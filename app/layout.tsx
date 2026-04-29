@@ -5,6 +5,10 @@ import BottomNav from "./BottomNav";
 export const metadata: Metadata = {
   title: "Strik Personeelsapp",
   description: "Interne app voor Strik Patisserie",
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({
