@@ -1,20 +1,35 @@
 export const dynamic = "force-dynamic";
+
+type NewsPost = {
+  id: string | number;
+  title: string;
+  content: string;
+  date: string;
+  image?: string;
+};
+
 export default async function NieuwsPage() {
   const res = await fetch("https://strik-patisserie.nl/wp-json/strik/v1/news", {
     cache: "no-store",
   });
 
-  const posts = await res.json();
+  const posts = (await res.json()) as NewsPost[];
 
   const important = posts
-    .filter((p: any) => p.title.includes("[BELANGRIJK]"))
-    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .filter((p) => p.title.includes("[BELANGRIJK]"))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const normal = posts
-    .filter((p: any) => !p.title.includes("[BELANGRIJK]"))
-    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .filter((p) => !p.title.includes("[BELANGRIJK]"))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const Card = ({ post, important = false }: any) => (
+  const Card = ({
+    post,
+    important = false,
+  }: {
+    post: NewsPost;
+    important?: boolean;
+  }) => (
     <article
       className={`w-full max-w-sm overflow-hidden rounded-3xl border shadow-sm ${
         important ? "border-red-200 bg-red-50" : "border-[#ebe7df] bg-white"
@@ -62,7 +77,7 @@ export default async function NieuwsPage() {
             </p>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {important.map((post: any) => (
+              {important.map((post) => (
                 <Card key={post.id} post={post} important />
               ))}
             </div>
@@ -71,7 +86,7 @@ export default async function NieuwsPage() {
 
         <section>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {normal.map((post: any) => (
+              {normal.map((post) => (
               <Card key={post.id} post={post} />
             ))}
           </div>

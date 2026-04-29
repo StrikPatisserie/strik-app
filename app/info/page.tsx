@@ -1,11 +1,18 @@
 export const dynamic = "force-dynamic";
 
+type FileItem = {
+  id: string | number;
+  url: string;
+  date: string;
+  title: string;
+};
+
 export default async function InfoPage() {
   const res = await fetch("https://strik-patisserie.nl/wp-json/strik/v1/files", {
     cache: "no-store",
   });
 
-  const files = await res.json();
+  const files = (await res.json()) as FileItem[];
 
   return (
     <main className="min-h-screen bg-[#f8f6f3] px-4 py-6 pb-28 text-[#2d2a26]">
@@ -21,7 +28,7 @@ export default async function InfoPage() {
         </section>
 
         <div className="space-y-3">
-          {files.map((file: any) => (
+          {files.map((file) => (
             <a
   key={file.id}
   href={file.url}

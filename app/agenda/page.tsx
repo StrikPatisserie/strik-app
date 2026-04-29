@@ -2,6 +2,14 @@
 
 import { useEffect, useState } from "react";
 
+type Booking = {
+  booking_id: string | number;
+  datum: string;
+  naam: string;
+  telefoon?: string;
+  details?: string;
+};
+
 function cleanText(text: string) {
   return (text || "")
     .replaceAll("&amp;", "&")
@@ -31,13 +39,13 @@ function formatDateRange(start: Date, end: Date) {
 }
 
 export default function AgendaPage() {
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
     fetch("https://strik-patisserie.nl/wp-json/strik/v1/bookings")
       .then((res) => res.json())
-      .then((data) => setBookings(data));
+      .then((data: Booking[]) => setBookings(data));
   }, []);
 
   const vandaag = new Date();
@@ -50,7 +58,7 @@ export default function AgendaPage() {
   endOfWeek.setDate(startOfWeek.getDate() + 7);
 
   const uniekeBookings = Object.values(
-    bookings.reduce((acc: any, booking: any) => {
+    bookings.reduce<Record<string, Booking>>((acc, booking) => {
       const key = `${booking.booking_id}-${getDateOnly(booking.datum)}`;
 
       if (!acc[key]) {
@@ -69,16 +77,16 @@ export default function AgendaPage() {
   );
 
   const weekBookings = uniekeBookings
-    .filter((b: any) => {
+    .filter((b) => {
       const datum = new Date(b.datum);
       return datum >= startOfWeek && datum < endOfWeek;
     })
     .sort(
-      (a: any, b: any) =>
+      (a, b) =>
         new Date(a.datum).getTime() - new Date(b.datum).getTime()
     );
 
-  const gegroepeerd = weekBookings.reduce((acc: any, booking: any) => {
+  const gegroepeerd = weekBookings.reduce<Record<string, Booking[]>>((acc, booking) => {
     const datum = new Date(booking.datum);
     const dag = datum.toLocaleDateString("nl-NL", {
       weekday: "long",
@@ -143,7 +151,7 @@ export default function AgendaPage() {
         )}
 
         <div className="space-y-6">
-          {Object.entries(gegroepeerd).map(([dag, items]: any) => (
+          {Object.entries(gegroepeerd).map(([dag, items]) => (
             <section key={dag}>
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-base font-bold capitalize">{dag}</h2>
@@ -153,7 +161,7 @@ export default function AgendaPage() {
               </div>
 
               <div className="space-y-3">
-                {items.map((b: any, i: number) => (
+                {items.map((b, i) => (
                   <div
                     key={i}
                     className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 shadow-sm"
