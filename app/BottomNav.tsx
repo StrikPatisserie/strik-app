@@ -8,6 +8,7 @@ const items = [
   { href: "/agenda", label: "Agenda" },
   { href: "/nieuws", label: "Nieuws" },
   { href: "/info", label: "Info" },
+  { href: "/schoonmaak", label: "Schoon" },
 ];
 
 export default function BottomNav() {
@@ -15,7 +16,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-4 left-1/2 z-50 w-[92%] max-w-md -translate-x-1/2 rounded-full border border-[#e7e0d8] bg-white/95 px-3 py-2 shadow-lg backdrop-blur">
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-5 gap-1">
         {items.map((item) => {
           const active =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
