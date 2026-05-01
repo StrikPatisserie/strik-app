@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 const CLEANING_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
-const CLEANING_API_KEY = "strik-schoonmaak-2026";
+const CLEANING_API_KEY = "schoonmaak-ijs-strik";
 
 const takenLijst = [
   "Vitrine schoongemaakt",
@@ -49,11 +49,13 @@ export default function SchoonmaakPage() {
     const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
 
     try {
-      const res = await fetch(CLEANING_API_URL, {
+      const url = new URL(CLEANING_API_URL);
+      url.searchParams.set("key", CLEANING_API_KEY);
+
+      const res = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-strik-key": CLEANING_API_KEY,
         },
         body: JSON.stringify({
           winkel,
