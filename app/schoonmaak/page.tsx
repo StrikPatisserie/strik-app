@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 
+const CLEANING_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
+const CLEANING_API_KEY = "strik-schoonmaak-2026";
+
 const takenLijst = [
   "Vitrine schoongemaakt",
   "Werkbank schoongemaakt",
@@ -18,6 +21,7 @@ export default function SchoonmaakPage() {
   const [taken, setTaken] = useState<string[]>([]);
   const [opmerking, setOpmerking] = useState("");
   const [status, setStatus] = useState("");
+  const [opslaanBezig, setOpslaanBezig] = useState(false);
 
   const vandaag = new Date().toISOString().split("T")[0];
 
@@ -28,30 +32,67 @@ export default function SchoonmaakPage() {
   }
 
   async function opslaan() {
+    if (!naam.trim()) {
+      setStatus("Vul eerst je naam in.");
+      return;
+    }
+
+    if (taken.length === 0) {
+      setStatus("Vink minimaal 1 taak af.");
+      return;
+    }
+
     setStatus("Opslaan...");
+    setOpslaanBezig(true);
 
-    const res = await fetch("https://strik-patisserie.nl/wp-json/strik/v1/cleaning", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-strik-key": "strik-schoonmaak-2026",
-      },
-      body: JSON.stringify({
-        winkel,
-        naam,
-        datum: vandaag,
-        taken,
-        opmerking,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
 
-    if (res.ok) {
-      setStatus("Opgeslagen ✅");
-      setNaam("");
-      setTaken([]);
-      setOpmerking("");
-    } else {
-      setStatus("Opslaan mislukt");
+    try {
+      const res = await fetch(CLEANING_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-strik-key": CLEANING_API_KEY,
+        },
+        body: JSON.stringify({
+          winkel,
+          naam: naam.trim(),
+          datum: vandaag,
+          taken,
+          opmerking: opmerking.trim(),
+        }),
+        signal: controller.signal,
+      });
+
+      const data = (await res.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+
+      if (res.ok) {
+        setStatus("Opgeslagen.");
+        setNaam("");
+        setTaken([]);
+        setOpmerking("");
+        return;
+      }
+
+      if (res.status === 403) {
+        setStatus("Geen toegang vanuit WordPress. Controleer de API sleutel.");
+        return;
+      }
+
+      setStatus(data?.message || "Opslaan mislukt.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setStatus("WordPress reageert niet. Probeer opnieuw.");
+        return;
+      }
+
+      setStatus("Kan geen verbinding maken met WordPress.");
+    } finally {
+      window.clearTimeout(timeoutId);
+      setOpslaanBezig(false);
     }
   }
 
@@ -117,12 +158,17 @@ export default function SchoonmaakPage() {
 
           <button
             onClick={opslaan}
-            className="w-full rounded-full bg-[#d75a48] p-4 font-bold text-white shadow-sm active:scale-[0.98]"
+            disabled={opslaanBezig}
+            className="w-full rounded-full bg-[#d75a48] p-4 font-bold text-white shadow-sm active:scale-[0.98] disabled:opacity-60"
           >
-            Opslaan
+            {opslaanBezig ? "Opslaan..." : "Opslaan"}
           </button>
 
-          {status && <p className="text-center text-sm">{status}</p>}
+          {status && (
+            <p className="rounded-2xl bg-white p-3 text-center text-sm shadow-sm">
+              {status}
+            </p>
+          )}
         </div>
       </div>
     </main>
