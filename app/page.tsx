@@ -1,4 +1,5 @@
 import Link from "next/link";
+import NotificationToggle from "./NotificationToggle";
 
 export default function Home() {
   return (
@@ -115,6 +116,7 @@ export default function Home() {
     </div>
   </div>
 </Link>
+          <NotificationToggle />
         </div>
       </div>
     </main>

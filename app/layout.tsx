@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import BottomNav from "./BottomNav";
+import NotificationMonitor from "./NotificationMonitor";
 
 export const metadata: Metadata = {
   title: "Strik Personeelsapp",
@@ -19,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="nl">
       <body>
+        <NotificationMonitor />
         <div className="pb-24">{children}</div>
         <BottomNav />
       </body>
