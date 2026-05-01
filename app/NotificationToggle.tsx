@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 const ENABLED_KEY = "strik-notifications-enabled";
 const LATEST_NEWS_KEY = "strik-latest-news-id";
@@ -39,21 +39,24 @@ async function rememberCurrentLatestPost() {
 }
 
 export default function NotificationToggle() {
-  const [enabled, setEnabled] = useState(() => {
-    if (typeof window === "undefined") return false;
-
-    return localStorage.getItem(ENABLED_KEY) === "true";
-  });
-  const [permission, setPermission] = useState<PermissionState>(() =>
-    getSupportedPermission()
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
   );
+  const [, refreshEnabled] = useState(false);
+  const [permission, setPermission] = useState<PermissionState>("default");
+
+  const currentPermission = hydrated ? getSupportedPermission() : permission;
+  const currentEnabled =
+    hydrated && localStorage.getItem(ENABLED_KEY) === "true";
 
   async function toggleNotifications() {
-    if (permission === "unsupported") return;
+    if (currentPermission === "unsupported") return;
 
-    if (enabled) {
+    if (currentEnabled) {
       localStorage.setItem(ENABLED_KEY, "false");
-      setEnabled(false);
+      refreshEnabled(false);
       return;
     }
 
@@ -69,12 +72,12 @@ export default function NotificationToggle() {
     if (nextPermission === "granted") {
       await rememberCurrentLatestPost().catch(() => {});
       localStorage.setItem(ENABLED_KEY, "true");
-      setEnabled(true);
+      refreshEnabled(true);
     }
   }
 
-  const blocked = permission === "denied";
-  const unsupported = permission === "unsupported";
+  const blocked = currentPermission === "denied";
+  const unsupported = currentPermission === "unsupported";
 
   return (
     <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
@@ -102,16 +105,16 @@ export default function NotificationToggle() {
         <button
           type="button"
           role="switch"
-          aria-checked={enabled}
+          aria-checked={currentEnabled}
           disabled={blocked || unsupported}
           onClick={toggleNotifications}
           className={`relative h-8 w-14 shrink-0 rounded-full transition disabled:opacity-50 ${
-            enabled ? "bg-[#c3d3bc]" : "bg-gray-300"
+            currentEnabled ? "bg-[#c3d3bc]" : "bg-gray-300"
           }`}
         >
           <span
             className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition ${
-              enabled ? "left-7" : "left-1"
+              currentEnabled ? "left-7" : "left-1"
             }`}
           />
         </button>
