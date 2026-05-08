@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 
@@ -343,7 +343,7 @@ function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
   });
 }
 
-export default function SchoonmaakPage() {
+function SchoonmaakForm() {
   const searchParams = useSearchParams();
   const planQuery = searchParams.get("plan");
   const defaultPlanType: PlanType =
@@ -874,5 +874,13 @@ export default function SchoonmaakPage() {
           )}
         </div>
     </StrikShell>
+  );
+}
+
+export default function SchoonmaakPage() {
+  return (
+    <Suspense fallback={<div className="p-5 text-center text-gray-500">Laden...</div>}>
+      <SchoonmaakForm />
+    </Suspense>
   );
 }
