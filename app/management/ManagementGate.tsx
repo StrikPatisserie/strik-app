@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 
 const MANAGEMENT_PIN = "1937";
 
@@ -27,19 +28,15 @@ export default function ManagementGate({
   if (unlocked) return children;
 
   return (
-    <main className="min-h-screen bg-[#f8f6f3] px-4 py-6 pb-28 text-[#2d2a26]">
-      <div className="mx-auto w-full max-w-md">
-        <section className="mb-6 rounded-[2rem] bg-[#a27a8e] p-6 text-white shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-            Strik Patisserie
-          </p>
-          <h1 className="mt-2 text-3xl font-bold">Management</h1>
-          <p className="mt-2 text-sm opacity-80">
-            Voer de 4-cijferige code in.
-          </p>
-        </section>
+    <StrikShell>
+        <StrikPageHeader
+          title="Management"
+          description="Voer de 4-cijferige code in."
+          icon={strikIcons.cleaningManagement}
+          tone="light"
+        />
 
-        <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
+        <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
           <input
             value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
@@ -54,7 +51,7 @@ export default function ManagementGate({
 
           <button
             onClick={unlock}
-            className="mt-4 w-full rounded-full bg-[#a27a8e] p-4 font-bold text-white shadow-sm active:scale-[0.98]"
+            className="mt-4 w-full rounded-full bg-[#c3d3bc] p-4 font-bold text-[#2d2a26] shadow-sm active:scale-[0.98]"
           >
             Open management
           </button>
@@ -65,7 +62,6 @@ export default function ManagementGate({
             </p>
           )}
         </section>
-      </div>
-    </main>
+    </StrikShell>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 
 const CLEANING_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
 const CLEANING_API_KEY = "schoonmaak-ijs-strik";
@@ -340,17 +341,13 @@ export default function SchoonmaakPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f8f6f3] px-4 py-6 pb-28 text-[#2d2a26]">
-      <div className="mx-auto w-full max-w-md">
-        <section className="mb-6 rounded-[2rem] bg-[#c3d3bc] p-6 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-60">
-            Strik Patisserie
-          </p>
-          <h1 className="mt-2 text-3xl font-bold">Schoonmaak</h1>
-          <p className="mt-2 text-sm opacity-70">
-            Dagelijkse afvinklijst per winkel
-          </p>
-        </section>
+    <StrikShell>
+        <StrikPageHeader
+          title="Schoonmaak"
+          description="Dagelijkse afvinklijst per ijssalon."
+          icon={strikIcons.cleaning}
+          tone="medium"
+        />
 
         <div className="space-y-4">
           <input
@@ -377,7 +374,7 @@ export default function SchoonmaakPage() {
             className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
           />
 
-          <div className="rounded-3xl bg-white p-4 shadow-sm">
+          <div className="rounded-3xl bg-white/85 p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="font-bold">Taken</p>
               {ladenBezig && (
@@ -412,7 +409,7 @@ export default function SchoonmaakPage() {
           />
 
           {temperatuurRegistratieActief && (
-            <section className="rounded-3xl bg-white p-4 shadow-sm">
+            <section className="rounded-3xl bg-white/85 p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="font-bold">Temperatuur registratie</p>
@@ -482,7 +479,7 @@ export default function SchoonmaakPage() {
           <button
             onClick={verzenden}
             disabled={verzendenBezig}
-            className="w-full rounded-full bg-[#d75a48] p-4 font-bold text-white shadow-sm active:scale-[0.98] disabled:opacity-60"
+            className="w-full rounded-full bg-[#9fb891] p-4 font-bold text-[#2d2a26] shadow-sm active:scale-[0.98] disabled:opacity-60"
           >
             {verzendenBezig ? "Verzenden..." : "Opslaan en verzenden"}
           </button>
@@ -493,7 +490,6 @@ export default function SchoonmaakPage() {
             </p>
           )}
         </div>
-      </div>
-    </main>
+    </StrikShell>
   );
 }

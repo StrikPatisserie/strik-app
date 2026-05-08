@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 
 type Booking = {
   booking_id: string | number;
@@ -101,17 +102,13 @@ export default function AgendaPage() {
   }, {});
 
   return (
-    <main className="min-h-screen bg-[#f8f6f3] px-4 py-6 pb-28 text-[#2d2a26]">
-      <div className="mx-auto w-full max-w-md">
-        <section className="mb-4 rounded-[2rem] bg-[#c3d3bc] p-6 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2d2a26]/60">
-            STRIK PATISSERIE
-          </p>
-          <h1 className="mt-2 text-3xl font-bold">Weekagenda</h1>
-          <p className="mt-2 text-sm text-[#2d2a26]/70">
-            Bruidstaartafspraken per week
-          </p>
-        </section>
+    <StrikShell>
+        <StrikPageHeader
+          title="Weekagenda"
+          description="Bruidstaartafspraken per week."
+          icon={strikIcons.bruidstaart}
+          tone="green"
+        />
 
         <div className="mb-6 flex items-center justify-between rounded-[1.5rem] border border-[#e7e0d8] bg-white p-2 shadow-sm">
           <button
@@ -194,7 +191,6 @@ export default function AgendaPage() {
             </section>
           ))}
         </div>
-      </div>
-    </main>
+    </StrikShell>
   );
 }

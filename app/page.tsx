@@ -1,4 +1,6 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import { strikIcons } from "./StrikUI";
 
 const sections = [
   {
@@ -8,6 +10,7 @@ const sections = [
     button: "bg-[#dbe6d4]",
     badge: "bg-[#b2c8a9]",
     icon: "W",
+    image: strikIcons.news,
   },
   {
     href: "/ijs",
@@ -16,6 +19,7 @@ const sections = [
     button: "bg-[#c3d3bc]",
     badge: "bg-[#9fb891]",
     icon: "IJ",
+    image: strikIcons.cleaning,
   },
   {
     href: "/management",
@@ -24,6 +28,7 @@ const sections = [
     button: "bg-[#eef3ea]",
     badge: "bg-[#cfdcc8]",
     icon: "M",
+    image: strikIcons.cleaningManagement,
     locked: true,
   },
 ];
@@ -62,7 +67,11 @@ export default function Home() {
               <span
                 className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold ${section.badge}`}
               >
-                {section.icon}
+                <img
+                  src={section.image}
+                  alt=""
+                  className="h-8 w-8 object-contain"
+                />
               </span>
 
               <span className="min-w-0 flex-1">

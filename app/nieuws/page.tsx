@@ -1,3 +1,5 @@
+import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
+
 export const dynamic = "force-dynamic";
 
 type NewsPost = {
@@ -60,15 +62,13 @@ export default async function NieuwsPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#f8f6f3] px-4 py-6 text-[#2d2a26]">
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="mb-6 rounded-3xl bg-[#c3d3bc] p-5 shadow-sm">
-          <p className="text-sm uppercase tracking-wide opacity-70">
-            STRIK PATISSERIE
-          </p>
-          <h1 className="mt-1 text-3xl font-bold">Nieuws</h1>
-          <p className="mt-1 text-sm opacity-80">Belangrijke informatie voor intern gebruik</p>
-        </div>
+    <StrikShell wide>
+      <StrikPageHeader
+        title="Nieuws"
+        description="Belangrijke informatie voor intern gebruik."
+        icon={strikIcons.news}
+        tone="green"
+      />
 
         {important.length > 0 && (
           <section className="mb-8">
@@ -86,12 +86,11 @@ export default async function NieuwsPage() {
 
         <section>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {normal.map((post) => (
+            {normal.map((post) => (
               <Card key={post.id} post={post} />
             ))}
           </div>
         </section>
-      </div>
-    </main>
+    </StrikShell>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 
 const CLEANING_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
 const CLEANING_API_KEY = "schoonmaak-ijs-strik";
@@ -94,19 +95,16 @@ export default function SchoonmaakOverzichtPage() {
   }, [datum, items, winkel]);
 
   return (
-    <main className="min-h-screen bg-[#f8f6f3] px-4 py-6 pb-28 text-[#2d2a26]">
-      <div className="mx-auto w-full max-w-3xl">
-        <section className="mb-6 rounded-[2rem] bg-[#c3d3bc] p-6 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-60">
-            Manager
-          </p>
-          <h1 className="mt-2 text-3xl font-bold">Schoonmaak overzicht</h1>
-          <p className="mt-2 text-sm opacity-70">
-            Bekijk verzonden schoonmaakregistraties per dag en ijssalon.
-          </p>
-        </section>
+    <StrikShell wide>
+        <StrikPageHeader
+          title="Schoonmaak overzicht"
+          description="Bekijk registraties per dag en ijssalon."
+          icon={strikIcons.cleaningManagement}
+          kicker="Management"
+          tone="medium"
+        />
 
-        <section className="mb-5 grid gap-3 rounded-[1.5rem] bg-white p-4 shadow-sm sm:grid-cols-2">
+        <section className="mb-5 grid gap-3 rounded-[1.5rem] bg-white/85 p-4 shadow-sm sm:grid-cols-2">
           <input
             type="date"
             value={datum}
@@ -197,7 +195,6 @@ export default function SchoonmaakOverzichtPage() {
             </article>
           ))}
         </div>
-      </div>
-    </main>
+    </StrikShell>
   );
 }

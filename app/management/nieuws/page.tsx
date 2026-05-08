@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 
 const NEWS_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/news";
 const NEWS_API_KEY = "schoonmaak-ijs-strik";
@@ -180,19 +181,16 @@ export default function NieuwsBeheerPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f8f6f3] px-4 py-6 pb-28 text-[#2d2a26]">
-      <div className="mx-auto w-full max-w-3xl">
-        <section className="mb-6 rounded-[2rem] bg-[#a27a8e] p-6 text-white shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-            Management
-          </p>
-          <h1 className="mt-2 text-3xl font-bold">Nieuws beheren</h1>
-          <p className="mt-2 text-sm opacity-80">
-            Plaats, pas aan of verwijder interne nieuwsberichten.
-          </p>
-        </section>
+    <StrikShell wide>
+        <StrikPageHeader
+          title="Nieuws beheren"
+          description="Plaats, pas aan of verwijder interne nieuwsberichten."
+          icon={strikIcons.newsManagement}
+          kicker="Management"
+          tone="green"
+        />
 
-        <section className="mb-6 rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
+        <section className="mb-6 rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-xl font-bold">
               {editingId ? "Nieuwsbericht aanpassen" : "Nieuwsbericht toevoegen"}
@@ -250,7 +248,7 @@ export default function NieuwsBeheerPage() {
             <button
               onClick={savePost}
               disabled={bezig}
-              className="w-full rounded-full bg-[#a27a8e] p-4 font-bold text-white shadow-sm active:scale-[0.98] disabled:opacity-60"
+              className="w-full rounded-full bg-[#c3d3bc] p-4 font-bold text-[#2d2a26] shadow-sm active:scale-[0.98] disabled:opacity-60"
             >
               {bezig ? "Opslaan..." : editingId ? "Wijzigingen opslaan" : "Nieuws plaatsen"}
             </button>
@@ -315,7 +313,6 @@ export default function NieuwsBeheerPage() {
             ))}
           </div>
         </section>
-      </div>
-    </main>
+    </StrikShell>
   );
 }

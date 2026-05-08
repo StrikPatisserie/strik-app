@@ -1,13 +1,15 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { strikIcons } from "./StrikUI";
 
 const items = [
-  { href: "/", label: "Home" },
-  { href: "/winkel", label: "Winkel" },
-  { href: "/ijs", label: "IJs" },
-  { href: "/management", label: "Mgmt" },
+  { href: "/", label: "Home", icon: "/strik-logo.png" },
+  { href: "/winkel", label: "Winkel", icon: strikIcons.news },
+  { href: "/ijs", label: "IJs", icon: strikIcons.cleaning },
+  { href: "/management", label: "Mgmt", icon: strikIcons.cleaningManagement },
 ];
 
 export default function BottomNav() {
@@ -24,12 +26,13 @@ export default function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-full px-3 py-3 text-center text-sm font-semibold transition active:scale-95 ${
+              className={`flex items-center justify-center gap-1.5 rounded-full px-2 py-3 text-center text-sm font-semibold transition active:scale-95 ${
                 active
                   ? "bg-[#c3d3bc] text-[#2d2a26]"
                   : "text-gray-500 hover:bg-[#f8f6f3]"
               }`}
             >
+              <img src={item.icon} alt="" className="h-4 w-4 object-contain" />
               {item.label}
             </Link>
           );
