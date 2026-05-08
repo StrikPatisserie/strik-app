@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 const MANAGEMENT_PIN = "1937";
-const SESSION_KEY = "strik-management-unlocked";
 
 export default function ManagementGate({
   children,
@@ -11,16 +10,11 @@ export default function ManagementGate({
   children: React.ReactNode;
 }>) {
   const [pin, setPin] = useState("");
-  const [unlocked, setUnlocked] = useState(() => {
-    if (typeof window === "undefined") return false;
-
-    return sessionStorage.getItem(SESSION_KEY) === "true";
-  });
+  const [unlocked, setUnlocked] = useState(false);
   const [error, setError] = useState("");
 
   function unlock() {
     if (pin === MANAGEMENT_PIN) {
-      sessionStorage.setItem(SESSION_KEY, "true");
       setUnlocked(true);
       setError("");
       return;
