@@ -1,11 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const CLEANING_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
 const CLEANING_API_KEY = "schoonmaak-ijs-strik";
 
-const takenLijst = [
+type CleaningItem = {
+  id: number;
+  winkel: string;
+  naam: string;
+  datum: string;
+  taken: string[];
+  opmerking: string;
+};
+
+const ijssalons = ["Lent", "Daalseweg", "Ziekerstraat", "Malden"];
+
+const algemeneTaken = [
   "Vitrine schoongemaakt",
   "Werkbank schoongemaakt",
   "Koeling gecontroleerd en schoon",
@@ -15,15 +26,83 @@ const takenLijst = [
   "Koffiehoek schoon",
 ];
 
+const takenPerIjssalon = {
+  Lent: algemeneTaken,
+  Daalseweg: algemeneTaken,
+  Ziekerstraat: algemeneTaken,
+  Malden: algemeneTaken,
+};
+
+function getVandaag() {
+  const vandaag = new Date();
+  const jaar = vandaag.getFullYear();
+  const maand = String(vandaag.getMonth() + 1).padStart(2, "0");
+  const dag = String(vandaag.getDate()).padStart(2, "0");
+
+  return `${jaar}-${maand}-${dag}`;
+}
+
+function getCleaningUrl() {
+  const url = new URL(CLEANING_API_URL);
+  url.searchParams.set("key", CLEANING_API_KEY);
+
+  return url;
+}
+
 export default function SchoonmaakPage() {
   const [winkel, setWinkel] = useState("Lent");
+  const [datum, setDatum] = useState(getVandaag);
   const [naam, setNaam] = useState("");
   const [taken, setTaken] = useState<string[]>([]);
   const [opmerking, setOpmerking] = useState("");
   const [status, setStatus] = useState("");
+  const [ladenBezig, setLadenBezig] = useState(false);
   const [opslaanBezig, setOpslaanBezig] = useState(false);
 
-  const vandaag = new Date().toISOString().split("T")[0];
+  const takenLijst = takenPerIjssalon[winkel as keyof typeof takenPerIjssalon];
+
+  useEffect(() => {
+    let negeerResultaat = false;
+
+    async function laadAntwoorden() {
+      setLadenBezig(true);
+      setStatus("");
+
+      try {
+        const res = await fetch(getCleaningUrl(), { cache: "no-store" });
+        const items = (await res.json()) as CleaningItem[];
+
+        if (!res.ok || negeerResultaat) return;
+
+        const opgeslagenItems = items.filter(
+          (item) => item.winkel === winkel && item.datum === datum
+        );
+        const nieuwsteItem = opgeslagenItems[0];
+
+        setTaken(nieuwsteItem?.taken || []);
+        setNaam(nieuwsteItem?.naam || "");
+        setOpmerking(nieuwsteItem?.opmerking || "");
+
+        if (opgeslagenItems.length > 0) {
+          setStatus("Opgeslagen antwoorden geladen.");
+        }
+      } catch {
+        if (!negeerResultaat) {
+          setStatus("Eerdere antwoorden konden niet geladen worden.");
+        }
+      } finally {
+        if (!negeerResultaat) {
+          setLadenBezig(false);
+        }
+      }
+    }
+
+    laadAntwoorden();
+
+    return () => {
+      negeerResultaat = true;
+    };
+  }, [winkel, datum]);
 
   function toggleTaak(taak: string) {
     setTaken((prev) =>
@@ -49,10 +128,7 @@ export default function SchoonmaakPage() {
     const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
 
     try {
-      const url = new URL(CLEANING_API_URL);
-      url.searchParams.set("key", CLEANING_API_KEY);
-
-      const res = await fetch(url, {
+      const res = await fetch(getCleaningUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -60,7 +136,7 @@ export default function SchoonmaakPage() {
         body: JSON.stringify({
           winkel,
           naam: naam.trim(),
-          datum: vandaag,
+          datum,
           taken,
           opmerking: opmerking.trim(),
         }),
@@ -73,9 +149,6 @@ export default function SchoonmaakPage() {
 
       if (res.ok) {
         setStatus("Opgeslagen.");
-        setNaam("");
-        setTaken([]);
-        setOpmerking("");
         return;
       }
 
@@ -112,16 +185,21 @@ export default function SchoonmaakPage() {
         </section>
 
         <div className="space-y-4">
+          <input
+            type="date"
+            value={datum}
+            onChange={(e) => setDatum(e.target.value)}
+            className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
+          />
+
           <select
             value={winkel}
             onChange={(e) => setWinkel(e.target.value)}
             className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
           >
-            <option>Lent</option>
-            <option>Heyendaal</option>
-            <option>Daalseweg</option>
-            <option>Ziekerstraat</option>
-            <option>Malden</option>
+            {ijssalons.map((ijssalon) => (
+              <option key={ijssalon}>{ijssalon}</option>
+            ))}
           </select>
 
           <input
@@ -132,7 +210,14 @@ export default function SchoonmaakPage() {
           />
 
           <div className="rounded-3xl bg-white p-4 shadow-sm">
-            <p className="mb-3 font-bold">Taken</p>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="font-bold">Taken</p>
+              {ladenBezig && (
+                <span className="text-xs font-semibold text-gray-500">
+                  Laden...
+                </span>
+              )}
+            </div>
 
             <div className="space-y-3">
               {takenLijst.map((taak) => (
