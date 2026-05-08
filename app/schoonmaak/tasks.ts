@@ -244,173 +244,598 @@ const opstartTakenPerIjssalon: Record<string, Task[]> = {
 
 const afsluitTakenLent: Task[] = [
   {
-    id: "lent-afsluit-1",
-    label: "Vitrine en werkbank schoonmaken",
-    info: "Reinig de vitrine binnen en buiten, neem de werkbank af en controleer de koffiemachine en milkshakemachine.",
+    id: "lent-1",
+    label: "BAKKEN SCHOONMAKEN & VOORRAAD CHECK (uur voor sluiting):",
+    children: [
+      {
+        id: "lent-1-a",
+        label: "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)",
+      },
+      {
+        id: "lent-1-b",
+        label: "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen",
+      },
+      {
+        id: "lent-1-c",
+        label: "Tafels buiten en binnen schoonmaken",
+      },
+      {
+        id: "lent-1-d",
+        label: "Prullenbakken legen & schone zak (i.v.t)",
+        info: "Na iedere shift gaat er een nieuwe zak in de vuilnisbak. Maak de buitenkant schoon met een nat doekje als deze vies is.",
+      },
+      {
+        id: "lent-1-e",
+        label: "Planten water geven (als het niet geregend heeft)",
+      },
+    ],
   },
   {
-    id: "lent-afsluit-2",
-    label: "Slagroom- en milkshakemachine reinigen",
-    info: "Spoel de slagroommachine door met schoon water en maak de milkshakemachine schoon.",
+    id: "lent-2",
+    label: "GROTE MACHINES SCHOONMAKEN (v.a. sluitingstijd, wel nog ijs doorverkopen!!):",
+    children: [
+      {
+        id: "lent-2-a",
+        label: "Koffiemachine schoonmaken",
+      },
+      {
+        id: "lent-2-b",
+        label: "Slagroommachine schoonmaken",
+      },
+      {
+        id: "lent-2-c",
+        label: "Milkshake machine. Eventuele milkshake resten stickeren met huidige datum en afgedekt opbergen in zwarte koeling",
+      },
+    ],
   },
   {
-    id: "lent-afsluit-3",
-    label: "Koffiemachine controleren",
-    info: "Verwijder restwater, maak de machine schoon en zet hem klaar voor de volgende dag.",
+    id: "lent-3",
+    label: "TERRAS OPRUIMEN",
+    children: [
+      {
+        id: "lent-3-a",
+        label: "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger",
+      },
+      {
+        id: "lent-3-b",
+        label: "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen",
+      },
+      {
+        id: "lent-3-c",
+        label: "Groene bankjes en ijsje naar binnen zetten",
+      },
+      {
+        id: "lent-3-d",
+        label: "Luifel indraaien",
+      },
+    ],
   },
   {
-    id: "lent-afsluit-4",
-    label: "Spoelbakjes en scheppen reinigen",
-    info: "Spoel alle spoelbakjes, ijsscheppen en spatels goed schoon en laat ze drogen.",
+    id: "lent-4",
+    label: "IJSVITRINE AFSLUITEN",
+    children: [
+      {
+        id: "lent-4-a",
+        label: "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!",
+      },
+      {
+        id: "lent-4-b",
+        label: "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.",
+      },
+      {
+        id: "lent-4-c",
+        label: "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen",
+      },
+      {
+        id: "lent-4-d",
+        label: "Ijsschaal uitzetten",
+      },
+      {
+        id: "lent-4-e",
+        label: "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen. Daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen",
+      },
+      {
+        id: "lent-4-f",
+        label: "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!",
+      },
+      {
+        id: "lent-4-g",
+        label: "Doekje over gehele ijsvitrine doen voor de hele vieze stukken",
+      },
+      {
+        id: "lent-4-h",
+        label: "Foto van gevraagde onderdelen naar Roos/Eva",
+      },
+    ],
   },
   {
-    id: "lent-afsluit-5",
-    label: "Koeling controleren",
-    info: "Controleer de temperatuur van de koeling en maak de binnenkant schoon waar nodig.",
+    id: "lent-5",
+    label: "SCHOONMAAK SALON",
+    children: [
+      {
+        id: "lent-5-a",
+        label: "Stofzuigen & dweilen van vloer",
+      },
+      {
+        id: "lent-5-b",
+        label: "Afwas doen & keuken opruimen",
+      },
+      {
+        id: "lent-5-c",
+        label: "Vieze theedoeken en sponzen verzamelen en in kratje doen",
+      },
+      {
+        id: "lent-5-d",
+        label: "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger in de lange gang",
+      },
+    ],
   },
   {
-    id: "lent-afsluit-6",
-    label: "Vloer vegen en dweilen",
-    info: "Veeg eerst, dweil daarna met allesreiniger en laat geen plassen staan.",
-  },
-  {
-    id: "lent-afsluit-7",
-    label: "Prullenbakken legen",
-    info: "Leeg alle prullenbakken, vervang zakken en zet het afval buiten.",
-  },
-  {
-    id: "lent-afsluit-8",
-    label: "Toilet en koffiehoek controleren",
-    info: "Controleer en ruim de toilet- en koffiehoek op zodat alles netjes achterblijft.",
+    id: "lent-6",
+    label: "CONTROLE",
+    children: [
+      {
+        id: "lent-6-a",
+        label: "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)",
+      },
+      {
+        id: "lent-6-b",
+        label: "Vriezers controleren op temperatuur en of ze goed dicht zijn!!",
+      },
+      {
+        id: "lent-6-c",
+        label: "Omzet formulieren invullen",
+      },
+      {
+        id: "lent-6-d",
+        label: "Laatste check: alles schoon/dicht/uit?",
+      },
+    ],
   },
 ];
 
 const afsluitTakenHeyendaal: Task[] = [
   {
-    id: "heyendaal-afsluit-1",
-    label: "Vitrine en werkbank schoonmaken",
-    info: "Reinig de vitrine binnen en buiten, neem de werkbank af en controleer de koffiemachine en milkshakemachine.",
+    id: "heyendaal-1",
+    label: "BAKKEN SCHOONMAKEN & VOORRAAD CHECK (uur voor sluiting):",
+    children: [
+      {
+        id: "heyendaal-1-a",
+        label: "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)",
+      },
+      {
+        id: "heyendaal-1-b",
+        label: "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen",
+      },
+      {
+        id: "heyendaal-1-c",
+        label: "Tafels buiten en binnen schoonmaken",
+      },
+      {
+        id: "heyendaal-1-d",
+        label: "Prullenbakken legen & schone zak (i.v.t)",
+      },
+      {
+        id: "heyendaal-1-e",
+        label: "Planten water geven (als het niet geregend heeft)",
+      },
+    ],
   },
   {
-    id: "heyendaal-afsluit-2",
-    label: "Slagroom- en milkshakemachine reinigen",
-    info: "Spoel de slagroommachine door met schoon water en maak de milkshakemachine schoon.",
+    id: "heyendaal-2",
+    label: "GROTE MACHINES SCHOONMAKEN (v.a. sluitingstijd, wel nog ijs doorverkopen!!):",
+    children: [
+      {
+        id: "heyendaal-2-a",
+        label: "Koffiemachine schoonmaken",
+      },
+      {
+        id: "heyendaal-2-b",
+        label: "Slagroommachine schoonmaken",
+      },
+      {
+        id: "heyendaal-2-c",
+        label: "Milkshake machine. Eventuele milkshake resten stickeren met huidige datum en afgedekt opbergen in zwarte koeling",
+      },
+    ],
   },
   {
-    id: "heyendaal-afsluit-3",
-    label: "Koffiemachine controleren",
-    info: "Verwijder restwater, maak de machine schoon en zet hem klaar voor de volgende dag.",
+    id: "heyendaal-3",
+    label: "TERRAS OPRUIMEN",
+    children: [
+      {
+        id: "heyendaal-3-a",
+        label: "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger",
+      },
+      {
+        id: "heyendaal-3-b",
+        label: "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen",
+      },
+      {
+        id: "heyendaal-3-c",
+        label: "Tafels en stoelen in café zetten",
+      },
+      {
+        id: "heyendaal-3-d",
+        label: "Parasols uit de voet halen en naar binnen halen",
+      },
+      {
+        id: "heyendaal-3-e",
+        label: "Luifel indraaien",
+      },
+    ],
   },
   {
-    id: "heyendaal-afsluit-4",
-    label: "Spoelbakjes en scheppen reinigen",
-    info: "Spoel alle spoelbakjes, ijsscheppen en spatels goed schoon en laat ze drogen.",
+    id: "heyendaal-4",
+    label: "IJSVITRINE AFSLUITEN",
+    children: [
+      {
+        id: "heyendaal-4-a",
+        label: "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!",
+      },
+      {
+        id: "heyendaal-4-b",
+        label: "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.",
+      },
+      {
+        id: "heyendaal-4-c",
+        label: "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen",
+      },
+      {
+        id: "heyendaal-4-d",
+        label: "Ijsschaal uitzetten",
+      },
+      {
+        id: "heyendaal-4-e",
+        label: "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Spoelbakje daarna met een nat doekje nog een keer afdoen",
+      },
+      {
+        id: "heyendaal-4-f",
+        label: "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!",
+      },
+      {
+        id: "heyendaal-4-g",
+        label: "Doekje over gehele ijsvitrine doen voor de hele vieze stukken",
+      },
+      {
+        id: "heyendaal-4-h",
+        label: "Foto van gevraagde onderdelen naar Roos/Eva",
+      },
+    ],
   },
   {
-    id: "heyendaal-afsluit-5",
-    label: "Koeling controleren",
-    info: "Controleer de temperatuur van de koeling en maak de binnenkant schoon waar nodig.",
+    id: "heyendaal-5",
+    label: "SCHOONMAAK SALON",
+    children: [
+      {
+        id: "heyendaal-5-a",
+        label: "Stofzuigen & dweilen van vloer",
+      },
+      {
+        id: "heyendaal-5-b",
+        label: "Afwas doen & keuken opruimen",
+      },
+      {
+        id: "heyendaal-5-c",
+        label: "Vieze theedoeken en sponzen verzamelen en in kratje doen",
+      },
+      {
+        id: "heyendaal-5-d",
+        label: "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger",
+      },
+    ],
   },
   {
-    id: "heyendaal-afsluit-6",
-    label: "Vloer vegen en dweilen",
-    info: "Veeg eerst, dweil daarna met allesreiniger en laat geen plassen staan.",
-  },
-  {
-    id: "heyendaal-afsluit-7",
-    label: "Prullenbakken legen",
-    info: "Leeg alle prullenbakken, vervang zakken en zet het afval buiten.",
-  },
-  {
-    id: "heyendaal-afsluit-8",
-    label: "Toilet en koffiehoek controleren",
-    info: "Controleer en ruim de toilet- en koffiehoek op zodat alles netjes achterblijft.",
+    id: "heyendaal-6",
+    label: "CONTROLE",
+    children: [
+      {
+        id: "heyendaal-6-a",
+        label: "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)",
+      },
+      {
+        id: "heyendaal-6-b",
+        label: "Vriezers controleren op temperatuur en of ze goed dicht zijn!!",
+      },
+      {
+        id: "heyendaal-6-c",
+        label: "Omzet formulieren invullen",
+      },
+      {
+        id: "heyendaal-6-d",
+        label: "Laatste check: alles schoon/dicht/uit?",
+      },
+    ],
   },
 ];
 
 const afsluitTakenDaalseweg: Task[] = [
   {
-    id: "daalseweg-afsluit-1",
-    label: "Vitrine en werkbank schoonmaken",
-    info: "Reinig de vitrine binnen en buiten, neem de werkbank af en controleer de koffiemachine en milkshakemachine.",
+    id: "daalseweg-1",
+    label: "BAKKEN SCHOONMAKEN & VOORRAAD CHECK (uur voor sluiting):",
+    children: [
+      {
+        id: "daalseweg-1-a",
+        label: "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)",
+      },
+      {
+        id: "daalseweg-1-b",
+        label: "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen",
+      },
+      {
+        id: "daalseweg-1-c",
+        label: "Tafels buiten en binnen schoonmaken",
+      },
+      {
+        id: "daalseweg-1-d",
+        label: "Prullenbakken legen & schone zak (i.v.t)",
+      },
+      {
+        id: "daalseweg-1-e",
+        label: "Planten water geven (als het niet geregend heeft)",
+      },
+    ],
   },
   {
-    id: "daalseweg-afsluit-2",
-    label: "Slagroom- en milkshakemachine reinigen",
-    info: "Spoel de slagroommachine door met schoon water en maak de milkshakemachine schoon.",
+    id: "daalseweg-2",
+    label: "GROTE MACHINES SCHOONMAKEN (v.a. sluitingstijd, wel nog ijs doorverkopen!!):",
+    children: [
+      {
+        id: "daalseweg-2-a",
+        label: "Koffiemachine schoonmaken",
+      },
+      {
+        id: "daalseweg-2-b",
+        label: "Slagroommachine schoonmaken",
+      },
+    ],
   },
   {
-    id: "daalseweg-afsluit-3",
-    label: "Koffiemachine controleren",
-    info: "Verwijder restwater, maak de machine schoon en zet hem klaar voor de volgende dag.",
+    id: "daalseweg-3",
+    label: "TERRAS OPRUIMEN",
+    children: [
+      {
+        id: "daalseweg-3-a",
+        label: "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger",
+      },
+      {
+        id: "daalseweg-3-b",
+        label: "Kussentjes van de bankjes naar binnen halen",
+      },
+      {
+        id: "daalseweg-3-c",
+        label: "Ijshoorntje naar binnen",
+      },
+      {
+        id: "daalseweg-3-d",
+        label: "Luifel indraaien",
+      },
+    ],
   },
   {
-    id: "daalseweg-afsluit-4",
-    label: "Spoelbakjes en scheppen reinigen",
-    info: "Spoel alle spoelbakjes, ijsscheppen en spatels goed schoon en laat ze drogen.",
+    id: "daalseweg-4",
+    label: "IJSVITRINE AFSLUITEN",
+    children: [
+      {
+        id: "daalseweg-4-a",
+        label: "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!",
+      },
+      {
+        id: "daalseweg-4-b",
+        label: "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.",
+      },
+      {
+        id: "daalseweg-4-c",
+        label: "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen",
+      },
+      {
+        id: "daalseweg-4-d",
+        label: "Ijsschaal uitzetten",
+      },
+      {
+        id: "daalseweg-4-e",
+        label: "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen",
+      },
+      {
+        id: "daalseweg-4-f",
+        label: "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!",
+      },
+      {
+        id: "daalseweg-4-g",
+        label: "Doekje over gehele ijsvitrine doen voor de hele vieze stukken",
+      },
+      {
+        id: "daalseweg-4-h",
+        label: "Foto van gevraagde onderdelen naar Roos/Eva",
+      },
+    ],
   },
   {
-    id: "daalseweg-afsluit-5",
-    label: "Koeling controleren",
-    info: "Controleer de temperatuur van de koeling en maak de binnenkant schoon waar nodig.",
+    id: "daalseweg-5",
+    label: "SCHOONMAAK SALON",
+    children: [
+      {
+        id: "daalseweg-5-a",
+        label: "Stofzuigen & dweilen van vloer",
+      },
+      {
+        id: "daalseweg-5-b",
+        label: "Afwas doen & keuken opruimen",
+      },
+      {
+        id: "daalseweg-5-c",
+        label: "Vieze theedoeken en sponzen verzamelen en in kratje doen",
+      },
+      {
+        id: "daalseweg-5-d",
+        label: "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger in de lange gang",
+      },
+    ],
   },
   {
-    id: "daalseweg-afsluit-6",
-    label: "Vloer vegen en dweilen",
-    info: "Veeg eerst, dweil daarna met allesreiniger en laat geen plassen staan.",
-  },
-  {
-    id: "daalseweg-afsluit-7",
-    label: "Prullenbakken legen",
-    info: "Leeg alle prullenbakken, vervang zakken en zet het afval buiten.",
-  },
-  {
-    id: "daalseweg-afsluit-8",
-    label: "Toilet en koffiehoek controleren",
-    info: "Controleer en ruim de toilet- en koffiehoek op zodat alles netjes achterblijft.",
+    id: "daalseweg-6",
+    label: "CONTROLE",
+    children: [
+      {
+        id: "daalseweg-6-a",
+        label: "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)",
+      },
+      {
+        id: "daalseweg-6-b",
+        label: "Vriezers controleren op temperatuur en of ze goed dicht zijn!!",
+      },
+      {
+        id: "daalseweg-6-c",
+        label: "Omzet formulieren invullen",
+      },
+      {
+        id: "daalseweg-6-d",
+        label: "Laatste check: alles schoon/dicht/uit?",
+      },
+    ],
   },
 ];
 
 const afsluitTakenZiekerstraat: Task[] = [
   {
-    id: "ziekerstraat-afsluit-1",
-    label: "Vitrine en werkbank schoonmaken",
-    info: "Reinig de vitrine binnen en buiten, neem de werkbank af en controleer de koffiemachine en milkshakemachine.",
+    id: "ziekerstraat-1",
+    label: "BAKKEN SCHOONMAKEN & VOORRAAD CHECK (uur voor sluiting):",
+    children: [
+      {
+        id: "ziekerstraat-1-a",
+        label: "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)",
+      },
+      {
+        id: "ziekerstraat-1-b",
+        label: "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen",
+      },
+      {
+        id: "ziekerstraat-1-c",
+        label: "Tafels buiten en binnen schoonmaken",
+      },
+      {
+        id: "ziekerstraat-1-d",
+        label: "Prullenbakken legen & schone zak (i.v.t)",
+      },
+      {
+        id: "ziekerstraat-1-e",
+        label: "Planten water geven (als het niet geregend heeft)",
+      },
+    ],
   },
   {
-    id: "ziekerstraat-afsluit-2",
-    label: "Slagroom- en milkshakemachine reinigen",
-    info: "Spoel de slagroommachine door met schoon water en maak de milkshakemachine schoon.",
+    id: "ziekerstraat-2",
+    label: "GROTE MACHINES SCHOONMAKEN (v.a. sluitingstijd, wel nog ijs doorverkopen!!):",
+    children: [
+      {
+        id: "ziekerstraat-2-a",
+        label: "Koffiemachine schoonmaken",
+      },
+      {
+        id: "ziekerstraat-2-b",
+        label: "Slagroommachine schoonmaken",
+      },
+    ],
   },
   {
-    id: "ziekerstraat-afsluit-3",
-    label: "Koffiemachine controleren",
-    info: "Verwijder restwater, maak de machine schoon en zet hem klaar voor de volgende dag.",
+    id: "ziekerstraat-3",
+    label: "TERRAS OPRUIMEN",
+    children: [
+      {
+        id: "ziekerstraat-3-a",
+        label: "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger",
+      },
+      {
+        id: "ziekerstraat-3-b",
+        label: "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen, LET OP, zorg dat de bezorgers/medewerkers nog naar binnen kunnen de volgende ochtend.",
+      },
+      {
+        id: "ziekerstraat-3-c",
+        label: "Ijsje, drangpalen en bord naar binnen",
+      },
+    ],
   },
   {
-    id: "ziekerstraat-afsluit-4",
-    label: "Spoelbakjes en scheppen reinigen",
-    info: "Spoel alle spoelbakjes, ijsscheppen en spatels goed schoon en laat ze drogen.",
+    id: "ziekerstraat-4",
+    label: "IJSVITRINE AFSLUITEN",
+    children: [
+      {
+        id: "ziekerstraat-4-a",
+        label: "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!",
+      },
+      {
+        id: "ziekerstraat-4-b",
+        label: "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.",
+      },
+      {
+        id: "ziekerstraat-4-c",
+        label: "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen",
+      },
+      {
+        id: "ziekerstraat-4-d",
+        label: "Ijsschaal uitzetten",
+      },
+      {
+        id: "ziekerstraat-4-e",
+        label: "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen",
+      },
+      {
+        id: "ziekerstraat-4-f",
+        label: "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!",
+      },
+      {
+        id: "ziekerstraat-4-g",
+        label: "Doekje over gehele ijsvitrine doen voor de hele vieze stukken",
+      },
+      {
+        id: "ziekerstraat-4-h",
+        label: "Foto van gevraagde onderdelen naar Roos/Eva",
+      },
+    ],
   },
   {
-    id: "ziekerstraat-afsluit-5",
-    label: "Koeling controleren",
-    info: "Controleer de temperatuur van de koeling en maak de binnenkant schoon waar nodig.",
+    id: "ziekerstraat-5",
+    label: "SCHOONMAAK SALON",
+    children: [
+      {
+        id: "ziekerstraat-5-a",
+        label: "Stofzuigen & dweilen van vloer",
+      },
+      {
+        id: "ziekerstraat-5-b",
+        label: "Afwas doen & keuken opruimen",
+      },
+      {
+        id: "ziekerstraat-5-c",
+        label: "Vieze theedoeken en sponzen verzamelen en in kratje doen",
+      },
+      {
+        id: "ziekerstraat-5-d",
+        label: "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger in de lange gang",
+      },
+    ],
   },
   {
-    id: "ziekerstraat-afsluit-6",
-    label: "Vloer vegen en dweilen",
-    info: "Veeg eerst, dweil daarna met allesreiniger en laat geen plassen staan.",
-  },
-  {
-    id: "ziekerstraat-afsluit-7",
-    label: "Prullenbakken legen",
-    info: "Leeg alle prullenbakken, vervang zakken en zet het afval buiten.",
-  },
-  {
-    id: "ziekerstraat-afsluit-8",
-    label: "Toilet en koffiehoek controleren",
-    info: "Controleer en ruim de toilet- en koffiehoek op zodat alles netjes achterblijft.",
+    id: "ziekerstraat-6",
+    label: "CONTROLE",
+    children: [
+      {
+        id: "ziekerstraat-6-a",
+        label: "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)",
+      },
+      {
+        id: "ziekerstraat-6-b",
+        label: "Vriezers controleren op temperatuur en of ze goed dicht zijn!!",
+      },
+      {
+        id: "ziekerstraat-6-c",
+        label: "Omzet formulieren invullen",
+      },
+      {
+        id: "ziekerstraat-6-d",
+        label: "Laatste check: alles schoon/dicht/uit?",
+      },
+    ],
   },
 ];
 
