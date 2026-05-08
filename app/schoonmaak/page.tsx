@@ -8,10 +8,12 @@ import {
   CleaningItem,
   CleaningPhotoUpload,
   CleaningTemperatureRegistration,
+  createPhotoTemperatureRegistrations,
   getCleaningItemPhotos,
   getCleaningUrl,
   itemMatchesCleaningSelection,
   stripInternalCleaningTasks,
+  stripInternalTemperatureRegistrations,
   withCleaningMetaMarkers,
 } from "./cleaningApi";
 
@@ -88,7 +90,7 @@ function verkleinFotoVoorUpload(file: File) {
     image.onload = () => {
       URL.revokeObjectURL(objectUrl);
 
-      const maxSize = 1200;
+      const maxSize = 900;
       const grootsteZijde = Math.max(image.width, image.height);
       const schaal = Math.min(1, maxSize / grootsteZijde);
 
@@ -122,7 +124,7 @@ function verkleinFotoVoorUpload(file: File) {
           );
         },
         "image/jpeg",
-        0.72
+        0.58
       );
     };
 
@@ -154,11 +156,13 @@ function normaliseerTemperatuurRegistraties(
   itemId: number,
   registraties: CleaningTemperatureRegistration[] = []
 ): TemperatuurRegistratie[] {
-  return registraties.map((item, index) => ({
-    id: item.id || `${itemId}-temperatuur-${index}`,
-    naam: item.naam || "",
-    temperatuur: item.temperatuur || "",
-  }));
+  return stripInternalTemperatureRegistrations(registraties).map(
+    (item, index) => ({
+      id: item.id || `${itemId}-temperatuur-${index}`,
+      naam: item.naam || "",
+      temperatuur: item.temperatuur || "",
+    })
+  );
 }
 
 function normaliseerFotoUploads(
@@ -552,10 +556,13 @@ function SchoonmaakForm() {
             fotoUploadsVoorOpslaan
           ),
           opmerking: opmerking.trim(),
-          temperatuurRegistraties: temperatuurRegistraties.map((item) => ({
-            naam: item.naam.trim(),
-            temperatuur: item.temperatuur.trim(),
-          })),
+          temperatuurRegistraties: [
+            ...temperatuurRegistraties.map((item) => ({
+              naam: item.naam.trim(),
+              temperatuur: item.temperatuur.trim(),
+            })),
+            ...createPhotoTemperatureRegistrations(fotoUploadsVoorOpslaan),
+          ],
           fotoUploads: fotoUploadsVoorOpslaan.map(serialiseerFotoUpload),
         }),
         signal: controller.signal,
@@ -681,15 +688,15 @@ function SchoonmaakForm() {
               {takenLijst.map((taak) => (
                 <div
                   key={taak.id}
-                  className="space-y-3 rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-3"
+                  className="space-y-3 rounded-2xl border border-[#d6e2cf] bg-white p-3 shadow-sm"
                 >
                   <button
                     type="button"
                     onClick={() => toggleTaak(taak)}
-                    className={`w-full rounded-2xl border p-4 text-left text-sm font-semibold ${
+                    className={`w-full rounded-2xl border px-4 py-4 text-left text-base font-bold leading-snug shadow-sm transition active:scale-[0.99] ${
                       isComplete(taak)
-                        ? "border-[#c3d3bc] bg-[#c3d3bc]"
-                        : "border-[#e7e0d8] bg-white"
+                        ? "border-[#8fb184] bg-[#c3d3bc] text-[#243620]"
+                        : "border-[#b8ccb0] bg-[#dce8d6] text-[#2d3f29]"
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -709,16 +716,16 @@ function SchoonmaakForm() {
                   </button>
 
                   {taak.children && (
-                    <div className="space-y-2 rounded-2xl bg-white p-3">
+                    <div className="space-y-2 rounded-2xl bg-[#f8f6f3] p-3">
                       {taak.children.map((subtaak) => (
                         <div key={subtaak.id} className="space-y-1">
                           <button
                             type="button"
                             onClick={() => toggleTaak(subtaak)}
-                            className={`w-full rounded-2xl border p-3 text-left text-sm font-semibold ${
+                            className={`w-full rounded-xl border px-3 py-3 text-left text-sm font-normal leading-relaxed transition active:scale-[0.99] ${
                               taken.includes(subtaak.id)
-                                ? "border-[#c3d3bc] bg-[#c3d3bc]"
-                                : "border-[#e7e0d8] bg-[#f8f6f3]"
+                                ? "border-[#b8ccb0] bg-[#eef3ea] text-[#243620]"
+                                : "border-[#e7e0d8] bg-white text-[#4f554c]"
                             }`}
                           >
                             <div className="flex items-center justify-between gap-3">

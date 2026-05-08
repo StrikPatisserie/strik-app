@@ -6,6 +6,7 @@ export const CLEANING_API_KEY = "schoonmaak-ijs-strik";
 
 const PLAN_MARKER_PREFIX = "__strik_plan:";
 const PHOTO_MARKER_PREFIX = "__strik_photo:";
+const PHOTO_TEMPERATURE_PREFIX = "__strik_photo_temperature:";
 
 export type CleaningTemperatureRegistration = {
   id?: string;
@@ -33,6 +34,20 @@ export type CleaningItem = {
   temperatuurRegistraties?: CleaningTemperatureRegistration[];
   fotoUploads?: CleaningPhotoUpload[];
 };
+
+export function isInternalTemperatureRegistration(
+  registratie: CleaningTemperatureRegistration
+) {
+  return registratie.naam.startsWith(PHOTO_TEMPERATURE_PREFIX);
+}
+
+export function stripInternalTemperatureRegistrations(
+  registraties: CleaningTemperatureRegistration[] = []
+) {
+  return registraties.filter(
+    (registratie) => !isInternalTemperatureRegistration(registratie)
+  );
+}
 
 export function getCleaningUrl() {
   const url = new URL(CLEANING_API_URL);
@@ -62,14 +77,13 @@ export function withCleaningMetaMarkers(
   fotoUploads: CleaningPhotoUpload[] = []
 ) {
   const fotoMarkers = fotoUploads
-    .filter((upload) => upload.url || upload.dataUrl)
+    .filter((upload) => upload.url)
     .map((upload) =>
       `${PHOTO_MARKER_PREFIX}${encodeURIComponent(
         JSON.stringify({
           label: upload.label,
           fileName: upload.fileName,
           url: upload.url,
-          dataUrl: upload.url ? undefined : upload.dataUrl,
           mediaId: upload.mediaId,
         })
       )}`
@@ -80,6 +94,47 @@ export function withCleaningMetaMarkers(
     getPlanMarker(planType),
     ...fotoMarkers,
   ];
+}
+
+export function createPhotoTemperatureRegistrations(
+  fotoUploads: CleaningPhotoUpload[] = []
+): CleaningTemperatureRegistration[] {
+  return fotoUploads
+    .filter((upload) => upload.url || upload.dataUrl)
+    .map((upload) => ({
+      naam: `${PHOTO_TEMPERATURE_PREFIX}${upload.label}`,
+      temperatuur: encodeURIComponent(
+        JSON.stringify({
+          label: upload.label,
+          fileName: upload.fileName,
+          url: upload.url,
+          dataUrl: upload.url ? undefined : upload.dataUrl,
+          mediaId: upload.mediaId,
+        })
+      ),
+    }));
+}
+
+function extractPhotoUploadsFromTemperatureRegistrations(
+  registraties: CleaningTemperatureRegistration[] = []
+) {
+  return registraties.flatMap((registratie) => {
+    if (!isInternalTemperatureRegistration(registratie)) return [];
+
+    try {
+      const upload = JSON.parse(
+        decodeURIComponent(registratie.temperatuur)
+      ) as CleaningPhotoUpload;
+
+      if (!upload.label || !upload.fileName || (!upload.url && !upload.dataUrl)) {
+        return [];
+      }
+
+      return [upload];
+    } catch {
+      return [];
+    }
+  });
 }
 
 export function extractPhotoUploadsFromTasks(taken: string[] = []) {
@@ -181,6 +236,12 @@ export function getCleaningItemPhotos(item: CleaningItem) {
   });
 
   extractPhotoUploadsFromTasks(item.taken).forEach((upload) => {
+    uploadsByLabel.set(upload.label, upload);
+  });
+
+  extractPhotoUploadsFromTemperatureRegistrations(
+    item.temperatuurRegistraties
+  ).forEach((upload) => {
     uploadsByLabel.set(upload.label, upload);
   });
 

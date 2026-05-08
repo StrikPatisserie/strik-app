@@ -9,6 +9,7 @@ import {
   getCleaningItemPlanType,
   getCleaningUrl,
   stripInternalCleaningTasks,
+  stripInternalTemperatureRegistrations,
 } from "../cleaningApi";
 
 const ijssalons = [
@@ -163,6 +164,9 @@ function CleaningCard({ item }: Readonly<{ item: CleaningItem }>) {
   const zichtbareTaken = stripInternalCleaningTasks(item.taken);
   const itemPlanType = getCleaningItemPlanType(item);
   const fotoUploads = getCleaningItemPhotos(item);
+  const temperatuurRegistraties = stripInternalTemperatureRegistrations(
+    item.temperatuurRegistraties
+  );
 
   return (
     <article className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
@@ -193,12 +197,11 @@ function CleaningCard({ item }: Readonly<{ item: CleaningItem }>) {
         ))}
       </div>
 
-      {item.temperatuurRegistraties &&
-        item.temperatuurRegistraties.length > 0 && (
+      {temperatuurRegistraties.length > 0 && (
           <div className="mt-4 rounded-2xl bg-[#f8f6f3] p-4">
             <p className="mb-3 font-bold">Temperaturen</p>
             <div className="space-y-2">
-              {item.temperatuurRegistraties.map((registratie, index) => (
+              {temperatuurRegistraties.map((registratie, index) => (
                 <div
                   key={`${registratie.naam}-${registratie.temperatuur}-${index}`}
                   className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-sm"
