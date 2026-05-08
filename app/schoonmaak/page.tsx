@@ -173,16 +173,18 @@ function SchoonmaakForm() {
 
         if (!res.ok || negeerResultaat) return;
 
-        const opgeslagenItems = items.filter((item) => {
-          const juisteWinkel = item.winkel === winkel;
-          const juisteDatum = item.datum === datum;
-          const juistePlan =
-            planType === "Opstartplan"
-              ? !item.titel || item.titel === planType
-              : item.titel === planType;
+        const opgeslagenItems = items
+          .filter((item) => {
+            const juisteWinkel = item.winkel === winkel;
+            const juisteDatum = item.datum === datum;
+            const juistePlan =
+              planType === "Opstartplan"
+                ? !item.titel || item.titel === planType
+                : item.titel === planType;
 
-          return juisteWinkel && juisteDatum && juistePlan;
-        });
+            return juisteWinkel && juisteDatum && juistePlan;
+          })
+          .sort((a, b) => b.id - a.id);
 
         const nieuwsteItem = opgeslagenItems[0];
 
