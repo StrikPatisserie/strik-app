@@ -7,6 +7,14 @@ import {
 
 const items = [
   {
+    href: "/ijs/bestellen",
+    label: "Bestellen",
+    title: "IJs bestellen",
+    description: "Snelle bestellijst met Bake-it nummers voor de zakelijke webshop.",
+    icon: strikIcons.ijs,
+    tone: "green" as const,
+  },
+  {
     href: "/ijs/info",
     label: "Documenten",
     title: "IJs Info",
