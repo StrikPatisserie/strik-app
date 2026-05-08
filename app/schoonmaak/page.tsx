@@ -12,14 +12,35 @@ type CleaningItem = {
   datum: string;
   taken: string[];
   opmerking: string;
+  temperatuurRegistraties?: TemperatuurRegistratie[];
 };
 
-const ijssalons = ["Lent", "Daalseweg", "Ziekerstraat", "Malden"];
+type TemperatuurRegistratie = {
+  id: string;
+  naam: string;
+  temperatuur: string;
+};
+
+type SchoonmaakAntwoorden = {
+  naam: string;
+  taken: string[];
+  opmerking: string;
+  temperatuurRegistraties: TemperatuurRegistratie[];
+  verzondenSignatuur?: string;
+};
+
+const ijssalons = [
+  "ijsloket Lent",
+  "ijsloket Heyendaal",
+  "ijsloket Daalseweg",
+  "ijsloket Ziekerstraat",
+];
 
 const algemeneTaken = [
   "Vitrine schoongemaakt",
   "Werkbank schoongemaakt",
   "Koeling gecontroleerd en schoon",
+  "Temperatuur registratie",
   "Vloer geveegd en gedweild",
   "Afval geleegd",
   "Toilet gecontroleerd",
@@ -27,10 +48,10 @@ const algemeneTaken = [
 ];
 
 const takenPerIjssalon = {
-  Lent: algemeneTaken,
-  Daalseweg: algemeneTaken,
-  Ziekerstraat: algemeneTaken,
-  Malden: algemeneTaken,
+  "ijsloket Lent": algemeneTaken,
+  "ijsloket Heyendaal": algemeneTaken,
+  "ijsloket Daalseweg": algemeneTaken,
+  "ijsloket Ziekerstraat": algemeneTaken,
 };
 
 function getVandaag() {
@@ -49,17 +70,46 @@ function getCleaningUrl() {
   return url;
 }
 
+function getDraftKey(winkel: string, datum: string) {
+  return `strik-schoonmaak-${datum}-${winkel}`;
+}
+
+function maakTemperatuurId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random()}`;
+}
+
+function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
+  return JSON.stringify({
+    naam: antwoorden.naam.trim(),
+    taken: antwoorden.taken,
+    opmerking: antwoorden.opmerking.trim(),
+    temperatuurRegistraties: antwoorden.temperatuurRegistraties.map((item) => ({
+      naam: item.naam.trim(),
+      temperatuur: item.temperatuur.trim(),
+    })),
+  });
+}
+
 export default function SchoonmaakPage() {
-  const [winkel, setWinkel] = useState("Lent");
+  const [winkel, setWinkel] = useState("ijsloket Lent");
   const [datum, setDatum] = useState(getVandaag);
   const [naam, setNaam] = useState("");
   const [taken, setTaken] = useState<string[]>([]);
   const [opmerking, setOpmerking] = useState("");
+  const [temperatuurRegistraties, setTemperatuurRegistraties] = useState<
+    TemperatuurRegistratie[]
+  >([]);
+  const [verzondenSignatuur, setVerzondenSignatuur] = useState("");
   const [status, setStatus] = useState("");
   const [ladenBezig, setLadenBezig] = useState(false);
-  const [opslaanBezig, setOpslaanBezig] = useState(false);
+  const [verzendenBezig, setVerzendenBezig] = useState(false);
 
   const takenLijst = takenPerIjssalon[winkel as keyof typeof takenPerIjssalon];
+  const temperatuurRegistratieActief = taken.includes("Temperatuur registratie");
 
   useEffect(() => {
     let negeerResultaat = false;
@@ -69,6 +119,22 @@ export default function SchoonmaakPage() {
       setStatus("");
 
       try {
+        const opgeslagenConcept = localStorage.getItem(getDraftKey(winkel, datum));
+
+        if (opgeslagenConcept) {
+          const concept = JSON.parse(opgeslagenConcept) as SchoonmaakAntwoorden;
+
+          if (negeerResultaat) return;
+
+          setTaken(concept.taken || []);
+          setNaam(concept.naam || "");
+          setOpmerking(concept.opmerking || "");
+          setTemperatuurRegistraties(concept.temperatuurRegistraties || []);
+          setVerzondenSignatuur(concept.verzondenSignatuur || "");
+          setStatus("Concept geladen.");
+          return;
+        }
+
         const res = await fetch(getCleaningUrl(), { cache: "no-store" });
         const items = (await res.json()) as CleaningItem[];
 
@@ -82,6 +148,17 @@ export default function SchoonmaakPage() {
         setTaken(nieuwsteItem?.taken || []);
         setNaam(nieuwsteItem?.naam || "");
         setOpmerking(nieuwsteItem?.opmerking || "");
+        setTemperatuurRegistraties(nieuwsteItem?.temperatuurRegistraties || []);
+        setVerzondenSignatuur(
+          nieuwsteItem
+            ? maakSignatuur({
+                naam: nieuwsteItem.naam || "",
+                taken: nieuwsteItem.taken || [],
+                opmerking: nieuwsteItem.opmerking || "",
+                temperatuurRegistraties: nieuwsteItem.temperatuurRegistraties || [],
+              })
+            : ""
+        );
 
         if (opgeslagenItems.length > 0) {
           setStatus("Opgeslagen antwoorden geladen.");
@@ -110,19 +187,101 @@ export default function SchoonmaakPage() {
     );
   }
 
-  async function opslaan() {
+  function getAntwoorden(): SchoonmaakAntwoorden {
+    return {
+      naam,
+      taken,
+      opmerking,
+      temperatuurRegistraties,
+      verzondenSignatuur,
+    };
+  }
+
+  function bewaarConcept(statusTekst = "Concept opgeslagen.") {
+    const antwoorden = getAntwoorden();
+
+    localStorage.setItem(
+      getDraftKey(winkel, datum),
+      JSON.stringify({
+        ...antwoorden,
+        verzondenSignatuur:
+          antwoorden.verzondenSignatuur === maakSignatuur(antwoorden)
+            ? antwoorden.verzondenSignatuur
+            : "",
+      })
+    );
+
+    setStatus(statusTekst);
+  }
+
+  function voegTemperatuurRegistratieToe() {
+    setTemperatuurRegistraties((prev) => [
+      ...prev,
+      { id: maakTemperatuurId(), naam: "", temperatuur: "" },
+    ]);
+  }
+
+  function updateTemperatuurRegistratie(
+    id: string,
+    veld: "naam" | "temperatuur",
+    waarde: string
+  ) {
+    setTemperatuurRegistraties((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [veld]: waarde } : item))
+    );
+  }
+
+  function verwijderTemperatuurRegistratie(id: string) {
+    setTemperatuurRegistraties((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function valideerAntwoorden() {
     if (!naam.trim()) {
       setStatus("Vul eerst je naam in.");
-      return;
+      return false;
     }
 
     if (taken.length === 0) {
       setStatus("Vink minimaal 1 taak af.");
+      return false;
+    }
+
+    if (temperatuurRegistratieActief) {
+      if (temperatuurRegistraties.length === 0) {
+        setStatus("Voeg minimaal 1 temperatuurregistratie toe.");
+        return false;
+      }
+
+      const onvolledig = temperatuurRegistraties.some(
+        (item) => !item.naam.trim() || !item.temperatuur.trim()
+      );
+
+      if (onvolledig) {
+        setStatus("Vul bij elke temperatuurregistratie een naam en temperatuur in.");
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function opslaan() {
+    bewaarConcept();
+  }
+
+  async function verzenden() {
+    if (!valideerAntwoorden()) return;
+
+    const antwoorden = getAntwoorden();
+    const signatuur = maakSignatuur(antwoorden);
+
+    if (signatuur === verzondenSignatuur) {
+      setStatus("Deze lijst is al verzonden.");
       return;
     }
 
     setStatus("Opslaan...");
-    setOpslaanBezig(true);
+    setVerzendenBezig(true);
 
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
@@ -139,6 +298,10 @@ export default function SchoonmaakPage() {
           datum,
           taken,
           opmerking: opmerking.trim(),
+          temperatuurRegistraties: temperatuurRegistraties.map((item) => ({
+            naam: item.naam.trim(),
+            temperatuur: item.temperatuur.trim(),
+          })),
         }),
         signal: controller.signal,
       });
@@ -148,7 +311,12 @@ export default function SchoonmaakPage() {
       } | null;
 
       if (res.ok) {
-        setStatus("Opgeslagen.");
+        setVerzondenSignatuur(signatuur);
+        localStorage.setItem(
+          getDraftKey(winkel, datum),
+          JSON.stringify({ ...antwoorden, verzondenSignatuur: signatuur })
+        );
+        setStatus("Opgeslagen en verzonden.");
         return;
       }
 
@@ -167,7 +335,7 @@ export default function SchoonmaakPage() {
       setStatus("Kan geen verbinding maken met WordPress.");
     } finally {
       window.clearTimeout(timeoutId);
-      setOpslaanBezig(false);
+      setVerzendenBezig(false);
     }
   }
 
@@ -243,12 +411,80 @@ export default function SchoonmaakPage() {
             className="min-h-28 w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
           />
 
+          {temperatuurRegistratieActief && (
+            <section className="rounded-3xl bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-bold">Temperatuur registratie</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Voeg elke koeling of vriezer toe met temperatuur.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {temperatuurRegistraties.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-3"
+                  >
+                    <input
+                      value={item.naam}
+                      onChange={(e) =>
+                        updateTemperatuurRegistratie(item.id, "naam", e.target.value)
+                      }
+                      placeholder="Bijv. Opslag vriezer"
+                      className="mb-2 w-full rounded-xl border border-[#e7e0d8] bg-white p-3"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        value={item.temperatuur}
+                        onChange={(e) =>
+                          updateTemperatuurRegistratie(
+                            item.id,
+                            "temperatuur",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Temperatuur"
+                        inputMode="decimal"
+                        className="min-w-0 flex-1 rounded-xl border border-[#e7e0d8] bg-white p-3"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => verwijderTemperatuurRegistratie(item.id)}
+                        className="rounded-xl bg-white px-4 text-sm font-bold text-[#d75a48]"
+                      >
+                        Wis
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={voegTemperatuurRegistratieToe}
+                  className="w-full rounded-2xl border border-dashed border-[#c3d3bc] bg-[#c3d3bc]/20 p-4 text-sm font-bold"
+                >
+                  Koeling toevoegen
+                </button>
+              </div>
+            </section>
+          )}
+
           <button
             onClick={opslaan}
-            disabled={opslaanBezig}
+            className="w-full rounded-full bg-[#c3d3bc] p-4 font-bold text-[#2d2a26] shadow-sm active:scale-[0.98] disabled:opacity-60"
+          >
+            Opslaan
+          </button>
+
+          <button
+            onClick={verzenden}
+            disabled={verzendenBezig}
             className="w-full rounded-full bg-[#d75a48] p-4 font-bold text-white shadow-sm active:scale-[0.98] disabled:opacity-60"
           >
-            {opslaanBezig ? "Opslaan..." : "Opslaan"}
+            {verzendenBezig ? "Verzenden..." : "Opslaan en verzenden"}
           </button>
 
           {status && (
