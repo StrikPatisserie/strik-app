@@ -424,54 +424,6 @@ export const takenPerPlanAndShop: Record<PlanType, Record<string, Task[]>> = {
   },
 };
 
-const infoForTaskLabel: Record<string, string> = {
-  "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!":
-    "LET OP! Dit hoeft alleen aan het begin van de shift, nog voordat de vitrine aanstaat. Met een schepje halemid in een emmer met warm water maak je de binnenkant van de vitrine elke dag schoon zodat er geen aangekoekt ijs of ander viezigheid meer te zien is.",
-  "Ijsvitrine van buiten schoonmaken met Glassex en torkrol":
-    "Het glaswerk van de vitrine wordt snel vies door ijs wat op de vitrine valt. Maak dit na iedere shift met Glassex schoon en houd tijdens je shift in de gaten of het glas er netjes uitziet.",
-  "Schone sponsen en schone ijsscheppen in de spoelbakken doen":
-    "Met spoelbakjes bedoelen we de twee bakjes die bij de ijsvitrine zitten waarmee je je ijsspatel schoonspoelt. Vul een kannetje met kokend heet water, giet dit in het bakje en spoel het ijs weg. Maak het bakje ook buitenkant schoon met een nat doekje.",
-  "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik.":
-    "De slagroommachine moet iedere dag goed schoon worden gemaakt. Haal de deksel van de machine en het bakje eruit. Vul een beker met lauw water en een klein beetje reiniger. Laat de machine doorlopen tot het bekertje leeg is, en herhaal daarna met alleen water.",
-  "Slagroom- en milkshakemachine reinigen":
-    "De slagroommachine moet dagelijks worden schoongemaakt omdat slagroom snel gaat schimmelen. Spoel de machine met reiniger door en spoel daarna nog een keer met alleen water. De milkshakemachine schoon je door een beker met lauw water te gebruiken en deze even te laten lopen.",
-  "Koffiemachine controleren":
-    "De koffiemachine moet iedere dag schoongemaakt worden. Laat hem even doorlopen, maak de bak met koffiedrap schoon en reinig alle losse onderdelen zoals pistolen, schuimbekertjes en stoompijpje. Één keer per week gebruik je speciale reiniger.",
-  "Vloer vegen en afnemen met natte dweil en allesreiniger":
-    "Het is belangrijk dat er na iedere shift wordt geveegd én gedweild. Vooral als het druk is geweest valt er veel ijs op de vloer, en als dit niet wordt schoongemaakt gaat het plakken en koekt het aan.",
-  "Prullenbakken naar buiten (controleer op de zak leeg is)":
-    "Na iedere shift gaat er een nieuwe zak in de vuilnisbak. Als de vuilnisbak van de buitenkant vies is, maak deze schoon met een nat doekje.",
-  "Prullenbakken legen & schone zak (i.v.t)":
-    "Na iedere shift gaat er een nieuwe zak in de vuilnisbak. Als de vuilnisbak van de buitenkant vies is, maak deze schoon met een nat doekje.",
-  "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine":
-    "Ook het toebehoren van het ijs wordt iedere dag schoongemaakt. Denk aan ijsspatels, normale spatels, hoorntjeshouders en servettenbakjes. Dit doe je met een nat doekje.",
-  "Keuken schoonmaken & afwas wegwerken":
-    "Ieder dag wordt de (ijs)keuken schoon achtergelaten voor de volgende dag. Zorg dat de wasbak schoon is, er geen viezigheden te zien zijn en alles netjes is opgeborgen.",
-  "Keukentje schoonmaken":
-    "Ieder dag wordt de (ijs)keuken schoon achtergelaten voor de volgende dag. Zorg dat de wasbak schoon is, er geen viezigheden te zien zijn en alles netjes is opgeborgen.",
-};
-
-function applyInfo(tasks: Task[]) {
-  for (const task of tasks) {
-    if (infoForTaskLabel[task.label]) {
-      task.info = infoForTaskLabel[task.label];
-    }
-
-    if (task.children) {
-      applyInfo(task.children);
-    }
-  }
-}
-
-applyInfo(opstartTakenPerIjssalon["ijsloket Lent"]);
-applyInfo(opstartTakenPerIjssalon["ijsloket Heyendaal"]);
-applyInfo(opstartTakenPerIjssalon["ijsloket Daalseweg"]);
-applyInfo(opstartTakenPerIjssalon["ijsloket Ziekerstraat"]);
-applyInfo(afsluitTakenLent);
-applyInfo(afsluitTakenHeyendaal);
-applyInfo(afsluitTakenDaalseweg);
-applyInfo(afsluitTakenZiekerstraat);
-
 export function flattenTasks(tasks: Task[]): Task[] {
   return tasks.flatMap((task) => [task, ...(task.children ? flattenTasks(task.children) : [])]);
 }

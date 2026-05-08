@@ -20,6 +20,11 @@ type CleaningItem = {
   taken: string[];
   opmerking: string;
   temperatuurRegistraties?: TemperatuurRegistratie[];
+  fotoUploads?: {
+    label: string;
+    fileName: string;
+    dataUrl: string;
+  }[];
 };
 
 const ijssalons = [
@@ -205,6 +210,30 @@ export default function SchoonmaakOverzichtPage() {
                     </div>
                   </div>
                 )}
+
+              {item.fotoUploads && item.fotoUploads.length > 0 && (
+                <div className="mt-4 rounded-2xl bg-[#f8f6f3] p-4">
+                  <p className="mb-3 font-bold">Geüploade foto&apos;s</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {item.fotoUploads.map((foto) => (
+                      <div
+                        key={foto.label}
+                        className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
+                      >
+                        <p className="mb-2 text-sm font-semibold">{foto.label}</p>
+                        <img
+                          src={foto.dataUrl}
+                          alt={foto.fileName}
+                          className="h-40 w-full rounded-2xl object-cover"
+                        />
+                        <p className="mt-2 truncate text-sm text-gray-600">
+                          {foto.fileName}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {item.opmerking && (
                 <p className="mt-4 rounded-2xl bg-[#f8f6f3] p-4 text-sm text-gray-700">

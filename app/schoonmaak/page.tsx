@@ -14,6 +14,13 @@ type TemperatuurRegistratie = {
   temperatuur: string;
 };
 
+type PhotoUpload = {
+  id: string;
+  label: string;
+  fileName: string;
+  dataUrl: string;
+};
+
 type CleaningItem = {
   id: number;
   titel?: string;
@@ -23,6 +30,7 @@ type CleaningItem = {
   taken: string[];
   opmerking: string;
   temperatuurRegistraties?: TemperatuurRegistratie[];
+  fotoUploads?: PhotoUpload[];
 };
 
 type SchoonmaakAntwoorden = {
@@ -31,6 +39,7 @@ type SchoonmaakAntwoorden = {
   taken: string[];
   opmerking: string;
   temperatuurRegistraties: TemperatuurRegistratie[];
+  fotoUploads: PhotoUpload[];
   verzondenSignatuur?: string;
 };
 
@@ -54,6 +63,28 @@ function getDraftKey(winkel: string, datum: string, planType: PlanType) {
   return `strik-schoonmaak-${datum}-${winkel}-${planType}`;
 }
 
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Kan het bestand niet lezen."));
+      }
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+const requiredFotoUploadLabels = [
+  "Bovenkant ijsvitrine",
+  "Keuken",
+  "Vloer",
+  "Spoelbakje",
+] as const;
+
 function maakTemperatuurId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -71,6 +102,10 @@ function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
     temperatuurRegistraties: antwoorden.temperatuurRegistraties.map((item) => ({
       naam: item.naam.trim(),
       temperatuur: item.temperatuur.trim(),
+    })),
+    fotoUploads: antwoorden.fotoUploads.map((upload) => ({
+      label: upload.label,
+      fileName: upload.fileName,
     })),
   });
 }
@@ -98,6 +133,7 @@ function SchoonmaakForm() {
     | { title: string; description: string }
     | null
   >(null);
+  const [fotoUploads, setFotoUploads] = useState<PhotoUpload[]>([]);
 
   const takenLijst = useMemo(
     () => getTakenLijst(planType, winkel),
@@ -149,6 +185,7 @@ function SchoonmaakForm() {
           setNaam(concept.naam || "");
           setOpmerking(concept.opmerking || "");
           setTemperatuurRegistraties(concept.temperatuurRegistraties || []);
+          setFotoUploads(concept.fotoUploads || []);
           setVerzondenSignatuur(concept.verzondenSignatuur || "");
           setStatus("Concept geladen.");
           return;
@@ -180,6 +217,7 @@ function SchoonmaakForm() {
         setNaam(nieuwsteItem?.naam || "");
         setOpmerking(nieuwsteItem?.opmerking || "");
         setTemperatuurRegistraties(nieuwsteItem?.temperatuurRegistraties || []);
+        setFotoUploads(nieuwsteItem?.fotoUploads || []);
         setVerzondenSignatuur(
           nieuwsteItem
             ? maakSignatuur({
@@ -188,6 +226,7 @@ function SchoonmaakForm() {
                 taken: nieuwsteItem.taken || [],
                 opmerking: nieuwsteItem.opmerking || "",
                 temperatuurRegistraties: nieuwsteItem.temperatuurRegistraties || [],
+                fotoUploads: nieuwsteItem.fotoUploads || [],
               })
             : ""
         );
@@ -252,6 +291,7 @@ function SchoonmaakForm() {
       taken: taken.map((id) => taskLabelById[id] ?? id),
       opmerking,
       temperatuurRegistraties,
+      fotoUploads,
       verzondenSignatuur,
     };
   }
@@ -294,6 +334,26 @@ function SchoonmaakForm() {
     setTemperatuurRegistraties((prev) => prev.filter((item) => item.id !== id));
   }
 
+  function updateFotoUpload(label: string, file: File | null) {
+    if (!file) return;
+
+    readFileAsDataUrl(file).then((dataUrl) => {
+      setFotoUploads((prev) => [
+        ...prev.filter((upload) => upload.label !== label),
+        {
+          id: `${label}-${Date.now()}`,
+          label,
+          fileName: file.name,
+          dataUrl,
+        },
+      ]);
+    });
+  }
+
+  function verwijderFotoUpload(label: string) {
+    setFotoUploads((prev) => prev.filter((upload) => upload.label !== label));
+  }
+
   function valideerAntwoorden() {
     if (!naam.trim()) {
       setStatus("Vul eerst je naam in.");
@@ -317,6 +377,19 @@ function SchoonmaakForm() {
 
       if (onvolledig) {
         setStatus("Vul bij elke temperatuurregistratie een naam en temperatuur in.");
+        return false;
+      }
+    }
+
+    if (planType === "Afsluitplan") {
+      const ontbrekendeFoto = requiredFotoUploadLabels.find(
+        (label) => !fotoUploads.some((upload) => upload.label === label)
+      );
+
+      if (ontbrekendeFoto) {
+        setStatus(
+          `Upload eerst een foto voor ${ontbrekendeFoto}.`
+        );
         return false;
       }
     }
@@ -361,6 +434,11 @@ function SchoonmaakForm() {
           temperatuurRegistraties: temperatuurRegistraties.map((item) => ({
             naam: item.naam.trim(),
             temperatuur: item.temperatuur.trim(),
+          })),
+          fotoUploads: fotoUploads.map((upload) => ({
+            label: upload.label,
+            fileName: upload.fileName,
+            dataUrl: upload.dataUrl,
           })),
         }),
         signal: controller.signal,
@@ -544,6 +622,67 @@ function SchoonmaakForm() {
             placeholder="Opmerking"
             className="min-h-28 w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
           />
+
+          {planType === "Afsluitplan" && (
+            <section className="rounded-3xl bg-white/85 p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-bold">Verplichte fotos</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Upload een foto voor elke verplichte locatie voordat je verzendt.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {requiredFotoUploadLabels.map((label) => {
+                  const upload = fotoUploads.find((item) => item.label === label);
+
+                  return (
+                    <div
+                      key={label}
+                      className="rounded-3xl border border-[#e7e0d8] bg-[#f8f6f3] p-4"
+                    >
+                      <p className="mb-2 text-sm font-semibold">{label}</p>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) =>
+                          updateFotoUpload(label, e.target.files?.[0] ?? null)
+                        }
+                        className="mb-3 w-full text-sm text-[#4b5d47]"
+                      />
+                      {upload ? (
+                        <div className="space-y-2">
+                          <img
+                            src={upload.dataUrl}
+                            alt={upload.fileName}
+                            className="h-28 w-full rounded-2xl object-cover"
+                          />
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="truncate text-[#2d2a26]">
+                              {upload.fileName}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => verwijderFotoUpload(label)}
+                              className="rounded-full bg-white px-3 py-1 text-[#d75a48]"
+                            >
+                              Verwijder
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">
+                          Selecteer een foto van {label.toLowerCase()}.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {temperatuurRegistratieActief && (
             <section className="rounded-3xl bg-white/85 p-4 shadow-sm">
