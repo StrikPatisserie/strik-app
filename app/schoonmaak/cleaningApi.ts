@@ -6,6 +6,7 @@ export const CLEANING_API_KEY = "schoonmaak-ijs-strik";
 
 const PLAN_MARKER_PREFIX = "__strik_plan:";
 const PHOTO_MARKER_PREFIX = "__strik_photo:";
+const PHOTO_MARKER_V2_PREFIX = "__strik_photo_v2:";
 const PHOTO_TEMPERATURE_PREFIX = "__strik_photo_temperature:";
 
 export type CleaningTemperatureRegistration = {
@@ -63,7 +64,8 @@ export function getPlanMarker(planType: PlanType) {
 export function isInternalCleaningTask(taak: string) {
   return (
     taak.startsWith(PLAN_MARKER_PREFIX) ||
-    taak.startsWith(PHOTO_MARKER_PREFIX)
+    taak.startsWith(PHOTO_MARKER_PREFIX) ||
+    taak.startsWith(PHOTO_MARKER_V2_PREFIX)
   );
 }
 
@@ -77,16 +79,9 @@ export function withCleaningMetaMarkers(
   fotoUploads: CleaningPhotoUpload[] = []
 ) {
   const fotoMarkers = fotoUploads
-    .filter((upload) => upload.url)
+    .filter((upload) => upload.url || upload.dataUrl)
     .map((upload) =>
-      `${PHOTO_MARKER_PREFIX}${encodeURIComponent(
-        JSON.stringify({
-          label: upload.label,
-          fileName: upload.fileName,
-          url: upload.url,
-          mediaId: upload.mediaId,
-        })
-      )}`
+      `${PHOTO_MARKER_V2_PREFIX}${encodePhotoUploadForStorage(upload)}`
     );
 
   return [
@@ -103,16 +98,58 @@ export function createPhotoTemperatureRegistrations(
     .filter((upload) => upload.url || upload.dataUrl)
     .map((upload) => ({
       naam: `${PHOTO_TEMPERATURE_PREFIX}${upload.label}`,
-      temperatuur: encodeURIComponent(
-        JSON.stringify({
-          label: upload.label,
-          fileName: upload.fileName,
-          url: upload.url,
-          dataUrl: upload.url ? undefined : upload.dataUrl,
-          mediaId: upload.mediaId,
-        })
-      ),
+      temperatuur: encodePhotoUploadForStorage(upload),
     }));
+}
+
+function photoUploadForStorage(upload: CleaningPhotoUpload) {
+  return {
+    label: upload.label,
+    fileName: upload.fileName,
+    url: upload.url,
+    dataUrl: upload.url ? undefined : upload.dataUrl,
+    mediaId: upload.mediaId,
+  };
+}
+
+function encodeBase64Url(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function decodeBase64Url(value: string) {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const paddedBase64 = base64.padEnd(
+    Math.ceil(base64.length / 4) * 4,
+    "="
+  );
+  const binary = atob(paddedBase64);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+
+  return new TextDecoder().decode(bytes);
+}
+
+function encodePhotoUploadForStorage(upload: CleaningPhotoUpload) {
+  return encodeBase64Url(JSON.stringify(photoUploadForStorage(upload)));
+}
+
+function decodePhotoUploadFromStorage(value: string) {
+  const upload = JSON.parse(decodeBase64Url(value)) as CleaningPhotoUpload;
+
+  if (!upload.label || !upload.fileName || (!upload.url && !upload.dataUrl)) {
+    return null;
+  }
+
+  return upload;
 }
 
 function extractPhotoUploadsFromTemperatureRegistrations(
@@ -122,15 +159,8 @@ function extractPhotoUploadsFromTemperatureRegistrations(
     if (!isInternalTemperatureRegistration(registratie)) return [];
 
     try {
-      const upload = JSON.parse(
-        decodeURIComponent(registratie.temperatuur)
-      ) as CleaningPhotoUpload;
-
-      if (!upload.label || !upload.fileName || (!upload.url && !upload.dataUrl)) {
-        return [];
-      }
-
-      return [upload];
+      const upload = decodePhotoUploadFromStorage(registratie.temperatuur);
+      return upload ? [upload] : [];
     } catch {
       return [];
     }
@@ -139,6 +169,17 @@ function extractPhotoUploadsFromTemperatureRegistrations(
 
 export function extractPhotoUploadsFromTasks(taken: string[] = []) {
   return taken.flatMap((taak) => {
+    if (taak.startsWith(PHOTO_MARKER_V2_PREFIX)) {
+      try {
+        const upload = decodePhotoUploadFromStorage(
+          taak.slice(PHOTO_MARKER_V2_PREFIX.length)
+        );
+        return upload ? [upload] : [];
+      } catch {
+        return [];
+      }
+    }
+
     if (!taak.startsWith(PHOTO_MARKER_PREFIX)) return [];
 
     try {

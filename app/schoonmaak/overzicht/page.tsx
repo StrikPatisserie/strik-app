@@ -186,11 +186,11 @@ function CleaningCard({ item }: Readonly<{ item: CleaningItem }>) {
         </span>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {zichtbareTaken.map((taak) => (
           <div
             key={taak}
-            className="rounded-2xl bg-[#f8f6f3] px-4 py-3 text-sm font-semibold"
+            className="rounded-2xl bg-[#f8f6f3] px-3 py-2 text-sm font-semibold leading-snug"
           >
             ✓ {taak}
           </div>

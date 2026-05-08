@@ -90,7 +90,7 @@ function verkleinFotoVoorUpload(file: File) {
     image.onload = () => {
       URL.revokeObjectURL(objectUrl);
 
-      const maxSize = 900;
+      const maxSize = 700;
       const grootsteZijde = Math.max(image.width, image.height);
       const schaal = Math.min(1, maxSize / grootsteZijde);
 
@@ -124,7 +124,7 @@ function verkleinFotoVoorUpload(file: File) {
           );
         },
         "image/jpeg",
-        0.58
+        0.45
       );
     };
 
@@ -413,12 +413,13 @@ function SchoonmaakForm() {
 
     setStatus(`Foto voorbereiden: ${label}...`);
 
+    let volgendeUploads: PhotoUpload[];
+
     try {
       const uploadFile = await verkleinFotoVoorUpload(file);
       const previewUrl = await readFileAsDataUrl(uploadFile);
-
-      setFotoUploads((prev) => [
-        ...prev.filter((upload) => upload.label !== label),
+      volgendeUploads = [
+        ...fotoUploads.filter((upload) => upload.label !== label),
         {
           id: `${label}-${Date.now()}`,
           label,
@@ -427,12 +428,15 @@ function SchoonmaakForm() {
           dataUrl: previewUrl,
           file: uploadFile,
         },
-      ]);
-
-      setStatus("Foto klaar om op te slaan.");
+      ];
     } catch {
       setStatus("Foto kon niet gelezen worden.");
+      return;
     }
+
+    setFotoUploads(volgendeUploads);
+    setStatus("Foto opslaan...");
+    await submitAntwoorden(volgendeUploads);
   }
 
   function verwijderFotoUpload(label: string) {
@@ -504,7 +508,7 @@ function SchoonmaakForm() {
     };
   }
 
-  function valideerAntwoorden() {
+  function valideerAntwoorden(volgendeFotoUploads: PhotoUpload[] = fotoUploads) {
     const heeftTemperatuur = temperatuurRegistraties.some(
       (item) => item.naam.trim() || item.temperatuur.trim()
     );
@@ -513,7 +517,7 @@ function SchoonmaakForm() {
       taken.length > 0 ||
       opmerking.trim() ||
       heeftTemperatuur ||
-      fotoUploads.length > 0;
+      volgendeFotoUploads.length > 0;
 
     if (!heeftInhoud) {
       setStatus("Vul eerst iets in om op te slaan.");
@@ -523,8 +527,10 @@ function SchoonmaakForm() {
     return true;
   }
 
-  async function submitAntwoorden() {
-    if (!valideerAntwoorden()) return;
+  async function submitAntwoorden(
+    volgendeFotoUploads: PhotoUpload[] = fotoUploads
+  ) {
+    if (!valideerAntwoorden(volgendeFotoUploads)) return;
 
     setStatus("Opslaan...");
     setVerzendenBezig(true);
@@ -532,7 +538,9 @@ function SchoonmaakForm() {
     let timeoutId: number | undefined;
 
     try {
-      const fotoUploadsVoorOpslaan = await uploadNieuweFotos(fotoUploads);
+      const fotoUploadsVoorOpslaan = await uploadNieuweFotos(
+        volgendeFotoUploads
+      );
       setFotoUploads(fotoUploadsVoorOpslaan);
 
       const antwoorden = getAntwoorden(fotoUploadsVoorOpslaan);
@@ -684,16 +692,16 @@ function SchoonmaakForm() {
               )}
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2.5">
               {takenLijst.map((taak) => (
                 <div
                   key={taak.id}
-                  className="space-y-3 rounded-2xl border border-[#d6e2cf] bg-white p-3 shadow-sm"
+                  className="space-y-2 rounded-2xl border border-[#d6e2cf] bg-white p-2 shadow-sm"
                 >
                   <button
                     type="button"
                     onClick={() => toggleTaak(taak)}
-                    className={`w-full rounded-2xl border px-4 py-4 text-left text-base font-bold leading-snug shadow-sm transition active:scale-[0.99] ${
+                    className={`w-full rounded-2xl border px-3 py-3 text-left text-base font-bold leading-tight shadow-sm transition active:scale-[0.99] ${
                       isComplete(taak)
                         ? "border-[#8fb184] bg-[#c3d3bc] text-[#243620]"
                         : "border-[#b8ccb0] bg-[#dce8d6] text-[#2d3f29]"
@@ -716,13 +724,13 @@ function SchoonmaakForm() {
                   </button>
 
                   {taak.children && (
-                    <div className="space-y-2 rounded-2xl bg-[#f8f6f3] p-3">
+                    <div className="space-y-1.5 rounded-2xl bg-[#f8f6f3] p-2">
                       {taak.children.map((subtaak) => (
                         <div key={subtaak.id} className="space-y-1">
                           <button
                             type="button"
                             onClick={() => toggleTaak(subtaak)}
-                            className={`w-full rounded-xl border px-3 py-3 text-left text-sm font-normal leading-relaxed transition active:scale-[0.99] ${
+                            className={`w-full rounded-xl border px-3 py-2 text-left text-sm font-normal leading-snug transition active:scale-[0.99] ${
                               taken.includes(subtaak.id)
                                 ? "border-[#b8ccb0] bg-[#eef3ea] text-[#243620]"
                                 : "border-[#e7e0d8] bg-white text-[#4f554c]"
