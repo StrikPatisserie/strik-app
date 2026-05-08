@@ -42,10 +42,9 @@ export default function Home() {
             Strik Patisserie
           </p>
           <h1
-            className="mt-2 text-[2.65rem] font-bold leading-none text-[#2d2a26]"
+            className="mt-2 text-[3.1rem] leading-none text-[#2d2a26]"
             style={{
-              fontFamily:
-                "Marker Felt, Chalkboard SE, Comic Sans MS, Arial Rounded MT Bold, cursive",
+              fontFamily: "Butterscotch, Marker Felt, cursive",
               letterSpacing: "0.01em",
             }}
           >
