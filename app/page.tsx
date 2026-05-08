@@ -139,6 +139,28 @@ export default function Home() {
               </div>
             </div>
           </Link>
+          <Link
+            href="/schoonmaak/overzicht"
+            className="block rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm transition active:scale-[0.98]"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <span className="rounded-full bg-[#a27a8e]/15 px-3 py-1 text-xs font-semibold text-[#a27a8e]">
+                  Manager
+                </span>
+                <h2 className="mt-3 text-xl font-bold">
+                  Schoonmaak overzicht
+                </h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Bekijk verzonden registraties per datum en ijssalon.
+                </p>
+              </div>
+
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#a27a8e] text-xl font-bold text-white">
+                →
+              </div>
+            </div>
+          </Link>
           <NotificationToggle />
         </div>
       </div>
