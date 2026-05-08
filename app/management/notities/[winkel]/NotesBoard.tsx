@@ -39,6 +39,7 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
   const [saving, setSaving] = useState(false);
   const [revision, setRevision] = useState(0);
   const hasLoadedRef = useRef(false);
+  const latestBoardRef = useRef<NotesBoardData>(getEmptyNotesBoard(winkel));
 
   const openTodoCount = useMemo(
     () => board.todos.filter((todo) => !todo.done).length,
@@ -46,6 +47,10 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
   );
 
   const completedTodoCount = board.todos.length - openTodoCount;
+
+  useEffect(() => {
+    latestBoardRef.current = board;
+  }, [board]);
 
   function mutateBoard(updater: (current: NotesBoardData) => NotesBoardData) {
     setBoard((current) => updater(current));
@@ -125,11 +130,11 @@ export default function NotesBoard({ winkel, winkelLabel }: NotesBoardProps) {
     if (!hasLoadedRef.current || revision === 0) return;
 
     const timeoutId = window.setTimeout(() => {
-      saveBoard(board);
+      saveBoard(latestBoardRef.current);
     }, 650);
 
     return () => window.clearTimeout(timeoutId);
-  }, [board, revision, saveBoard]);
+  }, [revision, saveBoard]);
 
   function addNote() {
     const text = newNote.trim();
