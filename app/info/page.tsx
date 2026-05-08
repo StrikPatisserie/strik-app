@@ -19,8 +19,8 @@ export default async function InfoPage() {
   return (
     <StrikShell>
       <StrikPageHeader
-        title="Belangrijke info"
-        description="Prijslijsten, allergenen en interne documenten."
+        title="Belangrijke winkelinfo"
+        description="Algemene documenten voor de winkel, zoals prijs- en bedrijfsinformatie."
         icon={strikIcons.info}
         tone="light"
       />

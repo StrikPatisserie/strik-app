@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 
 const CLEANING_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
 const CLEANING_API_KEY = "schoonmaak-ijs-strik";
 
+type PlanType = "Opstartplan" | "Afsluitplan";
+
+type TemperatuurRegistratie = {
+  id: string;
+  naam: string;
+  temperatuur: string;
+};
+
 type CleaningItem = {
   id: number;
+  titel?: string;
   winkel: string;
   naam: string;
   datum: string;
@@ -16,13 +26,8 @@ type CleaningItem = {
   temperatuurRegistraties?: TemperatuurRegistratie[];
 };
 
-type TemperatuurRegistratie = {
-  id: string;
-  naam: string;
-  temperatuur: string;
-};
-
 type SchoonmaakAntwoorden = {
+  planType: PlanType;
   naam: string;
   taken: string[];
   opmerking: string;
@@ -37,23 +42,265 @@ const ijssalons = [
   "ijsloket Ziekerstraat",
 ];
 
-const algemeneTaken = [
-  "Vitrine schoongemaakt",
-  "Werkbank schoongemaakt",
-  "Koeling gecontroleerd en schoon",
-  "Temperatuur registratie",
-  "Vloer geveegd en gedweild",
-  "Afval geleegd",
-  "Toilet gecontroleerd",
-  "Koffiehoek schoon",
+const planOptions: { value: PlanType; label: string }[] = [
+  { value: "Opstartplan", label: "Opstartplan" },
+  { value: "Afsluitplan", label: "Afsluitplan" },
 ];
 
-const takenPerIjssalon = {
-  "ijsloket Lent": algemeneTaken,
-  "ijsloket Heyendaal": algemeneTaken,
-  "ijsloket Daalseweg": algemeneTaken,
-  "ijsloket Ziekerstraat": algemeneTaken,
+type Task = {
+  id: string;
+  label: string;
+  children?: Task[];
 };
+
+const opstartTakenPerIjssalon: Record<string, Task[]> = {
+  "ijsloket Lent": [
+    {
+      id: "lent-1",
+      label: "Loket klaarmaken",
+      children: [
+        { id: "lent-1-1", label: "Prullenbakken naar buiten (controleer op de zak leeg is)" },
+        { id: "lent-1-2", label: "Vlag naar buiten" },
+        { id: "lent-1-3", label: "Ijshoorntje naar buiten" },
+        { id: "lent-1-4", label: "Luifel uitrollen" },
+      ],
+    },
+    {
+      id: "lent-2",
+      label: "IJSVITRINE SCHOONMAKEN & AANZETTEN",
+      children: [
+        {
+          id: "lent-2-1",
+          label: "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!",
+        },
+        { id: "lent-2-2", label: "Ijsvitrine aanzetten naar -16, lamp van ijsvitrine ook aanzetten!" },
+        { id: "lent-2-3", label: "Ijsvitrine van buiten schoonmaken met Glassex en torkrol" },
+        { id: "lent-2-4", label: "Metalen staven in vitrine plaatsen" },
+      ],
+    },
+    {
+      id: "lent-3",
+      label: "IJSVITRINE VULLEN",
+      children: [
+        { id: "lent-3-1", label: "Als de vitrine kouder is dan -10 graden, begin je met de ijsbakken in de vitrine zetten." },
+        { id: "lent-3-2", label: "Vul de ijsvitrine zoals de vaste indeling. Zijn er smaken op waardoor je een lege plek hebt? Vul deze dan met een smaak die je wel nog op voorraad hebt." },
+      ],
+    },
+    {
+      id: "lent-4",
+      label: "TOEBEHOREN KLAARZETTEN",
+      children: [
+        { id: "lent-4-1", label: "Houder met ijshoorntjes aanvullen (FIFO!!). LET OP: zeer breekbaar, dus voorzichtig!" },
+        { id: "lent-4-2", label: "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine" },
+        { id: "lent-4-3", label: "Schone sponsen en schone ijsscheppen in de spoelbakken doen" },
+        { id: "lent-4-4", label: "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik." },
+      ],
+    },
+    {
+      id: "lent-5",
+      label: "SALON SCHOONMAKEN",
+      children: [
+        { id: "lent-5-1", label: "Glaswerk van vitrine schoonmaken met Glassex en torkrol" },
+        { id: "lent-5-2", label: "Keuken schoonmaken & afwas wegwerken" },
+      ],
+    },
+  ],
+  "ijsloket Daalseweg": [
+    {
+      id: "daalseweg-1",
+      label: "Loket klaarmaken",
+      children: [
+        { id: "daalseweg-1-1", label: "Prullenbakken naar buiten (controleer op de zak leeg is)" },
+        { id: "daalseweg-1-2", label: "Vlag naar buiten" },
+        { id: "daalseweg-1-3", label: "Ijshoorntje naar buiten" },
+        { id: "daalseweg-1-4", label: "Luifel uitrollen" },
+      ],
+    },
+    {
+      id: "daalseweg-2",
+      label: "IJSVITRINE SCHOONMAKEN & AANZETTEN",
+      children: [
+        {
+          id: "daalseweg-2-1",
+          label: "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!",
+        },
+        { id: "daalseweg-2-2", label: "Ijsvitrine aanzetten naar -16, lamp van ijsvitrine ook aanzetten!" },
+        { id: "daalseweg-2-3", label: "Ijsvitrine van buiten schoonmaken met Glassex en torkrol" },
+        { id: "daalseweg-2-4", label: "Metalen staven in vitrine plaatsen" },
+      ],
+    },
+    {
+      id: "daalseweg-3",
+      label: "IJSVITRINE VULLEN",
+      children: [
+        { id: "daalseweg-3-1", label: "Als de vitrine kouder is dan -10 graden, begin je met de ijsbakken in de vitrine zetten. Pak ijsbakken uit de vriezer in het ijsloket, en vul eventueel aan met bakken uit de vriezer achter in de winkel." },
+        { id: "daalseweg-3-2", label: "Vul de ijsvitrine zoals de vaste indeling. Zijn er smaken op waardoor je een lege plek hebt? Vul deze dan met een smaak die je wel nog op voorraad hebt." },
+      ],
+    },
+    {
+      id: "daalseweg-4",
+      label: "TOEBEHOREN KLAARZETTEN",
+      children: [
+        { id: "daalseweg-4-1", label: "Houder met ijshoorntjes aanvullen (FIFO!!). LET OP: zeer breekbaar, dus voorzichtig!" },
+        { id: "daalseweg-4-2", label: "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine" },
+        { id: "daalseweg-4-3", label: "Schone sponsen en schone ijsscheppen in de spoelbakken doen" },
+        { id: "daalseweg-4-4", label: "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik." },
+      ],
+    },
+    {
+      id: "daalseweg-5",
+      label: "SALON SCHOONMAKEN",
+      children: [
+        { id: "daalseweg-5-1", label: "Glaswerk van vitrine schoonmaken met Glassex en torkrol" },
+        { id: "daalseweg-5-2", label: "Keuken schoonmaken & afwas wegwerken" },
+        { id: "daalseweg-5-3", label: "Keukentje schoonmaken" },
+      ],
+    },
+  ],
+  "ijsloket Heyendaal": [
+    {
+      id: "heyendaal-1",
+      label: "TERRAS UITZETTEN",
+      children: [
+        { id: "heyendaal-1-1", label: "Tafels en stoeltjes op z’n plek zetten & schoonmaken met sopje" },
+        { id: "heyendaal-1-2", label: "Plantjes en toebehoren op tafels" },
+        { id: "heyendaal-1-3", label: "Terras aanvegen" },
+        { id: "heyendaal-1-4", label: "Prullenbakken legen & schone zak (i.v.t)" },
+        { id: "heyendaal-1-5", label: "Planten water geven (als het niet geregend heeft). Ook de grote bakken!" },
+        { id: "heyendaal-1-6", label: "Parasols in de voeten doen en opzetten" },
+        { id: "heyendaal-1-7", label: "Luifel van loket uitrollen" },
+        { id: "heyendaal-1-8", label: "Groen ijsje naar buiten rollen" },
+        { id: "heyendaal-1-9", label: "Lampjes aanzetten (ook bij daglicht!)" },
+      ],
+    },
+    {
+      id: "heyendaal-2",
+      label: "IJSVITRINE SCHOONMAKEN & AANZETTEN",
+      children: [
+        {
+          id: "heyendaal-2-1",
+          label: "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!",
+        },
+        { id: "heyendaal-2-2", label: "Ijsvitrine aanzetten naar -16, lamp van ijsvitrine ook aanzetten!" },
+        { id: "heyendaal-2-3", label: "Ijsvitrine van buiten schoonmaken met Glassex en torkrol" },
+        { id: "heyendaal-2-4", label: "Metalen staven in vitrine plaatsen" },
+      ],
+    },
+    {
+      id: "heyendaal-3",
+      label: "IJSVITRINE VULLEN",
+      children: [
+        { id: "heyendaal-3-1", label: "Als de vitrine kouder is dan -10 graden, begin je met de ijsbakken in de vitrine zetten." },
+        { id: "heyendaal-3-2", label: "Vul de ijsvitrine zoals de vaste indeling. Zijn er smaken op waardoor je een lege plek hebt? Vul deze dan met een smaak die je wel nog op voorraad hebt." },
+      ],
+    },
+    {
+      id: "heyendaal-4",
+      label: "TOEBEHOREN KLAARZETTEN",
+      children: [
+        { id: "heyendaal-4-1", label: "Bakken met ijshoorntjes aanvullen (FIFO!!). LET OP: zeer breekbaar, dus voorzichtig!" },
+        { id: "heyendaal-4-2", label: "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine" },
+        { id: "heyendaal-4-3", label: "Schone sponsen en schone ijsscheppen in de spoelbakken doen" },
+        { id: "heyendaal-4-4", label: "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik." },
+      ],
+    },
+    {
+      id: "heyendaal-5",
+      label: "SALON SCHOONMAKEN",
+      children: [
+        { id: "heyendaal-5-1", label: "Vloer vegen en afnemen met natte dweil en allesreiniger" },
+        { id: "heyendaal-5-2", label: "Keuken schoonmaken & afwas wegwerken" },
+        { id: "heyendaal-5-3", label: "Glasplaat afnemen met Glassex" },
+      ],
+    },
+  ],
+  "ijsloket Ziekerstraat": [
+    {
+      id: "ziekerstraat-1",
+      label: "TERRAS UITZETTEN",
+      children: [
+        { id: "ziekerstraat-1-1", label: "Tafels en stoeltjes op z’n plek zetten & schoonmaken met sopje" },
+        { id: "ziekerstraat-1-2", label: "Plantjes en toebehoren op tafels" },
+        { id: "ziekerstraat-1-3", label: "Terras aanvegen" },
+        { id: "ziekerstraat-1-4", label: "Prullenbakken legen & schone zak (i.v.t)" },
+        { id: "ziekerstraat-1-5", label: "Planten water geven (als het niet geregend heeft). Ook de grote bakken!" },
+        { id: "ziekerstraat-1-6", label: "Parasols (indien het seizoen) in de voeten doen en opzetten" },
+        { id: "ziekerstraat-1-7", label: "Luifel van loket uitrollen" },
+        { id: "ziekerstraat-1-8", label: "Groen ijsje naar buiten rollen" },
+        { id: "ziekerstraat-1-9", label: "Ijzeren palen voor loket zetten" },
+      ],
+    },
+    {
+      id: "ziekerstraat-2",
+      label: "IJSVITRINE SCHOONMAKEN & AANZETTEN",
+      children: [
+        {
+          id: "ziekerstraat-2-1",
+          label: "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!",
+        },
+        { id: "ziekerstraat-2-2", label: "Ijsvitrine aanzetten naar -16, lamp van ijsvitrine ook aanzetten!" },
+        { id: "ziekerstraat-2-3", label: "Ijsvitrine van buiten schoonmaken met Glassex en torkrol" },
+        { id: "ziekerstraat-2-4", label: "Metalen staven in vitrine plaatsen" },
+      ],
+    },
+    {
+      id: "ziekerstraat-3",
+      label: "IJSVITRINE VULLEN",
+      children: [
+        { id: "ziekerstraat-3-1", label: "Als de vitrine kouder is dan -10 graden, begin je met de ijsbakken in de vitrine zetten." },
+        { id: "ziekerstraat-3-2", label: "Vul de ijsvitrine zoals de vaste indeling. Zijn er smaken op waardoor je een lege plek hebt? Vul deze dan met een smaak die je wel nog op voorraad hebt." },
+      ],
+    },
+    {
+      id: "ziekerstraat-4",
+      label: "TOEBEHOREN KLAARZETTEN",
+      children: [
+        { id: "ziekerstraat-4-1", label: "Bakken met ijshoorntjes aanvullen (FIFO!!). LET OP: zeer breekbaar, dus voorzichtig!" },
+        { id: "ziekerstraat-4-2", label: "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine" },
+        { id: "ziekerstraat-4-3", label: "Schone sponsen en schone ijsscheppen in de spoelbakken doen" },
+        { id: "ziekerstraat-4-4", label: "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik." },
+      ],
+    },
+    {
+      id: "ziekerstraat-5",
+      label: "SALON SCHOONMAKEN",
+      children: [
+        { id: "ziekerstraat-5-1", label: "Vloer vegen en afnemen met natte dweil en allesreiniger" },
+        { id: "ziekerstraat-5-2", label: "Keuken schoonmaken & afwas wegwerken" },
+        { id: "ziekerstraat-5-3", label: "Glasplaat afnemen met Glassex" },
+      ],
+    },
+  ],
+};
+
+const afsluitTaken: Task[] = [
+  { id: "afsluit-1", label: "Vitrine schoongemaakt" },
+  { id: "afsluit-2", label: "Werkbank schoongemaakt" },
+  { id: "afsluit-3", label: "Koeling gecontroleerd en schoon" },
+  { id: "afsluit-4", label: "Temperatuur registratie" },
+  { id: "afsluit-5", label: "Vloer geveegd en gedweild" },
+  { id: "afsluit-6", label: "Afval geleegd" },
+  { id: "afsluit-7", label: "Toilet gecontroleerd" },
+  { id: "afsluit-8", label: "Koffiehoek schoon" },
+];
+
+const takenPerPlanAndShop: Record<PlanType, Record<string, Task[]>> = {
+  Opstartplan: opstartTakenPerIjssalon,
+  Afsluitplan: {
+    "ijsloket Lent": afsluitTaken,
+    "ijsloket Heyendaal": afsluitTaken,
+    "ijsloket Daalseweg": afsluitTaken,
+    "ijsloket Ziekerstraat": afsluitTaken,
+  },
+};
+
+function flattenTasks(tasks: Task[]): Task[] {
+  return tasks.flatMap((task) => [task, ...(task.children ? flattenTasks(task.children) : [])]);
+}
+
+function getTakenLijst(planType: PlanType, winkel: string): Task[] {
+  return takenPerPlanAndShop[planType]?.[winkel] ?? takenPerPlanAndShop[planType]["ijsloket Lent"];
+}
 
 function getVandaag() {
   const vandaag = new Date();
@@ -71,8 +318,8 @@ function getCleaningUrl() {
   return url;
 }
 
-function getDraftKey(winkel: string, datum: string) {
-  return `strik-schoonmaak-${datum}-${winkel}`;
+function getDraftKey(winkel: string, datum: string, planType: PlanType) {
+  return `strik-schoonmaak-${datum}-${winkel}-${planType}`;
 }
 
 function maakTemperatuurId() {
@@ -85,6 +332,7 @@ function maakTemperatuurId() {
 
 function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
   return JSON.stringify({
+    planType: antwoorden.planType,
     naam: antwoorden.naam.trim(),
     taken: antwoorden.taken,
     opmerking: antwoorden.opmerking.trim(),
@@ -96,6 +344,12 @@ function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
 }
 
 export default function SchoonmaakPage() {
+  const searchParams = useSearchParams();
+  const planQuery = searchParams.get("plan");
+  const defaultPlanType: PlanType =
+    planQuery === "afsluit" ? "Afsluitplan" : "Opstartplan";
+
+  const [planType, setPlanType] = useState<PlanType>(defaultPlanType);
   const [winkel, setWinkel] = useState("ijsloket Lent");
   const [datum, setDatum] = useState(getVandaag);
   const [naam, setNaam] = useState("");
@@ -109,8 +363,30 @@ export default function SchoonmaakPage() {
   const [ladenBezig, setLadenBezig] = useState(false);
   const [verzendenBezig, setVerzendenBezig] = useState(false);
 
-  const takenLijst = takenPerIjssalon[winkel as keyof typeof takenPerIjssalon];
-  const temperatuurRegistratieActief = taken.includes("Temperatuur registratie");
+  const takenLijst = useMemo(
+    () => getTakenLijst(planType, winkel),
+    [planType, winkel]
+  );
+
+  const taskItems = useMemo(() => flattenTasks(takenLijst), [takenLijst]);
+
+  const taskLabelById = useMemo(
+    () => Object.fromEntries(taskItems.map((task) => [task.id, task.label])),
+    [taskItems]
+  );
+
+  const taskIdByLabel = useMemo(
+    () => Object.fromEntries(taskItems.map((task) => [task.label, task.id])),
+    [taskItems]
+  );
+
+  const temperatuurRegistratieActief = taken
+    .map((id) => taskLabelById[id] ?? id)
+    .includes("Temperatuur registratie");
+
+  useEffect(() => {
+    setPlanType(defaultPlanType);
+  }, [defaultPlanType]);
 
   useEffect(() => {
     let negeerResultaat = false;
@@ -120,14 +396,20 @@ export default function SchoonmaakPage() {
       setStatus("");
 
       try {
-        const opgeslagenConcept = localStorage.getItem(getDraftKey(winkel, datum));
+        const opgeslagenConcept = localStorage.getItem(
+          getDraftKey(winkel, datum, planType)
+        );
 
         if (opgeslagenConcept) {
           const concept = JSON.parse(opgeslagenConcept) as SchoonmaakAntwoorden;
 
           if (negeerResultaat) return;
 
-          setTaken(concept.taken || []);
+          const geladenTaken = (concept.taken || []).map(
+            (taak) => taskIdByLabel[taak] ?? taak
+          );
+
+          setTaken(geladenTaken);
           setNaam(concept.naam || "");
           setOpmerking(concept.opmerking || "");
           setTemperatuurRegistraties(concept.temperatuurRegistraties || []);
@@ -141,18 +423,31 @@ export default function SchoonmaakPage() {
 
         if (!res.ok || negeerResultaat) return;
 
-        const opgeslagenItems = items.filter(
-          (item) => item.winkel === winkel && item.datum === datum
-        );
+        const opgeslagenItems = items.filter((item) => {
+          const juisteWinkel = item.winkel === winkel;
+          const juisteDatum = item.datum === datum;
+          const juistePlan =
+            planType === "Opstartplan"
+              ? !item.titel || item.titel === planType
+              : item.titel === planType;
+
+          return juisteWinkel && juisteDatum && juistePlan;
+        });
+
         const nieuwsteItem = opgeslagenItems[0];
 
-        setTaken(nieuwsteItem?.taken || []);
+        const geladenTaken = (nieuwsteItem?.taken || []).map(
+          (taak) => taskIdByLabel[taak] ?? taak
+        );
+
+        setTaken(geladenTaken);
         setNaam(nieuwsteItem?.naam || "");
         setOpmerking(nieuwsteItem?.opmerking || "");
         setTemperatuurRegistraties(nieuwsteItem?.temperatuurRegistraties || []);
         setVerzondenSignatuur(
           nieuwsteItem
             ? maakSignatuur({
+                planType,
                 naam: nieuwsteItem.naam || "",
                 taken: nieuwsteItem.taken || [],
                 opmerking: nieuwsteItem.opmerking || "",
@@ -180,18 +475,45 @@ export default function SchoonmaakPage() {
     return () => {
       negeerResultaat = true;
     };
-  }, [winkel, datum]);
+  }, [winkel, datum, planType, defaultPlanType]);
 
-  function toggleTaak(taak: string) {
+  function isComplete(task: Task): boolean {
+    if (!task.children) {
+      return taken.includes(task.id);
+    }
+
+    return task.children.every(isComplete);
+  }
+
+  function toggleTaak(taak: Task) {
+    if (taak.children) {
+      const alleGevinkt = taak.children.every(isComplete);
+      const volgendeTaken = new Set(taken);
+
+      taak.children.forEach((kind) => {
+        if (alleGevinkt) {
+          volgendeTaken.delete(kind.id);
+        } else {
+          volgendeTaken.add(kind.id);
+        }
+      });
+
+      setTaken(Array.from(volgendeTaken));
+      return;
+    }
+
     setTaken((prev) =>
-      prev.includes(taak) ? prev.filter((t) => t !== taak) : [...prev, taak]
+      prev.includes(taak.id)
+        ? prev.filter((t) => t !== taak.id)
+        : [...prev, taak.id]
     );
   }
 
   function getAntwoorden(): SchoonmaakAntwoorden {
     return {
+      planType,
       naam,
-      taken,
+      taken: taken.map((id) => taskLabelById[id] ?? id),
       opmerking,
       temperatuurRegistraties,
       verzondenSignatuur,
@@ -202,7 +524,7 @@ export default function SchoonmaakPage() {
     const antwoorden = getAntwoorden();
 
     localStorage.setItem(
-      getDraftKey(winkel, datum),
+      getDraftKey(winkel, datum, planType),
       JSON.stringify({
         ...antwoorden,
         verzondenSignatuur:
@@ -294,10 +616,11 @@ export default function SchoonmaakPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          titel: planType,
           winkel,
           naam: naam.trim(),
           datum,
-          taken,
+          taken: antwoorden.taken,
           opmerking: opmerking.trim(),
           temperatuurRegistraties: temperatuurRegistraties.map((item) => ({
             naam: item.naam.trim(),
@@ -314,7 +637,7 @@ export default function SchoonmaakPage() {
       if (res.ok) {
         setVerzondenSignatuur(signatuur);
         localStorage.setItem(
-          getDraftKey(winkel, datum),
+          getDraftKey(winkel, datum, planType),
           JSON.stringify({ ...antwoorden, verzondenSignatuur: signatuur })
         );
         setStatus("Opgeslagen en verzonden.");
@@ -343,13 +666,30 @@ export default function SchoonmaakPage() {
   return (
     <StrikShell>
         <StrikPageHeader
-          title="Schoonmaak"
-          description="Dagelijkse afvinklijst per ijssalon."
+          title={planType}
+          description={`Dagelijkse ${planType === "Opstartplan" ? "opstart" : "afsluit"} checklist per ijssalon.`}
           icon={strikIcons.cleaning}
           tone="medium"
         />
 
         <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {planOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setPlanType(option.value)}
+                className={`rounded-2xl border p-4 text-sm font-semibold transition ${
+                  planType === option.value
+                    ? "border-[#93b28b] bg-[#c3d3bc]"
+                    : "border-[#e7e0d8] bg-white"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
           <input
             type="date"
             value={datum}
@@ -374,6 +714,24 @@ export default function SchoonmaakPage() {
             className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
           />
 
+          {planType === "Afsluitplan" && (
+            <div className="rounded-3xl bg-[#f7faf5] p-4 text-sm text-gray-700 shadow-sm">
+              <p className="font-semibold">Afsluitplan</p>
+              <p className="mt-2">
+                Gebruik dezelfde checklist als het opstartplan. Staat er “zie
+                schoonmaaklijst”? Bekijk dan het{' '}
+                <a
+                  href="/info"
+                  target="_blank"
+                  className="font-semibold text-[#3b6b43] underline"
+                >
+                  schoonmaakplan PDF
+                </a>
+                .
+              </p>
+            </div>
+          )}
+
           <div className="rounded-3xl bg-white/85 p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="font-bold">Taken</p>
@@ -384,19 +742,44 @@ export default function SchoonmaakPage() {
               )}
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               {takenLijst.map((taak) => (
-                <button
-                  key={taak}
-                  onClick={() => toggleTaak(taak)}
-                  className={`w-full rounded-2xl border p-4 text-left text-sm font-semibold ${
-                    taken.includes(taak)
-                      ? "border-[#c3d3bc] bg-[#c3d3bc]"
-                      : "border-[#e7e0d8] bg-[#f8f6f3]"
-                  }`}
+                <div
+                  key={taak.id}
+                  className="space-y-3 rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-3"
                 >
-                  {taken.includes(taak) ? "✓ " : ""}{taak}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleTaak(taak)}
+                    className={`w-full rounded-2xl border p-4 text-left text-sm font-semibold ${
+                      isComplete(taak)
+                        ? "border-[#c3d3bc] bg-[#c3d3bc]"
+                        : "border-[#e7e0d8] bg-white"
+                    }`}
+                  >
+                    {isComplete(taak) ? "✓ " : ""}{taak.label}
+                  </button>
+
+                  {taak.children && (
+                    <div className="space-y-2 rounded-2xl bg-white p-3">
+                      {taak.children.map((subtaak) => (
+                        <button
+                          key={subtaak.id}
+                          type="button"
+                          onClick={() => toggleTaak(subtaak)}
+                          className={`w-full rounded-2xl border p-3 text-left text-sm font-semibold ${
+                            taken.includes(subtaak.id)
+                              ? "border-[#c3d3bc] bg-[#c3d3bc]"
+                              : "border-[#e7e0d8] bg-[#f8f6f3]"
+                          }`}
+                        >
+                          {taken.includes(subtaak.id) ? "✓ " : ""}
+                          {subtaak.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>

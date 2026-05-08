@@ -13,7 +13,7 @@ type TemperatuurRegistratie = {
 
 type CleaningItem = {
   id: number;
-  titel: string;
+  titel?: string;
   winkel: string;
   naam: string;
   datum: string;
@@ -29,6 +29,10 @@ const ijssalons = [
   "ijsloket Daalseweg",
   "ijsloket Ziekerstraat",
 ];
+
+const planTypes = ["Alle types", "Opstartplan", "Afsluitplan"] as const;
+
+type PlanType = (typeof planTypes)[number];
 
 function getVandaag() {
   const vandaag = new Date();
@@ -50,6 +54,7 @@ export default function SchoonmaakOverzichtPage() {
   const [items, setItems] = useState<CleaningItem[]>([]);
   const [datum, setDatum] = useState(getVandaag);
   const [winkel, setWinkel] = useState("Alle ijssalons");
+  const [planType, setPlanType] = useState<PlanType>("Alle types");
   const [status, setStatus] = useState("Laden...");
 
   useEffect(() => {
@@ -89,10 +94,12 @@ export default function SchoonmaakOverzichtPage() {
     return items.filter((item) => {
       const juisteDatum = item.datum === datum;
       const juisteWinkel = winkel === "Alle ijssalons" || item.winkel === winkel;
+      const juisteType =
+        planType === "Alle types" || item.titel === planType;
 
-      return juisteDatum && juisteWinkel;
+      return juisteDatum && juisteWinkel && juisteType;
     });
-  }, [datum, items, winkel]);
+  }, [datum, items, winkel, planType]);
 
   return (
     <StrikShell wide>
@@ -104,7 +111,7 @@ export default function SchoonmaakOverzichtPage() {
           tone="medium"
         />
 
-        <section className="mb-5 grid gap-3 rounded-[1.5rem] bg-white/85 p-4 shadow-sm sm:grid-cols-2">
+        <section className="mb-5 grid gap-3 rounded-[1.5rem] bg-white/85 p-4 shadow-sm sm:grid-cols-3">
           <input
             type="date"
             value={datum}
@@ -119,6 +126,18 @@ export default function SchoonmaakOverzichtPage() {
           >
             {ijssalons.map((ijssalon) => (
               <option key={ijssalon}>{ijssalon}</option>
+            ))}
+          </select>
+
+          <select
+            value={planType}
+            onChange={(e) => setPlanType(e.target.value as PlanType)}
+            className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
+          >
+            {planTypes.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
             ))}
           </select>
         </section>
@@ -150,7 +169,7 @@ export default function SchoonmaakOverzichtPage() {
                   </p>
                   <h2 className="mt-1 text-xl font-bold">{item.winkel}</h2>
                   <p className="mt-1 text-sm text-gray-600">
-                    Ingevuld door {item.naam || "onbekend"}
+                    {item.titel ?? "Schoonmaak"} ingevuld door {item.naam || "onbekend"}
                   </p>
                 </div>
                 <span className="rounded-full bg-[#c3d3bc]/40 px-3 py-1 text-xs font-bold">

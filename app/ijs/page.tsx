@@ -7,20 +7,28 @@ import {
 
 const items = [
   {
-    href: "/info",
+    href: "/ijs/info",
     label: "Documenten",
-    title: "Info",
-    description: "Belangrijke bestanden voor de ijssalons.",
+    title: "IJs Info",
+    description: "Specifieke documenten voor de ijssalons, zoals allergenenlijst 2026.",
     icon: strikIcons.info,
     tone: "light" as const,
   },
   {
-    href: "/schoonmaak",
-    label: "Dagelijks",
-    title: "Schoonmaaklijst",
-    description: "Vink taken per ijssalon af en registreer temperaturen.",
+    href: "/schoonmaak?plan=opstart",
+    label: "Opstartplan",
+    title: "Opstartplan",
+    description: "Dagelijkse opstartchecklist voor de ijssalons.",
     icon: strikIcons.cleaning,
-    tone: "medium" as const,
+    tone: "light" as const,
+  },
+  {
+    href: "/schoonmaak?plan=afsluit",
+    label: "Afsluitplan",
+    title: "Afsluitplan",
+    description: "Dagelijkse afsluitchecklist voor de ijssalons.",
+    icon: strikIcons.cleaning,
+    tone: "light" as const,
   },
 ];
 
