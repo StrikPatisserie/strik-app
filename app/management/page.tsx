@@ -22,6 +22,14 @@ const items = [
     icon: strikIcons.newsManagement,
     tone: "green" as const,
   },
+  {
+    href: "/management/notities",
+    label: "Winkels",
+    title: "Notities",
+    description: "Beheer notities en to-do's per ijssalon.",
+    icon: strikIcons.notities,
+    tone: "muted" as const,
+  },
 ];
 
 export default function ManagementPage() {
