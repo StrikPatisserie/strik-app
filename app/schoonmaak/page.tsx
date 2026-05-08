@@ -168,29 +168,6 @@ function SchoonmaakForm() {
       setStatus("");
 
       try {
-        const opgeslagenConcept = localStorage.getItem(
-          getDraftKey(winkel, datum, planType)
-        );
-
-        if (opgeslagenConcept) {
-          const concept = JSON.parse(opgeslagenConcept) as SchoonmaakAntwoorden;
-
-          if (negeerResultaat) return;
-
-          const geladenTaken = (concept.taken || []).map(
-            (taak) => taskIdByLabel[taak] ?? taak
-          );
-
-          setTaken(geladenTaken);
-          setNaam(concept.naam || "");
-          setOpmerking(concept.opmerking || "");
-          setTemperatuurRegistraties(concept.temperatuurRegistraties || []);
-          setFotoUploads(concept.fotoUploads || []);
-          setVerzondenSignatuur(concept.verzondenSignatuur || "");
-          setStatus("Concept geladen.");
-          return;
-        }
-
         const res = await fetch(getCleaningUrl(), { cache: "no-store" });
         const items = (await res.json()) as CleaningItem[];
 
@@ -365,48 +342,16 @@ function SchoonmaakForm() {
       return false;
     }
 
-    if (temperatuurRegistratieActief) {
-      if (temperatuurRegistraties.length === 0) {
-        setStatus("Voeg minimaal 1 temperatuurregistratie toe.");
-        return false;
-      }
-
-      const onvolledig = temperatuurRegistraties.some(
-        (item) => !item.naam.trim() || !item.temperatuur.trim()
-      );
-
-      if (onvolledig) {
-        setStatus("Vul bij elke temperatuurregistratie een naam en temperatuur in.");
-        return false;
-      }
-    }
-
-    if (planType === "Afsluitplan") {
-      const ontbrekendeFoto = requiredFotoUploadLabels.find(
-        (label) => !fotoUploads.some((upload) => upload.label === label)
-      );
-
-      if (ontbrekendeFoto) {
-        setStatus(
-          `Upload eerst een foto voor ${ontbrekendeFoto}.`
-        );
-        return false;
-      }
-    }
+    // Removed mandatory checks for temperatures and photos to allow partial saves
 
     return true;
   }
 
-  async function submitAntwoorden(options?: { ignoreDuplicate?: boolean }) {
+  async function submitAntwoorden() {
     if (!valideerAntwoorden()) return;
 
     const antwoorden = getAntwoorden();
     const signatuur = maakSignatuur(antwoorden);
-
-    if (!options?.ignoreDuplicate && signatuur === verzondenSignatuur) {
-      setStatus("Deze lijst is al verzonden.");
-      return;
-    }
 
     setStatus("Opslaan...");
     setVerzendenBezig(true);
@@ -474,7 +419,7 @@ function SchoonmaakForm() {
   }
 
   function opslaan() {
-    void submitAntwoorden({ ignoreDuplicate: true });
+    void verzenden();
   }
 
   async function verzenden() {
@@ -759,17 +704,10 @@ function SchoonmaakForm() {
 
           <button
             onClick={opslaan}
+            disabled={verzendenBezig}
             className="w-full rounded-full bg-[#c3d3bc] p-4 font-bold text-[#2d2a26] shadow-sm active:scale-[0.98] disabled:opacity-60"
           >
-            Opslaan
-          </button>
-
-          <button
-            onClick={verzenden}
-            disabled={verzendenBezig}
-            className="w-full rounded-full bg-[#9fb891] p-4 font-bold text-[#2d2a26] shadow-sm active:scale-[0.98] disabled:opacity-60"
-          >
-            {verzendenBezig ? "Verzenden..." : "Opslaan en verzenden"}
+            {verzendenBezig ? "Opslaan..." : "Opslaan"}
           </button>
 
           {status && (
