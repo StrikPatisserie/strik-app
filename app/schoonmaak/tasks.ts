@@ -262,7 +262,6 @@ const afsluitTakenLent: Task[] = [
       {
         id: "lent-1-d",
         label: "Prullenbakken legen & schone zak (i.v.t)",
-        info: "Na iedere shift gaat er een nieuwe zak in de vuilnisbak. Maak de buitenkant schoon met een nat doekje als deze vies is.",
       },
       {
         id: "lent-1-e",
@@ -328,7 +327,7 @@ const afsluitTakenLent: Task[] = [
       },
       {
         id: "lent-4-d",
-        label: "Ijsschaal uitzetten",
+        label: "Ijsvitrine uitzetten",
       },
       {
         id: "lent-4-e",
@@ -483,7 +482,7 @@ const afsluitTakenHeyendaal: Task[] = [
       },
       {
         id: "heyendaal-4-d",
-        label: "Ijsschaal uitzetten",
+        label: "Ijsvitrine uitzetten",
       },
       {
         id: "heyendaal-4-e",
@@ -630,7 +629,7 @@ const afsluitTakenDaalseweg: Task[] = [
       },
       {
         id: "daalseweg-4-d",
-        label: "Ijsschaal uitzetten",
+        label: "Ijsvitrine uitzetten",
       },
       {
         id: "daalseweg-4-e",
@@ -773,7 +772,7 @@ const afsluitTakenZiekerstraat: Task[] = [
       },
       {
         id: "ziekerstraat-4-d",
-        label: "Ijsschaal uitzetten",
+        label: "Ijsvitrine uitzetten",
       },
       {
         id: "ziekerstraat-4-e",
@@ -900,8 +899,8 @@ const infoForTaskLabel: Record<string, string> = {
     "Zet bakken pas weg als er geen klanten meer komen. Is de -17 vriezer vol, gebruik de -22 vriezer en plak duidelijk een briefje 'DEZE EERST' op die bakken.",
   "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen":
     "Haal alle metalen staven uit de vitrine, was ze af en leg ze op een schone theedoek zodat ze droog en klaar zijn voor morgen.",
-  "Ijsschaal uitzetten":
-    "Zet de ijsschaal uit en maak hem schoon als er ijs of suiker op zit.",
+  "Ijsvitrine uitzetten":
+    "Zet de ijsvitrine uit en maak hem schoon als er ijs of suiker op zit.",
   "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen. Daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen":
     "Haal eerst alles uit de spoelbakjes. Laat ze leeglopen, spoel meerdere keren met heet water en neem de bakjes daarna nog af met een nat doekje.",
   "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Spoelbakje daarna met een nat doekje nog een keer afdoen":
@@ -946,18 +945,50 @@ const infoForTaskLabel: Record<string, string> = {
     "Loop nog een laatste ronde: machines uit, deuren dicht, vriezers dicht, afval weg en salon schoon.",
 };
 
-function applyInfo(tasks: Task[]) {
+const spoelbakjesAfsluitInfo =
+  "Met spoelbakjes bedoelen we de twee bakjes die gevestigd zitten aan de ijsvitrine waarmee je je ijsspatel schoonspoelt. Deze moeten na iedere dag goed schoon worden gemaakt, omdat ze snel verstopt kunnen raken met overtollig ijs of stukjes koek wat aan de spatel vastzit. Het schoonmaken hiervan is erg simpel: vul een kannetje met kokendheet water en gooi deze in het bakje. Het ijs smelt direct en loopt goed door. Herhaal indien nodig en maak het bakje van de buitenkant nog even goed schoon met een nat doekje";
+
+const afsluitInfoForTaskLabel: Record<string, string> = {
+  "Koffiemachine schoonmaken":
+    "De koffiemachine moet iedere dag schoongemaakt worden. Dit is gemakkelijk te doen door als eerste de machine even door te laten spoelen (knop met 3 bolletjes). De bak met koffiedrap moet geleegd worden en schoongemaakt worden. Daarnaast maak je alle losse onderdelen schoon: de pistolen, schuimbekertjes, stoompijpje etc. Één keer per week moet de koffiemachine schoongemaakt worden met een speciale machinereiniger. Hiervan doe je een schepje in een pistool, die je in de machine draait (alsof je een koffie gaat zetten). Als het pistool erin zit, druk je 10 keer achter elkaar, op het knopje met de drie bolletjes. Op die manier spoel je de machine van binnen schoon. Na 10 keer drukken haal je het pistool eruit, en laat je de machine nog een keer even doorspoelen.",
+  "Slagroommachine schoonmaken":
+    "De slagroommachine moet iedere dag goed schoon worden gemaakt. De slagroom blijft gemakkelijk zitten in de pijpjes van de machine en kan snel gaan schimmelen. De slagroommachine maak je als volgt schoon. Haal de deksel van de machine en haal het plastic bakje met slagroom eruit, deze zet je apart in een koeling. Vervolgens vul je een grote milkshake beker met lauw water én een klein scheutje slagroommachinereiniger (witte fles). Dit bekertje zet je in de machine, op de plek waar het plastic bakje stond. Het pijpje stop je in het bekertje. Vervolgens hou je een ander bekertje onder de machine, en laat je de machine volledig doorlopen, net zolang totdat het bekertje in de machine leeg is. Je ziet het overige slagroom weglopen, en op een gegeven moment wordt het water doorzichtig. Omdat je met een chemische stof werkt in de machine, herhaal je dit proces opnieuw, maar dan met een bekertje waar ALLEEN water in zit, dus geen reiniger! Als je hem voor de tweede keer hebt laten doorlopen, is de machine van de binnenkant schoon. Vervolgens haal je de losse onderdelen van de machine en maak je die apart schoon.",
+  "Milkshake machine. Eventuele milkshake resten stickeren met huidige datum en afgedekt opbergen in zwarte koeling":
+    "De milkshakemachine moet na ieder gebruik schoongemaakt worden voor de volgende keer. Dit is erg gemakkelijk! Vul de milkshakebeker tot ongeveer de helft van de beker met lauw water. Stop de beker in de machine en laat hem even lopen. Als je hem eruit haalt is de machine goed schoon. De beker was je even apart om.",
+  "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger":
+    "Na iedere shift gaat er een nieuwe zak (mits hij niet vol is natuurlijk) in de vuilnisbak. Als de vuilnisbak van de buitenkant vies is moet deze schoongemaakt worden met een nat doekje.",
+  "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen. Daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen":
+    spoelbakjesAfsluitInfo,
+  "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Spoelbakje daarna met een nat doekje nog een keer afdoen":
+    spoelbakjesAfsluitInfo,
+  "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen":
+    spoelbakjesAfsluitInfo,
+};
+
+function applyInfo(
+  tasks: Task[],
+  infoByLabel: Record<string, string>,
+  options: { clearExistingInfo?: boolean } = {}
+) {
   for (const task of tasks) {
-    task.info = task.info || infoForTaskLabel[task.label];
+    if (options.clearExistingInfo) {
+      delete task.info;
+    }
+
+    task.info = task.info || infoByLabel[task.label];
 
     if (task.children) {
-      applyInfo(task.children);
+      applyInfo(task.children, infoByLabel, options);
     }
   }
 }
 
-Object.values(takenPerPlanAndShop).forEach((takenPerShop) => {
-  Object.values(takenPerShop).forEach(applyInfo);
+Object.values(takenPerPlanAndShop.Opstartplan).forEach((tasks) => {
+  applyInfo(tasks, infoForTaskLabel);
+});
+
+Object.values(takenPerPlanAndShop.Afsluitplan).forEach((tasks) => {
+  applyInfo(tasks, afsluitInfoForTaskLabel, { clearExistingInfo: true });
 });
 
 export function flattenTasks(tasks: Task[]): Task[] {

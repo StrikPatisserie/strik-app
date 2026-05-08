@@ -676,8 +676,7 @@ function SchoonmaakForm() {
             <div className="rounded-3xl bg-[#f7faf5] p-4 text-sm text-gray-700 shadow-sm">
               <p className="font-semibold">Afsluitplan</p>
               <p className="mt-2">
-                Dit afsluitplan bevat nu gedetailleerde, taakniveau instructies per ijssalon.
-                Volg de extra informatie bij de taken met een info-icoon.
+                Bij sommige afsluitstappen staat extra uitleg onder het info-icoon.
               </p>
             </div>
           )}
