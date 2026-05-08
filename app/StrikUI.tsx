@@ -11,6 +11,7 @@ export const strikIcons = {
   management: "/icons_strik_management.svg",
   news: "/icons_strik_news.svg",
   newsManagement: "/icons_strik_add%20news%20management.svg",
+  photo: "/icons_strik_photo.svg",
   winkel: "/icons_strik_winkel.svg",
 };
 

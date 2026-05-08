@@ -397,17 +397,13 @@ function SchoonmaakForm() {
     return true;
   }
 
-  function opslaan() {
-    bewaarConcept();
-  }
-
-  async function verzenden() {
+  async function submitAntwoorden(options?: { ignoreDuplicate?: boolean }) {
     if (!valideerAntwoorden()) return;
 
     const antwoorden = getAntwoorden();
     const signatuur = maakSignatuur(antwoorden);
 
-    if (signatuur === verzondenSignatuur) {
+    if (!options?.ignoreDuplicate && signatuur === verzondenSignatuur) {
       setStatus("Deze lijst is al verzonden.");
       return;
     }
@@ -475,6 +471,14 @@ function SchoonmaakForm() {
       window.clearTimeout(timeoutId);
       setVerzendenBezig(false);
     }
+  }
+
+  function opslaan() {
+    void submitAntwoorden({ ignoreDuplicate: true });
+  }
+
+  async function verzenden() {
+    await submitAntwoorden();
   }
 
   return (
@@ -645,13 +649,21 @@ function SchoonmaakForm() {
                     >
                       <p className="mb-2 text-sm font-semibold">{label}</p>
                       <input
+                        id={`foto-upload-${label.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`}
                         type="file"
                         accept="image/*"
                         onChange={(e) =>
                           updateFotoUpload(label, e.target.files?.[0] ?? null)
                         }
-                        className="mb-3 w-full text-sm text-[#4b5d47]"
+                        className="sr-only"
                       />
+                      <label
+                        htmlFor={`foto-upload-${label.replace(/[^a-z0-9]/gi, "-").toLowerCase()}`}
+                        className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-[#9fb891] bg-[#eff7ee] px-4 py-3 text-sm font-semibold text-[#3b6b43] transition hover:bg-[#e3f0e0] cursor-pointer"
+                      >
+                        <img src={strikIcons.photo} alt="Foto" className="h-5 w-5" />
+                        {upload ? "Vervang foto" : "Upload foto"}
+                      </label>
                       {upload ? (
                         <div className="space-y-2">
                           <img
