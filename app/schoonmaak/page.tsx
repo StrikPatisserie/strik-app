@@ -94,6 +94,10 @@ function SchoonmaakForm() {
   const [status, setStatus] = useState("");
   const [ladenBezig, setLadenBezig] = useState(false);
   const [verzendenBezig, setVerzendenBezig] = useState(false);
+  const [activeInfo, setActiveInfo] = useState<
+    | { title: string; description: string }
+    | null
+  >(null);
 
   const takenLijst = useMemo(
     () => getTakenLijst(planType, winkel),
@@ -484,18 +488,18 @@ function SchoonmaakForm() {
                     <div className="flex items-center justify-between gap-3">
                       <span>{isComplete(taak) ? "✓ " : ""}{taak.label}</span>
                       {taak.info && (
-                        <span className="rounded-full border border-[#d8d6cc] bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#3b6b43]">
+                        <span
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setActiveInfo({ title: taak.label, description: taak.info! });
+                          }}
+                          className="cursor-pointer rounded-full border border-[#d8d6cc] bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#3b6b43]"
+                        >
                           i
                         </span>
                       )}
                     </div>
                   </button>
-
-                  {taak.info && (
-                    <p className="text-xs leading-relaxed text-[#4b5d47]">
-                      {taak.info}
-                    </p>
-                  )}
 
                   {taak.children && (
                     <div className="space-y-2 rounded-2xl bg-white p-3">
@@ -513,18 +517,18 @@ function SchoonmaakForm() {
                             <div className="flex items-center justify-between gap-3">
                               <span>{taken.includes(subtaak.id) ? "✓ " : ""}{subtaak.label}</span>
                               {subtaak.info && (
-                                <span className="rounded-full border border-[#d8d6cc] bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#3b6b43]">
+                                <span
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setActiveInfo({ title: subtaak.label, description: subtaak.info! });
+                                  }}
+                                  className="cursor-pointer rounded-full border border-[#d8d6cc] bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#3b6b43]"
+                                >
                                   i
                                 </span>
                               )}
                             </div>
                           </button>
-
-                          {subtaak.info && (
-                            <p className="text-xs leading-relaxed text-[#4b5d47]">
-                              {subtaak.info}
-                            </p>
-                          )}
                         </div>
                       ))}
                     </div>
@@ -621,6 +625,33 @@ function SchoonmaakForm() {
             <p className="rounded-2xl bg-white p-3 text-center text-sm shadow-sm">
               {status}
             </p>
+          )}
+
+          {activeInfo && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4">
+              <div className="max-w-lg rounded-3xl bg-white p-5 shadow-2xl">
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#2d2a26]/60">
+                      Info
+                    </p>
+                    <h2 className="mt-2 text-xl font-bold text-[#2d2a26]">
+                      {activeInfo.title}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveInfo(null)}
+                    className="rounded-full bg-[#f3f2ee] px-3 py-2 text-sm font-bold text-[#2d2a26]"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-sm leading-relaxed text-[#4b5d47]">
+                  {activeInfo.description}
+                </p>
+              </div>
+            </div>
           )}
         </div>
     </StrikShell>
