@@ -6,24 +6,21 @@ const sections = [
     title: "Winkel",
     subtitle: "Nieuws, agenda en info",
     color: "bg-[#c3d3bc]",
-    text: "text-black",
-    titleClass: "text-[2.5rem] sm:text-[2.75rem] lg:text-5xl",
+    icon: "W",
   },
   {
     href: "/ijs",
     title: "IJs",
     subtitle: "Info en schoonmaak",
     color: "bg-[#fed500]",
-    text: "text-black",
-    titleClass: "text-[2.5rem] sm:text-[2.75rem] lg:text-5xl",
+    icon: "IJ",
   },
   {
     href: "/management",
     title: "Management",
     subtitle: "Overzicht en beheer",
     color: "bg-white",
-    text: "text-black",
-    titleClass: "text-[2rem] sm:text-[2.15rem] lg:text-4xl",
+    icon: "M",
     locked: true,
   },
 ];
@@ -31,69 +28,72 @@ const sections = [
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#f8f6f3] px-4 py-6 text-[#2d2a26]">
-      <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col justify-center pb-20">
-        <section className="mb-7 overflow-hidden rounded-[2rem] bg-white shadow-sm sm:rounded-[2.5rem]">
-          <div className="flex items-center gap-4 bg-[#c3d3bc] px-6 py-5 sm:px-10 sm:py-7">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md flex-col justify-center pb-20">
+        <section className="mb-7 overflow-hidden rounded-[1.75rem] bg-white shadow-sm">
+          <div className="flex items-center gap-3 bg-[#c3d3bc] px-5 py-4">
             <img
               src="/strik-logo.png"
               alt="Strik"
-              className="h-11 w-auto object-contain sm:h-14"
+              className="h-10 w-auto object-contain"
             />
 
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.26em] text-[#2d2a26]/55 sm:text-xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#2d2a26]/55">
                 Strik Patisserie
               </p>
-              <h1 className="text-3xl font-bold leading-tight sm:text-4xl">
+              <h1 className="text-2xl font-bold leading-tight">
                 Personeelsapp
               </h1>
             </div>
           </div>
 
-          <div className="px-6 py-5 sm:px-10 sm:py-6">
-            <p className="text-lg font-semibold text-[#2d2a26]/65 sm:text-2xl">
+          <div className="px-5 py-4">
+            <p className="text-base font-semibold text-[#2d2a26]/65">
               Kies waarvoor je de app wilt gebruiken.
             </p>
           </div>
 
           <div className="grid grid-cols-4">
-            <div className="h-3 bg-[#c3d3bc]" />
-            <div className="h-3 bg-[#a27a8e]" />
-            <div className="h-3 bg-[#fed500]" />
-            <div className="h-3 bg-[#d75a48]" />
+            <div className="h-2 bg-[#c3d3bc]" />
+            <div className="h-2 bg-[#a27a8e]" />
+            <div className="h-2 bg-[#fed500]" />
+            <div className="h-2 bg-[#d75a48]" />
           </div>
         </section>
 
-        <nav className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-5">
+        <nav className="mx-auto w-full max-w-sm space-y-3">
           {sections.map((section) => (
             <Link
               key={section.href}
               href={section.href}
-              className={`flex min-h-40 flex-col justify-between rounded-[2rem] border border-[#e7e0d8] p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md active:scale-[0.98] sm:min-h-56 sm:p-7 ${section.color} ${section.text}`}
+              className="group flex items-center gap-4 rounded-full border border-[#e7e0d8] bg-white px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
             >
-              <div>
-                <span
-                  className={`block font-light uppercase leading-none tracking-[0.08em] ${section.titleClass}`}
-                >
-                  {section.title}
+              <span
+                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold ${section.color}`}
+              >
+                {section.icon}
+              </span>
+
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="text-lg font-bold leading-tight">
+                    {section.title}
+                  </span>
+                  {section.locked && (
+                    <span className="relative block h-4 w-4 rounded-b-sm bg-black">
+                      <span className="absolute -top-3 left-1/2 h-4 w-3 -translate-x-1/2 rounded-t-full border-2 border-black border-b-0" />
+                      <span className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+                    </span>
+                  )}
                 </span>
-                <span className="mt-3 block text-sm font-semibold text-black/55">
+                <span className="mt-0.5 block text-sm font-semibold text-[#2d2a26]/55">
                   {section.subtitle}
                 </span>
-              </div>
+              </span>
 
-              {section.locked && (
-                <span className="mt-5 flex justify-end">
-                  <span className="relative block h-8 w-8 rounded-b-md bg-black">
-                    <span className="absolute -top-5 left-1/2 h-7 w-6 -translate-x-1/2 rounded-t-full border-4 border-black border-b-0" />
-                    <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
-                  </span>
-                </span>
-              )}
-
-              {!section.locked && (
-                <span className="mt-5 flex justify-end text-3xl font-light">→</span>
-              )}
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f8f6f3] text-xl font-light transition group-hover:bg-[#c3d3bc]">
+                →
+              </span>
             </Link>
           ))}
         </nav>
