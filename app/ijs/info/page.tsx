@@ -47,6 +47,10 @@ function cleanWordPressText(value = "") {
     .trim();
 }
 
+function hasIjsLabel(value: string) {
+  return /(^|[^a-z0-9])ijs($|[^a-z0-9])/i.test(value);
+}
+
 function isIjsPdf(item: WordPressMediaItem) {
   const sourceUrl = item.source_url ?? "";
   const isPdf =
@@ -67,7 +71,7 @@ function isIjsPdf(item: WordPressMediaItem) {
     .map((value) => cleanWordPressText(value ?? "").toLowerCase())
     .join(" ");
 
-  return searchableText.includes("ijs");
+  return hasIjsLabel(searchableText);
 }
 
 function toFileItem(item: WordPressMediaItem): FileItem | null {
