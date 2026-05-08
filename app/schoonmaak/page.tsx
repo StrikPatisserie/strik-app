@@ -4,9 +4,15 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 import { PlanType, Task, ijssalons, planOptions, getTakenLijst, flattenTasks } from "./tasks";
-
-const CLEANING_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
-const CLEANING_API_KEY = "schoonmaak-ijs-strik";
+import {
+  CleaningItem,
+  CleaningPhotoUpload,
+  CleaningTemperatureRegistration,
+  getCleaningUrl,
+  itemMatchesCleaningSelection,
+  stripInternalCleaningTasks,
+  withPlanMarker,
+} from "./cleaningApi";
 
 type TemperatuurRegistratie = {
   id: string;
@@ -19,18 +25,6 @@ type PhotoUpload = {
   label: string;
   fileName: string;
   dataUrl: string;
-};
-
-type CleaningItem = {
-  id: number;
-  titel?: string;
-  winkel: string;
-  naam: string;
-  datum: string;
-  taken: string[];
-  opmerking: string;
-  temperatuurRegistraties?: TemperatuurRegistratie[];
-  fotoUploads?: PhotoUpload[];
 };
 
 type SchoonmaakAntwoorden = {
@@ -50,13 +44,6 @@ function getVandaag() {
   const dag = String(vandaag.getDate()).padStart(2, "0");
 
   return `${jaar}-${maand}-${dag}`;
-}
-
-function getCleaningUrl() {
-  const url = new URL(CLEANING_API_URL);
-  url.searchParams.set("key", CLEANING_API_KEY);
-
-  return url;
 }
 
 function getDraftKey(winkel: string, datum: string, planType: PlanType) {
@@ -93,6 +80,29 @@ function maakTemperatuurId() {
   return `${Date.now()}-${Math.random()}`;
 }
 
+function normaliseerTemperatuurRegistraties(
+  itemId: number,
+  registraties: CleaningTemperatureRegistration[] = []
+): TemperatuurRegistratie[] {
+  return registraties.map((item, index) => ({
+    id: item.id || `${itemId}-temperatuur-${index}`,
+    naam: item.naam || "",
+    temperatuur: item.temperatuur || "",
+  }));
+}
+
+function normaliseerFotoUploads(
+  itemId: number,
+  uploads: CleaningPhotoUpload[] = []
+): PhotoUpload[] {
+  return uploads.map((upload, index) => ({
+    id: upload.id || `${itemId}-foto-${index}`,
+    label: upload.label,
+    fileName: upload.fileName,
+    dataUrl: upload.dataUrl,
+  }));
+}
+
 function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
   return JSON.stringify({
     planType: antwoorden.planType,
@@ -116,7 +126,8 @@ function SchoonmaakForm() {
   const defaultPlanType: PlanType =
     planQuery === "afsluit" ? "Afsluitplan" : "Opstartplan";
 
-  const [planType, setPlanType] = useState<PlanType>(defaultPlanType);
+  const [gekozenPlanType, setGekozenPlanType] = useState<PlanType | null>(null);
+  const planType = gekozenPlanType ?? defaultPlanType;
   const [winkel, setWinkel] = useState("ijsloket Lent");
   const [datum, setDatum] = useState(getVandaag);
   const [naam, setNaam] = useState("");
@@ -157,10 +168,6 @@ function SchoonmaakForm() {
     .includes("Temperatuur registratie");
 
   useEffect(() => {
-    setPlanType(defaultPlanType);
-  }, [defaultPlanType]);
-
-  useEffect(() => {
     let negeerResultaat = false;
 
     async function laadAntwoorden() {
@@ -174,38 +181,51 @@ function SchoonmaakForm() {
         if (!res.ok || negeerResultaat) return;
 
         const opgeslagenItems = items
-          .filter((item) => {
-            const juisteWinkel = item.winkel === winkel;
-            const juisteDatum = item.datum === datum;
-            const juistePlan =
-              planType === "Opstartplan"
-                ? !item.titel || item.titel === planType
-                : item.titel === planType;
-
-            return juisteWinkel && juisteDatum && juistePlan;
-          })
+          .filter((item) =>
+            itemMatchesCleaningSelection(item, winkel, datum, planType)
+          )
           .sort((a, b) => b.id - a.id);
 
         const nieuwsteItem = opgeslagenItems[0];
+        const zichtbareTaken = stripInternalCleaningTasks(
+          nieuwsteItem?.taken || []
+        );
 
-        const geladenTaken = (nieuwsteItem?.taken || []).map(
+        const geladenTaken = zichtbareTaken.map(
           (taak) => taskIdByLabel[taak] ?? taak
         );
 
         setTaken(geladenTaken);
         setNaam(nieuwsteItem?.naam || "");
         setOpmerking(nieuwsteItem?.opmerking || "");
-        setTemperatuurRegistraties(nieuwsteItem?.temperatuurRegistraties || []);
-        setFotoUploads(nieuwsteItem?.fotoUploads || []);
+        setTemperatuurRegistraties(
+          nieuwsteItem
+            ? normaliseerTemperatuurRegistraties(
+                nieuwsteItem.id,
+                nieuwsteItem.temperatuurRegistraties
+              )
+            : []
+        );
+        setFotoUploads(
+          nieuwsteItem
+            ? normaliseerFotoUploads(nieuwsteItem.id, nieuwsteItem.fotoUploads)
+            : []
+        );
         setVerzondenSignatuur(
           nieuwsteItem
             ? maakSignatuur({
                 planType,
                 naam: nieuwsteItem.naam || "",
-                taken: nieuwsteItem.taken || [],
+                taken: zichtbareTaken,
                 opmerking: nieuwsteItem.opmerking || "",
-                temperatuurRegistraties: nieuwsteItem.temperatuurRegistraties || [],
-                fotoUploads: nieuwsteItem.fotoUploads || [],
+                temperatuurRegistraties: normaliseerTemperatuurRegistraties(
+                  nieuwsteItem.id,
+                  nieuwsteItem.temperatuurRegistraties
+                ),
+                fotoUploads: normaliseerFotoUploads(
+                  nieuwsteItem.id,
+                  nieuwsteItem.fotoUploads
+                ),
               })
             : ""
         );
@@ -229,7 +249,7 @@ function SchoonmaakForm() {
     return () => {
       negeerResultaat = true;
     };
-  }, [winkel, datum, planType, defaultPlanType]);
+  }, [winkel, datum, planType, taskIdByLabel]);
 
   function isComplete(task: Task): boolean {
     if (!task.children) {
@@ -275,23 +295,6 @@ function SchoonmaakForm() {
     };
   }
 
-  function bewaarConcept(statusTekst = "Concept opgeslagen.") {
-    const antwoorden = getAntwoorden();
-
-    localStorage.setItem(
-      getDraftKey(winkel, datum, planType),
-      JSON.stringify({
-        ...antwoorden,
-        verzondenSignatuur:
-          antwoorden.verzondenSignatuur === maakSignatuur(antwoorden)
-            ? antwoorden.verzondenSignatuur
-            : "",
-      })
-    );
-
-    setStatus(statusTekst);
-  }
-
   function voegTemperatuurRegistratieToe() {
     setTemperatuurRegistraties((prev) => [
       ...prev,
@@ -334,17 +337,20 @@ function SchoonmaakForm() {
   }
 
   function valideerAntwoorden() {
-    if (!naam.trim()) {
-      setStatus("Vul eerst je naam in.");
+    const heeftTemperatuur = temperatuurRegistraties.some(
+      (item) => item.naam.trim() || item.temperatuur.trim()
+    );
+    const heeftInhoud =
+      naam.trim() ||
+      taken.length > 0 ||
+      opmerking.trim() ||
+      heeftTemperatuur ||
+      fotoUploads.length > 0;
+
+    if (!heeftInhoud) {
+      setStatus("Vul eerst iets in om op te slaan.");
       return false;
     }
-
-    if (taken.length === 0) {
-      setStatus("Vink minimaal 1 taak af.");
-      return false;
-    }
-
-    // Removed mandatory checks for temperatures and photos to allow partial saves
 
     return true;
   }
@@ -372,7 +378,7 @@ function SchoonmaakForm() {
           winkel,
           naam: naam.trim(),
           datum,
-          taken: antwoorden.taken,
+          taken: withPlanMarker(antwoorden.taken, planType),
           opmerking: opmerking.trim(),
           temperatuurRegistraties: temperatuurRegistraties.map((item) => ({
             naam: item.naam.trim(),
@@ -443,7 +449,7 @@ function SchoonmaakForm() {
               <button
                 key={option.value}
                 type="button"
-                onClick={() => setPlanType(option.value)}
+                onClick={() => setGekozenPlanType(option.value)}
                 className={`rounded-2xl border p-4 text-sm font-semibold transition ${
                   planType === option.value
                     ? "border-[#93b28b] bg-[#c3d3bc]"

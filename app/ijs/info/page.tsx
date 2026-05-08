@@ -39,7 +39,7 @@ export default async function IJsInfoPage() {
       <div className="space-y-3">
         {files.length === 0 ? (
           <div className="rounded-[1.5rem] bg-white p-5 text-sm text-gray-600 shadow-sm">
-            Geen ijsdocumenten gevonden. Upload bestanden in WordPress met tag of type "ijs".
+            Geen ijsdocumenten gevonden. Upload bestanden in WordPress met tag of type &quot;ijs&quot;.
           </div>
         ) : (
           files.map((file) => (

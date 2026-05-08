@@ -2,30 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
-
-const CLEANING_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
-const CLEANING_API_KEY = "schoonmaak-ijs-strik";
-
-type TemperatuurRegistratie = {
-  naam: string;
-  temperatuur: string;
-};
-
-type CleaningItem = {
-  id: number;
-  titel?: string;
-  winkel: string;
-  naam: string;
-  datum: string;
-  taken: string[];
-  opmerking: string;
-  temperatuurRegistraties?: TemperatuurRegistratie[];
-  fotoUploads?: {
-    label: string;
-    fileName: string;
-    dataUrl: string;
-  }[];
-};
+import {
+  CleaningItem,
+  getCleaningItemKey,
+  getCleaningItemPlanType,
+  getCleaningUrl,
+  stripInternalCleaningTasks,
+} from "../cleaningApi";
 
 const ijssalons = [
   "Alle ijssalons",
@@ -46,13 +29,6 @@ function getVandaag() {
   const dag = String(vandaag.getDate()).padStart(2, "0");
 
   return `${jaar}-${maand}-${dag}`;
-}
-
-function getCleaningUrl() {
-  const url = new URL(CLEANING_API_URL);
-  url.searchParams.set("key", CLEANING_API_KEY);
-
-  return url;
 }
 
 export default function SchoonmaakOverzichtPage() {
@@ -96,14 +72,26 @@ export default function SchoonmaakOverzichtPage() {
   }, []);
 
   const gefilterdeItems = useMemo(() => {
-    return items.filter((item) => {
+    const nieuwsteItems = new Map<string, CleaningItem>();
+
+    items.forEach((item) => {
+      const itemPlanType = getCleaningItemPlanType(item);
       const juisteDatum = item.datum === datum;
       const juisteWinkel = winkel === "Alle ijssalons" || item.winkel === winkel;
       const juisteType =
-        planType === "Alle types" || item.titel === planType;
+        planType === "Alle types" || itemPlanType === planType;
 
-      return juisteDatum && juisteWinkel && juisteType;
+      if (!juisteDatum || !juisteWinkel || !juisteType) return;
+
+      const key = getCleaningItemKey(item);
+      const vorigeItem = nieuwsteItems.get(key);
+
+      if (!vorigeItem || item.id > vorigeItem.id) {
+        nieuwsteItems.set(key, item);
+      }
     });
+
+    return Array.from(nieuwsteItems.values()).sort((a, b) => b.id - a.id);
   }, [datum, items, winkel, planType]);
 
   return (
@@ -163,86 +151,95 @@ export default function SchoonmaakOverzichtPage() {
 
         <div className="space-y-4">
           {gefilterdeItems.map((item) => (
-            <article
-              key={item.id}
-              className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 shadow-sm"
-            >
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                    {item.datum}
-                  </p>
-                  <h2 className="mt-1 text-xl font-bold">{item.winkel}</h2>
-                  <p className="mt-1 text-sm text-gray-600">
-                    {item.titel ?? "Schoonmaak"} ingevuld door {item.naam || "onbekend"}
-                  </p>
-                </div>
-                <span className="rounded-full bg-[#c3d3bc]/40 px-3 py-1 text-xs font-bold">
-                  {item.taken.length} taken
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                {item.taken.map((taak) => (
-                  <div
-                    key={taak}
-                    className="rounded-2xl bg-[#f8f6f3] px-4 py-3 text-sm font-semibold"
-                  >
-                    ✓ {taak}
-                  </div>
-                ))}
-              </div>
-
-              {item.temperatuurRegistraties &&
-                item.temperatuurRegistraties.length > 0 && (
-                  <div className="mt-4 rounded-2xl bg-[#f8f6f3] p-4">
-                    <p className="mb-3 font-bold">Temperaturen</p>
-                    <div className="space-y-2">
-                      {item.temperatuurRegistraties.map((registratie) => (
-                        <div
-                          key={`${registratie.naam}-${registratie.temperatuur}`}
-                          className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-sm"
-                        >
-                          <span>{registratie.naam}</span>
-                          <span className="font-bold">{registratie.temperatuur} °C</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-              {item.fotoUploads && item.fotoUploads.length > 0 && (
-                <div className="mt-4 rounded-2xl bg-[#f8f6f3] p-4">
-                  <p className="mb-3 font-bold">Geüploade foto&apos;s</p>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {item.fotoUploads.map((foto) => (
-                      <div
-                        key={foto.label}
-                        className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
-                      >
-                        <p className="mb-2 text-sm font-semibold">{foto.label}</p>
-                        <img
-                          src={foto.dataUrl}
-                          alt={foto.fileName}
-                          className="h-40 w-full rounded-2xl object-cover"
-                        />
-                        <p className="mt-2 truncate text-sm text-gray-600">
-                          {foto.fileName}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {item.opmerking && (
-                <p className="mt-4 rounded-2xl bg-[#f8f6f3] p-4 text-sm text-gray-700">
-                  {item.opmerking}
-                </p>
-              )}
-            </article>
+            <CleaningCard key={item.id} item={item} />
           ))}
         </div>
     </StrikShell>
+  );
+}
+
+function CleaningCard({ item }: Readonly<{ item: CleaningItem }>) {
+  const zichtbareTaken = stripInternalCleaningTasks(item.taken);
+  const itemPlanType = getCleaningItemPlanType(item);
+
+  return (
+    <article className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+            {item.datum}
+          </p>
+          <h2 className="mt-1 text-xl font-bold">{item.winkel}</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            {itemPlanType ?? "Schoonmaak"} ingevuld door{" "}
+            {item.naam || "onbekend"}
+          </p>
+        </div>
+        <span className="rounded-full bg-[#c3d3bc]/40 px-3 py-1 text-xs font-bold">
+          {zichtbareTaken.length} taken
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {zichtbareTaken.map((taak) => (
+          <div
+            key={taak}
+            className="rounded-2xl bg-[#f8f6f3] px-4 py-3 text-sm font-semibold"
+          >
+            ✓ {taak}
+          </div>
+        ))}
+      </div>
+
+      {item.temperatuurRegistraties &&
+        item.temperatuurRegistraties.length > 0 && (
+          <div className="mt-4 rounded-2xl bg-[#f8f6f3] p-4">
+            <p className="mb-3 font-bold">Temperaturen</p>
+            <div className="space-y-2">
+              {item.temperatuurRegistraties.map((registratie, index) => (
+                <div
+                  key={`${registratie.naam}-${registratie.temperatuur}-${index}`}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-sm"
+                >
+                  <span>{registratie.naam}</span>
+                  <span className="font-bold">
+                    {registratie.temperatuur} °C
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      {item.fotoUploads && item.fotoUploads.length > 0 && (
+        <div className="mt-4 rounded-2xl bg-[#f8f6f3] p-4">
+          <p className="mb-3 font-bold">Geüploade foto&apos;s</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {item.fotoUploads.map((foto) => (
+              <div
+                key={foto.label}
+                className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
+              >
+                <p className="mb-2 text-sm font-semibold">{foto.label}</p>
+                <img
+                  src={foto.dataUrl}
+                  alt={foto.fileName}
+                  className="h-40 w-full rounded-2xl object-cover"
+                />
+                <p className="mt-2 truncate text-sm text-gray-600">
+                  {foto.fileName}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {item.opmerking && (
+        <p className="mt-4 rounded-2xl bg-[#f8f6f3] p-4 text-sm text-gray-700">
+          {item.opmerking}
+        </p>
+      )}
+    </article>
   );
 }
