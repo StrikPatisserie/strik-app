@@ -30,7 +30,7 @@ export default function ManagementPage() {
       <StrikPageHeader
         title="Management"
         description="Overzichten en interne berichten."
-        icon={strikIcons.cleaningManagement}
+        icon={strikIcons.management}
         tone="light"
       />
 

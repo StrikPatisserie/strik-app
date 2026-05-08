@@ -7,9 +7,9 @@ import { strikIcons } from "./StrikUI";
 
 const items = [
   { href: "/", label: "Home", icon: "/strik-logo.png" },
-  { href: "/winkel", label: "Winkel", icon: strikIcons.news },
-  { href: "/ijs", label: "IJs", icon: strikIcons.cleaning },
-  { href: "/management", label: "Mgmt", icon: strikIcons.cleaningManagement },
+  { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
+  { href: "/ijs", label: "IJs", icon: strikIcons.ijs },
+  { href: "/management", label: "Mgmt", icon: strikIcons.management },
 ];
 
 export default function BottomNav() {

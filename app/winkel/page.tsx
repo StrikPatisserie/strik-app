@@ -39,7 +39,7 @@ export default function WinkelPage() {
       <StrikPageHeader
         title="Winkel"
         description="Alles voor de winkel op één plek."
-        icon={strikIcons.news}
+        icon={strikIcons.winkel}
         tone="green"
       />
 

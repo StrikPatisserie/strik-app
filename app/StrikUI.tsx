@@ -6,9 +6,12 @@ export const strikIcons = {
   bruidstaart: "/icons_strik_bruidstaart.svg",
   cleaning: "/icons_strik_cleaning.svg",
   cleaningManagement: "/icons_strik_cleaning%20management.svg",
+  ijs: "/icons_strik_ijs.svg",
   info: "/icons_strik_info.svg",
+  management: "/icons_strik_management.svg",
   news: "/icons_strik_news.svg",
   newsManagement: "/icons_strik_add%20news%20management.svg",
+  winkel: "/icons_strik_winkel.svg",
 };
 
 const toneClasses = {

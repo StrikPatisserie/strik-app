@@ -10,7 +10,7 @@ const sections = [
     button: "bg-[#dbe6d4]",
     badge: "bg-[#b2c8a9]",
     icon: "W",
-    image: strikIcons.news,
+    image: strikIcons.winkel,
   },
   {
     href: "/ijs",
@@ -19,7 +19,7 @@ const sections = [
     button: "bg-[#c3d3bc]",
     badge: "bg-[#9fb891]",
     icon: "IJ",
-    image: strikIcons.cleaning,
+    image: strikIcons.ijs,
   },
   {
     href: "/management",
@@ -28,7 +28,7 @@ const sections = [
     button: "bg-[#eef3ea]",
     badge: "bg-[#cfdcc8]",
     icon: "M",
-    image: strikIcons.cleaningManagement,
+    image: strikIcons.management,
     locked: true,
   },
 ];

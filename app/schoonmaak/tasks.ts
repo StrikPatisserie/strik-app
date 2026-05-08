@@ -4,6 +4,7 @@ export type Task = {
   id: string;
   label: string;
   children?: Task[];
+  info?: string;
 };
 
 export const ijssalons = [
@@ -241,24 +242,185 @@ const opstartTakenPerIjssalon: Record<string, Task[]> = {
   ],
 };
 
-const afsluitTaken: Task[] = [
-  { id: "afsluit-1", label: "Vitrine schoongemaakt" },
-  { id: "afsluit-2", label: "Werkbank schoongemaakt" },
-  { id: "afsluit-3", label: "Koeling gecontroleerd en schoon" },
-  { id: "afsluit-4", label: "Temperatuur registratie" },
-  { id: "afsluit-5", label: "Vloer geveegd en gedweild" },
-  { id: "afsluit-6", label: "Afval geleegd" },
-  { id: "afsluit-7", label: "Toilet gecontroleerd" },
-  { id: "afsluit-8", label: "Koffiehoek schoon" },
+const afsluitTakenLent: Task[] = [
+  {
+    id: "lent-afsluit-1",
+    label: "Vitrine en werkbank schoonmaken",
+    info: "Reinig de vitrine binnen en buiten, neem de werkbank af en controleer de koffiemachine en milkshakemachine.",
+  },
+  {
+    id: "lent-afsluit-2",
+    label: "Slagroom- en milkshakemachine reinigen",
+    info: "Spoel de slagroommachine door met schoon water en maak de milkshakemachine schoon.",
+  },
+  {
+    id: "lent-afsluit-3",
+    label: "Koffiemachine controleren",
+    info: "Verwijder restwater, maak de machine schoon en zet hem klaar voor de volgende dag.",
+  },
+  {
+    id: "lent-afsluit-4",
+    label: "Spoelbakjes en scheppen reinigen",
+    info: "Spoel alle spoelbakjes, ijsscheppen en spatels goed schoon en laat ze drogen.",
+  },
+  {
+    id: "lent-afsluit-5",
+    label: "Koeling controleren",
+    info: "Controleer de temperatuur van de koeling en maak de binnenkant schoon waar nodig.",
+  },
+  {
+    id: "lent-afsluit-6",
+    label: "Vloer vegen en dweilen",
+    info: "Veeg eerst, dweil daarna met allesreiniger en laat geen plassen staan.",
+  },
+  {
+    id: "lent-afsluit-7",
+    label: "Prullenbakken legen",
+    info: "Leeg alle prullenbakken, vervang zakken en zet het afval buiten.",
+  },
+  {
+    id: "lent-afsluit-8",
+    label: "Toilet en koffiehoek controleren",
+    info: "Controleer en ruim de toilet- en koffiehoek op zodat alles netjes achterblijft.",
+  },
+];
+
+const afsluitTakenHeyendaal: Task[] = [
+  {
+    id: "heyendaal-afsluit-1",
+    label: "Vitrine en werkbank schoonmaken",
+    info: "Reinig de vitrine binnen en buiten, neem de werkbank af en controleer de koffiemachine en milkshakemachine.",
+  },
+  {
+    id: "heyendaal-afsluit-2",
+    label: "Slagroom- en milkshakemachine reinigen",
+    info: "Spoel de slagroommachine door met schoon water en maak de milkshakemachine schoon.",
+  },
+  {
+    id: "heyendaal-afsluit-3",
+    label: "Koffiemachine controleren",
+    info: "Verwijder restwater, maak de machine schoon en zet hem klaar voor de volgende dag.",
+  },
+  {
+    id: "heyendaal-afsluit-4",
+    label: "Spoelbakjes en scheppen reinigen",
+    info: "Spoel alle spoelbakjes, ijsscheppen en spatels goed schoon en laat ze drogen.",
+  },
+  {
+    id: "heyendaal-afsluit-5",
+    label: "Koeling controleren",
+    info: "Controleer de temperatuur van de koeling en maak de binnenkant schoon waar nodig.",
+  },
+  {
+    id: "heyendaal-afsluit-6",
+    label: "Vloer vegen en dweilen",
+    info: "Veeg eerst, dweil daarna met allesreiniger en laat geen plassen staan.",
+  },
+  {
+    id: "heyendaal-afsluit-7",
+    label: "Prullenbakken legen",
+    info: "Leeg alle prullenbakken, vervang zakken en zet het afval buiten.",
+  },
+  {
+    id: "heyendaal-afsluit-8",
+    label: "Toilet en koffiehoek controleren",
+    info: "Controleer en ruim de toilet- en koffiehoek op zodat alles netjes achterblijft.",
+  },
+];
+
+const afsluitTakenDaalseweg: Task[] = [
+  {
+    id: "daalseweg-afsluit-1",
+    label: "Vitrine en werkbank schoonmaken",
+    info: "Reinig de vitrine binnen en buiten, neem de werkbank af en controleer de koffiemachine en milkshakemachine.",
+  },
+  {
+    id: "daalseweg-afsluit-2",
+    label: "Slagroom- en milkshakemachine reinigen",
+    info: "Spoel de slagroommachine door met schoon water en maak de milkshakemachine schoon.",
+  },
+  {
+    id: "daalseweg-afsluit-3",
+    label: "Koffiemachine controleren",
+    info: "Verwijder restwater, maak de machine schoon en zet hem klaar voor de volgende dag.",
+  },
+  {
+    id: "daalseweg-afsluit-4",
+    label: "Spoelbakjes en scheppen reinigen",
+    info: "Spoel alle spoelbakjes, ijsscheppen en spatels goed schoon en laat ze drogen.",
+  },
+  {
+    id: "daalseweg-afsluit-5",
+    label: "Koeling controleren",
+    info: "Controleer de temperatuur van de koeling en maak de binnenkant schoon waar nodig.",
+  },
+  {
+    id: "daalseweg-afsluit-6",
+    label: "Vloer vegen en dweilen",
+    info: "Veeg eerst, dweil daarna met allesreiniger en laat geen plassen staan.",
+  },
+  {
+    id: "daalseweg-afsluit-7",
+    label: "Prullenbakken legen",
+    info: "Leeg alle prullenbakken, vervang zakken en zet het afval buiten.",
+  },
+  {
+    id: "daalseweg-afsluit-8",
+    label: "Toilet en koffiehoek controleren",
+    info: "Controleer en ruim de toilet- en koffiehoek op zodat alles netjes achterblijft.",
+  },
+];
+
+const afsluitTakenZiekerstraat: Task[] = [
+  {
+    id: "ziekerstraat-afsluit-1",
+    label: "Vitrine en werkbank schoonmaken",
+    info: "Reinig de vitrine binnen en buiten, neem de werkbank af en controleer de koffiemachine en milkshakemachine.",
+  },
+  {
+    id: "ziekerstraat-afsluit-2",
+    label: "Slagroom- en milkshakemachine reinigen",
+    info: "Spoel de slagroommachine door met schoon water en maak de milkshakemachine schoon.",
+  },
+  {
+    id: "ziekerstraat-afsluit-3",
+    label: "Koffiemachine controleren",
+    info: "Verwijder restwater, maak de machine schoon en zet hem klaar voor de volgende dag.",
+  },
+  {
+    id: "ziekerstraat-afsluit-4",
+    label: "Spoelbakjes en scheppen reinigen",
+    info: "Spoel alle spoelbakjes, ijsscheppen en spatels goed schoon en laat ze drogen.",
+  },
+  {
+    id: "ziekerstraat-afsluit-5",
+    label: "Koeling controleren",
+    info: "Controleer de temperatuur van de koeling en maak de binnenkant schoon waar nodig.",
+  },
+  {
+    id: "ziekerstraat-afsluit-6",
+    label: "Vloer vegen en dweilen",
+    info: "Veeg eerst, dweil daarna met allesreiniger en laat geen plassen staan.",
+  },
+  {
+    id: "ziekerstraat-afsluit-7",
+    label: "Prullenbakken legen",
+    info: "Leeg alle prullenbakken, vervang zakken en zet het afval buiten.",
+  },
+  {
+    id: "ziekerstraat-afsluit-8",
+    label: "Toilet en koffiehoek controleren",
+    info: "Controleer en ruim de toilet- en koffiehoek op zodat alles netjes achterblijft.",
+  },
 ];
 
 export const takenPerPlanAndShop: Record<PlanType, Record<string, Task[]>> = {
   Opstartplan: opstartTakenPerIjssalon,
   Afsluitplan: {
-    "ijsloket Lent": afsluitTaken,
-    "ijsloket Heyendaal": afsluitTaken,
-    "ijsloket Daalseweg": afsluitTaken,
-    "ijsloket Ziekerstraat": afsluitTaken,
+    "ijsloket Lent": afsluitTakenLent,
+    "ijsloket Heyendaal": afsluitTakenHeyendaal,
+    "ijsloket Daalseweg": afsluitTakenDaalseweg,
+    "ijsloket Ziekerstraat": afsluitTakenZiekerstraat,
   },
 };
 

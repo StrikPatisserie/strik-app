@@ -38,7 +38,7 @@ export default function IJsPage() {
       <StrikPageHeader
         title="IJs"
         description="Alles voor de ijssalons."
-        icon={strikIcons.cleaning}
+        icon={strikIcons.ijs}
         tone="medium"
       />
 

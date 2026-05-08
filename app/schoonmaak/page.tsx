@@ -3,11 +3,10 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
+import { PlanType, Task, ijssalons, planOptions, getTakenLijst, flattenTasks } from "./tasks";
 
 const CLEANING_API_URL = "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
 const CLEANING_API_KEY = "schoonmaak-ijs-strik";
-
-type PlanType = "Opstartplan" | "Afsluitplan";
 
 type TemperatuurRegistratie = {
   id: string;
@@ -34,273 +33,6 @@ type SchoonmaakAntwoorden = {
   temperatuurRegistraties: TemperatuurRegistratie[];
   verzondenSignatuur?: string;
 };
-
-const ijssalons = [
-  "ijsloket Lent",
-  "ijsloket Heyendaal",
-  "ijsloket Daalseweg",
-  "ijsloket Ziekerstraat",
-];
-
-const planOptions: { value: PlanType; label: string }[] = [
-  { value: "Opstartplan", label: "Opstartplan" },
-  { value: "Afsluitplan", label: "Afsluitplan" },
-];
-
-type Task = {
-  id: string;
-  label: string;
-  children?: Task[];
-};
-
-const opstartTakenPerIjssalon: Record<string, Task[]> = {
-  "ijsloket Lent": [
-    {
-      id: "lent-1",
-      label: "Loket klaarmaken",
-      children: [
-        { id: "lent-1-1", label: "Prullenbakken naar buiten (controleer op de zak leeg is)" },
-        { id: "lent-1-2", label: "Vlag naar buiten" },
-        { id: "lent-1-3", label: "Ijshoorntje naar buiten" },
-        { id: "lent-1-4", label: "Luifel uitrollen" },
-      ],
-    },
-    {
-      id: "lent-2",
-      label: "IJSVITRINE SCHOONMAKEN & AANZETTEN",
-      children: [
-        {
-          id: "lent-2-1",
-          label: "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!",
-        },
-        { id: "lent-2-2", label: "Ijsvitrine aanzetten naar -16, lamp van ijsvitrine ook aanzetten!" },
-        { id: "lent-2-3", label: "Ijsvitrine van buiten schoonmaken met Glassex en torkrol" },
-        { id: "lent-2-4", label: "Metalen staven in vitrine plaatsen" },
-      ],
-    },
-    {
-      id: "lent-3",
-      label: "IJSVITRINE VULLEN",
-      children: [
-        { id: "lent-3-1", label: "Als de vitrine kouder is dan -10 graden, begin je met de ijsbakken in de vitrine zetten." },
-        { id: "lent-3-2", label: "Vul de ijsvitrine zoals de vaste indeling. Zijn er smaken op waardoor je een lege plek hebt? Vul deze dan met een smaak die je wel nog op voorraad hebt." },
-      ],
-    },
-    {
-      id: "lent-4",
-      label: "TOEBEHOREN KLAARZETTEN",
-      children: [
-        { id: "lent-4-1", label: "Houder met ijshoorntjes aanvullen (FIFO!!). LET OP: zeer breekbaar, dus voorzichtig!" },
-        { id: "lent-4-2", label: "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine" },
-        { id: "lent-4-3", label: "Schone sponsen en schone ijsscheppen in de spoelbakken doen" },
-        { id: "lent-4-4", label: "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik." },
-      ],
-    },
-    {
-      id: "lent-5",
-      label: "SALON SCHOONMAKEN",
-      children: [
-        { id: "lent-5-1", label: "Glaswerk van vitrine schoonmaken met Glassex en torkrol" },
-        { id: "lent-5-2", label: "Keuken schoonmaken & afwas wegwerken" },
-      ],
-    },
-  ],
-  "ijsloket Daalseweg": [
-    {
-      id: "daalseweg-1",
-      label: "Loket klaarmaken",
-      children: [
-        { id: "daalseweg-1-1", label: "Prullenbakken naar buiten (controleer op de zak leeg is)" },
-        { id: "daalseweg-1-2", label: "Vlag naar buiten" },
-        { id: "daalseweg-1-3", label: "Ijshoorntje naar buiten" },
-        { id: "daalseweg-1-4", label: "Luifel uitrollen" },
-      ],
-    },
-    {
-      id: "daalseweg-2",
-      label: "IJSVITRINE SCHOONMAKEN & AANZETTEN",
-      children: [
-        {
-          id: "daalseweg-2-1",
-          label: "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!",
-        },
-        { id: "daalseweg-2-2", label: "Ijsvitrine aanzetten naar -16, lamp van ijsvitrine ook aanzetten!" },
-        { id: "daalseweg-2-3", label: "Ijsvitrine van buiten schoonmaken met Glassex en torkrol" },
-        { id: "daalseweg-2-4", label: "Metalen staven in vitrine plaatsen" },
-      ],
-    },
-    {
-      id: "daalseweg-3",
-      label: "IJSVITRINE VULLEN",
-      children: [
-        { id: "daalseweg-3-1", label: "Als de vitrine kouder is dan -10 graden, begin je met de ijsbakken in de vitrine zetten. Pak ijsbakken uit de vriezer in het ijsloket, en vul eventueel aan met bakken uit de vriezer achter in de winkel." },
-        { id: "daalseweg-3-2", label: "Vul de ijsvitrine zoals de vaste indeling. Zijn er smaken op waardoor je een lege plek hebt? Vul deze dan met een smaak die je wel nog op voorraad hebt." },
-      ],
-    },
-    {
-      id: "daalseweg-4",
-      label: "TOEBEHOREN KLAARZETTEN",
-      children: [
-        { id: "daalseweg-4-1", label: "Houder met ijshoorntjes aanvullen (FIFO!!). LET OP: zeer breekbaar, dus voorzichtig!" },
-        { id: "daalseweg-4-2", label: "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine" },
-        { id: "daalseweg-4-3", label: "Schone sponsen en schone ijsscheppen in de spoelbakken doen" },
-        { id: "daalseweg-4-4", label: "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik." },
-      ],
-    },
-    {
-      id: "daalseweg-5",
-      label: "SALON SCHOONMAKEN",
-      children: [
-        { id: "daalseweg-5-1", label: "Glaswerk van vitrine schoonmaken met Glassex en torkrol" },
-        { id: "daalseweg-5-2", label: "Keuken schoonmaken & afwas wegwerken" },
-        { id: "daalseweg-5-3", label: "Keukentje schoonmaken" },
-      ],
-    },
-  ],
-  "ijsloket Heyendaal": [
-    {
-      id: "heyendaal-1",
-      label: "TERRAS UITZETTEN",
-      children: [
-        { id: "heyendaal-1-1", label: "Tafels en stoeltjes op z’n plek zetten & schoonmaken met sopje" },
-        { id: "heyendaal-1-2", label: "Plantjes en toebehoren op tafels" },
-        { id: "heyendaal-1-3", label: "Terras aanvegen" },
-        { id: "heyendaal-1-4", label: "Prullenbakken legen & schone zak (i.v.t)" },
-        { id: "heyendaal-1-5", label: "Planten water geven (als het niet geregend heeft). Ook de grote bakken!" },
-        { id: "heyendaal-1-6", label: "Parasols in de voeten doen en opzetten" },
-        { id: "heyendaal-1-7", label: "Luifel van loket uitrollen" },
-        { id: "heyendaal-1-8", label: "Groen ijsje naar buiten rollen" },
-        { id: "heyendaal-1-9", label: "Lampjes aanzetten (ook bij daglicht!)" },
-      ],
-    },
-    {
-      id: "heyendaal-2",
-      label: "IJSVITRINE SCHOONMAKEN & AANZETTEN",
-      children: [
-        {
-          id: "heyendaal-2-1",
-          label: "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!",
-        },
-        { id: "heyendaal-2-2", label: "Ijsvitrine aanzetten naar -16, lamp van ijsvitrine ook aanzetten!" },
-        { id: "heyendaal-2-3", label: "Ijsvitrine van buiten schoonmaken met Glassex en torkrol" },
-        { id: "heyendaal-2-4", label: "Metalen staven in vitrine plaatsen" },
-      ],
-    },
-    {
-      id: "heyendaal-3",
-      label: "IJSVITRINE VULLEN",
-      children: [
-        { id: "heyendaal-3-1", label: "Als de vitrine kouder is dan -10 graden, begin je met de ijsbakken in de vitrine zetten." },
-        { id: "heyendaal-3-2", label: "Vul de ijsvitrine zoals de vaste indeling. Zijn er smaken op waardoor je een lege plek hebt? Vul deze dan met een smaak die je wel nog op voorraad hebt." },
-      ],
-    },
-    {
-      id: "heyendaal-4",
-      label: "TOEBEHOREN KLAARZETTEN",
-      children: [
-        { id: "heyendaal-4-1", label: "Bakken met ijshoorntjes aanvullen (FIFO!!). LET OP: zeer breekbaar, dus voorzichtig!" },
-        { id: "heyendaal-4-2", label: "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine" },
-        { id: "heyendaal-4-3", label: "Schone sponsen en schone ijsscheppen in de spoelbakken doen" },
-        { id: "heyendaal-4-4", label: "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik." },
-      ],
-    },
-    {
-      id: "heyendaal-5",
-      label: "SALON SCHOONMAKEN",
-      children: [
-        { id: "heyendaal-5-1", label: "Vloer vegen en afnemen met natte dweil en allesreiniger" },
-        { id: "heyendaal-5-2", label: "Keuken schoonmaken & afwas wegwerken" },
-        { id: "heyendaal-5-3", label: "Glasplaat afnemen met Glassex" },
-      ],
-    },
-  ],
-  "ijsloket Ziekerstraat": [
-    {
-      id: "ziekerstraat-1",
-      label: "TERRAS UITZETTEN",
-      children: [
-        { id: "ziekerstraat-1-1", label: "Tafels en stoeltjes op z’n plek zetten & schoonmaken met sopje" },
-        { id: "ziekerstraat-1-2", label: "Plantjes en toebehoren op tafels" },
-        { id: "ziekerstraat-1-3", label: "Terras aanvegen" },
-        { id: "ziekerstraat-1-4", label: "Prullenbakken legen & schone zak (i.v.t)" },
-        { id: "ziekerstraat-1-5", label: "Planten water geven (als het niet geregend heeft). Ook de grote bakken!" },
-        { id: "ziekerstraat-1-6", label: "Parasols (indien het seizoen) in de voeten doen en opzetten" },
-        { id: "ziekerstraat-1-7", label: "Luifel van loket uitrollen" },
-        { id: "ziekerstraat-1-8", label: "Groen ijsje naar buiten rollen" },
-        { id: "ziekerstraat-1-9", label: "Ijzeren palen voor loket zetten" },
-      ],
-    },
-    {
-      id: "ziekerstraat-2",
-      label: "IJSVITRINE SCHOONMAKEN & AANZETTEN",
-      children: [
-        {
-          id: "ziekerstraat-2-1",
-          label: "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!",
-        },
-        { id: "ziekerstraat-2-2", label: "Ijsvitrine aanzetten naar -16, lamp van ijsvitrine ook aanzetten!" },
-        { id: "ziekerstraat-2-3", label: "Ijsvitrine van buiten schoonmaken met Glassex en torkrol" },
-        { id: "ziekerstraat-2-4", label: "Metalen staven in vitrine plaatsen" },
-      ],
-    },
-    {
-      id: "ziekerstraat-3",
-      label: "IJSVITRINE VULLEN",
-      children: [
-        { id: "ziekerstraat-3-1", label: "Als de vitrine kouder is dan -10 graden, begin je met de ijsbakken in de vitrine zetten." },
-        { id: "ziekerstraat-3-2", label: "Vul de ijsvitrine zoals de vaste indeling. Zijn er smaken op waardoor je een lege plek hebt? Vul deze dan met een smaak die je wel nog op voorraad hebt." },
-      ],
-    },
-    {
-      id: "ziekerstraat-4",
-      label: "TOEBEHOREN KLAARZETTEN",
-      children: [
-        { id: "ziekerstraat-4-1", label: "Bakken met ijshoorntjes aanvullen (FIFO!!). LET OP: zeer breekbaar, dus voorzichtig!" },
-        { id: "ziekerstraat-4-2", label: "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine" },
-        { id: "ziekerstraat-4-3", label: "Schone sponsen en schone ijsscheppen in de spoelbakken doen" },
-        { id: "ziekerstraat-4-4", label: "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik." },
-      ],
-    },
-    {
-      id: "ziekerstraat-5",
-      label: "SALON SCHOONMAKEN",
-      children: [
-        { id: "ziekerstraat-5-1", label: "Vloer vegen en afnemen met natte dweil en allesreiniger" },
-        { id: "ziekerstraat-5-2", label: "Keuken schoonmaken & afwas wegwerken" },
-        { id: "ziekerstraat-5-3", label: "Glasplaat afnemen met Glassex" },
-      ],
-    },
-  ],
-};
-
-const afsluitTaken: Task[] = [
-  { id: "afsluit-1", label: "Vitrine schoongemaakt" },
-  { id: "afsluit-2", label: "Werkbank schoongemaakt" },
-  { id: "afsluit-3", label: "Koeling gecontroleerd en schoon" },
-  { id: "afsluit-4", label: "Temperatuur registratie" },
-  { id: "afsluit-5", label: "Vloer geveegd en gedweild" },
-  { id: "afsluit-6", label: "Afval geleegd" },
-  { id: "afsluit-7", label: "Toilet gecontroleerd" },
-  { id: "afsluit-8", label: "Koffiehoek schoon" },
-];
-
-const takenPerPlanAndShop: Record<PlanType, Record<string, Task[]>> = {
-  Opstartplan: opstartTakenPerIjssalon,
-  Afsluitplan: {
-    "ijsloket Lent": afsluitTaken,
-    "ijsloket Heyendaal": afsluitTaken,
-    "ijsloket Daalseweg": afsluitTaken,
-    "ijsloket Ziekerstraat": afsluitTaken,
-  },
-};
-
-function flattenTasks(tasks: Task[]): Task[] {
-  return tasks.flatMap((task) => [task, ...(task.children ? flattenTasks(task.children) : [])]);
-}
-
-function getTakenLijst(planType: PlanType, winkel: string): Task[] {
-  return takenPerPlanAndShop[planType]?.[winkel] ?? takenPerPlanAndShop[planType]["ijsloket Lent"];
-}
 
 function getVandaag() {
   const vandaag = new Date();
@@ -718,16 +450,8 @@ function SchoonmaakForm() {
             <div className="rounded-3xl bg-[#f7faf5] p-4 text-sm text-gray-700 shadow-sm">
               <p className="font-semibold">Afsluitplan</p>
               <p className="mt-2">
-                Gebruik dezelfde checklist als het opstartplan. Staat er “zie
-                schoonmaaklijst”? Bekijk dan het{' '}
-                <a
-                  href="/info"
-                  target="_blank"
-                  className="font-semibold text-[#3b6b43] underline"
-                >
-                  schoonmaakplan PDF
-                </a>
-                .
+                Dit afsluitplan bevat nu gedetailleerde, taakniveau instructies per ijssalon.
+                Volg de extra informatie bij de taken met een info-icoon.
               </p>
             </div>
           )}
@@ -757,25 +481,51 @@ function SchoonmaakForm() {
                         : "border-[#e7e0d8] bg-white"
                     }`}
                   >
-                    {isComplete(taak) ? "✓ " : ""}{taak.label}
+                    <div className="flex items-center justify-between gap-3">
+                      <span>{isComplete(taak) ? "✓ " : ""}{taak.label}</span>
+                      {taak.info && (
+                        <span className="rounded-full border border-[#d8d6cc] bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#3b6b43]">
+                          i
+                        </span>
+                      )}
+                    </div>
                   </button>
+
+                  {taak.info && (
+                    <p className="text-xs leading-relaxed text-[#4b5d47]">
+                      {taak.info}
+                    </p>
+                  )}
 
                   {taak.children && (
                     <div className="space-y-2 rounded-2xl bg-white p-3">
                       {taak.children.map((subtaak) => (
-                        <button
-                          key={subtaak.id}
-                          type="button"
-                          onClick={() => toggleTaak(subtaak)}
-                          className={`w-full rounded-2xl border p-3 text-left text-sm font-semibold ${
-                            taken.includes(subtaak.id)
-                              ? "border-[#c3d3bc] bg-[#c3d3bc]"
-                              : "border-[#e7e0d8] bg-[#f8f6f3]"
-                          }`}
-                        >
-                          {taken.includes(subtaak.id) ? "✓ " : ""}
-                          {subtaak.label}
-                        </button>
+                        <div key={subtaak.id} className="space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleTaak(subtaak)}
+                            className={`w-full rounded-2xl border p-3 text-left text-sm font-semibold ${
+                              taken.includes(subtaak.id)
+                                ? "border-[#c3d3bc] bg-[#c3d3bc]"
+                                : "border-[#e7e0d8] bg-[#f8f6f3]"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span>{taken.includes(subtaak.id) ? "✓ " : ""}{subtaak.label}</span>
+                              {subtaak.info && (
+                                <span className="rounded-full border border-[#d8d6cc] bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#3b6b43]">
+                                  i
+                                </span>
+                              )}
+                            </div>
+                          </button>
+
+                          {subtaak.info && (
+                            <p className="text-xs leading-relaxed text-[#4b5d47]">
+                              {subtaak.info}
+                            </p>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
