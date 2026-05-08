@@ -7,6 +7,7 @@ const EXTRAVESTIGING_URL = "https://evstrikb2b.extravestiging.nl";
 const CUSTOM_PRODUCTS_KEY = "strik-ijs-bestellen-custom-products";
 const HIDDEN_PRODUCTS_KEY = "strik-ijs-bestellen-hidden-products";
 const QUANTITIES_KEY = "strik-ijs-bestellen-quantities";
+const DEFAULT_SUBCODE = "000";
 
 type ProductGroup = "Ijs" | "Horeca Benodigdheden" | "Winkel benodigdheden divers";
 
@@ -126,11 +127,21 @@ function formatPrice(value: number) {
 function buildAddProductUrl(product: Product, amount: number) {
   const url = new URL("/AddProduct.aspx", EXTRAVESTIGING_URL);
   url.searchParams.set("ProductCode", product.code);
+  url.searchParams.set("Subcode", product.subcode || DEFAULT_SUBCODE);
   url.searchParams.set("Amount", String(amount));
+  url.searchParams.set("AddType", "Add");
+  url.searchParams.set("ActionCode", "ShoppingCart");
 
-  if (product.subcode) {
-    url.searchParams.set("Subcode", product.subcode);
-  }
+  return url.toString();
+}
+
+function buildStatusUrl(product: Product, amount: number) {
+  const url = new URL("/AddProduct.aspx", EXTRAVESTIGING_URL);
+  url.searchParams.set("ProductCode", product.code);
+  url.searchParams.set("Subcode", product.subcode || DEFAULT_SUBCODE);
+  url.searchParams.set("Amount", String(amount));
+  url.searchParams.set("AddType", "Add");
+  url.searchParams.set("ActionCode", "ShowStatus");
 
   return url.toString();
 }
@@ -466,6 +477,16 @@ export default function IjsBestellenPage() {
                         className="flex-1 rounded-xl bg-[#c3d3bc] px-3 py-2 text-center text-xs font-bold"
                       >
                         Toevoegen in webshop
+                      </a>
+                    )}
+                    {amount > 0 && (
+                      <a
+                        href={buildStatusUrl(product, amount)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-xl bg-[#eef3ea] px-3 py-2 text-center text-xs font-bold text-[#2d2a26]/65"
+                      >
+                        Test
                       </a>
                     )}
                     <button
