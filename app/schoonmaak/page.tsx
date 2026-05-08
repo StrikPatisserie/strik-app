@@ -8,10 +8,11 @@ import {
   CleaningItem,
   CleaningPhotoUpload,
   CleaningTemperatureRegistration,
+  getCleaningItemPhotos,
   getCleaningUrl,
   itemMatchesCleaningSelection,
   stripInternalCleaningTasks,
-  withPlanMarker,
+  withCleaningMetaMarkers,
 } from "./cleaningApi";
 
 type TemperatuurRegistratie = {
@@ -24,7 +25,11 @@ type PhotoUpload = {
   id: string;
   label: string;
   fileName: string;
-  dataUrl: string;
+  previewUrl: string;
+  dataUrl?: string;
+  url?: string;
+  mediaId?: number;
+  file?: File;
 };
 
 type SchoonmaakAntwoorden = {
@@ -65,6 +70,71 @@ function readFileAsDataUrl(file: File) {
   });
 }
 
+function maakJpegBestandsnaam(fileName: string) {
+  const zonderExtensie = fileName.replace(/\.[^.]+$/, "");
+  return `${zonderExtensie || "schoonmaak-foto"}.jpg`;
+}
+
+function verkleinFotoVoorUpload(file: File) {
+  return new Promise<File>((resolve) => {
+    if (!file.type.startsWith("image/")) {
+      resolve(file);
+      return;
+    }
+
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      const maxSize = 1200;
+      const grootsteZijde = Math.max(image.width, image.height);
+      const schaal = Math.min(1, maxSize / grootsteZijde);
+
+      if (schaal === 1 && file.size < 1_800_000) {
+        resolve(file);
+        return;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * schaal);
+      canvas.height = Math.round(image.height * schaal);
+
+      const context = canvas.getContext("2d");
+      if (!context) {
+        resolve(file);
+        return;
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+
+          resolve(
+            new File([blob], maakJpegBestandsnaam(file.name), {
+              type: "image/jpeg",
+            })
+          );
+        },
+        "image/jpeg",
+        0.72
+      );
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+
+    image.src = objectUrl;
+  });
+}
+
 const requiredFotoUploadLabels = [
   "Bovenkant ijsvitrine",
   "Keuken",
@@ -99,8 +169,19 @@ function normaliseerFotoUploads(
     id: upload.id || `${itemId}-foto-${index}`,
     label: upload.label,
     fileName: upload.fileName,
+    previewUrl: upload.url || upload.dataUrl || "",
     dataUrl: upload.dataUrl,
+    url: upload.url,
+    mediaId: upload.mediaId,
   }));
+}
+
+function getFotoSrc(upload: PhotoUpload | CleaningPhotoUpload) {
+  return (
+    upload.url ||
+    upload.dataUrl ||
+    ("previewUrl" in upload ? upload.previewUrl : "")
+  );
 }
 
 function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
@@ -116,6 +197,8 @@ function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
     fotoUploads: antwoorden.fotoUploads.map((upload) => ({
       label: upload.label,
       fileName: upload.fileName,
+      url: upload.url,
+      mediaId: upload.mediaId,
     })),
   });
 }
@@ -208,7 +291,10 @@ function SchoonmaakForm() {
         );
         setFotoUploads(
           nieuwsteItem
-            ? normaliseerFotoUploads(nieuwsteItem.id, nieuwsteItem.fotoUploads)
+            ? normaliseerFotoUploads(
+                nieuwsteItem.id,
+                getCleaningItemPhotos(nieuwsteItem)
+              )
             : []
         );
         setVerzondenSignatuur(
@@ -224,7 +310,7 @@ function SchoonmaakForm() {
                 ),
                 fotoUploads: normaliseerFotoUploads(
                   nieuwsteItem.id,
-                  nieuwsteItem.fotoUploads
+                  getCleaningItemPhotos(nieuwsteItem)
                 ),
               })
             : ""
@@ -283,14 +369,16 @@ function SchoonmaakForm() {
     );
   }
 
-  function getAntwoorden(): SchoonmaakAntwoorden {
+  function getAntwoorden(
+    volgendeFotoUploads: PhotoUpload[] = fotoUploads
+  ): SchoonmaakAntwoorden {
     return {
       planType,
       naam,
       taken: taken.map((id) => taskLabelById[id] ?? id),
       opmerking,
       temperatuurRegistraties,
-      fotoUploads,
+      fotoUploads: volgendeFotoUploads,
       verzondenSignatuur,
     };
   }
@@ -316,24 +404,100 @@ function SchoonmaakForm() {
     setTemperatuurRegistraties((prev) => prev.filter((item) => item.id !== id));
   }
 
-  function updateFotoUpload(label: string, file: File | null) {
+  async function updateFotoUpload(label: string, file: File | null) {
     if (!file) return;
 
-    readFileAsDataUrl(file).then((dataUrl) => {
+    setStatus(`Foto voorbereiden: ${label}...`);
+
+    try {
+      const uploadFile = await verkleinFotoVoorUpload(file);
+      const previewUrl = await readFileAsDataUrl(uploadFile);
+
       setFotoUploads((prev) => [
         ...prev.filter((upload) => upload.label !== label),
         {
           id: `${label}-${Date.now()}`,
           label,
-          fileName: file.name,
-          dataUrl,
+          fileName: uploadFile.name,
+          previewUrl,
+          dataUrl: previewUrl,
+          file: uploadFile,
         },
       ]);
-    });
+
+      setStatus("Foto klaar om op te slaan.");
+    } catch {
+      setStatus("Foto kon niet gelezen worden.");
+    }
   }
 
   function verwijderFotoUpload(label: string) {
     setFotoUploads((prev) => prev.filter((upload) => upload.label !== label));
+  }
+
+  async function uploadFotoNaarWordPress(upload: PhotoUpload) {
+    if (upload.url || !upload.file) return upload;
+
+    const formData = new FormData();
+    formData.set("file", upload.file, upload.file.name);
+    formData.set("label", upload.label);
+    formData.set("winkel", winkel);
+    formData.set("datum", datum);
+    formData.set("planType", planType);
+
+    const res = await fetch("/api/cleaning-photo", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = (await res.json().catch(() => null)) as {
+      id?: number;
+      url?: string;
+      fileName?: string;
+      message?: string;
+    } | null;
+
+    if (res.status === 503 && upload.dataUrl) {
+      return upload;
+    }
+
+    if (!res.ok || !data?.url) {
+      throw new Error(data?.message || "Foto uploaden naar WordPress mislukt.");
+    }
+
+    return {
+      ...upload,
+      file: undefined,
+      dataUrl: undefined,
+      previewUrl: data.url,
+      url: data.url,
+      mediaId: data.id,
+      fileName: data.fileName || upload.fileName,
+    };
+  }
+
+  async function uploadNieuweFotos(uploads: PhotoUpload[]) {
+    const volgendeUploads: PhotoUpload[] = [];
+
+    for (const upload of uploads) {
+      if (upload.file && !upload.url) {
+        setStatus(`Foto uploaden: ${upload.label}...`);
+      }
+
+      volgendeUploads.push(await uploadFotoNaarWordPress(upload));
+    }
+
+    return volgendeUploads;
+  }
+
+  function serialiseerFotoUpload(upload: PhotoUpload): CleaningPhotoUpload {
+    return {
+      label: upload.label,
+      fileName: upload.fileName,
+      url: upload.url,
+      mediaId: upload.mediaId,
+      dataUrl: upload.url ? undefined : upload.dataUrl,
+    };
   }
 
   function valideerAntwoorden() {
@@ -358,16 +522,20 @@ function SchoonmaakForm() {
   async function submitAntwoorden() {
     if (!valideerAntwoorden()) return;
 
-    const antwoorden = getAntwoorden();
-    const signatuur = maakSignatuur(antwoorden);
-
     setStatus("Opslaan...");
     setVerzendenBezig(true);
 
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
+    let timeoutId: number | undefined;
 
     try {
+      const fotoUploadsVoorOpslaan = await uploadNieuweFotos(fotoUploads);
+      setFotoUploads(fotoUploadsVoorOpslaan);
+
+      const antwoorden = getAntwoorden(fotoUploadsVoorOpslaan);
+      const signatuur = maakSignatuur(antwoorden);
+      const controller = new AbortController();
+      timeoutId = window.setTimeout(() => controller.abort(), 12_000);
+
       const res = await fetch(getCleaningUrl(), {
         method: "POST",
         headers: {
@@ -378,17 +546,17 @@ function SchoonmaakForm() {
           winkel,
           naam: naam.trim(),
           datum,
-          taken: withPlanMarker(antwoorden.taken, planType),
+          taken: withCleaningMetaMarkers(
+            antwoorden.taken,
+            planType,
+            fotoUploadsVoorOpslaan
+          ),
           opmerking: opmerking.trim(),
           temperatuurRegistraties: temperatuurRegistraties.map((item) => ({
             naam: item.naam.trim(),
             temperatuur: item.temperatuur.trim(),
           })),
-          fotoUploads: fotoUploads.map((upload) => ({
-            label: upload.label,
-            fileName: upload.fileName,
-            dataUrl: upload.dataUrl,
-          })),
+          fotoUploads: fotoUploadsVoorOpslaan.map(serialiseerFotoUpload),
         }),
         signal: controller.signal,
       });
@@ -419,9 +587,13 @@ function SchoonmaakForm() {
         return;
       }
 
-      setStatus("Kan geen verbinding maken met WordPress.");
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Kan geen verbinding maken met WordPress."
+      );
     } finally {
-      window.clearTimeout(timeoutId);
+      if (timeoutId) window.clearTimeout(timeoutId);
       setVerzendenBezig(false);
     }
   }
@@ -594,6 +766,7 @@ function SchoonmaakForm() {
               <div className="grid gap-3 sm:grid-cols-2">
                 {requiredFotoUploadLabels.map((label) => {
                   const upload = fotoUploads.find((item) => item.label === label);
+                  const fotoSrc = upload ? getFotoSrc(upload) : "";
 
                   return (
                     <div
@@ -619,11 +792,13 @@ function SchoonmaakForm() {
                       </label>
                       {upload ? (
                         <div className="space-y-2">
-                          <img
-                            src={upload.dataUrl}
-                            alt={upload.fileName}
-                            className="h-28 w-full rounded-2xl object-cover"
-                          />
+                          {fotoSrc && (
+                            <img
+                              src={fotoSrc}
+                              alt={upload.fileName}
+                              className="h-28 w-full rounded-2xl object-cover"
+                            />
+                          )}
                           <div className="flex items-center justify-between gap-2 text-sm">
                             <span className="truncate text-[#2d2a26]">
                               {upload.fileName}

@@ -5,6 +5,7 @@ export const CLEANING_API_URL =
 export const CLEANING_API_KEY = "schoonmaak-ijs-strik";
 
 const PLAN_MARKER_PREFIX = "__strik_plan:";
+const PHOTO_MARKER_PREFIX = "__strik_photo:";
 
 export type CleaningTemperatureRegistration = {
   id?: string;
@@ -16,7 +17,9 @@ export type CleaningPhotoUpload = {
   id?: string;
   label: string;
   fileName: string;
-  dataUrl: string;
+  dataUrl?: string;
+  url?: string;
+  mediaId?: number;
 };
 
 export type CleaningItem = {
@@ -43,18 +46,60 @@ export function getPlanMarker(planType: PlanType) {
 }
 
 export function isInternalCleaningTask(taak: string) {
-  return taak.startsWith(PLAN_MARKER_PREFIX);
+  return (
+    taak.startsWith(PLAN_MARKER_PREFIX) ||
+    taak.startsWith(PHOTO_MARKER_PREFIX)
+  );
 }
 
 export function stripInternalCleaningTasks(taken: string[] = []) {
   return taken.filter((taak) => !isInternalCleaningTask(taak));
 }
 
-export function withPlanMarker(taken: string[], planType: PlanType) {
+export function withCleaningMetaMarkers(
+  taken: string[],
+  planType: PlanType,
+  fotoUploads: CleaningPhotoUpload[] = []
+) {
+  const fotoMarkers = fotoUploads
+    .filter((upload) => upload.url || upload.dataUrl)
+    .map((upload) =>
+      `${PHOTO_MARKER_PREFIX}${encodeURIComponent(
+        JSON.stringify({
+          label: upload.label,
+          fileName: upload.fileName,
+          url: upload.url,
+          dataUrl: upload.url ? undefined : upload.dataUrl,
+          mediaId: upload.mediaId,
+        })
+      )}`
+    );
+
   return [
     ...stripInternalCleaningTasks(taken),
     getPlanMarker(planType),
+    ...fotoMarkers,
   ];
+}
+
+export function extractPhotoUploadsFromTasks(taken: string[] = []) {
+  return taken.flatMap((taak) => {
+    if (!taak.startsWith(PHOTO_MARKER_PREFIX)) return [];
+
+    try {
+      const upload = JSON.parse(
+        decodeURIComponent(taak.slice(PHOTO_MARKER_PREFIX.length))
+      ) as CleaningPhotoUpload;
+
+      if (!upload.label || !upload.fileName || (!upload.url && !upload.dataUrl)) {
+        return [];
+      }
+
+      return [upload];
+    } catch {
+      return [];
+    }
+  });
 }
 
 function planFromMarker(taken: string[] = []): PlanType | null {
@@ -124,4 +169,20 @@ export function getCleaningItemKey(item: CleaningItem) {
   const planType = getCleaningItemPlanType(item) ?? "Onbekend";
 
   return `${item.datum}-${item.winkel}-${planType}`;
+}
+
+export function getCleaningItemPhotos(item: CleaningItem) {
+  const uploadsByLabel = new Map<string, CleaningPhotoUpload>();
+
+  item.fotoUploads?.forEach((upload) => {
+    if (upload.url || upload.dataUrl) {
+      uploadsByLabel.set(upload.label, upload);
+    }
+  });
+
+  extractPhotoUploadsFromTasks(item.taken).forEach((upload) => {
+    uploadsByLabel.set(upload.label, upload);
+  });
+
+  return Array.from(uploadsByLabel.values());
 }

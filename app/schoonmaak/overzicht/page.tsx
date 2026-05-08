@@ -5,6 +5,7 @@ import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import {
   CleaningItem,
   getCleaningItemKey,
+  getCleaningItemPhotos,
   getCleaningItemPlanType,
   getCleaningUrl,
   stripInternalCleaningTasks,
@@ -161,6 +162,7 @@ export default function SchoonmaakOverzichtPage() {
 function CleaningCard({ item }: Readonly<{ item: CleaningItem }>) {
   const zichtbareTaken = stripInternalCleaningTasks(item.taken);
   const itemPlanType = getCleaningItemPlanType(item);
+  const fotoUploads = getCleaningItemPhotos(item);
 
   return (
     <article className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
@@ -211,26 +213,32 @@ function CleaningCard({ item }: Readonly<{ item: CleaningItem }>) {
           </div>
         )}
 
-      {item.fotoUploads && item.fotoUploads.length > 0 && (
+      {fotoUploads.length > 0 && (
         <div className="mt-4 rounded-2xl bg-[#f8f6f3] p-4">
           <p className="mb-3 font-bold">Geüploade foto&apos;s</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            {item.fotoUploads.map((foto) => (
-              <div
-                key={foto.label}
-                className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
-              >
-                <p className="mb-2 text-sm font-semibold">{foto.label}</p>
-                <img
-                  src={foto.dataUrl}
-                  alt={foto.fileName}
-                  className="h-40 w-full rounded-2xl object-cover"
-                />
-                <p className="mt-2 truncate text-sm text-gray-600">
-                  {foto.fileName}
-                </p>
-              </div>
-            ))}
+            {fotoUploads.map((foto) => {
+              const fotoSrc = foto.url || foto.dataUrl;
+
+              return (
+                <div
+                  key={foto.label}
+                  className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
+                >
+                  <p className="mb-2 text-sm font-semibold">{foto.label}</p>
+                  {fotoSrc && (
+                    <img
+                      src={fotoSrc}
+                      alt={foto.fileName}
+                      className="h-40 w-full rounded-2xl object-cover"
+                    />
+                  )}
+                  <p className="mt-2 truncate text-sm text-gray-600">
+                    {foto.fileName}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
