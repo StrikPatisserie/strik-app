@@ -849,6 +849,117 @@ export const takenPerPlanAndShop: Record<PlanType, Record<string, Task[]>> = {
   },
 };
 
+const infoForTaskLabel: Record<string, string> = {
+  "IJSVITRINE SCHOONMAKEN & AANZETTEN":
+    "Maak de vitrine schoon voordat hij helemaal koud is. Werk van binnen naar buiten en controleer daarna of de vitrine en lamp aanstaan.",
+  "Ijsvitrine van binnen schoonmaken met emmer Halemid (1 schep halemid op volle emmer lauw water). Let erop dat er geen aangekoekt ijs meer zichtbaar is!":
+    "LET OP! Dit doe je aan het begin van de shift, nog voordat de vitrine aanstaat. Gebruik 1 schep Halemid op een volle emmer lauw water en haal al het aangekoekte ijs en vuil weg.",
+  "Ijsvitrine van buiten schoonmaken met Glassex en torkrol":
+    "Het glas van de vitrine wordt snel vies door ijs en vingers. Maak het na iedere shift schoon met Glassex en torkrol, en houd tijdens de shift in de gaten of het netjes blijft.",
+  "Schone sponsen en schone ijsscheppen in de spoelbakken doen":
+    "Met spoelbakjes bedoelen we de twee bakjes bij de ijsvitrine waarmee je de ijsspatel schoonspoelt. Vul met schoon water en zet er schone sponsen en scheppen in.",
+  "Bakje slagroom uit de koelkast halen, aanvullen en in de slagroommachine doen. 1 keer doorspoelen voor gebruik.":
+    "Controleer of het bakje schoon is en vul slagroom netjes aan. Spoel de machine 1 keer door voordat je hem gebruikt.",
+  "Ijsbakjes, lepeltjes, servetten en spaarkaarten aanvullen op de vitrine":
+    "Vul alles aan volgens FIFO: oude voorraad eerst naar voren, nieuwe voorraad erachter. Neem houders en bakjes meteen af met een nat doekje als ze vies zijn.",
+  "Keuken schoonmaken & afwas wegwerken":
+    "Laat de keuken schoon achter: afwas weg, wasbak schoon, werkblad afgenomen en losse spullen terug op hun vaste plek.",
+  "Keukentje schoonmaken":
+    "Laat het keukentje schoon achter: afwas weg, wasbak schoon, werkblad afgenomen en losse spullen terug op hun vaste plek.",
+  "Vloer vegen en afnemen met natte dweil en allesreiniger":
+    "Veeg eerst goed, dweil daarna met allesreiniger. Let vooral op plekken waar ijs is gevallen, anders gaat het plakken en aankoeken.",
+  "Glasplaat afnemen met Glassex":
+    "Maak de glasplaat schoon met Glassex en torkrol zodat er geen vingers, strepen of ijsresten zichtbaar blijven.",
+  "Prullenbakken naar buiten (controleer op de zak leeg is)":
+    "Na iedere shift gaat er een schone zak in de prullenbak. Is de buitenkant vies, maak die dan schoon met een nat doekje.",
+  "Prullenbakken legen & schone zak (i.v.t)":
+    "Na iedere shift gaat er een schone zak in de prullenbak. Is de buitenkant vies, maak die dan schoon met een nat doekje.",
+  "Planten water geven (als het niet geregend heeft)":
+    "Geef de planten water als het droog is geweest. Controleer ook planten die niet direct in het zicht staan.",
+  "Planten water geven (als het niet geregend heeft). Ook de grote bakken!":
+    "Geef de planten water als het droog is geweest. Vergeet bij Heyendaal en Ziekerstraat de grote bakken niet.",
+  "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)":
+    "Gebruik rustige momenten slim: schep de bakken alvast schoon met de oranje spatel en papier, en werk de keuken bij zodat het afsluiten sneller gaat.",
+  "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen":
+    "Noteer duidelijk welke smaken op zijn of bijna op zijn, zodat de volgende dag genoeg voorraad klaarstaat.",
+  "Tafels buiten en binnen schoonmaken":
+    "Neem tafels buiten en binnen af met een schoon sopdoekje. Controleer ook randen en plekken waar ijs heeft gedruppeld.",
+  "GROTE MACHINES SCHOONMAKEN (v.a. sluitingstijd, wel nog ijs doorverkopen!!):":
+    "Begin hiermee vanaf sluitingstijd, maar blijf ijs verkopen als er nog klanten komen. Maak koffiemachine, slagroommachine en milkshakemachine rustig en volledig schoon.",
+  "Koffiemachine schoonmaken":
+    "Maak de koffiemachine dagelijks schoon: lekbak legen, koffiedik weggooien, losse onderdelen afspoelen, stoompijpje afnemen en de machine laten doorspoelen.",
+  "Slagroommachine schoonmaken":
+    "Slagroom bederft snel, dus deze machine moet elke dag schoon. Haal het bakje eruit, spoel met lauw water en reiniger, en spoel daarna nog een keer met alleen water.",
+  "Milkshake machine. Eventuele milkshake resten stickeren met huidige datum en afgedekt opbergen in zwarte koeling":
+    "Maak de milkshakemachine schoon door een beker met lauw water te laten draaien. Resten alleen bewaren als ze netjes zijn afgedekt, gestickerd met datum en in de zwarte koeling staan.",
+  "IJSVITRINE AFSLUITEN":
+    "Werk schoon en precies: bakken schoonmaken, vitrine leegmaken, spoelbakjes reinigen en alles klaarzetten voor de volgende ochtend.",
+  "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!":
+    "Maak de bovenkant en randen van elke ijsbak schoon met spatel en papier. Er mogen geen vieze of plakkerige bakken terug de vriezer in.",
+  "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.":
+    "Zet bakken pas weg als er geen klanten meer komen. Is de -17 vriezer vol, gebruik de -22 vriezer en plak duidelijk een briefje 'DEZE EERST' op die bakken.",
+  "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen":
+    "Haal alle metalen staven uit de vitrine, was ze af en leg ze op een schone theedoek zodat ze droog en klaar zijn voor morgen.",
+  "Ijsschaal uitzetten":
+    "Zet de ijsschaal uit en maak hem schoon als er ijs of suiker op zit.",
+  "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen. Daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen":
+    "Haal eerst alles uit de spoelbakjes. Laat ze leeglopen, spoel meerdere keren met heet water en neem de bakjes daarna nog af met een nat doekje.",
+  "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Spoelbakje daarna met een nat doekje nog een keer afdoen":
+    "Haal eerst alles uit de spoelbakjes. Laat ze leeglopen, spoel meerdere keren met heet water en neem de bakjes daarna nog af met een nat doekje.",
+  "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen":
+    "Haal eerst alles uit de spoelbakjes. Laat ze leeglopen, spoel meerdere keren met heet water en neem de bakjes daarna nog af met een nat doekje.",
+  "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!":
+    "Haal hoorntjes van de vitrine, doe er een plastic zak omheen en zet ze uit de zon. Laat ze niet op de vitrine staan.",
+  "Doekje over gehele ijsvitrine doen voor de hele vieze stukken":
+    "Neem de hele vitrine nog een keer af, vooral plekken met ijsresten, plakrandjes of stof.",
+  "Foto van gevraagde onderdelen naar Roos/Eva":
+    "Maak de gevraagde foto's duidelijk en controleer of alles erop staat. In de app upload je de foto's bij de verplichte fotovelden.",
+  "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger":
+    "Vervang volle zakken, knoop ze goed dicht en zet ze klaar op de plek waar de bezorger ze meeneemt.",
+  "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen":
+    "Neem tafels en stoelen af, haal plantjes en kaarten naar binnen en laat het terras netjes achter.",
+  "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen, LET OP, zorg dat de bezorgers/medewerkers nog naar binnen kunnen de volgende ochtend.":
+    "Neem tafels en stoelen af, haal plantjes en kaarten naar binnen en zorg dat de doorgang voor bezorgers en medewerkers vrij blijft.",
+  "Luifel indraaien":
+    "Draai de luifel rustig helemaal in en controleer of hij goed vastzit.",
+  "SCHOONMAAK SALON":
+    "Laat de salon zo achter dat de ochtenddienst direct schoon kan starten: vloer, keuken, afwas, textiel en afval op orde.",
+  "Stofzuigen & dweilen van vloer":
+    "Stofzuig of veeg eerst goed, dweil daarna met allesreiniger. Let vooral op plekken waar ijs is gevallen, anders gaat het plakken en aankoeken.",
+  "Afwas doen & keuken opruimen":
+    "Werk alle afwas weg, droog af waar nodig en zet alles terug op de vaste plek. Laat de wasbak en het werkblad schoon achter.",
+  "Vieze theedoeken en sponzen verzamelen en in kratje doen":
+    "Verzamel vieze theedoeken en sponzen in het kratje, zodat ze mee kunnen met de was. Laat geen natte doeken los liggen.",
+  "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger in de lange gang":
+    "Maak karton klein, knoop vuilniszakken goed dicht en zet alles netjes klaar op de afgesproken plek voor de bezorger.",
+  "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger":
+    "Maak karton klein, knoop vuilniszakken goed dicht en zet alles netjes klaar op de afgesproken plek voor de bezorger.",
+  "CONTROLE":
+    "Loop aan het einde alles nog een keer na: voorraad, vriezers, omzetformulieren en of alles schoon, dicht en uit is.",
+  "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)":
+    "Bestel alles wat op is via het bestelsysteem op de iPad. Wat daar niet besteld kan worden, mail je door naar info@strik-patisserie.nl.",
+  "Vriezers controleren op temperatuur en of ze goed dicht zijn!!":
+    "Controleer of alle vriezers goed dicht zitten en de temperatuur klopt. Dit voorkomt ijsverlies in de nacht.",
+  "Omzet formulieren invullen":
+    "Vul de omzetformulieren volledig en netjes in voordat je afsluit.",
+  "Laatste check: alles schoon/dicht/uit?":
+    "Loop nog een laatste ronde: machines uit, deuren dicht, vriezers dicht, afval weg en salon schoon.",
+};
+
+function applyInfo(tasks: Task[]) {
+  for (const task of tasks) {
+    task.info = task.info || infoForTaskLabel[task.label];
+
+    if (task.children) {
+      applyInfo(task.children);
+    }
+  }
+}
+
+Object.values(takenPerPlanAndShop).forEach((takenPerShop) => {
+  Object.values(takenPerShop).forEach(applyInfo);
+});
+
 export function flattenTasks(tasks: Task[]): Task[] {
   return tasks.flatMap((task) => [task, ...(task.children ? flattenTasks(task.children) : [])]);
 }
