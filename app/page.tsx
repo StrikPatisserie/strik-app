@@ -42,10 +42,14 @@ export default function Home() {
             Strik Patisserie
           </p>
           <h1
-            className="mt-1 text-4xl leading-none text-[#2d2a26]"
-            style={{ fontFamily: "Brush Script MT, Segoe Script, cursive" }}
+            className="mt-2 text-[2.65rem] font-bold leading-none text-[#2d2a26]"
+            style={{
+              fontFamily:
+                "Marker Felt, Chalkboard SE, Comic Sans MS, Arial Rounded MT Bold, cursive",
+              letterSpacing: "0.01em",
+            }}
           >
-            personeelsapp
+            Personeelsapp
           </h1>
         </header>
 
