@@ -1,5 +1,4 @@
 import Link from "next/link";
-import NotificationToggle from "../NotificationToggle";
 
 const items = [
   {
@@ -55,8 +54,6 @@ export default function ManagementPage() {
               </div>
             </Link>
           ))}
-
-          <NotificationToggle />
         </div>
       </div>
     </main>

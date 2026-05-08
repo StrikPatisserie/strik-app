@@ -80,15 +80,12 @@ export default function NotificationToggle() {
   const unsupported = currentPermission === "unsupported";
 
   return (
-    <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <span className="rounded-full bg-[#c3d3bc]/40 px-3 py-1 text-xs font-semibold">
-            Meldingen
-          </span>
-          <h2 className="mt-3 text-xl font-bold">Nieuws meldingen</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Ontvang een melding wanneer er een nieuw nieuwsbericht is.
+    <section className="rounded-2xl border border-[#e7e0d8] bg-white/80 p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-bold">Nieuws meldingen</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-gray-600">
+            Krijg een seintje bij nieuw winkelnieuws.
           </p>
           {blocked && (
             <p className="mt-2 text-xs font-semibold text-[#d75a48]">

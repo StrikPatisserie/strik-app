@@ -1,4 +1,5 @@
 import Link from "next/link";
+import NotificationToggle from "../NotificationToggle";
 
 const items = [
   {
@@ -61,6 +62,8 @@ export default function WinkelPage() {
               </div>
             </Link>
           ))}
+
+          <NotificationToggle />
         </div>
       </div>
     </main>
