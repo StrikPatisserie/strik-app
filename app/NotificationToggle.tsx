@@ -20,6 +20,22 @@ function getSupportedPermission(): PermissionState {
   return Notification.permission;
 }
 
+function isIosDevice() {
+  if (typeof navigator === "undefined") return false;
+
+  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+}
+
+function isStandaloneApp() {
+  if (typeof window === "undefined") return false;
+  const nav = navigator as Navigator & { standalone?: boolean };
+
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    Boolean(nav.standalone)
+  );
+}
+
 async function rememberCurrentLatestPost() {
   const res = await fetch(NEWS_URL, { cache: "no-store" });
   const posts = (await res.json()) as Array<{
@@ -78,6 +94,8 @@ export default function NotificationToggle() {
 
   const blocked = currentPermission === "denied";
   const unsupported = currentPermission === "unsupported";
+  const needsIosHomescreen =
+    hydrated && unsupported && isIosDevice() && !isStandaloneApp();
 
   return (
     <section className="rounded-2xl border border-[#e7e0d8] bg-white/80 p-4 shadow-sm">
@@ -94,7 +112,9 @@ export default function NotificationToggle() {
           )}
           {unsupported && (
             <p className="mt-2 text-xs font-semibold text-[#d75a48]">
-              Deze browser ondersteunt meldingen voor deze app niet.
+              {needsIosHomescreen
+                ? "Open de app via het beginscherm om meldingen aan te zetten."
+                : "Deze browser ondersteunt meldingen voor deze app niet."}
             </p>
           )}
         </div>

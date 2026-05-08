@@ -1,0 +1,24 @@
+{
+  "name": "Strik Personeelsapp",
+  "short_name": "Strik",
+  "description": "Interne app voor Strik Patisserie",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f0ea",
+  "theme_color": "#c3d3bc",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
