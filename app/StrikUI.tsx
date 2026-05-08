@@ -6,23 +6,63 @@ export const strikIcons = {
   bruidstaart: "/icons_strik_bruidstaart.svg",
   cleaning: "/icons_strik_cleaning.svg",
   cleaningManagement: "/icons_strik_cleaning%20management.svg",
+  afsluitplan: "/icons_strik_afsluitplan.svg",
   ijs: "/icons_strik_ijs.svg",
   info: "/icons_strik_info.svg",
   management: "/icons_strik_management.svg",
   news: "/icons_strik_news.svg",
   newsManagement: "/icons_strik_add%20news%20management.svg",
+  opstartplan: "/icons_strik_opstartplan.svg",
   photo: "/icons_strik_photo.svg",
   winkel: "/icons_strik_winkel.svg",
 };
 
 const toneClasses = {
+  blue: "bg-[#dbe9ee]",
+  honey: "bg-[#f1d28f]",
   light: "bg-[#eef3ea]",
   green: "bg-[#dce8d6]",
   medium: "bg-[#c3d3bc]",
+  muted: "bg-white/75",
   dark: "bg-[#a8bf9e]",
 };
 
 type Tone = keyof typeof toneClasses;
+
+const actionCardSizeClasses = {
+  compact: {
+    card: "gap-3 rounded-[1.25rem] p-3",
+    iconWrap: "h-12 w-12",
+    icon: "h-7 w-7",
+    label:
+      "mb-0.5 inline-block rounded-full bg-white/45 px-2.5 py-0.5 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-[#2d2a26]/45",
+    title: "text-base font-bold leading-tight",
+    description: "mt-0.5 block text-xs font-semibold leading-snug text-[#2d2a26]/45",
+    arrow: "h-8 w-8 text-base",
+  },
+  regular: {
+    card: "gap-4 rounded-[1.75rem] p-4",
+    iconWrap: "h-16 w-16",
+    icon: "h-10 w-10",
+    label:
+      "mb-1 inline-block rounded-full bg-white/45 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-[#2d2a26]/55",
+    title: "text-xl font-bold leading-tight",
+    description: "mt-0.5 block text-sm font-semibold leading-relaxed text-[#2d2a26]/55",
+    arrow: "h-10 w-10 text-xl",
+  },
+  large: {
+    card: "gap-4 rounded-[1.75rem] p-5",
+    iconWrap: "h-[4.5rem] w-[4.5rem]",
+    icon: "h-12 w-12",
+    label:
+      "mb-1.5 inline-block rounded-full bg-white/45 px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.12em] text-[#2d2a26]/55",
+    title: "text-2xl font-bold leading-tight",
+    description: "mt-1 block text-sm font-semibold leading-relaxed text-[#2d2a26]/60",
+    arrow: "h-11 w-11 text-2xl",
+  },
+};
+
+type ActionCardSize = keyof typeof actionCardSizeClasses;
 
 export function StrikShell({
   children,
@@ -84,6 +124,7 @@ export function StrikActionCard({
   icon,
   label,
   tone = "green",
+  size = "regular",
   locked = false,
 }: Readonly<{
   href: string;
@@ -92,25 +133,30 @@ export function StrikActionCard({
   icon: string;
   label?: string;
   tone?: Tone;
+  size?: ActionCardSize;
   locked?: boolean;
 }>) {
+  const sizeClasses = actionCardSizeClasses[size];
+
   return (
     <Link
       href={href}
-      className={`group flex items-center gap-4 rounded-[1.75rem] border border-[#e7e0d8]/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${toneClasses[tone]}`}
+      className={`group flex items-center border border-[#e7e0d8]/80 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${sizeClasses.card} ${toneClasses[tone]}`}
     >
-      <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/45">
-        <img src={icon} alt="" className="h-10 w-10 object-contain" />
+      <span
+        className={`flex shrink-0 items-center justify-center rounded-full bg-white/45 ${sizeClasses.iconWrap}`}
+      >
+        <img src={icon} alt="" className={`object-contain ${sizeClasses.icon}`} />
       </span>
 
       <span className="min-w-0 flex-1">
         {label && (
-          <span className="mb-1 inline-block rounded-full bg-white/45 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-[#2d2a26]/55">
+          <span className={sizeClasses.label}>
             {label}
           </span>
         )}
         <span className="flex items-center gap-2">
-          <span className="text-xl font-bold leading-tight">{title}</span>
+          <span className={sizeClasses.title}>{title}</span>
           {locked && (
             <span className="relative block h-4 w-4 rounded-b-sm bg-[#2d2a26]">
               <span className="absolute -top-3 left-1/2 h-4 w-3 -translate-x-1/2 rounded-t-full border-2 border-[#2d2a26] border-b-0" />
@@ -118,12 +164,14 @@ export function StrikActionCard({
             </span>
           )}
         </span>
-        <span className="mt-0.5 block text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
+        <span className={sizeClasses.description}>
           {description}
         </span>
       </span>
 
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/60 text-xl font-light transition group-hover:bg-white">
+      <span
+        className={`flex shrink-0 items-center justify-center rounded-full bg-white/60 font-light transition group-hover:bg-white ${sizeClasses.arrow}`}
+      >
         →
       </span>
     </Link>
