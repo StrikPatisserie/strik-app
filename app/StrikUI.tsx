@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import StrikBackButton from "./StrikBackButton";
 
 export const strikIcons = {
   agenda: "/icons_strik_agenda.svg",
@@ -76,6 +77,7 @@ export function StrikShell({
   return (
     <main className="min-h-screen bg-[#f4f0ea] px-4 py-6 pb-28 text-[#2d2a26]">
       <div className={`mx-auto w-full ${wide ? "max-w-3xl" : "max-w-md"}`}>
+        <StrikBackButton />
         {children}
       </div>
     </main>
