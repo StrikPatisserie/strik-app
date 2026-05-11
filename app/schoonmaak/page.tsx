@@ -144,6 +144,40 @@ const requiredFotoUploadLabels = [
   "Spoelbakje",
 ] as const;
 
+const vriezerControleTaakLabel =
+  "Vriezers controleren op temperatuur en of ze goed dicht zijn!!";
+
+const dagvoorraadVriezerPerIjssalon: Record<string, string> = {
+  "ijsloket Daalseweg": "Enkele vrieskast dagvoorraad",
+  "ijsloket Heyendaal": "Enkele vrieskast dagvoorraad",
+  "ijsloket Ziekerstraat": "Dubbele vrieskast dagvoorraad",
+  "ijsloket Lent": "Enkele vrieskast dagvoorraad",
+};
+
+function getVriezerTemperatuurVelden(winkel: string) {
+  const vriezerNaam =
+    dagvoorraadVriezerPerIjssalon[winkel] || "Vrieskast dagvoorraad";
+
+  return [
+    {
+      id: `${vriezerNaam}-scherm`,
+      naam: `${vriezerNaam} - schermtemperatuur`,
+      vriezerNaam,
+      label: "Schermtemperatuur",
+      toelichting: "Wat geeft het digitale scherm op de vriezer aan?",
+      placeholder: "Bijv. -18",
+    },
+    {
+      id: `${vriezerNaam}-handmeter`,
+      naam: `${vriezerNaam} - handmeting`,
+      vriezerNaam,
+      label: "Handmeting",
+      toelichting: "Meet de werkelijke temperatuur met het handmetertje.",
+      placeholder: "Bijv. -19",
+    },
+  ];
+}
+
 function maakTemperatuurId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -194,10 +228,12 @@ function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
     naam: antwoorden.naam.trim(),
     taken: antwoorden.taken,
     opmerking: antwoorden.opmerking.trim(),
-    temperatuurRegistraties: antwoorden.temperatuurRegistraties.map((item) => ({
-      naam: item.naam.trim(),
-      temperatuur: item.temperatuur.trim(),
-    })),
+    temperatuurRegistraties: antwoorden.temperatuurRegistraties
+      .filter((item) => item.naam.trim() && item.temperatuur.trim())
+      .map((item) => ({
+        naam: item.naam.trim(),
+        temperatuur: item.temperatuur.trim(),
+      })),
     fotoUploads: antwoorden.fotoUploads.map((upload) => ({
       label: upload.label,
       fileName: upload.fileName,
@@ -253,6 +289,32 @@ function SchoonmaakForm() {
   const temperatuurRegistratieActief = taken
     .map((id) => taskLabelById[id] ?? id)
     .includes("Temperatuur registratie");
+
+  const vriezerTemperatuurVelden = useMemo(
+    () =>
+      planType === "Afsluitplan" ? getVriezerTemperatuurVelden(winkel) : [],
+    [planType, winkel]
+  );
+
+  function getTemperatuurWaarde(naam: string) {
+    return (
+      temperatuurRegistraties.find((item) => item.naam === naam)
+        ?.temperatuur ?? ""
+    );
+  }
+
+  const vriezerControleTaakGevinkt = Boolean(
+    taskIdByLabel[vriezerControleTaakLabel] &&
+      taken.includes(taskIdByLabel[vriezerControleTaakLabel])
+  );
+
+  const heeftVriezerTemperatuurInvoer = vriezerTemperatuurVelden.some((veld) =>
+    getTemperatuurWaarde(veld.naam).trim()
+  );
+
+  const ontbrekendeVriezerTemperaturen = vriezerTemperatuurVelden.filter(
+    (veld) => !getTemperatuurWaarde(veld.naam).trim()
+  );
 
   useEffect(() => {
     let negeerResultaat = false;
@@ -404,6 +466,23 @@ function SchoonmaakForm() {
     );
   }
 
+  function updateVriezerTemperatuur(naam: string, waarde: string) {
+    setTemperatuurRegistraties((prev) => {
+      const bestaat = prev.some((item) => item.naam === naam);
+
+      if (!bestaat) {
+        return [
+          ...prev,
+          { id: maakTemperatuurId(), naam, temperatuur: waarde },
+        ];
+      }
+
+      return prev.map((item) =>
+        item.naam === naam ? { ...item, temperatuur: waarde } : item
+      );
+    });
+  }
+
   function verwijderTemperatuurRegistratie(id: string) {
     setTemperatuurRegistraties((prev) => prev.filter((item) => item.id !== id));
   }
@@ -524,6 +603,17 @@ function SchoonmaakForm() {
       return false;
     }
 
+    if (
+      planType === "Afsluitplan" &&
+      (vriezerControleTaakGevinkt || heeftVriezerTemperatuurInvoer) &&
+      ontbrekendeVriezerTemperaturen.length > 0
+    ) {
+      setStatus(
+        "Vul bij de dagvoorraad-vriezer zowel de schermtemperatuur als de handmeting in."
+      );
+      return false;
+    }
+
     return true;
   }
 
@@ -565,10 +655,12 @@ function SchoonmaakForm() {
           ),
           opmerking: opmerking.trim(),
           temperatuurRegistraties: [
-            ...temperatuurRegistraties.map((item) => ({
-              naam: item.naam.trim(),
-              temperatuur: item.temperatuur.trim(),
-            })),
+            ...temperatuurRegistraties
+              .filter((item) => item.naam.trim() && item.temperatuur.trim())
+              .map((item) => ({
+                naam: item.naam.trim(),
+                temperatuur: item.temperatuur.trim(),
+              })),
             ...createPhotoTemperatureRegistrations(fotoUploadsVoorOpslaan),
           ],
           fotoUploads: fotoUploadsVoorOpslaan.map(serialiseerFotoUpload),
@@ -758,6 +850,68 @@ function SchoonmaakForm() {
               ))}
             </div>
           </div>
+
+          {planType === "Afsluitplan" && vriezerTemperatuurVelden.length > 0 && (
+            <section className="rounded-3xl bg-white/85 p-4 shadow-sm">
+              <div className="mb-3">
+                <p className="font-bold">Vriezertemperaturen</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Noteer wat het digitale scherm aangeeft en meet daarna met het
+                  handmetertje of dit klopt.
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-[#e7e0d8] bg-[#f8f6f3] p-4">
+                <p className="text-sm font-bold text-[#2d2a26]">
+                  {vriezerTemperatuurVelden[0]?.vriezerNaam}
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {vriezerTemperatuurVelden.map((veld) => {
+                    const waarde = getTemperatuurWaarde(veld.naam);
+                    const ontbreekt =
+                      (vriezerControleTaakGevinkt ||
+                        heeftVriezerTemperatuurInvoer) &&
+                      !waarde.trim();
+
+                    return (
+                      <label
+                        key={veld.id}
+                        className={`block rounded-2xl border p-3 ${
+                          ontbreekt
+                            ? "border-[#d75a48] bg-[#fff7f5]"
+                            : "border-[#e7e0d8] bg-white"
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-[#2d2a26]">
+                          {veld.label}
+                        </span>
+                        <span className="mt-1 block text-xs font-semibold text-gray-500">
+                          {veld.toelichting}
+                        </span>
+                        <div className="mt-3 flex items-center gap-2">
+                          <input
+                            value={waarde}
+                            onChange={(e) =>
+                              updateVriezerTemperatuur(
+                                veld.naam,
+                                e.target.value
+                              )
+                            }
+                            placeholder={veld.placeholder}
+                            inputMode="decimal"
+                            className="min-w-0 flex-1 rounded-xl border border-[#e7e0d8] bg-white p-3"
+                          />
+                          <span className="text-sm font-bold text-gray-500">
+                            °C
+                          </span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          )}
 
           <textarea
             value={opmerking}
