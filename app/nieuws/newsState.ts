@@ -1,12 +1,18 @@
 export const NEWS_API_URL =
   "https://strik-patisserie.nl/wp-json/strik/v1/news";
 export const NEWS_READ_KEY = "strik-news-read-key";
+export const NEWS_READ_DATE_KEY = "strik-news-read-date";
 export const NEWS_READ_EVENT = "strik-news-read-change";
 
 export type NewsPostPreview = {
   id: string | number;
   title: string;
   date: string;
+};
+
+export type NewsPost = NewsPostPreview & {
+  content: string;
+  image?: string | false;
 };
 
 export function stripImportantTitle(title: string) {
