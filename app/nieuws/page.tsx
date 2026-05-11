@@ -1,4 +1,11 @@
 import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
+import MarkNewsRead from "./MarkNewsRead";
+import {
+  NEWS_API_URL,
+  getLatestNewsPost,
+  getNewsPostKey,
+  stripImportantTitle,
+} from "./newsState";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +18,13 @@ type NewsPost = {
 };
 
 export default async function NieuwsPage() {
-  const res = await fetch("https://strik-patisserie.nl/wp-json/strik/v1/news", {
+  const res = await fetch(NEWS_API_URL, {
     cache: "no-store",
   });
 
   const posts = (await res.json()) as NewsPost[];
+  const latestPost = getLatestNewsPost(posts);
+  const latestKey = latestPost ? getNewsPostKey(latestPost) : "";
 
   const important = posts
     .filter((p) => p.title.includes("[BELANGRIJK]"))
@@ -51,7 +60,7 @@ export default async function NieuwsPage() {
         </p>
 
         <h2 className="mt-1 text-lg font-bold leading-tight">
-          {post.title.replace("[BELANGRIJK]", "").trim()}
+          {stripImportantTitle(post.title)}
         </h2>
 
         <p className="mt-2 text-sm leading-relaxed text-gray-700">
@@ -63,6 +72,8 @@ export default async function NieuwsPage() {
 
   return (
     <StrikShell wide>
+      {latestKey && <MarkNewsRead latestKey={latestKey} />}
+
       <StrikPageHeader
         title="Nieuws"
         description="Belangrijke informatie voor intern gebruik."

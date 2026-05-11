@@ -3,24 +3,9 @@ import {
   StrikActionCard,
   StrikPageHeader,
   StrikShell,
-  StrikSquareActionCard,
   strikIcons,
 } from "../StrikUI";
-
-const featuredItems = [
-  {
-    href: "/nieuws",
-    title: "Nieuws",
-    icon: strikIcons.news,
-    tone: "green" as const,
-  },
-  {
-    href: "/strik-agenda",
-    title: "Strik agenda",
-    icon: strikIcons.strikAgenda,
-    tone: "honey" as const,
-  },
-];
+import WinkelFeaturedCards from "./WinkelFeaturedCards";
 
 const items = [
   {
@@ -52,11 +37,7 @@ export default function WinkelPage() {
       />
 
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          {featuredItems.map((item) => (
-            <StrikSquareActionCard key={item.href} {...item} />
-          ))}
-        </div>
+        <WinkelFeaturedCards />
 
         {items.map((item) => (
           <StrikActionCard key={item.href} {...item} />

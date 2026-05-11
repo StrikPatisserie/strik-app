@@ -119,22 +119,29 @@ export function StrikSquareActionCard({
   href,
   title,
   icon,
+  badge,
   tone = "green",
 }: Readonly<{
   href: string;
   title: string;
   icon: string;
+  badge?: string | number;
   tone?: Tone;
 }>) {
   return (
     <Link
       href={href}
-      className={`group flex aspect-square flex-col items-center justify-center rounded-[2rem] border border-[#e7e0d8]/80 p-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${toneClasses[tone]}`}
+      className={`group relative flex aspect-square flex-col items-center justify-center rounded-[2rem] border border-[#e7e0d8]/80 p-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${toneClasses[tone]}`}
     >
+      {badge && (
+        <span className="absolute right-4 top-4 flex h-7 min-w-7 items-center justify-center rounded-full bg-[#e24b3b] px-2 text-sm font-black text-white shadow-sm">
+          {badge}
+        </span>
+      )}
       <span className="text-2xl font-bold leading-tight text-[#050505]">
         {title}
       </span>
-      <span className="mt-8 flex h-20 w-20 items-center justify-center">
+      <span className="mt-7 flex h-24 w-24 items-center justify-center">
         <img
           src={icon}
           alt=""
