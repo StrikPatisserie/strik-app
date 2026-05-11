@@ -23,6 +23,14 @@ const items = [
     tone: "green" as const,
   },
   {
+    href: "/management/agenda",
+    label: "Team",
+    title: "Strik agenda beheren",
+    description: "Voeg feestdagen, personeelsdagen en activiteiten toe.",
+    icon: strikIcons.agenda,
+    tone: "honey" as const,
+  },
+  {
     href: "/management/notities",
     label: "Winkels",
     title: "Notities",

@@ -104,8 +104,8 @@ export default function AgendaPage() {
   return (
     <StrikShell>
         <StrikPageHeader
-          title="Weekagenda"
-          description="Bruidstaartafspraken per week."
+          title="Bruidstaartagenda"
+          description="Bruidstaartafspraken voor Ziekerstraat."
           icon={strikIcons.bruidstaart}
           tone="green"
         />
