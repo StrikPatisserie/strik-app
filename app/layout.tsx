@@ -4,7 +4,7 @@ import BottomNav from "./BottomNav";
 import NotificationMonitor from "./NotificationMonitor";
 
 export const metadata: Metadata = {
-  title: "Strik Personeelsapp",
+  title: "Strik Team app",
   description: "Interne app voor Strik Patisserie",
   manifest: "/manifest.webmanifest",
   appleWebApp: {

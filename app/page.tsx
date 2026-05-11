@@ -53,7 +53,7 @@ export default function Home() {
               letterSpacing: "0.01em",
             }}
           >
-            Personeelsapp
+            Strik Team app
           </h1>
         </header>
 
