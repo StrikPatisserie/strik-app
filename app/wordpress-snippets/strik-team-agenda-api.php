@@ -1,4 +1,3 @@
-<?php
 /**
  * Strik app - team agenda API
  *
@@ -11,6 +10,7 @@ if (!defined('STRIK_TEAM_AGENDA_API_KEY')) {
     define('STRIK_TEAM_AGENDA_API_KEY', 'schoonmaak-ijs-strik');
 }
 
+if (!function_exists('strik_team_agenda_permission')) {
 function strik_team_agenda_permission($request) {
     $key = (string) $request->get_param('key');
 
@@ -24,15 +24,21 @@ function strik_team_agenda_permission($request) {
         array('status' => 403)
     );
 }
+}
 
+if (!function_exists('strik_team_agenda_allowed_types')) {
 function strik_team_agenda_allowed_types() {
     return array('event', 'holiday', 'training', 'closing', 'birthday', 'anniversary');
 }
+}
 
+if (!function_exists('strik_team_agenda_allowed_audiences')) {
 function strik_team_agenda_allowed_audiences() {
     return array('alle', 'lent', 'heyendaal', 'daalseweg', 'ziekerstraat');
 }
+}
 
+if (!function_exists('strik_team_agenda_get_data')) {
 function strik_team_agenda_get_data() {
     $data = get_option('strik_team_agenda_data', array());
 
@@ -45,17 +51,23 @@ function strik_team_agenda_get_data() {
         'updatedAt' => isset($data['updatedAt']) ? sanitize_text_field($data['updatedAt']) : '',
     );
 }
+}
 
+if (!function_exists('strik_team_agenda_get')) {
 function strik_team_agenda_get($request) {
     return rest_ensure_response(strik_team_agenda_get_data());
 }
+}
 
+if (!function_exists('strik_team_agenda_clean_choice')) {
 function strik_team_agenda_clean_choice($value, $allowed, $fallback) {
     $value = sanitize_key((string) $value);
 
     return in_array($value, $allowed, true) ? $value : $fallback;
 }
+}
 
+if (!function_exists('strik_team_agenda_clean_date')) {
 function strik_team_agenda_clean_date($value) {
     $value = sanitize_text_field((string) $value);
 
@@ -65,7 +77,9 @@ function strik_team_agenda_clean_date($value) {
 
     return '';
 }
+}
 
+if (!function_exists('strik_team_agenda_sanitize_events')) {
 function strik_team_agenda_sanitize_events($events) {
     $clean = array();
 
@@ -109,7 +123,9 @@ function strik_team_agenda_sanitize_events($events) {
 
     return $clean;
 }
+}
 
+if (!function_exists('strik_team_agenda_save')) {
 function strik_team_agenda_save($request) {
     $params = $request->get_json_params();
 
@@ -125,6 +141,7 @@ function strik_team_agenda_save($request) {
     update_option('strik_team_agenda_data', $data, false);
 
     return rest_ensure_response($data);
+}
 }
 
 add_action('rest_api_init', function () {
