@@ -27,7 +27,7 @@ const items = [
     label: "Team",
     title: "Strik agenda beheren",
     description: "Voeg feestdagen, personeelsdagen en activiteiten toe.",
-    icon: strikIcons.agenda,
+    icon: strikIcons.strikAgenda,
     tone: "honey" as const,
   },
   {

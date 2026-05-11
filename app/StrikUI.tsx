@@ -15,6 +15,7 @@ export const strikIcons = {
   notities: "/icons_strik.svg",
   opstartplan: "/icons_strik_opstartplan.svg",
   photo: "/icons_strik_photo.svg",
+  strikAgenda: "/icons_strik_strikagenda.svg",
   winkel: "/icons_strik_winkel.svg",
 };
 
@@ -84,9 +85,6 @@ export function StrikShell({
 export function StrikPageHeader({
   title,
   description,
-  icon,
-  kicker = "Strik Patisserie",
-  tone = "green",
 }: Readonly<{
   title: string;
   description: string;
@@ -94,27 +92,56 @@ export function StrikPageHeader({
   kicker?: string;
   tone?: Tone;
 }>) {
+  const titleSizeClass =
+    title.length > 22
+      ? "text-[2.85rem]"
+      : title.length > 14
+      ? "text-[3.35rem]"
+      : "text-[4.35rem]";
+
   return (
-    <section
-      className={`mb-6 rounded-[2rem] p-5 shadow-sm ${toneClasses[tone]}`}
+    <header className="mb-7 pt-8 text-center">
+      <h1
+        className={`mx-auto max-w-full break-words leading-none text-[#050505] ${titleSizeClass}`}
+        style={{
+          fontFamily: "Butterscotch, Marker Felt, cursive",
+          letterSpacing: "0",
+        }}
+      >
+        {title}
+      </h1>
+      {description && <p className="sr-only">{description}</p>}
+    </header>
+  );
+}
+
+export function StrikSquareActionCard({
+  href,
+  title,
+  icon,
+  tone = "green",
+}: Readonly<{
+  href: string;
+  title: string;
+  icon: string;
+  tone?: Tone;
+}>) {
+  return (
+    <Link
+      href={href}
+      className={`group flex aspect-square flex-col items-center justify-center rounded-[2rem] border border-[#e7e0d8]/80 p-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${toneClasses[tone]}`}
     >
-      <div className="flex items-center gap-4">
-        {icon && (
-          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/45">
-            <img src={icon} alt="" className="h-10 w-10 object-contain" />
-          </span>
-        )}
-        <div className="min-w-0">
-          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-[#2d2a26]/55">
-            {kicker}
-          </p>
-          <h1 className="mt-1 text-3xl font-bold leading-tight">{title}</h1>
-          <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
-            {description}
-          </p>
-        </div>
-      </div>
-    </section>
+      <span className="text-2xl font-bold leading-tight text-[#050505]">
+        {title}
+      </span>
+      <span className="mt-8 flex h-20 w-20 items-center justify-center">
+        <img
+          src={icon}
+          alt=""
+          className="h-full w-full object-contain transition group-hover:scale-105"
+        />
+      </span>
+    </Link>
   );
 }
 

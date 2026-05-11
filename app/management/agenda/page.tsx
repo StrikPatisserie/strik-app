@@ -7,7 +7,7 @@ export default function ManagementAgendaPage() {
       <StrikPageHeader
         title="Strik agenda"
         description="Beheer feestdagen, personeelsdagen en teamactiviteiten."
-        icon={strikIcons.agenda}
+        icon={strikIcons.strikAgenda}
         kicker="Management"
         tone="honey"
       />

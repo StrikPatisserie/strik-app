@@ -152,7 +152,7 @@ export default function StrikAgendaPage() {
       <StrikPageHeader
         title="Strik agenda"
         description="Verjaardagen, jubilea en teamactiviteiten."
-        icon={strikIcons.agenda}
+        icon={strikIcons.strikAgenda}
         tone="honey"
       />
 

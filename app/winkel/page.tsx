@@ -3,26 +3,26 @@ import {
   StrikActionCard,
   StrikPageHeader,
   StrikShell,
+  StrikSquareActionCard,
   strikIcons,
 } from "../StrikUI";
 
-const items = [
+const featuredItems = [
   {
     href: "/nieuws",
-    label: "Intern",
     title: "Nieuws",
-    description: "Updates en weetjes voor intern gebruik.",
     icon: strikIcons.news,
     tone: "green" as const,
   },
   {
     href: "/strik-agenda",
-    label: "Team",
     title: "Strik agenda",
-    description: "Verjaardagen, jubilea en teamactiviteiten.",
-    icon: strikIcons.agenda,
+    icon: strikIcons.strikAgenda,
     tone: "honey" as const,
   },
+];
+
+const items = [
   {
     href: "/agenda",
     label: "Ziekerstraat",
@@ -52,6 +52,12 @@ export default function WinkelPage() {
       />
 
       <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          {featuredItems.map((item) => (
+            <StrikSquareActionCard key={item.href} {...item} />
+          ))}
+        </div>
+
         {items.map((item) => (
           <StrikActionCard key={item.href} {...item} />
         ))}
