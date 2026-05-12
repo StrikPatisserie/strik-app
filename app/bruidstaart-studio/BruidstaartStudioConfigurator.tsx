@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   cakeSizes,
   cakeStyles,
@@ -148,6 +148,23 @@ function sizeIconZoom(sizeId: string) {
   if (sizeId === "s3b") return 1.18;
 
   return 1.8;
+}
+
+function cakeDecorationAsset(layoutId: string) {
+  if (layoutId.includes("chesterfield")) {
+    return "/taartdecoratie%20klassiek_chesterfield.svg";
+  }
+  if (layoutId.includes("banen")) {
+    return "/taartdecoratie%20klassiek_banen.svg";
+  }
+  if (layoutId.includes("bogen")) {
+    return "/taartdecoratie%20klassiek_bogen.svg";
+  }
+  if (layoutId.includes("sierlijk")) {
+    return "/taartdecoratie%20klassiek_sierlijk.svg";
+  }
+
+  return "";
 }
 
 function OptionCard({
@@ -326,6 +343,7 @@ function LayerOptionSelectGrid({
 }
 
 function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
+  const visualizerId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
   const layers = getCakeLayers(config);
   const layerColors = layers.map((layer) => getLayerColor(config, layer.id));
@@ -356,7 +374,25 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     layoutId: string
   ) {
     const key = layoutId;
+    const decorationAsset = cakeDecorationAsset(layoutId);
     const center = x + width / 2;
+
+    if (decorationAsset) {
+      const clipId = `${visualizerId}-cake-layer-pattern-${index}`;
+
+      return (
+        <g clipPath={`url(#${clipId})`} opacity="0.95">
+          <image
+            href={decorationAsset}
+            x={x}
+            y={y - 1}
+            width={width}
+            height={layerHeight + 2}
+            preserveAspectRatio="none"
+          />
+        </g>
+      );
+    }
 
     if (key.includes("chesterfield")) {
       return (
@@ -626,6 +662,22 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         className="h-auto w-full text-[#1f1d1a]"
         aria-label="Bruidstaart visualisatie"
       >
+        <defs>
+          {layers.map((layer, index) => {
+            const width = layerWidth(layer.persons);
+            const x = (260 - width) / 2;
+            const y = layerY(index);
+
+            return (
+              <clipPath
+                key={layer.id}
+                id={`${visualizerId}-cake-layer-pattern-${index}`}
+              >
+                <rect x={x} y={y} width={width} height={layerHeight} rx="5" />
+              </clipPath>
+            );
+          })}
+        </defs>
         <path
           d="M 37 181 C 82 190, 180 190, 223 181"
           fill="none"
