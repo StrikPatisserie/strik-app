@@ -22,6 +22,7 @@ import {
   formatEuro,
   getCakeDesignGroups,
   getCakeLayers,
+  getDecorationQuantity,
   getDesignGroupsForLayers,
   getLayerColor,
   getLayerFilling,
@@ -45,6 +46,11 @@ import {
 } from "./types";
 
 const STRIK_STUDIO_EMAIL = "info@strik-patisserie.nl";
+const ROSE_DECORATION_IDS = [
+  "marsepeinrozen-zonder-blad",
+  "marsepeinrozen-met-blad",
+];
+const DEFAULT_ROSE_QUANTITY = 5;
 
 type StepId =
   | "stijl"
@@ -368,6 +374,63 @@ function LayerOptionSelectGrid({
   );
 }
 
+function DecorationOptionCard({
+  option,
+  selected,
+  quantity,
+  onToggle,
+  onQuantityChange,
+}: {
+  option: StudioOption;
+  selected: boolean;
+  quantity: number;
+  onToggle: () => void;
+  onQuantityChange: (quantity: number) => void;
+}) {
+  return (
+    <div
+      className={`rounded-[1.4rem] border p-4 shadow-sm transition ${
+        selected
+          ? "border-[#8fb184] bg-[#dce8d6]"
+          : "border-[#e7e0d8] bg-white"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-start justify-between gap-3 text-left active:scale-[0.99]"
+      >
+        <div className="min-w-0">
+          <p className="text-base font-bold leading-tight">{option.label}</p>
+          {option.description && (
+            <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
+              {option.description}
+            </p>
+          )}
+        </div>
+        <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-xs font-bold text-[#2d2a26]/55">
+          {optionPriceLabel(option)}
+        </span>
+      </button>
+
+      {selected && option.quantityLabel && (
+        <label className="mt-4 grid gap-2 text-sm font-black text-[#2d2a26]/70">
+          {option.quantityLabel}
+          <input
+            type="number"
+            min="1"
+            max="99"
+            step="1"
+            value={quantity}
+            onChange={(event) => onQuantityChange(Number(event.target.value))}
+            className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
 function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const visualizerId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
@@ -380,6 +443,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const maxPersons = Math.max(...layers.map((layer) => layer.persons), 1);
   const selectedDecorations = new Set(config.decorationIds);
   const selectedToppers = new Set(config.topperIds);
+  const selectedRoseDecorationId = ROSE_DECORATION_IDS.find((id) =>
+    selectedDecorations.has(id)
+  );
+  const selectedRoseQuantity = selectedRoseDecorationId
+    ? getDecorationQuantity(config, selectedRoseDecorationId)
+    : 0;
   const bottomY = 248;
   const layerHeight = 28;
   const gap = 8;
@@ -549,8 +618,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const topY = layerY(layers.length - 1);
   const hasFlowers =
     selectedDecorations.has("echte-bloemen") ||
-    selectedDecorations.has("marsepeinrozen-zonder-blad") ||
-    selectedDecorations.has("marsepeinrozen-met-blad");
+    selectedRoseQuantity > 0;
   const selectedMainTopperId = [
     "bruidspaartje",
     "topper-karton",
@@ -570,6 +638,22 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     });
   }
 
+  function layerRoseCount(index: number) {
+    if (!selectedRoseQuantity) return 0;
+
+    return (
+      Math.floor((selectedRoseQuantity * (index + 1)) / layers.length) -
+      Math.floor((selectedRoseQuantity * index) / layers.length)
+    );
+  }
+
+  function fixedDecorationPoints(count: number) {
+    if (count <= 0) return [];
+    if (count === 1) return [0.5];
+
+    return Array.from({ length: count }, (_, item) => item / (count - 1));
+  }
+
   function renderLayerDecorations(
     layerId: string,
     index: number,
@@ -579,7 +663,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   ) {
     const pearlPoints = layerDecorationPoints(width, 24, 8);
     const fruitPoints = layerDecorationPoints(width, 42, 4);
-    const flowerPoints = layerDecorationPoints(width, 58, 3);
+    const rosePoints = fixedDecorationPoints(layerRoseCount(index));
+    const realFlowerPoints = selectedDecorations.has("echte-bloemen")
+      ? layerDecorationPoints(width, 58, 3)
+      : [];
     const hasRoseLeaves = selectedDecorations.has("marsepeinrozen-met-blad");
 
     return (
@@ -622,21 +709,22 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           ))}
 
         {hasFlowers &&
-          flowerPoints.map((point, item) => {
+          [...rosePoints, ...realFlowerPoints].map((point, item) => {
+            const isRose = item < rosePoints.length;
             const flowerX =
               item === 0
                 ? x + 18
-                : item === flowerPoints.length - 1
+                : item === rosePoints.length + realFlowerPoints.length - 1
                   ? x + width - 18
                   : x + 18 + point * (width - 36);
-            const flowerY = y - 5 + (index % 2) * 3;
+            const flowerY = y - 5 + ((index + item) % 2) * 3;
 
             return (
               <g
                 key={`${layerId}-flower-${item}`}
                 transform={`translate(${flowerX} ${flowerY})`}
               >
-                {hasRoseLeaves && (
+                {isRose && hasRoseLeaves && (
                   <>
                     <path
                       d="M -7 3 q -6 -1 -7 -6 q 7 0 10 4"
@@ -652,7 +740,13 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                     />
                   </>
                 )}
-                <circle cx="0" cy="0" r="4.2" fill="#f5c8d0" stroke="currentColor" />
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="4.2"
+                  fill={isRose ? "#f5c8d0" : "#f7e6ea"}
+                  stroke="currentColor"
+                />
                 <path
                   d="M -2 0 c 3 -5 9 0 3 4 c -6 3 -8 -3 -3 -4"
                   fill="none"
@@ -1030,11 +1124,48 @@ export default function BruidstaartStudioConfigurator() {
   }
 
   function toggleDecoration(id: string) {
+    const option = findOption(decorationOptions, id);
+    if (!option) return;
+
+    setConfig((current) => {
+      const isSelected = current.decorationIds.includes(id);
+      let nextDecorationIds = current.decorationIds;
+      const nextQuantities = { ...current.decorationQuantities };
+
+      if (isSelected) {
+        nextDecorationIds = nextDecorationIds.filter((item) => item !== id);
+        delete nextQuantities[id];
+      } else {
+        if (option.selectionGroup === "marzipanRoses") {
+          nextDecorationIds = nextDecorationIds.filter(
+            (item) => !ROSE_DECORATION_IDS.includes(item)
+          );
+          ROSE_DECORATION_IDS.forEach((roseId) => delete nextQuantities[roseId]);
+        }
+
+        nextDecorationIds = [...nextDecorationIds, id];
+
+        if (option.quantityLabel) {
+          nextQuantities[id] =
+            current.decorationQuantities?.[id] || DEFAULT_ROSE_QUANTITY;
+        }
+      }
+
+      return {
+        ...current,
+        decorationIds: nextDecorationIds,
+        decorationQuantities: nextQuantities,
+      };
+    });
+  }
+
+  function setDecorationQuantity(decorationId: string, quantity: number) {
     setConfig((current) => ({
       ...current,
-      decorationIds: current.decorationIds.includes(id)
-        ? current.decorationIds.filter((item) => item !== id)
-        : [...current.decorationIds, id],
+      decorationQuantities: {
+        ...current.decorationQuantities,
+        [decorationId]: Math.max(1, Math.min(99, Math.round(quantity || 1))),
+      },
     }));
   }
 
@@ -1171,6 +1302,8 @@ export default function BruidstaartStudioConfigurator() {
       layerFillingIds: draft.config.layerFillingIds || {},
       layerColorIds: draft.config.layerColorIds || {},
       layerLayoutIds: draft.config.layerLayoutIds || {},
+      decorationQuantities: draft.config.decorationQuantities || {},
+      decorationNotes: draft.config.decorationNotes || "",
       topperIds: (draft.config.topperIds || []).filter((id) => id !== "geen"),
       contact: {
         ...initialWeddingCakeConfig.contact,
@@ -1532,13 +1665,31 @@ export default function BruidstaartStudioConfigurator() {
           {step.id === "decoratie" && (
             <div className="grid gap-3">
               {decorationOptions.map((option) => (
-                <OptionCard
+                <DecorationOptionCard
                   key={option.id}
                   option={option}
                   selected={config.decorationIds.includes(option.id)}
-                  onClick={() => toggleDecoration(option.id)}
+                  quantity={getDecorationQuantity(config, option.id)}
+                  onToggle={() => toggleDecoration(option.id)}
+                  onQuantityChange={(quantity) =>
+                    setDecorationQuantity(option.id, quantity)
+                  }
                 />
               ))}
+              <label className="grid gap-2 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 text-sm font-black text-[#2d2a26]/70 shadow-sm">
+                Opmerkingen over decoratie
+                <textarea
+                  value={config.decorationNotes}
+                  onChange={(event) =>
+                    setConfig((current) => ({
+                      ...current,
+                      decorationNotes: event.target.value,
+                    }))
+                  }
+                  placeholder="Bijvoorbeeld: bladgoud alleen links, bloemetjes alleen op de bovenste laag..."
+                  className="min-h-28 rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                />
+              </label>
             </div>
           )}
 
@@ -1822,6 +1973,12 @@ export default function BruidstaartStudioConfigurator() {
               <span className="font-bold">Decoratie:</span>{" "}
               {labels.decorations.length ? labels.decorations.join(", ") : "geen"}
             </p>
+            {config.decorationNotes && (
+              <p>
+                <span className="font-bold">Decoratie opmerkingen:</span>{" "}
+                {config.decorationNotes}
+              </p>
+            )}
           </div>
 
           <div className="mt-5 border-t border-[#e7e0d8] pt-4">

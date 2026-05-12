@@ -55,6 +55,36 @@ function optionToLine(option: StudioOption, persons: number): PriceLine {
   };
 }
 
+export function getDecorationQuantity(
+  config: WeddingCakeConfig,
+  decorationId: string
+) {
+  const quantity = config.decorationQuantities?.[decorationId];
+
+  if (!Number.isFinite(quantity)) return 1;
+
+  return Math.max(1, Math.min(99, Math.round(quantity)));
+}
+
+function decorationToLine(
+  config: WeddingCakeConfig,
+  option: StudioOption,
+  persons: number
+): PriceLine {
+  if (!option.quantityLabel) return optionToLine(option, persons);
+
+  const quantity = getDecorationQuantity(config, option.id);
+  const label = option.price.label || option.quantityLabel.toLowerCase();
+
+  return {
+    label: `${option.label} (${formatEuro(
+      option.price.amount
+    )} ${label} x ${quantity})`,
+    amount: option.price.amount * quantity,
+    quote: option.price.mode === "quote",
+  };
+}
+
 export function getCakeLayers(config: WeddingCakeConfig): CakeLayer[] {
   const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
 
@@ -264,7 +294,14 @@ export function calculateWeddingCakePrice(
     lines.push(line)
   );
 
-  [...decorations, ...toppers]
+  decorations
+    .filter((option): option is StudioOption => Boolean(option))
+    .forEach((option) => {
+      if (option.price.mode === "included") return;
+      lines.push(decorationToLine(config, option, size.persons));
+    });
+
+  toppers
     .filter((option): option is StudioOption => Boolean(option))
     .forEach((option) => {
       if (option.price.mode === "included") return;
@@ -293,7 +330,12 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   });
   const decorations = config.decorationIds.flatMap((id) => {
     const decoration = findOption(decorationOptions, id);
-    return decoration ? [decoration.label] : [];
+    if (!decoration) return [];
+    if (decoration.quantityLabel) {
+      return [`${decoration.label} (${getDecorationQuantity(config, id)}x)`];
+    }
+
+    return [decoration.label];
   });
 
   return {
@@ -341,6 +383,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
     `Kleur: ${labels.color}`,
     `Layout: ${labels.layout}`,
     `Decoratie: ${labels.decorations.length ? labels.decorations.join(", ") : "geen"}`,
+    `Decoratie opmerkingen: ${config.decorationNotes || "-"}`,
     `Topper/add-on: ${labels.topper}`,
     `Bruidsproefje: ${labels.tasting}`,
     "",

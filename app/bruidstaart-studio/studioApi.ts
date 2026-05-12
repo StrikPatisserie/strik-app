@@ -39,6 +39,17 @@ function textFrom(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function numericRecordFrom(value: unknown) {
+  if (!isRecord(value)) return {};
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, entry]) => {
+      const quantity = Number(entry);
+      return Number.isFinite(quantity) ? [[key, quantity]] : [];
+    })
+  );
+}
+
 export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
   if (!isRecord(value) || !isRecord(value.config)) return null;
 
@@ -67,6 +78,8 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
       layerLayoutIds: isRecord(config.layerLayoutIds)
         ? (config.layerLayoutIds as Record<string, string>)
         : {},
+      decorationQuantities: numericRecordFrom(config.decorationQuantities),
+      decorationNotes: textFrom(config.decorationNotes),
       topperIds: Array.isArray(config.topperIds)
         ? config.topperIds.filter(
             (id): id is string => typeof id === "string" && id !== "geen"

@@ -16,7 +16,13 @@ export type StudioOption = {
   allowedStyles?: CakeStyleId[];
   swatchColor?: string;
   swatchBorder?: string;
-  selectionGroup?: "none" | "mainTopper" | "initials" | "extraTopper";
+  selectionGroup?:
+    | "none"
+    | "mainTopper"
+    | "initials"
+    | "extraTopper"
+    | "marzipanRoses";
+  quantityLabel?: string;
 };
 
 export type CakeStyle = StudioOption & {
@@ -72,6 +78,8 @@ export type WeddingCakeConfig = {
   layoutId: string;
   layerLayoutIds: Record<string, string>;
   decorationIds: string[];
+  decorationQuantities: Record<string, number>;
+  decorationNotes: string;
   topperIds: string[];
   tasting: boolean;
   contact: ContactDetails;
