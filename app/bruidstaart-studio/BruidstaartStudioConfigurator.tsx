@@ -749,7 +749,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           id: selectedMainTopperId,
           width: 58,
           height: 52,
-          offsetY: 3,
+          offsetY: 12,
         }
       : null,
     hasBrideCoupleTopper
@@ -757,7 +757,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           id: "bruidspaartje",
           width: 54,
           height: 52,
-          offsetY: 3,
+          offsetY: 11,
         }
       : null,
     selectedInitialsId === "chocolade-initialen-geschreven"
@@ -765,7 +765,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           id: selectedInitialsId,
           width: 54,
           height: 34,
-          offsetY: 4,
+          offsetY: 13,
         }
       : null,
     selectedInitialsId === "chocolade-initialen-schildje"
@@ -773,15 +773,15 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           id: selectedInitialsId,
           width: 46,
           height: 50,
-          offsetY: 3,
+          offsetY: 12,
         }
       : null,
     selectedToppers.has("marsepeinen-ringen")
       ? {
           id: "marsepeinen-ringen",
-          width: 64,
-          height: 44,
-          offsetY: 5,
+          width: 82,
+          height: 56,
+          offsetY: 22,
         }
       : null,
   ].filter((item): item is {
@@ -790,9 +790,14 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     height: number;
     offsetY: number;
   } => Boolean(item));
-  const topperGap = 3;
-  const topperTotalWidth =
+  const topperGap = 2;
+  const topperRawTotalWidth =
     topperVisuals.reduce((total, item) => total + item.width, 0) +
+    Math.max(0, topperVisuals.length - 1) * topperGap;
+  const topperScale =
+    topperRawTotalWidth > 0 ? Math.min(1, 232 / topperRawTotalWidth) : 1;
+  const topperTotalWidth =
+    topperVisuals.reduce((total, item) => total + item.width * topperScale, 0) +
     Math.max(0, topperVisuals.length - 1) * topperGap;
 
   function layerDecorationPoints(width: number, spacing: number, max: number) {
@@ -869,7 +874,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     return (
       <>
         {selectedDecorations.has("bladgoud") &&
-          layerDecorationPoints(width, 34, 5).map((point, item) => (
+          layerDecorationPoints(width, 58, 3).map((point, item) => (
             <g
               key={`${layerId}-gold-${item}`}
               transform={`translate(${x + 16 + point * (width - 32)} ${
@@ -1121,16 +1126,21 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         {topperVisuals.map((topper, index) => {
           const previousWidth = topperVisuals
             .slice(0, index)
-            .reduce((total, item) => total + item.width + topperGap, 0);
+            .reduce(
+              (total, item) => total + item.width * topperScale + topperGap,
+              0
+            );
+          const width = topper.width * topperScale;
+          const height = topper.height * topperScale;
 
           return (
             <image
               key={topper.id}
               href={topperDecorationAsset(topper.id)}
               x={(260 - topperTotalWidth) / 2 + previousWidth}
-              y={Math.max(4, topY - topper.height + topper.offsetY)}
-              width={topper.width}
-              height={topper.height}
+              y={Math.max(2, topY - height + topper.offsetY * topperScale)}
+              width={width}
+              height={height}
               preserveAspectRatio="xMidYMid meet"
             />
           );
