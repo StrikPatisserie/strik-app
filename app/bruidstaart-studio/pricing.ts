@@ -9,6 +9,7 @@ import {
   topperOptions,
 } from "./data";
 import {
+  CakeLayer,
   Price,
   PriceLine,
   PriceSummary,
@@ -54,12 +55,71 @@ function optionToLine(option: StudioOption, persons: number): PriceLine {
   };
 }
 
+export function getCakeLayers(config: WeddingCakeConfig): CakeLayer[] {
+  const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
+
+  return size.layers.length
+    ? size.layers
+    : [
+        {
+          id: `${size.id}-layer`,
+          label: "Laag 1",
+          persons: size.persons,
+          personsLabel: size.personsLabel,
+        },
+      ];
+}
+
+export function getLayerFilling(
+  config: WeddingCakeConfig,
+  layerId: string
+): StudioOption {
+  return (
+    findOption(fillingOptions, config.layerFillingIds?.[layerId]) ||
+    findOption(fillingOptions, config.fillingId) ||
+    fillingOptions[0]
+  );
+}
+
+function fillingLinesForConfig(config: WeddingCakeConfig): PriceLine[] {
+  const layers = getCakeLayers(config);
+
+  return layers.flatMap((layer) => {
+    const filling = getLayerFilling(config, layer.id);
+    if (filling.price.mode === "included") return [];
+
+    return [
+      {
+        label: `${layer.label} ${layer.personsLabel}: ${
+          filling.label
+        } (${getPriceLabel(filling.price, layer.persons)})`,
+        amount: getPriceAmount(filling.price, layer.persons),
+        quote: filling.price.mode === "quote",
+      },
+    ];
+  });
+}
+
+export function getSelectedFillingSummary(config: WeddingCakeConfig) {
+  const layers = getCakeLayers(config);
+
+  if (layers.length <= 1) {
+    return getLayerFilling(config, layers[0].id).label;
+  }
+
+  return layers
+    .map((layer) => {
+      const filling = getLayerFilling(config, layer.id);
+      return `${layer.label} (${layer.personsLabel}): ${filling.label}`;
+    })
+    .join("; ");
+}
+
 export function calculateWeddingCakePrice(
   config: WeddingCakeConfig
 ): PriceSummary {
   const style = findOption(cakeStyles, config.styleId) || cakeStyles[0];
   const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
-  const filling = findOption(fillingOptions, config.fillingId);
   const color = findOption(colorOptions, config.colorId);
   const layout = findOption(layoutOptions, config.layoutId);
   const toppers = config.topperIds.flatMap((id) => {
@@ -89,7 +149,9 @@ export function calculateWeddingCakePrice(
     });
   }
 
-  [filling, color, layout, ...decorations, ...toppers]
+  fillingLinesForConfig(config).forEach((line) => lines.push(line));
+
+  [color, layout, ...decorations, ...toppers]
     .filter((option): option is StudioOption => Boolean(option))
     .forEach((option) => {
       if (option.price.mode === "included") return;
@@ -112,7 +174,6 @@ export function calculateWeddingCakePrice(
 export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   const style = findOption(cakeStyles, config.styleId);
   const size = findOption(cakeSizes, config.sizeId);
-  const filling = findOption(fillingOptions, config.fillingId);
   const color = findOption(colorOptions, config.colorId);
   const layout = findOption(layoutOptions, config.layoutId);
   const toppers = config.topperIds.flatMap((id) => {
@@ -131,7 +192,7 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
           size.tiers === 1 ? "" : "en"
         }`
       : "",
-    filling: filling?.label || "",
+    filling: getSelectedFillingSummary(config),
     color: color?.label || "",
     layout: layout?.label || "",
     decorations,
@@ -148,7 +209,9 @@ export function createProductionForm(config: WeddingCakeConfig) {
     "BRUIDSTAART STUDIO - AANVRAAG",
     "",
     "Klant",
+    `Herkenningscode: ${config.contact.recognitionCode || "-"}`,
     `Namen: ${config.contact.names || "-"}`,
+    `Achternaam: ${config.contact.surname || "-"}`,
     `E-mail: ${config.contact.email || "-"}`,
     `Telefoon: ${config.contact.phone || "-"}`,
     `Trouwdatum: ${config.contact.weddingDate || "-"}`,

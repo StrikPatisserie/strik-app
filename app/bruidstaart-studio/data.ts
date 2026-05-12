@@ -31,6 +31,15 @@ export const cakeStyles: CakeStyle[] = [
   },
 ];
 
+function makeLayer(
+  id: string,
+  label: string,
+  persons: number,
+  personsLabel: string
+) {
+  return { id, label, persons, personsLabel };
+}
+
 export const cakeSizes: CakeSize[] = [
   {
     id: "small-6-8",
@@ -39,6 +48,7 @@ export const cakeSizes: CakeSize[] = [
     persons: 8,
     personsLabel: "6-8 personen",
     tiers: 1,
+    layers: [makeLayer("small-6-8-1", "Kleine laag", 8, "6-8p")],
     description: "Optionele kleine bruidstaart uit de folder.",
     surchargePerPerson: 5,
   },
@@ -49,6 +59,7 @@ export const cakeSizes: CakeSize[] = [
     persons: 12,
     personsLabel: "10-12 personen",
     tiers: 1,
+    layers: [makeLayer("small-10-12-1", "Kleine laag", 12, "10-12p")],
     description: "Optionele kleine bruidstaart uit de folder.",
     surchargePerPerson: 3,
   },
@@ -59,6 +70,7 @@ export const cakeSizes: CakeSize[] = [
     persons: 18,
     personsLabel: "16-18 personen",
     tiers: 1,
+    layers: [makeLayer("s1a-1", "Laag 1", 18, "16-18p")],
     description: "Basisopbouw met een enkele taartlaag.",
   },
   {
@@ -68,6 +80,10 @@ export const cakeSizes: CakeSize[] = [
     persons: 14,
     personsLabel: "±14 personen",
     tiers: 2,
+    layers: [
+      makeLayer("s2a-1", "Onderlaag", 7, "6-8p"),
+      makeLayer("s2a-2", "Bovenlaag", 7, "6-8p"),
+    ],
     description: "Twee kleine lagen: 6-8p + 6-8p.",
   },
   {
@@ -77,6 +93,10 @@ export const cakeSizes: CakeSize[] = [
     persons: 18,
     personsLabel: "±18 personen",
     tiers: 2,
+    layers: [
+      makeLayer("s2b-1", "Onderlaag", 11, "10-12p"),
+      makeLayer("s2b-2", "Bovenlaag", 7, "6-8p"),
+    ],
     description: "6-8p + 10-12p.",
   },
   {
@@ -86,6 +106,10 @@ export const cakeSizes: CakeSize[] = [
     persons: 22,
     personsLabel: "±22 personen",
     tiers: 2,
+    layers: [
+      makeLayer("s2c-1", "Onderlaag", 11, "10-12p"),
+      makeLayer("s2c-2", "Bovenlaag", 11, "10-12p"),
+    ],
     description: "10-12p + 10-12p.",
   },
   {
@@ -95,6 +119,10 @@ export const cakeSizes: CakeSize[] = [
     persons: 28,
     personsLabel: "±28 personen",
     tiers: 2,
+    layers: [
+      makeLayer("s2d-1", "Onderlaag", 17, "16-18p"),
+      makeLayer("s2d-2", "Bovenlaag", 11, "10-12p"),
+    ],
     description: "10-12p + 16-18p.",
   },
   {
@@ -104,6 +132,10 @@ export const cakeSizes: CakeSize[] = [
     persons: 34,
     personsLabel: "±34 personen",
     tiers: 2,
+    layers: [
+      makeLayer("s2e-1", "Onderlaag", 17, "16-18p"),
+      makeLayer("s2e-2", "Bovenlaag", 17, "16-18p"),
+    ],
     description: "16-18p + 16-18p.",
   },
   {
@@ -113,6 +145,12 @@ export const cakeSizes: CakeSize[] = [
     persons: 36,
     personsLabel: "±36 personen",
     tiers: 2,
+    layers: [
+      makeLayer("s2f-1", "Onderlaag onder", 10, "10-12p"),
+      makeLayer("s2f-2", "Onderlaag boven", 10, "10-12p"),
+      makeLayer("s2f-3", "Bovenlaag onder", 8, "6-8p"),
+      makeLayer("s2f-4", "Bovenlaag boven", 8, "6-8p"),
+    ],
     description: "Gestapelde hoge opbouw met kleine en middelgrote lagen.",
   },
   {
@@ -122,6 +160,12 @@ export const cakeSizes: CakeSize[] = [
     persons: 56,
     personsLabel: "±56 personen",
     tiers: 2,
+    layers: [
+      makeLayer("s2g-1", "Onderlaag onder", 18, "16-18p"),
+      makeLayer("s2g-2", "Onderlaag boven", 18, "16-18p"),
+      makeLayer("s2g-3", "Bovenlaag onder", 10, "10-12p"),
+      makeLayer("s2g-4", "Bovenlaag boven", 10, "10-12p"),
+    ],
     description: "Hoge opbouw met middelgrote en grote lagen.",
   },
   {
@@ -131,6 +175,11 @@ export const cakeSizes: CakeSize[] = [
     persons: 35,
     personsLabel: "±35 personen",
     tiers: 3,
+    layers: [
+      makeLayer("s3a-1", "Onderlaag", 17, "16-18p"),
+      makeLayer("s3a-2", "Middenlaag", 11, "10-12p"),
+      makeLayer("s3a-3", "Bovenlaag", 7, "6-8p"),
+    ],
     description: "6-8p + 10-12p + 16-18p.",
   },
   {
@@ -140,6 +189,14 @@ export const cakeSizes: CakeSize[] = [
     persons: 70,
     personsLabel: "±70 personen",
     tiers: 3,
+    layers: [
+      makeLayer("s3b-1", "Onderlaag onder", 17, "16-18p"),
+      makeLayer("s3b-2", "Onderlaag boven", 17, "16-18p"),
+      makeLayer("s3b-3", "Middenlaag onder", 11, "10-12p"),
+      makeLayer("s3b-4", "Middenlaag boven", 11, "10-12p"),
+      makeLayer("s3b-5", "Bovenlaag onder", 7, "6-8p"),
+      makeLayer("s3b-6", "Bovenlaag boven", 7, "6-8p"),
+    ],
     description: "Hoge opbouw met kleine, middelgrote en grote lagen.",
   },
 ];
@@ -551,6 +608,8 @@ export const tastingOption: StudioOption = {
 
 export const emptyContactDetails: ContactDetails = {
   names: "",
+  surname: "",
+  recognitionCode: "",
   email: "",
   phone: "",
   weddingDate: "",
@@ -565,6 +624,7 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   styleId: "klassiek",
   sizeId: "s1a",
   fillingId: "chipolata",
+  layerFillingIds: {},
   colorId: "marsepein-kleur",
   layoutId: "klassiek-strak",
   decorationIds: [],

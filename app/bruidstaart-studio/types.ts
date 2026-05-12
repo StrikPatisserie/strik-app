@@ -31,12 +31,22 @@ export type CakeSize = {
   persons: number;
   personsLabel: string;
   tiers: number;
+  layers: CakeLayer[];
   description?: string;
   surchargePerPerson?: number;
 };
 
+export type CakeLayer = {
+  id: string;
+  label: string;
+  persons: number;
+  personsLabel: string;
+};
+
 export type ContactDetails = {
   names: string;
+  surname: string;
+  recognitionCode: string;
   email: string;
   phone: string;
   weddingDate: string;
@@ -51,6 +61,7 @@ export type WeddingCakeConfig = {
   styleId: CakeStyleId;
   sizeId: string;
   fillingId: string;
+  layerFillingIds: Record<string, string>;
   colorId: string;
   layoutId: string;
   decorationIds: string[];

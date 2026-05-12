@@ -19,9 +19,22 @@ import {
   createProductionForm,
   findOption,
   formatEuro,
+  getCakeLayers,
+  getLayerFilling,
   getSelectedWeddingCakeLabels,
 } from "./pricing";
+import {
+  createDraftFromConfig,
+  getWeddingCakeStudioUrl,
+  normalizeDraft,
+  normalizeDraftList,
+  saveLocalDraft,
+  searchLocalDrafts,
+  WeddingCakeDraft,
+} from "./studioApi";
 import { ContactDetails, StudioOption, WeddingCakeConfig } from "./types";
+
+const STRIK_STUDIO_EMAIL = "info@strik-patisserie.nl";
 
 type StepId =
   | "stijl"
@@ -195,6 +208,318 @@ function SizeCard({
   );
 }
 
+function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
+  const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
+  const layout = findOption(layoutOptions, config.layoutId);
+  const color = findOption(colorOptions, config.colorId);
+  const layers = getCakeLayers(config);
+  const maxPersons = Math.max(...layers.map((layer) => layer.persons), 1);
+  const selectedDecorations = new Set(config.decorationIds);
+  const selectedToppers = new Set(config.topperIds);
+  const bottomY = 170;
+  const layerHeight = 18;
+  const gap = 5;
+
+  function layerWidth(persons: number) {
+    return 74 + (persons / maxPersons) * 130;
+  }
+
+  function layerY(index: number) {
+    return bottomY - (index + 1) * layerHeight - index * gap;
+  }
+
+  function patternForLayer(index: number, x: number, y: number, width: number) {
+    const key = layout?.id || "";
+    const center = x + width / 2;
+
+    if (key.includes("chesterfield")) {
+      return (
+        <>
+          {[-50, -20, 10, 40, 70, 100, 130, 160, 190].map((offset) => (
+            <path
+              key={`diag-a-${index}-${offset}`}
+              d={`M ${x + offset} ${y + layerHeight} L ${x + offset + 45} ${y}`}
+              stroke="currentColor"
+              strokeWidth="0.8"
+              opacity="0.55"
+            />
+          ))}
+          {[-20, 10, 40, 70, 100, 130, 160, 190].map((offset) => (
+            <path
+              key={`diag-b-${index}-${offset}`}
+              d={`M ${x + offset} ${y} L ${x + offset + 45} ${
+                y + layerHeight
+              }`}
+              stroke="currentColor"
+              strokeWidth="0.8"
+              opacity="0.35"
+            />
+          ))}
+        </>
+      );
+    }
+
+    if (key.includes("banen")) {
+      return (
+        <>
+          <path
+            d={`M ${x + 8} ${y + 6} H ${x + width - 8}`}
+            stroke="currentColor"
+            strokeWidth="1"
+            opacity="0.55"
+          />
+          <path
+            d={`M ${x + 8} ${y + 12} H ${x + width - 8}`}
+            stroke="currentColor"
+            strokeWidth="1"
+            opacity="0.35"
+          />
+        </>
+      );
+    }
+
+    if (key.includes("bogen")) {
+      return (
+        <>
+          {[0, 1, 2, 3, 4].map((item) => (
+            <path
+              key={`bogen-${index}-${item}`}
+              d={`M ${x + 12 + item * 28} ${y + 5} Q ${
+                x + 26 + item * 28
+              } ${y + 16} ${x + 40 + item * 28} ${y + 5}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1"
+              opacity="0.5"
+            />
+          ))}
+        </>
+      );
+    }
+
+    if (key.includes("sierlijk") || key.includes("rozen")) {
+      return (
+        <>
+          {[0, 1, 2].map((item) => (
+            <path
+              key={`swirl-${index}-${item}`}
+              d={`M ${center - 36 + item * 34} ${y + 11} c 8 -10 22 8 4 5 c -10 -2 -2 -15 9 -10`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1"
+              opacity="0.55"
+            />
+          ))}
+        </>
+      );
+    }
+
+    if (key.includes("stippen")) {
+      return (
+        <>
+          {[0, 1, 2, 3, 4, 5].map((item) => (
+            <circle
+              key={`dot-${index}-${item}`}
+              cx={x + 18 + item * 24}
+              cy={y + (item % 2 ? 12 : 7)}
+              r="1.8"
+              fill="currentColor"
+              opacity="0.45"
+            />
+          ))}
+        </>
+      );
+    }
+
+    if (key.includes("grof") || key.includes("naked")) {
+      return (
+        <path
+          d={`M ${x + 10} ${y + 8} C ${x + 46} ${y + 2}, ${
+            x + width - 52
+          } ${y + 17}, ${x + width - 10} ${y + 9}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeDasharray={key.includes("naked-open") ? "4 4" : undefined}
+          opacity="0.5"
+        />
+      );
+    }
+
+    return null;
+  }
+
+  const topLayer = layers[layers.length - 1];
+  const topWidth = layerWidth(topLayer?.persons || 1);
+  const topX = (260 - topWidth) / 2;
+  const topY = layerY(layers.length - 1);
+  const hasFlowers =
+    selectedDecorations.has("echte-bloemen") ||
+    selectedDecorations.has("marsepeinrozen-zonder-blad") ||
+    selectedDecorations.has("marsepeinrozen-met-blad");
+  const hasMainTopper = ["bruidspaartje", "topper-karton", "topper-zelf-aanleveren"].some(
+    (id) => selectedToppers.has(id)
+  );
+
+  return (
+    <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-[#fffdf8] p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
+            Schets
+          </p>
+          <p className="text-lg font-black">{size.code}</p>
+        </div>
+        {color?.swatchColor && (
+          <span
+            className="h-9 w-9 shrink-0 rounded-full border-2"
+            style={{
+              backgroundColor: color.swatchColor,
+              borderColor: color.swatchBorder || "rgba(45, 42, 38, 0.18)",
+            }}
+            title={color.label}
+          />
+        )}
+      </div>
+      <svg
+        viewBox="0 0 260 205"
+        className="h-auto w-full text-[#1f1d1a]"
+        aria-label="Bruidstaart visualisatie"
+      >
+        <path
+          d="M 37 181 C 82 190, 180 190, 223 181"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          opacity="0.35"
+        />
+        {layers.map((layer, index) => {
+          const width = layerWidth(layer.persons);
+          const x = (260 - width) / 2;
+          const y = layerY(index);
+
+          return (
+            <g key={layer.id}>
+              <rect
+                x={x}
+                y={y}
+                width={width}
+                height={layerHeight}
+                rx="5"
+                fill="#fff"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              {patternForLayer(index, x, y, width)}
+              <text
+                x={130}
+                y={y + 12.5}
+                textAnchor="middle"
+                fontSize="7"
+                fontWeight="700"
+                fill="currentColor"
+                opacity="0.7"
+              >
+                {getLayerFilling(config, layer.id).label}
+              </text>
+            </g>
+          );
+        })}
+
+        {selectedDecorations.has("creme-parelrand") &&
+          [0, 1, 2, 3, 4, 5, 6].map((item) => (
+            <circle
+              key={`pearls-${item}`}
+              cx={topX + 16 + item * Math.max(12, topWidth / 8)}
+              cy={topY + layerHeight + 4}
+              r="2"
+              fill="currentColor"
+            />
+          ))}
+
+        {selectedDecorations.has("bladgoud") &&
+          [0, 1, 2, 3].map((item) => (
+            <path
+              key={`gold-${item}`}
+              d={`M ${topX + 28 + item * 24} ${topY + 7} l 4 -4 l 4 4 l -4 4 Z`}
+              fill="currentColor"
+              opacity="0.7"
+            />
+          ))}
+
+        {selectedDecorations.has("rood-fruit") &&
+          [0, 1, 2, 3, 4].map((item) => (
+            <circle
+              key={`fruit-${item}`}
+              cx={topX + 24 + item * 18}
+              cy={topY - 4 - (item % 2) * 3}
+              r="3"
+              fill="currentColor"
+            />
+          ))}
+
+        {hasFlowers &&
+          [0, 1, 2].map((item) => (
+            <g
+              key={`flower-${item}`}
+              transform={`translate(${topX + 28 + item * 20} ${topY - 8})`}
+            >
+              <circle cx="0" cy="0" r="4" fill="none" stroke="currentColor" />
+              <path
+                d="M -2 0 c 4 -6 9 1 2 4 c -7 2 -7 -5 0 -4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1"
+              />
+            </g>
+          ))}
+
+        {hasMainTopper && (
+          <g transform={`translate(${130} ${topY - 28})`}>
+            <path
+              d="M -16 18 L 16 18 M -10 18 L -10 2 L 10 2 L 10 18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M -3 2 C -12 -8 -22 5 -3 14 C 16 5 6 -8 -3 2"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+          </g>
+        )}
+
+        {selectedToppers.has("chocolade-initialen-geschreven") && (
+          <text x="130" y={topY - 10} textAnchor="middle" fontSize="14" fontWeight="800">
+            Initialen
+          </text>
+        )}
+        {selectedToppers.has("chocolade-initialen-schildje") && (
+          <g transform={`translate(${130} ${topY - 17})`}>
+            <rect x="-24" y="-10" width="48" height="18" rx="6" fill="#fff" stroke="currentColor" />
+            <text x="0" y="3" textAnchor="middle" fontSize="8" fontWeight="800">
+              Initialen
+            </text>
+          </g>
+        )}
+        {selectedToppers.has("marsepeinen-ringen") && (
+          <g transform={`translate(${topX + topWidth - 34} ${topY - 10})`}>
+            <circle cx="0" cy="0" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
+            <circle cx="10" cy="1" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
+          </g>
+        )}
+      </svg>
+      <p className="mt-2 text-xs font-bold leading-relaxed text-[#2d2a26]/50">
+        Schets op basis van formaat, layout, decoratie en toppers. De echte
+        afwerking blijft maatwerk.
+      </p>
+    </div>
+  );
+}
+
 function updateContact<K extends keyof ContactDetails>(
   config: WeddingCakeConfig,
   key: K,
@@ -215,6 +540,9 @@ export default function BruidstaartStudioConfigurator() {
   );
   const [stepIndex, setStepIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [draftSearch, setDraftSearch] = useState("");
+  const [draftResults, setDraftResults] = useState<WeddingCakeDraft[]>([]);
+  const [draftStatus, setDraftStatus] = useState("");
   const step = steps[stepIndex];
 
   const allowedLayouts = useMemo(
@@ -235,6 +563,49 @@ export default function BruidstaartStudioConfigurator() {
   const price = useMemo(() => calculateWeddingCakePrice(config), [config]);
   const labels = useMemo(() => getSelectedWeddingCakeLabels(config), [config]);
   const productionForm = useMemo(() => createProductionForm(config), [config]);
+  const activeLayers = useMemo(() => getCakeLayers(config), [config]);
+
+  function layerFillingIdsForSize(
+    sizeId: string,
+    current: WeddingCakeConfig
+  ) {
+    const size = findOption(cakeSizes, sizeId) || cakeSizes[0];
+    const currentLayers = getCakeLayers(current);
+
+    return Object.fromEntries(
+      size.layers.map((layer, index) => {
+        const currentLayer = currentLayers[index];
+        const fillingId =
+          current.layerFillingIds?.[layer.id] ||
+          (currentLayer
+            ? current.layerFillingIds?.[currentLayer.id]
+            : undefined) ||
+          current.fillingId ||
+          fillingOptions[0].id;
+
+        return [layer.id, fillingId];
+      })
+    );
+  }
+
+  function setSize(sizeId: string) {
+    setConfig((current) => ({
+      ...current,
+      sizeId,
+      layerFillingIds: layerFillingIdsForSize(sizeId, current),
+    }));
+  }
+
+  function setLayerFilling(layerId: string, fillingId: string) {
+    setConfig((current) => ({
+      ...current,
+      fillingId,
+      layerFillingIds: {
+        ...current.layerFillingIds,
+        [layerId]: fillingId,
+      },
+    }));
+  }
 
   function setStyle(styleId: WeddingCakeConfig["styleId"]) {
     const firstLayout =
@@ -312,12 +683,121 @@ export default function BruidstaartStudioConfigurator() {
     }
   }
 
+  function getMailSubject() {
+    const code = config.contact.recognitionCode.trim();
+    const names = config.contact.names.trim() || "bruidstaart";
+
+    return `Bruidstaart aanvraag${code ? ` ${code}` : ""} - ${names}`;
+  }
+
+  function openMail(to: string) {
+    if (!to.trim()) {
+      setDraftStatus("Vul eerst een e-mailadres in.");
+      return;
+    }
+
+    const params = new URLSearchParams({
+      subject: getMailSubject(),
+      body: productionForm,
+    });
+
+    window.location.href = `mailto:${encodeURIComponent(to.trim())}?${params}`;
+  }
+
+  async function saveDraft() {
+    const code = config.contact.recognitionCode.trim();
+
+    if (!code) {
+      setDraftStatus("Vul eerst een herkenningscode in.");
+      return;
+    }
+
+    const draft = createDraftFromConfig(config);
+
+    try {
+      const res = await fetch(getWeddingCakeStudioUrl(), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+
+      if (!res.ok) throw new Error("WordPress niet beschikbaar.");
+
+      const savedDraft = normalizeDraft(await res.json()) || draft;
+      saveLocalDraft(savedDraft);
+      setDraftResults([savedDraft]);
+      setDraftStatus("Concept opgeslagen in WordPress.");
+    } catch {
+      saveLocalDraft(draft);
+      setDraftResults([draft]);
+      setDraftStatus(
+        "WordPress-opslag is nog niet actief; concept is lokaal opgeslagen."
+      );
+    }
+  }
+
+  async function searchDrafts() {
+    const search = draftSearch.trim();
+
+    if (!search) {
+      setDraftStatus("Vul een herkenningscode of achternaam in.");
+      return;
+    }
+
+    try {
+      const res = await fetch(getWeddingCakeStudioUrl(search), {
+        cache: "no-store",
+      });
+
+      if (!res.ok) throw new Error("WordPress niet beschikbaar.");
+
+      const drafts = normalizeDraftList(await res.json());
+      setDraftResults(drafts);
+      setDraftStatus(
+        drafts.length
+          ? `${drafts.length} concept${drafts.length === 1 ? "" : "en"} gevonden.`
+          : "Geen concept gevonden."
+      );
+    } catch {
+      const drafts = searchLocalDrafts(search);
+      setDraftResults(drafts);
+      setDraftStatus(
+        drafts.length
+          ? `Lokaal ${drafts.length} concept${
+              drafts.length === 1 ? "" : "en"
+            } gevonden.`
+          : "Geen lokaal concept gevonden. Activeer de WordPress snippet voor zoeken op elk device."
+      );
+    }
+  }
+
+  function loadDraft(draft: WeddingCakeDraft) {
+    const nextConfig = {
+      ...initialWeddingCakeConfig,
+      ...draft.config,
+      layerFillingIds: draft.config.layerFillingIds || {},
+      topperIds: draft.config.topperIds?.length ? draft.config.topperIds : ["geen"],
+      contact: {
+        ...initialWeddingCakeConfig.contact,
+        ...draft.config.contact,
+        recognitionCode: draft.config.contact.recognitionCode || draft.code,
+        surname: draft.config.contact.surname || draft.surname,
+      },
+    };
+
+    setConfig({
+      ...nextConfig,
+      layerFillingIds: layerFillingIdsForSize(nextConfig.sizeId, nextConfig),
+    });
+    setDraftStatus(`Concept ${draft.code} geladen.`);
+  }
+
   const canGoBack = stepIndex > 0;
   const canGoNext = stepIndex < steps.length - 1;
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-4 shadow-sm">
+      <section className="studio-no-print rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
@@ -342,7 +822,97 @@ export default function BruidstaartStudioConfigurator() {
         </div>
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <section className="studio-no-print rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div>
+            <h3 className="text-lg font-black">Concept opslaan</h3>
+            <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
+              Vul een herkenningscode en achternaam in. Daarmee kun je de
+              aanvraag later terughalen en aanpassen.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <input
+                value={config.contact.recognitionCode}
+                onChange={(event) =>
+                  setConfig((current) =>
+                    updateContact(
+                      current,
+                      "recognitionCode",
+                      event.target.value
+                    )
+                  )
+                }
+                placeholder="Herkenningscode"
+                className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+              />
+              <input
+                value={config.contact.surname}
+                onChange={(event) =>
+                  setConfig((current) =>
+                    updateContact(current, "surname", event.target.value)
+                  )
+                }
+                placeholder="Achternaam klant"
+                className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={saveDraft}
+              className="mt-3 rounded-full bg-[#c3d3bc] px-5 py-3 font-bold shadow-sm"
+            >
+              Concept opslaan
+            </button>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-black">Concept terughalen</h3>
+            <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
+              Zoek op herkenningscode of achternaam.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={draftSearch}
+                onChange={(event) => setDraftSearch(event.target.value)}
+                placeholder="Code of achternaam"
+                className="min-w-0 flex-1 rounded-2xl border border-[#e7e0d8] bg-white p-4"
+              />
+              <button
+                type="button"
+                onClick={searchDrafts}
+                className="rounded-full bg-[#f1d28f] px-5 py-3 font-bold shadow-sm"
+              >
+                Zoeken
+              </button>
+            </div>
+            {draftStatus && (
+              <p className="mt-3 text-sm font-bold text-[#2d2a26]/55">
+                {draftStatus}
+              </p>
+            )}
+            {draftResults.length > 0 && (
+              <div className="mt-3 grid gap-2">
+                {draftResults.map((draft) => (
+                  <button
+                    key={`${draft.code}-${draft.updatedAt}`}
+                    type="button"
+                    onClick={() => loadDraft(draft)}
+                    className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-left shadow-sm"
+                  >
+                    <p className="font-black">{draft.code}</p>
+                    <p className="text-sm font-semibold text-[#2d2a26]/55">
+                      {draft.surname || draft.names || "Geen naam"} ·{" "}
+                      {new Date(draft.updatedAt).toLocaleDateString("nl-NL")}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <div className="studio-no-print grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
           {step.id === "stijl" && (
             <div className="grid gap-3">
@@ -364,9 +934,7 @@ export default function BruidstaartStudioConfigurator() {
                   key={size.id}
                   sizeId={size.id}
                   selected={config.sizeId === size.id}
-                  onClick={() =>
-                    setConfig((current) => ({ ...current, sizeId: size.id }))
-                  }
+                  onClick={() => setSize(size.id)}
                 />
               ))}
             </div>
@@ -374,19 +942,50 @@ export default function BruidstaartStudioConfigurator() {
 
           {step.id === "smaak" && (
             <div className="grid gap-3">
-              {fillingOptions.map((option) => (
-                <OptionCard
-                  key={option.id}
-                  option={option}
-                  selected={config.fillingId === option.id}
-                  onClick={() =>
-                    setConfig((current) => ({
-                      ...current,
-                      fillingId: option.id,
-                    }))
-                  }
-                />
-              ))}
+              {activeLayers.length <= 1 ? (
+                fillingOptions.map((option) => (
+                  <OptionCard
+                    key={option.id}
+                    option={option}
+                    selected={
+                      getLayerFilling(config, activeLayers[0].id).id ===
+                      option.id
+                    }
+                    onClick={() => setLayerFilling(activeLayers[0].id, option.id)}
+                  />
+                ))
+              ) : (
+                <div className="grid gap-4">
+                  {activeLayers.map((layer) => (
+                    <div
+                      key={layer.id}
+                      className="rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 shadow-sm"
+                    >
+                      <label className="block">
+                        <span className="text-sm font-black">
+                          {layer.label} · {layer.personsLabel}
+                        </span>
+                        <select
+                          value={getLayerFilling(config, layer.id).id}
+                          onChange={(event) =>
+                            setLayerFilling(layer.id, event.target.value)
+                          }
+                          className="mt-2 w-full rounded-2xl border border-[#e7e0d8] bg-white p-4 font-bold"
+                        >
+                          {fillingOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                              {option.price.mode === "perPerson"
+                                ? ` (+ ${formatEuro(option.price.amount)} p.p.)`
+                                : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -473,6 +1072,32 @@ export default function BruidstaartStudioConfigurator() {
 
           {step.id === "gegevens" && (
             <div className="grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input
+                  value={config.contact.recognitionCode}
+                  onChange={(event) =>
+                    setConfig((current) =>
+                      updateContact(
+                        current,
+                        "recognitionCode",
+                        event.target.value
+                      )
+                    )
+                  }
+                  placeholder="Herkenningscode"
+                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                />
+                <input
+                  value={config.contact.surname}
+                  onChange={(event) =>
+                    setConfig((current) =>
+                      updateContact(current, "surname", event.target.value)
+                    )
+                  }
+                  placeholder="Achternaam klant"
+                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                />
+              </div>
               <input
                 value={config.contact.names}
                 onChange={(event) =>
@@ -612,16 +1237,34 @@ export default function BruidstaartStudioConfigurator() {
                 >
                   Printen
                 </button>
+                <button
+                  type="button"
+                  onClick={() => openMail(config.contact.email)}
+                  className="rounded-full bg-white p-4 font-bold shadow-sm"
+                >
+                  Mail naar klant
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openMail(STRIK_STUDIO_EMAIL)}
+                  className="rounded-full bg-white p-4 font-bold shadow-sm"
+                >
+                  Mail naar Strik
+                </button>
               </div>
             </div>
           )}
         </section>
 
-        <aside className="h-fit rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm lg:sticky lg:top-5">
+        <aside className="h-fit space-y-4 rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm lg:sticky lg:top-5">
+          <CakeVisualizer config={config} />
+
+          <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
             Live prijs
           </p>
           <p className="mt-1 text-3xl font-black">{formatEuro(price.total)}</p>
+          </div>
           {price.hasQuoteItems && (
             <p className="mt-2 rounded-2xl bg-[#fff7e3] p-3 text-xs font-bold leading-relaxed text-[#5d4717]">
               Sommige onderdelen staan op aanvraag en zitten nog niet in het
@@ -663,7 +1306,7 @@ export default function BruidstaartStudioConfigurator() {
         </aside>
       </div>
 
-      <div className="flex gap-3">
+      <div className="studio-no-print flex gap-3">
         <button
           type="button"
           onClick={() => setStepIndex((current) => Math.max(0, current - 1))}
@@ -683,6 +1326,33 @@ export default function BruidstaartStudioConfigurator() {
           {canGoNext ? "Volgende stap" : "Aanvraag compleet"}
         </button>
       </div>
+
+      <section className="studio-print-report hidden bg-white text-black">
+        <div className="mb-5 flex items-start justify-between gap-6 border-b border-black/20 pb-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em]">
+              Strik Team app
+            </p>
+            <h1 className="mt-2 text-3xl font-black">Bruidstaart aanvraag</h1>
+            <p className="mt-1 text-sm">
+              {new Date().toLocaleString("nl-NL")}
+            </p>
+          </div>
+          <div className="text-right text-sm">
+            <p className="font-bold">Indicatie</p>
+            <p className="text-2xl font-black">{formatEuro(price.total)}</p>
+            {config.contact.recognitionCode && (
+              <p className="mt-2">Code: {config.contact.recognitionCode}</p>
+            )}
+          </div>
+        </div>
+        <div className="grid gap-5 print:grid-cols-[15rem_minmax(0,1fr)]">
+          <CakeVisualizer config={config} />
+          <pre className="whitespace-pre-wrap rounded-none border-0 bg-white p-0 text-[11px] leading-relaxed">
+            {productionForm}
+          </pre>
+        </div>
+      </section>
     </div>
   );
 }

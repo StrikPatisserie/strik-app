@@ -34,3 +34,37 @@ html {
 body {
   min-height: 100dvh;
 }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: #fff;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .studio-print-report,
+  .studio-print-report * {
+    visibility: visible !important;
+  }
+
+  .studio-print-report {
+    display: block !important;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    background: #fff;
+    color: #000;
+  }
+
+  .studio-no-print {
+    display: none !important;
+  }
+}
