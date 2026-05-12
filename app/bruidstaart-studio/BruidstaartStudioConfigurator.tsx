@@ -9,6 +9,7 @@ import {
   fillingOptions,
   initialWeddingCakeConfig,
   isLayoutAllowedForStyle,
+  isOptionAllowedForStyle,
   layoutOptions,
   tastingOption,
   topperOptions,
@@ -36,14 +37,15 @@ type StepId =
 
 const steps: { id: StepId; title: string; description: string }[] = [
   {
+    id: "formaat",
+    title: "Formaat",
+    description:
+      "Kies eerst het aantal personen en de opbouw uit de bruidstaartmogelijkheden.",
+  },
+  {
     id: "stijl",
     title: "Stijl",
     description: "Kies de basisafwerking van de taart.",
-  },
-  {
-    id: "formaat",
-    title: "Formaat",
-    description: "Kies het aantal personen en het aantal etages.",
   },
   {
     id: "smaak",
@@ -90,9 +92,13 @@ const steps: { id: StepId; title: string; description: string }[] = [
 function optionPriceLabel(option: StudioOption) {
   if (option.price.mode === "included") return "Inbegrepen";
   if (option.price.mode === "quote") return "Op aanvraag";
-  if (option.price.mode === "perPerson") return `${formatEuro(option.price.amount)} p.p.`;
+  if (option.price.mode === "perPerson") {
+    return `${formatEuro(option.price.amount)} p.p.`;
+  }
 
-  return `+ ${formatEuro(option.price.amount)}`;
+  return option.price.label
+    ? `+ ${formatEuro(option.price.amount)} ${option.price.label}`
+    : `+ ${formatEuro(option.price.amount)}`;
 }
 
 function OptionCard({
@@ -152,10 +158,28 @@ function SizeCard({
           : "border-[#e7e0d8] bg-white"
       }`}
     >
-      <p className="text-lg font-bold">{size.label}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
+            {size.code}
+          </p>
+          <p className="mt-1 text-lg font-bold">{size.label}</p>
+        </div>
+        {size.surchargePerPerson && (
+          <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-xs font-bold text-[#8a5b10]">
+            + {formatEuro(size.surchargePerPerson)} p.p.
+          </span>
+        )}
+      </div>
       <p className="mt-1 text-sm font-semibold text-[#2d2a26]/55">
-        {size.tiers} etage{size.tiers === 1 ? "" : "s"}
+        {size.personsLabel} · {size.tiers} laag
+        {size.tiers === 1 ? "" : "en"}
       </p>
+      {size.description && (
+        <p className="mt-2 text-sm font-semibold leading-relaxed text-[#2d2a26]/45">
+          {size.description}
+        </p>
+      )}
     </button>
   );
 }
@@ -189,6 +213,13 @@ export default function BruidstaartStudioConfigurator() {
       ),
     [config.styleId]
   );
+  const allowedColors = useMemo(
+    () =>
+      colorOptions.filter((option) =>
+        isOptionAllowedForStyle(option, config.styleId)
+      ),
+    [config.styleId]
+  );
 
   const price = useMemo(() => calculateWeddingCakePrice(config), [config]);
   const labels = useMemo(() => getSelectedWeddingCakeLabels(config), [config]);
@@ -198,10 +229,19 @@ export default function BruidstaartStudioConfigurator() {
     const firstLayout =
       layoutOptions.find((option) => isLayoutAllowedForStyle(option, styleId))
         ?.id || config.layoutId;
+    const firstColor =
+      colorOptions.find((option) => isOptionAllowedForStyle(option, styleId))
+        ?.id || config.colorId;
 
     setConfig((current) => ({
       ...current,
       styleId,
+      colorId: isOptionAllowedForStyle(
+        findOption(colorOptions, current.colorId) || colorOptions[0],
+        styleId
+      )
+        ? current.colorId
+        : firstColor,
       layoutId: isLayoutAllowedForStyle(
         findOption(layoutOptions, current.layoutId) || layoutOptions[0],
         styleId
@@ -310,7 +350,7 @@ export default function BruidstaartStudioConfigurator() {
 
           {step.id === "kleur" && (
             <div className="grid gap-3 sm:grid-cols-2">
-              {colorOptions.map((option) => (
+              {allowedColors.map((option) => (
                 <OptionCard
                   key={option.id}
                   option={option}

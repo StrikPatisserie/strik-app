@@ -8,7 +8,13 @@ import {
   tastingOption,
   topperOptions,
 } from "./data";
-import { Price, PriceLine, PriceSummary, StudioOption, WeddingCakeConfig } from "./types";
+import {
+  Price,
+  PriceLine,
+  PriceSummary,
+  StudioOption,
+  WeddingCakeConfig,
+} from "./types";
 
 export function formatEuro(amount: number) {
   return new Intl.NumberFormat("nl-NL", {
@@ -35,7 +41,9 @@ function getPriceLabel(price: Price, persons: number) {
   if (price.mode === "included") return "inbegrepen";
   if (price.mode === "quote") return "op aanvraag";
 
-  return formatEuro(price.amount);
+  return price.label
+    ? `${formatEuro(price.amount)} ${price.label}`
+    : formatEuro(price.amount);
 }
 
 function optionToLine(option: StudioOption, persons: number): PriceLine {
@@ -68,6 +76,15 @@ export function calculateWeddingCakePrice(
       amount: style.basePricePerPerson * size.persons,
     },
   ];
+
+  if (size.surchargePerPerson) {
+    lines.push({
+      label: `Kleine bruidstaart toeslag (${formatEuro(
+        size.surchargePerPerson
+      )} p.p. x ${size.persons})`,
+      amount: size.surchargePerPerson * size.persons,
+    });
+  }
 
   [filling, color, layout, ...decorations, topper]
     .filter((option): option is StudioOption => Boolean(option))
@@ -103,7 +120,11 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
 
   return {
     style: style?.label || "",
-    size: size ? `${size.label}, ${size.tiers} etage${size.tiers === 1 ? "" : "s"}` : "",
+    size: size
+      ? `${size.code} - ${size.label} (${size.personsLabel}), ${size.tiers} laag${
+          size.tiers === 1 ? "" : "en"
+        }`
+      : "",
     filling: filling?.label || "",
     color: color?.label || "",
     layout: layout?.label || "",
@@ -134,7 +155,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
     "",
     "Taart",
     `Stijl: ${labels.style}`,
-    `Formaat: ${labels.size}`,
+    `Formaat/opbouw: ${labels.size}`,
     `Smaak/vulling: ${labels.filling}`,
     `Kleur: ${labels.color}`,
     `Layout: ${labels.layout}`,

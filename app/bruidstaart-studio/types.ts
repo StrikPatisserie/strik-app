@@ -23,10 +23,13 @@ export type CakeStyle = StudioOption & {
 
 export type CakeSize = {
   id: string;
+  code: string;
   label: string;
   persons: number;
+  personsLabel: string;
   tiers: number;
   description?: string;
+  surchargePerPerson?: number;
 };
 
 export type ContactDetails = {
