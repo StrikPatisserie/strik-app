@@ -133,6 +133,15 @@ function sizeCompositionText(sizeId: string) {
     .join(" + ");
 }
 
+function sizeIconZoom(sizeId: string) {
+  if (sizeId.startsWith("small")) return 2.2;
+  if (sizeId === "s1a") return 2.15;
+  if (["s2f", "s2g", "s3a"].includes(sizeId)) return 1.45;
+  if (sizeId === "s3b") return 1.18;
+
+  return 1.8;
+}
+
 function OptionCard({
   option,
   selected,
@@ -195,41 +204,40 @@ function SizeCard({
     <button
       type="button"
       onClick={onClick}
-      className={`grid min-h-48 gap-3 rounded-[1.4rem] border p-4 text-left shadow-sm transition active:scale-[0.99] ${
+      className={`flex min-h-[17rem] min-w-0 flex-col gap-3 overflow-hidden rounded-[1.4rem] border p-4 text-left shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184] active:scale-[0.99] ${
         selected
           ? "border-[#8fb184] bg-[#dce8d6]"
           : "border-[#e7e0d8] bg-white"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex min-h-8 items-start justify-between gap-2">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
           {size.code}
         </p>
         {size.surchargePerPerson && (
-          <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-xs font-bold text-[#8a5b10]">
+          <span className="max-w-28 shrink-0 rounded-full bg-white/70 px-3 py-1 text-right text-xs font-bold leading-tight text-[#8a5b10]">
             + {formatEuro(size.surchargePerPerson)} p.p.
           </span>
         )}
       </div>
-      <div className="flex items-center gap-4">
-        <div className="flex h-24 w-28 shrink-0 items-center justify-center rounded-2xl bg-white/75 p-2">
-          <Image
-            src={size.iconPath}
-            alt=""
-            width={112}
-            height={96}
-            className="h-full w-full object-contain"
-          />
-        </div>
-        <div className="min-w-0">
-          <p className="text-xl font-black leading-tight">{size.label}</p>
-          <p className="mt-1 text-lg font-black leading-tight text-[#2d2a26]/65">
-            {size.personsLabel}
-          </p>
-          <p className="mt-2 text-sm font-bold leading-relaxed text-[#2d2a26]/45">
-            {sizeCompositionText(size.id)}
-          </p>
-        </div>
+      <div className="flex h-28 w-full items-center justify-center overflow-hidden rounded-2xl bg-white/75 p-3">
+        <Image
+          src={size.iconPath}
+          alt=""
+          width={220}
+          height={140}
+          className="h-full w-full object-contain"
+          style={{ transform: `scale(${sizeIconZoom(size.id)})` }}
+        />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xl font-black leading-tight">{size.label}</p>
+        <p className="mt-1 text-lg font-black leading-tight text-[#2d2a26]/65">
+          {size.personsLabel}
+        </p>
+        <p className="mt-2 text-xs font-bold leading-relaxed text-[#2d2a26]/45">
+          {sizeCompositionText(size.id)}
+        </p>
       </div>
     </button>
   );
@@ -459,13 +467,14 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           />
         )}
       </div>
-      <div className="mb-3 flex items-center justify-center rounded-2xl bg-white p-3">
+      <div className="mb-3 flex h-32 items-center justify-center overflow-hidden rounded-2xl bg-white p-3">
         <Image
           src={size.iconPath}
           alt=""
-          width={180}
-          height={105}
-          className="h-24 w-full object-contain"
+          width={260}
+          height={160}
+          className="h-full w-full object-contain"
+          style={{ transform: `scale(${sizeIconZoom(size.id)})` }}
         />
       </div>
       <svg
