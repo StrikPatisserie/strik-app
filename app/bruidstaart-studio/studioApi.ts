@@ -61,6 +61,12 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
       layerFillingIds: isRecord(config.layerFillingIds)
         ? (config.layerFillingIds as Record<string, string>)
         : {},
+      layerColorIds: isRecord(config.layerColorIds)
+        ? (config.layerColorIds as Record<string, string>)
+        : {},
+      layerLayoutIds: isRecord(config.layerLayoutIds)
+        ? (config.layerLayoutIds as Record<string, string>)
+        : {},
       topperIds: Array.isArray(config.topperIds)
         ? config.topperIds.filter((id): id is string => typeof id === "string")
         : ["geen"],

@@ -81,6 +81,28 @@ export function getLayerFilling(
   );
 }
 
+export function getLayerColor(
+  config: WeddingCakeConfig,
+  layerId: string
+): StudioOption {
+  return (
+    findOption(colorOptions, config.layerColorIds?.[layerId]) ||
+    findOption(colorOptions, config.colorId) ||
+    colorOptions[0]
+  );
+}
+
+export function getLayerLayout(
+  config: WeddingCakeConfig,
+  layerId: string
+): StudioOption {
+  return (
+    findOption(layoutOptions, config.layerLayoutIds?.[layerId]) ||
+    findOption(layoutOptions, config.layoutId) ||
+    layoutOptions[0]
+  );
+}
+
 function fillingLinesForConfig(config: WeddingCakeConfig): PriceLine[] {
   const layers = getCakeLayers(config);
 
@@ -95,6 +117,29 @@ function fillingLinesForConfig(config: WeddingCakeConfig): PriceLine[] {
         } (${getPriceLabel(filling.price, layer.persons)})`,
         amount: getPriceAmount(filling.price, layer.persons),
         quote: filling.price.mode === "quote",
+      },
+    ];
+  });
+}
+
+function layerOptionLinesForConfig(
+  config: WeddingCakeConfig,
+  getOption: (config: WeddingCakeConfig, layerId: string) => StudioOption,
+  label: string
+): PriceLine[] {
+  const layers = getCakeLayers(config);
+
+  return layers.flatMap((layer) => {
+    const option = getOption(config, layer.id);
+    if (option.price.mode === "included") return [];
+
+    return [
+      {
+        label: `${label} ${layer.label} ${layer.personsLabel}: ${
+          option.label
+        } (${getPriceLabel(option.price, layer.persons)})`,
+        amount: getPriceAmount(option.price, layer.persons),
+        quote: option.price.mode === "quote",
       },
     ];
   });
@@ -115,13 +160,29 @@ export function getSelectedFillingSummary(config: WeddingCakeConfig) {
     .join("; ");
 }
 
+function getSelectedLayerOptionSummary(
+  config: WeddingCakeConfig,
+  getOption: (config: WeddingCakeConfig, layerId: string) => StudioOption
+) {
+  const layers = getCakeLayers(config);
+
+  if (layers.length <= 1) {
+    return getOption(config, layers[0].id).label;
+  }
+
+  return layers
+    .map((layer) => {
+      const option = getOption(config, layer.id);
+      return `${layer.label} (${layer.personsLabel}): ${option.label}`;
+    })
+    .join("; ");
+}
+
 export function calculateWeddingCakePrice(
   config: WeddingCakeConfig
 ): PriceSummary {
   const style = findOption(cakeStyles, config.styleId) || cakeStyles[0];
   const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
-  const color = findOption(colorOptions, config.colorId);
-  const layout = findOption(layoutOptions, config.layoutId);
   const toppers = config.topperIds.flatMap((id) => {
     const topper = findOption(topperOptions, id);
     return topper ? [topper] : [];
@@ -150,8 +211,14 @@ export function calculateWeddingCakePrice(
   }
 
   fillingLinesForConfig(config).forEach((line) => lines.push(line));
+  layerOptionLinesForConfig(config, getLayerColor, "Kleur").forEach((line) =>
+    lines.push(line)
+  );
+  layerOptionLinesForConfig(config, getLayerLayout, "Layout").forEach((line) =>
+    lines.push(line)
+  );
 
-  [color, layout, ...decorations, ...toppers]
+  [...decorations, ...toppers]
     .filter((option): option is StudioOption => Boolean(option))
     .forEach((option) => {
       if (option.price.mode === "included") return;
@@ -174,8 +241,6 @@ export function calculateWeddingCakePrice(
 export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   const style = findOption(cakeStyles, config.styleId);
   const size = findOption(cakeSizes, config.sizeId);
-  const color = findOption(colorOptions, config.colorId);
-  const layout = findOption(layoutOptions, config.layoutId);
   const toppers = config.topperIds.flatMap((id) => {
     const topper = findOption(topperOptions, id);
     return topper ? [topper.label] : [];
@@ -193,8 +258,8 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
         }`
       : "",
     filling: getSelectedFillingSummary(config),
-    color: color?.label || "",
-    layout: layout?.label || "",
+    color: getSelectedLayerOptionSummary(config, getLayerColor),
+    layout: getSelectedLayerOptionSummary(config, getLayerLayout),
     decorations,
     topper: toppers.length ? toppers.join(", ") : "Geen topper",
     tasting: config.tasting ? tastingOption.label : "Nee",

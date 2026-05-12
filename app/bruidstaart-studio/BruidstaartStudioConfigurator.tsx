@@ -21,7 +21,9 @@ import {
   findOption,
   formatEuro,
   getCakeLayers,
+  getLayerColor,
   getLayerFilling,
+  getLayerLayout,
   getSelectedWeddingCakeLabels,
 } from "./pricing";
 import {
@@ -33,7 +35,12 @@ import {
   searchLocalDrafts,
   WeddingCakeDraft,
 } from "./studioApi";
-import { ContactDetails, StudioOption, WeddingCakeConfig } from "./types";
+import {
+  CakeLayer,
+  ContactDetails,
+  StudioOption,
+  WeddingCakeConfig,
+} from "./types";
 
 const STRIK_STUDIO_EMAIL = "info@strik-patisserie.nl";
 
@@ -69,12 +76,13 @@ const steps: { id: StepId; title: string; description: string }[] = [
   {
     id: "kleur",
     title: "Kleur",
-    description: "Kies een kleur uit de waaier. Exacte tint stemmen we later af.",
+    description:
+      "Kies per laag de kleur. Exacte tint stemmen we later af.",
   },
   {
     id: "layout",
-    title: "Layout",
-    description: "Kies de opbouw die past bij de gekozen stijl.",
+    title: "Layout per laag",
+    description: "Kies per laag de afwerking, zoals strak of chesterfield.",
   },
   {
     id: "decoratie",
@@ -243,49 +251,74 @@ function SizeCard({
   );
 }
 
-function ColorSwatchGrid({
+function optionSelectLabel(option: StudioOption) {
+  if (option.price.mode === "included") return option.label;
+  if (option.price.mode === "quote") return `${option.label} (op aanvraag)`;
+  if (option.price.mode === "perPerson") {
+    return `${option.label} (+ ${formatEuro(option.price.amount)} p.p.)`;
+  }
+
+  return option.price.label
+    ? `${option.label} (+ ${formatEuro(option.price.amount)} ${
+        option.price.label
+      })`
+    : `${option.label} (+ ${formatEuro(option.price.amount)})`;
+}
+
+function LayerOptionSelectGrid({
+  layers,
   options,
-  selectedId,
-  onSelect,
+  valueForLayer,
+  onChange,
 }: {
+  layers: CakeLayer[];
   options: StudioOption[];
-  selectedId: string;
-  onSelect: (id: string) => void;
+  valueForLayer: (layerId: string) => string;
+  onChange: (layerId: string, optionId: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))] gap-2">
-      {options.map((option) => {
-        const selected = selectedId === option.id;
+    <div className="grid gap-3">
+      {layers.map((layer) => {
+        const selected =
+          findOption(options, valueForLayer(layer.id)) || options[0];
 
         return (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => onSelect(option.id)}
-            className={`flex min-h-16 min-w-0 items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184] active:scale-[0.99] ${
-              selected
-                ? "border-[#8fb184] bg-[#dce8d6]"
-                : "border-[#e7e0d8] bg-white"
-            }`}
+          <label
+            key={layer.id}
+            className="rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 shadow-sm"
           >
-            <span
-              className="h-8 w-8 shrink-0 rounded-full border-2 shadow-inner"
-              style={{
-                backgroundColor: option.swatchColor || "#fff",
-                borderColor: option.swatchBorder || "rgba(45, 42, 38, 0.12)",
-              }}
-            />
-            <span className="min-w-0">
-              <span className="block text-sm font-black leading-tight [overflow-wrap:anywhere]">
-                {option.label}
-              </span>
-              {selected && (
-                <span className="mt-1 block text-xs font-bold text-[#2d2a26]/45">
-                  gekozen
-                </span>
+            <span className="flex items-center gap-3">
+              {selected?.swatchColor && (
+                <span
+                  className="h-10 w-10 shrink-0 rounded-full border-2 shadow-inner"
+                  style={{
+                    backgroundColor: selected.swatchColor,
+                    borderColor:
+                      selected.swatchBorder || "rgba(45, 42, 38, 0.12)",
+                  }}
+                />
               )}
+              <span className="min-w-0">
+                <span className="block text-sm font-black leading-tight">
+                  {layer.label}
+                </span>
+                <span className="mt-0.5 block text-xs font-bold text-[#2d2a26]/45">
+                  {layer.personsLabel}
+                </span>
+              </span>
             </span>
-          </button>
+            <select
+              value={selected?.id || ""}
+              onChange={(event) => onChange(layer.id, event.target.value)}
+              className="mt-3 w-full rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+            >
+              {options.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {optionSelectLabel(option)}
+                </option>
+              ))}
+            </select>
+          </label>
         );
       })}
     </div>
@@ -294,9 +327,12 @@ function ColorSwatchGrid({
 
 function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
-  const layout = findOption(layoutOptions, config.layoutId);
-  const color = findOption(colorOptions, config.colorId);
   const layers = getCakeLayers(config);
+  const layerColors = layers.map((layer) => getLayerColor(config, layer.id));
+  const uniqueLayerColors = layerColors.filter(
+    (option, index, items) =>
+      items.findIndex((item) => item.id === option.id) === index
+  );
   const maxPersons = Math.max(...layers.map((layer) => layer.persons), 1);
   const selectedDecorations = new Set(config.decorationIds);
   const selectedToppers = new Set(config.topperIds);
@@ -312,8 +348,14 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     return bottomY - (index + 1) * layerHeight - index * gap;
   }
 
-  function patternForLayer(index: number, x: number, y: number, width: number) {
-    const key = layout?.id || "";
+  function patternForLayer(
+    index: number,
+    x: number,
+    y: number,
+    width: number,
+    layoutId: string
+  ) {
+    const key = layoutId;
     const center = x + width / 2;
 
     if (key.includes("chesterfield")) {
@@ -456,15 +498,22 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             {size.label} · {size.personsLabel}
           </p>
         </div>
-        {color?.swatchColor && (
-          <span
-            className="h-9 w-9 shrink-0 rounded-full border-2"
-            style={{
-              backgroundColor: color.swatchColor,
-              borderColor: color.swatchBorder || "rgba(45, 42, 38, 0.18)",
-            }}
-            title={color.label}
-          />
+        {uniqueLayerColors.length > 0 && (
+          <div className="flex shrink-0 -space-x-2">
+            {uniqueLayerColors.slice(0, 4).map((color) => (
+              <span
+                key={color.id}
+                className="h-8 w-8 rounded-full border-2 border-white shadow-sm"
+                style={{
+                  backgroundColor: color.swatchColor || "#fff",
+                  outline: `1px solid ${
+                    color.swatchBorder || "rgba(45, 42, 38, 0.18)"
+                  }`,
+                }}
+                title={color.label}
+              />
+            ))}
+          </div>
         )}
       </div>
       <svg
@@ -483,6 +532,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           const width = layerWidth(layer.persons);
           const x = (260 - width) / 2;
           const y = layerY(index);
+          const layerColor = getLayerColor(config, layer.id);
+          const layerLayout = getLayerLayout(config, layer.id);
 
           return (
             <g key={layer.id}>
@@ -492,11 +543,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 width={width}
                 height={layerHeight}
                 rx="5"
-                fill="#fff"
+                fill={layerColor.swatchColor || "#fff"}
+                fillOpacity={layerColor.swatchColor ? "0.68" : "1"}
                 stroke="currentColor"
                 strokeWidth="2"
               />
-              {patternForLayer(index, x, y, width)}
+              {patternForLayer(index, x, y, width, layerLayout.id)}
               <text
                 x={130}
                 y={y + 12.5}
@@ -652,9 +704,11 @@ export default function BruidstaartStudioConfigurator() {
   const productionForm = useMemo(() => createProductionForm(config), [config]);
   const activeLayers = useMemo(() => getCakeLayers(config), [config]);
 
-  function layerFillingIdsForSize(
+  function layerOptionIdsForSize(
     sizeId: string,
-    current: WeddingCakeConfig
+    current: WeddingCakeConfig,
+    optionIds: Record<string, string> | undefined,
+    fallbackId: string
   ) {
     const size = findOption(cakeSizes, sizeId) || cakeSizes[0];
     const currentLayers = getCakeLayers(current);
@@ -662,15 +716,62 @@ export default function BruidstaartStudioConfigurator() {
     return Object.fromEntries(
       size.layers.map((layer, index) => {
         const currentLayer = currentLayers[index];
-        const fillingId =
-          current.layerFillingIds?.[layer.id] ||
-          (currentLayer
-            ? current.layerFillingIds?.[currentLayer.id]
-            : undefined) ||
-          current.fillingId ||
-          fillingOptions[0].id;
+        const optionId =
+          optionIds?.[layer.id] ||
+          (currentLayer ? optionIds?.[currentLayer.id] : undefined) ||
+          fallbackId;
 
-        return [layer.id, fillingId];
+        return [layer.id, optionId];
+      })
+    );
+  }
+
+  function layerFillingIdsForSize(
+    sizeId: string,
+    current: WeddingCakeConfig
+  ) {
+    return layerOptionIdsForSize(
+      sizeId,
+      current,
+      current.layerFillingIds,
+      current.fillingId || fillingOptions[0].id
+    );
+  }
+
+  function layerColorIdsForSize(sizeId: string, current: WeddingCakeConfig) {
+    return layerOptionIdsForSize(
+      sizeId,
+      current,
+      current.layerColorIds,
+      current.colorId || allowedColors[0]?.id || colorOptions[0].id
+    );
+  }
+
+  function layerLayoutIdsForSize(sizeId: string, current: WeddingCakeConfig) {
+    return layerOptionIdsForSize(
+      sizeId,
+      current,
+      current.layerLayoutIds,
+      current.layoutId || allowedLayouts[0]?.id || layoutOptions[0].id
+    );
+  }
+
+  function normalizeLayerOptionIdsForStyle(
+    layers: CakeLayer[],
+    optionIds: Record<string, string> | undefined,
+    fallbackId: string,
+    options: StudioOption[],
+    styleId: WeddingCakeConfig["styleId"]
+  ) {
+    return Object.fromEntries(
+      layers.map((layer) => {
+        const option = findOption(options, optionIds?.[layer.id] || fallbackId);
+        const nextId =
+          option && isOptionAllowedForStyle(option, styleId)
+            ? option.id
+            : fallbackId;
+
+        return [layer.id, nextId];
       })
     );
   }
@@ -680,6 +781,8 @@ export default function BruidstaartStudioConfigurator() {
       ...current,
       sizeId,
       layerFillingIds: layerFillingIdsForSize(sizeId, current),
+      layerColorIds: layerColorIdsForSize(sizeId, current),
+      layerLayoutIds: layerLayoutIdsForSize(sizeId, current),
     }));
   }
 
@@ -694,30 +797,71 @@ export default function BruidstaartStudioConfigurator() {
     }));
   }
 
-  function setStyle(styleId: WeddingCakeConfig["styleId"]) {
-    const firstLayout =
-      layoutOptions.find((option) => isLayoutAllowedForStyle(option, styleId))
-        ?.id || config.layoutId;
-    const firstColor =
-      colorOptions.find((option) => isOptionAllowedForStyle(option, styleId))
-        ?.id || config.colorId;
-
+  function setLayerColor(layerId: string, colorId: string) {
     setConfig((current) => ({
       ...current,
-      styleId,
-      colorId: isOptionAllowedForStyle(
+      colorId,
+      layerColorIds: {
+        ...current.layerColorIds,
+        [layerId]: colorId,
+      },
+    }));
+  }
+
+  function setLayerLayout(layerId: string, layoutId: string) {
+    setConfig((current) => ({
+      ...current,
+      layoutId,
+      layerLayoutIds: {
+        ...current.layerLayoutIds,
+        [layerId]: layoutId,
+      },
+    }));
+  }
+
+  function setStyle(styleId: WeddingCakeConfig["styleId"]) {
+    setConfig((current) => {
+      const firstLayout =
+        layoutOptions.find((option) => isLayoutAllowedForStyle(option, styleId))
+          ?.id || current.layoutId;
+      const firstColor =
+        colorOptions.find((option) => isOptionAllowedForStyle(option, styleId))
+          ?.id || current.colorId;
+      const nextColorId = isOptionAllowedForStyle(
         findOption(colorOptions, current.colorId) || colorOptions[0],
         styleId
       )
         ? current.colorId
-        : firstColor,
-      layoutId: isLayoutAllowedForStyle(
+        : firstColor;
+      const nextLayoutId = isLayoutAllowedForStyle(
         findOption(layoutOptions, current.layoutId) || layoutOptions[0],
         styleId
       )
         ? current.layoutId
-        : firstLayout,
-    }));
+        : firstLayout;
+      const layers = getCakeLayers(current);
+
+      return {
+        ...current,
+        styleId,
+        colorId: nextColorId,
+        layoutId: nextLayoutId,
+        layerColorIds: normalizeLayerOptionIdsForStyle(
+          layers,
+          current.layerColorIds,
+          nextColorId,
+          colorOptions,
+          styleId
+        ),
+        layerLayoutIds: normalizeLayerOptionIdsForStyle(
+          layers,
+          current.layerLayoutIds,
+          nextLayoutId,
+          layoutOptions,
+          styleId
+        ),
+      };
+    });
   }
 
   function toggleDecoration(id: string) {
@@ -864,6 +1008,8 @@ export default function BruidstaartStudioConfigurator() {
       ...initialWeddingCakeConfig,
       ...draft.config,
       layerFillingIds: draft.config.layerFillingIds || {},
+      layerColorIds: draft.config.layerColorIds || {},
+      layerLayoutIds: draft.config.layerLayoutIds || {},
       topperIds: draft.config.topperIds?.length ? draft.config.topperIds : ["geen"],
       contact: {
         ...initialWeddingCakeConfig.contact,
@@ -876,6 +1022,8 @@ export default function BruidstaartStudioConfigurator() {
     setConfig({
       ...nextConfig,
       layerFillingIds: layerFillingIdsForSize(nextConfig.sizeId, nextConfig),
+      layerColorIds: layerColorIdsForSize(nextConfig.sizeId, nextConfig),
+      layerLayoutIds: layerLayoutIdsForSize(nextConfig.sizeId, nextConfig),
     });
     setDraftStatus(`Concept ${draft.code} geladen.`);
   }
@@ -1088,34 +1236,21 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "kleur" && (
-            <ColorSwatchGrid
+            <LayerOptionSelectGrid
+              layers={activeLayers}
               options={allowedColors}
-              selectedId={config.colorId}
-              onSelect={(colorId) =>
-                setConfig((current) => ({
-                  ...current,
-                  colorId,
-                }))
-              }
+              valueForLayer={(layerId) => getLayerColor(config, layerId).id}
+              onChange={setLayerColor}
             />
           )}
 
           {step.id === "layout" && (
-            <div className="grid gap-3">
-              {allowedLayouts.map((option) => (
-                <OptionCard
-                  key={option.id}
-                  option={option}
-                  selected={config.layoutId === option.id}
-                  onClick={() =>
-                    setConfig((current) => ({
-                      ...current,
-                      layoutId: option.id,
-                    }))
-                  }
-                />
-              ))}
-            </div>
+            <LayerOptionSelectGrid
+              layers={activeLayers}
+              options={allowedLayouts}
+              valueForLayer={(layerId) => getLayerLayout(config, layerId).id}
+              onChange={setLayerLayout}
+            />
           )}
 
           {step.id === "decoratie" && (
@@ -1400,6 +1535,12 @@ export default function BruidstaartStudioConfigurator() {
             </p>
             <p>
               <span className="font-bold">Smaak:</span> {labels.filling}
+            </p>
+            <p>
+              <span className="font-bold">Kleur:</span> {labels.color}
+            </p>
+            <p>
+              <span className="font-bold">Layout:</span> {labels.layout}
             </p>
             <p>
               <span className="font-bold">Decoratie:</span>{" "}

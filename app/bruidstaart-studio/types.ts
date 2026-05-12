@@ -65,7 +65,9 @@ export type WeddingCakeConfig = {
   fillingId: string;
   layerFillingIds: Record<string, string>;
   colorId: string;
+  layerColorIds: Record<string, string>;
   layoutId: string;
+  layerLayoutIds: Record<string, string>;
   decorationIds: string[];
   topperIds: string[];
   tasting: boolean;
