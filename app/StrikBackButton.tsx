@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const parentRoutes: Record<string, string> = {
   "/agenda": "/winkel",
+  "/bruidstaart-studio": "/winkel",
   "/info": "/winkel",
   "/nieuws": "/winkel",
   "/strik-agenda": "/winkel",

@@ -9,6 +9,14 @@ import WinkelFeaturedCards from "./WinkelFeaturedCards";
 
 const items = [
   {
+    href: "/bruidstaart-studio",
+    label: "Aanvraag",
+    title: "Bruidstaart Studio",
+    description: "Stel een bruidstaart samen als aanvraag.",
+    icon: strikIcons.bruidstaart,
+    tone: "honey" as const,
+  },
+  {
     href: "/agenda",
     label: "Ziekerstraat",
     title: "Bruidstaarten",
