@@ -55,7 +55,7 @@ const steps: { id: StepId; title: string; description: string }[] = [
   {
     id: "kleur",
     title: "Kleur",
-    description: "Kies de basiskleur of noteer later een specifieke wens.",
+    description: "Kies een kleur uit de waaier. Exacte tint stemmen we later af.",
   },
   {
     id: "layout",
@@ -121,13 +121,24 @@ function OptionCard({
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-base font-bold leading-tight">{option.label}</p>
-          {option.description && (
-            <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
-              {option.description}
-            </p>
+        <div className="flex min-w-0 items-start gap-3">
+          {option.swatchColor && (
+            <span
+              className="mt-0.5 h-12 w-12 shrink-0 rounded-full border-2 shadow-inner"
+              style={{
+                backgroundColor: option.swatchColor,
+                borderColor: option.swatchBorder || "rgba(45, 42, 38, 0.12)",
+              }}
+            />
           )}
+          <div className="min-w-0">
+            <p className="text-base font-bold leading-tight">{option.label}</p>
+            {option.description && (
+              <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
+                {option.description}
+              </p>
+            )}
+          </div>
         </div>
         <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-xs font-bold text-[#2d2a26]/55">
           {optionPriceLabel(option)}
@@ -258,6 +269,37 @@ export default function BruidstaartStudioConfigurator() {
         ? current.decorationIds.filter((item) => item !== id)
         : [...current.decorationIds, id],
     }));
+  }
+
+  function toggleTopper(id: string) {
+    const option = findOption(topperOptions, id);
+    if (!option) return;
+
+    setConfig((current) => {
+      if (id === "geen") {
+        return { ...current, topperIds: ["geen"] };
+      }
+
+      const isSelected = current.topperIds.includes(id);
+      let nextIds = current.topperIds.filter((topperId) => topperId !== "geen");
+
+      if (isSelected) {
+        nextIds = nextIds.filter((topperId) => topperId !== id);
+      } else {
+        if (option.selectionGroup && option.selectionGroup !== "extraTopper") {
+          nextIds = nextIds.filter((topperId) => {
+            const existingOption = findOption(topperOptions, topperId);
+            return existingOption?.selectionGroup !== option.selectionGroup;
+          });
+        }
+        nextIds = [...nextIds, id];
+      }
+
+      return {
+        ...current,
+        topperIds: nextIds.length ? nextIds : ["geen"],
+      };
+    });
   }
 
   async function copyProductionForm() {
@@ -403,13 +445,8 @@ export default function BruidstaartStudioConfigurator() {
                 <OptionCard
                   key={option.id}
                   option={option}
-                  selected={config.topperId === option.id}
-                  onClick={() =>
-                    setConfig((current) => ({
-                      ...current,
-                      topperId: option.id,
-                    }))
-                  }
+                  selected={config.topperIds.includes(option.id)}
+                  onClick={() => toggleTopper(option.id)}
                 />
               ))}
             </div>

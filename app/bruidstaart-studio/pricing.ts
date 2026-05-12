@@ -62,7 +62,10 @@ export function calculateWeddingCakePrice(
   const filling = findOption(fillingOptions, config.fillingId);
   const color = findOption(colorOptions, config.colorId);
   const layout = findOption(layoutOptions, config.layoutId);
-  const topper = findOption(topperOptions, config.topperId);
+  const toppers = config.topperIds.flatMap((id) => {
+    const topper = findOption(topperOptions, id);
+    return topper ? [topper] : [];
+  });
   const decorations = config.decorationIds.flatMap((id) => {
     const decoration = findOption(decorationOptions, id);
     return decoration ? [decoration] : [];
@@ -86,7 +89,7 @@ export function calculateWeddingCakePrice(
     });
   }
 
-  [filling, color, layout, ...decorations, topper]
+  [filling, color, layout, ...decorations, ...toppers]
     .filter((option): option is StudioOption => Boolean(option))
     .forEach((option) => {
       if (option.price.mode === "included") return;
@@ -112,7 +115,10 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   const filling = findOption(fillingOptions, config.fillingId);
   const color = findOption(colorOptions, config.colorId);
   const layout = findOption(layoutOptions, config.layoutId);
-  const topper = findOption(topperOptions, config.topperId);
+  const toppers = config.topperIds.flatMap((id) => {
+    const topper = findOption(topperOptions, id);
+    return topper ? [topper.label] : [];
+  });
   const decorations = config.decorationIds.flatMap((id) => {
     const decoration = findOption(decorationOptions, id);
     return decoration ? [decoration.label] : [];
@@ -129,7 +135,7 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
     color: color?.label || "",
     layout: layout?.label || "",
     decorations,
-    topper: topper?.label || "",
+    topper: toppers.length ? toppers.join(", ") : "Geen topper",
     tasting: config.tasting ? tastingOption.label : "Nee",
   };
 }

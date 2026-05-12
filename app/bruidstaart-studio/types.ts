@@ -14,6 +14,9 @@ export type StudioOption = {
   description?: string;
   price: Price;
   allowedStyles?: CakeStyleId[];
+  swatchColor?: string;
+  swatchBorder?: string;
+  selectionGroup?: "none" | "mainTopper" | "initials" | "extraTopper";
 };
 
 export type CakeStyle = StudioOption & {
@@ -51,7 +54,7 @@ export type WeddingCakeConfig = {
   colorId: string;
   layoutId: string;
   decorationIds: string[];
-  topperId: string;
+  topperIds: string[];
   tasting: boolean;
   contact: ContactDetails;
 };
