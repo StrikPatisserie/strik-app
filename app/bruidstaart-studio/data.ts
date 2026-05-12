@@ -618,12 +618,6 @@ export const decorationOptions: StudioOption[] = [
 
 export const topperOptions: StudioOption[] = [
   {
-    id: "geen",
-    label: "Geen topper",
-    price: { mode: "included", amount: 0 },
-    selectionGroup: "none",
-  },
-  {
     id: "bruidspaartje",
     label: "Bruidspaartje",
     price: { mode: "fixed", amount: 10, label: "per taart" },
@@ -696,7 +690,7 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   layoutId: "klassiek-strak",
   layerLayoutIds: {},
   decorationIds: [],
-  topperIds: ["geen"],
+  topperIds: [],
   tasting: false,
   contact: emptyContactDetails,
 };

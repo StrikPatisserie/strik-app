@@ -68,8 +68,10 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
         ? (config.layerLayoutIds as Record<string, string>)
         : {},
       topperIds: Array.isArray(config.topperIds)
-        ? config.topperIds.filter((id): id is string => typeof id === "string")
-        : ["geen"],
+        ? config.topperIds.filter(
+            (id): id is string => typeof id === "string" && id !== "geen"
+          )
+        : [],
       contact: {
         ...config.contact,
         recognitionCode: textFrom(contact.recognitionCode) || code,

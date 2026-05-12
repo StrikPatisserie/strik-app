@@ -167,6 +167,26 @@ function cakeDecorationAsset(layoutId: string) {
   return "";
 }
 
+function topperDecorationAsset(topperId: string) {
+  if (topperId === "bruidspaartje") {
+    return "/decoratie%20opties_bruidspaartje.svg";
+  }
+  if (topperId === "topper-karton" || topperId === "topper-zelf-aanleveren") {
+    return "/decoratie%20opties_topper%20karton.svg";
+  }
+  if (
+    topperId === "chocolade-initialen-geschreven" ||
+    topperId === "chocolade-initialen-schildje"
+  ) {
+    return "/decoratie%20opties_chocolade%20initialen.svg";
+  }
+  if (topperId === "marsepeinen-ringen") {
+    return "/decoratie%20opties_marsepein%20ringen.svg";
+  }
+
+  return "";
+}
+
 function OptionCard({
   option,
   selected,
@@ -354,12 +374,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const maxPersons = Math.max(...layers.map((layer) => layer.persons), 1);
   const selectedDecorations = new Set(config.decorationIds);
   const selectedToppers = new Set(config.topperIds);
-  const bottomY = 170;
-  const layerHeight = 18;
-  const gap = 5;
+  const bottomY = 248;
+  const layerHeight = 28;
+  const gap = 8;
 
   function layerWidth(persons: number) {
-    return 74 + (persons / maxPersons) * 130;
+    return 62 + (persons / maxPersons) * 118;
   }
 
   function layerY(index: number) {
@@ -381,14 +401,15 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       const clipId = `${visualizerId}-cake-layer-pattern-${index}`;
 
       return (
-        <g clipPath={`url(#${clipId})`} opacity="0.95">
+        <g clipPath={`url(#${clipId})`}>
           <image
             href={decorationAsset}
             x={x}
-            y={y - 1}
+            y={y - 2}
             width={width}
-            height={layerHeight + 2}
+            height={layerHeight + 4}
             preserveAspectRatio="none"
+            filter={`url(#${visualizerId}-white-chocolate-outline)`}
           />
         </g>
       );
@@ -519,9 +540,15 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     selectedDecorations.has("echte-bloemen") ||
     selectedDecorations.has("marsepeinrozen-zonder-blad") ||
     selectedDecorations.has("marsepeinrozen-met-blad");
-  const hasMainTopper = ["bruidspaartje", "topper-karton", "topper-zelf-aanleveren"].some(
-    (id) => selectedToppers.has(id)
-  );
+  const selectedMainTopperId = [
+    "bruidspaartje",
+    "topper-karton",
+    "topper-zelf-aanleveren",
+  ].find((id) => selectedToppers.has(id));
+  const selectedInitialsId = [
+    "chocolade-initialen-geschreven",
+    "chocolade-initialen-schildje",
+  ].find((id) => selectedToppers.has(id));
 
   function layerDecorationPoints(width: number, spacing: number, max: number) {
     const count = Math.max(2, Math.min(max, Math.floor(width / spacing)));
@@ -658,11 +685,26 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         )}
       </div>
       <svg
-        viewBox="0 0 260 205"
+        viewBox="0 0 260 280"
         className="h-auto w-full text-[#1f1d1a]"
         aria-label="Bruidstaart visualisatie"
       >
         <defs>
+          <filter
+            id={`${visualizerId}-white-chocolate-outline`}
+            x="-16%"
+            y="-60%"
+            width="132%"
+            height="220%"
+          >
+            <feDropShadow
+              dx="0"
+              dy="0"
+              stdDeviation="0.7"
+              floodColor="#2d2a26"
+              floodOpacity="0.38"
+            />
+          </filter>
           {layers.map((layer, index) => {
             const width = layerWidth(layer.persons);
             const x = (260 - width) / 2;
@@ -679,7 +721,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           })}
         </defs>
         <path
-          d="M 37 181 C 82 190, 180 190, 223 181"
+          d="M 40 265 C 82 276, 178 276, 220 265"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -701,7 +743,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 height={layerHeight}
                 rx="5"
                 fill={layerColor.swatchColor || "#fff"}
-                fillOpacity={layerColor.swatchColor ? "0.82" : "1"}
+                fillOpacity={layerColor.swatchColor ? "0.9" : "1"}
                 stroke="currentColor"
                 strokeWidth="2"
               />
@@ -709,7 +751,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               {renderLayerDecorations(layer.id, index, x, y, width)}
               <text
                 x={130}
-                y={y + 12.5}
+                y={y + layerHeight / 2 + 2.5}
                 textAnchor="middle"
                 fontSize="7"
                 fontWeight="700"
@@ -722,42 +764,36 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           );
         })}
 
-        {hasMainTopper && (
-          <g transform={`translate(${130} ${topY - 28})`}>
-            <path
-              d="M -16 18 L 16 18 M -10 18 L -10 2 L 10 2 L 10 18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <path
-              d="M -3 2 C -12 -8 -22 5 -3 14 C 16 5 6 -8 -3 2"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-          </g>
+        {selectedMainTopperId && (
+          <image
+            href={topperDecorationAsset(selectedMainTopperId)}
+            x={100}
+            y={Math.max(4, topY - 42)}
+            width="60"
+            height="42"
+            preserveAspectRatio="xMidYMid meet"
+          />
         )}
 
-        {selectedToppers.has("chocolade-initialen-geschreven") && (
-          <text x="130" y={topY - 10} textAnchor="middle" fontSize="14" fontWeight="800">
-            Initialen
-          </text>
-        )}
-        {selectedToppers.has("chocolade-initialen-schildje") && (
-          <g transform={`translate(${130} ${topY - 17})`}>
-            <rect x="-24" y="-10" width="48" height="18" rx="6" fill="#fff" stroke="currentColor" />
-            <text x="0" y="3" textAnchor="middle" fontSize="8" fontWeight="800">
-              Initialen
-            </text>
-          </g>
+        {selectedInitialsId && (
+          <image
+            href={topperDecorationAsset(selectedInitialsId)}
+            x={106}
+            y={topY - 22}
+            width="48"
+            height="24"
+            preserveAspectRatio="xMidYMid meet"
+          />
         )}
         {selectedToppers.has("marsepeinen-ringen") && (
-          <g transform={`translate(${topX + topWidth - 34} ${topY - 10})`}>
-            <circle cx="0" cy="0" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
-            <circle cx="10" cy="1" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
-          </g>
+          <image
+            href={topperDecorationAsset("marsepeinen-ringen")}
+            x={topX + topWidth - 46}
+            y={topY - 24}
+            width="42"
+            height="28"
+            preserveAspectRatio="xMidYMid meet"
+          />
         )}
       </svg>
       <p className="mt-2 text-xs font-bold leading-relaxed text-[#2d2a26]/50">
@@ -988,10 +1024,6 @@ export default function BruidstaartStudioConfigurator() {
     if (!option) return;
 
     setConfig((current) => {
-      if (id === "geen") {
-        return { ...current, topperIds: ["geen"] };
-      }
-
       const isSelected = current.topperIds.includes(id);
       let nextIds = current.topperIds.filter((topperId) => topperId !== "geen");
 
@@ -1009,7 +1041,7 @@ export default function BruidstaartStudioConfigurator() {
 
       return {
         ...current,
-        topperIds: nextIds.length ? nextIds : ["geen"],
+        topperIds: nextIds,
       };
     });
   }
@@ -1120,7 +1152,7 @@ export default function BruidstaartStudioConfigurator() {
       layerFillingIds: draft.config.layerFillingIds || {},
       layerColorIds: draft.config.layerColorIds || {},
       layerLayoutIds: draft.config.layerLayoutIds || {},
-      topperIds: draft.config.topperIds?.length ? draft.config.topperIds : ["geen"],
+      topperIds: (draft.config.topperIds || []).filter((id) => id !== "geen"),
       contact: {
         ...initialWeddingCakeConfig.contact,
         ...draft.config.contact,
