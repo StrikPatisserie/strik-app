@@ -31,6 +31,13 @@ export function getWeddingCakeStudioUrl(search?: string, deliveryDate?: string) 
   return url;
 }
 
+export function getWeddingCakeDeleteUrl(code: string) {
+  const url = getWeddingCakeStudioUrl();
+  url.searchParams.set("code", code.trim());
+
+  return url;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -136,6 +143,17 @@ export function saveLocalDraft(draft: WeddingCakeDraft) {
       (item) => item.code.toLowerCase() !== draft.code.toLowerCase()
     ),
   ].slice(0, 100);
+
+  window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(nextDrafts));
+}
+
+export function deleteLocalDraft(code: string) {
+  if (typeof window === "undefined") return;
+
+  const normalizedCode = code.trim().toLowerCase();
+  const nextDrafts = loadLocalDrafts().filter(
+    (item) => item.code.toLowerCase() !== normalizedCode
+  );
 
   window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(nextDrafts));
 }

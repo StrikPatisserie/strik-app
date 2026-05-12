@@ -5,6 +5,7 @@
  * Plaats deze snippet in WordPress. De app gebruikt:
  * GET /wp-json/strik/v1/wedding-cakes?key=...&search=JANSEN&deliveryDate=2026-05-12
  * PUT /wp-json/strik/v1/wedding-cakes?key=...
+ * DELETE /wp-json/strik/v1/wedding-cakes?key=...&code=BRUID123
  */
 
 if (!defined('STRIK_WEDDING_CAKE_API_KEY')) {
@@ -192,6 +193,46 @@ function strik_wedding_cakes_save($request) {
 }
 }
 
+if (!function_exists('strik_wedding_cakes_delete')) {
+function strik_wedding_cakes_delete($request) {
+    $code = strik_wedding_cakes_text($request->get_param('code'));
+
+    if ($code === '') {
+        $params = $request->get_json_params();
+        if (is_array($params) && isset($params['code'])) {
+            $code = strik_wedding_cakes_text($params['code']);
+        }
+    }
+
+    if ($code === '') {
+        return new WP_Error(
+            'strik_wedding_cakes_missing_code',
+            'Herkenningscode is verplicht om te verwijderen.',
+            array('status' => 400)
+        );
+    }
+
+    $drafts = strik_wedding_cakes_get_all();
+    $storage_key = sanitize_key(strtolower($code));
+
+    if (!isset($drafts[$storage_key])) {
+        return rest_ensure_response(array(
+            'deleted' => false,
+            'code' => $code,
+            'message' => 'Concept niet gevonden.',
+        ));
+    }
+
+    unset($drafts[$storage_key]);
+    update_option('strik_wedding_cake_drafts', $drafts, false);
+
+    return rest_ensure_response(array(
+        'deleted' => true,
+        'code' => $code,
+    ));
+}
+}
+
 add_action('rest_api_init', function () {
     register_rest_route('strik/v1', '/wedding-cakes', array(
         array(
@@ -202,6 +243,11 @@ add_action('rest_api_init', function () {
         array(
             'methods' => WP_REST_Server::EDITABLE,
             'callback' => 'strik_wedding_cakes_save',
+            'permission_callback' => 'strik_wedding_cakes_permission',
+        ),
+        array(
+            'methods' => WP_REST_Server::DELETABLE,
+            'callback' => 'strik_wedding_cakes_delete',
             'permission_callback' => 'strik_wedding_cakes_permission',
         ),
     ));

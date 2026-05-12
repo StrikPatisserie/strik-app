@@ -31,6 +31,8 @@ import {
 } from "./pricing";
 import {
   createDraftFromConfig,
+  deleteLocalDraft,
+  getWeddingCakeDeleteUrl,
   getWeddingCakeStudioUrl,
   normalizeDraft,
   normalizeDraftList,
@@ -1468,6 +1470,39 @@ export default function BruidstaartStudioConfigurator() {
     setDraftStatus(`Concept ${draft.code} geladen.`);
   }
 
+  async function deleteDraft(draft: WeddingCakeDraft) {
+    const confirmed = window.confirm(
+      `Concept ${draft.code} verwijderen? Dit kan niet ongedaan gemaakt worden.`
+    );
+
+    if (!confirmed) return;
+
+    const removeDraftFromScreen = () => {
+      deleteLocalDraft(draft.code);
+      setDraftResults((current) =>
+        current.filter(
+          (item) => item.code.toLowerCase() !== draft.code.toLowerCase()
+        )
+      );
+    };
+
+    try {
+      const res = await fetch(getWeddingCakeDeleteUrl(draft.code), {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("WordPress verwijderen niet beschikbaar.");
+
+      removeDraftFromScreen();
+      setDraftStatus(`Concept ${draft.code} verwijderd.`);
+    } catch {
+      removeDraftFromScreen();
+      setDraftStatus(
+        "Concept is lokaal verwijderd. Werk de WordPress snippet bij om ook op elk device te kunnen verwijderen."
+      );
+    }
+  }
+
   const canGoBack = stepIndex > 0;
   const canGoNext = stepIndex < steps.length - 1;
 
@@ -1579,21 +1614,33 @@ export default function BruidstaartStudioConfigurator() {
             {draftResults.length > 0 && (
               <div className="mt-3 grid gap-2">
                 {draftResults.map((draft) => (
-                  <button
+                  <div
                     key={`${draft.code}-${draft.updatedAt}`}
-                    type="button"
-                    onClick={() => loadDraft(draft)}
-                    className="rounded-2xl border border-[#ead8aa] bg-white p-3 text-left shadow-sm"
+                    className="flex gap-2 rounded-2xl border border-[#ead8aa] bg-white p-3 shadow-sm"
                   >
-                    <p className="font-black">{draft.code}</p>
-                    <p className="text-sm font-semibold text-[#2d2a26]/55">
-                      {draft.surname || draft.names || "Geen naam"} ·{" "}
-                      {draft.config.contact.deliveryDate ||
-                        draft.config.contact.weddingDate ||
-                        "geen datum"}{" "}
-                      · {new Date(draft.updatedAt).toLocaleDateString("nl-NL")}
-                    </p>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => loadDraft(draft)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <p className="font-black">{draft.code}</p>
+                      <p className="text-sm font-semibold text-[#2d2a26]/55">
+                        {draft.surname || draft.names || "Geen naam"} ·{" "}
+                        {draft.config.contact.deliveryDate ||
+                          draft.config.contact.weddingDate ||
+                          "geen datum"}{" "}
+                        ·{" "}
+                        {new Date(draft.updatedAt).toLocaleDateString("nl-NL")}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteDraft(draft)}
+                      className="self-center rounded-full border border-[#e6b8af] bg-[#fff4f1] px-3 py-2 text-xs font-black text-[#9f382f]"
+                    >
+                      Verwijder
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
