@@ -253,7 +253,7 @@ function ColorSwatchGrid({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(10.5rem,1fr))] gap-2">
       {options.map((option) => {
         const selected = selectedId === option.id;
 
@@ -262,21 +262,21 @@ function ColorSwatchGrid({
             key={option.id}
             type="button"
             onClick={() => onSelect(option.id)}
-            className={`flex min-h-20 items-center gap-3 rounded-2xl border p-3 text-left shadow-sm transition active:scale-[0.99] ${
+            className={`flex min-h-16 min-w-0 items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-left shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184] active:scale-[0.99] ${
               selected
                 ? "border-[#8fb184] bg-[#dce8d6]"
                 : "border-[#e7e0d8] bg-white"
             }`}
           >
             <span
-              className="h-9 w-9 shrink-0 rounded-full border-2 shadow-inner"
+              className="h-8 w-8 shrink-0 rounded-full border-2 shadow-inner"
               style={{
                 backgroundColor: option.swatchColor || "#fff",
                 borderColor: option.swatchBorder || "rgba(45, 42, 38, 0.12)",
               }}
             />
             <span className="min-w-0">
-              <span className="block text-sm font-black leading-tight">
+              <span className="block text-sm font-black leading-tight [overflow-wrap:anywhere]">
                 {option.label}
               </span>
               {selected && (
