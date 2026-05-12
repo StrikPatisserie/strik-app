@@ -20,7 +20,9 @@ import {
   createProductionForm,
   findOption,
   formatEuro,
+  getCakeDesignGroups,
   getCakeLayers,
+  getDesignGroupsForLayers,
   getLayerColor,
   getLayerFilling,
   getLayerLayout,
@@ -848,7 +850,7 @@ export default function BruidstaartStudioConfigurator() {
   const price = useMemo(() => calculateWeddingCakePrice(config), [config]);
   const labels = useMemo(() => getSelectedWeddingCakeLabels(config), [config]);
   const productionForm = useMemo(() => createProductionForm(config), [config]);
-  const activeLayers = useMemo(() => getCakeLayers(config), [config]);
+  const activeLayers = useMemo(() => getCakeDesignGroups(config), [config]);
 
   function layerOptionIdsForSize(
     sizeId: string,
@@ -857,13 +859,18 @@ export default function BruidstaartStudioConfigurator() {
     fallbackId: string
   ) {
     const size = findOption(cakeSizes, sizeId) || cakeSizes[0];
-    const currentLayers = getCakeLayers(current);
+    const nextLayers = getDesignGroupsForLayers(size.layers);
+    const currentLayers = getCakeDesignGroups(current);
 
     return Object.fromEntries(
-      size.layers.map((layer, index) => {
+      nextLayers.map((layer, index) => {
         const currentLayer = currentLayers[index];
+        const sourceLayer = size.layers.find(
+          (item) => (item.designGroupId || item.id) === layer.id
+        );
         const optionId =
           optionIds?.[layer.id] ||
+          (sourceLayer ? optionIds?.[sourceLayer.id] : undefined) ||
           (currentLayer ? optionIds?.[currentLayer.id] : undefined) ||
           fallbackId;
 
@@ -985,7 +992,7 @@ export default function BruidstaartStudioConfigurator() {
       )
         ? current.layoutId
         : firstLayout;
-      const layers = getCakeLayers(current);
+      const layers = getCakeDesignGroups(current);
 
       return {
         ...current,

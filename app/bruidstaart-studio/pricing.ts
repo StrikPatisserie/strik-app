@@ -70,11 +70,51 @@ export function getCakeLayers(config: WeddingCakeConfig): CakeLayer[] {
       ];
 }
 
+export function getDesignGroupsForLayers(layers: CakeLayer[]): CakeLayer[] {
+  const groups: CakeLayer[] = [];
+  const groupsById = new Map<string, CakeLayer>();
+
+  layers.forEach((layer) => {
+    const groupId = layer.designGroupId || layer.id;
+    const existingGroup = groupsById.get(groupId);
+
+    if (existingGroup) {
+      existingGroup.persons += layer.persons;
+      return;
+    }
+
+    const group = {
+      id: groupId,
+      label: layer.designGroupLabel || layer.label,
+      persons: layer.persons,
+      personsLabel: layer.designGroupPersonsLabel || layer.personsLabel,
+    };
+
+    groupsById.set(groupId, group);
+    groups.push(group);
+  });
+
+  return groups;
+}
+
+export function getCakeDesignGroups(config: WeddingCakeConfig): CakeLayer[] {
+  return getDesignGroupsForLayers(getCakeLayers(config));
+}
+
+function getChoiceIdForLayer(config: WeddingCakeConfig, layerId: string) {
+  const layer = getCakeLayers(config).find((item) => item.id === layerId);
+
+  return layer?.designGroupId || layerId;
+}
+
 export function getLayerFilling(
   config: WeddingCakeConfig,
   layerId: string
 ): StudioOption {
+  const choiceId = getChoiceIdForLayer(config, layerId);
+
   return (
+    findOption(fillingOptions, config.layerFillingIds?.[choiceId]) ||
     findOption(fillingOptions, config.layerFillingIds?.[layerId]) ||
     findOption(fillingOptions, config.fillingId) ||
     fillingOptions[0]
@@ -85,7 +125,10 @@ export function getLayerColor(
   config: WeddingCakeConfig,
   layerId: string
 ): StudioOption {
+  const choiceId = getChoiceIdForLayer(config, layerId);
+
   return (
+    findOption(colorOptions, config.layerColorIds?.[choiceId]) ||
     findOption(colorOptions, config.layerColorIds?.[layerId]) ||
     findOption(colorOptions, config.colorId) ||
     colorOptions[0]
@@ -96,7 +139,10 @@ export function getLayerLayout(
   config: WeddingCakeConfig,
   layerId: string
 ): StudioOption {
+  const choiceId = getChoiceIdForLayer(config, layerId);
+
   return (
+    findOption(layoutOptions, config.layerLayoutIds?.[choiceId]) ||
     findOption(layoutOptions, config.layerLayoutIds?.[layerId]) ||
     findOption(layoutOptions, config.layoutId) ||
     layoutOptions[0]
@@ -104,7 +150,7 @@ export function getLayerLayout(
 }
 
 function fillingLinesForConfig(config: WeddingCakeConfig): PriceLine[] {
-  const layers = getCakeLayers(config);
+  const layers = getCakeDesignGroups(config);
 
   return layers.flatMap((layer) => {
     const filling = getLayerFilling(config, layer.id);
@@ -127,7 +173,7 @@ function layerOptionLinesForConfig(
   getOption: (config: WeddingCakeConfig, layerId: string) => StudioOption,
   label: string
 ): PriceLine[] {
-  const layers = getCakeLayers(config);
+  const layers = getCakeDesignGroups(config);
 
   return layers.flatMap((layer) => {
     const option = getOption(config, layer.id);
@@ -146,7 +192,7 @@ function layerOptionLinesForConfig(
 }
 
 export function getSelectedFillingSummary(config: WeddingCakeConfig) {
-  const layers = getCakeLayers(config);
+  const layers = getCakeDesignGroups(config);
 
   if (layers.length <= 1) {
     return getLayerFilling(config, layers[0].id).label;
@@ -164,7 +210,7 @@ function getSelectedLayerOptionSummary(
   config: WeddingCakeConfig,
   getOption: (config: WeddingCakeConfig, layerId: string) => StudioOption
 ) {
-  const layers = getCakeLayers(config);
+  const layers = getCakeDesignGroups(config);
 
   if (layers.length <= 1) {
     return getOption(config, layers[0].id).label;

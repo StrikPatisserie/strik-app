@@ -35,9 +35,22 @@ function makeLayer(
   id: string,
   label: string,
   persons: number,
-  personsLabel: string
+  personsLabel: string,
+  designGroup?: {
+    id: string;
+    label: string;
+    personsLabel: string;
+  }
 ) {
-  return { id, label, persons, personsLabel };
+  return {
+    id,
+    label,
+    persons,
+    personsLabel,
+    designGroupId: designGroup?.id,
+    designGroupLabel: designGroup?.label,
+    designGroupPersonsLabel: designGroup?.personsLabel,
+  };
 }
 
 function cakeSizeIcon(fileName: string) {
@@ -158,10 +171,26 @@ export const cakeSizes: CakeSize[] = [
     personsLabel: "±36 personen",
     tiers: 2,
     layers: [
-      makeLayer("s2f-1", "Onderlaag onder", 10, "10-12p"),
-      makeLayer("s2f-2", "Onderlaag boven", 10, "10-12p"),
-      makeLayer("s2f-3", "Bovenlaag onder", 8, "6-8p"),
-      makeLayer("s2f-4", "Bovenlaag boven", 8, "6-8p"),
+      makeLayer("s2f-1", "Onderlaag onder", 10, "10-12p", {
+        id: "s2f-bottom",
+        label: "Onderlaag hoog",
+        personsLabel: "2 x 10-12p",
+      }),
+      makeLayer("s2f-2", "Onderlaag boven", 10, "10-12p", {
+        id: "s2f-bottom",
+        label: "Onderlaag hoog",
+        personsLabel: "2 x 10-12p",
+      }),
+      makeLayer("s2f-3", "Bovenlaag onder", 8, "6-8p", {
+        id: "s2f-top",
+        label: "Bovenlaag hoog",
+        personsLabel: "2 x 6-8p",
+      }),
+      makeLayer("s2f-4", "Bovenlaag boven", 8, "6-8p", {
+        id: "s2f-top",
+        label: "Bovenlaag hoog",
+        personsLabel: "2 x 6-8p",
+      }),
     ],
     iconPath: cakeSizeIcon("S2F"),
     description: "Gestapelde hoge opbouw met kleine en middelgrote lagen.",
@@ -174,10 +203,26 @@ export const cakeSizes: CakeSize[] = [
     personsLabel: "±56 personen",
     tiers: 2,
     layers: [
-      makeLayer("s2g-1", "Onderlaag onder", 18, "16-18p"),
-      makeLayer("s2g-2", "Onderlaag boven", 18, "16-18p"),
-      makeLayer("s2g-3", "Bovenlaag onder", 10, "10-12p"),
-      makeLayer("s2g-4", "Bovenlaag boven", 10, "10-12p"),
+      makeLayer("s2g-1", "Onderlaag onder", 18, "16-18p", {
+        id: "s2g-bottom",
+        label: "Onderlaag hoog",
+        personsLabel: "2 x 16-18p",
+      }),
+      makeLayer("s2g-2", "Onderlaag boven", 18, "16-18p", {
+        id: "s2g-bottom",
+        label: "Onderlaag hoog",
+        personsLabel: "2 x 16-18p",
+      }),
+      makeLayer("s2g-3", "Bovenlaag onder", 10, "10-12p", {
+        id: "s2g-top",
+        label: "Bovenlaag hoog",
+        personsLabel: "2 x 10-12p",
+      }),
+      makeLayer("s2g-4", "Bovenlaag boven", 10, "10-12p", {
+        id: "s2g-top",
+        label: "Bovenlaag hoog",
+        personsLabel: "2 x 10-12p",
+      }),
     ],
     iconPath: cakeSizeIcon("S2G"),
     description: "Hoge opbouw met middelgrote en grote lagen.",
@@ -205,12 +250,36 @@ export const cakeSizes: CakeSize[] = [
     personsLabel: "±70 personen",
     tiers: 3,
     layers: [
-      makeLayer("s3b-1", "Onderlaag onder", 17, "16-18p"),
-      makeLayer("s3b-2", "Onderlaag boven", 17, "16-18p"),
-      makeLayer("s3b-3", "Middenlaag onder", 11, "10-12p"),
-      makeLayer("s3b-4", "Middenlaag boven", 11, "10-12p"),
-      makeLayer("s3b-5", "Bovenlaag onder", 7, "6-8p"),
-      makeLayer("s3b-6", "Bovenlaag boven", 7, "6-8p"),
+      makeLayer("s3b-1", "Onderlaag onder", 17, "16-18p", {
+        id: "s3b-bottom",
+        label: "Onderlaag hoog",
+        personsLabel: "2 x 16-18p",
+      }),
+      makeLayer("s3b-2", "Onderlaag boven", 17, "16-18p", {
+        id: "s3b-bottom",
+        label: "Onderlaag hoog",
+        personsLabel: "2 x 16-18p",
+      }),
+      makeLayer("s3b-3", "Middenlaag onder", 11, "10-12p", {
+        id: "s3b-middle",
+        label: "Middenlaag hoog",
+        personsLabel: "2 x 10-12p",
+      }),
+      makeLayer("s3b-4", "Middenlaag boven", 11, "10-12p", {
+        id: "s3b-middle",
+        label: "Middenlaag hoog",
+        personsLabel: "2 x 10-12p",
+      }),
+      makeLayer("s3b-5", "Bovenlaag onder", 7, "6-8p", {
+        id: "s3b-top",
+        label: "Bovenlaag hoog",
+        personsLabel: "2 x 6-8p",
+      }),
+      makeLayer("s3b-6", "Bovenlaag boven", 7, "6-8p", {
+        id: "s3b-top",
+        label: "Bovenlaag hoog",
+        personsLabel: "2 x 6-8p",
+      }),
     ],
     iconPath: cakeSizeIcon("S3B"),
     description: "Hoge opbouw met kleine, middelgrote en grote lagen.",

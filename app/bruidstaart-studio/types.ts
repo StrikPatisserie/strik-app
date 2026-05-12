@@ -42,6 +42,9 @@ export type CakeLayer = {
   label: string;
   persons: number;
   personsLabel: string;
+  designGroupId?: string;
+  designGroupLabel?: string;
+  designGroupPersonsLabel?: string;
 };
 
 export type ContactDetails = {
