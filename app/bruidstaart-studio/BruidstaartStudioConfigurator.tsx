@@ -1835,51 +1835,45 @@ export default function BruidstaartStudioConfigurator() {
       )}
 
       {step.id === "overzicht" && (
-        <section className="studio-no-print rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <section className="studio-no-print rounded-[1.25rem] border border-[#ecd9a9] bg-[#fff4d1] p-3 shadow-sm">
+          <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
             <div>
-              <h3 className="text-2xl font-black">Concept opslaan</h3>
-              <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
-                Sla deze bestelling groot en duidelijk op voordat je hem print of
-                mailt.
+              <h3 className="text-sm font-black">Concept</h3>
+              <p className="text-xs font-bold text-[#2d2a26]/45">
+                Opslaan of opnieuw beginnen.
               </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <input
-                  value={config.contact.recognitionCode}
-                  onChange={(event) =>
-                    setConfig((current) =>
-                      updateContact(
-                        current,
-                        "recognitionCode",
-                        event.target.value
-                      )
-                    )
-                  }
-                  placeholder="Herkenningscode"
-                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
-                />
-                <input
-                  value={config.contact.surname}
-                  onChange={(event) =>
-                    setConfig((current) =>
-                      updateContact(current, "surname", event.target.value)
-                    )
-                  }
-                  placeholder="Achternaam klant"
-                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
-                />
-              </div>
-              {draftStatus && (
-                <p className="mt-3 text-sm font-bold text-[#2d2a26]/55">
-                  {draftStatus}
-                </p>
-              )}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input
+                value={config.contact.recognitionCode}
+                onChange={(event) =>
+                  setConfig((current) =>
+                    updateContact(
+                      current,
+                      "recognitionCode",
+                      event.target.value
+                    )
+                  )
+                }
+                placeholder="Herkenningscode"
+                className="min-w-0 rounded-2xl border border-[#ecd9a9] bg-white/90 px-3 py-2.5 text-sm font-bold"
+              />
+              <input
+                value={config.contact.surname}
+                onChange={(event) =>
+                  setConfig((current) =>
+                    updateContact(current, "surname", event.target.value)
+                  )
+                }
+                placeholder="Achternaam klant"
+                className="min-w-0 rounded-2xl border border-[#ecd9a9] bg-white/90 px-3 py-2.5 text-sm font-bold"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2 lg:justify-end">
               <button
                 type="button"
                 onClick={saveDraft}
-                className={`rounded-full px-8 py-4 text-lg font-black shadow-sm transition ${
+                className={`rounded-full px-4 py-2.5 text-sm font-black shadow-sm transition ${
                   saveFeedback
                     ? "bg-[#dce8d6] text-[#2d2a26]"
                     : "bg-[#c3d3bc]"
@@ -1892,24 +1886,24 @@ export default function BruidstaartStudioConfigurator() {
               <button
                 type="button"
                 onClick={deleteCurrentDraft}
-                className="rounded-full bg-[#d94a45] px-6 py-4 text-lg font-black text-white shadow-sm"
+                className="rounded-full bg-[#e15f59] px-4 py-2.5 text-sm font-black text-white shadow-sm"
               >
                 Verwijder
               </button>
               <button
                 type="button"
                 onClick={startAgain}
-                className="rounded-full bg-white px-6 py-4 text-lg font-black shadow-sm"
+                className="rounded-full bg-white/90 px-4 py-2.5 text-sm font-black shadow-sm"
               >
                 Begin opnieuw
               </button>
             </div>
-            {saveFeedback && (
-              <p className="mt-2 text-sm italic text-[#8fb184]">
-                {saveFeedback}
-              </p>
-            )}
           </div>
+          {(saveFeedback || draftStatus) && (
+            <p className="mt-2 text-xs font-bold italic text-[#2d2a26]/55">
+              {saveFeedback || draftStatus}
+            </p>
+          )}
         </section>
       )}
 
