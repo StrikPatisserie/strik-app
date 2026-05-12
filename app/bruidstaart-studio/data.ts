@@ -40,6 +40,10 @@ function makeLayer(
   return { id, label, persons, personsLabel };
 }
 
+function cakeSizeIcon(fileName: string) {
+  return `/icons_strik%20taartlagen_${fileName}.svg`;
+}
+
 export const cakeSizes: CakeSize[] = [
   {
     id: "small-6-8",
@@ -49,6 +53,7 @@ export const cakeSizes: CakeSize[] = [
     personsLabel: "6-8 personen",
     tiers: 1,
     layers: [makeLayer("small-6-8-1", "Kleine laag", 8, "6-8p")],
+    iconPath: cakeSizeIcon("6-8P"),
     description: "Optionele kleine bruidstaart uit de folder.",
     surchargePerPerson: 5,
   },
@@ -60,6 +65,7 @@ export const cakeSizes: CakeSize[] = [
     personsLabel: "10-12 personen",
     tiers: 1,
     layers: [makeLayer("small-10-12-1", "Kleine laag", 12, "10-12p")],
+    iconPath: cakeSizeIcon("10-12P"),
     description: "Optionele kleine bruidstaart uit de folder.",
     surchargePerPerson: 3,
   },
@@ -71,6 +77,7 @@ export const cakeSizes: CakeSize[] = [
     personsLabel: "16-18 personen",
     tiers: 1,
     layers: [makeLayer("s1a-1", "Laag 1", 18, "16-18p")],
+    iconPath: cakeSizeIcon("S1A"),
     description: "Basisopbouw met een enkele taartlaag.",
   },
   {
@@ -84,6 +91,7 @@ export const cakeSizes: CakeSize[] = [
       makeLayer("s2a-1", "Onderlaag", 7, "6-8p"),
       makeLayer("s2a-2", "Bovenlaag", 7, "6-8p"),
     ],
+    iconPath: cakeSizeIcon("S2A"),
     description: "Twee kleine lagen: 6-8p + 6-8p.",
   },
   {
@@ -97,6 +105,7 @@ export const cakeSizes: CakeSize[] = [
       makeLayer("s2b-1", "Onderlaag", 11, "10-12p"),
       makeLayer("s2b-2", "Bovenlaag", 7, "6-8p"),
     ],
+    iconPath: cakeSizeIcon("S2B"),
     description: "6-8p + 10-12p.",
   },
   {
@@ -110,6 +119,7 @@ export const cakeSizes: CakeSize[] = [
       makeLayer("s2c-1", "Onderlaag", 11, "10-12p"),
       makeLayer("s2c-2", "Bovenlaag", 11, "10-12p"),
     ],
+    iconPath: cakeSizeIcon("S2C"),
     description: "10-12p + 10-12p.",
   },
   {
@@ -123,6 +133,7 @@ export const cakeSizes: CakeSize[] = [
       makeLayer("s2d-1", "Onderlaag", 17, "16-18p"),
       makeLayer("s2d-2", "Bovenlaag", 11, "10-12p"),
     ],
+    iconPath: cakeSizeIcon("S2D"),
     description: "10-12p + 16-18p.",
   },
   {
@@ -136,6 +147,7 @@ export const cakeSizes: CakeSize[] = [
       makeLayer("s2e-1", "Onderlaag", 17, "16-18p"),
       makeLayer("s2e-2", "Bovenlaag", 17, "16-18p"),
     ],
+    iconPath: cakeSizeIcon("S2E"),
     description: "16-18p + 16-18p.",
   },
   {
@@ -151,6 +163,7 @@ export const cakeSizes: CakeSize[] = [
       makeLayer("s2f-3", "Bovenlaag onder", 8, "6-8p"),
       makeLayer("s2f-4", "Bovenlaag boven", 8, "6-8p"),
     ],
+    iconPath: cakeSizeIcon("S2F"),
     description: "Gestapelde hoge opbouw met kleine en middelgrote lagen.",
   },
   {
@@ -166,6 +179,7 @@ export const cakeSizes: CakeSize[] = [
       makeLayer("s2g-3", "Bovenlaag onder", 10, "10-12p"),
       makeLayer("s2g-4", "Bovenlaag boven", 10, "10-12p"),
     ],
+    iconPath: cakeSizeIcon("S2G"),
     description: "Hoge opbouw met middelgrote en grote lagen.",
   },
   {
@@ -180,6 +194,7 @@ export const cakeSizes: CakeSize[] = [
       makeLayer("s3a-2", "Middenlaag", 11, "10-12p"),
       makeLayer("s3a-3", "Bovenlaag", 7, "6-8p"),
     ],
+    iconPath: cakeSizeIcon("S3A"),
     description: "6-8p + 10-12p + 16-18p.",
   },
   {
@@ -197,6 +212,7 @@ export const cakeSizes: CakeSize[] = [
       makeLayer("s3b-5", "Bovenlaag onder", 7, "6-8p"),
       makeLayer("s3b-6", "Bovenlaag boven", 7, "6-8p"),
     ],
+    iconPath: cakeSizeIcon("S3B"),
     description: "Hoge opbouw met kleine, middelgrote en grote lagen.",
   },
 ];
@@ -268,6 +284,34 @@ export const colorOptions: StudioOption[] = [
     price: { mode: "included", amount: 0 },
   },
   {
+    id: "klassiek-ivoor",
+    label: "Ivoor",
+    allowedStyles: ["klassiek"],
+    swatchColor: "#f6ead2",
+    price: { mode: "included", amount: 0 },
+  },
+  {
+    id: "klassiek-champagne",
+    label: "Champagne",
+    allowedStyles: ["klassiek"],
+    swatchColor: "#ead0a4",
+    price: { mode: "included", amount: 0 },
+  },
+  {
+    id: "klassiek-blush",
+    label: "Blush",
+    allowedStyles: ["klassiek"],
+    swatchColor: "#efd0c9",
+    price: { mode: "included", amount: 0 },
+  },
+  {
+    id: "klassiek-oudroze",
+    label: "Oudroze",
+    allowedStyles: ["klassiek"],
+    swatchColor: "#c98890",
+    price: { mode: "included", amount: 0 },
+  },
+  {
     id: "klassiek-roze",
     label: "Roze",
     allowedStyles: ["klassiek"],
@@ -331,6 +375,20 @@ export const colorOptions: StudioOption[] = [
     price: { mode: "included", amount: 0 },
   },
   {
+    id: "klassiek-sage",
+    label: "Sage",
+    allowedStyles: ["klassiek"],
+    swatchColor: "#aebd9a",
+    price: { mode: "included", amount: 0 },
+  },
+  {
+    id: "klassiek-eucalyptus",
+    label: "Eucalyptus",
+    allowedStyles: ["klassiek"],
+    swatchColor: "#7e9b8b",
+    price: { mode: "included", amount: 0 },
+  },
+  {
     id: "klassiek-groen",
     label: "Groen",
     allowedStyles: ["klassiek"],
@@ -349,6 +407,13 @@ export const colorOptions: StudioOption[] = [
     label: "Oranje",
     allowedStyles: ["klassiek"],
     swatchColor: "#e58a48",
+    price: { mode: "included", amount: 0 },
+  },
+  {
+    id: "klassiek-terracotta",
+    label: "Terracotta",
+    allowedStyles: ["klassiek"],
+    swatchColor: "#b7664d",
     price: { mode: "included", amount: 0 },
   },
   {
@@ -613,6 +678,7 @@ export const emptyContactDetails: ContactDetails = {
   email: "",
   phone: "",
   weddingDate: "",
+  deliveryDate: "",
   deliveryMethod: "pickup",
   deliveryAddress: "",
   invoiceName: "",

@@ -16,12 +16,16 @@ export type WeddingCakeDraft = {
   updatedAt: string;
 };
 
-export function getWeddingCakeStudioUrl(search?: string) {
+export function getWeddingCakeStudioUrl(search?: string, deliveryDate?: string) {
   const url = new URL(WEDDING_CAKE_API_URL);
   url.searchParams.set("key", WEDDING_CAKE_API_KEY);
 
   if (search?.trim()) {
     url.searchParams.set("search", search.trim());
+  }
+
+  if (deliveryDate?.trim()) {
+    url.searchParams.set("deliveryDate", deliveryDate.trim());
   }
 
   return url;
@@ -64,6 +68,8 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
         ...config.contact,
         recognitionCode: textFrom(contact.recognitionCode) || code,
         surname: textFrom(contact.surname || value.surname),
+        deliveryDate:
+          textFrom(contact.deliveryDate) || textFrom(contact.weddingDate),
       },
     },
     createdAt: textFrom(value.createdAt) || now,
@@ -112,16 +118,24 @@ export function saveLocalDraft(draft: WeddingCakeDraft) {
   window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(nextDrafts));
 }
 
-export function searchLocalDrafts(search: string) {
+export function searchLocalDrafts(search: string, deliveryDate = "") {
   const term = search.trim().toLowerCase();
-  if (!term) return [];
+  const dateTerm = deliveryDate.trim();
+  if (!term && !dateTerm) return [];
 
   return loadLocalDrafts().filter((draft) => {
-    return (
+    const contact = draft.config.contact;
+    const matchesTerm =
+      !term ||
       draft.code.toLowerCase().includes(term) ||
       draft.surname.toLowerCase().includes(term) ||
-      draft.names.toLowerCase().includes(term)
-    );
+      draft.names.toLowerCase().includes(term);
+    const matchesDeliveryDate =
+      !dateTerm ||
+      contact.deliveryDate === dateTerm ||
+      contact.weddingDate === dateTerm;
+
+    return matchesTerm && matchesDeliveryDate;
   });
 }
 

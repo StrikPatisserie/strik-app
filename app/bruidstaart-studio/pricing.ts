@@ -215,6 +215,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
     `E-mail: ${config.contact.email || "-"}`,
     `Telefoon: ${config.contact.phone || "-"}`,
     `Trouwdatum: ${config.contact.weddingDate || "-"}`,
+    `Leverdatum: ${config.contact.deliveryDate || "-"}`,
     "",
     "Factuur en levering",
     `Factuurnaam: ${config.contact.invoiceName || "-"}`,

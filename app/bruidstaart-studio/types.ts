@@ -32,6 +32,7 @@ export type CakeSize = {
   personsLabel: string;
   tiers: number;
   layers: CakeLayer[];
+  iconPath: string;
   description?: string;
   surchargePerPerson?: number;
 };
@@ -50,6 +51,7 @@ export type ContactDetails = {
   email: string;
   phone: string;
   weddingDate: string;
+  deliveryDate: string;
   deliveryMethod: "pickup" | "delivery";
   deliveryAddress: string;
   invoiceName: string;

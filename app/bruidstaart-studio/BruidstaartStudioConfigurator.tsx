@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import {
   cakeSizes,
@@ -114,6 +115,24 @@ function optionPriceLabel(option: StudioOption) {
     : `+ ${formatEuro(option.price.amount)}`;
 }
 
+function personsText(value: string) {
+  return value.replace(/p$/i, " personen");
+}
+
+function sizeCompositionText(sizeId: string) {
+  const size = findOption(cakeSizes, sizeId) || cakeSizes[0];
+  const counts = new Map<string, number>();
+
+  size.layers.forEach((layer) => {
+    const label = personsText(layer.personsLabel);
+    counts.set(label, (counts.get(label) || 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .map(([label, count]) => `${count} x ${label} taart`)
+    .join(" + ");
+}
+
 function OptionCard({
   option,
   selected,
@@ -176,35 +195,92 @@ function SizeCard({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-[1.4rem] border p-4 text-left shadow-sm transition active:scale-[0.99] ${
+      className={`grid min-h-48 gap-3 rounded-[1.4rem] border p-4 text-left shadow-sm transition active:scale-[0.99] ${
         selected
           ? "border-[#8fb184] bg-[#dce8d6]"
           : "border-[#e7e0d8] bg-white"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
-            {size.code}
-          </p>
-          <p className="mt-1 text-lg font-bold">{size.label}</p>
-        </div>
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
+          {size.code}
+        </p>
         {size.surchargePerPerson && (
           <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-xs font-bold text-[#8a5b10]">
             + {formatEuro(size.surchargePerPerson)} p.p.
           </span>
         )}
       </div>
-      <p className="mt-1 text-sm font-semibold text-[#2d2a26]/55">
-        {size.personsLabel} · {size.tiers} laag
-        {size.tiers === 1 ? "" : "en"}
-      </p>
-      {size.description && (
-        <p className="mt-2 text-sm font-semibold leading-relaxed text-[#2d2a26]/45">
-          {size.description}
-        </p>
-      )}
+      <div className="flex items-center gap-4">
+        <div className="flex h-24 w-28 shrink-0 items-center justify-center rounded-2xl bg-white/75 p-2">
+          <Image
+            src={size.iconPath}
+            alt=""
+            width={112}
+            height={96}
+            className="h-full w-full object-contain"
+          />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xl font-black leading-tight">{size.label}</p>
+          <p className="mt-1 text-lg font-black leading-tight text-[#2d2a26]/65">
+            {size.personsLabel}
+          </p>
+          <p className="mt-2 text-sm font-bold leading-relaxed text-[#2d2a26]/45">
+            {sizeCompositionText(size.id)}
+          </p>
+        </div>
+      </div>
     </button>
+  );
+}
+
+function ColorSwatchGrid({
+  options,
+  selectedId,
+  onSelect,
+}: {
+  options: StudioOption[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+      {options.map((option) => {
+        const selected = selectedId === option.id;
+
+        return (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => onSelect(option.id)}
+            className={`flex min-h-20 items-center gap-3 rounded-2xl border p-3 text-left shadow-sm transition active:scale-[0.99] ${
+              selected
+                ? "border-[#8fb184] bg-[#dce8d6]"
+                : "border-[#e7e0d8] bg-white"
+            }`}
+          >
+            <span
+              className="h-9 w-9 shrink-0 rounded-full border-2 shadow-inner"
+              style={{
+                backgroundColor: option.swatchColor || "#fff",
+                borderColor: option.swatchBorder || "rgba(45, 42, 38, 0.12)",
+              }}
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-black leading-tight">
+                {option.label}
+              </span>
+              {selected && (
+                <span className="mt-1 block text-xs font-bold text-[#2d2a26]/45">
+                  gekozen
+                </span>
+              )}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -368,7 +444,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
             Schets
           </p>
-          <p className="text-lg font-black">{size.code}</p>
+          <p className="text-lg font-black">
+            {size.label} · {size.personsLabel}
+          </p>
         </div>
         {color?.swatchColor && (
           <span
@@ -380,6 +458,15 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             title={color.label}
           />
         )}
+      </div>
+      <div className="mb-3 flex items-center justify-center rounded-2xl bg-white p-3">
+        <Image
+          src={size.iconPath}
+          alt=""
+          width={180}
+          height={105}
+          className="h-24 w-full object-contain"
+        />
       </div>
       <svg
         viewBox="0 0 260 205"
@@ -541,6 +628,7 @@ export default function BruidstaartStudioConfigurator() {
   const [stepIndex, setStepIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [draftSearch, setDraftSearch] = useState("");
+  const [draftDeliveryDate, setDraftDeliveryDate] = useState("");
   const [draftResults, setDraftResults] = useState<WeddingCakeDraft[]>([]);
   const [draftStatus, setDraftStatus] = useState("");
   const step = steps[stepIndex];
@@ -738,14 +826,15 @@ export default function BruidstaartStudioConfigurator() {
 
   async function searchDrafts() {
     const search = draftSearch.trim();
+    const deliveryDate = draftDeliveryDate.trim();
 
-    if (!search) {
-      setDraftStatus("Vul een herkenningscode of achternaam in.");
+    if (!search && !deliveryDate) {
+      setDraftStatus("Vul een herkenningscode, achternaam of leverdatum in.");
       return;
     }
 
     try {
-      const res = await fetch(getWeddingCakeStudioUrl(search), {
+      const res = await fetch(getWeddingCakeStudioUrl(search, deliveryDate), {
         cache: "no-store",
       });
 
@@ -759,7 +848,7 @@ export default function BruidstaartStudioConfigurator() {
           : "Geen concept gevonden."
       );
     } catch {
-      const drafts = searchLocalDrafts(search);
+      const drafts = searchLocalDrafts(search, deliveryDate);
       setDraftResults(drafts);
       setDraftStatus(
         drafts.length
@@ -868,14 +957,21 @@ export default function BruidstaartStudioConfigurator() {
           <div>
             <h3 className="text-lg font-black">Concept terughalen</h3>
             <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
-              Zoek op herkenningscode of achternaam.
+              Zoek op herkenningscode, achternaam of leverdatum.
             </p>
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_11rem_auto]">
               <input
                 value={draftSearch}
                 onChange={(event) => setDraftSearch(event.target.value)}
                 placeholder="Code of achternaam"
-                className="min-w-0 flex-1 rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white p-4"
+              />
+              <input
+                value={draftDeliveryDate}
+                onChange={(event) => setDraftDeliveryDate(event.target.value)}
+                type="date"
+                aria-label="Leverdatum"
+                className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white p-4"
               />
               <button
                 type="button"
@@ -902,7 +998,10 @@ export default function BruidstaartStudioConfigurator() {
                     <p className="font-black">{draft.code}</p>
                     <p className="text-sm font-semibold text-[#2d2a26]/55">
                       {draft.surname || draft.names || "Geen naam"} ·{" "}
-                      {new Date(draft.updatedAt).toLocaleDateString("nl-NL")}
+                      {draft.config.contact.deliveryDate ||
+                        draft.config.contact.weddingDate ||
+                        "geen datum"}{" "}
+                      · {new Date(draft.updatedAt).toLocaleDateString("nl-NL")}
                     </p>
                   </button>
                 ))}
@@ -990,21 +1089,16 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "kleur" && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {allowedColors.map((option) => (
-                <OptionCard
-                  key={option.id}
-                  option={option}
-                  selected={config.colorId === option.id}
-                  onClick={() =>
-                    setConfig((current) => ({
-                      ...current,
-                      colorId: option.id,
-                    }))
-                  }
-                />
-              ))}
-            </div>
+            <ColorSwatchGrid
+              options={allowedColors}
+              selectedId={config.colorId}
+              onSelect={(colorId) =>
+                setConfig((current) => ({
+                  ...current,
+                  colorId,
+                }))
+              }
+            />
           )}
 
           {step.id === "layout" && (
@@ -1131,16 +1225,42 @@ export default function BruidstaartStudioConfigurator() {
                   className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
                 />
               </div>
-              <input
-                value={config.contact.weddingDate}
-                onChange={(event) =>
-                  setConfig((current) =>
-                    updateContact(current, "weddingDate", event.target.value)
-                  )
-                }
-                type="date"
-                className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
-              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-sm font-bold text-[#2d2a26]/55">
+                  Trouwdatum
+                  <input
+                    value={config.contact.weddingDate}
+                    onChange={(event) =>
+                      setConfig((current) =>
+                        updateContact(
+                          current,
+                          "weddingDate",
+                          event.target.value
+                        )
+                      )
+                    }
+                    type="date"
+                    className="rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-normal text-[#2d2a26]"
+                  />
+                </label>
+                <label className="grid gap-1 text-sm font-bold text-[#2d2a26]/55">
+                  Leverdatum
+                  <input
+                    value={config.contact.deliveryDate}
+                    onChange={(event) =>
+                      setConfig((current) =>
+                        updateContact(
+                          current,
+                          "deliveryDate",
+                          event.target.value
+                        )
+                      )
+                    }
+                    type="date"
+                    className="rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-normal text-[#2d2a26]"
+                  />
+                </label>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {(["pickup", "delivery"] as const).map((method) => (
                   <button

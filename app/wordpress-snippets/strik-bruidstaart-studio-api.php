@@ -3,7 +3,7 @@
  * Strik app - Bruidstaart Studio API
  *
  * Plaats deze snippet in WordPress. De app gebruikt:
- * GET /wp-json/strik/v1/wedding-cakes?key=...&search=JANSEN
+ * GET /wp-json/strik/v1/wedding-cakes?key=...&search=JANSEN&deliveryDate=2026-05-12
  * PUT /wp-json/strik/v1/wedding-cakes?key=...
  */
 
@@ -67,32 +67,52 @@ function strik_wedding_cakes_text($value) {
 }
 }
 
-if (!function_exists('strik_wedding_cakes_matches')) {
-function strik_wedding_cakes_matches($draft, $search) {
-    if ($search === '') {
-        return true;
+if (!function_exists('strik_wedding_cakes_get_contact')) {
+function strik_wedding_cakes_get_contact($draft) {
+    if (!isset($draft['config']) || !is_array($draft['config'])) {
+        return array();
     }
+
+    if (!isset($draft['config']['contact']) || !is_array($draft['config']['contact'])) {
+        return array();
+    }
+
+    return $draft['config']['contact'];
+}
+}
+
+if (!function_exists('strik_wedding_cakes_matches')) {
+function strik_wedding_cakes_matches($draft, $search, $delivery_date) {
+    $contact = strik_wedding_cakes_get_contact($draft);
 
     $haystack = strtolower(
         implode(' ', array(
             isset($draft['code']) ? $draft['code'] : '',
             isset($draft['surname']) ? $draft['surname'] : '',
             isset($draft['names']) ? $draft['names'] : '',
+            isset($contact['deliveryDate']) ? $contact['deliveryDate'] : '',
+            isset($contact['weddingDate']) ? $contact['weddingDate'] : '',
         ))
     );
 
-    return strpos($haystack, strtolower($search)) !== false;
+    $matches_search = $search === '' || strpos($haystack, strtolower($search)) !== false;
+    $matches_date = $delivery_date === ''
+        || (isset($contact['deliveryDate']) && $contact['deliveryDate'] === $delivery_date)
+        || (isset($contact['weddingDate']) && $contact['weddingDate'] === $delivery_date);
+
+    return $matches_search && $matches_date;
 }
 }
 
 if (!function_exists('strik_wedding_cakes_get')) {
 function strik_wedding_cakes_get($request) {
     $search = strik_wedding_cakes_text($request->get_param('search'));
+    $delivery_date = strik_wedding_cakes_text($request->get_param('deliveryDate'));
     $drafts = array_values(strik_wedding_cakes_get_all());
     $filtered = array();
 
     foreach ($drafts as $draft) {
-        if (!is_array($draft) || !strik_wedding_cakes_matches($draft, $search)) {
+        if (!is_array($draft) || !strik_wedding_cakes_matches($draft, $search, $delivery_date)) {
             continue;
         }
 
