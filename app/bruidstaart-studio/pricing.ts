@@ -431,6 +431,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
     `Decoratie opmerkingen: ${config.decorationNotes || "-"}`,
     `Topper/add-on: ${labels.topper}`,
     `Betaald: ${config.paid ? "Ja" : "Nee"}`,
+    `Bestelling compleet: ${config.completed ? "Ja" : "Nee"}`,
     "",
     "Opmerkingen",
     config.contact.notes || "-",

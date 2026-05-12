@@ -699,13 +699,15 @@ export const topperOptions: StudioOption[] = [
   },
   {
     id: "topper-karton",
-    label: "Topper karton divers",
+    label: "Topper karton (goud/zilver/hout/zwart)",
+    description: "Ik kies een topper van Strik.",
     price: { mode: "fixed", amount: 5, label: "per taart" },
     selectionGroup: "mainTopper",
   },
   {
     id: "topper-zelf-aanleveren",
-    label: "Topper zelf aanleveren",
+    label: "Ik lever een eigen topper aan",
+    description: "Gratis.",
     price: { mode: "included", amount: 0 },
     selectionGroup: "mainTopper",
   },
@@ -760,6 +762,7 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   decorationNotes: "",
   topperIds: [],
   paid: false,
+  completed: false,
   contact: emptyContactDetails,
 };
 

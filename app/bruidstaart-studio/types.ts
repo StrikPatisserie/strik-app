@@ -82,6 +82,7 @@ export type WeddingCakeConfig = {
   decorationNotes: string;
   topperIds: string[];
   paid: boolean;
+  completed: boolean;
   contact: ContactDetails;
 };
 

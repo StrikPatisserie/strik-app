@@ -239,6 +239,25 @@ function colorMatrixForHex(hex?: string, multiplier = 1) {
   )} 0 0 0 0 ${blue.toFixed(3)} 0 0 0 1 0`;
 }
 
+function luminanceForHex(hex?: string) {
+  const [red, green, blue] = hexToRgb(hex).map((value) =>
+    value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  );
+
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function isDarkColor(hex?: string) {
+  return luminanceForHex(hex) < 0.45;
+}
+
+function pearlMatrixForColor(hex?: string) {
+  const luminance = luminanceForHex(hex);
+  const multiplier = luminance > 0.72 ? 0.62 : luminance > 0.52 ? 0.78 : 0.92;
+
+  return colorMatrixForHex(hex, multiplier);
+}
+
 function normalizeDateSearchInput(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -252,8 +271,8 @@ function normalizeDateSearchInput(value: string) {
   return `${fullYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
-function formatDutchShortDate(value?: string) {
-  if (!value) return "geen leverdatum";
+function formatDutchShortDate(value?: string, fallback = "geen leverdatum") {
+  if (!value) return fallback;
 
   const isoDate = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!isoDate) return value;
@@ -735,9 +754,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   }
 
   const topY = layerY(layers.length - 1);
-  const hasFlowers =
-    selectedDecorations.has("echte-bloemen") ||
-    selectedRoseQuantity > 0;
   const selectedMainTopperId = ["topper-karton", "topper-zelf-aanleveren"].find(
     (id) => selectedToppers.has(id)
   );
@@ -828,14 +844,16 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     index: number,
     x: number,
     y: number,
-    width: number
+    width: number,
+    layerColor?: StudioOption
   ) {
     const fruitPoints = layerDecorationPoints(width, 42, 4);
     const rosePoints = fixedDecorationPoints(layerRoseCount(index));
-    const realFlowerPoints = selectedDecorations.has("echte-bloemen")
-      ? layerDecorationPoints(width, 58, 3)
-      : [];
     const hasRoseLeaves = selectedDecorations.has("marsepeinrozen-met-blad");
+    const flowerX = x + width * (index % 2 ? 0.38 : 0.62);
+    const pearlFilter = isDarkColor(layerColor?.swatchColor)
+      ? `url(#${visualizerId}-snow-decoration)`
+      : `url(#${visualizerId}-layer-pearl-${index})`;
 
     return (
       <>
@@ -846,21 +864,28 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             y={y + layerHeight - 8}
             width={width - 6}
             height="12"
+            filter={pearlFilter}
             preserveAspectRatio="none"
           />
         )}
 
         {selectedDecorations.has("bladgoud") &&
-          layerDecorationPoints(width, 52, 3).map((point, item) => (
-            <image
+          layerDecorationPoints(width, 34, 5).map((point, item) => (
+            <g
               key={`${layerId}-gold-${item}`}
-              href={GOLD_LEAF_ASSET}
-              x={x + 8 + point * (width - 38)}
-              y={y + 4 + (item % 2) * 10}
-              width="30"
-              height="18"
-              preserveAspectRatio="xMidYMid meet"
-            />
+              transform={`translate(${x + 16 + point * (width - 32)} ${
+                y + 6 + (item % 3) * 8
+              }) rotate(${item % 2 ? -18 : 16})`}
+            >
+              <image
+                href={GOLD_LEAF_ASSET}
+                x="-11"
+                y="-8"
+                width="24"
+                height="18"
+                preserveAspectRatio="xMidYMid meet"
+              />
+            </g>
           ))}
 
         {selectedDecorations.has("rood-fruit") &&
@@ -876,46 +901,42 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             />
           ))}
 
-        {hasFlowers &&
-          [...rosePoints, ...realFlowerPoints].map((point, item) => {
-            const isRose = item < rosePoints.length;
+        {selectedDecorations.has("echte-bloemen") && (
+          <image
+            href={REAL_FLOWER_ASSET}
+            x={flowerX - 21}
+            y={y - 23}
+            width="42"
+            height="42"
+            preserveAspectRatio="xMidYMid meet"
+          />
+        )}
+
+        {selectedRoseQuantity > 0 &&
+          rosePoints.map((point, item) => {
             const flowerX =
               item === 0
-                ? x + (isRose ? 18 : 24)
-                : item === rosePoints.length + realFlowerPoints.length - 1
-                  ? x + width - (isRose ? 18 : 24)
+                ? x + 18
+                : item === rosePoints.length - 1
+                  ? x + width - 18
                   : x + 18 + point * (width - 36);
-            const flowerY =
-              y - (isRose ? 6 : 16) + ((index + item) % 2) * (isRose ? 3 : 4);
+            const flowerY = y - 6 + ((index + item) % 2) * 3;
 
             return (
               <g
                 key={`${layerId}-flower-${item}`}
                 transform={`translate(${flowerX} ${flowerY})`}
               >
-                {isRose ? (
-                  <image
-                    href={
-                      hasRoseLeaves
-                        ? ROSE_WITH_LEAF_ASSET
-                        : ROSE_WITHOUT_LEAF_ASSET
-                    }
-                    x="-8"
-                    y="-8"
-                    width="16"
-                    height="16"
-                    preserveAspectRatio="xMidYMid meet"
-                  />
-                ) : (
-                  <image
-                    href={REAL_FLOWER_ASSET}
-                    x="-19"
-                    y="-19"
-                    width="38"
-                    height="38"
-                    preserveAspectRatio="xMidYMid meet"
-                  />
-                )}
+                <image
+                  href={
+                    hasRoseLeaves ? ROSE_WITH_LEAF_ASSET : ROSE_WITHOUT_LEAF_ASSET
+                  }
+                  x="-8"
+                  y="-8"
+                  width="16"
+                  height="16"
+                  preserveAspectRatio="xMidYMid meet"
+                />
               </g>
             );
           })}
@@ -1004,6 +1025,24 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             );
           })}
           {layers.map((layer, index) => {
+            const layerColor = config.styleId
+              ? getLayerColor(config, layer.id)
+              : undefined;
+
+            return (
+              <filter
+                key={`${layer.id}-pearl-filter`}
+                id={`${visualizerId}-layer-pearl-${index}`}
+                colorInterpolationFilters="sRGB"
+              >
+                <feColorMatrix
+                  type="matrix"
+                  values={pearlMatrixForColor(layerColor?.swatchColor)}
+                />
+              </filter>
+            );
+          })}
+          {layers.map((layer, index) => {
             const width = layerWidth(layer.persons);
             const x = (260 - width) / 2;
             const y = layerY(index);
@@ -1059,10 +1098,13 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           const width = layerWidth(layer.persons);
           const x = (260 - width) / 2;
           const y = layerY(index);
+          const layerColor = config.styleId
+            ? getLayerColor(config, layer.id)
+            : undefined;
 
           return (
             <g key={`${layer.id}-decorations`}>
-              {renderLayerDecorations(layer.id, index, x, y, width)}
+              {renderLayerDecorations(layer.id, index, x, y, width, layerColor)}
             </g>
           );
         })}
@@ -1148,6 +1190,7 @@ export default function BruidstaartStudioConfigurator() {
   const [draftDeliveryDate, setDraftDeliveryDate] = useState("");
   const [draftResults, setDraftResults] = useState<WeddingCakeDraft[]>([]);
   const [draftStatus, setDraftStatus] = useState("");
+  const [saveFeedback, setSaveFeedback] = useState("");
   const step = steps[stepIndex];
 
   const allowedLayouts = useMemo(
@@ -1427,18 +1470,86 @@ export default function BruidstaartStudioConfigurator() {
     return `Bruidstaart bestelling${code ? ` ${code}` : ""} - ${names}`;
   }
 
+  function createMailBody() {
+    const priceLines = price.lines.length
+      ? price.lines
+          .map(
+            (line) =>
+              `- ${line.label}: ${
+                line.quote ? "op aanvraag" : formatEuro(line.amount)
+              }`
+          )
+          .join("\n")
+      : "- Nog geen prijsregels";
+
+    return [
+      "Bruidstaart bestelling",
+      "======================",
+      "",
+      "Klant",
+      `Herkenningscode: ${config.contact.recognitionCode || "-"}`,
+      `Namen: ${config.contact.names || "-"}`,
+      `Achternaam: ${config.contact.surname || "-"}`,
+      `E-mail: ${config.contact.email || "-"}`,
+      `Telefoon: ${config.contact.phone || "-"}`,
+      `Trouwdatum: ${formatDutchShortDate(config.contact.weddingDate, "-")}`,
+      `Leverdatum: ${formatDutchShortDate(config.contact.deliveryDate, "-")}`,
+      "",
+      "Factuur en levering",
+      `Factuurnaam: ${config.contact.invoiceName || "-"}`,
+      `Factuur e-mail: ${config.contact.invoiceEmail || "-"}`,
+      `Levering: ${
+        config.contact.deliveryMethod === "delivery" ? "bezorgen" : "afhalen"
+      }`,
+      `Adres: ${config.contact.deliveryAddress || "-"}`,
+      "",
+      "Taart",
+      `Stijl: ${labels.style || "-"}`,
+      `Formaat/opbouw: ${labels.size || "-"}`,
+      `Smaak/vulling: ${labels.filling || "-"}`,
+      `Kleur: ${labels.color || "-"}`,
+      `Layout: ${labels.layout || "-"}`,
+      `Decoratie: ${
+        labels.decorations.length ? labels.decorations.join(", ") : "geen"
+      }`,
+      `Decoratie opmerkingen: ${config.decorationNotes || "-"}`,
+      `Topper/add-on: ${labels.topper}`,
+      `Betaald: ${config.paid ? "Ja" : "Nee"}`,
+      `Bestelling compleet: ${config.completed ? "Ja" : "Nee"}`,
+      "",
+      "Opmerkingen",
+      config.contact.notes || "-",
+      "",
+      "Prijsindicatie",
+      priceLines,
+      `Totaal indicatie: ${formatEuro(price.total)}${
+        price.hasQuoteItems ? " + onderdelen op aanvraag" : ""
+      }`,
+      "",
+      "Visualisatie",
+      "De visuele schets staat in de Bruidstaart Studio in de Strik Team app.",
+    ].join("\n");
+  }
+
   function openMail(to: string) {
     if (!to.trim()) {
       setDraftStatus("Vul eerst een e-mailadres in.");
       return;
     }
 
-    const params = new URLSearchParams({
-      subject: getMailSubject(),
-      body: productionForm,
-    });
+    window.location.href = `mailto:${encodeURIComponent(
+      to.trim()
+    )}?subject=${encodeURIComponent(getMailSubject())}&body=${encodeURIComponent(
+      createMailBody()
+    )}`;
+  }
 
-    window.location.href = `mailto:${encodeURIComponent(to.trim())}?${params}`;
+  function showSaveFeedback(message = "opgeslagen") {
+    setSaveFeedback(message);
+
+    window.setTimeout(() => {
+      setSaveFeedback("");
+    }, 1800);
   }
 
   async function saveDraft() {
@@ -1449,6 +1560,7 @@ export default function BruidstaartStudioConfigurator() {
       return;
     }
 
+    setSaveFeedback("opslaan...");
     const draft = createDraftFromConfig(config);
 
     try {
@@ -1464,12 +1576,14 @@ export default function BruidstaartStudioConfigurator() {
       saveLocalDraft(savedDraft);
       setDraftResults([savedDraft]);
       setDraftStatus("Concept opgeslagen in WordPress.");
+      showSaveFeedback();
     } catch {
       saveLocalDraft(draft);
       setDraftResults([draft]);
       setDraftStatus(
         "WordPress-opslag is nog niet actief; concept is lokaal opgeslagen."
       );
+      showSaveFeedback();
     }
   }
 
@@ -1519,6 +1633,7 @@ export default function BruidstaartStudioConfigurator() {
       decorationQuantities: draft.config.decorationQuantities || {},
       decorationNotes: draft.config.decorationNotes || "",
       paid: Boolean(draft.config.paid),
+      completed: Boolean(draft.config.completed),
       topperIds: (draft.config.topperIds || []).filter((id) => id !== "geen"),
       contact: {
         ...initialWeddingCakeConfig.contact,
@@ -1535,7 +1650,7 @@ export default function BruidstaartStudioConfigurator() {
       layerLayoutIds: layerLayoutIdsForSize(nextConfig.sizeId, nextConfig),
     });
     setDraftStatus(`Concept ${draft.code} geladen.`);
-    goToStep(1);
+    goToStep(steps.length - 1);
   }
 
   async function deleteDraft(draft: WeddingCakeDraft) {
@@ -1692,13 +1807,24 @@ export default function BruidstaartStudioConfigurator() {
                 className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white px-4 py-3 text-sm"
               />
             </div>
-            <button
-              type="button"
-              onClick={saveDraft}
-              className="rounded-full bg-[#c3d3bc] px-5 py-3 text-sm font-bold shadow-sm"
-            >
-              Opslaan
-            </button>
+            <div>
+              <button
+                type="button"
+                onClick={saveDraft}
+                className={`rounded-full px-5 py-3 text-sm font-bold shadow-sm transition ${
+                  saveFeedback
+                    ? "bg-[#dce8d6] text-[#2d2a26]"
+                    : "bg-[#c3d3bc]"
+                }`}
+              >
+                {saveFeedback === "opslaan..." ? "Opslaan..." : "Opslaan"}
+              </button>
+              {saveFeedback && (
+                <p className="mt-1 text-center text-xs italic text-[#8fb184]">
+                  {saveFeedback}
+                </p>
+              )}
+            </div>
           </div>
           {draftStatus && (
             <p className="mt-2 text-xs font-bold text-[#2d2a26]/55">
@@ -1753,9 +1879,15 @@ export default function BruidstaartStudioConfigurator() {
               <button
                 type="button"
                 onClick={saveDraft}
-                className="rounded-full bg-[#c3d3bc] px-8 py-4 text-lg font-black shadow-sm"
+                className={`rounded-full px-8 py-4 text-lg font-black shadow-sm transition ${
+                  saveFeedback
+                    ? "bg-[#dce8d6] text-[#2d2a26]"
+                    : "bg-[#c3d3bc]"
+                }`}
               >
-                Concept opslaan
+                {saveFeedback === "opslaan..."
+                  ? "Opslaan..."
+                  : "Concept opslaan"}
               </button>
               <button
                 type="button"
@@ -1772,6 +1904,11 @@ export default function BruidstaartStudioConfigurator() {
                 Begin opnieuw
               </button>
             </div>
+            {saveFeedback && (
+              <p className="mt-2 text-sm italic text-[#8fb184]">
+                {saveFeedback}
+              </p>
+            )}
           </div>
         </section>
       )}
@@ -2230,20 +2367,36 @@ export default function BruidstaartStudioConfigurator() {
 
           {step.id === "overzicht" && (
             <div className="space-y-4">
-              <label className="flex items-center gap-3 rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 text-base font-black shadow-sm">
-                <input
-                  type="checkbox"
-                  checked={config.paid}
-                  onChange={(event) =>
-                    setConfig((current) => ({
-                      ...current,
-                      paid: event.target.checked,
-                    }))
-                  }
-                  className="h-6 w-6 accent-[#8fb184]"
-                />
-                Heeft betaald
-              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 text-base font-black shadow-sm">
+                  <input
+                    type="checkbox"
+                    checked={config.paid}
+                    onChange={(event) =>
+                      setConfig((current) => ({
+                        ...current,
+                        paid: event.target.checked,
+                      }))
+                    }
+                    className="h-6 w-6 accent-[#8fb184]"
+                  />
+                  Heeft betaald
+                </label>
+                <label className="flex items-center gap-3 rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 text-base font-black shadow-sm">
+                  <input
+                    type="checkbox"
+                    checked={config.completed}
+                    onChange={(event) =>
+                      setConfig((current) => ({
+                        ...current,
+                        completed: event.target.checked,
+                      }))
+                    }
+                    className="h-6 w-6 accent-[#8fb184]"
+                  />
+                  Bestelling compleet
+                </label>
+              </div>
               <div className="rounded-[1.5rem] bg-[#f8f6f3] p-4">
                 <h3 className="text-xl font-bold">Bakkerijformulier</h3>
                 <p className="mt-1 text-sm font-semibold text-[#2d2a26]/55">
@@ -2351,6 +2504,7 @@ export default function BruidstaartStudioConfigurator() {
         )}
       </div>
 
+      {step.id !== "start" && (
       <div className="studio-no-print flex gap-3">
         <button
           type="button"
@@ -2362,13 +2516,13 @@ export default function BruidstaartStudioConfigurator() {
         </button>
         <button
           type="button"
-          onClick={() => goToStep(stepIndex + 1)}
-          disabled={!canGoNext}
-          className="min-w-0 flex-1 rounded-full bg-[#c3d3bc] px-5 py-4 font-bold shadow-sm disabled:opacity-40"
+          onClick={() => (canGoNext ? goToStep(stepIndex + 1) : goToStep(0))}
+          className="min-w-0 flex-1 rounded-full bg-[#c3d3bc] px-5 py-4 font-bold shadow-sm"
         >
-          {canGoNext ? "Volgende stap" : "Bestelling compleet"}
+          {canGoNext ? "Volgende stap" : "Terug naar start"}
         </button>
       </div>
+      )}
 
       <section className="studio-print-report hidden bg-white text-black">
         <div className="mb-5 flex items-start justify-between gap-6 border-b border-black/20 pb-4">
