@@ -769,6 +769,7 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   decorationNotes: "",
   topperIds: [],
   tasting: false,
+  tastingFillingId: "chipolata",
   contact: emptyContactDetails,
 };
 

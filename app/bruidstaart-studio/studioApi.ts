@@ -80,6 +80,7 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
         : {},
       decorationQuantities: numericRecordFrom(config.decorationQuantities),
       decorationNotes: textFrom(config.decorationNotes),
+      tastingFillingId: textFrom(config.tastingFillingId) || "chipolata",
       topperIds: Array.isArray(config.topperIds)
         ? config.topperIds.filter(
             (id): id is string => typeof id === "string" && id !== "geen"

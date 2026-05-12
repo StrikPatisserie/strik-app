@@ -187,10 +187,12 @@ function topperDecorationAsset(topperId: string) {
     return "/decoratie%20opties_topper%20karton.svg";
   }
   if (
-    topperId === "chocolade-initialen-geschreven" ||
-    topperId === "chocolade-initialen-schildje"
+    topperId === "chocolade-initialen-geschreven"
   ) {
     return "/decoratie%20opties_chocolade%20initialen.svg";
+  }
+  if (topperId === "chocolade-initialen-schildje") {
+    return "/initialen%20schild.svg";
   }
   if (topperId === "marsepeinen-ringen") {
     return "/decoratie%20opties_marsepein%20ringen.svg";
@@ -612,9 +614,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     return null;
   }
 
-  const topLayer = layers[layers.length - 1];
-  const topWidth = layerWidth(topLayer?.persons || 1);
-  const topX = (260 - topWidth) / 2;
   const topY = layerY(layers.length - 1);
   const hasFlowers =
     selectedDecorations.has("echte-bloemen") ||
@@ -875,31 +874,41 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         {selectedMainTopperId && (
           <image
             href={topperDecorationAsset(selectedMainTopperId)}
-            x={100}
-            y={Math.max(4, topY - 42)}
-            width="60"
-            height="42"
+            x={92}
+            y={Math.max(4, topY - 52)}
+            width="76"
+            height="52"
             preserveAspectRatio="xMidYMid meet"
           />
         )}
 
-        {selectedInitialsId && (
+        {selectedInitialsId === "chocolade-initialen-geschreven" && (
           <image
             href={topperDecorationAsset(selectedInitialsId)}
-            x={106}
-            y={topY - 22}
-            width="48"
-            height="24"
+            x={97}
+            y={topY - 32}
+            width="66"
+            height="32"
+            preserveAspectRatio="xMidYMid meet"
+          />
+        )}
+        {selectedInitialsId === "chocolade-initialen-schildje" && (
+          <image
+            href={topperDecorationAsset(selectedInitialsId)}
+            x={102}
+            y={Math.max(4, topY - 50)}
+            width="56"
+            height="48"
             preserveAspectRatio="xMidYMid meet"
           />
         )}
         {selectedToppers.has("marsepeinen-ringen") && (
           <image
             href={topperDecorationAsset("marsepeinen-ringen")}
-            x={topX + topWidth - 46}
-            y={topY - 24}
-            width="42"
-            height="28"
+            x={128}
+            y={topY - 30}
+            width="54"
+            height="34"
             preserveAspectRatio="xMidYMid meet"
           />
         )}
@@ -1715,9 +1724,32 @@ export default function BruidstaartStudioConfigurator() {
                   setConfig((current) => ({
                     ...current,
                     tasting: !current.tasting,
+                    tastingFillingId:
+                      current.tastingFillingId || fillingOptions[0].id,
                   }))
                 }
               />
+              {config.tasting && (
+                <label className="grid gap-2 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 text-sm font-black text-[#2d2a26]/70 shadow-sm">
+                  Smaak voor het bruidsproefje
+                  <select
+                    value={config.tastingFillingId || fillingOptions[0].id}
+                    onChange={(event) =>
+                      setConfig((current) => ({
+                        ...current,
+                        tastingFillingId: event.target.value,
+                      }))
+                    }
+                    className="rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                  >
+                    {fillingOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <p className="rounded-2xl bg-[#f8f6f3] p-4 text-sm font-semibold leading-relaxed text-[#2d2a26]/60">
                 Dit is een aanvraag. Het proefmoment wordt later definitief
                 gepland door Strik.

@@ -324,6 +324,8 @@ export function calculateWeddingCakePrice(
 export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   const style = findOption(cakeStyles, config.styleId);
   const size = findOption(cakeSizes, config.sizeId);
+  const tastingFilling =
+    findOption(fillingOptions, config.tastingFillingId) || fillingOptions[0];
   const toppers = config.topperIds.flatMap((id) => {
     const topper = findOption(topperOptions, id);
     return topper ? [topper.label] : [];
@@ -350,7 +352,9 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
     layout: getSelectedLayerOptionSummary(config, getLayerLayout),
     decorations,
     topper: toppers.length ? toppers.join(", ") : "Geen topper",
-    tasting: config.tasting ? tastingOption.label : "Nee",
+    tasting: config.tasting
+      ? `${tastingOption.label} (${tastingFilling.label})`
+      : "Nee",
   };
 }
 
