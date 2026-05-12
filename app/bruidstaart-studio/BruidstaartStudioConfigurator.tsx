@@ -62,9 +62,11 @@ const CREME_DOTS_ASSET = "/strik-app_creme%20stippen.svg";
 const CREME_SMEAR_DICHT_ASSET = "/creme%20smeren_creme%20dicht.svg";
 const CREME_SMEAR_OPEN_ASSET = "/creme%20smeren_creme%20open.svg";
 const GOLD_LEAF_ASSET = "/bladgoud.svg";
+const RED_FRUIT_ASSET = "/roodfruit.svg";
 const INITIALS_SHIELD_ASSET = "/initialen%20op%20schild.svg";
 
 type StepId =
+  | "start"
   | "stijl"
   | "formaat"
   | "smaak"
@@ -76,6 +78,12 @@ type StepId =
   | "overzicht";
 
 const steps: { id: StepId; title: string; description: string }[] = [
+  {
+    id: "start",
+    title: "Start",
+    description:
+      "Haal een bestaande bruidstaart op of begin aan een nieuwe bestelling.",
+  },
   {
     id: "formaat",
     title: "Formaat",
@@ -229,6 +237,28 @@ function colorMatrixForHex(hex?: string, multiplier = 1) {
   return `0 0 0 0 ${red.toFixed(3)} 0 0 0 0 ${green.toFixed(
     3
   )} 0 0 0 0 ${blue.toFixed(3)} 0 0 0 1 0`;
+}
+
+function normalizeDateSearchInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const dutchDate = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2}|\d{4})$/);
+  if (!dutchDate) return trimmed;
+
+  const [, day, month, year] = dutchDate;
+  const fullYear = year.length === 2 ? `20${year}` : year;
+
+  return `${fullYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
+
+function formatDutchShortDate(value?: string) {
+  if (!value) return "geen leverdatum";
+
+  const isoDate = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!isoDate) return value;
+
+  return `${isoDate[3]}-${isoDate[2]}-${isoDate[1].slice(-2)}`;
 }
 
 function topperDecorationAsset(topperId: string) {
@@ -485,6 +515,27 @@ function DecorationOptionCard({
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+    </svg>
+  );
+}
+
 function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const visualizerId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const size = findOption(cakeSizes, config.sizeId);
@@ -695,6 +746,57 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     "chocolade-initialen-geschreven",
     "chocolade-initialen-schildje",
   ].find((id) => selectedToppers.has(id));
+  const topperVisuals = [
+    selectedMainTopperId
+      ? {
+          id: selectedMainTopperId,
+          width: 58,
+          height: 52,
+          offsetY: 3,
+        }
+      : null,
+    hasBrideCoupleTopper
+      ? {
+          id: "bruidspaartje",
+          width: 54,
+          height: 52,
+          offsetY: 3,
+        }
+      : null,
+    selectedInitialsId === "chocolade-initialen-geschreven"
+      ? {
+          id: selectedInitialsId,
+          width: 54,
+          height: 34,
+          offsetY: 4,
+        }
+      : null,
+    selectedInitialsId === "chocolade-initialen-schildje"
+      ? {
+          id: selectedInitialsId,
+          width: 46,
+          height: 50,
+          offsetY: 3,
+        }
+      : null,
+    selectedToppers.has("marsepeinen-ringen")
+      ? {
+          id: "marsepeinen-ringen",
+          width: 64,
+          height: 44,
+          offsetY: 5,
+        }
+      : null,
+  ].filter((item): item is {
+    id: string;
+    width: number;
+    height: number;
+    offsetY: number;
+  } => Boolean(item));
+  const topperGap = 3;
+  const topperTotalWidth =
+    topperVisuals.reduce((total, item) => total + item.width, 0) +
+    Math.max(0, topperVisuals.length - 1) * topperGap;
 
   function layerDecorationPoints(width: number, spacing: number, max: number) {
     const count = Math.max(2, Math.min(max, Math.floor(width / spacing)));
@@ -763,29 +865,15 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
         {selectedDecorations.has("rood-fruit") &&
           fruitPoints.map((point, item) => (
-            <g
+            <image
               key={`${layerId}-fruit-${item}`}
-              transform={`translate(${x + 16 + point * (width - 32)} ${
-              y - 5 - (item % 2) * 3
-              })`}
-            >
-              <circle
-                cx="0"
-                cy="0"
-                r="4.2"
-                fill="#bd2f37"
-                stroke="#fff7ec"
-                strokeWidth="0.8"
-              />
-              <circle
-                cx="4.8"
-                cy="1"
-                r="3.4"
-                fill="#d94a52"
-                stroke="#fff7ec"
-                strokeWidth="0.6"
-              />
-            </g>
+              href={RED_FRUIT_ASSET}
+              x={x + 5 + point * (width - 32)}
+              y={y - 16 - (item % 2) * 3}
+              width="24"
+              height="22"
+              preserveAspectRatio="xMidYMid meet"
+            />
           ))}
 
         {hasFlowers &&
@@ -997,57 +1085,23 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           );
         })}
 
-        {selectedMainTopperId && (
-          <image
-            href={topperDecorationAsset(selectedMainTopperId)}
-            x={hasBrideCoupleTopper ? 78 : 92}
-            y={Math.max(4, topY - 52)}
-            width={hasBrideCoupleTopper ? "64" : "76"}
-            height="52"
-            preserveAspectRatio="xMidYMid meet"
-          />
-        )}
-        {hasBrideCoupleTopper && (
-          <image
-            href={topperDecorationAsset("bruidspaartje")}
-            x={selectedMainTopperId ? 130 : 92}
-            y={Math.max(4, topY - 52)}
-            width={selectedMainTopperId ? "64" : "76"}
-            height="52"
-            preserveAspectRatio="xMidYMid meet"
-          />
-        )}
+        {topperVisuals.map((topper, index) => {
+          const previousWidth = topperVisuals
+            .slice(0, index)
+            .reduce((total, item) => total + item.width + topperGap, 0);
 
-        {selectedInitialsId === "chocolade-initialen-geschreven" && (
-          <image
-            href={topperDecorationAsset(selectedInitialsId)}
-            x={97}
-            y={topY - 32}
-            width="66"
-            height="32"
-            preserveAspectRatio="xMidYMid meet"
-          />
-        )}
-        {selectedInitialsId === "chocolade-initialen-schildje" && (
-          <image
-            href={topperDecorationAsset(selectedInitialsId)}
-            x={102}
-            y={Math.max(4, topY - 50)}
-            width="56"
-            height="48"
-            preserveAspectRatio="xMidYMid meet"
-          />
-        )}
-        {selectedToppers.has("marsepeinen-ringen") && (
-          <image
-            href={topperDecorationAsset("marsepeinen-ringen")}
-            x={105}
-            y={topY - 30}
-            width="54"
-            height="34"
-            preserveAspectRatio="xMidYMid meet"
-          />
-        )}
+          return (
+            <image
+              key={topper.id}
+              href={topperDecorationAsset(topper.id)}
+              x={(260 - topperTotalWidth) / 2 + previousWidth}
+              y={Math.max(4, topY - topper.height + topper.offsetY)}
+              width={topper.width}
+              height={topper.height}
+              preserveAspectRatio="xMidYMid meet"
+            />
+          );
+        })}
       </svg>
       <p className="mt-2 text-xs font-bold leading-relaxed text-[#2d2a26]/50">
         Schets op basis van formaat, kleur, layout, decoratie en toppers. De
@@ -1071,9 +1125,22 @@ function updateContact<K extends keyof ContactDetails>(
   };
 }
 
+function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
+  return {
+    ...initialWeddingCakeConfig,
+    layerFillingIds: {},
+    layerColorIds: {},
+    layerLayoutIds: {},
+    decorationIds: [],
+    decorationQuantities: {},
+    topperIds: [],
+    contact: { ...initialWeddingCakeConfig.contact },
+  };
+}
+
 export default function BruidstaartStudioConfigurator() {
   const [config, setConfig] = useState<WeddingCakeConfig>(
-    initialWeddingCakeConfig
+    createEmptyWeddingCakeConfig
   );
   const [stepIndex, setStepIndex] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -1408,7 +1475,7 @@ export default function BruidstaartStudioConfigurator() {
 
   async function searchDrafts() {
     const search = draftSearch.trim();
-    const deliveryDate = draftDeliveryDate.trim();
+    const deliveryDate = normalizeDateSearchInput(draftDeliveryDate);
 
     if (!search && !deliveryDate) {
       setDraftStatus("Vul een herkenningscode, achternaam of leverdatum in.");
@@ -1468,6 +1535,7 @@ export default function BruidstaartStudioConfigurator() {
       layerLayoutIds: layerLayoutIdsForSize(nextConfig.sizeId, nextConfig),
     });
     setDraftStatus(`Concept ${draft.code} geladen.`);
+    goToStep(1);
   }
 
   async function deleteDraft(draft: WeddingCakeDraft) {
@@ -1503,6 +1571,58 @@ export default function BruidstaartStudioConfigurator() {
     }
   }
 
+  async function deleteCurrentDraft() {
+    const code = config.contact.recognitionCode.trim();
+
+    if (!code) {
+      setDraftStatus("Er is nog geen herkenningscode om te verwijderen.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Concept ${code} verwijderen en dit formulier leegmaken?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(getWeddingCakeDeleteUrl(code), {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("WordPress verwijderen niet beschikbaar.");
+
+      deleteLocalDraft(code);
+      setDraftResults((current) =>
+        current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
+      );
+      setConfig(createEmptyWeddingCakeConfig());
+      setDraftStatus(`Concept ${code} verwijderd.`);
+      goToStep(0);
+    } catch {
+      deleteLocalDraft(code);
+      setDraftResults((current) =>
+        current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
+      );
+      setConfig(createEmptyWeddingCakeConfig());
+      setDraftStatus(
+        "Concept is lokaal verwijderd. Werk de WordPress snippet bij om ook op elk device te kunnen verwijderen."
+      );
+      goToStep(0);
+    }
+  }
+
+  function startAgain() {
+    const confirmed = window.confirm("Alles leegmaken en opnieuw beginnen?");
+
+    if (!confirmed) return;
+
+    setConfig(createEmptyWeddingCakeConfig());
+    setDraftResults([]);
+    setDraftStatus("Nieuw formulier gestart.");
+    goToStep(0);
+  }
+
   const canGoBack = stepIndex > 0;
   const canGoNext = stepIndex < steps.length - 1;
 
@@ -1519,13 +1639,13 @@ export default function BruidstaartStudioConfigurator() {
   return (
     <div className="space-y-5">
       <nav className="studio-no-print rounded-[1.5rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm">
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {steps.map((item, index) => (
             <button
               key={item.id}
               type="button"
               onClick={() => goToStep(index)}
-              className={`min-w-0 rounded-full px-2.5 py-2 text-xs font-black leading-tight transition sm:text-sm ${
+              className={`shrink-0 rounded-full px-3 py-2 text-xs font-black leading-tight transition sm:text-sm ${
                 stepIndex === index
                   ? "bg-[#c3d3bc] text-[#2d2a26]"
                   : "bg-[#f8f6f3] text-[#2d2a26]/55"
@@ -1536,117 +1656,6 @@ export default function BruidstaartStudioConfigurator() {
           ))}
         </div>
       </nav>
-
-      {stepIndex === 0 && (
-        <section className="studio-no-print grid gap-3 lg:grid-cols-2">
-          <div className="rounded-[1.35rem] border border-[#d8e7d1] bg-[#eef7e9] p-4 shadow-sm">
-            <h3 className="text-base font-black">Concept opslaan</h3>
-            <p className="mt-1 text-xs font-bold leading-relaxed text-[#2d2a26]/55">
-              Bewaar de bestelling met herkenningscode en achternaam.
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <input
-                  value={config.contact.recognitionCode}
-                  onChange={(event) =>
-                    setConfig((current) =>
-                      updateContact(
-                        current,
-                        "recognitionCode",
-                        event.target.value
-                      )
-                    )
-                  }
-                  placeholder="Herkenningscode"
-                  className="min-w-0 rounded-2xl border border-[#d4dfcf] bg-white px-4 py-3 text-sm"
-                />
-                <input
-                  value={config.contact.surname}
-                  onChange={(event) =>
-                    setConfig((current) =>
-                      updateContact(current, "surname", event.target.value)
-                    )
-                  }
-                  placeholder="Achternaam klant"
-                  className="min-w-0 rounded-2xl border border-[#d4dfcf] bg-white px-4 py-3 text-sm"
-                />
-            </div>
-            <button
-              type="button"
-              onClick={saveDraft}
-              className="mt-3 rounded-full bg-[#c3d3bc] px-5 py-3 text-sm font-black shadow-sm"
-            >
-              Concept opslaan
-            </button>
-          </div>
-
-          <div className="rounded-[1.35rem] border border-[#ead8aa] bg-[#fff7df] p-4 shadow-sm">
-            <h3 className="text-base font-black">Concept terughalen</h3>
-            <p className="mt-1 text-xs font-bold leading-relaxed text-[#2d2a26]/55">
-              Zoek op code, achternaam klant of leverdatum.
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_10.5rem_auto]">
-              <input
-                value={draftSearch}
-                onChange={(event) => setDraftSearch(event.target.value)}
-                placeholder="Code of achternaam"
-                className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-4 py-3 text-sm"
-              />
-              <input
-                value={draftDeliveryDate}
-                onChange={(event) => setDraftDeliveryDate(event.target.value)}
-                type="date"
-                aria-label="Leverdatum"
-                className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-4 py-3 text-sm"
-              />
-              <button
-                type="button"
-                onClick={searchDrafts}
-                className="rounded-full bg-[#f1d28f] px-5 py-3 text-sm font-black shadow-sm"
-              >
-                Zoeken
-              </button>
-            </div>
-            {draftStatus && (
-              <p className="mt-3 text-sm font-bold text-[#2d2a26]/55">
-                {draftStatus}
-              </p>
-            )}
-            {draftResults.length > 0 && (
-              <div className="mt-3 grid gap-2">
-                {draftResults.map((draft) => (
-                  <div
-                    key={`${draft.code}-${draft.updatedAt}`}
-                    className="flex gap-2 rounded-2xl border border-[#ead8aa] bg-white p-3 shadow-sm"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => loadDraft(draft)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <p className="font-black">{draft.code}</p>
-                      <p className="text-sm font-semibold text-[#2d2a26]/55">
-                        {draft.surname || draft.names || "Geen naam"} ·{" "}
-                        {draft.config.contact.deliveryDate ||
-                          draft.config.contact.weddingDate ||
-                          "geen datum"}{" "}
-                        ·{" "}
-                        {new Date(draft.updatedAt).toLocaleDateString("nl-NL")}
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteDraft(draft)}
-                      className="self-center rounded-full border border-[#e6b8af] bg-[#fff4f1] px-3 py-2 text-xs font-black text-[#9f382f]"
-                    >
-                      Verwijder
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
 
       {stepIndex > 0 && step.id !== "overzicht" && (
         <section className="studio-no-print rounded-[1.25rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm">
@@ -1740,13 +1749,29 @@ export default function BruidstaartStudioConfigurator() {
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={saveDraft}
-              className="rounded-full bg-[#c3d3bc] px-8 py-4 text-lg font-black shadow-sm"
-            >
-              Concept opslaan
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={saveDraft}
+                className="rounded-full bg-[#c3d3bc] px-8 py-4 text-lg font-black shadow-sm"
+              >
+                Concept opslaan
+              </button>
+              <button
+                type="button"
+                onClick={deleteCurrentDraft}
+                className="rounded-full bg-[#d94a45] px-6 py-4 text-lg font-black text-white shadow-sm"
+              >
+                Verwijder
+              </button>
+              <button
+                type="button"
+                onClick={startAgain}
+                className="rounded-full bg-white px-6 py-4 text-lg font-black shadow-sm"
+              >
+                Begin opnieuw
+              </button>
+            </div>
           </div>
         </section>
       )}
@@ -1776,8 +1801,104 @@ export default function BruidstaartStudioConfigurator() {
         </div>
       </section>
 
-      <div className="studio-no-print grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div
+        className={`studio-no-print grid gap-5 ${
+          step.id === "start" ? "" : "lg:grid-cols-[minmax(0,1fr)_20rem]"
+        }`}
+      >
         <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
+          {step.id === "start" && (
+            <div className="grid gap-4">
+              <div className="rounded-[1.35rem] border border-[#ead8aa] bg-[#fff7df] p-4 shadow-sm">
+                <h3 className="text-xl font-black">
+                  Bruidstaart inladen of aanpassen
+                </h3>
+                <p className="mt-1 text-sm font-bold leading-relaxed text-[#2d2a26]/55">
+                  Zoek op herkenningscode, achternaam of leverdatum.
+                </p>
+                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto]">
+                  <input
+                    value={draftSearch}
+                    onChange={(event) => setDraftSearch(event.target.value)}
+                    placeholder="Zoek"
+                    className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-4 py-3 text-sm font-bold"
+                  />
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                    Leverdatum
+                    <input
+                      value={draftDeliveryDate}
+                      onChange={(event) =>
+                        setDraftDeliveryDate(event.target.value)
+                      }
+                      inputMode="numeric"
+                      placeholder="DD-MM-JJ"
+                      className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-4 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={searchDrafts}
+                    className="self-end rounded-full bg-[#f1d28f] px-5 py-3 text-sm font-black shadow-sm"
+                  >
+                    Zoeken
+                  </button>
+                </div>
+                {draftStatus && (
+                  <p className="mt-3 text-sm font-bold text-[#2d2a26]/55">
+                    {draftStatus}
+                  </p>
+                )}
+                {draftResults.length > 0 && (
+                  <div className="mt-4 grid gap-2">
+                    {draftResults.map((draft) => {
+                      const deliveryDate =
+                        draft.config.contact.deliveryDate ||
+                        draft.config.contact.weddingDate;
+
+                      return (
+                        <div
+                          key={`${draft.code}-${draft.updatedAt}`}
+                          className="flex gap-2 rounded-2xl border border-[#ead8aa] bg-white p-3 shadow-sm"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => loadDraft(draft)}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <p className="font-black">{draft.code}</p>
+                            <p className="text-sm font-semibold text-[#2d2a26]/55">
+                              {draft.surname || draft.names || "Geen naam"} ·
+                              Leverdatum: {formatDutchShortDate(deliveryDate)}
+                            </p>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteDraft(draft)}
+                            aria-label={`Concept ${draft.code} verwijderen`}
+                            className="self-center rounded-full border border-[#e6b8af] bg-[#fff4f1] p-2.5 text-[#9f382f]"
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfig(createEmptyWeddingCakeConfig());
+                  setDraftStatus("");
+                  goToStep(1);
+                }}
+                className="rounded-full bg-[#c3d3bc] px-5 py-4 text-base font-black shadow-sm"
+              >
+                Nieuwe bruidstaart starten
+              </button>
+            </div>
+          )}
+
           {step.id === "stijl" && (
             <div className="grid gap-3">
               {cakeStyles.map((style) => (
@@ -2166,6 +2287,7 @@ export default function BruidstaartStudioConfigurator() {
           )}
         </section>
 
+        {step.id !== "start" && (
         <aside className="h-fit space-y-4 rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm lg:sticky lg:top-5">
           <CakeVisualizer config={config} />
 
@@ -2226,6 +2348,7 @@ export default function BruidstaartStudioConfigurator() {
             ))}
           </div>
         </aside>
+        )}
       </div>
 
       <div className="studio-no-print flex gap-3">
