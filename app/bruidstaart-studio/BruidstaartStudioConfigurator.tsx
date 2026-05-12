@@ -467,16 +467,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           />
         )}
       </div>
-      <div className="mb-3 flex h-32 items-center justify-center overflow-hidden rounded-2xl bg-white p-3">
-        <Image
-          src={size.iconPath}
-          alt=""
-          width={260}
-          height={160}
-          className="h-full w-full object-contain"
-          style={{ transform: `scale(${sizeIconZoom(size.id)})` }}
-        />
-      </div>
       <svg
         viewBox="0 0 260 205"
         className="h-auto w-full text-[#1f1d1a]"
