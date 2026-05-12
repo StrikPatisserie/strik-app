@@ -653,8 +653,7 @@ export const layoutOptions: StudioOption[] = [
 export const decorationOptions: StudioOption[] = [
   {
     id: "creme-parelrand",
-    label: "Crème parelrand / marsepein-icing rand",
-    description: "Randafwerking zoals in de bruidsfolder.",
+    label: "Crèmekleurige parelrand",
     price: { mode: "perPerson", amount: 0.15 },
   },
   {

@@ -101,12 +101,29 @@ export function getCakeLayers(config: WeddingCakeConfig): CakeLayer[] {
       ];
 }
 
+export function getLayerDesignChoiceId(layer: CakeLayer, layers: CakeLayer[]) {
+  if (layer.designGroupId) return layer.designGroupId;
+
+  const matchingSameSizeLayers = layers.filter(
+    (item) =>
+      !item.designGroupId &&
+      item.persons === layer.persons &&
+      item.personsLabel === layer.personsLabel
+  );
+
+  if (matchingSameSizeLayers.length > 1) {
+    return `same-size-${layer.personsLabel}-${layer.persons}`;
+  }
+
+  return layer.id;
+}
+
 export function getDesignGroupsForLayers(layers: CakeLayer[]): CakeLayer[] {
   const groups: CakeLayer[] = [];
   const groupsById = new Map<string, CakeLayer>();
 
   layers.forEach((layer) => {
-    const groupId = layer.designGroupId || layer.id;
+    const groupId = getLayerDesignChoiceId(layer, layers);
     const existingGroup = groupsById.get(groupId);
 
     if (existingGroup) {
@@ -114,11 +131,25 @@ export function getDesignGroupsForLayers(layers: CakeLayer[]): CakeLayer[] {
       return;
     }
 
+    const matchingSameSizeLayers = layers.filter(
+      (item) =>
+        !item.designGroupId &&
+        item.persons === layer.persons &&
+        item.personsLabel === layer.personsLabel
+    );
+    const isSameSizeGroup = matchingSameSizeLayers.length > 1;
+
     const group = {
       id: groupId,
-      label: layer.designGroupLabel || layer.label,
+      label:
+        layer.designGroupLabel ||
+        (isSameSizeGroup ? `${matchingSameSizeLayers.length} lagen` : layer.label),
       persons: layer.persons,
-      personsLabel: layer.designGroupPersonsLabel || layer.personsLabel,
+      personsLabel:
+        layer.designGroupPersonsLabel ||
+        (isSameSizeGroup
+          ? `${matchingSameSizeLayers.length} x ${layer.personsLabel}`
+          : layer.personsLabel),
     };
 
     groupsById.set(groupId, group);
@@ -133,9 +164,10 @@ export function getCakeDesignGroups(config: WeddingCakeConfig): CakeLayer[] {
 }
 
 function getChoiceIdForLayer(config: WeddingCakeConfig, layerId: string) {
-  const layer = getCakeLayers(config).find((item) => item.id === layerId);
+  const layers = getCakeLayers(config);
+  const layer = layers.find((item) => item.id === layerId);
 
-  return layer?.designGroupId || layerId;
+  return layer ? getLayerDesignChoiceId(layer, layers) : layerId;
 }
 
 export function getLayerFilling(

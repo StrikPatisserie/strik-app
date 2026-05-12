@@ -23,6 +23,7 @@ import {
   getCakeLayers,
   getDecorationQuantity,
   getDesignGroupsForLayers,
+  getLayerDesignChoiceId,
   getLayerColor,
   getLayerFilling,
   getLayerLayout,
@@ -53,9 +54,12 @@ const DEFAULT_ROSE_QUANTITY = 5;
 const ROSE_WITH_LEAF_ASSET = "/roosje%20met%20blad.svg";
 const ROSE_WITHOUT_LEAF_ASSET = "/roosje%20zonder%20blad.svg";
 const REAL_FLOWER_ASSET = "/strik%20app%20bloem.svg";
-const ROSE_PATTERN_ASSET = "/strik-app_creme%20roosjes.svg";
+const ROSE_PATTERN_ASSET = "/creme%20roosjes.svg";
 const PEARL_ASSET = "/strik-app_parelrand.svg";
 const CREME_DOTS_ASSET = "/strik-app_creme%20stippen.svg";
+const CREME_SMEAR_DICHT_ASSET = "/creme%20smeren_creme%20dicht.svg";
+const CREME_SMEAR_OPEN_ASSET = "/creme%20smeren_creme%20open.svg";
+const GOLD_LEAF_ASSET = "/bladgoud.svg";
 const INITIALS_SHIELD_ASSET = "/initialen%20op%20schild.svg";
 
 type StepId =
@@ -161,6 +165,12 @@ function sizeIconZoom(sizeId: string) {
 }
 
 function cakeDecorationAsset(layoutId: string) {
+  if (layoutId.includes("naked-dicht") || layoutId.includes("creme-strak")) {
+    return CREME_SMEAR_DICHT_ASSET;
+  }
+  if (layoutId.includes("naked-open") || layoutId.includes("creme-grof")) {
+    return CREME_SMEAR_OPEN_ASSET;
+  }
   if (layoutId.includes("creme-stippen")) {
     return CREME_DOTS_ASSET;
   }
@@ -185,6 +195,38 @@ function cakeDecorationAsset(layoutId: string) {
 
 function isWhiteDecorationBase(color: StudioOption) {
   return color.id === "icing-kleur";
+}
+
+function hexToRgb(hex?: string) {
+  if (!hex) return [1, 1, 1];
+
+  const normalized = hex.replace("#", "");
+  const fullHex =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((character) => character + character)
+          .join("")
+      : normalized;
+  const value = Number.parseInt(fullHex, 16);
+
+  if (Number.isNaN(value)) return [1, 1, 1];
+
+  return [
+    ((value >> 16) & 255) / 255,
+    ((value >> 8) & 255) / 255,
+    (value & 255) / 255,
+  ];
+}
+
+function colorMatrixForHex(hex?: string, multiplier = 1) {
+  const [red, green, blue] = hexToRgb(hex).map((value) =>
+    Math.max(0, Math.min(1, value * multiplier))
+  );
+
+  return `0 0 0 0 ${red.toFixed(3)} 0 0 0 0 ${green.toFixed(
+    3
+  )} 0 0 0 0 ${blue.toFixed(3)} 0 0 0 1 0`;
 }
 
 function topperDecorationAsset(topperId: string) {
@@ -487,6 +529,24 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
     if (decorationAsset) {
       const clipId = `${visualizerId}-cake-layer-pattern-${index}`;
+      const decorationFilter = key.includes("naked")
+        ? `url(#${visualizerId}-natural-smear-decoration)`
+        : key.includes("creme-rozen") ||
+            key.includes("creme-strak") ||
+            key.includes("creme-grof")
+          ? `url(#${visualizerId}-layer-decoration-${index})`
+          : `url(#${visualizerId}-${
+              isWhiteDecorationBase(layerColor)
+                ? "champagne-decoration"
+                : "snow-decoration"
+            })`;
+      const decorationOpacity =
+        key.includes("naked") ||
+        key.includes("creme-rozen") ||
+        key.includes("creme-strak") ||
+        key.includes("creme-grof")
+          ? "0.82"
+          : "1";
 
       return (
         <g clipPath={`url(#${clipId})`}>
@@ -497,11 +557,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             width={width}
             height={layerHeight + 4}
             preserveAspectRatio="none"
-            filter={`url(#${visualizerId}-${
-              isWhiteDecorationBase(layerColor)
-                ? "champagne-decoration"
-                : "snow-decoration"
-            })`}
+            filter={decorationFilter}
+            opacity={decorationOpacity}
           />
         </g>
       );
@@ -690,14 +747,15 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         )}
 
         {selectedDecorations.has("bladgoud") &&
-          layerDecorationPoints(width, 60, 3).map((point, item) => (
-            <path
+          layerDecorationPoints(width, 52, 3).map((point, item) => (
+            <image
               key={`${layerId}-gold-${item}`}
-              d={`M ${x + 18 + point * (width - 36)} ${y + 6} l 3 -3 l 4 3 l -2 5 l -4 1 Z`}
-              fill="#caa64c"
-              stroke="currentColor"
-              strokeWidth="0.4"
-              opacity="0.9"
+              href={GOLD_LEAF_ASSET}
+              x={x + 8 + point * (width - 38)}
+              y={y + 4 + (item % 2) * 10}
+              width="30"
+              height="18"
+              preserveAspectRatio="xMidYMid meet"
             />
           ))}
 
@@ -706,21 +764,21 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             <g
               key={`${layerId}-fruit-${item}`}
               transform={`translate(${x + 16 + point * (width - 32)} ${
-                y - 2 - (item % 2) * 2
+              y - 5 - (item % 2) * 3
               })`}
             >
               <circle
                 cx="0"
                 cy="0"
-                r="3.4"
+                r="4.2"
                 fill="#bd2f37"
                 stroke="#fff7ec"
                 strokeWidth="0.8"
               />
               <circle
-                cx="4"
+                cx="4.8"
                 cy="1"
-                r="2.7"
+                r="3.4"
                 fill="#d94a52"
                 stroke="#fff7ec"
                 strokeWidth="0.6"
@@ -733,11 +791,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             const isRose = item < rosePoints.length;
             const flowerX =
               item === 0
-                ? x + 18
+                ? x + (isRose ? 18 : 24)
                 : item === rosePoints.length + realFlowerPoints.length - 1
-                  ? x + width - 18
+                  ? x + width - (isRose ? 18 : 24)
                   : x + 18 + point * (width - 36);
-            const flowerY = y - 5 + ((index + item) % 2) * 3;
+            const flowerY =
+              y - (isRose ? 6 : 16) + ((index + item) % 2) * (isRose ? 3 : 4);
 
             return (
               <g
@@ -760,10 +819,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 ) : (
                   <image
                     href={REAL_FLOWER_ASSET}
-                    x="-9"
-                    y="-9"
-                    width="18"
-                    height="18"
+                    x="-19"
+                    y="-19"
+                    width="38"
+                    height="38"
                     preserveAspectRatio="xMidYMid meet"
                   />
                 )}
@@ -827,6 +886,33 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               values="0 0 0 0 0.82 0 0 0 0 0.68 0 0 0 0 0.42 0 0 0 1 0"
             />
           </filter>
+          <filter
+            id={`${visualizerId}-natural-smear-decoration`}
+            colorInterpolationFilters="sRGB"
+          >
+            <feColorMatrix
+              type="matrix"
+              values="0 0 0 0 0.88 0 0 0 0 0.78 0 0 0 0 0.62 0 0 0 1 0"
+            />
+          </filter>
+          {layers.map((layer, index) => {
+            const layerColor = config.styleId
+              ? getLayerColor(config, layer.id)
+              : undefined;
+
+            return (
+              <filter
+                key={`${layer.id}-filter`}
+                id={`${visualizerId}-layer-decoration-${index}`}
+                colorInterpolationFilters="sRGB"
+              >
+                <feColorMatrix
+                  type="matrix"
+                  values={colorMatrixForHex(layerColor?.swatchColor, 0.88)}
+                />
+              </filter>
+            );
+          })}
           {layers.map((layer, index) => {
             const width = layerWidth(layer.persons);
             const x = (260 - width) / 2;
@@ -1031,7 +1117,7 @@ export default function BruidstaartStudioConfigurator() {
       nextLayers.map((layer, index) => {
         const currentLayer = currentLayers[index];
         const sourceLayer = size.layers.find(
-          (item) => (item.designGroupId || item.id) === layer.id
+          (item) => getLayerDesignChoiceId(item, size.layers) === layer.id
         );
         const optionId =
           optionIds?.[layer.id] ||
@@ -1417,72 +1503,70 @@ export default function BruidstaartStudioConfigurator() {
       </nav>
 
       {stepIndex === 0 && (
-        <section className="studio-no-print rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div>
-            <h3 className="text-lg font-black">Concept opslaan</h3>
-            <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
-              Vul een herkenningscode en achternaam in. Daarmee kun je de
-              bestelling later terughalen en aanpassen.
+        <section className="studio-no-print grid gap-3 lg:grid-cols-2">
+          <div className="rounded-[1.35rem] border border-[#d8e7d1] bg-[#eef7e9] p-4 shadow-sm">
+            <h3 className="text-base font-black">Concept opslaan</h3>
+            <p className="mt-1 text-xs font-bold leading-relaxed text-[#2d2a26]/55">
+              Bewaar de bestelling met herkenningscode en achternaam.
             </p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <input
-                value={config.contact.recognitionCode}
-                onChange={(event) =>
-                  setConfig((current) =>
-                    updateContact(
-                      current,
-                      "recognitionCode",
-                      event.target.value
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <input
+                  value={config.contact.recognitionCode}
+                  onChange={(event) =>
+                    setConfig((current) =>
+                      updateContact(
+                        current,
+                        "recognitionCode",
+                        event.target.value
+                      )
                     )
-                  )
-                }
-                placeholder="Herkenningscode"
-                className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
-              />
-              <input
-                value={config.contact.surname}
-                onChange={(event) =>
-                  setConfig((current) =>
-                    updateContact(current, "surname", event.target.value)
-                  )
-                }
-                placeholder="Achternaam klant"
-                className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
-              />
+                  }
+                  placeholder="Herkenningscode"
+                  className="min-w-0 rounded-2xl border border-[#d4dfcf] bg-white px-4 py-3 text-sm"
+                />
+                <input
+                  value={config.contact.surname}
+                  onChange={(event) =>
+                    setConfig((current) =>
+                      updateContact(current, "surname", event.target.value)
+                    )
+                  }
+                  placeholder="Achternaam klant"
+                  className="min-w-0 rounded-2xl border border-[#d4dfcf] bg-white px-4 py-3 text-sm"
+                />
             </div>
             <button
               type="button"
               onClick={saveDraft}
-              className="mt-3 rounded-full bg-[#c3d3bc] px-5 py-3 font-bold shadow-sm"
+              className="mt-3 rounded-full bg-[#c3d3bc] px-5 py-3 text-sm font-black shadow-sm"
             >
               Concept opslaan
             </button>
           </div>
 
-          <div>
-            <h3 className="text-lg font-black">Concept terughalen</h3>
-            <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
-              Zoek op herkenningscode, achternaam of leverdatum.
+          <div className="rounded-[1.35rem] border border-[#ead8aa] bg-[#fff7df] p-4 shadow-sm">
+            <h3 className="text-base font-black">Concept terughalen</h3>
+            <p className="mt-1 text-xs font-bold leading-relaxed text-[#2d2a26]/55">
+              Zoek op code, achternaam klant of leverdatum.
             </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_11rem_auto]">
+            <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_10.5rem_auto]">
               <input
                 value={draftSearch}
                 onChange={(event) => setDraftSearch(event.target.value)}
                 placeholder="Code of achternaam"
-                className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-4 py-3 text-sm"
               />
               <input
                 value={draftDeliveryDate}
                 onChange={(event) => setDraftDeliveryDate(event.target.value)}
                 type="date"
                 aria-label="Leverdatum"
-                className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-4 py-3 text-sm"
               />
               <button
                 type="button"
                 onClick={searchDrafts}
-                className="rounded-full bg-[#f1d28f] px-5 py-3 font-bold shadow-sm"
+                className="rounded-full bg-[#f1d28f] px-5 py-3 text-sm font-black shadow-sm"
               >
                 Zoeken
               </button>
@@ -1499,7 +1583,7 @@ export default function BruidstaartStudioConfigurator() {
                     key={`${draft.code}-${draft.updatedAt}`}
                     type="button"
                     onClick={() => loadDraft(draft)}
-                    className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-left shadow-sm"
+                    className="rounded-2xl border border-[#ead8aa] bg-white p-3 text-left shadow-sm"
                   >
                     <p className="font-black">{draft.code}</p>
                     <p className="text-sm font-semibold text-[#2d2a26]/55">
@@ -1514,7 +1598,6 @@ export default function BruidstaartStudioConfigurator() {
               </div>
             )}
           </div>
-        </div>
         </section>
       )}
 
