@@ -732,14 +732,6 @@ export const topperOptions: StudioOption[] = [
   },
 ];
 
-export const tastingOption: StudioOption = {
-  id: "bruidsproefje",
-  label: "Bruidsproefje toevoegen",
-  description:
-    "4-persoons taartje met gewenste vulling. Niet afgewerkt als de uiteindelijke bruidstaart.",
-  price: { mode: "fixed", amount: 14.95, label: "per proefje" },
-};
-
 export const emptyContactDetails: ContactDetails = {
   names: "",
   surname: "",
@@ -756,33 +748,33 @@ export const emptyContactDetails: ContactDetails = {
 };
 
 export const initialWeddingCakeConfig: WeddingCakeConfig = {
-  styleId: "klassiek",
-  sizeId: "s1a",
-  fillingId: "chipolata",
+  styleId: "",
+  sizeId: "",
+  fillingId: "",
   layerFillingIds: {},
-  colorId: "marsepein-kleur",
+  colorId: "",
   layerColorIds: {},
-  layoutId: "klassiek-strak",
+  layoutId: "",
   layerLayoutIds: {},
   decorationIds: [],
   decorationQuantities: {},
   decorationNotes: "",
   topperIds: [],
-  tasting: false,
-  tastingFillingId: "chipolata",
+  paid: false,
   contact: emptyContactDetails,
 };
 
 export function isOptionAllowedForStyle(
   option: StudioOption,
-  styleId: CakeStyleId
+  styleId: CakeStyleId | ""
 ) {
+  if (!styleId) return false;
   return !option.allowedStyles || option.allowedStyles.includes(styleId);
 }
 
 export function isLayoutAllowedForStyle(
   option: StudioOption,
-  styleId: CakeStyleId
+  styleId: CakeStyleId | ""
 ) {
   return isOptionAllowedForStyle(option, styleId);
 }

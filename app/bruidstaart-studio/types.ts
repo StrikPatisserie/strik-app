@@ -69,7 +69,7 @@ export type ContactDetails = {
 };
 
 export type WeddingCakeConfig = {
-  styleId: CakeStyleId;
+  styleId: CakeStyleId | "";
   sizeId: string;
   fillingId: string;
   layerFillingIds: Record<string, string>;
@@ -81,8 +81,7 @@ export type WeddingCakeConfig = {
   decorationQuantities: Record<string, number>;
   decorationNotes: string;
   topperIds: string[];
-  tasting: boolean;
-  tastingFillingId: string;
+  paid: boolean;
   contact: ContactDetails;
 };
 

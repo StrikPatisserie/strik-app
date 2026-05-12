@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Laag_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 2196.47 366.58">
+  <!-- Generator: Adobe Illustrator 30.0.0, SVG Export Plug-In . SVG Version: 2.1.1 Build 123)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: none;
+      }
+
+      .st1 {
+        fill: #e5debb;
+      }
+
+      .st2 {
+        clip-path: url(#clippath);
+      }
+    </style>
+    <clipPath id="clippath">
+      <rect class="st0" x="41.88" y="0" width="2136.63" height="368.92"/>
+    </clipPath>
+  </defs>
+  <g class="st2">
+    <g>
+      <circle class="st1" cx="63.22" cy="55.9" r="21.34"/>
+      <circle class="st1" cx="270.28" cy="143.25" r="21.34"/>
+      <circle class="st1" cx="477.33" cy="55.9" r="21.34"/>
+      <circle class="st1" cx="684.39" cy="143.25" r="21.34"/>
+      <circle class="st1" cx="891.45" cy="55.9" r="21.34"/>
+      <circle class="st1" cx="1098.51" cy="143.25" r="21.34"/>
+      <circle class="st1" cx="1305.57" cy="55.9" r="21.34"/>
+      <circle class="st1" cx="1512.62" cy="143.25" r="21.34"/>
+      <circle class="st1" cx="1719.68" cy="55.9" r="21.34"/>
+      <circle class="st1" cx="1926.74" cy="143.25" r="21.34"/>
+      <circle class="st1" cx="2133.8" cy="55.9" r="21.34"/>
+      <circle class="st1" cx="63.22" cy="230.6" r="21.34"/>
+      <circle class="st1" cx="270.28" cy="317.95" r="21.34"/>
+      <circle class="st1" cx="477.33" cy="230.6" r="21.34"/>
+      <circle class="st1" cx="684.39" cy="317.95" r="21.34"/>
+      <circle class="st1" cx="891.45" cy="230.6" r="21.34"/>
+      <circle class="st1" cx="1098.51" cy="317.95" r="21.34"/>
+      <circle class="st1" cx="1305.57" cy="230.6" r="21.34"/>
+      <circle class="st1" cx="1512.62" cy="317.95" r="21.34"/>
+      <circle class="st1" cx="1719.68" cy="230.6" r="21.34"/>
+      <circle class="st1" cx="1926.74" cy="317.95" r="21.34"/>
+      <circle class="st1" cx="2133.8" cy="230.6" r="21.34"/>
+    </g>
+  </g>
+</svg>

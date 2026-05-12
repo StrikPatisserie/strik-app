@@ -5,7 +5,6 @@ import {
   decorationOptions,
   fillingOptions,
   layoutOptions,
-  tastingOption,
   topperOptions,
 } from "./data";
 import {
@@ -86,7 +85,9 @@ function decorationToLine(
 }
 
 export function getCakeLayers(config: WeddingCakeConfig): CakeLayer[] {
-  const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
+  const size = findOption(cakeSizes, config.sizeId);
+
+  if (!size) return [];
 
   return size.layers.length
     ? size.layers
@@ -224,6 +225,8 @@ function layerOptionLinesForConfig(
 export function getSelectedFillingSummary(config: WeddingCakeConfig) {
   const layers = getCakeDesignGroups(config);
 
+  if (!layers.length) return "";
+
   if (layers.length <= 1) {
     return getLayerFilling(config, layers[0].id).label;
   }
@@ -242,6 +245,8 @@ function getSelectedLayerOptionSummary(
 ) {
   const layers = getCakeDesignGroups(config);
 
+  if (!layers.length) return "";
+
   if (layers.length <= 1) {
     return getOption(config, layers[0].id).label;
   }
@@ -257,8 +262,17 @@ function getSelectedLayerOptionSummary(
 export function calculateWeddingCakePrice(
   config: WeddingCakeConfig
 ): PriceSummary {
-  const style = findOption(cakeStyles, config.styleId) || cakeStyles[0];
-  const size = findOption(cakeSizes, config.sizeId) || cakeSizes[0];
+  const style = findOption(cakeStyles, config.styleId);
+  const size = findOption(cakeSizes, config.sizeId);
+
+  if (!style || !size) {
+    return {
+      lines: [],
+      total: 0,
+      hasQuoteItems: false,
+    };
+  }
+
   const toppers = config.topperIds.flatMap((id) => {
     const topper = findOption(topperOptions, id);
     return topper ? [topper] : [];
@@ -308,10 +322,6 @@ export function calculateWeddingCakePrice(
       lines.push(optionToLine(option, size.persons));
     });
 
-  if (config.tasting) {
-    lines.push(optionToLine(tastingOption, size.persons));
-  }
-
   const total = lines.reduce((sum, line) => sum + line.amount, 0);
 
   return {
@@ -324,8 +334,6 @@ export function calculateWeddingCakePrice(
 export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   const style = findOption(cakeStyles, config.styleId);
   const size = findOption(cakeSizes, config.sizeId);
-  const tastingFilling =
-    findOption(fillingOptions, config.tastingFillingId) || fillingOptions[0];
   const toppers = config.topperIds.flatMap((id) => {
     const topper = findOption(topperOptions, id);
     return topper ? [topper.label] : [];
@@ -347,14 +355,15 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
           size.tiers === 1 ? "" : "en"
         }`
       : "",
-    filling: getSelectedFillingSummary(config),
-    color: getSelectedLayerOptionSummary(config, getLayerColor),
-    layout: getSelectedLayerOptionSummary(config, getLayerLayout),
+    filling: config.fillingId ? getSelectedFillingSummary(config) : "",
+    color: config.colorId
+      ? getSelectedLayerOptionSummary(config, getLayerColor)
+      : "",
+    layout: config.layoutId
+      ? getSelectedLayerOptionSummary(config, getLayerLayout)
+      : "",
     decorations,
     topper: toppers.length ? toppers.join(", ") : "Geen topper",
-    tasting: config.tasting
-      ? `${tastingOption.label} (${tastingFilling.label})`
-      : "Nee",
   };
 }
 
@@ -363,7 +372,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
   const price = calculateWeddingCakePrice(config);
 
   return [
-    "BRUIDSTAART STUDIO - AANVRAAG",
+    "BRUIDSTAART STUDIO - BESTELFORMULIER",
     "",
     "Klant",
     `Herkenningscode: ${config.contact.recognitionCode || "-"}`,
@@ -389,7 +398,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
     `Decoratie: ${labels.decorations.length ? labels.decorations.join(", ") : "geen"}`,
     `Decoratie opmerkingen: ${config.decorationNotes || "-"}`,
     `Topper/add-on: ${labels.topper}`,
-    `Bruidsproefje: ${labels.tasting}`,
+    `Betaald: ${config.paid ? "Ja" : "Nee"}`,
     "",
     "Opmerkingen",
     config.contact.notes || "-",
@@ -398,6 +407,6 @@ export function createProductionForm(config: WeddingCakeConfig) {
     ...price.lines.map((line) => `${line.label}: ${line.quote ? "op aanvraag" : formatEuro(line.amount)}`),
     `Totaal indicatie: ${formatEuro(price.total)}${price.hasQuoteItems ? " + onderdelen op aanvraag" : ""}`,
     "",
-    "Status: aanvraag, nog geen definitieve bestelling.",
+    "Status: bestelformulier voor productie.",
   ].join("\n");
 }
