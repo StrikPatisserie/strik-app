@@ -487,6 +487,111 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     (id) => selectedToppers.has(id)
   );
 
+  function layerDecorationPoints(width: number, spacing: number, max: number) {
+    const count = Math.max(2, Math.min(max, Math.floor(width / spacing)));
+
+    return Array.from({ length: count }, (_, item) => {
+      if (count === 1) return 0.5;
+      return item / (count - 1);
+    });
+  }
+
+  function renderLayerDecorations(
+    layerId: string,
+    index: number,
+    x: number,
+    y: number,
+    width: number
+  ) {
+    const pearlPoints = layerDecorationPoints(width, 24, 8);
+    const fruitPoints = layerDecorationPoints(width, 42, 4);
+    const flowerPoints = layerDecorationPoints(width, 58, 3);
+    const hasRoseLeaves = selectedDecorations.has("marsepeinrozen-met-blad");
+
+    return (
+      <>
+        {selectedDecorations.has("creme-parelrand") &&
+          pearlPoints.map((point, item) => (
+            <circle
+              key={`${layerId}-pearls-${item}`}
+              cx={x + 12 + point * (width - 24)}
+              cy={y + layerHeight + 2.5}
+              r="1.8"
+              fill="currentColor"
+              opacity="0.85"
+            />
+          ))}
+
+        {selectedDecorations.has("bladgoud") &&
+          layerDecorationPoints(width, 60, 3).map((point, item) => (
+            <path
+              key={`${layerId}-gold-${item}`}
+              d={`M ${x + 18 + point * (width - 36)} ${y + 6} l 3 -3 l 4 3 l -2 5 l -4 1 Z`}
+              fill="#caa64c"
+              stroke="currentColor"
+              strokeWidth="0.4"
+              opacity="0.9"
+            />
+          ))}
+
+        {selectedDecorations.has("rood-fruit") &&
+          fruitPoints.map((point, item) => (
+            <g
+              key={`${layerId}-fruit-${item}`}
+              transform={`translate(${x + 16 + point * (width - 32)} ${
+                y - 2 - (item % 2) * 2
+              })`}
+            >
+              <circle cx="0" cy="0" r="3" fill="#bd2f37" />
+              <circle cx="4" cy="1" r="2.4" fill="#d94a52" />
+            </g>
+          ))}
+
+        {hasFlowers &&
+          flowerPoints.map((point, item) => {
+            const flowerX =
+              item === 0
+                ? x + 18
+                : item === flowerPoints.length - 1
+                  ? x + width - 18
+                  : x + 18 + point * (width - 36);
+            const flowerY = y - 5 + (index % 2) * 3;
+
+            return (
+              <g
+                key={`${layerId}-flower-${item}`}
+                transform={`translate(${flowerX} ${flowerY})`}
+              >
+                {hasRoseLeaves && (
+                  <>
+                    <path
+                      d="M -7 3 q -6 -1 -7 -6 q 7 0 10 4"
+                      fill="#8fac7e"
+                      stroke="currentColor"
+                      strokeWidth="0.5"
+                    />
+                    <path
+                      d="M 7 3 q 6 -1 7 -6 q -7 0 -10 4"
+                      fill="#8fac7e"
+                      stroke="currentColor"
+                      strokeWidth="0.5"
+                    />
+                  </>
+                )}
+                <circle cx="0" cy="0" r="4.2" fill="#f5c8d0" stroke="currentColor" />
+                <path
+                  d="M -2 0 c 3 -5 9 0 3 4 c -6 3 -8 -3 -3 -4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                />
+              </g>
+            );
+          })}
+      </>
+    );
+  }
+
   return (
     <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-[#fffdf8] p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -544,11 +649,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 height={layerHeight}
                 rx="5"
                 fill={layerColor.swatchColor || "#fff"}
-                fillOpacity={layerColor.swatchColor ? "0.68" : "1"}
+                fillOpacity={layerColor.swatchColor ? "0.82" : "1"}
                 stroke="currentColor"
                 strokeWidth="2"
               />
               {patternForLayer(index, x, y, width, layerLayout.id)}
+              {renderLayerDecorations(layer.id, index, x, y, width)}
               <text
                 x={130}
                 y={y + 12.5}
@@ -563,54 +669,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             </g>
           );
         })}
-
-        {selectedDecorations.has("creme-parelrand") &&
-          [0, 1, 2, 3, 4, 5, 6].map((item) => (
-            <circle
-              key={`pearls-${item}`}
-              cx={topX + 16 + item * Math.max(12, topWidth / 8)}
-              cy={topY + layerHeight + 4}
-              r="2"
-              fill="currentColor"
-            />
-          ))}
-
-        {selectedDecorations.has("bladgoud") &&
-          [0, 1, 2, 3].map((item) => (
-            <path
-              key={`gold-${item}`}
-              d={`M ${topX + 28 + item * 24} ${topY + 7} l 4 -4 l 4 4 l -4 4 Z`}
-              fill="currentColor"
-              opacity="0.7"
-            />
-          ))}
-
-        {selectedDecorations.has("rood-fruit") &&
-          [0, 1, 2, 3, 4].map((item) => (
-            <circle
-              key={`fruit-${item}`}
-              cx={topX + 24 + item * 18}
-              cy={topY - 4 - (item % 2) * 3}
-              r="3"
-              fill="currentColor"
-            />
-          ))}
-
-        {hasFlowers &&
-          [0, 1, 2].map((item) => (
-            <g
-              key={`flower-${item}`}
-              transform={`translate(${topX + 28 + item * 20} ${topY - 8})`}
-            >
-              <circle cx="0" cy="0" r="4" fill="none" stroke="currentColor" />
-              <path
-                d="M -2 0 c 4 -6 9 1 2 4 c -7 2 -7 -5 0 -4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1"
-              />
-            </g>
-          ))}
 
         {hasMainTopper && (
           <g transform={`translate(${130} ${topY - 28})`}>
@@ -651,8 +709,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         )}
       </svg>
       <p className="mt-2 text-xs font-bold leading-relaxed text-[#2d2a26]/50">
-        Schets op basis van formaat, layout, decoratie en toppers. De echte
-        afwerking blijft maatwerk.
+        Schets op basis van formaat, kleur, layout, decoratie en toppers. De
+        echte afwerking blijft maatwerk.
       </p>
     </div>
   );
