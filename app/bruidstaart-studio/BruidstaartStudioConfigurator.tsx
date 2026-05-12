@@ -239,25 +239,6 @@ function colorMatrixForHex(hex?: string, multiplier = 1) {
   )} 0 0 0 0 ${blue.toFixed(3)} 0 0 0 1 0`;
 }
 
-function luminanceForHex(hex?: string) {
-  const [red, green, blue] = hexToRgb(hex).map((value) =>
-    value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
-  );
-
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-}
-
-function isDarkColor(hex?: string) {
-  return luminanceForHex(hex) < 0.45;
-}
-
-function pearlMatrixForColor(hex?: string) {
-  const luminance = luminanceForHex(hex);
-  const multiplier = luminance > 0.72 ? 0.62 : luminance > 0.52 ? 0.78 : 0.92;
-
-  return colorMatrixForHex(hex, multiplier);
-}
-
 function normalizeDateSearchInput(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -839,6 +820,39 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     return Array.from({ length: count }, (_, item) => item / (count - 1));
   }
 
+  function decorationFilterForLayer(layerColor?: StudioOption) {
+    const filterName =
+      layerColor && isWhiteDecorationBase(layerColor)
+        ? "champagne-decoration"
+        : "snow-decoration";
+
+    return `url(#${visualizerId}-${filterName})`;
+  }
+
+  function renderPearlBorder(
+    layerId: string,
+    x: number,
+    y: number,
+    width: number,
+    layerColor?: StudioOption
+  ) {
+    if (!selectedDecorations.has("creme-parelrand")) return null;
+
+    return (
+      <image
+        key={`${layerId}-pearl-border`}
+        href={PEARL_ASSET}
+        x={x + 3}
+        y={y + layerHeight - 8}
+        width={width - 6}
+        height="12"
+        filter={decorationFilterForLayer(layerColor)}
+        opacity="0.95"
+        preserveAspectRatio="none"
+      />
+    );
+  }
+
   function renderLayerDecorations(
     layerId: string,
     index: number,
@@ -851,24 +865,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     const rosePoints = fixedDecorationPoints(layerRoseCount(index));
     const hasRoseLeaves = selectedDecorations.has("marsepeinrozen-met-blad");
     const flowerX = x + width * (index % 2 ? 0.38 : 0.62);
-    const pearlFilter = isDarkColor(layerColor?.swatchColor)
-      ? `url(#${visualizerId}-snow-decoration)`
-      : `url(#${visualizerId}-layer-pearl-${index})`;
 
     return (
       <>
-        {selectedDecorations.has("creme-parelrand") && (
-          <image
-            href={PEARL_ASSET}
-            x={x + 3}
-            y={y + layerHeight - 8}
-            width={width - 6}
-            height="12"
-            filter={pearlFilter}
-            preserveAspectRatio="none"
-          />
-        )}
-
         {selectedDecorations.has("bladgoud") &&
           layerDecorationPoints(width, 34, 5).map((point, item) => (
             <g
@@ -1025,24 +1024,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             );
           })}
           {layers.map((layer, index) => {
-            const layerColor = config.styleId
-              ? getLayerColor(config, layer.id)
-              : undefined;
-
-            return (
-              <filter
-                key={`${layer.id}-pearl-filter`}
-                id={`${visualizerId}-layer-pearl-${index}`}
-                colorInterpolationFilters="sRGB"
-              >
-                <feColorMatrix
-                  type="matrix"
-                  values={pearlMatrixForColor(layerColor?.swatchColor)}
-                />
-              </filter>
-            );
-          })}
-          {layers.map((layer, index) => {
             const width = layerWidth(layer.persons);
             const x = (260 - width) / 2;
             const y = layerY(index);
@@ -1093,6 +1074,16 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 patternForLayer(index, x, y, width, layerLayout.id, layerColor)}
             </g>
           );
+        })}
+        {layers.map((layer, index) => {
+          const width = layerWidth(layer.persons);
+          const x = (260 - width) / 2;
+          const y = layerY(index);
+          const layerColor = config.styleId
+            ? getLayerColor(config, layer.id)
+            : undefined;
+
+          return renderPearlBorder(layer.id, x, y, width, layerColor);
         })}
         {layers.map((layer, index) => {
           const width = layerWidth(layer.persons);
