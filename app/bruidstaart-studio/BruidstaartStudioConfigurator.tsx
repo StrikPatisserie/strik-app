@@ -50,11 +50,13 @@ const ROSE_DECORATION_IDS = [
   "marsepeinrozen-met-blad",
 ];
 const DEFAULT_ROSE_QUANTITY = 5;
-const ROSE_ASSET = "/strik-app_creme%20roosjes.svg";
+const ROSE_WITH_LEAF_ASSET = "/roosje%20met%20blad.svg";
+const ROSE_WITHOUT_LEAF_ASSET = "/roosje%20zonder%20blad.svg";
+const REAL_FLOWER_ASSET = "/strik%20app%20bloem.svg";
+const ROSE_PATTERN_ASSET = "/strik-app_creme%20roosjes.svg";
 const PEARL_ASSET = "/strik-app_parelrand.svg";
 const CREME_DOTS_ASSET = "/strik-app_creme%20stippen.svg";
-const INITIALS_SHIELD_ASSET =
-  "/strik-app_chocolade%20initialen%20op%20schild%20kopie.svg";
+const INITIALS_SHIELD_ASSET = "/initialen%20op%20schild.svg";
 
 type StepId =
   | "stijl"
@@ -150,12 +152,12 @@ function sizeCompositionText(sizeId: string) {
 }
 
 function sizeIconZoom(sizeId: string) {
-  if (sizeId.startsWith("small")) return 2.2;
-  if (sizeId === "s1a") return 2.15;
-  if (["s2f", "s2g", "s3a"].includes(sizeId)) return 1.45;
-  if (sizeId === "s3b") return 1.18;
+  if (sizeId.startsWith("small")) return 1.25;
+  if (sizeId === "s1a") return 1.2;
+  if (["s2f", "s2g", "s3a"].includes(sizeId)) return 1.05;
+  if (sizeId === "s3b") return 0.95;
 
-  return 1.8;
+  return 1.12;
 }
 
 function cakeDecorationAsset(layoutId: string) {
@@ -163,7 +165,7 @@ function cakeDecorationAsset(layoutId: string) {
     return CREME_DOTS_ASSET;
   }
   if (layoutId.includes("creme-rozen")) {
-    return ROSE_ASSET;
+    return ROSE_PATTERN_ASSET;
   }
   if (layoutId.includes("chesterfield")) {
     return "/taartdecoratie%20klassiek_chesterfield.svg";
@@ -269,23 +271,23 @@ function SizeCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-[12.5rem] min-w-0 flex-col gap-2 overflow-hidden rounded-[1.2rem] border p-3 text-left shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184] active:scale-[0.99] ${
+      className={`flex min-h-[14rem] min-w-0 flex-col gap-3 overflow-hidden rounded-[1.2rem] border p-4 text-left shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184] active:scale-[0.99] ${
         selected
           ? "border-[#8fb184] bg-[#dce8d6]"
           : "border-[#e7e0d8] bg-white"
       }`}
     >
-      <div className="flex min-h-6 items-start justify-between gap-2">
+      <div className="flex min-h-6 flex-wrap items-start justify-between gap-2">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
           {size.code}
         </p>
         {size.surchargePerPerson && (
-          <span className="max-w-24 shrink-0 rounded-full bg-white/70 px-2 py-1 text-right text-[0.65rem] font-bold leading-tight text-[#8a5b10]">
+          <span className="shrink-0 whitespace-nowrap rounded-full bg-white/70 px-2.5 py-1 text-right text-[0.68rem] font-bold leading-tight text-[#8a5b10]">
             + {formatEuro(size.surchargePerPerson)} p.p.
           </span>
         )}
       </div>
-      <div className="flex h-20 w-full items-center justify-center overflow-hidden rounded-2xl bg-white/75 p-2">
+      <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded-2xl bg-white/75 p-2">
         <Image
           src={size.iconPath}
           alt=""
@@ -297,7 +299,7 @@ function SizeCard({
       </div>
       <div className="min-w-0">
         <p className="text-lg font-black leading-tight">{size.label}</p>
-        <p className="mt-0.5 text-sm font-black leading-tight text-[#2d2a26]/65">
+        <p className="mt-0.5 text-base font-black leading-tight text-[#2d2a26]/65">
           {size.personsLabel}
         </p>
         <p className="mt-1.5 text-xs font-bold leading-snug text-[#2d2a26]/45">
@@ -626,11 +628,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const hasFlowers =
     selectedDecorations.has("echte-bloemen") ||
     selectedRoseQuantity > 0;
-  const selectedMainTopperId = [
-    "bruidspaartje",
-    "topper-karton",
-    "topper-zelf-aanleveren",
-  ].find((id) => selectedToppers.has(id));
+  const selectedMainTopperId = ["topper-karton", "topper-zelf-aanleveren"].find(
+    (id) => selectedToppers.has(id)
+  );
+  const hasBrideCoupleTopper = selectedToppers.has("bruidspaartje");
   const selectedInitialsId = [
     "chocolade-initialen-geschreven",
     "chocolade-initialen-schildje",
@@ -708,8 +709,22 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 y - 2 - (item % 2) * 2
               })`}
             >
-              <circle cx="0" cy="0" r="3" fill="#bd2f37" />
-              <circle cx="4" cy="1" r="2.4" fill="#d94a52" />
+              <circle
+                cx="0"
+                cy="0"
+                r="3.4"
+                fill="#bd2f37"
+                stroke="#fff7ec"
+                strokeWidth="0.8"
+              />
+              <circle
+                cx="4"
+                cy="1"
+                r="2.7"
+                fill="#d94a52"
+                stroke="#fff7ec"
+                strokeWidth="0.6"
+              />
             </g>
           ))}
 
@@ -729,44 +744,27 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 key={`${layerId}-flower-${item}`}
                 transform={`translate(${flowerX} ${flowerY})`}
               >
-                {isRose && hasRoseLeaves && (
-                  <>
-                    <path
-                      d="M -7 3 q -6 -1 -7 -6 q 7 0 10 4"
-                      fill="#8fac7e"
-                      stroke="currentColor"
-                      strokeWidth="0.5"
-                    />
-                    <path
-                      d="M 7 3 q 6 -1 7 -6 q -7 0 -10 4"
-                      fill="#8fac7e"
-                      stroke="currentColor"
-                      strokeWidth="0.5"
-                    />
-                  </>
-                )}
-                <circle
-                  cx="0"
-                  cy="0"
-                  r="4.2"
-                  fill={isRose ? "#f5c8d0" : "#f7e6ea"}
-                  stroke="currentColor"
-                />
                 {isRose ? (
                   <image
-                    href={ROSE_ASSET}
-                    x="-6"
-                    y="-6"
-                    width="12"
-                    height="12"
-                    preserveAspectRatio="xMidYMid slice"
+                    href={
+                      hasRoseLeaves
+                        ? ROSE_WITH_LEAF_ASSET
+                        : ROSE_WITHOUT_LEAF_ASSET
+                    }
+                    x="-8"
+                    y="-8"
+                    width="16"
+                    height="16"
+                    preserveAspectRatio="xMidYMid meet"
                   />
                 ) : (
-                  <path
-                    d="M -2 0 c 3 -5 9 0 3 4 c -6 3 -8 -3 -3 -4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1"
+                  <image
+                    href={REAL_FLOWER_ASSET}
+                    x="-9"
+                    y="-9"
+                    width="18"
+                    height="18"
+                    preserveAspectRatio="xMidYMid meet"
                   />
                 )}
               </g>
@@ -878,28 +876,55 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               {layerColor &&
                 layerLayout &&
                 patternForLayer(index, x, y, width, layerLayout.id, layerColor)}
-              {renderLayerDecorations(layer.id, index, x, y, width)}
-              <text
-                x={130}
-                y={y + layerHeight / 2 + 2.5}
-                textAnchor="middle"
-                fontSize="7"
-                fontWeight="700"
-                fill="currentColor"
-                opacity="0.7"
-              >
-                {config.fillingId ? getLayerFilling(config, layer.id).label : ""}
-              </text>
             </g>
+          );
+        })}
+        {layers.map((layer, index) => {
+          const width = layerWidth(layer.persons);
+          const x = (260 - width) / 2;
+          const y = layerY(index);
+
+          return (
+            <g key={`${layer.id}-decorations`}>
+              {renderLayerDecorations(layer.id, index, x, y, width)}
+            </g>
+          );
+        })}
+        {layers.map((layer, index) => {
+          const y = layerY(index);
+
+          return (
+            <text
+              key={`${layer.id}-label`}
+              x={130}
+              y={y + layerHeight / 2 + 2.5}
+              textAnchor="middle"
+              fontSize="7"
+              fontWeight="700"
+              fill="currentColor"
+              opacity="0.7"
+            >
+              {config.fillingId ? getLayerFilling(config, layer.id).label : ""}
+            </text>
           );
         })}
 
         {selectedMainTopperId && (
           <image
             href={topperDecorationAsset(selectedMainTopperId)}
-            x={92}
+            x={hasBrideCoupleTopper ? 78 : 92}
             y={Math.max(4, topY - 52)}
-            width="76"
+            width={hasBrideCoupleTopper ? "64" : "76"}
+            height="52"
+            preserveAspectRatio="xMidYMid meet"
+          />
+        )}
+        {hasBrideCoupleTopper && (
+          <image
+            href={topperDecorationAsset("bruidspaartje")}
+            x={selectedMainTopperId ? 130 : 92}
+            y={Math.max(4, topY - 52)}
+            width={selectedMainTopperId ? "64" : "76"}
             height="52"
             preserveAspectRatio="xMidYMid meet"
           />
@@ -928,7 +953,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         {selectedToppers.has("marsepeinen-ringen") && (
           <image
             href={topperDecorationAsset("marsepeinen-ringen")}
-            x={128}
+            x={105}
             y={topY - 30}
             width="54"
             height="34"
@@ -1373,13 +1398,13 @@ export default function BruidstaartStudioConfigurator() {
   return (
     <div className="space-y-5">
       <nav className="studio-no-print rounded-[1.5rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm">
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           {steps.map((item, index) => (
             <button
               key={item.id}
               type="button"
               onClick={() => goToStep(index)}
-              className={`shrink-0 rounded-full px-4 py-2 text-sm font-black transition ${
+              className={`min-w-0 rounded-full px-2.5 py-2 text-xs font-black leading-tight transition sm:text-sm ${
                 stepIndex === index
                   ? "bg-[#c3d3bc] text-[#2d2a26]"
                   : "bg-[#f8f6f3] text-[#2d2a26]/55"
@@ -1637,7 +1662,7 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "formaat" && (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               {cakeSizes.map((size) => (
                 <SizeCard
                   key={size.id}

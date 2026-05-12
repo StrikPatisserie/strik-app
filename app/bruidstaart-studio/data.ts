@@ -54,7 +54,7 @@ function makeLayer(
 }
 
 function cakeSizeIcon(fileName: string) {
-  return `/icons_strik%20taartlagen_${fileName}.svg`;
+  return `/taartlagen_${fileName}.svg`;
 }
 
 export const cakeSizes: CakeSize[] = [
@@ -330,10 +330,10 @@ export const colorOptions: StudioOption[] = [
   {
     id: "marsepein-kleur",
     label: "Marsepein kleur",
-    description: "Warme beige basiskleur.",
+    description: "Gebroken witte basiskleur.",
     allowedStyles: ["klassiek"],
-    swatchColor: "#e5cfac",
-    swatchBorder: "#c5a780",
+    swatchColor: "#f3ead8",
+    swatchBorder: "#dacbb4",
     price: { mode: "included", amount: 0 },
   },
   {
@@ -696,7 +696,7 @@ export const topperOptions: StudioOption[] = [
     id: "bruidspaartje",
     label: "Bruidspaartje",
     price: { mode: "fixed", amount: 10, label: "per taart" },
-    selectionGroup: "mainTopper",
+    selectionGroup: "extraTopper",
   },
   {
     id: "topper-karton",
