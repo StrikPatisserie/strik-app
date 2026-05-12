@@ -169,6 +169,10 @@ function cakeDecorationAsset(layoutId: string) {
   return "";
 }
 
+function isWhiteDecorationBase(color: StudioOption) {
+  return color.id === "icing-kleur";
+}
+
 function topperDecorationAsset(topperId: string) {
   if (topperId === "bruidspaartje") {
     return "/decoratie%20opties_bruidspaartje.svg";
@@ -393,7 +397,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     x: number,
     y: number,
     width: number,
-    layoutId: string
+    layoutId: string,
+    layerColor: StudioOption
   ) {
     const key = layoutId;
     const decorationAsset = cakeDecorationAsset(layoutId);
@@ -411,7 +416,11 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             width={width}
             height={layerHeight + 4}
             preserveAspectRatio="none"
-            filter={`url(#${visualizerId}-white-chocolate-outline)`}
+            filter={`url(#${visualizerId}-${
+              isWhiteDecorationBase(layerColor)
+                ? "champagne-decoration"
+                : "snow-decoration"
+            })`}
           />
         </g>
       );
@@ -693,18 +702,21 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       >
         <defs>
           <filter
-            id={`${visualizerId}-white-chocolate-outline`}
-            x="-16%"
-            y="-60%"
-            width="132%"
-            height="220%"
+            id={`${visualizerId}-snow-decoration`}
+            colorInterpolationFilters="sRGB"
           >
-            <feDropShadow
-              dx="0"
-              dy="0"
-              stdDeviation="0.7"
-              floodColor="#2d2a26"
-              floodOpacity="0.38"
+            <feColorMatrix
+              type="matrix"
+              values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"
+            />
+          </filter>
+          <filter
+            id={`${visualizerId}-champagne-decoration`}
+            colorInterpolationFilters="sRGB"
+          >
+            <feColorMatrix
+              type="matrix"
+              values="0 0 0 0 0.82 0 0 0 0 0.68 0 0 0 0 0.42 0 0 0 1 0"
             />
           </filter>
           {layers.map((layer, index) => {
@@ -749,7 +761,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 stroke="currentColor"
                 strokeWidth="2"
               />
-              {patternForLayer(index, x, y, width, layerLayout.id)}
+              {patternForLayer(index, x, y, width, layerLayout.id, layerColor)}
               {renderLayerDecorations(layer.id, index, x, y, width)}
               <text
                 x={130}
@@ -1180,6 +1192,16 @@ export default function BruidstaartStudioConfigurator() {
   const canGoBack = stepIndex > 0;
   const canGoNext = stepIndex < steps.length - 1;
 
+  function goToStep(nextIndex: number) {
+    setStepIndex(Math.max(0, Math.min(steps.length - 1, nextIndex)));
+
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+    }
+  }
+
   return (
     <div className="space-y-5">
       <section className="studio-no-print rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-4 shadow-sm">
@@ -1207,7 +1229,8 @@ export default function BruidstaartStudioConfigurator() {
         </div>
       </section>
 
-      <section className="studio-no-print rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
+      {stepIndex === 0 && (
+        <section className="studio-no-print rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div>
             <h3 className="text-lg font-black">Concept opslaan</h3>
@@ -1305,7 +1328,111 @@ export default function BruidstaartStudioConfigurator() {
             )}
           </div>
         </div>
-      </section>
+        </section>
+      )}
+
+      {stepIndex > 0 && step.id !== "overzicht" && (
+        <section className="studio-no-print rounded-[1.25rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm">
+          <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+            <div>
+              <h3 className="text-base font-black">Concept opslaan</h3>
+              <p className="text-xs font-bold text-[#2d2a26]/45">
+                Tussendoor veilig bewaren.
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input
+                value={config.contact.recognitionCode}
+                onChange={(event) =>
+                  setConfig((current) =>
+                    updateContact(
+                      current,
+                      "recognitionCode",
+                      event.target.value
+                    )
+                  )
+                }
+                placeholder="Herkenningscode"
+                className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white px-4 py-3 text-sm"
+              />
+              <input
+                value={config.contact.surname}
+                onChange={(event) =>
+                  setConfig((current) =>
+                    updateContact(current, "surname", event.target.value)
+                  )
+                }
+                placeholder="Achternaam"
+                className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white px-4 py-3 text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={saveDraft}
+              className="rounded-full bg-[#c3d3bc] px-5 py-3 text-sm font-bold shadow-sm"
+            >
+              Opslaan
+            </button>
+          </div>
+          {draftStatus && (
+            <p className="mt-2 text-xs font-bold text-[#2d2a26]/55">
+              {draftStatus}
+            </p>
+          )}
+        </section>
+      )}
+
+      {step.id === "overzicht" && (
+        <section className="studio-no-print rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div>
+              <h3 className="text-2xl font-black">Concept opslaan</h3>
+              <p className="mt-1 text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
+                Sla deze aanvraag groot en duidelijk op voordat je hem print of
+                mailt.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <input
+                  value={config.contact.recognitionCode}
+                  onChange={(event) =>
+                    setConfig((current) =>
+                      updateContact(
+                        current,
+                        "recognitionCode",
+                        event.target.value
+                      )
+                    )
+                  }
+                  placeholder="Herkenningscode"
+                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                />
+                <input
+                  value={config.contact.surname}
+                  onChange={(event) =>
+                    setConfig((current) =>
+                      updateContact(current, "surname", event.target.value)
+                    )
+                  }
+                  placeholder="Achternaam klant"
+                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                />
+              </div>
+              {draftStatus && (
+                <p className="mt-3 text-sm font-bold text-[#2d2a26]/55">
+                  {draftStatus}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={saveDraft}
+              className="rounded-full bg-[#c3d3bc] px-8 py-4 text-lg font-black shadow-sm"
+            >
+              Concept opslaan
+            </button>
+          </div>
+        </section>
+      )}
 
       <div className="studio-no-print grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
@@ -1718,7 +1845,7 @@ export default function BruidstaartStudioConfigurator() {
       <div className="studio-no-print flex gap-3">
         <button
           type="button"
-          onClick={() => setStepIndex((current) => Math.max(0, current - 1))}
+          onClick={() => goToStep(stepIndex - 1)}
           disabled={!canGoBack}
           className="rounded-full bg-white px-5 py-4 font-bold shadow-sm disabled:opacity-40"
         >
@@ -1726,9 +1853,7 @@ export default function BruidstaartStudioConfigurator() {
         </button>
         <button
           type="button"
-          onClick={() =>
-            setStepIndex((current) => Math.min(steps.length - 1, current + 1))
-          }
+          onClick={() => goToStep(stepIndex + 1)}
           disabled={!canGoNext}
           className="min-w-0 flex-1 rounded-full bg-[#c3d3bc] px-5 py-4 font-bold shadow-sm disabled:opacity-40"
         >
