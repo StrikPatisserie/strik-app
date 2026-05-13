@@ -1562,7 +1562,7 @@ export default function BruidstaartStudioConfigurator() {
       `Decoratie opmerkingen: ${config.decorationNotes || "-"}`,
       `Topper/add-on: ${labels.topper}`,
       `Betaald: ${config.paid ? "Ja" : "Nee"}`,
-      `Bestelling compleet: ${config.completed ? "Ja" : "Nee"}`,
+      `Bestelling definitief: ${config.completed ? "Ja" : "Nee"}`,
       "",
       "Opmerkingen",
       config.contact.notes || "-",
@@ -1599,6 +1599,16 @@ export default function BruidstaartStudioConfigurator() {
     }, 1800);
   }
 
+  function getOrderSaveLabel() {
+    return config.completed
+      ? "Definitieve bestelling opslaan"
+      : "Bestelling opslaan";
+  }
+
+  function getOrderStatusLabel(draft: WeddingCakeDraft) {
+    return draft.config.completed ? "definitief" : "concept";
+  }
+
   async function saveDraft() {
     const code = config.contact.recognitionCode.trim();
 
@@ -1622,13 +1632,13 @@ export default function BruidstaartStudioConfigurator() {
       const savedDraft = normalizeDraft(await res.json()) || draft;
       saveLocalDraft(savedDraft);
       setDraftResults([savedDraft]);
-      setDraftStatus("Concept opgeslagen in WordPress.");
+      setDraftStatus("Bestelling opgeslagen in WordPress.");
       showSaveFeedback();
     } catch {
       saveLocalDraft(draft);
       setDraftResults([draft]);
       setDraftStatus(
-        "WordPress-opslag is nog niet actief; concept is lokaal opgeslagen."
+        "WordPress-opslag is nog niet actief; bestelling is lokaal opgeslagen."
       );
       showSaveFeedback();
     }
@@ -1654,18 +1664,20 @@ export default function BruidstaartStudioConfigurator() {
       setDraftResults(drafts);
       setDraftStatus(
         drafts.length
-          ? `${drafts.length} concept${drafts.length === 1 ? "" : "en"} gevonden.`
-          : "Geen concept gevonden."
+          ? `${drafts.length} bestelling${
+              drafts.length === 1 ? "" : "en"
+            } gevonden.`
+          : "Geen bestelling gevonden."
       );
     } catch {
       const drafts = searchLocalDrafts(search, deliveryDate);
       setDraftResults(drafts);
       setDraftStatus(
         drafts.length
-          ? `Lokaal ${drafts.length} concept${
+          ? `Lokaal ${drafts.length} bestelling${
               drafts.length === 1 ? "" : "en"
             } gevonden.`
-          : "Geen lokaal concept gevonden. Activeer de WordPress snippet voor zoeken op elk device."
+          : "Geen lokale bestelling gevonden. Activeer de WordPress snippet voor zoeken op elk device."
       );
     }
   }
@@ -1696,13 +1708,13 @@ export default function BruidstaartStudioConfigurator() {
       layerColorIds: layerColorIdsForSize(nextConfig.sizeId, nextConfig),
       layerLayoutIds: layerLayoutIdsForSize(nextConfig.sizeId, nextConfig),
     });
-    setDraftStatus(`Concept ${draft.code} geladen.`);
+    setDraftStatus(`Bestelling ${draft.code} geladen.`);
     goToStep(steps.length - 1);
   }
 
   async function deleteDraft(draft: WeddingCakeDraft) {
     const confirmed = window.confirm(
-      `Concept ${draft.code} verwijderen? Dit kan niet ongedaan gemaakt worden.`
+      `Bestelling ${draft.code} verwijderen? Dit kan niet ongedaan gemaakt worden.`
     );
 
     if (!confirmed) return;
@@ -1724,11 +1736,11 @@ export default function BruidstaartStudioConfigurator() {
       if (!res.ok) throw new Error("WordPress verwijderen niet beschikbaar.");
 
       removeDraftFromScreen();
-      setDraftStatus(`Concept ${draft.code} verwijderd.`);
+      setDraftStatus(`Bestelling ${draft.code} verwijderd.`);
     } catch {
       removeDraftFromScreen();
       setDraftStatus(
-        "Concept is lokaal verwijderd. Werk de WordPress snippet bij om ook op elk device te kunnen verwijderen."
+        "Bestelling is lokaal verwijderd. Werk de WordPress snippet bij om ook op elk device te kunnen verwijderen."
       );
     }
   }
@@ -1742,7 +1754,7 @@ export default function BruidstaartStudioConfigurator() {
     }
 
     const confirmed = window.confirm(
-      `Concept ${code} verwijderen en dit formulier leegmaken?`
+      `Bestelling ${code} verwijderen en dit formulier leegmaken?`
     );
 
     if (!confirmed) return;
@@ -1759,7 +1771,7 @@ export default function BruidstaartStudioConfigurator() {
         current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
       );
       setConfig(createEmptyWeddingCakeConfig());
-      setDraftStatus(`Concept ${code} verwijderd.`);
+      setDraftStatus(`Bestelling ${code} verwijderd.`);
       goToStep(0);
     } catch {
       deleteLocalDraft(code);
@@ -1768,7 +1780,7 @@ export default function BruidstaartStudioConfigurator() {
       );
       setConfig(createEmptyWeddingCakeConfig());
       setDraftStatus(
-        "Concept is lokaal verwijderd. Werk de WordPress snippet bij om ook op elk device te kunnen verwijderen."
+        "Bestelling is lokaal verwijderd. Werk de WordPress snippet bij om ook op elk device te kunnen verwijderen."
       );
       goToStep(0);
     }
@@ -1823,7 +1835,7 @@ export default function BruidstaartStudioConfigurator() {
         <section className="studio-no-print rounded-[1.25rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm">
           <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
             <div>
-              <h3 className="text-base font-black">Concept opslaan</h3>
+              <h3 className="text-base font-black">Bestelling opslaan</h3>
               <p className="text-xs font-bold text-[#2d2a26]/45">
                 Tussendoor veilig bewaren.
               </p>
@@ -1885,7 +1897,7 @@ export default function BruidstaartStudioConfigurator() {
         <section className="studio-no-print rounded-[1.25rem] border border-[#ecd9a9] bg-[#fff4d1] p-3 shadow-sm">
           <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
             <div>
-              <h3 className="text-sm font-black">Concept</h3>
+              <h3 className="text-sm font-black">Bruidstaart bestelling</h3>
               <p className="text-xs font-bold text-[#2d2a26]/45">
                 Opslaan of opnieuw beginnen.
               </p>
@@ -1928,7 +1940,7 @@ export default function BruidstaartStudioConfigurator() {
               >
                 {saveFeedback === "opslaan..."
                   ? "Opslaan..."
-                  : "Concept opslaan"}
+                  : getOrderSaveLabel()}
               </button>
               <button
                 type="button"
@@ -1989,7 +2001,7 @@ export default function BruidstaartStudioConfigurator() {
             <div className="grid gap-4">
               <div className="rounded-[1.35rem] border border-[#ead8aa] bg-[#fff7df] p-4 shadow-sm">
                 <h3 className="text-xl font-black">
-                  Bruidstaart inladen of aanpassen
+                  Bruidstaart bestelling inladen of aanpassen
                 </h3>
                 <p className="mt-1 text-sm font-bold leading-relaxed text-[#2d2a26]/55">
                   Zoek op herkenningscode, achternaam of leverdatum.
@@ -2032,6 +2044,7 @@ export default function BruidstaartStudioConfigurator() {
                       const deliveryDate =
                         draft.config.contact.deliveryDate ||
                         draft.config.contact.weddingDate;
+                      const orderStatus = getOrderStatusLabel(draft);
 
                       return (
                         <div
@@ -2043,7 +2056,23 @@ export default function BruidstaartStudioConfigurator() {
                             onClick={() => loadDraft(draft)}
                             className="min-w-0 flex-1 text-left"
                           >
-                            <p className="font-black">{draft.code}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-black">{draft.code}</p>
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] ${
+                                  orderStatus === "definitief"
+                                    ? "bg-[#dce8d6] text-[#4c6842]"
+                                    : "bg-[#f8f6f3] text-[#2d2a26]/55"
+                                }`}
+                              >
+                                {orderStatus}
+                              </span>
+                              {draft.config.paid && (
+                                <span className="rounded-full bg-[#e8f0f2] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
+                                  betaald
+                                </span>
+                              )}
+                            </div>
                             <p className="text-sm font-semibold text-[#2d2a26]/55">
                               {draft.surname || draft.names || "Geen naam"} ·
                               Leverdatum: {formatDutchShortDate(deliveryDate)}
@@ -2052,7 +2081,7 @@ export default function BruidstaartStudioConfigurator() {
                           <button
                             type="button"
                             onClick={() => deleteDraft(draft)}
-                            aria-label={`Concept ${draft.code} verwijderen`}
+                            aria-label={`Bestelling ${draft.code} verwijderen`}
                             className="self-center rounded-full border border-[#e6b8af] bg-[#fff4f1] p-2.5 text-[#9f382f]"
                           >
                             <TrashIcon />
@@ -2435,7 +2464,7 @@ export default function BruidstaartStudioConfigurator() {
                     }
                     className="h-6 w-6 accent-[#8fb184]"
                   />
-                  Bestelling compleet
+                  Bestelling definitief
                 </label>
               </div>
               <div className="rounded-[1.5rem] bg-[#f8f6f3] p-4">

@@ -1,4 +1,3 @@
-import NotificationToggle from "../NotificationToggle";
 import {
   StrikActionCard,
   StrikPageHeader,
@@ -10,20 +9,12 @@ import WinkelFeaturedCards from "./WinkelFeaturedCards";
 
 const items = [
   {
-    href: "/bruidstaart-studio",
-    label: "Aanvraag",
-    title: "Bruidstaart Studio",
-    description: "Stel een bruidstaart samen als aanvraag.",
-    icon: strikIcons.bruidstaart,
-    tone: "honey" as const,
-  },
-  {
-    href: "/agenda",
-    label: "Ziekerstraat",
+    href: "/bruidstaarten",
+    label: "Studio & agenda",
     title: "Bruidstaarten",
-    description: "Bruidstaartafspraken voor Ziekerstraat.",
+    description: "Aanvragen en afspraken voor bruidstaarten.",
     icon: strikIcons.bruidstaart,
-    tone: "medium" as const,
+    tone: "pink" as const,
   },
   {
     href: "/info",
@@ -47,13 +38,12 @@ export default function WinkelPage() {
 
       <div className="space-y-4">
         <WinkelFeaturedCards />
-        <TodayStaffWidget />
 
         {items.map((item) => (
           <StrikActionCard key={item.href} {...item} />
         ))}
 
-        <NotificationToggle />
+        <TodayStaffWidget />
       </div>
     </StrikShell>
   );

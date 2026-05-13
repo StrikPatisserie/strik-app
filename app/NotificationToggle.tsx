@@ -54,7 +54,11 @@ async function rememberCurrentLatestPost() {
   }
 }
 
-export default function NotificationToggle() {
+export default function NotificationToggle({
+  variant = "card",
+}: Readonly<{
+  variant?: "card" | "inline";
+}>) {
   const hydrated = useSyncExternalStore(
     () => () => {},
     () => true,
@@ -96,6 +100,46 @@ export default function NotificationToggle() {
   const unsupported = currentPermission === "unsupported";
   const needsIosHomescreen =
     hydrated && unsupported && isIosDevice() && !isStandaloneApp();
+
+  if (variant === "inline") {
+    return (
+      <div className="rounded-2xl bg-white/45 px-2.5 py-2 text-left">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[0.68rem] font-black uppercase leading-tight tracking-[0.08em] text-[#2d2a26]/55">
+              {currentEnabled ? "Nieuwsmeldingen aan" : "Zet nieuwsmeldingen aan"}
+            </p>
+            {(blocked || unsupported) && (
+              <p className="mt-1 text-[0.65rem] font-semibold leading-snug text-[#d75a48]">
+                {blocked
+                  ? "Geblokkeerd"
+                  : needsIosHomescreen
+                  ? "Via beginscherm"
+                  : "Niet ondersteund"}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={currentEnabled}
+            disabled={blocked || unsupported}
+            onClick={toggleNotifications}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-50 ${
+              currentEnabled ? "bg-[#a8bf9e]" : "bg-[#d6d0c8]"
+            }`}
+          >
+            <span
+              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${
+                currentEnabled ? "left-6" : "left-1"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <section className="rounded-2xl border border-[#e7e0d8] bg-white/80 p-4 shadow-sm">

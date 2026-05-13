@@ -1,6 +1,9 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import NotificationToggle from "../NotificationToggle";
 import { StrikSquareActionCard, strikIcons } from "../StrikUI";
 import {
   NEWS_API_URL,
@@ -11,20 +14,43 @@ import {
   getNewsPostKey,
 } from "../nieuws/newsState";
 
-const featuredItems = [
-  {
-    href: "/nieuws",
-    title: "Nieuws",
-    icon: strikIcons.news,
-    tone: "green" as const,
-  },
-  {
-    href: "/strik-agenda",
-    title: "Strik agenda",
-    icon: strikIcons.strikAgenda,
-    tone: "honey" as const,
-  },
-];
+const agendaItem = {
+  href: "/strik-agenda",
+  title: "Strik agenda",
+  icon: strikIcons.strikAgenda,
+  tone: "honey" as const,
+};
+
+function NewsFeaturedCard({ showBadge }: Readonly<{ showBadge: boolean }>) {
+  return (
+    <article className="relative grid aspect-square grid-rows-[2.35rem_1fr_auto] rounded-[1.5rem] border border-[#e7e0d8]/80 bg-[#dce8d6] p-3 text-center shadow-sm">
+      {showBadge && (
+        <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#e24b3b] px-1.5 text-xs font-black text-white shadow-sm">
+          1
+        </span>
+      )}
+
+      <Link
+        href="/nieuws"
+        className="group contents"
+        aria-label="Nieuws openen"
+      >
+        <span className="flex h-full items-center justify-center text-lg font-bold leading-tight text-[#050505]">
+          Nieuws
+        </span>
+        <span className="flex h-full items-center justify-center">
+          <img
+            src={strikIcons.news}
+            alt=""
+            className="h-12 w-12 object-contain transition group-hover:scale-105"
+          />
+        </span>
+      </Link>
+
+      <NotificationToggle variant="inline" />
+    </article>
+  );
+}
 
 export default function WinkelFeaturedCards() {
   const [latestNewsKey, setLatestNewsKey] = useState("");
@@ -82,14 +108,9 @@ export default function WinkelFeaturedCards() {
   }, [latestNewsKey]);
 
   return (
-    <div className="grid grid-cols-2 gap-4">
-      {featuredItems.map((item) => (
-        <StrikSquareActionCard
-          key={item.href}
-          {...item}
-          badge={item.href === "/nieuws" && showNewsBadge ? 1 : undefined}
-        />
-      ))}
+    <div className="mx-auto grid w-full max-w-[20rem] grid-cols-2 gap-3">
+      <NewsFeaturedCard showBadge={showNewsBadge} />
+      <StrikSquareActionCard {...agendaItem} size="compact" />
     </div>
   );
 }

@@ -23,6 +23,7 @@ export const strikIcons = {
 const toneClasses = {
   blue: "bg-[#dbe9ee]",
   honey: "bg-[#f1d28f]",
+  pink: "bg-[#f4d8dc]",
   light: "bg-[#eef3ea]",
   green: "bg-[#dce8d6]",
   medium: "bg-[#c3d3bc]",
@@ -66,6 +67,23 @@ const actionCardSizeClasses = {
 };
 
 type ActionCardSize = keyof typeof actionCardSizeClasses;
+
+const squareActionCardSizeClasses = {
+  compact: {
+    card: "grid-rows-[3.35rem_1fr] rounded-[1.5rem] p-3",
+    title: "text-lg",
+    icon: "h-16 w-16",
+    badge: "right-3 top-3 h-6 min-w-6 px-1.5 text-xs",
+  },
+  regular: {
+    card: "grid-rows-[4.5rem_1fr] rounded-[2rem] p-5",
+    title: "text-2xl",
+    icon: "h-24 w-24",
+    badge: "right-4 top-4 h-7 min-w-7 px-2 text-sm",
+  },
+};
+
+type SquareActionCardSize = keyof typeof squareActionCardSizeClasses;
 
 export function StrikShell({
   children,
@@ -123,31 +141,39 @@ export function StrikSquareActionCard({
   icon,
   badge,
   tone = "green",
+  size = "regular",
 }: Readonly<{
   href: string;
   title: string;
   icon: string;
   badge?: string | number;
   tone?: Tone;
+  size?: SquareActionCardSize;
 }>) {
+  const sizeClasses = squareActionCardSizeClasses[size];
+
   return (
     <Link
       href={href}
-      className={`group relative grid aspect-square grid-rows-[4.5rem_1fr] items-center rounded-[2rem] border border-[#e7e0d8]/80 p-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${toneClasses[tone]}`}
+      className={`group relative grid aspect-square items-center border border-[#e7e0d8]/80 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${sizeClasses.card} ${toneClasses[tone]}`}
     >
       {badge && (
-        <span className="absolute right-4 top-4 flex h-7 min-w-7 items-center justify-center rounded-full bg-[#e24b3b] px-2 text-sm font-black text-white shadow-sm">
+        <span
+          className={`absolute flex items-center justify-center rounded-full bg-[#e24b3b] font-black text-white shadow-sm ${sizeClasses.badge}`}
+        >
           {badge}
         </span>
       )}
-      <span className="flex h-full items-center justify-center text-2xl font-bold leading-tight text-[#050505]">
+      <span
+        className={`flex h-full items-center justify-center font-bold leading-tight text-[#050505] ${sizeClasses.title}`}
+      >
         {title}
       </span>
       <span className="flex h-full items-center justify-center pt-3">
         <img
           src={icon}
           alt=""
-          className="h-24 w-24 object-contain transition group-hover:scale-105"
+          className={`object-contain transition group-hover:scale-105 ${sizeClasses.icon}`}
         />
       </span>
     </Link>
