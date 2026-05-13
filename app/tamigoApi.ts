@@ -1,0 +1,550 @@
+import type { TeamAgendaEvent } from "./strik-agenda/teamAgendaApi";
+
+const TAMIGO_API_BASE_URL =
+  process.env.TAMIGO_API_BASE_URL || "https://api.tamigo.com";
+const TAMIGO_MAX_EMPLOYEE_PAGES = getPositiveNumber(
+  process.env.TAMIGO_MAX_EMPLOYEE_PAGES,
+  50
+);
+
+let cachedTamigoSessionToken: string | null = null;
+
+type JsonRecord = Record<string, unknown>;
+
+type TamigoSimpleEmployee = {
+  EmployeeId?: string;
+  Name?: string;
+  Email?: string;
+  IsEnabled?: boolean;
+  EndDate?: string;
+};
+
+type TamigoDetailedEmployee = {
+  EmployeeId?: string;
+  Name?: string;
+  Email?: string;
+  WageNumber?: string;
+  EmployerNumber?: string;
+  From?: string;
+  To?: string;
+  Birthdate?: string;
+  DeletedOn?: string;
+  IsActive?: boolean;
+  IsUserEnabled?: boolean;
+};
+
+export type PersonnelEventType = "birthday" | "anniversary";
+
+export type PersonnelAgendaEvent = {
+  id: string;
+  type: PersonnelEventType;
+  employeeName: string;
+  title: string;
+  date: string;
+  occurrenceDate: string;
+  daysUntil: number;
+  month: number;
+  day: number;
+  years?: number;
+  source: "tamigo";
+};
+
+export type PersonnelAgenda = {
+  generatedAt: string;
+  activeEmployeeCount: number;
+  birthdays: PersonnelAgendaEvent[];
+  anniversaries: PersonnelAgendaEvent[];
+};
+
+class TamigoApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number
+  ) {
+    super(message);
+    this.name = "TamigoApiError";
+  }
+}
+
+export class TamigoConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TamigoConfigurationError";
+  }
+}
+
+function getPositiveNumber(value: string | undefined, fallback: number) {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) && numberValue > 0
+    ? numberValue
+    : fallback;
+}
+
+function getTamigoApiKey() {
+  const apiKey = process.env.TAMIGO_API_KEY;
+
+  if (!apiKey) {
+    throw new TamigoConfigurationError("Tamigo API key is nog niet ingesteld.");
+  }
+
+  return apiKey;
+}
+
+function getTamigoApplicationName() {
+  return (
+    process.env.TAMIGO_APPLICATION_NAME ||
+    process.env.TAMIGO_API_NAME ||
+    process.env.TAMIGO_APP_NAME ||
+    ""
+  );
+}
+
+async function getTamigoAccessToken() {
+  const applicationName = getTamigoApplicationName();
+
+  if (!applicationName) {
+    return getTamigoApiKey();
+  }
+
+  if (cachedTamigoSessionToken) {
+    return cachedTamigoSessionToken;
+  }
+
+  const response = await fetch(createTamigoUrl("/v2/Login/Application"), {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      Name: applicationName,
+      Key: getTamigoApiKey(),
+    }),
+    cache: "no-store",
+  });
+  const text = await response.text();
+  const data = parseJson(text);
+
+  if (!response.ok) {
+    throw new TamigoApiError(
+      getErrorMessage(data, "Tamigo application login is mislukt."),
+      response.status
+    );
+  }
+
+  if (!isRecord(data) || !textFrom(data.SessionToken)) {
+    throw new TamigoApiError("Tamigo gaf geen sessietoken terug.");
+  }
+
+  cachedTamigoSessionToken = textFrom(data.SessionToken);
+
+  return cachedTamigoSessionToken;
+}
+
+function createTamigoUrl(path: string, params?: Record<string, string>) {
+  const baseUrl = TAMIGO_API_BASE_URL.endsWith("/")
+    ? TAMIGO_API_BASE_URL
+    : `${TAMIGO_API_BASE_URL}/`;
+  const url = new URL(path.replace(/^\//, ""), baseUrl);
+
+  for (const [key, value] of Object.entries(params || {})) {
+    url.searchParams.set(key, value);
+  }
+
+  return url;
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null;
+}
+
+function textFrom(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function boolFrom(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function parseJson(text: string) {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function getErrorMessage(data: unknown, fallback: string) {
+  if (!isRecord(data)) return fallback;
+
+  return (
+    textFrom(data.message) ||
+    textFrom(data.Message) ||
+    textFrom(data.error) ||
+    textFrom(data.Error) ||
+    fallback
+  );
+}
+
+async function tamigoGet(path: string, params?: Record<string, string>) {
+  const response = await fetch(createTamigoUrl(path, params), {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      "x-tamigo-token": await getTamigoAccessToken(),
+    },
+    cache: "no-store",
+  });
+  const text = await response.text();
+  const data = parseJson(text);
+
+  if (!response.ok) {
+    const authorizationMessage =
+      response.status === 401 && !getTamigoApplicationName()
+        ? "Tamigo API authorisatie mislukt. Als dit een application key is, stel ook TAMIGO_APPLICATION_NAME in."
+        : "Tamigo API-verzoek is mislukt.";
+
+    throw new TamigoApiError(
+      getErrorMessage(data, authorizationMessage),
+      response.status
+    );
+  }
+
+  if (!data) {
+    throw new TamigoApiError("Tamigo gaf geen geldige JSON terug.");
+  }
+
+  return data;
+}
+
+function getArrayRecords(data: unknown) {
+  if (Array.isArray(data)) return data.filter(isRecord);
+
+  if (!isRecord(data)) return [];
+
+  for (const key of ["Employees", "employees", "Data", "data", "Result", "result"]) {
+    const value = data[key];
+    if (Array.isArray(value)) return value.filter(isRecord);
+  }
+
+  return [];
+}
+
+function toSimpleEmployee(value: JsonRecord): TamigoSimpleEmployee {
+  return {
+    EmployeeId: textFrom(value.EmployeeId),
+    Name: textFrom(value.Name),
+    Email: textFrom(value.Email),
+    IsEnabled: boolFrom(value.IsEnabled),
+    EndDate: textFrom(value.EndDate),
+  };
+}
+
+function toDetailedEmployee(value: JsonRecord): TamigoDetailedEmployee {
+  return {
+    EmployeeId: textFrom(value.EmployeeId),
+    Name: textFrom(value.Name),
+    Email: textFrom(value.Email),
+    WageNumber: textFrom(value.WageNumber),
+    EmployerNumber: textFrom(value.EmployerNumber),
+    From: textFrom(value.From),
+    To: textFrom(value.To),
+    Birthdate: textFrom(value.Birthdate),
+    DeletedOn: textFrom(value.DeletedOn),
+    IsActive: boolFrom(value.IsActive),
+    IsUserEnabled: boolFrom(value.IsUserEnabled),
+  };
+}
+
+export async function fetchTamigoEmployeesPage(page = 1) {
+  const data = await tamigoGet("/v2/Employees/", {
+    page: String(page),
+  });
+
+  return getArrayRecords(data).map(toSimpleEmployee);
+}
+
+async function fetchTamigoEmployeeDetailsPage(page = 1) {
+  const data = await tamigoGet("/v2/Employees/GetEmployeeDetails/", {
+    page: String(page),
+    includedeleted: "false",
+  });
+
+  return getArrayRecords(data).map(toDetailedEmployee);
+}
+
+export async function testTamigoEmployeeConnection() {
+  const employees = await fetchTamigoEmployeesPage(1);
+
+  return {
+    ok: true,
+    employeeCountOnFirstPage: employees.length,
+  };
+}
+
+async function fetchTamigoEmployeeDetails() {
+  const employees: TamigoDetailedEmployee[] = [];
+  const seen = new Set<string>();
+
+  for (let page = 1; page <= TAMIGO_MAX_EMPLOYEE_PAGES; page += 1) {
+    const pageEmployees = await fetchTamigoEmployeeDetailsPage(page);
+    let addedCount = 0;
+
+    for (const employee of pageEmployees) {
+      const key = getEmployeeIdentity(employee);
+      if (seen.has(key)) continue;
+
+      seen.add(key);
+      employees.push(employee);
+      addedCount += 1;
+    }
+
+    if (pageEmployees.length === 0 || addedCount === 0) break;
+  }
+
+  return employees;
+}
+
+function getEmployeeIdentity(employee: TamigoDetailedEmployee) {
+  return (
+    employee.EmployeeId ||
+    employee.WageNumber ||
+    employee.EmployerNumber ||
+    employee.Email ||
+    employee.Name ||
+    "unknown"
+  );
+}
+
+function isActiveEmployee(employee: TamigoDetailedEmployee, today: Date) {
+  if (employee.DeletedOn) return false;
+  if (employee.IsActive === false) return false;
+  if (employee.IsUserEnabled === false) return false;
+
+  const startDate = parseDateOnly(employee.From);
+  if (startDate && startDate > today) return false;
+
+  const endDate = parseDateOnly(employee.To);
+  if (!endDate) return true;
+
+  endDate.setHours(23, 59, 59, 999);
+
+  return endDate >= today;
+}
+
+function parseOffsetMinutes(value: string) {
+  const match = value.match(/([+-])(\d{2})(\d{2})/);
+  if (!match) return 0;
+
+  const sign = match[1] === "-" ? -1 : 1;
+
+  return sign * (Number(match[2]) * 60 + Number(match[3]));
+}
+
+function parseDateOnly(value: string | undefined) {
+  const text = textFrom(value);
+  if (!text) return null;
+
+  const isoMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    return new Date(
+      Number(isoMatch[1]),
+      Number(isoMatch[2]) - 1,
+      Number(isoMatch[3])
+    );
+  }
+
+  const microsoftMatch = text.match(/^\/Date\((-?\d+)([+-]\d{4})?\)\/$/);
+  if (microsoftMatch) {
+    const timestamp =
+      Number(microsoftMatch[1]) +
+      parseOffsetMinutes(microsoftMatch[2] || "") * 60 * 1000;
+    const date = new Date(timestamp);
+
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  return null;
+}
+
+function getMonthDay(date: Date) {
+  return {
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+  };
+}
+
+function formatDate(year: number, month: number, day: number) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(
+    2,
+    "0"
+  )}`;
+}
+
+function createOccurrenceDate(year: number, month: number, day: number) {
+  if (month === 2 && day === 29) {
+    const leapDate = new Date(year, 1, 29);
+    if (leapDate.getMonth() === 1) return leapDate;
+
+    return new Date(year, 1, 28);
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+function getNextOccurrence(month: number, day: number, today: Date) {
+  let occurrence = createOccurrenceDate(today.getFullYear(), month, day);
+  occurrence.setHours(0, 0, 0, 0);
+
+  if (occurrence < today) {
+    occurrence = createOccurrenceDate(today.getFullYear() + 1, month, day);
+    occurrence.setHours(0, 0, 0, 0);
+  }
+
+  return occurrence;
+}
+
+function getDaysUntil(occurrence: Date, today: Date) {
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+
+  return Math.round((occurrence.getTime() - today.getTime()) / millisecondsPerDay);
+}
+
+function createSafeId(value: string) {
+  const safeValue =
+    value
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 72) || "employee";
+
+  return `${safeValue}-${createHash(value)}`;
+}
+
+function createHash(value: string) {
+  let hash = 5381;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 33) ^ value.charCodeAt(index);
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
+function createPersonnelEvent(
+  employee: TamigoDetailedEmployee,
+  type: PersonnelEventType,
+  sourceDate: Date,
+  today: Date
+): PersonnelAgendaEvent | null {
+  const employeeName = employee.Name?.trim();
+  if (!employeeName) return null;
+
+  const { month, day } = getMonthDay(sourceDate);
+  const occurrence = getNextOccurrence(month, day, today);
+  const occurrenceYear = occurrence.getFullYear();
+  const years =
+    type === "anniversary" ? occurrenceYear - sourceDate.getFullYear() : undefined;
+
+  if (type === "anniversary" && (!years || years < 1)) {
+    return null;
+  }
+
+  const identity = getEmployeeIdentity(employee);
+  const baseId = createSafeId(`${identity}-${type}`);
+
+  return {
+    id: `tamigo-${type}-${baseId}`,
+    type,
+    employeeName,
+    title:
+      type === "birthday"
+        ? `${employeeName} is jarig`
+        : `${employeeName} ${years} jaar bij Strik`,
+    date: formatDate(2000, month, day),
+    occurrenceDate: formatDate(occurrenceYear, month, day),
+    daysUntil: getDaysUntil(occurrence, today),
+    month,
+    day,
+    years,
+    source: "tamigo",
+  };
+}
+
+export async function getPersonnelAgenda(): Promise<PersonnelAgenda> {
+  const now = new Date();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+
+  const activeEmployees = (await fetchTamigoEmployeeDetails()).filter(
+    (employee) => isActiveEmployee(employee, today)
+  );
+  const birthdays = activeEmployees.flatMap((employee) => {
+    const birthdate = parseDateOnly(employee.Birthdate);
+    if (!birthdate) return [];
+
+    const event = createPersonnelEvent(employee, "birthday", birthdate, today);
+
+    return event ? [event] : [];
+  });
+  const anniversaries = activeEmployees.flatMap((employee) => {
+    const startDate = parseDateOnly(employee.From);
+    if (!startDate) return [];
+
+    const event = createPersonnelEvent(
+      employee,
+      "anniversary",
+      startDate,
+      today
+    );
+
+    return event ? [event] : [];
+  });
+
+  return {
+    generatedAt: now.toISOString(),
+    activeEmployeeCount: activeEmployees.length,
+    birthdays: sortPersonnelEvents(birthdays),
+    anniversaries: sortPersonnelEvents(anniversaries),
+  };
+}
+
+function sortPersonnelEvents(events: PersonnelAgendaEvent[]) {
+  return [...events].sort((a, b) => {
+    const dateDiff = a.occurrenceDate.localeCompare(b.occurrenceDate);
+    if (dateDiff !== 0) return dateDiff;
+
+    return a.employeeName.localeCompare(b.employeeName);
+  });
+}
+
+export function toTeamAgendaEvents(events: PersonnelAgendaEvent[]) {
+  const now = new Date().toISOString();
+
+  return events.map(
+    (event): TeamAgendaEvent => ({
+      id: event.id,
+      title: event.title,
+      date: event.date,
+      type: event.type,
+      audience: "alle",
+      description:
+        event.type === "anniversary" && event.years
+          ? `${event.years} jaar bij Strik`
+          : "",
+      recurringYearly: true,
+      source: "tamigo",
+      createdAt: now,
+      updatedAt: now,
+    })
+  );
+}
+
+export function getTamigoStatusCode(error: unknown) {
+  if (error instanceof TamigoConfigurationError) return 503;
+  if (error instanceof TamigoApiError) return error.status || 502;
+
+  return 502;
+}

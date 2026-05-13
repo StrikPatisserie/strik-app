@@ -31,6 +31,14 @@ const items = [
     tone: "honey" as const,
   },
   {
+    href: "/management/personeelsagenda",
+    label: "Team",
+    title: "Personeelsagenda",
+    description: "Bekijk verjaardagen, jubilea en meldingen per week.",
+    icon: strikIcons.strikAgenda,
+    tone: "light" as const,
+  },
+  {
     href: "/management/notities",
     label: "Winkels",
     title: "Notities",

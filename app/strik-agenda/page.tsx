@@ -5,9 +5,7 @@ import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 import {
   TeamAgendaEvent,
   TeamAgendaEventType,
-  getAudienceLabel,
   getEventTypeLabel,
-  getTeamAgendaUrl,
   normalizeTeamAgenda,
 } from "./teamAgendaApi";
 
@@ -182,7 +180,7 @@ function EventCard({ event }: { event: DisplayEvent }) {
               {getEventTypeLabel(event.type)}
             </span>
             <span className="rounded-full bg-[#f8f6f3] px-3 py-1 text-xs font-bold text-[#2d2a26]/55">
-              {getAudienceLabel(event.audience)}
+              Team
             </span>
           </div>
 
@@ -218,14 +216,16 @@ export default function StrikAgendaPage() {
       setStatus("Agenda laden...");
 
       try {
-        const res = await fetch(getTeamAgendaUrl(), { cache: "no-store" });
+        const res = await fetch("/api/tamigo-employees?view=shop", {
+          cache: "no-store",
+        });
         const data = (await res.json().catch(() => null)) as unknown;
 
         if (ignoreResult) return;
 
         if (!res.ok) {
           setEvents([]);
-          setStatus("Strik agenda is nog niet gekoppeld aan WordPress.");
+          setStatus("Tamigo verjaardagen zijn nog niet beschikbaar.");
           return;
         }
 
@@ -234,7 +234,7 @@ export default function StrikAgendaPage() {
       } catch {
         if (!ignoreResult) {
           setEvents([]);
-          setStatus("Kan de Strik agenda niet laden.");
+          setStatus("Kan de verjaardagen niet laden.");
         }
       } finally {
         if (!ignoreResult) {
@@ -291,7 +291,7 @@ export default function StrikAgendaPage() {
     <StrikShell>
       <StrikPageHeader
         title="Strik agenda"
-        description="Verjaardagen, jubilea en teamactiviteiten."
+        description="Verjaardagen van het team."
         icon={strikIcons.strikAgenda}
         tone="honey"
       />
@@ -360,7 +360,7 @@ export default function StrikAgendaPage() {
 
         {viewMode === "dag" && upcomingEvents.length === 0 && !loading ? (
           <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 text-sm text-gray-600 shadow-sm">
-            Er staan nog geen teammomenten in de Strik agenda.
+            Er staan nog geen verjaardagen in de Strik agenda.
           </div>
         ) : null}
 
@@ -446,7 +446,7 @@ export default function StrikAgendaPage() {
 
             {monthEvents.length === 0 ? (
               <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 text-sm text-gray-600 shadow-sm">
-                Geen teammomenten in deze maand.
+                Geen verjaardagen in deze maand.
               </div>
             ) : (
               <section className="space-y-3">
@@ -492,7 +492,7 @@ export default function StrikAgendaPage() {
 
                   {items.length === 0 ? (
                     <p className="mt-3 text-sm font-semibold text-gray-400">
-                      Geen items
+                      Geen verjaardagen
                     </p>
                   ) : (
                     <div className="mt-3 space-y-2">

@@ -11,6 +11,7 @@ const parentRoutes: Record<string, string> = {
   "/strik-agenda": "/winkel",
   "/schoonmaak": "/ijs",
   "/schoonmaak/overzicht": "/management",
+  "/management/personeelsagenda": "/management",
 };
 
 const topLevelRoutes = new Set(["/", "/winkel", "/ijs", "/management"]);
