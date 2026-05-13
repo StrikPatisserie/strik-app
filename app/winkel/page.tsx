@@ -5,6 +5,7 @@ import {
   StrikShell,
   strikIcons,
 } from "../StrikUI";
+import TodayStaffWidget from "./TodayStaffWidget";
 import WinkelFeaturedCards from "./WinkelFeaturedCards";
 
 const items = [
@@ -46,6 +47,7 @@ export default function WinkelPage() {
 
       <div className="space-y-4">
         <WinkelFeaturedCards />
+        <TodayStaffWidget />
 
         {items.map((item) => (
           <StrikActionCard key={item.href} {...item} />

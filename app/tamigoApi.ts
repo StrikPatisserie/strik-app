@@ -6,6 +6,7 @@ const TAMIGO_MAX_EMPLOYEE_PAGES = getPositiveNumber(
   process.env.TAMIGO_MAX_EMPLOYEE_PAGES,
   50
 );
+const AMSTERDAM_TIME_ZONE = "Europe/Amsterdam";
 
 let cachedTamigoSessionToken: string | null = null;
 
@@ -33,6 +34,26 @@ type TamigoDetailedEmployee = {
   IsUserEnabled?: boolean;
 };
 
+type TamigoShift = {
+  ShiftId?: string;
+  EmployeeId?: string;
+  EmployeeName?: string;
+  DepartmentId?: string;
+  DepartmentName?: string;
+  DepartmentKey?: string;
+  StartDateTime?: string;
+  EndDateTime?: string;
+};
+
+export type ShopName = "Heyendaal" | "Lent" | "Ziekerstraat" | "Daalseweg";
+
+type ShopDepartment = {
+  shop: ShopName;
+  departmentId: string;
+  departmentName: string;
+  departmentKey: string;
+};
+
 export type PersonnelEventType = "birthday" | "anniversary";
 
 export type PersonnelAgendaEvent = {
@@ -55,6 +76,57 @@ export type PersonnelAgenda = {
   birthdays: PersonnelAgendaEvent[];
   anniversaries: PersonnelAgendaEvent[];
 };
+
+export type TodayStaffShiftTime = {
+  startTime: string;
+  endTime: string;
+  timeLabel: string;
+};
+
+export type TodayStaffPerson = {
+  id: string;
+  employeeName: string;
+  shifts: TodayStaffShiftTime[];
+};
+
+export type TodayStaffShop = {
+  shop: ShopName;
+  departmentName: string;
+  employees: TodayStaffPerson[];
+};
+
+export type TodayStaffSchedule = {
+  generatedAt: string;
+  date: string;
+  shops: TodayStaffShop[];
+};
+
+const SHOP_DEPARTMENTS: ShopDepartment[] = [
+  {
+    shop: "Heyendaal",
+    departmentId: "15fe190a-2fee-4ff6-80ac-3da8c9fe252b",
+    departmentKey: "Heyendaalseweg",
+    departmentName: "Winkel - Heyendaalseweg",
+  },
+  {
+    shop: "Lent",
+    departmentId: "9bd578ca-9893-46e7-a1d4-23e1b49fcdb4",
+    departmentKey: "Oranje Marieplein",
+    departmentName: "Winkel - Oranje Marieplein",
+  },
+  {
+    shop: "Ziekerstraat",
+    departmentId: "5fba2ecb-5e47-4f9c-82a0-0cf1b753cfff",
+    departmentKey: "Ziekerstraat",
+    departmentName: "Winkel - Ziekerstraat",
+  },
+  {
+    shop: "Daalseweg",
+    departmentId: "57e2c68e-bf1c-44d3-a57f-d484a1a09865",
+    departmentKey: "Daalseweg",
+    departmentName: "Winkel - Daalseweg",
+  },
+];
 
 class TamigoApiError extends Error {
   constructor(
@@ -257,6 +329,19 @@ function toDetailedEmployee(value: JsonRecord): TamigoDetailedEmployee {
   };
 }
 
+function toTamigoShift(value: JsonRecord): TamigoShift {
+  return {
+    ShiftId: textFrom(value.ShiftId),
+    EmployeeId: textFrom(value.EmployeeId),
+    EmployeeName: textFrom(value.EmployeeName),
+    DepartmentId: textFrom(value.DepartmentId),
+    DepartmentName: textFrom(value.DepartmentName),
+    DepartmentKey: textFrom(value.DepartmentKey),
+    StartDateTime: textFrom(value.StartDateTime),
+    EndDateTime: textFrom(value.EndDateTime),
+  };
+}
+
 export async function fetchTamigoEmployeesPage(page = 0) {
   const data = await tamigoGet("/v2/Employees/", {
     page: String(page),
@@ -366,6 +451,160 @@ function parseDateOnly(value: string | undefined) {
   }
 
   return null;
+}
+
+function getAmsterdamDate(offsetDays = 0, now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: AMSTERDAM_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const dateParts = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+  const date = new Date(
+    Date.UTC(
+      Number(dateParts.year),
+      Number(dateParts.month) - 1,
+      Number(dateParts.day) + offsetDays
+    )
+  );
+
+  return formatDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+}
+
+function parseTamigoDateTime(value: string | undefined) {
+  const text = textFrom(value);
+  if (!text) return null;
+
+  const microsoftMatch = text.match(/^\/Date\((-?\d+)([+-]\d{4})?\)\/$/);
+  if (microsoftMatch) {
+    const date = new Date(Number(microsoftMatch[1]));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (/([zZ]|[+-]\d{2}:?\d{2})$/.test(text)) {
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
+}
+
+function formatAmsterdamTime(date: Date) {
+  return new Intl.DateTimeFormat("nl-NL", {
+    timeZone: AMSTERDAM_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function getTamigoTime(value: string | undefined) {
+  const text = textFrom(value);
+  if (!text) return "";
+
+  const date = parseTamigoDateTime(text);
+  if (date) return formatAmsterdamTime(date);
+
+  const isoTimeMatch = text.match(/T(\d{1,2}):(\d{2})/);
+  if (isoTimeMatch) {
+    return `${isoTimeMatch[1].padStart(2, "0")}:${isoTimeMatch[2]}`;
+  }
+
+  const timeMatch = text.match(/^(\d{1,2}):(\d{2})/);
+  if (timeMatch) {
+    return `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}`;
+  }
+
+  return "";
+}
+
+function createShiftTime(shift: TamigoShift): TodayStaffShiftTime | null {
+  const startTime = getTamigoTime(shift.StartDateTime);
+  const endTime = getTamigoTime(shift.EndDateTime);
+
+  if (!startTime || !endTime) return null;
+
+  return {
+    startTime,
+    endTime,
+    timeLabel: `${startTime}–${endTime}`,
+  };
+}
+
+async function fetchTodayShiftsForDepartment(
+  department: ShopDepartment,
+  from: string,
+  to: string
+) {
+  const data = await tamigoGet("/v2/Shifts/", {
+    from,
+    to,
+    departmentId: department.departmentId,
+    shiftStatus: "planned",
+  });
+
+  return getArrayRecords(data)
+    .map(toTamigoShift)
+    .filter((shift) => shift.DepartmentId === department.departmentId);
+}
+
+function toTodayStaffPersonKey(shift: TamigoShift) {
+  return textFrom(shift.EmployeeId) || textFrom(shift.EmployeeName);
+}
+
+function toTodayStaffShop(
+  department: ShopDepartment,
+  shifts: TamigoShift[]
+): TodayStaffShop {
+  const people = new Map<string, TodayStaffPerson>();
+
+  for (const shift of shifts) {
+    const employeeName = textFrom(shift.EmployeeName);
+    const shiftTime = createShiftTime(shift);
+
+    if (!employeeName || !shiftTime) continue;
+
+    const key = toTodayStaffPersonKey(shift);
+    const existing = people.get(key);
+
+    if (existing) {
+      existing.shifts.push(shiftTime);
+      continue;
+    }
+
+    people.set(key, {
+      id: `staff-${createHash(`${department.shop}-${key}`)}`,
+      employeeName,
+      shifts: [shiftTime],
+    });
+  }
+
+  const employees = [...people.values()]
+    .map((person) => ({
+      ...person,
+      shifts: [...person.shifts].sort((a, b) =>
+        a.startTime.localeCompare(b.startTime)
+      ),
+    }))
+    .sort((a, b) => {
+      const timeDiff = (a.shifts[0]?.startTime || "").localeCompare(
+        b.shifts[0]?.startTime || ""
+      );
+      if (timeDiff !== 0) return timeDiff;
+
+      return a.employeeName.localeCompare(b.employeeName);
+    });
+
+  return {
+    shop: department.shop,
+    departmentName: department.departmentName,
+    employees,
+  };
 }
 
 function getMonthDay(date: Date) {
@@ -518,6 +757,25 @@ function sortPersonnelEvents(events: PersonnelAgendaEvent[]) {
 
     return a.employeeName.localeCompare(b.employeeName);
   });
+}
+
+export async function getTodayStaffSchedule(): Promise<TodayStaffSchedule> {
+  const now = new Date();
+  const from = getAmsterdamDate(0, now);
+  const to = getAmsterdamDate(1, now);
+  const shops = await Promise.all(
+    SHOP_DEPARTMENTS.map(async (department) => {
+      const shifts = await fetchTodayShiftsForDepartment(department, from, to);
+
+      return toTodayStaffShop(department, shifts);
+    })
+  );
+
+  return {
+    generatedAt: now.toISOString(),
+    date: from,
+    shops,
+  };
 }
 
 export function toTeamAgendaEvents(events: PersonnelAgendaEvent[]) {
