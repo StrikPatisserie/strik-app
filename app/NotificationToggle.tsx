@@ -103,14 +103,14 @@ export default function NotificationToggle({
 
   if (variant === "inline") {
     return (
-      <div className="rounded-2xl bg-white/45 px-2.5 py-2 text-left">
-        <div className="flex items-center justify-between gap-2">
+      <div className="rounded-xl bg-white/45 px-2 py-1.5 text-left">
+        <div className="flex items-center justify-between gap-1.5">
           <div className="min-w-0">
-            <p className="text-[0.68rem] font-black uppercase leading-tight tracking-[0.08em] text-[#2d2a26]/55">
-              {currentEnabled ? "Nieuwsmeldingen aan" : "Zet nieuwsmeldingen aan"}
+            <p className="truncate text-[0.6rem] font-black uppercase leading-tight tracking-[0.08em] text-[#2d2a26]/55">
+              Pushmelding {currentEnabled ? "aan" : "uit"}
             </p>
             {(blocked || unsupported) && (
-              <p className="mt-1 text-[0.65rem] font-semibold leading-snug text-[#d75a48]">
+              <p className="mt-0.5 truncate text-[0.58rem] font-semibold leading-snug text-[#d75a48]">
                 {blocked
                   ? "Geblokkeerd"
                   : needsIosHomescreen
@@ -126,13 +126,13 @@ export default function NotificationToggle({
             aria-checked={currentEnabled}
             disabled={blocked || unsupported}
             onClick={toggleNotifications}
-            className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-50 ${
+            className={`relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-50 ${
               currentEnabled ? "bg-[#a8bf9e]" : "bg-[#d6d0c8]"
             }`}
           >
             <span
-              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${
-                currentEnabled ? "left-6" : "left-1"
+              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${
+                currentEnabled ? "left-[1.15rem]" : "left-0.5"
               }`}
             />
           </button>
