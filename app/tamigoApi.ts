@@ -257,7 +257,7 @@ function toDetailedEmployee(value: JsonRecord): TamigoDetailedEmployee {
   };
 }
 
-export async function fetchTamigoEmployeesPage(page = 1) {
+export async function fetchTamigoEmployeesPage(page = 0) {
   const data = await tamigoGet("/v2/Employees/", {
     page: String(page),
   });
@@ -265,7 +265,7 @@ export async function fetchTamigoEmployeesPage(page = 1) {
   return getArrayRecords(data).map(toSimpleEmployee);
 }
 
-async function fetchTamigoEmployeeDetailsPage(page = 1) {
+async function fetchTamigoEmployeeDetailsPage(page = 0) {
   const data = await tamigoGet("/v2/Employees/GetEmployeeDetails/", {
     page: String(page),
     includedeleted: "false",
@@ -287,7 +287,7 @@ async function fetchTamigoEmployeeDetails() {
   const employees: TamigoDetailedEmployee[] = [];
   const seen = new Set<string>();
 
-  for (let page = 1; page <= TAMIGO_MAX_EMPLOYEE_PAGES; page += 1) {
+  for (let page = 0; page < TAMIGO_MAX_EMPLOYEE_PAGES; page += 1) {
     const pageEmployees = await fetchTamigoEmployeeDetailsPage(page);
     let addedCount = 0;
 
