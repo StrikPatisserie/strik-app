@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import StrikBackButton from "./StrikBackButton";
+import StrikPageTitle from "./StrikPageTitle";
 
 export const strikIcons = {
   agenda: "/icons_strik_agenda.svg",
@@ -112,24 +113,9 @@ export function StrikPageHeader({
   kicker?: string;
   tone?: Tone;
 }>) {
-  const titleSizeClass =
-    title.length > 22
-      ? "text-[2.85rem]"
-      : title.length > 14
-      ? "text-[3.35rem]"
-      : "text-[4.35rem]";
-
   return (
     <header className="mb-7 pt-8 text-center">
-      <h1
-        className={`mx-auto max-w-full break-words leading-none text-[#050505] ${titleSizeClass}`}
-        style={{
-          fontFamily: "Butterscotch, Marker Felt, cursive",
-          letterSpacing: "0",
-        }}
-      >
-        {title}
-      </h1>
+      <StrikPageTitle title={title} />
       {description && <p className="sr-only">{description}</p>}
     </header>
   );
