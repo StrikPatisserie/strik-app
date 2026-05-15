@@ -1048,6 +1048,15 @@ export async function getPersonnelAgenda(): Promise<PersonnelAgenda> {
   };
 }
 
+export async function getUpcomingEmployeeEventCount(days = 7) {
+  const maxDays = Math.max(0, days);
+  const agenda = await getPersonnelAgenda();
+
+  return [...agenda.birthdays, ...agenda.anniversaries].filter(
+    (event) => event.daysUntil <= maxDays
+  ).length;
+}
+
 function sortPersonnelEvents(events: PersonnelAgendaEvent[]) {
   return [...events].sort((a, b) => {
     const dateDiff = a.occurrenceDate.localeCompare(b.occurrenceDate);

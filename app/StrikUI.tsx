@@ -186,6 +186,7 @@ export function StrikActionCard({
   description,
   icon,
   label,
+  badge,
   tone = "green",
   size = "regular",
   locked = false,
@@ -195,6 +196,7 @@ export function StrikActionCard({
   description: string;
   icon: string;
   label?: string;
+  badge?: string | number;
   tone?: Tone;
   size?: ActionCardSize;
   locked?: boolean;
@@ -204,8 +206,14 @@ export function StrikActionCard({
   return (
     <Link
       href={href}
-      className={`group flex items-center border border-[#e7e0d8]/80 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${sizeClasses.card} ${toneClasses[tone]}`}
+      className={`group relative flex items-center border border-[#e7e0d8]/80 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${sizeClasses.card} ${toneClasses[tone]}`}
     >
+      {badge && (
+        <span className="absolute right-4 top-4 flex h-7 min-w-7 items-center justify-center rounded-full bg-[#e24b3b] px-2 text-sm font-black text-white shadow-sm">
+          {badge}
+        </span>
+      )}
+
       <span
         className={`flex shrink-0 items-center justify-center rounded-full bg-white/45 ${sizeClasses.iconWrap}`}
       >

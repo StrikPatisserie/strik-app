@@ -25,6 +25,23 @@ type EventDraft = {
   recurringYearly: boolean;
 };
 
+type ManagementAgendaFilter = "all" | "manual" | "birthday" | "anniversary";
+
+type TamigoEmployeeAgendaResponse = {
+  events?: unknown[];
+  message?: string;
+};
+
+const filterOptions: {
+  value: ManagementAgendaFilter;
+  label: string;
+}[] = [
+  { value: "all", label: "Alles" },
+  { value: "manual", label: "Strik agenda" },
+  { value: "birthday", label: "Verjaardagen" },
+  { value: "anniversary", label: "Jubilea" },
+];
+
 function getToday() {
   const today = new Date();
   const year = today.getFullYear();
@@ -45,16 +62,72 @@ function emptyDraft(): EventDraft {
   };
 }
 
-function formatDate(value: string) {
+function parseLocalDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(year, (month || 1) - 1, day || 1);
+  date.setHours(0, 0, 0, 0);
 
-  return date.toLocaleDateString("nl-NL", {
+  return date;
+}
+
+function createYearlyDate(year: number, month: number, day: number) {
+  if (month === 2 && day === 29) {
+    const leapDate = new Date(year, 1, 29);
+    leapDate.setHours(0, 0, 0, 0);
+    if (leapDate.getMonth() === 1) return leapDate;
+
+    return new Date(year, 1, 28);
+  }
+
+  const date = new Date(year, month - 1, day);
+  date.setHours(0, 0, 0, 0);
+
+  return date;
+}
+
+function getEventDisplayDate(event: TeamAgendaEvent) {
+  const sourceDate = parseLocalDate(event.date);
+
+  if (!event.recurringYearly) return sourceDate;
+
+  const today = parseLocalDate(getToday());
+  let displayDate = createYearlyDate(
+    today.getFullYear(),
+    sourceDate.getMonth() + 1,
+    sourceDate.getDate()
+  );
+
+  if (displayDate < today) {
+    displayDate = createYearlyDate(
+      today.getFullYear() + 1,
+      sourceDate.getMonth() + 1,
+      sourceDate.getDate()
+    );
+  }
+
+  return displayDate;
+}
+
+function getDaysUntilEvent(event: TeamAgendaEvent) {
+  const today = parseLocalDate(getToday());
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+
+  return Math.round(
+    (getEventDisplayDate(event).getTime() - today.getTime()) /
+      millisecondsPerDay
+  );
+}
+
+function formatEventDate(event: TeamAgendaEvent) {
+  const date = getEventDisplayDate(event);
+  const suffix = event.recurringYearly ? " jaarlijks" : "";
+
+  return `${date.toLocaleDateString("nl-NL", {
     weekday: "short",
     day: "numeric",
     month: "short",
     year: "numeric",
-  });
+  })}${suffix}`;
 }
 
 function formatUpdatedAt(value?: string) {
@@ -73,47 +146,119 @@ function formatUpdatedAt(value?: string) {
 
 function sortEvents(events: TeamAgendaEvent[]) {
   return [...events].sort((a, b) => {
-    const dateDiff = a.date.localeCompare(b.date);
+    const dateDiff =
+      getEventDisplayDate(a).getTime() - getEventDisplayDate(b).getTime();
     if (dateDiff !== 0) return dateDiff;
 
     return a.title.localeCompare(b.title);
   });
 }
 
+async function fetchManualAgenda() {
+  const res = await fetch(getTeamAgendaUrl(), { cache: "no-store" });
+  const data = (await res.json().catch(() => null)) as unknown;
+
+  if (!res.ok) {
+    throw new Error("WordPress agenda is nog niet beschikbaar.");
+  }
+
+  return normalizeTeamAgenda(data);
+}
+
+async function fetchTamigoAgendaEvents() {
+  const res = await fetch("/api/tamigo-employees?view=management", {
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => null)) as
+    | TamigoEmployeeAgendaResponse
+    | null;
+
+  if (!res.ok) {
+    throw new Error(
+      data?.message || "Tamigo-events zijn tijdelijk niet beschikbaar."
+    );
+  }
+
+  return normalizeTeamAgenda({ events: data?.events || [] }).events.filter(
+    (event) => event.source === "tamigo"
+  );
+}
+
 export default function TeamAgendaManager() {
   const [agenda, setAgenda] = useState<TeamAgendaData>(getEmptyTeamAgenda);
+  const [tamigoEvents, setTamigoEvents] = useState<TeamAgendaEvent[]>([]);
   const [draft, setDraft] = useState<EventDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ManagementAgendaFilter>("all");
   const [status, setStatus] = useState("Agenda laden...");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [manualAgendaAvailable, setManualAgendaAvailable] = useState(true);
 
-  const sortedEvents = useMemo(() => sortEvents(agenda.events), [agenda.events]);
+  const combinedEvents = useMemo(
+    () => sortEvents([...agenda.events, ...tamigoEvents]),
+    [agenda.events, tamigoEvents]
+  );
+  const visibleEvents = useMemo(() => {
+    if (filter === "manual") return sortEvents(agenda.events);
+    if (filter === "birthday") {
+      return sortEvents(
+        combinedEvents.filter((event) => event.type === "birthday")
+      );
+    }
+    if (filter === "anniversary") {
+      return sortEvents(
+        combinedEvents.filter((event) => event.type === "anniversary")
+      );
+    }
+
+    return combinedEvents;
+  }, [agenda.events, combinedEvents, filter]);
+  const upcomingTamigoCount = useMemo(
+    () =>
+      tamigoEvents.filter((event) => {
+        const daysUntil = getDaysUntilEvent(event);
+
+        return daysUntil >= 0 && daysUntil <= 7;
+      }).length,
+    [tamigoEvents]
+  );
 
   const loadAgenda = useCallback(async () => {
     setLoading(true);
     setStatus("Agenda laden...");
 
-    try {
-      const res = await fetch(getTeamAgendaUrl(), { cache: "no-store" });
-      const data = (await res.json().catch(() => null)) as unknown;
+    const [manualResult, tamigoResult] = await Promise.allSettled([
+      fetchManualAgenda(),
+      fetchTamigoAgendaEvents(),
+    ]);
+    const statusMessages: string[] = [];
 
-      if (!res.ok) {
-        setAgenda(getEmptyTeamAgenda());
-        setStatus("WordPress agenda is nog niet beschikbaar.");
-        return;
-      }
-
-      setAgenda(normalizeTeamAgenda(data));
+    if (manualResult.status === "fulfilled") {
+      setAgenda(manualResult.value);
+      setManualAgendaAvailable(true);
       setDirty(false);
-      setStatus("");
-    } catch {
+    } else {
       setAgenda(getEmptyTeamAgenda());
-      setStatus("Kan geen verbinding maken met WordPress.");
-    } finally {
-      setLoading(false);
+      setManualAgendaAvailable(false);
+      setDirty(false);
+      statusMessages.push(
+        "Handmatige agenda-items zijn tijdelijk niet beschikbaar."
+      );
     }
+
+    if (tamigoResult.status === "fulfilled") {
+      setTamigoEvents(tamigoResult.value);
+    } else {
+      setTamigoEvents([]);
+      statusMessages.push(
+        "Tamigo-verjaardagen en jubilea zijn tijdelijk niet beschikbaar."
+      );
+    }
+
+    setStatus(statusMessages.join(" "));
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -125,6 +270,11 @@ export default function TeamAgendaManager() {
   }, [loadAgenda]);
 
   async function saveAgenda() {
+    if (!manualAgendaAvailable) {
+      setStatus("Haal de handmatige agenda eerst opnieuw op.");
+      return;
+    }
+
     setSaving(true);
     setStatus("Opslaan...");
 
@@ -145,6 +295,7 @@ export default function TeamAgendaManager() {
       }
 
       setAgenda(normalizeTeamAgenda(data));
+      setManualAgendaAvailable(true);
       setDirty(false);
       setStatus("Opgeslagen.");
     } catch {
@@ -172,6 +323,11 @@ export default function TeamAgendaManager() {
 
     if (!title || !date) {
       setStatus("Vul minimaal een titel en datum in.");
+      return;
+    }
+
+    if (!manualAgendaAvailable) {
+      setStatus("Haal de handmatige agenda eerst opnieuw op.");
       return;
     }
 
@@ -205,6 +361,8 @@ export default function TeamAgendaManager() {
   }
 
   function editEvent(event: TeamAgendaEvent) {
+    if (event.source !== "manual") return;
+
     setEditingId(event.id);
     setDraft({
       title: event.title,
@@ -233,24 +391,37 @@ export default function TeamAgendaManager() {
   return (
     <div className="space-y-5">
       <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
           <div className="rounded-2xl bg-[#eef3ea] p-3">
             <p className="text-2xl font-bold">{agenda.events.length}</p>
-            <p className="text-xs font-semibold text-[#2d2a26]/55">Items</p>
+            <p className="text-xs font-semibold text-[#2d2a26]/55">
+              Strik agenda
+            </p>
           </div>
-          <div className="rounded-2xl bg-[#f1d28f]/60 p-3">
+          <div className="rounded-2xl bg-[#f8e1ea] p-3">
             <p className="text-2xl font-bold">
-              {agenda.events.filter((event) => event.recurringYearly).length}
+              {tamigoEvents.filter((event) => event.type === "birthday").length}
             </p>
             <p className="text-xs font-semibold text-[#2d2a26]/55">
-              Jaarlijks
+              Verjaardagen
             </p>
           </div>
-          <div className="rounded-2xl bg-[#dbe9ee] p-3">
+          <div className="rounded-2xl bg-[#eef3ea] p-3">
             <p className="text-2xl font-bold">
-              {agenda.events.filter((event) => event.source === "tamigo").length}
+              {
+                tamigoEvents.filter((event) => event.type === "anniversary")
+                  .length
+              }
             </p>
-            <p className="text-xs font-semibold text-[#2d2a26]/55">Tamigo</p>
+            <p className="text-xs font-semibold text-[#2d2a26]/55">
+              Jubilea
+            </p>
+          </div>
+          <div className="rounded-2xl bg-[#f1d28f]/60 p-3">
+            <p className="text-2xl font-bold">{upcomingTamigoCount}</p>
+            <p className="text-xs font-semibold text-[#2d2a26]/55">
+              Binnen 7 dagen
+            </p>
           </div>
         </div>
 
@@ -268,7 +439,7 @@ export default function TeamAgendaManager() {
         <button
           type="button"
           onClick={saveAgenda}
-          disabled={saving || loading || !dirty}
+          disabled={saving || loading || !dirty || !manualAgendaAvailable}
           className="mt-4 w-full rounded-full bg-[#c3d3bc] p-4 font-bold disabled:opacity-50"
         >
           {saving ? "Opslaan..." : "Wijzigingen opslaan"}
@@ -353,7 +524,8 @@ export default function TeamAgendaManager() {
             <button
               type="button"
               onClick={submitDraft}
-              className="min-w-0 flex-1 rounded-full bg-[#c3d3bc] p-4 font-bold"
+              disabled={loading || !manualAgendaAvailable}
+              className="min-w-0 flex-1 rounded-full bg-[#c3d3bc] p-4 font-bold disabled:opacity-50"
             >
               {editingId ? "Wijziging bijwerken" : "Toevoegen"}
             </button>
@@ -372,14 +544,33 @@ export default function TeamAgendaManager() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold">Agenda-items</h2>
+        <div className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm">
+          <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] bg-[#f8f6f3] p-1 sm:grid-cols-4">
+            {filterOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setFilter(option.value)}
+                className={`rounded-full px-3 py-3 text-sm font-bold transition ${
+                  filter === option.value
+                    ? "bg-[#c3d3bc] text-[#2d2a26] shadow-sm"
+                    : "text-[#2d2a26]/50"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {sortedEvents.length === 0 ? (
+        <h2 className="text-xl font-bold">Strik Agenda</h2>
+
+        {visibleEvents.length === 0 ? (
           <div className="rounded-[1.5rem] bg-white/80 p-5 text-sm text-gray-600 shadow-sm">
-            Nog geen handmatige items in de Strik agenda.
+            Nog geen agenda-items gevonden voor deze selectie.
           </div>
         ) : (
-          sortedEvents.map((event) => (
+          visibleEvents.map((event) => (
             <article
               key={event.id}
               className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 shadow-sm"
@@ -404,7 +595,7 @@ export default function TeamAgendaManager() {
                     {event.title}
                   </h3>
                   <p className="mt-1 text-sm font-semibold capitalize text-[#2d2a26]/55">
-                    {formatDate(event.date)}
+                    {formatEventDate(event)}
                   </p>
                   {event.description && (
                     <p className="mt-3 rounded-2xl bg-[#f8f6f3] p-3 text-sm leading-relaxed text-gray-600">
@@ -414,22 +605,28 @@ export default function TeamAgendaManager() {
                 </div>
               </div>
 
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => editEvent(event)}
-                  className="flex-1 rounded-full bg-[#eef3ea] px-4 py-3 text-sm font-bold"
-                >
-                  Wijzig
-                </button>
-                <button
-                  type="button"
-                  onClick={() => deleteEvent(event.id)}
-                  className="rounded-full bg-[#f8f6f3] px-4 py-3 text-sm font-bold text-[#d75a48]"
-                >
-                  Verwijder
-                </button>
-              </div>
+              {event.source === "manual" ? (
+                <div className="mt-4 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => editEvent(event)}
+                    className="flex-1 rounded-full bg-[#eef3ea] px-4 py-3 text-sm font-bold"
+                  >
+                    Wijzig
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteEvent(event.id)}
+                    className="rounded-full bg-[#f8f6f3] px-4 py-3 text-sm font-bold text-[#d75a48]"
+                  >
+                    Verwijder
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-4 rounded-full bg-[#f8f6f3] px-4 py-3 text-center text-xs font-bold uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                  Automatisch via Tamigo
+                </p>
+              )}
             </article>
           ))
         )}

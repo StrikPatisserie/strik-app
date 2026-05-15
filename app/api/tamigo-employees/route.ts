@@ -1,6 +1,7 @@
 import {
   getPersonnelAgenda,
   getTamigoStatusCode,
+  getUpcomingEmployeeEventCount,
   testTamigoEmployeeConnection,
   toTeamAgendaEvents,
 } from "../../tamigoApi";
@@ -20,6 +21,14 @@ function getMode(request: Request) {
   return new URL(request.url).searchParams.get("mode") || "";
 }
 
+function getDays(request: Request) {
+  const value = Number(new URL(request.url).searchParams.get("days") || "7");
+
+  if (!Number.isFinite(value)) return 7;
+
+  return Math.max(0, Math.min(31, Math.round(value)));
+}
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -30,6 +39,15 @@ export async function GET(request: Request) {
   try {
     if (getMode(request) === "connection") {
       return Response.json(await testTamigoEmployeeConnection());
+    }
+
+    if (getMode(request) === "upcoming-count") {
+      const days = getDays(request);
+
+      return Response.json({
+        days,
+        count: await getUpcomingEmployeeEventCount(days),
+      });
     }
 
     const view = getView(request);

@@ -4,8 +4,9 @@ import {
   StrikShell,
   strikIcons,
 } from "../StrikUI";
+import ManagementAgendaCard from "./ManagementAgendaCard";
 
-const items = [
+const topItems = [
   {
     href: "/schoonmaak/overzicht",
     label: "IJs",
@@ -22,22 +23,9 @@ const items = [
     icon: strikIcons.newsManagement,
     tone: "green" as const,
   },
-  {
-    href: "/management/agenda",
-    label: "Team",
-    title: "Strik agenda beheren",
-    description: "Voeg feestdagen, personeelsdagen en activiteiten toe.",
-    icon: strikIcons.strikAgenda,
-    tone: "honey" as const,
-  },
-  {
-    href: "/management/personeelsagenda",
-    label: "Team",
-    title: "Personeelsagenda",
-    description: "Bekijk verjaardagen, jubilea en meldingen per week.",
-    icon: strikIcons.strikAgenda,
-    tone: "light" as const,
-  },
+];
+
+const bottomItems = [
   {
     href: "/management/rooster",
     label: "Tamigo",
@@ -67,7 +55,11 @@ export default function ManagementPage() {
       />
 
       <div className="space-y-4">
-        {items.map((item) => (
+        {topItems.map((item) => (
+          <StrikActionCard key={item.href} {...item} />
+        ))}
+        <ManagementAgendaCard />
+        {bottomItems.map((item) => (
           <StrikActionCard key={item.href} {...item} />
         ))}
       </div>
