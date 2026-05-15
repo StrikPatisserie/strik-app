@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   cakeSizes,
   cakeStyles,
@@ -470,6 +470,48 @@ function DecorationOptionCard({
   onToggle: () => void;
   onQuantityChange: (quantity: number) => void;
 }) {
+  const [quantityInput, setQuantityInput] = useState(String(quantity));
+
+  useEffect(() => {
+    setQuantityInput(String(quantity));
+  }, [quantity]);
+
+  function commitQuantityInput() {
+    if (!quantityInput.trim()) {
+      setQuantityInput(String(quantity));
+      return;
+    }
+
+    const nextQuantity = Math.max(
+      1,
+      Math.min(99, Math.round(Number(quantityInput)))
+    );
+
+    if (!Number.isFinite(nextQuantity)) {
+      setQuantityInput(String(quantity));
+      return;
+    }
+
+    setQuantityInput(String(nextQuantity));
+    onQuantityChange(nextQuantity);
+  }
+
+  function updateQuantityInput(value: string) {
+    if (!value) {
+      setQuantityInput("");
+      return;
+    }
+
+    if (!/^\d+$/.test(value)) return;
+
+    setQuantityInput(value);
+
+    const nextQuantity = Number(value);
+    if (nextQuantity >= 1 && nextQuantity <= 99) {
+      onQuantityChange(nextQuantity);
+    }
+  }
+
   return (
     <div
       className={`rounded-[1.4rem] border p-4 shadow-sm transition ${
@@ -500,12 +542,15 @@ function DecorationOptionCard({
         <label className="mt-4 grid gap-2 text-sm font-black text-[#2d2a26]/70">
           {option.quantityLabel}
           <input
-            type="number"
-            min="1"
-            max="99"
-            step="1"
-            value={quantity}
-            onChange={(event) => onQuantityChange(Number(event.target.value))}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={quantityInput}
+            onBlur={commitQuantityInput}
+            onChange={(event) => updateQuantityInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+            }}
             className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
           />
         </label>
@@ -1435,6 +1480,9 @@ export default function BruidstaartStudioConfigurator() {
       const isSelected = current.decorationIds.includes(id);
       let nextDecorationIds = current.decorationIds;
       const nextQuantities = { ...current.decorationQuantities };
+      const existingRoseQuantity = ROSE_DECORATION_IDS.map(
+        (roseId) => current.decorationQuantities?.[roseId]
+      ).find((quantity) => Number.isFinite(quantity));
 
       if (isSelected) {
         nextDecorationIds = nextDecorationIds.filter((item) => item !== id);
@@ -1451,7 +1499,9 @@ export default function BruidstaartStudioConfigurator() {
 
         if (option.quantityLabel) {
           nextQuantities[id] =
-            current.decorationQuantities?.[id] || DEFAULT_ROSE_QUANTITY;
+            current.decorationQuantities?.[id] ||
+            existingRoseQuantity ||
+            DEFAULT_ROSE_QUANTITY;
         }
       }
 
