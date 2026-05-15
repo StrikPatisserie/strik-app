@@ -10,6 +10,46 @@ import type {
 type LoadState = "loading" | "ready" | "error";
 type SortMode = "day" | "shop";
 
+const shopAccentClasses: Record<
+  string,
+  {
+    header: string;
+    pill: string;
+    section: string;
+  }
+> = {
+  Lent: {
+    header: "border-[#a8bf9e]/70 bg-[#dce8d6] text-[#263b22]",
+    pill: "bg-[#dce8d6] text-[#263b22]",
+    section: "border-[#a8bf9e]/55 bg-[#f4f8f1]",
+  },
+  Ziekerstraat: {
+    header: "border-[#d98f87]/70 bg-[#f8dfd8] text-[#7a2f28]",
+    pill: "bg-[#f8dfd8] text-[#7a2f28]",
+    section: "border-[#d98f87]/50 bg-[#fff6f4]",
+  },
+  Heyendaal: {
+    header: "border-[#d9b761]/70 bg-[#f1d28f]/75 text-[#4a3711]",
+    pill: "bg-[#f1d28f]/75 text-[#4a3711]",
+    section: "border-[#d9b761]/50 bg-[#fff9e9]",
+  },
+  Daalseweg: {
+    header: "border-[#9ebac4]/70 bg-[#dbe9ee] text-[#254858]",
+    pill: "bg-[#dbe9ee] text-[#254858]",
+    section: "border-[#9ebac4]/50 bg-[#f2f8fa]",
+  },
+};
+
+function getShopAccent(shopName: string) {
+  return (
+    shopAccentClasses[shopName] || {
+      header: "border-[#e7e0d8] bg-[#f8f6f3] text-[#2d2a26]",
+      pill: "bg-[#f8f6f3] text-[#2d2a26]",
+      section: "border-[#e7e0d8]/80 bg-white/70",
+    }
+  );
+}
+
 function ShiftSummary({ shop }: Readonly<{ shop: TodayStaffShop }>) {
   const hasEmployees = shop.employees.length > 0;
   const hasAbsences = shop.absences.length > 0;
@@ -81,11 +121,13 @@ function ShopBlock({
   shop: TodayStaffShop;
   compact?: boolean;
 }>) {
+  const accent = getShopAccent(shop.shop);
+
   return (
     <article className="rounded-2xl border border-[#e7e0d8]/80 bg-white/90 p-3 shadow-sm">
       <h3
-        className={`font-black leading-tight text-[#2d2a26] ${
-          compact ? "text-sm" : "text-base"
+        className={`rounded-2xl border px-3 py-2 text-center font-black leading-tight shadow-sm ${accent.header} ${
+          compact ? "text-base" : "text-lg"
         }`}
       >
         {shop.shop}
@@ -123,9 +165,15 @@ function ShopSection({
   shopName: string;
   days: WeekStaffDay[];
 }>) {
+  const accent = getShopAccent(shopName);
+
   return (
-    <section className="rounded-[1.5rem] border border-[#e7e0d8]/80 bg-white/70 p-3 shadow-sm">
-      <h2 className="mb-3 text-lg font-black text-[#050505]">{shopName}</h2>
+    <section className={`rounded-[1.5rem] border p-3 shadow-sm ${accent.section}`}>
+      <h2
+        className={`mb-3 rounded-2xl border px-4 py-3 text-center text-xl font-black ${accent.header}`}
+      >
+        {shopName}
+      </h2>
       <div className="grid gap-2 md:grid-cols-2">
         {days.map((day) => {
           const shop = day.shops.find((item) => item.shop === shopName);
@@ -136,11 +184,13 @@ function ShopSection({
               key={day.date}
               className="rounded-2xl border border-[#e7e0d8]/80 bg-white/90 p-3 shadow-sm"
             >
-              <div className="mb-2 flex items-baseline justify-between gap-2">
-                <h3 className="text-sm font-black capitalize text-[#2d2a26]">
+              <div
+                className={`mb-2 rounded-xl px-3 py-2 text-center ${accent.pill}`}
+              >
+                <h3 className="text-base font-black capitalize leading-tight">
                   {day.weekdayLabel}
                 </h3>
-                <p className="text-xs font-bold text-[#2d2a26]/45">
+                <p className="text-xs font-bold opacity-65">
                   {day.dateLabel}
                 </p>
               </div>

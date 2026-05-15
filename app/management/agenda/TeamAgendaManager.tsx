@@ -189,11 +189,11 @@ export default function TeamAgendaManager() {
   const [tamigoEvents, setTamigoEvents] = useState<TeamAgendaEvent[]>([]);
   const [draft, setDraft] = useState<EventDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [filter, setFilter] = useState<ManagementAgendaFilter>("all");
   const [status, setStatus] = useState("Agenda laden...");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
   const [manualAgendaAvailable, setManualAgendaAvailable] = useState(true);
 
   const combinedEvents = useMemo(
@@ -238,11 +238,9 @@ export default function TeamAgendaManager() {
     if (manualResult.status === "fulfilled") {
       setAgenda(manualResult.value);
       setManualAgendaAvailable(true);
-      setDirty(false);
     } else {
       setAgenda(getEmptyTeamAgenda());
       setManualAgendaAvailable(false);
-      setDirty(false);
       statusMessages.push(
         "Handmatige agenda-items zijn tijdelijk niet beschikbaar."
       );
@@ -269,10 +267,10 @@ export default function TeamAgendaManager() {
     return () => window.clearTimeout(timeoutId);
   }, [loadAgenda]);
 
-  async function saveAgenda() {
+  async function saveAgenda(nextAgenda: TeamAgendaData) {
     if (!manualAgendaAvailable) {
       setStatus("Haal de handmatige agenda eerst opnieuw op.");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -284,22 +282,23 @@ export default function TeamAgendaManager() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(agenda),
+        body: JSON.stringify(nextAgenda),
       });
 
       const data = (await res.json().catch(() => null)) as unknown;
 
       if (!res.ok) {
         setStatus("Opslaan in WordPress lukt nog niet.");
-        return;
+        return false;
       }
 
       setAgenda(normalizeTeamAgenda(data));
       setManualAgendaAvailable(true);
-      setDirty(false);
       setStatus("Opgeslagen.");
+      return true;
     } catch {
       setStatus("Kan geen verbinding maken met WordPress.");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -317,7 +316,17 @@ export default function TeamAgendaManager() {
     setEditingId(null);
   }
 
-  function submitDraft() {
+  function openDraftForm() {
+    resetDraft();
+    setFormOpen(true);
+  }
+
+  function closeDraftForm() {
+    resetDraft();
+    setFormOpen(false);
+  }
+
+  async function submitDraft() {
     const title = draft.title.trim();
     const date = draft.date.trim();
 
@@ -346,23 +355,25 @@ export default function TeamAgendaManager() {
         now,
       updatedAt: now,
     };
-
-    setAgenda((current) => ({
-      ...current,
+    const nextAgenda = {
+      ...agenda,
       events: editingId
-        ? current.events.map((event) =>
+        ? agenda.events.map((event) =>
             event.id === editingId ? nextEvent : event
           )
-        : [...current.events, nextEvent],
-    }));
-    setDirty(true);
-    setStatus("Wijzigingen staan klaar om op te slaan.");
-    resetDraft();
+        : [...agenda.events, nextEvent],
+    };
+    const saved = await saveAgenda(nextAgenda);
+
+    if (saved) {
+      closeDraftForm();
+    }
   }
 
   function editEvent(event: TeamAgendaEvent) {
     if (event.source !== "manual") return;
 
+    setFormOpen(true);
     setEditingId(event.id);
     setDraft({
       title: event.title,
@@ -374,18 +385,16 @@ export default function TeamAgendaManager() {
     });
   }
 
-  function deleteEvent(id: string) {
-    setAgenda((current) => ({
-      ...current,
-      events: current.events.filter((event) => event.id !== id),
-    }));
-    setDirty(true);
+  async function deleteEvent(id: string) {
+    const nextAgenda = {
+      ...agenda,
+      events: agenda.events.filter((event) => event.id !== id),
+    };
+    const saved = await saveAgenda(nextAgenda);
 
-    if (editingId === id) {
-      resetDraft();
+    if (saved && editingId === id) {
+      closeDraftForm();
     }
-
-    setStatus("Wijzigingen staan klaar om op te slaan.");
   }
 
   return (
@@ -427,119 +436,9 @@ export default function TeamAgendaManager() {
 
         <div className="mt-4 flex items-center justify-between gap-3 text-xs font-semibold text-gray-500">
           <span>
-            {loading
-              ? "Laden..."
-              : dirty
-              ? "Niet opgeslagen wijzigingen."
-              : status || "Alles bijgewerkt."}
+            {loading ? "Laden..." : status || "Alles bijgewerkt."}
           </span>
           {agenda.updatedAt && <span>{formatUpdatedAt(agenda.updatedAt)}</span>}
-        </div>
-
-        <button
-          type="button"
-          onClick={saveAgenda}
-          disabled={saving || loading || !dirty || !manualAgendaAvailable}
-          className="mt-4 w-full rounded-full bg-[#c3d3bc] p-4 font-bold disabled:opacity-50"
-        >
-          {saving ? "Opslaan..." : "Wijzigingen opslaan"}
-        </button>
-      </section>
-
-      <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
-        <h2 className="text-xl font-bold">
-          {editingId ? "Agenda-item wijzigen" : "Agenda-item toevoegen"}
-        </h2>
-
-        <div className="mt-4 space-y-3">
-          <input
-            value={draft.title}
-            onChange={(event) => updateDraft("title", event.target.value)}
-            placeholder="Titel"
-            className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
-          />
-
-          <input
-            type="date"
-            value={draft.date}
-            onChange={(event) => updateDraft("date", event.target.value)}
-            className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
-          />
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <select
-              value={draft.type}
-              onChange={(event) =>
-                updateDraft("type", event.target.value as TeamAgendaEventType)
-              }
-              className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
-            >
-              {teamAgendaEventTypes.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={draft.audience}
-              onChange={(event) =>
-                updateDraft(
-                  "audience",
-                  event.target.value as TeamAgendaAudience
-                )
-              }
-              className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
-            >
-              {teamAgendaAudiences.map((audience) => (
-                <option key={audience.value} value={audience.value}>
-                  {audience.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <textarea
-            value={draft.description}
-            onChange={(event) =>
-              updateDraft("description", event.target.value)
-            }
-            placeholder="Omschrijving"
-            className="min-h-24 w-full rounded-2xl border border-[#e7e0d8] bg-white p-4"
-          />
-
-          <label className="flex items-center gap-3 rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-4 text-sm font-semibold">
-            <input
-              type="checkbox"
-              checked={draft.recurringYearly}
-              onChange={(event) =>
-                updateDraft("recurringYearly", event.target.checked)
-              }
-              className="h-5 w-5"
-            />
-            Jaarlijks terugkerend
-          </label>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={submitDraft}
-              disabled={loading || !manualAgendaAvailable}
-              className="min-w-0 flex-1 rounded-full bg-[#c3d3bc] p-4 font-bold disabled:opacity-50"
-            >
-              {editingId ? "Wijziging bijwerken" : "Toevoegen"}
-            </button>
-
-            {editingId && (
-              <button
-                type="button"
-                onClick={resetDraft}
-                className="rounded-full bg-[#f8f6f3] px-5 font-bold text-gray-500"
-              >
-                Annuleer
-              </button>
-            )}
-          </div>
         </div>
       </section>
 
@@ -563,7 +462,131 @@ export default function TeamAgendaManager() {
           </div>
         </div>
 
-        <h2 className="text-xl font-bold">Strik Agenda</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold">Strik Agenda</h2>
+          <button
+            type="button"
+            onClick={formOpen ? closeDraftForm : openDraftForm}
+            aria-label={
+              formOpen ? "Agenda-item toevoegen sluiten" : "Agenda-item toevoegen"
+            }
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#c3d3bc] text-2xl font-black leading-none text-[#2d2a26] shadow-sm active:scale-[0.98]"
+          >
+            {formOpen ? "x" : "+"}
+          </button>
+        </div>
+
+        {formOpen && (
+          <section className="rounded-[1.5rem] border border-[#e7e0d8] bg-white/85 p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-base font-black">
+                {editingId ? "Agenda-item wijzigen" : "Agenda-item toevoegen"}
+              </h3>
+              <button
+                type="button"
+                onClick={closeDraftForm}
+                className="rounded-full bg-[#f8f6f3] px-3 py-1.5 text-sm font-black text-[#2d2a26]/55"
+              >
+                Sluit
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              <input
+                value={draft.title}
+                onChange={(event) => updateDraft("title", event.target.value)}
+                placeholder="Titel"
+                className="w-full rounded-xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm"
+              />
+
+              <input
+                type="date"
+                value={draft.date}
+                onChange={(event) => updateDraft("date", event.target.value)}
+                className="w-full rounded-xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm"
+              />
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <select
+                  value={draft.type}
+                  onChange={(event) =>
+                    updateDraft("type", event.target.value as TeamAgendaEventType)
+                  }
+                  className="w-full rounded-xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm"
+                >
+                  {teamAgendaEventTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={draft.audience}
+                  onChange={(event) =>
+                    updateDraft(
+                      "audience",
+                      event.target.value as TeamAgendaAudience
+                    )
+                  }
+                  className="w-full rounded-xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm"
+                >
+                  {teamAgendaAudiences.map((audience) => (
+                    <option key={audience.value} value={audience.value}>
+                      {audience.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <textarea
+                value={draft.description}
+                onChange={(event) =>
+                  updateDraft("description", event.target.value)
+                }
+                placeholder="Omschrijving"
+                className="min-h-20 w-full rounded-xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm"
+              />
+
+              <label className="flex items-center gap-2 rounded-xl border border-[#e7e0d8] bg-[#f8f6f3] px-3 py-2.5 text-sm font-semibold">
+                <input
+                  type="checkbox"
+                  checked={draft.recurringYearly}
+                  onChange={(event) =>
+                    updateDraft("recurringYearly", event.target.checked)
+                  }
+                  className="h-4 w-4"
+                />
+                Jaarlijks terugkerend
+              </label>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={submitDraft}
+                  disabled={saving || loading || !manualAgendaAvailable}
+                  className="min-w-0 flex-1 rounded-full bg-[#c3d3bc] px-4 py-3 text-sm font-black disabled:opacity-50"
+                >
+                  {saving
+                    ? "Opslaan..."
+                    : editingId
+                    ? "Wijziging opslaan"
+                    : "Toevoegen en opslaan"}
+                </button>
+
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={closeDraftForm}
+                    className="rounded-full bg-[#f8f6f3] px-4 py-3 text-sm font-black text-gray-500"
+                  >
+                    Annuleer
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
         {visibleEvents.length === 0 ? (
           <div className="rounded-[1.5rem] bg-white/80 p-5 text-sm text-gray-600 shadow-sm">
@@ -573,19 +596,19 @@ export default function TeamAgendaManager() {
           visibleEvents.map((event) => (
             <article
               key={event.id}
-              className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 shadow-sm"
+              className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-3 shadow-sm"
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="mb-2 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-[#eef3ea] px-3 py-1 text-xs font-bold text-[#2d3f29]">
+                  <div className="mb-1.5 flex flex-wrap gap-1.5">
+                    <span className="rounded-full bg-[#eef3ea] px-2.5 py-0.5 text-xs font-bold text-[#2d3f29]">
                       {getEventTypeLabel(event.type)}
                     </span>
-                    <span className="rounded-full bg-[#f8f6f3] px-3 py-1 text-xs font-bold text-[#2d2a26]/55">
+                    <span className="rounded-full bg-[#f8f6f3] px-2.5 py-0.5 text-xs font-bold text-[#2d2a26]/55">
                       {getAudienceLabel(event.audience)}
                     </span>
                     {event.recurringYearly && (
-                      <span className="rounded-full bg-[#f1d28f]/60 px-3 py-1 text-xs font-bold text-[#4a3711]">
+                      <span className="rounded-full bg-[#f1d28f]/60 px-2.5 py-0.5 text-xs font-bold text-[#4a3711]">
                         Jaarlijks
                       </span>
                     )}
@@ -598,7 +621,7 @@ export default function TeamAgendaManager() {
                     {formatEventDate(event)}
                   </p>
                   {event.description && (
-                    <p className="mt-3 rounded-2xl bg-[#f8f6f3] p-3 text-sm leading-relaxed text-gray-600">
+                    <p className="mt-2 rounded-2xl bg-[#f8f6f3] p-2.5 text-sm leading-relaxed text-gray-600">
                       {event.description}
                     </p>
                   )}
@@ -606,24 +629,24 @@ export default function TeamAgendaManager() {
               </div>
 
               {event.source === "manual" ? (
-                <div className="mt-4 flex gap-2">
+                <div className="mt-3 flex gap-2">
                   <button
                     type="button"
                     onClick={() => editEvent(event)}
-                    className="flex-1 rounded-full bg-[#eef3ea] px-4 py-3 text-sm font-bold"
+                    className="flex-1 rounded-full bg-[#eef3ea] px-4 py-2.5 text-sm font-bold"
                   >
                     Wijzig
                   </button>
                   <button
                     type="button"
                     onClick={() => deleteEvent(event.id)}
-                    className="rounded-full bg-[#f8f6f3] px-4 py-3 text-sm font-bold text-[#d75a48]"
+                    className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-bold text-[#d75a48]"
                   >
                     Verwijder
                   </button>
                 </div>
               ) : (
-                <p className="mt-4 rounded-full bg-[#f8f6f3] px-4 py-3 text-center text-xs font-bold uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                <p className="mt-3 rounded-full bg-[#f8f6f3] px-4 py-2.5 text-center text-xs font-bold uppercase tracking-[0.08em] text-[#2d2a26]/45">
                   Automatisch via Tamigo
                 </p>
               )}

@@ -5,7 +5,7 @@ export const TEAM_AGENDA_API_KEY = "schoonmaak-ijs-strik";
 export const teamAgendaEventTypes = [
   { value: "event", label: "Strik event" },
   { value: "holiday", label: "Feestdag" },
-  { value: "training", label: "Training" },
+  { value: "training", label: "Overig" },
   { value: "closing", label: "Sluitingsdag" },
   { value: "birthday", label: "Verjaardag" },
   { value: "anniversary", label: "Jubileum" },
