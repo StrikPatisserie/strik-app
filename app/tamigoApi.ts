@@ -43,6 +43,20 @@ type TamigoShift = {
   DepartmentKey?: string;
   StartDateTime?: string;
   EndDateTime?: string;
+  Date?: string;
+  StartDate?: string;
+  EndDate?: string;
+  ShiftActivityName?: string;
+  ShiftActivityShortName?: string;
+  AbsencePercentage?: number;
+  IsProductive?: boolean;
+};
+
+type TamigoLeavePerDay = {
+  Date?: string;
+  WageSystemKey?: string;
+  Name?: string;
+  AbsenceType?: string;
 };
 
 export type ShopName = "Heyendaal" | "Lent" | "Ziekerstraat" | "Daalseweg";
@@ -89,16 +103,42 @@ export type TodayStaffPerson = {
   shifts: TodayStaffShiftTime[];
 };
 
+export type StaffAbsenceType = "sick" | "vacation" | "absence";
+
+export type TodayStaffAbsence = {
+  id: string;
+  employeeName: string;
+  type: StaffAbsenceType;
+  label: string;
+};
+
 export type TodayStaffShop = {
   shop: ShopName;
   departmentName: string;
   employees: TodayStaffPerson[];
+  absences: TodayStaffAbsence[];
 };
 
 export type TodayStaffSchedule = {
   generatedAt: string;
   date: string;
   shops: TodayStaffShop[];
+};
+
+export type WeekStaffDay = {
+  date: string;
+  weekdayLabel: string;
+  dateLabel: string;
+  shops: TodayStaffShop[];
+};
+
+export type WeekStaffSchedule = {
+  generatedAt: string;
+  from: string;
+  to: string;
+  weekLabel: string;
+  shops: ShopName[];
+  days: WeekStaffDay[];
 };
 
 const SHOP_DEPARTMENTS: ShopDepartment[] = [
@@ -239,6 +279,12 @@ function boolFrom(value: unknown) {
   return typeof value === "boolean" ? value : undefined;
 }
 
+function numberFrom(value: unknown) {
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
 function parseJson(text: string) {
   try {
     return JSON.parse(text) as unknown;
@@ -339,6 +385,22 @@ function toTamigoShift(value: JsonRecord): TamigoShift {
     DepartmentKey: textFrom(value.DepartmentKey),
     StartDateTime: textFrom(value.StartDateTime),
     EndDateTime: textFrom(value.EndDateTime),
+    Date: textFrom(value.Date),
+    StartDate: textFrom(value.StartDate),
+    EndDate: textFrom(value.EndDate),
+    ShiftActivityName: textFrom(value.ShiftActivityName),
+    ShiftActivityShortName: textFrom(value.ShiftActivityShortName),
+    AbsencePercentage: numberFrom(value.AbsencePercentage),
+    IsProductive: boolFrom(value.IsProductive),
+  };
+}
+
+function toTamigoLeavePerDay(value: JsonRecord): TamigoLeavePerDay {
+  return {
+    Date: textFrom(value.Date),
+    WageSystemKey: textFrom(value.WageSystemKey),
+    Name: textFrom(value.Name),
+    AbsenceType: textFrom(value.AbsenceType),
   };
 }
 
@@ -476,6 +538,68 @@ function getAmsterdamDate(offsetDays = 0, now = new Date()) {
   return formatDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
 }
 
+function parseDateString(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  return new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  );
+}
+
+function addDaysToDateString(value: string, days: number) {
+  const date = parseDateString(value);
+  if (!date) return value;
+
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return formatDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+}
+
+function getAmsterdamWeekStartDate(weekOffset = 0, now = new Date()) {
+  const today = getAmsterdamDate(0, now);
+  const date = parseDateString(today) || new Date();
+  const dayOfWeek = date.getUTCDay();
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+  return addDaysToDateString(today, mondayOffset + weekOffset * 7);
+}
+
+function createDateRange(from: string, to: string) {
+  const dates: string[] = [];
+  let current = from;
+
+  for (let index = 0; index < 14 && current < to; index += 1) {
+    dates.push(current);
+    current = addDaysToDateString(current, 1);
+  }
+
+  return dates;
+}
+
+function formatDateLabel(value: string, options: Intl.DateTimeFormatOptions) {
+  const date = parseDateString(value);
+  if (!date) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    timeZone: "UTC",
+    ...options,
+  }).format(date);
+}
+
+function getTamigoDateOnly(value: string | undefined) {
+  const text = textFrom(value);
+  if (!text) return "";
+
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+  const date = parseTamigoDateTime(text);
+  if (!date) return "";
+
+  return formatDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+}
+
 function parseTamigoDateTime(value: string | undefined) {
   const text = textFrom(value);
   if (!text) return null;
@@ -523,6 +647,14 @@ function getTamigoTime(value: string | undefined) {
   return "";
 }
 
+function getShiftDate(shift: TamigoShift) {
+  return (
+    getTamigoDateOnly(shift.StartDateTime) ||
+    getTamigoDateOnly(shift.Date) ||
+    getTamigoDateOnly(shift.StartDate)
+  );
+}
+
 function createShiftTime(shift: TamigoShift): TodayStaffShiftTime | null {
   const startTime = getTamigoTime(shift.StartDateTime);
   const endTime = getTamigoTime(shift.EndDateTime);
@@ -536,7 +668,117 @@ function createShiftTime(shift: TamigoShift): TodayStaffShiftTime | null {
   };
 }
 
-async function fetchTodayShiftsForDepartment(
+function normalizeAbsenceText(value: string) {
+  return value
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getAbsenceType(label: string): StaffAbsenceType {
+  const normalized = normalizeAbsenceText(label);
+
+  if (normalized.includes("ziek")) return "sick";
+  if (
+    normalized.includes("vakantie") ||
+    normalized.includes("verlof") ||
+    normalized.includes("snipper")
+  ) {
+    return "vacation";
+  }
+
+  return "absence";
+}
+
+function getAbsenceLabel(type: StaffAbsenceType) {
+  if (type === "sick") return "Ziek";
+  if (type === "vacation") return "Vakantie";
+
+  return "Afwezig";
+}
+
+function getShiftAbsenceText(shift: TamigoShift) {
+  return textFrom(shift.ShiftActivityName) || textFrom(shift.ShiftActivityShortName);
+}
+
+function isAbsenceShift(shift: TamigoShift) {
+  const absenceText = getShiftAbsenceText(shift);
+  if (!absenceText) return false;
+  const normalized = normalizeAbsenceText(absenceText);
+
+  return (
+    getAbsenceType(absenceText) !== "absence" ||
+    normalized.includes("afwezig") ||
+    Boolean(shift.AbsencePercentage && shift.AbsencePercentage > 0)
+  );
+}
+
+function toStaffAbsenceFromShift(
+  department: ShopDepartment,
+  shift: TamigoShift
+): TodayStaffAbsence | null {
+  const employeeName = textFrom(shift.EmployeeName);
+  const absenceText = getShiftAbsenceText(shift);
+  if (!employeeName || !absenceText) return null;
+
+  const type = getAbsenceType(absenceText);
+
+  return {
+    id: `absence-${createHash(
+      `${department.shop}-${toTodayStaffPersonKey(shift)}-${getShiftDate(shift)}-${type}`
+    )}`,
+    employeeName,
+    type,
+    label: getAbsenceLabel(type),
+  };
+}
+
+function toStaffAbsenceFromLeave(
+  department: ShopDepartment,
+  leave: TamigoLeavePerDay
+): TodayStaffAbsence | null {
+  const employeeName = textFrom(leave.Name);
+  const absenceText = textFrom(leave.AbsenceType);
+  if (!employeeName || !absenceText) return null;
+
+  const type = getAbsenceType(absenceText);
+
+  return {
+    id: `absence-${createHash(
+      `${department.shop}-${leave.WageSystemKey || employeeName}-${getTamigoDateOnly(
+        leave.Date
+      )}-${type}`
+    )}`,
+    employeeName,
+    type,
+    label: getAbsenceLabel(type),
+  };
+}
+
+function sortAbsences(absences: TodayStaffAbsence[]) {
+  return [...absences].sort((a, b) => {
+    const typeDiff = a.type.localeCompare(b.type);
+    if (typeDiff !== 0) return typeDiff;
+
+    return a.employeeName.localeCompare(b.employeeName);
+  });
+}
+
+function dedupeAbsences(absences: TodayStaffAbsence[]) {
+  const seen = new Set<string>();
+
+  return sortAbsences(
+    absences.filter((absence) => {
+      const key = `${absence.employeeName.toLowerCase()}-${absence.type}`;
+      if (seen.has(key)) return false;
+
+      seen.add(key);
+      return true;
+    })
+  );
+}
+
+async function fetchShiftsForDepartment(
   department: ShopDepartment,
   from: string,
   to: string
@@ -553,13 +795,28 @@ async function fetchTodayShiftsForDepartment(
     .filter((shift) => shift.DepartmentId === department.departmentId);
 }
 
+async function fetchLeaveForDepartment(
+  department: ShopDepartment,
+  from: string,
+  to: string
+) {
+  const data = await tamigoGet("/v2/Leave/ByDate/", {
+    departmentId: department.departmentId,
+    startDate: from,
+    endDate: to,
+  });
+
+  return getArrayRecords(data).map(toTamigoLeavePerDay);
+}
+
 function toTodayStaffPersonKey(shift: TamigoShift) {
   return textFrom(shift.EmployeeId) || textFrom(shift.EmployeeName);
 }
 
 function toTodayStaffShop(
   department: ShopDepartment,
-  shifts: TamigoShift[]
+  shifts: TamigoShift[],
+  absences: TodayStaffAbsence[] = []
 ): TodayStaffShop {
   const people = new Map<string, TodayStaffPerson>();
 
@@ -604,7 +861,48 @@ function toTodayStaffShop(
     shop: department.shop,
     departmentName: department.departmentName,
     employees,
+    absences: dedupeAbsences(absences),
   };
+}
+
+function toDepartmentDaySchedule(
+  department: ShopDepartment,
+  date: string,
+  shifts: TamigoShift[],
+  leaves: TamigoLeavePerDay[]
+) {
+  const dayShifts = shifts.filter((shift) => getShiftDate(shift) === date);
+  const workingShifts = dayShifts.filter((shift) => !isAbsenceShift(shift));
+  const absenceShifts = dayShifts.flatMap((shift) => {
+    if (!isAbsenceShift(shift)) return [];
+
+    const absence = toStaffAbsenceFromShift(department, shift);
+    return absence ? [absence] : [];
+  });
+  const leaveAbsences = leaves.flatMap((leave) => {
+    if (getTamigoDateOnly(leave.Date) !== date) return [];
+
+    const absence = toStaffAbsenceFromLeave(department, leave);
+    return absence ? [absence] : [];
+  });
+
+  return toTodayStaffShop(department, workingShifts, [
+    ...leaveAbsences,
+    ...absenceShifts,
+  ]);
+}
+
+async function fetchDepartmentSchedule(
+  department: ShopDepartment,
+  from: string,
+  to: string
+) {
+  const [shifts, leaves] = await Promise.all([
+    fetchShiftsForDepartment(department, from, to),
+    fetchLeaveForDepartment(department, from, to),
+  ]);
+
+  return { department, shifts, leaves };
 }
 
 function getMonthDay(date: Date) {
@@ -763,18 +1061,62 @@ export async function getTodayStaffSchedule(): Promise<TodayStaffSchedule> {
   const now = new Date();
   const from = getAmsterdamDate(0, now);
   const to = getAmsterdamDate(1, now);
-  const shops = await Promise.all(
-    SHOP_DEPARTMENTS.map(async (department) => {
-      const shifts = await fetchTodayShiftsForDepartment(department, from, to);
+  const departmentSchedules = await Promise.all(
+    SHOP_DEPARTMENTS.map((department) =>
+      fetchDepartmentSchedule(department, from, to)
+    )
+  );
 
-      return toTodayStaffShop(department, shifts);
-    })
+  const shops = departmentSchedules.map(({ department, shifts, leaves }) =>
+    toDepartmentDaySchedule(department, from, shifts, leaves)
   );
 
   return {
     generatedAt: now.toISOString(),
     date: from,
     shops,
+  };
+}
+
+export async function getWeekStaffSchedule(
+  weekOffset = 0
+): Promise<WeekStaffSchedule> {
+  const now = new Date();
+  const from = getAmsterdamWeekStartDate(weekOffset, now);
+  const to = addDaysToDateString(from, 7);
+  const dates = createDateRange(from, to);
+  const departmentSchedules = await Promise.all(
+    SHOP_DEPARTMENTS.map((department) =>
+      fetchDepartmentSchedule(department, from, to)
+    )
+  );
+  const days = dates.map(
+    (date): WeekStaffDay => ({
+      date,
+      weekdayLabel: formatDateLabel(date, { weekday: "long" }),
+      dateLabel: formatDateLabel(date, {
+        day: "numeric",
+        month: "short",
+      }),
+      shops: departmentSchedules.map(({ department, shifts, leaves }) =>
+        toDepartmentDaySchedule(department, date, shifts, leaves)
+      ),
+    })
+  );
+
+  return {
+    generatedAt: now.toISOString(),
+    from,
+    to,
+    weekLabel: `${formatDateLabel(from, {
+      day: "numeric",
+      month: "short",
+    })} - ${formatDateLabel(addDaysToDateString(to, -1), {
+      day: "numeric",
+      month: "short",
+    })}`,
+    shops: SHOP_DEPARTMENTS.map((department) => department.shop),
+    days,
   };
 }
 

@@ -66,6 +66,33 @@ function ShopRow({
           Geen diensten vandaag
         </p>
       )}
+
+      {shop.absences.length > 0 && (
+        <div className="mt-2 rounded-xl bg-white/55 px-2.5 py-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+            Afwezig
+          </p>
+          <ul className="mt-1 space-y-1">
+            {shop.absences.map((absence) => (
+              <li
+                key={absence.id}
+                className="flex items-center justify-between gap-2 text-xs font-bold text-[#2d2a26]/65"
+              >
+                <span className="min-w-0 truncate">{absence.employeeName}</span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] uppercase tracking-[0.06em] ${
+                    absence.type === "sick"
+                      ? "bg-[#f8dfd8] text-[#9f382f]"
+                      : "bg-[#e8f0f2] text-[#4e6c74]"
+                  }`}
+                >
+                  {absence.label}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </article>
   );
 }

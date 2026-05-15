@@ -39,6 +39,14 @@ const items = [
     tone: "light" as const,
   },
   {
+    href: "/management/rooster",
+    label: "Tamigo",
+    title: "Rooster",
+    description: "Bekijk per week wie er werkt, ziek is of vakantie heeft.",
+    icon: strikIcons.strikAgenda,
+    tone: "medium" as const,
+  },
+  {
     href: "/management/notities",
     label: "Winkels",
     title: "Notities",
