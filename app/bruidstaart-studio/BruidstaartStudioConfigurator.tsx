@@ -710,8 +710,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 x + offset + 44 + (item % 2 ? 1.5 : -1)
               } ${y + 1}`}
               stroke="currentColor"
-              strokeWidth="0.34"
-              opacity={item % 2 ? "0.2" : "0.25"}
+              strokeWidth="0.3"
+              opacity={item % 2 ? "0.17" : "0.21"}
             />
           ))}
           {diagonalOffsetsB.map((offset, item) => (
@@ -721,8 +721,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 x + offset + 44 + (item % 2 ? -1.5 : 1)
               } ${y + height - 1}`}
               stroke="currentColor"
-              strokeWidth="0.34"
-              opacity={item % 2 ? "0.16" : "0.21"}
+              strokeWidth="0.3"
+              opacity={item % 2 ? "0.14" : "0.18"}
             />
           ))}
         </>
@@ -955,25 +955,43 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           d={`M ${x + 2} ${y + height - pearlRadius * 0.18} H ${x + width - 2}`}
           stroke={pearlColor}
           strokeLinecap="round"
-          strokeWidth={pearlRadius * 1.65}
-          opacity="0.94"
+          strokeWidth={pearlRadius * 1.22}
+          opacity="0.58"
         />
         {Array.from({ length: pearlCount }, (_item, item) => {
           const point = pearlCount === 1 ? 0.5 : item / (pearlCount - 1);
           const radius = pearlRadius + [-0.22, 0.1, -0.05, 0.18][item % 4];
           const yOffset = [0, 0.45, -0.25, 0.7, 0.15][item % 5];
+          const pearlX = pearlStart + point * (pearlEnd - pearlStart);
+          const pearlY = y + height - pearlRadius * 0.28 + yOffset;
 
           return (
-            <circle
-              key={`${layerId}-pearl-${item}`}
-              cx={pearlStart + point * (pearlEnd - pearlStart)}
-              cy={y + height - pearlRadius * 0.28 + yOffset}
-              r={radius}
-              fill={pearlColor}
-              stroke={pearlStroke}
-              strokeWidth="0.16"
-              opacity={item % 3 === 0 ? "0.94" : "1"}
-            />
+            <g key={`${layerId}-pearl-${item}`}>
+              <ellipse
+                cx={pearlX}
+                cy={pearlY + radius * 0.62}
+                rx={radius * 0.84}
+                ry={Math.max(0.5, radius * 0.16)}
+                fill="currentColor"
+                opacity="0.08"
+              />
+              <circle
+                cx={pearlX}
+                cy={pearlY}
+                r={radius}
+                fill={pearlColor}
+                stroke={pearlStroke}
+                strokeWidth="0.16"
+                opacity={item % 3 === 0 ? "0.94" : "1"}
+              />
+              <circle
+                cx={pearlX - radius * 0.28}
+                cy={pearlY - radius * 0.26}
+                r={radius * 0.22}
+                fill="#fffdf4"
+                opacity="0.42"
+              />
+            </g>
           );
         })}
       </g>
@@ -987,18 +1005,47 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     y: number,
     width: number
   ) {
+    type ClusterAlign = "left" | "right" | "top";
+    type FlowerClusterRole = "hero" | "support" | "corner" | "accent";
+
     const height = visualLayerHeight(index);
     const isBottomLayer = index === 0;
     const isTopLayer = index === visualLayers.length - 1;
     const roseCount = layerRoseCount(index);
     const hasRoseLeaves = selectedDecorations.has("marsepeinrozen-met-blad");
     const flowerX = x + width * (index % 2 ? 0.25 : 0.75);
-    const edgeClusters = [
-      { x: x + 10, y: y + 2, align: "left" },
-      { x: x + width - 10, y: y + 2, align: "right" },
-      { x: x + width * 0.5, y: y - 4, align: "top" },
-      { x: x + width * 0.28, y: y + height - 1, align: "left" },
-      { x: x + width * 0.72, y: y + height - 1, align: "right" },
+    const sideAlign: ClusterAlign = index % 2 ? "left" : "right";
+    const edgeClusters: Array<{
+      x: number;
+      y: number;
+      align: ClusterAlign;
+      scale: number;
+    }> = [
+      {
+        x: x + 10,
+        y: y + 1.4,
+        align: "left",
+        scale: isBottomLayer ? 0.92 : 1,
+      },
+      {
+        x: x + width - 10,
+        y: y + 1.4,
+        align: "right",
+        scale: isBottomLayer ? 0.92 : 1,
+      },
+      { x: x + width * 0.5, y: y - 4.5, align: "top", scale: 1.03 },
+      {
+        x: x + width * 0.28,
+        y: y + height - 1,
+        align: "left",
+        scale: 0.9,
+      },
+      {
+        x: x + width * 0.72,
+        y: y + height - 1,
+        align: "right",
+        scale: 0.9,
+      },
     ];
     const activeRoseClusters = edgeClusters.slice(
       0,
@@ -1015,13 +1062,29 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
       return count;
     });
-    const fruitClusters = [
-      { x: x + 15, y: y - 7, align: "left" },
-      { x: x + width - 15, y: y - 7, align: "right" },
+    const fruitClusters: Array<{
+      x: number;
+      y: number;
+      align: ClusterAlign;
+      scale: number;
+    }> = [
+      {
+        x: x + 15,
+        y: y - 7,
+        align: "left",
+        scale: isBottomLayer ? 0.82 : 0.92,
+      },
+      {
+        x: x + width - 15,
+        y: y - 7,
+        align: "right",
+        scale: isBottomLayer ? 0.82 : 0.92,
+      },
       {
         x: x + width * (topperVisuals.length ? 0.36 : 0.52),
-        y: y - 11,
+        y: y - 10.5,
         align: "top",
+        scale: isTopLayer ? 0.88 : 0.76,
       },
     ];
     const fruitAssets = [
@@ -1036,28 +1099,67 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       "/flowers_bloem1.svg",
       "/flowers_bloem2.svg",
       "/flowers_bloem3.svg",
+      "/flowers_bloemen4.svg",
+      "/flowers_bloemen5.svg",
     ];
     const flowerClusters = [
-      { x: flowerX, y: y - 8, align: index % 2 ? "left" : "right" },
       {
-        x: x + width * (topperVisuals.length ? 0.64 : 0.5),
-        y: y - 11,
-        align: "top",
+        x: flowerX,
+        y: y - (isTopLayer ? 11.5 : 7.5),
+        align: sideAlign,
+        role: isTopLayer ? "hero" : isBottomLayer ? "corner" : "support",
+        scale: isTopLayer ? 1.08 : isBottomLayer ? 0.82 : 0.94,
       },
-    ].filter((_cluster, item) => item === 0 || isTopLayer);
+      isTopLayer
+        ? {
+            x: x + width * (topperVisuals.length ? 0.64 : 0.5),
+            y: y - 11.5,
+            align: "top" as ClusterAlign,
+            role: "support" as FlowerClusterRole,
+            scale: 0.76,
+          }
+        : null,
+      !isBottomLayer && !isTopLayer
+        ? {
+            x: x + width * (sideAlign === "right" ? 0.2 : 0.8),
+            y: y + height - 0.5,
+            align: (sideAlign === "right" ? "left" : "right") as ClusterAlign,
+            role: "accent" as FlowerClusterRole,
+            scale: 0.62,
+          }
+        : null,
+    ].filter(
+      (
+        cluster
+      ): cluster is {
+        x: number;
+        y: number;
+        align: ClusterAlign;
+        role: FlowerClusterRole;
+        scale: number;
+      } => Boolean(cluster)
+    );
+    const goldFlakeAnchors = [
+      { x: x + 16, y: y + 8, rotate: -12, size: 1 },
+      { x: x + width - 18, y: y + 9, rotate: 15, size: 0.9 },
+      {
+        x: flowerX + (sideAlign === "right" ? -18 : 18),
+        y: y + (isTopLayer ? -2 : 5),
+        rotate: sideAlign === "right" ? -7 : 8,
+        size: 0.78,
+      },
+      {
+        x: x + width * (isTopLayer ? 0.45 : 0.72),
+        y: y + height - 8,
+        rotate: 19,
+        size: 0.72,
+      },
+    ];
     const goldFlakes = [
-      { x: x + 19, y: y + 7, points: "-2,-1 2,-2 3,1 -1,3" },
-      { x: x + width - 21, y: y + 10, points: "-1,-2 3,-1 1,3 -3,1" },
-      {
-        x: x + width * 0.28,
-        y: y + height - 9,
-        points: "-2,0 1,-3 3,1 -1,2",
-      },
-      {
-        x: x + width * 0.72,
-        y: y + height - 11,
-        points: "-3,-1 2,-2 3,2 -2,3",
-      },
+      { ...goldFlakeAnchors[0], points: "-2,-1 2,-2 3,1 -1,3" },
+      { ...goldFlakeAnchors[1], points: "-1,-2 3,-1 1,3 -3,1" },
+      { ...goldFlakeAnchors[2], points: "-2,0 1,-3 3,1 -1,2" },
+      { ...goldFlakeAnchors[3], points: "-3,-1 2,-2 3,2 -2,3" },
     ].slice(0, Math.min(4, Math.max(2, Math.floor(width / 58))));
 
     return (
@@ -1090,10 +1192,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               key={`${layerId}-gold-${item}`}
               points={flake.points}
               fill={item % 2 ? "#e1c16e" : "#caa45a"}
-              opacity={item % 2 ? "0.68" : "0.78"}
+              opacity={item % 2 ? "0.62" : "0.72"}
               transform={`translate(${flake.x} ${flake.y}) rotate(${
-                item % 2 ? -18 : 13
-              })`}
+                flake.rotate
+              }) scale(${flake.size})`}
             />
           ))}
 
@@ -1105,39 +1207,47 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 ? [
                     [0, 0],
                     [-10, 2],
-                    [-4, 8],
+                    [-5, 7],
                   ]
                 : [
                     [0, 0],
                     [10, 2],
-                    [4, 8],
+                    [5, 7],
                   ];
-            const sizes = [25, 22, 18];
+            const sizes = [18, 16, 13.5];
+            const rotations =
+              cluster.align === "right" ? [5, -6, 2] : [-5, 6, -2];
 
             return (
               <g key={`${layerId}-fruit-${item}`}>
                 {offsets.map(([offsetX, offsetY], fruitIndex) => {
-                  const fruitSize = sizes[fruitIndex];
+                  const fruitSize = sizes[fruitIndex] * cluster.scale;
+                  const centerX = cluster.x + offsetX;
+                  const centerY = cluster.y + offsetY;
 
                   return (
-                    <g key={`${layerId}-fruit-${item}-${fruitIndex}`}>
+                    <g
+                      key={`${layerId}-fruit-${item}-${fruitIndex}`}
+                      transform={`rotate(${rotations[fruitIndex]} ${centerX} ${centerY})`}
+                    >
                       <ellipse
-                        cx={cluster.x + offsetX + 1}
-                        cy={cluster.y + offsetY + fruitSize * 0.36}
+                        cx={centerX + 0.8}
+                        cy={centerY + fruitSize * 0.34}
                         rx={fruitSize * 0.38}
-                        ry="1.8"
+                        ry={Math.max(1.1, fruitSize * 0.08)}
                         fill="currentColor"
-                        opacity="0.12"
+                        opacity="0.13"
                       />
                       <image
                         href={
                           fruitAssets[(item + fruitIndex) % fruitAssets.length]
                         }
-                        x={cluster.x + offsetX - fruitSize / 2}
-                        y={cluster.y + offsetY - fruitSize / 2}
+                        x={centerX - fruitSize / 2}
+                        y={centerY - fruitSize / 2}
                         width={fruitSize}
                         height={fruitSize}
                         preserveAspectRatio="xMidYMid meet"
+                        opacity={fruitIndex === 2 ? "0.96" : "1"}
                       />
                     </g>
                   );
@@ -1149,70 +1259,119 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         {selectedDecorations.has("echte-bloemen") && (
           <>
             {flowerClusters.map((cluster, clusterIndex) => {
+              const scale = cluster.scale;
+              const right = cluster.align === "right";
+              const top = cluster.align === "top";
+              const hero = cluster.role === "hero";
               const elements = [
-                { asset: REAL_FLOWER_ASSET, x: 0, y: 0, size: 40, rotate: 0 },
                 {
-                  asset: flowerAssets[(index + clusterIndex) % flowerAssets.length],
-                  x: cluster.align === "right" ? -18 : 18,
-                  y: 6,
-                  size: 27,
-                  rotate: cluster.align === "right" ? -13 : 13,
+                  asset:
+                    flowerAssets[
+                      (index + clusterIndex + 3) % flowerAssets.length
+                    ],
+                  x: top ? -8 : right ? 12 : -12,
+                  y: 7,
+                  size: 22 * scale,
+                  rotate: right ? 7 : -7,
+                  opacity: 0.84,
+                },
+                {
+                  asset: REAL_FLOWER_ASSET,
+                  x: 0,
+                  y: 0,
+                  size: (hero ? 39 : 34) * scale,
+                  rotate: right ? -5 : 5,
+                  opacity: 0.96,
                 },
                 {
                   asset:
                     flowerAssets[
                       (index + clusterIndex + 2) % flowerAssets.length
                     ],
-                  x: cluster.align === "right" ? -9 : 9,
-                  y: -15,
-                  size: 22,
-                  rotate: cluster.align === "right" ? 15 : -15,
+                  x: top ? 11 : right ? -17 : 17,
+                  y: hero ? -11 : -8,
+                  size: (hero ? 25 : 21) * scale,
+                  rotate: right ? 6 : -6,
+                  opacity: 0.9,
                 },
                 {
                   asset: ROSE_WITH_LEAF_ASSET,
-                  x: cluster.align === "right" ? 11 : -11,
-                  y: 14,
-                  size: 19,
-                  rotate: cluster.align === "right" ? 10 : -10,
+                  x: top ? 4 : right ? 9 : -9,
+                  y: hero ? 12 : 10,
+                  size: 17 * scale,
+                  rotate: right ? 4 : -4,
+                  opacity: 0.86,
                 },
-              ];
+                hero
+                  ? {
+                      asset:
+                        flowerAssets[
+                          (index + clusterIndex + 4) % flowerAssets.length
+                        ],
+                      x: right ? -6 : 6,
+                      y: 15,
+                      size: 16 * scale,
+                      rotate: right ? -3 : 3,
+                      opacity: 0.82,
+                    }
+                  : null,
+              ].filter(
+                (
+                  element
+                ): element is {
+                  asset: string;
+                  x: number;
+                  y: number;
+                  size: number;
+                  rotate: number;
+                  opacity: number;
+                } => Boolean(element)
+              );
 
               return (
                 <g key={`${layerId}-flower-cluster-real-${clusterIndex}`}>
                   <ellipse
                     cx={cluster.x}
                     cy={cluster.y + 15}
-                    rx="26"
-                    ry="3"
+                    rx={hero ? 26 : 21}
+                    ry={hero ? 3 : 2.3}
                     fill="currentColor"
-                    opacity="0.12"
+                    opacity="0.11"
                   />
                   {[
-                    [cluster.align === "right" ? -14 : 14, 3, -28],
-                    [cluster.align === "right" ? 9 : -9, 12, 24],
-                    [cluster.align === "right" ? -4 : 4, -10, 6],
+                    [right ? -13 : 13, 3, right ? -24 : 24],
+                    [right ? 8 : -8, 10, right ? 26 : -26],
+                    [right ? -2 : 2, -8, right ? 5 : -5],
                   ].map(([leafX, leafY, rotate], leafIndex) => (
                     <ellipse
                       key={`${layerId}-flower-leaf-${clusterIndex}-${leafIndex}`}
-                      cx={cluster.x + leafX}
-                      cy={cluster.y + leafY}
-                      rx="4.5"
-                      ry="9"
+                      cx={cluster.x + leafX * scale}
+                      cy={cluster.y + leafY * scale}
+                      rx={4.2 * scale}
+                      ry={8.6 * scale}
                       fill="#5f8f45"
-                      opacity="0.62"
-                      transform={`rotate(${rotate} ${cluster.x + leafX} ${
-                        cluster.y + leafY
+                      opacity="0.58"
+                      transform={`rotate(${rotate} ${cluster.x + leafX * scale} ${
+                        cluster.y + leafY * scale
                       })`}
                     />
                   ))}
                   {elements.map((element, elementIndex) => (
                     <g
                       key={`${layerId}-flower-real-${clusterIndex}-${elementIndex}`}
-                      transform={`translate(${cluster.x + element.x} ${
-                        cluster.y + element.y
+                      transform={`translate(${cluster.x + element.x * scale} ${
+                        cluster.y + element.y * scale
                       }) rotate(${element.rotate})`}
-                      opacity={elementIndex === 0 ? "0.96" : "0.84"}
+                      opacity={element.opacity}
                     >
+                      <ellipse
+                        cx="0"
+                        cy={element.size * 0.28}
+                        rx={element.size * 0.34}
+                        ry={Math.max(1.2, element.size * 0.07)}
+                        fill="currentColor"
+                        opacity="0.11"
+                      />
                       <image
                         href={element.asset}
                         x={-element.size / 2}
@@ -1257,30 +1416,46 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 <ellipse
                   cx={cluster.x}
                   cy={cluster.y + 6}
-                  rx="13"
-                  ry="1.8"
+                  rx={13 * cluster.scale}
+                  ry={1.8 * cluster.scale}
                   fill="currentColor"
-                  opacity="0.09"
+                  opacity="0.1"
                 />
                 {offsets
                   .slice(0, rosettesInCluster)
                   .map(([offsetX, offsetY], roseIndex) => {
-                    const flowerSize = roseIndex === 0 ? 12.5 : 10.5;
+                    const flowerSize =
+                      (roseIndex === 0 ? 12.5 : 10.5) * cluster.scale;
+                    const roseX = cluster.x + offsetX * cluster.scale;
+                    const roseY = cluster.y + offsetY * cluster.scale;
+                    const roseRotate = [-5, 6, -2][roseIndex] || 0;
 
                     return (
-                      <image
+                      <g
                         key={`${layerId}-flower-${item}-${roseIndex}`}
-                        href={
-                          hasRoseLeaves
-                            ? ROSE_WITH_LEAF_ASSET
-                            : ROSE_WITHOUT_LEAF_ASSET
-                        }
-                        x={cluster.x + offsetX - flowerSize / 2}
-                        y={cluster.y + offsetY - flowerSize / 2}
-                        width={flowerSize}
-                        height={flowerSize}
-                        preserveAspectRatio="xMidYMid meet"
-                      />
+                        transform={`rotate(${roseRotate} ${roseX} ${roseY})`}
+                      >
+                        <ellipse
+                          cx={roseX}
+                          cy={roseY + flowerSize * 0.34}
+                          rx={flowerSize * 0.34}
+                          ry={Math.max(0.8, flowerSize * 0.07)}
+                          fill="currentColor"
+                          opacity="0.1"
+                        />
+                        <image
+                          href={
+                            hasRoseLeaves
+                              ? ROSE_WITH_LEAF_ASSET
+                              : ROSE_WITHOUT_LEAF_ASSET
+                          }
+                          x={roseX - flowerSize / 2}
+                          y={roseY - flowerSize / 2}
+                          width={flowerSize}
+                          height={flowerSize}
+                          preserveAspectRatio="xMidYMid meet"
+                        />
+                      </g>
                     );
                   })}
               </g>
@@ -1397,9 +1572,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               x2="0"
               y2="1"
             >
-              <stop offset="0" stopColor="#fffaf0" stopOpacity="0.58" />
-              <stop offset="0.38" stopColor="#ffffff" stopOpacity="0.16" />
-              <stop offset="1" stopColor="#2d2a26" stopOpacity="0.08" />
+              <stop offset="0" stopColor="#fffaf0" stopOpacity="0.66" />
+              <stop offset="0.3" stopColor="#ffffff" stopOpacity="0.18" />
+              <stop offset="0.74" stopColor="#5e554c" stopOpacity="0.045" />
+              <stop offset="1" stopColor="#2d2a26" stopOpacity="0.13" />
             </linearGradient>
           ))}
           {visualLayers.map((layer, index) => {
@@ -1458,9 +1634,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 rx="7"
                 ry="8"
                 fill={layerColor?.swatchColor || "#fffdf8"}
-                fillOpacity={layerColor?.swatchColor ? "0.94" : "1"}
+                fillOpacity={layerColor?.swatchColor ? "0.96" : "1"}
                 stroke="currentColor"
-                strokeWidth="0.95"
+                strokeWidth="0.9"
                 opacity="0.98"
               />
               <rect
@@ -1471,7 +1647,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 rx="6.2"
                 ry="7.2"
                 fill={`url(#${visualizerId}-layer-highlight-${index})`}
-                opacity="0.9"
+                opacity="0.92"
               />
               {layerColor &&
                 layerLayout &&
@@ -1491,7 +1667,18 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="1"
-                opacity="0.13"
+                opacity="0.16"
+              />
+              <path
+                d={`M ${x + 8} ${y + height - 8.5} C ${x + width * 0.36} ${
+                  y + height - 4.8
+                }, ${x + width * 0.64} ${y + height - 4.8}, ${
+                  x + width - 8
+                } ${y + height - 8.5}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                opacity="0.055"
               />
               <path
                 d={`M ${x + 10} ${y + 5} Q ${x + width / 2} ${y + 1.5} ${
@@ -1500,7 +1687,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 fill="none"
                 stroke="#fffaf0"
                 strokeWidth="1.15"
-                opacity="0.42"
+                opacity="0.46"
               />
             </g>
           );
