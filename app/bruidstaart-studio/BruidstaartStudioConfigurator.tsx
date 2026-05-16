@@ -937,6 +937,13 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
     return (
       <g key={`${layerId}-pearl-border`}>
+        <path
+          d={`M ${x + 2} ${y + height - pearlRadius * 0.18} H ${x + width - 2}`}
+          stroke={pearlColor}
+          strokeLinecap="round"
+          strokeWidth={pearlRadius * 1.65}
+          opacity="0.94"
+        />
         {Array.from({ length: pearlCount }, (_item, item) => {
           const point = pearlCount === 1 ? 0.5 : item / (pearlCount - 1);
 
@@ -948,8 +955,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               r={pearlRadius}
               fill={pearlColor}
               stroke={pearlStroke}
-              strokeWidth="0.18"
-              opacity="0.88"
+              strokeWidth="0.16"
+              opacity="1"
             />
           );
         })}
@@ -993,16 +1000,42 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       return count;
     });
     const fruitClusters = [
-      { x: x + 16, y: y - 8, align: "left" },
-      { x: x + width - 16, y: y - 8, align: "right" },
-      { x: x + width * 0.52, y: y - 13, align: "top" },
+      { x: x + 18, y: y - 10, align: "left" },
+      { x: x + width - 18, y: y - 10, align: "right" },
+      {
+        x: x + width * (topperVisuals.length ? 0.38 : 0.52),
+        y: y - 14,
+        align: "top",
+      },
+    ];
+    const fruitAssets = [
+      "/fruit%20icons_aardbei.svg",
+      "/fruit%20icons_framboos.svg",
+      "/fruit%20icons_rode%20besjes%20cluster.svg",
+      "/fruit%20icons_braam.svg",
+      "/fruit%20icons_rode%20bes.svg",
+      "/fruit%20icons_rood%20fruit%20kopie%203.svg",
     ];
     const goldFlakes = [
-      { x: x + width * 0.18, y: y + 9, points: "-2,-1 2,-2 3,1 -1,3" },
-      { x: x + width * 0.82, y: y + 13, points: "-1,-2 3,-1 1,3 -3,1" },
-      { x: x + width * 0.32, y: y + height - 12, points: "-2,0 1,-3 3,1 -1,2" },
-      { x: x + width * 0.68, y: y + height - 15, points: "-3,-1 2,-2 3,2 -2,3" },
-    ].slice(0, Math.min(4, Math.max(2, Math.floor(width / 58))));
+      { x: x + width * 0.16, y: y + 9, points: "-2,-1 2,-2 3,1 -1,3" },
+      { x: x + width * 0.84, y: y + 12, points: "-1,-2 3,-1 1,3 -3,1" },
+      {
+        x: x + width * 0.26,
+        y: y + height - 13,
+        points: "-2,0 1,-3 3,1 -1,2",
+      },
+      {
+        x: x + width * 0.74,
+        y: y + height - 16,
+        points: "-3,-1 2,-2 3,2 -2,3",
+      },
+      { x: x + width * 0.42, y: y + 12, points: "-2,-2 2,-1 1,3 -3,1" },
+      {
+        x: x + width * 0.58,
+        y: y + height - 11,
+        points: "-1,-3 3,-1 2,2 -2,3",
+      },
+    ].slice(0, Math.min(6, Math.max(3, Math.floor(width / 42))));
 
     return (
       <>
@@ -1048,28 +1081,35 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               cluster.align === "right"
                 ? [
                     [0, 0],
-                    [-8, 4],
-                    [-2, 8],
+                    [-12, 4],
+                    [-4, 10],
                   ]
                 : [
                     [0, 0],
-                    [8, 4],
-                    [2, 8],
+                    [12, 4],
+                    [4, 10],
                   ];
+            const sizes = [22, 18, 15];
 
             return (
               <g key={`${layerId}-fruit-${item}`}>
-                {offsets.map(([offsetX, offsetY], fruitIndex) => (
-                  <image
-                    key={`${layerId}-fruit-${item}-${fruitIndex}`}
-                    href={RED_FRUIT_ASSET}
-                    x={cluster.x + offsetX - 6}
-                    y={cluster.y + offsetY - 6}
-                    width="13"
-                    height="12"
-                    preserveAspectRatio="xMidYMid meet"
-                  />
-                ))}
+                {offsets.map(([offsetX, offsetY], fruitIndex) => {
+                  const fruitSize = sizes[fruitIndex];
+
+                  return (
+                    <image
+                      key={`${layerId}-fruit-${item}-${fruitIndex}`}
+                      href={
+                        fruitAssets[(item + fruitIndex) % fruitAssets.length]
+                      }
+                      x={cluster.x + offsetX - fruitSize / 2}
+                      y={cluster.y + offsetY - fruitSize / 2}
+                      width={fruitSize}
+                      height={fruitSize}
+                      preserveAspectRatio="xMidYMid meet"
+                    />
+                  );
+                })}
               </g>
             );
           })}
