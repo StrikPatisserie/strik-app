@@ -926,8 +926,14 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       layerColor && isWhiteDecorationBase(layerColor) ? "#d9c18d" : "#fff8e8";
     const pearlStroke =
       layerColor && isWhiteDecorationBase(layerColor) ? "#bea46d" : "#e2d4ad";
-    const pearlRadius = 2.2;
-    const pearlCount = Math.max(6, Math.floor(width / 11));
+    const pearlRadius = 3.4;
+    const pearlSpacing = 5.8;
+    const pearlCount = Math.max(
+      8,
+      Math.floor((width - pearlRadius * 1.4) / pearlSpacing) + 1
+    );
+    const pearlStart = x + pearlRadius * 0.72;
+    const pearlEnd = x + width - pearlRadius * 0.72;
 
     return (
       <g key={`${layerId}-pearl-border`}>
@@ -937,13 +943,13 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           return (
             <circle
               key={`${layerId}-pearl-${item}`}
-              cx={x + pearlRadius + point * (width - pearlRadius * 2)}
-              cy={y + height - pearlRadius + 0.8}
+              cx={pearlStart + point * (pearlEnd - pearlStart)}
+              cy={y + height - pearlRadius * 0.28}
               r={pearlRadius}
               fill={pearlColor}
               stroke={pearlStroke}
-              strokeWidth="0.24"
-              opacity="0.72"
+              strokeWidth="0.18"
+              opacity="0.88"
             />
           );
         })}
@@ -958,45 +964,115 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     y: number,
     width: number
   ) {
-    const fruitPoints = layerDecorationPoints(width, 62, 3);
-    const rosePoints = edgeClusterPoints(layerRoseCount(index), index);
+    const height = visualLayerHeight(index);
+    const isBottomLayer = index === 0;
+    const isTopLayer = index === visualLayers.length - 1;
+    const roseCount = layerRoseCount(index);
     const hasRoseLeaves = selectedDecorations.has("marsepeinrozen-met-blad");
     const flowerX = x + width * (index % 2 ? 0.28 : 0.72);
+    const edgeClusters = [
+      { x: x + 10, y: y + 2, align: "left" },
+      { x: x + width - 10, y: y + 2, align: "right" },
+      { x: x + width * 0.5, y: y - 4, align: "top" },
+      { x: x + width * 0.28, y: y + height - 1, align: "left" },
+      { x: x + width * 0.72, y: y + height - 1, align: "right" },
+    ];
+    const activeRoseClusters = edgeClusters.slice(
+      0,
+      Math.min(edgeClusters.length, Math.ceil(roseCount / 2))
+    );
+    let remainingRoses = roseCount;
+    const roseClusterCounts = activeRoseClusters.map((_cluster, item) => {
+      const clustersLeft = activeRoseClusters.length - item;
+      const count = Math.min(
+        3,
+        Math.max(1, Math.ceil(remainingRoses / clustersLeft))
+      );
+      remainingRoses -= count;
+
+      return count;
+    });
+    const fruitClusters = [
+      { x: x + 16, y: y - 8, align: "left" },
+      { x: x + width - 16, y: y - 8, align: "right" },
+      { x: x + width * 0.52, y: y - 13, align: "top" },
+    ];
+    const goldFlakes = [
+      { x: x + width * 0.18, y: y + 9, points: "-2,-1 2,-2 3,1 -1,3" },
+      { x: x + width * 0.82, y: y + 13, points: "-1,-2 3,-1 1,3 -3,1" },
+      { x: x + width * 0.32, y: y + height - 12, points: "-2,0 1,-3 3,1 -1,2" },
+      { x: x + width * 0.68, y: y + height - 15, points: "-3,-1 2,-2 3,2 -2,3" },
+    ].slice(0, Math.min(4, Math.max(2, Math.floor(width / 58))));
 
     return (
       <>
+        {isBottomLayer && (
+          <g key={`${layerId}-cakedrum`}>
+            <rect
+              x={x - 13}
+              y={y + height + 4}
+              width={width + 26}
+              height="8"
+              rx="4"
+              fill="#fffef8"
+              stroke="#ded8cf"
+              strokeWidth="0.75"
+              opacity="0.98"
+            />
+            <path
+              d={`M ${x - 9} ${y + height + 11} H ${x + width + 9}`}
+              stroke="#d4ccc1"
+              strokeWidth="1"
+              opacity="0.55"
+            />
+          </g>
+        )}
+
         {selectedDecorations.has("bladgoud") &&
-          layerDecorationPoints(width, 74, 3).map((point, item) => (
-            <g
+          goldFlakes.map((flake, item) => (
+            <polygon
               key={`${layerId}-gold-${item}`}
-              opacity="0.82"
-              transform={`translate(${x + 20 + point * (width - 40)} ${
-                y + 7 + (item % 3) * 7
-              }) rotate(${item % 2 ? -15 : 14})`}
-            >
-              <image
-                href={GOLD_LEAF_ASSET}
-                x="-8"
-                y="-6"
-                width="17"
-                height="12"
-                preserveAspectRatio="xMidYMid meet"
-              />
-            </g>
+              points={flake.points}
+              fill={item % 2 ? "#e1c16e" : "#caa45a"}
+              opacity="0.75"
+              transform={`translate(${flake.x} ${flake.y}) rotate(${
+                item % 2 ? -18 : 13
+              })`}
+            />
           ))}
 
         {selectedDecorations.has("rood-fruit") &&
-          fruitPoints.map((point, item) => (
-            <image
-              key={`${layerId}-fruit-${item}`}
-              href={RED_FRUIT_ASSET}
-              x={x + 13 + point * (width - 44)}
-              y={y - 13 - (item % 2) * 2}
-              width="18"
-              height="16"
-              preserveAspectRatio="xMidYMid meet"
-            />
-          ))}
+          fruitClusters.map((cluster, item) => {
+            if (item === 2 && !isTopLayer) return null;
+            const offsets =
+              cluster.align === "right"
+                ? [
+                    [0, 0],
+                    [-8, 4],
+                    [-2, 8],
+                  ]
+                : [
+                    [0, 0],
+                    [8, 4],
+                    [2, 8],
+                  ];
+
+            return (
+              <g key={`${layerId}-fruit-${item}`}>
+                {offsets.map(([offsetX, offsetY], fruitIndex) => (
+                  <image
+                    key={`${layerId}-fruit-${item}-${fruitIndex}`}
+                    href={RED_FRUIT_ASSET}
+                    x={cluster.x + offsetX - 6}
+                    y={cluster.y + offsetY - 6}
+                    width="13"
+                    height="12"
+                    preserveAspectRatio="xMidYMid meet"
+                  />
+                ))}
+              </g>
+            );
+          })}
 
         {selectedDecorations.has("echte-bloemen") && (
           <g>
@@ -1020,30 +1096,52 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           </g>
         )}
 
-        {selectedRoseQuantity > 0 &&
-          rosePoints.map((point, item) => {
-            const flowerX = Math.max(
-              x + 14,
-              Math.min(x + width - 14, x + point.ratio * width)
-            );
-            const flowerY = y - 7 + point.yOffset;
-            const flowerSize = 14 * point.scale;
+        {roseCount > 0 &&
+          activeRoseClusters.map((cluster, item) => {
+            const rosettesInCluster = roseClusterCounts[item] || 0;
+            if (rosettesInCluster <= 0) return null;
+            const offsets =
+              cluster.align === "right"
+                ? [
+                    [0, 0],
+                    [-8, 4],
+                    [-3, -7],
+                  ]
+                : cluster.align === "top"
+                  ? [
+                      [0, 0],
+                      [-7, 5],
+                      [7, 5],
+                    ]
+                  : [
+                      [0, 0],
+                      [8, 4],
+                      [3, -7],
+                    ];
 
             return (
-              <g
-                key={`${layerId}-flower-${item}`}
-                transform={`translate(${flowerX} ${flowerY})`}
-              >
-                <image
-                  href={
-                    hasRoseLeaves ? ROSE_WITH_LEAF_ASSET : ROSE_WITHOUT_LEAF_ASSET
-                  }
-                  x={-flowerSize / 2}
-                  y={-flowerSize / 2}
-                  width={flowerSize}
-                  height={flowerSize}
-                  preserveAspectRatio="xMidYMid meet"
-                />
+              <g key={`${layerId}-flower-cluster-${item}`}>
+                {offsets
+                  .slice(0, rosettesInCluster)
+                  .map(([offsetX, offsetY], roseIndex) => {
+                    const flowerSize = roseIndex === 0 ? 14 : 12;
+
+                    return (
+                      <image
+                        key={`${layerId}-flower-${item}-${roseIndex}`}
+                        href={
+                          hasRoseLeaves
+                            ? ROSE_WITH_LEAF_ASSET
+                            : ROSE_WITHOUT_LEAF_ASSET
+                        }
+                        x={cluster.x + offsetX - flowerSize / 2}
+                        y={cluster.y + offsetY - flowerSize / 2}
+                        width={flowerSize}
+                        height={flowerSize}
+                        preserveAspectRatio="xMidYMid meet"
+                      />
+                    );
+                  })}
               </g>
             );
           })}
