@@ -627,12 +627,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const selectedRoseQuantity = selectedRoseDecorationId
     ? getDecorationQuantity(config, selectedRoseDecorationId)
     : 0;
-  const bottomY = 236;
-  const layerHeight = 36;
-  const gap = 0;
+  const bottomY = 242;
+  const layerHeight = 39;
+  const gap = 0.6;
 
   function layerWidth(persons: number) {
-    return 56 + (persons / maxPersons) * 94;
+    return 64 + (persons / maxPersons) * 118;
   }
 
   function visualLayerHeight(index: number) {
@@ -678,17 +678,17 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         key.includes("creme-rozen") ||
         key.includes("creme-strak") ||
         key.includes("creme-grof")
-          ? "0.82"
-          : "1";
+          ? "0.66"
+          : "0.84";
 
       return (
         <g clipPath={`url(#${clipId})`}>
           <image
             href={decorationAsset}
-            x={x}
-            y={y - 2}
-            width={width}
-            height={height + 4}
+            x={x - 1}
+            y={y - 1}
+            width={width + 2}
+            height={height + 2}
             preserveAspectRatio="none"
             filter={decorationFilter}
             opacity={decorationOpacity}
@@ -705,8 +705,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               key={`diag-a-${index}-${offset}`}
               d={`M ${x + offset} ${y + height} L ${x + offset + 45} ${y}`}
               stroke="currentColor"
-              strokeWidth="0.8"
-              opacity="0.55"
+              strokeWidth="0.45"
+              opacity="0.28"
             />
           ))}
           {[-20, 10, 40, 70, 100, 130, 160, 190].map((offset) => (
@@ -714,8 +714,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               key={`diag-b-${index}-${offset}`}
               d={`M ${x + offset} ${y} L ${x + offset + 45} ${y + height}`}
               stroke="currentColor"
-              strokeWidth="0.8"
-              opacity="0.35"
+              strokeWidth="0.45"
+              opacity="0.2"
             />
           ))}
         </>
@@ -728,14 +728,14 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           <path
             d={`M ${x + 8} ${y + 6} H ${x + width - 8}`}
             stroke="currentColor"
-            strokeWidth="1"
-            opacity="0.55"
+            strokeWidth="0.7"
+            opacity="0.36"
           />
           <path
             d={`M ${x + 8} ${y + 12} H ${x + width - 8}`}
             stroke="currentColor"
-            strokeWidth="1"
-            opacity="0.35"
+            strokeWidth="0.7"
+            opacity="0.24"
           />
         </>
       );
@@ -752,8 +752,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               } ${y + 16} ${x + 40 + item * 28} ${y + 5}`}
               fill="none"
               stroke="currentColor"
-              strokeWidth="1"
-              opacity="0.5"
+              strokeWidth="0.65"
+              opacity="0.34"
             />
           ))}
         </>
@@ -769,8 +769,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               d={`M ${center - 36 + item * 34} ${y + 11} c 8 -10 22 8 4 5 c -10 -2 -2 -15 9 -10`}
               fill="none"
               stroke="currentColor"
-              strokeWidth="1"
-              opacity="0.55"
+              strokeWidth="0.65"
+              opacity="0.38"
             />
           ))}
         </>
@@ -785,9 +785,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               key={`dot-${index}-${item}`}
               cx={x + 18 + item * 24}
               cy={y + (item % 2 ? 12 : 7)}
-              r="1.8"
+              r="1.35"
               fill="currentColor"
-              opacity="0.45"
+              opacity="0.34"
             />
           ))}
         </>
@@ -802,9 +802,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           } ${y + 17}, ${x + width - 10} ${y + 9}`}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1"
+          strokeWidth="0.7"
           strokeDasharray={key.includes("naked-open") ? "4 4" : undefined}
-          opacity="0.5"
+          opacity="0.34"
         />
       );
     }
@@ -873,7 +873,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     topperVisuals.reduce((total, item) => total + item.width, 0) +
     Math.max(0, topperVisuals.length - 1) * topperGap;
   const topperScale =
-    topperRawTotalWidth > 0 ? Math.min(1, 232 / topperRawTotalWidth) : 1;
+    topperRawTotalWidth > 0 ? Math.min(1, 218 / topperRawTotalWidth) : 1;
   const topperTotalWidth =
     topperVisuals.reduce((total, item) => total + item.width * topperScale, 0) +
     Math.max(0, topperVisuals.length - 1) * topperGap;
@@ -896,11 +896,20 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     );
   }
 
-  function fixedDecorationPoints(count: number) {
-    if (count <= 0) return [];
-    if (count === 1) return [0.5];
+  function edgeClusterPoints(count: number, index: number) {
+    const left = [0.2, 0.27, 0.34, 0.39];
+    const right = [0.8, 0.73, 0.66, 0.61];
 
-    return Array.from({ length: count }, (_, item) => item / (count - 1));
+    return Array.from({ length: count }, (_item, item) => {
+      const sideIndex = Math.floor(item / 2) % left.length;
+      const leftSide = (item + index) % 2 === 0;
+
+      return {
+        ratio: leftSide ? left[sideIndex] : right[sideIndex],
+        yOffset: [-1.5, 1.5, -4, 3][item % 4],
+        scale: item % 3 === 0 ? 1 : 0.88,
+      };
+    });
   }
 
   function renderPearlBorder(
@@ -914,11 +923,11 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     if (!selectedDecorations.has("creme-parelrand")) return null;
 
     const pearlColor =
-      layerColor && isWhiteDecorationBase(layerColor) ? "#d8bd82" : "#fffefa";
+      layerColor && isWhiteDecorationBase(layerColor) ? "#d9c18d" : "#fff8e8";
     const pearlStroke =
-      layerColor && isWhiteDecorationBase(layerColor) ? "#bfa36a" : "#e8dfc8";
-    const pearlRadius = 3.2;
-    const pearlCount = Math.max(6, Math.floor(width / 8));
+      layerColor && isWhiteDecorationBase(layerColor) ? "#bea46d" : "#e2d4ad";
+    const pearlRadius = 2.2;
+    const pearlCount = Math.max(6, Math.floor(width / 11));
 
     return (
       <g key={`${layerId}-pearl-border`}>
@@ -933,8 +942,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               r={pearlRadius}
               fill={pearlColor}
               stroke={pearlStroke}
-              strokeWidth="0.35"
-              opacity="0.98"
+              strokeWidth="0.24"
+              opacity="0.72"
             />
           );
         })}
@@ -949,27 +958,28 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     y: number,
     width: number
   ) {
-    const fruitPoints = layerDecorationPoints(width, 42, 4);
-    const rosePoints = fixedDecorationPoints(layerRoseCount(index));
+    const fruitPoints = layerDecorationPoints(width, 62, 3);
+    const rosePoints = edgeClusterPoints(layerRoseCount(index), index);
     const hasRoseLeaves = selectedDecorations.has("marsepeinrozen-met-blad");
-    const flowerX = x + width * (index % 2 ? 0.38 : 0.62);
+    const flowerX = x + width * (index % 2 ? 0.28 : 0.72);
 
     return (
       <>
         {selectedDecorations.has("bladgoud") &&
-          layerDecorationPoints(width, 58, 3).map((point, item) => (
+          layerDecorationPoints(width, 74, 3).map((point, item) => (
             <g
               key={`${layerId}-gold-${item}`}
-              transform={`translate(${x + 16 + point * (width - 32)} ${
-                y + 6 + (item % 3) * 8
-              }) rotate(${item % 2 ? -18 : 16})`}
+              opacity="0.82"
+              transform={`translate(${x + 20 + point * (width - 40)} ${
+                y + 7 + (item % 3) * 7
+              }) rotate(${item % 2 ? -15 : 14})`}
             >
               <image
                 href={GOLD_LEAF_ASSET}
-                x="-11"
-                y="-8"
-                width="24"
-                height="18"
+                x="-8"
+                y="-6"
+                width="17"
+                height="12"
                 preserveAspectRatio="xMidYMid meet"
               />
             </g>
@@ -980,34 +990,44 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             <image
               key={`${layerId}-fruit-${item}`}
               href={RED_FRUIT_ASSET}
-              x={x + 5 + point * (width - 32)}
-              y={y - 16 - (item % 2) * 3}
-              width="24"
-              height="22"
+              x={x + 13 + point * (width - 44)}
+              y={y - 13 - (item % 2) * 2}
+              width="18"
+              height="16"
               preserveAspectRatio="xMidYMid meet"
             />
           ))}
 
         {selectedDecorations.has("echte-bloemen") && (
-          <image
-            href={REAL_FLOWER_ASSET}
-            x={flowerX - 21}
-            y={y - 23}
-            width="42"
-            height="42"
-            preserveAspectRatio="xMidYMid meet"
-          />
+          <g>
+            <image
+              href={REAL_FLOWER_ASSET}
+              x={flowerX - 18}
+              y={y - 24}
+              width="36"
+              height="36"
+              preserveAspectRatio="xMidYMid meet"
+            />
+            <image
+              href={REAL_FLOWER_ASSET}
+              x={flowerX + (index % 2 ? -25 : 8)}
+              y={y - 13}
+              width="24"
+              height="24"
+              opacity="0.78"
+              preserveAspectRatio="xMidYMid meet"
+            />
+          </g>
         )}
 
         {selectedRoseQuantity > 0 &&
           rosePoints.map((point, item) => {
-            const flowerX =
-              item === 0
-                ? x + 18
-                : item === rosePoints.length - 1
-                  ? x + width - 18
-                  : x + 18 + point * (width - 36);
-            const flowerY = y - 6 + ((index + item) % 2) * 3;
+            const flowerX = Math.max(
+              x + 14,
+              Math.min(x + width - 14, x + point.ratio * width)
+            );
+            const flowerY = y - 7 + point.yOffset;
+            const flowerSize = 14 * point.scale;
 
             return (
               <g
@@ -1018,10 +1038,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   href={
                     hasRoseLeaves ? ROSE_WITH_LEAF_ASSET : ROSE_WITHOUT_LEAF_ASSET
                   }
-                  x="-8"
-                  y="-8"
-                  width="16"
-                  height="16"
+                  x={-flowerSize / 2}
+                  y={-flowerSize / 2}
+                  width={flowerSize}
+                  height={flowerSize}
                   preserveAspectRatio="xMidYMid meet"
                 />
               </g>
@@ -1072,7 +1092,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           >
             <feColorMatrix
               type="matrix"
-              values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"
+              values="0 0 0 0 0.98 0 0 0 0 0.94 0 0 0 0 0.86 0 0 0 1 0"
             />
           </filter>
           <filter
@@ -1081,7 +1101,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           >
             <feColorMatrix
               type="matrix"
-              values="0 0 0 0 0.82 0 0 0 0 0.68 0 0 0 0 0.42 0 0 0 1 0"
+              values="0 0 0 0 0.78 0 0 0 0 0.62 0 0 0 0 0.38 0 0 0 1 0"
             />
           </filter>
           <filter
@@ -1090,8 +1110,26 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           >
             <feColorMatrix
               type="matrix"
-              values="0 0 0 0 0.88 0 0 0 0 0.78 0 0 0 0 0.62 0 0 0 1 0"
+              values="0 0 0 0 0.86 0 0 0 0 0.75 0 0 0 0 0.58 0 0 0 1 0"
             />
+          </filter>
+          <filter
+            id={`${visualizerId}-soft-layer-shadow`}
+            x="-20%"
+            y="-40%"
+            width="140%"
+            height="200%"
+          >
+            <feGaussianBlur stdDeviation="2.8" />
+          </filter>
+          <filter
+            id={`${visualizerId}-base-shadow`}
+            x="-20%"
+            y="-40%"
+            width="140%"
+            height="200%"
+          >
+            <feGaussianBlur stdDeviation="3.8" />
           </filter>
           {visualLayers.map((layer, index) => {
             const layerColor = config.styleId
@@ -1111,6 +1149,20 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               </filter>
             );
           })}
+          {visualLayers.map((layer, index) => (
+            <linearGradient
+              key={`${layer.id}-gradient`}
+              id={`${visualizerId}-layer-highlight-${index}`}
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="1"
+            >
+              <stop offset="0" stopColor="#fffaf0" stopOpacity="0.58" />
+              <stop offset="0.38" stopColor="#ffffff" stopOpacity="0.16" />
+              <stop offset="1" stopColor="#2d2a26" stopOpacity="0.08" />
+            </linearGradient>
+          ))}
           {visualLayers.map((layer, index) => {
             const width = layerWidth(layer.persons);
             const x = (260 - width) / 2;
@@ -1122,17 +1174,19 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 key={layer.id}
                 id={`${visualizerId}-cake-layer-pattern-${index}`}
               >
-                <rect x={x} y={y} width={width} height={height} rx="3" />
+                <rect x={x} y={y} width={width} height={height} rx="7" ry="8" />
               </clipPath>
             );
           })}
         </defs>
-        <path
-          d="M 52 260 C 88 270, 172 270, 208 260"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          opacity="0.35"
+        <ellipse
+          cx="130"
+          cy="258"
+          rx="82"
+          ry="7"
+          fill="currentColor"
+          filter={`url(#${visualizerId}-base-shadow)`}
+          opacity="0.14"
         />
         {visualLayers.map((layer, index) => {
           const width = layerWidth(layer.persons);
@@ -1148,16 +1202,37 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
           return (
             <g key={layer.id}>
+              <ellipse
+                cx="130"
+                cy={y + height + 2}
+                rx={width * 0.43}
+                ry="3.6"
+                fill="currentColor"
+                filter={`url(#${visualizerId}-soft-layer-shadow)`}
+                opacity={index === 0 ? "0.1" : "0.13"}
+              />
               <rect
                 x={x}
                 y={y}
                 width={width}
                 height={height}
-                rx="3"
+                rx="7"
+                ry="8"
                 fill={layerColor?.swatchColor || "#fffdf8"}
-                fillOpacity={layerColor?.swatchColor ? "0.9" : "1"}
+                fillOpacity={layerColor?.swatchColor ? "0.94" : "1"}
                 stroke="currentColor"
-                strokeWidth="1.35"
+                strokeWidth="0.95"
+                opacity="0.98"
+              />
+              <rect
+                x={x + 0.8}
+                y={y + 0.8}
+                width={width - 1.6}
+                height={height - 1.6}
+                rx="6.2"
+                ry="7.2"
+                fill={`url(#${visualizerId}-layer-highlight-${index})`}
+                opacity="0.9"
               />
               {layerColor &&
                 layerLayout &&
@@ -1170,6 +1245,24 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   layerLayout.id,
                   layerColor
                 )}
+              <path
+                d={`M ${x + 7} ${y + height - 5} Q ${x + width / 2} ${
+                  y + height + 0.6
+                } ${x + width - 7} ${y + height - 5}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1"
+                opacity="0.13"
+              />
+              <path
+                d={`M ${x + 10} ${y + 5} Q ${x + width / 2} ${y + 1.5} ${
+                  x + width - 10
+                } ${y + 5}`}
+                fill="none"
+                stroke="#fffaf0"
+                strokeWidth="1.15"
+                opacity="0.42"
+              />
             </g>
           );
         })}
@@ -1229,7 +1322,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               key={topper.id}
               href={topperDecorationAsset(topper.id)}
               x={(260 - topperTotalWidth) / 2 + previousWidth}
-              y={Math.max(2, topY - height + topper.offsetY * topperScale)}
+              y={Math.max(6, topY - height + topper.offsetY * topperScale - 8)}
               width={width}
               height={height}
               preserveAspectRatio="xMidYMid meet"
