@@ -1013,18 +1013,18 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     scale: number;
     rotation: number;
   }) {
-    const roseAsset = withLeaves ? ROSE_WITH_LEAF_ASSET : ROSE_WITHOUT_LEAF_ASSET;
+    const roseSize = 18;
+    const leafSize = roseSize * 0.6;
+    const roseAsset = ROSE_WITHOUT_LEAF_ASSET;
     const roseItems = [
-      { x: 0, y: -4, size: 34, rotate: -2, opacity: 1 },
-      { x: -13, y: 7, size: 28, rotate: -8, opacity: 0.98 },
-      { x: 13, y: 7, size: 28, rotate: 8, opacity: 0.98 },
+      { x: 0, y: -2, size: roseSize, rotate: -2, opacity: 1 },
+      { x: -8.5, y: 5.5, size: roseSize * 0.92, rotate: -8, opacity: 0.98 },
+      { x: 8.5, y: 5.5, size: roseSize * 0.92, rotate: 8, opacity: 0.98 },
     ];
     const leafItems = [
-      { x: -18, y: 7, rx: 5.2, ry: 10.5, rotate: -52 },
-      { x: 18, y: 8, rx: 5.2, ry: 10.5, rotate: 52 },
-      { x: -6, y: 13, rx: 4.8, ry: 9.2, rotate: -18 },
-      { x: 7, y: 13, rx: 4.8, ry: 9.2, rotate: 18 },
-      { x: 0, y: 4, rx: 4.4, ry: 8.8, rotate: 0 },
+      { x: -13.5, y: 8.5, rotate: -52 },
+      { x: 13.5, y: 8.5, rotate: 52 },
+      { x: 0, y: 11.5, rotate: 0 },
     ];
 
     return (
@@ -1034,11 +1034,11 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       >
         <ellipse
           cx="0"
-          cy="15"
-          rx="30"
-          ry="4"
+          cy={roseSize * 0.66}
+          rx={roseSize * 1.08}
+          ry={roseSize * 0.13}
           fill="currentColor"
-          opacity="0.12"
+          opacity="0.1"
         />
         {withLeaves &&
           leafItems.map((leaf, item) => (
@@ -1046,10 +1046,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               key={`${keyPrefix}-leaf-${item}`}
               cx={leaf.x}
               cy={leaf.y}
-              rx={leaf.rx}
-              ry={leaf.ry}
+              rx={leafSize * 0.22}
+              ry={leafSize * 0.5}
               fill="#83a978"
-              opacity="0.66"
+              opacity="0.62"
               transform={`rotate(${leaf.rotate} ${leaf.x} ${leaf.y})`}
             />
           ))}
@@ -1117,8 +1117,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               });
     const roseClusters = roseClusterRatios.map((ratio, item) => ({
       x: x + width * ratio,
-      y: y - (isTopLayer ? 6.8 : 4.8) + (item % 2 ? 0.8 : 0),
-      scale: isTopLayer ? 1.06 : 0.98,
+      y: y - (isTopLayer ? 5.6 : 4.4) + (item % 2 ? 0.55 : 0),
+      scale: isTopLayer ? 0.92 : 0.88,
       rotation: ratio < 0.35 ? -5 : ratio > 0.65 ? 5 : item % 2 ? 2 : -1,
     }));
     const fruitClusters: Array<{
