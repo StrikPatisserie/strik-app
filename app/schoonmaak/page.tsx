@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 import {
@@ -51,6 +51,19 @@ type SchoonmaakAntwoorden = {
   temperatuurRegistraties: TemperatuurRegistratie[];
   fotoUploads: PhotoUpload[];
   verzondenSignatuur?: string;
+};
+
+type AntwoordOverrides = {
+  takenIds?: string[];
+  naam?: string;
+  opmerking?: string;
+  temperatuurRegistraties?: TemperatuurRegistratie[];
+};
+
+type SubmitOptions = AntwoordOverrides & {
+  allowPartial?: boolean;
+  silent?: boolean;
+  skipIfUnchanged?: boolean;
 };
 
 function getVandaag() {
@@ -349,6 +362,8 @@ function SchoonmaakForm() {
     | null
   >(null);
   const [fotoUploads, setFotoUploads] = useState<PhotoUpload[]>([]);
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const verzondenSignatuurRef = useRef("");
 
   const takenLijst = useMemo(
     () => getTakenLijst(planType, winkel),
@@ -420,6 +435,19 @@ function SchoonmaakForm() {
   );
 
   useEffect(() => {
+    verzondenSignatuurRef.current = verzondenSignatuur;
+  }, [verzondenSignatuur]);
+
+  useEffect(
+    () => () => {
+      if (autoSaveTimerRef.current) {
+        window.clearTimeout(autoSaveTimerRef.current);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
     let negeerResultaat = false;
 
     async function laadAntwoorden() {
@@ -441,6 +469,7 @@ function SchoonmaakForm() {
         setTemperatuurRegistraties(lokaleDraft.temperatuurRegistraties || []);
         setFotoUploads(lokaleDraft.fotoUploads || []);
         setVerzondenSignatuur(signatuur);
+        verzondenSignatuurRef.current = signatuur;
         setStatus(statusBericht);
 
         return true;
@@ -507,24 +536,25 @@ function SchoonmaakForm() {
               )
             : []
         );
-        setVerzondenSignatuur(
-          nieuwsteItem
-            ? maakSignatuur({
-                planType,
-                naam: nieuwsteItem.naam || "",
-                taken: zichtbareTaken,
-                opmerking: nieuwsteItem.opmerking || "",
-                temperatuurRegistraties: normaliseerTemperatuurRegistraties(
-                  nieuwsteItem.id,
-                  nieuwsteItem.temperatuurRegistraties
-                ),
-                fotoUploads: normaliseerFotoUploads(
-                  nieuwsteItem.id,
-                  getCleaningItemPhotos(nieuwsteItem)
-                ),
-              })
-            : ""
-        );
+        const geladenSignatuur = nieuwsteItem
+          ? maakSignatuur({
+              planType,
+              naam: nieuwsteItem.naam || "",
+              taken: zichtbareTaken,
+              opmerking: nieuwsteItem.opmerking || "",
+              temperatuurRegistraties: normaliseerTemperatuurRegistraties(
+                nieuwsteItem.id,
+                nieuwsteItem.temperatuurRegistraties
+              ),
+              fotoUploads: normaliseerFotoUploads(
+                nieuwsteItem.id,
+                getCleaningItemPhotos(nieuwsteItem)
+              ),
+            })
+          : "";
+
+        setVerzondenSignatuur(geladenSignatuur);
+        verzondenSignatuurRef.current = geladenSignatuur;
 
         if (opgeslagenItems.length > 0) {
           setStatus("Opgeslagen antwoorden geladen.");
@@ -574,29 +604,59 @@ function SchoonmaakForm() {
         }
       });
 
-      setTaken(Array.from(volgendeTaken));
+      const volgendeTakenLijst = Array.from(volgendeTaken);
+      setTaken(volgendeTakenLijst);
+      planAutoSave(volgendeTakenLijst);
       return;
     }
 
-    setTaken((prev) =>
-      prev.includes(taak.id)
-        ? prev.filter((t) => t !== taak.id)
-        : [...prev, taak.id]
-    );
+    const volgendeTaken = taken.includes(taak.id)
+      ? taken.filter((t) => t !== taak.id)
+      : [...taken, taak.id];
+
+    setTaken(volgendeTaken);
+    planAutoSave(volgendeTaken);
   }
 
   function getAntwoorden(
-    volgendeFotoUploads: PhotoUpload[] = fotoUploads
+    volgendeFotoUploads: PhotoUpload[] = fotoUploads,
+    overrides: AntwoordOverrides = {}
   ): SchoonmaakAntwoorden {
     return {
       planType,
-      naam,
-      taken: taken.map((id) => taskLabelById[id] ?? id),
-      opmerking,
-      temperatuurRegistraties,
+      naam: overrides.naam ?? naam,
+      taken: (overrides.takenIds ?? taken).map((id) => taskLabelById[id] ?? id),
+      opmerking: overrides.opmerking ?? opmerking,
+      temperatuurRegistraties:
+        overrides.temperatuurRegistraties ?? temperatuurRegistraties,
       fotoUploads: volgendeFotoUploads,
       verzondenSignatuur,
     };
+  }
+
+  function planAutoSave(volgendeTaken: string[]) {
+    const antwoorden = getAntwoorden(fotoUploads, {
+      takenIds: volgendeTaken,
+    });
+    const signatuur = maakSignatuur(antwoorden);
+
+    bewaarLokaleDraft(winkel, datum, planType, antwoorden, signatuur);
+
+    if (signatuur === verzondenSignatuurRef.current) return;
+
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      void submitAntwoorden(fotoUploads, {
+        allowPartial: true,
+        silent: true,
+        skipIfUnchanged: true,
+        takenIds: volgendeTaken,
+      });
+    }, 900);
   }
 
   function voegTemperatuurRegistratieToe() {
@@ -741,15 +801,19 @@ function SchoonmaakForm() {
     };
   }
 
-  function valideerAntwoorden(volgendeFotoUploads: PhotoUpload[] = fotoUploads) {
-    const heeftTemperatuur = temperatuurRegistraties.some(
+  function valideerAntwoorden(
+    volgendeFotoUploads: PhotoUpload[] = fotoUploads,
+    options: SubmitOptions = {}
+  ) {
+    const antwoorden = getAntwoorden(volgendeFotoUploads, options);
+    const heeftTemperatuur = antwoorden.temperatuurRegistraties.some(
       (item) =>
         item.naam.trim() || isTemperatuurWaardeIngevuld(item.temperatuur)
     );
     const heeftInhoud =
-      naam.trim() ||
-      taken.length > 0 ||
-      opmerking.trim() ||
+      antwoorden.naam.trim() ||
+      antwoorden.taken.length > 0 ||
+      antwoorden.opmerking.trim() ||
       heeftTemperatuur ||
       volgendeFotoUploads.length > 0;
 
@@ -759,6 +823,7 @@ function SchoonmaakForm() {
     }
 
     if (
+      !options.allowPartial &&
       planType === "Afsluitplan" &&
       (vriezerControleTaakGevinkt || heeftVriezerTemperatuurInvoer) &&
       ontbrekendeVriezerTemperaturen.length > 0
@@ -773,16 +838,32 @@ function SchoonmaakForm() {
   }
 
   async function submitAntwoorden(
-    volgendeFotoUploads: PhotoUpload[] = fotoUploads
+    volgendeFotoUploads: PhotoUpload[] = fotoUploads,
+    options: SubmitOptions = {}
   ) {
-    if (!valideerAntwoorden(volgendeFotoUploads)) return;
+    if (!valideerAntwoorden(volgendeFotoUploads, options)) return;
 
-    setStatus("Opslaan...");
+    if (autoSaveTimerRef.current && !options.silent) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
+    if (!options.silent) {
+      setStatus("Opslaan...");
+    }
     setVerzendenBezig(true);
 
     let timeoutId: number | undefined;
-    let antwoorden = getAntwoorden(volgendeFotoUploads);
+    let antwoorden = getAntwoorden(volgendeFotoUploads, options);
     let signatuur = maakSignatuur(antwoorden);
+
+    if (
+      options.skipIfUnchanged &&
+      signatuur === verzondenSignatuurRef.current
+    ) {
+      setVerzendenBezig(false);
+      return;
+    }
 
     try {
       const fotoUploadsVoorOpslaan = await uploadNieuweFotos(
@@ -790,8 +871,16 @@ function SchoonmaakForm() {
       );
       setFotoUploads(fotoUploadsVoorOpslaan);
 
-      antwoorden = getAntwoorden(fotoUploadsVoorOpslaan);
+      antwoorden = getAntwoorden(fotoUploadsVoorOpslaan, options);
       signatuur = maakSignatuur(antwoorden);
+
+      if (
+        options.skipIfUnchanged &&
+        signatuur === verzondenSignatuurRef.current
+      ) {
+        return;
+      }
+
       const controller = new AbortController();
       timeoutId = window.setTimeout(() => controller.abort(), 12_000);
 
@@ -803,16 +892,16 @@ function SchoonmaakForm() {
         body: JSON.stringify({
           titel: planType,
           winkel,
-          naam: naam.trim(),
+          naam: antwoorden.naam.trim(),
           datum,
           taken: withCleaningMetaMarkers(
             antwoorden.taken,
             planType,
             fotoUploadsVoorOpslaan
           ),
-          opmerking: opmerking.trim(),
+          opmerking: antwoorden.opmerking.trim(),
           temperatuurRegistraties: [
-            ...temperatuurRegistraties
+            ...antwoorden.temperatuurRegistraties
               .filter(
                 (item) =>
                   item.naam.trim() &&
@@ -835,8 +924,11 @@ function SchoonmaakForm() {
 
       if (res.ok) {
         setVerzondenSignatuur(signatuur);
+        verzondenSignatuurRef.current = signatuur;
         bewaarLokaleDraft(winkel, datum, planType, antwoorden, signatuur);
-        setStatus("Opgeslagen en verzonden.");
+        setStatus(
+          options.silent ? "Automatisch opgeslagen." : "Opgeslagen en verzonden."
+        );
         return;
       }
 
@@ -876,6 +968,11 @@ function SchoonmaakForm() {
   }
 
   function opslaan() {
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
     void verzenden();
   }
 

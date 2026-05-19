@@ -607,9 +607,6 @@ function maakAfsluitTaken(
         afsluitSubtask(`${prefix}-6-c`, commonClosingTasks.omzet),
         afsluitSubtask(`${prefix}-6-d`, commonClosingTasks.laatsteCheck),
       ],
-      {
-        warning: "Sla pas op als alles is afgevinkt en de foto's zijn geupload.",
-      }
     ),
   ];
 }
