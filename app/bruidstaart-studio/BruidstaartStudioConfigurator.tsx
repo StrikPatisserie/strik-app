@@ -998,6 +998,89 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     );
   }
 
+  function renderRoseCluster({
+    keyPrefix,
+    x,
+    y,
+    withLeaves,
+    scale,
+    rotation,
+  }: {
+    keyPrefix: string;
+    x: number;
+    y: number;
+    withLeaves: boolean;
+    scale: number;
+    rotation: number;
+  }) {
+    const roseAsset = withLeaves ? ROSE_WITH_LEAF_ASSET : ROSE_WITHOUT_LEAF_ASSET;
+    const roseItems = [
+      { x: 0, y: -4, size: 34, rotate: -2, opacity: 1 },
+      { x: -13, y: 7, size: 28, rotate: -8, opacity: 0.98 },
+      { x: 13, y: 7, size: 28, rotate: 8, opacity: 0.98 },
+    ];
+    const leafItems = [
+      { x: -18, y: 7, rx: 5.2, ry: 10.5, rotate: -52 },
+      { x: 18, y: 8, rx: 5.2, ry: 10.5, rotate: 52 },
+      { x: -6, y: 13, rx: 4.8, ry: 9.2, rotate: -18 },
+      { x: 7, y: 13, rx: 4.8, ry: 9.2, rotate: 18 },
+      { x: 0, y: 4, rx: 4.4, ry: 8.8, rotate: 0 },
+    ];
+
+    return (
+      <g
+        key={keyPrefix}
+        transform={`translate(${x} ${y}) rotate(${rotation}) scale(${scale})`}
+      >
+        <ellipse
+          cx="0"
+          cy="15"
+          rx="30"
+          ry="4"
+          fill="currentColor"
+          opacity="0.12"
+        />
+        {withLeaves &&
+          leafItems.map((leaf, item) => (
+            <ellipse
+              key={`${keyPrefix}-leaf-${item}`}
+              cx={leaf.x}
+              cy={leaf.y}
+              rx={leaf.rx}
+              ry={leaf.ry}
+              fill="#83a978"
+              opacity="0.66"
+              transform={`rotate(${leaf.rotate} ${leaf.x} ${leaf.y})`}
+            />
+          ))}
+        {roseItems.map((rose, item) => (
+          <g
+            key={`${keyPrefix}-rose-${item}`}
+            transform={`translate(${rose.x} ${rose.y}) rotate(${rose.rotate})`}
+            opacity={rose.opacity}
+          >
+            <ellipse
+              cx="0"
+              cy={rose.size * 0.3}
+              rx={rose.size * 0.34}
+              ry={Math.max(1.2, rose.size * 0.07)}
+              fill="currentColor"
+              opacity="0.1"
+            />
+            <image
+              href={roseAsset}
+              x={-rose.size / 2}
+              y={-rose.size / 2}
+              width={rose.size}
+              height={rose.size}
+              preserveAspectRatio="xMidYMid meet"
+            />
+          </g>
+        ))}
+      </g>
+    );
+  }
+
   function renderLayerDecorations(
     layerId: string,
     index: number,
@@ -1015,58 +1098,29 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     const hasRoseLeaves = selectedDecorations.has("marsepeinrozen-met-blad");
     const flowerX = x + width * (index % 2 ? 0.25 : 0.75);
     const sideAlign: ClusterAlign = index % 2 ? "left" : "right";
-    const edgeClusters: Array<{
-      x: number;
-      y: number;
-      align: ClusterAlign;
-      scale: number;
-    }> = [
-      {
-        x: x + 13,
-        y: y - 2.5,
-        align: "left",
-        scale: isBottomLayer ? 1.04 : 1.14,
-      },
-      {
-        x: x + width - 13,
-        y: y - 2.5,
-        align: "right",
-        scale: isBottomLayer ? 1.04 : 1.14,
-      },
-      {
-        x: x + width * 0.5,
-        y: y - 6.5,
-        align: "top",
-        scale: isTopLayer ? 1.16 : 1.08,
-      },
-      {
-        x: x + width * 0.32,
-        y: y - 3.5,
-        align: "top",
-        scale: 1.02,
-      },
-      {
-        x: x + width * 0.68,
-        y: y - 3.5,
-        align: "top",
-        scale: 1.02,
-      },
-    ];
-    const activeRoseClusters = edgeClusters.slice(
-      0,
-      Math.min(edgeClusters.length, Math.ceil(roseCount / 3))
-    );
-    let remainingRoses = roseCount;
-    const roseClusterCounts = activeRoseClusters.map((_cluster, item) => {
-      const clustersLeft = activeRoseClusters.length - item;
-      const count = Math.min(
-        3,
-        Math.max(1, Math.ceil(remainingRoses / clustersLeft))
-      );
-      remainingRoses -= count;
-
-      return count;
-    });
+    const roseClusterCount =
+      roseCount > 0
+        ? Math.min(
+            Math.max(1, Math.floor(width / 46)),
+            Math.max(1, Math.ceil(roseCount / 3))
+          )
+        : 0;
+    const roseClusterRatios =
+      roseClusterCount === 1
+        ? [0.22]
+        : roseClusterCount === 2
+          ? [0.22, 0.78]
+          : roseClusterCount === 3
+            ? [0.22, 0.5, 0.78]
+            : Array.from({ length: roseClusterCount }, (_item, item) => {
+                return 0.18 + (item / (roseClusterCount - 1)) * 0.64;
+              });
+    const roseClusters = roseClusterRatios.map((ratio, item) => ({
+      x: x + width * ratio,
+      y: y - (isTopLayer ? 6.8 : 4.8) + (item % 2 ? 0.8 : 0),
+      scale: isTopLayer ? 1.06 : 0.98,
+      rotation: ratio < 0.35 ? -5 : ratio > 0.65 ? 5 : item % 2 ? 2 : -1,
+    }));
     const fruitClusters: Array<{
       x: number;
       y: number;
@@ -1393,79 +1447,16 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           </>
         )}
 
-        {roseCount > 0 &&
-          activeRoseClusters.map((cluster, item) => {
-            const rosettesInCluster = roseClusterCounts[item] || 0;
-            if (rosettesInCluster <= 0) return null;
-            const offsets =
-              cluster.align === "right"
-                ? [
-                    [0, 0],
-                    [-8, 4],
-                    [-3, -7],
-                  ]
-                : cluster.align === "top"
-                  ? [
-                      [0, 0],
-                      [-7, 5],
-                      [7, 5],
-                    ]
-                  : [
-                      [0, 0],
-                      [8, 4],
-                      [3, -7],
-                    ];
-
-            return (
-              <g key={`${layerId}-flower-cluster-${item}`}>
-                <ellipse
-                  cx={cluster.x}
-                  cy={cluster.y + 6}
-                  rx={13 * cluster.scale}
-                  ry={1.8 * cluster.scale}
-                  fill="currentColor"
-                  opacity="0.1"
-                />
-                {offsets
-                  .slice(0, rosettesInCluster)
-                  .map(([offsetX, offsetY], roseIndex) => {
-                    const flowerSize =
-                      (roseIndex === 0 ? 18 : 15.5) * cluster.scale;
-                    const roseX = cluster.x + offsetX * cluster.scale;
-                    const roseY = cluster.y + offsetY * cluster.scale;
-                    const roseRotate = [-5, 6, -2][roseIndex] || 0;
-
-                    return (
-                      <g
-                        key={`${layerId}-flower-${item}-${roseIndex}`}
-                        transform={`rotate(${roseRotate} ${roseX} ${roseY})`}
-                      >
-                        <ellipse
-                          cx={roseX}
-                          cy={roseY + flowerSize * 0.34}
-                          rx={flowerSize * 0.34}
-                          ry={Math.max(0.8, flowerSize * 0.07)}
-                          fill="currentColor"
-                          opacity="0.1"
-                        />
-                        <image
-                          href={
-                            hasRoseLeaves
-                              ? ROSE_WITH_LEAF_ASSET
-                              : ROSE_WITHOUT_LEAF_ASSET
-                          }
-                          x={roseX - flowerSize / 2}
-                          y={roseY - flowerSize / 2}
-                          width={flowerSize}
-                          height={flowerSize}
-                          preserveAspectRatio="xMidYMid meet"
-                        />
-                      </g>
-                    );
-                  })}
-              </g>
-            );
-          })}
+        {roseClusters.map((cluster, item) =>
+          renderRoseCluster({
+            keyPrefix: `${layerId}-rose-cluster-${item}`,
+            x: cluster.x,
+            y: cluster.y,
+            withLeaves: hasRoseLeaves,
+            scale: cluster.scale,
+            rotation: cluster.rotation,
+          })
+        )}
       </>
     );
   }
