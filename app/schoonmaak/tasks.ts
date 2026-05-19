@@ -1,10 +1,33 @@
 export type PlanType = "Opstartplan" | "Afsluitplan";
 
+export const afsluitPhaseOrder = [
+  "Voor sluiting",
+  "Machines",
+  "Belangrijkste afsluitblok",
+  "Schoonmaak",
+  "Eindcontrole",
+] as const;
+
+export type AfsluitPhase = (typeof afsluitPhaseOrder)[number];
+
 export type Task = {
   id: string;
   label: string;
   children?: Task[];
   info?: string;
+  phase?: AfsluitPhase;
+  description?: string;
+  warning?: string;
+  required?: boolean;
+  photoRequired?: boolean;
+  type?:
+    | "gewone taak"
+    | "controle"
+    | "temperatuur"
+    | "foto"
+    | "waarschuwing"
+    | "stap-voor-stap";
+  legacyLabels?: string[];
 };
 
 export const ijssalons = [
@@ -242,601 +265,442 @@ const opstartTakenPerIjssalon: Record<string, Task[]> = {
   ],
 };
 
-const afsluitTakenLent: Task[] = [
-  {
-    id: "lent-1",
-    label: "BAKKEN SCHOONMAKEN & VOORRAAD CHECK (uur voor sluiting):",
-    children: [
-      {
-        id: "lent-1-a",
-        label: "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)",
-      },
-      {
-        id: "lent-1-b",
-        label: "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen",
-      },
-      {
-        id: "lent-1-c",
-        label: "Tafels buiten en binnen schoonmaken",
-      },
-      {
-        id: "lent-1-d",
-        label: "Prullenbakken legen & schone zak (i.v.t)",
-      },
-      {
-        id: "lent-1-e",
-        label: "Planten water geven (als het niet geregend heeft)",
-      },
-    ],
+const commonBeforeClosingTasks = {
+  prepBakken: {
+    label: "Bakken alvast schoonmaken",
+    legacy:
+      "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)",
+    info:
+      "Als het rustig is: schep de bakken schoon met de oranje spatel en papier. Werk ook de keuken alvast bij. Dan is afsluiten straks rustiger.",
   },
-  {
-    id: "lent-2",
-    label: "GROTE MACHINES SCHOONMAKEN (v.a. sluitingstijd, wel nog ijs doorverkopen!!):",
-    children: [
-      {
-        id: "lent-2-a",
-        label: "Koffiemachine schoonmaken",
-      },
-      {
-        id: "lent-2-b",
-        label: "Slagroommachine schoonmaken",
-      },
-      {
-        id: "lent-2-c",
-        label: "Milkshake machine. Eventuele milkshake resten stickeren met huidige datum en afgedekt opbergen in zwarte koeling",
-      },
-    ],
+  smaken: {
+    label: "Smaken voor morgen noteren",
+    legacy: "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen",
+    info:
+      "Schrijf duidelijk op welke smaken op zijn of bijna op zijn. Zo kan de ochtenddienst meteen aanvullen.",
   },
-  {
-    id: "lent-3",
-    label: "TERRAS OPRUIMEN",
-    children: [
-      {
-        id: "lent-3-a",
-        label: "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger",
-      },
-      {
-        id: "lent-3-b",
-        label: "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen",
-      },
-      {
-        id: "lent-3-c",
-        label: "Groene bankjes en ijsje naar binnen zetten",
-      },
-      {
-        id: "lent-3-d",
-        label: "Luifel indraaien",
-      },
-    ],
+  tafels: {
+    label: "Tafels schoonmaken",
+    legacy: "Tafels buiten en binnen schoonmaken",
+    info:
+      "Neem tafels binnen en buiten af met een schoon sopdoekje. Check ook de randen en plekken waar ijs heeft gedruppeld.",
   },
-  {
-    id: "lent-4",
-    label: "IJSVITRINE AFSLUITEN",
-    children: [
-      {
-        id: "lent-4-a",
-        label: "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!",
-      },
-      {
-        id: "lent-4-b",
-        label: "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.",
-      },
-      {
-        id: "lent-4-c",
-        label: "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen",
-      },
-      {
-        id: "lent-4-d",
-        label: "Ijsvitrine uitzetten",
-      },
-      {
-        id: "lent-4-e",
-        label: "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen. Daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen",
-      },
-      {
-        id: "lent-4-f",
-        label: "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!",
-      },
-      {
-        id: "lent-4-g",
-        label: "Doekje over gehele ijsvitrine doen voor de hele vieze stukken",
-      },
-      {
-        id: "lent-4-h",
-        label: "Foto van gevraagde onderdelen naar Roos/Eva",
-      },
-    ],
+  prullenbakken: {
+    label: "Prullenbakken checken",
+    legacy: "Prullenbakken legen & schone zak (i.v.t)",
+    info:
+      "Leeg volle prullenbakken en doe er een schone zak in. Maak de buitenkant schoon als die vies is.",
   },
-  {
-    id: "lent-5",
-    label: "SCHOONMAAK SALON",
-    children: [
-      {
-        id: "lent-5-a",
-        label: "Stofzuigen & dweilen van vloer",
-      },
-      {
-        id: "lent-5-b",
-        label: "Afwas doen & keuken opruimen",
-      },
-      {
-        id: "lent-5-c",
-        label: "Vieze theedoeken en sponzen verzamelen en in kratje doen",
-      },
-      {
-        id: "lent-5-d",
-        label: "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger in de lange gang",
-      },
-    ],
+  planten: {
+    label: "Planten water geven",
+    legacy: "Planten water geven (als het niet geregend heeft)",
+    info:
+      "Geef de planten water als het droog is geweest. Check ook planten die niet direct in het zicht staan.",
   },
-  {
-    id: "lent-6",
-    label: "CONTROLE",
-    children: [
-      {
-        id: "lent-6-a",
-        label: "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)",
-      },
-      {
-        id: "lent-6-b",
-        label: "Vriezers controleren op temperatuur en of ze goed dicht zijn!!",
-      },
-      {
-        id: "lent-6-c",
-        label: "Omzet formulieren invullen",
-      },
-      {
-        id: "lent-6-d",
-        label: "Laatste check: alles schoon/dicht/uit?",
-      },
-    ],
-  },
-];
+};
 
-const afsluitTakenHeyendaal: Task[] = [
-  {
-    id: "heyendaal-1",
-    label: "BAKKEN SCHOONMAKEN & VOORRAAD CHECK (uur voor sluiting):",
-    children: [
-      {
-        id: "heyendaal-1-a",
-        label: "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)",
-      },
-      {
-        id: "heyendaal-1-b",
-        label: "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen",
-      },
-      {
-        id: "heyendaal-1-c",
-        label: "Tafels buiten en binnen schoonmaken",
-      },
-      {
-        id: "heyendaal-1-d",
-        label: "Prullenbakken legen & schone zak (i.v.t)",
-      },
-      {
-        id: "heyendaal-1-e",
-        label: "Planten water geven (als het niet geregend heeft)",
-      },
-    ],
+const commonClosingTasks = {
+  koffie: {
+    label: "Koffiemachine",
+    legacy: "Koffiemachine schoonmaken",
+    info:
+      "Maak de koffiemachine dagelijks schoon: lekbak legen, koffiedik weggooien, losse onderdelen afspoelen, stoompijpje afnemen en de machine laten doorspoelen.",
   },
-  {
-    id: "heyendaal-2",
-    label: "GROTE MACHINES SCHOONMAKEN (v.a. sluitingstijd, wel nog ijs doorverkopen!!):",
-    children: [
-      {
-        id: "heyendaal-2-a",
-        label: "Koffiemachine schoonmaken",
-      },
-      {
-        id: "heyendaal-2-b",
-        label: "Slagroommachine schoonmaken",
-      },
-      {
-        id: "heyendaal-2-c",
-        label: "Milkshake machine. Eventuele milkshake resten stickeren met huidige datum en afgedekt opbergen in zwarte koeling",
-      },
-    ],
+  slagroom: {
+    label: "Slagroommachine",
+    legacy: "Slagroommachine schoonmaken",
+    info:
+      "Haal het slagroombakje eruit. Spoel de machine met lauw water en reiniger. Spoel daarna nog een keer met alleen water.",
+    warning: "Slagroom bederft snel. Deze machine moet elke dag schoon.",
   },
-  {
-    id: "heyendaal-3",
-    label: "TERRAS OPRUIMEN",
-    children: [
-      {
-        id: "heyendaal-3-a",
-        label: "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger",
-      },
-      {
-        id: "heyendaal-3-b",
-        label: "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen",
-      },
-      {
-        id: "heyendaal-3-c",
-        label: "Tafels en stoelen in café zetten",
-      },
-      {
-        id: "heyendaal-3-d",
-        label: "Parasols uit de voet halen en naar binnen halen",
-      },
-      {
-        id: "heyendaal-3-e",
-        label: "Luifel indraaien",
-      },
-    ],
+  milkshake: {
+    label: "Milkshakemachine",
+    legacy:
+      "Milkshake machine. Eventuele milkshake resten stickeren met huidige datum en afgedekt opbergen in zwarte koeling",
+    info:
+      "Laat een beker met lauw water draaien. Bewaar resten alleen afgedekt, met datumsticker, in de zwarte koeling.",
   },
-  {
-    id: "heyendaal-4",
-    label: "IJSVITRINE AFSLUITEN",
-    children: [
-      {
-        id: "heyendaal-4-a",
-        label: "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!",
-      },
-      {
-        id: "heyendaal-4-b",
-        label: "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.",
-      },
-      {
-        id: "heyendaal-4-c",
-        label: "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen",
-      },
-      {
-        id: "heyendaal-4-d",
-        label: "Ijsvitrine uitzetten",
-      },
-      {
-        id: "heyendaal-4-e",
-        label: "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Spoelbakje daarna met een nat doekje nog een keer afdoen",
-      },
-      {
-        id: "heyendaal-4-f",
-        label: "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!",
-      },
-      {
-        id: "heyendaal-4-g",
-        label: "Doekje over gehele ijsvitrine doen voor de hele vieze stukken",
-      },
-      {
-        id: "heyendaal-4-h",
-        label: "Foto van gevraagde onderdelen naar Roos/Eva",
-      },
-    ],
+  vuilnisBezorger: {
+    label: "Vuilnis klaarzetten",
+    legacy: "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger",
+    info:
+      "Vervang volle zakken, knoop ze goed dicht en zet ze klaar op de plek waar de bezorger ze meeneemt.",
   },
-  {
-    id: "heyendaal-5",
-    label: "SCHOONMAAK SALON",
-    children: [
-      {
-        id: "heyendaal-5-a",
-        label: "Stofzuigen & dweilen van vloer",
-      },
-      {
-        id: "heyendaal-5-b",
-        label: "Afwas doen & keuken opruimen",
-      },
-      {
-        id: "heyendaal-5-c",
-        label: "Vieze theedoeken en sponzen verzamelen en in kratje doen",
-      },
-      {
-        id: "heyendaal-5-d",
-        label: "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger",
-      },
-    ],
+  ijsbakkenSchoon: {
+    label: "Bakken schoonmaken",
+    legacy:
+      "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!",
+    info:
+      "Maak de bovenkant en randen van elke ijsbak schoon met spatel en papier. Er mogen geen vieze of plakkerige bakken terug de vriezer in.",
+    warning: "Geen vieze ijsbakken in de vriezer.",
   },
-  {
-    id: "heyendaal-6",
-    label: "CONTROLE",
-    children: [
-      {
-        id: "heyendaal-6-a",
-        label: "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)",
-      },
-      {
-        id: "heyendaal-6-b",
-        label: "Vriezers controleren op temperatuur en of ze goed dicht zijn!!",
-      },
-      {
-        id: "heyendaal-6-c",
-        label: "Omzet formulieren invullen",
-      },
-      {
-        id: "heyendaal-6-d",
-        label: "Laatste check: alles schoon/dicht/uit?",
-      },
-    ],
+  bakkenVriezer: {
+    label: "Bakken in de vriezer zetten",
+    legacy:
+      "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.",
+    info:
+      "Zet bakken pas weg als er geen klanten meer komen. Is de -17 vriezer vol, gebruik de -22 vriezer en plak duidelijk een briefje 'DEZE EERST' op die bakken.",
   },
-];
+  staven: {
+    label: "Staven afwassen",
+    legacy: "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen",
+    info:
+      "Haal alle metalen staven uit de vitrine, was ze af en leg ze op een schone theedoek zodat ze droog en klaar zijn voor morgen.",
+  },
+  vitrineUit: {
+    label: "Vitrine uitzetten",
+    legacy: "Ijsvitrine uitzetten",
+    info: "Zet de ijsvitrine uit. Neem zichtbare ijs- en suikerresten meteen weg.",
+  },
+  spoelbakjes: {
+    label: "Spoelbakjes schoonmaken",
+    legacy:
+      "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen. Daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen",
+    extraLegacy: [
+      "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Spoelbakje daarna met een nat doekje nog een keer afdoen",
+      "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen",
+    ],
+    info:
+      "Haal eerst alles uit de spoelbakjes. Laat ze leeglopen, spoel meerdere keren met kokendheet water en neem de bakjes daarna af met een nat doekje.",
+  },
+  hoorntjes: {
+    label: "Hoorntjes weghalen",
+    legacy:
+      "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!",
+    info:
+      "Haal hoorntjes van de vitrine, doe er een plastic zak omheen en zet ze uit de zon.",
+    warning: "Laat hoorntjes niet op de ijsvitrine staan.",
+  },
+  vitrineAfnemen: {
+    label: "Vitrine afnemen",
+    legacy: "Doekje over gehele ijsvitrine doen voor de hele vieze stukken",
+    info: "Neem de hele vitrine nog een keer af, vooral plakrandjes en plekken met ijsresten.",
+  },
+  fotos: {
+    label: "Foto's uploaden",
+    legacy: "Foto van gevraagde onderdelen naar Roos/Eva",
+    info:
+      "Maak duidelijke foto's en upload ze onderaan in de app bij de verplichte fotovelden.",
+    photoRequired: true,
+    type: "foto" as const,
+  },
+  vloer: {
+    label: "Vloer doen",
+    legacy: "Stofzuigen & dweilen van vloer",
+    info:
+      "Stofzuig of veeg eerst goed. Dweil daarna met allesreiniger, vooral waar ijs is gevallen.",
+  },
+  afwas: {
+    label: "Afwas en keuken",
+    legacy: "Afwas doen & keuken opruimen",
+    info:
+      "Werk alle afwas weg, droog af waar nodig en zet alles terug op de vaste plek. Laat wasbak en werkblad schoon achter.",
+  },
+  doeken: {
+    label: "Vieze doeken in krat",
+    legacy: "Vieze theedoeken en sponzen verzamelen en in kratje doen",
+    info:
+      "Verzamel vieze theedoeken en sponzen in het kratje voor de was. Laat geen natte doeken los liggen.",
+  },
+  afval: {
+    label: "Afval klaarzetten",
+    legacy: "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger in de lange gang",
+    extraLegacy: [
+      "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger",
+    ],
+    info:
+      "Maak karton klein, knoop vuilniszakken goed dicht en zet alles netjes klaar op de afgesproken plek voor de bezorger.",
+  },
+  voorraadBestellen: {
+    label: "Voorraad bestellen",
+    legacy:
+      "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)",
+    info:
+      "Bestel alles wat op is via het bestelsysteem op de iPad. Wat daar niet besteld kan worden, mail je naar info@strik-patisserie.nl.",
+  },
+  vriezers: {
+    label: "Vriezers checken",
+    legacy: "Vriezers controleren op temperatuur en of ze goed dicht zijn!!",
+    info:
+      "Controleer of alle vriezers goed dicht zitten en of de temperatuur klopt. Vul de temperatuurvelden in de app in.",
+    type: "temperatuur" as const,
+    warning: "Een open vriezer kan ijsverlies geven.",
+  },
+  omzet: {
+    label: "Omzetformulieren invullen",
+    legacy: "Omzet formulieren invullen",
+    info: "Vul de omzetformulieren volledig en netjes in voordat je afsluit.",
+  },
+  laatsteCheck: {
+    label: "Alles schoon, dicht en uit",
+    legacy: "Laatste check: alles schoon/dicht/uit?",
+    info:
+      "Loop nog een laatste ronde: machines uit, deuren dicht, vriezers dicht, afval weg en salon schoon.",
+    type: "controle" as const,
+  },
+};
 
-const afsluitTakenDaalseweg: Task[] = [
-  {
-    id: "daalseweg-1",
-    label: "BAKKEN SCHOONMAKEN & VOORRAAD CHECK (uur voor sluiting):",
-    children: [
-      {
-        id: "daalseweg-1-a",
-        label: "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)",
-      },
-      {
-        id: "daalseweg-1-b",
-        label: "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen",
-      },
-      {
-        id: "daalseweg-1-c",
-        label: "Tafels buiten en binnen schoonmaken",
-      },
-      {
-        id: "daalseweg-1-d",
-        label: "Prullenbakken legen & schone zak (i.v.t)",
-      },
-      {
-        id: "daalseweg-1-e",
-        label: "Planten water geven (als het niet geregend heeft)",
-      },
-    ],
-  },
-  {
-    id: "daalseweg-2",
-    label: "GROTE MACHINES SCHOONMAKEN (v.a. sluitingstijd, wel nog ijs doorverkopen!!):",
-    children: [
-      {
-        id: "daalseweg-2-a",
-        label: "Koffiemachine schoonmaken",
-      },
-      {
-        id: "daalseweg-2-b",
-        label: "Slagroommachine schoonmaken",
-      },
-    ],
-  },
-  {
-    id: "daalseweg-3",
-    label: "TERRAS OPRUIMEN",
-    children: [
-      {
-        id: "daalseweg-3-a",
-        label: "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger",
-      },
-      {
-        id: "daalseweg-3-b",
-        label: "Kussentjes van de bankjes naar binnen halen",
-      },
-      {
-        id: "daalseweg-3-c",
-        label: "Ijshoorntje naar binnen",
-      },
-      {
-        id: "daalseweg-3-d",
-        label: "Luifel indraaien",
-      },
-    ],
-  },
-  {
-    id: "daalseweg-4",
-    label: "IJSVITRINE AFSLUITEN",
-    children: [
-      {
-        id: "daalseweg-4-a",
-        label: "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!",
-      },
-      {
-        id: "daalseweg-4-b",
-        label: "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.",
-      },
-      {
-        id: "daalseweg-4-c",
-        label: "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen",
-      },
-      {
-        id: "daalseweg-4-d",
-        label: "Ijsvitrine uitzetten",
-      },
-      {
-        id: "daalseweg-4-e",
-        label: "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen",
-      },
-      {
-        id: "daalseweg-4-f",
-        label: "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!",
-      },
-      {
-        id: "daalseweg-4-g",
-        label: "Doekje over gehele ijsvitrine doen voor de hele vieze stukken",
-      },
-      {
-        id: "daalseweg-4-h",
-        label: "Foto van gevraagde onderdelen naar Roos/Eva",
-      },
-    ],
-  },
-  {
-    id: "daalseweg-5",
-    label: "SCHOONMAAK SALON",
-    children: [
-      {
-        id: "daalseweg-5-a",
-        label: "Stofzuigen & dweilen van vloer",
-      },
-      {
-        id: "daalseweg-5-b",
-        label: "Afwas doen & keuken opruimen",
-      },
-      {
-        id: "daalseweg-5-c",
-        label: "Vieze theedoeken en sponzen verzamelen en in kratje doen",
-      },
-      {
-        id: "daalseweg-5-d",
-        label: "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger in de lange gang",
-      },
-    ],
-  },
-  {
-    id: "daalseweg-6",
-    label: "CONTROLE",
-    children: [
-      {
-        id: "daalseweg-6-a",
-        label: "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)",
-      },
-      {
-        id: "daalseweg-6-b",
-        label: "Vriezers controleren op temperatuur en of ze goed dicht zijn!!",
-      },
-      {
-        id: "daalseweg-6-c",
-        label: "Omzet formulieren invullen",
-      },
-      {
-        id: "daalseweg-6-d",
-        label: "Laatste check: alles schoon/dicht/uit?",
-      },
-    ],
-  },
-];
+function afsluitSubtask(
+  id: string,
+  data: {
+    label: string;
+    legacy: string;
+    extraLegacy?: string[];
+    info: string;
+    warning?: string;
+    type?: Task["type"];
+    photoRequired?: boolean;
+  }
+): Task {
+  return {
+    id,
+    label: data.label,
+    info: data.info,
+    warning: data.warning,
+    type: data.type || "gewone taak",
+    photoRequired: data.photoRequired,
+    required: true,
+    legacyLabels: [data.legacy, ...(data.extraLegacy || [])],
+  };
+}
 
-const afsluitTakenZiekerstraat: Task[] = [
-  {
-    id: "ziekerstraat-1",
-    label: "BAKKEN SCHOONMAKEN & VOORRAAD CHECK (uur voor sluiting):",
-    children: [
+function afsluitCard(
+  id: string,
+  phase: AfsluitPhase,
+  label: string,
+  children: Task[],
+  options: Pick<Task, "description" | "warning" | "info" | "type"> = {}
+): Task {
+  return {
+    id,
+    label,
+    phase,
+    children,
+    description: options.description,
+    warning: options.warning,
+    info: options.info,
+    type: options.type || "stap-voor-stap",
+    required: true,
+  };
+}
+
+function maakAfsluitTaken(
+  prefix: string,
+  opties: {
+    milkshake?: boolean;
+    terraceTasks: Task[];
+    afvalInLangeGang?: boolean;
+  }
+): Task[] {
+  const afval = {
+    ...commonClosingTasks.afval,
+    legacy: opties.afvalInLangeGang
+      ? commonClosingTasks.afval.legacy
+      : "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger",
+  };
+
+  return [
+    afsluitCard(
+      `${prefix}-voor-sluiting-ijs`,
+      "Voor sluiting",
+      "IJs & voorraad",
+      [
+        afsluitSubtask(`${prefix}-1-a`, commonBeforeClosingTasks.prepBakken),
+        afsluitSubtask(`${prefix}-1-b`, commonBeforeClosingTasks.smaken),
+        afsluitSubtask(`${prefix}-6-a`, commonClosingTasks.voorraadBestellen),
+      ],
       {
-        id: "ziekerstraat-1-a",
-        label: "Indien het rustig is, zorg je dat je de bakken & keuken alvast schoonmaakt (bakken schoon scheppen met oranje spatel en papier)",
-      },
+        description: "Doe dit alvast als het rustig wordt.",
+      }
+    ),
+    afsluitCard(
+      `${prefix}-voor-sluiting-salon`,
+      "Voor sluiting",
+      "Salon & terras",
+      [
+        afsluitSubtask(`${prefix}-1-c`, commonBeforeClosingTasks.tafels),
+        afsluitSubtask(`${prefix}-1-d`, commonBeforeClosingTasks.prullenbakken),
+        afsluitSubtask(`${prefix}-1-e`, commonBeforeClosingTasks.planten),
+      ],
       {
-        id: "ziekerstraat-1-b",
-        label: "Maak een lijstje met ijssmaken die op zijn en nodig zijn voor morgen",
-      },
+        description: "Maak de zichtbare plekken alvast netjes.",
+      }
+    ),
+    afsluitCard(
+      `${prefix}-machines`,
+      "Machines",
+      "Machines schoonmaken",
+      [
+        afsluitSubtask(`${prefix}-2-a`, commonClosingTasks.koffie),
+        afsluitSubtask(`${prefix}-2-b`, commonClosingTasks.slagroom),
+        ...(opties.milkshake
+          ? [afsluitSubtask(`${prefix}-2-c`, commonClosingTasks.milkshake)]
+          : []),
+      ],
       {
-        id: "ziekerstraat-1-c",
-        label: "Tafels buiten en binnen schoonmaken",
-      },
+        description: "Start rond sluitingstijd.",
+        warning: "Blijf ijs verkopen als er nog klanten komen.",
+      }
+    ),
+    afsluitCard(
+      `${prefix}-terras-opruimen`,
+      "Belangrijkste afsluitblok",
+      "Terras opruimen",
+      [
+        afsluitSubtask(`${prefix}-3-a`, commonClosingTasks.vuilnisBezorger),
+        ...opties.terraceTasks,
+      ],
       {
-        id: "ziekerstraat-1-d",
-        label: "Prullenbakken legen & schone zak (i.v.t)",
-      },
+        description: "Haal buiten naar binnen en laat de doorgang vrij.",
+      }
+    ),
+    afsluitCard(
+      `${prefix}-ijsvitrine-bakken`,
+      "Belangrijkste afsluitblok",
+      "IJs bakken wegzetten",
+      [
+        afsluitSubtask(`${prefix}-4-a`, commonClosingTasks.ijsbakkenSchoon),
+        afsluitSubtask(`${prefix}-4-b`, commonClosingTasks.bakkenVriezer),
+      ],
       {
-        id: "ziekerstraat-1-e",
-        label: "Planten water geven (als het niet geregend heeft)",
-      },
-    ],
-  },
-  {
-    id: "ziekerstraat-2",
-    label: "GROTE MACHINES SCHOONMAKEN (v.a. sluitingstijd, wel nog ijs doorverkopen!!):",
-    children: [
+        warning: "Geen vieze bakken terug in de vriezer.",
+      }
+    ),
+    afsluitCard(
+      `${prefix}-ijsvitrine-leegmaken`,
+      "Belangrijkste afsluitblok",
+      "Vitrine leegmaken",
+      [
+        afsluitSubtask(`${prefix}-4-c`, commonClosingTasks.staven),
+        afsluitSubtask(`${prefix}-4-d`, commonClosingTasks.vitrineUit),
+        afsluitSubtask(`${prefix}-4-e`, commonClosingTasks.spoelbakjes),
+        afsluitSubtask(`${prefix}-4-f`, commonClosingTasks.hoorntjes),
+        afsluitSubtask(`${prefix}-4-g`, commonClosingTasks.vitrineAfnemen),
+      ]
+    ),
+    afsluitCard(
+      `${prefix}-fotos`,
+      "Belangrijkste afsluitblok",
+      "Foto's",
+      [afsluitSubtask(`${prefix}-4-h`, commonClosingTasks.fotos)],
       {
-        id: "ziekerstraat-2-a",
-        label: "Koffiemachine schoonmaken",
-      },
+        description: "De verplichte uploadvelden staan onderaan.",
+      }
+    ),
+    afsluitCard(
+      `${prefix}-schoonmaak`,
+      "Schoonmaak",
+      "Laatste schoonmaak",
+      [
+        afsluitSubtask(`${prefix}-5-a`, commonClosingTasks.vloer),
+        afsluitSubtask(`${prefix}-5-b`, commonClosingTasks.afwas),
+        afsluitSubtask(`${prefix}-5-c`, commonClosingTasks.doeken),
+        afsluitSubtask(`${prefix}-5-d`, afval),
+      ]
+    ),
+    afsluitCard(
+      `${prefix}-eindcontrole`,
+      "Eindcontrole",
+      "Laatste check",
+      [
+        afsluitSubtask(`${prefix}-6-b`, commonClosingTasks.vriezers),
+        afsluitSubtask(`${prefix}-6-c`, commonClosingTasks.omzet),
+        afsluitSubtask(`${prefix}-6-d`, commonClosingTasks.laatsteCheck),
+      ],
       {
-        id: "ziekerstraat-2-b",
-        label: "Slagroommachine schoonmaken",
-      },
-    ],
-  },
-  {
-    id: "ziekerstraat-3",
-    label: "TERRAS OPRUIMEN",
-    children: [
-      {
-        id: "ziekerstraat-3-a",
-        label: "Vuilniszakken vervangen indien ze vol zitten en klaarzetten voor de bezorger",
-      },
-      {
-        id: "ziekerstraat-3-b",
-        label: "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen, LET OP, zorg dat de bezorgers/medewerkers nog naar binnen kunnen de volgende ochtend.",
-      },
-      {
-        id: "ziekerstraat-3-c",
-        label: "Ijsje, drangpalen en bord naar binnen",
-      },
-    ],
-  },
-  {
-    id: "ziekerstraat-4",
-    label: "IJSVITRINE AFSLUITEN",
-    children: [
-      {
-        id: "ziekerstraat-4-a",
-        label: "Alle ijsbakken volledig schoonmaken met de spatel en papier. LET OP: alle randen moeten volledig schoon zijn! Geen vieze bakken in de vriezer!",
-      },
-      {
-        id: "ziekerstraat-4-b",
-        label: "Indien er geen mensen meer komen, beginnen met de bakken in de -17 vriezer zetten. Geen plek meer? Zet de rest in de -22 vriezer met een briefje erop ‘DEZE EERST’.",
-      },
-      {
-        id: "ziekerstraat-4-c",
-        label: "Staven uit de vitrine halen, afwassen en op een theedoek te drogen leggen",
-      },
-      {
-        id: "ziekerstraat-4-d",
-        label: "Ijsvitrine uitzetten",
-      },
-      {
-        id: "ziekerstraat-4-e",
-        label: "Spoelbakjes leeg laten lopen, en alle spullen hieruit halen, daarna schoonmaken en een aantal keer doorspoelen met heet (kokend) water! Daarna met een nat doekje nog een keer afdoen",
-      },
-      {
-        id: "ziekerstraat-4-f",
-        label: "Hoorntjes van de vitrine halen en een plastic zak om doen! Let op: laat deze niet op de ijsvitrine staan, anders staat s’ochtends de zon erop!",
-      },
-      {
-        id: "ziekerstraat-4-g",
-        label: "Doekje over gehele ijsvitrine doen voor de hele vieze stukken",
-      },
-      {
-        id: "ziekerstraat-4-h",
-        label: "Foto van gevraagde onderdelen naar Roos/Eva",
-      },
-    ],
-  },
-  {
-    id: "ziekerstraat-5",
-    label: "SCHOONMAAK SALON",
-    children: [
-      {
-        id: "ziekerstraat-5-a",
-        label: "Stofzuigen & dweilen van vloer",
-      },
-      {
-        id: "ziekerstraat-5-b",
-        label: "Afwas doen & keuken opruimen",
-      },
-      {
-        id: "ziekerstraat-5-c",
-        label: "Vieze theedoeken en sponzen verzamelen en in kratje doen",
-      },
-      {
-        id: "ziekerstraat-5-d",
-        label: "Al het afval (karton & zakken) klein maken en klaarzetten voor de bezorger in de lange gang",
-      },
-    ],
-  },
-  {
-    id: "ziekerstraat-6",
-    label: "CONTROLE",
-    children: [
-      {
-        id: "ziekerstraat-6-a",
-        label: "Voorraad check à bestel alles wat op is via het bestelsysteem op de iPad (hetgeen wat niet besteld kan worden op de iPad doormailen naar info@strik-patisserie.nl)",
-      },
-      {
-        id: "ziekerstraat-6-b",
-        label: "Vriezers controleren op temperatuur en of ze goed dicht zijn!!",
-      },
-      {
-        id: "ziekerstraat-6-c",
-        label: "Omzet formulieren invullen",
-      },
-      {
-        id: "ziekerstraat-6-d",
-        label: "Laatste check: alles schoon/dicht/uit?",
-      },
-    ],
-  },
-];
+        warning: "Sla pas op als alles is afgevinkt en de foto's zijn geupload.",
+      }
+    ),
+  ];
+}
+
+const afsluitTakenLent: Task[] = maakAfsluitTaken("lent", {
+  milkshake: true,
+  afvalInLangeGang: true,
+  terraceTasks: [
+    afsluitSubtask("lent-3-b", {
+      label: "Tafels en stoelen naar binnen",
+      legacy: "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen",
+      info: "Neem tafels en stoelen af. Haal plantjes en kaarten naar binnen.",
+    }),
+    afsluitSubtask("lent-3-c", {
+      label: "Bankjes en ijsje naar binnen",
+      legacy: "Groene bankjes en ijsje naar binnen zetten",
+      info: "Zet de groene bankjes en het ijsje binnen op de vaste plek.",
+    }),
+    afsluitSubtask("lent-3-d", {
+      label: "Luifel indraaien",
+      legacy: "Luifel indraaien",
+      info: "Draai de luifel rustig helemaal in en controleer of hij goed vastzit.",
+    }),
+  ],
+});
+
+const afsluitTakenHeyendaal: Task[] = maakAfsluitTaken("heyendaal", {
+  milkshake: true,
+  terraceTasks: [
+    afsluitSubtask("heyendaal-3-b", {
+      label: "Tafels en stoelen schoon",
+      legacy: "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen",
+      info: "Neem tafels en stoelen af. Haal plantjes en kaarten naar binnen.",
+    }),
+    afsluitSubtask("heyendaal-3-c", {
+      label: "Meubels in cafe zetten",
+      legacy: "Tafels en stoelen in café zetten",
+      info: "Zet tafels en stoelen binnen in het cafe op de afgesproken plek.",
+    }),
+    afsluitSubtask("heyendaal-3-d", {
+      label: "Parasols naar binnen",
+      legacy: "Parasols uit de voet halen en naar binnen halen",
+      info: "Haal parasols uit de voet en zet ze binnen. Doe dit rustig met twee handen.",
+    }),
+    afsluitSubtask("heyendaal-3-e", {
+      label: "Luifel indraaien",
+      legacy: "Luifel indraaien",
+      info: "Draai de luifel rustig helemaal in en controleer of hij goed vastzit.",
+    }),
+  ],
+});
+
+const afsluitTakenDaalseweg: Task[] = maakAfsluitTaken("daalseweg", {
+  afvalInLangeGang: true,
+  terraceTasks: [
+    afsluitSubtask("daalseweg-3-b", {
+      label: "Kussens naar binnen",
+      legacy: "Kussentjes van de bankjes naar binnen halen",
+      info: "Haal de kussens van de bankjes en leg ze binnen op de vaste plek.",
+    }),
+    afsluitSubtask("daalseweg-3-c", {
+      label: "Ijshoorntje naar binnen",
+      legacy: "Ijshoorntje naar binnen",
+      info: "Zet het ijshoorntje binnen op de vaste plek.",
+    }),
+    afsluitSubtask("daalseweg-3-d", {
+      label: "Luifel indraaien",
+      legacy: "Luifel indraaien",
+      info: "Draai de luifel rustig helemaal in en controleer of hij goed vastzit.",
+    }),
+  ],
+});
+
+const afsluitTakenZiekerstraat: Task[] = maakAfsluitTaken("ziekerstraat", {
+  afvalInLangeGang: true,
+  terraceTasks: [
+    afsluitSubtask("ziekerstraat-3-b", {
+      label: "Terras naar binnen",
+      legacy:
+        "Terrastafels en stoelen schoonmaken & plantjes en kaarten naar binnen halen, LET OP, zorg dat de bezorgers/medewerkers nog naar binnen kunnen de volgende ochtend.",
+      info:
+        "Neem tafels en stoelen af. Haal plantjes en kaarten naar binnen. Zorg dat medewerkers en bezorgers morgenochtend naar binnen kunnen.",
+      warning: "Laat de doorgang vrij voor morgenochtend.",
+    }),
+    afsluitSubtask("ziekerstraat-3-c", {
+      label: "IJsje, palen en bord naar binnen",
+      legacy: "Ijsje, drangpalen en bord naar binnen",
+      info: "Zet het ijsje, de drangpalen en het bord binnen op de vaste plek.",
+    }),
+  ],
+});
 
 export const takenPerPlanAndShop: Record<PlanType, Record<string, Task[]>> = {
   Opstartplan: opstartTakenPerIjssalon,
@@ -988,11 +852,15 @@ Object.values(takenPerPlanAndShop.Opstartplan).forEach((tasks) => {
 });
 
 Object.values(takenPerPlanAndShop.Afsluitplan).forEach((tasks) => {
-  applyInfo(tasks, afsluitInfoForTaskLabel, { clearExistingInfo: true });
+  applyInfo(tasks, afsluitInfoForTaskLabel);
 });
 
 export function flattenTasks(tasks: Task[]): Task[] {
   return tasks.flatMap((task) => [task, ...(task.children ? flattenTasks(task.children) : [])]);
+}
+
+export function getTaskLabelAliases(task: Task): string[] {
+  return [task.label, ...(task.legacyLabels || [])];
 }
 
 export function getTakenLijst(planType: PlanType, winkel: string): Task[] {

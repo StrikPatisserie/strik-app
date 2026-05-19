@@ -1,4 +1,10 @@
-import { PlanType, flattenTasks, getTakenLijst, planOptions } from "./tasks";
+import {
+  PlanType,
+  flattenTasks,
+  getTakenLijst,
+  getTaskLabelAliases,
+  planOptions,
+} from "./tasks";
 
 export const CLEANING_API_URL =
   "/api/cleaning";
@@ -205,7 +211,7 @@ function planFromMarker(taken: string[] = []): PlanType | null {
 
 function taakLabelsVoorPlan(planType: PlanType, winkel: string) {
   return new Set(
-    flattenTasks(getTakenLijst(planType, winkel)).map((taak) => taak.label)
+    flattenTasks(getTakenLijst(planType, winkel)).flatMap(getTaskLabelAliases)
   );
 }
 

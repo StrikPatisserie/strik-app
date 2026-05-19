@@ -3,7 +3,16 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
-import { PlanType, Task, ijssalons, planOptions, getTakenLijst, flattenTasks } from "./tasks";
+import {
+  PlanType,
+  Task,
+  afsluitPhaseOrder,
+  ijssalons,
+  planOptions,
+  getTakenLijst,
+  flattenTasks,
+  getTaskLabelAliases,
+} from "./tasks";
 import {
   CleaningItem,
   CleaningPhotoUpload,
@@ -354,8 +363,31 @@ function SchoonmaakForm() {
   );
 
   const taskIdByLabel = useMemo(
-    () => Object.fromEntries(taskItems.map((task) => [task.label, task.id])),
+    () => {
+      const entries: Array<[string, string]> = [];
+
+      taskItems.forEach((task) => {
+        getTaskLabelAliases(task).forEach((label) => {
+          entries.push([label, task.id]);
+        });
+      });
+
+      return Object.fromEntries(entries);
+    },
     [taskItems]
+  );
+
+  const afsluitTakenPerFase = useMemo(
+    () =>
+      planType === "Afsluitplan"
+        ? afsluitPhaseOrder
+            .map((phase) => ({
+              phase,
+              tasks: takenLijst.filter((taak) => taak.phase === phase),
+            }))
+            .filter((group) => group.tasks.length > 0)
+        : [],
+    [planType, takenLijst]
   );
 
   const temperatuurRegistratieActief = taken
@@ -851,6 +883,160 @@ function SchoonmaakForm() {
     await submitAntwoorden();
   }
 
+  function getTaakVoortgang(taak: Task) {
+    const onderdelen = taak.children || [taak];
+    const klaar = onderdelen.filter(isComplete).length;
+
+    return {
+      klaar,
+      totaal: onderdelen.length,
+    };
+  }
+
+  function openTaakInfo(taak: Task) {
+    if (!taak.info) return;
+
+    setActiveInfo({ title: taak.label, description: taak.info });
+  }
+
+  function renderInfoKnop(taak: Task) {
+    if (!taak.info) return null;
+
+    return (
+      <span
+        role="button"
+        tabIndex={0}
+        aria-label={`Uitleg over ${taak.label}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          openTaakInfo(taak);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          event.stopPropagation();
+          openTaakInfo(taak);
+        }}
+        className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[#d8d6cc] bg-white text-xs font-black text-[#3b6b43] shadow-sm"
+      >
+        i
+      </span>
+    );
+  }
+
+  function renderWaarschuwing(tekst?: string) {
+    if (!tekst) return null;
+
+    return (
+      <div className="rounded-2xl border border-[#e4bf70] bg-[#fff7df] px-3 py-2 text-sm font-semibold leading-snug text-[#7a4f12]">
+        <span className="mr-1 font-black uppercase tracking-[0.12em]">
+          Let op
+        </span>
+        {tekst}
+      </div>
+    );
+  }
+
+  function renderSubtaak(subtaak: Task) {
+    const voltooid = taken.includes(subtaak.id);
+
+    return (
+      <div key={subtaak.id} className="space-y-1.5">
+        <button
+          type="button"
+          onClick={() => toggleTaak(subtaak)}
+          className={`w-full rounded-2xl border px-3 py-2.5 text-left transition active:scale-[0.99] ${
+            voltooid
+              ? "border-[#b8ccb0] bg-[#eff6ec] text-[#243620]"
+              : "border-[#e7e0d8] bg-white text-[#4f554c]"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-black ${
+                voltooid
+                  ? "border-[#8fb184] bg-[#c3d3bc] text-[#243620]"
+                  : "border-[#d8d6cc] bg-[#f8f6f3] text-transparent"
+              }`}
+            >
+              ✓
+            </span>
+            <span className="min-w-0 flex-1 text-sm font-semibold leading-snug">
+              {subtaak.label}
+            </span>
+            {renderInfoKnop(subtaak)}
+          </div>
+        </button>
+        {subtaak.description && (
+          <p className="pl-10 text-xs font-medium leading-relaxed text-gray-500">
+            {subtaak.description}
+          </p>
+        )}
+        {subtaak.warning && (
+          <div className="pl-9">{renderWaarschuwing(subtaak.warning)}</div>
+        )}
+      </div>
+    );
+  }
+
+  function renderTaakKaart(taak: Task) {
+    const voltooid = isComplete(taak);
+    const voortgang = getTaakVoortgang(taak);
+
+    return (
+      <article
+        key={taak.id}
+        className={`space-y-3 rounded-[1.5rem] border bg-white p-3 shadow-sm transition ${
+          voltooid ? "border-[#a9c29f]" : "border-[#e7e0d8]"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => toggleTaak(taak)}
+          className="w-full rounded-2xl text-left transition active:scale-[0.99]"
+        >
+          <div className="flex items-start gap-3">
+            <span
+              className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-black ${
+                voltooid
+                  ? "border-[#8fb184] bg-[#c3d3bc] text-[#243620]"
+                  : "border-[#d8d6cc] bg-[#f8f6f3] text-[#6b7280]"
+              }`}
+            >
+              {voltooid ? "✓" : voortgang.totaal}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-start justify-between gap-2">
+                <span className="block text-base font-black leading-tight text-[#2d2a26]">
+                  {taak.label}
+                </span>
+                {renderInfoKnop(taak)}
+              </span>
+              {taak.description && (
+                <span className="mt-1 block text-sm font-semibold leading-snug text-gray-500">
+                  {taak.description}
+                </span>
+              )}
+              {taak.children && (
+                <span className="mt-1 block text-xs font-bold uppercase tracking-[0.12em] text-[#6b7280]">
+                  {voortgang.klaar}/{voortgang.totaal} klaar
+                </span>
+              )}
+            </span>
+          </div>
+        </button>
+
+        {renderWaarschuwing(taak.warning)}
+
+        {taak.children && (
+          <div className="space-y-2 rounded-[1.25rem] bg-[#f8f6f3] p-2">
+            {taak.children.map(renderSubtaak)}
+          </div>
+        )}
+      </article>
+    );
+  }
+
   return (
     <StrikShell>
         <StrikPageHeader
@@ -904,90 +1090,68 @@ function SchoonmaakForm() {
 
           {planType === "Afsluitplan" && (
             <div className="rounded-3xl bg-[#f7faf5] p-4 text-sm text-gray-700 shadow-sm">
-              <p className="font-semibold">Afsluitplan</p>
+              <p className="font-semibold">Werk per fase</p>
               <p className="mt-2">
-                Bij sommige afsluitstappen staat extra uitleg onder het info-icoon.
+                Vink de korte taken af. Tik op het info-rondje als je uitleg
+                nodig hebt.
               </p>
             </div>
           )}
 
-          <div className="rounded-3xl bg-white/85 p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="font-bold">Taken</p>
-              {ladenBezig && (
-                <span className="text-xs font-semibold text-gray-500">
-                  Laden...
-                </span>
-              )}
-            </div>
+          {planType === "Afsluitplan" ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3 px-1">
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-[#6b7280]">
+                  Afsluiten
+                </p>
+                {ladenBezig && (
+                  <span className="text-xs font-semibold text-gray-500">
+                    Laden...
+                  </span>
+                )}
+              </div>
 
-            <div className="space-y-2.5">
-              {takenLijst.map((taak) => (
-                <div
-                  key={taak.id}
-                  className="space-y-2 rounded-2xl border border-[#d6e2cf] bg-white p-2 shadow-sm"
+              {afsluitTakenPerFase.map((groep, index) => (
+                <section
+                  key={groep.phase}
+                  className="rounded-[2rem] bg-white/85 p-4 shadow-sm"
                 >
-                  <button
-                    type="button"
-                    onClick={() => toggleTaak(taak)}
-                    className={`w-full rounded-2xl border px-3 py-3 text-left text-base font-bold leading-tight shadow-sm transition active:scale-[0.99] ${
-                      isComplete(taak)
-                        ? "border-[#8fb184] bg-[#c3d3bc] text-[#243620]"
-                        : "border-[#b8ccb0] bg-[#dce8d6] text-[#2d3f29]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span>{isComplete(taak) ? "✓ " : ""}{taak.label}</span>
-                      {taak.info && (
-                        <span
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setActiveInfo({ title: taak.label, description: taak.info! });
-                          }}
-                          className="cursor-pointer rounded-full border border-[#d8d6cc] bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#3b6b43]"
-                        >
-                          i
-                        </span>
-                      )}
+                  <div className="mb-3 flex items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#c3d3bc] text-sm font-black text-[#243620]">
+                      {index + 1}
+                    </span>
+                    <div>
+                      <p className="text-[0.7rem] font-black uppercase tracking-[0.18em] text-[#6b7280]">
+                        Fase {index + 1}
+                      </p>
+                      <h2 className="text-xl font-black leading-tight text-[#2d2a26]">
+                        {groep.phase}
+                      </h2>
                     </div>
-                  </button>
+                  </div>
 
-                  {taak.children && (
-                    <div className="space-y-1.5 rounded-2xl bg-[#f8f6f3] p-2">
-                      {taak.children.map((subtaak) => (
-                        <div key={subtaak.id} className="space-y-1">
-                          <button
-                            type="button"
-                            onClick={() => toggleTaak(subtaak)}
-                            className={`w-full rounded-xl border px-3 py-2 text-left text-sm font-normal leading-snug transition active:scale-[0.99] ${
-                              taken.includes(subtaak.id)
-                                ? "border-[#b8ccb0] bg-[#eef3ea] text-[#243620]"
-                                : "border-[#e7e0d8] bg-white text-[#4f554c]"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <span>{taken.includes(subtaak.id) ? "✓ " : ""}{subtaak.label}</span>
-                              {subtaak.info && (
-                                <span
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setActiveInfo({ title: subtaak.label, description: subtaak.info! });
-                                  }}
-                                  className="cursor-pointer rounded-full border border-[#d8d6cc] bg-white px-2 py-0.5 text-[0.65rem] font-semibold text-[#3b6b43]"
-                                >
-                                  i
-                                </span>
-                              )}
-                            </div>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {groep.tasks.map(renderTaakKaart)}
+                  </div>
+                </section>
               ))}
             </div>
-          </div>
+          ) : (
+            <div className="rounded-3xl bg-white/85 p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="font-bold">Taken</p>
+                {ladenBezig && (
+                  <span className="text-xs font-semibold text-gray-500">
+                    Laden...
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2.5">
+                {takenLijst.map(renderTaakKaart)}
+              </div>
+            </div>
+          )}
 
           {planType === "Afsluitplan" && vriezerTemperatuurVelden.length > 0 && (
             <section className="rounded-3xl bg-white/85 p-4 shadow-sm">
