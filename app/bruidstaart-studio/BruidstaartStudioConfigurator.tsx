@@ -1022,34 +1022,39 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       scale: number;
     }> = [
       {
-        x: x + 10,
-        y: y + 1.4,
+        x: x + 13,
+        y: y - 2.5,
         align: "left",
-        scale: isBottomLayer ? 0.92 : 1,
+        scale: isBottomLayer ? 1.04 : 1.14,
       },
       {
-        x: x + width - 10,
-        y: y + 1.4,
+        x: x + width - 13,
+        y: y - 2.5,
         align: "right",
-        scale: isBottomLayer ? 0.92 : 1,
-      },
-      { x: x + width * 0.5, y: y - 4.5, align: "top", scale: 1.03 },
-      {
-        x: x + width * 0.28,
-        y: y + height - 1,
-        align: "left",
-        scale: 0.9,
+        scale: isBottomLayer ? 1.04 : 1.14,
       },
       {
-        x: x + width * 0.72,
-        y: y + height - 1,
-        align: "right",
-        scale: 0.9,
+        x: x + width * 0.5,
+        y: y - 6.5,
+        align: "top",
+        scale: isTopLayer ? 1.16 : 1.08,
+      },
+      {
+        x: x + width * 0.32,
+        y: y - 3.5,
+        align: "top",
+        scale: 1.02,
+      },
+      {
+        x: x + width * 0.68,
+        y: y - 3.5,
+        align: "top",
+        scale: 1.02,
       },
     ];
     const activeRoseClusters = edgeClusters.slice(
       0,
-      Math.min(edgeClusters.length, Math.ceil(roseCount / 2))
+      Math.min(edgeClusters.length, Math.ceil(roseCount / 3))
     );
     let remainingRoses = roseCount;
     const roseClusterCounts = activeRoseClusters.map((_cluster, item) => {
@@ -1425,7 +1430,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   .slice(0, rosettesInCluster)
                   .map(([offsetX, offsetY], roseIndex) => {
                     const flowerSize =
-                      (roseIndex === 0 ? 12.5 : 10.5) * cluster.scale;
+                      (roseIndex === 0 ? 18 : 15.5) * cluster.scale;
                     const roseX = cluster.x + offsetX * cluster.scale;
                     const roseY = cluster.y + offsetY * cluster.scale;
                     const roseRotate = [-5, 6, -2][roseIndex] || 0;

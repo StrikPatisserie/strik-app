@@ -68,7 +68,7 @@ export const cakeSizes: CakeSize[] = [
     layers: [makeLayer("small-6-8-1", "Kleine laag", 8, "6-8p")],
     iconPath: cakeSizeIcon("6-8P"),
     description: "Optionele kleine bruidstaart uit de folder.",
-    surchargePerPerson: 5,
+    surchargePerPerson: 1.5,
   },
   {
     id: "small-10-12",
@@ -80,7 +80,7 @@ export const cakeSizes: CakeSize[] = [
     layers: [makeLayer("small-10-12-1", "Kleine laag", 12, "10-12p")],
     iconPath: cakeSizeIcon("10-12P"),
     description: "Optionele kleine bruidstaart uit de folder.",
-    surchargePerPerson: 3,
+    surchargePerPerson: 1.5,
   },
   {
     id: "s1a",
