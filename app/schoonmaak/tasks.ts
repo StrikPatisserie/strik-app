@@ -561,10 +561,7 @@ function maakAfsluitTaken(
       [
         afsluitSubtask(`${prefix}-4-a`, commonClosingTasks.ijsbakkenSchoon),
         afsluitSubtask(`${prefix}-4-b`, commonClosingTasks.bakkenVriezer),
-      ],
-      {
-        warning: "Geen vieze bakken terug in de vriezer.",
-      }
+      ]
     ),
     afsluitCard(
       `${prefix}-ijsvitrine-leegmaken`,
