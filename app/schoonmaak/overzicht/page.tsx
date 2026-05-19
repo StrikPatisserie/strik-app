@@ -48,12 +48,19 @@ export default function SchoonmaakOverzichtPage() {
 
       try {
         const res = await fetch(getCleaningUrl(), { cache: "no-store" });
-        const data = (await res.json()) as CleaningItem[];
+        const data = (await res.json().catch(() => null)) as
+          | CleaningItem[]
+          | { message?: string }
+          | null;
 
         if (negeerResultaat) return;
 
-        if (!res.ok) {
-          setStatus("Registraties konden niet geladen worden.");
+        if (!res.ok || !Array.isArray(data)) {
+          setStatus(
+            data && !Array.isArray(data) && data.message
+              ? data.message
+              : "Registraties konden niet geladen worden."
+          );
           return;
         }
 

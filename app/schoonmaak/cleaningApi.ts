@@ -1,8 +1,7 @@
 import { PlanType, flattenTasks, getTakenLijst, planOptions } from "./tasks";
 
 export const CLEANING_API_URL =
-  "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
-export const CLEANING_API_KEY = "schoonmaak-ijs-strik";
+  "/api/cleaning";
 
 const PLAN_MARKER_PREFIX = "__strik_plan:";
 const PHOTO_MARKER_PREFIX = "__strik_photo:";
@@ -51,10 +50,7 @@ export function stripInternalTemperatureRegistrations(
 }
 
 export function getCleaningUrl() {
-  const url = new URL(CLEANING_API_URL);
-  url.searchParams.set("key", CLEANING_API_KEY);
-
-  return url;
+  return CLEANING_API_URL;
 }
 
 export function getPlanMarker(planType: PlanType) {

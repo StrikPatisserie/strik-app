@@ -199,6 +199,16 @@ function normaliseerTemperatuurRegistraties(
   );
 }
 
+function isTemperatuurWaardeIngevuld(waarde: string) {
+  const temperatuur = waarde.trim();
+
+  return Boolean(temperatuur && temperatuur !== "-" && temperatuur !== "−");
+}
+
+function standaardTemperatuurWaarde(waarde = "") {
+  return waarde.trim() ? waarde : "-";
+}
+
 function normaliseerFotoUploads(
   itemId: number,
   uploads: CleaningPhotoUpload[] = []
@@ -229,7 +239,9 @@ function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
     taken: antwoorden.taken,
     opmerking: antwoorden.opmerking.trim(),
     temperatuurRegistraties: antwoorden.temperatuurRegistraties
-      .filter((item) => item.naam.trim() && item.temperatuur.trim())
+      .filter(
+        (item) => item.naam.trim() && isTemperatuurWaardeIngevuld(item.temperatuur)
+      )
       .map((item) => ({
         naam: item.naam.trim(),
         temperatuur: item.temperatuur.trim(),
@@ -241,6 +253,66 @@ function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
       mediaId: upload.mediaId,
     })),
   });
+}
+
+function maakLokaleDraft(
+  antwoorden: SchoonmaakAntwoorden,
+  verzondenSignatuur: string
+): SchoonmaakAntwoorden {
+  return {
+    ...antwoorden,
+    fotoUploads: antwoorden.fotoUploads.map(({ file: _file, ...upload }) => ({
+      ...upload,
+    })),
+    verzondenSignatuur,
+  };
+}
+
+function bewaarLokaleDraft(
+  winkel: string,
+  datum: string,
+  planType: PlanType,
+  antwoorden: SchoonmaakAntwoorden,
+  verzondenSignatuur: string
+) {
+  try {
+    localStorage.setItem(
+      getDraftKey(winkel, datum, planType),
+      JSON.stringify(maakLokaleDraft(antwoorden, verzondenSignatuur))
+    );
+  } catch {
+    // Als lokale opslag vol of geblokkeerd is, mag opslaan naar WordPress doorgaan.
+  }
+}
+
+function leesLokaleDraft(
+  winkel: string,
+  datum: string,
+  planType: PlanType
+): SchoonmaakAntwoorden | null {
+  try {
+    const raw = localStorage.getItem(getDraftKey(winkel, datum, planType));
+    if (!raw) return null;
+
+    const data = JSON.parse(raw) as Partial<SchoonmaakAntwoorden>;
+
+    return {
+      planType,
+      naam: typeof data.naam === "string" ? data.naam : "",
+      taken: Array.isArray(data.taken) ? data.taken : [],
+      opmerking: typeof data.opmerking === "string" ? data.opmerking : "",
+      temperatuurRegistraties: Array.isArray(data.temperatuurRegistraties)
+        ? data.temperatuurRegistraties
+        : [],
+      fotoUploads: Array.isArray(data.fotoUploads) ? data.fotoUploads : [],
+      verzondenSignatuur:
+        typeof data.verzondenSignatuur === "string"
+          ? data.verzondenSignatuur
+          : undefined,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function SchoonmaakForm() {
@@ -297,9 +369,8 @@ function SchoonmaakForm() {
   );
 
   function getTemperatuurWaarde(naam: string) {
-    return (
-      temperatuurRegistraties.find((item) => item.naam === naam)
-        ?.temperatuur ?? ""
+    return standaardTemperatuurWaarde(
+      temperatuurRegistraties.find((item) => item.naam === naam)?.temperatuur
     );
   }
 
@@ -309,11 +380,11 @@ function SchoonmaakForm() {
   );
 
   const heeftVriezerTemperatuurInvoer = vriezerTemperatuurVelden.some((veld) =>
-    getTemperatuurWaarde(veld.naam).trim()
+    isTemperatuurWaardeIngevuld(getTemperatuurWaarde(veld.naam))
   );
 
   const ontbrekendeVriezerTemperaturen = vriezerTemperatuurVelden.filter(
-    (veld) => !getTemperatuurWaarde(veld.naam).trim()
+    (veld) => !isTemperatuurWaardeIngevuld(getTemperatuurWaarde(veld.naam))
   );
 
   useEffect(() => {
@@ -323,11 +394,52 @@ function SchoonmaakForm() {
       setLadenBezig(true);
       setStatus("");
 
+      function laadLokaleDraftAlsFallback(statusBericht: string) {
+        const lokaleDraft = leesLokaleDraft(winkel, datum, planType);
+        if (!lokaleDraft) return false;
+
+        const lokaleTaken = lokaleDraft.taken.map(
+          (taak) => taskIdByLabel[taak] ?? taak
+        );
+        const signatuur = lokaleDraft.verzondenSignatuur || maakSignatuur(lokaleDraft);
+
+        setTaken(lokaleTaken);
+        setNaam(lokaleDraft.naam || "");
+        setOpmerking(lokaleDraft.opmerking || "");
+        setTemperatuurRegistraties(lokaleDraft.temperatuurRegistraties || []);
+        setFotoUploads(lokaleDraft.fotoUploads || []);
+        setVerzondenSignatuur(signatuur);
+        setStatus(statusBericht);
+
+        return true;
+      }
+
       try {
         const res = await fetch(getCleaningUrl(), { cache: "no-store" });
-        const items = (await res.json()) as CleaningItem[];
+        const data = (await res.json().catch(() => null)) as
+          | CleaningItem[]
+          | { message?: string }
+          | null;
 
-        if (!res.ok || negeerResultaat) return;
+        if (negeerResultaat) return;
+
+        if (!res.ok || !Array.isArray(data)) {
+          const message =
+            data && !Array.isArray(data) && data.message
+              ? data.message
+              : "Eerdere antwoorden konden niet geladen worden.";
+          const lokaleDraftGeladen = laadLokaleDraftAlsFallback(
+            "Lokale versie geladen. WordPress is tijdelijk niet bereikbaar."
+          );
+
+          if (!lokaleDraftGeladen) {
+            setStatus(message);
+          }
+
+          return;
+        }
+
+        const items = data;
 
         const opgeslagenItems = items
           .filter((item) =>
@@ -387,7 +499,13 @@ function SchoonmaakForm() {
         }
       } catch {
         if (!negeerResultaat) {
-          setStatus("Eerdere antwoorden konden niet geladen worden.");
+          const lokaleDraftGeladen = laadLokaleDraftAlsFallback(
+            "Lokale versie geladen. WordPress is tijdelijk niet bereikbaar."
+          );
+
+          if (!lokaleDraftGeladen) {
+            setStatus("Eerdere antwoorden konden niet geladen worden.");
+          }
         }
       } finally {
         if (!negeerResultaat) {
@@ -452,7 +570,7 @@ function SchoonmaakForm() {
   function voegTemperatuurRegistratieToe() {
     setTemperatuurRegistraties((prev) => [
       ...prev,
-      { id: maakTemperatuurId(), naam: "", temperatuur: "" },
+      { id: maakTemperatuurId(), naam: "", temperatuur: "-" },
     ]);
   }
 
@@ -473,7 +591,11 @@ function SchoonmaakForm() {
       if (!bestaat) {
         return [
           ...prev,
-          { id: maakTemperatuurId(), naam, temperatuur: waarde },
+          {
+            id: maakTemperatuurId(),
+            naam,
+            temperatuur: standaardTemperatuurWaarde(waarde),
+          },
         ];
       }
 
@@ -589,7 +711,8 @@ function SchoonmaakForm() {
 
   function valideerAntwoorden(volgendeFotoUploads: PhotoUpload[] = fotoUploads) {
     const heeftTemperatuur = temperatuurRegistraties.some(
-      (item) => item.naam.trim() || item.temperatuur.trim()
+      (item) =>
+        item.naam.trim() || isTemperatuurWaardeIngevuld(item.temperatuur)
     );
     const heeftInhoud =
       naam.trim() ||
@@ -626,6 +749,8 @@ function SchoonmaakForm() {
     setVerzendenBezig(true);
 
     let timeoutId: number | undefined;
+    let antwoorden = getAntwoorden(volgendeFotoUploads);
+    let signatuur = maakSignatuur(antwoorden);
 
     try {
       const fotoUploadsVoorOpslaan = await uploadNieuweFotos(
@@ -633,8 +758,8 @@ function SchoonmaakForm() {
       );
       setFotoUploads(fotoUploadsVoorOpslaan);
 
-      const antwoorden = getAntwoorden(fotoUploadsVoorOpslaan);
-      const signatuur = maakSignatuur(antwoorden);
+      antwoorden = getAntwoorden(fotoUploadsVoorOpslaan);
+      signatuur = maakSignatuur(antwoorden);
       const controller = new AbortController();
       timeoutId = window.setTimeout(() => controller.abort(), 12_000);
 
@@ -656,7 +781,11 @@ function SchoonmaakForm() {
           opmerking: opmerking.trim(),
           temperatuurRegistraties: [
             ...temperatuurRegistraties
-              .filter((item) => item.naam.trim() && item.temperatuur.trim())
+              .filter(
+                (item) =>
+                  item.naam.trim() &&
+                  isTemperatuurWaardeIngevuld(item.temperatuur)
+              )
               .map((item) => ({
                 naam: item.naam.trim(),
                 temperatuur: item.temperatuur.trim(),
@@ -674,30 +803,39 @@ function SchoonmaakForm() {
 
       if (res.ok) {
         setVerzondenSignatuur(signatuur);
-        localStorage.setItem(
-          getDraftKey(winkel, datum, planType),
-          JSON.stringify({ ...antwoorden, verzondenSignatuur: signatuur })
-        );
+        bewaarLokaleDraft(winkel, datum, planType, antwoorden, signatuur);
         setStatus("Opgeslagen en verzonden.");
         return;
       }
 
+      bewaarLokaleDraft(winkel, datum, planType, antwoorden, signatuur);
+
       if (res.status === 403) {
-        setStatus("Geen toegang vanuit WordPress. Controleer de API sleutel.");
+        setStatus(
+          "Lokaal opgeslagen. Geen toegang vanuit WordPress; controleer de API sleutel."
+        );
         return;
       }
 
-      setStatus(data?.message || "Opslaan mislukt.");
+      setStatus(
+        data?.message
+          ? `Lokaal opgeslagen. ${data.message}`
+          : "Lokaal opgeslagen. WordPress is tijdelijk niet bereikbaar."
+      );
     } catch (error) {
+      bewaarLokaleDraft(winkel, datum, planType, antwoorden, signatuur);
+
       if (error instanceof DOMException && error.name === "AbortError") {
-        setStatus("WordPress reageert niet. Probeer opnieuw.");
+        setStatus(
+          "Lokaal opgeslagen. WordPress reageert niet; probeer later opnieuw."
+        );
         return;
       }
 
       setStatus(
         error instanceof Error
-          ? error.message
-          : "Kan geen verbinding maken met WordPress."
+          ? `Lokaal opgeslagen. ${error.message}`
+          : "Lokaal opgeslagen. Kan geen verbinding maken met WordPress."
       );
     } finally {
       if (timeoutId) window.clearTimeout(timeoutId);
@@ -898,7 +1036,9 @@ function SchoonmaakForm() {
                               )
                             }
                             placeholder={veld.placeholder}
+                            type="text"
                             inputMode="decimal"
+                            autoComplete="off"
                             className="min-w-0 flex-1 rounded-xl border border-[#e7e0d8] bg-white p-3"
                           />
                           <span className="text-sm font-bold text-gray-500">
@@ -1019,7 +1159,7 @@ function SchoonmaakForm() {
                     />
                     <div className="flex gap-2">
                       <input
-                        value={item.temperatuur}
+                        value={standaardTemperatuurWaarde(item.temperatuur)}
                         onChange={(e) =>
                           updateTemperatuurRegistratie(
                             item.id,
@@ -1028,7 +1168,9 @@ function SchoonmaakForm() {
                           )
                         }
                         placeholder="Temperatuur"
+                        type="text"
                         inputMode="decimal"
+                        autoComplete="off"
                         className="min-w-0 flex-1 rounded-xl border border-[#e7e0d8] bg-white p-3"
                       />
                       <button
