@@ -945,7 +945,7 @@ function SchoonmaakForm() {
         <button
           type="button"
           onClick={() => toggleTaak(subtaak)}
-          className={`w-full rounded-2xl border px-3 py-2.5 text-left transition active:scale-[0.99] ${
+          className={`w-full rounded-2xl border px-3.5 py-3 text-left transition active:scale-[0.99] ${
             voltooid
               ? "border-[#b8ccb0] bg-[#eff6ec] text-[#243620]"
               : "border-[#e7e0d8] bg-white text-[#4f554c]"
@@ -961,7 +961,7 @@ function SchoonmaakForm() {
             >
               ✓
             </span>
-            <span className="min-w-0 flex-1 text-sm font-semibold leading-snug">
+            <span className="min-w-0 flex-1 text-[0.95rem] font-semibold leading-snug">
               {subtaak.label}
             </span>
             {renderInfoKnop(subtaak)}
@@ -986,7 +986,7 @@ function SchoonmaakForm() {
     return (
       <article
         key={taak.id}
-        className={`space-y-3 rounded-[1.5rem] border bg-white p-3 shadow-sm transition ${
+        className={`space-y-3 rounded-[1.5rem] border bg-white p-4 shadow-sm transition ${
           voltooid ? "border-[#a9c29f]" : "border-[#e7e0d8]"
         }`}
       >
@@ -1029,7 +1029,7 @@ function SchoonmaakForm() {
         {renderWaarschuwing(taak.warning)}
 
         {taak.children && (
-          <div className="space-y-2 rounded-[1.25rem] bg-[#f8f6f3] p-2">
+          <div className="space-y-2.5 rounded-[1.25rem] bg-[#f8f6f3] p-3">
             {taak.children.map(renderSubtaak)}
           </div>
         )}
@@ -1130,7 +1130,7 @@ function SchoonmaakForm() {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="space-y-3">
                     {groep.tasks.map(renderTaakKaart)}
                   </div>
                 </section>
