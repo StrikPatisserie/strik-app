@@ -1,0 +1,77 @@
+import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+
+const WORDPRESS_BASE_URL = "https://strik-patisserie.nl/wp-json/strik/v1";
+const WORDPRESS_API_KEY =
+  process.env.WORDPRESS_STRIK_API_KEY || "schoonmaak-ijs-strik";
+
+type WordPressCheck = {
+  id: string;
+  label: string;
+  path: string;
+  params?: Record<string, string>;
+};
+
+const checks: WordPressCheck[] = [
+  { id: "cleaning", label: "Schoonmaaklijsten", path: "/cleaning" },
+  { id: "team-agenda", label: "Strik Agenda", path: "/team-agenda" },
+  { id: "notes", label: "Notities", path: "/notes", params: { winkel: "lent" } },
+  { id: "news", label: "Nieuws", path: "/news" },
+];
+
+function getCheckUrl(check: WordPressCheck) {
+  const url = new URL(`${WORDPRESS_BASE_URL}${check.path}`);
+  url.searchParams.set("key", WORDPRESS_API_KEY);
+
+  Object.entries(check.params || {}).forEach(([key, value]) => {
+    url.searchParams.set(key, value);
+  });
+
+  return url;
+}
+
+function getMessage(status: number) {
+  if (status === 403) return "Geen toegang";
+  if (status === 404) return "Route ontbreekt";
+  if (status >= 500) return "Serverfout";
+
+  return "Niet bereikbaar";
+}
+
+async function checkWordPressEndpoint(check: WordPressCheck) {
+  try {
+    const response = await fetch(getCheckUrl(check), {
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    return {
+      id: check.id,
+      label: check.label,
+      ok: response.ok,
+      status: response.status,
+      message: response.ok ? "Verbonden" : getMessage(response.status),
+    };
+  } catch {
+    return {
+      id: check.id,
+      label: check.label,
+      ok: false,
+      status: 0,
+      message: "Geen verbinding",
+    };
+  }
+}
+
+export async function GET() {
+  const results = await Promise.all(checks.map(checkWordPressEndpoint));
+
+  return NextResponse.json({
+    ok: results.every((result) => result.ok),
+    checks: results,
+    checkedAt: new Date().toISOString(),
+  });
+}

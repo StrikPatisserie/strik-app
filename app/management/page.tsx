@@ -5,6 +5,7 @@ import {
   strikIcons,
 } from "../StrikUI";
 import ManagementAgendaCard from "./ManagementAgendaCard";
+import WordPressStatusPanel from "./WordPressStatusPanel";
 
 const topItems = [
   {
@@ -55,6 +56,7 @@ export default function ManagementPage() {
       />
 
       <div className="space-y-4">
+        <WordPressStatusPanel />
         {topItems.map((item) => (
           <StrikActionCard key={item.href} {...item} />
         ))}
