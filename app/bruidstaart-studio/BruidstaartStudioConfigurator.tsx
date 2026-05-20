@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   cakeSizes,
   cakeStyles,
@@ -54,7 +54,26 @@ const STRIK_STUDIO_EMAIL = "info@strik-patisserie.nl";
 const ROSE_DECORATION_IDS = [
   "marsepeinrozen-zonder-blad",
   "marsepeinrozen-met-blad",
+  "grote-marsepeinrozen-zonder-blad",
+  "grote-marsepeinrozen-met-blad",
 ];
+const BORDER_DECORATION_IDS = [
+  "marsepein-icing-band",
+  "geen-rand",
+  "creme-parelrand",
+];
+const FLOWER_DECORATION_IDS = [
+  ...ROSE_DECORATION_IDS,
+  "gipskruid",
+  "echte-bloemen",
+];
+const ACCENT_DECORATION_IDS = ["rood-fruit", "bladgoud"];
+const FLOWER_PLACEMENT_NOTE_ID = "echte-bloemen-plaatsing";
+const FLOWER_PLACEMENT_OPTIONS = [
+  { id: "standaard", label: "Standaard plaatsing door Strik" },
+  { id: "waterval", label: "Waterval plaatsing" },
+  { id: "specifiek", label: "Specifieke plaatsen (gebruik opmerking sectie)" },
+] as const;
 const DEFAULT_ROSE_QUANTITY = 5;
 const ROSE_WITH_LEAF_ASSET = "/app-icons-strik_roos%20met%20blad.svg";
 const ROSE_WITHOUT_LEAF_ASSET = "/app-icons-strik_roos%20zonder%20blad.svg";
@@ -312,6 +331,65 @@ function findColorOptionByNote(value?: string) {
 }
 
 const roseColorOptions = colorOptions.filter((option) => option.swatchColor);
+type RoseColorMode = "same" | "multiple";
+type FlowerPlacementId = (typeof FLOWER_PLACEMENT_OPTIONS)[number]["id"];
+
+function isRoseDecorationId(id: string) {
+  return ROSE_DECORATION_IDS.includes(id);
+}
+
+function isLargeRoseDecorationId(id: string) {
+  return id.startsWith("grote-marsepeinrozen");
+}
+
+function roseHasLeaf(id: string) {
+  return id.endsWith("met-blad");
+}
+
+function roseAssetForId(id: string) {
+  return roseHasLeaf(id) ? ROSE_WITH_LEAF_ASSET : ROSE_WITHOUT_LEAF_ASSET;
+}
+
+function parseRoseColorNote(value?: string): {
+  mode: RoseColorMode;
+  colorIds: string[];
+} {
+  const note = (value || "").trim();
+
+  if (note.startsWith("multi:")) {
+    return {
+      mode: "multiple",
+      colorIds: note
+        .slice(6)
+        .split(",")
+        .map((item) => findColorOptionByNote(item.trim())?.id || "")
+        .filter(Boolean),
+    };
+  }
+
+  const colorId = findColorOptionByNote(note)?.id || "";
+
+  return {
+    mode: "same",
+    colorIds: colorId ? [colorId] : [],
+  };
+}
+
+function createRoseColorNote(mode: RoseColorMode, colorIds: string[]) {
+  const uniqueColorIds = Array.from(new Set(colorIds.filter(Boolean)));
+
+  if (mode === "multiple") return `multi:${uniqueColorIds.join(",")}`;
+
+  return uniqueColorIds[0] || "";
+}
+
+function getFlowerPlacement(value?: string): FlowerPlacementId {
+  const placement = FLOWER_PLACEMENT_OPTIONS.find(
+    (option) => option.id === value
+  );
+
+  return placement?.id || "standaard";
+}
 
 function normalizeDateSearchInput(value: string) {
   const trimmed = value.trim();
@@ -537,6 +615,7 @@ function DecorationOptionCard({
   selected,
   quantity,
   colorNote,
+  children,
   onToggle,
   onQuantityChange,
   onColorNoteChange,
@@ -545,6 +624,7 @@ function DecorationOptionCard({
   selected: boolean;
   quantity: number;
   colorNote?: string;
+  children?: ReactNode;
   onToggle: () => void;
   onQuantityChange: (quantity: number) => void;
   onColorNoteChange?: (color: string) => void;
@@ -666,6 +746,134 @@ function DecorationOptionCard({
           )}
         </div>
       )}
+      {selected && children}
+    </div>
+  );
+}
+
+function RoseColorControls({
+  colorNote,
+  onChange,
+}: {
+  colorNote?: string;
+  onChange: (note: string) => void;
+}) {
+  const selection = parseRoseColorNote(colorNote);
+  const selectedColorIds = selection.colorIds;
+
+  function setMode(mode: RoseColorMode) {
+    onChange(createRoseColorNote(mode, selectedColorIds));
+  }
+
+  function setSingleColor(colorId: string) {
+    onChange(createRoseColorNote("same", colorId ? [colorId] : []));
+  }
+
+  function toggleColor(colorId: string) {
+    const nextColorIds = selectedColorIds.includes(colorId)
+      ? selectedColorIds.filter((id) => id !== colorId)
+      : [...selectedColorIds, colorId];
+
+    onChange(createRoseColorNote("multiple", nextColorIds));
+  }
+
+  return (
+    <div className="mt-4 grid gap-3 rounded-2xl border border-[#cfdcc8] bg-white/70 p-3">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {(["same", "multiple"] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => setMode(mode)}
+            className={`rounded-full px-3 py-2 text-xs font-black shadow-sm ${
+              selection.mode === mode
+                ? "bg-[#c3d3bc] text-[#2d2a26]"
+                : "bg-white text-[#2d2a26]/55"
+            }`}
+          >
+            {mode === "same" ? "Allemaal dezelfde kleur" : "Meerdere kleuren"}
+          </button>
+        ))}
+      </div>
+
+      {selection.mode === "same" ? (
+        <label className="grid gap-2 text-sm font-black text-[#2d2a26]/70">
+          Kleur roosjes
+          <select
+            value={selectedColorIds[0] || ""}
+            onChange={(event) => setSingleColor(event.target.value)}
+            className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+          >
+            <option value="">Kies kleur</option>
+            {roseColorOptions.map((color) => (
+              <option key={color.id} value={color.id}>
+                {color.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <div className="grid gap-2">
+          <p className="text-sm font-black text-[#2d2a26]/70">
+            Kleuren roosjes
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {roseColorOptions.map((color) => (
+              <label
+                key={color.id}
+                className={`flex cursor-pointer items-center gap-2 rounded-2xl border p-2 text-xs font-black ${
+                  selectedColorIds.includes(color.id)
+                    ? "border-[#8fb184] bg-[#dce8d6]"
+                    : "border-[#e7e0d8] bg-white"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedColorIds.includes(color.id)}
+                  onChange={() => toggleColor(color.id)}
+                  className="sr-only"
+                />
+                <span
+                  className="h-5 w-5 shrink-0 rounded-full border shadow-inner"
+                  style={{
+                    backgroundColor: color.swatchColor || "#fff",
+                    borderColor:
+                      color.swatchBorder || "rgba(45, 42, 38, 0.12)",
+                  }}
+                />
+                <span className="min-w-0 truncate">{color.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FlowerPlacementControls({
+  value,
+  onChange,
+}: {
+  value: FlowerPlacementId;
+  onChange: (value: FlowerPlacementId) => void;
+}) {
+  return (
+    <div className="mt-4 grid gap-2 rounded-2xl border border-[#cfdcc8] bg-white/70 p-3">
+      {FLOWER_PLACEMENT_OPTIONS.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() => onChange(option.id)}
+          className={`rounded-2xl border p-3 text-left text-sm font-black shadow-sm ${
+            value === option.id
+              ? "border-[#8fb184] bg-[#dce8d6]"
+              : "border-[#e7e0d8] bg-white"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -991,17 +1199,54 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const topperTotalWidth =
     topperVisuals.reduce((total, item) => total + item.width * topperScale, 0) +
     Math.max(0, topperVisuals.length - 1) * topperGap;
-  const roseTintFilters = ROSE_DECORATION_IDS.map((roseId) => ({
-    roseId,
-    color: findColorOptionByNote(config.decorationColorNotes?.[roseId]),
-  })).filter(
+  const roseTintFilters = ROSE_DECORATION_IDS.flatMap((roseId) => {
+    const colorIds = parseRoseColorNote(
+      config.decorationColorNotes?.[roseId]
+    ).colorIds;
+
+    return colorIds.flatMap((colorId) => {
+      const color = findOption(colorOptions, colorId);
+
+      return color?.swatchColor
+        ? [{ roseId, colorId: color.id, color }]
+        : [];
+    });
+  }).filter(
     (
-      item
+      item,
+      index,
+      items
     ): item is {
       roseId: string;
+      colorId: string;
       color: StudioOption & { swatchColor: string };
-    } => Boolean(item.color?.swatchColor)
+    } =>
+      Boolean(item.color.swatchColor) &&
+      items.findIndex(
+        (entry) => entry.roseId === item.roseId && entry.colorId === item.colorId
+      ) === index
   );
+
+  function roseTintFilterId(roseId: string, colorId: string) {
+    return `${visualizerId}-rose-tint-${roseId}-${colorId}`;
+  }
+
+  function roseTintForPlacement(roseId: string, itemIndex: number) {
+    const colorIds = parseRoseColorNote(
+      config.decorationColorNotes?.[roseId]
+    ).colorIds;
+    if (!colorIds.length) return undefined;
+
+    const colorId = colorIds[itemIndex % colorIds.length];
+    const color = findOption(colorOptions, colorId);
+
+    return color?.swatchColor
+      ? {
+          color,
+          filterId: roseTintFilterId(roseId, color.id),
+        }
+      : undefined;
+  }
 
   type DecorEdge = "top" | "bottom" | "left" | "right";
   type VisualRect = { x1: number; y1: number; x2: number; y2: number };
@@ -1032,6 +1277,16 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     tintFilterId?: string;
     baseOpacity?: number;
     kind: "flower" | "fruit" | "rose" | "gold";
+  };
+  type GypsophilaPlacement = {
+    key: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotate?: number;
+    opacity?: number;
+    edge: DecorEdge;
   };
 
   function clampVisual(value: number, min: number, max: number) {
@@ -1249,6 +1504,41 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     );
   }
 
+  function renderMarzipanBand(
+    layerId: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    layerColor?: StudioOption
+  ) {
+    if (!selectedDecorations.has("marsepein-icing-band")) return null;
+
+    const bandColor =
+      layerColor && isWhiteDecorationBase(layerColor) ? "#f5efe3" : "#e9d8bd";
+    const strokeColor =
+      layerColor && isWhiteDecorationBase(layerColor) ? "#d7cbb9" : "#cdb999";
+
+    return (
+      <g key={`${layerId}-marzipan-band`}>
+        <path
+          d={`M ${x + 3} ${y + height - 5.5} H ${x + width - 3}`}
+          stroke={strokeColor}
+          strokeLinecap="round"
+          strokeWidth="5.2"
+          opacity="0.42"
+        />
+        <path
+          d={`M ${x + 4} ${y + height - 5.7} H ${x + width - 4}`}
+          stroke={bandColor}
+          strokeLinecap="round"
+          strokeWidth="3.2"
+          opacity="0.9"
+        />
+      </g>
+    );
+  }
+
   function imagePlacement(placement: AssetPlacement) {
     const rotate = placement.rotate || 0;
     const centerX = placement.x + placement.width / 2;
@@ -1291,6 +1581,65 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     );
   }
 
+  function gypsophilaPlacement(placement: GypsophilaPlacement) {
+    const rotate = placement.rotate || 0;
+    const centerX = placement.x + placement.width / 2;
+    const centerY = placement.y + placement.height / 2;
+    const stems = [
+      { x1: 0.52, y1: 0.88, x2: 0.28, y2: 0.22, r: 1.15 },
+      { x1: 0.5, y1: 0.9, x2: 0.45, y2: 0.12, r: 1.05 },
+      { x1: 0.48, y1: 0.9, x2: 0.62, y2: 0.2, r: 1.2 },
+      { x1: 0.5, y1: 0.9, x2: 0.76, y2: 0.32, r: 0.98 },
+      { x1: 0.51, y1: 0.88, x2: 0.36, y2: 0.38, r: 0.9 },
+    ];
+
+    return (
+      <g
+        key={placement.key}
+        transform={`rotate(${rotate} ${centerX} ${centerY})`}
+        opacity={placement.opacity ?? 1}
+      >
+        {stems.map((stem, index) => {
+          const x1 = placement.x + placement.width * stem.x1;
+          const y1 = placement.y + placement.height * stem.y1;
+          const x2 = placement.x + placement.width * stem.x2;
+          const y2 = placement.y + placement.height * stem.y2;
+
+          return (
+            <g key={`${placement.key}-stem-${index}`}>
+              <path
+                d={`M ${x1} ${y1} Q ${placement.x + placement.width * 0.5} ${
+                  placement.y + placement.height * 0.48
+                } ${x2} ${y2}`}
+                fill="none"
+                stroke="#88a66d"
+                strokeWidth="0.34"
+                opacity="0.68"
+              />
+              <circle
+                cx={x2}
+                cy={y2}
+                r={stem.r}
+                fill="#fffef5"
+                stroke="#d8dfc4"
+                strokeWidth="0.22"
+              />
+              <circle
+                cx={x2 + 1.2}
+                cy={y2 + 1.4}
+                r={stem.r * 0.72}
+                fill="#fffdf2"
+                stroke="#d8dfc4"
+                strokeWidth="0.16"
+                opacity="0.92"
+              />
+            </g>
+          );
+        })}
+      </g>
+    );
+  }
+
   function renderLayerDecorations(
     layerId: string,
     index: number,
@@ -1307,6 +1656,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     const fruits: AssetPlacement[] = [];
     const roses: AssetPlacement[] = [];
     const gold: AssetPlacement[] = [];
+    const gypsophila: GypsophilaPlacement[] = [];
 
     function placementIsClear(
       placement: AssetPlacement,
@@ -1385,6 +1735,27 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
       list.push(placement);
       placedRects.push(placementRect(placement));
+      return true;
+    }
+
+    function addGypsophilaPlacement(
+      placement: GypsophilaPlacement,
+      options: {
+        allowOverlap?: boolean;
+        allowText?: boolean;
+        allowTopper?: boolean;
+      } = {}
+    ) {
+      const checkPlacement: AssetPlacement = {
+        ...placement,
+        asset: "",
+        kind: "flower",
+      };
+
+      if (!placementIsClear(checkPlacement, options)) return false;
+
+      gypsophila.push(placement);
+      placedRects.push(placementRect(checkPlacement));
       return true;
     }
 
@@ -1526,11 +1897,45 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     function addFlower() {
       if (!selectedDecorations.has("echte-bloemen")) return;
 
+      const flowerPlacement = getFlowerPlacement(
+        config.decorationColorNotes?.[FLOWER_PLACEMENT_NOTE_ID]
+      );
       const flowerBaseHeight = clampVisual(
         width * (isTopLayer ? 0.18 : 0.19),
         28,
         isTopLayer ? 42 : 48
       );
+
+      if (flowerPlacement === "waterval") {
+        const waterfallEdge: "left" | "right" = "right";
+        const waterfallRatios = isTopLayer ? [0.1, 0.34] : [0.16, 0.52, 0.84];
+
+        waterfallRatios.forEach((ratio, item) => {
+          const flowerHeight = flowerBaseHeight * [1.05, 0.88, 0.72][item % 3];
+          const flowerWidth = flowerHeight * 1.14;
+          const placement = edgePlacement({
+            key: `${layerId}-flower-waterfall-${item}`,
+            asset: REAL_FLOWER_ASSET,
+            edge: waterfallEdge,
+            ratio,
+            assetWidth: flowerWidth,
+            assetHeight: flowerHeight,
+            rotate: 10 - item * 5,
+            opacity: 0.96,
+            kind: "flower",
+            sideOffset: flowerWidth * (0.08 - item * 0.025),
+            flipX: true,
+          });
+
+          addPlacement(flowers, placement, {
+            allowOverlap: true,
+            allowText: true,
+          });
+        });
+
+        return;
+      }
+
       const firstEdge: "left" | "right" = index % 2 ? "right" : "left";
       const secondEdge: "left" | "right" =
         firstEdge === "left" ? "right" : "left";
@@ -1605,6 +2010,81 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       });
     }
 
+    function addGypsophila() {
+      if (!selectedDecorations.has("gipskruid")) return;
+
+      const flowerPlacement = getFlowerPlacement(
+        config.decorationColorNotes?.[FLOWER_PLACEMENT_NOTE_ID]
+      );
+      const gypsophilaHeight = clampVisual(
+        width * (isTopLayer ? 0.12 : 0.13),
+        18,
+        isTopLayer ? 28 : 32
+      );
+      const gypsophilaWidth = gypsophilaHeight * 1.2;
+      const useWaterfall =
+        flowerPlacement === "waterval" && selectedDecorations.has("echte-bloemen");
+      const plans: Array<{
+        edge: "left" | "right";
+        ratio: number;
+        rotate: number;
+        flipOffset: number;
+      }> = useWaterfall
+        ? [
+            { edge: "right", ratio: isTopLayer ? 0.2 : 0.28, rotate: 12, flipOffset: 0.06 },
+            { edge: "right", ratio: isTopLayer ? 0.48 : 0.66, rotate: 2, flipOffset: 0.02 },
+          ]
+        : [
+            {
+              edge: index % 2 ? "right" : "left",
+              ratio: isTopLayer ? 0.3 : 0.24,
+              rotate: index % 2 ? 12 : -12,
+              flipOffset: 0.02,
+            },
+            {
+              edge: index % 2 ? "left" : "right",
+              ratio: 0.62,
+              rotate: index % 2 ? -8 : 8,
+              flipOffset: -0.02,
+            },
+          ];
+
+      plans.forEach((plan, item) => {
+        const base = edgePlacement({
+          key: `${layerId}-gypsophila-anchor-${item}`,
+          asset: "",
+          edge: plan.edge,
+          ratio: plan.ratio,
+          assetWidth: gypsophilaWidth,
+          assetHeight: gypsophilaHeight,
+          rotate: plan.rotate,
+          opacity: 0.94,
+          kind: "flower",
+          sideOffset:
+            (plan.edge === "left" ? -1 : 1) *
+            gypsophilaWidth *
+            plan.flipOffset,
+        });
+
+        addGypsophilaPlacement(
+          {
+            key: `${layerId}-gypsophila-${item}`,
+            x: base.x,
+            y: base.y,
+            width: base.width,
+            height: base.height,
+            rotate: base.rotate,
+            opacity: base.opacity,
+            edge: base.edge,
+          },
+          {
+            allowOverlap: true,
+            allowText: true,
+          }
+        );
+      });
+    }
+
     function addFruit() {
       if (!selectedDecorations.has("rood-fruit")) return;
 
@@ -1622,7 +2102,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         selectedDecorations.has(roseId)
       );
       const separatedTopFruitRatios = selectedRoseId
-        ? selectedRoseId === "marsepeinrozen-met-blad"
+        ? roseHasLeaf(selectedRoseId)
           ? [0.12]
           : [0.88]
         : topBlockedByTopper
@@ -1688,26 +2168,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         );
         if (!remaining) return;
 
-        const roseSize = clampVisual(width * 0.114, 17, 23.2);
+        const baseRoseSize = clampVisual(width * 0.114, 17, 23.2);
+        const roseSize = baseRoseSize * (isLargeRoseDecorationId(roseId) ? 3 : 1);
         const roseGap = roseSize * 0.66;
-        const asset =
-          roseId === "marsepeinrozen-met-blad"
-            ? ROSE_WITH_LEAF_ASSET
-            : ROSE_WITHOUT_LEAF_ASSET;
-        const roseTintColor = findColorOptionByNote(
-          config.decorationColorNotes?.[roseId]
-        );
-        const roseTintFilterId = roseTintColor?.swatchColor
-          ? `${visualizerId}-rose-tint-${roseId}`
-          : undefined;
-        const roseTintAsset = roseTintFilterId
-          ? ROSE_WITHOUT_LEAF_ASSET
-          : undefined;
-        const roseBaseOpacity = roseTintFilterId
-          ? roseId === "marsepeinrozen-met-blad"
-            ? 1
-            : 0.14
-          : undefined;
+        const asset = roseAssetForId(roseId);
         const topCapacity = Math.max(
           1,
           Math.floor(
@@ -1783,6 +2247,16 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           });
 
           Array.from({ length: plan.count }, (_item, item) => {
+            const roseTint = roseTintForPlacement(
+              roseId,
+              planIndex * plan.count + item
+            );
+            const roseTintAsset = roseTint ? ROSE_WITHOUT_LEAF_ASSET : undefined;
+            const roseBaseOpacity = roseTint
+              ? roseHasLeaf(roseId)
+                ? 1
+                : 0.14
+              : undefined;
             const placement: AssetPlacement = horizontal
               ? {
                   ...rowCenter,
@@ -1793,7 +2267,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   rotate: [-4, 3, -1, 5][(item + variantIndex) % 4],
                   opacity: 0.98,
                   tintAsset: roseTintAsset,
-                  tintFilterId: roseTintFilterId,
+                  tintFilterId: roseTint?.filterId,
                   baseOpacity: roseBaseOpacity,
                 }
               : {
@@ -1808,7 +2282,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                       : 8 - (item % 2) * 5,
                   opacity: 0.98,
                   tintAsset: roseTintAsset,
-                  tintFilterId: roseTintFilterId,
+                  tintFilterId: roseTint?.filterId,
                   baseOpacity: roseBaseOpacity,
                 };
 
@@ -1896,6 +2370,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
     addFruit();
     addRoseRows();
+    addGypsophila();
     addFlower();
     addGoldAccents();
 
@@ -1926,6 +2401,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         {gold.map((placement) => imagePlacement(placement))}
         {fruits.map((placement) => imagePlacement(placement))}
         {roses.map((placement) => imagePlacement(placement))}
+        {gypsophila.map((placement) => gypsophilaPlacement(placement))}
         {flowers.map((placement) => imagePlacement(placement))}
       </>
     );
@@ -2142,8 +2618,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           </filter>
           {roseTintFilters.map((item) => (
             <filter
-              key={item.roseId}
-              id={`${visualizerId}-rose-tint-${item.roseId}`}
+              key={`${item.roseId}-${item.colorId}`}
+              id={roseTintFilterId(item.roseId, item.colorId)}
               colorInterpolationFilters="sRGB"
             >
               <feColorMatrix
@@ -2308,7 +2784,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             ? getLayerColor(config, layer.id)
             : undefined;
 
-          return renderPearlBorder(layer.id, x, y, width, height, layerColor);
+          return (
+            <g key={`${layer.id}-border`}>
+              {renderMarzipanBand(layer.id, x, y, width, height, layerColor)}
+              {renderPearlBorder(layer.id, x, y, width, height, layerColor)}
+            </g>
+          );
         })}
         {visualLayers.map((layer, index) => {
           const width = layerWidth(layer.persons);
@@ -2409,6 +2890,41 @@ function parseEuroAmount(value: string) {
   return Math.max(0, Math.round(amount * 100) / 100);
 }
 
+function getAllowedBorderDecorationIds(styleId: WeddingCakeConfig["styleId"]) {
+  if (styleId === "klassiek") return ["marsepein-icing-band", "creme-parelrand"];
+  if (styleId === "vanille-creme" || styleId === "naked") {
+    return ["geen-rand", "creme-parelrand"];
+  }
+
+  return [];
+}
+
+function getDefaultBorderDecorationId(styleId: WeddingCakeConfig["styleId"]) {
+  if (styleId === "klassiek") return "marsepein-icing-band";
+  if (styleId === "vanille-creme" || styleId === "naked") return "geen-rand";
+
+  return "";
+}
+
+function normalizeDecorationIdsForStyle(
+  decorationIds: string[],
+  styleId: WeddingCakeConfig["styleId"]
+) {
+  const allowedBorderIds = getAllowedBorderDecorationIds(styleId);
+  const selectedBorderId = decorationIds.find(
+    (id) => BORDER_DECORATION_IDS.includes(id) && allowedBorderIds.includes(id)
+  );
+  const fallbackBorderId = getDefaultBorderDecorationId(styleId);
+  const nonBorderIds = decorationIds.filter(
+    (id) => !BORDER_DECORATION_IDS.includes(id)
+  );
+
+  return [
+    selectedBorderId || fallbackBorderId,
+    ...nonBorderIds,
+  ].filter(Boolean);
+}
+
 function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
   return {
     ...initialWeddingCakeConfig,
@@ -2468,6 +2984,29 @@ export default function BruidstaartStudioConfigurator() {
   const decorationColorNotes = useMemo(
     () => getDecorationColorNotes(config),
     [config]
+  );
+  const borderDecorationOptions = useMemo(
+    () =>
+      decorationOptions.filter(
+        (option) =>
+          BORDER_DECORATION_IDS.includes(option.id) &&
+          isOptionAllowedForStyle(option, config.styleId)
+      ),
+    [config.styleId]
+  );
+  const flowerDecorationOptions = useMemo(
+    () =>
+      decorationOptions.filter((option) =>
+        FLOWER_DECORATION_IDS.includes(option.id)
+      ),
+    []
+  );
+  const accentDecorationOptions = useMemo(
+    () =>
+      decorationOptions.filter((option) =>
+        ACCENT_DECORATION_IDS.includes(option.id)
+      ),
+    []
   );
 
   function layerOptionIdsForSize(
@@ -2633,8 +3172,27 @@ export default function BruidstaartStudioConfigurator() {
           layoutOptions,
           styleId
         ),
+        decorationIds: normalizeDecorationIdsForStyle(
+          current.decorationIds,
+          styleId
+        ),
       };
     });
+  }
+
+  function setBorderDecoration(id: string) {
+    const allowedBorderIds = getAllowedBorderDecorationIds(config.styleId);
+    if (!allowedBorderIds.includes(id)) return;
+
+    setConfig((current) => ({
+      ...current,
+      decorationIds: [
+        id,
+        ...current.decorationIds.filter(
+          (decorationId) => !BORDER_DECORATION_IDS.includes(decorationId)
+        ),
+      ],
+    }));
   }
 
   function toggleDecoration(id: string) {
@@ -2646,30 +3204,25 @@ export default function BruidstaartStudioConfigurator() {
       let nextDecorationIds = current.decorationIds;
       const nextQuantities = { ...current.decorationQuantities };
       const nextColorNotes = { ...(current.decorationColorNotes || {}) };
-      const existingRoseQuantity = ROSE_DECORATION_IDS.map(
-        (roseId) => current.decorationQuantities?.[roseId]
-      ).find((quantity) => Number.isFinite(quantity));
 
       if (isSelected) {
         nextDecorationIds = nextDecorationIds.filter((item) => item !== id);
         delete nextQuantities[id];
         delete nextColorNotes[id];
-      } else {
-        if (option.selectionGroup === "marzipanRoses") {
-          nextDecorationIds = nextDecorationIds.filter(
-            (item) => !ROSE_DECORATION_IDS.includes(item)
-          );
-          ROSE_DECORATION_IDS.forEach((roseId) => delete nextQuantities[roseId]);
-          ROSE_DECORATION_IDS.forEach((roseId) => delete nextColorNotes[roseId]);
+        if (id === "echte-bloemen") {
+          delete nextColorNotes[FLOWER_PLACEMENT_NOTE_ID];
         }
-
+      } else {
         nextDecorationIds = [...nextDecorationIds, id];
 
         if (option.quantityLabel) {
           nextQuantities[id] =
-            current.decorationQuantities?.[id] ||
-            existingRoseQuantity ||
-            DEFAULT_ROSE_QUANTITY;
+            current.decorationQuantities?.[id] || DEFAULT_ROSE_QUANTITY;
+        }
+
+        if (id === "echte-bloemen") {
+          nextColorNotes[FLOWER_PLACEMENT_NOTE_ID] =
+            nextColorNotes[FLOWER_PLACEMENT_NOTE_ID] || "standaard";
         }
       }
 
@@ -3034,6 +3587,10 @@ export default function BruidstaartStudioConfigurator() {
 
     setConfig({
       ...nextConfig,
+      decorationIds: normalizeDecorationIdsForStyle(
+        nextConfig.decorationIds,
+        nextConfig.styleId
+      ),
       layerFillingIds: layerFillingIdsForSize(nextConfig.sizeId, nextConfig),
       layerColorIds: layerColorIdsForSize(nextConfig.sizeId, nextConfig),
       layerLayoutIds: layerLayoutIdsForSize(nextConfig.sizeId, nextConfig),
@@ -3556,24 +4113,99 @@ export default function BruidstaartStudioConfigurator() {
 
           {step.id === "decoratie" && (
             <div className="grid gap-3">
-              {decorationOptions.map((option) => (
-                <DecorationOptionCard
-                  key={option.id}
-                  option={option}
-                  selected={config.decorationIds.includes(option.id)}
-                  quantity={getDecorationQuantity(config, option.id)}
-                  colorNote={config.decorationColorNotes?.[option.id] || ""}
-                  onToggle={() => toggleDecoration(option.id)}
-                  onQuantityChange={(quantity) =>
-                    setDecorationQuantity(option.id, quantity)
-                  }
-                  onColorNoteChange={
-                    ROSE_DECORATION_IDS.includes(option.id)
-                      ? (color) => setDecorationColorNote(option.id, color)
-                      : undefined
-                  }
-                />
-              ))}
+              <section className="grid gap-3">
+                <div>
+                  <p className="text-sm font-black text-[#2d2a26]">Rand</p>
+                  <p className="mt-1 text-sm font-semibold text-[#2d2a26]/55">
+                    Kies één randoptie.
+                  </p>
+                </div>
+                {borderDecorationOptions.length ? (
+                  <div className="grid gap-3">
+                    {borderDecorationOptions.map((option) => (
+                      <OptionCard
+                        key={option.id}
+                        option={option}
+                        selected={config.decorationIds.includes(option.id)}
+                        onClick={() => setBorderDecoration(option.id)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-[1.4rem] bg-[#f8f6f3] p-4 text-sm font-bold text-[#2d2a26]/55">
+                    Kies eerst een stijl. Daarna verschijnen de juiste
+                    randopties.
+                  </p>
+                )}
+              </section>
+
+              <section className="mt-3 grid gap-3 border-t border-[#e7e0d8] pt-5">
+                <div>
+                  <p className="text-sm font-black text-[#2d2a26]">Bloemen</p>
+                  <p className="mt-1 text-sm font-semibold text-[#2d2a26]/55">
+                    Roosjes, gipskruid en echte bloemen.
+                  </p>
+                </div>
+                {flowerDecorationOptions.map((option) => (
+                  <DecorationOptionCard
+                    key={option.id}
+                    option={option}
+                    selected={config.decorationIds.includes(option.id)}
+                    quantity={getDecorationQuantity(config, option.id)}
+                    colorNote={config.decorationColorNotes?.[option.id] || ""}
+                    onToggle={() => toggleDecoration(option.id)}
+                    onQuantityChange={(quantity) =>
+                      setDecorationQuantity(option.id, quantity)
+                    }
+                  >
+                    {isRoseDecorationId(option.id) && (
+                      <RoseColorControls
+                        colorNote={config.decorationColorNotes?.[option.id]}
+                        onChange={(note) =>
+                          setDecorationColorNote(option.id, note)
+                        }
+                      />
+                    )}
+                    {option.id === "echte-bloemen" && (
+                      <FlowerPlacementControls
+                        value={getFlowerPlacement(
+                          config.decorationColorNotes?.[
+                            FLOWER_PLACEMENT_NOTE_ID
+                          ]
+                        )}
+                        onChange={(placement) =>
+                          setDecorationColorNote(
+                            FLOWER_PLACEMENT_NOTE_ID,
+                            placement
+                          )
+                        }
+                      />
+                    )}
+                  </DecorationOptionCard>
+                ))}
+              </section>
+
+              <section className="mt-3 grid gap-3 border-t border-[#e7e0d8] pt-5">
+                <div>
+                  <p className="text-sm font-black text-[#2d2a26]">
+                    Rood fruit en bladgoud
+                  </p>
+                </div>
+                {accentDecorationOptions.map((option) => (
+                  <DecorationOptionCard
+                    key={option.id}
+                    option={option}
+                    selected={config.decorationIds.includes(option.id)}
+                    quantity={getDecorationQuantity(config, option.id)}
+                    colorNote={config.decorationColorNotes?.[option.id] || ""}
+                    onToggle={() => toggleDecoration(option.id)}
+                    onQuantityChange={(quantity) =>
+                      setDecorationQuantity(option.id, quantity)
+                    }
+                  />
+                ))}
+              </section>
+
               <section className="grid gap-3 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>

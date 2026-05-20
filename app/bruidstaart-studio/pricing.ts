@@ -100,11 +100,27 @@ export function getDecorationSurcharges(config: WeddingCakeConfig) {
   );
 }
 
-function getDecorationColorLabel(value: string) {
+function getDecorationColorLabel(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "";
 
+  if (trimmed.startsWith("multi:")) {
+    return trimmed
+      .slice(6)
+      .split(",")
+      .map((item) => getDecorationColorLabel(item))
+      .filter(Boolean)
+      .join(", ");
+  }
+
   return findOption(colorOptions, trimmed)?.label || trimmed;
+}
+
+function getFlowerPlacementLabel(value: string) {
+  if (value === "waterval") return "waterval plaatsing";
+  if (value === "specifiek") return "specifieke plaatsen in opmerking";
+
+  return "standaard plaatsing door Strik";
 }
 
 export function getDecorationColorNotes(config: WeddingCakeConfig) {
@@ -428,14 +444,29 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
       config.decorationColorNotes?.[id] || ""
     );
     const colorSuffix = color ? `, kleur: ${color}` : "";
+    const placementSuffix =
+      id === "echte-bloemen"
+        ? `, ${getFlowerPlacementLabel(
+            config.decorationColorNotes?.["echte-bloemen-plaatsing"] || ""
+          )}`
+        : "";
 
     if (decoration.quantityLabel) {
       return [
-        `${decoration.label} (${getDecorationQuantity(config, id)}x${colorSuffix})`,
+        `${decoration.label} (${getDecorationQuantity(
+          config,
+          id
+        )}x${colorSuffix})`,
       ];
     }
 
-    return [color ? `${decoration.label} (${color})` : decoration.label];
+    return color || placementSuffix
+      ? [
+          `${decoration.label} (${[color, placementSuffix.replace(/^, /, "")]
+            .filter(Boolean)
+            .join(", ")})`,
+        ]
+      : [decoration.label];
   });
 
   return {

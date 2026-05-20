@@ -652,30 +652,62 @@ export const layoutOptions: StudioOption[] = [
 
 export const decorationOptions: StudioOption[] = [
   {
+    id: "marsepein-icing-band",
+    label: "Marsepein/icing band",
+    description: "Standaard rand bij klassieke bruidstaarten.",
+    allowedStyles: ["klassiek"],
+    price: { mode: "included", amount: 0 },
+  },
+  {
+    id: "geen-rand",
+    label: "Standaard geen rand",
+    description: "Standaard bij crème en naked taarten.",
+    allowedStyles: ["vanille-creme", "naked"],
+    price: { mode: "included", amount: 0 },
+  },
+  {
     id: "creme-parelrand",
     label: "Crèmekleurige parelrand",
     price: { mode: "perPerson", amount: 0.15 },
   },
   {
     id: "marsepeinrozen-zonder-blad",
-    label: "Marsepeinroosjes zonder blad",
+    label: "Kleine marsepeinroosjes zonder blad",
     description: "Geef het aantal roosjes op.",
-    price: { mode: "fixed", amount: 1, label: "per roosje" },
-    selectionGroup: "marzipanRoses",
+    price: { mode: "fixed", amount: 1.5, label: "per roosje" },
     quantityLabel: "Aantal roosjes",
   },
   {
     id: "marsepeinrozen-met-blad",
-    label: "Marsepeinroosjes met groen blad",
+    label: "Kleine marsepeinroosjes met groen blad",
     description: "Geef het aantal roosjes op.",
     price: { mode: "fixed", amount: 1.5, label: "per roosje" },
-    selectionGroup: "marzipanRoses",
     quantityLabel: "Aantal roosjes",
+  },
+  {
+    id: "grote-marsepeinrozen-zonder-blad",
+    label: "Grote marsepeinrozen zonder blad",
+    description: "Grote rozen, ongeveer 3x zo groot in de schets.",
+    price: { mode: "fixed", amount: 4.5, label: "per roos" },
+    quantityLabel: "Aantal rozen",
+  },
+  {
+    id: "grote-marsepeinrozen-met-blad",
+    label: "Grote marsepeinrozen met groen blad",
+    description: "Grote rozen, ongeveer 3x zo groot in de schets.",
+    price: { mode: "fixed", amount: 4.5, label: "per roos" },
+    quantityLabel: "Aantal rozen",
+  },
+  {
+    id: "gipskruid",
+    label: "Gipskruid",
+    description: "Kleine witte bloemetjes bij de bloemdecoratie.",
+    price: { mode: "perPerson", amount: 0.25 },
   },
   {
     id: "echte-bloemen",
     label: "Echte bloemen",
-    description: "Zelf aanleveren; waterval of verspreid in opmerkingen.",
+    description: "Zelf aanleveren, plaatsing naar keuze.",
     price: { mode: "included", amount: 0 },
   },
   {
