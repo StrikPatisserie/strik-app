@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import {
   cakeSizes,
   cakeStyles,
@@ -693,6 +693,8 @@ function TrashIcon() {
 
 function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const visualizerId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [downloadStatus, setDownloadStatus] = useState("");
   const size = findOption(cakeSizes, config.sizeId);
   const layers = getCakeLayers(config);
   const visualLayers = layers.reduce<
@@ -1929,6 +1931,125 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     );
   }
 
+  function getDownloadFilename(extension: "png" | "svg") {
+    const code = config.contact.recognitionCode
+      .trim()
+      .replace(/[^a-z0-9_-]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+
+    return `bruidstaart-schets${code ? `-${code}` : ""}.${extension}`;
+  }
+
+  function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function imageHrefToDataUrl(href: string) {
+    const absoluteHref = href.startsWith("/")
+      ? `${window.location.origin}${href}`
+      : href;
+    const response = await fetch(absoluteHref);
+    const blob = await response.blob();
+
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function createDownloadSvgBlob() {
+    if (!svgRef.current) return null;
+
+    const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("width", "1040");
+    clone.setAttribute("height", "1120");
+    clone.setAttribute("color", "#1f1d1a");
+
+    await Promise.all(
+      Array.from(clone.querySelectorAll("image")).map(async (image) => {
+        const href =
+          image.getAttribute("href") || image.getAttribute("xlink:href");
+
+        if (!href || href.startsWith("data:")) return;
+
+        try {
+          image.setAttribute("href", await imageHrefToDataUrl(href));
+        } catch {
+          if (href.startsWith("/")) {
+            image.setAttribute("href", `${window.location.origin}${href}`);
+          }
+        }
+      })
+    );
+
+    const serializedSvg = new XMLSerializer().serializeToString(clone);
+
+    return new Blob([serializedSvg], {
+      type: "image/svg+xml;charset=utf-8",
+    });
+  }
+
+  async function downloadVisualizerImage() {
+    setDownloadStatus("Download maken...");
+
+    try {
+      const svgBlob = await createDownloadSvgBlob();
+      if (!svgBlob) return;
+
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const image = new window.Image();
+      const pngBlob = await new Promise<Blob | null>((resolve) => {
+        image.onload = () => {
+          const canvas = document.createElement("canvas");
+          const scale = 4;
+
+          canvas.width = 260 * scale;
+          canvas.height = 280 * scale;
+
+          const context = canvas.getContext("2d");
+          if (!context) {
+            resolve(null);
+            return;
+          }
+
+          context.fillStyle = "#fffdf8";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => resolve(blob), "image/png", 0.98);
+        };
+        image.onerror = () => resolve(null);
+        image.src = svgUrl;
+      });
+
+      URL.revokeObjectURL(svgUrl);
+
+      if (pngBlob) {
+        downloadBlob(pngBlob, getDownloadFilename("png"));
+      } else {
+        downloadBlob(svgBlob, getDownloadFilename("svg"));
+      }
+
+      setDownloadStatus("Download gestart.");
+      window.setTimeout(() => setDownloadStatus(""), 1800);
+    } catch {
+      setDownloadStatus("Download lukt nu niet.");
+      window.setTimeout(() => setDownloadStatus(""), 2200);
+    }
+  }
+
   return (
     <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-[#fffdf8] p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -1940,25 +2061,35 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             {size ? `${size.label} · ${size.personsLabel}` : "Nog geen formaat"}
           </p>
         </div>
-        {uniqueLayerColors.length > 0 && (
-          <div className="flex shrink-0 -space-x-2">
-            {uniqueLayerColors.slice(0, 4).map((color) => (
-              <span
-                key={color.id}
-                className="h-8 w-8 rounded-full border-2 border-white shadow-sm"
-                style={{
-                  backgroundColor: color.swatchColor || "#fff",
-                  outline: `1px solid ${
-                    color.swatchBorder || "rgba(45, 42, 38, 0.18)"
-                  }`,
-                }}
-                title={color.label}
-              />
-            ))}
-          </div>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {uniqueLayerColors.length > 0 && (
+            <div className="flex -space-x-2">
+              {uniqueLayerColors.slice(0, 4).map((color) => (
+                <span
+                  key={color.id}
+                  className="h-8 w-8 rounded-full border-2 border-white shadow-sm"
+                  style={{
+                    backgroundColor: color.swatchColor || "#fff",
+                    outline: `1px solid ${
+                      color.swatchBorder || "rgba(45, 42, 38, 0.18)"
+                    }`,
+                  }}
+                  title={color.label}
+                />
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => void downloadVisualizerImage()}
+            className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm transition active:scale-[0.98]"
+          >
+            Download
+          </button>
+        </div>
       </div>
       <svg
+        ref={svgRef}
         viewBox="0 0 260 280"
         className="h-auto w-full text-[#1f1d1a]"
         aria-label="Bruidstaart visualisatie"
@@ -2242,6 +2373,11 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         Schets op basis van formaat, kleur, layout, decoratie en toppers. De
         echte afwerking blijft maatwerk.
       </p>
+      {downloadStatus && (
+        <p className="mt-2 text-xs font-black text-[#6f8b64]">
+          {downloadStatus}
+        </p>
+      )}
     </div>
   );
 }

@@ -9,6 +9,14 @@ import WinkelFeaturedCards from "./WinkelFeaturedCards";
 
 const items = [
   {
+    href: "/winkel/schoonmaak-registratie",
+    label: "Registratie",
+    title: "Schoonmaak & registratie",
+    description: "Temperatuurregistratie per winkel.",
+    icon: strikIcons.cleaning,
+    tone: "blue" as const,
+  },
+  {
     href: "/bruidstaarten",
     label: "Studio & agenda",
     title: "Bruidstaarten",
