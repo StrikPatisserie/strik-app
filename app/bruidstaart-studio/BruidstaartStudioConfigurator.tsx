@@ -99,6 +99,9 @@ const CREME_SMEAR_DICHT_ASSET = "/creme%20smeren_creme%20dicht.svg";
 const CREME_SMEAR_OPEN_ASSET = "/creme%20smeren_creme%20open.svg";
 const GOLD_LEAF_ASSET = "/bladgoud.svg";
 const INITIALS_SHIELD_ASSET = "/initialen%20op%20schild.svg";
+const CHOCO_LETTER_ASSET_PATH = "/choco-letters";
+const CHOCO_LETTER_ASPECT_RATIO = 0.68;
+const CHOCO_SPACE_RATIO = 0.32;
 
 type StepId =
   | "start"
@@ -497,6 +500,81 @@ function topperDecorationAsset(topperId: string) {
   }
 
   return "";
+}
+
+function normalizeChocoLetterText(value?: string) {
+  return (value || "").toUpperCase().replace(/[^A-Z\s]/g, "");
+}
+
+function chocoLetterTokens(text?: string) {
+  return normalizeChocoLetterText(text)
+    .split("")
+    .map((character) => (character === " " ? " " : character))
+    .filter((character) => character === " " || /^[A-Z]$/.test(character));
+}
+
+function ChocoLetterMonogram({
+  text,
+  centerX,
+  y,
+  size,
+  letterSpacing = -2,
+  scale = 1,
+  maxWidth,
+}: {
+  text?: string;
+  centerX: number;
+  y: number;
+  size: number;
+  letterSpacing?: number;
+  scale?: number;
+  maxWidth: number;
+}) {
+  const tokens = chocoLetterTokens(text);
+  const letterCount = tokens.filter((token) => token !== " ").length;
+
+  if (!letterCount) return null;
+
+  const steps = tokens.map((token) =>
+    token === " " ? size * CHOCO_SPACE_RATIO : size * CHOCO_LETTER_ASPECT_RATIO
+  );
+  const rawWidth =
+    steps.reduce((total, step) => total + step, 0) +
+    Math.max(0, tokens.length - 1) * letterSpacing;
+  const longTextScale =
+    letterCount > 3 ? Math.max(0.52, 3 / letterCount) : 1;
+  const finalScale = Math.min(
+    scale * longTextScale,
+    maxWidth / Math.max(1, rawWidth)
+  );
+  const groupX = centerX - (rawWidth * finalScale) / 2;
+  const placements = tokens.map((token, index) => ({
+    token,
+    width: steps[index],
+    x:
+      steps.slice(0, index).reduce((total, step) => total + step, 0) +
+      index * letterSpacing,
+  }));
+
+  return (
+    <g transform={`translate(${groupX} ${y}) scale(${finalScale})`}>
+      {placements.map((placement, index) => {
+        if (placement.token === " ") return null;
+
+        return (
+          <image
+            key={`${placement.token}-${index}`}
+            href={`${CHOCO_LETTER_ASSET_PATH}/${placement.token}.svg`}
+            x={placement.x}
+            y={0}
+            width={placement.width}
+            height={size}
+            preserveAspectRatio="xMidYMax meet"
+          />
+        );
+      })}
+    </g>
+  );
 }
 
 function OptionCard({
@@ -1280,7 +1358,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     return null;
   }
 
+  const topLayer = visualLayers[visualLayers.length - 1];
   const topY = visualLayers.length ? visualLayerY(visualLayers.length - 1) : bottomY;
+  const topLayerWidth = topLayer ? layerWidth(topLayer.persons) : 118;
   const selectedMainTopperId = ["topper-karton", "topper-zelf-aanleveren"].find(
     (id) => selectedToppers.has(id)
   );
@@ -1289,6 +1369,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     "chocolade-initialen-geschreven",
     "chocolade-initialen-schildje",
   ].find((id) => selectedToppers.has(id));
+  const chocoInitialsText = normalizeChocoLetterText(
+    config.topperInitialsText
+  );
   const topperVisuals = [
     selectedMainTopperId
       ? {
@@ -1309,7 +1392,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     selectedInitialsId === "chocolade-initialen-geschreven"
       ? {
           id: selectedInitialsId,
-          width: 54,
+          width: Math.max(30, Math.min(54, topLayerWidth * 0.42)),
           height: 34,
           offsetY: 13,
         }
@@ -3011,17 +3094,43 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             6,
             topY - height + topper.offsetY * topperScale - 1
           );
+          const isWrittenInitials =
+            topper.id === "chocolade-initialen-geschreven";
+          const isShieldInitials =
+            topper.id === "chocolade-initialen-schildje";
 
           return (
             <g key={topper.id}>
-              <image
-                href={topperDecorationAsset(topper.id)}
-                x={topperX}
-                y={topperY}
-                width={width}
-                height={height}
-                preserveAspectRatio="xMidYMid meet"
-              />
+              {!isWrittenInitials && (
+                <image
+                  href={topperDecorationAsset(topper.id)}
+                  x={topperX}
+                  y={topperY}
+                  width={width}
+                  height={height}
+                  preserveAspectRatio="xMidYMid meet"
+                />
+              )}
+              {isWrittenInitials && (
+                <ChocoLetterMonogram
+                  text={chocoInitialsText}
+                  centerX={topperX + width / 2}
+                  y={topperY + height * 0.12}
+                  size={height * 0.9}
+                  letterSpacing={-height * 0.11}
+                  maxWidth={Math.min(width, topLayerWidth * 0.42)}
+                />
+              )}
+              {isShieldInitials && (
+                <ChocoLetterMonogram
+                  text={chocoInitialsText}
+                  centerX={topperX + width / 2}
+                  y={topperY + height * 0.27}
+                  size={height * 0.38}
+                  letterSpacing={-height * 0.045}
+                  maxWidth={Math.min(width * 0.72, topLayerWidth * 0.34)}
+                />
+              )}
             </g>
           );
         })}
@@ -3119,6 +3228,7 @@ function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
     decorationExtraNotes: [],
     decorationSurcharges: [],
     topperIds: [],
+    topperInitialsText: "",
     topperNotes: "",
     topperSurcharges: [],
     contact: { ...initialWeddingCakeConfig.contact },
@@ -3597,6 +3707,13 @@ export default function BruidstaartStudioConfigurator() {
     });
   }
 
+  function setTopperInitialsText(value: string) {
+    setConfig((current) => ({
+      ...current,
+      topperInitialsText: normalizeChocoLetterText(value),
+    }));
+  }
+
   async function copyProductionForm() {
     try {
       await navigator.clipboard.writeText(productionForm);
@@ -3679,6 +3796,7 @@ export default function BruidstaartStudioConfigurator() {
           : "-"
       }`,
       `Topper/add-on: ${labels.topper}`,
+      `Topper initialen/tekst: ${config.topperInitialsText || "-"}`,
       `Topper opmerkingen: ${
         topperNoteTexts.length ? topperNoteTexts.join(" | ") : "-"
       }`,
@@ -3830,6 +3948,9 @@ export default function BruidstaartStudioConfigurator() {
       paid: Boolean(draft.config.paid),
       completed: Boolean(draft.config.completed),
       topperIds: (draft.config.topperIds || []).filter((id) => id !== "geen"),
+      topperInitialsText: normalizeChocoLetterText(
+        draft.config.topperInitialsText
+      ),
       topperNotes: draft.config.topperNotes || "",
       topperSurcharges: draft.config.topperSurcharges || [],
       contact: {
@@ -4648,6 +4769,24 @@ export default function BruidstaartStudioConfigurator() {
                   onClick={() => toggleTopper(option.id)}
                 />
               ))}
+              {config.topperIds.some((id) =>
+                [
+                  "chocolade-initialen-geschreven",
+                  "chocolade-initialen-schildje",
+                ].includes(id)
+              ) && (
+                <label className="grid gap-2 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 text-sm font-black text-[#2d2a26]/70 shadow-sm">
+                  Initialen of tekst
+                  <input
+                    value={config.topperInitialsText || ""}
+                    onChange={(event) =>
+                      setTopperInitialsText(event.target.value)
+                    }
+                    placeholder="Bijvoorbeeld JB"
+                    className="rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-4 text-base font-bold uppercase tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                  />
+                </label>
+              )}
               <section className="mt-3 grid gap-3 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -4675,7 +4814,7 @@ export default function BruidstaartStudioConfigurator() {
                       topperNotes: event.target.value,
                     }))
                   }
-                  placeholder="Bijvoorbeeld: topper moet goud, 2x topper, letters JB..."
+                  placeholder="Bijvoorbeeld: topper moet goud, 2x topper..."
                   className="min-h-24 rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-3 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
                 />
 
@@ -5042,6 +5181,15 @@ export default function BruidstaartStudioConfigurator() {
                       )})`
                   )
                   .join(" | ")}
+              </p>
+            )}
+            <p>
+              <span className="font-bold">Topper:</span> {labels.topper}
+            </p>
+            {config.topperInitialsText && (
+              <p>
+                <span className="font-bold">Topper initialen:</span>{" "}
+                {config.topperInitialsText}
               </p>
             )}
             {topperNoteTexts.length > 0 && (

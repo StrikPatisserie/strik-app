@@ -95,6 +95,7 @@ export type WeddingCakeConfig = {
   decorationExtraNotes: DecorationExtraNote[];
   decorationSurcharges: DecorationSurcharge[];
   topperIds: string[];
+  topperInitialsText: string;
   topperNotes: string;
   topperSurcharges: DecorationSurcharge[];
   paid: boolean;

@@ -807,6 +807,7 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   decorationExtraNotes: [],
   decorationSurcharges: [],
   topperIds: [],
+  topperInitialsText: "",
   topperNotes: "",
   topperSurcharges: [],
   paid: false,

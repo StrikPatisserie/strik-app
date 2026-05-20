@@ -562,6 +562,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
         : "-"
     }`,
     `Topper/add-on: ${labels.topper}`,
+    `Topper initialen/tekst: ${config.topperInitialsText || "-"}`,
     `Topper opmerkingen: ${topperNotes.length ? topperNotes.join(" | ") : "-"}`,
     `Topper toeslagen: ${
       topperSurcharges.length

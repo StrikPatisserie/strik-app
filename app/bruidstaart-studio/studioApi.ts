@@ -146,6 +146,9 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
       ),
       topperNotes: textFrom(config.topperNotes),
       topperSurcharges: decorationSurchargesFrom(config.topperSurcharges),
+      topperInitialsText: textFrom(config.topperInitialsText)
+        .toUpperCase()
+        .replace(/[^A-Z\s]/g, ""),
       paid: Boolean(config.paid),
       completed: Boolean(config.completed),
       topperIds: Array.isArray(config.topperIds)
