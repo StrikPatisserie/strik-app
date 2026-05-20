@@ -102,6 +102,8 @@ const INITIALS_SHIELD_ASSET = "/initialen%20op%20schild.svg";
 const CHOCO_LETTER_ASSET_PATH = "/choco-letters";
 const CHOCO_LETTER_ASPECT_RATIO = 0.68;
 const CHOCO_SPACE_RATIO = 0.32;
+const WHITE_CHOCOLATE_DECORATION_COLOR = "#fff4dc";
+const WHITE_CHOCOLATE_CONTRAST_DECORATION_COLOR = "#e8cf9f";
 
 type StepId =
   | "start"
@@ -275,6 +277,40 @@ function colorMatrixForHex(hex?: string, multiplier = 1) {
   return `0 0 0 0 ${red.toFixed(3)} 0 0 0 0 ${green.toFixed(
     3
   )} 0 0 0 0 ${blue.toFixed(3)} 0 0 0 1 0`;
+}
+
+function getRelativeLuminance(hex?: string) {
+  const [red, green, blue] = hexToRgb(hex).map((value) =>
+    value <= 0.03928
+      ? value / 12.92
+      : Math.pow((value + 0.055) / 1.055, 2.4)
+  );
+
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function colorDistance(firstHex?: string, secondHex?: string) {
+  const [firstRed, firstGreen, firstBlue] = hexToRgb(firstHex);
+  const [secondRed, secondGreen, secondBlue] = hexToRgb(secondHex);
+
+  return Math.sqrt(
+    (firstRed - secondRed) ** 2 +
+      (firstGreen - secondGreen) ** 2 +
+      (firstBlue - secondBlue) ** 2
+  );
+}
+
+function needsWhiteChocolateContrast(layerColor: StudioOption) {
+  if (!layerColor.swatchColor) return false;
+
+  return (
+    colorDistance(layerColor.swatchColor, WHITE_CHOCOLATE_DECORATION_COLOR) <
+      0.24 ||
+    Math.abs(
+      getRelativeLuminance(layerColor.swatchColor) -
+        getRelativeLuminance(WHITE_CHOCOLATE_DECORATION_COLOR)
+    ) < 0.12
+  );
 }
 
 function shadeHexColor(hex: string, multiplier = 0.78) {
@@ -992,7 +1028,7 @@ function RoseColorControls({
   );
 }
 
-function SinglePaletteColorControls({
+function CollapsiblePaletteColorControls({
   label,
   value,
   onChange,
@@ -1001,35 +1037,73 @@ function SinglePaletteColorControls({
   value?: string;
   onChange: (colorId: string) => void;
 }) {
-  const selectedColorId =
-    findColorOptionByNote(value)?.id || DEFAULT_SHARED_COLOR_ID;
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedColor =
+    findColorOptionByNote(value) ||
+    findOption(sharedDecorationColorOptions, DEFAULT_SHARED_COLOR_ID) ||
+    sharedDecorationColorOptions[0];
+
+  function selectColor(colorId: string) {
+    onChange(colorId);
+    setIsOpen(false);
+  }
 
   return (
     <div className="mt-4 grid gap-2 rounded-2xl border border-[#cfdcc8] bg-white/70 p-3">
-      <p className="text-sm font-black text-[#2d2a26]/70">{label}</p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {sharedDecorationColorOptions.map((color) => (
-          <button
-            key={color.id}
-            type="button"
-            onClick={() => onChange(color.id)}
-            className={`flex min-w-0 items-center gap-2 rounded-2xl border p-2 text-left text-xs font-black ${
-              selectedColorId === color.id
-                ? "border-[#8fb184] bg-[#dce8d6]"
-                : "border-[#e7e0d8] bg-white"
-            }`}
-          >
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        aria-expanded={isOpen}
+        className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-[#cfdcc8] bg-white p-3 text-left shadow-sm"
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-black text-[#2d2a26]/70">
+            {label}
+          </span>
+          <span className="mt-1 flex min-w-0 items-center gap-2 text-base font-black text-[#2d2a26]">
             <span
-              className="h-5 w-5 shrink-0 rounded-full border shadow-inner"
+              className="h-6 w-6 shrink-0 rounded-full border shadow-inner"
               style={{
-                backgroundColor: color.swatchColor || "#fff",
-                borderColor: color.swatchBorder || "rgba(45, 42, 38, 0.12)",
+                backgroundColor: selectedColor?.swatchColor || "#fff",
+                borderColor:
+                  selectedColor?.swatchBorder || "rgba(45, 42, 38, 0.12)",
               }}
             />
-            <span className="min-w-0 truncate">{color.label}</span>
-          </button>
-        ))}
-      </div>
+            <span className="min-w-0 truncate">
+              {selectedColor?.label || "Kies kleur"}
+            </span>
+          </span>
+        </span>
+        <span className="shrink-0 rounded-full bg-[#f8f6f3] px-3 py-1 text-xs font-black text-[#2d2a26]/55">
+          {isOpen ? "Sluit" : "Wijzig"}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {sharedDecorationColorOptions.map((color) => (
+            <button
+              key={color.id}
+              type="button"
+              onClick={() => selectColor(color.id)}
+              className={`flex min-w-0 items-center gap-2 rounded-2xl border p-2 text-left text-xs font-black ${
+                selectedColor?.id === color.id
+                  ? "border-[#8fb184] bg-[#dce8d6]"
+                  : "border-[#e7e0d8] bg-white"
+              }`}
+            >
+              <span
+                className="h-5 w-5 shrink-0 rounded-full border shadow-inner"
+                style={{
+                  backgroundColor: color.swatchColor || "#fff",
+                  borderColor: color.swatchBorder || "rgba(45, 42, 38, 0.12)",
+                }}
+              />
+              <span className="min-w-0 truncate">{color.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1201,7 +1275,14 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
     if (decorationAsset) {
       const clipId = `${visualizerId}-cake-layer-pattern-${index}`;
-      const decorationFilter = key.includes("naked")
+      const isSierlijkDecoration = key.includes("sierlijk");
+      const decorationFilter = isSierlijkDecoration
+        ? `url(#${visualizerId}-${
+            needsWhiteChocolateContrast(layerColor)
+              ? "white-chocolate-contrast-decoration"
+              : "white-chocolate-decoration"
+          })`
+        : key.includes("naked")
         ? `url(#${visualizerId}-natural-smear-decoration)`
         : key.includes("creme-rozen") ||
             key.includes("creme-strak") ||
@@ -1212,8 +1293,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 ? "champagne-decoration"
                 : "snow-decoration"
             })`;
-      const decorationOpacity =
-        key.includes("naked") ||
+      const decorationOpacity = isSierlijkDecoration
+        ? "0.92"
+        : key.includes("naked") ||
         key.includes("creme-rozen") ||
         key.includes("creme-strak") ||
         key.includes("creme-grof")
@@ -2846,6 +2928,26 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             <feColorMatrix
               type="matrix"
               values="0 0 0 0 0.78 0 0 0 0 0.62 0 0 0 0 0.38 0 0 0 1 0"
+            />
+          </filter>
+          <filter
+            id={`${visualizerId}-white-chocolate-decoration`}
+            colorInterpolationFilters="sRGB"
+          >
+            <feColorMatrix
+              type="matrix"
+              values={colorMatrixForHex(WHITE_CHOCOLATE_DECORATION_COLOR)}
+            />
+          </filter>
+          <filter
+            id={`${visualizerId}-white-chocolate-contrast-decoration`}
+            colorInterpolationFilters="sRGB"
+          >
+            <feColorMatrix
+              type="matrix"
+              values={colorMatrixForHex(
+                WHITE_CHOCOLATE_CONTRAST_DECORATION_COLOR
+              )}
             />
           </filter>
           <filter
@@ -4510,7 +4612,7 @@ export default function BruidstaartStudioConfigurator() {
                           />
                           {option.id === MARZIPAN_BAND_DECORATION_ID &&
                             selected && (
-                              <SinglePaletteColorControls
+                              <CollapsiblePaletteColorControls
                                 label="Kleur band"
                                 value={
                                   config.decorationColorNotes?.[
