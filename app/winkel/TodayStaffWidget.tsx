@@ -5,19 +5,39 @@ import type { TodayStaffSchedule, TodayStaffShop } from "../tamigoApi";
 
 type LoadState = "loading" | "ready" | "error";
 
-const SHOP_ROW_TONES = [
-  "bg-[#eef3ea]",
-  "bg-[#f7eedb]",
-  "bg-[#e8f0f2]",
-  "bg-[#f2eee8]",
-];
-
-const SHOP_NAME_COLORS: Record<string, string> = {
-  Lent: "text-[#3b6b43]",
-  Heyendaal: "text-[#8a5b10]",
-  Ziekerstraat: "text-[#9f382f]",
-  Daalseweg: "text-[#4e6c74]",
+const SHOP_ACCENTS: Record<
+  string,
+  {
+    card: string;
+    name: string;
+  }
+> = {
+  Lent: {
+    card: "border-[#a8bf9e]/55 bg-[#eef6ea]",
+    name: "text-[#3b6b43]",
+  },
+  Heyendaal: {
+    card: "border-[#d9b761]/45 bg-[#fff6dc]",
+    name: "text-[#8a5b10]",
+  },
+  Ziekerstraat: {
+    card: "border-[#d98f87]/45 bg-[#fff0ed]",
+    name: "text-[#9f382f]",
+  },
+  Daalseweg: {
+    card: "border-[#9ebac4]/50 bg-[#eef6f8]",
+    name: "text-[#4e6c74]",
+  },
 };
+
+function getShopAccent(shopName: string) {
+  return (
+    SHOP_ACCENTS[shopName] || {
+      card: "border-[#e7e0d8]/80 bg-[#f7f4ef]",
+      name: "text-[#2d2a26]",
+    }
+  );
+}
 
 function LoadingRows() {
   return (
@@ -39,11 +59,10 @@ function LoadingRows() {
 
 function ShopRow({
   shop,
-  index,
 }: Readonly<{
   shop: TodayStaffShop;
-  index: number;
 }>) {
+  const accent = getShopAccent(shop.shop);
   const iceEmployees = shop.iceEmployees || [];
   const iceShiftText = iceEmployees.length
     ? iceEmployees
@@ -57,14 +76,8 @@ function ShopRow({
     : "geen ijsdienst vandaag";
 
   return (
-    <article
-      className={`rounded-2xl px-3 py-3 ${SHOP_ROW_TONES[index % SHOP_ROW_TONES.length]}`}
-    >
-      <h3
-        className={`text-base font-black leading-tight ${
-          SHOP_NAME_COLORS[shop.shop] || "text-[#2d2a26]"
-        }`}
-      >
+    <article className={`rounded-2xl border px-3 py-3 ${accent.card}`}>
+      <h3 className={`text-base font-black leading-tight ${accent.name}`}>
         {shop.shop}
       </h3>
 
@@ -181,8 +194,8 @@ export default function TodayStaffWidget() {
 
         {state === "ready" && schedule && (
           <div className="space-y-2">
-            {schedule.shops.map((shop, index) => (
-              <ShopRow key={shop.shop} shop={shop} index={index} />
+            {schedule.shops.map((shop) => (
+              <ShopRow key={shop.shop} shop={shop} />
             ))}
           </div>
         )}
