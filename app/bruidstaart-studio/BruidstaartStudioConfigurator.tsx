@@ -56,15 +56,16 @@ const ROSE_DECORATION_IDS = [
   "marsepeinrozen-met-blad",
 ];
 const DEFAULT_ROSE_QUANTITY = 5;
-const ROSE_WITH_LEAF_ASSET = "/roosje%20met%20blad.svg";
-const ROSE_WITHOUT_LEAF_ASSET = "/roosje%20zonder%20blad.svg";
-const REAL_FLOWER_ASSET = "/flowers_bloem1.svg";
+const ROSE_WITH_LEAF_ASSET = "/app-icons-strik_roos%20met%20blad.svg";
+const ROSE_WITHOUT_LEAF_ASSET = "/app-icons-strik_roos%20zonder%20blad.svg";
+const REAL_FLOWER_ASSET = "/app-icons-strik_echte%20bloem.svg";
+const RED_FRUIT_LONG_ASSET = "/app-icons-strik_rood%20fruit%20lang.svg";
+const RED_FRUIT_SHORT_ASSET = "/app-icons-strik_rood%20fruit%20kort.svg";
 const ROSE_PATTERN_ASSET = "/creme%20roosjes.svg";
 const CREME_DOTS_ASSET = "/strik-app_creme%20stippen.svg";
 const CREME_SMEAR_DICHT_ASSET = "/creme%20smeren_creme%20dicht.svg";
 const CREME_SMEAR_OPEN_ASSET = "/creme%20smeren_creme%20open.svg";
 const GOLD_LEAF_ASSET = "/bladgoud.svg";
-const RED_FRUIT_ASSET = "/fruit%20icons_aardbei.svg";
 const INITIALS_SHIELD_ASSET = "/initialen%20op%20schild.svg";
 
 type StepId =
@@ -190,10 +191,10 @@ function cakeDecorationAsset(layoutId: string) {
     return ROSE_PATTERN_ASSET;
   }
   if (layoutId.includes("chesterfield")) {
-    return "/taartdecoratie%20klassiek_chesterfield.svg";
+    return "/app-icons-strik_chesterfield.svg";
   }
   if (layoutId.includes("banen")) {
-    return "/taartdecoratie%20klassiek_banen.svg";
+    return "/app-icons-strik_banen.svg";
   }
   if (layoutId.includes("bogen")) {
     return "/taartdecoratie%20klassiek_bogen.svg";
@@ -642,12 +643,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const maxPersons = Math.max(...visualLayers.map((layer) => layer.persons), 1);
   const selectedDecorations = new Set(config.decorationIds);
   const selectedToppers = new Set(config.topperIds);
-  const selectedRoseDecorationId = ROSE_DECORATION_IDS.find((id) =>
-    selectedDecorations.has(id)
-  );
-  const selectedRoseQuantity = selectedRoseDecorationId
-    ? getDecorationQuantity(config, selectedRoseDecorationId)
-    : 0;
   const bottomY = 242;
   const layerHeight = 39;
   const gap = 0.6;
@@ -906,38 +901,183 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     topperVisuals.reduce((total, item) => total + item.width * topperScale, 0) +
     Math.max(0, topperVisuals.length - 1) * topperGap;
 
-  function layerDecorationPoints(width: number, spacing: number, max: number) {
-    const count = Math.max(2, Math.min(max, Math.floor(width / spacing)));
+  type DecorEdge = "top" | "bottom" | "left" | "right";
+  type VisualRect = { x1: number; y1: number; x2: number; y2: number };
+  type DecorationZone = VisualRect & { edge: DecorEdge };
+  type LayerDecorationZones = {
+    layerBounds: VisualRect;
+    topEdgeZone: DecorationZone;
+    bottomEdgeZone: DecorationZone;
+    leftSideZone: DecorationZone;
+    rightSideZone: DecorationZone;
+    cornerZones: DecorationZone[];
+    safeCenterZone: VisualRect;
+    textExclusionZone: VisualRect;
+    topperExclusionZone?: VisualRect;
+  };
+  type AssetPlacement = {
+    key: string;
+    asset: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotate?: number;
+    opacity?: number;
+    shadowOpacity?: number;
+    edge: DecorEdge;
+    kind: "flower" | "fruit" | "rose" | "gold";
+  };
 
-    return Array.from({ length: count }, (_, item) => {
-      if (count === 1) return 0.5;
-      return item / (count - 1);
-    });
+  function clampVisual(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value));
   }
 
-  function layerRoseCount(index: number) {
-    if (!selectedRoseQuantity) return 0;
+  function overlapArea(first: VisualRect, second: VisualRect) {
+    const width = Math.max(
+      0,
+      Math.min(first.x2, second.x2) - Math.max(first.x1, second.x1)
+    );
+    const height = Math.max(
+      0,
+      Math.min(first.y2, second.y2) - Math.max(first.y1, second.y1)
+    );
+
+    return width * height;
+  }
+
+  function placementRect(placement: AssetPlacement): VisualRect {
+    return {
+      x1: placement.x,
+      y1: placement.y,
+      x2: placement.x + placement.width,
+      y2: placement.y + placement.height,
+    };
+  }
+
+  function getLayerDecorationZones(
+    index: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): LayerDecorationZones {
+    const edgeDepth = clampVisual(width * 0.08, 7, 15);
+    const sideInset = clampVisual(width * 0.045, 5, 10);
+    const topEdgeZone: DecorationZone = {
+      edge: "top",
+      x1: x + sideInset,
+      y1: y - edgeDepth,
+      x2: x + width - sideInset,
+      y2: y + edgeDepth,
+    };
+    const bottomEdgeZone: DecorationZone = {
+      edge: "bottom",
+      x1: x + sideInset,
+      y1: y + height - edgeDepth,
+      x2: x + width - sideInset,
+      y2: y + height,
+    };
+    const leftSideZone: DecorationZone = {
+      edge: "left",
+      x1: x - edgeDepth,
+      y1: y + edgeDepth * 0.4,
+      x2: x + edgeDepth,
+      y2: y + height - edgeDepth * 0.4,
+    };
+    const rightSideZone: DecorationZone = {
+      edge: "right",
+      x1: x + width - edgeDepth,
+      y1: y + edgeDepth * 0.4,
+      x2: x + width + edgeDepth,
+      y2: y + height - edgeDepth * 0.4,
+    };
+    const textWidth = clampVisual(width * 0.52, 48, 86);
+    const textHeight = clampVisual(height * 0.32, 12, 18);
+    const textExclusionZone = {
+      x1: x + width / 2 - textWidth / 2,
+      y1: y + height / 2 - textHeight / 2,
+      x2: x + width / 2 + textWidth / 2,
+      y2: y + height / 2 + textHeight / 2,
+    };
+    const topperExclusionZone =
+      index === visualLayers.length - 1 && topperVisuals.length
+        ? {
+            x1: 130 - topperTotalWidth / 2 - 10,
+            y1: topY - 68,
+            x2: 130 + topperTotalWidth / 2 + 10,
+            y2: topY + 22,
+          }
+        : undefined;
+
+    return {
+      layerBounds: { x1: x, y1: y, x2: x + width, y2: y + height },
+      topEdgeZone,
+      bottomEdgeZone,
+      leftSideZone,
+      rightSideZone,
+      cornerZones: [
+        {
+          edge: "top",
+          x1: x,
+          y1: y - edgeDepth,
+          x2: x + edgeDepth * 1.8,
+          y2: y + edgeDepth,
+        },
+        {
+          edge: "top",
+          x1: x + width - edgeDepth * 1.8,
+          y1: y - edgeDepth,
+          x2: x + width,
+          y2: y + edgeDepth,
+        },
+        {
+          edge: "bottom",
+          x1: x,
+          y1: y + height - edgeDepth,
+          x2: x + edgeDepth * 1.8,
+          y2: y + height,
+        },
+        {
+          edge: "bottom",
+          x1: x + width - edgeDepth * 1.8,
+          y1: y + height - edgeDepth,
+          x2: x + width,
+          y2: y + height,
+        },
+      ],
+      safeCenterZone: {
+        x1: x + width * 0.24,
+        y1: y + height * 0.26,
+        x2: x + width * 0.76,
+        y2: y + height * 0.74,
+      },
+      textExclusionZone,
+      topperExclusionZone,
+    };
+  }
+
+  const layerDecorationWeights = visualLayers.map((layer, index) => {
+    const topBias = index === visualLayers.length - 1 ? 1.12 : 1;
+    return layerWidth(layer.persons) * topBias;
+  });
+  const totalLayerDecorationWeight = layerDecorationWeights.reduce(
+    (total, item) => total + item,
+    0
+  );
+
+  function countForLayer(total: number, index: number) {
+    if (!total || !visualLayers.length || !totalLayerDecorationWeight) return 0;
+
+    const before = layerDecorationWeights
+      .slice(0, index)
+      .reduce((sum, item) => sum + item, 0);
+    const after = before + layerDecorationWeights[index];
 
     return (
-      Math.floor((selectedRoseQuantity * (index + 1)) / visualLayers.length) -
-      Math.floor((selectedRoseQuantity * index) / visualLayers.length)
+      Math.floor((total * after) / totalLayerDecorationWeight) -
+      Math.floor((total * before) / totalLayerDecorationWeight)
     );
-  }
-
-  function edgeClusterPoints(count: number, index: number) {
-    const left = [0.2, 0.27, 0.34, 0.39];
-    const right = [0.8, 0.73, 0.66, 0.61];
-
-    return Array.from({ length: count }, (_item, item) => {
-      const sideIndex = Math.floor(item / 2) % left.length;
-      const leftSide = (item + index) % 2 === 0;
-
-      return {
-        ratio: leftSide ? left[sideIndex] : right[sideIndex],
-        yOffset: [-1.5, 1.5, -4, 3][item % 4],
-        scale: item % 3 === 0 ? 1 : 0.88,
-      };
-    });
   }
 
   function renderPearlBorder(
@@ -1019,85 +1159,41 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     );
   }
 
-  function renderRoseCluster({
-    keyPrefix,
-    x,
-    y,
-    withLeaves,
-    scale,
-    rotation,
-  }: {
-    keyPrefix: string;
-    x: number;
-    y: number;
-    withLeaves: boolean;
-    scale: number;
-    rotation: number;
-  }) {
-    const roseSize = 18;
-    const leafSize = roseSize * 0.6;
-    const roseAsset = ROSE_WITHOUT_LEAF_ASSET;
-    const roseItems = [
-      { x: 0, y: -2, size: roseSize, rotate: -2, opacity: 1 },
-      { x: -8.5, y: 5.5, size: roseSize * 0.92, rotate: -8, opacity: 0.98 },
-      { x: 8.5, y: 5.5, size: roseSize * 0.92, rotate: 8, opacity: 0.98 },
-    ];
-    const leafItems = [
-      { x: -13.5, y: 8.5, rotate: -52 },
-      { x: 13.5, y: 8.5, rotate: 52 },
-      { x: 0, y: 11.5, rotate: 0 },
-    ];
+  function imagePlacement(
+    placement: AssetPlacement,
+    visualizerShadowId: string
+  ) {
+    const rotate = placement.rotate || 0;
+    const centerX = placement.x + placement.width / 2;
+    const centerY = placement.y + placement.height / 2;
+    const shadowOpacity = placement.shadowOpacity ?? 0.055;
 
     return (
       <g
-        key={keyPrefix}
-        transform={`translate(${x} ${y}) rotate(${rotation}) scale(${scale})`}
+        key={placement.key}
+        transform={`rotate(${rotate} ${centerX} ${centerY})`}
       >
-        <ellipse
-          cx="0"
-          cy={roseSize * 0.66}
-          rx={roseSize * 1.08}
-          ry={roseSize * 0.13}
-          fill="currentColor"
-          opacity="0.1"
+        {shadowOpacity > 0 && (
+          <image
+            href={placement.asset}
+            x={placement.x + 0.5}
+            y={placement.y + 0.75}
+            width={placement.width}
+            height={placement.height}
+            preserveAspectRatio="xMidYMid meet"
+            filter={`url(#${visualizerShadowId})`}
+            opacity={shadowOpacity}
+          />
+        )}
+        <image
+          href={placement.asset}
+          x={placement.x}
+          y={placement.y}
+          width={placement.width}
+          height={placement.height}
+          preserveAspectRatio="xMidYMid meet"
+          opacity={placement.opacity ?? 1}
         />
-        {withLeaves &&
-          leafItems.map((leaf, item) => (
-            <ellipse
-              key={`${keyPrefix}-leaf-${item}`}
-              cx={leaf.x}
-              cy={leaf.y}
-              rx={leafSize * 0.22}
-              ry={leafSize * 0.5}
-              fill="#83a978"
-              opacity="0.62"
-              transform={`rotate(${leaf.rotate} ${leaf.x} ${leaf.y})`}
-            />
-          ))}
-        {roseItems.map((rose, item) => (
-          <g
-            key={`${keyPrefix}-rose-${item}`}
-            transform={`translate(${rose.x} ${rose.y}) rotate(${rose.rotate})`}
-            opacity={rose.opacity}
-          >
-            <ellipse
-              cx="0"
-              cy={rose.size * 0.3}
-              rx={rose.size * 0.34}
-              ry={Math.max(1.2, rose.size * 0.07)}
-              fill="currentColor"
-              opacity="0.1"
-            />
-            <image
-              href={roseAsset}
-              x={-rose.size / 2}
-              y={-rose.size / 2}
-              width={rose.size}
-              height={rose.size}
-              preserveAspectRatio="xMidYMid meet"
-            />
-          </g>
-        ))}
       </g>
     );
   }
@@ -1109,138 +1205,454 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     y: number,
     width: number
   ) {
-    type ClusterAlign = "left" | "right" | "top";
-    type FlowerClusterRole = "hero" | "support" | "corner" | "accent";
-
     const height = visualLayerHeight(index);
     const isBottomLayer = index === 0;
     const isTopLayer = index === visualLayers.length - 1;
-    const roseCount = layerRoseCount(index);
-    const hasRoseLeaves = selectedDecorations.has("marsepeinrozen-met-blad");
-    const flowerX = x + width * (index % 2 ? 0.25 : 0.75);
-    const sideAlign: ClusterAlign = index % 2 ? "left" : "right";
-    const roseClusterCount =
-      roseCount > 0
-        ? Math.min(
-            Math.max(1, Math.floor(width / 46)),
-            Math.max(1, Math.ceil(roseCount / 3))
-          )
-        : 0;
-    const roseClusterRatios =
-      roseClusterCount === 1
-        ? [0.22]
-        : roseClusterCount === 2
+    const zones = getLayerDecorationZones(index, x, y, width, height);
+    const placedRects: VisualRect[] = [];
+    const accentAnchors: Array<{ x: number; y: number; edge: DecorEdge }> = [];
+    const flowers: AssetPlacement[] = [];
+    const fruits: AssetPlacement[] = [];
+    const roses: AssetPlacement[] = [];
+    const gold: AssetPlacement[] = [];
+    const decorShadowId = `${visualizerId}-decor-asset-shadow`;
+
+    function placementIsClear(
+      placement: AssetPlacement,
+      options: { allowOverlap?: boolean; allowText?: boolean } = {}
+    ) {
+      const rect = placementRect(placement);
+      const rectArea = Math.max(1, (rect.x2 - rect.x1) * (rect.y2 - rect.y1));
+
+      if (!options.allowText && overlapArea(rect, zones.textExclusionZone) > 0) {
+        return false;
+      }
+
+      if (
+        zones.topperExclusionZone &&
+        overlapArea(rect, zones.topperExclusionZone) > rectArea * 0.08
+      ) {
+        return false;
+      }
+
+      if (placement.edge === "bottom" && rect.y2 > zones.layerBounds.y2 + 0.2) {
+        return false;
+      }
+
+      if (!options.allowOverlap) {
+        return !placedRects.some((placed) => {
+          const placedArea = Math.max(
+            1,
+            (placed.x2 - placed.x1) * (placed.y2 - placed.y1)
+          );
+          return (
+            overlapArea(rect, placed) >
+            Math.min(rectArea, placedArea) * 0.42
+          );
+        });
+      }
+
+      return true;
+    }
+
+    function addPlacement(
+      list: AssetPlacement[],
+      placement: AssetPlacement,
+      options: { allowOverlap?: boolean; allowText?: boolean } = {}
+    ) {
+      if (!placementIsClear(placement, options)) return false;
+
+      list.push(placement);
+      placedRects.push(placementRect(placement));
+      if (placement.kind !== "gold") {
+        accentAnchors.push({
+          x: placement.x + placement.width / 2,
+          y:
+            placement.edge === "bottom"
+              ? placement.y + placement.height
+              : placement.y + placement.height * 0.55,
+          edge: placement.edge,
+        });
+      }
+
+      return true;
+    }
+
+    function edgePlacement({
+      key,
+      asset,
+      edge,
+      ratio,
+      assetWidth,
+      assetHeight,
+      rotate = 0,
+      opacity = 1,
+      shadowOpacity,
+      kind,
+      sideOffset = 0,
+    }: {
+      key: string;
+      asset: string;
+      edge: DecorEdge;
+      ratio: number;
+      assetWidth: number;
+      assetHeight: number;
+      rotate?: number;
+      opacity?: number;
+      shadowOpacity?: number;
+      kind: AssetPlacement["kind"];
+      sideOffset?: number;
+    }): AssetPlacement {
+      if (edge === "top") {
+        const centerX =
+          zones.topEdgeZone.x1 +
+          (zones.topEdgeZone.x2 - zones.topEdgeZone.x1) * ratio;
+        return {
+          key,
+          asset,
+          edge,
+          kind,
+          x: clampVisual(
+            centerX - assetWidth / 2,
+            x - assetWidth * 0.22,
+            x + width - assetWidth * 0.78
+          ),
+          y: y - assetHeight * 0.58 + sideOffset,
+          width: assetWidth,
+          height: assetHeight,
+          rotate,
+          opacity,
+          shadowOpacity,
+        };
+      }
+
+      if (edge === "bottom") {
+        const centerX =
+          zones.bottomEdgeZone.x1 +
+          (zones.bottomEdgeZone.x2 - zones.bottomEdgeZone.x1) * ratio;
+        return {
+          key,
+          asset,
+          edge,
+          kind,
+          x: clampVisual(
+            centerX - assetWidth / 2,
+            x - assetWidth * 0.1,
+            x + width - assetWidth * 0.9
+          ),
+          y: y + height - assetHeight,
+          width: assetWidth,
+          height: assetHeight,
+          rotate,
+          opacity,
+          shadowOpacity,
+        };
+      }
+
+      const centerY =
+        (edge === "left" ? zones.leftSideZone : zones.rightSideZone).y1 +
+        ((edge === "left" ? zones.leftSideZone : zones.rightSideZone).y2 -
+          (edge === "left" ? zones.leftSideZone : zones.rightSideZone).y1) *
+          ratio;
+
+      return {
+        key,
+        asset,
+        edge,
+        kind,
+        x:
+          edge === "left"
+            ? x - assetWidth * 0.48 + sideOffset
+            : x + width - assetWidth * 0.52 + sideOffset,
+        y: clampVisual(centerY - assetHeight / 2, y, y + height - assetHeight),
+        width: assetWidth,
+        height: assetHeight,
+        rotate,
+        opacity,
+        shadowOpacity,
+      };
+    }
+
+    function addFlower() {
+      if (!selectedDecorations.has("echte-bloemen")) return;
+
+      const flowerHeight = clampVisual(
+        width * (isTopLayer ? 0.16 : 0.135),
+        22,
+        isTopLayer ? 36 : 31
+      );
+      const flowerWidth = flowerHeight * 1.14;
+      const edge: DecorEdge = isTopLayer
+        ? "top"
+        : index % 2
+          ? "left"
+          : "right";
+      const ratios = isTopLayer
+        ? topperVisuals.length
+          ? [0.24, 0.76]
+          : [0.72, 0.28]
+        : [0.24, 0.76];
+
+      ratios.some((ratio, item) => {
+        const placement = edgePlacement({
+          key: `${layerId}-flower-${item}`,
+          asset: REAL_FLOWER_ASSET,
+          edge,
+          ratio,
+          assetWidth: flowerWidth,
+          assetHeight: flowerHeight,
+          rotate:
+            edge === "left"
+              ? -8
+              : edge === "right"
+                ? 8
+                : ratio < 0.5
+                  ? -5
+                  : 5,
+          opacity: 0.98,
+          shadowOpacity: 0.045,
+          kind: "flower",
+        });
+
+        return addPlacement(flowers, placement);
+      });
+
+      if (isBottomLayer && visualLayers.length > 1) {
+        const sideEdge: DecorEdge = index % 2 ? "right" : "left";
+        const sideFlowerHeight = flowerHeight * 0.9;
+        const sideFlower = edgePlacement({
+          key: `${layerId}-flower-side`,
+          asset: REAL_FLOWER_ASSET,
+          edge: sideEdge,
+          ratio: 0.36,
+          assetWidth: sideFlowerHeight * 1.14,
+          assetHeight: sideFlowerHeight,
+          rotate: sideEdge === "left" ? -10 : 10,
+          opacity: 0.94,
+          shadowOpacity: 0.04,
+          kind: "flower",
+        });
+        addPlacement(flowers, sideFlower);
+      }
+    }
+
+    function addFruit() {
+      if (!selectedDecorations.has("rood-fruit")) return;
+
+      const fruitHeight = clampVisual(width * 0.078, 11.5, 16.5);
+      const topBlockedByTopper = isTopLayer && topperVisuals.length > 0;
+      const canUseLong = !topBlockedByTopper && width > fruitHeight * 4.8;
+      const asset = canUseLong ? RED_FRUIT_LONG_ASSET : RED_FRUIT_SHORT_ASSET;
+      const assetWidth = fruitHeight * (canUseLong ? 3.62 : 2.75);
+      const edge: DecorEdge =
+        isTopLayer || !isBottomLayer
+          ? "top"
+          : isBottomLayer
+            ? "bottom"
+            : index % 2
+              ? "left"
+              : "right";
+      const ratios =
+        edge === "top" && topBlockedByTopper
           ? [0.22, 0.78]
-          : roseClusterCount === 3
-            ? [0.22, 0.5, 0.78]
-            : Array.from({ length: roseClusterCount }, (_item, item) => {
-                return 0.18 + (item / (roseClusterCount - 1)) * 0.64;
-              });
-    const roseClusters = roseClusterRatios.map((ratio, item) => ({
-      x: x + width * ratio,
-      y: y - (isTopLayer ? 5.6 : 4.4) + (item % 2 ? 0.55 : 0),
-      scale: isTopLayer ? 0.92 : 0.88,
-      rotation: ratio < 0.35 ? -5 : ratio > 0.65 ? 5 : item % 2 ? 2 : -1,
-    }));
-    const fruitClusters: Array<{
-      x: number;
-      y: number;
-      align: ClusterAlign;
-      scale: number;
-    }> = [
-      {
-        x: x + 15,
-        y: y - 7,
-        align: "left",
-        scale: isBottomLayer ? 0.82 : 0.92,
-      },
-      {
-        x: x + width - 15,
-        y: y - 7,
-        align: "right",
-        scale: isBottomLayer ? 0.82 : 0.92,
-      },
-      {
-        x: x + width * (topperVisuals.length ? 0.36 : 0.52),
-        y: y - 10.5,
-        align: "top",
-        scale: isTopLayer ? 0.88 : 0.76,
-      },
-    ];
-    const fruitAssets = [
-      "/fruit%20icons_aardbei.svg",
-      "/fruit%20icons_framboos.svg",
-      "/fruit%20icons_rode%20besjes%20cluster.svg",
-      "/fruit%20icons_braam.svg",
-      "/fruit%20icons_rode%20bes.svg",
-      "/fruit%20icons_rood%20fruit%20kopie%203.svg",
-    ];
-    const flowerAssets = [
-      "/flowers_bloem1.svg",
-      "/flowers_bloem2.svg",
-      "/flowers_bloem3.svg",
-      "/flowers_bloemen4.svg",
-      "/flowers_bloemen5.svg",
-    ];
-    const flowerClusters = [
-      {
-        x: flowerX,
-        y: y - (isTopLayer ? 11.5 : 7.5),
-        align: sideAlign,
-        role: isTopLayer ? "hero" : isBottomLayer ? "corner" : "support",
-        scale: isTopLayer ? 1.08 : isBottomLayer ? 0.82 : 0.94,
-      },
-      isTopLayer
-        ? {
-            x: x + width * (topperVisuals.length ? 0.64 : 0.5),
-            y: y - 11.5,
-            align: "top" as ClusterAlign,
-            role: "support" as FlowerClusterRole,
-            scale: 0.76,
-          }
-        : null,
-      !isBottomLayer && !isTopLayer
-        ? {
-            x: x + width * (sideAlign === "right" ? 0.2 : 0.8),
-            y: y + height - 0.5,
-            align: (sideAlign === "right" ? "left" : "right") as ClusterAlign,
-            role: "accent" as FlowerClusterRole,
-            scale: 0.62,
-          }
-        : null,
-    ].filter(
-      (
-        cluster
-      ): cluster is {
-        x: number;
-        y: number;
-        align: ClusterAlign;
-        role: FlowerClusterRole;
-        scale: number;
-      } => Boolean(cluster)
-    );
-    const goldFlakeAnchors = [
-      { x: x + 16, y: y + 8, rotate: -12, size: 1 },
-      { x: x + width - 18, y: y + 9, rotate: 15, size: 0.9 },
-      {
-        x: flowerX + (sideAlign === "right" ? -18 : 18),
-        y: y + (isTopLayer ? -2 : 5),
-        rotate: sideAlign === "right" ? -7 : 8,
-        size: 0.78,
-      },
-      {
-        x: x + width * (isTopLayer ? 0.45 : 0.72),
-        y: y + height - 8,
-        rotate: 19,
-        size: 0.72,
-      },
-    ];
-    const goldFlakes = [
-      { ...goldFlakeAnchors[0], points: "-2,-1 2,-2 3,1 -1,3" },
-      { ...goldFlakeAnchors[1], points: "-1,-2 3,-1 1,3 -3,1" },
-      { ...goldFlakeAnchors[2], points: "-2,0 1,-3 3,1 -1,2" },
-      { ...goldFlakeAnchors[3], points: "-3,-1 2,-2 3,2 -2,3" },
-    ].slice(0, Math.min(4, Math.max(2, Math.floor(width / 58))));
+          : edge === "bottom"
+            ? [0.74, 0.26]
+            : [0.28, 0.72];
+
+      ratios.some((ratio, item) => {
+        const placement = edgePlacement({
+          key: `${layerId}-fruit-${item}`,
+          asset,
+          edge,
+          ratio,
+          assetWidth:
+            edge === "left" || edge === "right" ? fruitHeight * 2.55 : assetWidth,
+          assetHeight: fruitHeight,
+          rotate:
+            edge === "left"
+              ? -88
+              : edge === "right"
+                ? 88
+                : ratio < 0.5
+                  ? -1.5
+                  : 1.5,
+          opacity: 0.98,
+          shadowOpacity: 0.045,
+          kind: "fruit",
+        });
+
+        return addPlacement(fruits, placement, { allowOverlap: true });
+      });
+    }
+
+    function addRoseRows() {
+      ROSE_DECORATION_IDS.forEach((roseId, variantIndex) => {
+        if (!selectedDecorations.has(roseId)) return;
+
+        let remaining = countForLayer(getDecorationQuantity(config, roseId), index);
+        if (!remaining) return;
+
+        const roseSize = clampVisual(width * 0.085, 12.5, 17.2);
+        const roseGap = roseSize * 0.72;
+        const asset =
+          roseId === "marsepeinrozen-met-blad"
+            ? ROSE_WITH_LEAF_ASSET
+            : ROSE_WITHOUT_LEAF_ASSET;
+        const topCapacity = Math.max(
+          1,
+          Math.floor(
+            ((isTopLayer && topperVisuals.length
+              ? (zones.topEdgeZone.x2 - zones.topEdgeZone.x1) * 0.38
+              : zones.topEdgeZone.x2 - zones.topEdgeZone.x1) /
+              roseGap)
+          )
+        );
+        const bottomCapacity = Math.max(
+          1,
+          Math.floor(
+            (zones.bottomEdgeZone.x2 - zones.bottomEdgeZone.x1) / roseGap
+          )
+        );
+        const sideCapacity = Math.max(1, Math.floor(height / roseGap));
+        const rowPlans: Array<{
+          edge: DecorEdge;
+          count: number;
+          ratio: number;
+        }> = [];
+
+        const topCount = Math.min(remaining, Math.max(1, topCapacity));
+        rowPlans.push({
+          edge: "top",
+          count: topCount,
+          ratio:
+            isTopLayer && topperVisuals.length
+              ? variantIndex % 2
+                ? 0.78
+                : 0.22
+              : remaining <= 3
+                ? index % 2
+                  ? 0.75
+                  : 0.25
+                : 0.5,
+        });
+        remaining -= topCount;
+
+        if (remaining > 0) {
+          const bottomCount = Math.min(remaining, bottomCapacity);
+          rowPlans.push({
+            edge: "bottom",
+            count: bottomCount,
+            ratio: variantIndex % 2 ? 0.27 : 0.73,
+          });
+          remaining -= bottomCount;
+        }
+
+        if (remaining > 0) {
+          const sideCount = Math.min(remaining, sideCapacity);
+          rowPlans.push({
+            edge: index % 2 ? "left" : "right",
+            count: sideCount,
+            ratio: 0.42,
+          });
+          remaining -= sideCount;
+        }
+
+        rowPlans.forEach((plan, planIndex) => {
+          const horizontal = plan.edge === "top" || plan.edge === "bottom";
+          const rowLength =
+            plan.count > 1 ? (plan.count - 1) * roseGap + roseSize : roseSize;
+          const rowCenter = edgePlacement({
+            key: `${layerId}-rose-row-anchor-${roseId}-${planIndex}`,
+            asset,
+            edge: plan.edge,
+            ratio: plan.ratio,
+            assetWidth: horizontal ? rowLength : roseSize,
+            assetHeight: horizontal ? roseSize : rowLength,
+            kind: "rose",
+          });
+          const rowRect = placementRect(rowCenter);
+          const rowAllowed =
+            overlapArea(rowRect, zones.textExclusionZone) === 0 &&
+            (!zones.topperExclusionZone ||
+              overlapArea(rowRect, zones.topperExclusionZone) <
+                (rowRect.x2 - rowRect.x1) * (rowRect.y2 - rowRect.y1) * 0.06);
+
+          if (!rowAllowed) return;
+
+          Array.from({ length: plan.count }, (_item, item) => {
+            const placement: AssetPlacement = horizontal
+              ? {
+                  ...rowCenter,
+                  key: `${layerId}-rose-${roseId}-${planIndex}-${item}`,
+                  x: rowCenter.x + item * roseGap,
+                  width: roseSize,
+                  height: roseSize,
+                  rotate: [-4, 3, -1, 5][(item + variantIndex) % 4],
+                  opacity: 0.98,
+                  shadowOpacity: 0.04,
+                }
+              : {
+                  ...rowCenter,
+                  key: `${layerId}-rose-${roseId}-${planIndex}-${item}`,
+                  y: rowCenter.y + item * roseGap,
+                  width: roseSize,
+                  height: roseSize,
+                  rotate:
+                    plan.edge === "left"
+                      ? -8 + (item % 2) * 5
+                      : 8 - (item % 2) * 5,
+                  opacity: 0.98,
+                  shadowOpacity: 0.04,
+                };
+
+            addPlacement(roses, placement, { allowOverlap: true });
+          });
+        });
+      });
+    }
+
+    function addGoldAccents() {
+      if (!selectedDecorations.has("bladgoud")) return;
+
+      const anchors: Array<{ x: number; y: number; edge: DecorEdge }> =
+        accentAnchors.length
+        ? accentAnchors
+        : [
+            {
+              x: x + width * (index % 2 ? 0.24 : 0.76),
+              y: y + height * 0.25,
+              edge: index % 2 ? "left" : "right",
+            },
+          ];
+      const goldCount = Math.min(4, Math.max(2, Math.ceil(width / 76)));
+      const goldSize = clampVisual(width * 0.035, 5.4, 8.6);
+
+      anchors.slice(0, goldCount).forEach((anchor, item) => {
+        const placement = edgePlacement({
+          key: `${layerId}-gold-${item}`,
+          asset: GOLD_LEAF_ASSET,
+          edge: anchor.edge,
+          ratio:
+            anchor.edge === "top" || anchor.edge === "bottom"
+              ? clampVisual((anchor.x - x) / width, 0.18, 0.82)
+              : clampVisual((anchor.y - y) / height, 0.18, 0.82),
+          assetWidth: goldSize * 1.22,
+          assetHeight: goldSize,
+          rotate: [-13, 11, -4, 17][item % 4],
+          opacity: item % 2 ? 0.68 : 0.76,
+          shadowOpacity: 0,
+          kind: "gold",
+          sideOffset: item % 2 ? 3 : -3,
+        });
+
+        addPlacement(gold, placement, { allowOverlap: true });
+      });
+    }
+
+    addFruit();
+    addRoseRows();
+    addFlower();
+    addGoldAccents();
 
     return (
       <>
@@ -1266,218 +1678,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           </g>
         )}
 
-        {selectedDecorations.has("bladgoud") &&
-          goldFlakes.map((flake, item) => (
-            <polygon
-              key={`${layerId}-gold-${item}`}
-              points={flake.points}
-              fill={item % 2 ? "#e1c16e" : "#caa45a"}
-              opacity={item % 2 ? "0.62" : "0.72"}
-              transform={`translate(${flake.x} ${flake.y}) rotate(${
-                flake.rotate
-              }) scale(${flake.size})`}
-            />
-          ))}
-
-        {selectedDecorations.has("rood-fruit") &&
-          fruitClusters.map((cluster, item) => {
-            if (item === 2 && !isTopLayer) return null;
-            const offsets =
-              cluster.align === "right"
-                ? [
-                    [0, 0],
-                    [-10, 2],
-                    [-5, 7],
-                  ]
-                : [
-                    [0, 0],
-                    [10, 2],
-                    [5, 7],
-                  ];
-            const sizes = [18, 16, 13.5];
-            const rotations =
-              cluster.align === "right" ? [5, -6, 2] : [-5, 6, -2];
-
-            return (
-              <g key={`${layerId}-fruit-${item}`}>
-                {offsets.map(([offsetX, offsetY], fruitIndex) => {
-                  const fruitSize = sizes[fruitIndex] * cluster.scale;
-                  const centerX = cluster.x + offsetX;
-                  const centerY = cluster.y + offsetY;
-
-                  return (
-                    <g
-                      key={`${layerId}-fruit-${item}-${fruitIndex}`}
-                      transform={`rotate(${rotations[fruitIndex]} ${centerX} ${centerY})`}
-                    >
-                      <ellipse
-                        cx={centerX + 0.8}
-                        cy={centerY + fruitSize * 0.34}
-                        rx={fruitSize * 0.38}
-                        ry={Math.max(1.1, fruitSize * 0.08)}
-                        fill="currentColor"
-                        opacity="0.13"
-                      />
-                      <image
-                        href={
-                          fruitAssets[(item + fruitIndex) % fruitAssets.length]
-                        }
-                        x={centerX - fruitSize / 2}
-                        y={centerY - fruitSize / 2}
-                        width={fruitSize}
-                        height={fruitSize}
-                        preserveAspectRatio="xMidYMid meet"
-                        opacity={fruitIndex === 2 ? "0.96" : "1"}
-                      />
-                    </g>
-                  );
-                })}
-              </g>
-            );
-          })}
-
-        {selectedDecorations.has("echte-bloemen") && (
-          <>
-            {flowerClusters.map((cluster, clusterIndex) => {
-              const scale = cluster.scale;
-              const right = cluster.align === "right";
-              const top = cluster.align === "top";
-              const hero = cluster.role === "hero";
-              const elements = [
-                {
-                  asset:
-                    flowerAssets[
-                      (index + clusterIndex + 3) % flowerAssets.length
-                    ],
-                  x: top ? -8 : right ? 12 : -12,
-                  y: 7,
-                  size: 22 * scale,
-                  rotate: right ? 7 : -7,
-                  opacity: 0.84,
-                },
-                {
-                  asset: REAL_FLOWER_ASSET,
-                  x: 0,
-                  y: 0,
-                  size: (hero ? 39 : 34) * scale,
-                  rotate: right ? -5 : 5,
-                  opacity: 0.96,
-                },
-                {
-                  asset:
-                    flowerAssets[
-                      (index + clusterIndex + 2) % flowerAssets.length
-                    ],
-                  x: top ? 11 : right ? -17 : 17,
-                  y: hero ? -11 : -8,
-                  size: (hero ? 25 : 21) * scale,
-                  rotate: right ? 6 : -6,
-                  opacity: 0.9,
-                },
-                {
-                  asset: ROSE_WITH_LEAF_ASSET,
-                  x: top ? 4 : right ? 9 : -9,
-                  y: hero ? 12 : 10,
-                  size: 17 * scale,
-                  rotate: right ? 4 : -4,
-                  opacity: 0.86,
-                },
-                hero
-                  ? {
-                      asset:
-                        flowerAssets[
-                          (index + clusterIndex + 4) % flowerAssets.length
-                        ],
-                      x: right ? -6 : 6,
-                      y: 15,
-                      size: 16 * scale,
-                      rotate: right ? -3 : 3,
-                      opacity: 0.82,
-                    }
-                  : null,
-              ].filter(
-                (
-                  element
-                ): element is {
-                  asset: string;
-                  x: number;
-                  y: number;
-                  size: number;
-                  rotate: number;
-                  opacity: number;
-                } => Boolean(element)
-              );
-
-              return (
-                <g key={`${layerId}-flower-cluster-real-${clusterIndex}`}>
-                  <ellipse
-                    cx={cluster.x}
-                    cy={cluster.y + 15}
-                    rx={hero ? 26 : 21}
-                    ry={hero ? 3 : 2.3}
-                    fill="currentColor"
-                    opacity="0.11"
-                  />
-                  {[
-                    [right ? -13 : 13, 3, right ? -24 : 24],
-                    [right ? 8 : -8, 10, right ? 26 : -26],
-                    [right ? -2 : 2, -8, right ? 5 : -5],
-                  ].map(([leafX, leafY, rotate], leafIndex) => (
-                    <ellipse
-                      key={`${layerId}-flower-leaf-${clusterIndex}-${leafIndex}`}
-                      cx={cluster.x + leafX * scale}
-                      cy={cluster.y + leafY * scale}
-                      rx={4.2 * scale}
-                      ry={8.6 * scale}
-                      fill="#5f8f45"
-                      opacity="0.58"
-                      transform={`rotate(${rotate} ${cluster.x + leafX * scale} ${
-                        cluster.y + leafY * scale
-                      })`}
-                    />
-                  ))}
-                  {elements.map((element, elementIndex) => (
-                    <g
-                      key={`${layerId}-flower-real-${clusterIndex}-${elementIndex}`}
-                      transform={`translate(${cluster.x + element.x * scale} ${
-                        cluster.y + element.y * scale
-                      }) rotate(${element.rotate})`}
-                      opacity={element.opacity}
-                    >
-                      <ellipse
-                        cx="0"
-                        cy={element.size * 0.28}
-                        rx={element.size * 0.34}
-                        ry={Math.max(1.2, element.size * 0.07)}
-                        fill="currentColor"
-                        opacity="0.11"
-                      />
-                      <image
-                        href={element.asset}
-                        x={-element.size / 2}
-                        y={-element.size / 2}
-                        width={element.size}
-                        height={element.size}
-                        preserveAspectRatio="xMidYMid meet"
-                      />
-                    </g>
-                  ))}
-                </g>
-              );
-            })}
-          </>
-        )}
-
-        {roseClusters.map((cluster, item) =>
-          renderRoseCluster({
-            keyPrefix: `${layerId}-rose-cluster-${item}`,
-            x: cluster.x,
-            y: cluster.y,
-            withLeaves: hasRoseLeaves,
-            scale: cluster.scale,
-            rotation: cluster.rotation,
-          })
-        )}
+        {gold.map((placement) => imagePlacement(placement, decorShadowId))}
+        {fruits.map((placement) => imagePlacement(placement, decorShadowId))}
+        {roses.map((placement) => imagePlacement(placement, decorShadowId))}
+        {flowers.map((placement) => imagePlacement(placement, decorShadowId))}
       </>
     );
   }
@@ -1551,7 +1755,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             width="140%"
             height="200%"
           >
-            <feGaussianBlur stdDeviation="2.8" />
+            <feGaussianBlur stdDeviation="2.1" />
           </filter>
           <filter
             id={`${visualizerId}-base-shadow`}
@@ -1560,7 +1764,16 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             width="140%"
             height="200%"
           >
-            <feGaussianBlur stdDeviation="3.8" />
+            <feGaussianBlur stdDeviation="2.6" />
+          </filter>
+          <filter
+            id={`${visualizerId}-decor-asset-shadow`}
+            x="-10%"
+            y="-10%"
+            width="120%"
+            height="120%"
+          >
+            <feGaussianBlur stdDeviation="0.45" />
           </filter>
           {visualLayers.map((layer, index) => {
             const layerColor = config.styleId
@@ -1613,12 +1826,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         </defs>
         <ellipse
           cx="130"
-          cy="258"
+          cy="256"
           rx="82"
-          ry="7"
+          ry="4.8"
           fill="currentColor"
           filter={`url(#${visualizerId}-base-shadow)`}
-          opacity="0.14"
+          opacity="0.055"
         />
         {visualLayers.map((layer, index) => {
           const width = layerWidth(layer.persons);
@@ -1638,10 +1851,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                 cx="130"
                 cy={y + height + 2}
                 rx={width * 0.43}
-                ry="3.6"
+                ry="2.8"
                 fill="currentColor"
                 filter={`url(#${visualizerId}-soft-layer-shadow)`}
-                opacity={index === 0 ? "0.1" : "0.13"}
+                opacity={index === 0 ? "0.055" : "0.075"}
               />
               <rect
                 x={x}
