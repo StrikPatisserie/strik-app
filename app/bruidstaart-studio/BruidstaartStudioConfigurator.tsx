@@ -242,16 +242,6 @@ function colorMatrixForHex(hex?: string, multiplier = 1) {
   )} 0 0 0 0 ${blue.toFixed(3)} 0 0 0 1 0`;
 }
 
-function blendHexColor(hex: string | undefined, target: string, amount: number) {
-  const sourceRgb = hexToRgb(hex).map((value) => Math.round(value * 255));
-  const targetRgb = hexToRgb(target).map((value) => Math.round(value * 255));
-  const mixedRgb = sourceRgb.map((value, index) =>
-    Math.round(value + (targetRgb[index] - value) * amount)
-  );
-
-  return `rgb(${mixedRgb[0]}, ${mixedRgb[1]}, ${mixedRgb[2]})`;
-}
-
 function normalizeColorSearchText(value: string) {
   return value
     .toLocaleLowerCase("nl-NL")
@@ -720,14 +710,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const layerHeight = 39;
   const gap = 0.6;
 
-  function roseTintHexForLayer(roseId: string, layerColor?: StudioOption) {
-    return (
-      findColorOptionByNote(config.decorationColorNotes?.[roseId])?.swatchColor ||
-      layerColor?.swatchColor ||
-      "#e5b7ae"
-    );
-  }
-
   function layerWidth(persons: number) {
     return 64 + (persons / maxPersons) * 118;
   }
@@ -1008,8 +990,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     shadowOpacity?: number;
     edge: DecorEdge;
     flipX?: boolean;
-    tintColor?: string;
-    hasLeaves?: boolean;
     kind: "flower" | "fruit" | "rose" | "gold";
   };
 
@@ -1256,134 +1236,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       : undefined;
     const imageOpacity = placement.opacity ?? 1;
 
-    if (placement.kind === "rose" && placement.tintColor) {
-      const baseColor = placement.tintColor;
-      const petalShadow = blendHexColor(baseColor, "#4f201d", 0.34);
-      const petalMid = blendHexColor(baseColor, "#ffffff", 0.2);
-      const petalLight = blendHexColor(baseColor, "#ffffff", 0.58);
-      const petalDeep = blendHexColor(baseColor, "#5c1718", 0.22);
-      const leafFill = "#9bb56e";
-      const leafStroke = "#6f8b51";
-      const x = placement.x;
-      const y = placement.y;
-      const width = placement.width;
-      const height = placement.height;
-      const roseCenterX = x + width * 0.5;
-      const roseCenterY = y + height * 0.48;
-
-      return (
-        <g
-          key={placement.key}
-          transform={`rotate(${rotate} ${centerX} ${centerY})`}
-          opacity={imageOpacity}
-        >
-          <g transform={mirrorTransform}>
-            <ellipse
-              cx={roseCenterX}
-              cy={y + height * 0.88}
-              rx={width * 0.38}
-              ry={height * 0.08}
-              fill="currentColor"
-              opacity="0.11"
-            />
-            {placement.hasLeaves && (
-              <>
-                <ellipse
-                  cx={x + width * 0.28}
-                  cy={y + height * 0.66}
-                  rx={width * 0.2}
-                  ry={height * 0.09}
-                  fill={leafFill}
-                  stroke={leafStroke}
-                  strokeWidth="0.15"
-                  transform={`rotate(-30 ${x + width * 0.28} ${
-                    y + height * 0.66
-                  })`}
-                  opacity="0.92"
-                />
-                <ellipse
-                  cx={x + width * 0.72}
-                  cy={y + height * 0.66}
-                  rx={width * 0.2}
-                  ry={height * 0.09}
-                  fill={leafFill}
-                  stroke={leafStroke}
-                  strokeWidth="0.15"
-                  transform={`rotate(30 ${x + width * 0.72} ${
-                    y + height * 0.66
-                  })`}
-                  opacity="0.9"
-                />
-              </>
-            )}
-            <ellipse
-              cx={roseCenterX}
-              cy={roseCenterY}
-              rx={width * 0.34}
-              ry={height * 0.26}
-              fill={petalShadow}
-              opacity="0.94"
-            />
-            <ellipse
-              cx={x + width * 0.38}
-              cy={y + height * 0.42}
-              rx={width * 0.22}
-              ry={height * 0.13}
-              fill={petalMid}
-              transform={`rotate(-24 ${x + width * 0.38} ${
-                y + height * 0.42
-              })`}
-            />
-            <ellipse
-              cx={x + width * 0.62}
-              cy={y + height * 0.42}
-              rx={width * 0.22}
-              ry={height * 0.13}
-              fill={petalLight}
-              transform={`rotate(24 ${x + width * 0.62} ${
-                y + height * 0.42
-              })`}
-            />
-            <ellipse
-              cx={roseCenterX}
-              cy={y + height * 0.52}
-              rx={width * 0.24}
-              ry={height * 0.16}
-              fill={petalMid}
-            />
-            <path
-              d={`M ${x + width * 0.27} ${y + height * 0.49} C ${
-                x + width * 0.42
-              } ${y + height * 0.24}, ${x + width * 0.7} ${
-                y + height * 0.32
-              }, ${x + width * 0.64} ${y + height * 0.53} C ${
-                x + width * 0.55
-              } ${y + height * 0.44}, ${x + width * 0.43} ${
-                y + height * 0.44
-              }, ${x + width * 0.37} ${y + height * 0.57}`}
-              fill="none"
-              stroke={petalDeep}
-              strokeLinecap="round"
-              strokeWidth={Math.max(0.45, width * 0.035)}
-              opacity="0.62"
-            />
-            <path
-              d={`M ${x + width * 0.36} ${y + height * 0.56} C ${
-                x + width * 0.47
-              } ${y + height * 0.44}, ${x + width * 0.62} ${
-                y + height * 0.49
-              }, ${x + width * 0.57} ${y + height * 0.61}`}
-              fill="none"
-              stroke={petalLight}
-              strokeLinecap="round"
-              strokeWidth={Math.max(0.35, width * 0.025)}
-              opacity="0.68"
-            />
-          </g>
-        </g>
-      );
-    }
-
     return (
       <g
         key={placement.key}
@@ -1442,9 +1294,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     const isBottomLayer = index === 0;
     const isTopLayer = index === visualLayers.length - 1;
     const zones = getLayerDecorationZones(index, x, y, width, height);
-    const layerColor = config.styleId
-      ? getLayerColor(config, layerId)
-      : undefined;
     const placedRects: VisualRect[] = [];
     const accentAnchors: Array<{ x: number; y: number; edge: DecorEdge }> = [];
     const flowers: AssetPlacement[] = [];
@@ -1574,7 +1423,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           zones.topEdgeZone.x1 +
           (zones.topEdgeZone.x2 - zones.topEdgeZone.x1) * ratio;
         const topAnchorFactor =
-          kind === "flower" ? 0.68 : kind === "fruit" ? 0.28 : 0.32;
+          kind === "flower" ? 0.68 : kind === "fruit" ? 0.86 : 0.32;
         const sideOverhang =
           kind === "flower" ? 0.22 : kind === "fruit" ? 0.1 : 0.05;
 
@@ -1792,11 +1641,11 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               ratio: nextRatio,
               assetWidth: assetWidth,
               assetHeight: fruitHeight,
-              rotate: nextRatio < 0.5 ? -1.5 : 1.5,
+              rotate: 0,
               opacity: 0.98,
               shadowOpacity: 0.05,
               kind: "fruit",
-              sideOffset: row.edge === "top" ? fruitHeight * 0.04 : 0,
+              sideOffset: 0,
             });
 
             return addPlacement(fruits, placement);
@@ -1821,8 +1670,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           roseId === "marsepeinrozen-met-blad"
             ? ROSE_WITH_LEAF_ASSET
             : ROSE_WITHOUT_LEAF_ASSET;
-        const roseTintColor = roseTintHexForLayer(roseId, layerColor);
-        const hasLeaves = roseId === "marsepeinrozen-met-blad";
         const topCapacity = Math.max(
           1,
           Math.floor(
@@ -1908,8 +1755,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   rotate: [-4, 3, -1, 5][(item + variantIndex) % 4],
                   opacity: 0.98,
                   shadowOpacity: 0.045,
-                  tintColor: roseTintColor,
-                  hasLeaves,
                 }
               : {
                   ...rowCenter,
@@ -1923,8 +1768,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                       : 8 - (item % 2) * 5,
                   opacity: 0.98,
                   shadowOpacity: 0.045,
-                  tintColor: roseTintColor,
-                  hasLeaves,
                 };
 
             addPlacement(roses, placement, {
