@@ -1301,7 +1301,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     const isTopLayer = index === visualLayers.length - 1;
     const zones = getLayerDecorationZones(index, x, y, width, height);
     const placedRects: VisualRect[] = [];
-    const accentAnchors: Array<{ x: number; y: number; edge: DecorEdge }> = [];
     const flowers: AssetPlacement[] = [];
     const fruits: AssetPlacement[] = [];
     const roses: AssetPlacement[] = [];
@@ -1382,17 +1381,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
       list.push(placement);
       placedRects.push(placementRect(placement));
-      if (placement.kind !== "gold") {
-        accentAnchors.push({
-          x: placement.x + placement.width / 2,
-          y:
-            placement.edge === "bottom"
-              ? placement.y + placement.height
-              : placement.y + placement.height * 0.55,
-          edge: placement.edge,
-        });
-      }
-
       return true;
     }
 
@@ -1426,7 +1414,13 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           zones.topEdgeZone.x1 +
           (zones.topEdgeZone.x2 - zones.topEdgeZone.x1) * ratio;
         const topAnchorFactor =
-          kind === "flower" ? 0.68 : kind === "fruit" ? 0.86 : 0.32;
+          kind === "flower"
+            ? 0.68
+            : kind === "fruit"
+              ? 0.86
+              : kind === "rose"
+                ? 1
+                : 0.32;
         const sideOverhang =
           kind === "flower" ? 0.22 : kind === "fruit" ? 0.1 : 0.05;
 
@@ -1529,74 +1523,80 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       if (!selectedDecorations.has("echte-bloemen")) return;
 
       const flowerBaseHeight = clampVisual(
-        width * (isTopLayer ? 0.15 : 0.16),
-        24,
-        isTopLayer ? 35 : 40
+        width * (isTopLayer ? 0.18 : 0.19),
+        28,
+        isTopLayer ? 42 : 48
       );
-      const flowerCount = isBottomLayer || width > 142 ? 3 : 2;
       const firstEdge: "left" | "right" = index % 2 ? "right" : "left";
       const secondEdge: "left" | "right" =
         firstEdge === "left" ? "right" : "left";
-      const sideFlowerPlans: Array<{
+      const flowerClusterPlans: Array<{
         edge: "left" | "right";
         ratios: number[];
-        rotate: number;
+        baseRotate: number;
         flipX: boolean;
-        sideOffset: number;
-        scale: number;
+        count: number;
+        scales: number[];
       }> = [
         {
           edge: firstEdge,
           ratios: [0.24, 0.32, 0.18, 0.4],
-          rotate: firstEdge === "left" ? -8 : 8,
+          baseRotate: firstEdge === "left" ? -8 : 8,
           flipX: firstEdge === "right",
-          sideOffset: 0,
-          scale: 1,
+          count: isBottomLayer || width > 142 ? 2 : 1,
+          scales: [1.08, 0.9, 0.76],
         },
         {
           edge: secondEdge,
           ratios: [0.55, 0.64, 0.46, 0.72],
-          rotate: secondEdge === "left" ? -5 : 5,
+          baseRotate: secondEdge === "left" ? -5 : 5,
           flipX: secondEdge === "right",
-          sideOffset: 0,
-          scale: 0.86,
+          count: 1,
+          scales: [0.94, 0.78],
         },
-        {
-          edge: firstEdge,
-          ratios: [0.36, 0.44, 0.28, 0.5],
-          rotate: firstEdge === "left" ? -11 : 11,
-          flipX: firstEdge === "right",
-          sideOffset: 0,
-          scale: 0.72,
-        },
-      ].slice(0, flowerCount);
+      ];
+      const clusterOffsets = [
+        { ratio: 0, side: 0, rotate: 0 },
+        { ratio: 0.055, side: 0.1, rotate: 4 },
+        { ratio: -0.045, side: -0.08, rotate: -5 },
+      ];
 
-      sideFlowerPlans.forEach((plan) => {
+      flowerClusterPlans.forEach((plan, clusterIndex) => {
         plan.ratios.some((ratio, candidateIndex) => {
-          const flowerHeight = flowerBaseHeight * plan.scale;
-          const flowerWidth = flowerHeight * 1.14;
-          const sideOffset =
-            plan.edge === "left"
-              ? -flowerWidth * (0.08 + candidateIndex * 0.015)
-              : flowerWidth * (0.08 + candidateIndex * 0.015);
-          const placement = edgePlacement({
-            key: `${layerId}-flower-${plan.edge}-${candidateIndex}`,
-            asset: REAL_FLOWER_ASSET,
-            edge: plan.edge,
-            ratio,
-            assetWidth: flowerWidth,
-            assetHeight: flowerHeight,
-            rotate: plan.rotate + [-2, 1.5, 0, 2][candidateIndex],
-            opacity: 0.96,
-            kind: "flower",
-            sideOffset: plan.sideOffset + sideOffset,
-            flipX: plan.flipX,
+          let placedInCluster = false;
+
+          clusterOffsets.slice(0, plan.count).forEach((offset, item) => {
+            const flowerHeight = flowerBaseHeight * plan.scales[item];
+            const flowerWidth = flowerHeight * 1.14;
+            const sideDirection = plan.edge === "left" ? -1 : 1;
+            const placement = edgePlacement({
+              key: `${layerId}-flower-${clusterIndex}-${item}-${candidateIndex}`,
+              asset: REAL_FLOWER_ASSET,
+              edge: plan.edge,
+              ratio: clampVisual(ratio + offset.ratio, 0.12, 0.88),
+              assetWidth: flowerWidth,
+              assetHeight: flowerHeight,
+              rotate:
+                plan.baseRotate +
+                offset.rotate +
+                [-2, 1.5, 0, 2][candidateIndex],
+              opacity: 0.96,
+              kind: "flower",
+              sideOffset:
+                sideDirection *
+                flowerWidth *
+                (0.1 + offset.side + candidateIndex * 0.012),
+              flipX: plan.flipX,
+            });
+
+            placedInCluster =
+              addPlacement(flowers, placement, {
+                allowOverlap: true,
+                allowText: true,
+              }) || placedInCluster;
           });
 
-          return addPlacement(flowers, placement, {
-            allowOverlap: true,
-            allowText: true,
-          });
+          return placedInCluster;
         });
       });
     }
@@ -1775,7 +1775,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             assetWidth: horizontal ? rowLength : roseSize,
             assetHeight: horizontal ? roseSize : rowLength,
             kind: "rose",
-            sideOffset: plan.edge === "top" ? roseSize * 0.1 : 0,
+            sideOffset: 0,
           });
 
           Array.from({ length: plan.count }, (_item, item) => {
@@ -1820,40 +1820,73 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     function addGoldAccents() {
       if (!selectedDecorations.has("bladgoud")) return;
 
-      const anchors: Array<{ x: number; y: number; edge: DecorEdge }> =
-        accentAnchors.length
-        ? accentAnchors
-        : [
-            {
-              x: x + width * (index % 2 ? 0.24 : 0.76),
-              y: y + height * 0.25,
-              edge: index % 2 ? "left" : "right",
-            },
-          ];
-      const goldCount = Math.min(4, Math.max(2, Math.ceil(width / 72)));
-      const goldSize = clampVisual(width * 0.05, 7.4, 12.2);
-      const visibleAnchors = anchors.slice(0, Math.min(2, anchors.length));
+      const goldSize = clampVisual(width * 0.055, 8.2, 13.2);
+      const goldWidth = goldSize * 1.22;
+      const cornerInsetX = clampVisual(width * 0.11, 10, 18);
+      const cornerInsetY = clampVisual(height * 0.16, 6, 10);
+      const firstCorner: "left" | "right" = index % 2 ? "right" : "left";
+      const secondCorner: "left" | "right" =
+        firstCorner === "left" ? "right" : "left";
+      const goldClusters: Array<{
+        edge: "left" | "right";
+        x: number;
+        y: number;
+        pieces: number;
+      }> = [
+        {
+          edge: firstCorner,
+          x:
+            firstCorner === "left"
+              ? x + cornerInsetX
+              : x + width - cornerInsetX - goldWidth,
+          y: y + cornerInsetY + height * 0.08,
+          pieces: 3,
+        },
+        {
+          edge: secondCorner,
+          x:
+            secondCorner === "left"
+              ? x + cornerInsetX
+              : x + width - cornerInsetX - goldWidth,
+          y: y + height - cornerInsetY - goldSize * 1.8,
+          pieces: width > 132 ? 2 : 1,
+        },
+      ];
+      const pieceOffsets = [
+        { x: 0, y: 0, rotate: -18, opacity: 0.82 },
+        { x: goldSize * 1.05, y: goldSize * 0.38, rotate: 15, opacity: 0.76 },
+        { x: goldSize * 0.35, y: goldSize * 1.05, rotate: -7, opacity: 0.7 },
+      ];
 
-      Array.from({ length: goldCount }, (_gold, item) => {
-        const anchor = visibleAnchors[item % visibleAnchors.length];
-        const clusterOffset = [-4, 3.5, 0.5, -1.5][item % 4];
-        const placement = edgePlacement({
-          key: `${layerId}-gold-${item}`,
-          asset: GOLD_LEAF_ASSET,
-          edge: anchor.edge,
-          ratio:
-            anchor.edge === "top" || anchor.edge === "bottom"
-              ? clampVisual((anchor.x - x) / width, 0.18, 0.82)
-              : clampVisual((anchor.y - y) / height, 0.18, 0.82),
-          assetWidth: goldSize * 1.22,
-          assetHeight: goldSize,
-          rotate: [-13, 11, -4, 17][item % 4],
-          opacity: item % 2 ? 0.72 : 0.82,
-          kind: "gold",
-          sideOffset: item % 2 ? clusterOffset : -clusterOffset,
+      goldClusters.forEach((cluster, clusterIndex) => {
+        pieceOffsets.slice(0, cluster.pieces).forEach((offset, item) => {
+          const direction = cluster.edge === "left" ? 1 : -1;
+          const placement: AssetPlacement = {
+            key: `${layerId}-gold-${clusterIndex}-${item}`,
+            asset: GOLD_LEAF_ASSET,
+            edge: cluster.edge,
+            kind: "gold",
+            x: clampVisual(
+              cluster.x + offset.x * direction,
+              x + cornerInsetX * 0.55,
+              x + width - cornerInsetX * 0.55 - goldWidth
+            ),
+            y: clampVisual(
+              cluster.y + offset.y,
+              y + cornerInsetY,
+              y + height - cornerInsetY - goldSize
+            ),
+            width: goldWidth,
+            height: goldSize,
+            rotate: offset.rotate * direction,
+            opacity: offset.opacity,
+          };
+
+          addPlacement(gold, placement, {
+            allowOverlap: true,
+            allowText: true,
+          });
         });
-
-        addPlacement(gold, placement, { allowOverlap: true });
       });
     }
 
