@@ -666,7 +666,7 @@ export const decorationOptions: StudioOption[] = [
   },
   {
     id: "marsepeinrozen-met-blad",
-    label: "Marsepeinroosjes met blad",
+    label: "Marsepeinroosjes met groen blad",
     description: "Geef het aantal roosjes op.",
     price: { mode: "fixed", amount: 1.5, label: "per roosje" },
     selectionGroup: "marzipanRoses",
@@ -759,6 +759,7 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   layerLayoutIds: {},
   decorationIds: [],
   decorationQuantities: {},
+  decorationColorNotes: {},
   decorationNotes: "",
   decorationExtraNotes: [],
   decorationSurcharges: [],

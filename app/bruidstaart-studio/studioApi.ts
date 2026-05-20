@@ -127,6 +127,16 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
         ? (config.layerLayoutIds as Record<string, string>)
         : {},
       decorationQuantities: numericRecordFrom(config.decorationQuantities),
+      decorationColorNotes: isRecord(config.decorationColorNotes)
+        ? Object.fromEntries(
+            Object.entries(config.decorationColorNotes).flatMap(
+              ([key, value]) => {
+                const text = textFrom(value);
+                return text ? [[key, text]] : [];
+              }
+            )
+          )
+        : {},
       decorationNotes: textFrom(config.decorationNotes),
       decorationExtraNotes: decorationExtraNotesFrom(
         config.decorationExtraNotes

@@ -90,6 +90,7 @@ export type WeddingCakeConfig = {
   layerLayoutIds: Record<string, string>;
   decorationIds: string[];
   decorationQuantities: Record<string, number>;
+  decorationColorNotes: Record<string, string>;
   decorationNotes: string;
   decorationExtraNotes: DecorationExtraNote[];
   decorationSurcharges: DecorationSurcharge[];

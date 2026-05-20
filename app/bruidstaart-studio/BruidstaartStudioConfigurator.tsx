@@ -21,6 +21,7 @@ import {
   formatEuro,
   getCakeDesignGroups,
   getCakeLayers,
+  getDecorationColorNotes,
   getDecorationNoteTexts,
   getDecorationQuantity,
   getDecorationSurcharges,
@@ -463,14 +464,18 @@ function DecorationOptionCard({
   option,
   selected,
   quantity,
+  colorNote,
   onToggle,
   onQuantityChange,
+  onColorNoteChange,
 }: {
   option: StudioOption;
   selected: boolean;
   quantity: number;
+  colorNote?: string;
   onToggle: () => void;
   onQuantityChange: (quantity: number) => void;
+  onColorNoteChange?: (color: string) => void;
 }) {
   const [quantityInput, setQuantityInput] = useState(String(quantity));
 
@@ -541,21 +546,35 @@ function DecorationOptionCard({
       </button>
 
       {selected && option.quantityLabel && (
-        <label className="mt-4 grid gap-2 text-sm font-black text-[#2d2a26]/70">
-          {option.quantityLabel}
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            value={quantityInput}
-            onBlur={commitQuantityInput}
-            onChange={(event) => updateQuantityInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
-            className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
-          />
-        </label>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-2 text-sm font-black text-[#2d2a26]/70">
+            {option.quantityLabel}
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={quantityInput}
+              onBlur={commitQuantityInput}
+              onChange={(event) => updateQuantityInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+              className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+            />
+          </label>
+          {onColorNoteChange && (
+            <label className="grid gap-2 text-sm font-black text-[#2d2a26]/70">
+              Kleur roosjes
+              <input
+                type="text"
+                value={colorNote || ""}
+                onChange={(event) => onColorNoteChange(event.target.value)}
+                placeholder="Bijv. ivoor, pastelroze"
+                className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+              />
+            </label>
+          )}
+        </div>
       )}
     </div>
   );
@@ -1811,6 +1830,7 @@ function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
     layerLayoutIds: {},
     decorationIds: [],
     decorationQuantities: {},
+    decorationColorNotes: {},
     decorationExtraNotes: [],
     decorationSurcharges: [],
     topperIds: [],
@@ -1856,6 +1876,10 @@ export default function BruidstaartStudioConfigurator() {
   );
   const decorationSurcharges = useMemo(
     () => getDecorationSurcharges(config),
+    [config]
+  );
+  const decorationColorNotes = useMemo(
+    () => getDecorationColorNotes(config),
     [config]
   );
 
@@ -2034,6 +2058,7 @@ export default function BruidstaartStudioConfigurator() {
       const isSelected = current.decorationIds.includes(id);
       let nextDecorationIds = current.decorationIds;
       const nextQuantities = { ...current.decorationQuantities };
+      const nextColorNotes = { ...(current.decorationColorNotes || {}) };
       const existingRoseQuantity = ROSE_DECORATION_IDS.map(
         (roseId) => current.decorationQuantities?.[roseId]
       ).find((quantity) => Number.isFinite(quantity));
@@ -2041,12 +2066,14 @@ export default function BruidstaartStudioConfigurator() {
       if (isSelected) {
         nextDecorationIds = nextDecorationIds.filter((item) => item !== id);
         delete nextQuantities[id];
+        delete nextColorNotes[id];
       } else {
         if (option.selectionGroup === "marzipanRoses") {
           nextDecorationIds = nextDecorationIds.filter(
             (item) => !ROSE_DECORATION_IDS.includes(item)
           );
           ROSE_DECORATION_IDS.forEach((roseId) => delete nextQuantities[roseId]);
+          ROSE_DECORATION_IDS.forEach((roseId) => delete nextColorNotes[roseId]);
         }
 
         nextDecorationIds = [...nextDecorationIds, id];
@@ -2063,6 +2090,7 @@ export default function BruidstaartStudioConfigurator() {
         ...current,
         decorationIds: nextDecorationIds,
         decorationQuantities: nextQuantities,
+        decorationColorNotes: nextColorNotes,
       };
     });
   }
@@ -2073,6 +2101,16 @@ export default function BruidstaartStudioConfigurator() {
       decorationQuantities: {
         ...current.decorationQuantities,
         [decorationId]: Math.max(1, Math.min(99, Math.round(quantity || 1))),
+      },
+    }));
+  }
+
+  function setDecorationColorNote(decorationId: string, color: string) {
+    setConfig((current) => ({
+      ...current,
+      decorationColorNotes: {
+        ...(current.decorationColorNotes || {}),
+        [decorationId]: color,
       },
     }));
   }
@@ -2236,6 +2274,13 @@ export default function BruidstaartStudioConfigurator() {
       `Decoratie opmerkingen: ${
         decorationNoteTexts.length ? decorationNoteTexts.join(" | ") : "-"
       }`,
+      `Decoratie kleuren: ${
+        decorationColorNotes.length
+          ? decorationColorNotes
+              .map((item) => `${item.label}: ${item.color}`)
+              .join(" | ")
+          : "-"
+      }`,
       `Decoratie toeslagen: ${
         decorationSurcharges.length
           ? decorationSurcharges
@@ -2378,6 +2423,7 @@ export default function BruidstaartStudioConfigurator() {
       layerColorIds: draft.config.layerColorIds || {},
       layerLayoutIds: draft.config.layerLayoutIds || {},
       decorationQuantities: draft.config.decorationQuantities || {},
+      decorationColorNotes: draft.config.decorationColorNotes || {},
       decorationNotes: draft.config.decorationNotes || "",
       decorationExtraNotes: draft.config.decorationExtraNotes || [],
       decorationSurcharges: draft.config.decorationSurcharges || [],
@@ -2922,9 +2968,15 @@ export default function BruidstaartStudioConfigurator() {
                   option={option}
                   selected={config.decorationIds.includes(option.id)}
                   quantity={getDecorationQuantity(config, option.id)}
+                  colorNote={config.decorationColorNotes?.[option.id] || ""}
                   onToggle={() => toggleDecoration(option.id)}
                   onQuantityChange={(quantity) =>
                     setDecorationQuantity(option.id, quantity)
+                  }
+                  onColorNoteChange={
+                    ROSE_DECORATION_IDS.includes(option.id)
+                      ? (color) => setDecorationColorNote(option.id, color)
+                      : undefined
                   }
                 />
               ))}
@@ -3363,6 +3415,14 @@ export default function BruidstaartStudioConfigurator() {
               <p>
                 <span className="font-bold">Decoratie opmerkingen:</span>{" "}
                 {decorationNoteTexts.join(" | ")}
+              </p>
+            )}
+            {decorationColorNotes.length > 0 && (
+              <p>
+                <span className="font-bold">Decoratie kleuren:</span>{" "}
+                {decorationColorNotes
+                  .map((item) => `${item.label}: ${item.color}`)
+                  .join(" | ")}
               </p>
             )}
             {decorationSurcharges.length > 0 && (

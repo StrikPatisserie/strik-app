@@ -100,6 +100,25 @@ export function getDecorationSurcharges(config: WeddingCakeConfig) {
   );
 }
 
+export function getDecorationColorNotes(config: WeddingCakeConfig) {
+  const colorNotes = config.decorationColorNotes || {};
+
+  return config.decorationIds.flatMap((id) => {
+    const color = colorNotes[id]?.trim();
+    if (!color) return [];
+
+    const decoration = findOption(decorationOptions, id);
+
+    return [
+      {
+        id,
+        label: decoration?.label || id,
+        color,
+      },
+    ];
+  });
+}
+
 export function getCakeLayers(config: WeddingCakeConfig): CakeLayer[] {
   const size = findOption(cakeSizes, config.sizeId);
 
@@ -398,11 +417,16 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   const decorations = config.decorationIds.flatMap((id) => {
     const decoration = findOption(decorationOptions, id);
     if (!decoration) return [];
+    const color = config.decorationColorNotes?.[id]?.trim();
+    const colorSuffix = color ? `, kleur: ${color}` : "";
+
     if (decoration.quantityLabel) {
-      return [`${decoration.label} (${getDecorationQuantity(config, id)}x)`];
+      return [
+        `${decoration.label} (${getDecorationQuantity(config, id)}x${colorSuffix})`,
+      ];
     }
 
-    return [decoration.label];
+    return [color ? `${decoration.label} (${color})` : decoration.label];
   });
 
   return {
@@ -429,6 +453,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
   const price = calculateWeddingCakePrice(config);
   const decorationNotes = getDecorationNoteTexts(config);
   const decorationSurcharges = getDecorationSurcharges(config);
+  const decorationColorNotes = getDecorationColorNotes(config);
 
   return [
     "BRUIDSTAART STUDIO - BESTELFORMULIER",
@@ -456,6 +481,13 @@ export function createProductionForm(config: WeddingCakeConfig) {
     `Layout: ${labels.layout}`,
     `Decoratie: ${labels.decorations.length ? labels.decorations.join(", ") : "geen"}`,
     `Decoratie opmerkingen: ${decorationNotes.length ? decorationNotes.join(" | ") : "-"}`,
+    `Decoratie kleuren: ${
+      decorationColorNotes.length
+        ? decorationColorNotes
+            .map((item) => `${item.label}: ${item.color}`)
+            .join(" | ")
+        : "-"
+    }`,
     `Decoratie toeslagen: ${
       decorationSurcharges.length
         ? decorationSurcharges
