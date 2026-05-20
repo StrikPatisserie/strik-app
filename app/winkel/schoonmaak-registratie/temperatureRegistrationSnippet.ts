@@ -9,6 +9,7 @@ export const TEMPERATURE_REGISTRATION_SNIPPET = String.raw`<?php
  * - POST /wp-json/strik/v1/temperature-registration
  *
  * Elke POST overschrijft de bestaande registratie met dezelfde datum + winkel.
+ * Oude ijs-schermen kunnen het veld "temperatuur" blijven lezen.
  */
 
 if (!defined('STRIK_TEMPERATURE_API_KEY')) {
@@ -54,6 +55,7 @@ function strik_temperature_v1_registrations($items) {
             'naam' => $naam,
             'displayTemperatuur' => $display_temperatuur,
             'handTemperatuur' => $hand_temperatuur,
+            'temperatuur' => $temperature,
             'temperature' => $temperature,
             'deviceType' => $device_type,
             'status' => $status,
