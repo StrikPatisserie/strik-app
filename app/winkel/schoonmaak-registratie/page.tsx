@@ -116,6 +116,19 @@ function createTemperatureRow(
   };
 }
 
+function temperatureValueIsNegative(value: string) {
+  return value.trim().startsWith("-");
+}
+
+function setTemperatureSign(value: string, sign: "+" | "-") {
+  const trimmedValue = value.trim();
+  const valueWithoutSign = trimmedValue.replace(/^[+-]/, "");
+
+  if (!valueWithoutSign) return sign === "-" ? "-" : "";
+
+  return sign === "-" ? `-${valueWithoutSign}` : valueWithoutSign;
+}
+
 function normalizeDeviceName(value: string) {
   return value.toLocaleLowerCase("nl-NL").replace(/\s+/g, " ").trim();
 }
@@ -227,6 +240,66 @@ function sortByLatest(items: TemperatureItem[]) {
   });
 }
 
+function TemperatureValueInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const isNegative = temperatureValueIsNegative(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function updateSign(sign: "+" | "-") {
+    onChange(setTemperatureSign(value, sign));
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  return (
+    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+      {label}
+      <span className="grid grid-cols-[auto_minmax(0,1fr)] gap-1">
+        <span className="grid gap-1">
+          <button
+            type="button"
+            onClick={() => updateSign("+")}
+            aria-label={`${label} positief maken`}
+            className={`h-6 w-6 rounded-full text-[0.68rem] font-black leading-none shadow-sm ${
+              isNegative
+                ? "bg-white text-[#2d2a26]/45"
+                : "bg-[#dbe9ee] text-[#214456]"
+            }`}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => updateSign("-")}
+            aria-label={`${label} negatief maken`}
+            className={`h-6 w-6 rounded-full text-[0.68rem] font-black leading-none shadow-sm ${
+              isNegative
+                ? "bg-[#dbe9ee] text-[#214456]"
+                : "bg-white text-[#2d2a26]/45"
+            }`}
+          >
+            -
+          </button>
+        </span>
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          inputMode="decimal"
+          placeholder="0,0"
+          className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+        />
+      </span>
+    </label>
+  );
+}
+
 function readLocalDraft(winkelId: WinkelId, datum: string) {
   if (typeof window === "undefined") return null;
 
@@ -283,8 +356,11 @@ export default function SchoonmaakRegistratiePage() {
   const [ladenBezig, setLadenBezig] = useState(false);
   const [opslaanBezig, setOpslaanBezig] = useState(false);
   const autoSaveTimerRef = useRef<number | null>(null);
+  const addFeedbackTimerRef = useRef<number | null>(null);
+  const registrationRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const verzondenSignatuurRef = useRef("");
   const extraRowIdRef = useRef(0);
+  const [addFeedback, setAddFeedback] = useState("");
   const selectedWinkel = getSelectedWinkel(winkelId);
 
   function createPayload(nextForm = form): TemperaturePayload {
@@ -408,16 +484,34 @@ export default function SchoonmaakRegistratiePage() {
 
   function addRegistrationRow() {
     extraRowIdRef.current += 1;
+    const nextRow = createTemperatureRow(
+      "",
+      `extra-${form.temperatuurRegistraties.length}-${extraRowIdRef.current}`
+    );
 
     updateForm({
       ...form,
-      temperatuurRegistraties: [
-        ...form.temperatuurRegistraties,
-        createTemperatureRow(
-          "",
-          `extra-${form.temperatuurRegistraties.length}-${extraRowIdRef.current}`
-        ),
-      ],
+      temperatuurRegistraties: [...form.temperatuurRegistraties, nextRow],
+    });
+    setAddFeedback("Meetpunt toegevoegd.");
+
+    if (addFeedbackTimerRef.current) {
+      window.clearTimeout(addFeedbackTimerRef.current);
+    }
+
+    addFeedbackTimerRef.current = window.setTimeout(() => {
+      setAddFeedback("");
+      addFeedbackTimerRef.current = null;
+    }, 1800);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const nextElement = registrationRowRefs.current[nextRow.id];
+        const firstInput = nextElement?.querySelector<HTMLInputElement>("input");
+
+        nextElement?.scrollIntoView({ behavior: "smooth", block: "center" });
+        firstInput?.focus({ preventScroll: true });
+      });
     });
   }
 
@@ -438,6 +532,9 @@ export default function SchoonmaakRegistratiePage() {
     () => () => {
       if (autoSaveTimerRef.current) {
         window.clearTimeout(autoSaveTimerRef.current);
+      }
+      if (addFeedbackTimerRef.current) {
+        window.clearTimeout(addFeedbackTimerRef.current);
       }
     },
     []
@@ -628,13 +725,20 @@ export default function SchoonmaakRegistratiePage() {
                 {selectedWinkel.label} · {datum}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={addRegistrationRow}
-              className="rounded-full bg-[#dbe9ee] px-4 py-2.5 text-sm font-black shadow-sm"
-            >
-              + Meetpunt
-            </button>
+            <div className="grid justify-items-end gap-1">
+              <button
+                type="button"
+                onClick={addRegistrationRow}
+                className="rounded-full bg-[#dbe9ee] px-4 py-2.5 text-sm font-black shadow-sm"
+              >
+                + Meetpunt
+              </button>
+              {addFeedback && (
+                <p className="text-xs font-black text-[#6d9caf]">
+                  {addFeedback}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="mt-4 grid gap-3">
@@ -644,6 +748,9 @@ export default function SchoonmaakRegistratiePage() {
               return (
                 <div
                   key={item.id}
+                  ref={(element) => {
+                    registrationRowRefs.current[item.id] = element;
+                  }}
                   className="grid gap-2 rounded-[1.25rem] border border-[#e7e0d8] bg-[#f8f6f3] p-3 sm:grid-cols-[minmax(0,1.25fr)_8rem_8rem_auto]"
                 >
                   <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
@@ -657,38 +764,20 @@ export default function SchoonmaakRegistratiePage() {
                       className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
                     />
                   </label>
-                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-                    Display
-                    <input
-                      value={item.displayTemperatuur}
-                      onChange={(event) =>
-                        updateRegistration(
-                          item.id,
-                          "displayTemperatuur",
-                          event.target.value
-                        )
-                      }
-                      inputMode="decimal"
-                      placeholder="0,0"
-                      className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
-                    />
-                  </label>
-                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-                    Handmeting
-                    <input
-                      value={item.handTemperatuur}
-                      onChange={(event) =>
-                        updateRegistration(
-                          item.id,
-                          "handTemperatuur",
-                          event.target.value
-                        )
-                      }
-                      inputMode="decimal"
-                      placeholder="0,0"
-                      className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
-                    />
-                  </label>
+                  <TemperatureValueInput
+                    label="Display"
+                    value={item.displayTemperatuur}
+                    onChange={(value) =>
+                      updateRegistration(item.id, "displayTemperatuur", value)
+                    }
+                  />
+                  <TemperatureValueInput
+                    label="Handmeting"
+                    value={item.handTemperatuur}
+                    onChange={(value) =>
+                      updateRegistration(item.id, "handTemperatuur", value)
+                    }
+                  />
                   {isDefaultRow ? (
                     <span className="hidden sm:block" aria-hidden="true" />
                   ) : (
