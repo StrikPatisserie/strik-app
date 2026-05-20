@@ -100,6 +100,16 @@ export function getDecorationSurcharges(config: WeddingCakeConfig) {
   );
 }
 
+export function getTopperNoteTexts(config: WeddingCakeConfig) {
+  return [config.topperNotes || ""].map((note) => note.trim()).filter(Boolean);
+}
+
+export function getTopperSurcharges(config: WeddingCakeConfig) {
+  return (config.topperSurcharges || []).filter(
+    (surcharge) => surcharge.description.trim() || surcharge.amount > 0
+  );
+}
+
 function getDecorationColorLabel(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -421,6 +431,15 @@ export function calculateWeddingCakePrice(
     });
   });
 
+  getTopperSurcharges(config).forEach((surcharge) => {
+    if (!surcharge.amount) return;
+
+    lines.push({
+      label: `Topper toeslag: ${surcharge.description.trim() || "extra wens"}`,
+      amount: surcharge.amount,
+    });
+  });
+
   const total = lines.reduce((sum, line) => sum + line.amount, 0);
 
   return {
@@ -494,6 +513,8 @@ export function createProductionForm(config: WeddingCakeConfig) {
   const decorationNotes = getDecorationNoteTexts(config);
   const decorationSurcharges = getDecorationSurcharges(config);
   const decorationColorNotes = getDecorationColorNotes(config);
+  const topperNotes = getTopperNoteTexts(config);
+  const topperSurcharges = getTopperSurcharges(config);
 
   return [
     "BRUIDSTAART STUDIO - BESTELFORMULIER",
@@ -541,6 +562,19 @@ export function createProductionForm(config: WeddingCakeConfig) {
         : "-"
     }`,
     `Topper/add-on: ${labels.topper}`,
+    `Topper opmerkingen: ${topperNotes.length ? topperNotes.join(" | ") : "-"}`,
+    `Topper toeslagen: ${
+      topperSurcharges.length
+        ? topperSurcharges
+            .map(
+              (surcharge) =>
+                `${surcharge.description || "extra wens"} (${formatEuro(
+                  surcharge.amount
+                )})`
+            )
+            .join(" | ")
+        : "-"
+    }`,
     `Betaald: ${config.paid ? "Ja" : "Nee"}`,
     `Bestelling definitief: ${config.completed ? "Ja" : "Nee"}`,
     "",

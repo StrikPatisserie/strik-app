@@ -671,8 +671,15 @@ export const decorationOptions: StudioOption[] = [
   },
   {
     id: "creme-parelrand",
-    label: "Crèmekleurige parelrand",
+    label: "Creme Bolletjesrand",
     price: { mode: "perPerson", amount: 0.15 },
+  },
+  {
+    id: "parelrand",
+    label: "Parelrand",
+    description: "Kies goud, zilver, brons of ivory.",
+    allowedStyles: ["klassiek"],
+    price: { mode: "perPerson", amount: 0.2 },
   },
   {
     id: "marsepeinrozen-zonder-blad",
@@ -800,6 +807,8 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   decorationExtraNotes: [],
   decorationSurcharges: [],
   topperIds: [],
+  topperNotes: "",
+  topperSurcharges: [],
   paid: false,
   completed: false,
   contact: emptyContactDetails,

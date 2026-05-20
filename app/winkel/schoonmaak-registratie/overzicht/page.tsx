@@ -14,6 +14,7 @@ import {
   isWinkelId,
   monthOptions,
   normalizeDeviceName,
+  normalizeTemperatureDeviceType,
   temperatureRowsByWinkel,
   winkelOptions,
   type TemperatureDeviceType,
@@ -158,8 +159,10 @@ function buildRows(
 
     registrations.forEach((registration, registrationIndex) => {
       const deviceName = registration.naam || "Onbekend meetpunt";
-      const deviceType =
-        registration.deviceType || inferDeviceType(registration.naam || "");
+      const deviceType = normalizeTemperatureDeviceType(
+        registration.deviceType,
+        registration.naam || ""
+      );
       const temperature = getMeasuredTemperature(registration);
       const evaluation = evaluateTemperature(deviceType, temperature);
       const note = registration.note || record.opmerking || "";

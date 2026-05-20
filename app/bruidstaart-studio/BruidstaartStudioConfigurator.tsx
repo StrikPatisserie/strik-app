@@ -25,6 +25,8 @@ import {
   getDecorationNoteTexts,
   getDecorationQuantity,
   getDecorationSurcharges,
+  getTopperNoteTexts,
+  getTopperSurcharges,
   getDesignGroupsForLayers,
   getLayerDesignChoiceId,
   getLayerColor,
@@ -61,8 +63,10 @@ const BORDER_DECORATION_IDS = [
   "marsepein-icing-band",
   "geen-rand",
   "creme-parelrand",
+  "parelrand",
 ];
 const MARZIPAN_BAND_DECORATION_ID = "marsepein-icing-band";
+const PEARL_BORDER_DECORATION_ID = "parelrand";
 const FLOWER_DECORATION_IDS = [
   ...ROSE_DECORATION_IDS,
   "gipskruid",
@@ -75,6 +79,12 @@ const FLOWER_PLACEMENT_OPTIONS = [
   { id: "standaard", label: "Standaard plaatsing door Strik" },
   { id: "waterval", label: "Waterval plaatsing" },
   { id: "specifiek", label: "Specifieke plaatsen (gebruik opmerking sectie)" },
+] as const;
+const PEARL_BORDER_COLOR_OPTIONS = [
+  { id: "Goud", label: "Goud", swatchColor: "#c7a14a", swatchBorder: "#9f792f" },
+  { id: "Zilver", label: "Zilver", swatchColor: "#d7d9d8", swatchBorder: "#aeb3b3" },
+  { id: "Brons", label: "Brons", swatchColor: "#b47a46", swatchBorder: "#88512c" },
+  { id: "Ivory", label: "Ivory", swatchColor: "#fff8e8", swatchBorder: "#dccca4" },
 ] as const;
 const DEFAULT_ROSE_QUANTITY = 5;
 const LARGE_ROSE_VISUAL_SCALE = 2;
@@ -435,6 +445,16 @@ function getFlowerPlacement(value?: string): FlowerPlacementId {
   return placement?.id || "standaard";
 }
 
+function getPearlBorderColor(value?: string) {
+  const normalized = normalizeColorSearchText(value || "");
+
+  return (
+    PEARL_BORDER_COLOR_OPTIONS.find(
+      (option) => normalizeColorSearchText(option.id) === normalized
+    ) || PEARL_BORDER_COLOR_OPTIONS[0]
+  );
+}
+
 function normalizeDateSearchInput(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -462,7 +482,7 @@ function topperDecorationAsset(topperId: string) {
     return "/decoratie%20opties_bruidspaartje.svg";
   }
   if (topperId === "topper-karton" || topperId === "topper-zelf-aanleveren") {
-    return "/decoratie%20opties_topper%20karton.svg";
+    return "/topper.svg";
   }
   if (
     topperId === "chocolade-initialen-geschreven"
@@ -926,6 +946,47 @@ function SinglePaletteColorControls({
               style={{
                 backgroundColor: color.swatchColor || "#fff",
                 borderColor: color.swatchBorder || "rgba(45, 42, 38, 0.12)",
+              }}
+            />
+            <span className="min-w-0 truncate">{color.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PearlBorderColorControls({
+  value,
+  onChange,
+}: {
+  value?: string;
+  onChange: (colorId: string) => void;
+}) {
+  const selectedColor = getPearlBorderColor(value);
+
+  return (
+    <div className="mt-4 grid gap-2 rounded-2xl border border-[#cfdcc8] bg-white/70 p-3">
+      <p className="text-sm font-black text-[#2d2a26]/70">
+        Kleur parelrand
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {PEARL_BORDER_COLOR_OPTIONS.map((color) => (
+          <button
+            key={color.id}
+            type="button"
+            onClick={() => onChange(color.id)}
+            className={`flex min-w-0 items-center gap-2 rounded-2xl border p-2 text-left text-xs font-black ${
+              selectedColor.id === color.id
+                ? "border-[#8fb184] bg-[#dce8d6]"
+                : "border-[#e7e0d8] bg-white"
+            }`}
+          >
+            <span
+              className="h-5 w-5 shrink-0 rounded-full border shadow-inner"
+              style={{
+                backgroundColor: color.swatchColor,
+                borderColor: color.swatchBorder,
               }}
             />
             <span className="min-w-0 truncate">{color.label}</span>
@@ -1543,12 +1604,27 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     height: number,
     layerColor?: StudioOption
   ) {
-    if (!selectedDecorations.has("creme-parelrand")) return null;
+    const hasCreamPearlBorder = selectedDecorations.has("creme-parelrand");
+    const hasColoredPearlBorder = selectedDecorations.has(
+      PEARL_BORDER_DECORATION_ID
+    );
 
-    const pearlColor =
-      layerColor && isWhiteDecorationBase(layerColor) ? "#d9c18d" : "#fff8e8";
-    const pearlStroke =
-      layerColor && isWhiteDecorationBase(layerColor) ? "#bea46d" : "#e2d4ad";
+    if (!hasCreamPearlBorder && !hasColoredPearlBorder) return null;
+
+    const selectedPearlColor = getPearlBorderColor(
+      config.decorationColorNotes?.[PEARL_BORDER_DECORATION_ID]
+    );
+
+    const pearlColor = hasColoredPearlBorder
+      ? selectedPearlColor.swatchColor
+      : layerColor && isWhiteDecorationBase(layerColor)
+        ? "#d9c18d"
+        : "#fff8e8";
+    const pearlStroke = hasColoredPearlBorder
+      ? selectedPearlColor.swatchBorder
+      : layerColor && isWhiteDecorationBase(layerColor)
+        ? "#bea46d"
+        : "#e2d4ad";
     const pearlRadius = 3.4;
     const pearlSpacing = 5.8;
     const pearlCount = Math.max(
@@ -2992,7 +3068,11 @@ function parseEuroAmount(value: string) {
 
 function getAllowedBorderDecorationIds(styleId: WeddingCakeConfig["styleId"]) {
   if (styleId === "klassiek") {
-    return [MARZIPAN_BAND_DECORATION_ID, "creme-parelrand"];
+    return [
+      MARZIPAN_BAND_DECORATION_ID,
+      "creme-parelrand",
+      PEARL_BORDER_DECORATION_ID,
+    ];
   }
   if (styleId === "vanille-creme" || styleId === "naked") {
     return ["geen-rand", "creme-parelrand"];
@@ -3039,6 +3119,8 @@ function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
     decorationExtraNotes: [],
     decorationSurcharges: [],
     topperIds: [],
+    topperNotes: "",
+    topperSurcharges: [],
     contact: { ...initialWeddingCakeConfig.contact },
   };
 }
@@ -3087,6 +3169,8 @@ export default function BruidstaartStudioConfigurator() {
     () => getDecorationColorNotes(config),
     [config]
   );
+  const topperNoteTexts = useMemo(() => getTopperNoteTexts(config), [config]);
+  const topperSurcharges = useMemo(() => getTopperSurcharges(config), [config]);
   const borderDecorationOptions = useMemo(
     () =>
       decorationOptions.filter(
@@ -3286,15 +3370,26 @@ export default function BruidstaartStudioConfigurator() {
     const allowedBorderIds = getAllowedBorderDecorationIds(config.styleId);
     if (!allowedBorderIds.includes(id)) return;
 
-    setConfig((current) => ({
-      ...current,
-      decorationIds: [
-        id,
-        ...current.decorationIds.filter(
-          (decorationId) => !BORDER_DECORATION_IDS.includes(decorationId)
-        ),
-      ],
-    }));
+    setConfig((current) => {
+      const nextColorNotes = { ...(current.decorationColorNotes || {}) };
+
+      if (id === PEARL_BORDER_DECORATION_ID) {
+        nextColorNotes[PEARL_BORDER_DECORATION_ID] =
+          nextColorNotes[PEARL_BORDER_DECORATION_ID] ||
+          PEARL_BORDER_COLOR_OPTIONS[0].id;
+      }
+
+      return {
+        ...current,
+        decorationIds: [
+          id,
+          ...current.decorationIds.filter(
+            (decorationId) => !BORDER_DECORATION_IDS.includes(decorationId)
+          ),
+        ],
+        decorationColorNotes: nextColorNotes,
+      };
+    });
   }
 
   function toggleDecoration(id: string) {
@@ -3434,6 +3529,47 @@ export default function BruidstaartStudioConfigurator() {
     }));
   }
 
+  function addTopperSurcharge() {
+    setConfig((current) => ({
+      ...current,
+      topperSurcharges: [
+        ...(current.topperSurcharges || []),
+        {
+          id: createStudioItemId("topper-toeslag"),
+          description: "",
+          amount: 0,
+        },
+      ],
+    }));
+  }
+
+  function updateTopperSurcharge(
+    id: string,
+    field: "description" | "amount",
+    value: string
+  ) {
+    setConfig((current) => ({
+      ...current,
+      topperSurcharges: (current.topperSurcharges || []).map((surcharge) =>
+        surcharge.id === id
+          ? {
+              ...surcharge,
+              [field]: field === "amount" ? parseEuroAmount(value) : value,
+            }
+          : surcharge
+      ),
+    }));
+  }
+
+  function removeTopperSurcharge(id: string) {
+    setConfig((current) => ({
+      ...current,
+      topperSurcharges: (current.topperSurcharges || []).filter(
+        (surcharge) => surcharge.id !== id
+      ),
+    }));
+  }
+
   function toggleTopper(id: string) {
     const option = findOption(topperOptions, id);
     if (!option) return;
@@ -3543,6 +3679,21 @@ export default function BruidstaartStudioConfigurator() {
           : "-"
       }`,
       `Topper/add-on: ${labels.topper}`,
+      `Topper opmerkingen: ${
+        topperNoteTexts.length ? topperNoteTexts.join(" | ") : "-"
+      }`,
+      `Topper toeslagen: ${
+        topperSurcharges.length
+          ? topperSurcharges
+              .map(
+                (surcharge) =>
+                  `${surcharge.description || "extra wens"} (${formatEuro(
+                    surcharge.amount
+                  )})`
+              )
+              .join(" | ")
+          : "-"
+      }`,
       `Betaald: ${config.paid ? "Ja" : "Nee"}`,
       `Bestelling definitief: ${config.completed ? "Ja" : "Nee"}`,
       "",
@@ -3679,6 +3830,8 @@ export default function BruidstaartStudioConfigurator() {
       paid: Boolean(draft.config.paid),
       completed: Boolean(draft.config.completed),
       topperIds: (draft.config.topperIds || []).filter((id) => id !== "geen"),
+      topperNotes: draft.config.topperNotes || "",
+      topperSurcharges: draft.config.topperSurcharges || [],
       contact: {
         ...initialWeddingCakeConfig.contact,
         ...draft.config.contact,
@@ -4251,6 +4404,22 @@ export default function BruidstaartStudioConfigurator() {
                                 }
                               />
                             )}
+                          {option.id === PEARL_BORDER_DECORATION_ID &&
+                            selected && (
+                              <PearlBorderColorControls
+                                value={
+                                  config.decorationColorNotes?.[
+                                    PEARL_BORDER_DECORATION_ID
+                                  ]
+                                }
+                                onChange={(colorId) =>
+                                  setDecorationColorNote(
+                                    PEARL_BORDER_DECORATION_ID,
+                                    colorId
+                                  )
+                                }
+                              />
+                            )}
                         </div>
                       );
                     })}
@@ -4479,6 +4648,93 @@ export default function BruidstaartStudioConfigurator() {
                   onClick={() => toggleTopper(option.id)}
                 />
               ))}
+              <section className="mt-3 grid gap-3 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-[#2d2a26]">
+                      Topper opmerkingen en toeslagen
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[#2d2a26]/55">
+                      Bijvoorbeeld kleurwens, extra topper of maatwerk.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addTopperSurcharge}
+                    className="rounded-full border border-[#ead7a6] bg-[#fff8e3] px-4 py-2 text-sm font-black text-[#7a5a18]"
+                  >
+                    + Toeslag
+                  </button>
+                </div>
+
+                <textarea
+                  value={config.topperNotes || ""}
+                  onChange={(event) =>
+                    setConfig((current) => ({
+                      ...current,
+                      topperNotes: event.target.value,
+                    }))
+                  }
+                  placeholder="Bijvoorbeeld: topper moet goud, 2x topper, letters JB..."
+                  className="min-h-24 rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-3 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                />
+
+                {(config.topperSurcharges || []).map((surcharge, index) => (
+                  <div
+                    key={surcharge.id}
+                    className="grid gap-3 rounded-2xl border border-[#ead7a6] bg-[#fffaf0] p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-black text-[#7a5a18]">
+                        Topper toeslag {index + 1}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => removeTopperSurcharge(surcharge.id)}
+                        className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#d75a48]"
+                      >
+                        Verwijder
+                      </button>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                      <input
+                        value={surcharge.description}
+                        onChange={(event) =>
+                          updateTopperSurcharge(
+                            surcharge.id,
+                            "description",
+                            event.target.value
+                          )
+                        }
+                        placeholder="Omschrijving toeslag"
+                        className="rounded-2xl border border-[#e7e0d8] bg-white p-3 font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                      />
+                      <label className="relative block">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#7a5a18]">
+                          €
+                        </span>
+                        <input
+                          value={
+                            surcharge.amount
+                              ? String(surcharge.amount).replace(".", ",")
+                              : ""
+                          }
+                          onChange={(event) =>
+                            updateTopperSurcharge(
+                              surcharge.id,
+                              "amount",
+                              event.target.value
+                            )
+                          }
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-3 pl-7 font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </section>
             </div>
           )}
 
@@ -4779,6 +5035,25 @@ export default function BruidstaartStudioConfigurator() {
               <p>
                 <span className="font-bold">Decoratie toeslagen:</span>{" "}
                 {decorationSurcharges
+                  .map(
+                    (surcharge) =>
+                      `${surcharge.description || "extra wens"} (${formatEuro(
+                        surcharge.amount
+                      )})`
+                  )
+                  .join(" | ")}
+              </p>
+            )}
+            {topperNoteTexts.length > 0 && (
+              <p>
+                <span className="font-bold">Topper opmerkingen:</span>{" "}
+                {topperNoteTexts.join(" | ")}
+              </p>
+            )}
+            {topperSurcharges.length > 0 && (
+              <p>
+                <span className="font-bold">Topper toeslagen:</span>{" "}
+                {topperSurcharges
                   .map(
                     (surcharge) =>
                       `${surcharge.description || "extra wens"} (${formatEuro(

@@ -7,13 +7,7 @@ export const winkelOptions = [
 
 export type WinkelId = (typeof winkelOptions)[number]["id"];
 
-export type TemperatureDeviceType =
-  | "koeling"
-  | "vriezer"
-  | "warm"
-  | "vitrine"
-  | "ijsvitrine"
-  | "overig";
+export type TemperatureDeviceType = "koeling" | "vriezer";
 
 export type TemperatureStatus =
   | "ok"
@@ -54,10 +48,6 @@ export const deviceTypeOptions: {
 }[] = [
   { id: "koeling", label: "Koeling" },
   { id: "vriezer", label: "Vriezer" },
-  { id: "vitrine", label: "Vitrine" },
-  { id: "ijsvitrine", label: "IJsvitrine" },
-  { id: "warm", label: "Warm" },
-  { id: "overig", label: "Overig" },
 ];
 
 export const temperatureRowsByWinkel: Record<WinkelId, string[]> = {
@@ -136,30 +126,23 @@ export function inferDeviceType(name: string): TemperatureDeviceType {
     normalized.includes("vriezer") ||
     normalized.includes("freezer")
   ) {
-    return normalized.includes("ijs") && normalized.includes("vitrine")
-      ? "ijsvitrine"
-      : "vriezer";
+    return "vriezer";
   }
 
-  if (normalized.includes("warm")) return "warm";
-  if (normalized.includes("ijsvitrine")) return "ijsvitrine";
-  if (normalized.includes("vitrine")) return "vitrine";
-  if (
-    normalized.includes("koel") ||
-    normalized.includes("koeling") ||
-    normalized.includes("koelkast")
-  ) {
-    return "koeling";
-  }
+  return "koeling";
+}
 
-  return "overig";
+export function normalizeTemperatureDeviceType(
+  deviceType: string | undefined,
+  name = ""
+): TemperatureDeviceType {
+  return deviceType === "vriezer" || deviceType === "koeling"
+    ? deviceType
+    : inferDeviceType(name);
 }
 
 export function getDeviceTypeLabel(deviceType?: string) {
-  return (
-    deviceTypeOptions.find((option) => option.id === deviceType)?.label ||
-    "Overig"
-  );
+  return deviceType === "vriezer" ? "Vriezer" : "Koeling";
 }
 
 export function parseTemperatureValue(value?: string) {
@@ -212,7 +195,7 @@ export function evaluateTemperature(
     };
   }
 
-  if (deviceType === "vriezer" || deviceType === "ijsvitrine") {
+  if (deviceType === "vriezer") {
     if (temperature <= -18) {
       return okEvaluation();
     }
@@ -224,23 +207,15 @@ export function evaluateTemperature(
     return deviationEvaluation();
   }
 
-  if (deviceType === "warm") {
-    return temperature >= 60 ? okEvaluation() : deviationEvaluation();
+  if (temperature <= 7) {
+    return okEvaluation();
   }
 
-  if (deviceType === "koeling" || deviceType === "vitrine") {
-    if (temperature <= 7) {
-      return okEvaluation();
-    }
-
-    if (temperature <= 8) {
-      return attentionEvaluation();
-    }
-
-    return deviationEvaluation();
+  if (temperature <= 8) {
+    return attentionEvaluation();
   }
 
-  return okEvaluation();
+  return deviationEvaluation();
 }
 
 export function isActionRequiredStatus(status: TemperatureStatus) {

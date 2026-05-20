@@ -144,6 +144,8 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
       decorationSurcharges: decorationSurchargesFrom(
         config.decorationSurcharges
       ),
+      topperNotes: textFrom(config.topperNotes),
+      topperSurcharges: decorationSurchargesFrom(config.topperSurcharges),
       paid: Boolean(config.paid),
       completed: Boolean(config.completed),
       topperIds: Array.isArray(config.topperIds)
