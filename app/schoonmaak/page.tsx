@@ -489,7 +489,7 @@ function SchoonmaakForm() {
 
         if (!result.ok) {
           const lokaleDraftGeladen = laadLokaleDraftAlsFallback(
-            "Lokale versie geladen. WordPress is tijdelijk niet bereikbaar."
+            "Lokale conceptversie geladen."
           );
 
           if (!lokaleDraftGeladen) {
@@ -561,7 +561,7 @@ function SchoonmaakForm() {
       } catch {
         if (!negeerResultaat) {
           const lokaleDraftGeladen = laadLokaleDraftAlsFallback(
-            "Lokale versie geladen. WordPress is tijdelijk niet bereikbaar."
+            "Lokale conceptversie geladen."
           );
 
           if (!lokaleDraftGeladen) {

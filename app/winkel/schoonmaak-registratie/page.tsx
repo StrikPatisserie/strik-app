@@ -593,7 +593,7 @@ export default function SchoonmaakRegistratiePage() {
 
         if (!result.ok) {
           const loadedLocal = loadLocalDraft(
-            "Lokale versie geladen. WordPress is tijdelijk niet bereikbaar."
+            "Lokale conceptversie geladen."
           );
 
           if (!loadedLocal) {
@@ -642,7 +642,7 @@ export default function SchoonmaakRegistratiePage() {
       } catch {
         if (!negeerResultaat) {
           const loadedLocal = loadLocalDraft(
-            "Lokale versie geladen. WordPress is tijdelijk niet bereikbaar."
+            "Lokale conceptversie geladen."
           );
 
           if (!loadedLocal) {
