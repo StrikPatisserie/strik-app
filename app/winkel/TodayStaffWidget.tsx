@@ -37,6 +37,18 @@ function ShopRow({
   shop: TodayStaffShop;
   index: number;
 }>) {
+  const iceEmployees = shop.iceEmployees || [];
+  const iceShiftText = iceEmployees.length
+    ? iceEmployees
+        .map(
+          (employee) =>
+            `${employee.employeeName} ${employee.shifts
+              .map((shift) => shift.timeLabel)
+              .join(", ")}`
+        )
+        .join(" · ")
+    : "geen ijsdienst vandaag";
+
   return (
     <article
       className={`rounded-2xl px-3 py-3 ${SHOP_ROW_TONES[index % SHOP_ROW_TONES.length]}`}
@@ -64,6 +76,12 @@ function ShopRow({
       ) : (
         <p className="mt-1.5 text-sm font-semibold text-[#2d2a26]/50">
           Geen diensten vandaag
+        </p>
+      )}
+
+      {shop.iceEmployees && (
+        <p className="mt-2 rounded-xl bg-white/50 px-2.5 py-2 text-xs font-semibold italic leading-snug text-[#2d2a26]/60">
+          IJs: {iceShiftText}
         </p>
       )}
 

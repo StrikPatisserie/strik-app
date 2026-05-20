@@ -41,6 +41,8 @@ type TamigoShift = {
   DepartmentId?: string;
   DepartmentName?: string;
   DepartmentKey?: string;
+  Comments?: string;
+  Comments2?: string;
   StartDateTime?: string;
   EndDateTime?: string;
   Date?: string;
@@ -117,6 +119,8 @@ export type TodayStaffShop = {
   departmentName: string;
   employees: TodayStaffPerson[];
   absences: TodayStaffAbsence[];
+  iceDepartmentName?: string;
+  iceEmployees?: TodayStaffPerson[];
 };
 
 export type TodayStaffSchedule = {
@@ -167,6 +171,20 @@ const SHOP_DEPARTMENTS: ShopDepartment[] = [
     departmentName: "Winkel - Daalseweg",
   },
 ];
+
+const ICE_LOKET_DEPARTMENT: ShopDepartment = {
+  shop: "Lent",
+  departmentId: "9c15db05-51a4-43e6-9c0a-4da44e62853e",
+  departmentKey: "Ijsloket",
+  departmentName: "Ijsloket",
+};
+
+const ICE_SHIFT_LOCATION_ALIASES: Record<ShopName, string[]> = {
+  Heyendaal: ["HEY", "HEYENDAAL", "HEYENDAALSEWEG"],
+  Lent: ["LENT", "ORANJE", "ORANJE MARIEPLEIN"],
+  Ziekerstraat: ["ZIEKER", "ZIEKERSTRAAT"],
+  Daalseweg: ["DAAL", "DAALSEWEG"],
+};
 
 class TamigoApiError extends Error {
   constructor(
@@ -383,6 +401,8 @@ function toTamigoShift(value: JsonRecord): TamigoShift {
     DepartmentId: textFrom(value.DepartmentId),
     DepartmentName: textFrom(value.DepartmentName),
     DepartmentKey: textFrom(value.DepartmentKey),
+    Comments: textFrom(value.Comments),
+    Comments2: textFrom(value.Comments2),
     StartDateTime: textFrom(value.StartDateTime),
     EndDateTime: textFrom(value.EndDateTime),
     Date: textFrom(value.Date),
@@ -865,6 +885,67 @@ function toTodayStaffShop(
   };
 }
 
+function normalizeIceLocationText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+}
+
+function getIceShiftShop(shift: TamigoShift): ShopName | null {
+  const locationText = normalizeIceLocationText(
+    [shift.Comments, shift.Comments2].filter(Boolean).join(" ")
+  );
+
+  if (!locationText) return null;
+
+  for (const [shop, aliases] of Object.entries(ICE_SHIFT_LOCATION_ALIASES)) {
+    if (
+      aliases.some((alias) =>
+        locationText.includes(normalizeIceLocationText(alias))
+      )
+    ) {
+      return shop as ShopName;
+    }
+  }
+
+  return null;
+}
+
+function toIceEmployeesByShop(date: string, shifts: TamigoShift[]) {
+  const shiftsByShop = new Map<ShopName, TamigoShift[]>(
+    SHOP_DEPARTMENTS.map((department) => [department.shop, []])
+  );
+
+  shifts.forEach((shift) => {
+    if (getShiftDate(shift) !== date || isAbsenceShift(shift)) return;
+
+    const shop = getIceShiftShop(shift);
+    if (!shop) return;
+
+    shiftsByShop.get(shop)?.push(shift);
+  });
+
+  return Object.fromEntries(
+    SHOP_DEPARTMENTS.map((department) => {
+      const iceDepartment = {
+        ...ICE_LOKET_DEPARTMENT,
+        shop: department.shop,
+      };
+
+      return [
+        department.shop,
+        toTodayStaffShop(
+          iceDepartment,
+          shiftsByShop.get(department.shop) || []
+        ).employees,
+      ];
+    })
+  ) as Record<ShopName, TodayStaffPerson[]>;
+}
+
 function toDepartmentDaySchedule(
   department: ShopDepartment,
   date: string,
@@ -1070,14 +1151,22 @@ export async function getTodayStaffSchedule(): Promise<TodayStaffSchedule> {
   const now = new Date();
   const from = getAmsterdamDate(0, now);
   const to = getAmsterdamDate(1, now);
-  const departmentSchedules = await Promise.all(
-    SHOP_DEPARTMENTS.map((department) =>
-      fetchDepartmentSchedule(department, from, to)
-    )
-  );
+  const [departmentSchedules, iceShifts] = await Promise.all([
+    Promise.all(
+      SHOP_DEPARTMENTS.map((department) =>
+        fetchDepartmentSchedule(department, from, to)
+      )
+    ),
+    fetchShiftsForDepartment(ICE_LOKET_DEPARTMENT, from, to),
+  ]);
+  const iceEmployeesByShop = toIceEmployeesByShop(from, iceShifts);
 
   const shops = departmentSchedules.map(({ department, shifts, leaves }) =>
-    toDepartmentDaySchedule(department, from, shifts, leaves)
+    ({
+      ...toDepartmentDaySchedule(department, from, shifts, leaves),
+      iceDepartmentName: ICE_LOKET_DEPARTMENT.departmentName,
+      iceEmployees: iceEmployeesByShop[department.shop] || [],
+    })
   );
 
   return {
