@@ -7,7 +7,8 @@
  * Belangrijk:
  * - Houd maar een schoonmaak/cleaning snippet tegelijk actief.
  * - Deze snippet registreert GET en POST op /wp-json/strik/v1/cleaning.
- * - Deze snippet herstelt oude data uit WordPress posts met "ijsloket" data.
+ * - Normale app-calls lezen de snelle option-opslag.
+ * - Oude WordPress posts met "ijsloket" data zijn optioneel via ?legacy=1.
  */
 
 if (!defined('STRIK_CLEANING_API_KEY')) {
@@ -107,7 +108,7 @@ function strik_cleaning_v5_temperatures($items) {
     return $clean;
 }
 
-function strik_cleaning_v5_photos($items) {
+function strik_cleaning_v5_photos($items, $include_data_url = false) {
     $items = strik_cleaning_v5_decode($items);
     $clean = array();
 
@@ -116,14 +117,19 @@ function strik_cleaning_v5_photos($items) {
     foreach (array_slice($items, 0, 50) as $item) {
         if (!is_array($item)) continue;
 
-        $clean[] = array(
+        $photo = array(
             'id' => isset($item['id']) ? sanitize_text_field($item['id']) : uniqid('foto-', true),
             'label' => isset($item['label']) ? sanitize_text_field($item['label']) : '',
             'fileName' => isset($item['fileName']) ? sanitize_file_name($item['fileName']) : '',
             'url' => isset($item['url']) ? esc_url_raw($item['url']) : '',
             'mediaId' => isset($item['mediaId']) ? absint($item['mediaId']) : 0,
-            'dataUrl' => isset($item['dataUrl']) && is_string($item['dataUrl']) ? substr($item['dataUrl'], 0, 2500000) : '',
         );
+
+        if ($include_data_url && $photo['url'] === '' && isset($item['dataUrl']) && is_string($item['dataUrl'])) {
+            $photo['dataUrl'] = substr($item['dataUrl'], 0, 600000);
+        }
+
+        $clean[] = $photo;
     }
 
     return $clean;
@@ -177,7 +183,7 @@ function strik_cleaning_v5_found_post_types() {
     );
 }
 
-function strik_cleaning_v5_post_to_item($post) {
+function strik_cleaning_v5_post_to_item($post, $include_data_url = false) {
     $title = strik_cleaning_v5_parse_title($post->post_title);
     $data = strik_cleaning_v5_content_data($post);
 
@@ -214,13 +220,13 @@ function strik_cleaning_v5_post_to_item($post) {
         'taken' => strik_cleaning_v5_text_array($taken),
         'opmerking' => sanitize_textarea_field((string) $opmerking),
         'temperatuurRegistraties' => strik_cleaning_v5_temperatures($temperaturen),
-        'fotoUploads' => strik_cleaning_v5_photos($fotos),
+        'fotoUploads' => strik_cleaning_v5_photos($fotos, $include_data_url),
         'createdAt' => get_post_time(DATE_ATOM, true, $post),
         'source' => 'wordpress-post',
     );
 }
 
-function strik_cleaning_v5_normalize_option_item($item) {
+function strik_cleaning_v5_normalize_option_item($item, $include_data_url = false) {
     return array(
         'id' => isset($item['id']) ? absint($item['id']) : 0,
         'titel' => isset($item['titel']) ? sanitize_text_field($item['titel']) : '',
@@ -230,25 +236,29 @@ function strik_cleaning_v5_normalize_option_item($item) {
         'taken' => strik_cleaning_v5_text_array(isset($item['taken']) ? $item['taken'] : array()),
         'opmerking' => isset($item['opmerking']) ? sanitize_textarea_field($item['opmerking']) : '',
         'temperatuurRegistraties' => strik_cleaning_v5_temperatures(isset($item['temperatuurRegistraties']) ? $item['temperatuurRegistraties'] : array()),
-        'fotoUploads' => strik_cleaning_v5_photos(isset($item['fotoUploads']) ? $item['fotoUploads'] : array()),
+        'fotoUploads' => strik_cleaning_v5_photos(isset($item['fotoUploads']) ? $item['fotoUploads'] : array(), $include_data_url),
         'createdAt' => isset($item['createdAt']) ? sanitize_text_field($item['createdAt']) : '',
         'source' => 'option',
     );
 }
 
-function strik_cleaning_v5_get_items() {
+function strik_cleaning_v5_get_items($include_legacy_posts = false, $include_data_url = false) {
     $items = array();
 
     foreach (strik_cleaning_v5_option_items() as $item) {
-        $clean = strik_cleaning_v5_normalize_option_item($item);
+        $clean = strik_cleaning_v5_normalize_option_item($item, $include_data_url);
         if ($clean['datum'] !== '' && $clean['winkel'] !== '') $items[] = $clean;
+    }
+
+    if (!$include_legacy_posts) {
+        return $items;
     }
 
     foreach (strik_cleaning_v5_find_post_ids() as $post_id) {
         $post = get_post(absint($post_id));
         if (!$post) continue;
 
-        $clean = strik_cleaning_v5_post_to_item($post);
+        $clean = strik_cleaning_v5_post_to_item($post, $include_data_url);
         if ($clean['datum'] !== '' && $clean['winkel'] !== '') $items[] = $clean;
     }
 
@@ -256,7 +266,10 @@ function strik_cleaning_v5_get_items() {
 }
 
 function strik_cleaning_v5_get($request) {
-    return rest_ensure_response(strik_cleaning_v5_get_items());
+    $include_legacy_posts = (string) $request->get_param('legacy') === '1';
+    $include_data_url = (string) $request->get_param('includeDataUrl') === '1';
+
+    return rest_ensure_response(strik_cleaning_v5_get_items($include_legacy_posts, $include_data_url));
 }
 
 function strik_cleaning_v5_save($request) {
@@ -279,7 +292,7 @@ function strik_cleaning_v5_save($request) {
         'taken' => strik_cleaning_v5_text_array(isset($params['taken']) ? $params['taken'] : array()),
         'opmerking' => isset($params['opmerking']) ? sanitize_textarea_field($params['opmerking']) : '',
         'temperatuurRegistraties' => strik_cleaning_v5_temperatures(isset($params['temperatuurRegistraties']) ? $params['temperatuurRegistraties'] : array()),
-        'fotoUploads' => strik_cleaning_v5_photos(isset($params['fotoUploads']) ? $params['fotoUploads'] : array()),
+        'fotoUploads' => strik_cleaning_v5_photos(isset($params['fotoUploads']) ? $params['fotoUploads'] : array(), true),
         'createdAt' => wp_date(DATE_ATOM),
     );
 

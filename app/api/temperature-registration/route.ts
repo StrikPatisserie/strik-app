@@ -5,13 +5,39 @@ export const dynamic = "force-dynamic";
 const WORDPRESS_TEMPERATURE_API_URL =
   "https://strik-patisserie.nl/wp-json/strik/v1/temperature-registration";
 const TEMPERATURE_API_KEY =
-  process.env.WORDPRESS_TEMPERATURE_API_KEY || "schoonmaak-ijs-strik";
+  process.env.WORDPRESS_TEMPERATURE_API_KEY ||
+  process.env.WORDPRESS_STRIK_API_KEY ||
+  "schoonmaak-ijs-strik";
 
 function getWordPressTemperatureUrl() {
   const url = new URL(WORDPRESS_TEMPERATURE_API_URL);
   url.searchParams.set("key", TEMPERATURE_API_KEY);
 
   return url;
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWordPressTemperature() {
+  const requestInit = {
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
+  } as const;
+
+  try {
+    const response = await fetch(getWordPressTemperatureUrl(), requestInit);
+    if (response.status < 500) return response;
+  } catch {
+    // Retry below for short WordPress/network hiccups.
+  }
+
+  await wait(300);
+
+  return fetch(getWordPressTemperatureUrl(), requestInit);
 }
 
 async function readWordPressResponse(response: Response) {
@@ -57,12 +83,7 @@ function createWordPressErrorResponse(status: number) {
 
 export async function GET() {
   try {
-    const response = await fetch(getWordPressTemperatureUrl(), {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
+    const response = await fetchWordPressTemperature();
     const data = await readWordPressResponse(response);
 
     if (!response.ok) {

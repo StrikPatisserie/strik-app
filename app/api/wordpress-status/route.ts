@@ -15,6 +15,11 @@ type WordPressCheck = {
 
 const checks: WordPressCheck[] = [
   { id: "cleaning", label: "Schoonmaaklijsten", path: "/cleaning" },
+  {
+    id: "temperature-registration",
+    label: "Temperatuurregistratie",
+    path: "/temperature-registration",
+  },
   { id: "team-agenda", label: "Strik Agenda", path: "/team-agenda" },
   { id: "notes", label: "Notities", path: "/notes", params: { winkel: "lent" } },
   { id: "news", label: "Nieuws", path: "/news" },
@@ -39,14 +44,33 @@ function getMessage(status: number) {
   return "Niet bereikbaar";
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchCheckUrl(check: WordPressCheck) {
+  const requestInit = {
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
+  } as const;
+
+  try {
+    const response = await fetch(getCheckUrl(check), requestInit);
+    if (response.status < 500) return response;
+  } catch {
+    // Retry below for short WordPress/network hiccups.
+  }
+
+  await wait(300);
+
+  return fetch(getCheckUrl(check), requestInit);
+}
+
 async function checkWordPressEndpoint(check: WordPressCheck) {
   try {
-    const response = await fetch(getCheckUrl(check), {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
+    const response = await fetchCheckUrl(check);
 
     return {
       id: check.id,
