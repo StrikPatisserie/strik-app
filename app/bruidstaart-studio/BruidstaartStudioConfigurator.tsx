@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   cakeSizes,
   cakeStyles,
@@ -242,6 +242,63 @@ function colorMatrixForHex(hex?: string, multiplier = 1) {
   )} 0 0 0 0 ${blue.toFixed(3)} 0 0 0 1 0`;
 }
 
+function luminanceTintMatrixForHex(hex?: string, multiplier = 1, lift = 0) {
+  const [red, green, blue] = hexToRgb(hex).map((value) =>
+    Math.max(0, Math.min(1, value * multiplier))
+  );
+  const [lumRed, lumGreen, lumBlue] = [0.2126, 0.7152, 0.0722];
+
+  return `${(lumRed * red).toFixed(3)} ${(lumGreen * red).toFixed(3)} ${(
+    lumBlue * red
+  ).toFixed(3)} 0 ${lift.toFixed(3)} ${(lumRed * green).toFixed(3)} ${(
+    lumGreen * green
+  ).toFixed(3)} ${(lumBlue * green).toFixed(3)} 0 ${lift.toFixed(3)} ${(
+    lumRed * blue
+  ).toFixed(3)} ${(lumGreen * blue).toFixed(3)} ${(lumBlue * blue).toFixed(
+    3
+  )} 0 ${lift.toFixed(3)} 0 0 0 1 0`;
+}
+
+function normalizeColorSearchText(value: string) {
+  return value
+    .toLocaleLowerCase("nl-NL")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function findColorOptionByNote(value?: string) {
+  const normalized = normalizeColorSearchText(value || "");
+  if (!normalized) return undefined;
+
+  const aliasIds: Record<string, string> = {
+    pastelroze: "roze-pastel",
+    lichtroze: "klassiek-lichtroze",
+    oudroze: "klassiek-oudroze",
+    mintgroen: "klassiek-mintgroen",
+    pastelgroen: "groen-pastel",
+    pastelblauw: "creme-pastelblauw",
+    pastelgeel: "creme-pastelgeel",
+    pastellila: "creme-pastellila",
+    pastelperzik: "creme-pastelperzik",
+    pastelmint: "creme-pastelmint",
+    pastelzalm: "creme-pastelzalm",
+  };
+  const alias = aliasIds[normalized];
+
+  if (alias) return findOption(colorOptions, alias);
+
+  return colorOptions.find((option) => {
+    const label = normalizeColorSearchText(option.label);
+
+    return (
+      label === normalized ||
+      label.includes(normalized) ||
+      normalized.includes(label)
+    );
+  });
+}
+
 function normalizeDateSearchInput(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";
@@ -478,15 +535,23 @@ function DecorationOptionCard({
   onQuantityChange: (quantity: number) => void;
   onColorNoteChange?: (color: string) => void;
 }) {
-  const [quantityInput, setQuantityInput] = useState(String(quantity));
+  const [isEditingQuantity, setIsEditingQuantity] = useState(false);
+  const [quantityDraft, setQuantityDraft] = useState("");
+  const quantityInput = isEditingQuantity ? quantityDraft : String(quantity);
 
-  useEffect(() => {
-    setQuantityInput(String(quantity));
-  }, [quantity]);
+  function beginQuantityInput() {
+    setIsEditingQuantity(true);
+    setQuantityDraft(String(quantity));
+  }
+
+  function resetQuantityInput() {
+    setIsEditingQuantity(false);
+    setQuantityDraft("");
+  }
 
   function commitQuantityInput() {
     if (!quantityInput.trim()) {
-      setQuantityInput(String(quantity));
+      resetQuantityInput();
       return;
     }
 
@@ -496,23 +561,26 @@ function DecorationOptionCard({
     );
 
     if (!Number.isFinite(nextQuantity)) {
-      setQuantityInput(String(quantity));
+      resetQuantityInput();
       return;
     }
 
-    setQuantityInput(String(nextQuantity));
+    setQuantityDraft(String(nextQuantity));
+    setIsEditingQuantity(false);
     onQuantityChange(nextQuantity);
   }
 
   function updateQuantityInput(value: string) {
+    setIsEditingQuantity(true);
+
     if (!value) {
-      setQuantityInput("");
+      setQuantityDraft("");
       return;
     }
 
     if (!/^\d+$/.test(value)) return;
 
-    setQuantityInput(value);
+    setQuantityDraft(value);
 
     const nextQuantity = Number(value);
     if (nextQuantity >= 1 && nextQuantity <= 99) {
@@ -555,6 +623,7 @@ function DecorationOptionCard({
               inputMode="numeric"
               pattern="[0-9]*"
               value={quantityInput}
+              onFocus={beginQuantityInput}
               onBlur={commitQuantityInput}
               onChange={(event) => updateQuantityInput(event.target.value)}
               onKeyDown={(event) => {
@@ -646,6 +715,14 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const bottomY = 242;
   const layerHeight = 39;
   const gap = 0.6;
+
+  function roseTintHexForLayer(roseId: string, layerColor?: StudioOption) {
+    return (
+      findColorOptionByNote(config.decorationColorNotes?.[roseId])?.swatchColor ||
+      layerColor?.swatchColor ||
+      "#e5b7ae"
+    );
+  }
 
   function layerWidth(persons: number) {
     return 64 + (persons / maxPersons) * 118;
@@ -927,6 +1004,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     shadowOpacity?: number;
     edge: DecorEdge;
     flipX?: boolean;
+    tintFilterId?: string;
+    tintOpacity?: number;
     kind: "flower" | "fruit" | "rose" | "gold";
   };
 
@@ -1171,6 +1250,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     const mirrorTransform = placement.flipX
       ? `translate(${centerX * 2} 0) scale(-1 1)`
       : undefined;
+    const imageOpacity = placement.opacity ?? 1;
 
     return (
       <g
@@ -1190,16 +1270,42 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             transform={mirrorTransform}
           />
         )}
-        <image
-          href={placement.asset}
-          x={placement.x}
-          y={placement.y}
-          width={placement.width}
-          height={placement.height}
-          preserveAspectRatio="xMidYMid meet"
-          opacity={placement.opacity ?? 1}
-          transform={mirrorTransform}
-        />
+        {placement.tintFilterId ? (
+          <>
+            <image
+              href={placement.asset}
+              x={placement.x}
+              y={placement.y}
+              width={placement.width}
+              height={placement.height}
+              preserveAspectRatio="xMidYMid meet"
+              opacity={imageOpacity * 0.34}
+              transform={mirrorTransform}
+            />
+            <image
+              href={placement.asset}
+              x={placement.x}
+              y={placement.y}
+              width={placement.width}
+              height={placement.height}
+              preserveAspectRatio="xMidYMid meet"
+              filter={`url(#${placement.tintFilterId})`}
+              opacity={imageOpacity * (placement.tintOpacity ?? 0.82)}
+              transform={mirrorTransform}
+            />
+          </>
+        ) : (
+          <image
+            href={placement.asset}
+            x={placement.x}
+            y={placement.y}
+            width={placement.width}
+            height={placement.height}
+            preserveAspectRatio="xMidYMid meet"
+            opacity={imageOpacity}
+            transform={mirrorTransform}
+          />
+        )}
       </g>
     );
   }
@@ -1247,6 +1353,25 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       }
 
       if (placement.edge === "bottom" && rect.y2 > zones.layerBounds.y2 + 0.2) {
+        return false;
+      }
+
+      if (placement.edge === "top") {
+        const neededOverlap =
+          placement.kind === "flower"
+            ? placement.height * 0.18
+            : placement.kind === "fruit"
+              ? placement.height * 0.12
+              : placement.height * 0.08;
+
+        if (rect.y2 < zones.layerBounds.y1 + neededOverlap) return false;
+      }
+
+      if (placement.edge === "left" && rect.x2 < zones.layerBounds.x1 + 3) {
+        return false;
+      }
+
+      if (placement.edge === "right" && rect.x1 > zones.layerBounds.x2 - 3) {
         return false;
       }
 
@@ -1324,9 +1449,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         const centerX =
           zones.topEdgeZone.x1 +
           (zones.topEdgeZone.x2 - zones.topEdgeZone.x1) * ratio;
-        const topAnchorFactor = kind === "fruit" ? 0.93 : 1;
+        const topAnchorFactor =
+          kind === "flower" ? 0.82 : kind === "fruit" ? 0.78 : 0.74;
         const sideOverhang =
-          kind === "flower" ? 0.52 : kind === "fruit" ? 0.2 : 0.12;
+          kind === "flower" ? 0.22 : kind === "fruit" ? 0.1 : 0.05;
 
         return {
           key,
@@ -1359,8 +1485,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           kind,
           x: clampVisual(
             centerX - assetWidth / 2,
-            x - assetWidth * 0.1,
-            x + width - assetWidth * 0.9
+            x,
+            x + width - assetWidth
           ),
           y: y + height - assetHeight,
           width: assetWidth,
@@ -1385,8 +1511,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         kind,
         x:
           edge === "left"
-            ? x - assetWidth * 0.64 + sideOffset
-            : x + width - assetWidth * 0.36 + sideOffset,
+            ? x + assetWidth * 0.06 + sideOffset
+            : x + width - assetWidth * 1.06 + sideOffset,
         y: clampVisual(centerY - assetHeight / 2, y, y + height - assetHeight),
         width: assetWidth,
         height: assetHeight,
@@ -1407,6 +1533,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       );
       const flowerWidth = flowerHeight * 1.14;
       const edge: DecorEdge = "top";
+      const flowerYOffset = (ratio: number, item = 0) =>
+        flowerHeight * (ratio < 0.5 ? 0.24 : 0.08) + item * 1.3;
       const ratios = isTopLayer
         ? topperVisuals.length
           ? [0.2, 0.8]
@@ -1427,6 +1555,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           opacity: 0.98,
           shadowOpacity: 0.05,
           kind: "flower",
+          sideOffset: flowerYOffset(ratio, item),
           flipX: ratio > 0.5,
         });
 
@@ -1446,6 +1575,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           opacity: 0.94,
           shadowOpacity: 0.045,
           kind: "flower",
+          sideOffset: flowerYOffset(index % 2 ? 0.94 : 0.06, 1),
           flipX: index % 2 === 1,
         });
         addPlacement(flowers, sideFlower, { allowOverlap: true });
@@ -1527,6 +1657,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           roseId === "marsepeinrozen-met-blad"
             ? ROSE_WITH_LEAF_ASSET
             : ROSE_WITHOUT_LEAF_ASSET;
+        const roseFilterId = `${visualizerId}-rose-tint-${index}-${roseId}`;
         const topCapacity = Math.max(
           1,
           Math.floor(
@@ -1612,6 +1743,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   rotate: [-4, 3, -1, 5][(item + variantIndex) % 4],
                   opacity: 0.98,
                   shadowOpacity: 0.045,
+                  tintFilterId: roseFilterId,
+                  tintOpacity:
+                    roseId === "marsepeinrozen-met-blad" ? 0.74 : 0.84,
                 }
               : {
                   ...rowCenter,
@@ -1625,6 +1759,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                       : 8 - (item % 2) * 5,
                   opacity: 0.98,
                   shadowOpacity: 0.045,
+                  tintFilterId: roseFilterId,
+                  tintOpacity:
+                    roseId === "marsepeinrozen-met-blad" ? 0.74 : 0.84,
                 };
 
             addPlacement(roses, placement, {
@@ -1803,6 +1940,28 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           >
             <feGaussianBlur stdDeviation="0.45" />
           </filter>
+          {visualLayers.flatMap((layer, index) => {
+            const layerColor = config.styleId
+              ? getLayerColor(config, layer.id)
+              : undefined;
+
+            return ROSE_DECORATION_IDS.map((roseId) => (
+              <filter
+                key={`${layer.id}-${roseId}-tint`}
+                id={`${visualizerId}-rose-tint-${index}-${roseId}`}
+                colorInterpolationFilters="sRGB"
+              >
+                <feColorMatrix
+                  type="matrix"
+                  values={luminanceTintMatrixForHex(
+                    roseTintHexForLayer(roseId, layerColor),
+                    1.08,
+                    0.018
+                  )}
+                />
+              </filter>
+            ));
+          })}
           {visualLayers.map((layer, index) => {
             const layerColor = config.styleId
               ? getLayerColor(config, layer.id)
@@ -2010,11 +2169,11 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             <g key={topper.id}>
               <ellipse
                 cx={topperX + width / 2}
-                cy={topperY + height - 4}
-                rx={Math.max(10, width * 0.32)}
-                ry="2.4"
+                cy={topperY + height - 3}
+                rx={Math.max(7, width * 0.22)}
+                ry="1.2"
                 fill="currentColor"
-                opacity="0.08"
+                opacity="0.018"
               />
               <image
                 href={topperDecorationAsset(topper.id)}
