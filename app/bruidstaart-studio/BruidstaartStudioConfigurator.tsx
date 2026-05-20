@@ -13,6 +13,7 @@ import {
   isOptionAllowedForStyle,
   layoutOptions,
   topperOptions,
+  weddingCakeColorPaletteOptions,
 } from "./data";
 import {
   calculateWeddingCakePrice,
@@ -62,6 +63,7 @@ const BORDER_DECORATION_IDS = [
   "geen-rand",
   "creme-parelrand",
 ];
+const MARZIPAN_BAND_DECORATION_ID = "marsepein-icing-band";
 const FLOWER_DECORATION_IDS = [
   ...ROSE_DECORATION_IDS,
   "gipskruid",
@@ -261,6 +263,15 @@ function colorMatrixForHex(hex?: string, multiplier = 1) {
   )} 0 0 0 0 ${blue.toFixed(3)} 0 0 0 1 0`;
 }
 
+function shadeHexColor(hex: string, multiplier = 0.78) {
+  const [red, green, blue] = hexToRgb(hex).map((value) =>
+    Math.max(0, Math.min(255, Math.round(value * 255 * multiplier)))
+  );
+  const toHex = (value: number) => value.toString(16).padStart(2, "0");
+
+  return `#${toHex(red)}${toHex(green)}${toHex(blue)}`;
+}
+
 function tintMatrixForHex(hex?: string) {
   const [red, green, blue] = hexToRgb(hex);
   const shade = 0.78;
@@ -330,7 +341,9 @@ function findColorOptionByNote(value?: string) {
   });
 }
 
-const roseColorOptions = colorOptions.filter((option) => option.swatchColor);
+const sharedDecorationColorOptions = weddingCakeColorPaletteOptions.filter(
+  (option) => option.swatchColor
+);
 type RoseColorMode = "same" | "multiple";
 type FlowerPlacementId = (typeof FLOWER_PLACEMENT_OPTIONS)[number]["id"];
 
@@ -736,7 +749,7 @@ function DecorationOptionCard({
                 className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
               >
                 <option value="">Kies kleur</option>
-                {roseColorOptions.map((color) => (
+                {sharedDecorationColorOptions.map((color) => (
                   <option key={color.id} value={color.id}>
                     {color.label}
                   </option>
@@ -805,7 +818,7 @@ function RoseColorControls({
             className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
           >
             <option value="">Kies kleur</option>
-            {roseColorOptions.map((color) => (
+            {sharedDecorationColorOptions.map((color) => (
               <option key={color.id} value={color.id}>
                 {color.label}
               </option>
@@ -818,7 +831,7 @@ function RoseColorControls({
             Kleuren roosjes
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {roseColorOptions.map((color) => (
+            {sharedDecorationColorOptions.map((color) => (
               <label
                 key={color.id}
                 className={`flex cursor-pointer items-center gap-2 rounded-2xl border p-2 text-xs font-black ${
@@ -847,6 +860,59 @@ function RoseColorControls({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SinglePaletteColorControls({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value?: string;
+  onChange: (colorId: string) => void;
+}) {
+  const selectedColorId = findColorOptionByNote(value)?.id || "";
+
+  return (
+    <div className="mt-4 grid gap-2 rounded-2xl border border-[#cfdcc8] bg-white/70 p-3">
+      <p className="text-sm font-black text-[#2d2a26]/70">{label}</p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className={`flex min-w-0 items-center gap-2 rounded-2xl border p-2 text-left text-xs font-black ${
+            selectedColorId
+              ? "border-[#e7e0d8] bg-white text-[#2d2a26]/55"
+              : "border-[#8fb184] bg-[#dce8d6] text-[#2d2a26]"
+          }`}
+        >
+          <span className="h-5 w-5 shrink-0 rounded-full border border-[#dacbb4] bg-[#f3ead8] shadow-inner" />
+          <span className="min-w-0 truncate">Standaard</span>
+        </button>
+        {sharedDecorationColorOptions.map((color) => (
+          <button
+            key={color.id}
+            type="button"
+            onClick={() => onChange(color.id)}
+            className={`flex min-w-0 items-center gap-2 rounded-2xl border p-2 text-left text-xs font-black ${
+              selectedColorId === color.id
+                ? "border-[#8fb184] bg-[#dce8d6]"
+                : "border-[#e7e0d8] bg-white"
+            }`}
+          >
+            <span
+              className="h-5 w-5 shrink-0 rounded-full border shadow-inner"
+              style={{
+                backgroundColor: color.swatchColor || "#fff",
+                borderColor: color.swatchBorder || "rgba(45, 42, 38, 0.12)",
+              }}
+            />
+            <span className="min-w-0 truncate">{color.label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1512,12 +1578,20 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     height: number,
     layerColor?: StudioOption
   ) {
-    if (!selectedDecorations.has("marsepein-icing-band")) return null;
+    if (!selectedDecorations.has(MARZIPAN_BAND_DECORATION_ID)) return null;
 
+    const selectedBandColor = findColorOptionByNote(
+      config.decorationColorNotes?.[MARZIPAN_BAND_DECORATION_ID]
+    );
     const bandColor =
-      layerColor && isWhiteDecorationBase(layerColor) ? "#f5efe3" : "#e9d8bd";
+      selectedBandColor?.swatchColor ||
+      (layerColor && isWhiteDecorationBase(layerColor) ? "#f5efe3" : "#e9d8bd");
     const strokeColor =
-      layerColor && isWhiteDecorationBase(layerColor) ? "#d7cbb9" : "#cdb999";
+      selectedBandColor?.swatchBorder ||
+      shadeHexColor(
+        bandColor,
+        layerColor && isWhiteDecorationBase(layerColor) ? 0.86 : 0.78
+      );
 
     return (
       <g key={`${layerId}-marzipan-band`}>
@@ -2891,7 +2965,9 @@ function parseEuroAmount(value: string) {
 }
 
 function getAllowedBorderDecorationIds(styleId: WeddingCakeConfig["styleId"]) {
-  if (styleId === "klassiek") return ["marsepein-icing-band", "creme-parelrand"];
+  if (styleId === "klassiek") {
+    return [MARZIPAN_BAND_DECORATION_ID, "creme-parelrand"];
+  }
   if (styleId === "vanille-creme" || styleId === "naked") {
     return ["geen-rand", "creme-parelrand"];
   }
@@ -2900,7 +2976,7 @@ function getAllowedBorderDecorationIds(styleId: WeddingCakeConfig["styleId"]) {
 }
 
 function getDefaultBorderDecorationId(styleId: WeddingCakeConfig["styleId"]) {
-  if (styleId === "klassiek") return "marsepein-icing-band";
+  if (styleId === "klassiek") return MARZIPAN_BAND_DECORATION_ID;
   if (styleId === "vanille-creme" || styleId === "naked") return "geen-rand";
 
   return "";
@@ -4122,14 +4198,36 @@ export default function BruidstaartStudioConfigurator() {
                 </div>
                 {borderDecorationOptions.length ? (
                   <div className="grid gap-3">
-                    {borderDecorationOptions.map((option) => (
-                      <OptionCard
-                        key={option.id}
-                        option={option}
-                        selected={config.decorationIds.includes(option.id)}
-                        onClick={() => setBorderDecoration(option.id)}
-                      />
-                    ))}
+                    {borderDecorationOptions.map((option) => {
+                      const selected = config.decorationIds.includes(option.id);
+
+                      return (
+                        <div key={option.id}>
+                          <OptionCard
+                            option={option}
+                            selected={selected}
+                            onClick={() => setBorderDecoration(option.id)}
+                          />
+                          {option.id === MARZIPAN_BAND_DECORATION_ID &&
+                            selected && (
+                              <SinglePaletteColorControls
+                                label="Kleur band"
+                                value={
+                                  config.decorationColorNotes?.[
+                                    MARZIPAN_BAND_DECORATION_ID
+                                  ]
+                                }
+                                onChange={(colorId) =>
+                                  setDecorationColorNote(
+                                    MARZIPAN_BAND_DECORATION_ID,
+                                    colorId
+                                  )
+                                }
+                              />
+                            )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="rounded-[1.4rem] bg-[#f8f6f3] p-4 text-sm font-bold text-[#2d2a26]/55">

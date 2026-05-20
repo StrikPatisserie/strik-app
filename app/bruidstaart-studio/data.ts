@@ -326,25 +326,7 @@ export const fillingOptions: StudioOption[] = [
   },
 ];
 
-export const colorOptions: StudioOption[] = [
-  {
-    id: "marsepein-kleur",
-    label: "Marsepein kleur",
-    description: "Gebroken witte basiskleur.",
-    allowedStyles: ["klassiek"],
-    swatchColor: "#f3ead8",
-    swatchBorder: "#dacbb4",
-    price: { mode: "included", amount: 0 },
-  },
-  {
-    id: "icing-kleur",
-    label: "Icing kleur",
-    description: "Heldere witte basis.",
-    allowedStyles: ["klassiek"],
-    swatchColor: "#fffdf8",
-    swatchBorder: "#d9d0c4",
-    price: { mode: "included", amount: 0 },
-  },
+export const weddingCakeColorPaletteOptions: StudioOption[] = [
   {
     id: "klassiek-lichtroze",
     label: "Lichtroze",
@@ -499,6 +481,28 @@ export const colorOptions: StudioOption[] = [
     swatchColor: "#d3a846",
     price: { mode: "included", amount: 0 },
   },
+];
+
+export const colorOptions: StudioOption[] = [
+  {
+    id: "marsepein-kleur",
+    label: "Marsepein kleur",
+    description: "Gebroken witte basiskleur.",
+    allowedStyles: ["klassiek"],
+    swatchColor: "#f3ead8",
+    swatchBorder: "#dacbb4",
+    price: { mode: "included", amount: 0 },
+  },
+  {
+    id: "icing-kleur",
+    label: "Icing kleur",
+    description: "Heldere witte basis.",
+    allowedStyles: ["klassiek"],
+    swatchColor: "#fffdf8",
+    swatchBorder: "#d9d0c4",
+    price: { mode: "included", amount: 0 },
+  },
+  ...weddingCakeColorPaletteOptions,
   {
     id: "creme",
     label: "Crème",
