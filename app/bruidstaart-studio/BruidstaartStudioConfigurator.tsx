@@ -1777,7 +1777,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             assetWidth: horizontal ? rowLength : roseSize,
             assetHeight: horizontal ? roseSize : rowLength,
             kind: "rose",
-            sideOffset: 0,
+            sideOffset: plan.edge === "top" && isTopLayer ? roseSize * 0.22 : 0,
           });
 
           Array.from({ length: plan.count }, (_item, item) => {
