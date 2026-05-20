@@ -14,13 +14,13 @@ import {
   getTaskLabelAliases,
 } from "./tasks";
 import {
-  CleaningItem,
   CleaningPhotoUpload,
   CleaningTemperatureRegistration,
   createPhotoTemperatureRegistrations,
+  fetchCleaningItems,
   getCleaningItemPhotos,
-  getCleaningUrl,
   itemMatchesCleaningSelection,
+  saveCleaningItem,
   stripInternalCleaningTasks,
   stripInternalTemperatureRegistrations,
   withCleaningMetaMarkers,
@@ -283,8 +283,14 @@ function maakLokaleDraft(
 ): SchoonmaakAntwoorden {
   return {
     ...antwoorden,
-    fotoUploads: antwoorden.fotoUploads.map(({ file: _file, ...upload }) => ({
-      ...upload,
+    fotoUploads: antwoorden.fotoUploads.map((upload) => ({
+      id: upload.id,
+      label: upload.label,
+      fileName: upload.fileName,
+      previewUrl: upload.previewUrl,
+      dataUrl: upload.dataUrl,
+      url: upload.url,
+      mediaId: upload.mediaId,
     })),
     verzondenSignatuur,
   };
@@ -364,6 +370,7 @@ function SchoonmaakForm() {
   const [fotoUploads, setFotoUploads] = useState<PhotoUpload[]>([]);
   const autoSaveTimerRef = useRef<number | null>(null);
   const verzondenSignatuurRef = useRef("");
+  const photoUploadIdRef = useRef(0);
 
   const takenLijst = useMemo(
     () => getTakenLijst(planType, winkel),
@@ -476,31 +483,23 @@ function SchoonmaakForm() {
       }
 
       try {
-        const res = await fetch(getCleaningUrl(), { cache: "no-store" });
-        const data = (await res.json().catch(() => null)) as
-          | CleaningItem[]
-          | { message?: string }
-          | null;
+        const result = await fetchCleaningItems();
 
         if (negeerResultaat) return;
 
-        if (!res.ok || !Array.isArray(data)) {
-          const message =
-            data && !Array.isArray(data) && data.message
-              ? data.message
-              : "Eerdere antwoorden konden niet geladen worden.";
+        if (!result.ok) {
           const lokaleDraftGeladen = laadLokaleDraftAlsFallback(
             "Lokale versie geladen. WordPress is tijdelijk niet bereikbaar."
           );
 
           if (!lokaleDraftGeladen) {
-            setStatus(message);
+            setStatus(result.message);
           }
 
           return;
         }
 
-        const items = data;
+        const items = result.data;
 
         const opgeslagenItems = items
           .filter((item) =>
@@ -711,10 +710,11 @@ function SchoonmaakForm() {
     try {
       const uploadFile = await verkleinFotoVoorUpload(file);
       const previewUrl = await readFileAsDataUrl(uploadFile);
+      photoUploadIdRef.current += 1;
       volgendeUploads = [
         ...fotoUploads.filter((upload) => upload.label !== label),
         {
-          id: `${label}-${Date.now()}`,
+          id: `${label}-${photoUploadIdRef.current}`,
           label,
           fileName: uploadFile.name,
           previewUrl,
@@ -853,7 +853,6 @@ function SchoonmaakForm() {
     }
     setVerzendenBezig(true);
 
-    let timeoutId: number | undefined;
     let antwoorden = getAntwoorden(volgendeFotoUploads, options);
     let signatuur = maakSignatuur(antwoorden);
 
@@ -881,48 +880,34 @@ function SchoonmaakForm() {
         return;
       }
 
-      const controller = new AbortController();
-      timeoutId = window.setTimeout(() => controller.abort(), 12_000);
-
-      const res = await fetch(getCleaningUrl(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          titel: planType,
-          winkel,
-          naam: antwoorden.naam.trim(),
-          datum,
-          taken: withCleaningMetaMarkers(
-            antwoorden.taken,
-            planType,
-            fotoUploadsVoorOpslaan
-          ),
-          opmerking: antwoorden.opmerking.trim(),
-          temperatuurRegistraties: [
-            ...antwoorden.temperatuurRegistraties
-              .filter(
-                (item) =>
-                  item.naam.trim() &&
-                  isTemperatuurWaardeIngevuld(item.temperatuur)
-              )
-              .map((item) => ({
-                naam: item.naam.trim(),
-                temperatuur: item.temperatuur.trim(),
-              })),
-            ...createPhotoTemperatureRegistrations(fotoUploadsVoorOpslaan),
-          ],
-          fotoUploads: fotoUploadsVoorOpslaan.map(serialiseerFotoUpload),
-        }),
-        signal: controller.signal,
+      const result = await saveCleaningItem({
+        titel: planType,
+        winkel,
+        naam: antwoorden.naam.trim(),
+        datum,
+        taken: withCleaningMetaMarkers(
+          antwoorden.taken,
+          planType,
+          fotoUploadsVoorOpslaan
+        ),
+        opmerking: antwoorden.opmerking.trim(),
+        temperatuurRegistraties: [
+          ...antwoorden.temperatuurRegistraties
+            .filter(
+              (item) =>
+                item.naam.trim() &&
+                isTemperatuurWaardeIngevuld(item.temperatuur)
+            )
+            .map((item) => ({
+              naam: item.naam.trim(),
+              temperatuur: item.temperatuur.trim(),
+            })),
+          ...createPhotoTemperatureRegistrations(fotoUploadsVoorOpslaan),
+        ],
+        fotoUploads: fotoUploadsVoorOpslaan.map(serialiseerFotoUpload),
       });
 
-      const data = (await res.json().catch(() => null)) as {
-        message?: string;
-      } | null;
-
-      if (res.ok) {
+      if (result.ok) {
         setVerzondenSignatuur(signatuur);
         verzondenSignatuurRef.current = signatuur;
         bewaarLokaleDraft(winkel, datum, planType, antwoorden, signatuur);
@@ -934,27 +919,16 @@ function SchoonmaakForm() {
 
       bewaarLokaleDraft(winkel, datum, planType, antwoorden, signatuur);
 
-      if (res.status === 403) {
+      if (result.status === 403) {
         setStatus(
           "Lokaal opgeslagen. Geen toegang vanuit WordPress; controleer de API sleutel."
         );
         return;
       }
 
-      setStatus(
-        data?.message
-          ? `Lokaal opgeslagen. ${data.message}`
-          : "Lokaal opgeslagen. WordPress is tijdelijk niet bereikbaar."
-      );
+      setStatus(`Lokaal opgeslagen. ${result.message}`);
     } catch (error) {
       bewaarLokaleDraft(winkel, datum, planType, antwoorden, signatuur);
-
-      if (error instanceof DOMException && error.name === "AbortError") {
-        setStatus(
-          "Lokaal opgeslagen. WordPress reageert niet; probeer later opnieuw."
-        );
-        return;
-      }
 
       setStatus(
         error instanceof Error
@@ -962,7 +936,6 @@ function SchoonmaakForm() {
           : "Lokaal opgeslagen. Kan geen verbinding maken met WordPress."
       );
     } finally {
-      if (timeoutId) window.clearTimeout(timeoutId);
       setVerzendenBezig(false);
     }
   }

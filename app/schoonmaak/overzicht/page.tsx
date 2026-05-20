@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import {
   CleaningItem,
+  fetchCleaningItems,
   getCleaningItemKey,
   getCleaningItemPhotos,
   getCleaningItemPlanType,
-  getCleaningUrl,
   stripInternalCleaningTasks,
   stripInternalTemperatureRegistrations,
 } from "../cleaningApi";
@@ -47,24 +47,16 @@ export default function SchoonmaakOverzichtPage() {
       setStatus("Laden...");
 
       try {
-        const res = await fetch(getCleaningUrl(), { cache: "no-store" });
-        const data = (await res.json().catch(() => null)) as
-          | CleaningItem[]
-          | { message?: string }
-          | null;
+        const result = await fetchCleaningItems();
 
         if (negeerResultaat) return;
 
-        if (!res.ok || !Array.isArray(data)) {
-          setStatus(
-            data && !Array.isArray(data) && data.message
-              ? data.message
-              : "Registraties konden niet geladen worden."
-          );
+        if (!result.ok) {
+          setStatus(result.message);
           return;
         }
 
-        setItems(data);
+        setItems(result.data);
         setStatus("");
       } catch {
         if (!negeerResultaat) {

@@ -8,6 +8,9 @@ import {
 
 export const CLEANING_API_URL =
   "/api/cleaning";
+const WORDPRESS_CLEANING_API_URL =
+  "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
+const WORDPRESS_CLEANING_API_KEY = "schoonmaak-ijs-strik";
 
 const PLAN_MARKER_PREFIX = "__strik_plan:";
 const PHOTO_MARKER_PREFIX = "__strik_photo:";
@@ -41,6 +44,10 @@ export type CleaningItem = {
   fotoUploads?: CleaningPhotoUpload[];
 };
 
+type CleaningApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; message: string; status?: number };
+
 export function isInternalTemperatureRegistration(
   registratie: CleaningTemperatureRegistration
 ) {
@@ -57,6 +64,116 @@ export function stripInternalTemperatureRegistrations(
 
 export function getCleaningUrl() {
   return CLEANING_API_URL;
+}
+
+function getWordPressCleaningUrl() {
+  const url = new URL(WORDPRESS_CLEANING_API_URL);
+  url.searchParams.set("key", WORDPRESS_CLEANING_API_KEY);
+
+  return url.toString();
+}
+
+async function readJson(response: Response) {
+  return (await response.json().catch(() => null)) as unknown;
+}
+
+function getApiMessage(data: unknown, fallback: string) {
+  if (
+    data &&
+    typeof data === "object" &&
+    "message" in data &&
+    typeof data.message === "string" &&
+    data.message.trim()
+  ) {
+    return data.message;
+  }
+
+  return fallback;
+}
+
+async function fetchCleaningItemsFrom(url: string) {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+  const data = await readJson(response);
+
+  if (response.ok && Array.isArray(data)) {
+    return { ok: true as const, data: data as CleaningItem[] };
+  }
+
+  return {
+    ok: false as const,
+    status: response.status,
+    message: getApiMessage(data, "Eerdere antwoorden konden niet geladen worden."),
+  };
+}
+
+export async function fetchCleaningItems(): Promise<
+  CleaningApiResult<CleaningItem[]>
+> {
+  try {
+    const appResult = await fetchCleaningItemsFrom(CLEANING_API_URL);
+    if (appResult.ok) return appResult;
+  } catch {
+    // Probeer WordPress direct als de app-route in de browser hapert.
+  }
+
+  try {
+    return await fetchCleaningItemsFrom(getWordPressCleaningUrl());
+  } catch {
+    return {
+      ok: false,
+      message: "Kan geen verbinding maken met WordPress schoonmaakopslag.",
+    };
+  }
+}
+
+async function saveCleaningItemTo(url: string, payload: unknown) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await readJson(response);
+
+  if (response.ok) {
+    return { ok: true as const, data: data as CleaningItem };
+  }
+
+  return {
+    ok: false as const,
+    status: response.status,
+    message: getApiMessage(
+      data,
+      "WordPress schoonmaakopslag is tijdelijk niet bereikbaar."
+    ),
+  };
+}
+
+export async function saveCleaningItem(
+  payload: unknown
+): Promise<CleaningApiResult<CleaningItem>> {
+  try {
+    const appResult = await saveCleaningItemTo(CLEANING_API_URL, payload);
+    if (appResult.ok) return appResult;
+  } catch {
+    // Probeer WordPress direct als de app-route in de browser hapert.
+  }
+
+  try {
+    return await saveCleaningItemTo(getWordPressCleaningUrl(), payload);
+  } catch {
+    return {
+      ok: false,
+      message: "Kan geen verbinding maken met WordPress schoonmaakopslag.",
+    };
+  }
 }
 
 export function getPlanMarker(planType: PlanType) {
