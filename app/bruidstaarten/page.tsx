@@ -22,6 +22,16 @@ const items = [
     icon: strikIcons.bruidstaart,
     tone: "medium" as const,
   },
+  {
+    href: "https://strik-patisserie.nl/wp-content/uploads/2025/06/bruidstaart-inspiratie.pdf",
+    label: "Inspiratie PDF",
+    title: "Bruidstaart voorbeelden",
+    description: "Bekijk voorbeelden en inspiratie uit WordPress.",
+    icon: strikIcons.info,
+    tone: "light" as const,
+    target: "_blank" as const,
+    rel: "noopener noreferrer",
+  },
 ];
 
 export default function BruidstaartenPage() {

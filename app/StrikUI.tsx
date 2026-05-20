@@ -176,6 +176,8 @@ export function StrikActionCard({
   tone = "green",
   size = "regular",
   locked = false,
+  target,
+  rel,
 }: Readonly<{
   href: string;
   title: string;
@@ -186,12 +188,16 @@ export function StrikActionCard({
   tone?: Tone;
   size?: ActionCardSize;
   locked?: boolean;
+  target?: "_self" | "_blank" | "_parent" | "_top";
+  rel?: string;
 }>) {
   const sizeClasses = actionCardSizeClasses[size];
 
   return (
     <Link
       href={href}
+      target={target}
+      rel={rel}
       className={`group relative flex items-center border border-[#e7e0d8]/80 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${sizeClasses.card} ${toneClasses[tone]}`}
     >
       {badge && (
