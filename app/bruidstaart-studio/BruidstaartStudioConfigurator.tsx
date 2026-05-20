@@ -1524,6 +1524,16 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     );
   }
 
+  function countBeforeLayer(total: number, index: number) {
+    if (!total || !visualLayers.length || !totalLayerDecorationWeight) return 0;
+
+    const before = layerDecorationWeights
+      .slice(0, index)
+      .reduce((sum, item) => sum + item, 0);
+
+    return Math.floor((total * before) / totalLayerDecorationWeight);
+  }
+
   function renderPearlBorder(
     layerId: string,
     x: number,
@@ -2254,12 +2264,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       ROSE_DECORATION_IDS.forEach((roseId, variantIndex) => {
         if (!selectedDecorations.has(roseId)) return;
 
-        let remaining = countForLayer(
-          getDecorationQuantity(config, roseId),
-          index
-        );
+        const totalRoseCount = getDecorationQuantity(config, roseId);
+        let remaining = countForLayer(totalRoseCount, index);
         if (!remaining) return;
 
+        const colorIndexOffset = countBeforeLayer(totalRoseCount, index);
+        let roseIndexInLayer = 0;
         const baseRoseSize = clampVisual(width * 0.114, 17, 23.2);
         const roseSize = baseRoseSize * (isLargeRoseDecorationId(roseId) ? 3 : 1);
         const roseGap = roseSize * 0.66;
@@ -2341,7 +2351,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           Array.from({ length: plan.count }, (_item, item) => {
             const roseTint = roseTintForPlacement(
               roseId,
-              planIndex * plan.count + item
+              colorIndexOffset + roseIndexInLayer
             );
             const roseTintAsset = roseTint ? ROSE_WITHOUT_LEAF_ASSET : undefined;
             const roseBaseOpacity = roseTint
@@ -2377,9 +2387,11 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   tintFilterId: roseTint?.filterId,
                   baseOpacity: roseBaseOpacity,
                 };
+            roseIndexInLayer += 1;
 
             addPlacement(roses, placement, {
               allowOverlap: true,
+              allowText: true,
               allowTopper: true,
             });
           });
