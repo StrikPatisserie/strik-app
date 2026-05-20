@@ -13,7 +13,6 @@ import {
   isOptionAllowedForStyle,
   layoutOptions,
   topperOptions,
-  weddingCakeColorPaletteOptions,
 } from "./data";
 import {
   calculateWeddingCakePrice,
@@ -314,6 +313,32 @@ function findColorOptionByNote(value?: string) {
   if (!normalized) return undefined;
 
   const aliasIds: Record<string, string> = {
+    marsepeinbeige: "marsepein-kleur",
+    beige: "marsepein-kleur",
+    sneeuwwit: "icing-kleur",
+    wit: "icing-kleur",
+    camel: "klassiek-ivoor",
+    poederblauw: "klassiek-lichtblauw",
+    salie: "klassiek-mintgroen",
+    poederroze: "klassiek-lichtroze",
+    citroen: "klassiek-geel",
+    sky: "klassiek-blauw",
+    petrol: "klassiek-eucalyptus",
+    asperge: "klassiek-groen",
+    lavendel: "klassiek-lila",
+    honing: "klassiek-goud",
+    sinaas: "klassiek-oranje",
+    kers: "klassiek-rood",
+    blush: "klassiek-blush",
+    marine: "klassiek-donkerblauw",
+    dennen: "klassiek-sage",
+    fuchsia: "klassiek-roze",
+    mosterd: "klassiek-champagne",
+    burgundy: "klassiek-bordeaux",
+    chocolate: "klassiek-oudroze",
+    terracotta: "klassiek-terracotta",
+    ijzer: "klassiek-paars",
+    zwart: "klassiek-zwart",
     pastelroze: "roze-pastel",
     lichtroze: "klassiek-lichtroze",
     oudroze: "klassiek-oudroze",
@@ -341,8 +366,8 @@ function findColorOptionByNote(value?: string) {
   });
 }
 
-const sharedDecorationColorOptions = weddingCakeColorPaletteOptions.filter(
-  (option) => option.swatchColor
+const sharedDecorationColorOptions = colorOptions.filter(
+  (option) => option.swatchColor && option.allowedStyles?.includes("klassiek")
 );
 type RoseColorMode = "same" | "multiple";
 type FlowerPlacementId = (typeof FLOWER_PLACEMENT_OPTIONS)[number]["id"];
@@ -888,7 +913,7 @@ function SinglePaletteColorControls({
               : "border-[#8fb184] bg-[#dce8d6] text-[#2d2a26]"
           }`}
         >
-          <span className="h-5 w-5 shrink-0 rounded-full border border-[#dacbb4] bg-[#f3ead8] shadow-inner" />
+          <span className="h-5 w-5 shrink-0 rounded-full border border-[#e3d8bd] bg-[#FFFAE6] shadow-inner" />
           <span className="min-w-0 truncate">Standaard</span>
         </button>
         {sharedDecorationColorOptions.map((color) => (
@@ -1585,7 +1610,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     );
     const bandColor =
       selectedBandColor?.swatchColor ||
-      (layerColor && isWhiteDecorationBase(layerColor) ? "#f5efe3" : "#e9d8bd");
+      (layerColor && isWhiteDecorationBase(layerColor) ? "#FFFFFF" : "#FFFAE6");
     const strokeColor =
       selectedBandColor?.swatchBorder ||
       shadeHexColor(
