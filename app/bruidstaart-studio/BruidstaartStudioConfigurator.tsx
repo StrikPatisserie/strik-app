@@ -261,6 +261,9 @@ function normalizeColorSearchText(value: string) {
 }
 
 function findColorOptionByNote(value?: string) {
+  const directOption = findOption(colorOptions, value || "");
+  if (directOption) return directOption;
+
   const normalized = normalizeColorSearchText(value || "");
   if (!normalized) return undefined;
 
@@ -291,6 +294,8 @@ function findColorOptionByNote(value?: string) {
     );
   });
 }
+
+const roseColorOptions = colorOptions.filter((option) => option.swatchColor);
 
 function normalizeDateSearchInput(value: string) {
   const trimmed = value.trim();
@@ -531,6 +536,7 @@ function DecorationOptionCard({
   const [isEditingQuantity, setIsEditingQuantity] = useState(false);
   const [quantityDraft, setQuantityDraft] = useState("");
   const quantityInput = isEditingQuantity ? quantityDraft : String(quantity);
+  const selectedRoseColorId = findColorOptionByNote(colorNote)?.id || "";
 
   function beginQuantityInput() {
     setIsEditingQuantity(true);
@@ -628,13 +634,18 @@ function DecorationOptionCard({
           {onColorNoteChange && (
             <label className="grid gap-2 text-sm font-black text-[#2d2a26]/70">
               Kleur roosjes
-              <input
-                type="text"
-                value={colorNote || ""}
+              <select
+                value={selectedRoseColorId}
                 onChange={(event) => onColorNoteChange(event.target.value)}
-                placeholder="Bijv. ivoor, pastelroze"
                 className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
-              />
+              >
+                <option value="">Kies kleur</option>
+                {roseColorOptions.map((color) => (
+                  <option key={color.id} value={color.id}>
+                    {color.label}
+                  </option>
+                ))}
+              </select>
             </label>
           )}
         </div>
@@ -1496,7 +1507,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           );
           return (
             overlapArea(rect, placed) >
-            Math.min(rectArea, placedArea) * 0.42
+            Math.min(rectArea, placedArea) * 0.08
           );
         });
       }
@@ -1563,7 +1574,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           zones.topEdgeZone.x1 +
           (zones.topEdgeZone.x2 - zones.topEdgeZone.x1) * ratio;
         const topAnchorFactor =
-          kind === "flower" ? 0.72 : kind === "fruit" ? 0.52 : 0.46;
+          kind === "flower" ? 0.68 : kind === "fruit" ? 0.28 : 0.32;
         const sideOverhang =
           kind === "flower" ? 0.22 : kind === "fruit" ? 0.1 : 0.05;
 
@@ -1636,6 +1647,24 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       };
     }
 
+    function ratioFallbacks(ratio: number) {
+      return Array.from(
+        new Set(
+          [
+            ratio,
+            ratio - 0.14,
+            ratio + 0.14,
+            ratio - 0.26,
+            ratio + 0.26,
+            0.18,
+            0.82,
+            0.32,
+            0.68,
+          ].map((item) => clampVisual(Number(item.toFixed(2)), 0.08, 0.92))
+        )
+      );
+    }
+
     function addFlower() {
       if (!selectedDecorations.has("echte-bloemen")) return;
 
@@ -1700,6 +1729,16 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
       const fruitHeight = clampVisual(width * 0.12, 17, 25);
       const topBlockedByTopper = isTopLayer && topperVisuals.length > 0;
+      const selectedRoseId = ROSE_DECORATION_IDS.find((roseId) =>
+        selectedDecorations.has(roseId)
+      );
+      const separatedTopFruitRatios = selectedRoseId
+        ? selectedRoseId === "marsepeinrozen-met-blad"
+          ? [0.12]
+          : [0.88]
+        : topBlockedByTopper
+          ? [0.12, 0.88]
+          : [isTopLayer ? 0.34 : index % 2 ? 0.28 : 0.72];
       const fruitRows: Array<{
         edge: DecorEdge;
         ratios: number[];
@@ -1707,9 +1746,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       }> = [
         {
           edge: "top",
-          ratios: topBlockedByTopper
-            ? [0.2, 0.8]
-            : [isTopLayer ? 0.34 : index % 2 ? 0.28 : 0.72],
+          ratios: separatedTopFruitRatios,
           forceShort: topBlockedByTopper,
         },
         ...(isBottomLayer
@@ -1732,23 +1769,22 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         const assetWidth = fruitHeight * (canUseLong ? 3.62 : 2.75);
 
         row.ratios.forEach((ratio, item) => {
-          const placement = edgePlacement({
-            key: `${layerId}-fruit-${rowIndex}-${item}`,
-            asset,
-            edge: row.edge,
-            ratio,
-            assetWidth: assetWidth,
-            assetHeight: fruitHeight,
-            rotate: ratio < 0.5 ? -1.5 : 1.5,
-            opacity: 0.98,
-            shadowOpacity: 0.05,
-            kind: "fruit",
-            sideOffset: row.edge === "top" ? 1.1 : 0,
-          });
+          ratioFallbacks(ratio).some((nextRatio, candidateIndex) => {
+            const placement = edgePlacement({
+              key: `${layerId}-fruit-${rowIndex}-${item}-${candidateIndex}`,
+              asset,
+              edge: row.edge,
+              ratio: nextRatio,
+              assetWidth: assetWidth,
+              assetHeight: fruitHeight,
+              rotate: nextRatio < 0.5 ? -1.5 : 1.5,
+              opacity: 0.98,
+              shadowOpacity: 0.05,
+              kind: "fruit",
+              sideOffset: row.edge === "top" ? fruitHeight * 0.04 : 0,
+            });
 
-          addPlacement(fruits, placement, {
-            allowOverlap: true,
-            allowTopper: row.forceShort,
+            return addPlacement(fruits, placement);
           });
         });
       });
@@ -1765,7 +1801,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         if (!remaining) return;
 
         const roseSize = clampVisual(width * 0.114, 17, 23.2);
-        const roseGap = roseSize * 0.66;
+        const roseGap = roseSize * 1.02;
         const asset =
           roseId === "marsepeinrozen-met-blad"
             ? ROSE_WITH_LEAF_ASSET
@@ -1803,10 +1839,16 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             edge,
             count,
             ratio:
-              isTopLayer && topperVisuals.length && edge === "top"
+              selectedDecorations.has("rood-fruit") && edge === "top"
                 ? variantIndex % 2
                   ? 0.86
                   : 0.14
+                : selectedDecorations.has("rood-fruit") && edge === "bottom"
+                  ? 0.28
+                : isTopLayer && topperVisuals.length && edge === "top"
+                  ? variantIndex % 2
+                    ? 0.86
+                    : 0.14
                 : edge === "bottom"
                   ? variantIndex % 2
                     ? 0.27
@@ -1843,7 +1885,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             assetWidth: horizontal ? rowLength : roseSize,
             assetHeight: horizontal ? roseSize : rowLength,
             kind: "rose",
-            sideOffset: plan.edge === "top" ? roseSize * 0.1 : 0,
+            sideOffset: plan.edge === "top" ? roseSize * 0.02 : 0,
           });
 
           Array.from({ length: plan.count }, (_item, item) => {
@@ -1876,10 +1918,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   hasLeaves,
                 };
 
-            addPlacement(roses, placement, {
-              allowOverlap: true,
-              allowTopper: true,
-            });
+            addPlacement(roses, placement);
           });
         });
       });
@@ -2257,14 +2296,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
           return (
             <g key={topper.id}>
-              <ellipse
-                cx={topperX + width / 2}
-                cy={topperY + height - 3}
-                rx={Math.max(7, width * 0.22)}
-                ry="1.2"
-                fill="currentColor"
-                opacity="0.018"
-              />
               <image
                 href={topperDecorationAsset(topper.id)}
                 x={topperX}
@@ -2596,13 +2627,20 @@ export default function BruidstaartStudioConfigurator() {
   }
 
   function setDecorationColorNote(decorationId: string, color: string) {
-    setConfig((current) => ({
-      ...current,
-      decorationColorNotes: {
-        ...(current.decorationColorNotes || {}),
-        [decorationId]: color,
-      },
-    }));
+    setConfig((current) => {
+      const nextColorNotes = { ...(current.decorationColorNotes || {}) };
+
+      if (color) {
+        nextColorNotes[decorationId] = color;
+      } else {
+        delete nextColorNotes[decorationId];
+      }
+
+      return {
+        ...current,
+        decorationColorNotes: nextColorNotes,
+      };
+    });
   }
 
   function addDecorationNote() {

@@ -100,6 +100,13 @@ export function getDecorationSurcharges(config: WeddingCakeConfig) {
   );
 }
 
+function getDecorationColorLabel(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  return findOption(colorOptions, trimmed)?.label || trimmed;
+}
+
 export function getDecorationColorNotes(config: WeddingCakeConfig) {
   const colorNotes = config.decorationColorNotes || {};
 
@@ -113,7 +120,7 @@ export function getDecorationColorNotes(config: WeddingCakeConfig) {
       {
         id,
         label: decoration?.label || id,
-        color,
+        color: getDecorationColorLabel(color),
       },
     ];
   });
@@ -417,7 +424,9 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   const decorations = config.decorationIds.flatMap((id) => {
     const decoration = findOption(decorationOptions, id);
     if (!decoration) return [];
-    const color = config.decorationColorNotes?.[id]?.trim();
+    const color = getDecorationColorLabel(
+      config.decorationColorNotes?.[id] || ""
+    );
     const colorSuffix = color ? `, kleur: ${color}` : "";
 
     if (decoration.quantityLabel) {
