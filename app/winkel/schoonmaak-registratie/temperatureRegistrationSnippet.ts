@@ -35,14 +35,19 @@ function strik_temperature_v1_registrations($items) {
         if (!is_array($item)) continue;
 
         $naam = isset($item['naam']) ? sanitize_text_field($item['naam']) : '';
-        $temperatuur = isset($item['temperatuur']) ? sanitize_text_field($item['temperatuur']) : '';
+        $display_temperatuur = isset($item['displayTemperatuur']) ? sanitize_text_field($item['displayTemperatuur']) : '';
+        $hand_temperatuur = isset($item['handTemperatuur']) ? sanitize_text_field($item['handTemperatuur']) : '';
+        if ($hand_temperatuur === '' && isset($item['temperatuur'])) {
+            $hand_temperatuur = sanitize_text_field($item['temperatuur']);
+        }
 
-        if ($naam === '' && $temperatuur === '') continue;
+        if ($naam === '' && $display_temperatuur === '' && $hand_temperatuur === '') continue;
 
         $clean[] = array(
             'id' => isset($item['id']) ? sanitize_text_field($item['id']) : uniqid('temp-', true),
             'naam' => $naam,
-            'temperatuur' => $temperatuur,
+            'displayTemperatuur' => $display_temperatuur,
+            'handTemperatuur' => $hand_temperatuur,
         );
     }
 
@@ -199,7 +204,10 @@ function strik_temperature_v1_admin_page() {
         echo '<td>' . esc_html($item['naam']) . '</td>';
         echo '<td><ul>';
         foreach ($temps as $temp) {
-            echo '<li>' . esc_html($temp['naam'] . ': ' . $temp['temperatuur'] . ' °C') . '</li>';
+            $display_temperatuur = isset($temp['displayTemperatuur']) ? $temp['displayTemperatuur'] : '';
+            $hand_temperatuur = isset($temp['handTemperatuur']) ? $temp['handTemperatuur'] : (isset($temp['temperatuur']) ? $temp['temperatuur'] : '');
+
+            echo '<li>' . esc_html($temp['naam'] . ': display ' . ($display_temperatuur !== '' ? $display_temperatuur : '-') . ' °C, handmeting ' . ($hand_temperatuur !== '' ? $hand_temperatuur : '-') . ' °C') . '</li>';
         }
         echo '</ul></td>';
         echo '<td>' . nl2br(esc_html($item['opmerking'])) . '</td>';

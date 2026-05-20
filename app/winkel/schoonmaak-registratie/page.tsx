@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
-import { TEMPERATURE_REGISTRATION_SNIPPET } from "./temperatureRegistrationSnippet";
 
 const winkelOptions = [
   { id: "ziekerstraat", label: "Ziekerstraat" },
@@ -13,10 +12,53 @@ const winkelOptions = [
 
 type WinkelId = (typeof winkelOptions)[number]["id"];
 
+const temperatureRowsByWinkel: Record<WinkelId, string[]> = {
+  heyendaal: [
+    "zelfbedienings vriezer winkel",
+    "zelfbedieningskoeling winkel",
+    "gebaksvitrine winkel",
+    "vrieskast chocohok links",
+    "vrieskast chocohok rechts",
+    "vriezer coma kasten gang",
+    "koelcel gebak achter",
+  ],
+  ziekerstraat: [
+    "zelfbedienings vriezer winkel",
+    "zelfbedieningskoeling winkel",
+    "gebaksvitrine winkel",
+    "koelkast keuken",
+    "vriescel gang",
+    "koelcel gang",
+    "koelwerkbank achter",
+    "vrieskast enkel achter",
+    "vrieskast dubbel achter",
+  ],
+  daalseweg: [
+    "zelfbedienings vriezer winkel",
+    "zelfbedieningskoeling winkel",
+    "gebaksvitrine winkel",
+    "vriescel achter",
+    "koelcel achter",
+    "vrieskast ijs",
+    "vrieskast achter",
+  ],
+  lent: [
+    "zelfbedienings vriezer winkel",
+    "zelfbedieningskoeling winkel",
+    "gebaksvitrine winkel",
+    "vrieskast ijs achter",
+    "vriescel achter",
+    "koelcel achter",
+    "koelwerkbank achter",
+  ],
+};
+
 type TemperatureRegistration = {
   id: string;
   naam: string;
-  temperatuur: string;
+  displayTemperatuur: string;
+  handTemperatuur: string;
+  temperatuur?: string;
 };
 
 type TemperaturePayload = {
@@ -53,16 +95,46 @@ function getVandaag() {
   return `${jaar}-${maand}-${dag}`;
 }
 
-function createTemperatureId(prefix = "temp") {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+function createTemperatureRowId(prefix: string, index: number) {
+  const normalizedPrefix = prefix
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `${normalizedPrefix || "meetpunt"}-${index + 1}`;
 }
 
-function createDefaultTemperatureRows(): TemperatureRegistration[] {
-  return ["Koeling toonbank", "Vriezer", "Voorraadkoeling"].map((naam) => ({
-    id: createTemperatureId(),
+function createTemperatureRow(
+  naam = "",
+  id = "meetpunt-1"
+): TemperatureRegistration {
+  return {
+    id,
     naam,
-    temperatuur: "",
-  }));
+    displayTemperatuur: "",
+    handTemperatuur: "",
+  };
+}
+
+function normalizeDeviceName(value: string) {
+  return value.toLocaleLowerCase("nl-NL").replace(/\s+/g, " ").trim();
+}
+
+function createDefaultTemperatureRows(winkelId: WinkelId) {
+  return temperatureRowsByWinkel[winkelId].map((naam, index) =>
+    createTemperatureRow(naam, createTemperatureRowId(winkelId, index))
+  );
+}
+
+function isDefaultTemperatureRow(
+  winkelId: WinkelId,
+  item: TemperatureRegistration
+) {
+  const itemName = normalizeDeviceName(item.naam);
+
+  return temperatureRowsByWinkel[winkelId].some(
+    (name) => normalizeDeviceName(name) === itemName
+  );
 }
 
 function getDraftKey(winkelId: WinkelId, datum: string) {
@@ -75,14 +147,42 @@ function getSelectedWinkel(winkelId: WinkelId) {
   );
 }
 
-function normalizeRegistrations(items?: TemperatureRegistration[]) {
-  if (!Array.isArray(items) || !items.length) return createDefaultTemperatureRows();
+function normalizeRegistrations(
+  items: TemperatureRegistration[] | undefined,
+  winkelId: WinkelId
+) {
+  const defaultRows = createDefaultTemperatureRows(winkelId);
 
-  return items.map((item) => ({
-    id: item.id || createTemperatureId(),
+  if (!Array.isArray(items) || !items.length) {
+    return defaultRows;
+  }
+
+  const normalizedItems = items.map((item, index) => ({
+    id: item.id || createTemperatureRowId(item.naam || "meetpunt", index),
     naam: item.naam || "",
-    temperatuur: item.temperatuur || "",
+    displayTemperatuur: item.displayTemperatuur || "",
+    handTemperatuur: item.handTemperatuur || item.temperatuur || "",
   }));
+  const usedItemIds = new Set<string>();
+  const rowsWithDefaults = defaultRows.map((defaultRow) => {
+    const matchingItem = normalizedItems.find(
+      (item) =>
+        normalizeDeviceName(item.naam) === normalizeDeviceName(defaultRow.naam)
+    );
+
+    if (!matchingItem) return defaultRow;
+
+    usedItemIds.add(matchingItem.id);
+
+    return {
+      ...defaultRow,
+      displayTemperatuur: matchingItem.displayTemperatuur,
+      handTemperatuur: matchingItem.handTemperatuur,
+    };
+  });
+  const extraRows = normalizedItems.filter((item) => !usedItemIds.has(item.id));
+
+  return [...rowsWithDefaults, ...extraRows];
 }
 
 function cleanRegistrations(items: TemperatureRegistration[]) {
@@ -90,9 +190,12 @@ function cleanRegistrations(items: TemperatureRegistration[]) {
     .map((item) => ({
       id: item.id,
       naam: item.naam.trim(),
-      temperatuur: item.temperatuur.trim(),
+      displayTemperatuur: item.displayTemperatuur.trim(),
+      handTemperatuur: item.handTemperatuur.trim(),
     }))
-    .filter((item) => item.naam || item.temperatuur);
+    .filter(
+      (item) => item.naam || item.displayTemperatuur || item.handTemperatuur
+    );
 }
 
 function makeSignature(payload: TemperaturePayload) {
@@ -105,7 +208,8 @@ function makeSignature(payload: TemperaturePayload) {
       payload.temperatuurRegistraties
     ).map((item) => ({
       naam: item.naam,
-      temperatuur: item.temperatuur,
+      displayTemperatuur: item.displayTemperatuur,
+      handTemperatuur: item.handTemperatuur,
     })),
   });
 }
@@ -153,12 +257,16 @@ function saveLocalDraft(winkelId: WinkelId, payload: TemperaturePayload) {
   }
 }
 
-function payloadToFormState(payload: TemperaturePayload): FormState {
+function payloadToFormState(
+  payload: TemperaturePayload,
+  winkelId: WinkelId
+): FormState {
   return {
     naam: payload.naam || "",
     opmerking: payload.opmerking || "",
     temperatuurRegistraties: normalizeRegistrations(
-      payload.temperatuurRegistraties
+      payload.temperatuurRegistraties,
+      winkelId
     ),
   };
 }
@@ -169,14 +277,14 @@ export default function SchoonmaakRegistratiePage() {
   const [form, setForm] = useState<FormState>({
     naam: "",
     opmerking: "",
-    temperatuurRegistraties: createDefaultTemperatureRows(),
+    temperatuurRegistraties: createDefaultTemperatureRows("ziekerstraat"),
   });
   const [status, setStatus] = useState("");
   const [ladenBezig, setLadenBezig] = useState(false);
   const [opslaanBezig, setOpslaanBezig] = useState(false);
-  const [snippetStatus, setSnippetStatus] = useState("");
   const autoSaveTimerRef = useRef<number | null>(null);
   const verzondenSignatuurRef = useRef("");
+  const extraRowIdRef = useRef(0);
   const selectedWinkel = getSelectedWinkel(winkelId);
 
   function createPayload(nextForm = form): TemperaturePayload {
@@ -206,8 +314,8 @@ export default function SchoonmaakRegistratiePage() {
       skipIfUnchanged?: boolean;
     } = {}
   ) {
-    const hasTemperature = payload.temperatuurRegistraties.some((item) =>
-      item.temperatuur.trim()
+    const hasTemperature = payload.temperatuurRegistraties.some(
+      (item) => item.displayTemperatuur.trim() || item.handTemperatuur.trim()
     );
     const hasContent =
       payload.naam.trim() || payload.opmerking.trim() || hasTemperature;
@@ -287,7 +395,7 @@ export default function SchoonmaakRegistratiePage() {
 
   function updateRegistration(
     id: string,
-    field: "naam" | "temperatuur",
+    field: "naam" | "displayTemperatuur" | "handTemperatuur",
     value: string
   ) {
     updateForm({
@@ -299,11 +407,16 @@ export default function SchoonmaakRegistratiePage() {
   }
 
   function addRegistrationRow() {
+    extraRowIdRef.current += 1;
+
     updateForm({
       ...form,
       temperatuurRegistraties: [
         ...form.temperatuurRegistraties,
-        { id: createTemperatureId(), naam: "", temperatuur: "" },
+        createTemperatureRow(
+          "",
+          `extra-${form.temperatuurRegistraties.length}-${extraRowIdRef.current}`
+        ),
       ],
     });
   }
@@ -317,18 +430,8 @@ export default function SchoonmaakRegistratiePage() {
       ...form,
       temperatuurRegistraties: nextRows.length
         ? nextRows
-        : [{ id: createTemperatureId(), naam: "", temperatuur: "" }],
+        : [createTemperatureRow("", "meetpunt-1")],
     });
-  }
-
-  async function copySnippet() {
-    try {
-      await navigator.clipboard.writeText(TEMPERATURE_REGISTRATION_SNIPPET);
-      setSnippetStatus("Snippet gekopieerd.");
-      window.setTimeout(() => setSnippetStatus(""), 1800);
-    } catch {
-      setSnippetStatus("Kopiëren lukt nu niet.");
-    }
   }
 
   useEffect(
@@ -357,7 +460,7 @@ export default function SchoonmaakRegistratiePage() {
       ) {
         const signature = makeSignature(payload);
 
-        setForm(payloadToFormState(payload));
+        setForm(payloadToFormState(payload, winkelId));
         verzondenSignatuurRef.current = signature;
         setStatus(nextStatus);
       }
@@ -395,7 +498,7 @@ export default function SchoonmaakRegistratiePage() {
             setForm({
               naam: "",
               opmerking: "",
-              temperatuurRegistraties: createDefaultTemperatureRows(),
+              temperatuurRegistraties: createDefaultTemperatureRows(winkelId),
             });
             verzondenSignatuurRef.current = "";
           }
@@ -428,7 +531,7 @@ export default function SchoonmaakRegistratiePage() {
           setForm({
             naam: "",
             opmerking: "",
-            temperatuurRegistraties: createDefaultTemperatureRows(),
+            temperatuurRegistraties: createDefaultTemperatureRows(winkelId),
           });
           verzondenSignatuurRef.current = "";
         }
@@ -443,7 +546,7 @@ export default function SchoonmaakRegistratiePage() {
             setForm({
               naam: "",
               opmerking: "",
-              temperatuurRegistraties: createDefaultTemperatureRows(),
+              temperatuurRegistraties: createDefaultTemperatureRows(winkelId),
             });
             verzondenSignatuurRef.current = "";
           }
@@ -535,47 +638,71 @@ export default function SchoonmaakRegistratiePage() {
           </div>
 
           <div className="mt-4 grid gap-3">
-            {form.temperatuurRegistraties.map((item, index) => (
-              <div
-                key={item.id}
-                className="grid gap-2 rounded-[1.25rem] border border-[#e7e0d8] bg-[#f8f6f3] p-3 sm:grid-cols-[minmax(0,1fr)_8rem_auto]"
-              >
-                <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-                  Meetpunt {index + 1}
-                  <input
-                    value={item.naam}
-                    onChange={(event) =>
-                      updateRegistration(item.id, "naam", event.target.value)
-                    }
-                    placeholder="Bijvoorbeeld koeling"
-                    className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
-                  />
-                </label>
-                <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-                  Temperatuur
-                  <input
-                    value={item.temperatuur}
-                    onChange={(event) =>
-                      updateRegistration(
-                        item.id,
-                        "temperatuur",
-                        event.target.value
-                      )
-                    }
-                    inputMode="decimal"
-                    placeholder="0,0"
-                    className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => removeRegistrationRow(item.id)}
-                  className="self-end rounded-full bg-white px-3 py-2 text-xs font-black text-[#c94f43] shadow-sm"
+            {form.temperatuurRegistraties.map((item, index) => {
+              const isDefaultRow = isDefaultTemperatureRow(winkelId, item);
+
+              return (
+                <div
+                  key={item.id}
+                  className="grid gap-2 rounded-[1.25rem] border border-[#e7e0d8] bg-[#f8f6f3] p-3 sm:grid-cols-[minmax(0,1.25fr)_8rem_8rem_auto]"
                 >
-                  Verwijder
-                </button>
-              </div>
-            ))}
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                    Apparaat {index + 1}
+                    <input
+                      value={item.naam}
+                      onChange={(event) =>
+                        updateRegistration(item.id, "naam", event.target.value)
+                      }
+                      placeholder="Bijvoorbeeld koeling"
+                      className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                    Display
+                    <input
+                      value={item.displayTemperatuur}
+                      onChange={(event) =>
+                        updateRegistration(
+                          item.id,
+                          "displayTemperatuur",
+                          event.target.value
+                        )
+                      }
+                      inputMode="decimal"
+                      placeholder="0,0"
+                      className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                    Handmeting
+                    <input
+                      value={item.handTemperatuur}
+                      onChange={(event) =>
+                        updateRegistration(
+                          item.id,
+                          "handTemperatuur",
+                          event.target.value
+                        )
+                      }
+                      inputMode="decimal"
+                      placeholder="0,0"
+                      className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                    />
+                  </label>
+                  {isDefaultRow ? (
+                    <span className="hidden sm:block" aria-hidden="true" />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => removeRegistrationRow(item.id)}
+                      className="self-end rounded-full bg-white px-3 py-2 text-xs font-black text-[#c94f43] shadow-sm"
+                    >
+                      Verwijder
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <label className="mt-4 grid gap-2 text-sm font-black text-[#2d2a26]/65">
@@ -604,34 +731,6 @@ export default function SchoonmaakRegistratiePage() {
           >
             {opslaanBezig ? "Opslaan..." : "Opslaan"}
           </button>
-        </section>
-
-        <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-black">WordPress snippet</h3>
-              <p className="mt-1 text-sm font-bold text-[#2d2a26]/50">
-                Route voor digitaal opslaan en overschrijven per dag.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void copySnippet()}
-              className="rounded-full bg-[#dbe9ee] px-4 py-2.5 text-sm font-black shadow-sm"
-            >
-              Kopieer snippet
-            </button>
-          </div>
-          {snippetStatus && (
-            <p className="mt-3 text-sm font-black text-[#6d9caf]">
-              {snippetStatus}
-            </p>
-          )}
-          <textarea
-            readOnly
-            value={TEMPERATURE_REGISTRATION_SNIPPET}
-            className="mt-4 h-72 w-full rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-4 font-mono text-[0.68rem] leading-relaxed text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
-          />
         </section>
       </div>
     </StrikShell>
