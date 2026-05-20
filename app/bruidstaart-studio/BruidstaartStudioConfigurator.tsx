@@ -1339,7 +1339,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             ? placement.height * 0.18
             : placement.kind === "fruit"
               ? placement.height * 0.12
-              : placement.height * 0.08;
+              : placement.kind === "rose"
+                ? 0
+                : placement.height * 0.08;
 
         if (rect.y2 < zones.layerBounds.y1 + neededOverlap) return false;
       }
