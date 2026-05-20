@@ -100,7 +100,7 @@ const CREME_SMEAR_OPEN_ASSET = "/creme%20smeren_creme%20open.svg";
 const GOLD_LEAF_ASSET = "/bladgoud.svg";
 const INITIALS_SHIELD_ASSET = "/initialen%20op%20schild.svg";
 const CHOCO_LETTER_ASSET_PATH = "/choco-letters";
-const CHOCO_LETTER_ASPECT_RATIO = 0.68;
+const CHOCO_LETTER_ADVANCE_RATIO = 0.68;
 const CHOCO_SPACE_RATIO = 0.32;
 const WHITE_CHOCOLATE_DECORATION_COLOR = "#fff4dc";
 const WHITE_CHOCOLATE_CONTRAST_DECORATION_COLOR = "#e8cf9f";
@@ -549,6 +549,10 @@ function chocoLetterTokens(text?: string) {
     .filter((character) => character === " " || /^[A-Z]$/.test(character));
 }
 
+function hasChocoLetterText(text?: string) {
+  return chocoLetterTokens(text).some((token) => token !== " ");
+}
+
 function ChocoLetterMonogram({
   text,
   centerX,
@@ -572,25 +576,25 @@ function ChocoLetterMonogram({
   if (!letterCount) return null;
 
   const steps = tokens.map((token) =>
-    token === " " ? size * CHOCO_SPACE_RATIO : size * CHOCO_LETTER_ASPECT_RATIO
+    token === " " ? size * CHOCO_SPACE_RATIO : size * CHOCO_LETTER_ADVANCE_RATIO
   );
-  const rawWidth =
-    steps.reduce((total, step) => total + step, 0) +
-    Math.max(0, tokens.length - 1) * letterSpacing;
-  const longTextScale =
-    letterCount > 3 ? Math.max(0.52, 3 / letterCount) : 1;
+  const placements = tokens.map((token, index) => ({
+    token,
+    width: token === " " ? steps[index] : size,
+    x:
+      steps.slice(0, index).reduce((total, step) => total + step, 0) +
+      index * letterSpacing,
+  }));
+  const rawWidth = placements.reduce(
+    (width, placement) => Math.max(width, placement.x + placement.width),
+    0
+  );
+  const longTextScale = letterCount > 3 ? Math.max(0.52, 3 / letterCount) : 1;
   const finalScale = Math.min(
     scale * longTextScale,
     maxWidth / Math.max(1, rawWidth)
   );
   const groupX = centerX - (rawWidth * finalScale) / 2;
-  const placements = tokens.map((token, index) => ({
-    token,
-    width: steps[index],
-    x:
-      steps.slice(0, index).reduce((total, step) => total + step, 0) +
-      index * letterSpacing,
-  }));
 
   return (
     <g transform={`translate(${groupX} ${y}) scale(${finalScale})`}>
@@ -1454,6 +1458,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const chocoInitialsText = normalizeChocoLetterText(
     config.topperInitialsText
   );
+  const hasVisibleChocoInitials = hasChocoLetterText(chocoInitialsText);
   const topperVisuals = [
     selectedMainTopperId
       ? {
@@ -3203,7 +3208,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
 
           return (
             <g key={topper.id}>
-              {!isWrittenInitials && (
+              {(!isWrittenInitials || !hasVisibleChocoInitials) && (
                 <image
                   href={topperDecorationAsset(topper.id)}
                   x={topperX}
@@ -3213,13 +3218,13 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   preserveAspectRatio="xMidYMid meet"
                 />
               )}
-              {isWrittenInitials && (
+              {isWrittenInitials && hasVisibleChocoInitials && (
                 <ChocoLetterMonogram
                   text={chocoInitialsText}
                   centerX={topperX + width / 2}
                   y={topperY + height * 0.12}
                   size={height * 0.9}
-                  letterSpacing={-height * 0.11}
+                  letterSpacing={-height * 0.15}
                   maxWidth={Math.min(width, topLayerWidth * 0.42)}
                 />
               )}
