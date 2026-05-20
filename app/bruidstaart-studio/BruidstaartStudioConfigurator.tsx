@@ -1307,6 +1307,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         const centerX =
           zones.topEdgeZone.x1 +
           (zones.topEdgeZone.x2 - zones.topEdgeZone.x1) * ratio;
+        const topAnchorFactor =
+          kind === "flower" ? 0.68 : kind === "fruit" ? 0.42 : 0.56;
+
         return {
           key,
           asset,
@@ -1317,7 +1320,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             x - assetWidth * 0.22,
             x + width - assetWidth * 0.78
           ),
-          y: y - assetHeight * 0.58 + sideOffset,
+          y: y - assetHeight * topAnchorFactor + sideOffset,
           width: assetWidth,
           height: assetHeight,
           rotate,
@@ -1362,8 +1365,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         kind,
         x:
           edge === "left"
-            ? x - assetWidth * 0.48 + sideOffset
-            : x + width - assetWidth * 0.52 + sideOffset,
+            ? x - assetWidth * 0.64 + sideOffset
+            : x + width - assetWidth * 0.36 + sideOffset,
         y: clampVisual(centerY - assetHeight / 2, y, y + height - assetHeight),
         width: assetWidth,
         height: assetHeight,
@@ -1377,9 +1380,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       if (!selectedDecorations.has("echte-bloemen")) return;
 
       const flowerHeight = clampVisual(
-        width * (isTopLayer ? 0.16 : 0.135),
-        22,
-        isTopLayer ? 36 : 31
+        width * (isTopLayer ? 0.235 : 0.195),
+        31,
+        isTopLayer ? 50 : 44
       );
       const flowerWidth = flowerHeight * 1.14;
       const edge: DecorEdge = isTopLayer
@@ -1410,16 +1413,22 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   ? -5
                   : 5,
           opacity: 0.98,
-          shadowOpacity: 0.045,
+          shadowOpacity: 0.05,
           kind: "flower",
+          sideOffset:
+            edge === "left"
+              ? -flowerWidth * 0.1
+              : edge === "right"
+                ? flowerWidth * 0.1
+                : -1.5,
         });
 
-        return addPlacement(flowers, placement);
+        return addPlacement(flowers, placement, { allowOverlap: true });
       });
 
       if (isBottomLayer && visualLayers.length > 1) {
         const sideEdge: DecorEdge = index % 2 ? "right" : "left";
-        const sideFlowerHeight = flowerHeight * 0.9;
+        const sideFlowerHeight = flowerHeight * 0.98;
         const sideFlower = edgePlacement({
           key: `${layerId}-flower-side`,
           asset: REAL_FLOWER_ASSET,
@@ -1429,17 +1438,21 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           assetHeight: sideFlowerHeight,
           rotate: sideEdge === "left" ? -10 : 10,
           opacity: 0.94,
-          shadowOpacity: 0.04,
+          shadowOpacity: 0.045,
           kind: "flower",
+          sideOffset:
+            sideEdge === "left"
+              ? -sideFlowerHeight * 0.12
+              : sideFlowerHeight * 0.12,
         });
-        addPlacement(flowers, sideFlower);
+        addPlacement(flowers, sideFlower, { allowOverlap: true });
       }
     }
 
     function addFruit() {
       if (!selectedDecorations.has("rood-fruit")) return;
 
-      const fruitHeight = clampVisual(width * 0.078, 11.5, 16.5);
+      const fruitHeight = clampVisual(width * 0.104, 15, 21.8);
       const topBlockedByTopper = isTopLayer && topperVisuals.length > 0;
       const canUseLong = !topBlockedByTopper && width > fruitHeight * 4.8;
       const asset = canUseLong ? RED_FRUIT_LONG_ASSET : RED_FRUIT_SHORT_ASSET;
@@ -1477,8 +1490,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   ? -1.5
                   : 1.5,
           opacity: 0.98,
-          shadowOpacity: 0.045,
+          shadowOpacity: 0.05,
           kind: "fruit",
+          sideOffset: edge === "top" ? 1.1 : 0,
         });
 
         return addPlacement(fruits, placement, { allowOverlap: true });
@@ -1492,8 +1506,8 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         let remaining = countForLayer(getDecorationQuantity(config, roseId), index);
         if (!remaining) return;
 
-        const roseSize = clampVisual(width * 0.085, 12.5, 17.2);
-        const roseGap = roseSize * 0.72;
+        const roseSize = clampVisual(width * 0.114, 17, 23.2);
+        const roseGap = roseSize * 0.66;
         const asset =
           roseId === "marsepeinrozen-met-blad"
             ? ROSE_WITH_LEAF_ASSET
@@ -1569,6 +1583,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             assetWidth: horizontal ? rowLength : roseSize,
             assetHeight: horizontal ? roseSize : rowLength,
             kind: "rose",
+            sideOffset: plan.edge === "top" ? -0.6 : 0,
           });
           const rowRect = placementRect(rowCenter);
           const rowAllowed =
@@ -1589,7 +1604,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   height: roseSize,
                   rotate: [-4, 3, -1, 5][(item + variantIndex) % 4],
                   opacity: 0.98,
-                  shadowOpacity: 0.04,
+                  shadowOpacity: 0.045,
                 }
               : {
                   ...rowCenter,
@@ -1602,7 +1617,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                       ? -8 + (item % 2) * 5
                       : 8 - (item % 2) * 5,
                   opacity: 0.98,
-                  shadowOpacity: 0.04,
+                  shadowOpacity: 0.045,
                 };
 
             addPlacement(roses, placement, { allowOverlap: true });
@@ -1624,10 +1639,13 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
               edge: index % 2 ? "left" : "right",
             },
           ];
-      const goldCount = Math.min(4, Math.max(2, Math.ceil(width / 76)));
-      const goldSize = clampVisual(width * 0.035, 5.4, 8.6);
+      const goldCount = Math.min(4, Math.max(2, Math.ceil(width / 72)));
+      const goldSize = clampVisual(width * 0.05, 7.4, 12.2);
+      const visibleAnchors = anchors.slice(0, Math.min(2, anchors.length));
 
-      anchors.slice(0, goldCount).forEach((anchor, item) => {
+      Array.from({ length: goldCount }, (_gold, item) => {
+        const anchor = visibleAnchors[item % visibleAnchors.length];
+        const clusterOffset = [-4, 3.5, 0.5, -1.5][item % 4];
         const placement = edgePlacement({
           key: `${layerId}-gold-${item}`,
           asset: GOLD_LEAF_ASSET,
@@ -1639,10 +1657,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           assetWidth: goldSize * 1.22,
           assetHeight: goldSize,
           rotate: [-13, 11, -4, 17][item % 4],
-          opacity: item % 2 ? 0.68 : 0.76,
+          opacity: item % 2 ? 0.72 : 0.82,
           shadowOpacity: 0,
           kind: "gold",
-          sideOffset: item % 2 ? 3 : -3,
+          sideOffset: item % 2 ? clusterOffset : -clusterOffset,
         });
 
         addPlacement(gold, placement, { allowOverlap: true });
