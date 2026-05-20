@@ -1,73 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
-
-const winkelOptions = [
-  { id: "ziekerstraat", label: "Ziekerstraat" },
-  { id: "heyendaal", label: "Heyendaal" },
-  { id: "daalseweg", label: "Daalseweg" },
-  { id: "lent", label: "Lent" },
-] as const;
-
-type WinkelId = (typeof winkelOptions)[number]["id"];
-
-const temperatureRowsByWinkel: Record<WinkelId, string[]> = {
-  heyendaal: [
-    "zelfbedienings vriezer winkel",
-    "zelfbedieningskoeling winkel",
-    "gebaksvitrine winkel",
-    "vrieskast chocohok links",
-    "vrieskast chocohok rechts",
-    "vriezer coma kasten gang",
-    "koelcel gebak achter",
-  ],
-  ziekerstraat: [
-    "zelfbedienings vriezer winkel",
-    "zelfbedieningskoeling winkel",
-    "gebaksvitrine winkel",
-    "koelkast keuken",
-    "vriescel gang",
-    "koelcel gang",
-    "koelwerkbank achter",
-    "vrieskast enkel achter",
-    "vrieskast dubbel achter",
-  ],
-  daalseweg: [
-    "zelfbedienings vriezer winkel",
-    "zelfbedieningskoeling winkel",
-    "gebaksvitrine winkel",
-    "vriescel achter",
-    "koelcel achter",
-    "vrieskast ijs",
-    "vrieskast achter",
-  ],
-  lent: [
-    "zelfbedienings vriezer winkel",
-    "zelfbedieningskoeling winkel",
-    "gebaksvitrine winkel",
-    "vrieskast ijs achter",
-    "vriescel achter",
-    "koelcel achter",
-    "koelwerkbank achter",
-  ],
-};
-
-type TemperatureRegistration = {
-  id: string;
-  naam: string;
-  displayTemperatuur: string;
-  handTemperatuur: string;
-  temperatuur?: string;
-};
-
-type TemperaturePayload = {
-  winkel: string;
-  datum: string;
-  naam: string;
-  opmerking: string;
-  temperatuurRegistraties: TemperatureRegistration[];
-};
+import {
+  deviceTypeOptions,
+  evaluateTemperature,
+  getMeasuredTemperature,
+  inferDeviceType,
+  isActionRequiredStatus,
+  normalizeDeviceName,
+  temperatureRowsByWinkel,
+  winkelOptions,
+  type TemperatureDeviceType,
+  type TemperaturePayload,
+  type TemperatureRegistration,
+  type WinkelId,
+} from "./temperatureRegistrationShared";
 
 type TemperatureDraft = TemperaturePayload & {
   verzondenSignatuur?: string;
@@ -113,6 +62,9 @@ function createTemperatureRow(
     naam,
     displayTemperatuur: "",
     handTemperatuur: "",
+    deviceType: inferDeviceType(naam),
+    actionTaken: "",
+    note: "",
   };
 }
 
@@ -127,10 +79,6 @@ function setTemperatureSign(value: string, sign: "+" | "-") {
   if (!valueWithoutSign) return sign === "-" ? "-" : "";
 
   return sign === "-" ? `-${valueWithoutSign}` : valueWithoutSign;
-}
-
-function normalizeDeviceName(value: string) {
-  return value.toLocaleLowerCase("nl-NL").replace(/\s+/g, " ").trim();
 }
 
 function createDefaultTemperatureRows(winkelId: WinkelId) {
@@ -174,7 +122,11 @@ function normalizeRegistrations(
     id: item.id || createTemperatureRowId(item.naam || "meetpunt", index),
     naam: item.naam || "",
     displayTemperatuur: item.displayTemperatuur || "",
-    handTemperatuur: item.handTemperatuur || item.temperatuur || "",
+    handTemperatuur:
+      item.handTemperatuur || item.temperature || item.temperatuur || "",
+    deviceType: item.deviceType || inferDeviceType(item.naam || ""),
+    actionTaken: item.actionTaken || "",
+    note: item.note || "",
   }));
   const usedItemIds = new Set<string>();
   const rowsWithDefaults = defaultRows.map((defaultRow) => {
@@ -191,6 +143,9 @@ function normalizeRegistrations(
       ...defaultRow,
       displayTemperatuur: matchingItem.displayTemperatuur,
       handTemperatuur: matchingItem.handTemperatuur,
+      deviceType: matchingItem.deviceType || defaultRow.deviceType,
+      actionTaken: matchingItem.actionTaken,
+      note: matchingItem.note,
     };
   });
   const extraRows = normalizedItems.filter((item) => !usedItemIds.has(item.id));
@@ -200,14 +155,30 @@ function normalizeRegistrations(
 
 function cleanRegistrations(items: TemperatureRegistration[]) {
   return items
-    .map((item) => ({
-      id: item.id,
-      naam: item.naam.trim(),
-      displayTemperatuur: item.displayTemperatuur.trim(),
-      handTemperatuur: item.handTemperatuur.trim(),
-    }))
+    .map((item) => {
+      const deviceType = item.deviceType || inferDeviceType(item.naam);
+      const measuredTemperature = getMeasuredTemperature(item);
+      const evaluation = evaluateTemperature(deviceType, measuredTemperature);
+
+      return {
+        id: item.id,
+        naam: item.naam.trim(),
+        displayTemperatuur: item.displayTemperatuur.trim(),
+        handTemperatuur: item.handTemperatuur.trim(),
+        temperature: measuredTemperature,
+        deviceType,
+        status: evaluation.status,
+        actionTaken: (item.actionTaken || "").trim(),
+        note: (item.note || "").trim(),
+      };
+    })
     .filter(
-      (item) => item.naam || item.displayTemperatuur || item.handTemperatuur
+      (item) =>
+        item.naam ||
+        item.displayTemperatuur ||
+        item.handTemperatuur ||
+        item.actionTaken ||
+        item.note
     );
 }
 
@@ -223,6 +194,11 @@ function makeSignature(payload: TemperaturePayload) {
       naam: item.naam,
       displayTemperatuur: item.displayTemperatuur,
       handTemperatuur: item.handTemperatuur,
+      temperature: item.temperature,
+      deviceType: item.deviceType,
+      status: item.status,
+      actionTaken: item.actionTaken,
+      note: item.note,
     })),
   });
 }
@@ -238,6 +214,18 @@ function sortByLatest(items: TemperatureItem[]) {
 
     return (b.id || 0) - (a.id || 0);
   });
+}
+
+function statusPillClass(status: ReturnType<typeof evaluateTemperature>["status"]) {
+  if (status === "ok") return "border-[#c6dec0] bg-[#edf7ea] text-[#3f6b36]";
+  if (status === "attention") {
+    return "border-[#f1d28f] bg-[#fff5d8] text-[#7a5a18]";
+  }
+  if (status === "deviation") {
+    return "border-[#efb4aa] bg-[#fff0ed] text-[#a0382f]";
+  }
+
+  return "border-[#ded8cf] bg-white text-[#2d2a26]/45";
 }
 
 function TemperatureValueInput({
@@ -409,6 +397,28 @@ export default function SchoonmaakRegistratiePage() {
       return;
     }
 
+    if (!options.allowPartial) {
+      const missingAction = payload.temperatuurRegistraties.find((item) => {
+        const deviceType = item.deviceType || inferDeviceType(item.naam);
+        const evaluation = evaluateTemperature(
+          deviceType,
+          getMeasuredTemperature(item)
+        );
+
+        return (
+          isActionRequiredStatus(evaluation.status) &&
+          !(item.actionTaken || "").trim()
+        );
+      });
+
+      if (missingAction) {
+        setStatus(
+          `Vul eerst de actie bij afwijking in voor ${missingAction.naam}.`
+        );
+        return;
+      }
+    }
+
     if (options.skipIfUnchanged && signature === verzondenSignatuurRef.current) {
       return;
     }
@@ -471,7 +481,13 @@ export default function SchoonmaakRegistratiePage() {
 
   function updateRegistration(
     id: string,
-    field: "naam" | "displayTemperatuur" | "handTemperatuur",
+    field:
+      | "naam"
+      | "displayTemperatuur"
+      | "handTemperatuur"
+      | "deviceType"
+      | "actionTaken"
+      | "note",
     value: string
   ) {
     updateForm({
@@ -726,13 +742,21 @@ export default function SchoonmaakRegistratiePage() {
               </p>
             </div>
             <div className="grid justify-items-end gap-1">
-              <button
-                type="button"
-                onClick={addRegistrationRow}
-                className="rounded-full bg-[#dbe9ee] px-4 py-2.5 text-sm font-black shadow-sm"
-              >
-                + Meetpunt
-              </button>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Link
+                  href={`/winkel/schoonmaak-registratie/overzicht?winkel=${winkelId}`}
+                  className="rounded-full bg-white px-4 py-2.5 text-sm font-black shadow-sm"
+                >
+                  Maandoverzicht
+                </Link>
+                <button
+                  type="button"
+                  onClick={addRegistrationRow}
+                  className="rounded-full bg-[#dbe9ee] px-4 py-2.5 text-sm font-black shadow-sm"
+                >
+                  + Meetpunt
+                </button>
+              </div>
               {addFeedback && (
                 <p className="text-xs font-black text-[#6d9caf]">
                   {addFeedback}
@@ -744,6 +768,11 @@ export default function SchoonmaakRegistratiePage() {
           <div className="mt-4 grid gap-3">
             {form.temperatuurRegistraties.map((item, index) => {
               const isDefaultRow = isDefaultTemperatureRow(winkelId, item);
+              const deviceType = item.deviceType || inferDeviceType(item.naam);
+              const evaluation = evaluateTemperature(
+                deviceType,
+                getMeasuredTemperature(item)
+              );
 
               return (
                 <div
@@ -751,7 +780,7 @@ export default function SchoonmaakRegistratiePage() {
                   ref={(element) => {
                     registrationRowRefs.current[item.id] = element;
                   }}
-                  className="grid gap-2 rounded-[1.25rem] border border-[#e7e0d8] bg-[#f8f6f3] p-3 sm:grid-cols-[minmax(0,1.25fr)_8rem_8rem_auto]"
+                  className="grid gap-2 rounded-[1.25rem] border border-[#e7e0d8] bg-[#f8f6f3] p-3 lg:grid-cols-[minmax(0,1.25fr)_9rem_8rem_8rem_9rem_auto]"
                 >
                   <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
                     Apparaat {index + 1}
@@ -763,6 +792,26 @@ export default function SchoonmaakRegistratiePage() {
                       placeholder="Bijvoorbeeld koeling"
                       className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
                     />
+                  </label>
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                    Type
+                    <select
+                      value={deviceType}
+                      onChange={(event) =>
+                        updateRegistration(
+                          item.id,
+                          "deviceType",
+                          event.target.value as TemperatureDeviceType
+                        )
+                      }
+                      className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                    >
+                      {deviceTypeOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <TemperatureValueInput
                     label="Display"
@@ -778,6 +827,18 @@ export default function SchoonmaakRegistratiePage() {
                       updateRegistration(item.id, "handTemperatuur", value)
                     }
                   />
+                  <div className="grid content-end gap-1">
+                    <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                      Status
+                    </p>
+                    <span
+                      className={`rounded-full border px-3 py-2 text-center text-xs font-black ${statusPillClass(
+                        evaluation.status
+                      )}`}
+                    >
+                      {evaluation.shortLabel}
+                    </span>
+                  </div>
                   {isDefaultRow ? (
                     <span className="hidden sm:block" aria-hidden="true" />
                   ) : (
@@ -789,6 +850,40 @@ export default function SchoonmaakRegistratiePage() {
                       Verwijder
                     </button>
                   )}
+                  {isActionRequiredStatus(evaluation.status) && (
+                    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 lg:col-span-3">
+                      Actie bij afwijking
+                      <textarea
+                        value={item.actionTaken || ""}
+                        onChange={(event) =>
+                          updateRegistration(
+                            item.id,
+                            "actionTaken",
+                            event.target.value
+                          )
+                        }
+                        placeholder={evaluation.actionHint}
+                        className="min-h-20 rounded-2xl border border-[#e7e0d8] bg-white p-3 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                      />
+                    </label>
+                  )}
+                  <label
+                    className={`grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 ${
+                      isActionRequiredStatus(evaluation.status)
+                        ? "lg:col-span-3"
+                        : "lg:col-span-6"
+                    }`}
+                  >
+                    Notitie
+                    <input
+                      value={item.note || ""}
+                      onChange={(event) =>
+                        updateRegistration(item.id, "note", event.target.value)
+                      }
+                      placeholder="Bijvoorbeeld deur open geweest of net bijgevuld"
+                      className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                    />
+                  </label>
                 </div>
               );
             })}

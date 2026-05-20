@@ -40,14 +40,25 @@ function strik_temperature_v1_registrations($items) {
         if ($hand_temperatuur === '' && isset($item['temperatuur'])) {
             $hand_temperatuur = sanitize_text_field($item['temperatuur']);
         }
+        $temperature = isset($item['temperature']) ? sanitize_text_field($item['temperature']) : $hand_temperatuur;
+        if ($temperature === '') $temperature = $display_temperatuur;
+        $device_type = isset($item['deviceType']) ? sanitize_text_field($item['deviceType']) : '';
+        $status = isset($item['status']) ? sanitize_text_field($item['status']) : '';
+        $action_taken = isset($item['actionTaken']) ? sanitize_textarea_field($item['actionTaken']) : '';
+        $note = isset($item['note']) ? sanitize_textarea_field($item['note']) : '';
 
-        if ($naam === '' && $display_temperatuur === '' && $hand_temperatuur === '') continue;
+        if ($naam === '' && $display_temperatuur === '' && $hand_temperatuur === '' && $action_taken === '' && $note === '') continue;
 
         $clean[] = array(
             'id' => isset($item['id']) ? sanitize_text_field($item['id']) : uniqid('temp-', true),
             'naam' => $naam,
             'displayTemperatuur' => $display_temperatuur,
             'handTemperatuur' => $hand_temperatuur,
+            'temperature' => $temperature,
+            'deviceType' => $device_type,
+            'status' => $status,
+            'actionTaken' => $action_taken,
+            'note' => $note,
         );
     }
 
@@ -206,8 +217,18 @@ function strik_temperature_v1_admin_page() {
         foreach ($temps as $temp) {
             $display_temperatuur = isset($temp['displayTemperatuur']) ? $temp['displayTemperatuur'] : '';
             $hand_temperatuur = isset($temp['handTemperatuur']) ? $temp['handTemperatuur'] : (isset($temp['temperatuur']) ? $temp['temperatuur'] : '');
+            $status = isset($temp['status']) ? $temp['status'] : '';
+            $device_type = isset($temp['deviceType']) ? $temp['deviceType'] : '';
+            $action_taken = isset($temp['actionTaken']) ? $temp['actionTaken'] : '';
+            $note = isset($temp['note']) ? $temp['note'] : '';
 
-            echo '<li>' . esc_html($temp['naam'] . ': display ' . ($display_temperatuur !== '' ? $display_temperatuur : '-') . ' °C, handmeting ' . ($hand_temperatuur !== '' ? $hand_temperatuur : '-') . ' °C') . '</li>';
+            $line = $temp['naam'] . ': display ' . ($display_temperatuur !== '' ? $display_temperatuur : '-') . ' °C, handmeting ' . ($hand_temperatuur !== '' ? $hand_temperatuur : '-') . ' °C';
+            if ($device_type !== '') $line .= ', type ' . $device_type;
+            if ($status !== '') $line .= ', status ' . $status;
+            if ($action_taken !== '') $line .= ', actie ' . $action_taken;
+            if ($note !== '') $line .= ', notitie ' . $note;
+
+            echo '<li>' . esc_html($line) . '</li>';
         }
         echo '</ul></td>';
         echo '<td>' . nl2br(esc_html($item['opmerking'])) . '</td>';

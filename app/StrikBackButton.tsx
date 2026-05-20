@@ -11,6 +11,7 @@ const parentRoutes: Record<string, string> = {
   "/nieuws": "/winkel",
   "/strik-agenda": "/winkel",
   "/winkel/schoonmaak-registratie": "/winkel",
+  "/winkel/schoonmaak-registratie/overzicht": "/winkel/schoonmaak-registratie",
   "/schoonmaak": "/ijs",
   "/schoonmaak/overzicht": "/management",
   "/management/personeelsagenda": "/management",
