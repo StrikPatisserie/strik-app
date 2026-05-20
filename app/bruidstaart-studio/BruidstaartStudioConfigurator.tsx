@@ -1816,7 +1816,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         if (!remaining) return;
 
         const roseSize = clampVisual(width * 0.114, 17, 23.2);
-        const roseGap = roseSize * 1.02;
+        const roseGap = roseSize * 0.66;
         const asset =
           roseId === "marsepeinrozen-met-blad"
             ? ROSE_WITH_LEAF_ASSET
@@ -1854,16 +1854,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             edge,
             count,
             ratio:
-              selectedDecorations.has("rood-fruit") && edge === "top"
+              isTopLayer && topperVisuals.length && edge === "top"
                 ? variantIndex % 2
                   ? 0.86
                   : 0.14
-                : selectedDecorations.has("rood-fruit") && edge === "bottom"
-                  ? 0.28
-                : isTopLayer && topperVisuals.length && edge === "top"
-                  ? variantIndex % 2
-                    ? 0.86
-                    : 0.14
                 : edge === "bottom"
                   ? variantIndex % 2
                     ? 0.27
@@ -1900,7 +1894,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             assetWidth: horizontal ? rowLength : roseSize,
             assetHeight: horizontal ? roseSize : rowLength,
             kind: "rose",
-            sideOffset: plan.edge === "top" ? roseSize * 0.02 : 0,
+            sideOffset: plan.edge === "top" ? roseSize * 0.1 : 0,
           });
 
           Array.from({ length: plan.count }, (_item, item) => {
@@ -1933,7 +1927,10 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   hasLeaves,
                 };
 
-            addPlacement(roses, placement);
+            addPlacement(roses, placement, {
+              allowOverlap: true,
+              allowTopper: true,
+            });
           });
         });
       });
