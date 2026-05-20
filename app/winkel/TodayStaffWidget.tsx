@@ -12,6 +12,13 @@ const SHOP_ROW_TONES = [
   "bg-[#f2eee8]",
 ];
 
+const SHOP_NAME_COLORS: Record<string, string> = {
+  Lent: "text-[#3b6b43]",
+  Heyendaal: "text-[#8a5b10]",
+  Ziekerstraat: "text-[#9f382f]",
+  Daalseweg: "text-[#4e6c74]",
+};
+
 function LoadingRows() {
   return (
     <div className="space-y-2">
@@ -53,7 +60,11 @@ function ShopRow({
     <article
       className={`rounded-2xl px-3 py-3 ${SHOP_ROW_TONES[index % SHOP_ROW_TONES.length]}`}
     >
-      <h3 className="text-sm font-black leading-tight text-[#2d2a26]">
+      <h3
+        className={`text-base font-black leading-tight ${
+          SHOP_NAME_COLORS[shop.shop] || "text-[#2d2a26]"
+        }`}
+      >
         {shop.shop}
       </h3>
 
