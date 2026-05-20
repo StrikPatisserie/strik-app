@@ -22,6 +22,7 @@ import {
   type TemperatureStatus,
   type WinkelId,
 } from "../temperatureRegistrationShared";
+import { fetchTemperatureRegistrations } from "../temperatureRegistrationApi";
 
 type LocationFilter = WinkelId | "all";
 
@@ -290,27 +291,17 @@ export default function TemperatuurRegistratieOverzichtPage() {
       setStatus("");
 
       try {
-        const res = await fetch("/api/temperature-registration", {
-          cache: "no-store",
-        });
-        const data = (await res.json().catch(() => null)) as
-          | TemperatureRecord[]
-          | { message?: string }
-          | null;
+        const result = await fetchTemperatureRegistrations();
 
         if (ignoreResult) return;
 
-        if (!res.ok || !Array.isArray(data)) {
-          const message =
-            data && !Array.isArray(data) && data.message
-              ? data.message
-              : "Temperatuurregistraties konden niet geladen worden.";
-          setStatus(message);
+        if (!result.ok) {
+          setStatus(result.message);
           setRecords([]);
           return;
         }
 
-        setRecords(data);
+        setRecords(result.data);
       } catch {
         if (!ignoreResult) {
           setStatus("Temperatuurregistraties konden niet geladen worden.");

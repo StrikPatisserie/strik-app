@@ -15,19 +15,18 @@ import {
   winkelOptions,
   type TemperatureDeviceType,
   type TemperaturePayload,
+  type TemperatureRecord,
   type TemperatureRegistration,
   type WinkelId,
 } from "./temperatureRegistrationShared";
+import {
+  fetchTemperatureRegistrations,
+  saveTemperatureRegistration,
+} from "./temperatureRegistrationApi";
 
 type TemperatureDraft = TemperaturePayload & {
   verzondenSignatuur?: string;
   savedAt?: string;
-};
-
-type TemperatureItem = TemperaturePayload & {
-  id?: number;
-  createdAt?: string;
-  updatedAt?: string;
 };
 
 type FormState = {
@@ -207,7 +206,13 @@ function makeSignature(payload: TemperaturePayload) {
   });
 }
 
-function sortByLatest(items: TemperatureItem[]) {
+function getRecordSortId(item: TemperatureRecord) {
+  const id = Number(item.id || 0);
+
+  return Number.isFinite(id) ? id : 0;
+}
+
+function sortByLatest(items: TemperatureRecord[]) {
   return [...items].sort((a, b) => {
     const aTime = new Date(a.updatedAt || a.createdAt || "").getTime();
     const bTime = new Date(b.updatedAt || b.createdAt || "").getTime();
@@ -216,7 +221,7 @@ function sortByLatest(items: TemperatureItem[]) {
       return bTime - aTime;
     }
 
-    return (b.id || 0) - (a.id || 0);
+    return getRecordSortId(b) - getRecordSortId(a);
   });
 }
 
@@ -438,22 +443,10 @@ export default function SchoonmaakRegistratiePage() {
     }
 
     try {
-      const res = await fetch("/api/temperature-registration", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as
-        | TemperatureItem
-        | { message?: string }
-        | null;
+      const result = await saveTemperatureRegistration(payload);
 
-      if (!res.ok) {
-        const message =
-          data && "message" in data && data.message
-            ? data.message
-            : "WordPress temperatuurroute is nog niet beschikbaar.";
-        setStatus(`Lokaal opgeslagen. ${message}`);
+      if (!result.ok) {
+        setStatus(`Lokaal opgeslagen. ${result.message}`);
         return;
       }
 
@@ -594,27 +587,17 @@ export default function SchoonmaakRegistratiePage() {
       }
 
       try {
-        const res = await fetch("/api/temperature-registration", {
-          cache: "no-store",
-        });
-        const data = (await res.json().catch(() => null)) as
-          | TemperatureItem[]
-          | { message?: string }
-          | null;
+        const result = await fetchTemperatureRegistrations();
 
         if (negeerResultaat) return;
 
-        if (!res.ok || !Array.isArray(data)) {
+        if (!result.ok) {
           const loadedLocal = loadLocalDraft(
             "Lokale versie geladen. WordPress is tijdelijk niet bereikbaar."
           );
 
           if (!loadedLocal) {
-            const message =
-              data && !Array.isArray(data) && data.message
-                ? data.message
-                : "Eerdere temperatuurregistratie kon niet geladen worden.";
-            setStatus(message);
+            setStatus(result.message);
             setForm({
               naam: "",
               opmerking: "",
@@ -626,6 +609,7 @@ export default function SchoonmaakRegistratiePage() {
           return;
         }
 
+        const data = result.data;
         const matchingItem = sortByLatest(
           data.filter(
             (item) => item.datum === datum && item.winkel === selectedWinkel.label
