@@ -68,6 +68,17 @@ export type ContactDetails = {
   notes: string;
 };
 
+export type DecorationExtraNote = {
+  id: string;
+  text: string;
+};
+
+export type DecorationSurcharge = {
+  id: string;
+  description: string;
+  amount: number;
+};
+
 export type WeddingCakeConfig = {
   styleId: CakeStyleId | "";
   sizeId: string;
@@ -80,6 +91,8 @@ export type WeddingCakeConfig = {
   decorationIds: string[];
   decorationQuantities: Record<string, number>;
   decorationNotes: string;
+  decorationExtraNotes: DecorationExtraNote[];
+  decorationSurcharges: DecorationSurcharge[];
   topperIds: string[];
   paid: boolean;
   completed: boolean;

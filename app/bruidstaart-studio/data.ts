@@ -760,6 +760,8 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   decorationIds: [],
   decorationQuantities: {},
   decorationNotes: "",
+  decorationExtraNotes: [],
+  decorationSurcharges: [],
   topperIds: [],
   paid: false,
   completed: false,

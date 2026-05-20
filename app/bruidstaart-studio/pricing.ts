@@ -84,6 +84,22 @@ function decorationToLine(
   };
 }
 
+export function getDecorationNoteTexts(config: WeddingCakeConfig) {
+  return [
+    config.decorationNotes,
+    ...(config.decorationExtraNotes || []).map((note) => note.text),
+  ]
+    .map((note) => note.trim())
+    .filter(Boolean);
+}
+
+export function getDecorationSurcharges(config: WeddingCakeConfig) {
+  return (config.decorationSurcharges || []).filter(
+    (surcharge) =>
+      surcharge.description.trim() || surcharge.amount > 0
+  );
+}
+
 export function getCakeLayers(config: WeddingCakeConfig): CakeLayer[] {
   const size = findOption(cakeSizes, config.sizeId);
 
@@ -354,6 +370,15 @@ export function calculateWeddingCakePrice(
       lines.push(optionToLine(option, size.persons));
     });
 
+  getDecorationSurcharges(config).forEach((surcharge) => {
+    if (!surcharge.amount) return;
+
+    lines.push({
+      label: `Decoratie toeslag: ${surcharge.description.trim() || "extra wens"}`,
+      amount: surcharge.amount,
+    });
+  });
+
   const total = lines.reduce((sum, line) => sum + line.amount, 0);
 
   return {
@@ -402,6 +427,8 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
 export function createProductionForm(config: WeddingCakeConfig) {
   const labels = getSelectedWeddingCakeLabels(config);
   const price = calculateWeddingCakePrice(config);
+  const decorationNotes = getDecorationNoteTexts(config);
+  const decorationSurcharges = getDecorationSurcharges(config);
 
   return [
     "BRUIDSTAART STUDIO - BESTELFORMULIER",
@@ -428,7 +455,19 @@ export function createProductionForm(config: WeddingCakeConfig) {
     `Kleur: ${labels.color}`,
     `Layout: ${labels.layout}`,
     `Decoratie: ${labels.decorations.length ? labels.decorations.join(", ") : "geen"}`,
-    `Decoratie opmerkingen: ${config.decorationNotes || "-"}`,
+    `Decoratie opmerkingen: ${decorationNotes.length ? decorationNotes.join(" | ") : "-"}`,
+    `Decoratie toeslagen: ${
+      decorationSurcharges.length
+        ? decorationSurcharges
+            .map(
+              (surcharge) =>
+                `${surcharge.description || "extra wens"} (${formatEuro(
+                  surcharge.amount
+                )})`
+            )
+            .join(" | ")
+        : "-"
+    }`,
     `Topper/add-on: ${labels.topper}`,
     `Betaald: ${config.paid ? "Ja" : "Nee"}`,
     `Bestelling definitief: ${config.completed ? "Ja" : "Nee"}`,

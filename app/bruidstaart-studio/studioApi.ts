@@ -57,6 +57,47 @@ function numericRecordFrom(value: unknown) {
   );
 }
 
+function decorationExtraNotesFrom(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item, index) => {
+    if (!isRecord(item)) return [];
+
+    const text = textFrom(item.text);
+    if (!text.trim()) return [];
+
+    return [
+      {
+        id: textFrom(item.id) || `note-${index + 1}`,
+        text,
+      },
+    ];
+  });
+}
+
+function decorationSurchargesFrom(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item, index) => {
+    if (!isRecord(item)) return [];
+
+    const description = textFrom(item.description);
+    const amount = Number(item.amount);
+
+    if (!description.trim() && (!Number.isFinite(amount) || amount <= 0)) {
+      return [];
+    }
+
+    return [
+      {
+        id: textFrom(item.id) || `surcharge-${index + 1}`,
+        description,
+        amount: Number.isFinite(amount) ? Math.max(0, amount) : 0,
+      },
+    ];
+  });
+}
+
 export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
   if (!isRecord(value) || !isRecord(value.config)) return null;
 
@@ -87,6 +128,12 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
         : {},
       decorationQuantities: numericRecordFrom(config.decorationQuantities),
       decorationNotes: textFrom(config.decorationNotes),
+      decorationExtraNotes: decorationExtraNotesFrom(
+        config.decorationExtraNotes
+      ),
+      decorationSurcharges: decorationSurchargesFrom(
+        config.decorationSurcharges
+      ),
       paid: Boolean(config.paid),
       completed: Boolean(config.completed),
       topperIds: Array.isArray(config.topperIds)

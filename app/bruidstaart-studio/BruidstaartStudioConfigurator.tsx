@@ -21,7 +21,9 @@ import {
   formatEuro,
   getCakeDesignGroups,
   getCakeLayers,
+  getDecorationNoteTexts,
   getDecorationQuantity,
+  getDecorationSurcharges,
   getDesignGroupsForLayers,
   getLayerDesignChoiceId,
   getLayerColor,
@@ -1788,6 +1790,19 @@ function updateContact<K extends keyof ContactDetails>(
   };
 }
 
+function createStudioItemId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function parseEuroAmount(value: string) {
+  const normalized = value.replace(",", ".").replace(/[^\d.]/g, "");
+  const amount = Number.parseFloat(normalized);
+
+  if (!Number.isFinite(amount)) return 0;
+
+  return Math.max(0, Math.round(amount * 100) / 100);
+}
+
 function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
   return {
     ...initialWeddingCakeConfig,
@@ -1796,6 +1811,8 @@ function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
     layerLayoutIds: {},
     decorationIds: [],
     decorationQuantities: {},
+    decorationExtraNotes: [],
+    decorationSurcharges: [],
     topperIds: [],
     contact: { ...initialWeddingCakeConfig.contact },
   };
@@ -1833,6 +1850,14 @@ export default function BruidstaartStudioConfigurator() {
   const labels = useMemo(() => getSelectedWeddingCakeLabels(config), [config]);
   const productionForm = useMemo(() => createProductionForm(config), [config]);
   const activeLayers = useMemo(() => getCakeDesignGroups(config), [config]);
+  const decorationNoteTexts = useMemo(
+    () => getDecorationNoteTexts(config),
+    [config]
+  );
+  const decorationSurcharges = useMemo(
+    () => getDecorationSurcharges(config),
+    [config]
+  );
 
   function layerOptionIdsForSize(
     sizeId: string,
@@ -2052,6 +2077,76 @@ export default function BruidstaartStudioConfigurator() {
     }));
   }
 
+  function addDecorationNote() {
+    setConfig((current) => ({
+      ...current,
+      decorationExtraNotes: [
+        ...(current.decorationExtraNotes || []),
+        { id: createStudioItemId("decoratie-opmerking"), text: "" },
+      ],
+    }));
+  }
+
+  function updateDecorationNote(id: string, text: string) {
+    setConfig((current) => ({
+      ...current,
+      decorationExtraNotes: (current.decorationExtraNotes || []).map((note) =>
+        note.id === id ? { ...note, text } : note
+      ),
+    }));
+  }
+
+  function removeDecorationNote(id: string) {
+    setConfig((current) => ({
+      ...current,
+      decorationExtraNotes: (current.decorationExtraNotes || []).filter(
+        (note) => note.id !== id
+      ),
+    }));
+  }
+
+  function addDecorationSurcharge() {
+    setConfig((current) => ({
+      ...current,
+      decorationSurcharges: [
+        ...(current.decorationSurcharges || []),
+        {
+          id: createStudioItemId("decoratie-toeslag"),
+          description: "",
+          amount: 0,
+        },
+      ],
+    }));
+  }
+
+  function updateDecorationSurcharge(
+    id: string,
+    field: "description" | "amount",
+    value: string
+  ) {
+    setConfig((current) => ({
+      ...current,
+      decorationSurcharges: (current.decorationSurcharges || []).map(
+        (surcharge) =>
+          surcharge.id === id
+            ? {
+                ...surcharge,
+                [field]: field === "amount" ? parseEuroAmount(value) : value,
+              }
+            : surcharge
+      ),
+    }));
+  }
+
+  function removeDecorationSurcharge(id: string) {
+    setConfig((current) => ({
+      ...current,
+      decorationSurcharges: (current.decorationSurcharges || []).filter(
+        (surcharge) => surcharge.id !== id
+      ),
+    }));
+  }
+
   function toggleTopper(id: string) {
     const option = findOption(topperOptions, id);
     if (!option) return;
@@ -2138,7 +2233,21 @@ export default function BruidstaartStudioConfigurator() {
       `Decoratie: ${
         labels.decorations.length ? labels.decorations.join(", ") : "geen"
       }`,
-      `Decoratie opmerkingen: ${config.decorationNotes || "-"}`,
+      `Decoratie opmerkingen: ${
+        decorationNoteTexts.length ? decorationNoteTexts.join(" | ") : "-"
+      }`,
+      `Decoratie toeslagen: ${
+        decorationSurcharges.length
+          ? decorationSurcharges
+              .map(
+                (surcharge) =>
+                  `${surcharge.description || "extra wens"} (${formatEuro(
+                    surcharge.amount
+                  )})`
+              )
+              .join(" | ")
+          : "-"
+      }`,
       `Topper/add-on: ${labels.topper}`,
       `Betaald: ${config.paid ? "Ja" : "Nee"}`,
       `Bestelling definitief: ${config.completed ? "Ja" : "Nee"}`,
@@ -2270,6 +2379,8 @@ export default function BruidstaartStudioConfigurator() {
       layerLayoutIds: draft.config.layerLayoutIds || {},
       decorationQuantities: draft.config.decorationQuantities || {},
       decorationNotes: draft.config.decorationNotes || "",
+      decorationExtraNotes: draft.config.decorationExtraNotes || [],
+      decorationSurcharges: draft.config.decorationSurcharges || [],
       paid: Boolean(draft.config.paid),
       completed: Boolean(draft.config.completed),
       topperIds: (draft.config.topperIds || []).filter((id) => id !== "geen"),
@@ -2817,20 +2928,142 @@ export default function BruidstaartStudioConfigurator() {
                   }
                 />
               ))}
-              <label className="grid gap-2 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 text-sm font-black text-[#2d2a26]/70 shadow-sm">
-                Opmerkingen over decoratie
-                <textarea
-                  value={config.decorationNotes}
-                  onChange={(event) =>
-                    setConfig((current) => ({
-                      ...current,
-                      decorationNotes: event.target.value,
-                    }))
-                  }
-                  placeholder="Bijvoorbeeld: bladgoud alleen links, bloemetjes alleen op de bovenste laag..."
-                  className="min-h-28 rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
-                />
-              </label>
+              <section className="grid gap-3 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-[#2d2a26]">
+                      Opmerkingen en toeslagen
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[#2d2a26]/55">
+                      Voor afwijkende decoratie, extra wensen of maatwerk.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={addDecorationNote}
+                      className="rounded-full border border-[#d6e2cf] bg-[#f7faf5] px-4 py-2 text-sm font-black text-[#3b6b43]"
+                    >
+                      + Opmerking
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addDecorationSurcharge}
+                      className="rounded-full border border-[#ead7a6] bg-[#fff8e3] px-4 py-2 text-sm font-black text-[#7a5a18]"
+                    >
+                      + Toeslag
+                    </button>
+                  </div>
+                </div>
+
+                {config.decorationNotes && (
+                  <label className="grid gap-2 rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-3 text-sm font-black text-[#2d2a26]/70">
+                    Bestaande decoratie-opmerking
+                    <textarea
+                      value={config.decorationNotes}
+                      onChange={(event) =>
+                        setConfig((current) => ({
+                          ...current,
+                          decorationNotes: event.target.value,
+                        }))
+                      }
+                      className="min-h-20 rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                    />
+                  </label>
+                )}
+
+                {(config.decorationExtraNotes || []).map((note, index) => (
+                  <div
+                    key={note.id}
+                    className="grid gap-2 rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-black text-[#2d2a26]/70">
+                        Opmerking {index + 1}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => removeDecorationNote(note.id)}
+                        className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#d75a48]"
+                      >
+                        Verwijder
+                      </button>
+                    </div>
+                    <textarea
+                      value={note.text}
+                      onChange={(event) =>
+                        updateDecorationNote(note.id, event.target.value)
+                      }
+                      placeholder="Bijvoorbeeld: bloemen alleen op de bovenste laag..."
+                      className="min-h-20 rounded-2xl border border-[#e7e0d8] bg-white p-3 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                    />
+                  </div>
+                ))}
+
+                {(config.decorationSurcharges || []).map((surcharge, index) => (
+                  <div
+                    key={surcharge.id}
+                    className="grid gap-3 rounded-2xl border border-[#ead7a6] bg-[#fffaf0] p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-black text-[#7a5a18]">
+                        Toeslag {index + 1}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => removeDecorationSurcharge(surcharge.id)}
+                        className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#d75a48]"
+                      >
+                        Verwijder
+                      </button>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                      <input
+                        value={surcharge.description}
+                        onChange={(event) =>
+                          updateDecorationSurcharge(
+                            surcharge.id,
+                            "description",
+                            event.target.value
+                          )
+                        }
+                        placeholder="Omschrijving toeslag"
+                        className="rounded-2xl border border-[#e7e0d8] bg-white p-3 font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                      />
+                      <label className="relative block">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#7a5a18]">
+                          €
+                        </span>
+                        <input
+                          value={
+                            surcharge.amount
+                              ? String(surcharge.amount).replace(".", ",")
+                              : ""
+                          }
+                          onChange={(event) =>
+                            updateDecorationSurcharge(
+                              surcharge.id,
+                              "amount",
+                              event.target.value
+                            )
+                          }
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          className="w-full rounded-2xl border border-[#e7e0d8] bg-white p-3 pl-7 font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+
+                {!config.decorationNotes &&
+                  !(config.decorationExtraNotes || []).length &&
+                  !(config.decorationSurcharges || []).length && (
+                    <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-semibold text-[#2d2a26]/55">
+                      Nog geen extra opmerkingen of toeslagen toegevoegd.
+                    </p>
+                  )}
+              </section>
             </div>
           )}
 
@@ -3126,10 +3359,23 @@ export default function BruidstaartStudioConfigurator() {
               <span className="font-bold">Decoratie:</span>{" "}
               {labels.decorations.length ? labels.decorations.join(", ") : "geen"}
             </p>
-            {config.decorationNotes && (
+            {decorationNoteTexts.length > 0 && (
               <p>
                 <span className="font-bold">Decoratie opmerkingen:</span>{" "}
-                {config.decorationNotes}
+                {decorationNoteTexts.join(" | ")}
+              </p>
+            )}
+            {decorationSurcharges.length > 0 && (
+              <p>
+                <span className="font-bold">Decoratie toeslagen:</span>{" "}
+                {decorationSurcharges
+                  .map(
+                    (surcharge) =>
+                      `${surcharge.description || "extra wens"} (${formatEuro(
+                        surcharge.amount
+                      )})`
+                  )
+                  .join(" | ")}
               </p>
             )}
           </div>
