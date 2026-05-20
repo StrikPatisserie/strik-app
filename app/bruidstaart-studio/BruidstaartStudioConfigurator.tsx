@@ -77,7 +77,7 @@ const FLOWER_PLACEMENT_OPTIONS = [
   { id: "specifiek", label: "Specifieke plaatsen (gebruik opmerking sectie)" },
 ] as const;
 const DEFAULT_ROSE_QUANTITY = 5;
-const LARGE_ROSE_VISUAL_SCALE = 2.4;
+const LARGE_ROSE_VISUAL_SCALE = 2;
 const ROSE_WITH_LEAF_ASSET = "/app-icons-strik_roos%20met%20blad.svg";
 const ROSE_WITHOUT_LEAF_ASSET = "/app-icons-strik_roos%20zonder%20blad.svg";
 const REAL_FLOWER_ASSET = "/app-icons-strik_echte%20bloem.svg";
@@ -2272,20 +2272,13 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         const colorIndexOffset = countBeforeLayer(totalRoseCount, index);
         let roseIndexInLayer = 0;
         const baseRoseSize = clampVisual(width * 0.114, 17, 23.2);
+        const isLargeRose = isLargeRoseDecorationId(roseId);
         const roseSize =
-          baseRoseSize *
-          (isLargeRoseDecorationId(roseId) ? LARGE_ROSE_VISUAL_SCALE : 1);
-        const roseGap = roseSize * 0.66;
+          baseRoseSize * (isLargeRose ? LARGE_ROSE_VISUAL_SCALE : 1);
+        const roseGap = roseSize * (isLargeRose ? 0.84 : 0.66);
         const asset = roseAssetForId(roseId);
-        const topCapacity = Math.max(
-          1,
-          Math.floor(
-            ((isTopLayer && topperVisuals.length
-              ? (zones.topEdgeZone.x2 - zones.topEdgeZone.x1) * 0.38
-              : zones.topEdgeZone.x2 - zones.topEdgeZone.x1) /
-              roseGap)
-          )
-        );
+        const topEdgeWidth = zones.topEdgeZone.x2 - zones.topEdgeZone.x1;
+        const topCapacity = Math.max(1, Math.floor(topEdgeWidth / roseGap));
         const bottomCapacity = Math.max(
           1,
           Math.floor(
