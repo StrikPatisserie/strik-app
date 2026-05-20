@@ -691,14 +691,14 @@ export const decorationOptions: StudioOption[] = [
   {
     id: "grote-marsepeinrozen-zonder-blad",
     label: "Grote marsepeinrozen zonder blad",
-    description: "Grote rozen, ongeveer 3x zo groot in de schets.",
+    description: "Grote rozen, groter zichtbaar in de schets.",
     price: { mode: "fixed", amount: 4.5, label: "per roos" },
     quantityLabel: "Aantal rozen",
   },
   {
     id: "grote-marsepeinrozen-met-blad",
     label: "Grote marsepeinrozen met groen blad",
-    description: "Grote rozen, ongeveer 3x zo groot in de schets.",
+    description: "Grote rozen, groter zichtbaar in de schets.",
     price: { mode: "fixed", amount: 4.5, label: "per roos" },
     quantityLabel: "Aantal rozen",
   },

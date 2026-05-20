@@ -77,6 +77,7 @@ const FLOWER_PLACEMENT_OPTIONS = [
   { id: "specifiek", label: "Specifieke plaatsen (gebruik opmerking sectie)" },
 ] as const;
 const DEFAULT_ROSE_QUANTITY = 5;
+const LARGE_ROSE_VISUAL_SCALE = 2.4;
 const ROSE_WITH_LEAF_ASSET = "/app-icons-strik_roos%20met%20blad.svg";
 const ROSE_WITHOUT_LEAF_ASSET = "/app-icons-strik_roos%20zonder%20blad.svg";
 const REAL_FLOWER_ASSET = "/app-icons-strik_echte%20bloem.svg";
@@ -2271,7 +2272,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
         const colorIndexOffset = countBeforeLayer(totalRoseCount, index);
         let roseIndexInLayer = 0;
         const baseRoseSize = clampVisual(width * 0.114, 17, 23.2);
-        const roseSize = baseRoseSize * (isLargeRoseDecorationId(roseId) ? 3 : 1);
+        const roseSize =
+          baseRoseSize *
+          (isLargeRoseDecorationId(roseId) ? LARGE_ROSE_VISUAL_SCALE : 1);
         const roseGap = roseSize * 0.66;
         const asset = roseAssetForId(roseId);
         const topCapacity = Math.max(
