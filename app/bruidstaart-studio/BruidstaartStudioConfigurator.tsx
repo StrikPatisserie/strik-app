@@ -70,6 +70,7 @@ const FLOWER_DECORATION_IDS = [
 ];
 const ACCENT_DECORATION_IDS = ["rood-fruit", "bladgoud"];
 const FLOWER_PLACEMENT_NOTE_ID = "echte-bloemen-plaatsing";
+const DEFAULT_SHARED_COLOR_ID = "marsepein-kleur";
 const FLOWER_PLACEMENT_OPTIONS = [
   { id: "standaard", label: "Standaard plaatsing door Strik" },
   { id: "waterval", label: "Waterval plaatsing" },
@@ -405,16 +406,20 @@ function parseRoseColorNote(value?: string): {
     };
   }
 
-  const colorId = findColorOptionByNote(note)?.id || "";
+  const colorId = findColorOptionByNote(note)?.id || DEFAULT_SHARED_COLOR_ID;
 
   return {
     mode: "same",
-    colorIds: colorId ? [colorId] : [],
+    colorIds: [colorId],
   };
 }
 
 function createRoseColorNote(mode: RoseColorMode, colorIds: string[]) {
-  const uniqueColorIds = Array.from(new Set(colorIds.filter(Boolean)));
+  const uniqueColorIds = Array.from(
+    new Set(
+      (colorIds.length ? colorIds : [DEFAULT_SHARED_COLOR_ID]).filter(Boolean)
+    )
+  );
 
   if (mode === "multiple") return `multi:${uniqueColorIds.join(",")}`;
 
@@ -838,11 +843,10 @@ function RoseColorControls({
         <label className="grid gap-2 text-sm font-black text-[#2d2a26]/70">
           Kleur roosjes
           <select
-            value={selectedColorIds[0] || ""}
+            value={selectedColorIds[0] || DEFAULT_SHARED_COLOR_ID}
             onChange={(event) => setSingleColor(event.target.value)}
             className="w-full rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
           >
-            <option value="">Kies kleur</option>
             {sharedDecorationColorOptions.map((color) => (
               <option key={color.id} value={color.id}>
                 {color.label}
@@ -898,24 +902,13 @@ function SinglePaletteColorControls({
   value?: string;
   onChange: (colorId: string) => void;
 }) {
-  const selectedColorId = findColorOptionByNote(value)?.id || "";
+  const selectedColorId =
+    findColorOptionByNote(value)?.id || DEFAULT_SHARED_COLOR_ID;
 
   return (
     <div className="mt-4 grid gap-2 rounded-2xl border border-[#cfdcc8] bg-white/70 p-3">
       <p className="text-sm font-black text-[#2d2a26]/70">{label}</p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <button
-          type="button"
-          onClick={() => onChange("")}
-          className={`flex min-w-0 items-center gap-2 rounded-2xl border p-2 text-left text-xs font-black ${
-            selectedColorId
-              ? "border-[#e7e0d8] bg-white text-[#2d2a26]/55"
-              : "border-[#8fb184] bg-[#dce8d6] text-[#2d2a26]"
-          }`}
-        >
-          <span className="h-5 w-5 shrink-0 rounded-full border border-[#e3d8bd] bg-[#FFFAE6] shadow-inner" />
-          <span className="min-w-0 truncate">Standaard</span>
-        </button>
         {sharedDecorationColorOptions.map((color) => (
           <button
             key={color.id}

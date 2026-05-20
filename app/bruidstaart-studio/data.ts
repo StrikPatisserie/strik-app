@@ -394,7 +394,7 @@ export const weddingCakeColorPaletteOptions: StudioOption[] = [
     id: "klassiek-paars",
     label: "IJzer",
     allowedStyles: ["klassiek"],
-    swatchColor: "#212A2D",
+    swatchColor: "#3A3A3A",
     price: { mode: "included", amount: 0 },
   },
   {
@@ -469,7 +469,7 @@ export const weddingCakeColorPaletteOptions: StudioOption[] = [
   },
   {
     id: "klassiek-zwart",
-    label: "Zwart",
+    label: "Zwart - icing",
     allowedStyles: ["klassiek"],
     swatchColor: "#000000",
     price: { mode: "included", amount: 0 },
@@ -495,7 +495,7 @@ export const colorOptions: StudioOption[] = [
   },
   {
     id: "icing-kleur",
-    label: "Sneeuwwit",
+    label: "Wit - icing",
     description: "Heldere witte icing.",
     allowedStyles: ["klassiek"],
     swatchColor: "#FFFFFF",
