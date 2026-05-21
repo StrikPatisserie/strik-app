@@ -762,13 +762,6 @@ export const topperOptions: StudioOption[] = [
     selectionGroup: "initials",
   },
   {
-    id: "chocolade-initialen-schildje",
-    label: "Chocolade initialen op schildje",
-    description: "Vul de letters hieronder in.",
-    price: { mode: "fixed", amount: 5, label: "per taart" },
-    selectionGroup: "initials",
-  },
-  {
     id: "marsepeinen-ringen",
     label: "Marsepeinen ringen of strik",
     price: { mode: "fixed", amount: 3.5, label: "per taart" },

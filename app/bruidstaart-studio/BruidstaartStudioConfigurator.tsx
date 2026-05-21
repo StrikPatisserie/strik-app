@@ -98,8 +98,9 @@ const CREME_DOTS_ASSET = "/strik-app_creme%20stippen.svg";
 const CREME_SMEAR_DICHT_ASSET = "/creme%20smeren_creme%20dicht.svg";
 const CREME_SMEAR_OPEN_ASSET = "/creme%20smeren_creme%20open.svg";
 const GOLD_LEAF_ASSET = "/bladgoud.svg";
-const INITIALS_SHIELD_ASSET = "/initialen%20op%20schild.svg";
 const CHOCO_LETTER_ASSET_PATH = "/choco-letters";
+const CHOCOLATE_INITIALS_TOPPER_ID = "chocolade-initialen-geschreven";
+const REMOVED_TOPPER_IDS = new Set(["chocolade-initialen-schildje"]);
 const CHOCO_LETTER_ADVANCE_RATIO = 0.68;
 const CHOCO_SPACE_RATIO = 0.32;
 const WHITE_CHOCOLATE_DECORATION_COLOR = "#fff4dc";
@@ -523,13 +524,8 @@ function topperDecorationAsset(topperId: string) {
   if (topperId === "topper-karton" || topperId === "topper-zelf-aanleveren") {
     return "/topper.svg";
   }
-  if (
-    topperId === "chocolade-initialen-geschreven"
-  ) {
+  if (topperId === CHOCOLATE_INITIALS_TOPPER_ID) {
     return "/decoratie%20opties_chocolade%20initialen.svg";
-  }
-  if (topperId === "chocolade-initialen-schildje") {
-    return INITIALS_SHIELD_ASSET;
   }
   if (topperId === "marsepeinen-ringen") {
     return "/decoratie%20opties_marsepein%20ringen.svg";
@@ -1451,10 +1447,9 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
     (id) => selectedToppers.has(id)
   );
   const hasBrideCoupleTopper = selectedToppers.has("bruidspaartje");
-  const selectedInitialsId = [
-    "chocolade-initialen-geschreven",
-    "chocolade-initialen-schildje",
-  ].find((id) => selectedToppers.has(id));
+  const hasChocolateInitialsTopper = selectedToppers.has(
+    CHOCOLATE_INITIALS_TOPPER_ID
+  );
   const chocoInitialsText = normalizeChocoLetterText(
     config.topperInitialsText
   );
@@ -1476,20 +1471,12 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           offsetY: 11,
         }
       : null,
-    selectedInitialsId === "chocolade-initialen-geschreven"
+    hasChocolateInitialsTopper
       ? {
-          id: selectedInitialsId,
+          id: CHOCOLATE_INITIALS_TOPPER_ID,
           width: Math.max(30, Math.min(54, topLayerWidth * 0.42)),
           height: 34,
           offsetY: 13,
-        }
-      : null,
-    selectedInitialsId === "chocolade-initialen-schildje"
-      ? {
-          id: selectedInitialsId,
-          width: 46,
-          height: 50,
-          offsetY: 12,
         }
       : null,
     selectedToppers.has("marsepeinen-ringen")
@@ -3201,10 +3188,7 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
             6,
             topY - height + topper.offsetY * topperScale - 1
           );
-          const isWrittenInitials =
-            topper.id === "chocolade-initialen-geschreven";
-          const isShieldInitials =
-            topper.id === "chocolade-initialen-schildje";
+          const isWrittenInitials = topper.id === CHOCOLATE_INITIALS_TOPPER_ID;
 
           return (
             <g key={topper.id}>
@@ -3226,16 +3210,6 @@ function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
                   size={height * 0.9}
                   letterSpacing={-height * 0.15}
                   maxWidth={Math.min(width, topLayerWidth * 0.42)}
-                />
-              )}
-              {isShieldInitials && (
-                <ChocoLetterMonogram
-                  text={chocoInitialsText}
-                  centerX={topperX + width / 2}
-                  y={topperY + height * 0.27}
-                  size={height * 0.38}
-                  letterSpacing={-height * 0.045}
-                  maxWidth={Math.min(width * 0.72, topLayerWidth * 0.34)}
                 />
               )}
             </g>
@@ -3340,6 +3314,16 @@ function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
     topperSurcharges: [],
     contact: { ...initialWeddingCakeConfig.contact },
   };
+}
+
+function cleanTopperIds(topperIds: string[]) {
+  return topperIds.filter(
+    (id) => id !== "geen" && !REMOVED_TOPPER_IDS.has(id)
+  );
+}
+
+function hasChocolateInitialsTopper(config: WeddingCakeConfig) {
+  return config.topperIds.includes(CHOCOLATE_INITIALS_TOPPER_ID);
 }
 
 export default function BruidstaartStudioConfigurator() {
@@ -3793,7 +3777,7 @@ export default function BruidstaartStudioConfigurator() {
 
     setConfig((current) => {
       const isSelected = current.topperIds.includes(id);
-      let nextIds = current.topperIds.filter((topperId) => topperId !== "geen");
+      let nextIds = cleanTopperIds(current.topperIds);
 
       if (isSelected) {
         nextIds = nextIds.filter((topperId) => topperId !== id);
@@ -3810,6 +3794,9 @@ export default function BruidstaartStudioConfigurator() {
       return {
         ...current,
         topperIds: nextIds,
+        topperInitialsText: nextIds.includes(CHOCOLATE_INITIALS_TOPPER_ID)
+          ? current.topperInitialsText
+          : "",
       };
     });
   }
@@ -3903,7 +3890,9 @@ export default function BruidstaartStudioConfigurator() {
           : "-"
       }`,
       `Topper/add-on: ${labels.topper}`,
-      `Topper initialen/tekst: ${config.topperInitialsText || "-"}`,
+      `Topper initialen/tekst: ${
+        hasChocolateInitialsTopper(config) ? config.topperInitialsText || "-" : "-"
+      }`,
       `Topper opmerkingen: ${
         topperNoteTexts.length ? topperNoteTexts.join(" | ") : "-"
       }`,
@@ -4041,6 +4030,7 @@ export default function BruidstaartStudioConfigurator() {
   }
 
   function loadDraft(draft: WeddingCakeDraft) {
+    const cleanedTopperIds = cleanTopperIds(draft.config.topperIds || []);
     const nextConfig = {
       ...initialWeddingCakeConfig,
       ...draft.config,
@@ -4054,10 +4044,10 @@ export default function BruidstaartStudioConfigurator() {
       decorationSurcharges: draft.config.decorationSurcharges || [],
       paid: Boolean(draft.config.paid),
       completed: Boolean(draft.config.completed),
-      topperIds: (draft.config.topperIds || []).filter((id) => id !== "geen"),
-      topperInitialsText: normalizeChocoLetterText(
-        draft.config.topperInitialsText
-      ),
+      topperIds: cleanedTopperIds,
+      topperInitialsText: cleanedTopperIds.includes(CHOCOLATE_INITIALS_TOPPER_ID)
+        ? normalizeChocoLetterText(draft.config.topperInitialsText)
+        : "",
       topperNotes: draft.config.topperNotes || "",
       topperSurcharges: draft.config.topperSurcharges || [],
       contact: {
@@ -4868,32 +4858,34 @@ export default function BruidstaartStudioConfigurator() {
 
           {step.id === "topper" && (
             <div className="grid gap-3">
-              {topperOptions.map((option) => (
-                <OptionCard
-                  key={option.id}
-                  option={option}
-                  selected={config.topperIds.includes(option.id)}
-                  onClick={() => toggleTopper(option.id)}
-                />
-              ))}
-              {config.topperIds.some((id) =>
-                [
-                  "chocolade-initialen-geschreven",
-                  "chocolade-initialen-schildje",
-                ].includes(id)
-              ) && (
-                <label className="grid gap-2 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 text-sm font-black text-[#2d2a26]/70 shadow-sm">
-                  Initialen of tekst
-                  <input
-                    value={config.topperInitialsText || ""}
-                    onChange={(event) =>
-                      setTopperInitialsText(event.target.value)
-                    }
-                    placeholder="Bijvoorbeeld JB"
-                    className="rounded-2xl border border-[#e7e0d8] bg-[#f8f6f3] p-4 text-base font-bold uppercase tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
-                  />
-                </label>
-              )}
+              {topperOptions.map((option) => {
+                const selected = config.topperIds.includes(option.id);
+                const showInitialsInput =
+                  option.id === CHOCOLATE_INITIALS_TOPPER_ID && selected;
+
+                return (
+                  <div key={option.id} className="grid gap-2">
+                    <OptionCard
+                      option={option}
+                      selected={selected}
+                      onClick={() => toggleTopper(option.id)}
+                    />
+                    {showInitialsInput && (
+                      <label className="grid gap-2 rounded-[1.2rem] border border-[#cfdcc8] bg-[#f8f6f3] p-4 text-sm font-black text-[#2d2a26]/70 shadow-sm">
+                        Initialen of tekst
+                        <input
+                          value={config.topperInitialsText || ""}
+                          onChange={(event) =>
+                            setTopperInitialsText(event.target.value)
+                          }
+                          placeholder="Bijvoorbeeld JB"
+                          className="rounded-2xl border border-[#cfdcc8] bg-white p-4 text-base font-bold uppercase tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                        />
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
               <section className="mt-3 grid gap-3 rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>

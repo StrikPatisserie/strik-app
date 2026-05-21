@@ -5,6 +5,8 @@ export const WEDDING_CAKE_API_URL =
 export const WEDDING_CAKE_API_KEY = "schoonmaak-ijs-strik";
 
 const LOCAL_STORAGE_KEY = "strik-wedding-cake-drafts";
+const CHOCOLATE_INITIALS_TOPPER_ID = "chocolade-initialen-geschreven";
+const REMOVED_TOPPER_IDS = new Set(["chocolade-initialen-schildje"]);
 
 export type WeddingCakeDraft = {
   id: string;
@@ -98,6 +100,23 @@ function decorationSurchargesFrom(value: unknown) {
   });
 }
 
+function topperIdsFrom(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter(
+        (id): id is string =>
+          typeof id === "string" && id !== "geen" && !REMOVED_TOPPER_IDS.has(id)
+      )
+    : [];
+}
+
+function normalizedTopperInitialsText(value: unknown, topperIds: string[]) {
+  if (!topperIds.includes(CHOCOLATE_INITIALS_TOPPER_ID)) return "";
+
+  return textFrom(value)
+    .toUpperCase()
+    .replace(/[^A-Z\s]/g, "");
+}
+
 export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
   if (!isRecord(value) || !isRecord(value.config)) return null;
 
@@ -109,6 +128,7 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
     ? config.contact
     : {};
   const now = new Date().toISOString();
+  const topperIds = topperIdsFrom(config.topperIds);
 
   return {
     id: textFrom(value.id) || code,
@@ -146,16 +166,13 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
       ),
       topperNotes: textFrom(config.topperNotes),
       topperSurcharges: decorationSurchargesFrom(config.topperSurcharges),
-      topperInitialsText: textFrom(config.topperInitialsText)
-        .toUpperCase()
-        .replace(/[^A-Z\s]/g, ""),
+      topperInitialsText: normalizedTopperInitialsText(
+        config.topperInitialsText,
+        topperIds
+      ),
       paid: Boolean(config.paid),
       completed: Boolean(config.completed),
-      topperIds: Array.isArray(config.topperIds)
-        ? config.topperIds.filter(
-            (id): id is string => typeof id === "string" && id !== "geen"
-          )
-        : [],
+      topperIds,
       contact: {
         ...config.contact,
         recognitionCode: textFrom(contact.recognitionCode) || code,
@@ -245,13 +262,21 @@ export function searchLocalDrafts(search: string, deliveryDate = "") {
 export function createDraftFromConfig(config: WeddingCakeConfig) {
   const now = new Date().toISOString();
   const code = config.contact.recognitionCode.trim();
+  const topperIds = topperIdsFrom(config.topperIds);
 
   return {
     id: code,
     code,
     surname: config.contact.surname.trim(),
     names: config.contact.names.trim(),
-    config,
+    config: {
+      ...config,
+      topperIds,
+      topperInitialsText: normalizedTopperInitialsText(
+        config.topperInitialsText,
+        topperIds
+      ),
+    },
     createdAt: now,
     updatedAt: now,
   };

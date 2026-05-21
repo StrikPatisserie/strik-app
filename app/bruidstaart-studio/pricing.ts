@@ -16,6 +16,8 @@ import {
   WeddingCakeConfig,
 } from "./types";
 
+const CHOCOLATE_INITIALS_TOPPER_ID = "chocolade-initialen-geschreven";
+
 export function formatEuro(amount: number) {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
@@ -562,7 +564,11 @@ export function createProductionForm(config: WeddingCakeConfig) {
         : "-"
     }`,
     `Topper/add-on: ${labels.topper}`,
-    `Topper initialen/tekst: ${config.topperInitialsText || "-"}`,
+    `Topper initialen/tekst: ${
+      config.topperIds.includes(CHOCOLATE_INITIALS_TOPPER_ID)
+        ? config.topperInitialsText || "-"
+        : "-"
+    }`,
     `Topper opmerkingen: ${topperNotes.length ? topperNotes.join(" | ") : "-"}`,
     `Topper toeslagen: ${
       topperSurcharges.length
