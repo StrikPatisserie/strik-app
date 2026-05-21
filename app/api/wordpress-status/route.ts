@@ -20,6 +20,7 @@ const checks: WordPressCheck[] = [
     label: "Temperatuurregistratie",
     path: "/temperature-registration",
   },
+  { id: "recepturen", label: "Recepturen", path: "/recepturen" },
   { id: "team-agenda", label: "Strik Agenda", path: "/team-agenda" },
   { id: "notes", label: "Notities", path: "/notes", params: { winkel: "lent" } },
   { id: "news", label: "Nieuws", path: "/news" },

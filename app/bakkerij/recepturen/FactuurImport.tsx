@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { Ingredient, InvoiceImport, InvoiceLine, Recipe } from "./types";
 import { Panel, SectionTitle } from "./RecepturenShared";
+import { parseBekoInvoiceFile } from "./invoiceImportParser";
 import PriceUpdateReview, { InvoiceSummary } from "./PriceUpdateReview";
 
 export default function FactuurImport({
@@ -10,10 +11,12 @@ export default function FactuurImport({
   onApproveLine,
   onIgnoreLine,
   onMatchLine,
+  onImportInvoice,
 }: Readonly<{
   invoice: InvoiceImport;
   ingredients: Ingredient[];
   recipes: Recipe[];
+  onImportInvoice: (invoice: InvoiceImport) => void;
   onApproveLine: (invoiceId: string, line: InvoiceLine) => void;
   onIgnoreLine: (invoiceId: string, line: InvoiceLine) => void;
   onMatchLine: (
@@ -24,13 +27,32 @@ export default function FactuurImport({
 }>) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadMessage, setUploadMessage] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
 
-  function handleSelectedFile(file?: File) {
+  async function handleSelectedFile(file?: File) {
     if (!file) return;
 
-    setUploadMessage(
-      `${file.name} gekozen. De demo-analyse hieronder blijft actief totdat de echte parser is aangesloten.`
-    );
+    setIsImporting(true);
+    setUploadMessage(`${file.name} wordt geanalyseerd...`);
+
+    try {
+      const result = await parseBekoInvoiceFile(file, ingredients);
+
+      if (!result.ok) {
+        setUploadMessage(result.message);
+        return;
+      }
+
+      onImportInvoice(result.invoice);
+      setUploadMessage(
+        `${file.name} ingeladen: ${result.invoice.lines.length} regels, ${result.invoice.lines.filter((line) => line.matchedIngredientId).length} automatisch gekoppeld.`
+      );
+    } catch {
+      setUploadMessage("Factuur kon niet gelezen worden.");
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   return (
@@ -46,27 +68,30 @@ export default function FactuurImport({
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();
-              handleSelectedFile(event.dataTransfer.files?.[0]);
+              void handleSelectedFile(event.dataTransfer.files?.[0]);
             }}
             className="rounded-[1.15rem] border-2 border-dashed border-[#cfdcc8] bg-[#f7faf5] p-5 text-center"
           >
             <p className="text-sm font-black">Sleep factuur hierheen</p>
             <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
-              PDF, CSV of Excel · maximaal 20 MB
+              Beko CSV of tekstexport · maximaal 20 MB
             </p>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.csv,.xlsx,.xls"
+              accept=".csv,.txt,.tsv,.pdf,.xlsx,.xls"
               className="sr-only"
-              onChange={(event) => handleSelectedFile(event.target.files?.[0])}
+              onChange={(event) =>
+                void handleSelectedFile(event.target.files?.[0])
+              }
             />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
+              disabled={isImporting}
               className="mt-4 rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
             >
-              Bestand kiezen
+              {isImporting ? "Inladen..." : "Bestand kiezen"}
             </button>
             {uploadMessage && (
               <p className="mt-3 text-xs font-bold leading-relaxed text-[#45663b]">

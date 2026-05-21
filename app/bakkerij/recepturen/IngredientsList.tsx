@@ -11,8 +11,11 @@ import {
   formatDate,
   formatEuro,
   formatPercent,
+  ingredientPackagePrice,
+  ingredientPreviousPackagePrice,
   ingredientPriceChange,
   normalizeSearch,
+  packagePriceLabel,
   recipesUsingIngredient,
 } from "./utils";
 
@@ -116,7 +119,7 @@ export default function IngredientsList({
               <span>Leverancier</span>
               <span>Artikel</span>
               <span>Eenheid</span>
-              <span>Prijs</span>
+              <span>Prijs /kg</span>
               <span>Wijziging</span>
               <span>Factuur</span>
             </div>
@@ -142,7 +145,7 @@ export default function IngredientsList({
                   <p className="text-sm font-bold">{ingredient.supplierArticleNumber}</p>
                   <p className="text-sm font-bold">{ingredient.packageSize}</p>
                   <p className="text-sm font-black">
-                    {formatEuro(ingredient.pricePerBaseUnit)}
+                    {formatEuro(ingredientPackagePrice(ingredient))}
                   </p>
                   <span
                     className={`w-fit rounded-full px-2.5 py-1 text-xs font-black ${
@@ -249,8 +252,14 @@ function IngredientDetail({
           <Panel>
             <SectionTitle title="Prijs en leverancier" />
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <MiniMetric label="Huidige prijs" value={formatEuro(ingredient.lastPrice)} />
-              <MiniMetric label="Vorige prijs" value={formatEuro(ingredient.previousPrice)} />
+              <MiniMetric
+                label={packagePriceLabel(ingredient.recipeUnit)}
+                value={formatEuro(ingredientPackagePrice(ingredient))}
+              />
+              <MiniMetric
+                label={`Vorige ${packagePriceLabel(ingredient.recipeUnit).toLowerCase()}`}
+                value={formatEuro(ingredientPreviousPackagePrice(ingredient))}
+              />
               <MiniMetric
                 label="Per basiseenheid"
                 value={formatEuro(ingredient.pricePerBaseUnit)}

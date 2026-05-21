@@ -7,6 +7,7 @@ import {
   formatEuro,
   formatPercent,
   invoiceLineImpact,
+  normalizePackagePrice,
 } from "./utils";
 
 export default function PriceUpdateReview({
@@ -87,7 +88,9 @@ export default function PriceUpdateReview({
               >
                 <p className="text-sm font-black">{line.description}</p>
                 <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-                  Artikel {line.articleNumber} · {formatEuro(line.pricePerUnit)}
+                  Artikel {line.articleNumber} ·{" "}
+                  {formatEuro(normalizePackagePrice(line.pricePerUnit))}
+                  {" /kg"}
                 </p>
                 <IngredientMatchControls
                   invoiceId={invoice.id}
@@ -150,8 +153,14 @@ function ReviewLine({
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <MiniMetric label="Oude prijs" value={formatEuro(line.oldPrice)} />
-        <MiniMetric label="Nieuwe prijs" value={formatEuro(line.newPrice)} />
+        <MiniMetric
+          label="Oude prijs /kg"
+          value={formatEuro(normalizePackagePrice(line.oldPrice))}
+        />
+        <MiniMetric
+          label="Nieuwe prijs /kg"
+          value={formatEuro(normalizePackagePrice(line.newPrice))}
+        />
         <MiniMetric label="Factuurregel" value={`${line.quantity} ${line.unit}`} />
       </div>
 

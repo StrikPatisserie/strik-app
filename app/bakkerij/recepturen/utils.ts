@@ -17,6 +17,64 @@ export function formatEuro(value: number) {
   }).format(value);
 }
 
+export function baseUnitFactor(unit: RecipeUnit) {
+  if (unit === "gram" || unit === "ml") return 1000;
+
+  return 1;
+}
+
+export function packagePriceLabel(unit: RecipeUnit) {
+  if (unit === "gram" || unit === "kg") return "Prijs /kg";
+  if (unit === "ml" || unit === "liter") return "Prijs /l";
+
+  return "Prijs /st";
+}
+
+export function ingredientPackagePrice(ingredient: Ingredient) {
+  if (
+    ingredient.lastPrice > 0 &&
+    ingredient.lastPrice < 1 &&
+    ingredient.pricePerBaseUnit > 0 &&
+    Math.abs(ingredient.lastPrice - ingredient.pricePerBaseUnit) < 0.000001
+  ) {
+    return ingredient.pricePerBaseUnit * baseUnitFactor(ingredient.recipeUnit);
+  }
+
+  if (ingredient.lastPrice > 0) return ingredient.lastPrice;
+
+  return ingredient.pricePerBaseUnit * baseUnitFactor(ingredient.recipeUnit);
+}
+
+export function ingredientPreviousPackagePrice(ingredient: Ingredient) {
+  if (
+    ingredient.previousPrice > 0 &&
+    ingredient.previousPrice < 1 &&
+    ingredient.pricePerBaseUnit > 0 &&
+    Math.abs(ingredient.previousPrice - ingredient.pricePerBaseUnit) < 0.000001
+  ) {
+    return ingredient.previousPrice * baseUnitFactor(ingredient.recipeUnit);
+  }
+
+  if (ingredient.previousPrice > 0) return ingredient.previousPrice;
+
+  return ingredient.previousPrice * baseUnitFactor(ingredient.recipeUnit);
+}
+
+export function normalizePackagePrice(value: number, unit: RecipeUnit = "gram") {
+  if (value > 0 && value < 1 && (unit === "gram" || unit === "ml")) {
+    return value * 1000;
+  }
+
+  return value;
+}
+
+export function pricePerBaseUnitFromPackagePrice(
+  price: number,
+  unit: RecipeUnit
+) {
+  return price / baseUnitFactor(unit);
+}
+
 export function formatPercent(value: number, digits = 0) {
   return `${value.toLocaleString("nl-NL", {
     maximumFractionDigits: digits,
@@ -77,9 +135,10 @@ export function quantityLabel(quantity: number, unit: RecipeUnit) {
 }
 
 export function ingredientPriceChange(ingredient: Ingredient) {
-  if (!ingredient.previousPrice) return 0;
+  const previousPrice = ingredientPreviousPackagePrice(ingredient);
+  if (!previousPrice) return 0;
 
-  return ((ingredient.lastPrice - ingredient.previousPrice) / ingredient.previousPrice) * 100;
+  return ((ingredientPackagePrice(ingredient) - previousPrice) / previousPrice) * 100;
 }
 
 export function recipeCostChange(recipe: Recipe) {

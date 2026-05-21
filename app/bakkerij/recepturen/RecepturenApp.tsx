@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import StrikBackButton from "../../StrikBackButton";
 import StrikPageTitle from "../../StrikPageTitle";
 import FactuurImport from "./FactuurImport";
@@ -13,7 +13,17 @@ import ProductieCalculator from "./ProductieCalculator";
 import RecipeDetail from "./RecipeDetail";
 import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
-import type { Ingredient, InvoiceLine, Recipe } from "./types";
+import {
+  fetchRecepturenData,
+  saveRecepturenData,
+  type RecepturenData,
+} from "./recepturenApi";
+import type { Ingredient, InvoiceImport, InvoiceLine, Recipe } from "./types";
+import {
+  ingredientPackagePrice,
+  normalizePackagePrice,
+  pricePerBaseUnitFromPackagePrice,
+} from "./utils";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard" },
@@ -27,31 +37,128 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]["id"];
 
+function hasStoredRecepturenData(data: RecepturenData) {
+  return Boolean(
+    data.ingredients.length || data.recipes.length || data.invoiceImports.length
+  );
+}
+
+function replaceInvoiceLine(
+  invoices: InvoiceImport[],
+  invoiceId: string,
+  line: InvoiceLine,
+  changes: Partial<InvoiceLine>
+): InvoiceImport[] {
+  return invoices.map((invoice) => {
+    if (invoice.id !== invoiceId) return invoice;
+
+    const nextLines = invoice.lines.map((item) =>
+      item.articleNumber === line.articleNumber &&
+      item.description === line.description
+        ? { ...item, ...changes }
+        : item
+    );
+    const hasPending = nextLines.some((item) => item.reviewStatus === "pending");
+    const nextStatus: InvoiceImport["status"] = hasPending
+      ? "review"
+      : "processed";
+
+    return {
+      ...invoice,
+      status: nextStatus,
+      lines: nextLines,
+    };
+  });
+}
+
 export default function RecepturenApp() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeItems, setRecipeItems] = useState(recipes);
   const [ingredientItems, setIngredientItems] = useState(ingredients);
   const [invoiceItems, setInvoiceItems] = useState(invoiceImports);
-  const latestInvoice = invoiceItems[0];
+  const [syncStatus, setSyncStatus] = useState("Lokale receptuurdata geladen.");
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const latestInvoice = invoiceItems[0] || invoiceImports[0];
+
+  function persistRecepturenData(
+    nextData: RecepturenData,
+    successMessage = "Recepturen opgeslagen in WordPress."
+  ) {
+    setSyncStatus("Opslaan naar WordPress...");
+
+    void saveRecepturenData(nextData).then((result) => {
+      setSyncStatus(
+        result.ok ? successMessage : `Lokaal bijgewerkt. ${result.message}`
+      );
+    });
+  }
+
+  useEffect(() => {
+    let ignoreResult = false;
+
+    async function loadRecepturenData() {
+      setIsLoadingData(true);
+
+      const result = await fetchRecepturenData();
+      if (ignoreResult) return;
+
+      if (result.ok && hasStoredRecepturenData(result.data)) {
+        setIngredientItems(
+          result.data.ingredients.length ? result.data.ingredients : ingredients
+        );
+        setRecipeItems(result.data.recipes.length ? result.data.recipes : recipes);
+        setInvoiceItems(
+          result.data.invoiceImports.length
+            ? result.data.invoiceImports
+            : invoiceImports
+        );
+        setSyncStatus("Recepturen uit WordPress geladen.");
+      } else if (result.ok) {
+        setSyncStatus(
+          "Lokale startdata geladen. Eerste wijziging wordt in WordPress opgeslagen."
+        );
+      } else {
+        setSyncStatus(`Lokale startdata geladen. ${result.message}`);
+      }
+
+      setIsLoadingData(false);
+    }
+
+    void loadRecepturenData();
+
+    return () => {
+      ignoreResult = true;
+    };
+  }, []);
 
   function updateRecipe(updatedRecipe: Recipe) {
-    setRecipeItems((current) =>
-      current.map((recipe) =>
-        recipe.id === updatedRecipe.id ? updatedRecipe : recipe
-      )
+    const nextRecipes = recipeItems.map((recipe) =>
+      recipe.id === updatedRecipe.id ? updatedRecipe : recipe
     );
+
+    setRecipeItems(nextRecipes);
     setSelectedRecipe((current) =>
       current?.id === updatedRecipe.id ? updatedRecipe : current
     );
+    persistRecepturenData({
+      ingredients: ingredientItems,
+      recipes: nextRecipes,
+      invoiceImports: invoiceItems,
+    });
   }
 
   function updateIngredient(updatedIngredient: Ingredient) {
-    setIngredientItems((current) =>
-      current.map((ingredient) =>
-        ingredient.id === updatedIngredient.id ? updatedIngredient : ingredient
-      )
+    const nextIngredients = ingredientItems.map((ingredient) =>
+      ingredient.id === updatedIngredient.id ? updatedIngredient : ingredient
     );
+
+    setIngredientItems(nextIngredients);
+    persistRecepturenData({
+      ingredients: nextIngredients,
+      recipes: recipeItems,
+      invoiceImports: invoiceItems,
+    });
   }
 
   function updateInvoiceLine(
@@ -59,47 +166,65 @@ export default function RecepturenApp() {
     line: InvoiceLine,
     changes: Partial<InvoiceLine>
   ) {
-    setInvoiceItems((current) =>
-      current.map((invoice) => {
-        if (invoice.id !== invoiceId) return invoice;
+    const nextInvoices = replaceInvoiceLine(invoiceItems, invoiceId, line, changes);
 
-        const nextLines = invoice.lines.map((item) =>
-          item.articleNumber === line.articleNumber &&
-          item.description === line.description
-            ? { ...item, ...changes }
-            : item
-        );
-        const hasPending = nextLines.some(
-          (item) => item.reviewStatus === "pending"
-        );
-
-        return {
-          ...invoice,
-          status: hasPending ? "review" : "processed",
-          lines: nextLines,
-        };
-      })
-    );
+    setInvoiceItems(nextInvoices);
+    persistRecepturenData({
+      ingredients: ingredientItems,
+      recipes: recipeItems,
+      invoiceImports: nextInvoices,
+    });
   }
 
   function approveInvoiceLine(invoiceId: string, line: InvoiceLine) {
-    updateInvoiceLine(invoiceId, line, { reviewStatus: "approved" });
+    const invoice = invoiceItems.find((item) => item.id === invoiceId);
+    const nextInvoices = replaceInvoiceLine(invoiceItems, invoiceId, line, {
+      reviewStatus: "approved",
+    });
 
-    if (!line.matchedIngredientId) return;
+    if (!line.matchedIngredientId) {
+      setInvoiceItems(nextInvoices);
+      persistRecepturenData(
+        {
+          ingredients: ingredientItems,
+          recipes: recipeItems,
+          invoiceImports: nextInvoices,
+        },
+        "Factuurregel goedgekeurd en opgeslagen."
+      );
+      return;
+    }
 
-    setIngredientItems((current) =>
-      current.map((ingredient) =>
-        ingredient.id === line.matchedIngredientId
-          ? {
-              ...ingredient,
-              previousPrice: line.oldPrice,
-              lastPrice: line.newPrice,
-              pricePerBaseUnit: line.newPrice,
-              lastUpdated: new Date().toISOString().slice(0, 10),
-              lastInvoice: latestInvoice.invoiceNumber,
-            }
-          : ingredient
-      )
+    const nextIngredients = ingredientItems.map((ingredient) => {
+      if (ingredient.id !== line.matchedIngredientId) return ingredient;
+
+      const nextPackagePrice = normalizePackagePrice(
+        line.newPrice,
+        ingredient.recipeUnit
+      );
+
+      return {
+        ...ingredient,
+        previousPrice: ingredientPackagePrice(ingredient),
+        lastPrice: nextPackagePrice,
+        pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(
+          nextPackagePrice,
+          ingredient.recipeUnit
+        ),
+        lastUpdated: new Date().toISOString().slice(0, 10),
+        lastInvoice: invoice?.invoiceNumber || ingredient.lastInvoice,
+      };
+    });
+
+    setInvoiceItems(nextInvoices);
+    setIngredientItems(nextIngredients);
+    persistRecepturenData(
+      {
+        ingredients: nextIngredients,
+        recipes: recipeItems,
+        invoiceImports: nextInvoices,
+      },
+      "Prijsupdate goedgekeurd en opgeslagen."
     );
   }
 
@@ -116,6 +241,20 @@ export default function RecepturenApp() {
       matchedIngredientId: ingredientId,
       reviewStatus: "pending",
     });
+  }
+
+  function importInvoice(invoice: InvoiceImport) {
+    const nextInvoices = [invoice, ...invoiceItems].slice(0, 100);
+
+    setInvoiceItems(nextInvoices);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: recipeItems,
+        invoiceImports: nextInvoices,
+      },
+      "Beko factuur opgeslagen in WordPress."
+    );
   }
 
   return (
@@ -157,6 +296,10 @@ export default function RecepturenApp() {
             </p>
           </div>
         </header>
+
+        <div className="mb-4 rounded-[1.1rem] border border-[#e7e0d8] bg-white/80 px-4 py-3 text-sm font-bold text-[#2d2a26]/58 shadow-sm">
+          {isLoadingData ? "Recepturen laden..." : syncStatus}
+        </div>
 
         <nav className="sticky top-2 z-20 mb-5 overflow-x-auto rounded-[1.25rem] border border-[#e7e0d8] bg-white/95 p-2 shadow-sm backdrop-blur">
           <div className="flex min-w-max gap-2">
@@ -208,6 +351,7 @@ export default function RecepturenApp() {
             onApproveLine={approveInvoiceLine}
             onIgnoreLine={ignoreInvoiceLine}
             onMatchLine={matchInvoiceLine}
+            onImportInvoice={importInvoice}
           />
         )}
         {activeTab === "marge" && (
