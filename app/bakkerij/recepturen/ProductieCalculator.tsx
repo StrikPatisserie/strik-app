@@ -19,6 +19,7 @@ export default function ProductieCalculator({
   const [desiredAmount, setDesiredAmount] = useState(30);
   const [stockIngredientId, setStockIngredientId] = useState("slagroom-35");
   const [stockQuantity, setStockQuantity] = useState(20);
+  const [feedback, setFeedback] = useState("");
   const selectedRecipe = findRecipe(recipes, recipeId) || finalProducts[0];
   const selectedIngredient = findIngredient(ingredients, stockIngredientId);
 
@@ -57,14 +58,70 @@ export default function ProductieCalculator({
 
   const totalCost = selectedRecipe ? selectedRecipe.costPrice * desiredAmount : 0;
 
+  function showFeedback(message: string) {
+    setFeedback(message);
+    window.setTimeout(() => setFeedback(""), 2200);
+  }
+
+  async function copyProductionList() {
+    try {
+      await navigator.clipboard.writeText(
+        createProductionText(selectedRecipe, desiredAmount, productionRows)
+      );
+      showFeedback("Productielijst gekopieerd.");
+    } catch {
+      showFeedback("Kopieren lukt nu niet.");
+    }
+  }
+
+  function printProductionList() {
+    const printWindow = window.open("", "_blank", "width=980,height=760");
+
+    if (!printWindow) {
+      showFeedback("Printvenster is geblokkeerd.");
+      return;
+    }
+
+    printWindow.document.write(
+      createProductionPrintHtml(selectedRecipe, desiredAmount, productionRows)
+    );
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 150);
+    showFeedback("Printvenster geopend.");
+  }
+
   return (
     <div className="grid gap-4">
       <Panel>
-        <SectionTitle
-          eyebrow="Productie"
-          title="Productiecalculator"
-          description="Schaal recepten op, bereken beperkende grondstoffen en maak alvast een productiekaart."
-        />
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <SectionTitle
+            eyebrow="Productie"
+            title="Productiecalculator"
+            description="Schaal recepten op, bereken beperkende grondstoffen en maak alvast een productiekaart."
+          />
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <button
+              type="button"
+              onClick={printProductionList}
+              disabled={!selectedRecipe}
+              className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm disabled:opacity-50"
+            >
+              Productiekaart printen
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyProductionList()}
+              disabled={!selectedRecipe}
+              className="rounded-full bg-white px-4 py-2.5 text-sm font-black shadow-sm disabled:opacity-50"
+            >
+              Lijst kopieren
+            </button>
+          </div>
+        </div>
+        {feedback && (
+          <p className="mt-3 text-sm font-black text-[#45663b]">{feedback}</p>
+        )}
       </Panel>
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -305,6 +362,80 @@ function estimateBatchBaseQuantity(batchSize: string) {
   if (batchSize.includes("kg")) return value * 1000;
 
   return value * 1000;
+}
+
+type ProductionRow = {
+  id: string;
+  type: string;
+  name: string;
+  quantity: string;
+  cost: number;
+};
+
+function createProductionText(
+  recipe: Recipe | undefined,
+  amount: number,
+  rows: ProductionRow[]
+) {
+  if (!recipe) return "Geen recept gekozen.";
+
+  return [
+    `Productiekaart: ${recipe.name}`,
+    `Aantal: ${amount}`,
+    `Batch: ${recipe.batchSize}`,
+    "",
+    "Benodigdheden",
+    rows
+      .map(
+        (row) =>
+          `- ${row.type}: ${row.name} · ${row.quantity} · ${formatEuro(row.cost)}`
+      )
+      .join("\n"),
+  ].join("\n");
+}
+
+function createProductionPrintHtml(
+  recipe: Recipe | undefined,
+  amount: number,
+  rows: ProductionRow[]
+) {
+  const title = recipe ? recipe.name : "Geen recept gekozen";
+  const rowHtml = rows
+    .map(
+      (row) =>
+        `<tr><td>${escapeHtml(row.type)}</td><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.quantity)}</td><td>${escapeHtml(formatEuro(row.cost))}</td></tr>`
+    )
+    .join("");
+
+  return `<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)} productiekaart</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #2d2a26; margin: 32px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border-bottom: 1px solid #ddd5ca; padding: 9px; text-align: left; font-size: 13px; }
+    th { background: #f4f0ea; }
+    .meta { border: 1px solid #ddd5ca; border-radius: 10px; display: inline-block; padding: 10px 14px; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <div class="meta">Aantal: <strong>${amount}</strong>${recipe ? ` · Batch: <strong>${escapeHtml(recipe.batchSize)}</strong>` : ""}</div>
+  <table><thead><tr><th>Type</th><th>Naam</th><th>Hoeveelheid</th><th>Kostprijs</th></tr></thead><tbody>${rowHtml || "<tr><td colspan=\"4\">Geen regels.</td></tr>"}</tbody></table>
+</body>
+</html>`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function MiniMetric({

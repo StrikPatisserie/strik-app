@@ -13,7 +13,7 @@ import ProductieCalculator from "./ProductieCalculator";
 import RecipeDetail from "./RecipeDetail";
 import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
-import type { Recipe } from "./types";
+import type { Ingredient, InvoiceLine, Recipe } from "./types";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard" },
@@ -30,7 +30,93 @@ type TabId = (typeof tabs)[number]["id"];
 export default function RecepturenApp() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const latestInvoice = invoiceImports[0];
+  const [recipeItems, setRecipeItems] = useState(recipes);
+  const [ingredientItems, setIngredientItems] = useState(ingredients);
+  const [invoiceItems, setInvoiceItems] = useState(invoiceImports);
+  const latestInvoice = invoiceItems[0];
+
+  function updateRecipe(updatedRecipe: Recipe) {
+    setRecipeItems((current) =>
+      current.map((recipe) =>
+        recipe.id === updatedRecipe.id ? updatedRecipe : recipe
+      )
+    );
+    setSelectedRecipe((current) =>
+      current?.id === updatedRecipe.id ? updatedRecipe : current
+    );
+  }
+
+  function updateIngredient(updatedIngredient: Ingredient) {
+    setIngredientItems((current) =>
+      current.map((ingredient) =>
+        ingredient.id === updatedIngredient.id ? updatedIngredient : ingredient
+      )
+    );
+  }
+
+  function updateInvoiceLine(
+    invoiceId: string,
+    line: InvoiceLine,
+    changes: Partial<InvoiceLine>
+  ) {
+    setInvoiceItems((current) =>
+      current.map((invoice) => {
+        if (invoice.id !== invoiceId) return invoice;
+
+        const nextLines = invoice.lines.map((item) =>
+          item.articleNumber === line.articleNumber &&
+          item.description === line.description
+            ? { ...item, ...changes }
+            : item
+        );
+        const hasPending = nextLines.some(
+          (item) => item.reviewStatus === "pending"
+        );
+
+        return {
+          ...invoice,
+          status: hasPending ? "review" : "processed",
+          lines: nextLines,
+        };
+      })
+    );
+  }
+
+  function approveInvoiceLine(invoiceId: string, line: InvoiceLine) {
+    updateInvoiceLine(invoiceId, line, { reviewStatus: "approved" });
+
+    if (!line.matchedIngredientId) return;
+
+    setIngredientItems((current) =>
+      current.map((ingredient) =>
+        ingredient.id === line.matchedIngredientId
+          ? {
+              ...ingredient,
+              previousPrice: line.oldPrice,
+              lastPrice: line.newPrice,
+              pricePerBaseUnit: line.newPrice,
+              lastUpdated: new Date().toISOString().slice(0, 10),
+              lastInvoice: latestInvoice.invoiceNumber,
+            }
+          : ingredient
+      )
+    );
+  }
+
+  function ignoreInvoiceLine(invoiceId: string, line: InvoiceLine) {
+    updateInvoiceLine(invoiceId, line, { reviewStatus: "ignored" });
+  }
+
+  function matchInvoiceLine(
+    invoiceId: string,
+    line: InvoiceLine,
+    ingredientId: string
+  ) {
+    updateInvoiceLine(invoiceId, line, {
+      matchedIngredientId: ingredientId,
+      reviewStatus: "pending",
+    });
+  }
 
   return (
     <main className="min-h-screen bg-[#f4f0ea] px-4 py-6 pb-28 text-[#2d2a26]">
@@ -91,39 +177,60 @@ export default function RecepturenApp() {
           </div>
         </nav>
 
-        {activeTab === "dashboard" && <RecepturenDashboard />}
+        {activeTab === "dashboard" && (
+          <RecepturenDashboard
+            recipes={recipeItems}
+            ingredients={ingredientItems}
+            invoice={latestInvoice}
+          />
+        )}
         {activeTab === "recepten" && (
-          <RecipesList recipes={recipes} onOpenRecipe={setSelectedRecipe} />
+          <RecipesList recipes={recipeItems} onOpenRecipe={setSelectedRecipe} />
         )}
         {activeTab === "halffabricaten" && (
           <HalffabricatenList
-            recipes={recipes}
+            recipes={recipeItems}
             onOpenRecipe={setSelectedRecipe}
           />
         )}
         {activeTab === "ingredienten" && (
-          <IngredientsList ingredients={ingredients} recipes={recipes} />
+          <IngredientsList
+            ingredients={ingredientItems}
+            recipes={recipeItems}
+            onUpdateIngredient={updateIngredient}
+          />
         )}
         {activeTab === "factuurimport" && (
           <FactuurImport
             invoice={latestInvoice}
-            ingredients={ingredients}
-            recipes={recipes}
+            ingredients={ingredientItems}
+            recipes={recipeItems}
+            onApproveLine={approveInvoiceLine}
+            onIgnoreLine={ignoreInvoiceLine}
+            onMatchLine={matchInvoiceLine}
           />
         )}
         {activeTab === "marge" && (
-          <MargeOverzicht recipes={recipes} onOpenRecipe={setSelectedRecipe} />
+          <MargeOverzicht
+            recipes={recipeItems}
+            onOpenRecipe={setSelectedRecipe}
+          />
         )}
         {activeTab === "productie" && (
-          <ProductieCalculator recipes={recipes} ingredients={ingredients} />
+          <ProductieCalculator
+            recipes={recipeItems}
+            ingredients={ingredientItems}
+          />
         )}
 
         {selectedRecipe && (
           <RecipeDetail
+            key={selectedRecipe.id}
             recipe={selectedRecipe}
-            ingredients={ingredients}
-            recipes={recipes}
+            ingredients={ingredientItems}
+            recipes={recipeItems}
             onClose={() => setSelectedRecipe(null)}
+            onSaveRecipe={updateRecipe}
           />
         )}
       </div>

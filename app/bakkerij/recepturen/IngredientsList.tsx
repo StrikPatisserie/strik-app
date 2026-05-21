@@ -19,7 +19,12 @@ import {
 export default function IngredientsList({
   ingredients,
   recipes,
-}: Readonly<{ ingredients: Ingredient[]; recipes: Recipe[] }>) {
+  onUpdateIngredient,
+}: Readonly<{
+  ingredients: Ingredient[];
+  recipes: Recipe[];
+  onUpdateIngredient: (ingredient: Ingredient) => void;
+}>) {
   const [search, setSearch] = useState("");
   const [supplier, setSupplier] = useState("all");
   const [allergen, setAllergen] = useState("all");
@@ -167,6 +172,10 @@ export default function IngredientsList({
         <IngredientDetail
           ingredient={selectedIngredient}
           recipes={recipes}
+          onUpdateIngredient={(ingredient) => {
+            onUpdateIngredient(ingredient);
+            setSelectedIngredient(ingredient);
+          }}
           onClose={() => setSelectedIngredient(null)}
         />
       )}
@@ -177,13 +186,40 @@ export default function IngredientsList({
 function IngredientDetail({
   ingredient,
   recipes,
+  onUpdateIngredient,
   onClose,
 }: Readonly<{
   ingredient: Ingredient;
   recipes: Recipe[];
+  onUpdateIngredient: (ingredient: Ingredient) => void;
   onClose: () => void;
 }>) {
   const linkedRecipes = recipesUsingIngredient(recipes, ingredient.id);
+  const [isLinking, setIsLinking] = useState(false);
+  const [articleNumber, setArticleNumber] = useState(
+    ingredient.supplierArticleNumber
+  );
+  const [alias, setAlias] = useState("");
+  const [feedback, setFeedback] = useState("");
+
+  function saveSupplierLink() {
+    const nextAliases = Array.from(
+      new Set([...ingredient.aliases, alias.trim()].filter(Boolean))
+    );
+    const updatedIngredient = {
+      ...ingredient,
+      supplierArticleNumber:
+        articleNumber.trim() || ingredient.supplierArticleNumber,
+      aliases: nextAliases,
+      lastUpdated: new Date().toISOString().slice(0, 10),
+    };
+
+    onUpdateIngredient(updatedIngredient);
+    setAlias("");
+    setIsLinking(false);
+    setFeedback("Koppeling opgeslagen.");
+    window.setTimeout(() => setFeedback(""), 2000);
+  }
 
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#2d2a26]/35 px-3 py-5 backdrop-blur-sm">
@@ -242,10 +278,44 @@ function IngredientDetail({
             </div>
             <button
               type="button"
+              onClick={() => setIsLinking((current) => !current)}
               className="mt-4 rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
             >
-              Koppelen aan leveranciersartikel
+              {isLinking ? "Koppeling sluiten" : "Koppelen aan leveranciersartikel"}
             </button>
+            {isLinking && (
+              <div className="mt-4 grid gap-3 rounded-2xl border border-[#cfdcc8] bg-[#f7faf5] p-3">
+                <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                  Artikelnummer
+                  <input
+                    value={articleNumber}
+                    onChange={(event) => setArticleNumber(event.target.value)}
+                    className="rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                  Extra alias
+                  <input
+                    value={alias}
+                    onChange={(event) => setAlias(event.target.value)}
+                    placeholder="Naam zoals op factuur"
+                    className="rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={saveSupplierLink}
+                  className="w-fit rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+                >
+                  Koppeling opslaan
+                </button>
+              </div>
+            )}
+            {feedback && (
+              <p className="mt-3 text-xs font-black text-[#45663b]">
+                {feedback}
+              </p>
+            )}
           </Panel>
         </div>
 

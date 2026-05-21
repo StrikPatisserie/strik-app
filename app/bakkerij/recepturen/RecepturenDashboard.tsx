@@ -1,5 +1,5 @@
-import { ingredients, invoiceImports, recipes } from "./mockData";
 import { MetricCard, Panel, SectionTitle, MarginBadge } from "./RecepturenShared";
+import type { Ingredient, InvoiceImport, Recipe } from "./types";
 import {
   formatDate,
   formatPercent,
@@ -8,7 +8,15 @@ import {
   recipeCostChange,
 } from "./utils";
 
-export default function RecepturenDashboard() {
+export default function RecepturenDashboard({
+  recipes,
+  ingredients,
+  invoice,
+}: Readonly<{
+  recipes: Recipe[];
+  ingredients: Ingredient[];
+  invoice: InvoiceImport;
+}>) {
   const finalProducts = recipes.filter((recipe) => recipe.type === "finalProduct");
   const semiFinished = recipes.filter((recipe) => recipe.type === "semiFinished");
   const underMargin = finalProducts.filter(
@@ -24,7 +32,6 @@ export default function RecepturenDashboard() {
   const biggestRecipeChanges = [...finalProducts]
     .sort((first, second) => recipeCostChange(second) - recipeCostChange(first))
     .slice(0, 4);
-  const latestInvoice = invoiceImports[0];
 
   return (
     <div className="grid gap-4">
@@ -44,9 +51,9 @@ export default function RecepturenDashboard() {
             </p>
           </div>
           <div className="rounded-[1rem] border border-[#efc2bb] bg-white/70 p-3 text-sm font-black text-[#a83e31]">
-            {latestInvoice.supplier} {latestInvoice.invoiceNumber}
+            {invoice.supplier} {invoice.invoiceNumber}
             <span className="block text-xs text-[#2d2a26]/45">
-              {formatDate(latestInvoice.invoiceDate)}
+              {formatDate(invoice.invoiceDate)}
             </span>
           </div>
         </div>
@@ -83,13 +90,13 @@ export default function RecepturenDashboard() {
         />
         <MetricCard
           label="Prijsupdates open"
-          value={latestInvoice.lines.filter((line) => line.reviewStatus === "pending").length}
+          value={invoice.lines.filter((line) => line.reviewStatus === "pending").length}
           detail="Regels wachten op goedkeuring"
           tone="pressure"
         />
         <MetricCard
           label="Nieuwe artikelen"
-          value={latestInvoice.lines.filter((line) => !line.matchedIngredientId).length}
+          value={invoice.lines.filter((line) => !line.matchedIngredientId).length}
           detail="Moeten nog gekoppeld worden"
         />
         <MetricCard
