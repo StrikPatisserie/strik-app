@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import {
+  fetchCleaningItems,
+  stripInternalTemperatureRegistrations,
+  type CleaningItem,
+} from "../../schoonmaak/cleaningApi";
+import {
   deviceTypeOptions,
   evaluateTemperature,
   getMeasuredTemperature,
@@ -242,6 +247,28 @@ function recordMatchesWinkel(
   );
 }
 
+function getLocationIdFromName(value: string) {
+  const normalized = normalizeDeviceName(value).replace(/^ijsloket\s+/, "");
+
+  return winkelOptions.find(
+    (winkel) =>
+      normalizeDeviceName(winkel.id) === normalized ||
+      normalizeDeviceName(winkel.label) === normalized
+  )?.id;
+}
+
+function cleaningItemMatchesWinkel(
+  item: CleaningItem,
+  winkelId: WinkelId,
+  datum: string
+) {
+  return (
+    item.titel === "Afsluitplan" &&
+    item.datum === datum &&
+    getLocationIdFromName(item.winkel || "") === winkelId
+  );
+}
+
 function payloadHasDraftContent(payload: TemperaturePayload) {
   const registrations = Array.isArray(payload.temperatuurRegistraties)
     ? payload.temperatuurRegistraties
@@ -300,6 +327,52 @@ function getMissingRegistrationStatus(
   }
 
   return `Geen opgeslagen temperatuurregistratie voor ${winkelLabel} op ${datum}.`;
+}
+
+function getCleaningSortId(item: CleaningItem) {
+  const id = Number(item.id || 0);
+
+  return Number.isFinite(id) ? id : 0;
+}
+
+function sortCleaningByLatest(items: CleaningItem[]) {
+  return [...items].sort((a, b) => getCleaningSortId(b) - getCleaningSortId(a));
+}
+
+function cleaningItemToTemperaturePayload(
+  item: CleaningItem,
+  winkelLabel: string
+): TemperaturePayload | null {
+  const registrations: TemperatureRegistration[] = [];
+
+  stripInternalTemperatureRegistrations(
+    item.temperatuurRegistraties || []
+  ).forEach((registration, index) => {
+    const temperature = (registration.temperatuur || "").trim();
+    if (!temperature) return;
+    const name = registration.naam || "Ijs afsluitplan";
+
+    registrations.push({
+      id: `afsluitplan-${item.id}-${registration.id || index}`,
+      naam: name,
+      displayTemperatuur: "",
+      handTemperatuur: temperature,
+      temperature,
+      deviceType: normalizeTemperatureDeviceType(undefined, name),
+      actionTaken: "",
+      note: "Ijs afsluitplan",
+    });
+  });
+
+  if (!registrations.length) return null;
+
+  return {
+    winkel: winkelLabel,
+    datum: item.datum,
+    naam: item.naam || "",
+    opmerking: item.opmerking || "",
+    temperatuurRegistraties: registrations,
+  };
 }
 
 function statusPillClass(status: ReturnType<typeof evaluateTemperature>["status"]) {
@@ -670,29 +743,14 @@ export default function SchoonmaakRegistratiePage() {
       }
 
       try {
-        const result = await fetchTemperatureRegistrations();
+        const [result, cleaningResult] = await Promise.all([
+          fetchTemperatureRegistrations(),
+          fetchCleaningItems(),
+        ]);
 
         if (negeerResultaat) return;
 
-        if (!result.ok) {
-          const loadedLocal = loadLocalDraft(
-            "Lokale conceptversie geladen."
-          );
-
-          if (!loadedLocal) {
-            setStatus(result.message);
-            setForm({
-              naam: "",
-              opmerking: "",
-              temperatuurRegistraties: createDefaultTemperatureRows(winkelId),
-            });
-            verzondenSignatuurRef.current = "";
-          }
-
-          return;
-        }
-
-        const data = result.data;
+        const data = result.ok ? result.data : [];
         const matchingItem = sortByLatest(
           data.filter(
             (item) =>
@@ -716,6 +774,28 @@ export default function SchoonmaakRegistratiePage() {
           return;
         }
 
+        if (cleaningResult.ok) {
+          const cleaningPayload = sortCleaningByLatest(
+            cleaningResult.data.filter((item) =>
+              cleaningItemMatchesWinkel(item, winkelId, datum)
+            )
+          )
+            .map((item) =>
+              cleaningItemToTemperaturePayload(item, selectedWinkel.label)
+            )
+            .find((payload): payload is TemperaturePayload =>
+              Boolean(payload)
+            );
+
+          if (cleaningPayload) {
+            hydrateLoadedPayload(
+              cleaningPayload,
+              "Ijs afsluitplan-temperaturen geladen."
+            );
+            return;
+          }
+        }
+
         const loadedLocal = loadLocalDraft("Lokale conceptversie geladen.");
         if (!loadedLocal) {
           setForm({
@@ -725,12 +805,14 @@ export default function SchoonmaakRegistratiePage() {
           });
           verzondenSignatuurRef.current = "";
           setStatus(
-            getMissingRegistrationStatus(
-              data,
-              winkelId,
-              selectedWinkel.label,
-              datum
-            )
+            result.ok
+              ? getMissingRegistrationStatus(
+                  data,
+                  winkelId,
+                  selectedWinkel.label,
+                  datum
+                )
+              : result.message
           );
         }
       } catch {
