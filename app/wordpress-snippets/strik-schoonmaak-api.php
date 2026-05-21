@@ -170,6 +170,23 @@ function strik_cleaning_v5_clean_date($value) {
     return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
 }
 
+function strik_cleaning_v5_week_range($date = '') {
+    $date = strik_cleaning_v5_clean_date($date);
+    if ($date === '') $date = wp_date('Y-m-d');
+
+    $timestamp = strtotime($date . ' 00:00:00');
+    if (!$timestamp) $timestamp = time();
+
+    $day = (int) date('N', $timestamp);
+    $monday = strtotime('-' . ($day - 1) . ' days', $timestamp);
+    $sunday = strtotime('+' . (7 - $day) . ' days', $timestamp);
+
+    return array(
+        'startDate' => date('Y-m-d', $monday),
+        'endDate' => date('Y-m-d', $sunday),
+    );
+}
+
 function strik_cleaning_v5_parse_title($title) {
     $parts = preg_split('/\s+[–-]\s+/u', (string) $title);
 
@@ -450,8 +467,11 @@ function strik_cleaning_v5_repair_option_items($items) {
     return $cleaned;
 }
 
-function strik_cleaning_v5_import_archive($archive_name = '') {
+function strik_cleaning_v5_import_archive($archive_name = '', $filters = array()) {
     $archives = strik_cleaning_v5_archive_options();
+    $start_date = isset($filters['startDate']) ? strik_cleaning_v5_clean_date($filters['startDate']) : '';
+    $end_date = isset($filters['endDate']) ? strik_cleaning_v5_clean_date($filters['endDate']) : '';
+    $include_photos = isset($filters['includePhotos']) ? (bool) $filters['includePhotos'] : true;
 
     if ($archive_name === '' && !empty($archives[0]['name'])) {
         $archive_name = $archives[0]['name'];
@@ -502,6 +522,12 @@ function strik_cleaning_v5_import_archive($archive_name = '') {
 
         $clean = strik_cleaning_v5_normalize_option_item($item, false);
         if ($clean['datum'] === '' || $clean['winkel'] === '') continue;
+        if ($start_date !== '' && strcmp($clean['datum'], $start_date) < 0) continue;
+        if ($end_date !== '' && strcmp($clean['datum'], $end_date) > 0) continue;
+
+        if (!$include_photos) {
+            $clean['fotoUploads'] = array();
+        }
 
         $key = implode('|', array(
             $clean['datum'],
@@ -530,6 +556,9 @@ function strik_cleaning_v5_import_archive($archive_name = '') {
         'archiveName' => $archive_name,
         'imported' => $imported,
         'totalActive' => count($active_items),
+        'startDate' => $start_date,
+        'endDate' => $end_date,
+        'includePhotos' => $include_photos,
         'message' => 'Schoonmaakarchief is opgeschoond teruggezet in de actieve lijst.',
     );
 }
@@ -574,6 +603,21 @@ function strik_cleaning_v5_get($request) {
     if ((string) $request->get_param('archive') === 'import') {
         return rest_ensure_response(
             strik_cleaning_v5_import_archive((string) $request->get_param('archiveName'))
+        );
+    }
+
+    if ((string) $request->get_param('archive') === 'import-week') {
+        $range = strik_cleaning_v5_week_range((string) $request->get_param('date'));
+
+        return rest_ensure_response(
+            strik_cleaning_v5_import_archive(
+                (string) $request->get_param('archiveName'),
+                array(
+                    'startDate' => $range['startDate'],
+                    'endDate' => $range['endDate'],
+                    'includePhotos' => false,
+                )
+            )
         );
     }
 
