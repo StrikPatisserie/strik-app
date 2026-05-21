@@ -797,7 +797,6 @@ function SchoonmaakForm() {
       fileName: upload.fileName,
       url: upload.url,
       mediaId: upload.mediaId,
-      dataUrl: upload.url ? undefined : upload.dataUrl,
     };
   }
 

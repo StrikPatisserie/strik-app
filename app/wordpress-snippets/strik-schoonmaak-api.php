@@ -15,10 +15,35 @@ if (!defined('STRIK_CLEANING_API_KEY')) {
     define('STRIK_CLEANING_API_KEY', 'schoonmaak-ijs-strik');
 }
 
+if (!defined('STRIK_CLEANING_PHOTO_MARKER_PREFIX')) {
+    define('STRIK_CLEANING_PHOTO_MARKER_PREFIX', '__strik_photo:');
+}
+
+if (!defined('STRIK_CLEANING_PHOTO_MARKER_V2_PREFIX')) {
+    define('STRIK_CLEANING_PHOTO_MARKER_V2_PREFIX', '__strik_photo_v2:');
+}
+
+if (!defined('STRIK_CLEANING_PHOTO_TEMPERATURE_PREFIX')) {
+    define('STRIK_CLEANING_PHOTO_TEMPERATURE_PREFIX', '__strik_photo_temperature:');
+}
+
 function strik_cleaning_v5_permission($request) {
     return hash_equals(STRIK_CLEANING_API_KEY, (string) $request->get_param('key'))
         ? true
         : new WP_Error('strik_cleaning_forbidden', 'Geen toegang.', array('status' => 403));
+}
+
+function strik_cleaning_v5_starts_with($value, $prefix) {
+    return is_string($value) && strpos($value, $prefix) === 0;
+}
+
+function strik_cleaning_v5_is_photo_marker($value) {
+    return strik_cleaning_v5_starts_with($value, STRIK_CLEANING_PHOTO_MARKER_PREFIX)
+        || strik_cleaning_v5_starts_with($value, STRIK_CLEANING_PHOTO_MARKER_V2_PREFIX);
+}
+
+function strik_cleaning_v5_is_photo_temperature_name($value) {
+    return strik_cleaning_v5_starts_with($value, STRIK_CLEANING_PHOTO_TEMPERATURE_PREFIX);
 }
 
 function strik_cleaning_v5_decode($value) {
@@ -77,7 +102,10 @@ function strik_cleaning_v5_text_array($items) {
     if (!is_array($items)) return $clean;
 
     foreach (array_slice($items, 0, 500) as $item) {
-        $text = sanitize_text_field((string) $item);
+        if (strik_cleaning_v5_is_photo_marker($item)) continue;
+        if (is_array($item) || is_object($item)) continue;
+
+        $text = sanitize_text_field(substr((string) $item, 0, 2000));
         if ($text !== '') $clean[] = $text;
     }
 
@@ -96,6 +124,7 @@ function strik_cleaning_v5_temperatures($items) {
         $naam = isset($item['naam']) ? sanitize_text_field($item['naam']) : '';
         $temperatuur = isset($item['temperatuur']) ? sanitize_text_field($item['temperatuur']) : '';
 
+        if (strik_cleaning_v5_is_photo_temperature_name($naam)) continue;
         if ($naam === '' || $temperatuur === '') continue;
 
         $clean[] = array(
@@ -242,10 +271,77 @@ function strik_cleaning_v5_normalize_option_item($item, $include_data_url = fals
     );
 }
 
+function strik_cleaning_v5_item_has_inline_photo_data($item) {
+    if (!is_array($item)) return true;
+
+    if (isset($item['fotoUploads']) && is_array($item['fotoUploads'])) {
+        foreach ($item['fotoUploads'] as $photo) {
+            if (is_array($photo) && isset($photo['dataUrl']) && is_string($photo['dataUrl']) && $photo['dataUrl'] !== '') {
+                return true;
+            }
+        }
+    }
+
+    if (isset($item['taken']) && is_array($item['taken'])) {
+        foreach ($item['taken'] as $taak) {
+            if (strik_cleaning_v5_is_photo_marker($taak)) return true;
+        }
+    }
+
+    if (isset($item['temperatuurRegistraties']) && is_array($item['temperatuurRegistraties'])) {
+        foreach ($item['temperatuurRegistraties'] as $registratie) {
+            if (!is_array($registratie)) continue;
+            $naam = isset($registratie['naam']) ? (string) $registratie['naam'] : '';
+            $temperatuur = isset($registratie['temperatuur']) ? (string) $registratie['temperatuur'] : '';
+
+            if (strik_cleaning_v5_is_photo_temperature_name($naam) || strpos($temperatuur, 'data:image/') !== false) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+function strik_cleaning_v5_repair_option_items($items) {
+    $changed = false;
+    $cleaned = array();
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            $changed = true;
+            continue;
+        }
+
+        if (strik_cleaning_v5_item_has_inline_photo_data($item)) {
+            $changed = true;
+        }
+
+        $clean = strik_cleaning_v5_normalize_option_item($item, false);
+        if ($clean['datum'] === '' || $clean['winkel'] === '') {
+            $changed = true;
+            continue;
+        }
+
+        $cleaned[] = $clean;
+    }
+
+    if ($changed) {
+        update_option('strik_cleaning_items', array_values($cleaned), false);
+    }
+
+    return $cleaned;
+}
+
 function strik_cleaning_v5_get_items($include_legacy_posts = false, $include_data_url = false) {
     $items = array();
+    $option_items = strik_cleaning_v5_option_items();
 
-    foreach (strik_cleaning_v5_option_items() as $item) {
+    if (!$include_data_url) {
+        $option_items = strik_cleaning_v5_repair_option_items($option_items);
+    }
+
+    foreach ($option_items as $item) {
         $clean = strik_cleaning_v5_normalize_option_item($item, $include_data_url);
         if ($clean['datum'] !== '' && $clean['winkel'] !== '') $items[] = $clean;
     }
@@ -276,7 +372,7 @@ function strik_cleaning_v5_save($request) {
     $params = $request->get_json_params();
     if (!is_array($params)) $params = array();
 
-    $items = strik_cleaning_v5_option_items();
+    $items = strik_cleaning_v5_repair_option_items(strik_cleaning_v5_option_items());
     $max_id = 0;
 
     foreach ($items as $item) {
@@ -292,7 +388,7 @@ function strik_cleaning_v5_save($request) {
         'taken' => strik_cleaning_v5_text_array(isset($params['taken']) ? $params['taken'] : array()),
         'opmerking' => isset($params['opmerking']) ? sanitize_textarea_field($params['opmerking']) : '',
         'temperatuurRegistraties' => strik_cleaning_v5_temperatures(isset($params['temperatuurRegistraties']) ? $params['temperatuurRegistraties'] : array()),
-        'fotoUploads' => strik_cleaning_v5_photos(isset($params['fotoUploads']) ? $params['fotoUploads'] : array(), true),
+        'fotoUploads' => strik_cleaning_v5_photos(isset($params['fotoUploads']) ? $params['fotoUploads'] : array(), false),
         'createdAt' => wp_date(DATE_ATOM),
     );
 
