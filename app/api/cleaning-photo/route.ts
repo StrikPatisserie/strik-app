@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 const WORDPRESS_MEDIA_URL =
   process.env.WORDPRESS_MEDIA_URL ||
   "https://strik-patisserie.nl/wp-json/wp/v2/media";
+const MAX_CLEANING_PHOTO_BYTES = 750_000;
 
 function getWordPressCredentials() {
   return {
@@ -47,6 +48,16 @@ export async function POST(request: Request) {
     return Response.json(
       { message: "Geen foto ontvangen om te uploaden." },
       { status: 400 }
+    );
+  }
+
+  if (file.size > MAX_CLEANING_PHOTO_BYTES) {
+    return Response.json(
+      {
+        message:
+          "Foto is nog te groot om veilig naar WordPress te sturen. Maak de foto opnieuw of probeer een kleinere uitsnede.",
+      },
+      { status: 413 }
     );
   }
 

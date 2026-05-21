@@ -99,6 +99,17 @@ function maakJpegBestandsnaam(fileName: string) {
   return `${zonderExtensie || "schoonmaak-foto"}.jpg`;
 }
 
+const FOTO_UPLOAD_MAX_ZIJDE = 520;
+const FOTO_UPLOAD_MIN_ZIJDE = 320;
+const FOTO_UPLOAD_DOEL_BYTES = 180_000;
+const FOTO_UPLOAD_KWALITEITEN = [0.38, 0.3, 0.24];
+
+function canvasNaarJpegBlob(canvas: HTMLCanvasElement, kwaliteit: number) {
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/jpeg", kwaliteit);
+  });
+}
+
 function verkleinFotoVoorUpload(file: File) {
   return new Promise<File>((resolve) => {
     if (!file.type.startsWith("image/")) {
@@ -112,42 +123,59 @@ function verkleinFotoVoorUpload(file: File) {
     image.onload = () => {
       URL.revokeObjectURL(objectUrl);
 
-      const maxSize = 700;
-      const grootsteZijde = Math.max(image.width, image.height);
-      const schaal = Math.min(1, maxSize / grootsteZijde);
+      void (async () => {
+        try {
+          const grootsteZijde = Math.max(image.width, image.height);
+          let maxZijde = FOTO_UPLOAD_MAX_ZIJDE;
+          let besteBlob: Blob | null = null;
 
-      if (schaal === 1 && file.size < 1_800_000) {
-        resolve(file);
-        return;
-      }
+          while (maxZijde >= FOTO_UPLOAD_MIN_ZIJDE) {
+            const schaal = Math.min(1, maxZijde / grootsteZijde);
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(image.width * schaal));
+            canvas.height = Math.max(1, Math.round(image.height * schaal));
 
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(image.width * schaal);
-      canvas.height = Math.round(image.height * schaal);
+            const context = canvas.getContext("2d");
+            if (!context) {
+              resolve(file);
+              return;
+            }
 
-      const context = canvas.getContext("2d");
-      if (!context) {
-        resolve(file);
-        return;
-      }
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            resolve(file);
+            for (const kwaliteit of FOTO_UPLOAD_KWALITEITEN) {
+              const blob = await canvasNaarJpegBlob(canvas, kwaliteit);
+              if (!blob) continue;
+
+              besteBlob = blob;
+
+              if (blob.size <= FOTO_UPLOAD_DOEL_BYTES) {
+                resolve(
+                  new File([blob], maakJpegBestandsnaam(file.name), {
+                    type: "image/jpeg",
+                  })
+                );
+                return;
+              }
+            }
+
+            maxZijde = Math.round(maxZijde * 0.82);
+          }
+
+          if (besteBlob) {
+            resolve(
+              new File([besteBlob], maakJpegBestandsnaam(file.name), {
+                type: "image/jpeg",
+              })
+            );
             return;
           }
 
-          resolve(
-            new File([blob], maakJpegBestandsnaam(file.name), {
-              type: "image/jpeg",
-            })
-          );
-        },
-        "image/jpeg",
-        0.45
-      );
+          resolve(file);
+        } catch {
+          resolve(file);
+        }
+      })();
     };
 
     image.onerror = () => {
