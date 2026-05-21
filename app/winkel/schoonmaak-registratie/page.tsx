@@ -177,9 +177,9 @@ function cleanRegistrations(items: TemperatureRegistration[]) {
     })
     .filter(
       (item) =>
-        item.naam ||
         item.displayTemperatuur ||
         item.handTemperatuur ||
+        item.temperature ||
         item.actionTaken ||
         item.note
     );
@@ -223,6 +223,83 @@ function sortByLatest(items: TemperatureRecord[]) {
 
     return getRecordSortId(b) - getRecordSortId(a);
   });
+}
+
+function normalizeMatchValue(value: string) {
+  return value.trim().toLocaleLowerCase("nl-NL");
+}
+
+function recordMatchesWinkel(
+  item: TemperatureRecord,
+  winkelId: WinkelId,
+  winkelLabel: string
+) {
+  const itemWinkel = normalizeMatchValue(item.winkel || "");
+
+  return (
+    itemWinkel === normalizeMatchValue(winkelId) ||
+    itemWinkel === normalizeMatchValue(winkelLabel)
+  );
+}
+
+function payloadHasDraftContent(payload: TemperaturePayload) {
+  const registrations = Array.isArray(payload.temperatuurRegistraties)
+    ? payload.temperatuurRegistraties
+    : [];
+
+  return Boolean(
+    (payload.naam || "").trim() ||
+      (payload.opmerking || "").trim() ||
+      registrations.some(
+        (item) =>
+          (item.displayTemperatuur || "").trim() ||
+          (item.handTemperatuur || "").trim() ||
+          (item.temperature || "").trim() ||
+          (item.temperatuur || "").trim() ||
+          (item.actionTaken || "").trim() ||
+          (item.note || "").trim()
+      )
+  );
+}
+
+function payloadHasRegistrationContent(payload: TemperaturePayload) {
+  const registrations = Array.isArray(payload.temperatuurRegistraties)
+    ? payload.temperatuurRegistraties
+    : [];
+
+  return Boolean(
+    (payload.opmerking || "").trim() ||
+      registrations.some(
+        (item) =>
+          (item.displayTemperatuur || "").trim() ||
+          (item.handTemperatuur || "").trim() ||
+          (item.temperature || "").trim() ||
+          (item.temperatuur || "").trim() ||
+          (item.actionTaken || "").trim() ||
+          (item.note || "").trim()
+      )
+  );
+}
+
+function getMissingRegistrationStatus(
+  data: TemperatureRecord[],
+  winkelId: WinkelId,
+  winkelLabel: string,
+  datum: string
+) {
+  const latestForWinkel = sortByLatest(
+    data.filter(
+      (item) =>
+        recordMatchesWinkel(item, winkelId, winkelLabel) &&
+        payloadHasRegistrationContent(item)
+    )
+  )[0];
+
+  if (latestForWinkel?.datum) {
+    return `Geen opgeslagen temperatuurregistratie voor ${winkelLabel} op ${datum}. Laatste in WordPress: ${latestForWinkel.datum}.`;
+  }
+
+  return `Geen opgeslagen temperatuurregistratie voor ${winkelLabel} op ${datum}.`;
 }
 
 function statusPillClass(status: ReturnType<typeof evaluateTemperature>["status"]) {
@@ -304,7 +381,9 @@ function readLocalDraft(winkelId: WinkelId, datum: string) {
     const raw = window.localStorage.getItem(getDraftKey(winkelId, datum));
     if (!raw) return null;
 
-    return JSON.parse(raw) as TemperatureDraft;
+    const draft = JSON.parse(raw) as TemperatureDraft;
+
+    return payloadHasDraftContent(draft) ? draft : null;
   } catch {
     return null;
   }
@@ -390,8 +469,8 @@ export default function SchoonmaakRegistratiePage() {
     const hasTemperature = payload.temperatuurRegistraties.some(
       (item) => item.displayTemperatuur.trim() || item.handTemperatuur.trim()
     );
-    const hasContent =
-      payload.naam.trim() || payload.opmerking.trim() || hasTemperature;
+    const hasContent = payloadHasDraftContent(payload);
+    const hasRegistrationContent = payloadHasRegistrationContent(payload);
     const signature = makeSignature(payload);
 
     if (options.allowPartial && !hasContent) return;
@@ -436,6 +515,10 @@ export default function SchoonmaakRegistratiePage() {
     }
 
     saveLocalDraft(winkelId, payload);
+
+    if (options.allowPartial && !hasRegistrationContent) {
+      return;
+    }
 
     if (!options.silent) {
       setOpslaanBezig(true);
@@ -612,7 +695,10 @@ export default function SchoonmaakRegistratiePage() {
         const data = result.data;
         const matchingItem = sortByLatest(
           data.filter(
-            (item) => item.datum === datum && item.winkel === selectedWinkel.label
+            (item) =>
+              item.datum === datum &&
+              recordMatchesWinkel(item, winkelId, selectedWinkel.label) &&
+              payloadHasRegistrationContent(item)
           )
         )[0];
 
@@ -638,6 +724,14 @@ export default function SchoonmaakRegistratiePage() {
             temperatuurRegistraties: createDefaultTemperatureRows(winkelId),
           });
           verzondenSignatuurRef.current = "";
+          setStatus(
+            getMissingRegistrationStatus(
+              data,
+              winkelId,
+              selectedWinkel.label,
+              datum
+            )
+          );
         }
       } catch {
         if (!negeerResultaat) {

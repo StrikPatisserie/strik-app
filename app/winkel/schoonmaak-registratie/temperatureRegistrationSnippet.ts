@@ -48,7 +48,7 @@ function strik_temperature_v1_registrations($items) {
         $action_taken = isset($item['actionTaken']) ? sanitize_textarea_field($item['actionTaken']) : '';
         $note = isset($item['note']) ? sanitize_textarea_field($item['note']) : '';
 
-        if ($naam === '' && $display_temperatuur === '' && $hand_temperatuur === '' && $action_taken === '' && $note === '') continue;
+        if ($display_temperatuur === '' && $hand_temperatuur === '' && $temperature === '' && $action_taken === '' && $note === '') continue;
 
         $clean[] = array(
             'id' => isset($item['id']) ? sanitize_text_field($item['id']) : uniqid('temp-', true),
@@ -95,7 +95,7 @@ function strik_temperature_v1_get_items() {
 
     foreach (strik_temperature_v1_option_items() as $item) {
         $clean = strik_temperature_v1_normalize_item($item);
-        if ($clean['datum'] !== '' && $clean['winkel'] !== '') $items[] = $clean;
+        if ($clean['datum'] !== '' && $clean['winkel'] !== '' && (!empty($clean['temperatuurRegistraties']) || $clean['opmerking'] !== '')) $items[] = $clean;
     }
 
     return $items;
@@ -131,13 +131,24 @@ function strik_temperature_v1_save($request) {
         }
     }
 
+    $temperatuur_registraties = strik_temperature_v1_registrations(isset($params['temperatuurRegistraties']) ? $params['temperatuurRegistraties'] : array());
+    $opmerking = isset($params['opmerking']) ? sanitize_textarea_field($params['opmerking']) : '';
+
+    if (empty($temperatuur_registraties) && $opmerking === '') {
+        return new WP_Error(
+            'strik_temperature_empty',
+            'Geen temperatuurgegevens om op te slaan.',
+            array('status' => 400)
+        );
+    }
+
     $new_item = array(
         'id' => $existing_item && isset($existing_item['id']) ? absint($existing_item['id']) : $max_id + 1,
         'winkel' => $winkel,
         'naam' => isset($params['naam']) ? sanitize_text_field($params['naam']) : '',
         'datum' => $datum,
-        'opmerking' => isset($params['opmerking']) ? sanitize_textarea_field($params['opmerking']) : '',
-        'temperatuurRegistraties' => strik_temperature_v1_registrations(isset($params['temperatuurRegistraties']) ? $params['temperatuurRegistraties'] : array()),
+        'opmerking' => $opmerking,
+        'temperatuurRegistraties' => $temperatuur_registraties,
         'createdAt' => $existing_item && isset($existing_item['createdAt']) ? sanitize_text_field($existing_item['createdAt']) : $now,
         'updatedAt' => $now,
     );

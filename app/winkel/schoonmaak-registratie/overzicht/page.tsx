@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
 import {
+  fetchCleaningItems,
+  stripInternalTemperatureRegistrations,
+  type CleaningItem,
+} from "../../../schoonmaak/cleaningApi";
+import {
   deviceTypeOptions,
   evaluateTemperature,
   getDeviceTypeLabel,
@@ -18,6 +23,7 @@ import {
   temperatureRowsByWinkel,
   winkelOptions,
   type TemperatureDeviceType,
+  type TemperatureRegistration,
   type TemperatureRecord,
   type TemperatureStatus,
   type WinkelId,
@@ -81,14 +87,31 @@ function formatDutchTime(value: string) {
   });
 }
 
-function getRecordLocationId(record: TemperatureRecord) {
-  const normalized = normalizeDeviceName(record.winkel || "");
+function getLocationIdFromName(value: string) {
+  const normalized = normalizeDeviceName(value).replace(/^ijsloket\s+/, "");
 
   return winkelOptions.find(
     (winkel) =>
       normalizeDeviceName(winkel.id) === normalized ||
       normalizeDeviceName(winkel.label) === normalized
   )?.id;
+}
+
+function getRecordLocationId(record: TemperatureRecord) {
+  return getLocationIdFromName(record.winkel || "");
+}
+
+function getCleaningItemLocationId(item: CleaningItem) {
+  return getLocationIdFromName(item.winkel || "");
+}
+
+function registrationHasContent(registration: TemperatureRegistration) {
+  return Boolean(
+    getMeasuredTemperature(registration).trim() ||
+      (registration.displayTemperatuur || "").trim() ||
+      (registration.actionTaken || "").trim() ||
+      (registration.note || "").trim()
+  );
 }
 
 function statusClass(status: TemperatureStatus) {
@@ -125,6 +148,7 @@ function escapeHtml(value: string) {
 
 function buildRows(
   records: TemperatureRecord[],
+  cleaningItems: CleaningItem[],
   locationFilter: LocationFilter,
   month: number,
   year: number,
@@ -158,32 +182,92 @@ function buildRows(
       ? record.temperatuurRegistraties
       : [];
 
-    registrations.forEach((registration, registrationIndex) => {
+    registrations
+      .filter(registrationHasContent)
+      .forEach((registration, registrationIndex) => {
+        const deviceName = registration.naam || "Onbekend meetpunt";
+        const deviceType = normalizeTemperatureDeviceType(
+          registration.deviceType,
+          registration.naam || ""
+        );
+        const temperature = getMeasuredTemperature(registration);
+        const evaluation = evaluateTemperature(deviceType, temperature);
+        const note = registration.note || record.opmerking || "";
+
+        rows.push({
+          key: `registration-${record.id || recordIndex}-${registration.id || registrationIndex}`,
+          date: recordDate,
+          time: formatDutchTime(createdAt),
+          locationId,
+          location: locationId ? getWinkelLabel(locationId) : record.winkel,
+          deviceName,
+          deviceType,
+          displayTemperature: registration.displayTemperatuur || "",
+          temperature,
+          status: evaluation.status,
+          statusLabel: evaluation.label,
+          actionTaken: registration.actionTaken || "",
+          enteredBy: record.naam || "",
+          note,
+          createdAt,
+          source: "registration",
+        });
+      });
+  });
+
+  const latestCleaningItems = new Map<string, CleaningItem>();
+
+  cleaningItems.forEach((item) => {
+    if (item.titel !== "Afsluitplan") return;
+    const locationId = getCleaningItemLocationId(item);
+    const key = `${item.datum}|${locationId || item.winkel}|${item.titel}`;
+    const existingItem = latestCleaningItems.get(key);
+
+    if (!existingItem || item.id > existingItem.id) {
+      latestCleaningItems.set(key, item);
+    }
+  });
+
+  Array.from(latestCleaningItems.values()).forEach((item) => {
+    const recordDate = item.datum || "";
+    const dateParts = recordDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!dateParts) return;
+
+    const recordYear = Number(dateParts[1]);
+    const recordMonth = Number(dateParts[2]) - 1;
+    if (recordYear !== year || recordMonth !== month) return;
+
+    const locationId = getCleaningItemLocationId(item);
+    const locationMatches =
+      locationFilter === "all" || locationId === locationFilter;
+    if (!locationMatches) return;
+
+    stripInternalTemperatureRegistrations(
+      item.temperatuurRegistraties || []
+    ).forEach((registration, registrationIndex) => {
+      const temperature = (registration.temperatuur || "").trim();
+      if (!temperature) return;
+
       const deviceName = registration.naam || "Onbekend meetpunt";
-      const deviceType = normalizeTemperatureDeviceType(
-        registration.deviceType,
-        registration.naam || ""
-      );
-      const temperature = getMeasuredTemperature(registration);
+      const deviceType = normalizeTemperatureDeviceType(undefined, deviceName);
       const evaluation = evaluateTemperature(deviceType, temperature);
-      const note = registration.note || record.opmerking || "";
 
       rows.push({
-        key: `registration-${record.id || recordIndex}-${registration.id || registrationIndex}`,
+        key: `cleaning-${item.id}-${registration.id || registrationIndex}`,
         date: recordDate,
-        time: formatDutchTime(createdAt),
+        time: "-",
         locationId,
-        location: locationId ? getWinkelLabel(locationId) : record.winkel,
+        location: locationId ? getWinkelLabel(locationId) : item.winkel,
         deviceName,
         deviceType,
-        displayTemperature: registration.displayTemperatuur || "",
+        displayTemperature: "",
         temperature,
         status: evaluation.status,
         statusLabel: evaluation.label,
-        actionTaken: registration.actionTaken || "",
-        enteredBy: record.naam || "",
-        note,
-        createdAt,
+        actionTaken: "",
+        enteredBy: item.naam || "",
+        note: item.opmerking || "Ijs afsluitplan",
+        createdAt: "",
         source: "registration",
       });
     });
@@ -255,6 +339,7 @@ function buildRows(
 export default function TemperatuurRegistratieOverzichtPage() {
   const today = getTodayParts();
   const [records, setRecords] = useState<TemperatureRecord[]>([]);
+  const [cleaningItems, setCleaningItems] = useState<CleaningItem[]>([]);
   const [locationFilter, setLocationFilter] =
     useState<LocationFilter>("ziekerstraat");
   const [month, setMonth] = useState(today.month);
@@ -291,21 +376,33 @@ export default function TemperatuurRegistratieOverzichtPage() {
       setStatus("");
 
       try {
-        const result = await fetchTemperatureRegistrations();
+        const [temperatureResult, cleaningResult] = await Promise.all([
+          fetchTemperatureRegistrations(),
+          fetchCleaningItems(),
+        ]);
 
         if (ignoreResult) return;
 
-        if (!result.ok) {
-          setStatus(result.message);
+        if (!temperatureResult.ok && !cleaningResult.ok) {
+          setStatus(temperatureResult.message);
           setRecords([]);
+          setCleaningItems([]);
           return;
         }
 
-        setRecords(result.data);
+        setRecords(temperatureResult.ok ? temperatureResult.data : []);
+        setCleaningItems(cleaningResult.ok ? cleaningResult.data : []);
+
+        if (!temperatureResult.ok) {
+          setStatus(temperatureResult.message);
+        } else if (!cleaningResult.ok) {
+          setStatus(cleaningResult.message);
+        }
       } catch {
         if (!ignoreResult) {
           setStatus("Temperatuurregistraties konden niet geladen worden.");
           setRecords([]);
+          setCleaningItems([]);
         }
       } finally {
         if (!ignoreResult) setLoading(false);
@@ -321,32 +418,38 @@ export default function TemperatuurRegistratieOverzichtPage() {
 
   const rows = useMemo(
     () =>
-      buildRows(records, locationFilter, month, year, includeMissingRows).filter(
-        (row) => {
-          if (
-            deviceFilter !== "all" &&
-            normalizeDeviceName(row.deviceName) !== deviceFilter
-          ) {
-            return false;
-          }
-
-          if (deviceTypeFilter !== "all" && row.deviceType !== deviceTypeFilter) {
-            return false;
-          }
-
-          if (
-            onlyProblems &&
-            !isAttentionOrDeviationStatus(row.status) &&
-            row.status !== "missing"
-          ) {
-            return false;
-          }
-
-          return true;
+      buildRows(
+        records,
+        cleaningItems,
+        locationFilter,
+        month,
+        year,
+        includeMissingRows
+      ).filter((row) => {
+        if (
+          deviceFilter !== "all" &&
+          normalizeDeviceName(row.deviceName) !== deviceFilter
+        ) {
+          return false;
         }
-      ),
+
+        if (deviceTypeFilter !== "all" && row.deviceType !== deviceTypeFilter) {
+          return false;
+        }
+
+        if (
+          onlyProblems &&
+          !isAttentionOrDeviationStatus(row.status) &&
+          row.status !== "missing"
+        ) {
+          return false;
+        }
+
+        return true;
+      }),
     [
       records,
+      cleaningItems,
       locationFilter,
       month,
       year,
