@@ -35,6 +35,10 @@ type UploadedFile = File & {
   type: string;
 };
 
+type CanvasPolyfillModule = typeof import("@napi-rs/canvas") & {
+  default?: Partial<typeof import("@napi-rs/canvas")>;
+};
+
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_OCR_PDF_PAGES = 3;
 
@@ -477,7 +481,19 @@ function parseLooseInvoiceLines(text: string, ingredients: Ingredient[]) {
     .filter((line): line is InvoiceLine => Boolean(line));
 }
 
+async function ensurePdfCanvasGlobals() {
+  const canvas = (await import("@napi-rs/canvas")) as CanvasPolyfillModule;
+  const source = canvas.default || canvas;
+  const globals = globalThis as unknown as Record<string, unknown>;
+
+  globals.DOMMatrix ||= source.DOMMatrix;
+  globals.ImageData ||= source.ImageData;
+  globals.Path2D ||= source.Path2D;
+}
+
 async function extractPdfText(buffer: Buffer) {
+  await ensurePdfCanvasGlobals();
+
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
 
@@ -506,6 +522,8 @@ async function extractTextWithOcr(image: Buffer) {
 }
 
 async function extractScannedPdfText(buffer: Buffer) {
+  await ensurePdfCanvasGlobals();
+
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
   const pages: string[] = [];
@@ -572,7 +590,16 @@ async function parseInvoiceFile(
     text = await extractPdfText(buffer);
     lines = maybeParseDelimitedText(text, ingredients);
 
-    if (!lines.length) {
+    if (!lines.length && text.trim()) {
+      lines = parseLooseInvoiceLines(text, ingredients);
+      if (lines.length) {
+        warnings.push(
+          "Kolommen waren niet exact herkenbaar; regels zijn met tekstherkenning ingeschat."
+        );
+      }
+    }
+
+    if (!lines.length && !text.trim()) {
       warnings.push(
         "Deze PDF bevat weinig tekst. Ik heb OCR op de eerste pagina's geprobeerd."
       );
