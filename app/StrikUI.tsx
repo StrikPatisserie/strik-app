@@ -5,6 +5,7 @@ import StrikPageTitle from "./StrikPageTitle";
 
 export const strikIcons = {
   agenda: "/icons_strik_agenda.svg",
+  bakkerij: "/apps%20strik_Bakkerij.svg",
   bruidstaart: "/icons_strik_bruidstaart.svg",
   cleaning: "/icons_strik_cleaning.svg",
   cleaningManagement: "/icons_strik_cleaning%20management.svg",
@@ -17,6 +18,7 @@ export const strikIcons = {
   notities: "/icons_strik.svg",
   opstartplan: "/icons_strik_opstartplan.svg",
   photo: "/icons_strik_photo.svg",
+  recepturen: "/apps%20strik_recepten.svg",
   strikAgenda: "/icons_strik_strikagenda.svg",
   winkel: "/icons_strik_winkel.svg",
 };

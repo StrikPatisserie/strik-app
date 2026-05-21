@@ -17,7 +17,7 @@ const parentRoutes: Record<string, string> = {
   "/management/personeelsagenda": "/management",
 };
 
-const topLevelRoutes = new Set(["/", "/winkel", "/ijs", "/management"]);
+const topLevelRoutes = new Set(["/", "/winkel", "/ijs", "/bakkerij", "/management"]);
 
 function getParentRoute(pathname: string) {
   if (topLevelRoutes.has(pathname)) return "";

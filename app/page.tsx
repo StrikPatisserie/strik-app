@@ -22,6 +22,15 @@ const sections = [
     image: strikIcons.ijs,
   },
   {
+    href: "/bakkerij",
+    title: "Bakkerij",
+    subtitle: "Recepturen en productie",
+    button: "bg-[#eadfcf]",
+    badge: "bg-[#c3d3bc]",
+    icon: "B",
+    image: strikIcons.bakkerij,
+  },
+  {
     href: "/management",
     title: "Management",
     subtitle: "Overzicht en beheer",
