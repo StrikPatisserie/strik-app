@@ -44,8 +44,11 @@ export default function FactuurImport({
       }
 
       onImportInvoice(result.invoice);
+      const warningText = result.warnings.length
+        ? ` Let op: ${result.warnings.join(" ")}`
+        : "";
       setUploadMessage(
-        `${file.name} ingeladen: ${result.invoice.lines.length} regels, ${result.invoice.lines.filter((line) => line.matchedIngredientId).length} automatisch gekoppeld.`
+        `${file.name} ingeladen: ${result.invoice.lines.length} regels, ${result.invoice.lines.filter((line) => line.matchedIngredientId).length} automatisch gekoppeld.${warningText}`
       );
     } catch {
       setUploadMessage("Factuur kon niet gelezen worden.");
@@ -61,8 +64,8 @@ export default function FactuurImport({
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-center">
           <SectionTitle
             eyebrow="Factuurimport"
-            title="Upload PDF, CSV of Excel"
-            description="Hier kunnen straks facturen van Beko, Zeelandia of Sligro worden ingelezen. De analyse hieronder is mockdata."
+            title="Upload factuur of receptbestand"
+            description="Beko, Zeelandia en Sligro worden automatisch gelezen uit CSV, Excel, tekst-PDF of OCR."
           />
           <div
             onDragOver={(event) => event.preventDefault()}
@@ -74,12 +77,12 @@ export default function FactuurImport({
           >
             <p className="text-sm font-black">Sleep factuur hierheen</p>
             <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
-              Beko CSV of tekstexport · maximaal 20 MB
+              CSV, Excel, PDF of afbeelding · maximaal 20 MB
             </p>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.txt,.tsv,.pdf,.xlsx,.xls"
+              accept=".csv,.txt,.tsv,.pdf,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.tif,.tiff"
               className="sr-only"
               onChange={(event) =>
                 void handleSelectedFile(event.target.files?.[0])
@@ -106,7 +109,7 @@ export default function FactuurImport({
         <SectionTitle
           eyebrow="Analyse"
           title="Herkende factuur"
-          description="Na upload wordt de leverancier herkend en worden artikelen aan ingredienten gekoppeld."
+          description="Na upload wordt de leverancier herkend en worden artikelen eerst ter controle aan ingredienten gekoppeld."
         />
         <div className="mt-4">
           <InvoiceSummary invoice={invoice} />
