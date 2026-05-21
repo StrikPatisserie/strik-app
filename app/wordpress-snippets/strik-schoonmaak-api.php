@@ -15,6 +15,14 @@ if (!defined('STRIK_CLEANING_API_KEY')) {
     define('STRIK_CLEANING_API_KEY', 'schoonmaak-ijs-strik');
 }
 
+if (!defined('STRIK_CLEANING_OPTION_NAME')) {
+    define('STRIK_CLEANING_OPTION_NAME', 'strik_cleaning_items');
+}
+
+if (!defined('STRIK_CLEANING_OPTION_MAX_BYTES')) {
+    define('STRIK_CLEANING_OPTION_MAX_BYTES', 2500000);
+}
+
 if (!defined('STRIK_CLEANING_PHOTO_MARKER_PREFIX')) {
     define('STRIK_CLEANING_PHOTO_MARKER_PREFIX', '__strik_photo:');
 }
@@ -44,6 +52,76 @@ function strik_cleaning_v5_is_photo_marker($value) {
 
 function strik_cleaning_v5_is_photo_temperature_name($value) {
     return strik_cleaning_v5_starts_with($value, STRIK_CLEANING_PHOTO_TEMPERATURE_PREFIX);
+}
+
+function strik_cleaning_v5_option_storage_stats() {
+    global $wpdb;
+
+    $row = $wpdb->get_row(
+        $wpdb->prepare(
+            "SELECT option_id, OCTET_LENGTH(option_value) AS bytes
+             FROM {$wpdb->options}
+             WHERE option_name = %s
+             LIMIT 1",
+            STRIK_CLEANING_OPTION_NAME
+        ),
+        ARRAY_A
+    );
+
+    return array(
+        'exists' => is_array($row),
+        'bytes' => is_array($row) && isset($row['bytes']) ? absint($row['bytes']) : 0,
+    );
+}
+
+function strik_cleaning_v5_archive_option_storage($reason = 'manual') {
+    global $wpdb;
+
+    $stats = strik_cleaning_v5_option_storage_stats();
+    if (!$stats['exists']) {
+        add_option(STRIK_CLEANING_OPTION_NAME, array(), '', false);
+
+        return array(
+            'archived' => false,
+            'reason' => sanitize_key($reason),
+            'bytes' => 0,
+            'message' => 'Geen bestaande schoonmaakopslag gevonden.',
+        );
+    }
+
+    $archive_name = STRIK_CLEANING_OPTION_NAME . '_archived_' . gmdate('Ymd_His');
+    $updated = $wpdb->update(
+        $wpdb->options,
+        array(
+            'option_name' => $archive_name,
+            'autoload' => 'no',
+        ),
+        array('option_name' => STRIK_CLEANING_OPTION_NAME),
+        array('%s', '%s'),
+        array('%s')
+    );
+
+    wp_cache_delete(STRIK_CLEANING_OPTION_NAME, 'options');
+    wp_cache_delete('alloptions', 'options');
+
+    if ($updated === false) {
+        return array(
+            'archived' => false,
+            'reason' => sanitize_key($reason),
+            'bytes' => $stats['bytes'],
+            'message' => 'Archiveren van de oude schoonmaakopslag is mislukt.',
+        );
+    }
+
+    add_option(STRIK_CLEANING_OPTION_NAME, array(), '', false);
+
+    return array(
+        'archived' => true,
+        'reason' => sanitize_key($reason),
+        'bytes' => $stats['bytes'],
+        'archiveName' => $archive_name,
+        'message' => 'Oude schoonmaakopslag is gearchiveerd; nieuwe opslag is leeg gestart.',
+    );
 }
 
 function strik_cleaning_v5_decode($value) {
@@ -165,7 +243,13 @@ function strik_cleaning_v5_photos($items, $include_data_url = false) {
 }
 
 function strik_cleaning_v5_option_items() {
-    $items = get_option('strik_cleaning_items', array());
+    $stats = strik_cleaning_v5_option_storage_stats();
+    if ($stats['exists'] && $stats['bytes'] > STRIK_CLEANING_OPTION_MAX_BYTES) {
+        strik_cleaning_v5_archive_option_storage('too_large');
+        return array();
+    }
+
+    $items = get_option(STRIK_CLEANING_OPTION_NAME, array());
 
     if (!is_array($items)) return array();
     if (isset($items['items']) && is_array($items['items'])) $items = $items['items'];
@@ -362,6 +446,14 @@ function strik_cleaning_v5_get_items($include_legacy_posts = false, $include_dat
 }
 
 function strik_cleaning_v5_get($request) {
+    if ((string) $request->get_param('health') === '1') {
+        return rest_ensure_response(strik_cleaning_v5_option_storage_stats());
+    }
+
+    if ((string) $request->get_param('repair') === 'archive') {
+        return rest_ensure_response(strik_cleaning_v5_archive_option_storage('manual'));
+    }
+
     $include_legacy_posts = (string) $request->get_param('legacy') === '1';
     $include_data_url = (string) $request->get_param('includeDataUrl') === '1';
 
