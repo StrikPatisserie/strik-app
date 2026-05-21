@@ -30,6 +30,7 @@ export type CleaningPhotoUpload = {
   dataUrl?: string;
   url?: string;
   mediaId?: number;
+  unavailable?: boolean;
 };
 
 export type CleaningItem = {
@@ -227,6 +228,7 @@ function photoUploadForStorage(upload: CleaningPhotoUpload) {
     fileName: upload.fileName,
     url: upload.url,
     mediaId: upload.mediaId,
+    unavailable: upload.unavailable,
   };
 }
 
@@ -389,7 +391,7 @@ export function getCleaningItemPhotos(item: CleaningItem) {
   const uploadsByLabel = new Map<string, CleaningPhotoUpload>();
 
   item.fotoUploads?.forEach((upload) => {
-    if (upload.url || upload.dataUrl) {
+    if (upload.url || upload.dataUrl || upload.unavailable) {
       uploadsByLabel.set(upload.label, upload);
     }
   });

@@ -40,6 +40,7 @@ type PhotoUpload = {
   dataUrl?: string;
   url?: string;
   mediaId?: number;
+  unavailable?: boolean;
   file?: File;
 };
 
@@ -271,6 +272,7 @@ function normaliseerFotoUploads(
     dataUrl: upload.dataUrl,
     url: upload.url,
     mediaId: upload.mediaId,
+    unavailable: upload.unavailable,
   }));
 }
 

@@ -27,6 +27,10 @@ if (!defined('STRIK_CLEANING_OPTION_MAX_BYTES')) {
     define('STRIK_CLEANING_OPTION_MAX_BYTES', 2500000);
 }
 
+if (!defined('STRIK_CLEANING_PHOTO_RETENTION_DAYS')) {
+    define('STRIK_CLEANING_PHOTO_RETENTION_DAYS', 31);
+}
+
 if (!defined('STRIK_CLEANING_PHOTO_MARKER_PREFIX')) {
     define('STRIK_CLEANING_PHOTO_MARKER_PREFIX', '__strik_photo:');
 }
@@ -187,6 +191,19 @@ function strik_cleaning_v5_week_range($date = '') {
     );
 }
 
+function strik_cleaning_v5_photo_cutoff_date() {
+    $timestamp = strtotime('-' . STRIK_CLEANING_PHOTO_RETENTION_DAYS . ' days', strtotime(wp_date('Y-m-d') . ' 00:00:00'));
+
+    return date('Y-m-d', $timestamp ?: time());
+}
+
+function strik_cleaning_v5_date_is_past_photo_retention($date) {
+    $date = strik_cleaning_v5_clean_date($date);
+    if ($date === '') return false;
+
+    return strcmp($date, strik_cleaning_v5_photo_cutoff_date()) < 0;
+}
+
 function strik_cleaning_v5_parse_title($title) {
     $parts = preg_split('/\s+[–-]\s+/u', (string) $title);
 
@@ -280,7 +297,13 @@ function strik_cleaning_v5_photos($items, $include_data_url = false) {
             'fileName' => isset($item['fileName']) ? sanitize_file_name($item['fileName']) : '',
             'url' => isset($item['url']) ? esc_url_raw($item['url']) : '',
             'mediaId' => isset($item['mediaId']) ? absint($item['mediaId']) : 0,
+            'unavailable' => !empty($item['unavailable']),
         );
+
+        if ($photo['unavailable']) {
+            $photo['url'] = '';
+            $photo['mediaId'] = 0;
+        }
 
         if ($include_data_url && $photo['url'] === '' && isset($item['dataUrl']) && is_string($item['dataUrl'])) {
             $photo['dataUrl'] = substr($item['dataUrl'], 0, 600000);
@@ -290,6 +313,30 @@ function strik_cleaning_v5_photos($items, $include_data_url = false) {
     }
 
     return $clean;
+}
+
+function strik_cleaning_v5_expire_photos($photos) {
+    $expired = array();
+
+    foreach ($photos as $photo) {
+        if (!is_array($photo)) continue;
+
+        $label = isset($photo['label']) ? sanitize_text_field($photo['label']) : '';
+        $file_name = isset($photo['fileName']) ? sanitize_file_name($photo['fileName']) : '';
+
+        if ($label === '' && $file_name === '') continue;
+
+        $expired[] = array(
+            'id' => isset($photo['id']) ? sanitize_text_field($photo['id']) : uniqid('foto-', true),
+            'label' => $label,
+            'fileName' => $file_name,
+            'url' => '',
+            'mediaId' => 0,
+            'unavailable' => true,
+        );
+    }
+
+    return $expired;
 }
 
 function strik_cleaning_v5_option_items() {
@@ -390,16 +437,23 @@ function strik_cleaning_v5_post_to_item($post, $include_data_url = false) {
 }
 
 function strik_cleaning_v5_normalize_option_item($item, $include_data_url = false) {
+    $datum = isset($item['datum']) ? strik_cleaning_v5_clean_date($item['datum']) : '';
+    $photos = strik_cleaning_v5_photos(isset($item['fotoUploads']) ? $item['fotoUploads'] : array(), $include_data_url);
+
+    if (strik_cleaning_v5_date_is_past_photo_retention($datum)) {
+        $photos = strik_cleaning_v5_expire_photos($photos);
+    }
+
     return array(
         'id' => isset($item['id']) ? absint($item['id']) : 0,
         'titel' => isset($item['titel']) ? sanitize_text_field($item['titel']) : '',
         'winkel' => isset($item['winkel']) ? sanitize_text_field($item['winkel']) : '',
         'naam' => isset($item['naam']) ? sanitize_text_field($item['naam']) : '',
-        'datum' => isset($item['datum']) ? strik_cleaning_v5_clean_date($item['datum']) : '',
+        'datum' => $datum,
         'taken' => strik_cleaning_v5_text_array(isset($item['taken']) ? $item['taken'] : array()),
         'opmerking' => isset($item['opmerking']) ? sanitize_textarea_field($item['opmerking']) : '',
         'temperatuurRegistraties' => strik_cleaning_v5_temperatures(isset($item['temperatuurRegistraties']) ? $item['temperatuurRegistraties'] : array()),
-        'fotoUploads' => strik_cleaning_v5_photos(isset($item['fotoUploads']) ? $item['fotoUploads'] : array(), $include_data_url),
+        'fotoUploads' => $photos,
         'createdAt' => isset($item['createdAt']) ? sanitize_text_field($item['createdAt']) : '',
         'source' => 'option',
     );
@@ -409,8 +463,22 @@ function strik_cleaning_v5_item_has_inline_photo_data($item) {
     if (!is_array($item)) return true;
 
     if (isset($item['fotoUploads']) && is_array($item['fotoUploads'])) {
+        $datum = isset($item['datum']) ? strik_cleaning_v5_clean_date($item['datum']) : '';
+
         foreach ($item['fotoUploads'] as $photo) {
             if (is_array($photo) && isset($photo['dataUrl']) && is_string($photo['dataUrl']) && $photo['dataUrl'] !== '') {
+                return true;
+            }
+
+            if (
+                strik_cleaning_v5_date_is_past_photo_retention($datum) &&
+                is_array($photo) &&
+                (
+                    !empty($photo['url']) ||
+                    !isset($photo['unavailable']) ||
+                    empty($photo['unavailable'])
+                )
+            ) {
                 return true;
             }
         }
@@ -654,6 +722,10 @@ function strik_cleaning_v5_save($request) {
         'fotoUploads' => strik_cleaning_v5_photos(isset($params['fotoUploads']) ? $params['fotoUploads'] : array(), false),
         'createdAt' => wp_date(DATE_ATOM),
     );
+
+    if (strik_cleaning_v5_date_is_past_photo_retention($new_item['datum'])) {
+        $new_item['fotoUploads'] = strik_cleaning_v5_expire_photos($new_item['fotoUploads']);
+    }
 
     $items[] = $new_item;
     if (count($items) > 1500) $items = array_slice($items, -1500);

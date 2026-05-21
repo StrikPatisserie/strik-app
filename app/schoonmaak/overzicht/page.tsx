@@ -228,12 +228,16 @@ function CleaningCard({ item }: Readonly<{ item: CleaningItem }>) {
                   className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
                 >
                   <p className="mb-2 text-sm font-semibold">{foto.label}</p>
-                  {fotoSrc && (
+                  {fotoSrc ? (
                     <img
                       src={fotoSrc}
                       alt={foto.fileName}
                       className="h-40 w-full rounded-2xl object-cover"
                     />
+                  ) : (
+                    <div className="flex h-40 w-full items-center justify-center rounded-2xl bg-[#f8f6f3] p-4 text-center text-sm font-semibold text-gray-500">
+                      Foto geüpload, niet meer beschikbaar
+                    </div>
                   )}
                   <p className="mt-2 truncate text-sm text-gray-600">
                     {foto.fileName}
