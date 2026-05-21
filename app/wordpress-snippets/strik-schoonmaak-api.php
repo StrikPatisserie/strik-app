@@ -19,6 +19,10 @@ if (!defined('STRIK_CLEANING_OPTION_NAME')) {
     define('STRIK_CLEANING_OPTION_NAME', 'strik_cleaning_items');
 }
 
+if (!defined('STRIK_CLEANING_ARCHIVE_PREFIX')) {
+    define('STRIK_CLEANING_ARCHIVE_PREFIX', STRIK_CLEANING_OPTION_NAME . '_archived_');
+}
+
 if (!defined('STRIK_CLEANING_OPTION_MAX_BYTES')) {
     define('STRIK_CLEANING_OPTION_MAX_BYTES', 2500000);
 }
@@ -122,6 +126,35 @@ function strik_cleaning_v5_archive_option_storage($reason = 'manual') {
         'archiveName' => $archive_name,
         'message' => 'Oude schoonmaakopslag is gearchiveerd; nieuwe opslag is leeg gestart.',
     );
+}
+
+function strik_cleaning_v5_is_archive_option_name($name) {
+    return is_string($name)
+        && strpos($name, STRIK_CLEANING_ARCHIVE_PREFIX) === 0
+        && preg_match('/^[A-Za-z0-9_]+$/', $name);
+}
+
+function strik_cleaning_v5_archive_options() {
+    global $wpdb;
+
+    $rows = $wpdb->get_results(
+        $wpdb->prepare(
+            "SELECT option_name, OCTET_LENGTH(option_value) AS bytes
+             FROM {$wpdb->options}
+             WHERE option_name LIKE %s
+             ORDER BY option_id DESC
+             LIMIT 20",
+            $wpdb->esc_like(STRIK_CLEANING_ARCHIVE_PREFIX) . '%'
+        ),
+        ARRAY_A
+    );
+
+    return array_map(function ($row) {
+        return array(
+            'name' => isset($row['option_name']) ? sanitize_text_field($row['option_name']) : '',
+            'bytes' => isset($row['bytes']) ? absint($row['bytes']) : 0,
+        );
+    }, is_array($rows) ? $rows : array());
 }
 
 function strik_cleaning_v5_decode($value) {
@@ -411,10 +444,94 @@ function strik_cleaning_v5_repair_option_items($items) {
     }
 
     if ($changed) {
-        update_option('strik_cleaning_items', array_values($cleaned), false);
+        update_option(STRIK_CLEANING_OPTION_NAME, array_values($cleaned), false);
     }
 
     return $cleaned;
+}
+
+function strik_cleaning_v5_import_archive($archive_name = '') {
+    $archives = strik_cleaning_v5_archive_options();
+
+    if ($archive_name === '' && !empty($archives[0]['name'])) {
+        $archive_name = $archives[0]['name'];
+    }
+
+    if (!strik_cleaning_v5_is_archive_option_name($archive_name)) {
+        return new WP_Error(
+            'strik_cleaning_archive_invalid',
+            'Geen geldig schoonmaakarchief gekozen.',
+            array('status' => 400)
+        );
+    }
+
+    $archive_items = get_option($archive_name, array());
+    if (!is_array($archive_items)) {
+        return new WP_Error(
+            'strik_cleaning_archive_unreadable',
+            'Dit schoonmaakarchief kan niet als lijst worden gelezen.',
+            array('status' => 500)
+        );
+    }
+
+    if (isset($archive_items['items']) && is_array($archive_items['items'])) {
+        $archive_items = $archive_items['items'];
+    }
+
+    $active_items = strik_cleaning_v5_repair_option_items(strik_cleaning_v5_option_items());
+    $max_id = 0;
+    $seen = array();
+
+    foreach ($active_items as $item) {
+        if (isset($item['id'])) $max_id = max($max_id, absint($item['id']));
+
+        $seen[] = implode('|', array(
+            isset($item['datum']) ? $item['datum'] : '',
+            isset($item['winkel']) ? $item['winkel'] : '',
+            isset($item['titel']) ? $item['titel'] : '',
+            isset($item['naam']) ? $item['naam'] : '',
+            isset($item['createdAt']) ? $item['createdAt'] : '',
+        ));
+    }
+
+    $seen = array_flip($seen);
+    $imported = 0;
+
+    foreach ($archive_items as $item) {
+        if (!is_array($item)) continue;
+
+        $clean = strik_cleaning_v5_normalize_option_item($item, false);
+        if ($clean['datum'] === '' || $clean['winkel'] === '') continue;
+
+        $key = implode('|', array(
+            $clean['datum'],
+            $clean['winkel'],
+            $clean['titel'],
+            $clean['naam'],
+            $clean['createdAt'],
+        ));
+
+        if (isset($seen[$key])) continue;
+
+        $max_id += 1;
+        $clean['id'] = $max_id;
+        $active_items[] = $clean;
+        $seen[$key] = true;
+        $imported += 1;
+    }
+
+    if (count($active_items) > 1500) {
+        $active_items = array_slice($active_items, -1500);
+    }
+
+    update_option(STRIK_CLEANING_OPTION_NAME, array_values($active_items), false);
+
+    return array(
+        'archiveName' => $archive_name,
+        'imported' => $imported,
+        'totalActive' => count($active_items),
+        'message' => 'Schoonmaakarchief is opgeschoond teruggezet in de actieve lijst.',
+    );
 }
 
 function strik_cleaning_v5_get_items($include_legacy_posts = false, $include_data_url = false) {
@@ -448,6 +565,16 @@ function strik_cleaning_v5_get_items($include_legacy_posts = false, $include_dat
 function strik_cleaning_v5_get($request) {
     if ((string) $request->get_param('health') === '1') {
         return rest_ensure_response(strik_cleaning_v5_option_storage_stats());
+    }
+
+    if ((string) $request->get_param('archive') === 'list') {
+        return rest_ensure_response(strik_cleaning_v5_archive_options());
+    }
+
+    if ((string) $request->get_param('archive') === 'import') {
+        return rest_ensure_response(
+            strik_cleaning_v5_import_archive((string) $request->get_param('archiveName'))
+        );
     }
 
     if ((string) $request->get_param('repair') === 'archive') {
@@ -487,7 +614,7 @@ function strik_cleaning_v5_save($request) {
     $items[] = $new_item;
     if (count($items) > 1500) $items = array_slice($items, -1500);
 
-    update_option('strik_cleaning_items', array_values($items), false);
+    update_option(STRIK_CLEANING_OPTION_NAME, array_values($items), false);
 
     return rest_ensure_response($new_item);
 }
