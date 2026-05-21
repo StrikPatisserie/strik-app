@@ -508,6 +508,47 @@ function normalizeDateSearchInput(value: string) {
   return `${fullYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }
 
+function dateFromIsoDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return new Date(Number.NaN);
+
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function toIsoDate(date: Date) {
+  if (Number.isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getWeekStartIso(value?: string) {
+  const date = value ? dateFromIsoDate(value) : new Date();
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  const day = safeDate.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+
+  safeDate.setDate(safeDate.getDate() + mondayOffset);
+
+  return toIsoDate(safeDate);
+}
+
+function addDaysIso(value: string, days: number) {
+  const date = dateFromIsoDate(value);
+  date.setDate(date.getDate() + days);
+
+  return toIsoDate(date);
+}
+
+function getWeekDates(weekStartIso: string) {
+  return Array.from({ length: 7 }, (_item, index) =>
+    addDaysIso(weekStartIso, index)
+  );
+}
+
 function formatDutchShortDate(value?: string, fallback = "geen leverdatum") {
   if (!value) return fallback;
 
@@ -515,6 +556,23 @@ function formatDutchShortDate(value?: string, fallback = "geen leverdatum") {
   if (!isoDate) return value;
 
   return `${isoDate[3]}-${isoDate[2]}-${isoDate[1].slice(-2)}`;
+}
+
+function formatWeekRange(weekStartIso: string) {
+  return `${formatDutchShortDate(weekStartIso)} t/m ${formatDutchShortDate(
+    addDaysIso(weekStartIso, 6)
+  )}`;
+}
+
+function formatWeekDayLabel(value: string) {
+  const date = dateFromIsoDate(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+  }).format(date);
 }
 
 function topperDecorationAsset(topperId: string) {
@@ -3326,6 +3384,36 @@ function hasChocolateInitialsTopper(config: WeddingCakeConfig) {
   return config.topperIds.includes(CHOCOLATE_INITIALS_TOPPER_ID);
 }
 
+function getDraftOverviewDate(draft: WeddingCakeDraft) {
+  return (
+    draft.config.contact.deliveryDate || draft.config.contact.weddingDate || ""
+  );
+}
+
+function uniqueDrafts(drafts: WeddingCakeDraft[]) {
+  const itemsByCode = new Map<string, WeddingCakeDraft>();
+
+  drafts.forEach((draft) => {
+    const key = draft.code.trim().toLowerCase();
+    if (!key) return;
+
+    const existing = itemsByCode.get(key);
+    if (!existing || draft.updatedAt > existing.updatedAt) {
+      itemsByCode.set(key, draft);
+    }
+  });
+
+  return Array.from(itemsByCode.values()).sort((first, second) => {
+    const dateCompare = getDraftOverviewDate(first).localeCompare(
+      getDraftOverviewDate(second)
+    );
+
+    if (dateCompare) return dateCompare;
+
+    return first.code.localeCompare(second.code, "nl-NL");
+  });
+}
+
 export default function BruidstaartStudioConfigurator() {
   const [config, setConfig] = useState<WeddingCakeConfig>(
     createEmptyWeddingCakeConfig
@@ -3336,6 +3424,13 @@ export default function BruidstaartStudioConfigurator() {
   const [draftDeliveryDate, setDraftDeliveryDate] = useState("");
   const [draftResults, setDraftResults] = useState<WeddingCakeDraft[]>([]);
   const [draftStatus, setDraftStatus] = useState("");
+  const [weekOverviewOpen, setWeekOverviewOpen] = useState(false);
+  const [weekOverviewStart, setWeekOverviewStart] = useState("");
+  const [weekOverviewResults, setWeekOverviewResults] = useState<
+    WeddingCakeDraft[]
+  >([]);
+  const [weekOverviewStatus, setWeekOverviewStatus] = useState("");
+  const [weekOverviewLoading, setWeekOverviewLoading] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState("");
   const step = steps[stepIndex];
 
@@ -3372,6 +3467,20 @@ export default function BruidstaartStudioConfigurator() {
   );
   const topperNoteTexts = useMemo(() => getTopperNoteTexts(config), [config]);
   const topperSurcharges = useMemo(() => getTopperSurcharges(config), [config]);
+  const weekOverviewDates = useMemo(
+    () => (weekOverviewStart ? getWeekDates(weekOverviewStart) : []),
+    [weekOverviewStart]
+  );
+  const weekOverviewGroups = useMemo(
+    () =>
+      weekOverviewDates.map((date) => ({
+        date,
+        drafts: weekOverviewResults.filter(
+          (draft) => getDraftOverviewDate(draft) === date
+        ),
+      })),
+    [weekOverviewDates, weekOverviewResults]
+  );
   const borderDecorationOptions = useMemo(
     () =>
       decorationOptions.filter(
@@ -4029,6 +4138,68 @@ export default function BruidstaartStudioConfigurator() {
     }
   }
 
+  async function loadWeekOverview(startIso = weekOverviewStart || getWeekStartIso()) {
+    const normalizedStart = getWeekStartIso(startIso);
+    const dates = getWeekDates(normalizedStart);
+
+    setWeekOverviewOpen(true);
+    setWeekOverviewStart(normalizedStart);
+    setWeekOverviewLoading(true);
+    setWeekOverviewStatus("Weekoverzicht laden...");
+
+    try {
+      const results = await Promise.all(
+        dates.map(async (date) => {
+          const res = await fetch(getWeddingCakeStudioUrl("", date), {
+            cache: "no-store",
+          });
+
+          if (!res.ok) throw new Error("WordPress niet beschikbaar.");
+
+          return normalizeDraftList(await res.json());
+        })
+      );
+      const drafts = uniqueDrafts(results.flat());
+
+      setWeekOverviewResults(drafts);
+      setWeekOverviewStatus(
+        drafts.length
+          ? `${drafts.length} bruidstaart${
+              drafts.length === 1 ? "" : "en"
+            } gevonden voor ${formatWeekRange(normalizedStart)}.`
+          : `Geen bruidstaarten gevonden voor ${formatWeekRange(
+              normalizedStart
+            )}.`
+      );
+    } catch {
+      const drafts = uniqueDrafts(
+        dates.flatMap((date) => searchLocalDrafts("", date))
+      );
+
+      setWeekOverviewResults(drafts);
+      setWeekOverviewStatus(
+        drafts.length
+          ? `Lokaal ${drafts.length} bruidstaart${
+              drafts.length === 1 ? "" : "en"
+            } gevonden voor ${formatWeekRange(normalizedStart)}.`
+          : `Geen lokale bruidstaarten gevonden voor ${formatWeekRange(
+              normalizedStart
+            )}.`
+      );
+    } finally {
+      setWeekOverviewLoading(false);
+    }
+  }
+
+  function toggleWeekOverview() {
+    if (weekOverviewOpen) {
+      setWeekOverviewOpen(false);
+      return;
+    }
+
+    void loadWeekOverview(weekOverviewStart || getWeekStartIso());
+  }
+
   function loadDraft(draft: WeddingCakeDraft) {
     const cleanedTopperIds = cleanTopperIds(draft.config.topperIds || []);
     const nextConfig = {
@@ -4360,12 +4531,23 @@ export default function BruidstaartStudioConfigurator() {
           {step.id === "start" && (
             <div className="grid gap-4">
               <div className="rounded-[1.35rem] border border-[#ead8aa] bg-[#fff7df] p-4 shadow-sm">
-                <h3 className="text-xl font-black">
-                  Bruidstaart bestelling inladen of aanpassen
-                </h3>
-                <p className="mt-1 text-sm font-bold leading-relaxed text-[#2d2a26]/55">
-                  Zoek op herkenningscode, achternaam of leverdatum.
-                </p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-xl font-black">
+                      Bruidstaart bestelling inladen of aanpassen
+                    </h3>
+                    <p className="mt-1 text-sm font-bold leading-relaxed text-[#2d2a26]/55">
+                      Zoek op herkenningscode, achternaam of leverdatum.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleWeekOverview}
+                    className="rounded-full border border-[#ead8aa] bg-white/55 px-3 py-1.5 text-xs font-black text-[#2d2a26]/45 shadow-sm transition hover:text-[#2d2a26]/70"
+                  >
+                    {weekOverviewOpen ? "Sluit weekoverzicht" : "Weekoverzicht"}
+                  </button>
+                </div>
                 <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto]">
                   <input
                     value={draftSearch}
@@ -4393,6 +4575,168 @@ export default function BruidstaartStudioConfigurator() {
                     Zoeken
                   </button>
                 </div>
+                {weekOverviewOpen && (
+                  <section className="mt-4 grid gap-3 rounded-[1.2rem] border border-[#ead8aa] bg-white/65 p-3">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-[#2d2a26]">
+                          Weekoverzicht
+                        </p>
+                        <p className="mt-0.5 text-xs font-bold text-[#2d2a26]/50">
+                          {weekOverviewStart
+                            ? formatWeekRange(weekOverviewStart)
+                            : "Kies een week."}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void loadWeekOverview(
+                              addDaysIso(
+                                weekOverviewStart || getWeekStartIso(),
+                                -7
+                              )
+                            )
+                          }
+                          disabled={weekOverviewLoading}
+                          className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
+                        >
+                          Vorige
+                        </button>
+                        <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                          Week van
+                          <input
+                            type="date"
+                            value={weekOverviewStart}
+                            onChange={(event) => {
+                              const nextStart = event.target.value
+                                ? getWeekStartIso(event.target.value)
+                                : "";
+
+                              setWeekOverviewStart(nextStart);
+                              setWeekOverviewResults([]);
+                              setWeekOverviewStatus(
+                                nextStart
+                                  ? `Klaar om ${formatWeekRange(
+                                      nextStart
+                                    )} te laden.`
+                                  : ""
+                              );
+                            }}
+                            className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void loadWeekOverview(
+                              addDaysIso(weekOverviewStart || getWeekStartIso(), 7)
+                            )
+                          }
+                          disabled={weekOverviewLoading}
+                          className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
+                        >
+                          Volgende
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void loadWeekOverview()}
+                          disabled={weekOverviewLoading}
+                          className="rounded-full bg-[#dce8d6] px-4 py-2 text-xs font-black text-[#2d2a26] shadow-sm disabled:opacity-50"
+                        >
+                          {weekOverviewLoading ? "Laden..." : "Toon"}
+                        </button>
+                      </div>
+                    </div>
+                    {weekOverviewStatus && (
+                      <p className="text-xs font-bold text-[#2d2a26]/55">
+                        {weekOverviewStatus}
+                      </p>
+                    )}
+                    {weekOverviewGroups.length > 0 && (
+                      <div className="grid gap-2">
+                        {weekOverviewGroups.map((group) => {
+                          const definitiveCount = group.drafts.filter(
+                            (draft) => draft.config.completed
+                          ).length;
+
+                          return (
+                            <div
+                              key={group.date}
+                              className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-black capitalize">
+                                  {formatWeekDayLabel(group.date)}
+                                </p>
+                                <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                                  {group.drafts.length} totaal
+                                  {group.drafts.length > 0
+                                    ? ` · ${definitiveCount} definitief`
+                                    : ""}
+                                </span>
+                              </div>
+                              {group.drafts.length ? (
+                                <div className="mt-2 grid gap-2">
+                                  {group.drafts.map((draft) => {
+                                    const orderStatus =
+                                      getOrderStatusLabel(draft);
+                                    const size = findOption(
+                                      cakeSizes,
+                                      draft.config.sizeId
+                                    );
+
+                                    return (
+                                      <button
+                                        key={`${group.date}-${draft.code}`}
+                                        type="button"
+                                        onClick={() => loadDraft(draft)}
+                                        className="rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3 text-left shadow-sm transition active:scale-[0.99]"
+                                      >
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-black">
+                                            {draft.code}
+                                          </span>
+                                          <span
+                                            className={`rounded-full px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] ${
+                                              orderStatus === "definitief"
+                                                ? "bg-[#dce8d6] text-[#4c6842]"
+                                                : "bg-[#f8f6f3] text-[#2d2a26]/55"
+                                            }`}
+                                          >
+                                            {orderStatus}
+                                          </span>
+                                          {draft.config.paid && (
+                                            <span className="rounded-full bg-[#e8f0f2] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
+                                              betaald
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="mt-1 text-sm font-semibold text-[#2d2a26]/60">
+                                          {draft.surname ||
+                                            draft.names ||
+                                            "Geen naam"}
+                                          {size
+                                            ? ` · ${size.label} (${size.personsLabel})`
+                                            : ""}
+                                        </p>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <p className="mt-2 rounded-2xl bg-[#f8f6f3] p-3 text-xs font-bold text-[#2d2a26]/45">
+                                  Geen bruidstaarten.
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+                )}
                 {draftStatus && (
                   <p className="mt-3 text-sm font-bold text-[#2d2a26]/55">
                     {draftStatus}
