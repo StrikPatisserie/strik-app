@@ -37,6 +37,24 @@ const RECIPE_PHOTO_MAX_SIDE = 360;
 const RECIPE_PHOTO_MIN_SIDE = 180;
 const RECIPE_PHOTO_MAX_DATA_URL_LENGTH = 45000;
 const RECIPE_PHOTO_QUALITIES = [0.3, 0.22, 0.16, 0.1];
+const recipeEditSections: Array<{
+  id: RecipeEditSection;
+  label: string;
+  hint: string;
+}> = [
+  { id: "basis", label: "Basis", hint: "Naam, batch en foto" },
+  { id: "grondstoffen", label: "Grondstoffen", hint: "Wat gaat erin" },
+  { id: "halffabricaten", label: "Halffabricaten", hint: "Wat moet eerst klaar" },
+  { id: "stappen", label: "Stappen", hint: "Hoe maak je het" },
+  { id: "notities", label: "Notities", hint: "Allergenen en opmerkingen" },
+];
+
+type RecipeEditSection =
+  | "basis"
+  | "grondstoffen"
+  | "halffabricaten"
+  | "stappen"
+  | "notities";
 
 export default function RecipeDetail({
   recipe,
@@ -56,6 +74,8 @@ export default function RecipeDetail({
   onSaveIngredient: (ingredient: Ingredient) => void;
 }>) {
   const [isEditing, setIsEditing] = useState(startInEditMode);
+  const [activeEditSection, setActiveEditSection] =
+    useState<RecipeEditSection>("basis");
   const [feedback, setFeedback] = useState("");
   const [draft, setDraft] = useState(() => createRecipeDraft(recipe));
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
@@ -98,6 +118,11 @@ export default function RecipeDetail({
 
   function updateDraft(changes: Partial<RecipeDraft>) {
     setDraft((current) => ({ ...current, ...changes }));
+  }
+
+  function startEditing(section: RecipeEditSection = "basis") {
+    setActiveEditSection(section);
+    setIsEditing(true);
   }
 
   async function updateRecipePhoto(file: File | null) {
@@ -328,22 +353,26 @@ export default function RecipeDetail({
         <div className="flex flex-wrap items-start justify-between gap-3 rounded-[1.25rem] bg-white/88 p-4">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
-              {recipe.type === "finalProduct"
+              {isEditing
+                ? "Recept aanpassen"
+                : recipe.type === "finalProduct"
                 ? "Recept detail"
                 : "Halffabricaat detail"}
             </p>
             <h2 className="mt-1 text-3xl font-black leading-tight">
-              {recipe.name}
+              {isEditing ? draft.name || recipe.name : recipe.name}
             </h2>
             <div className="mt-3 flex flex-wrap gap-2">
               <RecipeStatusBadge status={recipe.status} />
-              <MarginBadge status={marginStatusForRecipe(recipe)} />
+              {!isEditing && <MarginBadge status={marginStatusForRecipe(recipe)} />}
               <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
-                {recipe.productGroup}
+                {isEditing ? draft.productGroup || recipe.productGroup : recipe.productGroup}
               </span>
-              <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
-                {recipe.version}
-              </span>
+              {!isEditing && (
+                <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
+                  {recipe.version}
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -358,21 +387,49 @@ export default function RecipeDetail({
         {isEditing && (
           <Panel className="mt-4 border-[#cfdcc8] bg-[#f7faf5]">
             <SectionTitle
-              eyebrow="Bewerken"
-              title="Recept volledig aanpassen"
-              description="Wijzig basisgegevens, grondstoffen, halffabricaten, productiestappen, afwerking en werkmodus-informatie."
+              eyebrow="Aanpassen"
+              title="Wat wil je wijzigen?"
+              description="Kies één onderdeel. Zo blijft het rustig en hoef je niet door alles heen te zoeken."
             />
 
+            <div className="mt-4 grid gap-2 sm:grid-cols-5">
+              {recipeEditSections.map((section) => {
+                const isActive = activeEditSection === section.id;
+
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setActiveEditSection(section.id)}
+                    className={`rounded-2xl border px-3 py-3 text-left shadow-sm transition ${
+                      isActive
+                        ? "border-[#8fb184] bg-[#c3d3bc] text-[#2d2a26]"
+                        : "border-[#dfe9d8] bg-white text-[#2d2a26]/65"
+                    }`}
+                  >
+                    <span className="block text-sm font-black">
+                      {section.label}
+                    </span>
+                    <span className="mt-1 block text-xs font-bold leading-snug opacity-70">
+                      {section.hint}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="mt-4 grid gap-4">
-              <EditorBlock title="Basisgegevens">
+              {activeEditSection === "basis" && (
+                <>
+              <EditorBlock title="Basis">
                 <div className="grid gap-3 lg:grid-cols-3">
                   <EditTextField
-                    label="Naam"
+                    label="Receptnaam"
                     value={draft.name}
                     onChange={(value) => updateDraft({ name: value })}
                   />
                   <EditTextField
-                    label="Productgroep"
+                    label="Groep"
                     value={draft.productGroup}
                     onChange={(value) => updateDraft({ productGroup: value })}
                   />
@@ -399,19 +456,19 @@ export default function RecipeDetail({
                     }))}
                   />
                   <EditTextField
-                    label="Verkoopprijs"
+                    label="Verkoop"
                     value={draft.salesPrice}
                     onChange={(value) => updateDraft({ salesPrice: value })}
                     inputMode="decimal"
                   />
                   <EditTextField
-                    label="Doelmarge"
+                    label="Marge doel"
                     value={draft.targetMargin}
                     onChange={(value) => updateDraft({ targetMargin: value })}
                     inputMode="decimal"
                   />
                   <EditTextField
-                    label="Batch omschrijving"
+                    label="Batch tekst"
                     value={draft.batchSize}
                     onChange={(value) => updateDraft({ batchSize: value })}
                   />
@@ -457,7 +514,7 @@ export default function RecipeDetail({
                     onChange={(value) => updateDraft({ version: value })}
                   />
                   <EditTextField
-                    label="Foto hint"
+                    label="Foto tekst"
                     value={draft.photoHint}
                     onChange={(value) => updateDraft({ photoHint: value })}
                   />
@@ -538,7 +595,10 @@ export default function RecipeDetail({
                   </div>
                 </div>
               </EditorBlock>
+                </>
+              )}
 
+              {activeEditSection === "grondstoffen" && (
               <EditorBlock title="Grondstoffen">
                 <div className="grid gap-2">
                   {draft.ingredients.map((line) => {
@@ -727,7 +787,9 @@ export default function RecipeDetail({
                   </div>
                 </div>
               </EditorBlock>
+              )}
 
+              {activeEditSection === "halffabricaten" && (
               <EditorBlock title="Halffabricaten">
                 <div className="grid gap-2">
                   {draft.semiFinishedItems.map((line) => {
@@ -804,7 +866,9 @@ export default function RecipeDetail({
                   </button>
                 </div>
               </EditorBlock>
+              )}
 
+              {activeEditSection === "stappen" && (
               <div className="grid gap-4 xl:grid-cols-2">
                 <ArrayEditor
                   title="Productiestappen"
@@ -831,7 +895,9 @@ export default function RecipeDetail({
                   placeholder="Bijv. ring, spatel, thermomixer"
                 />
               </div>
+              )}
 
+              {activeEditSection === "notities" && (
               <EditorBlock title="Allergenen en opmerkingen">
                 <div className="grid gap-3 lg:grid-cols-2">
                   <EditTextField
@@ -851,6 +917,7 @@ export default function RecipeDetail({
                   />
                 </div>
               </EditorBlock>
+              )}
             </div>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -874,10 +941,16 @@ export default function RecipeDetail({
               <p className="text-sm font-black text-[#45663b]">
                 Nieuwe kostprijs: {formatEuro(previewCostPrice)}
               </p>
+              {feedback && (
+                <p className="text-sm font-black text-[#45663b]">
+                  {feedback}
+                </p>
+              )}
             </div>
           </Panel>
         )}
 
+        {!isEditing && (
         <div className="mt-4 grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
           <Panel className="bg-[#fffdf8]">
             <div
@@ -1080,14 +1153,16 @@ export default function RecipeDetail({
             </div>
           </div>
         </div>
+        )}
 
+        {!isEditing && (
         <div className="mt-4 flex flex-wrap gap-2 rounded-[1.25rem] bg-white/88 p-3">
           <button
             type="button"
-            onClick={() => setIsEditing((current) => !current)}
+            onClick={() => startEditing("basis")}
             className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
           >
-            {isEditing ? "Bewerken sluiten" : "Recept bewerken"}
+            Recept bewerken
           </button>
           <button
             type="button"
@@ -1116,6 +1191,7 @@ export default function RecipeDetail({
             </p>
           )}
         </div>
+        )}
       </div>
     </div>
   );
