@@ -98,8 +98,17 @@ export default function RecipeDetail({
   );
   const extraTotal =
     parseDutchNumber(draft.packagingCost) + parseDutchNumber(draft.decorationCost);
-  const previewCostPrice =
+  const previewBatchCost =
     Math.round((directTotal + semiFinishedTotal + extraTotal) * 100) / 100;
+  const previewBatchQuantity =
+    parseDutchNumber(draft.standardBatchQuantity) ||
+    getBatchInfo(recipe)?.quantity ||
+    1;
+  const previewCostPrice = costPriceFromBatchCost(
+    draft.type,
+    previewBatchCost,
+    previewBatchQuantity
+  );
   const salesPrice = parseDutchNumber(draft.salesPrice);
   const targetMargin = parseDutchNumber(draft.targetMargin);
   const previewRecipe = buildRecipeFromDraft(
@@ -364,7 +373,9 @@ export default function RecipeDetail({
             </h2>
             <div className="mt-3 flex flex-wrap gap-2">
               <RecipeStatusBadge status={recipe.status} />
-              {!isEditing && <MarginBadge status={marginStatusForRecipe(recipe)} />}
+              {!isEditing && (
+                <MarginBadge status={marginStatusForRecipe(previewRecipe)} />
+              )}
               <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
                 {isEditing ? draft.productGroup || recipe.productGroup : recipe.productGroup}
               </span>
@@ -939,8 +950,15 @@ export default function RecipeDetail({
                 Annuleer
               </button>
               <p className="text-sm font-black text-[#45663b]">
-                Nieuwe kostprijs: {formatEuro(previewCostPrice)}
+                {draft.type === "finalProduct"
+                  ? `Nieuwe kostprijs/stuk: ${formatEuro(previewCostPrice)}`
+                  : `Nieuwe batchkostprijs: ${formatEuro(previewCostPrice)}`}
               </p>
+              {draft.type === "finalProduct" && (
+                <p className="text-sm font-black text-[#2d2a26]/55">
+                  Batch totaal: {formatEuro(previewBatchCost)}
+                </p>
+              )}
               {feedback && (
                 <p className="text-sm font-black text-[#45663b]">
                   {feedback}
@@ -988,7 +1006,10 @@ export default function RecipeDetail({
                 label="Verkoopprijs"
                 value={salesPrice ? formatEuro(salesPrice) : "-"}
               />
-              <Metric label="Kostprijs" value={formatEuro(previewCostPrice)} />
+              <Metric
+                label={previewRecipe.type === "finalProduct" ? "Kost/stuk" : "Kostprijs"}
+                value={formatEuro(previewCostPrice)}
+              />
               <Metric
                 label="Marge"
                 value={
@@ -1003,6 +1024,9 @@ export default function RecipeDetail({
               />
               <Metric label="Portie" value={draft.portionLabel} />
               <Metric label="Batch" value={draft.batchSize} />
+              {previewRecipe.type === "finalProduct" && (
+                <Metric label="Batch totaal" value={formatEuro(previewBatchCost)} />
+              )}
             </div>
           </Panel>
 
@@ -1010,15 +1034,26 @@ export default function RecipeDetail({
             <Panel>
               <SectionTitle
                 title="Kostprijsopbouw"
-                description="Opgebouwd uit directe ingredienten, halffabricaten, decoratie en verpakking."
+                description={
+                  previewRecipe.type === "finalProduct"
+                    ? "Batchbedragen. De kostprijs per stuk wordt gedeeld door de standaard batch."
+                    : "Opgebouwd uit directe ingredienten, halffabricaten, decoratie en verpakking."
+                }
               />
-              <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                <Metric label="Direct" value={formatEuro(directTotal)} />
+              <div className="mt-4 grid gap-3 sm:grid-cols-5">
+                <Metric label="Direct batch" value={formatEuro(directTotal)} />
                 <Metric
-                  label="Halffabricaten"
+                  label="Halffab. batch"
                   value={formatEuro(semiFinishedTotal)}
                 />
-                <Metric label="Extra" value={formatEuro(extraTotal)} />
+                <Metric label="Extra batch" value={formatEuro(extraTotal)} />
+                <Metric label="Batch totaal" value={formatEuro(previewBatchCost)} />
+                <Metric
+                  label={previewRecipe.type === "finalProduct" ? "Per stuk" : "Totaal"}
+                  value={formatEuro(previewCostPrice)}
+                />
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <Metric
                   label="Verschil"
                   value={`${formatEuro(recipeCostDelta(previewRecipe))} - ${formatPercent(
@@ -1026,6 +1061,14 @@ export default function RecipeDetail({
                     1
                   )}`}
                 />
+                {previewRecipe.type === "finalProduct" && (
+                  <Metric
+                    label="Rekenregel"
+                    value={`${formatEuro(previewBatchCost)} / ${previewBatchQuantity.toLocaleString(
+                      "nl-NL"
+                    )}`}
+                  />
+                )}
               </div>
               {previewRecipe.type === "finalProduct" && (
                 <div className="mt-4 rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
@@ -1361,6 +1404,18 @@ function buildRecipeFromDraft(
     packagingCost: parseDutchNumber(draft.packagingCost),
     decorationCost: parseDutchNumber(draft.decorationCost),
   };
+}
+
+function costPriceFromBatchCost(
+  type: RecipeType,
+  batchCost: number,
+  batchQuantity: number
+) {
+  if (type === "finalProduct" && batchQuantity > 0) {
+    return roundMoney(batchCost / batchQuantity);
+  }
+
+  return roundMoney(batchCost);
 }
 
 function normalizeIngredientDrafts(

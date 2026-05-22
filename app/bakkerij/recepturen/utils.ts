@@ -206,7 +206,7 @@ export function invoiceLineImpact(line: InvoiceLine, recipes: Recipe[]) {
 }
 
 export function scaledRecipeIngredients(recipe: Recipe, amount: number) {
-  const multiplier = Math.max(0, amount);
+  const multiplier = recipeProductionMultiplier(recipe, amount);
 
   return recipe.ingredients.map((item) => ({
     ...item,
@@ -216,13 +216,37 @@ export function scaledRecipeIngredients(recipe: Recipe, amount: number) {
 }
 
 export function scaledSemiFinishedItems(recipe: Recipe, amount: number) {
-  const multiplier = Math.max(0, amount);
+  const multiplier = recipeProductionMultiplier(recipe, amount);
 
   return recipe.semiFinishedItems.map((item) => ({
     ...item,
     quantity: item.quantity * multiplier,
     costContribution: item.costContribution * multiplier,
   }));
+}
+
+function recipeProductionMultiplier(recipe: Recipe, amount: number) {
+  const safeAmount = Math.max(0, amount);
+
+  if (recipe.type !== "finalProduct") return safeAmount;
+
+  return safeAmount / recipeBatchQuantity(recipe);
+}
+
+function recipeBatchQuantity(recipe: Recipe) {
+  if (recipe.standardBatchQuantity && recipe.standardBatchQuantity > 0) {
+    return recipe.standardBatchQuantity;
+  }
+
+  const match = recipe.batchSize
+    .replace(",", ".")
+    .match(/(\d+(?:\.\d+)?)/);
+
+  if (!match) return 1;
+
+  const quantity = Number.parseFloat(match[1]);
+
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
 }
 
 export function maxPiecesForIngredient(recipe: Recipe, ingredientId: string, stock: number) {
