@@ -5,7 +5,7 @@ import {
   findIngredient,
   formatDate,
   formatEuro,
-  formatPercent,
+  formatSignedPercent,
   invoiceLineImpact,
   normalizePackagePrice,
 } from "./utils";
@@ -193,10 +193,12 @@ function ReviewLine({
           className={`w-fit rounded-full px-3 py-1 text-sm font-black ${
             line.percentageChange >= 8
               ? "bg-[#ffe0dc] text-[#a83e31]"
-              : "bg-[#fff0bd] text-[#8a5b10]"
+              : line.percentageChange > 0
+                ? "bg-[#fff0bd] text-[#8a5b10]"
+                : "bg-[#dce8d6] text-[#45663b]"
           }`}
         >
-          +{formatPercent(line.percentageChange, 2)}
+          {formatSignedPercent(line.percentageChange, 2)}
         </span>
       </div>
 

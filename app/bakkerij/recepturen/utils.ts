@@ -82,6 +82,10 @@ export function formatPercent(value: number, digits = 0) {
   })}%`;
 }
 
+export function formatSignedPercent(value: number, digits = 0) {
+  return `${value > 0 ? "+" : ""}${formatPercent(value, digits)}`;
+}
+
 export function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;

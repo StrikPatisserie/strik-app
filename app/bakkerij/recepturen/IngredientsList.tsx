@@ -10,7 +10,7 @@ import {
 import {
   formatDate,
   formatEuro,
-  formatPercent,
+  formatSignedPercent,
   ingredientPackagePrice,
   ingredientPreviousPackagePrice,
   ingredientPriceChange,
@@ -156,8 +156,7 @@ export default function IngredientsList({
                           : "bg-[#dce8d6] text-[#45663b]"
                     }`}
                   >
-                    {ingredientPriceChange(ingredient) >= 0 ? "+" : ""}
-                    {formatPercent(ingredientPriceChange(ingredient), 1)}
+                    {formatSignedPercent(ingredientPriceChange(ingredient), 1)}
                   </span>
                   <p className="text-xs font-bold text-[#2d2a26]/45">
                     {ingredient.lastInvoice}
@@ -266,7 +265,7 @@ function IngredientDetail({
               />
               <MiniMetric
                 label="Wijziging"
-                value={`${ingredientPriceChange(ingredient) >= 0 ? "+" : ""}${formatPercent(ingredientPriceChange(ingredient), 1)}`}
+                value={formatSignedPercent(ingredientPriceChange(ingredient), 1)}
               />
               <MiniMetric label="Verpakking" value={ingredient.packageSize} />
               <MiniMetric label="Bijgewerkt" value={formatDate(ingredient.lastUpdated)} />

@@ -2,7 +2,7 @@ import { MetricCard, Panel, SectionTitle, MarginBadge } from "./RecepturenShared
 import type { Ingredient, InvoiceImport, Recipe } from "./types";
 import {
   formatDate,
-  formatPercent,
+  formatSignedPercent,
   ingredientPriceChange,
   marginStatusForRecipe,
   recipeCostChange,
@@ -127,7 +127,7 @@ export default function RecepturenDashboard({
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-[#fff0bd] px-3 py-1 text-sm font-black text-[#8a5b10]">
-                  +{formatPercent(ingredientPriceChange(ingredient), 1)}
+                  {formatSignedPercent(ingredientPriceChange(ingredient), 1)}
                 </span>
               </div>
             ))}
@@ -152,7 +152,7 @@ export default function RecepturenDashboard({
                   <div className="min-w-0">
                     <p className="font-black leading-tight">{recipe.name}</p>
                     <p className="text-xs font-bold text-[#2d2a26]/45">
-                      {recipe.productGroup} · +{formatPercent(recipeCostChange(recipe), 1)}
+                      {recipe.productGroup} · {formatSignedPercent(recipeCostChange(recipe), 1)}
                     </p>
                   </div>
                   <MarginBadge status={status} />
