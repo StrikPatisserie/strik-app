@@ -13,6 +13,7 @@ import ProductieCalculator from "./ProductieCalculator";
 import RecipeDetail from "./RecipeDetail";
 import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
+import RecepturenWorkMode from "./RecepturenWorkMode";
 import {
   fetchRecepturenData,
   pruneInvoiceImports,
@@ -37,6 +38,7 @@ const tabs = [
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
+type RecepturenMode = "work" | "management";
 
 function hasStoredRecepturenData(data: RecepturenData) {
   return Boolean(
@@ -90,6 +92,7 @@ function replaceInvoiceLine(
 }
 
 export default function RecepturenApp() {
+  const [mode, setMode] = useState<RecepturenMode>("work");
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeItems, setRecipeItems] = useState(recipes);
@@ -431,7 +434,13 @@ export default function RecepturenApp() {
       <div className="mx-auto w-full max-w-7xl">
         <StrikBackButton />
 
-        <header className="mb-5 grid gap-4 rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+        <header
+          className={`mb-5 grid gap-4 rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm ${
+            mode === "management"
+              ? "lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center"
+              : ""
+          }`}
+        >
           <div>
             <div className="mb-2 flex items-center justify-center gap-3 lg:justify-start">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#dce8d6]">
@@ -449,12 +458,14 @@ export default function RecepturenApp() {
               <StrikPageTitle title="Recepturen" />
             </div>
             <p className="mx-auto mt-3 max-w-3xl text-center text-sm font-semibold leading-relaxed text-[#2d2a26]/58 lg:mx-0 lg:text-left">
-              Interne receptenbank voor eindproducten, halffabricaten,
-              ingredienten, factuurprijsupdates, marges en productiecalculatie.
+              {mode === "work"
+                ? "Werkvloerweergave voor recepten zoeken, batch schalen en productie afvinken."
+                : "Interne receptenbank voor eindproducten, halffabricaten, ingredienten, factuurprijsupdates, marges en productiecalculatie."}
             </p>
           </div>
 
-          <div className="rounded-[1.2rem] border border-[#efc2bb] bg-[#fff4f1] p-4">
+          {mode === "management" && (
+            <div className="rounded-[1.2rem] border border-[#efc2bb] bg-[#fff4f1] p-4">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#a83e31]">
               Actie nodig
             </p>
@@ -463,56 +474,100 @@ export default function RecepturenApp() {
               producten onder gewenste marge na laatste {latestInvoice.supplier}
               -factuur.
             </p>
-          </div>
+            </div>
+          )}
         </header>
 
-        <div className="mb-4 rounded-[1.1rem] border border-[#e7e0d8] bg-white/80 px-4 py-3 text-sm font-bold text-[#2d2a26]/58 shadow-sm">
-          {isLoadingData ? "Recepturen laden..." : syncStatus}
-        </div>
-
-        <nav className="sticky top-2 z-20 mb-5 overflow-x-auto rounded-[1.25rem] border border-[#e7e0d8] bg-white/95 p-2 shadow-sm backdrop-blur">
-          <div className="flex min-w-max gap-2">
-            {tabs.map((tab) => (
+        <div className="mb-4 rounded-[1.15rem] border border-[#e7e0d8] bg-white/88 p-2 shadow-sm">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[
+              {
+                id: "work" as const,
+                label: "Werkmodus",
+                detail: "Zoeken, schalen en afvinken",
+              },
+              {
+                id: "management" as const,
+                label: "Management",
+                detail: "Calculatie, prijzen en marges",
+              },
+            ].map((item) => (
               <button
-                key={tab.id}
+                key={item.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`rounded-full px-4 py-2.5 text-sm font-black transition active:scale-[0.98] ${
-                  activeTab === tab.id
-                    ? "bg-[#c3d3bc] text-[#2d2a26]"
-                    : "bg-[#f8f6f3] text-[#2d2a26]/55 hover:text-[#2d2a26]"
+                onClick={() => setMode(item.id)}
+                className={`rounded-[1rem] px-4 py-3 text-left transition active:scale-[0.99] ${
+                  mode === item.id
+                    ? "bg-[#c3d3bc] text-[#2d2a26] shadow-sm"
+                    : "bg-[#f8f6f3] text-[#2d2a26]/60"
                 }`}
               >
-                {tab.label}
+                <span className="block text-base font-black">{item.label}</span>
+                <span className="mt-0.5 block text-xs font-bold">
+                  {item.detail}
+                </span>
               </button>
             ))}
           </div>
-        </nav>
+        </div>
 
-        {activeTab === "dashboard" && (
+        <div className="mb-4 rounded-[1.1rem] border border-[#e7e0d8] bg-white/80 px-4 py-3 text-sm font-bold text-[#2d2a26]/58 shadow-sm">
+          {isLoadingData
+            ? "Recepturen laden..."
+            : mode === "work"
+              ? "Receptdata klaar voor productie."
+              : syncStatus}
+        </div>
+
+        {mode === "work" && (
+          <RecepturenWorkMode recipes={recipeItems} ingredients={ingredientItems} />
+        )}
+
+        {mode === "management" && (
+          <nav className="sticky top-2 z-20 mb-5 overflow-x-auto rounded-[1.25rem] border border-[#e7e0d8] bg-white/95 p-2 shadow-sm backdrop-blur">
+            <div className="flex min-w-max gap-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`rounded-full px-4 py-2.5 text-sm font-black transition active:scale-[0.98] ${
+                    activeTab === tab.id
+                      ? "bg-[#c3d3bc] text-[#2d2a26]"
+                      : "bg-[#f8f6f3] text-[#2d2a26]/55 hover:text-[#2d2a26]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+        )}
+
+        {mode === "management" && activeTab === "dashboard" && (
           <RecepturenDashboard
             recipes={recipeItems}
             ingredients={ingredientItems}
             invoice={latestInvoice}
           />
         )}
-        {activeTab === "recepten" && (
+        {mode === "management" && activeTab === "recepten" && (
           <RecipesList recipes={recipeItems} onOpenRecipe={setSelectedRecipe} />
         )}
-        {activeTab === "halffabricaten" && (
+        {mode === "management" && activeTab === "halffabricaten" && (
           <HalffabricatenList
             recipes={recipeItems}
             onOpenRecipe={setSelectedRecipe}
           />
         )}
-        {activeTab === "ingredienten" && (
+        {mode === "management" && activeTab === "ingredienten" && (
           <IngredientsList
             ingredients={ingredientItems}
             recipes={recipeItems}
             onUpdateIngredient={updateIngredient}
           />
         )}
-        {activeTab === "factuurimport" && (
+        {mode === "management" && activeTab === "factuurimport" && (
           <FactuurImport
             invoice={latestInvoice}
             ingredients={ingredientItems}
@@ -526,20 +581,20 @@ export default function RecepturenApp() {
             onImportInvoice={importInvoice}
           />
         )}
-        {activeTab === "marge" && (
+        {mode === "management" && activeTab === "marge" && (
           <MargeOverzicht
             recipes={recipeItems}
             onOpenRecipe={setSelectedRecipe}
           />
         )}
-        {activeTab === "productie" && (
+        {mode === "management" && activeTab === "productie" && (
           <ProductieCalculator
             recipes={recipeItems}
             ingredients={ingredientItems}
           />
         )}
 
-        {selectedRecipe && (
+        {mode === "management" && selectedRecipe && (
           <RecipeDetail
             key={selectedRecipe.id}
             recipe={selectedRecipe}

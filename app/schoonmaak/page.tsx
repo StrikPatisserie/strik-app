@@ -104,6 +104,10 @@ const FOTO_UPLOAD_MAX_ZIJDE = 520;
 const FOTO_UPLOAD_MIN_ZIJDE = 320;
 const FOTO_UPLOAD_DOEL_BYTES = 180_000;
 const FOTO_UPLOAD_KWALITEITEN = [0.38, 0.3, 0.24];
+const FOTO_FALLBACK_MAX_ZIJDE = 300;
+const FOTO_FALLBACK_MIN_ZIJDE = 220;
+const FOTO_FALLBACK_DOEL_BYTES = 55_000;
+const FOTO_FALLBACK_KWALITEITEN = [0.28, 0.22, 0.16];
 
 function canvasNaarJpegBlob(canvas: HTMLCanvasElement, kwaliteit: number) {
   return new Promise<Blob | null>((resolve) => {
@@ -111,7 +115,15 @@ function canvasNaarJpegBlob(canvas: HTMLCanvasElement, kwaliteit: number) {
   });
 }
 
-function verkleinFotoVoorUpload(file: File) {
+function verkleinFoto(
+  file: File,
+  options: {
+    maxZijde: number;
+    minZijde: number;
+    doelBytes: number;
+    kwaliteiten: number[];
+  }
+) {
   return new Promise<File>((resolve) => {
     if (!file.type.startsWith("image/")) {
       resolve(file);
@@ -127,10 +139,10 @@ function verkleinFotoVoorUpload(file: File) {
       void (async () => {
         try {
           const grootsteZijde = Math.max(image.width, image.height);
-          let maxZijde = FOTO_UPLOAD_MAX_ZIJDE;
+          let maxZijde = options.maxZijde;
           let besteBlob: Blob | null = null;
 
-          while (maxZijde >= FOTO_UPLOAD_MIN_ZIJDE) {
+          while (maxZijde >= options.minZijde) {
             const schaal = Math.min(1, maxZijde / grootsteZijde);
             const canvas = document.createElement("canvas");
             canvas.width = Math.max(1, Math.round(image.width * schaal));
@@ -144,13 +156,13 @@ function verkleinFotoVoorUpload(file: File) {
 
             context.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-            for (const kwaliteit of FOTO_UPLOAD_KWALITEITEN) {
+            for (const kwaliteit of options.kwaliteiten) {
               const blob = await canvasNaarJpegBlob(canvas, kwaliteit);
               if (!blob) continue;
 
               besteBlob = blob;
 
-              if (blob.size <= FOTO_UPLOAD_DOEL_BYTES) {
+              if (blob.size <= options.doelBytes) {
                 resolve(
                   new File([blob], maakJpegBestandsnaam(file.name), {
                     type: "image/jpeg",
@@ -186,6 +198,26 @@ function verkleinFotoVoorUpload(file: File) {
 
     image.src = objectUrl;
   });
+}
+
+function verkleinFotoVoorUpload(file: File) {
+  return verkleinFoto(file, {
+    maxZijde: FOTO_UPLOAD_MAX_ZIJDE,
+    minZijde: FOTO_UPLOAD_MIN_ZIJDE,
+    doelBytes: FOTO_UPLOAD_DOEL_BYTES,
+    kwaliteiten: FOTO_UPLOAD_KWALITEITEN,
+  });
+}
+
+async function maakKleineFotoPreviewDataUrl(file: File) {
+  const previewFile = await verkleinFoto(file, {
+    maxZijde: FOTO_FALLBACK_MAX_ZIJDE,
+    minZijde: FOTO_FALLBACK_MIN_ZIJDE,
+    doelBytes: FOTO_FALLBACK_DOEL_BYTES,
+    kwaliteiten: FOTO_FALLBACK_KWALITEITEN,
+  });
+
+  return readFileAsDataUrl(previewFile);
 }
 
 const requiredFotoUploadLabels = [
@@ -274,6 +306,38 @@ function normaliseerFotoUploads(
     mediaId: upload.mediaId,
     unavailable: upload.unavailable,
   }));
+}
+
+function mergeFotoUploadsMetLokalePreview(
+  opgeslagenFotos: PhotoUpload[],
+  lokaleFotos: PhotoUpload[] = []
+) {
+  const lokaleFotosPerLabel = new Map(
+    lokaleFotos.map((upload) => [upload.label, upload])
+  );
+
+  const samengevoegdeFotos = opgeslagenFotos.map((upload) => {
+    if (getFotoSrc(upload)) return upload;
+
+    const lokaleFoto = lokaleFotosPerLabel.get(upload.label);
+    if (!lokaleFoto || !getFotoSrc(lokaleFoto)) return upload;
+
+    return {
+      ...upload,
+      previewUrl: lokaleFoto.previewUrl,
+      dataUrl: lokaleFoto.dataUrl,
+      url: lokaleFoto.url,
+      mediaId: lokaleFoto.mediaId,
+    };
+  });
+  const opgeslagenLabels = new Set(
+    samengevoegdeFotos.map((upload) => upload.label)
+  );
+  const lokaleFotosMetPreview = lokaleFotos.filter(
+    (upload) => !opgeslagenLabels.has(upload.label) && getFotoSrc(upload)
+  );
+
+  return [...samengevoegdeFotos, ...lokaleFotosMetPreview];
 }
 
 function getFotoSrc(upload: PhotoUpload | CleaningPhotoUpload) {
@@ -557,14 +621,19 @@ function SchoonmaakForm() {
               )
             : []
         );
-        setFotoUploads(
-          nieuwsteItem
-            ? normaliseerFotoUploads(
-                nieuwsteItem.id,
-                getCleaningItemPhotos(nieuwsteItem)
-              )
-            : []
+        const opgeslagenFotos = nieuwsteItem
+          ? normaliseerFotoUploads(
+              nieuwsteItem.id,
+              getCleaningItemPhotos(nieuwsteItem)
+            )
+          : [];
+        const lokaleDraft = leesLokaleDraft(winkel, datum, planType);
+        const fotoUploadsMetLokalePreview = mergeFotoUploadsMetLokalePreview(
+          opgeslagenFotos,
+          lokaleDraft?.fotoUploads
         );
+
+        setFotoUploads(fotoUploadsMetLokalePreview);
         const geladenSignatuur = nieuwsteItem
           ? maakSignatuur({
               planType,
@@ -575,10 +644,7 @@ function SchoonmaakForm() {
                 nieuwsteItem.id,
                 nieuwsteItem.temperatuurRegistraties
               ),
-              fotoUploads: normaliseerFotoUploads(
-                nieuwsteItem.id,
-                getCleaningItemPhotos(nieuwsteItem)
-              ),
+              fotoUploads: fotoUploadsMetLokalePreview,
             })
           : "";
 
@@ -788,6 +854,16 @@ function SchoonmaakForm() {
       message?: string;
     } | null;
 
+    if (res.status === 503 && upload.file) {
+      const dataUrl = await maakKleineFotoPreviewDataUrl(upload.file);
+
+      return {
+        ...upload,
+        dataUrl,
+        previewUrl: dataUrl,
+      };
+    }
+
     if (res.status === 503 && upload.dataUrl) {
       return upload;
     }
@@ -825,8 +901,10 @@ function SchoonmaakForm() {
     return {
       label: upload.label,
       fileName: upload.fileName,
+      dataUrl: upload.url ? undefined : upload.dataUrl,
       url: upload.url,
       mediaId: upload.mediaId,
+      unavailable: upload.unavailable,
     };
   }
 

@@ -52,6 +52,8 @@ export type Recipe = {
   name: string;
   type: RecipeType;
   productGroup: string;
+  standardBatchQuantity?: number;
+  standardBatchUnit?: RecipeUnit;
   salesPrice: number;
   costPrice: number;
   previousCostPrice: number;
@@ -60,8 +62,13 @@ export type Recipe = {
   status: RecipeStatus;
   ingredients: RecipeIngredient[];
   semiFinishedItems: SemiFinishedUsage[];
+  workInstructions?: string[];
   preparationSteps: string[];
+  finishingSteps?: string[];
+  equipment?: string[];
   allergens: string[];
+  internalNotes?: string;
+  isWorkModeVisible?: boolean;
   version: string;
   lastUpdated: string;
   portionLabel: string;

@@ -31,6 +31,10 @@ if (!defined('STRIK_CLEANING_PHOTO_RETENTION_DAYS')) {
     define('STRIK_CLEANING_PHOTO_RETENTION_DAYS', 31);
 }
 
+if (!defined('STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES')) {
+    define('STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES', 90000);
+}
+
 if (!defined('STRIK_CLEANING_PHOTO_MARKER_PREFIX')) {
     define('STRIK_CLEANING_PHOTO_MARKER_PREFIX', '__strik_photo:');
 }
@@ -282,6 +286,18 @@ function strik_cleaning_v5_temperatures($items) {
     return $clean;
 }
 
+function strik_cleaning_v5_clean_photo_data_url($value, $max_bytes = STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES) {
+    if (!is_string($value) || $value === '') return '';
+    if (strlen($value) > $max_bytes) return '';
+
+    $value = trim($value);
+    if (!preg_match('/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+\/=_-]+$/i', $value)) {
+        return '';
+    }
+
+    return $value;
+}
+
 function strik_cleaning_v5_photos($items, $include_data_url = false) {
     $items = strik_cleaning_v5_decode($items);
     $clean = array();
@@ -305,8 +321,10 @@ function strik_cleaning_v5_photos($items, $include_data_url = false) {
             $photo['mediaId'] = 0;
         }
 
-        if ($include_data_url && $photo['url'] === '' && isset($item['dataUrl']) && is_string($item['dataUrl'])) {
-            $photo['dataUrl'] = substr($item['dataUrl'], 0, 600000);
+        if ($photo['url'] === '' && isset($item['dataUrl']) && is_string($item['dataUrl'])) {
+            $max_bytes = $include_data_url ? 600000 : STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES;
+            $data_url = strik_cleaning_v5_clean_photo_data_url($item['dataUrl'], $max_bytes);
+            if ($data_url !== '') $photo['dataUrl'] = $data_url;
         }
 
         $clean[] = $photo;
@@ -467,7 +485,9 @@ function strik_cleaning_v5_item_has_inline_photo_data($item) {
 
         foreach ($item['fotoUploads'] as $photo) {
             if (is_array($photo) && isset($photo['dataUrl']) && is_string($photo['dataUrl']) && $photo['dataUrl'] !== '') {
-                return true;
+                if (strik_cleaning_v5_clean_photo_data_url($photo['dataUrl']) === '') {
+                    return true;
+                }
             }
 
             if (

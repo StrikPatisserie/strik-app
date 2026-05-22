@@ -199,7 +199,7 @@ export function withCleaningMetaMarkers(
   fotoUploads: CleaningPhotoUpload[] = []
 ) {
   const fotoMarkers = fotoUploads
-    .filter((upload) => upload.url)
+    .filter((upload) => upload.url || upload.dataUrl)
     .map((upload) =>
       `${PHOTO_MARKER_V2_PREFIX}${encodePhotoUploadForStorage(upload)}`
     );
@@ -215,7 +215,7 @@ export function createPhotoTemperatureRegistrations(
   fotoUploads: CleaningPhotoUpload[] = []
 ): CleaningTemperatureRegistration[] {
   return fotoUploads
-    .filter((upload) => upload.url)
+    .filter((upload) => upload.url || upload.dataUrl)
     .map((upload) => ({
       naam: `${PHOTO_TEMPERATURE_PREFIX}${upload.label}`,
       temperatuur: encodePhotoUploadForStorage(upload),
@@ -227,6 +227,7 @@ function photoUploadForStorage(upload: CleaningPhotoUpload) {
     label: upload.label,
     fileName: upload.fileName,
     url: upload.url,
+    dataUrl: upload.url ? undefined : upload.dataUrl,
     mediaId: upload.mediaId,
     unavailable: upload.unavailable,
   };
