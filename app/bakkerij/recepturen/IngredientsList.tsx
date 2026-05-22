@@ -16,8 +16,28 @@ import {
   ingredientPriceChange,
   normalizeSearch,
   packagePriceLabel,
+  pricePerBaseUnitFromPackagePrice,
   recipesUsingIngredient,
 } from "./utils";
+
+function formatEditablePrice(value: number) {
+  return value.toLocaleString("nl-NL", {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 2,
+  });
+}
+
+function parseDutchPriceInput(value: string) {
+  const normalized = value
+    .trim()
+    .replace(/\s/g, "")
+    .replace(/€|\u00a0/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const parsed = Number.parseFloat(normalized.replace(/[^\d.-]/g, ""));
+
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 export default function IngredientsList({
   ingredients,
@@ -201,6 +221,9 @@ function IngredientDetail({
   const [articleNumber, setArticleNumber] = useState(
     ingredient.supplierArticleNumber
   );
+  const [priceInput, setPriceInput] = useState(
+    formatEditablePrice(ingredientPackagePrice(ingredient))
+  );
   const [alias, setAlias] = useState("");
   const [feedback, setFeedback] = useState("");
 
@@ -220,6 +243,33 @@ function IngredientDetail({
     setAlias("");
     setIsLinking(false);
     setFeedback("Koppeling opgeslagen.");
+    window.setTimeout(() => setFeedback(""), 2000);
+  }
+
+  function saveManualPrice() {
+    const nextPackagePrice = parseDutchPriceInput(priceInput);
+
+    if (nextPackagePrice <= 0) {
+      setFeedback("Vul een geldige prijs groter dan 0 in.");
+      return;
+    }
+
+    const currentPackagePrice = ingredientPackagePrice(ingredient);
+    const updatedIngredient = {
+      ...ingredient,
+      previousPrice: currentPackagePrice,
+      lastPrice: nextPackagePrice,
+      pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(
+        nextPackagePrice,
+        ingredient.recipeUnit
+      ),
+      lastUpdated: new Date().toISOString().slice(0, 10),
+      lastInvoice: "Handmatig aangepast",
+    };
+
+    onUpdateIngredient(updatedIngredient);
+    setPriceInput(formatEditablePrice(nextPackagePrice));
+    setFeedback("Prijs handmatig aangepast.");
     window.setTimeout(() => setFeedback(""), 2000);
   }
 
@@ -269,6 +319,24 @@ function IngredientDetail({
               />
               <MiniMetric label="Verpakking" value={ingredient.packageSize} />
               <MiniMetric label="Bijgewerkt" value={formatDate(ingredient.lastUpdated)} />
+            </div>
+            <div className="mt-4 grid gap-3 rounded-2xl border border-[#cfdcc8] bg-[#f7faf5] p-3">
+              <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                Handmatige {packagePriceLabel(ingredient.recipeUnit).toLowerCase()}
+                <input
+                  value={priceInput}
+                  onChange={(event) => setPriceInput(event.target.value)}
+                  inputMode="decimal"
+                  className="rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={saveManualPrice}
+                className="w-fit rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+              >
+                Prijs opslaan
+              </button>
             </div>
           </Panel>
 
