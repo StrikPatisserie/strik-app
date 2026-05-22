@@ -1,4 +1,4 @@
-import type { Ingredient, InvoiceImport, Recipe } from "./types";
+import type { Ingredient, InvoiceImport, InvoiceLine, Recipe } from "./types";
 
 export type RecepturenData = {
   ingredients: Ingredient[];
@@ -15,6 +15,13 @@ const APP_RECEPTUREN_API_URL = "/api/recepturen";
 const WORDPRESS_RECEPTUREN_API_URL =
   "https://strik-patisserie.nl/wp-json/strik/v1/recepturen";
 const WORDPRESS_RECEPTUREN_API_KEY = "schoonmaak-ijs-strik";
+const MAX_STORED_INVOICE_IMPORTS = 32;
+const MAX_REVIEW_INVOICE_IMPORTS = 8;
+const MAX_PROCESSED_INVOICE_IMPORTS = 14;
+const MAX_REVERTED_INVOICE_IMPORTS = 6;
+const MAX_IGNORED_INVOICE_IMPORTS = 4;
+const MAX_OTHER_INVOICE_IMPORTS = 4;
+const MAX_STORED_LINES_PER_INVOICE = 600;
 
 function getWordPressRecepturenUrl() {
   const url = new URL(WORDPRESS_RECEPTUREN_API_URL);
@@ -49,10 +56,103 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
   return {
     ingredients: Array.isArray(record.ingredients) ? record.ingredients : [],
     recipes: Array.isArray(record.recipes) ? record.recipes : [],
-    invoiceImports: Array.isArray(record.invoiceImports)
-      ? record.invoiceImports
-      : [],
+    invoiceImports: pruneInvoiceImports(
+      Array.isArray(record.invoiceImports) ? record.invoiceImports : []
+    ),
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
+  };
+}
+
+function hasReviewWork(invoice: InvoiceImport) {
+  return (
+    invoice.status === "review" ||
+    invoice.lines.some((line) => line.reviewStatus === "pending")
+  );
+}
+
+function stableInvoiceLineId(
+  invoice: InvoiceImport,
+  line: InvoiceLine,
+  index: number
+) {
+  if (line.id) return line.id;
+
+  const invoiceKey = invoice.id || invoice.invoiceNumber || "invoice";
+  return `${invoiceKey}-line-${index + 1}`;
+}
+
+function ensureInvoiceLineIds(invoice: InvoiceImport) {
+  return {
+    ...invoice,
+    lines: invoice.lines.map((line, index) => ({
+      ...line,
+      id: stableInvoiceLineId(invoice, line, index),
+    })),
+  };
+}
+
+function limitStoredInvoiceLines(invoice: InvoiceImport) {
+  return {
+    ...invoice,
+    lines: invoice.lines.slice(0, MAX_STORED_LINES_PER_INVOICE),
+  };
+}
+
+function compactIgnoredInvoice(invoice: InvoiceImport) {
+  return {
+    ...invoice,
+    lines: [],
+  };
+}
+
+export function pruneInvoiceImports(invoiceImports: InvoiceImport[]) {
+  const counters = {
+    review: 0,
+    processed: 0,
+    reverted: 0,
+    ignored: 0,
+    other: 0,
+  };
+
+  return invoiceImports
+    .filter((invoice) => invoice && Array.isArray(invoice.lines))
+    .map(ensureInvoiceLineIds)
+    .filter((invoice) => {
+      if (hasReviewWork(invoice)) {
+        counters.review += 1;
+        return counters.review <= MAX_REVIEW_INVOICE_IMPORTS;
+      }
+
+      if (invoice.status === "processed") {
+        counters.processed += 1;
+        return counters.processed <= MAX_PROCESSED_INVOICE_IMPORTS;
+      }
+
+      if (invoice.status === "reverted") {
+        counters.reverted += 1;
+        return counters.reverted <= MAX_REVERTED_INVOICE_IMPORTS;
+      }
+
+      if (invoice.status === "ignored") {
+        counters.ignored += 1;
+        return counters.ignored <= MAX_IGNORED_INVOICE_IMPORTS;
+      }
+
+      counters.other += 1;
+      return counters.other <= MAX_OTHER_INVOICE_IMPORTS;
+    })
+    .slice(0, MAX_STORED_INVOICE_IMPORTS)
+    .map((invoice) =>
+      invoice.status === "ignored"
+        ? compactIgnoredInvoice(invoice)
+        : limitStoredInvoiceLines(invoice)
+    );
+}
+
+function prepareRecepturenDataForStorage(data: RecepturenData) {
+  return {
+    ...data,
+    invoiceImports: pruneInvoiceImports(data.invoiceImports),
   };
 }
 
@@ -101,13 +201,14 @@ export async function fetchRecepturenData(): Promise<
 }
 
 async function saveRecepturenDataTo(url: string, data: RecepturenData) {
+  const storageData = prepareRecepturenDataForStorage(data);
   const response = await fetch(url, {
     method: "PUT",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify(storageData),
   });
   const result = await readJson(response);
   const normalized = normalizeRecepturenData(result);

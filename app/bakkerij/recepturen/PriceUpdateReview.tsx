@@ -10,6 +10,10 @@ import {
   normalizePackagePrice,
 } from "./utils";
 
+function invoiceLineKey(line: InvoiceLine, index: number) {
+  return line.id || `${line.articleNumber}-${line.description}-${index}`;
+}
+
 export default function PriceUpdateReview({
   invoice,
   ingredients,
@@ -18,6 +22,7 @@ export default function PriceUpdateReview({
   onIgnoreLine,
   onIgnoreInvoice,
   onRevertInvoice,
+  onDeleteInvoice,
   onMatchLine,
 }: Readonly<{
   invoice: InvoiceImport;
@@ -27,6 +32,7 @@ export default function PriceUpdateReview({
   onIgnoreLine: (invoiceId: string, line: InvoiceLine) => void;
   onIgnoreInvoice: (invoiceId: string) => void;
   onRevertInvoice: (invoiceId: string) => void;
+  onDeleteInvoice: (invoiceId: string) => void;
   onMatchLine: (
     invoiceId: string,
     line: InvoiceLine,
@@ -88,11 +94,18 @@ export default function PriceUpdateReview({
             >
               Factuur terugdraaien
             </button>
+            <button
+              type="button"
+              onClick={() => onDeleteInvoice(invoice.id)}
+              className="rounded-full border border-[#efc2bb] bg-white px-4 py-2.5 text-sm font-black text-[#a83e31] shadow-sm"
+            >
+              Factuur verwijderen
+            </button>
           </div>
           {pendingLines.length ? (
-            pendingLines.map((line) => (
+            pendingLines.map((line, index) => (
               <ReviewLine
-                key={`${line.articleNumber}-${line.description}`}
+                key={invoiceLineKey(line, index)}
                 invoiceId={invoice.id}
                 line={line}
                 ingredients={ingredients}
@@ -116,9 +129,9 @@ export default function PriceUpdateReview({
         />
         <div className="mt-4 grid gap-2">
           {unmatchedLines.length ? (
-            unmatchedLines.map((line) => (
+            unmatchedLines.map((line, index) => (
               <div
-                key={`${line.articleNumber}-${line.description}`}
+                key={invoiceLineKey(line, index)}
                 className="rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3"
               >
                 <p className="text-sm font-black">{line.description}</p>

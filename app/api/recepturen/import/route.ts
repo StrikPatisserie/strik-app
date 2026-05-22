@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
@@ -44,6 +46,17 @@ type BekoRawLine = {
   quantityUnit: string;
 };
 
+type SupplierLineInput = {
+  articleNumber: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  totalPrice: number;
+  unitPrice: number;
+  priceKind?: PricePerUnitKind;
+  packageSizeHint?: string;
+};
+
 type ExtractedInvoice = {
   invoice: InvoiceImport;
   warnings: string[];
@@ -62,6 +75,12 @@ type CanvasPolyfillModule = typeof import("@napi-rs/canvas") & {
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_OCR_PDF_PAGES = 3;
+const MAX_INVOICE_LINES = 600;
+const TESSERACT_WORKER_PATH = path.join(
+  process.cwd(),
+  "node_modules/tesseract.js/src/worker-script/node/index.js"
+);
+const TESSERACT_CACHE_PATH = path.join(tmpdir(), "strik-tesseract");
 
 const ARTICLE_HEADERS = [
   "artikelnummer",
@@ -130,7 +149,7 @@ const PACKAGE_UNIT_PRICE_HEADERS = [
   "prijs",
 ];
 const UNIT_PATTERN =
-  /\b(kg|kilo|kilogram|g|gr|gram|l|ltr|liter|ml|st|stuks|stuk|doos|zak|pak|tray|emmer)\b/i;
+  /\b(kg|kilo|kilogram|g|gr|gram|l|li|ltr|liter|ml|st|stuks|stuk|doos|zak|pak|tray|emmer)\b/i;
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ message }, { status });
@@ -277,7 +296,7 @@ function normalizeUnit(unit: string, description = "") {
   const found = match[1].toLowerCase();
   if (["kilo", "kilogram"].includes(found)) return "kg";
   if (["gr", "gram"].includes(found)) return "g";
-  if (["ltr", "liter"].includes(found)) return "l";
+  if (["li", "ltr", "liter"].includes(found)) return "l";
   if (["stuks", "stuk"].includes(found)) return "st";
 
   return found;
@@ -377,8 +396,8 @@ function priceForIngredientUnit(
   const hasWeightIngredient = recipeUnit === "gram" || recipeUnit === "kg";
   const hasVolumeIngredient = recipeUnit === "ml" || recipeUnit === "liter";
   const packageSize =
-    (ingredient ? parsePackageSize(ingredient.packageSize) : null) ||
-    parsePackageSize(fallbackPackageSize);
+    parsePackageSize(fallbackPackageSize) ||
+    (ingredient ? parsePackageSize(ingredient.packageSize) : null);
 
   if (priceKind === "base") return pricePerUnit;
 
@@ -399,6 +418,10 @@ function priceForIngredientUnit(
       "cn",
       "pk",
       "em",
+      "kt",
+      "ka",
+      "ei",
+      "pg",
     ].includes(normalizedUnit)
   ) {
     if (hasWeightIngredient && packageSize.unit === "kg") {
@@ -418,6 +441,78 @@ function priceForIngredientUnit(
   if (normalizedUnit === "ml" && hasVolumeIngredient) return pricePerUnit * 1000;
 
   return pricePerUnit;
+}
+
+function createSupplierInvoiceLine(
+  input: SupplierLineInput,
+  ingredients: Ingredient[]
+): InvoiceLine | null {
+  if (!input.articleNumber && !input.description) return null;
+  if (!input.unitPrice && !input.totalPrice) return null;
+
+  const matchedIngredient = findMatchingIngredient(
+    input.articleNumber,
+    input.description,
+    ingredients
+  );
+  const priceKind = input.priceKind || "package";
+  const packageSizeHint = input.packageSizeHint || input.description;
+  const packageSize =
+    parsePackageSize(packageSizeHint) ||
+    (matchedIngredient ? parsePackageSize(matchedIngredient.packageSize) : null);
+  const normalizedUnit = normalizeUnit(input.unit, input.description);
+  const wantsWeight = isWeightIngredient(matchedIngredient);
+  const wantsVolume = isVolumeIngredient(matchedIngredient);
+  const desiredPackageUnit = wantsVolume ? "l" : wantsWeight ? "kg" : "";
+
+  let quantity = input.quantity || 1;
+  let unit = normalizedUnit;
+  let pricePerUnit = input.unitPrice || (quantity ? input.totalPrice / quantity : 0);
+  let totalPrice = input.totalPrice || pricePerUnit * quantity;
+
+  if (priceKind === "base") {
+    unit = desiredPackageUnit || normalizedUnit;
+  } else if (
+    matchedIngredient &&
+    packageSize &&
+    desiredPackageUnit &&
+    packageSize.unit === desiredPackageUnit &&
+    !["kg", "g", "l", "ml"].includes(normalizedUnit)
+  ) {
+    pricePerUnit = pricePerUnit / packageSize.amount;
+    quantity = quantity * packageSize.amount;
+    unit = desiredPackageUnit;
+    totalPrice = input.totalPrice || pricePerUnit * quantity;
+  } else {
+    pricePerUnit = priceForIngredientUnit(
+      pricePerUnit,
+      input.unit,
+      matchedIngredient,
+      priceKind,
+      packageSizeHint
+    );
+
+    if (wantsWeight && normalizedUnit === "g") unit = "kg";
+    if (wantsVolume && normalizedUnit === "ml") unit = "l";
+  }
+
+  if (!pricePerUnit) return null;
+
+  const oldPrice = matchedIngredient ? ingredientPackagePrice(matchedIngredient) : 0;
+
+  return {
+    articleNumber: input.articleNumber,
+    description: cleanCell(input.description),
+    quantity,
+    unit,
+    totalPrice,
+    pricePerUnit,
+    matchedIngredientId: matchedIngredient?.id,
+    oldPrice,
+    newPrice: pricePerUnit,
+    percentageChange: getPercentageChange(oldPrice, pricePerUnit),
+    reviewStatus: "pending",
+  };
 }
 
 function createInvoiceLine(
@@ -640,6 +735,302 @@ function parseBekoPdfLines(text: string, ingredients: Ingredient[]) {
     .filter((line): line is InvoiceLine => Boolean(line));
 }
 
+function isZeelandiaInvoiceText(fileName: string, text: string) {
+  return (
+    detectSupplier(fileName, text) === "Zeelandia" &&
+    /Artikelnr\.\s+Artikelnaam/i.test(text) &&
+    /Prijs\/\s*eenheid/i.test(text)
+  );
+}
+
+function parseZeelandiaPdfLines(text: string, ingredients: Ingredient[]) {
+  return compactTextLines(text)
+    .map((line) => {
+      const match = line.match(
+        /^(\d{6,})\s+(.+?)\s+(\d+(?:[.,]\d+)?)\s+([A-Z]+)\s+(\d+(?:[.,]\d+)?)\s+(KG|L|LI|ST)\s+(\d+(?:[.,]\d+)?)\s+(KG|L|LI|ST)\s+(\d+(?:[.,]\d+)?)\s+p\/(KG|L|LI|ST)\s+(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s+\d+%$/i
+      );
+
+      if (!match) return null;
+
+      const totalQuantity = parseDutchNumber(match[7]);
+      const unit = normalizeUnit(match[8]);
+      const unitPrice = parseDutchNumber(match[9]);
+      const totalPrice = parseDutchNumber(match[12]);
+
+      if (totalQuantity <= 0 || unitPrice <= 0 || totalPrice <= 0) {
+        return null;
+      }
+
+      return createSupplierInvoiceLine(
+        {
+          articleNumber: match[1],
+          description: match[2],
+          quantity: totalQuantity,
+          unit,
+          totalPrice,
+          unitPrice,
+          priceKind: "base",
+          packageSizeHint: `${match[5]} ${match[6]}`,
+        },
+        ingredients
+      );
+    })
+    .filter((line): line is InvoiceLine => Boolean(line));
+}
+
+function isRoelofsenInvoiceText(fileName: string, text: string) {
+  return (
+    detectSupplier(fileName, text) === "Roelofsen" &&
+    /Roelofsen\s+AGF/i.test(text) &&
+    /Artikelnr\.\s+Omschrijving\s+Eenheid/i.test(text)
+  );
+}
+
+function shouldSkipSupplierDescription(description: string) {
+  return /\b(backorder|emballage|ret\.?-?emb|klapkrat|statiegeld)\b/i.test(
+    description
+  );
+}
+
+function parseRoelofsenPdfLines(text: string, ingredients: Ingredient[]) {
+  return compactTextLines(text)
+    .map((line) => {
+      const match = line.match(
+        /^(\d{3,})\s+(.+?)\s+(kg|stuk)\s+(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?-?)\s+\d+(?:[.,]\d+)?%$/i
+      );
+
+      if (!match) return null;
+
+      const description = cleanCell(match[2]);
+      const quantity = parseDutchNumber(match[4]);
+      const unitPrice = parseDutchNumber(match[5]);
+      const totalPrice = parseDutchNumber(match[6]);
+
+      if (
+        shouldSkipSupplierDescription(description) ||
+        quantity <= 0 ||
+        unitPrice <= 0 ||
+        totalPrice <= 0
+      ) {
+        return null;
+      }
+
+      return createSupplierInvoiceLine(
+        {
+          articleNumber: match[1],
+          description,
+          quantity,
+          unit: match[3],
+          totalPrice,
+          unitPrice,
+          priceKind: "package",
+          packageSizeHint: description,
+        },
+        ingredients
+      );
+    })
+    .filter((line): line is InvoiceLine => Boolean(line));
+}
+
+function isFruitOpMaatInvoiceText(fileName: string, text: string) {
+  return (
+    detectSupplier(fileName, text) === "Roelofs Fruit op Maat" &&
+    /FRUIT\s+OP\s+MAAT/i.test(text) &&
+    /Datum\s+Artikel\s+nr\.\s+Artikel/i.test(text)
+  );
+}
+
+function parseFruitOpMaatPdfLines(text: string, ingredients: Ingredient[]) {
+  return text
+    .split(/\r?\n/)
+    .map((rawLine) => rawLine.trim())
+    .map((line) => {
+      const cells = line.split("\t").map(cleanCell);
+      if (cells.length < 4) return null;
+
+      const dateAndPackages = cells[0].match(
+        /^\d{1,2}-\d{1,2}-\d{4}\s+(-?\d+(?:[.,]\d+)?)$/
+      );
+      const descriptionAndPrices = cells[1].match(
+        /^(.+?)\s+€\s*(-?\d[\d.,]*)\s+€\s*(-?\d[\d.,-]*)$/
+      );
+      const article = cells[2].match(/^(\d{2,})\b/);
+      const weight = cells[3].match(/(-?\d+(?:[.,]\d+)?)\s*(KG|L|LI|ST)\b/i);
+
+      if (!dateAndPackages || !descriptionAndPrices || !article || !weight) {
+        return null;
+      }
+
+      const description = cleanCell(descriptionAndPrices[1]);
+      const quantity = parseDutchNumber(weight[1]);
+      const unit = normalizeUnit(weight[2]);
+      const totalPrice = parseDutchNumber(descriptionAndPrices[3]);
+
+      if (
+        shouldSkipSupplierDescription(description) ||
+        quantity <= 0 ||
+        totalPrice <= 0
+      ) {
+        return null;
+      }
+
+      return createSupplierInvoiceLine(
+        {
+          articleNumber: article[1],
+          description,
+          quantity,
+          unit,
+          totalPrice,
+          unitPrice: totalPrice / quantity,
+          priceKind: "base",
+          packageSizeHint: description,
+        },
+        ingredients
+      );
+    })
+    .filter((line): line is InvoiceLine => Boolean(line));
+}
+
+function isHefeInvoiceText(fileName: string, text: string) {
+  return (
+    detectSupplier(fileName, text) === "Hefe van Haag" &&
+    /RECHNUNG\s+R-/i.test(text) &&
+    /Artikel-Nr\.\s*\/\s*-Bezeichnung/i.test(text)
+  );
+}
+
+function normalizeHefeUnit(unit: string) {
+  const normalized = cleanCell(unit).toUpperCase().replace(/\s+/g, " ");
+
+  if (/\b(LI|L)\b/.test(normalized)) return "l";
+  if (/\bKG\b/.test(normalized)) return "kg";
+  if (/\bST\b/.test(normalized)) return "st";
+
+  return normalized.toLowerCase();
+}
+
+function parseHefeTrailingMeasure(value: string) {
+  const match = value.match(/\s(\d+(?:[.,]\d+)?)\s*(KG|LI|L|ST|KT)$/i);
+  if (!match || match.index === undefined) return null;
+
+  return {
+    quantity: parseDutchNumber(match[1]),
+    unit: normalizeHefeUnit(match[2]),
+    start: match.index,
+    raw: match[0],
+  };
+}
+
+function parseHefeCountAndUnit(value: string) {
+  const match = value.match(
+    /\s(\d+(?:[.,]\d+)?)\s+([A-Z]{1,3}\s*\d*(?:[.,]\d+)?\s*(?:KG|LI|L|ST)?(?:\s*\*)?(?:\s+\d+(?:[.,]\d+)?\s*(?:KG|LI|L|ST))?)$/i
+  );
+
+  if (!match || match.index === undefined) return null;
+
+  return {
+    quantity: parseDutchNumber(match[1]),
+    unitSegment: cleanCell(match[2]),
+    description: cleanCell(value.slice(0, match.index)),
+  };
+}
+
+function correctedOcrTotal(totalPrice: number, expectedTotal: number) {
+  if (!expectedTotal) return totalPrice;
+  if (numbersAreClose(totalPrice, expectedTotal)) return totalPrice;
+
+  return expectedTotal;
+}
+
+function parseHefePdfLines(text: string, ingredients: Ingredient[]) {
+  return compactTextLines(text)
+    .map((line) => {
+      if (!/^\d{4,7}\s/.test(line)) return null;
+
+      const priceMatch = line.match(
+        /\s(\d+(?:[.,]\d{4}))\s+(-?\d[\d.,]*)(?:\s+[O0©\[\]]+)?$/i
+      );
+      if (!priceMatch || priceMatch.index === undefined) return null;
+
+      const beforePrice = line.slice(0, priceMatch.index).trim();
+      const article = beforePrice.match(/^(\d{4,7})\s+(.+)$/);
+      if (!article) return null;
+
+      let productPart = article[2];
+      let content = parseHefeTrailingMeasure(productPart);
+      let contentQuantity = 0;
+      let contentUnit = "";
+      let countInfo = content
+        ? parseHefeCountAndUnit(productPart.slice(0, content.start))
+        : null;
+
+      if (content && countInfo) {
+        contentQuantity = content.quantity;
+        contentUnit = content.unit;
+        productPart = productPart.slice(0, content.start).trim();
+      } else {
+        content = null;
+        countInfo = parseHefeCountAndUnit(productPart);
+      }
+
+      if (!countInfo) return null;
+
+      const description = countInfo.description;
+      const unitPrice = parseDutchNumber(priceMatch[1]);
+      const rawTotalPrice = parseDutchNumber(priceMatch[2]);
+      const quantity = contentQuantity || countInfo.quantity;
+      const unit = contentUnit || normalizeHefeUnit(countInfo.unitSegment);
+      const totalPrice = correctedOcrTotal(
+        rawTotalPrice,
+        unitPrice * (quantity || countInfo.quantity || 1)
+      );
+
+      if (
+        shouldSkipSupplierDescription(description) ||
+        quantity <= 0 ||
+        unitPrice <= 0 ||
+        totalPrice <= 0
+      ) {
+        return null;
+      }
+
+      return createSupplierInvoiceLine(
+        {
+          articleNumber: article[1],
+          description,
+          quantity,
+          unit,
+          totalPrice,
+          unitPrice,
+          priceKind: contentQuantity ? "base" : "package",
+          packageSizeHint: `${countInfo.unitSegment} ${description}`,
+        },
+        ingredients
+      );
+    })
+    .filter((line): line is InvoiceLine => Boolean(line));
+}
+
+function parseKnownSupplierPdfLines(
+  fileName: string,
+  text: string,
+  ingredients: Ingredient[]
+) {
+  if (isBekoInvoiceText(fileName, text)) return parseBekoPdfLines(text, ingredients);
+  if (isZeelandiaInvoiceText(fileName, text)) {
+    return parseZeelandiaPdfLines(text, ingredients);
+  }
+  if (isRoelofsenInvoiceText(fileName, text)) {
+    return parseRoelofsenPdfLines(text, ingredients);
+  }
+  if (isFruitOpMaatInvoiceText(fileName, text)) {
+    return parseFruitOpMaatPdfLines(text, ingredients);
+  }
+  if (isHefeInvoiceText(fileName, text)) return parseHefePdfLines(text, ingredients);
+
+  return [];
+}
+
 function parseCsvRows(text: string) {
   const result = Papa.parse<string[]>(text, {
     skipEmptyLines: "greedy",
@@ -709,6 +1100,19 @@ function extractInvoiceNumber(text: string, fileName: string) {
   const bekoFileMatch = fileName.match(/Factuur_Beko_(\d{5,})/i);
   if (bekoFileMatch) return bekoFileMatch[1];
 
+  const roelofsenMatch = text.match(
+    /Factuurnr\.\s+Factuurdatum\s+Debiteurennr\.\s+(\d{5,})/i
+  );
+  if (roelofsenMatch) return roelofsenMatch[1];
+
+  const germanInvoiceMatch = text.match(
+    /\bRechnungsnummer\s*[:#-]?\s*([A-Z]?-?\d{5,})/i
+  );
+  if (germanInvoiceMatch) return germanInvoiceMatch[1];
+
+  const invoiceNumberMatch = text.match(/\bFactuurnummer\s+(\d{5,})/i);
+  if (invoiceNumberMatch) return invoiceNumberMatch[1];
+
   const match = text.match(
     /\b(?:factuur(?:nummer)?|invoice|bon|document)\s*(?:nr\.?|nummer|no\.?)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9./-]{3,})/i
   );
@@ -724,7 +1128,9 @@ function detectSupplier(fileName: string, text: string) {
   if (haystack.includes("zeelandia")) return "Zeelandia";
   if (haystack.includes("sligro")) return "Sligro";
   if (haystack.includes("roelofsen")) return "Roelofsen";
-  if (haystack.includes("roelofs fruit")) return "Roelofs Fruit op Maat";
+  if (haystack.includes("roelofs fruit") || haystack.includes("fruit op maat")) {
+    return "Roelofs Fruit op Maat";
+  }
   if (haystack.includes("hefe van haag") || haystack.includes("hefe")) {
     return "Hefe van Haag";
   }
@@ -741,7 +1147,7 @@ function findLooseQuantity(line: string, articleEnd: number) {
   const textAfterArticle = line.slice(articleEnd);
   const quantityMatch = Array.from(
     textAfterArticle.matchAll(
-      /(^|\s)(\d+(?:[.,]\d{1,3})?)\s*(kg|kilo|kilogram|g|gr|gram|l|ltr|liter|ml|st|stuks|stuk|doos|zak|pak|tray|emmer)\b/gi
+      /(^|\s)(\d+(?:[.,]\d{1,3})?)\s*(kg|kilo|kilogram|g|gr|gram|l|li|ltr|liter|ml|st|stuks|stuk|doos|zak|pak|tray|emmer)\b/gi
     )
   ).at(-1);
 
@@ -893,7 +1299,10 @@ async function extractPdfText(buffer: Buffer) {
 
 async function extractTextWithOcr(image: Buffer) {
   const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker("nld+eng");
+  const worker = await createWorker("eng", 1, {
+    cachePath: TESSERACT_CACHE_PATH,
+    workerPath: TESSERACT_WORKER_PATH,
+  });
 
   try {
     const result = await worker.recognize(image);
@@ -901,6 +1310,35 @@ async function extractTextWithOcr(image: Buffer) {
   } finally {
     await worker.terminate();
   }
+}
+
+async function extractPdfEmbeddedImageText(buffer: Buffer) {
+  await ensurePdfCanvasGlobals();
+
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  const pages: string[] = [];
+
+  try {
+    const imageResult = await parser.getImage({
+      first: MAX_OCR_PDF_PAGES,
+      imageBuffer: true,
+      imageDataUrl: false,
+      imageThreshold: 100,
+    });
+
+    for (const page of imageResult.pages) {
+      for (const image of page.images) {
+        if (image.data) {
+          pages.push(await extractTextWithOcr(Buffer.from(image.data)));
+        }
+      }
+    }
+  } finally {
+    await parser.destroy();
+  }
+
+  return pages.join("\n");
 }
 
 async function extractScannedPdfText(buffer: Buffer) {
@@ -921,11 +1359,17 @@ async function extractScannedPdfText(buffer: Buffer) {
     for (const page of screenshots.pages) {
       pages.push(await extractTextWithOcr(Buffer.from(page.data)));
     }
+  } catch {
+    // Some scanned PDFs contain full-page embedded images that pdf.js cannot
+    // render through canvas. Those can still be OCR'ed via getImage().
   } finally {
     await parser.destroy();
   }
 
-  return pages.join("\n");
+  const screenshotText = pages.join("\n");
+  if (screenshotText.trim()) return screenshotText;
+
+  return extractPdfEmbeddedImageText(buffer);
 }
 
 function createInvoice(
@@ -933,8 +1377,10 @@ function createInvoice(
   fileName: string,
   text: string
 ): InvoiceImport {
+  const id = `invoice-${Date.now()}`;
+
   return {
-    id: `invoice-${Date.now()}`,
+    id,
     supplier: detectSupplier(fileName, text),
     invoiceNumber: extractInvoiceNumber(text, fileName),
     invoiceDate: extractDate(text),
@@ -946,8 +1392,21 @@ function createInvoice(
       minute: "2-digit",
     }),
     status: "review",
-    lines,
+    lines: lines.map((line, index) => ({
+      ...line,
+      id: line.id || `${id}-line-${index + 1}`,
+    })),
   };
+}
+
+function limitInvoiceLines(lines: InvoiceLine[], warnings: string[]) {
+  if (lines.length <= MAX_INVOICE_LINES) return lines;
+
+  warnings.push(
+    `Er zijn ${lines.length} regels herkend. Alleen de eerste ${MAX_INVOICE_LINES} regels zijn meegenomen zodat de opslag klein blijft.`
+  );
+
+  return lines.slice(0, MAX_INVOICE_LINES);
 }
 
 async function parseInvoiceFile(
@@ -970,9 +1429,7 @@ async function parseInvoiceFile(
     lines = parseTabularRows(rows, ingredients);
   } else if (extension === "pdf" || mimeType.includes("pdf")) {
     text = await extractPdfText(buffer);
-    lines = isBekoInvoiceText(fileName, text)
-      ? parseBekoPdfLines(text, ingredients)
-      : [];
+    lines = parseKnownSupplierPdfLines(fileName, text, ingredients);
 
     if (!lines.length) {
       lines = maybeParseDelimitedText(text, ingredients);
@@ -987,17 +1444,31 @@ async function parseInvoiceFile(
       }
     }
 
-    if (!lines.length && !text.trim()) {
+    if (!lines.length) {
       warnings.push(
-        "Deze PDF bevat weinig tekst. Ik heb OCR op de eerste pagina's geprobeerd."
+        text.trim()
+          ? "Deze PDF kon niet als tekstfactuur worden gelezen. Ik heb OCR op de eerste pagina's geprobeerd."
+          : "Deze PDF bevat weinig tekst. Ik heb OCR op de eerste pagina's geprobeerd."
       );
-      text = await extractScannedPdfText(buffer);
-      lines = maybeParseDelimitedText(text, ingredients);
+      const ocrText = await extractScannedPdfText(buffer);
+
+      if (ocrText.trim()) {
+        text = ocrText;
+        lines = parseKnownSupplierPdfLines(fileName, text, ingredients);
+      }
+
+      if (!lines.length && text.trim()) {
+        lines = maybeParseDelimitedText(text, ingredients);
+      }
     }
   } else if (mimeType.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "tif", "tiff"].includes(extension)) {
     warnings.push("Afbeelding gelezen met OCR. Controleer de herkende regels extra goed.");
     text = await extractTextWithOcr(buffer);
-    lines = maybeParseDelimitedText(text, ingredients);
+    lines = parseKnownSupplierPdfLines(fileName, text, ingredients);
+
+    if (!lines.length) {
+      lines = maybeParseDelimitedText(text, ingredients);
+    }
   } else {
     throw new Error("Bestandstype wordt nog niet ondersteund.");
   }
@@ -1014,6 +1485,8 @@ async function parseInvoiceFile(
       "Geen factuurregels herkend. Gebruik een bestand met artikelnummer, omschrijving, aantal, eenheid en prijs."
     );
   }
+
+  lines = limitInvoiceLines(lines, warnings);
 
   return {
     invoice: createInvoice(lines, fileName, text),

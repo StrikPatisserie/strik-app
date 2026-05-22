@@ -295,7 +295,7 @@ export const fillingOptions: StudioOption[] = [
   {
     id: "aardbeien-room",
     label: "Aardbeien room",
-    price: { mode: "included", amount: 0 },
+    price: { mode: "perPerson", amount: 0.35 },
   },
   {
     id: "witte-choco-framboos",

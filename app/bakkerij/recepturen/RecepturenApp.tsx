@@ -15,6 +15,7 @@ import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
 import {
   fetchRecepturenData,
+  pruneInvoiceImports,
   saveRecepturenData,
   type RecepturenData,
 } from "./recepturenApi";
@@ -53,6 +54,18 @@ function invoiceStatusForLines(lines: InvoiceLine[]): InvoiceImport["status"] {
   return "processed";
 }
 
+function sameInvoiceLine(item: InvoiceLine, selectedLine: InvoiceLine) {
+  if (item.id || selectedLine.id) return item.id === selectedLine.id;
+
+  return (
+    item.articleNumber === selectedLine.articleNumber &&
+    item.description === selectedLine.description &&
+    item.quantity === selectedLine.quantity &&
+    item.unit === selectedLine.unit &&
+    item.totalPrice === selectedLine.totalPrice
+  );
+}
+
 function replaceInvoiceLine(
   invoices: InvoiceImport[],
   invoiceId: string,
@@ -63,8 +76,7 @@ function replaceInvoiceLine(
     if (invoice.id !== invoiceId) return invoice;
 
     const nextLines = invoice.lines.map((item) =>
-      item.articleNumber === line.articleNumber &&
-      item.description === line.description
+      sameInvoiceLine(item, line)
         ? { ...item, ...changes }
         : item
     );
@@ -366,6 +378,29 @@ export default function RecepturenApp() {
     );
   }
 
+  function deleteInvoice(invoiceId: string) {
+    const invoice = invoiceItems.find((item) => item.id === invoiceId);
+    if (!invoice) return;
+
+    const confirmed = window.confirm(
+      `Factuur ${invoice.invoiceNumber} uit de opslag verwijderen? Reeds goedgekeurde ingredientprijzen blijven staan. Gebruik eerst terugdraaien als je die prijsupdates wilt herstellen.`
+    );
+
+    if (!confirmed) return;
+
+    const nextInvoices = invoiceItems.filter((item) => item.id !== invoiceId);
+
+    setInvoiceItems(nextInvoices);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: recipeItems,
+        invoiceImports: nextInvoices,
+      },
+      "Factuur verwijderd uit de opslag."
+    );
+  }
+
   function matchInvoiceLine(
     invoiceId: string,
     line: InvoiceLine,
@@ -378,7 +413,7 @@ export default function RecepturenApp() {
   }
 
   function importInvoice(invoice: InvoiceImport) {
-    const nextInvoices = [invoice, ...invoiceItems].slice(0, 100);
+    const nextInvoices = pruneInvoiceImports([invoice, ...invoiceItems]);
 
     setInvoiceItems(nextInvoices);
     persistRecepturenData(
@@ -387,7 +422,7 @@ export default function RecepturenApp() {
         recipes: recipeItems,
         invoiceImports: nextInvoices,
       },
-      "Beko factuur opgeslagen in WordPress."
+      "Factuur opgeslagen in WordPress; het bestand zelf is niet bewaard."
     );
   }
 
@@ -486,6 +521,7 @@ export default function RecepturenApp() {
             onIgnoreLine={ignoreInvoiceLine}
             onIgnoreInvoice={ignoreInvoice}
             onRevertInvoice={revertInvoice}
+            onDeleteInvoice={deleteInvoice}
             onMatchLine={matchInvoiceLine}
             onImportInvoice={importInvoice}
           />

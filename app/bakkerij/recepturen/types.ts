@@ -74,6 +74,7 @@ export type Recipe = {
 };
 
 export type InvoiceLine = {
+  id?: string;
   articleNumber: string;
   description: string;
   quantity: number;

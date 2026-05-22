@@ -12,6 +12,7 @@ export default function FactuurImport({
   onIgnoreLine,
   onIgnoreInvoice,
   onRevertInvoice,
+  onDeleteInvoice,
   onMatchLine,
   onImportInvoice,
 }: Readonly<{
@@ -23,6 +24,7 @@ export default function FactuurImport({
   onIgnoreLine: (invoiceId: string, line: InvoiceLine) => void;
   onIgnoreInvoice: (invoiceId: string) => void;
   onRevertInvoice: (invoiceId: string) => void;
+  onDeleteInvoice: (invoiceId: string) => void;
   onMatchLine: (
     invoiceId: string,
     line: InvoiceLine,
@@ -52,7 +54,7 @@ export default function FactuurImport({
         ? ` Let op: ${result.warnings.join(" ")}`
         : "";
       setUploadMessage(
-        `${file.name} ingeladen: ${result.invoice.lines.length} regels, ${result.invoice.lines.filter((line) => line.matchedIngredientId).length} automatisch gekoppeld.${warningText}`
+        `${file.name} ingeladen: ${result.invoice.lines.length} regels, ${result.invoice.lines.filter((line) => line.matchedIngredientId).length} automatisch gekoppeld. Het bestand zelf is niet opgeslagen.${warningText}`
       );
     } catch {
       setUploadMessage("Factuur kon niet gelezen worden.");
@@ -69,7 +71,7 @@ export default function FactuurImport({
           <SectionTitle
             eyebrow="Factuurimport"
             title="Upload factuur of receptbestand"
-            description="Beko, Zeelandia en Sligro worden automatisch gelezen uit CSV, Excel, tekst-PDF of OCR."
+            description="Beko, Zeelandia, Sligro, Roelofsen, Fruit op Maat en Hefe van Haag worden automatisch gelezen uit CSV, Excel, tekst-PDF of OCR."
           />
           <div
             onDragOver={(event) => event.preventDefault()}
@@ -81,7 +83,7 @@ export default function FactuurImport({
           >
             <p className="text-sm font-black">Sleep factuur hierheen</p>
             <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
-              CSV, Excel, PDF of afbeelding · maximaal 20 MB
+              CSV, Excel, PDF of afbeelding · maximaal 20 MB · bestand wordt niet bewaard
             </p>
             <input
               ref={fileInputRef}
@@ -128,6 +130,7 @@ export default function FactuurImport({
         onIgnoreLine={onIgnoreLine}
         onIgnoreInvoice={onIgnoreInvoice}
         onRevertInvoice={onRevertInvoice}
+        onDeleteInvoice={onDeleteInvoice}
         onMatchLine={onMatchLine}
       />
 
