@@ -33,6 +33,17 @@ type LooseNumberMatch = {
   end: number;
 };
 
+type BekoRawLine = {
+  articleNumber: string;
+  priceUnit: string;
+  description: string;
+  totalPrice: number;
+  bekoPrice: number;
+  contentAmount: number;
+  quantity: number;
+  quantityUnit: string;
+};
+
 type ExtractedInvoice = {
   invoice: InvoiceImport;
   warnings: string[];
@@ -151,12 +162,16 @@ function parseIngredients(value: FormDataEntryValue | null) {
 }
 
 function parseDutchNumber(value: unknown) {
-  const trimmed = String(value ?? "")
+  let trimmed = String(value ?? "")
     .trim()
     .replace(/\s/g, "")
     .replace(/€|\u00a0/g, "");
 
   if (!trimmed) return 0;
+
+  if (trimmed.endsWith("-") && !trimmed.startsWith("-")) {
+    trimmed = `-${trimmed.slice(0, -1)}`;
+  }
 
   const normalized =
     trimmed.includes(",") && trimmed.includes(".")
@@ -268,6 +283,24 @@ function normalizeUnit(unit: string, description = "") {
   return found;
 }
 
+function normalizeBekoUnit(unit: string) {
+  const upperUnit = unit.toUpperCase();
+
+  if (upperUnit === "LT") return "l";
+  if (upperUnit === "ST") return "st";
+  if (upperUnit === "KG" || upperUnit === "HK") return "kg";
+
+  return upperUnit.toLowerCase();
+}
+
+function isWeightIngredient(ingredient?: Ingredient) {
+  return ingredient?.recipeUnit === "gram" || ingredient?.recipeUnit === "kg";
+}
+
+function isVolumeIngredient(ingredient?: Ingredient) {
+  return ingredient?.recipeUnit === "ml" || ingredient?.recipeUnit === "liter";
+}
+
 function parsePackageSize(packageSize = "") {
   const normalized = packageSize.toLowerCase().replace(",", ".");
   const multiPack = normalized.match(
@@ -334,27 +367,45 @@ function priceForIngredientUnit(
   pricePerUnit: number,
   unit: string,
   ingredient?: Ingredient,
-  priceKind: PricePerUnitKind = "package"
+  priceKind: PricePerUnitKind = "package",
+  fallbackPackageSize = ""
 ) {
   if (!pricePerUnit) return 0;
 
   const normalizedUnit = normalizeUnit(unit);
   const recipeUnit = ingredient?.recipeUnit;
-  const isWeightIngredient = recipeUnit === "gram" || recipeUnit === "kg";
-  const isVolumeIngredient = recipeUnit === "ml" || recipeUnit === "liter";
-  const packageSize = ingredient ? parsePackageSize(ingredient.packageSize) : null;
+  const hasWeightIngredient = recipeUnit === "gram" || recipeUnit === "kg";
+  const hasVolumeIngredient = recipeUnit === "ml" || recipeUnit === "liter";
+  const packageSize =
+    (ingredient ? parsePackageSize(ingredient.packageSize) : null) ||
+    parsePackageSize(fallbackPackageSize);
 
   if (priceKind === "base") return pricePerUnit;
 
   if (
     packageSize &&
-    ["st", "doos", "zak", "pak", "tray", "emmer"].includes(normalizedUnit)
+    [
+      "st",
+      "doos",
+      "zak",
+      "pak",
+      "tray",
+      "emmer",
+      "ds",
+      "bl",
+      "bs",
+      "rl",
+      "fl",
+      "cn",
+      "pk",
+      "em",
+    ].includes(normalizedUnit)
   ) {
-    if (isWeightIngredient && packageSize.unit === "kg") {
+    if (hasWeightIngredient && packageSize.unit === "kg") {
       return pricePerUnit / packageSize.amount;
     }
 
-    if (isVolumeIngredient && packageSize.unit === "l") {
+    if (hasVolumeIngredient && packageSize.unit === "l") {
       return pricePerUnit / packageSize.amount;
     }
 
@@ -363,8 +414,8 @@ function priceForIngredientUnit(
     }
   }
 
-  if (normalizedUnit === "g" && isWeightIngredient) return pricePerUnit * 1000;
-  if (normalizedUnit === "ml" && isVolumeIngredient) return pricePerUnit * 1000;
+  if (normalizedUnit === "g" && hasWeightIngredient) return pricePerUnit * 1000;
+  if (normalizedUnit === "ml" && hasVolumeIngredient) return pricePerUnit * 1000;
 
   return pricePerUnit;
 }
@@ -393,7 +444,8 @@ function createInvoiceLine(
     rawPricePerUnit || totalPrice,
     unit,
     matchedIngredient,
-    explicitUnitPrice ? map.pricePerUnitKind || "package" : "package"
+    explicitUnitPrice ? map.pricePerUnitKind || "package" : "package",
+    description
   );
   const oldPrice = matchedIngredient ? ingredientPackagePrice(matchedIngredient) : 0;
 
@@ -432,6 +484,159 @@ function parseTabularRows(
   return cleanRows
     .slice(headerIndex + 1)
     .map((row) => createInvoiceLine(row, map, ingredients))
+    .filter((line): line is InvoiceLine => Boolean(line));
+}
+
+function isBekoInvoiceText(fileName: string, text: string) {
+  return (
+    detectSupplier(fileName, text) === "Beko" &&
+    /Art\.nr\.\s+KG/i.test(text) &&
+    /Bruto\s+Prijs/i.test(text)
+  );
+}
+
+function parseBekoArticleCell(cell: string) {
+  const match = cleanCell(cell).match(/^(\d{5,8})\s+([A-Z]{2})\s+(.+)$/);
+  if (!match) return null;
+
+  return {
+    articleNumber: match[1],
+    priceUnit: match[2].toUpperCase(),
+    description: cleanCell(match[3]),
+  };
+}
+
+function parseBekoQuantityCell(cell = "") {
+  const match = cleanCell(cell).match(/(-?\d+(?:[.,]\d+)?-?)\s*([A-Z]{1,3})\b/i);
+
+  return {
+    quantity: match ? parseDutchNumber(match[1]) : 0,
+    quantityUnit: match ? match[2].toUpperCase() : "",
+  };
+}
+
+function bekoQuantityCellIndex(cells: string[]) {
+  for (let index = cells.length - 2; index >= 4; index -= 1) {
+    if (/\d/.test(cells[index]) && /\b[A-Z]{1,3}\b/i.test(cells[index])) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function isBekoContinuationLine(line: string) {
+  return (
+    line !== "" &&
+    !line.includes("\t") &&
+    !line.includes(":") &&
+    !/^(-{3}|DC Beko|Weeknr|Beko Groothandel|BONNUMMER|Aantal\b|Totaal\b|BTW\b|Bedrag\b)/i.test(line) &&
+    !/^\d{5,8}\s+[A-Z]{2}\b/.test(line)
+  );
+}
+
+function parseBekoRawLines(text: string) {
+  const rows: BekoRawLine[] = [];
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const cells = line.split("\t").map(cleanCell);
+    const article = parseBekoArticleCell(cells[0] || "");
+
+    if (!article) {
+      if (rows.length && isBekoContinuationLine(line)) {
+        rows[rows.length - 1].description = cleanCell(
+          `${rows[rows.length - 1].description} ${line}`
+        );
+      }
+
+      continue;
+    }
+
+    const quantityIndex = bekoQuantityCellIndex(cells);
+    const quantityInfo =
+      quantityIndex >= 0 ? parseBekoQuantityCell(cells[quantityIndex]) : null;
+    const contentAmount =
+      quantityIndex > 0 ? parseDutchNumber(cells[quantityIndex - 1]) : 0;
+    const totalPrice = parseDutchNumber(cells[2]);
+    const bekoPrice = parseDutchNumber(cells[3]);
+
+    if (totalPrice <= 0 || bekoPrice <= 0) continue;
+
+    rows.push({
+      ...article,
+      totalPrice,
+      bekoPrice,
+      contentAmount,
+      quantity: Math.abs(quantityInfo?.quantity || 1),
+      quantityUnit: quantityInfo?.quantityUnit || article.priceUnit,
+    });
+  }
+
+  return rows;
+}
+
+function createBekoInvoiceLine(
+  row: BekoRawLine,
+  ingredients: Ingredient[]
+): InvoiceLine | null {
+  const matchedIngredient = findMatchingIngredient(
+    row.articleNumber,
+    row.description,
+    ingredients
+  );
+  let unit = normalizeBekoUnit(row.quantityUnit || row.priceUnit);
+  let quantity = row.quantity || 1;
+  let pricePerUnit = row.bekoPrice;
+
+  if (
+    matchedIngredient &&
+    row.contentAmount > 0 &&
+    (isWeightIngredient(matchedIngredient) || isVolumeIngredient(matchedIngredient))
+  ) {
+    pricePerUnit = row.totalPrice / row.contentAmount;
+    quantity = row.contentAmount;
+    unit = isVolumeIngredient(matchedIngredient) ? "l" : "kg";
+  } else if (row.priceUnit === "HK") {
+    pricePerUnit = row.bekoPrice / 100;
+    quantity = row.quantity * 100;
+    unit = "kg";
+  } else if (["KG", "LT", "ST"].includes(row.priceUnit)) {
+    unit = normalizeBekoUnit(row.priceUnit);
+  } else {
+    pricePerUnit = priceForIngredientUnit(
+      row.bekoPrice,
+      normalizeBekoUnit(row.priceUnit),
+      matchedIngredient,
+      "package",
+      row.description
+    );
+  }
+
+  if (!pricePerUnit) return null;
+
+  const oldPrice = matchedIngredient ? ingredientPackagePrice(matchedIngredient) : 0;
+
+  return {
+    articleNumber: row.articleNumber,
+    description: row.description,
+    quantity,
+    unit,
+    totalPrice: row.totalPrice,
+    pricePerUnit,
+    matchedIngredientId: matchedIngredient?.id,
+    oldPrice,
+    newPrice: pricePerUnit,
+    percentageChange: getPercentageChange(oldPrice, pricePerUnit),
+    reviewStatus: "pending",
+  };
+}
+
+function parseBekoPdfLines(text: string, ingredients: Ingredient[]) {
+  return parseBekoRawLines(text)
+    .map((row) => createBekoInvoiceLine(row, ingredients))
     .filter((line): line is InvoiceLine => Boolean(line));
 }
 
@@ -496,6 +701,14 @@ function extractDate(text: string) {
 }
 
 function extractInvoiceNumber(text: string, fileName: string) {
+  const bekoHeaderMatch = text.match(
+    /\b\d{1,2}\s+\d{5,}\s+\d{2}[-/.]\d{2}[-/.]\d{4}\s+(\d{5,})\s+EUR\b/i
+  );
+  if (bekoHeaderMatch) return bekoHeaderMatch[1];
+
+  const bekoFileMatch = fileName.match(/Factuur_Beko_(\d{5,})/i);
+  if (bekoFileMatch) return bekoFileMatch[1];
+
   const match = text.match(
     /\b(?:factuur(?:nummer)?|invoice|bon|document)\s*(?:nr\.?|nummer|no\.?)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9./-]{3,})/i
   );
@@ -510,6 +723,11 @@ function detectSupplier(fileName: string, text: string) {
   if (haystack.includes("beko")) return "Beko";
   if (haystack.includes("zeelandia")) return "Zeelandia";
   if (haystack.includes("sligro")) return "Sligro";
+  if (haystack.includes("roelofsen")) return "Roelofsen";
+  if (haystack.includes("roelofs fruit")) return "Roelofs Fruit op Maat";
+  if (haystack.includes("hefe van haag") || haystack.includes("hefe")) {
+    return "Hefe van Haag";
+  }
 
   return "Onbekend";
 }
@@ -752,7 +970,13 @@ async function parseInvoiceFile(
     lines = parseTabularRows(rows, ingredients);
   } else if (extension === "pdf" || mimeType.includes("pdf")) {
     text = await extractPdfText(buffer);
-    lines = maybeParseDelimitedText(text, ingredients);
+    lines = isBekoInvoiceText(fileName, text)
+      ? parseBekoPdfLines(text, ingredients)
+      : [];
+
+    if (!lines.length) {
+      lines = maybeParseDelimitedText(text, ingredients);
+    }
 
     if (!lines.length && text.trim()) {
       lines = parseLooseInvoiceLines(text, ingredients);
