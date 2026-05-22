@@ -287,30 +287,34 @@ export default function RecepturenWorkMode({
   }, [filter, recipes, search]);
 
   return (
-    <section className="grid gap-5">
-      <div className="rounded-[1.35rem] border border-[#e2dbcf] bg-white/90 p-5 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#45663b]">
-          Werkvloer
-        </p>
-        <h2 className="mt-1 text-3xl font-black leading-tight">
-          Recepten werkmodus
-        </h2>
-        <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-[#2d2a26]/58">
-          Zoek een recept, schaal de batch en volg de stappen in productie.
-        </p>
+    <section className="grid gap-4">
+      <div className="rounded-[1.1rem] border border-[#e2dbcf] bg-white/88 p-3 shadow-sm sm:p-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#45663b]">
+              Werkvloer
+            </p>
+            <h2 className="mt-0.5 text-2xl font-black leading-tight sm:text-3xl">
+              Recepten werkmodus
+            </h2>
+          </div>
+          <p className="max-w-md text-xs font-bold leading-snug text-[#2d2a26]/50 sm:text-right">
+            Zoek, schaal en volg.
+          </p>
+        </div>
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Zoek recept..."
-          className="mt-5 w-full rounded-[1.2rem] border border-[#d8d0c4] bg-[#fffdf8] px-5 py-4 text-lg font-black text-[#2d2a26] shadow-sm outline-none placeholder:text-[#2d2a26]/35 focus:ring-2 focus:ring-[#8fb184]"
+          className="mt-3 w-full rounded-[1rem] border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-base font-black text-[#2d2a26] shadow-sm outline-none placeholder:text-[#2d2a26]/35 focus:ring-2 focus:ring-[#8fb184]"
         />
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-1.5">
           {WORK_FILTERS.map((item) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setFilter(item.id)}
-              className={`rounded-full px-4 py-3 text-sm font-black shadow-sm transition active:scale-[0.98] ${
+              className={`rounded-full px-3 py-2 text-xs font-black shadow-sm transition active:scale-[0.98] ${
                 filter === item.id
                   ? "bg-[#c3d3bc] text-[#2d2a26]"
                   : "bg-[#f8f6f3] text-[#2d2a26]/60"
@@ -323,7 +327,7 @@ export default function RecepturenWorkMode({
       </div>
 
       {visibleRecipes.length ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {visibleRecipes.map((recipe) => (
             <RecipeWorkCard
               key={recipe.id}
@@ -368,31 +372,31 @@ function RecipeWorkCard({
   const batch = getStandardBatch(recipe);
 
   return (
-    <article className="grid gap-4 rounded-[1.25rem] border border-[#e2dbcf] bg-white/92 p-5 shadow-sm">
+    <article className="grid gap-3 rounded-[1.05rem] border border-[#e2dbcf] bg-white/92 p-4 shadow-sm">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/42">
+        <p className="text-[0.65rem] font-black uppercase tracking-[0.13em] text-[#2d2a26]/42">
           {recipe.productGroup}
         </p>
-        <h3 className="mt-1 text-xl font-black leading-tight">{recipe.name}</h3>
-        <p className="mt-2 text-sm font-bold text-[#2d2a26]/55">
+        <h3 className="mt-1 text-lg font-black leading-tight">{recipe.name}</h3>
+        <p className="mt-1 text-xs font-bold text-[#2d2a26]/55">
           {getRecipeTypeLabel(recipe)} - standaard batch {formatBatch(batch)}
         </p>
-        <p className="mt-1 text-xs font-bold text-[#2d2a26]/42">
+        <p className="mt-0.5 text-[0.7rem] font-bold text-[#2d2a26]/42">
           Laatst gewijzigd {formatDate(recipe.lastUpdated)}
         </p>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {recipe.allergens.length ? (
           recipe.allergens.slice(0, 5).map((allergen) => (
             <span
               key={allergen}
-              className="rounded-full bg-[#f8f6f3] px-3 py-1 text-xs font-black text-[#2d2a26]/58"
+              className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-[0.7rem] font-black text-[#2d2a26]/58"
             >
               {allergen}
             </span>
           ))
         ) : (
-          <span className="rounded-full bg-[#f8f6f3] px-3 py-1 text-xs font-black text-[#2d2a26]/45">
+          <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-[0.7rem] font-black text-[#2d2a26]/45">
             Geen allergenen
           </span>
         )}
@@ -401,14 +405,14 @@ function RecipeWorkCard({
         <button
           type="button"
           onClick={onOpen}
-          className="rounded-full bg-white px-4 py-3 text-sm font-black shadow-sm"
+          className="rounded-full bg-white px-3 py-2.5 text-xs font-black shadow-sm"
         >
           Open recept
         </button>
         <button
           type="button"
           onClick={onStart}
-          className="rounded-full bg-[#c3d3bc] px-4 py-3 text-sm font-black shadow-sm"
+          className="rounded-full bg-[#c3d3bc] px-3 py-2.5 text-xs font-black shadow-sm"
         >
           Start werkmodus
         </button>

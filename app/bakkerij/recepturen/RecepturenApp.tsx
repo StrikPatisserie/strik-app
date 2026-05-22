@@ -3,7 +3,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
 import StrikBackButton from "../../StrikBackButton";
-import StrikPageTitle from "../../StrikPageTitle";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList from "./IngredientsList";
@@ -20,7 +19,13 @@ import {
   saveRecepturenData,
   type RecepturenData,
 } from "./recepturenApi";
-import type { Ingredient, InvoiceImport, InvoiceLine, Recipe } from "./types";
+import type {
+  Ingredient,
+  InvoiceImport,
+  InvoiceLine,
+  Recipe,
+  RecipeType,
+} from "./types";
 import {
   ingredientPackagePrice,
   normalizePackagePrice,
@@ -95,6 +100,7 @@ export default function RecepturenApp() {
   const [mode, setMode] = useState<RecepturenMode>("work");
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
   const [recipeItems, setRecipeItems] = useState(recipes);
   const [ingredientItems, setIngredientItems] = useState(ingredients);
   const [invoiceItems, setInvoiceItems] = useState(invoiceImports);
@@ -153,15 +159,19 @@ export default function RecepturenApp() {
     };
   }, []);
 
-  function updateRecipe(updatedRecipe: Recipe) {
-    const nextRecipes = recipeItems.map((recipe) =>
-      recipe.id === updatedRecipe.id ? updatedRecipe : recipe
-    );
+  function saveRecipe(updatedRecipe: Recipe) {
+    const exists = recipeItems.some((recipe) => recipe.id === updatedRecipe.id);
+    const nextRecipes = exists
+      ? recipeItems.map((recipe) =>
+          recipe.id === updatedRecipe.id ? updatedRecipe : recipe
+        )
+      : [updatedRecipe, ...recipeItems];
 
     setRecipeItems(nextRecipes);
     setSelectedRecipe((current) =>
       current?.id === updatedRecipe.id ? updatedRecipe : current
     );
+    setRecipeEditorStartsOpen(false);
     persistRecepturenData({
       ingredients: ingredientItems,
       recipes: nextRecipes,
@@ -169,10 +179,27 @@ export default function RecepturenApp() {
     });
   }
 
-  function updateIngredient(updatedIngredient: Ingredient) {
-    const nextIngredients = ingredientItems.map((ingredient) =>
-      ingredient.id === updatedIngredient.id ? updatedIngredient : ingredient
+  function openRecipe(recipe: Recipe) {
+    setRecipeEditorStartsOpen(false);
+    setSelectedRecipe(recipe);
+  }
+
+  function createRecipe(type: RecipeType) {
+    setRecipeEditorStartsOpen(true);
+    setSelectedRecipe(createBlankRecipe(type));
+  }
+
+  function saveIngredient(updatedIngredient: Ingredient) {
+    const exists = ingredientItems.some(
+      (ingredient) => ingredient.id === updatedIngredient.id
     );
+    const nextIngredients = exists
+      ? ingredientItems.map((ingredient) =>
+          ingredient.id === updatedIngredient.id
+            ? updatedIngredient
+            : ingredient
+        )
+      : [updatedIngredient, ...ingredientItems];
 
     setIngredientItems(nextIngredients);
     persistRecepturenData({
@@ -430,93 +457,82 @@ export default function RecepturenApp() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f0ea] px-4 py-6 pb-28 text-[#2d2a26]">
+    <main className="min-h-screen bg-[#f4f0ea] px-3 py-4 pb-24 text-[#2d2a26] sm:px-4 sm:py-5">
       <div className="mx-auto w-full max-w-7xl">
         <StrikBackButton />
 
-        <header
-          className={`mb-5 grid gap-4 rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm ${
-            mode === "management"
-              ? "lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center"
-              : ""
-          }`}
-        >
-          <div>
-            <div className="mb-2 flex items-center justify-center gap-3 lg:justify-start">
-              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#dce8d6]">
+        <header className="mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#dce8d6] sm:h-12 sm:w-12">
                 <img
                   src={bakeryIcons.recepturen}
                   alt=""
-                  className="h-9 w-9 object-contain"
+                  className="h-7 w-7 object-contain sm:h-8 sm:w-8"
                 />
               </span>
-              <span className="rounded-full bg-[#fff0bd] px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-[#8a5b10]">
-                Bakkerij
-              </span>
+              <div className="min-w-0">
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#8a5b10]">
+                  Bakkerij
+                </p>
+                <h1
+                  className="truncate text-4xl leading-none text-[#050505] sm:text-5xl"
+                  style={{
+                    fontFamily: "Butterscotch, Marker Felt, cursive",
+                    letterSpacing: "0",
+                  }}
+                >
+                  Recepturen
+                </h1>
+              </div>
             </div>
-            <div className="lg:text-left">
-              <StrikPageTitle title="Recepturen" />
-            </div>
-            <p className="mx-auto mt-3 max-w-3xl text-center text-sm font-semibold leading-relaxed text-[#2d2a26]/58 lg:mx-0 lg:text-left">
-              {mode === "work"
-                ? "Werkvloerweergave voor recepten zoeken, batch schalen en productie afvinken."
-                : "Interne receptenbank voor eindproducten, halffabricaten, ingredienten, factuurprijsupdates, marges en productiecalculatie."}
-            </p>
-          </div>
 
-          {mode === "management" && (
-            <div className="rounded-[1.2rem] border border-[#efc2bb] bg-[#fff4f1] p-4">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#a83e31]">
-              Actie nodig
-            </p>
-            <p className="mt-2 text-2xl font-black">8</p>
-            <p className="mt-1 text-xs font-bold leading-relaxed text-[#2d2a26]/55">
-              producten onder gewenste marge na laatste {latestInvoice.supplier}
-              -factuur.
-            </p>
-            </div>
-          )}
+            {mode === "management" && (
+              <div className="rounded-2xl border border-[#efc2bb] bg-[#fff4f1] px-3 py-2 text-right">
+                <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#a83e31]">
+                  Actie
+                </p>
+                <p className="text-lg font-black leading-none">8 marge</p>
+              </div>
+            )}
+          </div>
         </header>
 
-        <div className="mb-4 rounded-[1.15rem] border border-[#e7e0d8] bg-white/88 p-2 shadow-sm">
-          <div className="grid gap-2 sm:grid-cols-2">
-            {[
-              {
-                id: "work" as const,
-                label: "Werkmodus",
-                detail: "Zoeken, schalen en afvinken",
-              },
-              {
-                id: "management" as const,
-                label: "Management",
-                detail: "Calculatie, prijzen en marges",
-              },
-            ].map((item) => (
+        <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] sm:items-center">
+          <div className="relative rounded-full bg-[#2d2a26] p-1.5 shadow-sm">
+            <span
+              className={`absolute inset-y-1.5 left-1.5 w-[calc(50%-0.375rem)] rounded-full bg-[#c3d3bc] transition-transform duration-200 ${
+                mode === "management" ? "translate-x-full" : "translate-x-0"
+              }`}
+            />
+            <div className="relative grid grid-cols-2">
               <button
-                key={item.id}
                 type="button"
-                onClick={() => setMode(item.id)}
-                className={`rounded-[1rem] px-4 py-3 text-left transition active:scale-[0.99] ${
-                  mode === item.id
-                    ? "bg-[#c3d3bc] text-[#2d2a26] shadow-sm"
-                    : "bg-[#f8f6f3] text-[#2d2a26]/60"
+                onClick={() => setMode("work")}
+                className={`rounded-full px-4 py-2.5 text-sm font-black transition ${
+                  mode === "work" ? "text-[#2d2a26]" : "text-white/68"
                 }`}
               >
-                <span className="block text-base font-black">{item.label}</span>
-                <span className="mt-0.5 block text-xs font-bold">
-                  {item.detail}
-                </span>
+                Werk
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setMode("management")}
+                className={`rounded-full px-4 py-2.5 text-sm font-black transition ${
+                  mode === "management" ? "text-[#2d2a26]" : "text-white/68"
+                }`}
+              >
+                Management
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div className="mb-4 rounded-[1.1rem] border border-[#e7e0d8] bg-white/80 px-4 py-3 text-sm font-bold text-[#2d2a26]/58 shadow-sm">
-          {isLoadingData
-            ? "Recepturen laden..."
-            : mode === "work"
-              ? "Receptdata klaar voor productie."
-              : syncStatus}
+          <p className="text-xs font-bold leading-snug text-[#2d2a26]/50 sm:text-right">
+            {isLoadingData
+              ? "Laden..."
+              : mode === "work"
+                ? "Recepten klaar."
+                : syncStatus}
+          </p>
         </div>
 
         {mode === "work" && (
@@ -552,19 +568,24 @@ export default function RecepturenApp() {
           />
         )}
         {mode === "management" && activeTab === "recepten" && (
-          <RecipesList recipes={recipeItems} onOpenRecipe={setSelectedRecipe} />
+          <RecipesList
+            recipes={recipeItems}
+            onOpenRecipe={openRecipe}
+            onCreateRecipe={() => createRecipe("finalProduct")}
+          />
         )}
         {mode === "management" && activeTab === "halffabricaten" && (
           <HalffabricatenList
             recipes={recipeItems}
-            onOpenRecipe={setSelectedRecipe}
+            onOpenRecipe={openRecipe}
+            onCreateRecipe={() => createRecipe("semiFinished")}
           />
         )}
         {mode === "management" && activeTab === "ingredienten" && (
           <IngredientsList
             ingredients={ingredientItems}
             recipes={recipeItems}
-            onUpdateIngredient={updateIngredient}
+            onUpdateIngredient={saveIngredient}
           />
         )}
         {mode === "management" && activeTab === "factuurimport" && (
@@ -584,7 +605,7 @@ export default function RecepturenApp() {
         {mode === "management" && activeTab === "marge" && (
           <MargeOverzicht
             recipes={recipeItems}
-            onOpenRecipe={setSelectedRecipe}
+            onOpenRecipe={openRecipe}
           />
         )}
         {mode === "management" && activeTab === "productie" && (
@@ -600,11 +621,51 @@ export default function RecepturenApp() {
             recipe={selectedRecipe}
             ingredients={ingredientItems}
             recipes={recipeItems}
+            startInEditMode={recipeEditorStartsOpen}
             onClose={() => setSelectedRecipe(null)}
-            onSaveRecipe={updateRecipe}
+            onSaveRecipe={saveRecipe}
+            onSaveIngredient={saveIngredient}
           />
         )}
       </div>
     </main>
   );
+}
+
+function createBlankRecipe(type: RecipeType): Recipe {
+  const now = new Date().toISOString().slice(0, 10);
+  const idPrefix = type === "semiFinished" ? "hf-new" : "recipe-new";
+
+  return {
+    id: `${idPrefix}-${Date.now()}`,
+    name: type === "semiFinished" ? "Nieuw halffabricaat" : "Nieuw recept",
+    type,
+    productGroup: type === "semiFinished" ? "Vullingen" : "Gebak",
+    standardBatchQuantity: type === "semiFinished" ? 1 : 40,
+    standardBatchUnit: type === "semiFinished" ? "kg" : "stuk",
+    salesPrice: type === "semiFinished" ? 0 : 0,
+    costPrice: 0,
+    previousCostPrice: 0,
+    targetMargin: type === "semiFinished" ? 0 : 75,
+    currentMargin: 0,
+    status: "draft",
+    ingredients: [],
+    semiFinishedItems: [],
+    workInstructions: [],
+    preparationSteps: ["Vul hier de eerste productiestap in."],
+    finishingSteps: [],
+    equipment: [],
+    allergens: [],
+    internalNotes: "",
+    isWorkModeVisible: true,
+    version: "v1",
+    lastUpdated: now,
+    portionLabel: type === "semiFinished" ? "1 kg" : "1 stuk",
+    batchSize: type === "semiFinished" ? "1 kg" : "40 stuks",
+    photoHint: "Nieuw recept",
+    notes: "",
+    linkedFinalProductIds: [],
+    packagingCost: 0,
+    decorationCost: 0,
+  };
 }

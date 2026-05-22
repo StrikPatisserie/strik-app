@@ -15,20 +15,31 @@ import {
 export default function HalffabricatenList({
   recipes,
   onOpenRecipe,
+  onCreateRecipe,
 }: Readonly<{
   recipes: Recipe[];
   onOpenRecipe: (recipe: Recipe) => void;
+  onCreateRecipe: () => void;
 }>) {
   const semiFinished = recipes.filter((recipe) => recipe.type === "semiFinished");
 
   return (
     <Panel>
       <div className="grid gap-4">
-        <SectionTitle
-          eyebrow="Basisrecepten"
-          title="Halffabricaten"
-          description="Losse recepten die als bouwstenen gekoppeld worden aan eindproducten."
-        />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <SectionTitle
+            eyebrow="Basisrecepten"
+            title="Halffabricaten"
+            description="Losse recepten die als bouwstenen gekoppeld worden aan eindproducten."
+          />
+          <button
+            type="button"
+            onClick={onCreateRecipe}
+            className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm transition active:scale-[0.98]"
+          >
+            Nieuw halffabricaat
+          </button>
+        </div>
 
         {semiFinished.length ? (
           <div className="grid gap-3 lg:grid-cols-2">
