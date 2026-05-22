@@ -24,6 +24,10 @@ if (!defined('STRIK_RECEPTUREN_MAX_JSON_BYTES')) {
     define('STRIK_RECEPTUREN_MAX_JSON_BYTES', 4500000);
 }
 
+if (!defined('STRIK_RECEPTUREN_PHOTO_PREVIEW_MAX_BYTES')) {
+    define('STRIK_RECEPTUREN_PHOTO_PREVIEW_MAX_BYTES', 60000);
+}
+
 if (!function_exists('strik_recepturen_v1_permission')) {
 function strik_recepturen_v1_permission($request) {
     return hash_equals(STRIK_RECEPTUREN_API_KEY, (string) $request->get_param('key'))
@@ -63,13 +67,40 @@ function strik_recepturen_v1_sanitize_key($key) {
 }
 }
 
+if (!function_exists('strik_recepturen_v1_is_photo_preview_key')) {
+function strik_recepturen_v1_is_photo_preview_key($key_path) {
+    $suffix = '.photoPreviewDataUrl';
+
+    return $key_path === 'photoPreviewDataUrl'
+        || substr((string) $key_path, -strlen($suffix)) === $suffix;
+}
+}
+
+if (!function_exists('strik_recepturen_v1_clean_photo_data_url')) {
+function strik_recepturen_v1_clean_photo_data_url($value) {
+    if (!is_string($value) || $value === '') return '';
+
+    $value = trim($value);
+    if (strlen($value) > STRIK_RECEPTUREN_PHOTO_PREVIEW_MAX_BYTES) return '';
+
+    return preg_match('/^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+\/=]+$/i', $value)
+        ? $value
+        : '';
+}
+}
+
 if (!function_exists('strik_recepturen_v1_sanitize_deep')) {
-function strik_recepturen_v1_sanitize_deep($value) {
+function strik_recepturen_v1_sanitize_deep($value, $key_path = '') {
     if (is_array($value)) {
         $clean = array();
 
         foreach ($value as $key => $item) {
-            $clean[strik_recepturen_v1_sanitize_key($key)] = strik_recepturen_v1_sanitize_deep($item);
+            $clean_key = strik_recepturen_v1_sanitize_key($key);
+            $next_key_path = $key_path === ''
+                ? (string) $clean_key
+                : $key_path . '.' . $clean_key;
+
+            $clean[$clean_key] = strik_recepturen_v1_sanitize_deep($item, $next_key_path);
         }
 
         return $clean;
@@ -81,6 +112,10 @@ function strik_recepturen_v1_sanitize_deep($value) {
 
     if (is_numeric($value) && !is_string($value)) {
         return 0 + $value;
+    }
+
+    if (strik_recepturen_v1_is_photo_preview_key($key_path)) {
+        return strik_recepturen_v1_clean_photo_data_url($value);
     }
 
     return strik_recepturen_v1_text($value);

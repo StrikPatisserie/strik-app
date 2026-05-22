@@ -74,6 +74,9 @@ export type Recipe = {
   portionLabel: string;
   batchSize: string;
   photoHint: string;
+  photoPreviewDataUrl?: string;
+  photoFileName?: string;
+  photoUpdatedAt?: string;
   notes: string;
   linkedFinalProductIds?: string[];
   packagingCost?: number;

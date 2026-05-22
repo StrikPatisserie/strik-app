@@ -32,6 +32,11 @@ import {
 
 const recipeUnits: RecipeUnit[] = ["gram", "kg", "ml", "liter", "stuk"];
 const recipeStatuses: RecipeStatus[] = ["active", "draft", "old"];
+const RECIPE_PHOTO_MAX_SOURCE_BYTES = 12 * 1024 * 1024;
+const RECIPE_PHOTO_MAX_SIDE = 360;
+const RECIPE_PHOTO_MIN_SIDE = 180;
+const RECIPE_PHOTO_MAX_DATA_URL_LENGTH = 45000;
+const RECIPE_PHOTO_QUALITIES = [0.3, 0.22, 0.16, 0.1];
 
 export default function RecipeDetail({
   recipe,
@@ -93,6 +98,46 @@ export default function RecipeDetail({
 
   function updateDraft(changes: Partial<RecipeDraft>) {
     setDraft((current) => ({ ...current, ...changes }));
+  }
+
+  async function updateRecipePhoto(file: File | null) {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showFeedback("Kies een afbeeldingsbestand.");
+      return;
+    }
+
+    if (file.size > RECIPE_PHOTO_MAX_SOURCE_BYTES) {
+      showFeedback("Foto is te groot. Kies maximaal 12 MB.");
+      return;
+    }
+
+    try {
+      const preview = await createSmallRecipePhotoPreview(file);
+
+      setDraft((current) => ({
+        ...current,
+        photoPreviewDataUrl: preview.dataUrl,
+        photoFileName: preview.fileName,
+        photoUpdatedAt: todayIsoDate(),
+        photoHint:
+          current.photoHint.trim() ||
+          file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "),
+      }));
+      showFeedback("Foto verkleind toegevoegd.");
+    } catch {
+      showFeedback("Foto kon niet worden verkleind.");
+    }
+  }
+
+  function removeRecipePhoto() {
+    updateDraft({
+      photoPreviewDataUrl: "",
+      photoFileName: "",
+      photoUpdatedAt: "",
+    });
+    showFeedback("Foto verwijderd.");
   }
 
   function saveRecipeDraft() {
@@ -427,6 +472,70 @@ export default function RecipeDetail({
                     />
                     Toon in werkmodus
                   </label>
+                </div>
+              </EditorBlock>
+
+              <EditorBlock title="Foto">
+                <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)]">
+                  <div
+                    className={`flex aspect-[4/3] items-center justify-center rounded-2xl border border-[#dfe9d8] bg-[#eadfcf] bg-cover bg-center p-3 text-center ${
+                      draft.photoPreviewDataUrl ? "shadow-inner" : ""
+                    }`}
+                    style={
+                      draft.photoPreviewDataUrl
+                        ? {
+                            backgroundImage: `url("${draft.photoPreviewDataUrl}")`,
+                          }
+                        : undefined
+                    }
+                  >
+                    {!draft.photoPreviewDataUrl && (
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
+                          Geen foto
+                        </p>
+                        <p className="mt-2 text-sm font-black">
+                          {draft.photoHint || "Receptfoto"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid content-start gap-3">
+                    <div className="flex flex-wrap gap-2">
+                      <label className="cursor-pointer rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm">
+                        Foto toevoegen
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="sr-only"
+                          onChange={(event) => {
+                            void updateRecipePhoto(event.target.files?.[0] || null);
+                            event.currentTarget.value = "";
+                          }}
+                        />
+                      </label>
+                      {draft.photoPreviewDataUrl && (
+                        <button
+                          type="button"
+                          onClick={removeRecipePhoto}
+                          className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#a83e31] shadow-sm"
+                        >
+                          Verwijder foto
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-sm font-bold leading-relaxed text-[#2d2a26]/55">
+                      Alleen een kleine preview wordt opgeslagen. De originele
+                      upload gaat niet mee naar WordPress, zodat recepturen
+                      licht blijven en niet vastlopen door grote foto&apos;s.
+                    </p>
+                    {draft.photoFileName && (
+                      <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/40">
+                        {draft.photoFileName}
+                        {draft.photoUpdatedAt ? ` - ${draft.photoUpdatedAt}` : ""}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </EditorBlock>
 
@@ -771,13 +880,35 @@ export default function RecipeDetail({
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
           <Panel className="bg-[#fffdf8]">
-            <div className="flex aspect-[4/3] items-center justify-center rounded-[1.1rem] border border-[#e7e0d8] bg-[#eadfcf] p-4 text-center">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
-                  Foto placeholder
-                </p>
-                <p className="mt-2 text-lg font-black">{recipe.photoHint}</p>
-              </div>
+            <div
+              className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[1.1rem] border border-[#e7e0d8] bg-[#eadfcf] bg-cover bg-center p-4 text-center"
+              style={
+                previewRecipe.photoPreviewDataUrl
+                  ? {
+                      backgroundImage: `url("${previewRecipe.photoPreviewDataUrl}")`,
+                    }
+                  : undefined
+              }
+            >
+              {previewRecipe.photoPreviewDataUrl ? (
+                <div className="absolute inset-x-3 bottom-3 rounded-2xl bg-white/88 px-3 py-2 text-left shadow-sm">
+                  <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
+                    Foto preview
+                  </p>
+                  <p className="truncate text-sm font-black">
+                    {previewRecipe.photoHint || previewRecipe.photoFileName || recipe.name}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
+                    Foto placeholder
+                  </p>
+                  <p className="mt-2 text-lg font-black">
+                    {previewRecipe.photoHint}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
               <Metric
@@ -1021,6 +1152,9 @@ type RecipeDraft = {
   decorationCost: string;
   version: string;
   photoHint: string;
+  photoPreviewDataUrl: string;
+  photoFileName: string;
+  photoUpdatedAt: string;
   isWorkModeVisible: boolean;
   ingredients: RecipeIngredientDraft[];
   semiFinishedItems: SemiFinishedDraft[];
@@ -1063,6 +1197,9 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
     decorationCost: formatInputNumber(recipe.decorationCost || 0),
     version: recipe.version,
     photoHint: recipe.photoHint,
+    photoPreviewDataUrl: recipe.photoPreviewDataUrl || "",
+    photoFileName: recipe.photoFileName || "",
+    photoUpdatedAt: recipe.photoUpdatedAt || "",
     isWorkModeVisible: recipe.isWorkModeVisible ?? true,
     ingredients: recipe.ingredients.map((item) => ({
       id: createLocalId("ingredient-line"),
@@ -1141,6 +1278,9 @@ function buildRecipeFromDraft(
     portionLabel: draft.portionLabel.trim() || recipe.portionLabel,
     batchSize: draft.batchSize.trim() || recipe.batchSize,
     photoHint: draft.photoHint.trim() || recipe.photoHint,
+    photoPreviewDataUrl: draft.photoPreviewDataUrl,
+    photoFileName: draft.photoFileName.trim(),
+    photoUpdatedAt: draft.photoUpdatedAt,
     notes: draft.notes.trim(),
     packagingCost: parseDutchNumber(draft.packagingCost),
     decorationCost: parseDutchNumber(draft.decorationCost),
@@ -1312,6 +1452,85 @@ function formatInputNumber(value: number) {
   if (!value) return "";
 
   return String(Math.round(value * 10000) / 10000).replace(".", ",");
+}
+
+async function createSmallRecipePhotoPreview(file: File) {
+  const sourceDataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(sourceDataUrl);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Canvas wordt niet ondersteund.");
+  }
+
+  let bestDataUrl = "";
+
+  for (
+    let maxSide = RECIPE_PHOTO_MAX_SIDE;
+    maxSide >= RECIPE_PHOTO_MIN_SIDE;
+    maxSide -= 40
+  ) {
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    context.fillStyle = "#fffdf8";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    for (const quality of RECIPE_PHOTO_QUALITIES) {
+      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      bestDataUrl =
+        !bestDataUrl || dataUrl.length < bestDataUrl.length ? dataUrl : bestDataUrl;
+
+      if (dataUrl.length <= RECIPE_PHOTO_MAX_DATA_URL_LENGTH) {
+        return {
+          dataUrl,
+          fileName: smallJpegFileName(file.name),
+        };
+      }
+    }
+  }
+
+  if (bestDataUrl && bestDataUrl.length <= RECIPE_PHOTO_MAX_DATA_URL_LENGTH) {
+    return {
+      dataUrl: bestDataUrl,
+      fileName: smallJpegFileName(file.name),
+    };
+  }
+
+  throw new Error("Foto blijft te groot.");
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("Foto kon niet gelezen worden."));
+    reader.onerror = () => reject(new Error("Foto kon niet gelezen worden."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Foto kon niet geopend worden."));
+    image.src = dataUrl;
+  });
+}
+
+function smallJpegFileName(fileName: string) {
+  const cleanName = fileName
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 42);
+
+  return `${cleanName || "receptfoto"}-preview.jpg`;
 }
 
 function parseList(value: string) {
