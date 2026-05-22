@@ -16,6 +16,8 @@ export default function PriceUpdateReview({
   recipes,
   onApproveLine,
   onIgnoreLine,
+  onIgnoreInvoice,
+  onRevertInvoice,
   onMatchLine,
 }: Readonly<{
   invoice: InvoiceImport;
@@ -23,6 +25,8 @@ export default function PriceUpdateReview({
   recipes: Recipe[];
   onApproveLine: (invoiceId: string, line: InvoiceLine) => void;
   onIgnoreLine: (invoiceId: string, line: InvoiceLine) => void;
+  onIgnoreInvoice: (invoiceId: string) => void;
+  onRevertInvoice: (invoiceId: string) => void;
   onMatchLine: (
     invoiceId: string,
     line: InvoiceLine,
@@ -32,13 +36,25 @@ export default function PriceUpdateReview({
   const pendingLines = invoice.lines.filter(
     (line) => line.reviewStatus === "pending" && line.matchedIngredientId
   );
-  const unmatchedLines = invoice.lines.filter((line) => !line.matchedIngredientId);
+  const unmatchedLines = invoice.lines.filter(
+    (line) => line.reviewStatus === "pending" && !line.matchedIngredientId
+  );
   const approvedLines = invoice.lines.filter(
     (line) => line.reviewStatus === "approved"
   );
   const ignoredLines = invoice.lines.filter(
     (line) => line.reviewStatus === "ignored"
   );
+  const revertedLines = invoice.lines.filter(
+    (line) => line.reviewStatus === "reverted"
+  );
+  const canIgnoreInvoice = invoice.lines.some(
+    (line) =>
+      line.reviewStatus !== "approved" &&
+      line.reviewStatus !== "ignored" &&
+      line.reviewStatus !== "reverted"
+  );
+  const canRevertInvoice = approvedLines.some((line) => line.matchedIngredientId);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -49,10 +65,29 @@ export default function PriceUpdateReview({
           description="Nieuwe factuurprijzen worden eerst beoordeeld voordat ze ingredientprijzen overschrijven."
         />
         <div className="mt-4 grid gap-3">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-4">
             <MiniMetric label="Open" value={String(pendingLines.length)} />
             <MiniMetric label="Goedgekeurd" value={String(approvedLines.length)} />
             <MiniMetric label="Genegeerd" value={String(ignoredLines.length)} />
+            <MiniMetric label="Teruggedraaid" value={String(revertedLines.length)} />
+          </div>
+          <div className="flex flex-wrap gap-2 rounded-[1.15rem] border border-[#e7e0d8] bg-[#fffdf8] p-3">
+            <button
+              type="button"
+              onClick={() => onIgnoreInvoice(invoice.id)}
+              disabled={!canIgnoreInvoice}
+              className="rounded-full bg-white px-4 py-2.5 text-sm font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Hele factuur negeren
+            </button>
+            <button
+              type="button"
+              onClick={() => onRevertInvoice(invoice.id)}
+              disabled={!canRevertInvoice}
+              className="rounded-full bg-[#ffe0dc] px-4 py-2.5 text-sm font-black text-[#a83e31] shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Factuur terugdraaien
+            </button>
           </div>
           {pendingLines.length ? (
             pendingLines.map((line) => (

@@ -3,8 +3,17 @@ export type RecipeStatus = "active" | "draft" | "old";
 export type RecipeUnit = "gram" | "kg" | "ml" | "liter" | "stuk";
 export type IngredientStatus = "active" | "inactive";
 export type MarginStatus = "good" | "pressure" | "critical";
-export type InvoiceReviewStatus = "pending" | "approved" | "ignored";
-export type InvoiceImportStatus = "analyzed" | "review" | "processed";
+export type InvoiceReviewStatus =
+  | "pending"
+  | "approved"
+  | "ignored"
+  | "reverted";
+export type InvoiceImportStatus =
+  | "analyzed"
+  | "review"
+  | "processed"
+  | "ignored"
+  | "reverted";
 
 export type Ingredient = {
   id: string;
@@ -76,6 +85,9 @@ export type InvoiceLine = {
   newPrice: number;
   percentageChange: number;
   reviewStatus: InvoiceReviewStatus;
+  previousLastInvoice?: string;
+  appliedAt?: string;
+  revertedAt?: string;
 };
 
 export type InvoiceImport = {

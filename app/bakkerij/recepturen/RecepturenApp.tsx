@@ -43,6 +43,16 @@ function hasStoredRecepturenData(data: RecepturenData) {
   );
 }
 
+function invoiceStatusForLines(lines: InvoiceLine[]): InvoiceImport["status"] {
+  if (lines.some((item) => item.reviewStatus === "pending")) return "review";
+  if (lines.length && lines.every((item) => item.reviewStatus === "ignored")) {
+    return "ignored";
+  }
+  if (lines.some((item) => item.reviewStatus === "reverted")) return "reverted";
+
+  return "processed";
+}
+
 function replaceInvoiceLine(
   invoices: InvoiceImport[],
   invoiceId: string,
@@ -58,14 +68,10 @@ function replaceInvoiceLine(
         ? { ...item, ...changes }
         : item
     );
-    const hasPending = nextLines.some((item) => item.reviewStatus === "pending");
-    const nextStatus: InvoiceImport["status"] = hasPending
-      ? "review"
-      : "processed";
 
     return {
       ...invoice,
-      status: nextStatus,
+      status: invoiceStatusForLines(nextLines),
       lines: nextLines,
     };
   });
@@ -178,8 +184,13 @@ export default function RecepturenApp() {
 
   function approveInvoiceLine(invoiceId: string, line: InvoiceLine) {
     const invoice = invoiceItems.find((item) => item.id === invoiceId);
+    const currentIngredient = line.matchedIngredientId
+      ? ingredientItems.find((ingredient) => ingredient.id === line.matchedIngredientId)
+      : undefined;
     const nextInvoices = replaceInvoiceLine(invoiceItems, invoiceId, line, {
       reviewStatus: "approved",
+      previousLastInvoice: currentIngredient?.lastInvoice,
+      appliedAt: new Date().toISOString(),
     });
 
     if (!line.matchedIngredientId) {
@@ -230,6 +241,129 @@ export default function RecepturenApp() {
 
   function ignoreInvoiceLine(invoiceId: string, line: InvoiceLine) {
     updateInvoiceLine(invoiceId, line, { reviewStatus: "ignored" });
+  }
+
+  function ignoreInvoice(invoiceId: string) {
+    const invoice = invoiceItems.find((item) => item.id === invoiceId);
+    if (!invoice) return;
+
+    const hasApprovedLines = invoice.lines.some(
+      (line) => line.reviewStatus === "approved"
+    );
+    const confirmed = window.confirm(
+      hasApprovedLines
+        ? "Deze factuur heeft al goedgekeurde regels. Niet-goedgekeurde regels negeren? Gebruik terugdraaien om goedgekeurde prijsupdates terug te zetten."
+        : "Hele factuur negeren? Er worden geen ingredientprijzen aangepast."
+    );
+
+    if (!confirmed) return;
+
+    const nextInvoices = invoiceItems.map((item) => {
+      if (item.id !== invoiceId) return item;
+
+      const lines = item.lines.map((line) =>
+        line.reviewStatus === "approved"
+          ? line
+          : { ...line, reviewStatus: "ignored" as const }
+      );
+
+      return {
+        ...item,
+        status: invoiceStatusForLines(lines),
+        lines,
+      };
+    });
+
+    setInvoiceItems(nextInvoices);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: recipeItems,
+        invoiceImports: nextInvoices,
+      },
+      "Factuur genegeerd en opgeslagen."
+    );
+  }
+
+  function revertInvoice(invoiceId: string) {
+    const invoice = invoiceItems.find((item) => item.id === invoiceId);
+    if (!invoice) return;
+
+    const approvedLines = invoice.lines.filter(
+      (line) => line.reviewStatus === "approved" && line.matchedIngredientId
+    );
+    if (!approvedLines.length) return;
+
+    const confirmed = window.confirm(
+      `Prijsupdates uit factuur ${invoice.invoiceNumber} terugdraaien? ${approvedLines.length} gekoppelde ingredientprijzen worden teruggezet naar hun oude prijs.`
+    );
+
+    if (!confirmed) return;
+
+    const revertedAt = new Date().toISOString();
+    const revertLinesByIngredient = new Map<string, InvoiceLine>();
+    approvedLines.forEach((line) => {
+      if (!line.matchedIngredientId || !line.oldPrice) return;
+      if (!revertLinesByIngredient.has(line.matchedIngredientId)) {
+        revertLinesByIngredient.set(line.matchedIngredientId, line);
+      }
+    });
+
+    const nextIngredients = ingredientItems.map((ingredient) => {
+      const line = revertLinesByIngredient.get(ingredient.id);
+      if (!line) return ingredient;
+
+      const currentPackagePrice = ingredientPackagePrice(ingredient);
+      const restoredPackagePrice = normalizePackagePrice(
+        line.oldPrice,
+        ingredient.recipeUnit
+      );
+
+      return {
+        ...ingredient,
+        previousPrice: currentPackagePrice,
+        lastPrice: restoredPackagePrice,
+        pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(
+          restoredPackagePrice,
+          ingredient.recipeUnit
+        ),
+        lastUpdated: revertedAt.slice(0, 10),
+        lastInvoice:
+          line.previousLastInvoice ||
+          `Teruggedraaid: ${invoice.invoiceNumber}`,
+      };
+    });
+
+    const nextInvoices = invoiceItems.map((item) => {
+      if (item.id !== invoiceId) return item;
+
+      const lines = item.lines.map((line) => {
+        if (line.reviewStatus === "approved") {
+          return { ...line, reviewStatus: "reverted" as const, revertedAt };
+        }
+
+        return line.reviewStatus === "pending"
+          ? { ...line, reviewStatus: "ignored" as const }
+          : line;
+      });
+
+      return {
+        ...item,
+        status: "reverted" as const,
+        lines,
+      };
+    });
+
+    setIngredientItems(nextIngredients);
+    setInvoiceItems(nextInvoices);
+    persistRecepturenData(
+      {
+        ingredients: nextIngredients,
+        recipes: recipeItems,
+        invoiceImports: nextInvoices,
+      },
+      "Factuur teruggedraaid en opgeslagen."
+    );
   }
 
   function matchInvoiceLine(
@@ -350,6 +484,8 @@ export default function RecepturenApp() {
             recipes={recipeItems}
             onApproveLine={approveInvoiceLine}
             onIgnoreLine={ignoreInvoiceLine}
+            onIgnoreInvoice={ignoreInvoice}
+            onRevertInvoice={revertInvoice}
             onMatchLine={matchInvoiceLine}
             onImportInvoice={importInvoice}
           />

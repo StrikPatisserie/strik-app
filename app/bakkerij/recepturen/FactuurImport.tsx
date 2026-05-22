@@ -10,6 +10,8 @@ export default function FactuurImport({
   recipes,
   onApproveLine,
   onIgnoreLine,
+  onIgnoreInvoice,
+  onRevertInvoice,
   onMatchLine,
   onImportInvoice,
 }: Readonly<{
@@ -19,6 +21,8 @@ export default function FactuurImport({
   onImportInvoice: (invoice: InvoiceImport) => void;
   onApproveLine: (invoiceId: string, line: InvoiceLine) => void;
   onIgnoreLine: (invoiceId: string, line: InvoiceLine) => void;
+  onIgnoreInvoice: (invoiceId: string) => void;
+  onRevertInvoice: (invoiceId: string) => void;
   onMatchLine: (
     invoiceId: string,
     line: InvoiceLine,
@@ -122,6 +126,8 @@ export default function FactuurImport({
         recipes={recipes}
         onApproveLine={onApproveLine}
         onIgnoreLine={onIgnoreLine}
+        onIgnoreInvoice={onIgnoreInvoice}
+        onRevertInvoice={onRevertInvoice}
         onMatchLine={onMatchLine}
       />
 
