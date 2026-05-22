@@ -21,6 +21,16 @@ type ColumnMap = {
   unit?: number;
   totalPrice?: number;
   pricePerUnit?: number;
+  pricePerUnitKind?: PricePerUnitKind;
+};
+
+type PricePerUnitKind = "base" | "package";
+
+type LooseNumberMatch = {
+  raw: string;
+  value: number;
+  index: number;
+  end: number;
 };
 
 type ExtractedInvoice = {
@@ -85,14 +95,24 @@ const TOTAL_HEADERS = [
   "excl btw",
   "waarde",
 ];
-const UNIT_PRICE_HEADERS = [
-  "prijs per eenheid",
+const BASE_UNIT_PRICE_HEADERS = [
   "prijs per kg",
+  "prijs/kg",
+  "euro per kg",
+  "eur per kg",
+  "eur/kg",
   "prijs per kilo",
-  "prijs per stuk",
-  "eenheidsprijs",
+  "prijs per liter",
+  "prijs/l",
+  "eur/l",
   "kg prijs",
   "kiloprijs",
+  "literprijs",
+];
+const PACKAGE_UNIT_PRICE_HEADERS = [
+  "prijs per eenheid",
+  "prijs per stuk",
+  "eenheidsprijs",
   "nettoprijs",
   "netto prijs",
   "stuksprijs",
@@ -147,6 +167,10 @@ function parseDutchNumber(value: unknown) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function numbersAreClose(left: number, right: number) {
+  return Math.abs(left - right) < 0.01;
+}
+
 function normalizeHeader(value: unknown) {
   return normalizeSearch(String(value ?? ""))
     .replace(/[^a-z0-9]+/g, " ")
@@ -179,11 +203,20 @@ function findHeaderIndex(
 function getColumnMap(headers: string[]): ColumnMap {
   const normalizedHeaders = headers.map(normalizeHeader);
   const totalPrice = findHeaderIndex(normalizedHeaders, TOTAL_HEADERS);
-  const pricePerUnit = findHeaderIndex(
+  const baseUnitPrice = findHeaderIndex(
     normalizedHeaders,
-    UNIT_PRICE_HEADERS,
+    BASE_UNIT_PRICE_HEADERS,
     totalPrice >= 0 ? [totalPrice] : []
   );
+  const packageUnitPrice =
+    baseUnitPrice >= 0
+      ? -1
+      : findHeaderIndex(
+          normalizedHeaders,
+          PACKAGE_UNIT_PRICE_HEADERS,
+          totalPrice >= 0 ? [totalPrice] : []
+        );
+  const pricePerUnit = baseUnitPrice >= 0 ? baseUnitPrice : packageUnitPrice;
   const map: ColumnMap = {
     articleNumber: findHeaderIndex(normalizedHeaders, ARTICLE_HEADERS),
     description: findHeaderIndex(normalizedHeaders, DESCRIPTION_HEADERS),
@@ -191,11 +224,14 @@ function getColumnMap(headers: string[]): ColumnMap {
     unit: findHeaderIndex(normalizedHeaders, UNIT_HEADERS),
     totalPrice,
     pricePerUnit,
+    pricePerUnitKind: baseUnitPrice >= 0 ? "base" : "package",
   };
 
   Object.entries(map).forEach(([key, value]) => {
     if (value === -1) delete map[key as keyof ColumnMap];
   });
+
+  if (map.pricePerUnit === undefined) delete map.pricePerUnitKind;
 
   return map;
 }
@@ -230,6 +266,31 @@ function normalizeUnit(unit: string, description = "") {
   if (["stuks", "stuk"].includes(found)) return "st";
 
   return found;
+}
+
+function parsePackageSize(packageSize = "") {
+  const normalized = packageSize.toLowerCase().replace(",", ".");
+  const multiPack = normalized.match(
+    /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(kg|kilo|kilogram|g|gr|gram|l|ltr|liter|ml|st|stuks|stuk)\b/i
+  );
+  const direct =
+    multiPack ||
+    normalized.match(
+      /(\d+(?:\.\d+)?)\s*(kg|kilo|kilogram|g|gr|gram|l|ltr|liter|ml|st|stuks|stuk)\b/i
+    );
+
+  if (!direct) return null;
+
+  const amount = multiPack
+    ? parseDutchNumber(direct[1]) * parseDutchNumber(direct[2])
+    : parseDutchNumber(direct[1]);
+  const unit = normalizeUnit(multiPack ? direct[3] : direct[2]);
+
+  if (!amount) return null;
+  if (unit === "g") return { amount: amount / 1000, unit: "kg" };
+  if (unit === "ml") return { amount: amount / 1000, unit: "l" };
+
+  return { amount, unit };
 }
 
 function findMatchingIngredient(
@@ -272,7 +333,8 @@ function getPercentageChange(oldPrice: number, newPrice: number) {
 function priceForIngredientUnit(
   pricePerUnit: number,
   unit: string,
-  ingredient?: Ingredient
+  ingredient?: Ingredient,
+  priceKind: PricePerUnitKind = "package"
 ) {
   if (!pricePerUnit) return 0;
 
@@ -280,6 +342,26 @@ function priceForIngredientUnit(
   const recipeUnit = ingredient?.recipeUnit;
   const isWeightIngredient = recipeUnit === "gram" || recipeUnit === "kg";
   const isVolumeIngredient = recipeUnit === "ml" || recipeUnit === "liter";
+  const packageSize = ingredient ? parsePackageSize(ingredient.packageSize) : null;
+
+  if (priceKind === "base") return pricePerUnit;
+
+  if (
+    packageSize &&
+    ["st", "doos", "zak", "pak", "tray", "emmer"].includes(normalizedUnit)
+  ) {
+    if (isWeightIngredient && packageSize.unit === "kg") {
+      return pricePerUnit / packageSize.amount;
+    }
+
+    if (isVolumeIngredient && packageSize.unit === "l") {
+      return pricePerUnit / packageSize.amount;
+    }
+
+    if (recipeUnit === "stuk" && packageSize.unit === "st") {
+      return pricePerUnit / packageSize.amount;
+    }
+  }
 
   if (normalizedUnit === "g" && isWeightIngredient) return pricePerUnit * 1000;
   if (normalizedUnit === "ml" && isVolumeIngredient) return pricePerUnit * 1000;
@@ -310,7 +392,8 @@ function createInvoiceLine(
   const pricePerUnit = priceForIngredientUnit(
     rawPricePerUnit || totalPrice,
     unit,
-    matchedIngredient
+    matchedIngredient,
+    explicitUnitPrice ? map.pricePerUnitKind || "package" : "package"
   );
   const oldPrice = matchedIngredient ? ingredientPackagePrice(matchedIngredient) : 0;
 
@@ -388,6 +471,12 @@ function compactTextLines(text: string) {
 }
 
 function maybeParseDelimitedText(text: string, ingredients: Ingredient[]) {
+  const delimiterRows = compactTextLines(text)
+    .filter((line) => /[;\t|]/.test(line))
+    .map((line) => line.split(/[;\t|]/).map(cleanCell));
+  const delimiterLines = parseTabularRows(delimiterRows, ingredients);
+  if (delimiterLines.length) return delimiterLines;
+
   const rows = parseCsvRows(text);
   const tabularLines = parseTabularRows(rows, ingredients);
   if (tabularLines.length) return tabularLines;
@@ -430,39 +519,113 @@ function findLooseArticleNumber(line: string) {
   return match ? match[0] : "";
 }
 
+function findLooseQuantity(line: string, articleEnd: number) {
+  const textAfterArticle = line.slice(articleEnd);
+  const quantityMatch = Array.from(
+    textAfterArticle.matchAll(
+      /(^|\s)(\d+(?:[.,]\d{1,3})?)\s*(kg|kilo|kilogram|g|gr|gram|l|ltr|liter|ml|st|stuks|stuk|doos|zak|pak|tray|emmer)\b/gi
+    )
+  ).at(-1);
+
+  if (quantityMatch?.index !== undefined) {
+    return {
+      quantity: parseDutchNumber(quantityMatch[2]) || 1,
+      unit: normalizeUnit(quantityMatch[3]),
+      index: articleEnd + quantityMatch.index + quantityMatch[0].indexOf(quantityMatch[2]),
+      end: articleEnd + quantityMatch.index + quantityMatch[0].length,
+    };
+  }
+
+  return { quantity: 1, unit: "kg", index: -1, end: -1 };
+}
+
+function findLooseMoneyMatches(line: string, articleEnd: number) {
+  return Array.from(
+    line.matchAll(/(?:€\s*)?-?\d{1,5}(?:[.,]\d{2,4})/g),
+    (match): LooseNumberMatch => ({
+      raw: match[0],
+      value: parseDutchNumber(match[0]),
+      index: match.index || 0,
+      end: (match.index || 0) + match[0].length,
+    })
+  ).filter((match) => {
+    if (match.index < articleEnd) return false;
+    if (!match.value) return false;
+
+    const next = line.slice(match.end, match.end + 2);
+    return !next.includes("%");
+  });
+}
+
+function inferLoosePrices(
+  priceMatches: LooseNumberMatch[],
+  quantity: number
+) {
+  if (!priceMatches.length) return null;
+
+  if (priceMatches.length === 1) {
+    const totalPrice = priceMatches[0].value;
+
+    return {
+      totalPrice,
+      packagePrice: quantity ? totalPrice / quantity : totalPrice,
+    };
+  }
+
+  const penultimate = priceMatches[priceMatches.length - 2].value;
+  const last = priceMatches[priceMatches.length - 1].value;
+
+  if (quantity > 1 && numbersAreClose(penultimate / quantity, last)) {
+    return { totalPrice: penultimate, packagePrice: last };
+  }
+
+  if (quantity > 1 && numbersAreClose(last / quantity, penultimate)) {
+    return { totalPrice: last, packagePrice: penultimate };
+  }
+
+  return { totalPrice: last, packagePrice: penultimate };
+}
+
 function parseLooseInvoiceLines(text: string, ingredients: Ingredient[]) {
   return compactTextLines(text)
     .map((line) => {
       const articleNumber = findLooseArticleNumber(line);
-      const numbers = Array.from(
-        line.matchAll(/-?\d+(?:[.,]\d{1,4})?/g),
-        (match) => match[0]
+      const articleIndex = line.indexOf(articleNumber);
+      const articleEnd = articleIndex + articleNumber.length;
+
+      if (!articleNumber) return null;
+
+      const quantityMatch = findLooseQuantity(line, articleEnd);
+      const priceMatches = findLooseMoneyMatches(line, articleEnd).filter(
+        (match) =>
+          quantityMatch.index === -1 ||
+          match.end <= quantityMatch.index ||
+          match.index >= quantityMatch.end
       );
+      const prices = inferLoosePrices(priceMatches, quantityMatch.quantity);
 
-      if (!articleNumber || numbers.length < 2) return null;
+      if (!prices) return null;
 
-      const totalPrice = parseDutchNumber(numbers[numbers.length - 1]);
-      const previousNumber = parseDutchNumber(numbers[numbers.length - 2]);
-      const quantity =
-        numbers.length >= 3 ? parseDutchNumber(numbers[numbers.length - 3]) || 1 : 1;
-      const unitMatch = line.match(UNIT_PATTERN);
-      const unit = normalizeUnit(unitMatch?.[1] || "kg", line);
-      const pricePerUnit =
-        previousNumber || (quantity && totalPrice ? totalPrice / quantity : 0);
-      const descriptionStart = line.indexOf(articleNumber) + articleNumber.length;
-      const firstNumberIndex = line.search(/-?\d+(?:[.,]\d{1,4})?/);
+      const descriptionStart = articleEnd;
+      const firstPriceIndex = priceMatches[0]?.index ?? -1;
+      const descriptionEnd =
+        quantityMatch.index > descriptionStart
+          ? quantityMatch.index
+          : firstPriceIndex > descriptionStart
+            ? firstPriceIndex
+            : undefined;
       const description =
         line
-          .slice(descriptionStart, firstNumberIndex > descriptionStart ? firstNumberIndex : undefined)
+          .slice(descriptionStart, descriptionEnd)
           .replace(UNIT_PATTERN, "")
           .trim() || line.replace(articleNumber, "").trim();
       const row = [
         articleNumber,
         description,
-        String(quantity),
-        unit,
-        String(totalPrice),
-        String(pricePerUnit),
+        String(quantityMatch.quantity),
+        quantityMatch.unit,
+        String(prices.totalPrice),
+        String(prices.packagePrice),
       ];
 
       return createInvoiceLine(
@@ -474,6 +637,7 @@ function parseLooseInvoiceLines(text: string, ingredients: Ingredient[]) {
           unit: 3,
           totalPrice: 4,
           pricePerUnit: 5,
+          pricePerUnitKind: "package",
         },
         ingredients
       );
