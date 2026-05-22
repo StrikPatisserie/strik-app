@@ -218,6 +218,11 @@ function createPrintHtml(
   const finishingRows = finishingSteps
     .map((step) => `<li>${escapeHtml(step)}</li>`)
     .join("");
+  const photoBlock = recipe.photoPreviewDataUrl
+    ? `<div class="photo"><img src="${escapeHtml(
+        recipe.photoPreviewDataUrl
+      )}" alt="${escapeHtml(recipe.name)} voorbeeld" /></div>`
+    : "";
 
   return `<!doctype html>
 <html lang="nl">
@@ -233,12 +238,15 @@ function createPrintHtml(
     td, th { border-bottom: 1px solid #ded6ca; font-size: 14px; padding: 9px; text-align: left; }
     th { background: #f4f0ea; }
     li { margin: 8px 0; }
+    .photo { border: 1px solid #ded6ca; border-radius: 14px; margin: 18px 0; overflow: hidden; width: 260px; }
+    .photo img { display: block; width: 100%; }
   </style>
 </head>
 <body>
   <h1>${escapeHtml(recipe.name)}</h1>
   <p>${escapeHtml(recipe.productGroup)} - ${escapeHtml(getRecipeTypeLabel(recipe))}</p>
   <p><strong>Batch:</strong> ${escapeHtml(formatBatch(batch))}</p>
+  ${photoBlock}
   <h2>Ingredienten</h2>
   <table><tbody>${ingredientRows || "<tr><td>Geen directe ingredienten.</td></tr>"}</tbody></table>
   <h2>Benodigde halffabricaten</h2>
@@ -373,6 +381,7 @@ function RecipeWorkCard({
 
   return (
     <article className="grid gap-3 rounded-[1.05rem] border border-[#e2dbcf] bg-white/92 p-4 shadow-sm">
+      <RecipeWorkPhoto recipe={recipe} compact />
       <div>
         <p className="text-[0.65rem] font-black uppercase tracking-[0.13em] text-[#2d2a26]/42">
           {recipe.productGroup}
@@ -483,26 +492,29 @@ function WorkRecipeDetail({
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#2d2a26]/35 px-3 py-5 backdrop-blur-sm">
       <div className="mx-auto max-w-6xl rounded-[1.5rem] border border-[#ded6ca] bg-[#f4f0ea] p-4 shadow-2xl">
         <div className="rounded-[1.25rem] bg-white/92 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#45663b]">
-                Recept werkmodus
-              </p>
-              <h2 className="mt-1 text-3xl font-black leading-tight">
-                {recipe.name}
-              </h2>
-              <p className="mt-2 text-sm font-bold text-[#2d2a26]/55">
-                {recipe.productGroup} - {getRecipeTypeLabel(recipe)} - standaard{" "}
-                {formatBatch(standardBatch)}
-              </p>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#45663b]">
+                  Recept werkmodus
+                </p>
+                <h2 className="mt-1 text-3xl font-black leading-tight">
+                  {recipe.name}
+                </h2>
+                <p className="mt-2 text-sm font-bold text-[#2d2a26]/55">
+                  {recipe.productGroup} - {getRecipeTypeLabel(recipe)} - standaard{" "}
+                  {formatBatch(standardBatch)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full bg-[#f8f6f3] px-4 py-3 text-sm font-black shadow-sm"
+              >
+                Sluit
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full bg-[#f8f6f3] px-4 py-3 text-sm font-black shadow-sm"
-            >
-              Sluit
-            </button>
+            <RecipeWorkPhoto recipe={recipe} label="Zo moet het eruit zien" />
           </div>
 
           <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
@@ -692,6 +704,49 @@ function WorkPanel({
   );
 }
 
+function RecipeWorkPhoto({
+  recipe,
+  label = "Voorbeeld",
+  compact = false,
+}: Readonly<{ recipe: Recipe; label?: string; compact?: boolean }>) {
+  const hasPhoto = Boolean(recipe.photoPreviewDataUrl);
+
+  return (
+    <div
+      className={`relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[1rem] border border-[#e2dbcf] bg-[#eadfcf] bg-cover bg-center text-center shadow-sm ${
+        compact ? "min-h-36" : "min-h-44"
+      }`}
+      style={
+        hasPhoto
+          ? {
+              backgroundImage: `url("${recipe.photoPreviewDataUrl}")`,
+            }
+          : undefined
+      }
+    >
+      {hasPhoto ? (
+        <div className="absolute inset-x-2 bottom-2 rounded-2xl bg-white/88 px-3 py-2 text-left shadow-sm">
+          <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
+            {label}
+          </p>
+          <p className="truncate text-sm font-black">
+            {recipe.photoHint || recipe.name}
+          </p>
+        </div>
+      ) : (
+        <div className="px-4">
+          <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/42">
+            Nog geen foto
+          </p>
+          <p className="mt-2 text-sm font-black text-[#2d2a26]/70">
+            {recipe.photoHint || recipe.name}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WorkQuantityLine({
   quantity,
   name,
@@ -763,48 +818,51 @@ function ProductionMode({
     <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#f4f0ea] px-3 py-4 text-[#2d2a26]">
       <div className="mx-auto grid max-w-6xl gap-4">
         <header className="rounded-[1.25rem] bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#45663b]">
-                Productiemodus
-              </p>
-              <h2 className="mt-1 text-3xl font-black leading-tight">
-                {recipe.name}
-              </h2>
-              <p className="mt-2 text-lg font-black text-[#2d2a26]/65">
-                Batchgrootte: {formatBatch(batch)}
-              </p>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#45663b]">
+                  Productiemodus
+                </p>
+                <h2 className="mt-1 text-3xl font-black leading-tight">
+                  {recipe.name}
+                </h2>
+                <p className="mt-2 text-lg font-black text-[#2d2a26]/65">
+                  Batchgrootte: {formatBatch(batch)}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPaused((current) => !current)}
+                  className="rounded-full bg-[#fff0bd] px-5 py-3 text-sm font-black text-[#7a5a18] shadow-sm"
+                >
+                  {isPaused ? "Hervat" : "Pauzeer"}
+                </button>
+                <button
+                  type="button"
+                  onClick={completeAll}
+                  className="rounded-full bg-[#c3d3bc] px-5 py-3 text-sm font-black shadow-sm"
+                >
+                  Afronden
+                </button>
+                <button
+                  type="button"
+                  onClick={resetChecklist}
+                  className="rounded-full bg-white px-5 py-3 text-sm font-black shadow-sm"
+                >
+                  Reset checklist
+                </button>
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="rounded-full bg-white px-5 py-3 text-sm font-black shadow-sm"
+                >
+                  Terug naar recept
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setIsPaused((current) => !current)}
-                className="rounded-full bg-[#fff0bd] px-5 py-3 text-sm font-black text-[#7a5a18] shadow-sm"
-              >
-                {isPaused ? "Hervat" : "Pauzeer"}
-              </button>
-              <button
-                type="button"
-                onClick={completeAll}
-                className="rounded-full bg-[#c3d3bc] px-5 py-3 text-sm font-black shadow-sm"
-              >
-                Afronden
-              </button>
-              <button
-                type="button"
-                onClick={resetChecklist}
-                className="rounded-full bg-white px-5 py-3 text-sm font-black shadow-sm"
-              >
-                Reset checklist
-              </button>
-              <button
-                type="button"
-                onClick={onBack}
-                className="rounded-full bg-white px-5 py-3 text-sm font-black shadow-sm"
-              >
-                Terug naar recept
-              </button>
-            </div>
+            <RecipeWorkPhoto recipe={recipe} label="Eindbeeld" />
           </div>
           <div className="mt-5">
             <div className="flex items-center justify-between gap-3 text-sm font-black text-[#2d2a26]/60">
