@@ -762,7 +762,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     lastUpdated: now,
     portionLabel: type === "semiFinished" ? "1 kg" : "1 stuk",
     batchSize: type === "semiFinished" ? "1 kg" : "40 stuks",
-    photoHint: "Nieuw recept",
+    photoHint: type === "semiFinished" ? "" : "Nieuw recept",
     photoPreviewDataUrl: "",
     photoFileName: "",
     photoUpdatedAt: "",
@@ -819,26 +819,54 @@ function mergeRecipes(currentRecipes: Recipe[], importedRecipes: Recipe[]) {
   const merged = [...currentRecipes];
 
   importedRecipes.forEach((importedRecipe) => {
+    const normalizedImportedRecipe = stripSemiFinishedPhoto(importedRecipe);
     const existingIndex = merged.findIndex(
-      (recipe) => normalizeSearch(recipe.name) === normalizeSearch(importedRecipe.name)
+      (recipe) =>
+        normalizeSearch(recipe.name) === normalizeSearch(normalizedImportedRecipe.name)
     );
 
     if (existingIndex >= 0) {
       merged[existingIndex] = {
         ...merged[existingIndex],
-        ...importedRecipe,
+        ...normalizedImportedRecipe,
         id: merged[existingIndex].id,
         photoPreviewDataUrl:
-          importedRecipe.photoPreviewDataUrl || merged[existingIndex].photoPreviewDataUrl,
+          normalizedImportedRecipe.type === "semiFinished"
+            ? ""
+            : normalizedImportedRecipe.photoPreviewDataUrl ||
+              merged[existingIndex].photoPreviewDataUrl,
         photoFileName:
-          importedRecipe.photoFileName || merged[existingIndex].photoFileName,
+          normalizedImportedRecipe.type === "semiFinished"
+            ? ""
+            : normalizedImportedRecipe.photoFileName ||
+              merged[existingIndex].photoFileName,
         photoUpdatedAt:
-          importedRecipe.photoUpdatedAt || merged[existingIndex].photoUpdatedAt,
+          normalizedImportedRecipe.type === "semiFinished"
+            ? ""
+            : normalizedImportedRecipe.photoUpdatedAt ||
+              merged[existingIndex].photoUpdatedAt,
       };
     } else {
-      merged.unshift(importedRecipe);
+      merged.unshift(normalizedImportedRecipe);
     }
   });
 
   return merged;
+}
+
+function stripSemiFinishedPhoto(recipe: Recipe): Recipe {
+  if (recipe.type !== "semiFinished") return recipe;
+
+  return {
+    ...recipe,
+    photoHint: "",
+    photoPreviewDataUrl: "",
+    photoFileName: "",
+    photoUpdatedAt: "",
+    packagingCost: 0,
+    decorationCost: 0,
+    decorationMargin: 0,
+    targetMargin: 0,
+    salesPrice: 0,
+  };
 }

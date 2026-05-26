@@ -218,7 +218,7 @@ function createPrintHtml(
   const finishingRows = finishingSteps
     .map((step) => `<li>${escapeHtml(step)}</li>`)
     .join("");
-  const photoBlock = recipe.photoPreviewDataUrl
+  const photoBlock = recipe.type === "finalProduct" && recipe.photoPreviewDataUrl
     ? `<div class="photo"><img src="${escapeHtml(
         recipe.photoPreviewDataUrl
       )}" alt="${escapeHtml(recipe.name)} voorbeeld" /></div>`
@@ -435,7 +435,8 @@ function RecipeWorkCard({
 }
 
 function RecipeWorkThumb({ recipe }: Readonly<{ recipe: Recipe }>) {
-  const hasPhoto = Boolean(recipe.photoPreviewDataUrl);
+  const hasPhoto =
+    recipe.type === "finalProduct" && Boolean(recipe.photoPreviewDataUrl);
 
   return (
     <div
@@ -520,7 +521,13 @@ function WorkRecipeDetail({
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#2d2a26]/35 px-3 py-5 backdrop-blur-sm">
       <div className="mx-auto max-w-6xl rounded-[1.5rem] border border-[#ded6ca] bg-[#f4f0ea] p-4 shadow-2xl">
         <div className="rounded-[1.25rem] bg-white/92 p-5">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div
+            className={`grid gap-4 ${
+              recipe.type === "finalProduct"
+                ? "lg:grid-cols-[minmax(0,1fr)_18rem]"
+                : ""
+            }`}
+          >
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[#45663b]">
@@ -542,7 +549,9 @@ function WorkRecipeDetail({
                 Sluit
               </button>
             </div>
-            <RecipeWorkPhoto recipe={recipe} label="Zo moet het eruit zien" />
+            {recipe.type === "finalProduct" && (
+              <RecipeWorkPhoto recipe={recipe} label="Zo moet het eruit zien" />
+            )}
           </div>
 
           <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
@@ -737,7 +746,8 @@ function RecipeWorkPhoto({
   label = "Voorbeeld",
   compact = false,
 }: Readonly<{ recipe: Recipe; label?: string; compact?: boolean }>) {
-  const hasPhoto = Boolean(recipe.photoPreviewDataUrl);
+  const hasPhoto =
+    recipe.type === "finalProduct" && Boolean(recipe.photoPreviewDataUrl);
 
   return (
     <div
@@ -890,7 +900,9 @@ function ProductionMode({
                 </button>
               </div>
             </div>
-            <RecipeWorkPhoto recipe={recipe} label="Eindbeeld" />
+            {recipe.type === "finalProduct" && (
+              <RecipeWorkPhoto recipe={recipe} label="Eindbeeld" />
+            )}
           </div>
           <div className="mt-5">
             <div className="flex items-center justify-between gap-3 text-sm font-black text-[#2d2a26]/60">

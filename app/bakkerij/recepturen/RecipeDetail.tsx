@@ -88,9 +88,11 @@ export default function RecipeDetail({
   const [feedback, setFeedback] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isImportingRecipe, setIsImportingRecipe] = useState(false);
+  const [isAddingNewIngredient, setIsAddingNewIngredient] = useState(false);
   const [recipeImportWarnings, setRecipeImportWarnings] = useState<string[]>([]);
   const [draft, setDraft] = useState(() => createRecipeDraft(recipe));
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
+  const isSemiFinishedDraft = draft.type === "semiFinished";
   const availableIngredients = ingredients;
   const semiFinishedOptions = recipes.filter(
     (item) => item.type === "semiFinished" && item.id !== recipe.id
@@ -108,20 +110,25 @@ export default function RecipeDetail({
     (total, item) => total + item.costContribution,
     0
   );
-  const previewBatchQuantity =
-    parseDutchNumber(draft.standardBatchQuantity) ||
-    getBatchInfo(recipe)?.quantity ||
-    1;
+  const previewMadeWeightKg = recipeMadeWeightKg(
+    previewIngredients,
+    previewSemiFinished
+  );
+  const previewBatchQuantity = isSemiFinishedDraft
+    ? previewMadeWeightKg || getBatchInfo(recipe)?.quantity || 1
+    : parseDutchNumber(draft.standardBatchQuantity) ||
+      getBatchInfo(recipe)?.quantity ||
+      1;
   const packagingUnitCost = parseDutchNumber(draft.packagingCost);
   const decorationUnitCost = parseDutchNumber(draft.decorationCost);
   const packagingTotal =
-    draft.type === "finalProduct"
+    !isSemiFinishedDraft
       ? packagingUnitCost * previewBatchQuantity
-      : packagingUnitCost;
+      : 0;
   const decorationTotal =
-    draft.type === "finalProduct"
+    !isSemiFinishedDraft
       ? decorationUnitCost * previewBatchQuantity
-      : decorationUnitCost;
+      : 0;
   const extraTotal = packagingTotal + decorationTotal;
   const previewBatchCost =
     Math.round((directTotal + semiFinishedTotal + extraTotal) * 100) / 100;
@@ -389,6 +396,7 @@ export default function RecipeDetail({
       ],
     }));
     setNewIngredient(createIngredientDraft());
+    setIsAddingNewIngredient(false);
     showFeedback("Ingredient toegevoegd.");
   }
 
@@ -421,11 +429,9 @@ export default function RecipeDetail({
   }
 
   function recalculateRecipeCost() {
-    const updatedRecipe = {
-      ...recipe,
+    const updatedRecipe: Recipe = {
+      ...previewRecipe,
       previousCostPrice: recipe.costPrice,
-      costPrice: previewCostPrice,
-      currentMargin: calculateMargin(recipe.salesPrice, previewCostPrice),
       lastUpdated: todayIsoDate(),
     };
 
@@ -450,7 +456,7 @@ export default function RecipeDetail({
             </h2>
             <div className="mt-2 flex flex-wrap gap-2">
               <RecipeStatusBadge status={recipe.status} />
-              {!isEditing && (
+              {!isEditing && recipe.type === "finalProduct" && (
                 <MarginBadge status={marginStatusForRecipe(previewRecipe)} />
               )}
               <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
@@ -514,7 +520,13 @@ export default function RecipeDetail({
             <div className="mt-3 grid gap-3">
               {activeEditSection === "basis" && (
                 <EditorBlock title="Basis en foto">
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
+                  <div
+                    className={
+                      draft.type === "finalProduct"
+                        ? "grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]"
+                        : "grid gap-3"
+                    }
+                  >
                     <div className="grid content-start gap-3">
                       <div className="rounded-2xl border border-[#dfe9d8] bg-[#fffdf8] p-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -595,82 +607,89 @@ export default function RecipeDetail({
                         />
                       </div>
 
-                      <div className="grid gap-3 rounded-2xl bg-white/70 p-3 md:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,0.8fr)]">
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-                            Batch
-                          </p>
-                          <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
-                            Hoeveel maak je in één keer?
-                          </p>
+                      <div className="rounded-2xl bg-white/70 p-3">
+                        <div className="grid gap-3 md:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,0.8fr)]">
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                              Batch
+                            </p>
+                            <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
+                              {draft.type === "semiFinished"
+                                ? "Automatisch totaalgewicht uit grondstoffen."
+                                : "Hoeveel maak je in één keer?"}
+                            </p>
+                          </div>
+                          {draft.type === "semiFinished" ? (
+                            <>
+                              <Metric
+                                label="Gemaakt gewicht"
+                                value={`${formatInputNumber(previewBatchQuantity)} kg`}
+                              />
+                              <Metric
+                                label="Inkoop/kg"
+                                value={formatEuro(previewCostPrice)}
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <EditTextField
+                                label="Aantal"
+                                value={draft.standardBatchQuantity}
+                                onChange={(value) =>
+                                  updateDraft({ standardBatchQuantity: value })
+                                }
+                                inputMode="decimal"
+                              />
+                              <SelectField
+                                label="Eenheid"
+                                value={draft.standardBatchUnit}
+                                onChange={(value) =>
+                                  updateDraft({ standardBatchUnit: value as RecipeUnit })
+                                }
+                                options={recipeUnits.map((unit) => ({
+                                  value: unit,
+                                  label: unitLabelText(unit),
+                                }))}
+                              />
+                            </>
+                          )}
                         </div>
-                        <EditTextField
-                          label="Aantal"
-                          value={draft.standardBatchQuantity}
-                          onChange={(value) =>
-                            updateDraft({ standardBatchQuantity: value })
-                          }
-                          inputMode="decimal"
-                        />
-                        <SelectField
-                          label="Eenheid"
-                          value={draft.standardBatchUnit}
-                          onChange={(value) =>
-                            updateDraft({ standardBatchUnit: value as RecipeUnit })
-                          }
-                          options={recipeUnits.map((unit) => ({
-                            value: unit,
-                            label: unitLabelText(unit),
-                          }))}
-                        />
                       </div>
 
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                        {draft.type === "finalProduct" && (
-                          <>
-                            <EditTextField
-                              label="Verkoop"
-                              value={draft.salesPrice}
-                              onChange={(value) =>
-                                updateDraft({ salesPrice: value })
-                              }
-                              inputMode="decimal"
-                            />
-                            <EditTextField
-                              label="Marge %"
-                              value={draft.targetMargin}
-                              onChange={(value) =>
-                                updateDraft({ targetMargin: value })
-                              }
-                              inputMode="decimal"
-                            />
-                          </>
-                        )}
-                        <EditTextField
-                          label={
-                            draft.type === "finalProduct"
-                              ? "Verpakking/stuk"
-                              : "Verpakking batch"
-                          }
-                          value={draft.packagingCost}
-                          onChange={(value) =>
-                            updateDraft({ packagingCost: value })
-                          }
-                          inputMode="decimal"
-                        />
-                        <EditTextField
-                          label={
-                            draft.type === "finalProduct"
-                              ? "Decoratie/stuk"
-                              : "Decoratie batch"
-                          }
-                          value={draft.decorationCost}
-                          onChange={(value) =>
-                            updateDraft({ decorationCost: value })
-                          }
-                          inputMode="decimal"
-                        />
-                        {draft.type === "finalProduct" && (
+                      {draft.type === "finalProduct" && (
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                          <EditTextField
+                            label="Verkoop"
+                            value={draft.salesPrice}
+                            onChange={(value) =>
+                              updateDraft({ salesPrice: value })
+                            }
+                            inputMode="decimal"
+                          />
+                          <EditTextField
+                            label="Marge %"
+                            value={draft.targetMargin}
+                            onChange={(value) =>
+                              updateDraft({ targetMargin: value })
+                            }
+                            inputMode="decimal"
+                          />
+                          <EditTextField
+                            label="Verpakking/stuk"
+                            value={draft.packagingCost}
+                            onChange={(value) =>
+                              updateDraft({ packagingCost: value })
+                            }
+                            inputMode="decimal"
+                          />
+                          <EditTextField
+                            label="Decoratie/stuk"
+                            value={draft.decorationCost}
+                            onChange={(value) =>
+                              updateDraft({ decorationCost: value })
+                            }
+                            inputMode="decimal"
+                          />
                           <EditTextField
                             label="Deco marge %"
                             value={draft.decorationMargin}
@@ -679,8 +698,8 @@ export default function RecipeDetail({
                             }
                             inputMode="decimal"
                           />
-                        )}
-                      </div>
+                        </div>
+                      )}
 
                       <label className="flex items-center gap-3 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-black">
                         <input
@@ -697,6 +716,7 @@ export default function RecipeDetail({
                       </label>
                     </div>
 
+                    {draft.type === "finalProduct" && (
                     <div className="grid content-start gap-2 rounded-2xl border border-[#dfe9d8] bg-white/76 p-3">
                       <div
                         className={`flex aspect-[4/3] items-center justify-center rounded-2xl border border-[#dfe9d8] bg-[#eadfcf] bg-cover bg-center p-3 text-center ${
@@ -754,6 +774,7 @@ export default function RecipeDetail({
                         </p>
                       )}
                     </div>
+                    )}
                   </div>
                 </EditorBlock>
               )}
@@ -843,101 +864,118 @@ export default function RecipeDetail({
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3">
-                  <p className="text-sm font-black">Direct nieuwe grondstof</p>
-                  <div className="mt-3 grid gap-2 lg:grid-cols-3">
-                    <EditTextField
-                      label="Naam"
-                      value={newIngredient.name}
-                      onChange={(value) =>
-                        setNewIngredient((current) => ({
-                          ...current,
-                          name: value,
-                        }))
-                      }
-                    />
-                    <EditTextField
-                      label="Leverancier"
-                      value={newIngredient.supplier}
-                      onChange={(value) =>
-                        setNewIngredient((current) => ({
-                          ...current,
-                          supplier: value,
-                        }))
-                      }
-                    />
-                    <EditTextField
-                      label="Artikelnummer"
-                      value={newIngredient.supplierArticleNumber}
-                      onChange={(value) =>
-                        setNewIngredient((current) => ({
-                          ...current,
-                          supplierArticleNumber: value,
-                        }))
-                      }
-                    />
-                    <EditTextField
-                      label="Verpakking"
-                      value={newIngredient.packageSize}
-                      onChange={(value) =>
-                        setNewIngredient((current) => ({
-                          ...current,
-                          packageSize: value,
-                        }))
-                      }
-                    />
-                    <SelectField
-                      label="Rekeneenheid"
-                      value={newIngredient.recipeUnit}
-                      onChange={(value) =>
-                        setNewIngredient((current) => ({
-                          ...current,
-                          recipeUnit: value as RecipeUnit,
-                        }))
-                      }
-                      options={recipeUnits.map((unit) => ({
-                        value: unit,
-                        label: unitLabelText(unit),
-                      }))}
-                    />
-                    <EditTextField
-                      label="Prijs /kg, /l of /st"
-                      value={newIngredient.packagePrice}
-                      onChange={(value) =>
-                        setNewIngredient((current) => ({
-                          ...current,
-                          packagePrice: value,
-                        }))
-                      }
-                      inputMode="decimal"
-                    />
-                    <EditTextField
-                      label="Allergenen"
-                      value={newIngredient.allergens}
-                      onChange={(value) =>
-                        setNewIngredient((current) => ({
-                          ...current,
-                          allergens: value,
-                        }))
-                      }
-                    />
-                    <EditTextField
-                      label="Aliases"
-                      value={newIngredient.aliases}
-                      onChange={(value) =>
-                        setNewIngredient((current) => ({
-                          ...current,
-                          aliases: value,
-                        }))
-                      }
-                    />
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-black">Nieuwe grondstof</p>
+                      <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
+                        Gebruik dit alleen als de grondstof nog niet in de lijst staat.
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={createNewIngredient}
-                      className="self-end rounded-full bg-[#c3d3bc] px-4 py-3 text-sm font-black shadow-sm"
+                      onClick={() => setIsAddingNewIngredient((current) => !current)}
+                      className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
                     >
-                      Toevoegen en gebruiken
+                      {isAddingNewIngredient ? "Sluit invoer" : "Nieuwe grondstof toevoegen"}
                     </button>
                   </div>
+
+                  {isAddingNewIngredient && (
+                    <div className="mt-3 grid gap-2 lg:grid-cols-3">
+                      <EditTextField
+                        label="Naam"
+                        value={newIngredient.name}
+                        onChange={(value) =>
+                          setNewIngredient((current) => ({
+                            ...current,
+                            name: value,
+                          }))
+                        }
+                      />
+                      <EditTextField
+                        label="Leverancier"
+                        value={newIngredient.supplier}
+                        onChange={(value) =>
+                          setNewIngredient((current) => ({
+                            ...current,
+                            supplier: value,
+                          }))
+                        }
+                      />
+                      <EditTextField
+                        label="Artikelnummer"
+                        value={newIngredient.supplierArticleNumber}
+                        onChange={(value) =>
+                          setNewIngredient((current) => ({
+                            ...current,
+                            supplierArticleNumber: value,
+                          }))
+                        }
+                      />
+                      <EditTextField
+                        label="Verpakking"
+                        value={newIngredient.packageSize}
+                        onChange={(value) =>
+                          setNewIngredient((current) => ({
+                            ...current,
+                            packageSize: value,
+                          }))
+                        }
+                      />
+                      <SelectField
+                        label="Rekeneenheid"
+                        value={newIngredient.recipeUnit}
+                        onChange={(value) =>
+                          setNewIngredient((current) => ({
+                            ...current,
+                            recipeUnit: value as RecipeUnit,
+                          }))
+                        }
+                        options={recipeUnits.map((unit) => ({
+                          value: unit,
+                          label: unitLabelText(unit),
+                        }))}
+                      />
+                      <EditTextField
+                        label="Prijs /kg, /l of /st"
+                        value={newIngredient.packagePrice}
+                        onChange={(value) =>
+                          setNewIngredient((current) => ({
+                            ...current,
+                            packagePrice: value,
+                          }))
+                        }
+                        inputMode="decimal"
+                      />
+                      <EditTextField
+                        label="Allergenen"
+                        value={newIngredient.allergens}
+                        onChange={(value) =>
+                          setNewIngredient((current) => ({
+                            ...current,
+                            allergens: value,
+                          }))
+                        }
+                      />
+                      <EditTextField
+                        label="Aliases"
+                        value={newIngredient.aliases}
+                        onChange={(value) =>
+                          setNewIngredient((current) => ({
+                            ...current,
+                            aliases: value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={createNewIngredient}
+                        className="self-end rounded-full bg-[#c3d3bc] px-4 py-3 text-sm font-black shadow-sm"
+                      >
+                        Toevoegen en gebruiken
+                      </button>
+                    </div>
+                  )}
                 </div>
               </EditorBlock>
               )}
@@ -1035,12 +1073,14 @@ export default function RecipeDetail({
                   onChange={(values) => updateDraft({ workInstructions: values })}
                   placeholder="Stap voor bakkers op de werkvloer"
                 />
-                <ArrayEditor
-                  title="Afwerking"
-                  values={draft.finishingSteps}
-                  onChange={(values) => updateDraft({ finishingSteps: values })}
-                  placeholder="Decoratie of afwerking"
-                />
+                {draft.type === "finalProduct" && (
+                  <ArrayEditor
+                    title="Afwerking"
+                    values={draft.finishingSteps}
+                    onChange={(values) => updateDraft({ finishingSteps: values })}
+                    placeholder="Decoratie of afwerking"
+                  />
+                )}
                 <ArrayEditor
                   title="Benodigd materiaal"
                   values={draft.equipment}
@@ -1094,7 +1134,7 @@ export default function RecipeDetail({
               <p className="text-sm font-black text-[#45663b]">
                 {draft.type === "finalProduct"
                   ? `Nieuwe kostprijs/stuk: ${formatEuro(previewCostPrice)}`
-                  : `Nieuwe batchkostprijs: ${formatEuro(previewCostPrice)}`}
+                  : `Nieuwe kostprijs/kg: ${formatEuro(previewCostPrice)}`}
               </p>
               {draft.type === "finalProduct" && (
                 <p className="text-sm font-black text-[#2d2a26]/55">
@@ -1151,8 +1191,15 @@ export default function RecipeDetail({
         )}
 
         {!isEditing && (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <div
+          className={`mt-4 grid gap-4 ${
+            previewRecipe.type === "finalProduct"
+              ? "lg:grid-cols-[18rem_minmax(0,1fr)]"
+              : "lg:grid-cols-[16rem_minmax(0,1fr)]"
+          }`}
+        >
           <Panel className="bg-[#fffdf8]">
+            {previewRecipe.type === "finalProduct" && (
             <div
               className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[1.1rem] border border-[#e7e0d8] bg-[#eadfcf] bg-cover bg-center p-4 text-center"
               style={
@@ -1183,27 +1230,34 @@ export default function RecipeDetail({
                 </div>
               )}
             </div>
+            )}
             <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+              {previewRecipe.type === "finalProduct" && (
+                <Metric
+                  label="Verkoopprijs"
+                  value={salesPrice ? formatEuro(salesPrice) : "-"}
+                />
+              )}
               <Metric
-                label="Verkoopprijs"
-                value={salesPrice ? formatEuro(salesPrice) : "-"}
-              />
-              <Metric
-                label={previewRecipe.type === "finalProduct" ? "Kost/stuk" : "Kostprijs"}
+                label={previewRecipe.type === "finalProduct" ? "Kost/stuk" : "Kost/kg"}
                 value={formatEuro(previewCostPrice)}
               />
-              <Metric
-                label="Marge"
-                value={
-                  calculateMargin(salesPrice, previewCostPrice)
-                    ? formatPercent(calculateMargin(salesPrice, previewCostPrice))
-                    : "-"
-                }
-              />
-              <Metric
-                label="Doelmarge"
-                value={targetMargin ? formatPercent(targetMargin) : "-"}
-              />
+              {previewRecipe.type === "finalProduct" && (
+                <>
+                  <Metric
+                    label="Marge"
+                    value={
+                      calculateMargin(salesPrice, previewCostPrice)
+                        ? formatPercent(calculateMargin(salesPrice, previewCostPrice))
+                        : "-"
+                    }
+                  />
+                  <Metric
+                    label="Doelmarge"
+                    value={targetMargin ? formatPercent(targetMargin) : "-"}
+                  />
+                </>
+              )}
               <Metric label="Portie" value={draft.portionLabel} />
               <Metric label="Batch" value={draft.batchSize} />
               {previewRecipe.type === "finalProduct" && (
@@ -1219,20 +1273,41 @@ export default function RecipeDetail({
                 description={
                   previewRecipe.type === "finalProduct"
                     ? "Verpakking en decoratie staan per stuk in de invoer en worden voor de batch automatisch doorgerekend."
-                    : "Opgebouwd uit directe ingredienten, halffabricaten, decoratie en verpakking."
+                    : "Totaalgewicht komt automatisch uit de grondstoffen. Kostprijs is de inkoopprijs per kg."
                 }
               />
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+              <div
+                className={`mt-4 grid gap-3 sm:grid-cols-2 ${
+                  previewRecipe.type === "finalProduct"
+                    ? "xl:grid-cols-6"
+                    : "xl:grid-cols-4"
+                }`}
+              >
                 <Metric label="Direct batch" value={formatEuro(directTotal)} />
                 <Metric
                   label="Halffab. batch"
                   value={formatEuro(semiFinishedTotal)}
                 />
-                <Metric label="Verpakking" value={formatEuro(packagingTotal)} />
-                <Metric label="Decoratie" value={formatEuro(decorationTotal)} />
-                <Metric label="Batch totaal" value={formatEuro(previewBatchCost)} />
+                {previewRecipe.type === "finalProduct" && (
+                  <>
+                    <Metric label="Verpakking" value={formatEuro(packagingTotal)} />
+                    <Metric label="Decoratie" value={formatEuro(decorationTotal)} />
+                  </>
+                )}
                 <Metric
-                  label={previewRecipe.type === "finalProduct" ? "Per stuk" : "Totaal"}
+                  label={
+                    previewRecipe.type === "finalProduct"
+                      ? "Batch totaal"
+                      : "Gewicht"
+                  }
+                  value={
+                    previewRecipe.type === "finalProduct"
+                      ? formatEuro(previewBatchCost)
+                      : `${formatInputNumber(previewBatchQuantity)} kg`
+                  }
+                />
+                <Metric
+                  label={previewRecipe.type === "finalProduct" ? "Per stuk" : "Per kg"}
                   value={formatEuro(previewCostPrice)}
                 />
               </div>
@@ -1615,12 +1690,18 @@ function buildRecipeFromDraft(
   semiFinishedItems: SemiFinishedUsage[],
   costPrice: number
 ): Recipe {
-  const salesPrice = parseDutchNumber(draft.salesPrice);
-  const standardBatchQuantity =
-    parseDutchNumber(draft.standardBatchQuantity) || undefined;
+  const isSemiFinished = draft.type === "semiFinished";
+  const salesPrice = isSemiFinished ? 0 : parseDutchNumber(draft.salesPrice);
+  const autoWeightKg = recipeMadeWeightKg(recipeIngredients, semiFinishedItems);
+  const standardBatchQuantity = isSemiFinished
+    ? autoWeightKg || parseDutchNumber(draft.standardBatchQuantity) || undefined
+    : parseDutchNumber(draft.standardBatchQuantity) || undefined;
+  const standardBatchUnit: RecipeUnit = isSemiFinished
+    ? "kg"
+    : draft.standardBatchUnit;
   const batchSize = batchLabelFromValues(
     standardBatchQuantity,
-    draft.standardBatchUnit,
+    standardBatchUnit,
     draft.batchSize || recipe.batchSize
   );
 
@@ -1634,30 +1715,34 @@ function buildRecipeFromDraft(
     salesPrice,
     costPrice,
     previousCostPrice: recipe.costPrice,
-    targetMargin: parseDutchNumber(draft.targetMargin),
-    currentMargin: calculateMargin(salesPrice, costPrice),
+    targetMargin: isSemiFinished ? 0 : parseDutchNumber(draft.targetMargin),
+    currentMargin: isSemiFinished ? 0 : calculateMargin(salesPrice, costPrice),
     status: draft.status,
     ingredients: recipeIngredients,
     semiFinishedItems,
     workInstructions: cleanList(draft.workInstructions),
     preparationSteps: cleanList(draft.preparationSteps),
-    finishingSteps: cleanList(draft.finishingSteps),
+    finishingSteps: isSemiFinished ? [] : cleanList(draft.finishingSteps),
     equipment: cleanList(draft.equipment),
     allergens: parseList(draft.allergens),
     internalNotes: draft.internalNotes.trim(),
     isWorkModeVisible: draft.isWorkModeVisible,
     version: draft.version.trim() || recipe.version || "v1",
     lastUpdated: todayIsoDate(),
-    portionLabel: portionLabelFromValues(draft.type, draft.standardBatchUnit),
+    portionLabel: portionLabelFromValues(draft.type, standardBatchUnit),
     batchSize,
-    photoHint: draft.photoHint.trim() || draft.name.trim() || recipe.photoHint,
-    photoPreviewDataUrl: draft.photoPreviewDataUrl,
-    photoFileName: draft.photoFileName.trim(),
-    photoUpdatedAt: draft.photoUpdatedAt,
+    photoHint: isSemiFinished
+      ? ""
+      : draft.photoHint.trim() || draft.name.trim() || recipe.photoHint,
+    photoPreviewDataUrl: isSemiFinished ? "" : draft.photoPreviewDataUrl,
+    photoFileName: isSemiFinished ? "" : draft.photoFileName.trim(),
+    photoUpdatedAt: isSemiFinished ? "" : draft.photoUpdatedAt,
     notes: draft.notes.trim(),
-    packagingCost: parseDutchNumber(draft.packagingCost),
-    decorationCost: parseDutchNumber(draft.decorationCost),
-    decorationMargin: parseDutchNumber(draft.decorationMargin) || 30,
+    packagingCost: isSemiFinished ? 0 : parseDutchNumber(draft.packagingCost),
+    decorationCost: isSemiFinished ? 0 : parseDutchNumber(draft.decorationCost),
+    decorationMargin: isSemiFinished
+      ? 0
+      : parseDutchNumber(draft.decorationMargin) || 30,
   };
 }
 
@@ -1666,7 +1751,7 @@ function costPriceFromBatchCost(
   batchCost: number,
   batchQuantity: number
 ) {
-  if (type === "finalProduct" && batchQuantity > 0) {
+  if ((type === "finalProduct" || type === "semiFinished") && batchQuantity > 0) {
     return roundMoney(batchCost / batchQuantity);
   }
 
@@ -1761,7 +1846,36 @@ function semiFinishedCostForQuantity(
 
   const requested = convertQuantityToUnit(quantity, unit, batch.unit);
 
+  if (recipe.type === "semiFinished") {
+    return roundMoney(requested * recipe.costPrice);
+  }
+
   return roundMoney((requested / batch.quantity) * recipe.costPrice);
+}
+
+function recipeLineWeightKg(quantity: number, unit: RecipeUnit) {
+  if (unit === "kg") return quantity;
+  if (unit === "gram") return quantity / 1000;
+  if (unit === "liter") return quantity;
+  if (unit === "ml") return quantity / 1000;
+
+  return 0;
+}
+
+function recipeMadeWeightKg(
+  recipeIngredients: RecipeIngredient[],
+  semiFinishedItems: SemiFinishedUsage[]
+) {
+  const directWeight = recipeIngredients.reduce(
+    (total, item) => total + recipeLineWeightKg(item.quantity, item.unit),
+    0
+  );
+  const semiFinishedWeight = semiFinishedItems.reduce(
+    (total, item) => total + recipeLineWeightKg(item.quantity, item.unit),
+    0
+  );
+
+  return roundMoney(directWeight + semiFinishedWeight);
 }
 
 function getBatchInfo(recipe?: Recipe | null) {

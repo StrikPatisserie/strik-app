@@ -269,6 +269,13 @@ export function recipeBatchQuantity(recipe: Recipe) {
   return recipeBatchInfo(recipe)?.quantity || 1;
 }
 
+function formatQuantityForLabel(value: number) {
+  return value.toLocaleString("nl-NL", {
+    maximumFractionDigits: 3,
+    minimumFractionDigits: 0,
+  });
+}
+
 export function convertQuantityToUnit(
   quantity: number,
   fromUnit: RecipeUnit,
@@ -307,6 +314,10 @@ export function semiFinishedCostForQuantity(
 
   const requested = convertQuantityToUnit(quantity, unit, batch.unit);
 
+  if (recipe.type === "semiFinished") {
+    return roundMoney(requested * recipe.costPrice);
+  }
+
   return roundMoney((requested / batch.quantity) * recipe.costPrice);
 }
 
@@ -315,7 +326,7 @@ export function costPriceFromBatchCost(
   batchCost: number,
   batchQuantity: number
 ) {
-  if (type === "finalProduct" && batchQuantity > 0) {
+  if ((type === "finalProduct" || type === "semiFinished") && batchQuantity > 0) {
     return roundMoney(batchCost / batchQuantity);
   }
 
@@ -323,6 +334,16 @@ export function costPriceFromBatchCost(
 }
 
 export function recipeExtraCostBreakdown(recipe: Recipe) {
+  if (recipe.type === "semiFinished") {
+    return {
+      packagingUnitCost: 0,
+      decorationUnitCost: 0,
+      packagingTotal: 0,
+      decorationTotal: 0,
+      extraCost: 0,
+    };
+  }
+
   const batchQuantity = recipeBatchQuantity(recipe);
   const packagingUnitCost = recipe.packagingCost || 0;
   const decorationUnitCost = recipe.decorationCost || 0;
@@ -342,6 +363,31 @@ export function recipeExtraCostBreakdown(recipe: Recipe) {
     decorationTotal: roundMoney(decorationTotal),
     extraCost: roundMoney(packagingTotal + decorationTotal),
   };
+}
+
+function recipeLineWeightInKg(quantity: number, unit: RecipeUnit) {
+  if (unit === "kg") return quantity;
+  if (unit === "gram") return quantity / 1000;
+  if (unit === "liter") return quantity;
+  if (unit === "ml") return quantity / 1000;
+
+  return 0;
+}
+
+function semiFinishedMadeWeightKg(
+  ingredients: RecipeIngredient[],
+  semiFinishedItems: SemiFinishedUsage[]
+) {
+  const directWeight = ingredients.reduce(
+    (total, item) => total + recipeLineWeightInKg(item.quantity, item.unit),
+    0
+  );
+  const semiWeight = semiFinishedItems.reduce(
+    (total, item) => total + recipeLineWeightInKg(item.quantity, item.unit),
+    0
+  );
+
+  return roundMoney(directWeight + semiWeight);
 }
 
 export function recipeCostBreakdown(
@@ -374,10 +420,17 @@ export function recipeCostBreakdown(
   const extraBreakdown = recipeExtraCostBreakdown(recipe);
   const extraCost = extraBreakdown.extraCost;
   const batchCost = roundMoney(directCost + semiFinishedTotal + extraCost);
+  const batchQuantity =
+    recipe.type === "semiFinished"
+      ? semiFinishedMadeWeightKg(
+          recalculatedIngredients,
+          recalculatedSemiFinished
+        ) || recipeBatchQuantity(recipe)
+      : recipeBatchQuantity(recipe);
   const costPrice = costPriceFromBatchCost(
     recipe.type,
     batchCost,
-    recipeBatchQuantity(recipe)
+    batchQuantity
   );
 
   return {
@@ -387,6 +440,7 @@ export function recipeCostBreakdown(
     semiFinishedCost: semiFinishedTotal,
     extraCost,
     batchCost,
+    batchQuantity,
     costPrice,
   };
 }
@@ -406,8 +460,31 @@ export function recalculateRecipeCosts(
     previousCostPrice:
       costs.costPrice === recipe.costPrice ? recipe.previousCostPrice : recipe.costPrice,
     costPrice: costs.costPrice,
-    currentMargin: calculateMargin(recipe.salesPrice, costs.costPrice),
+    currentMargin:
+      recipe.type === "semiFinished"
+        ? 0
+        : calculateMargin(recipe.salesPrice, costs.costPrice),
     lastUpdated: options.markAsUpdated ? new Date().toISOString().slice(0, 10) : recipe.lastUpdated,
+    standardBatchQuantity:
+      recipe.type === "semiFinished" ? costs.batchQuantity : recipe.standardBatchQuantity,
+    standardBatchUnit:
+      recipe.type === "semiFinished" ? "kg" : recipe.standardBatchUnit,
+    batchSize:
+      recipe.type === "semiFinished"
+        ? `${formatQuantityForLabel(costs.batchQuantity)} kg`
+        : recipe.batchSize,
+    portionLabel: recipe.type === "semiFinished" ? "per kg" : recipe.portionLabel,
+    packagingCost: recipe.type === "semiFinished" ? 0 : recipe.packagingCost,
+    decorationCost: recipe.type === "semiFinished" ? 0 : recipe.decorationCost,
+    decorationMargin: recipe.type === "semiFinished" ? 0 : recipe.decorationMargin,
+    targetMargin: recipe.type === "semiFinished" ? 0 : recipe.targetMargin,
+    salesPrice: recipe.type === "semiFinished" ? 0 : recipe.salesPrice,
+    photoHint: recipe.type === "semiFinished" ? "" : recipe.photoHint,
+    photoPreviewDataUrl:
+      recipe.type === "semiFinished" ? "" : recipe.photoPreviewDataUrl,
+    photoFileName: recipe.type === "semiFinished" ? "" : recipe.photoFileName,
+    photoUpdatedAt:
+      recipe.type === "semiFinished" ? "" : recipe.photoUpdatedAt,
   };
 }
 

@@ -9,14 +9,11 @@ import {
   SectionTitle,
 } from "./RecepturenShared";
 import {
-  changeBadgeClass,
   formatDate,
   formatEuro,
-  formatSignedPercent,
   linkedFinalProducts,
   normalizeSearch,
   quantityLabel,
-  recipeCostChange,
 } from "./utils";
 
 export default function HalffabricatenList({
@@ -109,12 +106,11 @@ export default function HalffabricatenList({
 
         {filteredRecipes.length ? (
           <div className="overflow-hidden rounded-[1.15rem] border border-[#e7e0d8]">
-            <div className="hidden grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_8rem_8rem_8rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 xl:grid">
+            <div className="hidden grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_9rem_8rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 xl:grid">
               <span>Halffabricaat</span>
               <span>Groep</span>
-              <span>Batch</span>
-              <span>Kostprijs</span>
-              <span>Wijziging</span>
+              <span>Gewicht</span>
+              <span>Kostprijs/kg</span>
               <span>Gekoppeld</span>
               <span>Status</span>
             </div>
@@ -122,14 +118,13 @@ export default function HalffabricatenList({
               {filteredRecipes.map((recipe) => {
                 const linkedProducts = linkedFinalProducts(recipes, recipe.id);
                 const firstIngredient = recipe.ingredients[0];
-                const change = recipeCostChange(recipe);
 
                 return (
                   <button
                     key={recipe.id}
                     type="button"
                     onClick={() => onOpenRecipe(recipe)}
-                    className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_8rem_8rem_8rem_8rem] xl:items-center"
+                    className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_9rem_8rem_8rem] xl:items-center"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-base font-black">
@@ -152,13 +147,6 @@ export default function HalffabricatenList({
                     <p className="text-sm font-black">
                       {formatEuro(recipe.costPrice)}
                     </p>
-                    <span
-                      className={`w-fit rounded-full px-2.5 py-1 text-xs font-black ${changeBadgeClass(
-                        change
-                      )}`}
-                    >
-                      {formatSignedPercent(change, 1)}
-                    </span>
                     <p className="text-sm font-black">
                       {linkedProducts.length} producten
                     </p>
