@@ -453,7 +453,10 @@ export function salesPeriodDays(period: SalesPeriod = "week") {
 
 export function normalizeProductionLog(entries: ProductionLogEntry[] = []) {
   return entries
-    .filter((entry) => entry.date && entry.quantity > 0)
+    .filter((entry) =>
+      Boolean(entry.date) &&
+      (entry.source === "stock" ? entry.quantity >= 0 : entry.quantity > 0)
+    )
     .map((entry) => ({
       id: entry.id || `production-${entry.date}-${entry.quantity}`,
       date: entry.date,
@@ -557,7 +560,7 @@ export function productionNeedForRecipe(
   );
   const averageSalesPeriod = syncedRecipe.averageSalesPeriod || "week";
   const lastProducedQuantity =
-    syncedRecipe.lastProducedQuantity || recipeBatchQuantity(recipe);
+    syncedRecipe.lastProducedQuantity ?? recipeBatchQuantity(recipe);
 
   if (syncedRecipe.type !== "finalProduct" || averageSalesQuantity <= 0) {
     return {
@@ -593,6 +596,21 @@ export function productionNeedForRecipe(
   }
 
   const dailySales = averageSalesQuantity / salesPeriodDays(averageSalesPeriod);
+  if (lastProducedQuantity <= 0) {
+    return {
+      recipe: syncedRecipe,
+      status: "due",
+      averageSalesQuantity,
+      averageSalesPeriod,
+      lastProducedAt,
+      lastProducedQuantity,
+      nextProductionDate: todayIsoDate(),
+      daysUntilProduction: 0,
+      daysCovered: 0,
+      estimatedRemainingQuantity: 0,
+    };
+  }
+
   const daysCovered = dailySales > 0 ? lastProducedQuantity / dailySales : 0;
   const lastProducedDate = isoDateAtStartOfDay(lastProducedAt);
   const nextProductionDateObject = new Date(lastProducedDate);
@@ -733,6 +751,29 @@ export function registerRecipeProduction(
     quantity: safeProducedQuantity,
     note,
     source: "work",
+  };
+
+  return syncRecipeProductionMetadata({
+    ...recipe,
+    productionLog: [newEntry, ...productionLog],
+  });
+}
+
+export function registerRecipeStockAdjustment(
+  recipe: Recipe,
+  currentQuantity: number,
+  adjustedAt: Date = new Date(),
+  note = "Voorraad handmatig aangepast"
+) {
+  const safeQuantity = Math.max(0, currentQuantity || 0);
+  const adjustmentDate = dateAtStartOfDay(adjustedAt);
+  const productionLog = productionLogForRecipe(recipe);
+  const newEntry: ProductionLogEntry = {
+    id: `stock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    date: localIsoDate(adjustmentDate),
+    quantity: safeQuantity,
+    note,
+    source: "stock",
   };
 
   return syncRecipeProductionMetadata({

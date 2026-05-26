@@ -26,13 +26,11 @@ export default function RecipesList({
   recipes,
   onOpenRecipe,
   onCreateRecipe,
-  onOpenPlanning,
   onRecalculateAll,
 }: Readonly<{
   recipes: Recipe[];
   onOpenRecipe: (recipe: Recipe) => void;
   onCreateRecipe: () => void;
-  onOpenPlanning: () => void;
   onRecalculateAll: () => void;
 }>) {
   const [search, setSearch] = useState("");
@@ -65,13 +63,6 @@ export default function RecipesList({
             description="Zoek, filter en open eindproducten met actuele kostprijs en marge."
           />
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onOpenPlanning}
-              className="rounded-full bg-[#fff0bd] px-4 py-2.5 text-sm font-black text-[#7a5a18] shadow-sm transition active:scale-[0.98]"
-            >
-              Productieplanning
-            </button>
             <button
               type="button"
               onClick={onRecalculateAll}

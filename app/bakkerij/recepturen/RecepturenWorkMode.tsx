@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Ingredient, Recipe, RecipeUnit } from "./types";
+import ProductionPlanningPanel from "./ProductionPlanningPanel";
 import {
   findIngredient,
   findRecipe,
@@ -7,17 +8,15 @@ import {
   formatDate,
   normalizeSearch,
   scaledRecipeBatchWeightKg,
+  todayIsoDate,
 } from "./utils";
+import {
+  defaultWorkCategoryOptions,
+  workCategoriesForRecipe,
+  workCategoryLabel,
+} from "./workCategories";
 
-type WorkFilterId =
-  | "all"
-  | "gebak"
-  | "taarten"
-  | "sloffen"
-  | "koek"
-  | "ijs"
-  | "bonbons"
-  | "halffabricaten";
+type WorkFilterId = string;
 
 type BatchInfo = {
   quantity: number;
@@ -32,12 +31,7 @@ type ProductionTask = {
 
 const WORK_FILTERS: Array<{ id: WorkFilterId; label: string }> = [
   { id: "all", label: "Alles" },
-  { id: "gebak", label: "Gebak" },
-  { id: "taarten", label: "Taarten" },
-  { id: "sloffen", label: "Sloffen" },
-  { id: "koek", label: "Koek" },
-  { id: "ijs", label: "IJs" },
-  { id: "bonbons", label: "Bonbons" },
+  ...defaultWorkCategoryOptions,
   { id: "halffabricaten", label: "Halffabricaten" },
 ];
 
@@ -117,19 +111,10 @@ function getBatchStep(batch: BatchInfo) {
 }
 
 function recipeMatchesFilter(recipe: Recipe, filter: WorkFilterId) {
-  const group = normalizeSearch(recipe.productGroup);
-  const name = normalizeSearch(recipe.name);
-
   if (filter === "all") return true;
   if (filter === "halffabricaten") return recipe.type === "semiFinished";
-  if (filter === "gebak") return group.includes("gebak") || group.includes("gateau");
-  if (filter === "taarten") return group.includes("taart") || name.includes("taart");
-  if (filter === "sloffen") return group.includes("slof") || name.includes("slof");
-  if (filter === "koek") return group.includes("koek") || name.includes("koek");
-  if (filter === "ijs") return group.includes("ijs") || name.includes("ijs");
-  if (filter === "bonbons") return group.includes("bonbon") || name.includes("bonbon");
 
-  return true;
+  return recipe.type === "finalProduct" && workCategoriesForRecipe(recipe).includes(filter);
 }
 
 function getRecipeTypeLabel(recipe: Recipe) {
@@ -286,16 +271,49 @@ export default function RecepturenWorkMode({
   recipes,
   ingredients,
   onMarkProduced,
+  onAdjustStock,
+  onUpdateProductionLog,
+  onDeleteProductionLog,
 }: Readonly<{
   recipes: Recipe[];
   ingredients: Ingredient[];
-  onMarkProduced: (recipe: Recipe, quantity: number, requestId?: string) => void;
+  onMarkProduced: (
+    recipe: Recipe,
+    quantity: number,
+    requestId?: string,
+    date?: string
+  ) => void;
+  onAdjustStock: (recipe: Recipe, quantity: number, date: string) => void;
+  onUpdateProductionLog: (
+    recipe: Recipe,
+    entryId: string,
+    changes: { date?: string; quantity?: number; note?: string }
+  ) => void;
+  onDeleteProductionLog: (recipe: Recipe, entryId: string) => void;
 }>) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<WorkFilterId>("all");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [startInProduction, setStartInProduction] = useState(false);
   const [productionFeedback, setProductionFeedback] = useState("");
+  const workFilters = useMemo(() => {
+    const customCategories = recipes
+      .flatMap((recipe) =>
+        recipe.type === "finalProduct" ? workCategoriesForRecipe(recipe) : []
+      )
+      .filter(
+        (category) =>
+          !WORK_FILTERS.some((filterOption) => filterOption.id === category)
+      );
+
+    return [
+      ...WORK_FILTERS,
+      ...Array.from(new Set(customCategories)).map((category) => ({
+        id: category,
+        label: workCategoryLabel(category),
+      })),
+    ];
+  }, [recipes]);
   const visibleRecipes = useMemo(() => {
     const query = normalizeSearch(search);
 
@@ -311,8 +329,13 @@ export default function RecepturenWorkMode({
     });
   }, [filter, recipes, search]);
 
-  function markProduced(recipe: Recipe, quantity: number, requestId?: string) {
-    onMarkProduced(recipe, quantity, requestId);
+  function markProduced(
+    recipe: Recipe,
+    quantity: number,
+    requestId?: string,
+    date?: string
+  ) {
+    onMarkProduced(recipe, quantity, requestId, date);
     setProductionFeedback(`${recipe.name} staat als gemaakt geregistreerd.`);
     window.setTimeout(() => setProductionFeedback(""), 2600);
   }
@@ -324,6 +347,17 @@ export default function RecepturenWorkMode({
           {productionFeedback}
         </p>
       )}
+      <ProductionPlanningPanel
+        recipes={recipes}
+        onOpenRecipe={(recipe) => {
+          setStartInProduction(false);
+          setSelectedRecipe(recipe);
+        }}
+        onMarkProduced={markProduced}
+        onAdjustStock={onAdjustStock}
+        onUpdateProductionLog={onUpdateProductionLog}
+        onDeleteProductionLog={onDeleteProductionLog}
+      />
       <div className="rounded-[1.1rem] border border-[#e2dbcf] bg-white/88 p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -345,7 +379,7 @@ export default function RecepturenWorkMode({
           className="mt-3 w-full rounded-[1rem] border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-base font-black text-[#2d2a26] shadow-sm outline-none placeholder:text-[#2d2a26]/35 focus:ring-2 focus:ring-[#8fb184]"
         />
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {WORK_FILTERS.map((item) => (
+          {workFilters.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -407,6 +441,9 @@ function RecipeWorkCard({
   onStart,
 }: Readonly<{ recipe: Recipe; onOpen: () => void; onStart: () => void }>) {
   const batch = getStandardBatch(recipe);
+  const categories = recipe.type === "finalProduct"
+    ? workCategoriesForRecipe(recipe).slice(0, 3)
+    : ["halffabricaten"];
 
   return (
     <article className="grid gap-3 rounded-[1.05rem] border border-[#e2dbcf] bg-white/92 p-3 shadow-sm">
@@ -428,6 +465,16 @@ function RecipeWorkCard({
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
+        {categories.map((category) => (
+          <span
+            key={category}
+            className="rounded-full bg-[#dce8d6] px-2 py-0.5 text-[0.66rem] font-black text-[#45663b]"
+          >
+            {category === "halffabricaten"
+              ? "Halffabricaat"
+              : workCategoryLabel(category)}
+          </span>
+        ))}
         {recipe.allergens.length ? (
           recipe.allergens.slice(0, 4).map((allergen) => (
             <span
@@ -502,12 +549,18 @@ function WorkRecipeDetail({
   ingredients: Ingredient[];
   startInProduction: boolean;
   onSelectRecipe: (recipe: Recipe) => void;
-  onMarkProduced: (recipe: Recipe, quantity: number) => void;
+  onMarkProduced: (
+    recipe: Recipe,
+    quantity: number,
+    requestId?: string,
+    date?: string
+  ) => void;
   onClose: () => void;
 }>) {
   const standardBatch = getStandardBatch(recipe);
   const [batchQuantity, setBatchQuantity] = useState(standardBatch.quantity);
   const [isProducing, setIsProducing] = useState(startInProduction);
+  const [isRegisteringProduction, setIsRegisteringProduction] = useState(false);
   const activeBatch = { ...standardBatch, quantity: batchQuantity };
   const multiplier = standardBatch.quantity
     ? batchQuantity / standardBatch.quantity
@@ -639,7 +692,7 @@ function WorkRecipeDetail({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => onMarkProduced(recipe, batchQuantity)}
+                onClick={() => setIsRegisteringProduction(true)}
                 className="rounded-full bg-[#fff0bd] px-5 py-3 text-sm font-black text-[#7a5a18] shadow-sm"
               >
                 Product gemaakt
@@ -764,12 +817,24 @@ function WorkRecipeDetail({
           recipe={recipe}
           batch={activeBatch}
           batchWeightKg={batchWeightKg}
-          onMarkProduced={() => onMarkProduced(recipe, batchQuantity)}
+          onMarkProduced={(date) => onMarkProduced(recipe, batchQuantity, undefined, date)}
           ingredients={scaledIngredients}
           semiFinished={scaledSemiFinished}
           steps={workSteps}
           finishingSteps={finishingSteps}
           onBack={() => setIsProducing(false)}
+        />
+      )}
+      {isRegisteringProduction && (
+        <ProductionRegistrationDialog
+          title="Product gemaakt opslaan"
+          quantity={batchQuantity}
+          unit={standardBatch.unit}
+          onCancel={() => setIsRegisteringProduction(false)}
+          onConfirm={(date) => {
+            onMarkProduced(recipe, batchQuantity, undefined, date);
+            setIsRegisteringProduction(false);
+          }}
         />
       )}
     </div>
@@ -867,7 +932,7 @@ function ProductionMode({
   recipe: Recipe;
   batch: BatchInfo;
   batchWeightKg: number;
-  onMarkProduced: () => void;
+  onMarkProduced: (date: string) => void;
   ingredients: ReturnType<typeof getScaledIngredients>;
   semiFinished: ReturnType<typeof getScaledSemiFinished>;
   steps: string[];
@@ -878,6 +943,7 @@ function ProductionMode({
   const [isPaused, setIsPaused] = useState(false);
   const [viewMode, setViewMode] = useState<"checklist" | "focus">("checklist");
   const [focusIndex, setFocusIndex] = useState(0);
+  const [isFinishingProduction, setIsFinishingProduction] = useState(false);
   const tasks = useMemo(
     () => createProductionTasks(ingredients, semiFinished, steps, finishingSteps),
     [finishingSteps, ingredients, semiFinished, steps]
@@ -901,7 +967,7 @@ function ProductionMode({
 
   function completeAll() {
     setCheckedTasks(Object.fromEntries(tasks.map((task) => [task.id, true])));
-    onMarkProduced();
+    setIsFinishingProduction(true);
   }
 
   return (
@@ -1073,6 +1139,82 @@ function ProductionMode({
             )}
           </section>
         )}
+        {isFinishingProduction && (
+          <ProductionRegistrationDialog
+            title="Productie afronden"
+            quantity={batch.quantity}
+            unit={batch.unit}
+            onCancel={() => setIsFinishingProduction(false)}
+            onConfirm={(date) => {
+              onMarkProduced(date);
+              setIsFinishingProduction(false);
+              onBack();
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProductionRegistrationDialog({
+  title,
+  quantity,
+  unit,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  title: string;
+  quantity: number;
+  unit: RecipeUnit;
+  onCancel: () => void;
+  onConfirm: (date: string) => void;
+}>) {
+  const [date, setDate] = useState(todayIsoDate());
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#2d2a26]/42 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[1.4rem] border border-[#ded6ca] bg-white p-5 shadow-2xl">
+        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#45663b]">
+          Opslaan
+        </p>
+        <h3 className="mt-1 text-2xl font-black">{title}</h3>
+        <p className="mt-2 text-sm font-bold text-[#2d2a26]/55">
+          Datum controleren voordat de voorraad/prognose wordt bijgewerkt.
+        </p>
+        <label className="mt-4 block">
+          <span className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+            Productiedatum
+          </span>
+          <input
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            className="mt-1 w-full rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-base font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
+          />
+        </label>
+        <div className="mt-3 rounded-2xl bg-[#f8f6f3] p-3">
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+            Aantal
+          </p>
+          <p className="mt-1 text-lg font-black">{formatAmount(quantity, unit)}</p>
+        </div>
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black text-[#2d2a26]/60"
+          >
+            Annuleer
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(date || todayIsoDate())}
+            className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+          >
+            Opslaan
+          </button>
+        </div>
       </div>
     </div>
   );

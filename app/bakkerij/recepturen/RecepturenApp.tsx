@@ -8,7 +8,6 @@ import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList from "./IngredientsList";
 import MargeOverzicht from "./MargeOverzicht";
 import { bakeryIcons, ingredients, invoiceImports, recipes } from "./mockData";
-import ProductionPlanningPanel from "./ProductionPlanningPanel";
 import RecipeDetail from "./RecipeDetail";
 import RecipeDataImport from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
@@ -24,6 +23,7 @@ import type {
   Ingredient,
   InvoiceImport,
   InvoiceLine,
+  ProductionLogEntry,
   Recipe,
   RecipeType,
 } from "./types";
@@ -34,11 +34,12 @@ import {
   pricePerBaseUnitFromPackagePrice,
   recalculateAllRecipeCosts,
   registerRecipeProduction,
+  registerRecipeStockAdjustment,
+  syncRecipeProductionMetadata,
 } from "./utils";
 
 const tabs = [
   { id: "dashboard", label: "Dashboard" },
-  { id: "planning", label: "Productieplanning" },
   { id: "recepten", label: "Recepten" },
   { id: "halffabricaten", label: "Halffabricaten" },
   { id: "ingredienten", label: "Ingredienten" },
@@ -261,8 +262,10 @@ export default function RecepturenApp() {
   function markRecipeProduced(
     recipeToProduce: Recipe,
     quantity: number,
-    requestId?: string
+    requestId?: string,
+    date?: string
   ) {
+    const producedAt = date ? localDateFromInput(date) : new Date();
     const nextRecipes = recipeItems.map((recipe) => {
       if (recipe.id !== recipeToProduce.id) return recipe;
 
@@ -277,7 +280,7 @@ export default function RecepturenApp() {
           }
         : recipe;
 
-      return registerRecipeProduction(recipeWithRequestClosed, quantity);
+      return registerRecipeProduction(recipeWithRequestClosed, quantity, producedAt);
     });
 
     setRecipeItems(nextRecipes);
@@ -289,6 +292,87 @@ export default function RecepturenApp() {
         invoiceImports: invoiceItems,
       },
       `${recipeToProduce.name} staat als gemaakt geregistreerd.`
+    );
+  }
+
+  function adjustRecipeStock(recipeToAdjust: Recipe, quantity: number, date: string) {
+    const adjustedAt = date ? localDateFromInput(date) : new Date();
+    const nextRecipes = recipeItems.map((recipe) =>
+      recipe.id === recipeToAdjust.id
+        ? registerRecipeStockAdjustment(recipe, quantity, adjustedAt)
+        : recipe
+    );
+
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        invoiceImports: invoiceItems,
+      },
+      `${recipeToAdjust.name} voorraad aangepast.`
+    );
+  }
+
+  function updateProductionLogEntry(
+    recipeToUpdate: Recipe,
+    entryId: string,
+    changes: Partial<Pick<ProductionLogEntry, "date" | "quantity" | "note">>
+  ) {
+    const nextRecipes = recipeItems.map((recipe) => {
+      if (recipe.id !== recipeToUpdate.id) return recipe;
+
+      return syncRecipeProductionMetadata({
+        ...recipe,
+        productionLog: (recipe.productionLog || []).map((entry) =>
+          entry.id === entryId
+            ? {
+                ...entry,
+                ...changes,
+                quantity:
+                  changes.quantity !== undefined
+                    ? Math.max(0, changes.quantity)
+                    : entry.quantity,
+              }
+            : entry
+        ),
+      });
+    });
+
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        invoiceImports: invoiceItems,
+      },
+      "Productieregistratie aangepast."
+    );
+  }
+
+  function deleteProductionLogEntry(recipeToUpdate: Recipe, entryId: string) {
+    const nextRecipes = recipeItems.map((recipe) => {
+      if (recipe.id !== recipeToUpdate.id) return recipe;
+
+      return syncRecipeProductionMetadata({
+        ...recipe,
+        productionLog: (recipe.productionLog || []).filter(
+          (entry) => entry.id !== entryId
+        ),
+      });
+    });
+
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        invoiceImports: invoiceItems,
+      },
+      "Productieregistratie verwijderd."
     );
   }
 
@@ -730,6 +814,9 @@ export default function RecepturenApp() {
             recipes={recipeItems}
             ingredients={ingredientItems}
             onMarkProduced={markRecipeProduced}
+            onAdjustStock={adjustRecipeStock}
+            onUpdateProductionLog={updateProductionLogEntry}
+            onDeleteProductionLog={deleteProductionLogEntry}
           />
         )}
 
@@ -756,12 +843,6 @@ export default function RecepturenApp() {
 
         {mode === "management" && activeTab === "dashboard" && (
           <div className="grid gap-4">
-            <ProductionPlanningPanel
-              recipes={recipeItems}
-              onOpenRecipe={openRecipe}
-              onMarkProduced={markRecipeProduced}
-              compact
-            />
             <RecepturenDashboard
               recipes={recipeItems}
               ingredients={ingredientItems}
@@ -769,19 +850,11 @@ export default function RecepturenApp() {
             />
           </div>
         )}
-        {mode === "management" && activeTab === "planning" && (
-          <ProductionPlanningPanel
-            recipes={recipeItems}
-            onOpenRecipe={openRecipe}
-            onMarkProduced={markRecipeProduced}
-          />
-        )}
         {mode === "management" && activeTab === "recepten" && (
           <RecipesList
             recipes={recipeItems}
             onOpenRecipe={openRecipe}
             onCreateRecipe={() => createRecipe("finalProduct")}
-            onOpenPlanning={() => setActiveTab("planning")}
             onRecalculateAll={recalculateAllRecipes}
           />
         )}
@@ -878,6 +951,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     allergens: [],
     internalNotes: "",
     isWorkModeVisible: true,
+    workCategories: type === "semiFinished" ? [] : ["gebak"],
     version: "v1",
     lastUpdated: now,
     portionLabel: type === "semiFinished" ? "1 kg" : "1 stuk",
@@ -898,6 +972,13 @@ function createBlankRecipe(type: RecipeType): Recipe {
     productionLog: [],
     productionRequests: [],
   };
+}
+
+function localDateFromInput(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return new Date(value);
+
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
 function mergeIngredients(

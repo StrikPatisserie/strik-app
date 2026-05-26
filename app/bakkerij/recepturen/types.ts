@@ -2,7 +2,7 @@ export type RecipeType = "finalProduct" | "semiFinished";
 export type RecipeStatus = "active" | "draft" | "old";
 export type RecipeUnit = "gram" | "kg" | "ml" | "liter" | "stuk";
 export type SalesPeriod = "week" | "month" | "year";
-export type ProductionLogSource = "work" | "manual";
+export type ProductionLogSource = "work" | "manual" | "stock";
 export type ProductionRequestStatus = "open" | "done";
 export type IngredientStatus = "active" | "inactive";
 export type MarginStatus = "good" | "pressure" | "critical";
@@ -88,6 +88,7 @@ export type Recipe = {
   allergens: string[];
   internalNotes?: string;
   isWorkModeVisible?: boolean;
+  workCategories?: string[];
   version: string;
   lastUpdated: string;
   portionLabel: string;

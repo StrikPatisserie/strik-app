@@ -42,6 +42,12 @@ import {
   syncRecipeProductionMetadata,
   targetSalesPrice,
 } from "./utils";
+import {
+  defaultWorkCategoryOptions,
+  normalizeWorkCategory,
+  workCategoriesForRecipe,
+  workCategoryLabel,
+} from "./workCategories";
 
 const recipeUnits: RecipeUnit[] = ["gram", "kg", "ml", "liter", "stuk"];
 const recipeStatuses: RecipeStatus[] = ["active", "draft", "old"];
@@ -107,6 +113,7 @@ export default function RecipeDetail({
   const [recipeImportWarnings, setRecipeImportWarnings] = useState<string[]>([]);
   const [draft, setDraft] = useState(() => createRecipeDraft(recipe));
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
+  const [newWorkCategory, setNewWorkCategory] = useState("");
   const [newProductionEntry, setNewProductionEntry] = useState(() => ({
     date: todayIsoDate(),
     quantity: formatInputNumber(
@@ -190,6 +197,44 @@ export default function RecipeDetail({
 
   function updateDraft(changes: Partial<RecipeDraft>) {
     setDraft((current) => ({ ...current, ...changes }));
+  }
+
+  function toggleWorkCategory(categoryId: string) {
+    const normalized = normalizeWorkCategory(categoryId);
+    if (!normalized) return;
+
+    setDraft((current) => {
+      const exists = current.workCategories.includes(normalized);
+
+      return {
+        ...current,
+        workCategories: exists
+          ? current.workCategories.filter((category) => category !== normalized)
+          : [...current.workCategories, normalized],
+      };
+    });
+  }
+
+  function addCustomWorkCategory() {
+    const normalized = normalizeWorkCategory(newWorkCategory);
+    if (!normalized) return;
+
+    setDraft((current) => ({
+      ...current,
+      workCategories: Array.from(
+        new Set([...current.workCategories, normalized])
+      ),
+    }));
+    setNewWorkCategory("");
+  }
+
+  function removeWorkCategory(categoryId: string) {
+    setDraft((current) => ({
+      ...current,
+      workCategories: current.workCategories.filter(
+        (category) => category !== categoryId
+      ),
+    }));
   }
 
   function startEditing(section: RecipeEditSection = "basis") {
@@ -465,6 +510,20 @@ export default function RecipeDetail({
       productionLog: current.productionLog.filter((entry) => entry.id !== entryId),
     }));
     showFeedback("Productieregistratie verwijderd.");
+  }
+
+  function updateProductionLogEntry(
+    entryId: string,
+    changes: Partial<ProductionLogEntry>
+  ) {
+    setDraft((current) => ({
+      ...current,
+      productionLog: normalizeProductionLog(
+        current.productionLog.map((entry) =>
+          entry.id === entryId ? { ...entry, ...changes } : entry
+        )
+      ),
+    }));
   }
 
   function addProductionRequest() {
@@ -889,6 +948,70 @@ export default function RecipeDetail({
                         />
                         Toon in werkmodus
                       </label>
+
+                      {draft.type === "finalProduct" && (
+                        <div className="rounded-2xl border border-[#dfe9d8] bg-white p-3">
+                          <p className="text-sm font-black">
+                            Werkmodus categorieën
+                          </p>
+                          <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
+                            Kies waar bakkers dit recept onder terugvinden.
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {defaultWorkCategoryOptions.map((category) => {
+                              const selected = draft.workCategories.includes(
+                                category.id
+                              );
+
+                              return (
+                                <button
+                                  key={category.id}
+                                  type="button"
+                                  onClick={() => toggleWorkCategory(category.id)}
+                                  className={`rounded-full px-3 py-2 text-xs font-black shadow-sm ${
+                                    selected
+                                      ? "bg-[#c3d3bc] text-[#2d2a26]"
+                                      : "bg-[#f8f6f3] text-[#2d2a26]/55"
+                                  }`}
+                                >
+                                  {category.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {draft.workCategories.length > 0 && (
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {draft.workCategories.map((category) => (
+                                <button
+                                  key={category}
+                                  type="button"
+                                  onClick={() => removeWorkCategory(category)}
+                                  className="rounded-full bg-[#dce8d6] px-3 py-1.5 text-xs font-black text-[#45663b]"
+                                >
+                                  {workCategoryLabel(category)} x
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                            <input
+                              value={newWorkCategory}
+                              onChange={(event) =>
+                                setNewWorkCategory(event.target.value)
+                              }
+                              placeholder="Nieuwe categorie"
+                              className="rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-sm font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
+                            />
+                            <button
+                              type="button"
+                              onClick={addCustomWorkCategory}
+                              className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+                            >
+                              Voeg toe
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {draft.type === "finalProduct" && (
@@ -1051,23 +1174,40 @@ export default function RecipeDetail({
                         draft.productionLog.map((entry) => (
                           <div
                             key={entry.id}
-                            className="grid gap-2 rounded-2xl bg-[#fffdf8] p-3 sm:grid-cols-[8rem_8rem_minmax(0,1fr)_auto] sm:items-center"
+                            className="grid gap-2 rounded-2xl bg-[#fffdf8] p-3 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto] sm:items-center"
                           >
-                            <p className="text-sm font-black">
-                              {formatDate(entry.date)}
-                            </p>
-                            <p className="text-sm font-black">
-                              {planningQuantityLabel(
-                                entry.quantity,
-                                draft.standardBatchUnit
-                              )}
-                            </p>
-                            <p className="text-xs font-bold text-[#2d2a26]/50">
-                              {entry.note ||
-                                (entry.source === "work"
-                                  ? "Werkmodus"
-                                  : "Handmatig")}
-                            </p>
+                            <DateField
+                              label="Datum"
+                              value={entry.date}
+                              onChange={(value) =>
+                                updateProductionLogEntry(entry.id, {
+                                  date: value,
+                                })
+                              }
+                            />
+                            <EditTextField
+                              label="Aantal"
+                              value={formatInputNumber(entry.quantity)}
+                              onChange={(value) =>
+                                updateProductionLogEntry(entry.id, {
+                                  quantity: parseDutchNumber(value),
+                                })
+                              }
+                              inputMode="decimal"
+                            />
+                            <EditTextField
+                              label={
+                                entry.source === "stock"
+                                  ? "Notitie voorraad"
+                                  : "Notitie"
+                              }
+                              value={entry.note || ""}
+                              onChange={(value) =>
+                                updateProductionLogEntry(entry.id, {
+                                  note: value,
+                                })
+                              }
+                            />
                             <button
                               type="button"
                               onClick={() => removeProductionLogEntry(entry.id)}
@@ -1954,6 +2094,7 @@ type RecipeDraft = {
   photoFileName: string;
   photoUpdatedAt: string;
   isWorkModeVisible: boolean;
+  workCategories: string[];
   ingredients: RecipeIngredientDraft[];
   semiFinishedItems: SemiFinishedDraft[];
   preparationSteps: string[];
@@ -2004,6 +2145,8 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
     photoFileName: recipe.photoFileName || "",
     photoUpdatedAt: recipe.photoUpdatedAt || "",
     isWorkModeVisible: recipe.isWorkModeVisible ?? true,
+    workCategories:
+      recipe.type === "finalProduct" ? workCategoriesForRecipe(recipe) : [],
     ingredients: recipe.ingredients.map((item) => ({
       id: createLocalId("ingredient-line"),
       ingredientId: item.ingredientId,
@@ -2057,6 +2200,10 @@ function recipeDraftFromImportedRecipe(
       : current.averageSalesQuantity,
     averageSalesPeriod:
       importedRecipe.averageSalesPeriod || current.averageSalesPeriod,
+    workCategories:
+      importedRecipe.type === "finalProduct" && importedRecipe.workCategories?.length
+        ? importedRecipe.workCategories
+        : current.workCategories,
     ingredients: importedRecipe.ingredients.length
       ? importedRecipe.ingredients.map((item) => ({
           id: createLocalId("ingredient-line"),
@@ -2153,6 +2300,9 @@ function buildRecipeFromDraft(
     allergens: parseList(draft.allergens),
     internalNotes: draft.internalNotes.trim(),
     isWorkModeVisible: draft.isWorkModeVisible,
+    workCategories: isSemiFinished
+      ? []
+      : Array.from(new Set(draft.workCategories.map(normalizeWorkCategory).filter(Boolean))),
     version: draft.version.trim() || recipe.version || "v1",
     lastUpdated: todayIsoDate(),
     portionLabel: portionLabelFromValues(draft.type, standardBatchUnit),
