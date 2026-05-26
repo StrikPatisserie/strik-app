@@ -1,6 +1,7 @@
 export type RecipeType = "finalProduct" | "semiFinished";
 export type RecipeStatus = "active" | "draft" | "old";
 export type RecipeUnit = "gram" | "kg" | "ml" | "liter" | "stuk";
+export type SalesPeriod = "week" | "month" | "year";
 export type IngredientStatus = "active" | "inactive";
 export type MarginStatus = "good" | "pressure" | "critical";
 export type InvoiceReviewStatus =
@@ -82,6 +83,10 @@ export type Recipe = {
   packagingCost?: number;
   decorationCost?: number;
   decorationMargin?: number;
+  averageSalesQuantity?: number;
+  averageSalesPeriod?: SalesPeriod;
+  lastProducedAt?: string;
+  lastProducedQuantity?: number;
 };
 
 export type InvoiceLine = {

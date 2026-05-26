@@ -7,6 +7,7 @@ import type {
   RecipeStatus,
   RecipeType,
   RecipeUnit,
+  SalesPeriod,
   SemiFinishedUsage,
 } from "./types";
 
@@ -115,6 +116,10 @@ export function formatDate(value: string) {
   }).format(date);
 }
 
+export function todayIsoDate() {
+  return localIsoDate(new Date());
+}
+
 export function marginStatusForRecipe(recipe: Recipe): MarginStatus {
   if (recipe.type === "semiFinished") return "good";
 
@@ -157,6 +162,17 @@ export function quantityLabel(quantity: number, unit: RecipeUnit) {
   return `${quantity.toLocaleString("nl-NL", {
     maximumFractionDigits: quantity < 10 ? 2 : 0,
   })} ${unitLabel(unit)}`;
+}
+
+export function formatBatchWeight(weightKg: number) {
+  if (!weightKg) return "-";
+
+  const rounded = Math.round(weightKg * 100) / 100;
+
+  return `${rounded.toLocaleString("nl-NL", {
+    maximumFractionDigits: rounded < 10 ? 2 : 1,
+    minimumFractionDigits: 0,
+  })} kg`;
 }
 
 export function ingredientPriceChange(ingredient: Ingredient) {
@@ -365,7 +381,7 @@ export function recipeExtraCostBreakdown(recipe: Recipe) {
   };
 }
 
-function recipeLineWeightInKg(quantity: number, unit: RecipeUnit) {
+export function recipeLineWeightInKg(quantity: number, unit: RecipeUnit) {
   if (unit === "kg") return quantity;
   if (unit === "gram") return quantity / 1000;
   if (unit === "liter") return quantity;
@@ -374,7 +390,7 @@ function recipeLineWeightInKg(quantity: number, unit: RecipeUnit) {
   return 0;
 }
 
-function semiFinishedMadeWeightKg(
+export function recipeLinesWeightInKg(
   ingredients: RecipeIngredient[],
   semiFinishedItems: SemiFinishedUsage[]
 ) {
@@ -388,6 +404,221 @@ function semiFinishedMadeWeightKg(
   );
 
   return roundMoney(directWeight + semiWeight);
+}
+
+export function recipeBatchWeightKg(recipe: Recipe) {
+  return recipeLinesWeightInKg(recipe.ingredients, recipe.semiFinishedItems);
+}
+
+export function scaledRecipeBatchWeightKg(recipe: Recipe, multiplier: number) {
+  return roundMoney(recipeBatchWeightKg(recipe) * Math.max(0, multiplier));
+}
+
+const SALES_PERIOD_DAYS: Record<SalesPeriod, number> = {
+  week: 7,
+  month: 30,
+  year: 365,
+};
+
+export type ProductionNeedStatus = "none" | "ok" | "soon" | "due" | "overdue";
+
+export type ProductionNeed = {
+  recipe: Recipe;
+  status: ProductionNeedStatus;
+  averageSalesQuantity: number;
+  averageSalesPeriod: SalesPeriod;
+  lastProducedAt: string;
+  lastProducedQuantity: number;
+  nextProductionDate: string;
+  daysUntilProduction: number;
+  daysCovered: number;
+};
+
+export function salesPeriodLabel(period: SalesPeriod) {
+  if (period === "month") return "maand";
+  if (period === "year") return "jaar";
+
+  return "week";
+}
+
+export function salesPeriodDays(period: SalesPeriod = "week") {
+  return SALES_PERIOD_DAYS[period] || SALES_PERIOD_DAYS.week;
+}
+
+export function productionNeedForRecipe(
+  recipe: Recipe,
+  today: Date = new Date()
+): ProductionNeed {
+  const averageSalesQuantity = Math.max(0, recipe.averageSalesQuantity || 0);
+  const averageSalesPeriod = recipe.averageSalesPeriod || "week";
+  const lastProducedQuantity =
+    recipe.lastProducedQuantity || recipeBatchQuantity(recipe);
+
+  if (recipe.type !== "finalProduct" || averageSalesQuantity <= 0) {
+    return {
+      recipe,
+      status: "none",
+      averageSalesQuantity,
+      averageSalesPeriod,
+      lastProducedAt: recipe.lastProducedAt || "",
+      lastProducedQuantity,
+      nextProductionDate: "",
+      daysUntilProduction: 9999,
+      daysCovered: 0,
+    };
+  }
+
+  const todayStart = dateAtStartOfDay(today);
+  const lastProducedAt = recipe.lastProducedAt || "";
+
+  if (!lastProducedAt) {
+    return {
+      recipe,
+      status: "due",
+      averageSalesQuantity,
+      averageSalesPeriod,
+      lastProducedAt: "",
+      lastProducedQuantity,
+      nextProductionDate: todayIsoDate(),
+      daysUntilProduction: 0,
+      daysCovered: 0,
+    };
+  }
+
+  const dailySales = averageSalesQuantity / salesPeriodDays(averageSalesPeriod);
+  const daysCovered = dailySales > 0 ? lastProducedQuantity / dailySales : 0;
+  const lastProducedDate = dateAtStartOfDay(new Date(lastProducedAt));
+  const nextProductionDateObject = new Date(lastProducedDate);
+
+  nextProductionDateObject.setDate(
+    lastProducedDate.getDate() + Math.max(1, Math.floor(daysCovered))
+  );
+
+  const daysUntilProduction = Math.ceil(
+    (nextProductionDateObject.getTime() - todayStart.getTime()) / 86400000
+  );
+  const status: ProductionNeedStatus =
+    daysUntilProduction < 0
+      ? "overdue"
+      : daysUntilProduction <= 1
+        ? "due"
+        : daysUntilProduction <= 7
+          ? "soon"
+          : "ok";
+
+  return {
+    recipe,
+    status,
+    averageSalesQuantity,
+    averageSalesPeriod,
+    lastProducedAt,
+    lastProducedQuantity,
+    nextProductionDate: nextProductionDateObject.toISOString().slice(0, 10),
+    daysUntilProduction,
+    daysCovered,
+  };
+}
+
+export function productionNeeds(recipes: Recipe[]) {
+  return recipes
+    .map((recipe) => productionNeedForRecipe(recipe))
+    .filter((item) => ["overdue", "due", "soon"].includes(item.status))
+    .sort(
+      (first, second) =>
+        first.daysUntilProduction - second.daysUntilProduction ||
+        first.recipe.name.localeCompare(second.recipe.name, "nl-NL")
+    );
+}
+
+export function productionNeedLabel(need: ProductionNeed) {
+  if (need.status === "overdue") {
+    return `${Math.abs(need.daysUntilProduction)} dagen te laat`;
+  }
+
+  if (need.status === "due") return "Nu maken";
+  if (need.status === "soon") return `Over ${need.daysUntilProduction} dagen`;
+
+  return "Nog niet nodig";
+}
+
+export function productionNeedClass(status: ProductionNeedStatus) {
+  if (status === "overdue" || status === "due") {
+    return "bg-[#ffe0dc] text-[#a83e31]";
+  }
+
+  if (status === "soon") return "bg-[#fff0bd] text-[#7a5a18]";
+
+  return "bg-[#f1eee9] text-[#2d2a26]/55";
+}
+
+export function registerRecipeProduction(
+  recipe: Recipe,
+  producedQuantity: number,
+  producedAt: Date = new Date()
+) {
+  const safeProducedQuantity = Math.max(
+    0,
+    producedQuantity || recipe.standardBatchQuantity || recipeBatchQuantity(recipe)
+  );
+  const productionDate = dateAtStartOfDay(producedAt);
+  const previousProductionDate = recipe.lastProducedAt
+    ? dateAtStartOfDay(new Date(recipe.lastProducedAt))
+    : null;
+  const previousProducedQuantity =
+    recipe.lastProducedQuantity || recipe.standardBatchQuantity || recipeBatchQuantity(recipe);
+  const averageSalesPeriod = recipe.averageSalesPeriod || "week";
+  let averageSalesQuantity = Math.max(0, recipe.averageSalesQuantity || 0);
+
+  if (
+    recipe.type === "finalProduct" &&
+    previousProductionDate &&
+    previousProducedQuantity > 0
+  ) {
+    const daysBetween = Math.round(
+      (productionDate.getTime() - previousProductionDate.getTime()) / 86400000
+    );
+
+    if (daysBetween > 0) {
+      const observedPeriodSales =
+        (previousProducedQuantity / daysBetween) *
+        salesPeriodDays(averageSalesPeriod);
+
+      averageSalesQuantity = averageSalesQuantity
+        ? weightedSalesAverage(averageSalesQuantity, observedPeriodSales)
+        : roundPlanningQuantity(observedPeriodSales);
+    }
+  }
+
+  return {
+    ...recipe,
+    averageSalesQuantity:
+      recipe.type === "finalProduct" ? averageSalesQuantity : 0,
+    averageSalesPeriod,
+    lastProducedAt: localIsoDate(productionDate),
+    lastProducedQuantity: safeProducedQuantity,
+  };
+}
+
+function dateAtStartOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function localIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function roundPlanningQuantity(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+
+  return Math.round(value * 10) / 10;
+}
+
+function weightedSalesAverage(currentAverage: number, observedAverage: number) {
+  return roundPlanningQuantity(currentAverage * 0.65 + observedAverage * 0.35);
 }
 
 export function recipeCostBreakdown(
@@ -422,7 +653,7 @@ export function recipeCostBreakdown(
   const batchCost = roundMoney(directCost + semiFinishedTotal + extraCost);
   const batchQuantity =
     recipe.type === "semiFinished"
-      ? semiFinishedMadeWeightKg(
+      ? recipeLinesWeightInKg(
           recalculatedIngredients,
           recalculatedSemiFinished
         ) || recipeBatchQuantity(recipe)

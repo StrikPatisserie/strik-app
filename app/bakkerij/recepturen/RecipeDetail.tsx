@@ -6,6 +6,7 @@ import type {
   RecipeStatus,
   RecipeType,
   RecipeUnit,
+  SalesPeriod,
   SemiFinishedUsage,
 } from "./types";
 import {
@@ -19,6 +20,7 @@ import {
   directIngredientCost,
   findIngredient,
   findRecipe,
+  formatBatchWeight,
   formatDate,
   formatEuro,
   formatPercent,
@@ -33,6 +35,7 @@ import {
 
 const recipeUnits: RecipeUnit[] = ["gram", "kg", "ml", "liter", "stuk"];
 const recipeStatuses: RecipeStatus[] = ["active", "draft", "old"];
+const salesPeriods: SalesPeriod[] = ["week", "month", "year"];
 const RECIPE_PHOTO_MAX_SOURCE_BYTES = 12 * 1024 * 1024;
 const RECIPE_PHOTO_MAX_SIDE = 360;
 const RECIPE_PHOTO_MIN_SIDE = 180;
@@ -608,7 +611,13 @@ export default function RecipeDetail({
                       </div>
 
                       <div className="rounded-2xl bg-white/70 p-3">
-                        <div className="grid gap-3 md:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,0.8fr)]">
+                        <div
+                          className={`grid gap-3 ${
+                            draft.type === "semiFinished"
+                              ? "md:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,0.8fr)]"
+                              : "md:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,0.8fr)_8rem]"
+                          }`}
+                        >
                           <div>
                             <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
                               Batch
@@ -651,9 +660,19 @@ export default function RecipeDetail({
                                   label: unitLabelText(unit),
                                 }))}
                               />
+                              <Metric
+                                label="Batchgewicht"
+                                value={formatBatchWeight(previewMadeWeightKg)}
+                              />
                             </>
                           )}
                         </div>
+                        {draft.type === "finalProduct" && (
+                          <p className="mt-2 text-xs font-bold text-[#2d2a26]/45">
+                            Telt alle g/kg en l/ml uit de grondstoffen en
+                            halffabricaten mee.
+                          </p>
+                        )}
                       </div>
 
                       {draft.type === "finalProduct" && (
@@ -698,6 +717,52 @@ export default function RecipeDetail({
                             }
                             inputMode="decimal"
                           />
+                        </div>
+                      )}
+
+                      {draft.type === "finalProduct" && (
+                        <div className="rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
+                          <p className="text-sm font-black">
+                            Productieplanning
+                          </p>
+                          <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
+                            Vul de gemiddelde verkoop in. Na “product gemaakt”
+                            leert het systeem van het vorige interval en stelt
+                            dit gemiddelde automatisch bij.
+                          </p>
+                          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(9rem,0.8fr)_minmax(9rem,0.8fr)_minmax(12rem,1fr)]">
+                            <EditTextField
+                              label="Gemiddeld verkocht"
+                              value={draft.averageSalesQuantity}
+                              onChange={(value) =>
+                                updateDraft({ averageSalesQuantity: value })
+                              }
+                              inputMode="decimal"
+                            />
+                            <SelectField
+                              label="Periode"
+                              value={draft.averageSalesPeriod}
+                              onChange={(value) =>
+                                updateDraft({
+                                  averageSalesPeriod: value as SalesPeriod,
+                                })
+                              }
+                              options={salesPeriods.map((period) => ({
+                                value: period,
+                                label: salesPeriodText(period),
+                              }))}
+                            />
+                            <Metric
+                              label="Leren uit productie"
+                              value={
+                                recipe.lastProducedAt
+                                  ? `Sinds ${formatDate(recipe.lastProducedAt)} · ${
+                                      recipe.lastProducedQuantity || "-"
+                                    } stuks`
+                                  : "Start na eerste registratie"
+                              }
+                            />
+                          </div>
                         </div>
                       )}
 
@@ -1256,10 +1321,26 @@ export default function RecipeDetail({
                     label="Doelmarge"
                     value={targetMargin ? formatPercent(targetMargin) : "-"}
                   />
+                  <Metric
+                    label="Verkooptempo"
+                    value={
+                      previewRecipe.averageSalesQuantity
+                        ? `${previewRecipe.averageSalesQuantity.toLocaleString(
+                            "nl-NL"
+                          )} ${salesPeriodText(
+                            previewRecipe.averageSalesPeriod || "week"
+                          )}`
+                        : "-"
+                    }
+                  />
                 </>
               )}
               <Metric label="Portie" value={draft.portionLabel} />
               <Metric label="Batch" value={draft.batchSize} />
+              <Metric
+                label="Batchgewicht"
+                value={formatBatchWeight(previewMadeWeightKg)}
+              />
               {previewRecipe.type === "finalProduct" && (
                 <Metric label="Batch totaal" value={formatEuro(previewBatchCost)} />
               )}
@@ -1279,7 +1360,7 @@ export default function RecipeDetail({
               <div
                 className={`mt-4 grid gap-3 sm:grid-cols-2 ${
                   previewRecipe.type === "finalProduct"
-                    ? "xl:grid-cols-6"
+                    ? "xl:grid-cols-7"
                     : "xl:grid-cols-4"
                 }`}
               >
@@ -1293,6 +1374,12 @@ export default function RecipeDetail({
                     <Metric label="Verpakking" value={formatEuro(packagingTotal)} />
                     <Metric label="Decoratie" value={formatEuro(decorationTotal)} />
                   </>
+                )}
+                {previewRecipe.type === "finalProduct" && (
+                  <Metric
+                    label="Batchgewicht"
+                    value={formatBatchWeight(previewMadeWeightKg)}
+                  />
                 )}
                 <Metric
                   label={
@@ -1531,6 +1618,8 @@ type RecipeDraft = {
   packagingCost: string;
   decorationCost: string;
   decorationMargin: string;
+  averageSalesQuantity: string;
+  averageSalesPeriod: SalesPeriod;
   version: string;
   photoHint: string;
   photoPreviewDataUrl: string;
@@ -1577,6 +1666,8 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
     packagingCost: formatInputNumber(recipe.packagingCost || 0),
     decorationCost: formatInputNumber(recipe.decorationCost || 0),
     decorationMargin: formatInputNumber(recipe.decorationMargin ?? 30),
+    averageSalesQuantity: formatInputNumber(recipe.averageSalesQuantity || 0),
+    averageSalesPeriod: recipe.averageSalesPeriod || "week",
     version: recipe.version,
     photoHint: recipe.photoHint,
     photoPreviewDataUrl: recipe.photoPreviewDataUrl || "",
@@ -1631,6 +1722,11 @@ function recipeDraftFromImportedRecipe(
       current.standardBatchUnit,
     batchSize: importedRecipe.batchSize || current.batchSize,
     portionLabel: importedRecipe.portionLabel || current.portionLabel,
+    averageSalesQuantity: importedRecipe.averageSalesQuantity
+      ? formatInputNumber(importedRecipe.averageSalesQuantity)
+      : current.averageSalesQuantity,
+    averageSalesPeriod:
+      importedRecipe.averageSalesPeriod || current.averageSalesPeriod,
     ingredients: importedRecipe.ingredients.length
       ? importedRecipe.ingredients.map((item) => ({
           id: createLocalId("ingredient-line"),
@@ -1711,7 +1807,7 @@ function buildRecipeFromDraft(
     type: draft.type,
     productGroup: draft.productGroup.trim() || recipe.productGroup,
     standardBatchQuantity,
-    standardBatchUnit: draft.standardBatchUnit,
+    standardBatchUnit,
     salesPrice,
     costPrice,
     previousCostPrice: recipe.costPrice,
@@ -1743,6 +1839,12 @@ function buildRecipeFromDraft(
     decorationMargin: isSemiFinished
       ? 0
       : parseDutchNumber(draft.decorationMargin) || 30,
+    averageSalesQuantity: isSemiFinished
+      ? 0
+      : parseDutchNumber(draft.averageSalesQuantity),
+    averageSalesPeriod: isSemiFinished ? "week" : draft.averageSalesPeriod,
+    lastProducedAt: isSemiFinished ? "" : recipe.lastProducedAt,
+    lastProducedQuantity: isSemiFinished ? 0 : recipe.lastProducedQuantity,
   };
 }
 
@@ -2100,11 +2202,21 @@ function unitLabelText(unit: RecipeUnit) {
   return "stuk";
 }
 
+function salesPeriodText(period: SalesPeriod) {
+  if (period === "month") return "per maand";
+  if (period === "year") return "per jaar";
+
+  return "per week";
+}
+
 function createRecipeText(
   recipe: Recipe,
   ingredients: Ingredient[],
   recipes: Recipe[]
 ) {
+  const batchWeight = formatBatchWeight(
+    recipeMadeWeightKg(recipe.ingredients, recipe.semiFinishedItems)
+  );
   const ingredientLines = recipe.ingredients.map((item) => {
     const ingredient = findIngredient(ingredients, item.ingredientId);
 
@@ -2126,6 +2238,7 @@ function createRecipeText(
     recipe.name,
     `Groep: ${recipe.productGroup}`,
     `Batch: ${recipe.batchSize}`,
+    `Batchgewicht: ${batchWeight}`,
     `Portie: ${recipe.portionLabel}`,
     `Kostprijs: ${formatEuro(recipe.costPrice)}`,
     `Verkoopprijs: ${recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}`,
@@ -2154,6 +2267,9 @@ function createRecipePrintHtml(
   ingredients: Ingredient[],
   recipes: Recipe[]
 ) {
+  const batchWeight = formatBatchWeight(
+    recipeMadeWeightKg(recipe.ingredients, recipe.semiFinishedItems)
+  );
   const ingredientRows = recipe.ingredients
     .map((item) => {
       const ingredient = findIngredient(ingredients, item.ingredientId);
@@ -2191,7 +2307,7 @@ function createRecipePrintHtml(
     table { width: 100%; border-collapse: collapse; margin-top: 8px; }
     th, td { border-bottom: 1px solid #ddd5ca; padding: 8px; text-align: left; font-size: 13px; }
     th { background: #f4f0ea; }
-    .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
+    .meta { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 16px; }
     .box { border: 1px solid #ddd5ca; border-radius: 10px; padding: 10px; }
     ol { padding-left: 22px; }
   </style>
@@ -2201,6 +2317,7 @@ function createRecipePrintHtml(
   <p>${escapeHtml(recipe.productGroup)} - ${escapeHtml(recipe.version)}</p>
   <div class="meta">
     <div class="box"><strong>Batch</strong><br />${escapeHtml(recipe.batchSize)}</div>
+    <div class="box"><strong>Batchgewicht</strong><br />${escapeHtml(batchWeight)}</div>
     <div class="box"><strong>Portie</strong><br />${escapeHtml(recipe.portionLabel)}</div>
     <div class="box"><strong>Kostprijs</strong><br />${escapeHtml(formatEuro(recipe.costPrice))}</div>
     <div class="box"><strong>Marge</strong><br />${escapeHtml(formatPercent(recipe.currentMargin))}</div>

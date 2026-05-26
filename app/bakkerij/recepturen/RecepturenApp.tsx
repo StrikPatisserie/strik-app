@@ -8,6 +8,7 @@ import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList from "./IngredientsList";
 import MargeOverzicht from "./MargeOverzicht";
 import { bakeryIcons, ingredients, invoiceImports, recipes } from "./mockData";
+import ProductionPlanningPanel from "./ProductionPlanningPanel";
 import RecipeDetail from "./RecipeDetail";
 import RecipeDataImport from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
@@ -32,6 +33,7 @@ import {
   normalizePackagePrice,
   pricePerBaseUnitFromPackagePrice,
   recalculateAllRecipeCosts,
+  registerRecipeProduction,
 } from "./utils";
 
 const tabs = [
@@ -252,6 +254,25 @@ export default function RecepturenApp() {
         invoiceImports: invoiceItems,
       },
       "Recept verwijderd en kostprijzen opnieuw berekend."
+    );
+  }
+
+  function markRecipeProduced(recipeToProduce: Recipe, quantity: number) {
+    const nextRecipes = recipeItems.map((recipe) =>
+      recipe.id === recipeToProduce.id
+        ? registerRecipeProduction(recipe, quantity)
+        : recipe
+    );
+
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        invoiceImports: invoiceItems,
+      },
+      `${recipeToProduce.name} staat als gemaakt geregistreerd.`
     );
   }
 
@@ -633,7 +654,11 @@ export default function RecepturenApp() {
         </div>
 
         {mode === "work" && (
-          <RecepturenWorkMode recipes={recipeItems} ingredients={ingredientItems} />
+          <RecepturenWorkMode
+            recipes={recipeItems}
+            ingredients={ingredientItems}
+            onMarkProduced={markRecipeProduced}
+          />
         )}
 
         {mode === "management" && (
@@ -658,11 +683,19 @@ export default function RecepturenApp() {
         )}
 
         {mode === "management" && activeTab === "dashboard" && (
-          <RecepturenDashboard
-            recipes={recipeItems}
-            ingredients={ingredientItems}
-            invoice={latestInvoice}
-          />
+          <div className="grid gap-4">
+            <ProductionPlanningPanel
+              recipes={recipeItems}
+              onOpenRecipe={openRecipe}
+              onMarkProduced={markRecipeProduced}
+              compact
+            />
+            <RecepturenDashboard
+              recipes={recipeItems}
+              ingredients={ingredientItems}
+              invoice={latestInvoice}
+            />
+          </div>
         )}
         {mode === "management" && activeTab === "recepten" && (
           <RecipesList
@@ -771,6 +804,10 @@ function createBlankRecipe(type: RecipeType): Recipe {
     packagingCost: 0,
     decorationCost: 0,
     decorationMargin: 30,
+    averageSalesQuantity: 0,
+    averageSalesPeriod: "week",
+    lastProducedAt: "",
+    lastProducedQuantity: 0,
   };
 }
 

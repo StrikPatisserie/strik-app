@@ -12,11 +12,13 @@ import {
 } from "./RecepturenShared";
 import {
   formatDate,
+  formatBatchWeight,
   formatEuro,
   formatPercent,
   linkedFinalProducts,
   marginStatusForRecipe,
   normalizeSearch,
+  recipeBatchWeightKg,
   recipeTypeLabel,
 } from "./utils";
 
@@ -119,9 +121,10 @@ export default function RecipesList({
 
         {filteredRecipes.length ? (
           <div className="overflow-hidden rounded-[1.15rem] border border-[#e7e0d8]">
-            <div className="hidden grid-cols-[minmax(14rem,1.4fr)_8rem_8rem_8rem_8rem_8rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 xl:grid">
+            <div className="hidden grid-cols-[minmax(14rem,1.4fr)_8rem_8rem_8rem_8rem_8rem_8rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 xl:grid">
               <span>Recept</span>
               <span>Groep</span>
+              <span>Gewicht</span>
               <span>Verkoop</span>
               <span>Kostprijs</span>
               <span>Marge</span>
@@ -134,7 +137,7 @@ export default function RecipesList({
                   key={recipe.id}
                   type="button"
                   onClick={() => onOpenRecipe(recipe)}
-                  className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(14rem,1.4fr)_8rem_8rem_8rem_8rem_8rem_8rem] xl:items-center"
+                  className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(14rem,1.4fr)_8rem_8rem_8rem_8rem_8rem_8rem_8rem] xl:items-center"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-base font-black">{recipe.name}</p>
@@ -143,6 +146,9 @@ export default function RecipesList({
                     </p>
                   </div>
                   <p className="text-sm font-bold text-[#2d2a26]/62">{recipe.productGroup}</p>
+                  <p className="text-sm font-black">
+                    {formatBatchWeight(recipeBatchWeightKg(recipe))}
+                  </p>
                   <p className="text-sm font-black">{formatEuro(recipe.salesPrice)}</p>
                   <p className="text-sm font-black">{formatEuro(recipe.costPrice)}</p>
                   <div>

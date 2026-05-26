@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
+import ProductionPlanningPanel from "./ProductionPlanningPanel";
 import type { Ingredient, Recipe, RecipeUnit } from "./types";
-import { findIngredient, findRecipe, formatDate, normalizeSearch } from "./utils";
+import {
+  findIngredient,
+  findRecipe,
+  formatBatchWeight,
+  formatDate,
+  normalizeSearch,
+  scaledRecipeBatchWeightKg,
+} from "./utils";
 
 type WorkFilterId =
   | "all"
@@ -138,6 +146,8 @@ function getWorkSteps(recipe: Recipe) {
 }
 
 function getFinishingSteps(recipe: Recipe) {
+  if (recipe.type === "semiFinished") return [];
+
   if (recipe.finishingSteps?.length) {
     return recipe.finishingSteps.filter((step) => step.trim());
   }
@@ -197,6 +207,7 @@ function getScaledSemiFinished(
 function createPrintHtml(
   recipe: Recipe,
   batch: BatchInfo,
+  batchWeightKg: number,
   ingredients: ReturnType<typeof getScaledIngredients>,
   semiFinished: ReturnType<typeof getScaledSemiFinished>,
   steps: string[],
@@ -246,6 +257,7 @@ function createPrintHtml(
   <h1>${escapeHtml(recipe.name)}</h1>
   <p>${escapeHtml(recipe.productGroup)} - ${escapeHtml(getRecipeTypeLabel(recipe))}</p>
   <p><strong>Batch:</strong> ${escapeHtml(formatBatch(batch))}</p>
+  <p><strong>Batchgewicht:</strong> ${escapeHtml(formatBatchWeight(batchWeightKg))}</p>
   ${photoBlock}
   <h2>Ingredienten</h2>
   <table><tbody>${ingredientRows || "<tr><td>Geen directe ingredienten.</td></tr>"}</tbody></table>
@@ -253,8 +265,11 @@ function createPrintHtml(
   <table><tbody>${semiRows || "<tr><td>Geen halffabricaten.</td></tr>"}</tbody></table>
   <h2>Bereidingswijze</h2>
   <ol>${stepRows}</ol>
-  <h2>Afwerking</h2>
-  <ol>${finishingRows}</ol>
+  ${
+    finishingRows
+      ? `<h2>Afwerking</h2><ol>${finishingRows}</ol>`
+      : ""
+  }
 </body>
 </html>`;
 }
@@ -271,14 +286,17 @@ function escapeHtml(value: string) {
 export default function RecepturenWorkMode({
   recipes,
   ingredients,
+  onMarkProduced,
 }: Readonly<{
   recipes: Recipe[];
   ingredients: Ingredient[];
+  onMarkProduced: (recipe: Recipe, quantity: number) => void;
 }>) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<WorkFilterId>("all");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [startInProduction, setStartInProduction] = useState(false);
+  const [productionFeedback, setProductionFeedback] = useState("");
   const visibleRecipes = useMemo(() => {
     const query = normalizeSearch(search);
 
@@ -294,8 +312,28 @@ export default function RecepturenWorkMode({
     });
   }, [filter, recipes, search]);
 
+  function markProduced(recipe: Recipe, quantity: number) {
+    onMarkProduced(recipe, quantity);
+    setProductionFeedback(`${recipe.name} staat als gemaakt geregistreerd.`);
+    window.setTimeout(() => setProductionFeedback(""), 2600);
+  }
+
   return (
     <section className="grid gap-4">
+      {productionFeedback && (
+        <p className="rounded-[1rem] border border-[#c7ddbf] bg-[#f4faf0] p-3 text-sm font-black text-[#45663b]">
+          {productionFeedback}
+        </p>
+      )}
+      <ProductionPlanningPanel
+        recipes={recipes}
+        onOpenRecipe={(recipe) => {
+          setStartInProduction(false);
+          setSelectedRecipe(recipe);
+        }}
+        onMarkProduced={markProduced}
+      />
+
       <div className="rounded-[1.1rem] border border-[#e2dbcf] bg-white/88 p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -365,6 +403,7 @@ export default function RecepturenWorkMode({
           ingredients={ingredients}
           startInProduction={startInProduction}
           onSelectRecipe={setSelectedRecipe}
+          onMarkProduced={markProduced}
           onClose={() => setSelectedRecipe(null)}
         />
       )}
@@ -465,6 +504,7 @@ function WorkRecipeDetail({
   ingredients,
   startInProduction,
   onSelectRecipe,
+  onMarkProduced,
   onClose,
 }: Readonly<{
   recipe: Recipe;
@@ -472,6 +512,7 @@ function WorkRecipeDetail({
   ingredients: Ingredient[];
   startInProduction: boolean;
   onSelectRecipe: (recipe: Recipe) => void;
+  onMarkProduced: (recipe: Recipe, quantity: number) => void;
   onClose: () => void;
 }>) {
   const standardBatch = getStandardBatch(recipe);
@@ -481,6 +522,7 @@ function WorkRecipeDetail({
   const multiplier = standardBatch.quantity
     ? batchQuantity / standardBatch.quantity
     : 1;
+  const batchWeightKg = scaledRecipeBatchWeightKg(recipe, multiplier);
   const scaledIngredients = getScaledIngredients(recipe, ingredients, multiplier);
   const scaledSemiFinished = getScaledSemiFinished(recipe, recipes, multiplier);
   const workSteps = getWorkSteps(recipe);
@@ -506,6 +548,7 @@ function WorkRecipeDetail({
       createPrintHtml(
         recipe,
         activeBatch,
+        batchWeightKg,
         scaledIngredients,
         scaledSemiFinished,
         workSteps,
@@ -599,8 +642,18 @@ function WorkRecipeDetail({
               <p className="mt-2 text-sm font-bold text-[#45663b]">
                 Hoeveelheden zijn geschaald naar {formatBatch(activeBatch)}.
               </p>
+              <p className="mt-1 text-sm font-black text-[#2d2a26]/58">
+                Batchgewicht: {formatBatchWeight(batchWeightKg)}
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => onMarkProduced(recipe, batchQuantity)}
+                className="rounded-full bg-[#fff0bd] px-5 py-3 text-sm font-black text-[#7a5a18] shadow-sm"
+              >
+                Product gemaakt
+              </button>
               <button
                 type="button"
                 onClick={() => setIsProducing(true)}
@@ -678,13 +731,15 @@ function WorkRecipeDetail({
           </WorkPanel>
 
           <div className="grid gap-4">
-            <WorkPanel title="Afwerking">
-              <div className="grid gap-2">
-                {finishingSteps.map((step, index) => (
-                  <WorkChecklistPreview key={`${step}-${index}`} label={step} />
-                ))}
-              </div>
-            </WorkPanel>
+            {finishingSteps.length > 0 && (
+              <WorkPanel title="Afwerking">
+                <div className="grid gap-2">
+                  {finishingSteps.map((step, index) => (
+                    <WorkChecklistPreview key={`${step}-${index}`} label={step} />
+                  ))}
+                </div>
+              </WorkPanel>
+            )}
 
             <WorkPanel title="Allergenen">
               <div className="flex flex-wrap gap-2">
@@ -718,6 +773,8 @@ function WorkRecipeDetail({
         <ProductionMode
           recipe={recipe}
           batch={activeBatch}
+          batchWeightKg={batchWeightKg}
+          onMarkProduced={() => onMarkProduced(recipe, batchQuantity)}
           ingredients={scaledIngredients}
           semiFinished={scaledSemiFinished}
           steps={workSteps}
@@ -809,6 +866,8 @@ function WorkChecklistPreview({ label }: Readonly<{ label: string }>) {
 function ProductionMode({
   recipe,
   batch,
+  batchWeightKg,
+  onMarkProduced,
   ingredients,
   semiFinished,
   steps,
@@ -817,6 +876,8 @@ function ProductionMode({
 }: Readonly<{
   recipe: Recipe;
   batch: BatchInfo;
+  batchWeightKg: number;
+  onMarkProduced: () => void;
   ingredients: ReturnType<typeof getScaledIngredients>;
   semiFinished: ReturnType<typeof getScaledSemiFinished>;
   steps: string[];
@@ -850,6 +911,7 @@ function ProductionMode({
 
   function completeAll() {
     setCheckedTasks(Object.fromEntries(tasks.map((task) => [task.id, true])));
+    onMarkProduced();
   }
 
   return (
@@ -867,6 +929,9 @@ function ProductionMode({
                 </h2>
                 <p className="mt-2 text-lg font-black text-[#2d2a26]/65">
                   Batchgrootte: {formatBatch(batch)}
+                </p>
+                <p className="mt-1 text-sm font-black text-[#2d2a26]/55">
+                  Batchgewicht: {formatBatchWeight(batchWeightKg)}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -960,12 +1025,14 @@ function ProductionMode({
               checkedTasks={checkedTasks}
               onToggle={toggleTask}
             />
-            <ProductionTaskGroup
-              title="Afwerking"
-              tasks={tasks.filter((task) => task.group === "finishing")}
-              checkedTasks={checkedTasks}
-              onToggle={toggleTask}
-            />
+            {finishingSteps.length > 0 && (
+              <ProductionTaskGroup
+                title="Afwerking"
+                tasks={tasks.filter((task) => task.group === "finishing")}
+                checkedTasks={checkedTasks}
+                onToggle={toggleTask}
+              />
+            )}
           </div>
         ) : (
           <section className="rounded-[1.4rem] bg-white p-6 text-center shadow-sm">
