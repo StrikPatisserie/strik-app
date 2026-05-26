@@ -32,9 +32,13 @@ import {
   normalizeSearch,
   normalizePackagePrice,
   pricePerBaseUnitFromPackagePrice,
+  productionLogForRecipe,
+  quantityLabel,
   recalculateAllRecipeCosts,
   registerRecipeProduction,
   registerRecipeStockAdjustment,
+  recipeBatchWeightKg,
+  recipeTypeLabel,
   syncRecipeProductionMetadata,
 } from "./utils";
 
@@ -730,6 +734,25 @@ export default function RecepturenApp() {
     );
   }
 
+  function currentRecepturenData(): RecepturenData {
+    return {
+      ingredients: ingredientItems,
+      recipes: recipeItems,
+      invoiceImports: invoiceItems,
+    };
+  }
+
+  function downloadJsonBackup() {
+    downloadRecepturenJsonBackup(currentRecepturenData());
+    setSyncStatus("Volledig herstelbestand gedownload.");
+  }
+
+  function downloadExcelBackup() {
+    void downloadRecepturenExcelBackup(currentRecepturenData())
+      .then(() => setSyncStatus("Excel-backup gedownload."))
+      .catch(() => setSyncStatus("Excel-backup kon niet worden gemaakt."));
+  }
+
   return (
     <main className="min-h-screen bg-[#f4f0ea] px-3 py-4 pb-24 text-[#2d2a26] sm:px-4 sm:py-5">
       <div className="mx-auto w-full max-w-7xl">
@@ -800,13 +823,33 @@ export default function RecepturenApp() {
               </button>
             </div>
           </div>
-          <p className="text-xs font-bold leading-snug text-[#2d2a26]/50 sm:text-right">
-            {isLoadingData
-              ? "Laden..."
-              : mode === "work"
-                ? "Recepten klaar."
-                : syncStatus}
-          </p>
+          <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
+            {mode === "management" && (
+              <>
+                <button
+                  type="button"
+                  onClick={downloadExcelBackup}
+                  className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#2d2a26]/70 shadow-sm"
+                >
+                  Download Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadJsonBackup}
+                  className="rounded-full bg-[#fff0bd] px-3 py-2 text-xs font-black text-[#7a5a18] shadow-sm"
+                >
+                  Herstelbestand
+                </button>
+              </>
+            )}
+            <p className="text-xs font-bold leading-snug text-[#2d2a26]/50 sm:text-right">
+              {isLoadingData
+                ? "Laden..."
+                : mode === "work"
+                  ? "Recepten klaar."
+                  : syncStatus}
+            </p>
+          </div>
         </div>
 
         {mode === "work" && (
@@ -979,6 +1022,249 @@ function localDateFromInput(value: string) {
   if (!match) return new Date(value);
 
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function backupStamp() {
+  const date = new Date();
+  const parts = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+    String(date.getHours()).padStart(2, "0"),
+    String(date.getMinutes()).padStart(2, "0"),
+  ];
+
+  return `${parts[0]}-${parts[1]}-${parts[2]}_${parts[3]}-${parts[4]}`;
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadRecepturenJsonBackup(data: RecepturenData) {
+  const backup = {
+    exportedAt: new Date().toISOString(),
+    source: "Strik recepturen",
+    version: 1,
+    ...data,
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {
+    type: "application/json",
+  });
+
+  downloadBlob(blob, `strik-recepturen-backup-${backupStamp()}.json`);
+}
+
+async function downloadRecepturenExcelBackup(data: RecepturenData) {
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.utils.book_new();
+  const ingredientById = new Map(
+    data.ingredients.map((ingredient) => [ingredient.id, ingredient])
+  );
+  const recipeById = new Map(data.recipes.map((recipe) => [recipe.id, recipe]));
+
+  appendSheet(
+    XLSX,
+    workbook,
+    "Recepten",
+    data.recipes.map((recipe) => ({
+      id: recipe.id,
+      naam: recipe.name,
+      soort: recipeTypeLabel(recipe.type),
+      groep: recipe.productGroup,
+      status: recipe.status,
+      batch: recipe.standardBatchQuantity || "",
+      batchEenheid: recipe.standardBatchUnit || "",
+      batchTekst: recipe.batchSize,
+      batchgewichtKg: recipeBatchWeightKg(recipe),
+      verkoopprijs: recipe.salesPrice,
+      kostprijs: recipe.costPrice,
+      marge: recipe.currentMargin,
+      doelmarge: recipe.targetMargin,
+      zichtbaarWerkmodus: recipe.isWorkModeVisible !== false,
+      categorieen: recipe.workCategories?.join(", ") || "",
+      laatstGewijzigd: recipe.lastUpdated,
+      opmerkingen: recipe.internalNotes || recipe.notes || "",
+    }))
+  );
+
+  appendSheet(
+    XLSX,
+    workbook,
+    "Grondstoffen",
+    data.ingredients.map((ingredient) => ({
+      id: ingredient.id,
+      naam: ingredient.name,
+      leverancier: ingredient.supplier,
+      artikelnummer: ingredient.supplierArticleNumber,
+      verpakking: ingredient.packageSize,
+      rekeneenheid: ingredient.recipeUnit,
+      laatstePrijs: ingredient.lastPrice,
+      prijsPerBasiseenheid: ingredient.pricePerBaseUnit,
+      allergenen: ingredient.allergens.join(", "),
+      aliases: ingredient.aliases.join(", "),
+      status: ingredient.status,
+      laatsteFactuur: ingredient.lastInvoice,
+      laatstGewijzigd: ingredient.lastUpdated,
+    }))
+  );
+
+  appendSheet(
+    XLSX,
+    workbook,
+    "Recept grondstoffen",
+    data.recipes.flatMap((recipe) =>
+      recipe.ingredients.map((line) => {
+        const ingredient = ingredientById.get(line.ingredientId);
+
+        return {
+          receptId: recipe.id,
+          recept: recipe.name,
+          receptSoort: recipeTypeLabel(recipe.type),
+          grondstofId: line.ingredientId,
+          grondstof: ingredient?.name || line.ingredientId,
+          hoeveelheid: line.quantity,
+          eenheid: line.unit,
+          hoeveelheidTekst: quantityLabel(line.quantity, line.unit),
+          kost: line.costContribution,
+        };
+      })
+    )
+  );
+
+  appendSheet(
+    XLSX,
+    workbook,
+    "Halffabricaten in recept",
+    data.recipes.flatMap((recipe) =>
+      recipe.semiFinishedItems.map((line) => {
+        const semiFinished = recipeById.get(line.semiFinishedRecipeId);
+
+        return {
+          receptId: recipe.id,
+          recept: recipe.name,
+          halffabricaatId: line.semiFinishedRecipeId,
+          halffabricaat: semiFinished?.name || line.semiFinishedRecipeId,
+          hoeveelheid: line.quantity,
+          eenheid: line.unit,
+          hoeveelheidTekst: quantityLabel(line.quantity, line.unit),
+          kost: line.costContribution,
+        };
+      })
+    )
+  );
+
+  appendSheet(
+    XLSX,
+    workbook,
+    "Stappen",
+    data.recipes.flatMap((recipe) => [
+      ...recipe.preparationSteps.map((step, index) => ({
+        receptId: recipe.id,
+        recept: recipe.name,
+        soort: "Bereiding",
+        stap: index + 1,
+        tekst: step,
+      })),
+      ...(recipe.workInstructions || []).map((step, index) => ({
+        receptId: recipe.id,
+        recept: recipe.name,
+        soort: "Werkmodus",
+        stap: index + 1,
+        tekst: step,
+      })),
+      ...(recipe.finishingSteps || []).map((step, index) => ({
+        receptId: recipe.id,
+        recept: recipe.name,
+        soort: "Afwerking",
+        stap: index + 1,
+        tekst: step,
+      })),
+    ])
+  );
+
+  appendSheet(
+    XLSX,
+    workbook,
+    "Productielog",
+    data.recipes.flatMap((recipe) =>
+      productionLogForRecipe(recipe).map((entry) => ({
+        receptId: recipe.id,
+        recept: recipe.name,
+        datum: entry.date,
+        hoeveelheid: entry.quantity,
+        eenheid: recipe.standardBatchUnit || "",
+        bron: entry.source || "",
+        notitie: entry.note || "",
+      }))
+    )
+  );
+
+  appendSheet(
+    XLSX,
+    workbook,
+    "Facturen",
+    data.invoiceImports.map((invoice) => ({
+      id: invoice.id,
+      leverancier: invoice.supplier,
+      factuurnummer: invoice.invoiceNumber,
+      factuurdatum: invoice.invoiceDate,
+      geupload: invoice.uploadedAt,
+      status: invoice.status,
+      regels: invoice.lines.length,
+    }))
+  );
+
+  appendSheet(
+    XLSX,
+    workbook,
+    "Factuurregels",
+    data.invoiceImports.flatMap((invoice) =>
+      invoice.lines.map((line) => ({
+        factuurId: invoice.id,
+        leverancier: invoice.supplier,
+        factuurnummer: invoice.invoiceNumber,
+        artikelnummer: line.articleNumber,
+        omschrijving: line.description,
+        aantal: line.quantity,
+        eenheid: line.unit,
+        totaalprijs: line.totalPrice,
+        prijsPerEenheid: line.pricePerUnit,
+        gekoppeldeGrondstof: line.matchedIngredientId
+          ? ingredientById.get(line.matchedIngredientId)?.name ||
+            line.matchedIngredientId
+          : "",
+        status: line.reviewStatus,
+      }))
+    )
+  );
+
+  const buffer = XLSX.write(workbook, {
+    bookType: "xlsx",
+    type: "array",
+  }) as ArrayBuffer;
+
+  downloadBlob(
+    new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    }),
+    `strik-recepturen-overzicht-${backupStamp()}.xlsx`
+  );
+}
+
+function appendSheet(
+  XLSX: typeof import("xlsx"),
+  workbook: import("xlsx").WorkBook,
+  sheetName: string,
+  rows: Array<Record<string, string | number | boolean>>
+) {
+  const sheet = XLSX.utils.json_to_sheet(rows.length ? rows : [{ leeg: true }]);
+  XLSX.utils.book_append_sheet(workbook, sheet, sheetName.slice(0, 31));
 }
 
 function mergeIngredients(

@@ -17,6 +17,7 @@ import {
 } from "./workCategories";
 
 type WorkFilterId = string;
+type WorkModeView = "recipes" | "planning";
 
 type BatchInfo = {
   quantity: number;
@@ -293,6 +294,7 @@ export default function RecepturenWorkMode({
 }>) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<WorkFilterId>("all");
+  const [activeView, setActiveView] = useState<WorkModeView>("recipes");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [startInProduction, setStartInProduction] = useState(false);
   const [productionFeedback, setProductionFeedback] = useState("");
@@ -347,17 +349,46 @@ export default function RecepturenWorkMode({
           {productionFeedback}
         </p>
       )}
-      <ProductionPlanningPanel
-        recipes={recipes}
-        onOpenRecipe={(recipe) => {
-          setStartInProduction(false);
-          setSelectedRecipe(recipe);
-        }}
-        onMarkProduced={markProduced}
-        onAdjustStock={onAdjustStock}
-        onUpdateProductionLog={onUpdateProductionLog}
-        onDeleteProductionLog={onDeleteProductionLog}
-      />
+
+      <div className="rounded-[1.15rem] border border-[#e2dbcf] bg-white/92 p-2 shadow-sm">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[
+            { id: "recipes" as const, label: "Recept maken", hint: "Zoeken en starten" },
+            { id: "planning" as const, label: "Productieplanning", hint: "Voorraad en bijmaken" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveView(item.id)}
+              className={`rounded-[1rem] px-4 py-3 text-left transition active:scale-[0.99] ${
+                activeView === item.id
+                  ? "bg-[#c3d3bc] text-[#2d2a26] shadow-sm"
+                  : "bg-[#f8f6f3] text-[#2d2a26]/58"
+              }`}
+            >
+              <span className="block text-base font-black">{item.label}</span>
+              <span className="mt-0.5 block text-xs font-bold">{item.hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeView === "planning" && (
+        <ProductionPlanningPanel
+          recipes={recipes}
+          onOpenRecipe={(recipe) => {
+            setStartInProduction(false);
+            setSelectedRecipe(recipe);
+          }}
+          onMarkProduced={markProduced}
+          onAdjustStock={onAdjustStock}
+          onUpdateProductionLog={onUpdateProductionLog}
+          onDeleteProductionLog={onDeleteProductionLog}
+        />
+      )}
+
+      {activeView === "recipes" && (
+      <>
       <div className="rounded-[1.1rem] border border-[#e2dbcf] bg-white/88 p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
@@ -417,6 +448,8 @@ export default function RecepturenWorkMode({
         <p className="rounded-[1.2rem] bg-white/85 p-5 text-sm font-bold text-[#2d2a26]/55">
           Geen recepten gevonden voor deze zoekopdracht.
         </p>
+      )}
+      </>
       )}
 
       {selectedRecipe && (
