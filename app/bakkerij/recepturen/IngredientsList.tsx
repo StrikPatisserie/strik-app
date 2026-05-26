@@ -44,10 +44,14 @@ export default function IngredientsList({
   ingredients,
   recipes,
   onUpdateIngredient,
+  onDeleteIngredient,
+  onDeleteIngredients,
 }: Readonly<{
   ingredients: Ingredient[];
   recipes: Recipe[];
   onUpdateIngredient: (ingredient: Ingredient) => void;
+  onDeleteIngredient: (ingredient: Ingredient) => void;
+  onDeleteIngredients: (ingredients: Ingredient[]) => void;
 }>) {
   const [search, setSearch] = useState("");
   const [supplier, setSupplier] = useState("all");
@@ -60,6 +64,7 @@ export default function IngredientsList({
   const allergens = Array.from(
     new Set(ingredients.flatMap((item) => item.allergens))
   ).sort((first, second) => first.localeCompare(second, "nl-NL"));
+  const hfIngredients = ingredients.filter(isHfIngredient);
 
   const filteredIngredients = useMemo(() => {
     const query = normalizeSearch(search);
@@ -95,6 +100,36 @@ export default function IngredientsList({
           title="Ingredienten"
           description="Database met leveranciersartikelen, prijshistorie, allergenen en recept-impact."
         />
+
+        {hfIngredients.length > 0 && (
+          <div className="rounded-[1.15rem] border border-[#ead7a6] bg-[#fff8e3] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-[#7a5a18]">
+                  {hfIngredients.length} HF-items staan nog tussen grondstoffen
+                </p>
+                <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
+                  Halffabricaten horen in het halffabricaten-overzicht. Opruimen
+                  verwijdert deze HF-grondstoffen uit de grondstoffenlijst en uit
+                  directe receptregels.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    `${hfIngredients.length} HF-grondstoffen verwijderen uit de grondstoffenlijst? Halffabricaatrecepten zelf blijven bestaan.`
+                  );
+
+                  if (confirmed) onDeleteIngredients(hfIngredients);
+                }}
+                className="rounded-full bg-[#fff0bd] px-4 py-2.5 text-sm font-black text-[#7a5a18] shadow-sm"
+              >
+                HF opruimen
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(10rem,0.7fr))]">
           <SearchInput
@@ -153,7 +188,16 @@ export default function IngredientsList({
                   className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_7rem_8rem_7rem_8rem] xl:items-center"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-base font-black">{ingredient.name}</p>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="truncate text-base font-black">
+                        {ingredient.name}
+                      </p>
+                      {isHfIngredient(ingredient) && (
+                        <span className="rounded-full bg-[#fff0bd] px-2 py-0.5 text-[0.62rem] font-black text-[#7a5a18]">
+                          HF
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs font-bold text-[#2d2a26]/45">
                       {ingredient.allergens.length
                         ? ingredient.allergens.join(", ")
@@ -195,6 +239,10 @@ export default function IngredientsList({
             onUpdateIngredient(ingredient);
             setSelectedIngredient(ingredient);
           }}
+          onDeleteIngredient={(ingredient) => {
+            onDeleteIngredient(ingredient);
+            setSelectedIngredient(null);
+          }}
           onClose={() => setSelectedIngredient(null)}
         />
       )}
@@ -206,11 +254,13 @@ function IngredientDetail({
   ingredient,
   recipes,
   onUpdateIngredient,
+  onDeleteIngredient,
   onClose,
 }: Readonly<{
   ingredient: Ingredient;
   recipes: Recipe[];
   onUpdateIngredient: (ingredient: Ingredient) => void;
+  onDeleteIngredient: (ingredient: Ingredient) => void;
   onClose: () => void;
 }>) {
   const linkedRecipes = recipesUsingIngredient(recipes, ingredient.id);
@@ -268,6 +318,16 @@ function IngredientDetail({
     setPriceInput(formatEditablePrice(nextPackagePrice));
     setFeedback("Prijs handmatig aangepast.");
     window.setTimeout(() => setFeedback(""), 2000);
+  }
+
+  function requestDeleteIngredient() {
+    const confirmed = window.confirm(
+      linkedRecipes.length
+        ? `${ingredient.name} verwijderen? Deze grondstof staat in ${linkedRecipes.length} recepten. De regels worden daar ook verwijderd en kostprijzen worden opnieuw berekend.`
+        : `${ingredient.name} verwijderen uit de grondstoffenlijst?`
+    );
+
+    if (confirmed) onDeleteIngredient(ingredient);
   }
 
   return (
@@ -423,9 +483,37 @@ function IngredientDetail({
             )}
           </div>
         </Panel>
+
+        <Panel className="mt-4 border-[#efc2bb] bg-[#fff4f1]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-[#a83e31]">
+                Grondstof verwijderen
+              </p>
+              <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
+                Gebruik dit voor dubbele artikelen of HF-items die eigenlijk
+                halffabricaten zijn.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={requestDeleteIngredient}
+              className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#a83e31] shadow-sm"
+            >
+              Verwijder grondstof
+            </button>
+          </div>
+        </Panel>
       </div>
     </div>
   );
+}
+
+function isHfIngredient(ingredient: Ingredient) {
+  const normalizedName = normalizeSearch(ingredient.name);
+  const article = ingredient.supplierArticleNumber.toUpperCase();
+
+  return normalizedName.startsWith("hf ") || article.startsWith("HF");
 }
 
 function MiniMetric({

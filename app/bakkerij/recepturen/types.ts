@@ -2,6 +2,8 @@ export type RecipeType = "finalProduct" | "semiFinished";
 export type RecipeStatus = "active" | "draft" | "old";
 export type RecipeUnit = "gram" | "kg" | "ml" | "liter" | "stuk";
 export type SalesPeriod = "week" | "month" | "year";
+export type ProductionLogSource = "work" | "manual";
+export type ProductionRequestStatus = "open" | "done";
 export type IngredientStatus = "active" | "inactive";
 export type MarginStatus = "good" | "pressure" | "critical";
 export type InvoiceReviewStatus =
@@ -48,6 +50,22 @@ export type SemiFinishedUsage = {
   costContribution: number;
 };
 
+export type ProductionLogEntry = {
+  id: string;
+  date: string;
+  quantity: number;
+  note?: string;
+  source?: ProductionLogSource;
+};
+
+export type ProductionRequest = {
+  id: string;
+  date: string;
+  quantity: number;
+  reason: string;
+  status: ProductionRequestStatus;
+};
+
 export type Recipe = {
   id: string;
   name: string;
@@ -87,6 +105,8 @@ export type Recipe = {
   averageSalesPeriod?: SalesPeriod;
   lastProducedAt?: string;
   lastProducedQuantity?: number;
+  productionLog?: ProductionLogEntry[];
+  productionRequests?: ProductionRequest[];
 };
 
 export type InvoiceLine = {

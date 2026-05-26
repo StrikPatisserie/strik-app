@@ -38,6 +38,7 @@ import {
 
 const tabs = [
   { id: "dashboard", label: "Dashboard" },
+  { id: "planning", label: "Productieplanning" },
   { id: "recepten", label: "Recepten" },
   { id: "halffabricaten", label: "Halffabricaten" },
   { id: "ingredienten", label: "Ingredienten" },
@@ -257,12 +258,27 @@ export default function RecepturenApp() {
     );
   }
 
-  function markRecipeProduced(recipeToProduce: Recipe, quantity: number) {
-    const nextRecipes = recipeItems.map((recipe) =>
-      recipe.id === recipeToProduce.id
-        ? registerRecipeProduction(recipe, quantity)
-        : recipe
-    );
+  function markRecipeProduced(
+    recipeToProduce: Recipe,
+    quantity: number,
+    requestId?: string
+  ) {
+    const nextRecipes = recipeItems.map((recipe) => {
+      if (recipe.id !== recipeToProduce.id) return recipe;
+
+      const recipeWithRequestClosed = requestId
+        ? {
+            ...recipe,
+            productionRequests: recipe.productionRequests?.map((request) =>
+              request.id === requestId
+                ? { ...request, status: "done" as const }
+                : request
+            ),
+          }
+        : recipe;
+
+      return registerRecipeProduction(recipeWithRequestClosed, quantity);
+    });
 
     setRecipeItems(nextRecipes);
     syncSelectedRecipe(nextRecipes);
@@ -303,6 +319,62 @@ export default function RecepturenApp() {
       invoiceItems,
       "Ingredient opgeslagen en kostprijzen opnieuw berekend."
     );
+  }
+
+  function deleteIngredients(
+    ingredientsToDelete: Ingredient[],
+    successMessage?: string
+  ) {
+    const deleteIds = new Set(ingredientsToDelete.map((ingredient) => ingredient.id));
+    if (!deleteIds.size) return;
+
+    const nextIngredients = ingredientItems.filter(
+      (ingredient) => !deleteIds.has(ingredient.id)
+    );
+    const recipesWithoutDeletedIngredients = recipeItems.map((recipe) => ({
+      ...recipe,
+      ingredients: recipe.ingredients.filter(
+        (line) => !deleteIds.has(line.ingredientId)
+      ),
+    }));
+    const nextRecipes = recalculateAllRecipeCosts(
+      recipesWithoutDeletedIngredients,
+      nextIngredients,
+      { markAsUpdated: true }
+    );
+    const nextInvoices = invoiceItems.map((invoice) => {
+      const lines = invoice.lines.map((line) =>
+        line.matchedIngredientId && deleteIds.has(line.matchedIngredientId)
+          ? { ...line, matchedIngredientId: undefined }
+          : line
+      );
+
+      return {
+        ...invoice,
+        status: invoiceStatusForLines(lines),
+        lines,
+      };
+    });
+
+    setIngredientItems(nextIngredients);
+    setRecipeItems(nextRecipes);
+    setInvoiceItems(nextInvoices);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: nextIngredients,
+        recipes: nextRecipes,
+        invoiceImports: nextInvoices,
+      },
+      successMessage ||
+        `${ingredientsToDelete.length} grondstof${
+          ingredientsToDelete.length === 1 ? "" : "fen"
+        } verwijderd en kostprijzen opnieuw berekend.`
+    );
+  }
+
+  function deleteIngredient(ingredient: Ingredient) {
+    deleteIngredients([ingredient], `${ingredient.name} verwijderd.`);
   }
 
   function updateInvoiceLine(
@@ -697,11 +769,19 @@ export default function RecepturenApp() {
             />
           </div>
         )}
+        {mode === "management" && activeTab === "planning" && (
+          <ProductionPlanningPanel
+            recipes={recipeItems}
+            onOpenRecipe={openRecipe}
+            onMarkProduced={markRecipeProduced}
+          />
+        )}
         {mode === "management" && activeTab === "recepten" && (
           <RecipesList
             recipes={recipeItems}
             onOpenRecipe={openRecipe}
             onCreateRecipe={() => createRecipe("finalProduct")}
+            onOpenPlanning={() => setActiveTab("planning")}
             onRecalculateAll={recalculateAllRecipes}
           />
         )}
@@ -717,6 +797,13 @@ export default function RecepturenApp() {
             ingredients={ingredientItems}
             recipes={recipeItems}
             onUpdateIngredient={saveIngredient}
+            onDeleteIngredient={deleteIngredient}
+            onDeleteIngredients={(ingredientsToDelete) =>
+              deleteIngredients(
+                ingredientsToDelete,
+                `${ingredientsToDelete.length} HF-grondstoffen opgeruimd.`
+              )
+            }
           />
         )}
         {mode === "management" && activeTab === "import" && (
@@ -808,6 +895,8 @@ function createBlankRecipe(type: RecipeType): Recipe {
     averageSalesPeriod: "week",
     lastProducedAt: "",
     lastProducedQuantity: 0,
+    productionLog: [],
+    productionRequests: [],
   };
 }
 

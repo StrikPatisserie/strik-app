@@ -2,6 +2,8 @@ import type {
   Ingredient,
   InvoiceLine,
   MarginStatus,
+  ProductionLogEntry,
+  ProductionRequest,
   Recipe,
   RecipeIngredient,
   RecipeStatus,
@@ -425,6 +427,9 @@ export type ProductionNeedStatus = "none" | "ok" | "soon" | "due" | "overdue";
 export type ProductionNeed = {
   recipe: Recipe;
   status: ProductionNeedStatus;
+  manualRequestId?: string;
+  requestReason?: string;
+  requestedQuantity?: number;
   averageSalesQuantity: number;
   averageSalesPeriod: SalesPeriod;
   lastProducedAt: string;
@@ -432,6 +437,7 @@ export type ProductionNeed = {
   nextProductionDate: string;
   daysUntilProduction: number;
   daysCovered: number;
+  estimatedRemainingQuantity: number;
 };
 
 export function salesPeriodLabel(period: SalesPeriod) {
@@ -445,35 +451,135 @@ export function salesPeriodDays(period: SalesPeriod = "week") {
   return SALES_PERIOD_DAYS[period] || SALES_PERIOD_DAYS.week;
 }
 
+export function normalizeProductionLog(entries: ProductionLogEntry[] = []) {
+  return entries
+    .filter((entry) => entry.date && entry.quantity > 0)
+    .map((entry) => ({
+      id: entry.id || `production-${entry.date}-${entry.quantity}`,
+      date: entry.date,
+      quantity: roundPlanningQuantity(entry.quantity),
+      note: entry.note || "",
+      source: entry.source || "manual",
+    }))
+    .sort((first, second) => {
+      const dateCompare = second.date.localeCompare(first.date);
+
+      return dateCompare || second.id.localeCompare(first.id);
+    });
+}
+
+export function productionLogForRecipe(recipe: Recipe) {
+  const log = normalizeProductionLog(recipe.productionLog || []);
+  if (log.length) return log;
+
+  if (!recipe.lastProducedAt || !recipe.lastProducedQuantity) return [];
+
+  return [
+    {
+      id: `legacy-${recipe.id}-${recipe.lastProducedAt}`,
+      date: recipe.lastProducedAt,
+      quantity: recipe.lastProducedQuantity,
+      note: "Eerdere productieregistratie",
+      source: "work" as const,
+    },
+  ];
+}
+
+export function normalizeProductionRequests(
+  requests: ProductionRequest[] = []
+) {
+  return requests
+    .filter((request) => request.date && request.quantity > 0)
+    .map((request) => ({
+      id: request.id || `request-${request.date}-${request.quantity}`,
+      date: request.date,
+      quantity: roundPlanningQuantity(request.quantity),
+      reason: request.reason || "Extra productie",
+      status: request.status || "open",
+    }))
+    .sort((first, second) => {
+      const dateCompare = first.date.localeCompare(second.date);
+
+      return dateCompare || first.id.localeCompare(second.id);
+    });
+}
+
+export function openProductionRequests(recipe: Recipe) {
+  return normalizeProductionRequests(recipe.productionRequests || []).filter(
+    (request) => request.status === "open"
+  );
+}
+
+export function syncRecipeProductionMetadata(recipe: Recipe): Recipe {
+  if (recipe.type !== "finalProduct") {
+    return {
+      ...recipe,
+      averageSalesQuantity: 0,
+      averageSalesPeriod: "week",
+      lastProducedAt: "",
+      lastProducedQuantity: 0,
+      productionLog: [],
+      productionRequests: [],
+    };
+  }
+
+  const productionLog = normalizeProductionLog(productionLogForRecipe(recipe));
+  const productionRequests = normalizeProductionRequests(
+    recipe.productionRequests || []
+  );
+  const latestEntry = productionLog[0];
+  const averageSalesPeriod = recipe.averageSalesPeriod || "week";
+  const learnedAverageSalesQuantity = learnedSalesAverageFromLog(
+    productionLog,
+    averageSalesPeriod
+  );
+
+  return {
+    ...recipe,
+    averageSalesQuantity:
+      learnedAverageSalesQuantity || Math.max(0, recipe.averageSalesQuantity || 0),
+    averageSalesPeriod,
+    lastProducedAt: latestEntry?.date || "",
+    lastProducedQuantity: latestEntry?.quantity || 0,
+    productionLog,
+    productionRequests,
+  };
+}
+
 export function productionNeedForRecipe(
   recipe: Recipe,
   today: Date = new Date()
 ): ProductionNeed {
-  const averageSalesQuantity = Math.max(0, recipe.averageSalesQuantity || 0);
-  const averageSalesPeriod = recipe.averageSalesPeriod || "week";
+  const syncedRecipe = syncRecipeProductionMetadata(recipe);
+  const averageSalesQuantity = Math.max(
+    0,
+    syncedRecipe.averageSalesQuantity || 0
+  );
+  const averageSalesPeriod = syncedRecipe.averageSalesPeriod || "week";
   const lastProducedQuantity =
-    recipe.lastProducedQuantity || recipeBatchQuantity(recipe);
+    syncedRecipe.lastProducedQuantity || recipeBatchQuantity(recipe);
 
-  if (recipe.type !== "finalProduct" || averageSalesQuantity <= 0) {
+  if (syncedRecipe.type !== "finalProduct" || averageSalesQuantity <= 0) {
     return {
-      recipe,
+      recipe: syncedRecipe,
       status: "none",
       averageSalesQuantity,
       averageSalesPeriod,
-      lastProducedAt: recipe.lastProducedAt || "",
+      lastProducedAt: syncedRecipe.lastProducedAt || "",
       lastProducedQuantity,
       nextProductionDate: "",
       daysUntilProduction: 9999,
       daysCovered: 0,
+      estimatedRemainingQuantity: 0,
     };
   }
 
   const todayStart = dateAtStartOfDay(today);
-  const lastProducedAt = recipe.lastProducedAt || "";
+  const lastProducedAt = syncedRecipe.lastProducedAt || "";
 
   if (!lastProducedAt) {
     return {
-      recipe,
+      recipe: syncedRecipe,
       status: "due",
       averageSalesQuantity,
       averageSalesPeriod,
@@ -482,13 +588,21 @@ export function productionNeedForRecipe(
       nextProductionDate: todayIsoDate(),
       daysUntilProduction: 0,
       daysCovered: 0,
+      estimatedRemainingQuantity: 0,
     };
   }
 
   const dailySales = averageSalesQuantity / salesPeriodDays(averageSalesPeriod);
   const daysCovered = dailySales > 0 ? lastProducedQuantity / dailySales : 0;
-  const lastProducedDate = dateAtStartOfDay(new Date(lastProducedAt));
+  const lastProducedDate = isoDateAtStartOfDay(lastProducedAt);
   const nextProductionDateObject = new Date(lastProducedDate);
+  const daysSinceProduction = Math.max(
+    0,
+    Math.floor((todayStart.getTime() - lastProducedDate.getTime()) / 86400000)
+  );
+  const estimatedRemainingQuantity = roundPlanningQuantity(
+    Math.max(0, lastProducedQuantity - dailySales * daysSinceProduction)
+  );
 
   nextProductionDateObject.setDate(
     lastProducedDate.getDate() + Math.max(1, Math.floor(daysCovered))
@@ -507,22 +621,72 @@ export function productionNeedForRecipe(
           : "ok";
 
   return {
-    recipe,
+    recipe: syncedRecipe,
     status,
     averageSalesQuantity,
     averageSalesPeriod,
     lastProducedAt,
     lastProducedQuantity,
-    nextProductionDate: nextProductionDateObject.toISOString().slice(0, 10),
+    nextProductionDate: localIsoDate(nextProductionDateObject),
     daysUntilProduction,
     daysCovered,
+    estimatedRemainingQuantity,
   };
 }
 
-export function productionNeeds(recipes: Recipe[]) {
+export function productionNeedForRequest(
+  recipe: Recipe,
+  request: ProductionRequest,
+  today: Date = new Date()
+): ProductionNeed {
+  const baseNeed = productionNeedForRecipe(recipe, today);
+  const todayStart = dateAtStartOfDay(today);
+  const requestDate = isoDateAtStartOfDay(request.date);
+  const daysUntilProduction = Math.ceil(
+    (requestDate.getTime() - todayStart.getTime()) / 86400000
+  );
+  const status: ProductionNeedStatus =
+    daysUntilProduction < 0
+      ? "overdue"
+      : daysUntilProduction <= 1
+        ? "due"
+        : daysUntilProduction <= 7
+          ? "soon"
+          : "ok";
+
+  return {
+    ...baseNeed,
+    status,
+    manualRequestId: request.id,
+    requestReason: request.reason,
+    requestedQuantity: request.quantity,
+    nextProductionDate: request.date,
+    daysUntilProduction,
+  };
+}
+
+export function productionForecasts(recipes: Recipe[]) {
   return recipes
+    .filter((recipe) => recipe.type === "finalProduct")
     .map((recipe) => productionNeedForRecipe(recipe))
-    .filter((item) => ["overdue", "due", "soon"].includes(item.status))
+    .sort(
+      (first, second) =>
+        first.daysUntilProduction - second.daysUntilProduction ||
+        first.recipe.name.localeCompare(second.recipe.name, "nl-NL")
+    );
+}
+
+export function productionNeeds(recipes: Recipe[]) {
+  const forecastNeeds = productionForecasts(recipes).filter((item) =>
+    ["overdue", "due", "soon"].includes(item.status)
+  );
+  const requestedNeeds = recipes.flatMap((recipe) =>
+    openProductionRequests(recipe)
+      .map((request) => productionNeedForRequest(recipe, request))
+      .filter((item) => ["overdue", "due", "soon"].includes(item.status))
+  );
+
+  return [...requestedNeeds, ...forecastNeeds]
     .sort(
       (first, second) =>
         first.daysUntilProduction - second.daysUntilProduction ||
@@ -554,53 +718,42 @@ export function productionNeedClass(status: ProductionNeedStatus) {
 export function registerRecipeProduction(
   recipe: Recipe,
   producedQuantity: number,
-  producedAt: Date = new Date()
+  producedAt: Date = new Date(),
+  note = "Geregistreerd in werkmodus"
 ) {
   const safeProducedQuantity = Math.max(
     0,
     producedQuantity || recipe.standardBatchQuantity || recipeBatchQuantity(recipe)
   );
   const productionDate = dateAtStartOfDay(producedAt);
-  const previousProductionDate = recipe.lastProducedAt
-    ? dateAtStartOfDay(new Date(recipe.lastProducedAt))
-    : null;
-  const previousProducedQuantity =
-    recipe.lastProducedQuantity || recipe.standardBatchQuantity || recipeBatchQuantity(recipe);
-  const averageSalesPeriod = recipe.averageSalesPeriod || "week";
-  let averageSalesQuantity = Math.max(0, recipe.averageSalesQuantity || 0);
-
-  if (
-    recipe.type === "finalProduct" &&
-    previousProductionDate &&
-    previousProducedQuantity > 0
-  ) {
-    const daysBetween = Math.round(
-      (productionDate.getTime() - previousProductionDate.getTime()) / 86400000
-    );
-
-    if (daysBetween > 0) {
-      const observedPeriodSales =
-        (previousProducedQuantity / daysBetween) *
-        salesPeriodDays(averageSalesPeriod);
-
-      averageSalesQuantity = averageSalesQuantity
-        ? weightedSalesAverage(averageSalesQuantity, observedPeriodSales)
-        : roundPlanningQuantity(observedPeriodSales);
-    }
-  }
-
-  return {
-    ...recipe,
-    averageSalesQuantity:
-      recipe.type === "finalProduct" ? averageSalesQuantity : 0,
-    averageSalesPeriod,
-    lastProducedAt: localIsoDate(productionDate),
-    lastProducedQuantity: safeProducedQuantity,
+  const productionLog = productionLogForRecipe(recipe);
+  const newEntry: ProductionLogEntry = {
+    id: `production-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    date: localIsoDate(productionDate),
+    quantity: safeProducedQuantity,
+    note,
+    source: "work",
   };
+
+  return syncRecipeProductionMetadata({
+    ...recipe,
+    productionLog: [newEntry, ...productionLog],
+  });
 }
 
 function dateAtStartOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isoDateAtStartOfDay(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return dateAtStartOfDay(new Date(value));
+
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  );
 }
 
 function localIsoDate(date: Date) {
@@ -619,6 +772,39 @@ function roundPlanningQuantity(value: number) {
 
 function weightedSalesAverage(currentAverage: number, observedAverage: number) {
   return roundPlanningQuantity(currentAverage * 0.65 + observedAverage * 0.35);
+}
+
+function learnedSalesAverageFromLog(
+  productionLog: ProductionLogEntry[],
+  averageSalesPeriod: SalesPeriod
+) {
+  const oldestFirst = [...productionLog].sort((first, second) => {
+    const dateCompare = first.date.localeCompare(second.date);
+
+    return dateCompare || first.id.localeCompare(second.id);
+  });
+  let learnedAverage = 0;
+
+  for (let index = 1; index < oldestFirst.length; index += 1) {
+    const previous = oldestFirst[index - 1];
+    const current = oldestFirst[index];
+    const daysBetween = Math.round(
+      (isoDateAtStartOfDay(current.date).getTime() -
+        isoDateAtStartOfDay(previous.date).getTime()) /
+        86400000
+    );
+
+    if (daysBetween <= 0 || previous.quantity <= 0) continue;
+
+    const observedPeriodSales =
+      (previous.quantity / daysBetween) * salesPeriodDays(averageSalesPeriod);
+
+    learnedAverage = learnedAverage
+      ? weightedSalesAverage(learnedAverage, observedPeriodSales)
+      : roundPlanningQuantity(observedPeriodSales);
+  }
+
+  return learnedAverage;
 }
 
 export function recipeCostBreakdown(

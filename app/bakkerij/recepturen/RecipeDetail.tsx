@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type {
   Ingredient,
+  ProductionLogEntry,
+  ProductionRequest,
   Recipe,
   RecipeIngredient,
   RecipeStatus,
@@ -26,10 +28,18 @@ import {
   formatPercent,
   marginStatusForRecipe,
   normalizePackagePrice,
+  normalizeProductionLog,
+  normalizeProductionRequests,
   pricePerBaseUnitFromPackagePrice,
+  productionLogForRecipe,
+  productionNeedClass,
+  productionNeedForRecipe,
+  productionNeedLabel,
   quantityLabel,
   recipeCostChange,
   recipeCostDelta,
+  salesPeriodLabel,
+  syncRecipeProductionMetadata,
   targetSalesPrice,
 } from "./utils";
 
@@ -47,6 +57,7 @@ const recipeEditSections: Array<{
   hint: string;
 }> = [
   { id: "basis", label: "Basis", hint: "Naam, batch, prijs en foto" },
+  { id: "productie", label: "Productie", hint: "Logboek en planning" },
   { id: "grondstoffen", label: "Grondstoffen", hint: "Wat gaat erin" },
   { id: "halffabricaten", label: "Halffabricaten", hint: "Voorwerk" },
   { id: "stappen", label: "Stappen", hint: "Bereiding" },
@@ -55,6 +66,7 @@ const recipeEditSections: Array<{
 
 type RecipeEditSection =
   | "basis"
+  | "productie"
   | "grondstoffen"
   | "halffabricaten"
   | "stappen"
@@ -95,6 +107,20 @@ export default function RecipeDetail({
   const [recipeImportWarnings, setRecipeImportWarnings] = useState<string[]>([]);
   const [draft, setDraft] = useState(() => createRecipeDraft(recipe));
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
+  const [newProductionEntry, setNewProductionEntry] = useState(() => ({
+    date: todayIsoDate(),
+    quantity: formatInputNumber(
+      recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1
+    ),
+    note: "",
+  }));
+  const [newProductionRequest, setNewProductionRequest] = useState(() => ({
+    date: todayIsoDate(),
+    quantity: formatInputNumber(
+      recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1
+    ),
+    reason: "",
+  }));
   const isSemiFinishedDraft = draft.type === "semiFinished";
   const availableIngredients = ingredients;
   const semiFinishedOptions = recipes.filter(
@@ -149,6 +175,7 @@ export default function RecipeDetail({
     previewSemiFinished,
     previewCostPrice
   );
+  const productionPreview = productionNeedForRecipe(previewRecipe);
   const targetPrice = targetSalesPrice(previewRecipe);
   const recipeUsageCount = recipes.filter((item) =>
     item.semiFinishedItems.some(
@@ -403,6 +430,85 @@ export default function RecipeDetail({
     showFeedback("Ingredient toegevoegd.");
   }
 
+  function addProductionLogEntry() {
+    const quantity = parseDutchNumber(newProductionEntry.quantity);
+    const date = newProductionEntry.date.trim();
+
+    if (!date || quantity <= 0) {
+      showFeedback("Vul een datum en hoeveelheid in.");
+      return;
+    }
+
+    const entry: ProductionLogEntry = {
+      id: createLocalId("production"),
+      date,
+      quantity,
+      note: newProductionEntry.note.trim(),
+      source: "manual",
+    };
+
+    setDraft((current) => ({
+      ...current,
+      productionLog: normalizeProductionLog([entry, ...current.productionLog]),
+    }));
+    setNewProductionEntry({
+      date: todayIsoDate(),
+      quantity: formatInputNumber(previewBatchQuantity || 1),
+      note: "",
+    });
+    showFeedback("Productie toegevoegd aan logboek.");
+  }
+
+  function removeProductionLogEntry(entryId: string) {
+    setDraft((current) => ({
+      ...current,
+      productionLog: current.productionLog.filter((entry) => entry.id !== entryId),
+    }));
+    showFeedback("Productieregistratie verwijderd.");
+  }
+
+  function addProductionRequest() {
+    const quantity = parseDutchNumber(newProductionRequest.quantity);
+    const date = newProductionRequest.date.trim();
+
+    if (!date || quantity <= 0) {
+      showFeedback("Vul een datum en hoeveelheid in.");
+      return;
+    }
+
+    const request: ProductionRequest = {
+      id: createLocalId("request"),
+      date,
+      quantity,
+      reason: newProductionRequest.reason.trim() || "Extra productie",
+      status: "open",
+    };
+
+    setDraft((current) => ({
+      ...current,
+      productionRequests: normalizeProductionRequests([
+        request,
+        ...current.productionRequests,
+      ]),
+    }));
+    setNewProductionRequest({
+      date: todayIsoDate(),
+      quantity: formatInputNumber(previewBatchQuantity || 1),
+      reason: "",
+    });
+    showFeedback("Extra productie gepland.");
+  }
+
+  function removeProductionRequest(requestId: string) {
+    setDraft((current) => ({
+      ...current,
+      productionRequests: current.productionRequests.filter(
+        (request) => request.id !== requestId
+      ),
+    }));
+    showFeedback("Geplande productie verwijderd.");
+  }
+
   async function copyRecipe() {
     try {
       await navigator.clipboard.writeText(
@@ -499,6 +605,10 @@ export default function RecipeDetail({
 
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
               {recipeEditSections.map((section) => {
+                if (section.id === "productie" && draft.type !== "finalProduct") {
+                  return null;
+                }
+
                 const isActive = activeEditSection === section.id;
 
                 return (
@@ -842,6 +952,222 @@ export default function RecipeDetail({
                     )}
                   </div>
                 </EditorBlock>
+              )}
+
+              {activeEditSection === "productie" && draft.type === "finalProduct" && (
+              <EditorBlock title="Productieplanning">
+                <div className="grid gap-3 lg:grid-cols-4">
+                  <Metric
+                    label="Geschat over"
+                    value={
+                      productionPreview.status === "none"
+                        ? "-"
+                        : planningQuantityLabel(
+                            productionPreview.estimatedRemainingQuantity,
+                            draft.standardBatchUnit
+                          )
+                    }
+                  />
+                  <Metric
+                    label="Volgende productie"
+                    value={
+                      productionPreview.nextProductionDate
+                        ? formatDate(productionPreview.nextProductionDate)
+                        : "Nog onbekend"
+                    }
+                    className={productionNeedClass(productionPreview.status)}
+                  />
+                  <Metric
+                    label="Status"
+                    value={
+                      productionPreview.status === "none"
+                        ? "Geen prognose"
+                        : productionNeedLabel(productionPreview)
+                    }
+                    className={productionNeedClass(productionPreview.status)}
+                  />
+                  <Metric
+                    label="Verkooptempo"
+                    value={
+                      productionPreview.averageSalesQuantity
+                        ? `${productionPreview.averageSalesQuantity.toLocaleString(
+                            "nl-NL"
+                          )} per ${salesPeriodLabel(
+                            productionPreview.averageSalesPeriod
+                          )}`
+                        : "Nog invullen"
+                    }
+                  />
+                </div>
+
+                <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                  <div className="rounded-2xl border border-[#dfe9d8] bg-white p-3">
+                    <p className="text-sm font-black">Productielogboek</p>
+                    <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
+                      Wanneer is dit recept gemaakt en hoeveel? Dit voedt de prognose.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto]">
+                      <DateField
+                        label="Datum"
+                        value={newProductionEntry.date}
+                        onChange={(value) =>
+                          setNewProductionEntry((current) => ({
+                            ...current,
+                            date: value,
+                          }))
+                        }
+                      />
+                      <EditTextField
+                        label="Aantal"
+                        value={newProductionEntry.quantity}
+                        onChange={(value) =>
+                          setNewProductionEntry((current) => ({
+                            ...current,
+                            quantity: value,
+                          }))
+                        }
+                        inputMode="decimal"
+                      />
+                      <EditTextField
+                        label="Notitie"
+                        value={newProductionEntry.note}
+                        onChange={(value) =>
+                          setNewProductionEntry((current) => ({
+                            ...current,
+                            note: value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={addProductionLogEntry}
+                        className="self-end rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+                      >
+                        Toevoegen
+                      </button>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {draft.productionLog.length ? (
+                        draft.productionLog.map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="grid gap-2 rounded-2xl bg-[#fffdf8] p-3 sm:grid-cols-[8rem_8rem_minmax(0,1fr)_auto] sm:items-center"
+                          >
+                            <p className="text-sm font-black">
+                              {formatDate(entry.date)}
+                            </p>
+                            <p className="text-sm font-black">
+                              {planningQuantityLabel(
+                                entry.quantity,
+                                draft.standardBatchUnit
+                              )}
+                            </p>
+                            <p className="text-xs font-bold text-[#2d2a26]/50">
+                              {entry.note ||
+                                (entry.source === "work"
+                                  ? "Werkmodus"
+                                  : "Handmatig")}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => removeProductionLogEntry(entry.id)}
+                              className="rounded-full bg-[#fff4f1] px-3 py-2 text-xs font-black text-[#a83e31]"
+                            >
+                              Verwijder
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-bold text-[#2d2a26]/50">
+                          Nog geen producties geregistreerd.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
+                    <p className="text-sm font-black">Extra productie plannen</p>
+                    <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
+                      Bijvoorbeeld voor een aanbieding, grote bestelling of drukke week.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto]">
+                      <DateField
+                        label="Datum"
+                        value={newProductionRequest.date}
+                        onChange={(value) =>
+                          setNewProductionRequest((current) => ({
+                            ...current,
+                            date: value,
+                          }))
+                        }
+                      />
+                      <EditTextField
+                        label="Aantal"
+                        value={newProductionRequest.quantity}
+                        onChange={(value) =>
+                          setNewProductionRequest((current) => ({
+                            ...current,
+                            quantity: value,
+                          }))
+                        }
+                        inputMode="decimal"
+                      />
+                      <EditTextField
+                        label="Reden"
+                        value={newProductionRequest.reason}
+                        onChange={(value) =>
+                          setNewProductionRequest((current) => ({
+                            ...current,
+                            reason: value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={addProductionRequest}
+                        className="self-end rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+                      >
+                        Plan
+                      </button>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {draft.productionRequests.length ? (
+                        draft.productionRequests.map((request) => (
+                          <div
+                            key={request.id}
+                            className="grid gap-2 rounded-2xl bg-white p-3 sm:grid-cols-[8rem_8rem_minmax(0,1fr)_auto] sm:items-center"
+                          >
+                            <p className="text-sm font-black">
+                              {formatDate(request.date)}
+                            </p>
+                            <p className="text-sm font-black">
+                              {planningQuantityLabel(
+                                request.quantity,
+                                draft.standardBatchUnit
+                              )}
+                            </p>
+                            <p className="text-xs font-bold text-[#2d2a26]/50">
+                              {request.reason} ·{" "}
+                              {request.status === "done" ? "gemaakt" : "open"}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => removeProductionRequest(request.id)}
+                              className="rounded-full bg-[#fff4f1] px-3 py-2 text-xs font-black text-[#a83e31]"
+                            >
+                              Verwijder
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="rounded-2xl bg-white p-3 text-sm font-bold text-[#2d2a26]/50">
+                          Geen extra geplande producties.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </EditorBlock>
               )}
 
               {activeEditSection === "grondstoffen" && (
@@ -1620,6 +1946,8 @@ type RecipeDraft = {
   decorationMargin: string;
   averageSalesQuantity: string;
   averageSalesPeriod: SalesPeriod;
+  productionLog: ProductionLogEntry[];
+  productionRequests: ProductionRequest[];
   version: string;
   photoHint: string;
   photoPreviewDataUrl: string;
@@ -1668,6 +1996,8 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
     decorationMargin: formatInputNumber(recipe.decorationMargin ?? 30),
     averageSalesQuantity: formatInputNumber(recipe.averageSalesQuantity || 0),
     averageSalesPeriod: recipe.averageSalesPeriod || "week",
+    productionLog: productionLogForRecipe(recipe),
+    productionRequests: normalizeProductionRequests(recipe.productionRequests || []),
     version: recipe.version,
     photoHint: recipe.photoHint,
     photoPreviewDataUrl: recipe.photoPreviewDataUrl || "",
@@ -1801,7 +2131,7 @@ function buildRecipeFromDraft(
     draft.batchSize || recipe.batchSize
   );
 
-  return {
+  const updatedRecipe: Recipe = {
     ...recipe,
     name: draft.name.trim() || recipe.name,
     type: draft.type,
@@ -1843,9 +2173,17 @@ function buildRecipeFromDraft(
       ? 0
       : parseDutchNumber(draft.averageSalesQuantity),
     averageSalesPeriod: isSemiFinished ? "week" : draft.averageSalesPeriod,
-    lastProducedAt: isSemiFinished ? "" : recipe.lastProducedAt,
-    lastProducedQuantity: isSemiFinished ? 0 : recipe.lastProducedQuantity,
+    lastProducedAt: isSemiFinished ? "" : draft.productionLog[0]?.date || "",
+    lastProducedQuantity: isSemiFinished
+      ? 0
+      : draft.productionLog[0]?.quantity || 0,
+    productionLog: isSemiFinished ? [] : draft.productionLog,
+    productionRequests: isSemiFinished ? [] : draft.productionRequests,
   };
+
+  return isSemiFinished
+    ? updatedRecipe
+    : syncRecipeProductionMetadata(updatedRecipe);
 }
 
 function costPriceFromBatchCost(
@@ -2209,6 +2547,21 @@ function salesPeriodText(period: SalesPeriod) {
   return "per week";
 }
 
+function planningQuantityLabel(quantity: number, unit: RecipeUnit) {
+  const label =
+    unit === "stuk"
+      ? "stuks"
+      : unit === "gram"
+        ? "g"
+        : unit === "liter"
+          ? "l"
+          : unit;
+
+  return `${quantity.toLocaleString("nl-NL", {
+    maximumFractionDigits: quantity < 10 ? 1 : 0,
+  })} ${label}`;
+}
+
 function createRecipeText(
   recipe: Recipe,
   ingredients: Ingredient[],
@@ -2421,6 +2774,28 @@ function EditTextField({
       <input
         value={value}
         inputMode={inputMode}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+      />
+    </label>
+  );
+}
+
+function DateField({
+  label,
+  value,
+  onChange,
+}: Readonly<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}>) {
+  return (
+    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+      {label}
+      <input
+        type="date"
+        value={value}
         onChange={(event) => onChange(event.target.value)}
         className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />

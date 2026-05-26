@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import ProductionPlanningPanel from "./ProductionPlanningPanel";
 import type { Ingredient, Recipe, RecipeUnit } from "./types";
 import {
   findIngredient,
@@ -290,7 +289,7 @@ export default function RecepturenWorkMode({
 }: Readonly<{
   recipes: Recipe[];
   ingredients: Ingredient[];
-  onMarkProduced: (recipe: Recipe, quantity: number) => void;
+  onMarkProduced: (recipe: Recipe, quantity: number, requestId?: string) => void;
 }>) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<WorkFilterId>("all");
@@ -312,8 +311,8 @@ export default function RecepturenWorkMode({
     });
   }, [filter, recipes, search]);
 
-  function markProduced(recipe: Recipe, quantity: number) {
-    onMarkProduced(recipe, quantity);
+  function markProduced(recipe: Recipe, quantity: number, requestId?: string) {
+    onMarkProduced(recipe, quantity, requestId);
     setProductionFeedback(`${recipe.name} staat als gemaakt geregistreerd.`);
     window.setTimeout(() => setProductionFeedback(""), 2600);
   }
@@ -325,15 +324,6 @@ export default function RecepturenWorkMode({
           {productionFeedback}
         </p>
       )}
-      <ProductionPlanningPanel
-        recipes={recipes}
-        onOpenRecipe={(recipe) => {
-          setStartInProduction(false);
-          setSelectedRecipe(recipe);
-        }}
-        onMarkProduced={markProduced}
-      />
-
       <div className="rounded-[1.1rem] border border-[#e2dbcf] bg-white/88 p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
