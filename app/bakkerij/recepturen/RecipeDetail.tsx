@@ -2182,7 +2182,7 @@ function recipeDraftFromImportedRecipe(
   return {
     ...current,
     name: importedRecipe.name || current.name,
-    type: importedRecipe.type || current.type,
+    type: current.type,
     productGroup: importedRecipe.productGroup || current.productGroup,
     standardBatchQuantity: formatInputNumber(
       importedRecipe.standardBatchQuantity ||
