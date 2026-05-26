@@ -10,6 +10,7 @@ import MargeOverzicht from "./MargeOverzicht";
 import { bakeryIcons, ingredients, invoiceImports, recipes } from "./mockData";
 import ProductieCalculator from "./ProductieCalculator";
 import RecipeDetail from "./RecipeDetail";
+import RecipeDataImport from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
 import RecepturenWorkMode from "./RecepturenWorkMode";
@@ -28,8 +29,10 @@ import type {
 } from "./types";
 import {
   ingredientPackagePrice,
+  normalizeSearch,
   normalizePackagePrice,
   pricePerBaseUnitFromPackagePrice,
+  recalculateAllRecipeCosts,
 } from "./utils";
 
 const tabs = [
@@ -37,6 +40,7 @@ const tabs = [
   { id: "recepten", label: "Recepten" },
   { id: "halffabricaten", label: "Halffabricaten" },
   { id: "ingredienten", label: "Ingredienten" },
+  { id: "import", label: "Bestand import" },
   { id: "factuurimport", label: "Factuurimport" },
   { id: "marge", label: "Marge-overzicht" },
   { id: "productie", label: "Productiecalculator" },
@@ -121,6 +125,41 @@ export default function RecepturenApp() {
     });
   }
 
+  function syncSelectedRecipe(nextRecipes: Recipe[]) {
+    setSelectedRecipe((current) =>
+      current ? nextRecipes.find((recipe) => recipe.id === current.id) || current : null
+    );
+  }
+
+  function recalculateRecipesWithIngredients(
+    nextIngredients: Ingredient[],
+    nextInvoices: InvoiceImport[] = invoiceItems,
+    successMessage = "Alle kostprijzen opnieuw berekend en opgeslagen."
+  ) {
+    const nextRecipes = recalculateAllRecipeCosts(recipeItems, nextIngredients, {
+      markAsUpdated: true,
+    });
+
+    setIngredientItems(nextIngredients);
+    setInvoiceItems(nextInvoices);
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: nextIngredients,
+        recipes: nextRecipes,
+        invoiceImports: nextInvoices,
+      },
+      successMessage
+    );
+
+    return nextRecipes;
+  }
+
+  function recalculateAllRecipes() {
+    recalculateRecipesWithIngredients(ingredientItems);
+  }
+
   useEffect(() => {
     let ignoreResult = false;
 
@@ -166,15 +205,23 @@ export default function RecepturenApp() {
           recipe.id === updatedRecipe.id ? updatedRecipe : recipe
         )
       : [updatedRecipe, ...recipeItems];
+    const recalculatedRecipes = recalculateAllRecipeCosts(
+      nextRecipes,
+      ingredientItems,
+      { markAsUpdated: true }
+    );
 
-    setRecipeItems(nextRecipes);
+    setRecipeItems(recalculatedRecipes);
     setSelectedRecipe((current) =>
-      current?.id === updatedRecipe.id ? updatedRecipe : current
+      current?.id === updatedRecipe.id
+        ? recalculatedRecipes.find((recipe) => recipe.id === updatedRecipe.id) ||
+          updatedRecipe
+        : current
     );
     setRecipeEditorStartsOpen(false);
     persistRecepturenData({
       ingredients: ingredientItems,
-      recipes: nextRecipes,
+      recipes: recalculatedRecipes,
       invoiceImports: invoiceItems,
     });
   }
@@ -201,12 +248,11 @@ export default function RecepturenApp() {
         )
       : [updatedIngredient, ...ingredientItems];
 
-    setIngredientItems(nextIngredients);
-    persistRecepturenData({
-      ingredients: nextIngredients,
-      recipes: recipeItems,
-      invoiceImports: invoiceItems,
-    });
+    recalculateRecipesWithIngredients(
+      nextIngredients,
+      invoiceItems,
+      "Ingredient opgeslagen en kostprijzen opnieuw berekend."
+    );
   }
 
   function updateInvoiceLine(
@@ -269,15 +315,10 @@ export default function RecepturenApp() {
       };
     });
 
-    setInvoiceItems(nextInvoices);
-    setIngredientItems(nextIngredients);
-    persistRecepturenData(
-      {
-        ingredients: nextIngredients,
-        recipes: recipeItems,
-        invoiceImports: nextInvoices,
-      },
-      "Prijsupdate goedgekeurd en opgeslagen."
+    recalculateRecipesWithIngredients(
+      nextIngredients,
+      nextInvoices,
+      "Prijsupdate goedgekeurd en alle kostprijzen herberekend."
     );
   }
 
@@ -396,15 +437,10 @@ export default function RecepturenApp() {
       };
     });
 
-    setIngredientItems(nextIngredients);
-    setInvoiceItems(nextInvoices);
-    persistRecepturenData(
-      {
-        ingredients: nextIngredients,
-        recipes: recipeItems,
-        invoiceImports: nextInvoices,
-      },
-      "Factuur teruggedraaid en opgeslagen."
+    recalculateRecipesWithIngredients(
+      nextIngredients,
+      nextInvoices,
+      "Factuur teruggedraaid en kostprijzen opnieuw berekend."
     );
   }
 
@@ -453,6 +489,38 @@ export default function RecepturenApp() {
         invoiceImports: nextInvoices,
       },
       "Factuur opgeslagen in WordPress; het bestand zelf is niet bewaard."
+    );
+  }
+
+  function importIngredients(importedIngredients: Ingredient[]) {
+    if (!importedIngredients.length) return;
+
+    const nextIngredients = mergeIngredients(ingredientItems, importedIngredients);
+
+    recalculateRecipesWithIngredients(
+      nextIngredients,
+      invoiceItems,
+      `${importedIngredients.length} grondstoffen ingeladen; kostprijzen herberekend.`
+    );
+  }
+
+  function importRecipes(importedRecipes: Recipe[]) {
+    if (!importedRecipes.length) return;
+
+    const mergedRecipes = mergeRecipes(recipeItems, importedRecipes);
+    const nextRecipes = recalculateAllRecipeCosts(mergedRecipes, ingredientItems, {
+      markAsUpdated: true,
+    });
+
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        invoiceImports: invoiceItems,
+      },
+      `${importedRecipes.length} recepten ingeladen en kostprijzen berekend.`
     );
   }
 
@@ -572,6 +640,7 @@ export default function RecepturenApp() {
             recipes={recipeItems}
             onOpenRecipe={openRecipe}
             onCreateRecipe={() => createRecipe("finalProduct")}
+            onRecalculateAll={recalculateAllRecipes}
           />
         )}
         {mode === "management" && activeTab === "halffabricaten" && (
@@ -586,6 +655,14 @@ export default function RecepturenApp() {
             ingredients={ingredientItems}
             recipes={recipeItems}
             onUpdateIngredient={saveIngredient}
+          />
+        )}
+        {mode === "management" && activeTab === "import" && (
+          <RecipeDataImport
+            ingredients={ingredientItems}
+            recipes={recipeItems}
+            onImportIngredients={importIngredients}
+            onImportRecipes={importRecipes}
           />
         )}
         {mode === "management" && activeTab === "factuurimport" && (
@@ -671,4 +748,73 @@ function createBlankRecipe(type: RecipeType): Recipe {
     packagingCost: 0,
     decorationCost: 0,
   };
+}
+
+function mergeIngredients(
+  currentIngredients: Ingredient[],
+  importedIngredients: Ingredient[]
+) {
+  const merged = [...currentIngredients];
+
+  importedIngredients.forEach((importedIngredient) => {
+    const existingIndex = merged.findIndex((ingredient) => {
+      const sameArticle =
+        importedIngredient.supplierArticleNumber !== "-" &&
+        ingredient.supplierArticleNumber !== "-" &&
+        normalizeSearch(ingredient.supplierArticleNumber) ===
+          normalizeSearch(importedIngredient.supplierArticleNumber);
+
+      return (
+        sameArticle ||
+        normalizeSearch(ingredient.name) === normalizeSearch(importedIngredient.name)
+      );
+    });
+
+    if (existingIndex >= 0) {
+      merged[existingIndex] = {
+        ...merged[existingIndex],
+        ...importedIngredient,
+        id: merged[existingIndex].id,
+        aliases: Array.from(
+          new Set([
+            ...merged[existingIndex].aliases,
+            ...importedIngredient.aliases,
+            importedIngredient.name,
+          ])
+        ),
+      };
+    } else {
+      merged.unshift(importedIngredient);
+    }
+  });
+
+  return merged;
+}
+
+function mergeRecipes(currentRecipes: Recipe[], importedRecipes: Recipe[]) {
+  const merged = [...currentRecipes];
+
+  importedRecipes.forEach((importedRecipe) => {
+    const existingIndex = merged.findIndex(
+      (recipe) => normalizeSearch(recipe.name) === normalizeSearch(importedRecipe.name)
+    );
+
+    if (existingIndex >= 0) {
+      merged[existingIndex] = {
+        ...merged[existingIndex],
+        ...importedRecipe,
+        id: merged[existingIndex].id,
+        photoPreviewDataUrl:
+          importedRecipe.photoPreviewDataUrl || merged[existingIndex].photoPreviewDataUrl,
+        photoFileName:
+          importedRecipe.photoFileName || merged[existingIndex].photoFileName,
+        photoUpdatedAt:
+          importedRecipe.photoUpdatedAt || merged[existingIndex].photoUpdatedAt,
+      };
+    } else {
+      merged.unshift(importedRecipe);
+    }
+  });
+
+  return merged;
 }

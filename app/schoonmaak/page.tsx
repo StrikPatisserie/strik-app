@@ -577,7 +577,7 @@ function SchoonmaakForm() {
       }
 
       try {
-        const result = await fetchCleaningItems();
+        const result = await fetchCleaningItems({ includeDataUrl: true });
 
         if (negeerResultaat) return;
 
@@ -835,27 +835,8 @@ function SchoonmaakForm() {
   async function uploadFotoNaarWordPress(upload: PhotoUpload) {
     if (upload.url || !upload.file) return upload;
 
-    const formData = new FormData();
-    formData.set("file", upload.file, upload.file.name);
-    formData.set("label", upload.label);
-    formData.set("winkel", winkel);
-    formData.set("datum", datum);
-    formData.set("planType", planType);
-
-    const res = await fetch("/api/cleaning-photo", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = (await res.json().catch(() => null)) as {
-      id?: number;
-      url?: string;
-      fileName?: string;
-      message?: string;
-    } | null;
-
-    if (res.status === 503 && upload.file) {
-      const dataUrl = await maakKleineFotoPreviewDataUrl(upload.file);
+    async function fallbackPreview() {
+      const dataUrl = await maakKleineFotoPreviewDataUrl(upload.file as File);
 
       return {
         ...upload,
@@ -864,12 +845,39 @@ function SchoonmaakForm() {
       };
     }
 
-    if (res.status === 503 && upload.dataUrl) {
-      return upload;
+    const formData = new FormData();
+    formData.set("file", upload.file, upload.file.name);
+    formData.set("label", upload.label);
+    formData.set("winkel", winkel);
+    formData.set("datum", datum);
+    formData.set("planType", planType);
+
+    let res: Response;
+
+    try {
+      res = await fetch("/api/cleaning-photo", {
+        method: "POST",
+        body: formData,
+      });
+    } catch {
+      return fallbackPreview();
     }
 
+    const data = (await res.json().catch(() => null)) as {
+      id?: number;
+      url?: string;
+      fileName?: string;
+      message?: string;
+    } | null;
+
     if (!res.ok || !data?.url) {
-      throw new Error(data?.message || "Foto uploaden naar WordPress mislukt.");
+      setStatus(
+        data?.message
+          ? `${data.message} Kleine preview wordt opgeslagen.`
+          : "Foto-upload naar WordPress Media lukt niet. Kleine preview wordt opgeslagen."
+      );
+
+      return fallbackPreview();
     }
 
     return {

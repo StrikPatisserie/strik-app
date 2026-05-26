@@ -49,6 +49,10 @@ type CleaningApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; message: string; status?: number };
 
+type FetchCleaningItemsOptions = {
+  includeDataUrl?: boolean;
+};
+
 export function isInternalTemperatureRegistration(
   registratie: CleaningTemperatureRegistration
 ) {
@@ -67,11 +71,18 @@ export function getCleaningUrl() {
   return CLEANING_API_URL;
 }
 
-function getWordPressCleaningUrl() {
+function getWordPressCleaningUrl(options: FetchCleaningItemsOptions = {}) {
   const url = new URL(WORDPRESS_CLEANING_API_URL);
   url.searchParams.set("key", WORDPRESS_CLEANING_API_KEY);
+  if (options.includeDataUrl) url.searchParams.set("includeDataUrl", "1");
 
   return url.toString();
+}
+
+function getAppCleaningUrl(options: FetchCleaningItemsOptions = {}) {
+  if (!options.includeDataUrl) return CLEANING_API_URL;
+
+  return `${CLEANING_API_URL}?includeDataUrl=1`;
 }
 
 async function readJson(response: Response) {
@@ -112,18 +123,18 @@ async function fetchCleaningItemsFrom(url: string) {
   };
 }
 
-export async function fetchCleaningItems(): Promise<
-  CleaningApiResult<CleaningItem[]>
-> {
+export async function fetchCleaningItems(
+  options: FetchCleaningItemsOptions = {}
+): Promise<CleaningApiResult<CleaningItem[]>> {
   try {
-    const appResult = await fetchCleaningItemsFrom(CLEANING_API_URL);
+    const appResult = await fetchCleaningItemsFrom(getAppCleaningUrl(options));
     if (appResult.ok) return appResult;
   } catch {
     // Probeer WordPress direct als de app-route in de browser hapert.
   }
 
   try {
-    return await fetchCleaningItemsFrom(getWordPressCleaningUrl());
+    return await fetchCleaningItemsFrom(getWordPressCleaningUrl(options));
   } catch {
     return {
       ok: false,

@@ -433,102 +433,110 @@ export default function RecipeDetail({
               {activeEditSection === "basis" && (
                 <>
               <EditorBlock title="Basis">
-                <div className="grid gap-3 lg:grid-cols-3">
-                  <EditTextField
-                    label="Receptnaam"
-                    value={draft.name}
-                    onChange={(value) => updateDraft({ name: value })}
-                  />
-                  <EditTextField
-                    label="Groep"
-                    value={draft.productGroup}
-                    onChange={(value) => updateDraft({ productGroup: value })}
-                  />
-                  <SelectField
-                    label="Type"
-                    value={draft.type}
-                    onChange={(value) =>
-                      updateDraft({ type: value as RecipeType })
-                    }
-                    options={[
-                      { value: "finalProduct", label: "Eindproduct" },
-                      { value: "semiFinished", label: "Halffabricaat" },
-                    ]}
-                  />
-                  <SelectField
-                    label="Status"
-                    value={draft.status}
-                    onChange={(value) =>
-                      updateDraft({ status: value as RecipeStatus })
-                    }
-                    options={recipeStatuses.map((status) => ({
-                      value: status,
-                      label: recipeStatusText(status),
-                    }))}
-                  />
-                  <EditTextField
-                    label="Verkoop"
-                    value={draft.salesPrice}
-                    onChange={(value) => updateDraft({ salesPrice: value })}
-                    inputMode="decimal"
-                  />
-                  <EditTextField
-                    label="Marge doel"
-                    value={draft.targetMargin}
-                    onChange={(value) => updateDraft({ targetMargin: value })}
-                    inputMode="decimal"
-                  />
-                  <EditTextField
-                    label="Batch tekst"
-                    value={draft.batchSize}
-                    onChange={(value) => updateDraft({ batchSize: value })}
-                  />
-                  <EditTextField
-                    label="Standaard batch"
-                    value={draft.standardBatchQuantity}
-                    onChange={(value) =>
-                      updateDraft({ standardBatchQuantity: value })
-                    }
-                    inputMode="decimal"
-                  />
-                  <SelectField
-                    label="Batch eenheid"
-                    value={draft.standardBatchUnit}
-                    onChange={(value) =>
-                      updateDraft({ standardBatchUnit: value as RecipeUnit })
-                    }
-                    options={recipeUnits.map((unit) => ({
-                      value: unit,
-                      label: unitLabelText(unit),
-                    }))}
-                  />
-                  <EditTextField
-                    label="Portie"
-                    value={draft.portionLabel}
-                    onChange={(value) => updateDraft({ portionLabel: value })}
-                  />
-                  <EditTextField
-                    label="Verpakking"
-                    value={draft.packagingCost}
-                    onChange={(value) => updateDraft({ packagingCost: value })}
-                    inputMode="decimal"
-                  />
-                  <EditTextField
-                    label="Decoratie"
-                    value={draft.decorationCost}
-                    onChange={(value) => updateDraft({ decorationCost: value })}
-                    inputMode="decimal"
-                  />
-                  <EditTextField
-                    label="Versie"
-                    value={draft.version}
-                    onChange={(value) => updateDraft({ version: value })}
-                  />
-                  <EditTextField
-                    label="Foto tekst"
-                    value={draft.photoHint}
-                    onChange={(value) => updateDraft({ photoHint: value })}
-                  />
+                <p className="mb-4 text-sm font-bold leading-relaxed text-[#2d2a26]/55">
+                  Alleen de basis die nodig is om het recept te herkennen en de
+                  kostprijs goed uit te rekenen.
+                </p>
+
+                <div className="grid gap-4">
+                  <div className="grid gap-3 lg:grid-cols-4">
+                    <EditTextField
+                      label="Receptnaam"
+                      value={draft.name}
+                      onChange={(value) => updateDraft({ name: value })}
+                    />
+                    <EditTextField
+                      label="Groep"
+                      value={draft.productGroup}
+                      onChange={(value) => updateDraft({ productGroup: value })}
+                    />
+                    <SelectField
+                      label="Soort recept"
+                      value={draft.type}
+                      onChange={(value) =>
+                        updateDraft({ type: value as RecipeType })
+                      }
+                      options={[
+                        { value: "finalProduct", label: "Eindproduct" },
+                        { value: "semiFinished", label: "Halffabricaat" },
+                      ]}
+                    />
+                    <SelectField
+                      label="Status"
+                      value={draft.status}
+                      onChange={(value) =>
+                        updateDraft({ status: value as RecipeStatus })
+                      }
+                      options={recipeStatuses.map((status) => ({
+                        value: status,
+                        label: recipeStatusText(status),
+                      }))}
+                    />
+                  </div>
+
+                  <div className="grid gap-3 rounded-2xl bg-white/70 p-3 lg:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_minmax(0,1fr)]">
+                    <div className="lg:col-span-2">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
+                        Hoeveel maak je met dit recept?
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-[#2d2a26]/55">
+                        Bijvoorbeeld 40 stuks, 2 kg of 1 batch.
+                      </p>
+                    </div>
+                    <EditTextField
+                      label="Aantal"
+                      value={draft.standardBatchQuantity}
+                      onChange={(value) =>
+                        updateDraft({ standardBatchQuantity: value })
+                      }
+                      inputMode="decimal"
+                    />
+                    <SelectField
+                      label="Eenheid"
+                      value={draft.standardBatchUnit}
+                      onChange={(value) =>
+                        updateDraft({ standardBatchUnit: value as RecipeUnit })
+                      }
+                      options={recipeUnits.map((unit) => ({
+                        value: unit,
+                        label: unitLabelText(unit),
+                      }))}
+                    />
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-4">
+                    {draft.type === "finalProduct" && (
+                      <>
+                        <EditTextField
+                          label="Verkoopprijs"
+                          value={draft.salesPrice}
+                          onChange={(value) => updateDraft({ salesPrice: value })}
+                          inputMode="decimal"
+                        />
+                        <EditTextField
+                          label="Doelmarge %"
+                          value={draft.targetMargin}
+                          onChange={(value) =>
+                            updateDraft({ targetMargin: value })
+                          }
+                          inputMode="decimal"
+                        />
+                      </>
+                    )}
+                    <EditTextField
+                      label="Verpakking per batch"
+                      value={draft.packagingCost}
+                      onChange={(value) => updateDraft({ packagingCost: value })}
+                      inputMode="decimal"
+                    />
+                    <EditTextField
+                      label="Decoratie/extra per batch"
+                      value={draft.decorationCost}
+                      onChange={(value) => updateDraft({ decorationCost: value })}
+                      inputMode="decimal"
+                    />
+                  </div>
+
                   <label className="flex items-center gap-3 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-black">
                     <input
                       type="checkbox"
@@ -538,7 +546,7 @@ export default function RecipeDetail({
                       }
                       className="h-5 w-5 accent-[#8fb184]"
                     />
-                    Toon in werkmodus
+                    Toon dit recept in werkmodus
                   </label>
                 </div>
               </EditorBlock>
@@ -1369,13 +1377,20 @@ function buildRecipeFromDraft(
   costPrice: number
 ): Recipe {
   const salesPrice = parseDutchNumber(draft.salesPrice);
+  const standardBatchQuantity =
+    parseDutchNumber(draft.standardBatchQuantity) || undefined;
+  const batchSize = batchLabelFromValues(
+    standardBatchQuantity,
+    draft.standardBatchUnit,
+    draft.batchSize || recipe.batchSize
+  );
 
   return {
     ...recipe,
     name: draft.name.trim() || recipe.name,
     type: draft.type,
     productGroup: draft.productGroup.trim() || recipe.productGroup,
-    standardBatchQuantity: parseDutchNumber(draft.standardBatchQuantity) || undefined,
+    standardBatchQuantity,
     standardBatchUnit: draft.standardBatchUnit,
     salesPrice,
     costPrice,
@@ -1392,11 +1407,11 @@ function buildRecipeFromDraft(
     allergens: parseList(draft.allergens),
     internalNotes: draft.internalNotes.trim(),
     isWorkModeVisible: draft.isWorkModeVisible,
-    version: draft.version.trim() || recipe.version,
+    version: draft.version.trim() || recipe.version || "v1",
     lastUpdated: todayIsoDate(),
-    portionLabel: draft.portionLabel.trim() || recipe.portionLabel,
-    batchSize: draft.batchSize.trim() || recipe.batchSize,
-    photoHint: draft.photoHint.trim() || recipe.photoHint,
+    portionLabel: portionLabelFromValues(draft.type, draft.standardBatchUnit),
+    batchSize,
+    photoHint: draft.photoHint.trim() || draft.name.trim() || recipe.photoHint,
     photoPreviewDataUrl: draft.photoPreviewDataUrl,
     photoFileName: draft.photoFileName.trim(),
     photoUpdatedAt: draft.photoUpdatedAt,
@@ -1416,6 +1431,22 @@ function costPriceFromBatchCost(
   }
 
   return roundMoney(batchCost);
+}
+
+function batchLabelFromValues(
+  quantity: number | undefined,
+  unit: RecipeUnit,
+  fallback: string
+) {
+  if (!quantity) return fallback || `1 ${unitLabelText(unit)}`;
+
+  return `${formatInputNumber(quantity)} ${unitLabelText(unit)}`;
+}
+
+function portionLabelFromValues(type: RecipeType, unit: RecipeUnit) {
+  if (type === "semiFinished") return `per ${unitLabelText(unit)}`;
+
+  return unit === "stuk" ? "per stuk" : `per ${unitLabelText(unit)}`;
 }
 
 function normalizeIngredientDrafts(

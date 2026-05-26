@@ -24,10 +24,12 @@ export default function RecipesList({
   recipes,
   onOpenRecipe,
   onCreateRecipe,
+  onRecalculateAll,
 }: Readonly<{
   recipes: Recipe[];
   onOpenRecipe: (recipe: Recipe) => void;
   onCreateRecipe: () => void;
+  onRecalculateAll: () => void;
 }>) {
   const [search, setSearch] = useState("");
   const [group, setGroup] = useState("all");
@@ -58,13 +60,22 @@ export default function RecipesList({
             title="Recepten"
             description="Zoek, filter en open eindproducten met actuele kostprijs en marge."
           />
-          <button
-            type="button"
-            onClick={onCreateRecipe}
-            className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm transition active:scale-[0.98]"
-          >
-            Nieuw recept
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onRecalculateAll}
+              className="rounded-full bg-[#2d2a26] px-4 py-2.5 text-sm font-black text-white shadow-sm transition active:scale-[0.98]"
+            >
+              Herbereken alles
+            </button>
+            <button
+              type="button"
+              onClick={onCreateRecipe}
+              className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm transition active:scale-[0.98]"
+            >
+              Nieuw recept
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(10rem,0.7fr))]">

@@ -47,7 +47,7 @@ export default function SchoonmaakOverzichtPage() {
       setStatus("Laden...");
 
       try {
-        const result = await fetchCleaningItems();
+        const result = await fetchCleaningItems({ includeDataUrl: true });
 
         if (negeerResultaat) return;
 

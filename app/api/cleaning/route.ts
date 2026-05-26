@@ -9,9 +9,10 @@ const CLEANING_API_KEY =
   process.env.WORDPRESS_STRIK_API_KEY ||
   "schoonmaak-ijs-strik";
 
-function getWordPressCleaningUrl() {
+function getWordPressCleaningUrl(options: { includeDataUrl?: boolean } = {}) {
   const url = new URL(WORDPRESS_CLEANING_API_URL);
   url.searchParams.set("key", CLEANING_API_KEY);
+  if (options.includeDataUrl) url.searchParams.set("includeDataUrl", "1");
 
   return url;
 }
@@ -20,7 +21,7 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchWordPressCleaning() {
+async function fetchWordPressCleaning(options: { includeDataUrl?: boolean } = {}) {
   const requestInit = {
     cache: "no-store",
     headers: {
@@ -29,7 +30,7 @@ async function fetchWordPressCleaning() {
   } as const;
 
   try {
-    const response = await fetch(getWordPressCleaningUrl(), requestInit);
+    const response = await fetch(getWordPressCleaningUrl(options), requestInit);
     if (response.status < 500) return response;
   } catch {
     // Retry below for short WordPress/network hiccups.
@@ -37,7 +38,7 @@ async function fetchWordPressCleaning() {
 
   await wait(300);
 
-  return fetch(getWordPressCleaningUrl(), requestInit);
+  return fetch(getWordPressCleaningUrl(options), requestInit);
 }
 
 async function readWordPressResponse(response: Response) {
@@ -81,9 +82,12 @@ function createWordPressErrorResponse(status: number) {
   );
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const response = await fetchWordPressCleaning();
+    const url = new URL(request.url);
+    const response = await fetchWordPressCleaning({
+      includeDataUrl: url.searchParams.get("includeDataUrl") === "1",
+    });
     const data = await readWordPressResponse(response);
 
     if (!response.ok) {
