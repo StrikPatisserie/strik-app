@@ -127,9 +127,10 @@ export function todayIsoDate() {
 export function marginStatusForRecipe(recipe: Recipe): MarginStatus {
   if (recipe.type === "semiFinished") return "good";
 
-  if (!recipe.targetMargin) return "good";
-  if (recipe.currentMargin >= recipe.targetMargin) return "good";
-  if (recipe.currentMargin >= recipe.targetMargin - 3) return "pressure";
+  const targetPrice = targetSalesPrice(recipe);
+  if (!targetPrice) return "good";
+  if (recipe.salesPrice >= targetPrice) return "good";
+  if (recipe.salesPrice >= targetPrice * 0.97) return "pressure";
 
   return "critical";
 }
@@ -198,7 +199,33 @@ export function recipeCostDelta(recipe: Recipe) {
 export function targetSalesPrice(recipe: Recipe) {
   if (!recipe.targetMargin || recipe.targetMargin >= 100) return recipe.salesPrice;
 
-  return recipe.costPrice / (1 - recipe.targetMargin / 100);
+  if (recipe.type !== "finalProduct") {
+    return recipe.costPrice / (1 - recipe.targetMargin / 100);
+  }
+
+  const extras = recipeExtraCostBreakdown(recipe);
+  const marginBaseCost = Math.max(
+    0,
+    recipe.costPrice - extras.packagingUnitCost - extras.decorationUnitCost
+  );
+  const decorationMargin = Math.min(
+    99,
+    Math.max(0, recipe.decorationMargin ?? 30)
+  );
+  const baseTarget =
+    marginBaseCost / (1 - recipe.targetMargin / 100);
+  const decorationTarget = extras.decorationUnitCost
+    ? extras.decorationUnitCost / (1 - decorationMargin / 100)
+    : 0;
+
+  return baseTarget + extras.packagingUnitCost + decorationTarget;
+}
+
+export function effectiveTargetMargin(recipe: Recipe) {
+  const targetPrice = targetSalesPrice(recipe);
+  if (!targetPrice) return 0;
+
+  return Math.round(((targetPrice - recipe.costPrice) / targetPrice) * 1000) / 10;
 }
 
 export function normalizeSearch(value: string) {

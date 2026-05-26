@@ -22,6 +22,7 @@ import {
 import {
   changeBadgeClass,
   directIngredientCost,
+  effectiveTargetMargin,
   findIngredient,
   findRecipe,
   formatBatchWeight,
@@ -192,7 +193,6 @@ export default function RecipeDetail({
     previewBatchQuantity
   );
   const salesPrice = parseDutchNumber(draft.salesPrice);
-  const targetMargin = parseDutchNumber(draft.targetMargin);
   const previewRecipe = buildRecipeFromDraft(
     recipe,
     draft,
@@ -203,6 +203,7 @@ export default function RecipeDetail({
   );
   const productionPreview = productionNeedForRecipe(previewRecipe);
   const targetPrice = targetSalesPrice(previewRecipe);
+  const effectiveMarginTarget = effectiveTargetMargin(previewRecipe);
   const recipeUsageCount = recipes.filter((item) =>
     item.semiFinishedItems.some(
       (usage) => usage.semiFinishedRecipeId === recipe.id
@@ -925,7 +926,7 @@ export default function RecipeDetail({
                             inputMode="decimal"
                           />
                           <EditTextField
-                            label="Marge %"
+                            label="Basis marge %"
                             value={draft.targetMargin}
                             onChange={(value) =>
                               updateDraft({ targetMargin: value })
@@ -1941,8 +1942,12 @@ export default function RecipeDetail({
                     }
                   />
                   <Metric
-                    label="Doelmarge"
-                    value={targetMargin ? formatPercent(targetMargin) : "-"}
+                    label="Doelmarge totaal"
+                    value={
+                      effectiveMarginTarget
+                        ? formatPercent(effectiveMarginTarget, 1)
+                        : "-"
+                    }
                   />
                   <Metric
                     label="Verkooptempo"
@@ -2042,13 +2047,14 @@ export default function RecipeDetail({
               {previewRecipe.type === "finalProduct" && (
                 <div className="mt-4 rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
                   <p className="text-sm font-black text-[#7a5a18]">
-                    Adviesprijs bij {formatPercent(previewRecipe.targetMargin)} totaalmarge:{" "}
+                    Adviesprijs volgens marge-instellingen:{" "}
                     {formatEuro(targetPrice)}
                   </p>
                   <p className="mt-1 text-xs font-bold text-[#2d2a26]/55">
-                    De zichtbare marge en margestatus worden berekend over de
-                    volledige kostprijs per stuk, inclusief verpakking en
-                    decoratie.
+                    Basisrecept rekent met {formatPercent(previewRecipe.targetMargin)} marge,
+                    decoratie met {formatPercent(previewRecipe.decorationMargin ?? 30)}
+                    en verpakking tegen kostprijs. Daardoor is de totale
+                    doelmarge hier {formatPercent(effectiveMarginTarget, 1)}.
                     Verkoopprijs moet met{" "}
                     {formatEuro(Math.max(0, targetPrice - previewRecipe.salesPrice))}{" "}
                     omhoog om de doelmarge te halen.

@@ -63,7 +63,7 @@ export default function MargeOverzicht({
         <SectionTitle
           eyebrow="Marge"
           title="Marge-overzicht"
-          description="Totaalmarge naast de adviesprijs. De margestatus vergelijkt de huidige marge met de doelmarge."
+          description="Totaalmarge naast de adviesprijs. De margestatus gebruikt basisreceptmarge, decoratiemarge en verpakking tegen kostprijs."
         />
 
         <div className="grid gap-3 lg:grid-cols-4">
