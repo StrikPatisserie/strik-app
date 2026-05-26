@@ -1,6 +1,7 @@
 import { MetricCard, Panel, SectionTitle, MarginBadge } from "./RecepturenShared";
 import type { Ingredient, InvoiceImport, Recipe } from "./types";
 import {
+  changeBadgeClass,
   formatDate,
   formatSignedPercent,
   ingredientPriceChange,
@@ -85,7 +86,7 @@ export default function RecepturenDashboard({
         <MetricCard
           label="Onder margegrens"
           value={underMargin.length}
-          detail="Producten met gele of rode marge-status"
+          detail="Producten met krappe of kritische marge"
           tone="critical"
         />
         <MetricCard
@@ -126,7 +127,11 @@ export default function RecepturenDashboard({
                     {ingredient.supplier} · {ingredient.lastInvoice}
                   </p>
                 </div>
-                <span className="shrink-0 rounded-full bg-[#fff0bd] px-3 py-1 text-sm font-black text-[#8a5b10]">
+                <span
+                  className={`shrink-0 rounded-full px-3 py-1 text-sm font-black ${changeBadgeClass(
+                    ingredientPriceChange(ingredient)
+                  )}`}
+                >
                   {formatSignedPercent(ingredientPriceChange(ingredient), 1)}
                 </span>
               </div>
@@ -152,9 +157,16 @@ export default function RecepturenDashboard({
                   <div className="min-w-0">
                     <p className="font-black leading-tight">{recipe.name}</p>
                     <p className="text-xs font-bold text-[#2d2a26]/45">
-                      {recipe.productGroup} · {formatSignedPercent(recipeCostChange(recipe), 1)}
+                      {recipe.productGroup}
                     </p>
                   </div>
+                  <span
+                    className={`shrink-0 rounded-full px-3 py-1 text-sm font-black ${changeBadgeClass(
+                      recipeCostChange(recipe)
+                    )}`}
+                  >
+                    {formatSignedPercent(recipeCostChange(recipe), 1)}
+                  </span>
                   <MarginBadge status={status} />
                 </div>
               );

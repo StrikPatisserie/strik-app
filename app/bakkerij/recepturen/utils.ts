@@ -86,6 +86,24 @@ export function formatSignedPercent(value: number, digits = 0) {
   return `${value > 0 ? "+" : ""}${formatPercent(value, digits)}`;
 }
 
+export function changeBadgeClass(value: number, positiveIsGood = false) {
+  if (Math.abs(value) < 0.05) {
+    return "bg-[#f1eee9] text-[#2d2a26]/55";
+  }
+
+  const isGood = positiveIsGood ? value > 0 : value < 0;
+
+  return isGood
+    ? "bg-[#dce8d6] text-[#45663b]"
+    : "bg-[#ffe0dc] text-[#a83e31]";
+}
+
+export function marginGap(recipe: Recipe) {
+  if (recipe.type === "semiFinished") return 0;
+
+  return recipe.salesPrice - targetSalesPrice(recipe);
+}
+
 export function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -99,8 +117,11 @@ export function formatDate(value: string) {
 
 export function marginStatusForRecipe(recipe: Recipe): MarginStatus {
   if (recipe.type === "semiFinished") return "good";
-  if (recipe.currentMargin >= recipe.targetMargin) return "good";
-  if (recipe.currentMargin >= recipe.targetMargin - 3) return "pressure";
+
+  const targetPrice = targetSalesPrice(recipe);
+  if (!targetPrice) return "good";
+  if (recipe.salesPrice >= targetPrice) return "good";
+  if (recipe.salesPrice >= targetPrice * 0.97) return "pressure";
 
   return "critical";
 }
@@ -158,7 +179,28 @@ export function recipeCostDelta(recipe: Recipe) {
 export function targetSalesPrice(recipe: Recipe) {
   if (!recipe.targetMargin || recipe.targetMargin >= 100) return recipe.salesPrice;
 
-  return recipe.costPrice / (1 - recipe.targetMargin / 100);
+  if (recipe.type !== "finalProduct") {
+    return recipe.costPrice / (1 - recipe.targetMargin / 100);
+  }
+
+  const extras = recipeExtraCostBreakdown(recipe);
+  const marginBaseCost = Math.max(
+    0,
+    recipe.costPrice - extras.packagingUnitCost - extras.decorationUnitCost
+  );
+  const decorationMargin = Math.min(
+    99,
+    Math.max(0, recipe.decorationMargin ?? 30)
+  );
+  const decorationTarget = extras.decorationUnitCost
+    ? extras.decorationUnitCost / (1 - decorationMargin / 100)
+    : 0;
+
+  return (
+    marginBaseCost / (1 - recipe.targetMargin / 100) +
+    extras.packagingUnitCost +
+    decorationTarget
+  );
 }
 
 export function normalizeSearch(value: string) {
@@ -280,6 +322,28 @@ export function costPriceFromBatchCost(
   return roundMoney(batchCost);
 }
 
+export function recipeExtraCostBreakdown(recipe: Recipe) {
+  const batchQuantity = recipeBatchQuantity(recipe);
+  const packagingUnitCost = recipe.packagingCost || 0;
+  const decorationUnitCost = recipe.decorationCost || 0;
+  const packagingTotal =
+    recipe.type === "finalProduct"
+      ? packagingUnitCost * batchQuantity
+      : packagingUnitCost;
+  const decorationTotal =
+    recipe.type === "finalProduct"
+      ? decorationUnitCost * batchQuantity
+      : decorationUnitCost;
+
+  return {
+    packagingUnitCost,
+    decorationUnitCost,
+    packagingTotal: roundMoney(packagingTotal),
+    decorationTotal: roundMoney(decorationTotal),
+    extraCost: roundMoney(packagingTotal + decorationTotal),
+  };
+}
+
 export function recipeCostBreakdown(
   recipe: Recipe,
   ingredients: Ingredient[],
@@ -307,7 +371,8 @@ export function recipeCostBreakdown(
   });
   const directCost = directIngredientCost(recalculatedIngredients);
   const semiFinishedTotal = semiFinishedCost(recalculatedSemiFinished);
-  const extraCost = (recipe.packagingCost || 0) + (recipe.decorationCost || 0);
+  const extraBreakdown = recipeExtraCostBreakdown(recipe);
+  const extraCost = extraBreakdown.extraCost;
   const batchCost = roundMoney(directCost + semiFinishedTotal + extraCost);
   const costPrice = costPriceFromBatchCost(
     recipe.type,

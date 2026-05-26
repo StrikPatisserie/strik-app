@@ -77,9 +77,7 @@ export function MarginBadge({ status }: Readonly<{ status: MarginStatus }>) {
   const className =
     status === "good"
       ? "bg-[#dce8d6] text-[#45663b]"
-      : status === "pressure"
-        ? "bg-[#fff0bd] text-[#8a5b10]"
-        : "bg-[#ffe0dc] text-[#a83e31]";
+      : "bg-[#ffe0dc] text-[#a83e31]";
 
   return (
     <span

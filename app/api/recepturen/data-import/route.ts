@@ -539,6 +539,7 @@ function getOrCreateImportedRecipe(
     linkedFinalProductIds: [],
     packagingCost: 0,
     decorationCost: 0,
+    decorationMargin: 30,
   };
 
   grouped.set(key, recipe);

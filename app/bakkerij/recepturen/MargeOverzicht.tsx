@@ -9,8 +9,11 @@ import {
   SectionTitle,
 } from "./RecepturenShared";
 import {
+  changeBadgeClass,
   formatEuro,
   formatPercent,
+  formatSignedPercent,
+  marginGap,
   marginStatusForRecipe,
   recipeCostChange,
   recipeCostDelta,
@@ -133,9 +136,14 @@ export default function MargeOverzicht({
                 >
                   <div className="min-w-0">
                     <p className="truncate text-base font-black">{recipe.name}</p>
-                    <p className="text-xs font-bold text-[#2d2a26]/45">
-                      Verschil {formatEuro(recipeCostDelta(recipe))} · {formatPercent(recipeCostChange(recipe), 1)}
-                    </p>
+                    <span
+                      className={`mt-1 inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-black ${changeBadgeClass(
+                        recipeCostChange(recipe)
+                      )}`}
+                    >
+                      {formatEuro(recipeCostDelta(recipe))} ·{" "}
+                      {formatSignedPercent(recipeCostChange(recipe), 1)}
+                    </span>
                   </div>
                   <p className="text-sm font-bold text-[#2d2a26]/62">
                     {recipeTypeLabel(recipe.type)}
@@ -147,15 +155,27 @@ export default function MargeOverzicht({
                   <p className="text-sm font-black">
                     {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
                   </p>
-                  <p className="text-sm font-black">
-                    {recipe.currentMargin ? formatPercent(recipe.currentMargin) : "-"}
-                  </p>
+                  <div>
+                    <p className="text-sm font-black">
+                      {recipe.currentMargin ? formatPercent(recipe.currentMargin) : "-"}
+                    </p>
+                    {recipe.type === "finalProduct" && (
+                      <span
+                        className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-black ${changeBadgeClass(
+                          marginGap(recipe),
+                          true
+                        )}`}
+                      >
+                        {marginGap(recipe) >= 0 ? "ruimte" : "krap"}
+                      </span>
+                    )}
+                  </div>
                   <MarginBadge status={marginStatusForRecipe(recipe)} />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold">{causeForRecipe(recipe)}</p>
                     {recipe.type === "finalProduct" && (
                       <p className="text-xs font-bold text-[#2d2a26]/45">
-                        Advies bij 80%: {formatEuro(targetSalesPrice(recipe))}
+                        Adviesprijs: {formatEuro(targetSalesPrice(recipe))}
                       </p>
                     )}
                   </div>

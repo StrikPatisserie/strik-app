@@ -81,6 +81,7 @@ export type Recipe = {
   linkedFinalProductIds?: string[];
   packagingCost?: number;
   decorationCost?: number;
+  decorationMargin?: number;
 };
 
 export type InvoiceLine = {

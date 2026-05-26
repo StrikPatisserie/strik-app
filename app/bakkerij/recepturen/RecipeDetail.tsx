@@ -15,6 +15,7 @@ import {
   SectionTitle,
 } from "./RecepturenShared";
 import {
+  changeBadgeClass,
   directIngredientCost,
   findIngredient,
   findRecipe,
@@ -63,6 +64,7 @@ export default function RecipeDetail({
   startInEditMode = false,
   onClose,
   onSaveRecipe,
+  onDeleteRecipe,
   onSaveIngredient,
 }: Readonly<{
   recipe: Recipe;
@@ -71,12 +73,14 @@ export default function RecipeDetail({
   startInEditMode?: boolean;
   onClose: () => void;
   onSaveRecipe: (recipe: Recipe) => void;
+  onDeleteRecipe: (recipe: Recipe) => void;
   onSaveIngredient: (ingredient: Ingredient) => void;
 }>) {
   const [isEditing, setIsEditing] = useState(startInEditMode);
   const [activeEditSection, setActiveEditSection] =
     useState<RecipeEditSection>("basis");
   const [feedback, setFeedback] = useState("");
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [draft, setDraft] = useState(() => createRecipeDraft(recipe));
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
   const availableIngredients = ingredients;
@@ -96,14 +100,23 @@ export default function RecipeDetail({
     (total, item) => total + item.costContribution,
     0
   );
-  const extraTotal =
-    parseDutchNumber(draft.packagingCost) + parseDutchNumber(draft.decorationCost);
-  const previewBatchCost =
-    Math.round((directTotal + semiFinishedTotal + extraTotal) * 100) / 100;
   const previewBatchQuantity =
     parseDutchNumber(draft.standardBatchQuantity) ||
     getBatchInfo(recipe)?.quantity ||
     1;
+  const packagingUnitCost = parseDutchNumber(draft.packagingCost);
+  const decorationUnitCost = parseDutchNumber(draft.decorationCost);
+  const packagingTotal =
+    draft.type === "finalProduct"
+      ? packagingUnitCost * previewBatchQuantity
+      : packagingUnitCost;
+  const decorationTotal =
+    draft.type === "finalProduct"
+      ? decorationUnitCost * previewBatchQuantity
+      : decorationUnitCost;
+  const extraTotal = packagingTotal + decorationTotal;
+  const previewBatchCost =
+    Math.round((directTotal + semiFinishedTotal + extraTotal) * 100) / 100;
   const previewCostPrice = costPriceFromBatchCost(
     draft.type,
     previewBatchCost,
@@ -119,6 +132,11 @@ export default function RecipeDetail({
     previewCostPrice
   );
   const targetPrice = targetSalesPrice(previewRecipe);
+  const recipeUsageCount = recipes.filter((item) =>
+    item.semiFinishedItems.some(
+      (usage) => usage.semiFinishedRecipeId === recipe.id
+    )
+  ).length;
 
   function showFeedback(message: string) {
     setFeedback(message);
@@ -187,6 +205,16 @@ export default function RecipeDetail({
     setDraft(createRecipeDraft(updatedRecipe));
     setIsEditing(false);
     showFeedback("Recept opgeslagen.");
+  }
+
+  function requestDeleteRecipe() {
+    if (!isConfirmingDelete) {
+      setIsConfirmingDelete(true);
+      showFeedback("Klik nog een keer op verwijderen om te bevestigen.");
+      return;
+    }
+
+    onDeleteRecipe(recipe);
   }
 
   function addIngredientLine(ingredientId = availableIngredients[0]?.id || "") {
@@ -506,7 +534,7 @@ export default function RecipeDetail({
                         />
                       </div>
 
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                         {draft.type === "finalProduct" && (
                           <>
                             <EditTextField
@@ -528,7 +556,11 @@ export default function RecipeDetail({
                           </>
                         )}
                         <EditTextField
-                          label="Verpakking"
+                          label={
+                            draft.type === "finalProduct"
+                              ? "Verpakking/stuk"
+                              : "Verpakking batch"
+                          }
                           value={draft.packagingCost}
                           onChange={(value) =>
                             updateDraft({ packagingCost: value })
@@ -536,13 +568,27 @@ export default function RecipeDetail({
                           inputMode="decimal"
                         />
                         <EditTextField
-                          label="Decoratie"
+                          label={
+                            draft.type === "finalProduct"
+                              ? "Decoratie/stuk"
+                              : "Decoratie batch"
+                          }
                           value={draft.decorationCost}
                           onChange={(value) =>
                             updateDraft({ decorationCost: value })
                           }
                           inputMode="decimal"
                         />
+                        {draft.type === "finalProduct" && (
+                          <EditTextField
+                            label="Deco marge %"
+                            value={draft.decorationMargin}
+                            onChange={(value) =>
+                              updateDraft({ decorationMargin: value })
+                            }
+                            inputMode="decimal"
+                          />
+                        )}
                       </div>
 
                       <label className="flex items-center gap-3 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-black">
@@ -977,6 +1023,46 @@ export default function RecipeDetail({
                 </p>
               )}
             </div>
+
+            <div className="mt-3 rounded-2xl border border-[#efc2bb] bg-[#fff4f1] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-[#a83e31]">
+                    Recept verwijderen
+                  </p>
+                  <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
+                    {recipeUsageCount
+                      ? `Dit recept wordt in ${recipeUsageCount} ander recept gebruikt. Die koppeling wordt ook verwijderd.`
+                      : "Dit haalt het recept uit het management- en werkoverzicht."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {isConfirmingDelete && (
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmingDelete(false)}
+                      className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#2d2a26]/60 shadow-sm"
+                    >
+                      Toch houden
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={requestDeleteRecipe}
+                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black shadow-sm ${
+                      isConfirmingDelete
+                        ? "bg-[#a83e31] text-white"
+                        : "bg-white text-[#a83e31]"
+                    }`}
+                  >
+                    <TrashIcon />
+                    {isConfirmingDelete
+                      ? "Ja, definitief verwijderen"
+                      : "Verwijder recept"}
+                  </button>
+                </div>
+              </div>
+            </div>
           </Panel>
         )}
 
@@ -1048,17 +1134,18 @@ export default function RecipeDetail({
                 title="Kostprijsopbouw"
                 description={
                   previewRecipe.type === "finalProduct"
-                    ? "Batchbedragen. De kostprijs per stuk wordt gedeeld door de standaard batch."
+                    ? "Verpakking en decoratie staan per stuk in de invoer en worden voor de batch automatisch doorgerekend."
                     : "Opgebouwd uit directe ingredienten, halffabricaten, decoratie en verpakking."
                 }
               />
-              <div className="mt-4 grid gap-3 sm:grid-cols-5">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
                 <Metric label="Direct batch" value={formatEuro(directTotal)} />
                 <Metric
                   label="Halffab. batch"
                   value={formatEuro(semiFinishedTotal)}
                 />
-                <Metric label="Extra batch" value={formatEuro(extraTotal)} />
+                <Metric label="Verpakking" value={formatEuro(packagingTotal)} />
+                <Metric label="Decoratie" value={formatEuro(decorationTotal)} />
                 <Metric label="Batch totaal" value={formatEuro(previewBatchCost)} />
                 <Metric
                   label={previewRecipe.type === "finalProduct" ? "Per stuk" : "Totaal"}
@@ -1072,6 +1159,7 @@ export default function RecipeDetail({
                     recipeCostChange(previewRecipe),
                     1
                   )}`}
+                  className={changeBadgeClass(recipeCostChange(previewRecipe))}
                 />
                 {previewRecipe.type === "finalProduct" && (
                   <Metric
@@ -1085,10 +1173,12 @@ export default function RecipeDetail({
               {previewRecipe.type === "finalProduct" && (
                 <div className="mt-4 rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
                   <p className="text-sm font-black text-[#7a5a18]">
-                    Adviesprijs bij {formatPercent(previewRecipe.targetMargin)} marge:{" "}
+                    Adviesprijs met {formatPercent(previewRecipe.targetMargin)} marge op basis:{" "}
                     {formatEuro(targetPrice)}
                   </p>
                   <p className="mt-1 text-xs font-bold text-[#2d2a26]/55">
+                    Basisrecept krijgt de doelmarge. Verpakking gaat kost-op-kost
+                    mee; decoratie rekent met {formatPercent(previewRecipe.decorationMargin ?? 30)} marge.
                     Verkoopprijs moet met{" "}
                     {formatEuro(Math.max(0, targetPrice - previewRecipe.salesPrice))}{" "}
                     omhoog om de doelmarge te halen.
@@ -1281,6 +1371,7 @@ type RecipeDraft = {
   standardBatchUnit: RecipeUnit;
   packagingCost: string;
   decorationCost: string;
+  decorationMargin: string;
   version: string;
   photoHint: string;
   photoPreviewDataUrl: string;
@@ -1326,6 +1417,7 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
       recipe.standardBatchUnit || getBatchInfo(recipe)?.unit || "stuk",
     packagingCost: formatInputNumber(recipe.packagingCost || 0),
     decorationCost: formatInputNumber(recipe.decorationCost || 0),
+    decorationMargin: formatInputNumber(recipe.decorationMargin ?? 30),
     version: recipe.version,
     photoHint: recipe.photoHint,
     photoPreviewDataUrl: recipe.photoPreviewDataUrl || "",
@@ -1422,6 +1514,7 @@ function buildRecipeFromDraft(
     notes: draft.notes.trim(),
     packagingCost: parseDutchNumber(draft.packagingCost),
     decorationCost: parseDutchNumber(draft.decorationCost),
+    decorationMargin: parseDutchNumber(draft.decorationMargin) || 30,
   };
 }
 
@@ -2011,10 +2104,14 @@ function SelectField({
   );
 }
 
-function Metric({ label, value }: Readonly<{ label: string; value: string }>) {
+function Metric({
+  label,
+  value,
+  className = "bg-[#f8f6f3]",
+}: Readonly<{ label: string; value: string; className?: string }>) {
   return (
-    <div className="rounded-2xl bg-[#f8f6f3] p-3">
-      <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/40">
+    <div className={`rounded-2xl p-3 ${className}`}>
+      <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] opacity-60">
         {label}
       </p>
       <p className="mt-1 text-sm font-black">{value}</p>
@@ -2035,5 +2132,26 @@ function LineItem({
       </div>
       <p className="shrink-0 text-sm font-black">{value}</p>
     </div>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.2"
+      viewBox="0 0 24 24"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v5" />
+      <path d="M14 11v5" />
+    </svg>
   );
 }

@@ -224,6 +224,37 @@ export default function RecepturenApp() {
     });
   }
 
+  function deleteRecipe(recipeToDelete: Recipe) {
+    const nextRecipes = recipeItems
+      .filter((recipe) => recipe.id !== recipeToDelete.id)
+      .map((recipe) => ({
+        ...recipe,
+        semiFinishedItems: recipe.semiFinishedItems.filter(
+          (item) => item.semiFinishedRecipeId !== recipeToDelete.id
+        ),
+        linkedFinalProductIds: recipe.linkedFinalProductIds?.filter(
+          (id) => id !== recipeToDelete.id
+        ),
+      }));
+    const recalculatedRecipes = recalculateAllRecipeCosts(
+      nextRecipes,
+      ingredientItems,
+      { markAsUpdated: true }
+    );
+
+    setRecipeItems(recalculatedRecipes);
+    setSelectedRecipe(null);
+    setRecipeEditorStartsOpen(false);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: recalculatedRecipes,
+        invoiceImports: invoiceItems,
+      },
+      "Recept verwijderd en kostprijzen opnieuw berekend."
+    );
+  }
+
   function openRecipe(recipe: Recipe) {
     setRecipeEditorStartsOpen(false);
     setSelectedRecipe(recipe);
@@ -692,6 +723,7 @@ export default function RecepturenApp() {
             startInEditMode={recipeEditorStartsOpen}
             onClose={() => setSelectedRecipe(null)}
             onSaveRecipe={saveRecipe}
+            onDeleteRecipe={deleteRecipe}
             onSaveIngredient={saveIngredient}
           />
         )}
@@ -738,6 +770,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     linkedFinalProductIds: [],
     packagingCost: 0,
     decorationCost: 0,
+    decorationMargin: 30,
   };
 }
 

@@ -8,6 +8,7 @@ import {
   SectionTitle,
 } from "./RecepturenShared";
 import {
+  changeBadgeClass,
   formatDate,
   formatEuro,
   formatSignedPercent,
@@ -168,13 +169,9 @@ export default function IngredientsList({
                     {formatEuro(ingredientPackagePrice(ingredient))}
                   </p>
                   <span
-                    className={`w-fit rounded-full px-2.5 py-1 text-xs font-black ${
-                      ingredientPriceChange(ingredient) >= 8
-                        ? "bg-[#ffe0dc] text-[#a83e31]"
-                        : ingredientPriceChange(ingredient) > 0
-                          ? "bg-[#fff0bd] text-[#8a5b10]"
-                          : "bg-[#dce8d6] text-[#45663b]"
-                    }`}
+                    className={`w-fit rounded-full px-2.5 py-1 text-xs font-black ${changeBadgeClass(
+                      ingredientPriceChange(ingredient)
+                    )}`}
                   >
                     {formatSignedPercent(ingredientPriceChange(ingredient), 1)}
                   </span>
@@ -316,6 +313,7 @@ function IngredientDetail({
               <MiniMetric
                 label="Wijziging"
                 value={formatSignedPercent(ingredientPriceChange(ingredient), 1)}
+                className={changeBadgeClass(ingredientPriceChange(ingredient))}
               />
               <MiniMetric label="Verpakking" value={ingredient.packageSize} />
               <MiniMetric label="Bijgewerkt" value={formatDate(ingredient.lastUpdated)} />
@@ -433,10 +431,11 @@ function IngredientDetail({
 function MiniMetric({
   label,
   value,
-}: Readonly<{ label: string; value: string }>) {
+  className = "bg-[#f8f6f3]",
+}: Readonly<{ label: string; value: string; className?: string }>) {
   return (
-    <div className="rounded-2xl bg-[#f8f6f3] p-3">
-      <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/40">
+    <div className={`rounded-2xl p-3 ${className}`}>
+      <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] opacity-60">
         {label}
       </p>
       <p className="mt-1 truncate text-sm font-black">{value}</p>

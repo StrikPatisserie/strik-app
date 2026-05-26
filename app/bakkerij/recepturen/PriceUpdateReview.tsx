@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Ingredient, InvoiceImport, InvoiceLine, Recipe } from "./types";
 import { EmptyState, Panel, SectionTitle } from "./RecepturenShared";
 import {
+  changeBadgeClass,
   findIngredient,
   formatDate,
   formatEuro,
@@ -190,13 +191,9 @@ function ReviewLine({
           </p>
         </div>
         <span
-          className={`w-fit rounded-full px-3 py-1 text-sm font-black ${
-            line.percentageChange >= 8
-              ? "bg-[#ffe0dc] text-[#a83e31]"
-              : line.percentageChange > 0
-                ? "bg-[#fff0bd] text-[#8a5b10]"
-                : "bg-[#dce8d6] text-[#45663b]"
-          }`}
+          className={`w-fit rounded-full px-3 py-1 text-sm font-black ${changeBadgeClass(
+            line.percentageChange
+          )}`}
         >
           {formatSignedPercent(line.percentageChange, 2)}
         </span>

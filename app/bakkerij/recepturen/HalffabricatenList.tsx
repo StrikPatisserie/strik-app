@@ -1,15 +1,22 @@
+import { useMemo, useState } from "react";
 import type { Recipe } from "./types";
 import {
   EmptyState,
+  FilterSelect,
   Panel,
   RecipeStatusBadge,
+  SearchInput,
   SectionTitle,
 } from "./RecepturenShared";
 import {
+  changeBadgeClass,
   formatDate,
   formatEuro,
+  formatSignedPercent,
   linkedFinalProducts,
+  normalizeSearch,
   quantityLabel,
+  recipeCostChange,
 } from "./utils";
 
 export default function HalffabricatenList({
@@ -21,7 +28,38 @@ export default function HalffabricatenList({
   onOpenRecipe: (recipe: Recipe) => void;
   onCreateRecipe: () => void;
 }>) {
-  const semiFinished = recipes.filter((recipe) => recipe.type === "semiFinished");
+  const [search, setSearch] = useState("");
+  const [group, setGroup] = useState("all");
+  const [status, setStatus] = useState("all");
+  const semiFinished = useMemo(
+    () => recipes.filter((recipe) => recipe.type === "semiFinished"),
+    [recipes]
+  );
+  const groups = useMemo(
+    () =>
+      Array.from(
+        new Set(semiFinished.map((recipe) => recipe.productGroup))
+      ).sort((first, second) => first.localeCompare(second, "nl-NL")),
+    [semiFinished]
+  );
+  const filteredRecipes = useMemo(() => {
+    const query = normalizeSearch(search);
+
+    return semiFinished.filter((recipe) => {
+      const linkedProducts = linkedFinalProducts(recipes, recipe.id);
+      const matchesSearch =
+        !query ||
+        normalizeSearch(recipe.name).includes(query) ||
+        normalizeSearch(recipe.productGroup).includes(query) ||
+        linkedProducts.some((product) =>
+          normalizeSearch(product.name).includes(query)
+        );
+      const matchesGroup = group === "all" || recipe.productGroup === group;
+      const matchesStatus = status === "all" || recipe.status === status;
+
+      return matchesSearch && matchesGroup && matchesStatus;
+    });
+  }, [group, recipes, search, semiFinished, status]);
 
   return (
     <Panel>
@@ -30,7 +68,7 @@ export default function HalffabricatenList({
           <SectionTitle
             eyebrow="Basisrecepten"
             title="Halffabricaten"
-            description="Losse recepten die als bouwstenen gekoppeld worden aan eindproducten."
+            description="Overzicht van vullingen, mousses, bodems en andere bouwstenen."
           />
           <button
             type="button"
@@ -41,75 +79,99 @@ export default function HalffabricatenList({
           </button>
         </div>
 
-        {semiFinished.length ? (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {semiFinished.map((recipe) => {
-              const linkedProducts = linkedFinalProducts(recipes, recipe.id);
-              const firstIngredient = recipe.ingredients[0];
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(10rem,0.8fr))]">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Zoek halffabricaat, groep of gekoppeld product"
+          />
+          <FilterSelect
+            label="Groep"
+            value={group}
+            onChange={setGroup}
+            options={[
+              { value: "all", label: "Alle groepen" },
+              ...groups.map((item) => ({ value: item, label: item })),
+            ]}
+          />
+          <FilterSelect
+            label="Status"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "all", label: "Alle statussen" },
+              { value: "active", label: "Actief" },
+              { value: "draft", label: "Concept" },
+              { value: "old", label: "Oud recept" },
+            ]}
+          />
+        </div>
 
-              return (
-                <button
-                  key={recipe.id}
-                  type="button"
-                  onClick={() => onOpenRecipe(recipe)}
-                  className="rounded-[1.15rem] border border-[#e7e0d8] bg-[#fffdf8] p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
-                >
-                  <div className="flex items-start justify-between gap-3">
+        {filteredRecipes.length ? (
+          <div className="overflow-hidden rounded-[1.15rem] border border-[#e7e0d8]">
+            <div className="hidden grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_8rem_8rem_8rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 xl:grid">
+              <span>Halffabricaat</span>
+              <span>Groep</span>
+              <span>Batch</span>
+              <span>Kostprijs</span>
+              <span>Wijziging</span>
+              <span>Gekoppeld</span>
+              <span>Status</span>
+            </div>
+            <div className="divide-y divide-[#e7e0d8] bg-white">
+              {filteredRecipes.map((recipe) => {
+                const linkedProducts = linkedFinalProducts(recipes, recipe.id);
+                const firstIngredient = recipe.ingredients[0];
+                const change = recipeCostChange(recipe);
+
+                return (
+                  <button
+                    key={recipe.id}
+                    type="button"
+                    onClick={() => onOpenRecipe(recipe)}
+                    className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_8rem_8rem_8rem_8rem] xl:items-center"
+                  >
                     <div className="min-w-0">
-                      <p className="truncate text-lg font-black">{recipe.name}</p>
-                      <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
-                        {recipe.batchSize} · gewijzigd {formatDate(recipe.lastUpdated)}
+                      <p className="truncate text-base font-black">
+                        {recipe.name}
+                      </p>
+                      <p className="text-xs font-bold text-[#2d2a26]/45">
+                        {firstIngredient
+                          ? `${quantityLabel(
+                              firstIngredient.quantity,
+                              firstIngredient.unit
+                            )} hoofdgrondstof`
+                          : "Geen grondstoffen"}{" "}
+                        · gewijzigd {formatDate(recipe.lastUpdated)}
                       </p>
                     </div>
+                    <p className="text-sm font-bold text-[#2d2a26]/62">
+                      {recipe.productGroup}
+                    </p>
+                    <p className="text-sm font-black">{recipe.batchSize}</p>
+                    <p className="text-sm font-black">
+                      {formatEuro(recipe.costPrice)}
+                    </p>
+                    <span
+                      className={`w-fit rounded-full px-2.5 py-1 text-xs font-black ${changeBadgeClass(
+                        change
+                      )}`}
+                    >
+                      {formatSignedPercent(change, 1)}
+                    </span>
+                    <p className="text-sm font-black">
+                      {linkedProducts.length} producten
+                    </p>
                     <RecipeStatusBadge status={recipe.status} />
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <MiniMetric label="Kostprijs batch" value={formatEuro(recipe.costPrice)} />
-                    <MiniMetric
-                      label="Kostprijs per kg"
-                      value={formatEuro(recipe.costPrice / Math.max(1, parseFloat(recipe.batchSize.replace(",", "."))))}
-                    />
-                    <MiniMetric
-                      label="Gekoppeld"
-                      value={`${linkedProducts.length} producten`}
-                    />
-                    <MiniMetric
-                      label="Allergenen"
-                      value={recipe.allergens.length ? recipe.allergens.join(", ") : "Geen"}
-                    />
-                  </div>
-                  <div className="mt-4 rounded-2xl bg-white p-3">
-                    <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/40">
-                      Basis
-                    </p>
-                    <p className="mt-1 text-sm font-bold text-[#2d2a26]/65">
-                      {firstIngredient
-                        ? `${quantityLabel(firstIngredient.quantity, firstIngredient.unit)} hoofdgrondstof`
-                        : "Geen ingredienten"}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : (
-          <EmptyState text="Nog geen halffabricaten beschikbaar." />
+          <EmptyState text="Geen halffabricaten gevonden met deze filters." />
         )}
       </div>
     </Panel>
-  );
-}
-
-function MiniMetric({
-  label,
-  value,
-}: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="rounded-2xl bg-white p-3">
-      <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/40">
-        {label}
-      </p>
-      <p className="mt-1 truncate text-sm font-black">{value}</p>
-    </div>
   );
 }
