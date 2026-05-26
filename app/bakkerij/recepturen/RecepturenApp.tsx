@@ -8,7 +8,6 @@ import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList from "./IngredientsList";
 import MargeOverzicht from "./MargeOverzicht";
 import { bakeryIcons, ingredients, invoiceImports, recipes } from "./mockData";
-import ProductieCalculator from "./ProductieCalculator";
 import RecipeDetail from "./RecipeDetail";
 import RecipeDataImport from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
@@ -43,7 +42,6 @@ const tabs = [
   { id: "import", label: "Bestand import" },
   { id: "factuurimport", label: "Factuurimport" },
   { id: "marge", label: "Marge-overzicht" },
-  { id: "productie", label: "Productiecalculator" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -685,13 +683,6 @@ export default function RecepturenApp() {
             onOpenRecipe={openRecipe}
           />
         )}
-        {mode === "management" && activeTab === "productie" && (
-          <ProductieCalculator
-            recipes={recipeItems}
-            ingredients={ingredientItems}
-          />
-        )}
-
         {mode === "management" && selectedRecipe && (
           <RecipeDetail
             key={selectedRecipe.id}

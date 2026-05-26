@@ -5358,7 +5358,7 @@ export default function BruidstaartStudioConfigurator() {
                 placeholder="Namen bruidspaar"
                 className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
               />
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(13rem,1fr)]">
                 <input
                   value={config.contact.email}
                   onChange={(event) =>
@@ -5451,7 +5451,7 @@ export default function BruidstaartStudioConfigurator() {
                 placeholder="Leveringsadres of afhaallocatie"
                 className="min-h-24 rounded-2xl border border-[#e7e0d8] bg-white p-4"
               />
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                 <input
                   value={config.contact.invoiceName}
                   onChange={(event) =>

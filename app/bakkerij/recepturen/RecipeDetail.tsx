@@ -42,11 +42,11 @@ const recipeEditSections: Array<{
   label: string;
   hint: string;
 }> = [
-  { id: "basis", label: "Basis", hint: "Naam, batch en foto" },
+  { id: "basis", label: "Basis", hint: "Naam, batch, prijs en foto" },
   { id: "grondstoffen", label: "Grondstoffen", hint: "Wat gaat erin" },
-  { id: "halffabricaten", label: "Halffabricaten", hint: "Wat moet eerst klaar" },
-  { id: "stappen", label: "Stappen", hint: "Hoe maak je het" },
-  { id: "notities", label: "Notities", hint: "Allergenen en opmerkingen" },
+  { id: "halffabricaten", label: "Halffabricaten", hint: "Voorwerk" },
+  { id: "stappen", label: "Stappen", hint: "Bereiding" },
+  { id: "notities", label: "Notities", hint: "Allergenen" },
 ];
 
 type RecipeEditSection =
@@ -358,8 +358,8 @@ export default function RecipeDetail({
 
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#2d2a26]/35 px-3 py-5 backdrop-blur-sm">
-      <div className="mx-auto max-w-6xl rounded-[1.5rem] border border-[#e7e0d8] bg-[#f4f0ea] p-4 shadow-2xl">
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-[1.25rem] bg-white/88 p-4">
+      <div className="mx-auto max-w-[88rem] rounded-[1.35rem] border border-[#e7e0d8] bg-[#f4f0ea] p-3 shadow-2xl">
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-[1rem] bg-white/88 p-3">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
               {isEditing
@@ -368,10 +368,10 @@ export default function RecipeDetail({
                 ? "Recept detail"
                 : "Halffabricaat detail"}
             </p>
-            <h2 className="mt-1 text-3xl font-black leading-tight">
+            <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">
               {isEditing ? draft.name || recipe.name : recipe.name}
             </h2>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               <RecipeStatusBadge status={recipe.status} />
               {!isEditing && (
                 <MarginBadge status={marginStatusForRecipe(previewRecipe)} />
@@ -396,14 +396,22 @@ export default function RecipeDetail({
         </div>
 
         {isEditing && (
-          <Panel className="mt-4 border-[#cfdcc8] bg-[#f7faf5]">
-            <SectionTitle
-              eyebrow="Aanpassen"
-              title="Wat wil je wijzigen?"
-              description="Kies één onderdeel. Zo blijft het rustig en hoef je niet door alles heen te zoeken."
-            />
+          <Panel className="mt-3 border-[#cfdcc8] bg-[#f7faf5] p-3">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p className="text-[0.68rem] font-black uppercase tracking-[0.15em] text-[#2d2a26]/42">
+                  Aanpassen
+                </p>
+                <h3 className="text-lg font-black leading-tight">
+                  Kies onderdeel
+                </h3>
+              </div>
+              <p className="text-xs font-bold text-[#2d2a26]/45">
+                Per tabje aanpassen. Rustig en overzichtelijk.
+              </p>
+            </div>
 
-            <div className="mt-4 grid gap-2 sm:grid-cols-5">
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
               {recipeEditSections.map((section) => {
                 const isActive = activeEditSection === section.id;
 
@@ -412,7 +420,7 @@ export default function RecipeDetail({
                     key={section.id}
                     type="button"
                     onClick={() => setActiveEditSection(section.id)}
-                    className={`rounded-2xl border px-3 py-3 text-left shadow-sm transition ${
+                    className={`min-w-max rounded-full border px-4 py-2 text-left shadow-sm transition ${
                       isActive
                         ? "border-[#8fb184] bg-[#c3d3bc] text-[#2d2a26]"
                         : "border-[#dfe9d8] bg-white text-[#2d2a26]/65"
@@ -421,200 +429,196 @@ export default function RecipeDetail({
                     <span className="block text-sm font-black">
                       {section.label}
                     </span>
-                    <span className="mt-1 block text-xs font-bold leading-snug opacity-70">
-                      {section.hint}
-                    </span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="mt-4 grid gap-4">
+            <div className="mt-3 grid gap-3">
               {activeEditSection === "basis" && (
-                <>
-              <EditorBlock title="Basis">
-                <p className="mb-4 text-sm font-bold leading-relaxed text-[#2d2a26]/55">
-                  Alleen de basis die nodig is om het recept te herkennen en de
-                  kostprijs goed uit te rekenen.
-                </p>
-
-                <div className="grid gap-4">
-                  <div className="grid gap-3 lg:grid-cols-4">
-                    <EditTextField
-                      label="Receptnaam"
-                      value={draft.name}
-                      onChange={(value) => updateDraft({ name: value })}
-                    />
-                    <EditTextField
-                      label="Groep"
-                      value={draft.productGroup}
-                      onChange={(value) => updateDraft({ productGroup: value })}
-                    />
-                    <SelectField
-                      label="Soort recept"
-                      value={draft.type}
-                      onChange={(value) =>
-                        updateDraft({ type: value as RecipeType })
-                      }
-                      options={[
-                        { value: "finalProduct", label: "Eindproduct" },
-                        { value: "semiFinished", label: "Halffabricaat" },
-                      ]}
-                    />
-                    <SelectField
-                      label="Status"
-                      value={draft.status}
-                      onChange={(value) =>
-                        updateDraft({ status: value as RecipeStatus })
-                      }
-                      options={recipeStatuses.map((status) => ({
-                        value: status,
-                        label: recipeStatusText(status),
-                      }))}
-                    />
-                  </div>
-
-                  <div className="grid gap-3 rounded-2xl bg-white/70 p-3 lg:grid-cols-[minmax(0,1fr)_12rem_minmax(0,1fr)_minmax(0,1fr)]">
-                    <div className="lg:col-span-2">
-                      <p className="text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
-                        Hoeveel maak je met dit recept?
-                      </p>
-                      <p className="mt-1 text-sm font-bold text-[#2d2a26]/55">
-                        Bijvoorbeeld 40 stuks, 2 kg of 1 batch.
-                      </p>
-                    </div>
-                    <EditTextField
-                      label="Aantal"
-                      value={draft.standardBatchQuantity}
-                      onChange={(value) =>
-                        updateDraft({ standardBatchQuantity: value })
-                      }
-                      inputMode="decimal"
-                    />
-                    <SelectField
-                      label="Eenheid"
-                      value={draft.standardBatchUnit}
-                      onChange={(value) =>
-                        updateDraft({ standardBatchUnit: value as RecipeUnit })
-                      }
-                      options={recipeUnits.map((unit) => ({
-                        value: unit,
-                        label: unitLabelText(unit),
-                      }))}
-                    />
-                  </div>
-
-                  <div className="grid gap-3 lg:grid-cols-4">
-                    {draft.type === "finalProduct" && (
-                      <>
+                <EditorBlock title="Basis en foto">
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
+                    <div className="grid content-start gap-3">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         <EditTextField
-                          label="Verkoopprijs"
-                          value={draft.salesPrice}
-                          onChange={(value) => updateDraft({ salesPrice: value })}
-                          inputMode="decimal"
+                          label="Naam"
+                          value={draft.name}
+                          onChange={(value) => updateDraft({ name: value })}
                         />
                         <EditTextField
-                          label="Doelmarge %"
-                          value={draft.targetMargin}
+                          label="Groep"
+                          value={draft.productGroup}
                           onChange={(value) =>
-                            updateDraft({ targetMargin: value })
+                            updateDraft({ productGroup: value })
+                          }
+                        />
+                        <SelectField
+                          label="Soort"
+                          value={draft.type}
+                          onChange={(value) =>
+                            updateDraft({ type: value as RecipeType })
+                          }
+                          options={[
+                            { value: "finalProduct", label: "Eindproduct" },
+                            { value: "semiFinished", label: "Halffabricaat" },
+                          ]}
+                        />
+                        <SelectField
+                          label="Status"
+                          value={draft.status}
+                          onChange={(value) =>
+                            updateDraft({ status: value as RecipeStatus })
+                          }
+                          options={recipeStatuses.map((status) => ({
+                            value: status,
+                            label: recipeStatusText(status),
+                          }))}
+                        />
+                      </div>
+
+                      <div className="grid gap-3 rounded-2xl bg-white/70 p-3 md:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,0.8fr)]">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                            Batch
+                          </p>
+                          <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
+                            Hoeveel maak je in één keer?
+                          </p>
+                        </div>
+                        <EditTextField
+                          label="Aantal"
+                          value={draft.standardBatchQuantity}
+                          onChange={(value) =>
+                            updateDraft({ standardBatchQuantity: value })
                           }
                           inputMode="decimal"
                         />
-                      </>
-                    )}
-                    <EditTextField
-                      label="Verpakking per batch"
-                      value={draft.packagingCost}
-                      onChange={(value) => updateDraft({ packagingCost: value })}
-                      inputMode="decimal"
-                    />
-                    <EditTextField
-                      label="Decoratie/extra per batch"
-                      value={draft.decorationCost}
-                      onChange={(value) => updateDraft({ decorationCost: value })}
-                      inputMode="decimal"
-                    />
-                  </div>
-
-                  <label className="flex items-center gap-3 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-black">
-                    <input
-                      type="checkbox"
-                      checked={draft.isWorkModeVisible}
-                      onChange={(event) =>
-                        updateDraft({ isWorkModeVisible: event.target.checked })
-                      }
-                      className="h-5 w-5 accent-[#8fb184]"
-                    />
-                    Toon dit recept in werkmodus
-                  </label>
-                </div>
-              </EditorBlock>
-
-              <EditorBlock title="Foto">
-                <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)]">
-                  <div
-                    className={`flex aspect-[4/3] items-center justify-center rounded-2xl border border-[#dfe9d8] bg-[#eadfcf] bg-cover bg-center p-3 text-center ${
-                      draft.photoPreviewDataUrl ? "shadow-inner" : ""
-                    }`}
-                    style={
-                      draft.photoPreviewDataUrl
-                        ? {
-                            backgroundImage: `url("${draft.photoPreviewDataUrl}")`,
+                        <SelectField
+                          label="Eenheid"
+                          value={draft.standardBatchUnit}
+                          onChange={(value) =>
+                            updateDraft({ standardBatchUnit: value as RecipeUnit })
                           }
-                        : undefined
-                    }
-                  >
-                    {!draft.photoPreviewDataUrl && (
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
-                          Geen foto
-                        </p>
-                        <p className="mt-2 text-sm font-black">
-                          {draft.photoHint || "Receptfoto"}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid content-start gap-3">
-                    <div className="flex flex-wrap gap-2">
-                      <label className="cursor-pointer rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm">
-                        Foto toevoegen
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="sr-only"
-                          onChange={(event) => {
-                            void updateRecipePhoto(event.target.files?.[0] || null);
-                            event.currentTarget.value = "";
-                          }}
+                          options={recipeUnits.map((unit) => ({
+                            value: unit,
+                            label: unitLabelText(unit),
+                          }))}
                         />
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        {draft.type === "finalProduct" && (
+                          <>
+                            <EditTextField
+                              label="Verkoop"
+                              value={draft.salesPrice}
+                              onChange={(value) =>
+                                updateDraft({ salesPrice: value })
+                              }
+                              inputMode="decimal"
+                            />
+                            <EditTextField
+                              label="Marge %"
+                              value={draft.targetMargin}
+                              onChange={(value) =>
+                                updateDraft({ targetMargin: value })
+                              }
+                              inputMode="decimal"
+                            />
+                          </>
+                        )}
+                        <EditTextField
+                          label="Verpakking"
+                          value={draft.packagingCost}
+                          onChange={(value) =>
+                            updateDraft({ packagingCost: value })
+                          }
+                          inputMode="decimal"
+                        />
+                        <EditTextField
+                          label="Decoratie"
+                          value={draft.decorationCost}
+                          onChange={(value) =>
+                            updateDraft({ decorationCost: value })
+                          }
+                          inputMode="decimal"
+                        />
+                      </div>
+
+                      <label className="flex items-center gap-3 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-black">
+                        <input
+                          type="checkbox"
+                          checked={draft.isWorkModeVisible}
+                          onChange={(event) =>
+                            updateDraft({
+                              isWorkModeVisible: event.target.checked,
+                            })
+                          }
+                          className="h-5 w-5 accent-[#8fb184]"
+                        />
+                        Toon in werkmodus
                       </label>
-                      {draft.photoPreviewDataUrl && (
-                        <button
-                          type="button"
-                          onClick={removeRecipePhoto}
-                          className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#a83e31] shadow-sm"
-                        >
-                          Verwijder foto
-                        </button>
+                    </div>
+
+                    <div className="grid content-start gap-2 rounded-2xl border border-[#dfe9d8] bg-white/76 p-3">
+                      <div
+                        className={`flex aspect-[4/3] items-center justify-center rounded-2xl border border-[#dfe9d8] bg-[#eadfcf] bg-cover bg-center p-3 text-center ${
+                          draft.photoPreviewDataUrl ? "shadow-inner" : ""
+                        }`}
+                        style={
+                          draft.photoPreviewDataUrl
+                            ? {
+                                backgroundImage: `url("${draft.photoPreviewDataUrl}")`,
+                              }
+                            : undefined
+                        }
+                      >
+                        {!draft.photoPreviewDataUrl && (
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
+                              Geen foto
+                            </p>
+                            <p className="mt-2 text-sm font-black">
+                              {draft.photoHint || "Receptfoto"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <label className="cursor-pointer rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm">
+                          Foto toevoegen
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            onChange={(event) => {
+                              void updateRecipePhoto(event.target.files?.[0] || null);
+                              event.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                        {draft.photoPreviewDataUrl && (
+                          <button
+                            type="button"
+                            onClick={removeRecipePhoto}
+                            className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#a83e31] shadow-sm"
+                          >
+                            Verwijder
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold leading-snug text-[#2d2a26]/50">
+                        Alleen een kleine preview wordt opgeslagen.
+                      </p>
+                      {draft.photoFileName && (
+                        <p className="truncate text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/40">
+                          {draft.photoFileName}
+                          {draft.photoUpdatedAt ? ` - ${draft.photoUpdatedAt}` : ""}
+                        </p>
                       )}
                     </div>
-                    <p className="text-sm font-bold leading-relaxed text-[#2d2a26]/55">
-                      Alleen een kleine preview wordt opgeslagen. De originele
-                      upload gaat niet mee naar WordPress, zodat recepturen
-                      licht blijven en niet vastlopen door grote foto&apos;s.
-                    </p>
-                    {draft.photoFileName && (
-                      <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/40">
-                        {draft.photoFileName}
-                        {draft.photoUpdatedAt ? ` - ${draft.photoUpdatedAt}` : ""}
-                      </p>
-                    )}
                   </div>
-                </div>
-              </EditorBlock>
-                </>
+                </EditorBlock>
               )}
 
               {activeEditSection === "grondstoffen" && (
@@ -1878,7 +1882,7 @@ function EditorBlock({
 }: Readonly<{ title: string; children: React.ReactNode }>) {
   return (
     <div className="rounded-2xl border border-[#dfe9d8] bg-white/72 p-3">
-      <p className="mb-3 text-sm font-black">{title}</p>
+      <p className="mb-2 text-sm font-black">{title}</p>
       {children}
     </div>
   );
@@ -1951,7 +1955,7 @@ function EditTextField({
         value={value}
         inputMode={inputMode}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />
     </label>
   );
@@ -1972,7 +1976,7 @@ function TextAreaField({
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-28 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-h-24 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />
     </label>
   );
@@ -1995,7 +1999,7 @@ function SelectField({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

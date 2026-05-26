@@ -380,32 +380,36 @@ function RecipeWorkCard({
   const batch = getStandardBatch(recipe);
 
   return (
-    <article className="grid gap-3 rounded-[1.05rem] border border-[#e2dbcf] bg-white/92 p-4 shadow-sm">
-      <RecipeWorkPhoto recipe={recipe} compact />
-      <div>
-        <p className="text-[0.65rem] font-black uppercase tracking-[0.13em] text-[#2d2a26]/42">
-          {recipe.productGroup}
-        </p>
-        <h3 className="mt-1 text-lg font-black leading-tight">{recipe.name}</h3>
-        <p className="mt-1 text-xs font-bold text-[#2d2a26]/55">
-          {getRecipeTypeLabel(recipe)} - standaard batch {formatBatch(batch)}
-        </p>
-        <p className="mt-0.5 text-[0.7rem] font-bold text-[#2d2a26]/42">
-          Laatst gewijzigd {formatDate(recipe.lastUpdated)}
-        </p>
+    <article className="grid gap-3 rounded-[1.05rem] border border-[#e2dbcf] bg-white/92 p-3 shadow-sm">
+      <div className="grid grid-cols-[4.25rem_minmax(0,1fr)] gap-3">
+        <RecipeWorkThumb recipe={recipe} />
+        <div className="min-w-0">
+          <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/42">
+            {recipe.productGroup}
+          </p>
+          <h3 className="mt-0.5 truncate text-base font-black leading-tight">
+            {recipe.name}
+          </h3>
+          <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
+            {getRecipeTypeLabel(recipe)} - {formatBatch(batch)}
+          </p>
+          <p className="mt-0.5 text-[0.68rem] font-bold text-[#2d2a26]/42">
+            Gewijzigd {formatDate(recipe.lastUpdated)}
+          </p>
+        </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {recipe.allergens.length ? (
-          recipe.allergens.slice(0, 5).map((allergen) => (
+          recipe.allergens.slice(0, 4).map((allergen) => (
             <span
               key={allergen}
-              className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-[0.7rem] font-black text-[#2d2a26]/58"
+              className="rounded-full bg-[#f8f6f3] px-2 py-0.5 text-[0.66rem] font-black text-[#2d2a26]/58"
             >
               {allergen}
             </span>
           ))
         ) : (
-          <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-[0.7rem] font-black text-[#2d2a26]/45">
+          <span className="rounded-full bg-[#f8f6f3] px-2 py-0.5 text-[0.66rem] font-black text-[#2d2a26]/45">
             Geen allergenen
           </span>
         )}
@@ -427,6 +431,30 @@ function RecipeWorkCard({
         </button>
       </div>
     </article>
+  );
+}
+
+function RecipeWorkThumb({ recipe }: Readonly<{ recipe: Recipe }>) {
+  const hasPhoto = Boolean(recipe.photoPreviewDataUrl);
+
+  return (
+    <div
+      className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl border border-[#e2dbcf] bg-[#eadfcf] bg-cover bg-center text-center shadow-sm"
+      style={
+        hasPhoto
+          ? {
+              backgroundImage: `url("${recipe.photoPreviewDataUrl}")`,
+            }
+          : undefined
+      }
+      aria-label={hasPhoto ? `Foto van ${recipe.name}` : "Geen receptfoto"}
+    >
+      {!hasPhoto && (
+        <span className="text-lg font-black text-[#2d2a26]/42">
+          {recipe.name.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+    </div>
   );
 }
 
