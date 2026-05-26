@@ -2042,12 +2042,13 @@ export default function RecipeDetail({
               {previewRecipe.type === "finalProduct" && (
                 <div className="mt-4 rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
                   <p className="text-sm font-black text-[#7a5a18]">
-                    Adviesprijs met {formatPercent(previewRecipe.targetMargin)} marge op basis:{" "}
+                    Adviesprijs bij {formatPercent(previewRecipe.targetMargin)} totaalmarge:{" "}
                     {formatEuro(targetPrice)}
                   </p>
                   <p className="mt-1 text-xs font-bold text-[#2d2a26]/55">
-                    Basisrecept krijgt de doelmarge. Verpakking gaat kost-op-kost
-                    mee; decoratie rekent met {formatPercent(previewRecipe.decorationMargin ?? 30)} marge.
+                    De zichtbare marge en margestatus worden berekend over de
+                    volledige kostprijs per stuk, inclusief verpakking en
+                    decoratie.
                     Verkoopprijs moet met{" "}
                     {formatEuro(Math.max(0, targetPrice - previewRecipe.salesPrice))}{" "}
                     omhoog om de doelmarge te halen.
@@ -2116,7 +2117,7 @@ export default function RecipeDetail({
               <Panel>
                 <SectionTitle
                   title="Verpakking in recept"
-                  description="Deze kosten gaan kost-op-kost mee in de berekening."
+                  description="Deze kosten tellen mee in de volledige kostprijs per stuk."
                 />
                 <div className="mt-3 grid gap-2">
                   {previewRecipe.packagingItems?.length ? (

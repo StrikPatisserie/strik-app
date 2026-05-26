@@ -63,7 +63,7 @@ export default function MargeOverzicht({
         <SectionTitle
           eyebrow="Marge"
           title="Marge-overzicht"
-          description="Totaalmarge naast de adviesprijs. De prijsstatus houdt rekening met verpakking kost-op-kost en decoratie met eigen marge."
+          description="Totaalmarge naast de adviesprijs. De margestatus vergelijkt de huidige marge met de doelmarge."
         />
 
         <div className="grid gap-3 lg:grid-cols-4">
@@ -123,7 +123,7 @@ export default function MargeOverzicht({
               <span>Kost nu</span>
               <span>Verkoop</span>
               <span>Totaalmarge</span>
-              <span>Prijsstatus</span>
+              <span>Margestatus</span>
               <span>Grootste oorzaak</span>
             </div>
             <div className="divide-y divide-[#e7e0d8] bg-white">
@@ -166,7 +166,7 @@ export default function MargeOverzicht({
                           true
                         )}`}
                       >
-                        {marginGap(recipe) >= 0 ? "prijs ok" : "te laag"}
+                        {marginGap(recipe) >= 0 ? "marge ok" : "te laag"}
                       </span>
                     )}
                   </div>
