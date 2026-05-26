@@ -41,6 +41,7 @@ function strik_recepturen_v1_defaults() {
     return array(
         'ingredients' => array(),
         'recipes' => array(),
+        'packagingItems' => array(),
         'invoiceImports' => array(),
         'updatedAt' => '',
     );
@@ -144,6 +145,10 @@ function strik_recepturen_v1_normalize_data($data) {
         'recipes' => strik_recepturen_v1_limit_list(
             isset($data['recipes']) ? $data['recipes'] : array(),
             3000
+        ),
+        'packagingItems' => strik_recepturen_v1_limit_list(
+            isset($data['packagingItems']) ? $data['packagingItems'] : array(),
+            1000
         ),
         'invoiceImports' => strik_recepturen_v1_limit_list(
             isset($data['invoiceImports']) ? $data['invoiceImports'] : array(),

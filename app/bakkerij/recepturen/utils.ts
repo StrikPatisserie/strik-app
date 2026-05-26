@@ -2,10 +2,12 @@ import type {
   Ingredient,
   InvoiceLine,
   MarginStatus,
+  PackagingItem,
   ProductionLogEntry,
   ProductionRequest,
   Recipe,
   RecipeIngredient,
+  RecipePackagingLine,
   RecipeStatus,
   RecipeType,
   RecipeUnit,
@@ -363,7 +365,10 @@ export function recipeExtraCostBreakdown(recipe: Recipe) {
   }
 
   const batchQuantity = recipeBatchQuantity(recipe);
-  const packagingUnitCost = recipe.packagingCost || 0;
+  const selectedPackagingUnitCost = selectedRecipePackagingUnitCost(
+    recipe.packagingItems || []
+  );
+  const packagingUnitCost = (recipe.packagingCost || 0) + selectedPackagingUnitCost;
   const decorationUnitCost = recipe.decorationCost || 0;
   const packagingTotal =
     recipe.type === "finalProduct"
@@ -376,11 +381,60 @@ export function recipeExtraCostBreakdown(recipe: Recipe) {
 
   return {
     packagingUnitCost,
+    selectedPackagingUnitCost,
     decorationUnitCost,
     packagingTotal: roundMoney(packagingTotal),
     decorationTotal: roundMoney(decorationTotal),
     extraCost: roundMoney(packagingTotal + decorationTotal),
   };
+}
+
+export function normalizeRecipePackagingLines(
+  packagingLines: RecipePackagingLine[] = [],
+  packagingItems: PackagingItem[] = []
+) {
+  return packagingLines
+    .map((line) => {
+      const packaging = packagingItems.find((item) => item.id === line.packagingId);
+      const quantity = Math.max(0, line.quantity || 0);
+      const unitPrice = packaging?.unitPrice ?? line.unitPrice ?? 0;
+      const nameSnapshot =
+        packaging?.name || line.nameSnapshot || line.packagingId || "Verpakking";
+
+      return {
+        ...line,
+        id: line.id,
+        packagingId: line.packagingId,
+        quantity,
+        unitPrice,
+        costContribution: roundMoney(unitPrice * quantity),
+        nameSnapshot,
+      };
+    })
+    .filter((line) => line.packagingId && line.quantity > 0);
+}
+
+export function packagingCostForLine(
+  line: RecipePackagingLine,
+  packagingItems: PackagingItem[] = []
+) {
+  const packaging = packagingItems.find((item) => item.id === line.packagingId);
+  const unitPrice = packaging?.unitPrice ?? line.unitPrice ?? 0;
+  const quantity = Math.max(0, line.quantity || 0);
+
+  return roundMoney(unitPrice * quantity);
+}
+
+export function selectedRecipePackagingUnitCost(
+  packagingLines: RecipePackagingLine[] = [],
+  packagingItems: PackagingItem[] = []
+) {
+  return roundMoney(
+    packagingLines.reduce(
+      (total, line) => total + packagingCostForLine(line, packagingItems),
+      0
+    )
+  );
 }
 
 export function recipeLineWeightInKg(quantity: number, unit: RecipeUnit) {
@@ -851,7 +905,8 @@ function learnedSalesAverageFromLog(
 export function recipeCostBreakdown(
   recipe: Recipe,
   ingredients: Ingredient[],
-  recipes: Recipe[]
+  recipes: Recipe[],
+  packagingItems: PackagingItem[] = []
 ) {
   const recalculatedIngredients = recipe.ingredients.map((item) => {
     const ingredient = findIngredient(ingredients, item.ingredientId);
@@ -875,7 +930,14 @@ export function recipeCostBreakdown(
   });
   const directCost = directIngredientCost(recalculatedIngredients);
   const semiFinishedTotal = semiFinishedCost(recalculatedSemiFinished);
-  const extraBreakdown = recipeExtraCostBreakdown(recipe);
+  const recalculatedPackagingItems =
+    recipe.type === "semiFinished"
+      ? []
+      : normalizeRecipePackagingLines(recipe.packagingItems || [], packagingItems);
+  const extraBreakdown = recipeExtraCostBreakdown({
+    ...recipe,
+    packagingItems: recalculatedPackagingItems,
+  });
   const extraCost = extraBreakdown.extraCost;
   const batchCost = roundMoney(directCost + semiFinishedTotal + extraCost);
   const batchQuantity =
@@ -894,6 +956,7 @@ export function recipeCostBreakdown(
   return {
     ingredients: recalculatedIngredients,
     semiFinishedItems: recalculatedSemiFinished,
+    packagingItems: recalculatedPackagingItems,
     directCost,
     semiFinishedCost: semiFinishedTotal,
     extraCost,
@@ -907,14 +970,16 @@ export function recalculateRecipeCosts(
   recipe: Recipe,
   ingredients: Ingredient[],
   recipes: Recipe[],
-  options: { markAsUpdated?: boolean } = {}
+  options: { markAsUpdated?: boolean } = {},
+  packagingItems: PackagingItem[] = []
 ): Recipe {
-  const costs = recipeCostBreakdown(recipe, ingredients, recipes);
+  const costs = recipeCostBreakdown(recipe, ingredients, recipes, packagingItems);
 
   return {
     ...recipe,
     ingredients: costs.ingredients,
     semiFinishedItems: costs.semiFinishedItems,
+    packagingItems: recipe.type === "semiFinished" ? [] : costs.packagingItems,
     previousCostPrice:
       costs.costPrice === recipe.costPrice ? recipe.previousCostPrice : recipe.costPrice,
     costPrice: costs.costPrice,
@@ -949,7 +1014,8 @@ export function recalculateRecipeCosts(
 export function recalculateAllRecipeCosts(
   recipes: Recipe[],
   ingredients: Ingredient[],
-  options: { markAsUpdated?: boolean } = {}
+  options: { markAsUpdated?: boolean } = {},
+  packagingItems: PackagingItem[] = []
 ) {
   const originals = new Map(
     recipes.map((recipe) => [
@@ -965,7 +1031,13 @@ export function recalculateAllRecipeCosts(
 
   for (let iteration = 0; iteration < 4; iteration += 1) {
     recipePool = recipePool.map((recipe) =>
-      recalculateRecipeCosts(recipe, ingredients, recipePool)
+      recalculateRecipeCosts(
+        recipe,
+        ingredients,
+        recipePool,
+        {},
+        packagingItems
+      )
     );
   }
 

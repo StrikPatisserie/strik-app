@@ -1,10 +1,12 @@
 import { useState } from "react";
 import type {
   Ingredient,
+  PackagingItem,
   ProductionLogEntry,
   ProductionRequest,
   Recipe,
   RecipeIngredient,
+  RecipePackagingLine,
   RecipeStatus,
   RecipeType,
   RecipeUnit,
@@ -39,6 +41,8 @@ import {
   recipeCostChange,
   recipeCostDelta,
   salesPeriodLabel,
+  normalizeRecipePackagingLines,
+  selectedRecipePackagingUnitCost,
   syncRecipeProductionMetadata,
   targetSalesPrice,
 } from "./utils";
@@ -87,6 +91,7 @@ type RecipeImportResponse = {
 export default function RecipeDetail({
   recipe,
   ingredients,
+  packagingItems,
   recipes,
   startInEditMode = false,
   onClose,
@@ -96,6 +101,7 @@ export default function RecipeDetail({
 }: Readonly<{
   recipe: Recipe;
   ingredients: Ingredient[];
+  packagingItems: PackagingItem[];
   recipes: Recipe[];
   startInEditMode?: boolean;
   onClose: () => void;
@@ -130,6 +136,11 @@ export default function RecipeDetail({
   }));
   const isSemiFinishedDraft = draft.type === "semiFinished";
   const availableIngredients = ingredients;
+  const activePackagingOptions = packagingItems.filter(
+    (item) =>
+      item.status === "active" ||
+      draft.packagingItems.some((line) => line.packagingId === item.id)
+  );
   const semiFinishedOptions = recipes.filter(
     (item) => item.type === "semiFinished" && item.id !== recipe.id
   );
@@ -140,6 +151,10 @@ export default function RecipeDetail({
   const previewSemiFinished = normalizeSemiFinishedDrafts(
     draft.semiFinishedItems,
     recipes
+  );
+  const previewPackagingItems = normalizePackagingDrafts(
+    draft.packagingItems,
+    packagingItems
   );
   const directTotal = directIngredientCost(previewIngredients);
   const semiFinishedTotal = previewSemiFinished.reduce(
@@ -155,7 +170,10 @@ export default function RecipeDetail({
     : parseDutchNumber(draft.standardBatchQuantity) ||
       getBatchInfo(recipe)?.quantity ||
       1;
-  const packagingUnitCost = parseDutchNumber(draft.packagingCost);
+  const manualPackagingUnitCost = parseDutchNumber(draft.packagingCost);
+  const selectedPackagingUnitCost =
+    selectedRecipePackagingUnitCost(previewPackagingItems);
+  const packagingUnitCost = manualPackagingUnitCost + selectedPackagingUnitCost;
   const decorationUnitCost = parseDutchNumber(draft.decorationCost);
   const packagingTotal =
     !isSemiFinishedDraft
@@ -180,6 +198,7 @@ export default function RecipeDetail({
     draft,
     previewIngredients,
     previewSemiFinished,
+    previewPackagingItems,
     previewCostPrice
   );
   const productionPreview = productionNeedForRecipe(previewRecipe);
@@ -329,6 +348,7 @@ export default function RecipeDetail({
       draft,
       previewIngredients,
       previewSemiFinished,
+      previewPackagingItems,
       previewCostPrice
     );
 
@@ -417,6 +437,56 @@ export default function RecipeDetail({
       semiFinishedItems: current.semiFinishedItems.filter(
         (line) => line.id !== lineId
       ),
+    }));
+  }
+
+  function addPackagingLine(packagingId = activePackagingOptions[0]?.id || "") {
+    const packaging = packagingItems.find((item) => item.id === packagingId);
+
+    setDraft((current) => ({
+      ...current,
+      packagingItems: [
+        ...current.packagingItems,
+        {
+          id: createLocalId("packaging-line"),
+          packagingId,
+          quantity: "1",
+          unitPrice: packaging?.unitPrice || 0,
+          costContribution: packaging?.unitPrice || 0,
+          nameSnapshot: packaging?.name || "",
+        },
+      ],
+    }));
+  }
+
+  function updatePackagingLine(
+    lineId: string,
+    changes: Partial<RecipePackagingDraft>
+  ) {
+    setDraft((current) => ({
+      ...current,
+      packagingItems: current.packagingItems.map((line) => {
+        if (line.id !== lineId) return line;
+
+        const nextLine = { ...line, ...changes };
+        const packaging = packagingItems.find(
+          (item) => item.id === nextLine.packagingId
+        );
+
+        if (changes.packagingId !== undefined) {
+          nextLine.unitPrice = packaging?.unitPrice || 0;
+          nextLine.nameSnapshot = packaging?.name || "";
+        }
+
+        return nextLine;
+      }),
+    }));
+  }
+
+  function removePackagingLine(lineId: string) {
+    setDraft((current) => ({
+      ...current,
+      packagingItems: current.packagingItems.filter((line) => line.id !== lineId),
     }));
   }
 
@@ -845,7 +915,7 @@ export default function RecipeDetail({
                       </div>
 
                       {draft.type === "finalProduct" && (
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                           <EditTextField
                             label="Verkoop"
                             value={draft.salesPrice}
@@ -859,14 +929,6 @@ export default function RecipeDetail({
                             value={draft.targetMargin}
                             onChange={(value) =>
                               updateDraft({ targetMargin: value })
-                            }
-                            inputMode="decimal"
-                          />
-                          <EditTextField
-                            label="Verpakking/stuk"
-                            value={draft.packagingCost}
-                            onChange={(value) =>
-                              updateDraft({ packagingCost: value })
                             }
                             inputMode="decimal"
                           />
@@ -886,6 +948,96 @@ export default function RecipeDetail({
                             }
                             inputMode="decimal"
                           />
+                        </div>
+                      )}
+
+                      {draft.type === "finalProduct" && (
+                        <div className="rounded-2xl border border-[#dfe9d8] bg-white p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-black">
+                                Verpakking
+                              </p>
+                              <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
+                                Kies uit de verpakkingslijst of vul een eigen
+                                bedrag per stuk in.
+                              </p>
+                            </div>
+                            <Metric
+                              label="Per stuk"
+                              value={formatEuro(packagingUnitCost)}
+                            />
+                          </div>
+
+                          <div className="mt-3 grid gap-2">
+                            {draft.packagingItems.map((line) => {
+                              const normalizedLine = previewPackagingItems.find(
+                                (item) => item.id === line.id
+                              );
+
+                              return (
+                                <div
+                                  key={line.id}
+                                  className="grid gap-2 rounded-2xl border border-[#dfe9d8] bg-[#fffdf8] p-3 lg:grid-cols-[minmax(12rem,1fr)_7rem_7rem_auto]"
+                                >
+                                  <PackagingSearchField
+                                    packagingItems={activePackagingOptions}
+                                    value={line.packagingId}
+                                    onChange={(value) =>
+                                      updatePackagingLine(line.id, {
+                                        packagingId: value,
+                                      })
+                                    }
+                                  />
+                                  <EditTextField
+                                    label="Aantal/stuk"
+                                    value={line.quantity}
+                                    onChange={(value) =>
+                                      updatePackagingLine(line.id, {
+                                        quantity: value,
+                                      })
+                                    }
+                                    inputMode="decimal"
+                                  />
+                                  <Metric
+                                    label="Kost/stuk"
+                                    value={formatEuro(
+                                      normalizedLine?.costContribution || 0
+                                    )}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removePackagingLine(line.id)}
+                                    className="self-end rounded-full bg-[#fff4f1] px-3 py-2 text-sm font-black text-[#a83e31]"
+                                  >
+                                    Verwijder
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => addPackagingLine()}
+                              className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+                            >
+                              Verpakking toevoegen
+                            </button>
+                            <EditTextField
+                              label="Eigen bedrag/stuk"
+                              value={draft.packagingCost}
+                              onChange={(value) =>
+                                updateDraft({ packagingCost: value })
+                              }
+                              inputMode="decimal"
+                            />
+                            <p className="text-xs font-bold text-[#2d2a26]/45">
+                              Lijst: {formatEuro(selectedPackagingUnitCost)} +
+                              eigen: {formatEuro(manualPackagingUnitCost)}
+                            </p>
+                          </div>
                         </div>
                       )}
 
@@ -1955,6 +2107,40 @@ export default function RecipeDetail({
               </Panel>
             </div>
 
+            {previewRecipe.type === "finalProduct" && (
+              <Panel>
+                <SectionTitle
+                  title="Verpakking in recept"
+                  description="Deze kosten gaan kost-op-kost mee in de berekening."
+                />
+                <div className="mt-3 grid gap-2">
+                  {previewRecipe.packagingItems?.length ? (
+                    previewRecipe.packagingItems.map((item, index) => (
+                      <LineItem
+                        key={`${item.packagingId}-${index}`}
+                        title={
+                          item.nameSnapshot || item.packagingId || "Verpakking"
+                        }
+                        meta={`${formatInputNumber(item.quantity)} per stuk`}
+                        value={formatEuro(item.costContribution)}
+                      />
+                    ))
+                  ) : (
+                    <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-bold text-[#2d2a26]/45">
+                      Geen verpakkingen uit de lijst gekoppeld.
+                    </p>
+                  )}
+                  {manualPackagingUnitCost > 0 && (
+                    <LineItem
+                      title="Eigen verpakkingsbedrag"
+                      meta="Handmatig per stuk"
+                      value={formatEuro(manualPackagingUnitCost)}
+                    />
+                  )}
+                </div>
+              </Panel>
+            )}
+
             <div className="grid gap-4 xl:grid-cols-2">
               <Panel>
                 <SectionTitle title="Bereidingswijze" />
@@ -2070,6 +2256,15 @@ type SemiFinishedDraft = {
   costContribution: number;
 };
 
+type RecipePackagingDraft = {
+  id: string;
+  packagingId: string;
+  quantity: string;
+  unitPrice: number;
+  costContribution: number;
+  nameSnapshot: string;
+};
+
 type RecipeDraft = {
   name: string;
   type: RecipeType;
@@ -2097,6 +2292,7 @@ type RecipeDraft = {
   workCategories: string[];
   ingredients: RecipeIngredientDraft[];
   semiFinishedItems: SemiFinishedDraft[];
+  packagingItems: RecipePackagingDraft[];
   preparationSteps: string[];
   workInstructions: string[];
   finishingSteps: string[];
@@ -2161,6 +2357,14 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
       unit: item.unit,
       costContribution: item.costContribution,
     })),
+    packagingItems: (recipe.packagingItems || []).map((item) => ({
+      id: item.id || createLocalId("packaging-line"),
+      packagingId: item.packagingId,
+      quantity: formatInputNumber(item.quantity),
+      unitPrice: item.unitPrice,
+      costContribution: item.costContribution,
+      nameSnapshot: item.nameSnapshot || "",
+    })),
     preparationSteps: recipe.preparationSteps.length
       ? recipe.preparationSteps
       : [""],
@@ -2222,6 +2426,16 @@ function recipeDraftFromImportedRecipe(
           costContribution: item.costContribution,
         }))
       : current.semiFinishedItems,
+    packagingItems: importedRecipe.packagingItems?.length
+      ? importedRecipe.packagingItems.map((item) => ({
+          id: item.id || createLocalId("packaging-line"),
+          packagingId: item.packagingId,
+          quantity: formatInputNumber(item.quantity),
+          unitPrice: item.unitPrice,
+          costContribution: item.costContribution,
+          nameSnapshot: item.nameSnapshot || "",
+        }))
+      : current.packagingItems,
     preparationSteps: importedRecipe.preparationSteps.length
       ? importedRecipe.preparationSteps
       : current.preparationSteps,
@@ -2261,6 +2475,7 @@ function buildRecipeFromDraft(
   draft: RecipeDraft,
   recipeIngredients: RecipeIngredient[],
   semiFinishedItems: SemiFinishedUsage[],
+  packagingItems: RecipePackagingLine[],
   costPrice: number
 ): Recipe {
   const isSemiFinished = draft.type === "semiFinished";
@@ -2293,6 +2508,7 @@ function buildRecipeFromDraft(
     status: draft.status,
     ingredients: recipeIngredients,
     semiFinishedItems,
+    packagingItems: isSemiFinished ? [] : packagingItems,
     workInstructions: cleanList(draft.workInstructions),
     preparationSteps: cleanList(draft.preparationSteps),
     finishingSteps: isSemiFinished ? [] : cleanList(draft.finishingSteps),
@@ -2414,6 +2630,27 @@ function normalizeSemiFinishedDraft(
       ? semiFinishedCostForQuantity(linkedRecipe, quantity, line.unit)
       : 0,
   };
+}
+
+function normalizePackagingDrafts(
+  lines: RecipePackagingDraft[],
+  packagingItems: PackagingItem[]
+): RecipePackagingLine[] {
+  return normalizeRecipePackagingLines(
+    lines.map((line) => {
+      const packaging = packagingItems.find((item) => item.id === line.packagingId);
+
+      return {
+        id: line.id,
+        packagingId: line.packagingId,
+        quantity: parseDutchNumber(line.quantity),
+        unitPrice: packaging?.unitPrice ?? line.unitPrice ?? 0,
+        costContribution: line.costContribution,
+        nameSnapshot: packaging?.name || line.nameSnapshot,
+      };
+    }),
+    packagingItems
+  );
 }
 
 function ingredientCostForQuantity(
@@ -3081,6 +3318,80 @@ function IngredientSearchField({
   );
 }
 
+function PackagingSearchField({
+  packagingItems,
+  value,
+  onChange,
+}: Readonly<{
+  packagingItems: PackagingItem[];
+  value: string;
+  onChange: (value: string) => void;
+}>) {
+  const selectedPackaging = packagingItems.find((item) => item.id === value);
+  const [query, setQuery] = useState(selectedPackaging?.name || value || "");
+  const [isOpen, setIsOpen] = useState(false);
+  const normalizedQuery = normalizeIngredientQuery(query);
+  const suggestions = packagingItems
+    .map((item) => ({
+      item,
+      score: packagingSearchScore(item, normalizedQuery),
+    }))
+    .filter(({ score }) => !normalizedQuery || score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+
+      return left.item.name.localeCompare(right.item.name, "nl-NL");
+    })
+    .map(({ item }) => item);
+
+  return (
+    <label className="relative grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+      Verpakking
+      <input
+        value={query}
+        onBlur={() => window.setTimeout(() => setIsOpen(false), 140)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        placeholder="Typ doos, deksel of bodem"
+        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+      />
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-[#dfe9d8] bg-white p-1.5 text-left normal-case tracking-normal shadow-xl">
+          {suggestions.length ? (
+            suggestions.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onChange(item.id);
+                  setQuery(item.name);
+                  setIsOpen(false);
+                }}
+                className={`grid w-full gap-0.5 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f8f6f3] ${
+                  item.id === value ? "bg-[#dce8d6]" : ""
+                }`}
+              >
+                <span className="font-black text-[#2d2a26]">{item.name}</span>
+                <span className="truncate text-xs font-bold text-[#2d2a26]/45">
+                  {item.supplier} - {item.packageSize} - {formatEuro(item.unitPrice)}
+                </span>
+              </button>
+            ))
+          ) : (
+            <p className="px-3 py-2 text-sm font-bold text-[#2d2a26]/45">
+              Geen verpakking gevonden.
+            </p>
+          )}
+        </div>
+      )}
+    </label>
+  );
+}
+
 function Metric({
   label,
   value,
@@ -3122,6 +3433,33 @@ function ingredientSearchScore(ingredient: Ingredient, normalizedQuery: string) 
     ingredient.supplierArticleNumber,
     ingredient.packageSize,
     ...ingredient.aliases,
+  ]
+    .map(normalizeIngredientQuery)
+    .join(" ");
+  const compactHaystack = haystack.replace(/\s+/g, "");
+  const compactQuery = normalizedQuery.replace(/\s+/g, "");
+
+  if (haystack === normalizedQuery) return 120;
+  if (haystack.split(/\s+/).includes(normalizedQuery)) return 95;
+  if (queryWords.every((word) => haystack.includes(word))) return 80;
+  if (compactQuery.length >= 4 && compactHaystack.includes(compactQuery)) {
+    return 62;
+  }
+
+  return 0;
+}
+
+function packagingSearchScore(item: PackagingItem, normalizedQuery: string) {
+  if (!normalizedQuery) return 1;
+
+  const queryWords = ingredientQueryWords(normalizedQuery);
+  if (!queryWords.length) return 1;
+
+  const haystack = [
+    item.name,
+    item.supplier,
+    item.articleNumber,
+    item.packageSize,
   ]
     .map(normalizeIngredientQuery)
     .join(" ");

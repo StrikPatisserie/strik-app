@@ -7,7 +7,14 @@ import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList from "./IngredientsList";
 import MargeOverzicht from "./MargeOverzicht";
-import { bakeryIcons, ingredients, invoiceImports, recipes } from "./mockData";
+import {
+  bakeryIcons,
+  ingredients,
+  invoiceImports,
+  packagingItems as defaultPackagingItems,
+  recipes,
+} from "./mockData";
+import PackagingList from "./PackagingList";
 import RecipeDetail from "./RecipeDetail";
 import RecipeDataImport from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
@@ -23,6 +30,7 @@ import type {
   Ingredient,
   InvoiceImport,
   InvoiceLine,
+  PackagingItem,
   ProductionLogEntry,
   Recipe,
   RecipeType,
@@ -47,6 +55,7 @@ const tabs = [
   { id: "recepten", label: "Recepten" },
   { id: "halffabricaten", label: "Halffabricaten" },
   { id: "ingredienten", label: "Ingredienten" },
+  { id: "verpakkingen", label: "Verpakkingen" },
   { id: "import", label: "Bestand import" },
   { id: "factuurimport", label: "Factuurimport" },
   { id: "marge", label: "Marge-overzicht" },
@@ -57,7 +66,10 @@ type RecepturenMode = "work" | "management";
 
 function hasStoredRecepturenData(data: RecepturenData) {
   return Boolean(
-    data.ingredients.length || data.recipes.length || data.invoiceImports.length
+    data.ingredients.length ||
+      data.recipes.length ||
+      data.invoiceImports.length ||
+      (data.packagingItems?.length || 0)
   );
 }
 
@@ -113,6 +125,7 @@ export default function RecepturenApp() {
   const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
   const [recipeItems, setRecipeItems] = useState(recipes);
   const [ingredientItems, setIngredientItems] = useState(ingredients);
+  const [packagingItems, setPackagingItems] = useState(defaultPackagingItems);
   const [invoiceItems, setInvoiceItems] = useState(invoiceImports);
   const [syncStatus, setSyncStatus] = useState("Lokale receptuurdata geladen.");
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -122,9 +135,14 @@ export default function RecepturenApp() {
     nextData: RecepturenData,
     successMessage = "Recepturen opgeslagen in WordPress."
   ) {
+    const completeData: RecepturenData = {
+      ...nextData,
+      packagingItems: nextData.packagingItems ?? packagingItems,
+    };
+
     setSyncStatus("Opslaan naar WordPress...");
 
-    void saveRecepturenData(nextData).then((result) => {
+    void saveRecepturenData(completeData).then((result) => {
       setSyncStatus(
         result.ok ? successMessage : `Lokaal bijgewerkt. ${result.message}`
       );
@@ -142,9 +160,14 @@ export default function RecepturenApp() {
     nextInvoices: InvoiceImport[] = invoiceItems,
     successMessage = "Alle kostprijzen opnieuw berekend en opgeslagen."
   ) {
-    const nextRecipes = recalculateAllRecipeCosts(recipeItems, nextIngredients, {
-      markAsUpdated: true,
-    });
+    const nextRecipes = recalculateAllRecipeCosts(
+      recipeItems,
+      nextIngredients,
+      {
+        markAsUpdated: true,
+      },
+      packagingItems
+    );
 
     setIngredientItems(nextIngredients);
     setInvoiceItems(nextInvoices);
@@ -180,6 +203,11 @@ export default function RecepturenApp() {
           result.data.ingredients.length ? result.data.ingredients : ingredients
         );
         setRecipeItems(result.data.recipes.length ? result.data.recipes : recipes);
+        setPackagingItems(
+          Array.isArray(result.data.packagingItems)
+            ? result.data.packagingItems
+            : defaultPackagingItems
+        );
         setInvoiceItems(
           result.data.invoiceImports.length
             ? result.data.invoiceImports
@@ -214,7 +242,8 @@ export default function RecepturenApp() {
     const recalculatedRecipes = recalculateAllRecipeCosts(
       nextRecipes,
       ingredientItems,
-      { markAsUpdated: true }
+      { markAsUpdated: true },
+      packagingItems
     );
 
     setRecipeItems(recalculatedRecipes);
@@ -247,7 +276,8 @@ export default function RecepturenApp() {
     const recalculatedRecipes = recalculateAllRecipeCosts(
       nextRecipes,
       ingredientItems,
-      { markAsUpdated: true }
+      { markAsUpdated: true },
+      packagingItems
     );
 
     setRecipeItems(recalculatedRecipes);
@@ -428,7 +458,8 @@ export default function RecepturenApp() {
     const nextRecipes = recalculateAllRecipeCosts(
       recipesWithoutDeletedIngredients,
       nextIngredients,
-      { markAsUpdated: true }
+      { markAsUpdated: true },
+      packagingItems
     );
     const nextInvoices = invoiceItems.map((invoice) => {
       const lines = invoice.lines.map((line) =>
@@ -718,9 +749,14 @@ export default function RecepturenApp() {
     if (!importedRecipes.length) return;
 
     const mergedRecipes = mergeRecipes(recipeItems, importedRecipes);
-    const nextRecipes = recalculateAllRecipeCosts(mergedRecipes, ingredientItems, {
-      markAsUpdated: true,
-    });
+    const nextRecipes = recalculateAllRecipeCosts(
+      mergedRecipes,
+      ingredientItems,
+      {
+        markAsUpdated: true,
+      },
+      packagingItems
+    );
 
     setRecipeItems(nextRecipes);
     syncSelectedRecipe(nextRecipes);
@@ -734,10 +770,81 @@ export default function RecepturenApp() {
     );
   }
 
+  function savePackagingItem(updatedPackaging: PackagingItem) {
+    const exists = packagingItems.some((item) => item.id === updatedPackaging.id);
+    const normalizedPackaging = {
+      ...updatedPackaging,
+      unitPrice:
+        updatedPackaging.quantityPerPackage > 0
+          ? Math.round(
+              (updatedPackaging.packagePrice / updatedPackaging.quantityPerPackage) *
+                10000
+            ) / 10000
+          : updatedPackaging.unitPrice,
+      lastUpdated: new Date().toISOString().slice(0, 10),
+    };
+    const nextPackagingItems = exists
+      ? packagingItems.map((item) =>
+          item.id === updatedPackaging.id ? normalizedPackaging : item
+        )
+      : [normalizedPackaging, ...packagingItems];
+    const nextRecipes = recalculateAllRecipeCosts(
+      recipeItems,
+      ingredientItems,
+      { markAsUpdated: true },
+      nextPackagingItems
+    );
+
+    setPackagingItems(nextPackagingItems);
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        packagingItems: nextPackagingItems,
+        invoiceImports: invoiceItems,
+      },
+      "Verpakking opgeslagen en kostprijzen opnieuw berekend."
+    );
+  }
+
+  function deletePackagingItem(packagingToDelete: PackagingItem) {
+    const nextPackagingItems = packagingItems.filter(
+      (item) => item.id !== packagingToDelete.id
+    );
+    const recipesWithoutPackaging = recipeItems.map((recipe) => ({
+      ...recipe,
+      packagingItems: (recipe.packagingItems || []).filter(
+        (line) => line.packagingId !== packagingToDelete.id
+      ),
+    }));
+    const nextRecipes = recalculateAllRecipeCosts(
+      recipesWithoutPackaging,
+      ingredientItems,
+      { markAsUpdated: true },
+      nextPackagingItems
+    );
+
+    setPackagingItems(nextPackagingItems);
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        packagingItems: nextPackagingItems,
+        invoiceImports: invoiceItems,
+      },
+      `${packagingToDelete.name} verwijderd uit verpakkingen.`
+    );
+  }
+
   function currentRecepturenData(): RecepturenData {
     return {
       ingredients: ingredientItems,
       recipes: recipeItems,
+      packagingItems,
       invoiceImports: invoiceItems,
     };
   }
@@ -922,6 +1029,14 @@ export default function RecepturenApp() {
             }
           />
         )}
+        {mode === "management" && activeTab === "verpakkingen" && (
+          <PackagingList
+            packagingItems={packagingItems}
+            recipes={recipeItems}
+            onSavePackagingItem={savePackagingItem}
+            onDeletePackagingItem={deletePackagingItem}
+          />
+        )}
         {mode === "management" && activeTab === "import" && (
           <RecipeDataImport
             ingredients={ingredientItems}
@@ -956,6 +1071,7 @@ export default function RecepturenApp() {
             recipe={selectedRecipe}
             ingredients={ingredientItems}
             recipes={recipeItems}
+            packagingItems={packagingItems}
             startInEditMode={recipeEditorStartsOpen}
             onClose={() => setSelectedRecipe(null)}
             onSaveRecipe={saveRecipe}
@@ -1005,6 +1121,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     photoUpdatedAt: "",
     notes: "",
     linkedFinalProductIds: [],
+    packagingItems: [],
     packagingCost: 0,
     decorationCost: 0,
     decorationMargin: 30,
@@ -1117,6 +1234,24 @@ async function downloadRecepturenExcelBackup(data: RecepturenData) {
   appendSheet(
     XLSX,
     workbook,
+    "Verpakkingen",
+    (data.packagingItems || []).map((packaging) => ({
+      id: packaging.id,
+      naam: packaging.name,
+      leverancier: packaging.supplier,
+      artikelnummer: packaging.articleNumber,
+      verpakking: packaging.packageSize,
+      aantalPerVerpakking: packaging.quantityPerPackage,
+      prijsPerVerpakking: packaging.packagePrice,
+      prijsPerStuk: packaging.unitPrice,
+      status: packaging.status,
+      laatstGewijzigd: packaging.lastUpdated,
+    }))
+  );
+
+  appendSheet(
+    XLSX,
+    workbook,
     "Recept grondstoffen",
     data.recipes.flatMap((recipe) =>
       recipe.ingredients.map((line) => {
@@ -1132,6 +1267,31 @@ async function downloadRecepturenExcelBackup(data: RecepturenData) {
           eenheid: line.unit,
           hoeveelheidTekst: quantityLabel(line.quantity, line.unit),
           kost: line.costContribution,
+        };
+      })
+    )
+  );
+
+  const packagingById = new Map(
+    (data.packagingItems || []).map((packaging) => [packaging.id, packaging])
+  );
+
+  appendSheet(
+    XLSX,
+    workbook,
+    "Recept verpakkingen",
+    data.recipes.flatMap((recipe) =>
+      (recipe.packagingItems || []).map((line) => {
+        const packaging = packagingById.get(line.packagingId);
+
+        return {
+          receptId: recipe.id,
+          recept: recipe.name,
+          verpakkingId: line.packagingId,
+          verpakking: packaging?.name || line.nameSnapshot || line.packagingId,
+          aantalPerProduct: line.quantity,
+          prijsPerStuk: line.unitPrice,
+          kostPerProduct: line.costContribution,
         };
       })
     )

@@ -1,4 +1,4 @@
-import type { Ingredient, InvoiceImport, Recipe } from "./types";
+import type { Ingredient, InvoiceImport, PackagingItem, Recipe } from "./types";
 
 export const bakeryIcons = {
   bakkerij: "/apps%20strik_Bakkerij.svg",
@@ -10,6 +10,45 @@ export const productGroups: string[] = [
   "Bodems & beslag",
   "Petit Gateau",
   "Gebak"
+];
+
+export const packagingItems: PackagingItem[] = [
+  {
+    id: "pkg-gebaksdoos-210",
+    name: "Gebaksdoos PC 210x210x90 mm 6P Strik Patisserie",
+    supplier: "Beko",
+    articleNumber: "18088GBD04PC",
+    packageSize: "100 stuks per doos",
+    quantityPerPackage: 100,
+    packagePrice: 33.79,
+    unitPrice: 0.3379,
+    status: "active",
+    lastUpdated: "2026-05-26",
+  },
+  {
+    id: "pkg-petit-bodem",
+    name: "Petit gateau bodem goud",
+    supplier: "Beko",
+    articleNumber: "BODEM-PETIT",
+    packageSize: "100 stuks per doos",
+    quantityPerPackage: 100,
+    packagePrice: 18.5,
+    unitPrice: 0.185,
+    status: "active",
+    lastUpdated: "2026-05-26",
+  },
+  {
+    id: "pkg-transparant-deksel",
+    name: "Transparant deksel klein gebak",
+    supplier: "Beko",
+    articleNumber: "DEKSEL-KLEIN",
+    packageSize: "100 stuks per doos",
+    quantityPerPackage: 100,
+    packagePrice: 12.5,
+    unitPrice: 0.125,
+    status: "active",
+    lastUpdated: "2026-05-26",
+  },
 ];
 
 export const ingredients: Ingredient[] = [

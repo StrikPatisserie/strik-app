@@ -5,6 +5,7 @@ export type SalesPeriod = "week" | "month" | "year";
 export type ProductionLogSource = "work" | "manual" | "stock";
 export type ProductionRequestStatus = "open" | "done";
 export type IngredientStatus = "active" | "inactive";
+export type PackagingStatus = "active" | "inactive";
 export type MarginStatus = "good" | "pressure" | "critical";
 export type InvoiceReviewStatus =
   | "pending"
@@ -50,6 +51,28 @@ export type SemiFinishedUsage = {
   costContribution: number;
 };
 
+export type PackagingItem = {
+  id: string;
+  name: string;
+  supplier: string;
+  articleNumber: string;
+  packageSize: string;
+  quantityPerPackage: number;
+  packagePrice: number;
+  unitPrice: number;
+  status: PackagingStatus;
+  lastUpdated: string;
+};
+
+export type RecipePackagingLine = {
+  id?: string;
+  packagingId: string;
+  quantity: number;
+  unitPrice: number;
+  costContribution: number;
+  nameSnapshot?: string;
+};
+
 export type ProductionLogEntry = {
   id: string;
   date: string;
@@ -81,6 +104,7 @@ export type Recipe = {
   status: RecipeStatus;
   ingredients: RecipeIngredient[];
   semiFinishedItems: SemiFinishedUsage[];
+  packagingItems?: RecipePackagingLine[];
   workInstructions?: string[];
   preparationSteps: string[];
   finishingSteps?: string[];

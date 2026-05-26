@@ -1,8 +1,15 @@
-import type { Ingredient, InvoiceImport, InvoiceLine, Recipe } from "./types";
+import type {
+  Ingredient,
+  InvoiceImport,
+  InvoiceLine,
+  PackagingItem,
+  Recipe,
+} from "./types";
 
 export type RecepturenData = {
   ingredients: Ingredient[];
   recipes: Recipe[];
+  packagingItems?: PackagingItem[];
   invoiceImports: InvoiceImport[];
   updatedAt?: string;
 };
@@ -56,6 +63,9 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
   return {
     ingredients: Array.isArray(record.ingredients) ? record.ingredients : [],
     recipes: Array.isArray(record.recipes) ? record.recipes : [],
+    packagingItems: Array.isArray(record.packagingItems)
+      ? record.packagingItems
+      : [],
     invoiceImports: pruneInvoiceImports(
       Array.isArray(record.invoiceImports) ? record.invoiceImports : []
     ),
