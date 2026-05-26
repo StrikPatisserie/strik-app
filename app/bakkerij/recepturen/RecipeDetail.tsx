@@ -2257,22 +2257,22 @@ function IngredientSearchField({
   onChange: (value: string) => void;
 }>) {
   const selectedIngredient = findIngredient(ingredients, value);
-  const [query, setQuery] = useState(selectedIngredient?.name || "");
+  const [query, setQuery] = useState(selectedIngredient?.name || value || "");
   const [isOpen, setIsOpen] = useState(false);
 
-  const normalizedQuery =
-    selectedIngredient && query === selectedIngredient.name
-      ? ""
-      : normalizeIngredientQuery(query);
+  const normalizedQuery = normalizeIngredientQuery(query);
   const suggestions = ingredients
-    .filter((ingredient) => {
-      if (!normalizedQuery) return true;
+    .map((ingredient) => ({
+      ingredient,
+      score: ingredientSearchScore(ingredient, normalizedQuery),
+    }))
+    .filter(({ score }) => !normalizedQuery || score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
 
-      return [ingredient.name, ingredient.supplierArticleNumber, ...ingredient.aliases]
-        .filter(Boolean)
-        .some((item) => normalizeIngredientQuery(item).includes(normalizedQuery));
+      return left.ingredient.name.localeCompare(right.ingredient.name, "nl-NL");
     })
-    .slice(0, 40);
+    .map(({ ingredient }) => ingredient);
 
   return (
     <label className="relative grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
@@ -2315,7 +2315,8 @@ function IngredientSearchField({
             ))
           ) : (
             <p className="px-3 py-2 text-sm font-bold text-[#2d2a26]/45">
-              Geen grondstof gevonden.
+              Geen grondstof gevonden. Typ bijvoorbeeld alleen een deel van de
+              naam.
             </p>
           )}
         </div>
@@ -2344,7 +2345,41 @@ function normalizeIngredientQuery(value: string) {
     .toLocaleLowerCase("nl-NL")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
+}
+
+function ingredientQueryWords(value: string) {
+  return normalizeIngredientQuery(value).split(/\s+/).filter(Boolean);
+}
+
+function ingredientSearchScore(ingredient: Ingredient, normalizedQuery: string) {
+  if (!normalizedQuery) return 1;
+
+  const queryWords = ingredientQueryWords(normalizedQuery);
+  if (!queryWords.length) return 1;
+
+  const haystack = [
+    ingredient.name,
+    ingredient.supplier,
+    ingredient.supplierArticleNumber,
+    ingredient.packageSize,
+    ...ingredient.aliases,
+  ]
+    .map(normalizeIngredientQuery)
+    .join(" ");
+  const compactHaystack = haystack.replace(/\s+/g, "");
+  const compactQuery = normalizedQuery.replace(/\s+/g, "");
+
+  if (haystack === normalizedQuery) return 120;
+  if (haystack.split(/\s+/).includes(normalizedQuery)) return 95;
+  if (queryWords.every((word) => haystack.includes(word))) return 80;
+  if (compactQuery.length >= 4 && compactHaystack.includes(compactQuery)) {
+    return 62;
+  }
+
+  return 0;
 }
 
 function LineItem({

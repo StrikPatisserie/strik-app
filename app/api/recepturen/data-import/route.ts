@@ -277,21 +277,66 @@ function uniqueId(prefix: string, name: string, existingIds: Set<string>) {
   return id;
 }
 
+function normalizedWords(value: string) {
+  return normalizeSearch(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function compactNormalized(value: string) {
+  return normalizedWords(value).join("");
+}
+
+function ingredientMatchScore(candidateName: string, ingredient: Ingredient) {
+  const candidateWords = normalizedWords(candidateName);
+  const candidateCompact = compactNormalized(candidateName);
+  if (!candidateWords.length || !candidateCompact) return 0;
+
+  return [ingredient.name, ...ingredient.aliases].reduce((best, alias) => {
+    const aliasWords = normalizedWords(alias);
+    const aliasCompact = compactNormalized(alias);
+    if (!aliasWords.length || !aliasCompact) return best;
+
+    if (candidateCompact === aliasCompact) return Math.max(best, 120);
+
+    const allAliasWordsArePresent = aliasWords.every((word) =>
+      candidateWords.includes(word)
+    );
+    if (allAliasWordsArePresent) {
+      return Math.max(best, aliasWords.length > 1 ? 95 : 72);
+    }
+
+    const allCandidateWordsArePresent = candidateWords.every((word) =>
+      aliasWords.includes(word)
+    );
+    if (allCandidateWordsArePresent && candidateWords.length > 1) {
+      return Math.max(best, 82);
+    }
+
+    if (
+      aliasWords.length > 1 &&
+      candidateWords.length > 1 &&
+      (candidateCompact.includes(aliasCompact) ||
+        aliasCompact.includes(candidateCompact))
+    ) {
+      return Math.max(best, 68);
+    }
+
+    return best;
+  }, 0);
+}
+
 function findMatchingIngredient(name: string, ingredients: Ingredient[]) {
-  const normalizedName = normalizeSearch(name);
+  const scored = ingredients
+    .map((ingredient) => ({
+      ingredient,
+      score: ingredientMatchScore(name, ingredient),
+    }))
+    .filter((item) => item.score >= 68)
+    .sort((left, right) => right.score - left.score);
 
-  return ingredients.find((ingredient) =>
-    [ingredient.name, ...ingredient.aliases].some((alias) => {
-      const normalizedAlias = normalizeSearch(alias);
-
-      return (
-        normalizedAlias &&
-        normalizedName &&
-        (normalizedName.includes(normalizedAlias) ||
-          normalizedAlias.includes(normalizedName))
-      );
-    })
-  );
+  return scored[0]?.ingredient;
 }
 
 function getCell(row: string[], index?: number) {
@@ -975,11 +1020,12 @@ function parseLooseRecipeSheet(
     }
 
     const ingredientCandidate = parseLooseIngredientRow(row, section);
+    const matchedLooseIngredient = ingredientCandidate
+      ? findMatchingIngredient(ingredientCandidate.name, ingredients)
+      : undefined;
     if (
       ingredientCandidate &&
-      (section === "ingredients" ||
-        findMatchingIngredient(ingredientCandidate.name, ingredients) ||
-        AMOUNT_WITH_UNIT_PATTERN.test(line))
+      (section === "ingredients" || matchedLooseIngredient)
     ) {
       addLooseIngredientCandidate(
         recipe,
