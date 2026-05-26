@@ -107,14 +107,14 @@ export default function RecipesList({
             ]}
           />
           <FilterSelect
-            label="Marge"
+            label="Prijsstatus"
             value={margin}
             onChange={setMargin}
             options={[
-              { value: "all", label: "Alle marges" },
-              { value: "good", label: "Goed" },
-              { value: "pressure", label: "Onder druk" },
-              { value: "critical", label: "Kritisch" },
+              { value: "all", label: "Alle statussen" },
+              { value: "good", label: "Prijs ok" },
+              { value: "pressure", label: "Bijna" },
+              { value: "critical", label: "Te laag" },
             ]}
           />
         </div>
@@ -127,8 +127,8 @@ export default function RecipesList({
               <span>Gewicht</span>
               <span>Verkoop</span>
               <span>Kostprijs</span>
-              <span>Marge</span>
-              <span>Status</span>
+              <span>Totaalmarge</span>
+              <span>Prijsstatus</span>
               <span>Halffab.</span>
             </div>
             <div className="divide-y divide-[#e7e0d8] bg-white">

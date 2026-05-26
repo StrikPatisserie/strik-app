@@ -1217,6 +1217,11 @@ export default function RecipeDetail({
                       <p className="text-xs font-bold leading-snug text-[#2d2a26]/50">
                         Alleen een kleine preview wordt opgeslagen.
                       </p>
+                      <EditTextField
+                        label="Foto tekst"
+                        value={draft.photoHint}
+                        onChange={(value) => updateDraft({ photoHint: value })}
+                      />
                       {draft.photoFileName && (
                         <p className="truncate text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/40">
                           {draft.photoFileName}

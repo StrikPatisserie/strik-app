@@ -63,7 +63,7 @@ export default function MargeOverzicht({
         <SectionTitle
           eyebrow="Marge"
           title="Marge-overzicht"
-          description="Stuur op actuele kostprijs, marge, doelmarge en grootste oorzaak per product."
+          description="Totaalmarge naast de adviesprijs. De prijsstatus houdt rekening met verpakking kost-op-kost en decoratie met eigen marge."
         />
 
         <div className="grid gap-3 lg:grid-cols-4">
@@ -83,7 +83,7 @@ export default function MargeOverzicht({
             onChange={setRiskFilter}
             options={[
               { value: "all", label: "Alles" },
-              { value: "under", label: "Onder margegrens" },
+              { value: "under", label: "Onder adviesprijs" },
               { value: "increase", label: "Kostprijsstijging" },
             ]}
           />
@@ -122,8 +122,8 @@ export default function MargeOverzicht({
               <span>Kost oud</span>
               <span>Kost nu</span>
               <span>Verkoop</span>
-              <span>Marge</span>
-              <span>Status</span>
+              <span>Totaalmarge</span>
+              <span>Prijsstatus</span>
               <span>Grootste oorzaak</span>
             </div>
             <div className="divide-y divide-[#e7e0d8] bg-white">
@@ -166,7 +166,7 @@ export default function MargeOverzicht({
                           true
                         )}`}
                       >
-                        {marginGap(recipe) >= 0 ? "ruimte" : "krap"}
+                        {marginGap(recipe) >= 0 ? "prijs ok" : "te laag"}
                       </span>
                     )}
                   </div>

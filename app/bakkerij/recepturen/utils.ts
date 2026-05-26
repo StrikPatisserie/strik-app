@@ -136,10 +136,10 @@ export function marginStatusForRecipe(recipe: Recipe): MarginStatus {
 }
 
 export function marginStatusLabel(status: MarginStatus) {
-  if (status === "good") return "Goed";
-  if (status === "pressure") return "Onder druk";
+  if (status === "good") return "Prijs ok";
+  if (status === "pressure") return "Bijna";
 
-  return "Kritisch";
+  return "Te laag";
 }
 
 export function recipeStatusLabel(status: RecipeStatus) {
