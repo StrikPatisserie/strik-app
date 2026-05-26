@@ -62,7 +62,39 @@ type ParsedImport = {
   message: string;
 };
 
+type ParsedSheet = {
+  name: string;
+  rows: string[][];
+  text: string;
+};
+
+type FileTextRows = {
+  rows: string[][];
+  text: string;
+  sheets: ParsedSheet[];
+  warnings: string[];
+};
+
+type RecipeSection =
+  | "unknown"
+  | "ingredients"
+  | "steps"
+  | "finishing"
+  | "allergens"
+  | "notes";
+
+type LooseIngredientCandidate = {
+  name: string;
+  quantity: number;
+  unit: RecipeUnit;
+  rawLine: string;
+};
+
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const MAX_IMPORT_ROWS = 3500;
+const MAX_IMPORT_TEXT_CHARS = 260000;
+const MAX_IMPORT_RECIPES = 25;
+const MAX_IMPORT_WARNINGS = 40;
 const INGREDIENT_NAME_HEADERS = [
   "ingredient",
   "grondstof",
@@ -107,6 +139,14 @@ const UNIT_HEADERS = ["eenheid", "unit"];
 const STEP_HEADERS = ["stap", "bereiding", "bereidingswijze", "werkwijze"];
 const FINISHING_HEADERS = ["afwerking", "decoratie", "finishing"];
 const NOTE_HEADERS = ["notitie", "opmerking", "interne opmerking"];
+const UNIT_WORDS =
+  "kg|kilo|kilogram|g|gr|gram|l|ltr|liter|ml|st|stuk|stuks";
+const AMOUNT_WITH_UNIT_PATTERN = new RegExp(
+  `(\\d+(?:[.,]\\d+)?)\\s*(${UNIT_WORDS})\\b`,
+  "i"
+);
+const LOOSE_INGREDIENT_NOISE =
+  /\b(kostprijs|verkoop|marge|prijs|totaal|btw|factuur|advies|batch totaal|per stuk)\b/i;
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ message }, { status });
@@ -214,6 +254,10 @@ function recipeLineUnitFromText(value: string, fallback: RecipeUnit = "gram") {
   return fallback;
 }
 
+function looksLikeUnitCell(value: string) {
+  return new RegExp(`^\\s*(?:${UNIT_WORDS})\\s*$`, "i").test(value);
+}
+
 function uniqueId(prefix: string, name: string, existingIds: Set<string>) {
   const base =
     normalizeSearch(name)
@@ -264,21 +308,49 @@ function parseCsvRows(text: string) {
     .map((row) => row.map(cleanCell));
 }
 
-function parseWorkbookRows(buffer: Buffer) {
+function limitRows(rows: string[][], warnings: string[]) {
+  if (rows.length <= MAX_IMPORT_ROWS) return rows;
+
+  warnings.push(
+    `Bestand is ingekort naar ${MAX_IMPORT_ROWS} regels om de import licht te houden.`
+  );
+
+  return rows.slice(0, MAX_IMPORT_ROWS);
+}
+
+function limitText(text: string, warnings: string[]) {
+  if (text.length <= MAX_IMPORT_TEXT_CHARS) return text;
+
+  warnings.push(
+    "Bestand bevat heel veel tekst; alleen het eerste deel is gelezen."
+  );
+
+  return text.slice(0, MAX_IMPORT_TEXT_CHARS);
+}
+
+function parseWorkbookSheets(buffer: Buffer, warnings: string[]) {
   const workbook = XLSX.read(buffer, {
     type: "buffer",
     cellDates: false,
   });
 
-  return workbook.SheetNames.flatMap((sheetName) => {
+  return workbook.SheetNames.map((sheetName) => {
     const sheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
       header: 1,
       defval: "",
       raw: false,
     });
+    const cleanRows = limitRows(
+      rows.map((row) => row.map(cleanCell)),
+      warnings
+    );
 
-    return rows.map((row) => row.map(cleanCell));
+    return {
+      name: sheetName,
+      rows: cleanRows,
+      text: limitText(cleanRows.map((row) => row.join("\t")).join("\n"), warnings),
+    };
   });
 }
 
@@ -287,6 +359,244 @@ function compactTextLines(text: string) {
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
+}
+
+function pushWarning(warnings: string[], message: string) {
+  if (warnings.length >= MAX_IMPORT_WARNINGS || warnings.includes(message)) {
+    return;
+  }
+
+  warnings.push(message);
+}
+
+function cleanRecipeLine(value: string) {
+  return value
+    .replace(/^\s*(?:\d+[\).:-]\s*)+/, "")
+    .replace(/[•·]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isBoringSheetName(name: string) {
+  return /^(sheet|blad|tabblad|recept|recipes?)\s*\d*$/i.test(name.trim());
+}
+
+function isLikelySectionHeading(line: string) {
+  return Boolean(classifyRecipeSection(line) !== "unknown");
+}
+
+function isLikelyRecipeTitle(line: string) {
+  const clean = cleanRecipeLine(line);
+
+  return (
+    clean.length >= 3 &&
+    clean.length <= 80 &&
+    /[a-z]/i.test(clean) &&
+    !AMOUNT_WITH_UNIT_PATTERN.test(clean) &&
+    !LOOSE_INGREDIENT_NOISE.test(clean) &&
+    !isLikelySectionHeading(clean)
+  );
+}
+
+function classifyRecipeSection(line: string): RecipeSection {
+  if (AMOUNT_WITH_UNIT_PATTERN.test(line)) return "unknown";
+  if (line.length > 90) return "unknown";
+
+  const normalized = normalizeSearch(line);
+
+  if (
+    /\b(ingredienten|ingredient|grondstoffen|grondstof|receptuur|samenstelling|deeg|beslag|vulling|massa)\b/.test(
+      normalized
+    )
+  ) {
+    return "ingredients";
+  }
+
+  if (
+    /\b(bereiding|bereidingswijze|werkwijze|methode|productie|instructie|stappen|maakwijze)\b/.test(
+      normalized
+    )
+  ) {
+    return "steps";
+  }
+
+  if (/\b(afwerking|decoratie|opmaak|garnering|finishing)\b/.test(normalized)) {
+    return "finishing";
+  }
+
+  if (/\b(allergenen|allergeen|allergens)\b/.test(normalized)) {
+    return "allergens";
+  }
+
+  if (/\b(opmerking|opmerkingen|notitie|notities|bewaren|let op)\b/.test(normalized)) {
+    return "notes";
+  }
+
+  return "unknown";
+}
+
+function parseBatchFromLine(line: string) {
+  const match = line.match(
+    /\b(?:batch|opbrengst|recept\s*voor|aantal|porties?)\D{0,24}(\d+(?:[.,]\d+)?)\s*([a-z]+)?/i
+  );
+  const standaloneMatch = line.match(
+    new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${UNIT_WORDS})\\s*$`, "i")
+  );
+  const parsedMatch = match || standaloneMatch;
+
+  if (!parsedMatch) return null;
+
+  const quantity = parseDutchNumber(parsedMatch[1]);
+  if (!quantity) return null;
+
+  const unit = recipeLineUnitFromText(parsedMatch[2] || line, "stuk");
+
+  return {
+    quantity,
+    unit,
+  };
+}
+
+function findRecipeTitle(rows: string[][], sheetName: string, fileName: string) {
+  const explicitTitle = rows
+    .map((row) => row.join(" ").trim())
+    .find((line) => /\b(receptnaam|recept|product)\b\s*[:=-]\s*.+/i.test(line));
+
+  if (explicitTitle) {
+    const [, title] =
+      explicitTitle.match(/\b(?:receptnaam|recept|product)\b\s*[:=-]\s*(.+)/i) ||
+      [];
+    if (title) return cleanRecipeLine(title);
+  }
+
+  if (sheetName && !isBoringSheetName(sheetName)) {
+    return cleanRecipeLine(sheetName);
+  }
+
+  const titleLine = rows
+    .slice(0, 18)
+    .map((row) => row.filter(Boolean).join(" ").trim())
+    .find(isLikelyRecipeTitle);
+
+  return titleLine
+    ? cleanRecipeLine(titleLine)
+    : fileName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+}
+
+function findRecipeBatch(rows: string[][]) {
+  for (const row of rows.slice(0, 32)) {
+    const line = row.join(" ").trim();
+    const batch = parseBatchFromLine(line);
+
+    if (batch) return batch;
+  }
+
+  return null;
+}
+
+function parseLooseIngredientLine(line: string): LooseIngredientCandidate | null {
+  const clean = cleanRecipeLine(line);
+  if (!clean || LOOSE_INGREDIENT_NOISE.test(clean)) return null;
+
+  const amountFirst = clean.match(
+    new RegExp(
+      `^(\\d+(?:[.,]\\d+)?)\\s*(${UNIT_WORDS})\\b\\s+(.+)$`,
+      "i"
+    )
+  );
+  if (amountFirst) {
+    return {
+      quantity: parseDutchNumber(amountFirst[1]),
+      unit: recipeLineUnitFromText(amountFirst[2]),
+      name: cleanRecipeLine(amountFirst[3].replace(/[.;:]$/, "")),
+      rawLine: clean,
+    };
+  }
+
+  const amountLast = clean.match(
+    new RegExp(
+      `^(.+?)\\s+(\\d+(?:[.,]\\d+)?)\\s*(${UNIT_WORDS})\\b.*$`,
+      "i"
+    )
+  );
+  if (amountLast) {
+    return {
+      name: cleanRecipeLine(amountLast[1].replace(/[.;:]$/, "")),
+      quantity: parseDutchNumber(amountLast[2]),
+      unit: recipeLineUnitFromText(amountLast[3]),
+      rawLine: clean,
+    };
+  }
+
+  return null;
+}
+
+function parseLooseIngredientRow(
+  row: string[],
+  section: RecipeSection
+): LooseIngredientCandidate | null {
+  const cells = row.map(cleanCell).filter(Boolean);
+  if (!cells.length) return null;
+
+  const lineCandidate = parseLooseIngredientLine(cells.join(" "));
+  if (lineCandidate) return lineCandidate;
+
+  const amountCellIndexWithUnit = cells.findIndex((cell, index) => {
+    if (!parseDutchNumber(cell)) return false;
+
+    return looksLikeUnitCell(cells[index + 1] || "") ||
+      looksLikeUnitCell(cells[index - 1] || "");
+  });
+  const amountCellIndex =
+    amountCellIndexWithUnit >= 0
+      ? amountCellIndexWithUnit
+      : cells.findIndex((cell) => {
+          if (!parseDutchNumber(cell)) return false;
+
+          return !/[a-z]/i.test(cell);
+        });
+  if (amountCellIndex === -1) return null;
+
+  const amount = parseDutchNumber(cells[amountCellIndex]);
+  if (!amount) return null;
+
+  const unitCell =
+    cells[amountCellIndex + 1] || cells[amountCellIndex - 1] || cells.join(" ");
+  const unit = recipeLineUnitFromText(unitCell, "gram");
+  const nameCell = cells.find((cell, index) => {
+    if (index === amountCellIndex) return false;
+    if (cell === unitCell && /\b(kg|g|gram|l|liter|ml|st|stuk|stuks)\b/i.test(cell)) {
+      return false;
+    }
+
+    return (
+      /[a-z]/i.test(cell) &&
+      !AMOUNT_WITH_UNIT_PATTERN.test(cell) &&
+      !LOOSE_INGREDIENT_NOISE.test(cell) &&
+      !isLikelySectionHeading(cell)
+    );
+  });
+
+  if (!nameCell) return null;
+  if (section === "unknown" && cells.length < 2) return null;
+
+  return {
+    name: cleanRecipeLine(nameCell),
+    quantity: amount,
+    unit,
+    rawLine: cells.join(" "),
+  };
+}
+
+function isLikelyInstructionLine(line: string) {
+  const clean = cleanRecipeLine(line);
+  if (clean.length < 8 || clean.length > 220) return false;
+  if (AMOUNT_WITH_UNIT_PATTERN.test(clean)) return false;
+  if (LOOSE_INGREDIENT_NOISE.test(clean)) return false;
+
+  return /\b(meng|mix|klop|spatel|verwarm|bak|koel|vries|laat|doe|voeg|giet|snijd|weeg|roer|smelt|kneed|rol|vul|garneer|bewaar)\b/i.test(
+    clean
+  );
 }
 
 function mapIngredientHeaders(row: string[]): IngredientColumnMap {
@@ -547,6 +857,220 @@ function getOrCreateImportedRecipe(
   return recipe;
 }
 
+function addLooseIngredientCandidate(
+  recipe: Recipe,
+  candidate: LooseIngredientCandidate,
+  ingredients: Ingredient[],
+  warnings: string[],
+  unmatched: string[]
+) {
+  if (!candidate.name || !candidate.quantity) return;
+
+  const matchedIngredient = findMatchingIngredient(candidate.name, ingredients);
+
+  if (!matchedIngredient) {
+    unmatched.push(
+      `${candidate.quantity} ${unitLabel(candidate.unit)} ${candidate.name}`
+    );
+    pushWarning(
+      warnings,
+      `Controleer grondstof "${candidate.name}": niet automatisch gekoppeld.`
+    );
+    return;
+  }
+
+  recipe.ingredients.push({
+    ingredientId: matchedIngredient.id,
+    quantity: candidate.quantity,
+    unit: candidate.unit,
+    costContribution: 0,
+  });
+}
+
+function applyLooseNotes(recipe: Recipe, unmatched: string[]) {
+  if (!unmatched.length) return;
+
+  const noteLines = [
+    "Niet automatisch gekoppeld uit import:",
+    ...unmatched.slice(0, 30).map((line) => `- ${line}`),
+  ];
+  const importNote = noteLines.join("\n");
+
+  recipe.internalNotes = recipe.internalNotes
+    ? `${recipe.internalNotes}\n\n${importNote}`
+    : importNote;
+  recipe.notes = recipe.notes ? `${recipe.notes}\n\n${importNote}` : importNote;
+}
+
+function parseLooseRecipeSheet(
+  sheet: ParsedSheet,
+  ingredients: Ingredient[],
+  fileName: string,
+  ids: Set<string>
+) {
+  const warnings: string[] = [];
+  const today = new Date().toISOString().slice(0, 10);
+  const name = findRecipeTitle(sheet.rows, sheet.name, fileName);
+  const recipe = getOrCreateImportedRecipe(
+    new Map<string, Recipe>(),
+    name,
+    ids,
+    today,
+    fileName
+  );
+  const batch = findRecipeBatch(sheet.rows);
+  const unmatched: string[] = [];
+  let section: RecipeSection = "unknown";
+  let sawLikelyRecipeData = false;
+
+  if (batch) {
+    recipe.standardBatchQuantity = batch.quantity;
+    recipe.standardBatchUnit = batch.unit;
+    recipe.batchSize = `${batch.quantity} ${unitLabel(batch.unit)}`;
+    recipe.portionLabel =
+      batch.unit === "stuk" ? "per stuk" : `per ${unitLabel(batch.unit)}`;
+  }
+
+  sheet.rows.forEach((row) => {
+    const cells = row.map(cleanCell).filter(Boolean);
+    if (!cells.length) return;
+
+    const line = cells.join(" ");
+    const nextSection = classifyRecipeSection(line);
+
+    if (nextSection !== "unknown") {
+      section = nextSection;
+
+      const afterColon = line.split(/[:=-]/).slice(1).join(" ").trim();
+      if (afterColon && section === "allergens") {
+        recipe.allergens = Array.from(
+          new Set([...recipe.allergens, ...parseList(afterColon)])
+        );
+      } else if (afterColon && section === "notes") {
+        recipe.internalNotes = recipe.internalNotes
+          ? `${recipe.internalNotes}\n${afterColon}`
+          : afterColon;
+      }
+
+      return;
+    }
+
+    if (section === "allergens") {
+      recipe.allergens = Array.from(
+        new Set([...recipe.allergens, ...parseList(line)])
+      );
+      sawLikelyRecipeData = true;
+      return;
+    }
+
+    if (section === "notes") {
+      const note = cleanRecipeLine(line);
+      if (note && !LOOSE_INGREDIENT_NOISE.test(note)) {
+        recipe.internalNotes = recipe.internalNotes
+          ? `${recipe.internalNotes}\n${note}`
+          : note;
+        sawLikelyRecipeData = true;
+      }
+      return;
+    }
+
+    const ingredientCandidate = parseLooseIngredientRow(row, section);
+    if (
+      ingredientCandidate &&
+      (section === "ingredients" ||
+        findMatchingIngredient(ingredientCandidate.name, ingredients) ||
+        AMOUNT_WITH_UNIT_PATTERN.test(line))
+    ) {
+      addLooseIngredientCandidate(
+        recipe,
+        ingredientCandidate,
+        ingredients,
+        warnings,
+        unmatched
+      );
+      sawLikelyRecipeData = true;
+      return;
+    }
+
+    const instruction = cleanRecipeLine(line);
+    if (section === "steps" && instruction && !isLikelySectionHeading(instruction)) {
+      recipe.preparationSteps.push(instruction);
+      sawLikelyRecipeData = true;
+      return;
+    }
+
+    if (
+      section === "finishing" &&
+      instruction &&
+      !isLikelySectionHeading(instruction)
+    ) {
+      recipe.finishingSteps = [...(recipe.finishingSteps || []), instruction];
+      sawLikelyRecipeData = true;
+      return;
+    }
+
+    if (section === "unknown" && isLikelyInstructionLine(instruction)) {
+      recipe.preparationSteps.push(instruction);
+      sawLikelyRecipeData = true;
+    }
+  });
+
+  recipe.preparationSteps = Array.from(new Set(recipe.preparationSteps));
+  recipe.finishingSteps = Array.from(new Set(recipe.finishingSteps || []));
+  applyLooseNotes(recipe, unmatched);
+
+  if (
+    !sawLikelyRecipeData &&
+    !recipe.ingredients.length &&
+    !recipe.preparationSteps.length &&
+    !recipe.internalNotes
+  ) {
+    return { recipe: null, warnings };
+  }
+
+  if (!recipe.ingredients.length && unmatched.length) {
+    pushWarning(
+      warnings,
+      "Ik zag wel grondstofregels, maar kon ze nog niet koppelen aan de grondstoffenlijst."
+    );
+  }
+
+  return { recipe, warnings };
+}
+
+function parseLooseRecipeSheets(
+  sheets: ParsedSheet[],
+  ingredients: Ingredient[],
+  fileName: string
+) {
+  const ids = new Set<string>();
+  const recipes: Recipe[] = [];
+  const warnings: string[] = [];
+
+  sheets.forEach((sheet) => {
+    const parsed = parseLooseRecipeSheet(sheet, ingredients, fileName, ids);
+    parsed.warnings.forEach((warning) => pushWarning(warnings, warning));
+
+    if (parsed.recipe) {
+      recipes.push(parsed.recipe);
+    }
+  });
+
+  return {
+    recipes: recipes.slice(0, MAX_IMPORT_RECIPES),
+    warnings,
+  };
+}
+
+function recipeHasImportContent(recipe: Recipe) {
+  return Boolean(
+    recipe.ingredients.length ||
+      recipe.preparationSteps.length ||
+      recipe.finishingSteps?.length ||
+      recipe.internalNotes
+  );
+}
+
 function parseTextRecipe(text: string, ingredients: Ingredient[], fileName: string) {
   const lines = compactTextLines(text);
   const warnings: string[] = [];
@@ -634,23 +1158,62 @@ async function extractPdfText(buffer: Buffer) {
   }
 }
 
-async function rowsAndTextFromFile(fileName: string, mimeType: string, buffer: Buffer) {
+async function rowsAndTextFromFile(
+  fileName: string,
+  mimeType: string,
+  buffer: Buffer
+): Promise<FileTextRows> {
   const extension = getExtension(fileName);
+  const warnings: string[] = [];
 
   if (["xlsx", "xls"].includes(extension)) {
-    const rows = parseWorkbookRows(buffer);
-    return { rows, text: rows.map((row) => row.join("\t")).join("\n") };
+    const sheets = parseWorkbookSheets(buffer, warnings);
+    const rows = limitRows(
+      sheets.flatMap((sheet) => sheet.rows),
+      warnings
+    );
+    const text = limitText(sheets.map((sheet) => sheet.text).join("\n"), warnings);
+
+    return { rows, text, sheets, warnings };
   }
 
   if (["csv", "txt", "tsv"].includes(extension) || mimeType.includes("csv")) {
-    const text = buffer.toString("utf8");
-    return { rows: parseCsvRows(text), text };
+    const text = limitText(buffer.toString("utf8"), warnings);
+    const rows = limitRows(parseCsvRows(text), warnings);
+
+    return {
+      rows,
+      text,
+      sheets: [
+        {
+          name: fileName.replace(/\.[^.]+$/, ""),
+          rows,
+          text,
+        },
+      ],
+      warnings,
+    };
   }
 
   if (extension === "pdf" || mimeType.includes("pdf")) {
-    const text = await extractPdfText(buffer);
-    const rows = compactTextLines(text).map((line) => line.split(/\t|;|\s{2,}/));
-    return { rows, text };
+    const text = limitText(await extractPdfText(buffer), warnings);
+    const rows = limitRows(
+      compactTextLines(text).map((line) => line.split(/\t|;|\s{2,}/)),
+      warnings
+    );
+
+    return {
+      rows,
+      text,
+      sheets: [
+        {
+          name: fileName.replace(/\.[^.]+$/, ""),
+          rows,
+          text,
+        },
+      ],
+      warnings,
+    };
   }
 
   throw new Error("Bestandstype wordt nog niet ondersteund.");
@@ -663,7 +1226,8 @@ async function parseImportFile(
   buffer: Buffer,
   ingredients: Ingredient[]
 ): Promise<ParsedImport> {
-  const { rows, text } = await rowsAndTextFromFile(fileName, mimeType, buffer);
+  const { rows, text, sheets, warnings: fileWarnings } =
+    await rowsAndTextFromFile(fileName, mimeType, buffer);
 
   if (kind === "ingredients") {
     const parsed = parseIngredientRows(rows);
@@ -673,27 +1237,35 @@ async function parseImportFile(
 
     return {
       ingredients: parsed.ingredients,
-      warnings: parsed.warnings,
+      warnings: [...fileWarnings, ...parsed.warnings],
       message: `${parsed.ingredients.length} grondstoffen herkend.`,
     };
   }
 
   const parsedRows = parseRecipeRows(rows, ingredients, fileName);
-  const parsedText = parsedRows.recipes.length
+  const parsedLoose = parsedRows.recipes.some(recipeHasImportContent)
     ? parsedRows
+    : parseLooseRecipeSheets(sheets, ingredients, fileName);
+  const parsedText = parsedLoose.recipes.some(recipeHasImportContent)
+    ? parsedLoose
     : parseTextRecipe(text, ingredients, fileName);
-  const recipes = parsedText.recipes.filter(
-    (recipe) => recipe.ingredients.length || recipe.preparationSteps.length
-  );
+  const recipes = parsedText.recipes.filter(recipeHasImportContent);
 
   if (!recipes.length) {
-    throw new Error("Geen recepten herkend. Controleer of ingredienten en stappen leesbaar zijn.");
+    throw new Error(
+      "Geen recepten herkend. Probeer een Excel/PDF met receptnaam, grondstoffen of bereidingsregels."
+    );
   }
 
   return {
-    recipes,
-    warnings: parsedText.warnings,
-    message: `${recipes.length} recepten herkend.`,
+    recipes: recipes.slice(0, MAX_IMPORT_RECIPES),
+    warnings: [...fileWarnings, ...parsedText.warnings].slice(
+      0,
+      MAX_IMPORT_WARNINGS
+    ),
+    message: `${Math.min(recipes.length, MAX_IMPORT_RECIPES)} recept${
+      Math.min(recipes.length, MAX_IMPORT_RECIPES) === 1 ? "" : "en"
+    } herkend. Het originele bestand is niet opgeslagen.`,
   };
 }
 

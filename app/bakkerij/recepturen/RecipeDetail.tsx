@@ -524,7 +524,8 @@ export default function RecipeDetail({
                             </p>
                             <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/50">
                               Upload PDF, Excel of CSV. Daarna kun je alles nog
-                              controleren en aanpassen.
+                              controleren en aanpassen. Het bestand zelf wordt
+                              niet opgeslagen.
                             </p>
                           </div>
                           <label className="cursor-pointer rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm">
