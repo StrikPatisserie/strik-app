@@ -57,6 +57,12 @@ type RecipeEditSection =
   | "stappen"
   | "notities";
 
+type RecipeImportResponse = {
+  recipes?: Recipe[];
+  warnings?: string[];
+  message?: string;
+};
+
 export default function RecipeDetail({
   recipe,
   ingredients,
@@ -81,6 +87,8 @@ export default function RecipeDetail({
     useState<RecipeEditSection>("basis");
   const [feedback, setFeedback] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isImportingRecipe, setIsImportingRecipe] = useState(false);
+  const [recipeImportWarnings, setRecipeImportWarnings] = useState<string[]>([]);
   const [draft, setDraft] = useState(() => createRecipeDraft(recipe));
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
   const availableIngredients = ingredients;
@@ -190,6 +198,47 @@ export default function RecipeDetail({
       photoUpdatedAt: "",
     });
     showFeedback("Foto verwijderd.");
+  }
+
+  async function importRecipeFile(file: File | null) {
+    if (!file) return;
+
+    setIsImportingRecipe(true);
+    setRecipeImportWarnings([]);
+
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("kind", "recipes");
+      formData.set("ingredients", JSON.stringify(availableIngredients));
+      formData.set("recipes", JSON.stringify(recipes));
+
+      const response = await fetch("/api/recepturen/data-import", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json()) as RecipeImportResponse;
+
+      if (!response.ok) {
+        throw new Error(data.message || "Bestand kon niet gelezen worden.");
+      }
+
+      const importedRecipe = data.recipes?.[0];
+      if (!importedRecipe) {
+        throw new Error("Geen recept herkend in dit bestand.");
+      }
+
+      setDraft((current) => recipeDraftFromImportedRecipe(current, importedRecipe));
+      setActiveEditSection("grondstoffen");
+      setRecipeImportWarnings(data.warnings || []);
+      showFeedback(data.message || "Receptbestand ingelezen.");
+    } catch (error) {
+      showFeedback(
+        error instanceof Error ? error.message : "Bestand kon niet gelezen worden."
+      );
+    } finally {
+      setIsImportingRecipe(false);
+    }
   }
 
   function saveRecipeDraft() {
@@ -467,6 +516,47 @@ export default function RecipeDetail({
                 <EditorBlock title="Basis en foto">
                   <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
                     <div className="grid content-start gap-3">
+                      <div className="rounded-2xl border border-[#dfe9d8] bg-[#fffdf8] p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-black">
+                              Receptbestand inlezen
+                            </p>
+                            <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/50">
+                              Upload PDF, Excel of CSV. Daarna kun je alles nog
+                              controleren en aanpassen.
+                            </p>
+                          </div>
+                          <label className="cursor-pointer rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm">
+                            {isImportingRecipe ? "Lezen..." : "Bestand kiezen"}
+                            <input
+                              type="file"
+                              accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf"
+                              disabled={isImportingRecipe}
+                              className="sr-only"
+                              onChange={(event) => {
+                                void importRecipeFile(
+                                  event.target.files?.[0] || null
+                                );
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {recipeImportWarnings.length > 0 && (
+                          <div className="mt-3 rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
+                            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#7a5a18]">
+                              Controlepunten
+                            </p>
+                            <ul className="mt-2 grid gap-1 text-xs font-bold text-[#2d2a26]/60">
+                              {recipeImportWarnings.slice(0, 6).map((warning) => (
+                                <li key={warning}>{warning}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         <EditTextField
                           label="Naam"
@@ -685,8 +775,8 @@ export default function RecipeDetail({
                         key={line.id}
                         className="grid gap-2 rounded-2xl border border-[#dfe9d8] bg-white p-3 lg:grid-cols-[minmax(12rem,1fr)_7rem_7rem_7rem_auto]"
                       >
-                        <SelectField
-                          label="Ingredient"
+                        <IngredientSearchField
+                          ingredients={availableIngredients}
                           value={line.ingredientId}
                           onChange={(value) => {
                             const ingredient = findIngredient(
@@ -698,13 +788,6 @@ export default function RecipeDetail({
                               unit: ingredient?.recipeUnit || line.unit,
                             });
                           }}
-                          options={[
-                            { value: "", label: "Kies ingredient" },
-                            ...availableIngredients.map((ingredient) => ({
-                              value: ingredient.id,
-                              label: ingredient.name,
-                            })),
-                          ]}
                         />
                         <EditTextField
                           label="Aantal"
@@ -1452,6 +1535,65 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
   };
 }
 
+function recipeDraftFromImportedRecipe(
+  current: RecipeDraft,
+  importedRecipe: Recipe
+): RecipeDraft {
+  return {
+    ...current,
+    name: importedRecipe.name || current.name,
+    type: importedRecipe.type || current.type,
+    productGroup: importedRecipe.productGroup || current.productGroup,
+    standardBatchQuantity: formatInputNumber(
+      importedRecipe.standardBatchQuantity ||
+        getBatchInfo(importedRecipe)?.quantity ||
+        parseDutchNumber(current.standardBatchQuantity)
+    ),
+    standardBatchUnit:
+      importedRecipe.standardBatchUnit ||
+      getBatchInfo(importedRecipe)?.unit ||
+      current.standardBatchUnit,
+    batchSize: importedRecipe.batchSize || current.batchSize,
+    portionLabel: importedRecipe.portionLabel || current.portionLabel,
+    ingredients: importedRecipe.ingredients.length
+      ? importedRecipe.ingredients.map((item) => ({
+          id: createLocalId("ingredient-line"),
+          ingredientId: item.ingredientId,
+          quantity: formatInputNumber(item.quantity),
+          unit: item.unit,
+          costContribution: item.costContribution,
+        }))
+      : current.ingredients,
+    semiFinishedItems: importedRecipe.semiFinishedItems.length
+      ? importedRecipe.semiFinishedItems.map((item) => ({
+          id: createLocalId("semi-line"),
+          semiFinishedRecipeId: item.semiFinishedRecipeId,
+          quantity: formatInputNumber(item.quantity),
+          unit: item.unit,
+          costContribution: item.costContribution,
+        }))
+      : current.semiFinishedItems,
+    preparationSteps: importedRecipe.preparationSteps.length
+      ? importedRecipe.preparationSteps
+      : current.preparationSteps,
+    workInstructions: importedRecipe.workInstructions?.length
+      ? importedRecipe.workInstructions
+      : current.workInstructions,
+    finishingSteps: importedRecipe.finishingSteps?.length
+      ? importedRecipe.finishingSteps
+      : current.finishingSteps,
+    equipment: importedRecipe.equipment?.length
+      ? importedRecipe.equipment
+      : current.equipment,
+    allergens: importedRecipe.allergens.length
+      ? importedRecipe.allergens.join(", ")
+      : current.allergens,
+    internalNotes: importedRecipe.internalNotes || current.internalNotes,
+    notes: importedRecipe.notes || current.notes,
+    photoHint: importedRecipe.photoHint || current.photoHint,
+  };
+}
+
 function createIngredientDraft(): NewIngredientDraft {
   return {
     name: "",
@@ -2104,6 +2246,83 @@ function SelectField({
   );
 }
 
+function IngredientSearchField({
+  ingredients,
+  value,
+  onChange,
+}: Readonly<{
+  ingredients: Ingredient[];
+  value: string;
+  onChange: (value: string) => void;
+}>) {
+  const selectedIngredient = findIngredient(ingredients, value);
+  const [query, setQuery] = useState(selectedIngredient?.name || "");
+  const [isOpen, setIsOpen] = useState(false);
+
+  const normalizedQuery =
+    selectedIngredient && query === selectedIngredient.name
+      ? ""
+      : normalizeIngredientQuery(query);
+  const suggestions = ingredients
+    .filter((ingredient) => {
+      if (!normalizedQuery) return true;
+
+      return [ingredient.name, ingredient.supplierArticleNumber, ...ingredient.aliases]
+        .filter(Boolean)
+        .some((item) => normalizeIngredientQuery(item).includes(normalizedQuery));
+    })
+    .slice(0, 40);
+
+  return (
+    <label className="relative grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+      Grondstof
+      <input
+        value={query}
+        onBlur={() => window.setTimeout(() => setIsOpen(false), 140)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        placeholder="Typ bijvoorbeeld slagroom"
+        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+      />
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-[#dfe9d8] bg-white p-1.5 text-left normal-case tracking-normal shadow-xl">
+          {suggestions.length ? (
+            suggestions.map((ingredient) => (
+              <button
+                key={ingredient.id}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onChange(ingredient.id);
+                  setQuery(ingredient.name);
+                  setIsOpen(false);
+                }}
+                className={`grid w-full gap-0.5 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#f8f6f3] ${
+                  ingredient.id === value ? "bg-[#dce8d6]" : ""
+                }`}
+              >
+                <span className="font-black text-[#2d2a26]">
+                  {ingredient.name}
+                </span>
+                <span className="truncate text-xs font-bold text-[#2d2a26]/45">
+                  {ingredient.supplier} - {ingredient.packageSize}
+                </span>
+              </button>
+            ))
+          ) : (
+            <p className="px-3 py-2 text-sm font-bold text-[#2d2a26]/45">
+              Geen grondstof gevonden.
+            </p>
+          )}
+        </div>
+      )}
+    </label>
+  );
+}
+
 function Metric({
   label,
   value,
@@ -2117,6 +2336,14 @@ function Metric({
       <p className="mt-1 text-sm font-black">{value}</p>
     </div>
   );
+}
+
+function normalizeIngredientQuery(value: string) {
+  return value
+    .toLocaleLowerCase("nl-NL")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function LineItem({
