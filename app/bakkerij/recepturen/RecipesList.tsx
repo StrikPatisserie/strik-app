@@ -39,6 +39,18 @@ export default function RecipesList({
   const [margin, setMargin] = useState("all");
 
   const finalProducts = recipes.filter((recipe) => recipe.type === "finalProduct");
+  const groupOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...productGroups,
+          ...finalProducts
+            .map((recipe) => recipe.productGroup)
+            .filter((group): group is string => Boolean(group?.trim())),
+        ])
+      ),
+    [finalProducts]
+  );
   const filteredRecipes = useMemo(() => {
     const query = normalizeSearch(search);
 
@@ -92,7 +104,7 @@ export default function RecipesList({
             onChange={setGroup}
             options={[
               { value: "all", label: "Alle groepen" },
-              ...productGroups.map((item) => ({ value: item, label: item })),
+              ...groupOptions.map((item) => ({ value: item, label: item })),
             ]}
           />
           <FilterSelect

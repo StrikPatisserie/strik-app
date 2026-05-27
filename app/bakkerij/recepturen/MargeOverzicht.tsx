@@ -32,6 +32,22 @@ export default function MargeOverzicht({
   const [riskFilter, setRiskFilter] = useState("all");
   const [groupFilter, setGroupFilter] = useState("all");
   const [supplierImpact, setSupplierImpact] = useState("all");
+  const groupOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...productGroups,
+          "Basis",
+          "Vullingen",
+          "Mousses",
+          "Afwerking",
+          ...recipes
+            .map((recipe) => recipe.productGroup)
+            .filter((group): group is string => Boolean(group?.trim())),
+        ])
+      ),
+    [recipes]
+  );
 
   const filteredRecipes = useMemo(
     () =>
@@ -93,11 +109,7 @@ export default function MargeOverzicht({
             onChange={setGroupFilter}
             options={[
               { value: "all", label: "Alle groepen" },
-              ...productGroups.map((item) => ({ value: item, label: item })),
-              { value: "Basis", label: "Basis" },
-              { value: "Vullingen", label: "Vullingen" },
-              { value: "Mousses", label: "Mousses" },
-              { value: "Afwerking", label: "Afwerking" },
+              ...groupOptions.map((item) => ({ value: item, label: item })),
             ]}
           />
           <FilterSelect
