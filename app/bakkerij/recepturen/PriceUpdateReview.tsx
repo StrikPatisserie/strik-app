@@ -25,6 +25,7 @@ export default function PriceUpdateReview({
   onRevertInvoice,
   onDeleteInvoice,
   onMatchLine,
+  onCreateIngredientFromLine,
 }: Readonly<{
   invoice: InvoiceImport;
   ingredients: Ingredient[];
@@ -39,6 +40,7 @@ export default function PriceUpdateReview({
     line: InvoiceLine,
     ingredientId: string
   ) => void;
+  onCreateIngredientFromLine: (invoiceId: string, line: InvoiceLine) => void;
 }>) {
   const pendingLines = invoice.lines.filter(
     (line) => line.reviewStatus === "pending" && line.matchedIngredientId
@@ -148,6 +150,22 @@ export default function PriceUpdateReview({
                   onMatch={onMatchLine}
                   buttonClassName="mt-3 rounded-full bg-white px-3 py-2 text-xs font-black text-[#7a5a18] shadow-sm"
                 />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onCreateIngredientFromLine(invoice.id, line)}
+                    className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black text-[#2d2a26] shadow-sm"
+                  >
+                    Nieuw artikel toevoegen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onIgnoreLine(invoice.id, line)}
+                    className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#a83e31] shadow-sm"
+                  >
+                    Negeren
+                  </button>
+                </div>
               </div>
             ))
           ) : (

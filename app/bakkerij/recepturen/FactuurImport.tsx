@@ -14,6 +14,7 @@ export default function FactuurImport({
   onRevertInvoice,
   onDeleteInvoice,
   onMatchLine,
+  onCreateIngredientFromLine,
   onImportInvoice,
 }: Readonly<{
   invoice: InvoiceImport;
@@ -30,6 +31,7 @@ export default function FactuurImport({
     line: InvoiceLine,
     ingredientId: string
   ) => void;
+  onCreateIngredientFromLine: (invoiceId: string, line: InvoiceLine) => void;
 }>) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadMessage, setUploadMessage] = useState("");
@@ -138,6 +140,7 @@ export default function FactuurImport({
         onRevertInvoice={onRevertInvoice}
         onDeleteInvoice={onDeleteInvoice}
         onMatchLine={onMatchLine}
+        onCreateIngredientFromLine={onCreateIngredientFromLine}
       />
 
       <Panel>

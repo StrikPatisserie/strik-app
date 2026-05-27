@@ -34,6 +34,7 @@ import type {
   ProductionLogEntry,
   Recipe,
   RecipeType,
+  RecipeUnit,
 } from "./types";
 import {
   ingredientPackagePrice,
@@ -116,6 +117,64 @@ function replaceInvoiceLine(
       lines: nextLines,
     };
   });
+}
+
+function invoiceLineRecipeUnit(line: InvoiceLine): RecipeUnit {
+  const unit = line.unit.toLowerCase();
+  const description = line.description.toLowerCase();
+  const source = `${unit} ${description}`;
+
+  if (/(kg|kilo|kilogram|g|gr|gram)/i.test(source)) return "gram";
+  if (/(ml|liter|ltr|\bli\b|\bl\b)/i.test(source)) return "ml";
+
+  return "stuk";
+}
+
+function invoiceLinePackageSize(line: InvoiceLine, recipeUnit: RecipeUnit) {
+  const match = line.description.match(
+    /(\d+(?:[.,]\d+)?)\s*(kg|kilo|kilogram|g|gr|gram|ml|liter|ltr|li|l|stuks|stuk|st)\b/i
+  );
+
+  if (match) {
+    const amount = match[1].replace(".", ",");
+    const rawUnit = match[2].toLowerCase();
+    const unit =
+      rawUnit === "kg" || rawUnit === "kilo" || rawUnit === "kilogram"
+        ? "kg"
+        : rawUnit === "g" || rawUnit === "gr" || rawUnit === "gram"
+          ? "g"
+          : rawUnit === "ml"
+            ? "ml"
+            : rawUnit === "liter" ||
+                rawUnit === "ltr" ||
+                rawUnit === "li" ||
+                rawUnit === "l"
+              ? "l"
+              : "stuks";
+
+    return `${amount} ${unit}`;
+  }
+
+  if (recipeUnit === "gram") return "1 kg";
+  if (recipeUnit === "ml") return "1 l";
+
+  return "1 stuk";
+}
+
+function sameSupplierArticle(
+  ingredient: Ingredient,
+  articleNumber: string,
+  supplier: string
+) {
+  const normalizedArticle = articleNumber.replace(/^0+/, "").trim();
+  if (!normalizedArticle) return false;
+
+  return (
+    ingredient.supplierArticleNumber.replace(/^0+/, "").trim() ===
+      normalizedArticle &&
+    (!supplier ||
+      normalizeSearch(ingredient.supplier) === normalizeSearch(supplier))
+  );
 }
 
 export default function RecepturenApp() {
@@ -719,6 +778,105 @@ export default function RecepturenApp() {
     });
   }
 
+  function createIngredientFromInvoiceLine(invoiceId: string, line: InvoiceLine) {
+    const invoice = invoiceItems.find((item) => item.id === invoiceId);
+    const supplier = invoice?.supplier || "Onbekend";
+    const existingIngredient = ingredientItems.find((ingredient) =>
+      sameSupplierArticle(ingredient, line.articleNumber, supplier)
+    );
+    const isSameInvoiceArticle = (item: InvoiceLine) =>
+      item.articleNumber === line.articleNumber &&
+      normalizeSearch(item.description) === normalizeSearch(line.description) &&
+      item.reviewStatus === "pending" &&
+      !item.matchedIngredientId;
+
+    if (existingIngredient) {
+      const nextInvoices = invoiceItems.map((item) => {
+        if (item.id !== invoiceId) return item;
+
+        const lines = item.lines.map((invoiceLine) =>
+          isSameInvoiceArticle(invoiceLine) || sameInvoiceLine(invoiceLine, line)
+            ? {
+                ...invoiceLine,
+                matchedIngredientId: existingIngredient.id,
+                reviewStatus: "pending" as const,
+              }
+            : invoiceLine
+        );
+
+        return { ...item, status: invoiceStatusForLines(lines), lines };
+      });
+
+      setInvoiceItems(nextInvoices);
+      persistRecepturenData(
+        {
+          ingredients: ingredientItems,
+          recipes: recipeItems,
+          invoiceImports: nextInvoices,
+        },
+        `${existingIngredient.name} bestond al en is gekoppeld.`
+      );
+      return;
+    }
+
+    const recipeUnit = invoiceLineRecipeUnit(line);
+    const packagePrice = normalizePackagePrice(
+      line.newPrice ||
+        line.pricePerUnit ||
+        (line.quantity ? line.totalPrice / line.quantity : 0),
+      recipeUnit
+    );
+    const now = new Date().toISOString();
+    const idBase =
+      normalizeSearch(line.description)
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "factuur-artikel";
+    const newIngredient: Ingredient = {
+      id: `ingredient-${idBase}-${Date.now()}`,
+      name: line.description || `Artikel ${line.articleNumber}`,
+      supplier,
+      supplierArticleNumber: line.articleNumber || "-",
+      packageSize: invoiceLinePackageSize(line, recipeUnit),
+      recipeUnit,
+      lastPrice: packagePrice,
+      previousPrice: 0,
+      pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(
+        packagePrice,
+        recipeUnit
+      ),
+      allergens: [],
+      lastUpdated: now.slice(0, 10),
+      status: "active",
+      lastInvoice: invoice?.invoiceNumber || "",
+      aliases: [line.description, line.articleNumber].filter(Boolean),
+    };
+
+    const nextIngredients = [newIngredient, ...ingredientItems];
+    const nextInvoices = invoiceItems.map((item) => {
+      if (item.id !== invoiceId) return item;
+
+      const lines = item.lines.map((invoiceLine) =>
+        isSameInvoiceArticle(invoiceLine) || sameInvoiceLine(invoiceLine, line)
+          ? {
+              ...invoiceLine,
+              matchedIngredientId: newIngredient.id,
+              reviewStatus: "approved" as const,
+              previousLastInvoice: undefined,
+              appliedAt: now,
+            }
+          : invoiceLine
+      );
+
+      return { ...item, status: invoiceStatusForLines(lines), lines };
+    });
+
+    recalculateRecipesWithIngredients(
+      nextIngredients,
+      nextInvoices,
+      `${newIngredient.name} toegevoegd als nieuwe grondstof en prijs toegepast.`
+    );
+  }
+
   function importInvoice(invoice: InvoiceImport) {
     const nextInvoices = pruneInvoiceImports([invoice, ...invoiceItems]);
 
@@ -1056,6 +1214,7 @@ export default function RecepturenApp() {
             onRevertInvoice={revertInvoice}
             onDeleteInvoice={deleteInvoice}
             onMatchLine={matchInvoiceLine}
+            onCreateIngredientFromLine={createIngredientFromInvoiceLine}
             onImportInvoice={importInvoice}
           />
         )}
