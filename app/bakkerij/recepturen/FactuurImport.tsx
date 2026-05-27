@@ -40,6 +40,11 @@ export default function FactuurImport({
 
     setIsImporting(true);
     setUploadMessage(`${file.name} wordt geanalyseerd...`);
+    const slowAnalysisTimer = window.setTimeout(() => {
+      setUploadMessage(
+        `${file.name} wordt nog gelezen met OCR. Gescande facturen kunnen 30-60 seconden duren.`
+      );
+    }, 8000);
 
     try {
       const result = await parseBekoInvoiceFile(file, ingredients);
@@ -59,6 +64,7 @@ export default function FactuurImport({
     } catch {
       setUploadMessage("Factuur kon niet gelezen worden.");
     } finally {
+      window.clearTimeout(slowAnalysisTimer);
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }

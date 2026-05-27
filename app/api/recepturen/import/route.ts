@@ -1353,15 +1353,28 @@ async function extractPdfText(buffer: Buffer) {
 }
 
 async function extractTextWithOcr(image: Buffer) {
+  const [text = ""] = await extractTextsWithOcr([image]);
+
+  return text;
+}
+
+async function extractTextsWithOcr(images: Buffer[]) {
+  if (!images.length) return [];
+
   const { createWorker } = await import("tesseract.js");
   const worker = await createWorker("eng", 1, {
     cachePath: TESSERACT_CACHE_PATH,
     workerPath: TESSERACT_WORKER_PATH,
   });
+  const texts: string[] = [];
 
   try {
-    const result = await worker.recognize(image);
-    return result.data.text || "";
+    for (const image of images) {
+      const result = await worker.recognize(image);
+      texts.push(result.data.text || "");
+    }
+
+    return texts;
   } finally {
     await worker.terminate();
   }
@@ -1372,7 +1385,7 @@ async function extractPdfEmbeddedImageText(buffer: Buffer) {
 
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  const pages: string[] = [];
+  const imageBuffers: Buffer[] = [];
 
   try {
     const imageResult = await parser.getImage({
@@ -1385,7 +1398,7 @@ async function extractPdfEmbeddedImageText(buffer: Buffer) {
     for (const page of imageResult.pages) {
       for (const image of page.images) {
         if (image.data) {
-          pages.push(await extractTextWithOcr(Buffer.from(image.data)));
+          imageBuffers.push(Buffer.from(image.data));
         }
       }
     }
@@ -1393,7 +1406,7 @@ async function extractPdfEmbeddedImageText(buffer: Buffer) {
     await parser.destroy();
   }
 
-  return pages.join("\n");
+  return (await extractTextsWithOcr(imageBuffers)).join("\n");
 }
 
 async function extractScannedPdfText(buffer: Buffer) {
@@ -1401,7 +1414,7 @@ async function extractScannedPdfText(buffer: Buffer) {
 
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  const pages: string[] = [];
+  const screenshotBuffers: Buffer[] = [];
 
   try {
     const screenshots = await parser.getScreenshot({
@@ -1412,7 +1425,7 @@ async function extractScannedPdfText(buffer: Buffer) {
     });
 
     for (const page of screenshots.pages) {
-      pages.push(await extractTextWithOcr(Buffer.from(page.data)));
+      screenshotBuffers.push(Buffer.from(page.data));
     }
   } catch {
     // Some scanned PDFs contain full-page embedded images that pdf.js cannot
@@ -1421,7 +1434,7 @@ async function extractScannedPdfText(buffer: Buffer) {
     await parser.destroy();
   }
 
-  const screenshotText = pages.join("\n");
+  const screenshotText = (await extractTextsWithOcr(screenshotBuffers)).join("\n");
   if (screenshotText.trim()) return screenshotText;
 
   return extractPdfEmbeddedImageText(buffer);
@@ -1561,9 +1574,7 @@ async function parseInvoiceImageFiles(
   let text = "";
   let lines: InvoiceLine[] = [];
 
-  for (const buffer of buffers) {
-    text = `${text}\n${await extractTextWithOcr(buffer)}`.trim();
-  }
+  text = (await extractTextsWithOcr(buffers)).join("\n").trim();
 
   if (text.trim()) {
     lines = parseKnownSupplierPdfLines(fileName, text, ingredients);
