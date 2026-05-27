@@ -16,6 +16,7 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type ColumnMap = {
   articleNumber?: number;
@@ -910,10 +911,10 @@ function parseFruitOpMaatPdfLines(text: string, ingredients: Ingredient[]) {
 }
 
 function isHefeInvoiceText(fileName: string, text: string) {
-  return (
-    detectSupplier(fileName, text) === "Hefe van Haag" &&
-    /RECHNUNG\s+R-/i.test(text) &&
-    /Artikel-Nr\.\s*\/\s*-Bezeichnung/i.test(text)
+  if (detectSupplier(fileName, text) !== "Hefe van Haag") return false;
+
+  return /RECHNUNG\s+R-|Rechnungsnummer|Artikel-Nr|Bezeichnung|LS-Nummer|Warentarif-Nr/i.test(
+    text
   );
 }
 
@@ -931,6 +932,26 @@ function normalizeHefeUnit(unit: string) {
 
 function parseHefeNumber(value: string) {
   const normalized = cleanCell(value).replace(/^S$/i, "5");
+
+  return parseDutchNumber(normalized);
+}
+
+function parseHefeUnitPrice(value: string) {
+  const normalized = cleanCell(value);
+
+  if (!normalized) return 0;
+  if (/[,.]/.test(normalized)) return parseDutchNumber(normalized);
+  if (/^\d{5,7}$/.test(normalized)) return Number(normalized) / 10000;
+
+  return parseDutchNumber(normalized);
+}
+
+function parseHefeTotalPrice(value: string) {
+  const normalized = cleanCell(value);
+
+  if (!normalized) return 0;
+  if (/[,.]/.test(normalized)) return parseDutchNumber(normalized);
+  if (/^-?\d{3,}$/.test(normalized)) return Number(normalized) / 100;
 
   return parseDutchNumber(normalized);
 }
@@ -1000,7 +1021,7 @@ function parseHefePdfLines(text: string, ingredients: Ingredient[]) {
       if (!/^\d{4,7}\s/.test(line)) return null;
 
       const priceMatch = line.match(
-        /\s(\d+(?:[.,]\d{3,4}))\s+(-?\d[\d.,]*)(?:\s+[O0©\[\]]+)?$/i
+        /\s(\d+(?:[.,]\d{2,4})|\d{5,7})\s+(-?\d[\d.,]*)(?:\s+[O0©\[\]]+)?$/i
       );
       if (!priceMatch || priceMatch.index === undefined) return null;
 
@@ -1030,8 +1051,8 @@ function parseHefePdfLines(text: string, ingredients: Ingredient[]) {
       if (!countInfo) return null;
 
       const description = countInfo.description;
-      const unitPrice = parseDutchNumber(priceMatch[1]);
-      const rawTotalPrice = parseDutchNumber(priceMatch[2]);
+      const unitPrice = parseHefeUnitPrice(priceMatch[1]);
+      const rawTotalPrice = parseHefeTotalPrice(priceMatch[2]);
       const quantity = contentQuantity || countInfo.quantity;
       const unit = contentUnit || normalizeHefeUnit(countInfo.unitSegment);
       const priceKind = hefeLineUsesBasePrice(unit) ? "base" : "package";
@@ -1409,7 +1430,22 @@ async function extractPdfEmbeddedImageText(buffer: Buffer) {
   return (await extractTextsWithOcr(imageBuffers)).join("\n");
 }
 
+function hasInvoiceLikeText(text: string) {
+  return (
+    text.trim().length > 80 &&
+    /artikel|rechnung|factuur|invoice|omschrijving|bezeichnung|preis|betrag|aantal|totaal/i.test(
+      text
+    )
+  );
+}
+
 async function extractScannedPdfText(buffer: Buffer) {
+  const embeddedImageText = await extractPdfEmbeddedImageText(buffer);
+
+  if (hasInvoiceLikeText(embeddedImageText)) {
+    return embeddedImageText;
+  }
+
   await ensurePdfCanvasGlobals();
 
   const { PDFParse } = await import("pdf-parse");
@@ -1437,7 +1473,7 @@ async function extractScannedPdfText(buffer: Buffer) {
   const screenshotText = (await extractTextsWithOcr(screenshotBuffers)).join("\n");
   if (screenshotText.trim()) return screenshotText;
 
-  return extractPdfEmbeddedImageText(buffer);
+  return embeddedImageText;
 }
 
 function createInvoice(
