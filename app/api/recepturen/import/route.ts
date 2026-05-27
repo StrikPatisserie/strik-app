@@ -178,6 +178,15 @@ function getExtension(fileName: string) {
   return fileName.split(".").pop()?.toLowerCase() || "";
 }
 
+function isImageUpload(file: UploadedFile) {
+  const extension = getExtension(file.name);
+
+  return (
+    file.type.startsWith("image/") ||
+    ["png", "jpg", "jpeg", "webp", "tif", "tiff"].includes(extension)
+  );
+}
+
 function parseIngredients(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !value.trim()) return [];
 
@@ -920,12 +929,26 @@ function normalizeHefeUnit(unit: string) {
   return normalized.toLowerCase();
 }
 
+function parseHefeNumber(value: string) {
+  const normalized = cleanCell(value).replace(/^S$/i, "5");
+
+  return parseDutchNumber(normalized);
+}
+
+function hefeUnitSegmentHasPackageAmount(unitSegment: string) {
+  const normalized = cleanCell(unitSegment).toUpperCase();
+
+  return /\d/.test(normalized) || /S\s*(KG|LI|L|UL|UI|ST|U)\b/.test(normalized);
+}
+
 function parseHefeTrailingMeasure(value: string) {
-  const match = value.match(/\s(\d+(?:[.,]\d+)?)\s*(KG|LI|L|UL|UI|ST|U|KT|PG)$/i);
+  const match = value.match(
+    /\s(\d+(?:[.,]\d+)?|S)\s*(KG|LI|L|UL|UI|ST|U|KT|PG)$/i
+  );
   if (!match || match.index === undefined) return null;
 
   return {
-    quantity: parseDutchNumber(match[1]),
+    quantity: parseHefeNumber(match[1]),
     unit: normalizeHefeUnit(match[2]),
     start: match.index,
     raw: match[0],
@@ -994,7 +1017,9 @@ function parseHefePdfLines(text: string, ingredients: Ingredient[]) {
         : null;
 
       if (content && countInfo) {
-        contentQuantity = content.quantity;
+        contentQuantity = hefeUnitSegmentHasPackageAmount(countInfo.unitSegment)
+          ? content.quantity
+          : content.quantity * countInfo.quantity;
         contentUnit = content.unit;
         productPart = productPart.slice(0, content.start).trim();
       } else {
@@ -1524,6 +1549,53 @@ async function parseInvoiceFile(
   };
 }
 
+async function parseInvoiceImageFiles(
+  files: UploadedFile[],
+  buffers: Buffer[],
+  ingredients: Ingredient[]
+): Promise<ExtractedInvoice> {
+  const warnings = [
+    "Grote PDF is als losse pagina-afbeeldingen gelezen met OCR. Controleer de herkende regels extra goed.",
+  ];
+  const fileName = files[0]?.name || "factuur-afbeeldingen.jpg";
+  let text = "";
+  let lines: InvoiceLine[] = [];
+
+  for (const buffer of buffers) {
+    text = `${text}\n${await extractTextWithOcr(buffer)}`.trim();
+  }
+
+  if (text.trim()) {
+    lines = parseKnownSupplierPdfLines(fileName, text, ingredients);
+  }
+
+  if (!lines.length && text.trim()) {
+    lines = maybeParseDelimitedText(text, ingredients);
+  }
+
+  if (!lines.length && text.trim()) {
+    lines = parseLooseInvoiceLines(text, ingredients);
+    if (lines.length) {
+      warnings.push(
+        "Kolommen waren niet exact herkenbaar; regels zijn met tekstherkenning ingeschat."
+      );
+    }
+  }
+
+  if (!lines.length) {
+    throw new Error(
+      "Geen factuurregels herkend. Gebruik een bestand met artikelnummer, omschrijving, aantal, eenheid en prijs."
+    );
+  }
+
+  lines = limitInvoiceLines(lines, warnings);
+
+  return {
+    invoice: createInvoice(lines, fileName, text),
+    warnings,
+  };
+}
+
 export async function POST(request: Request) {
   let formData: FormData;
 
@@ -1533,25 +1605,37 @@ export async function POST(request: Request) {
     return jsonError("Upload kon niet gelezen worden.");
   }
 
-  const file = formData.get("file");
-  if (!isUploadedFile(file)) {
+  let files = formData.getAll("files").filter(isUploadedFile);
+  const legacyFile = formData.get("file");
+
+  if (!files.length && isUploadedFile(legacyFile)) {
+    files = [legacyFile];
+  }
+
+  if (!files.length) {
     return jsonError("Geen bestand ontvangen.");
   }
 
-  if (file.size > MAX_FILE_BYTES) {
+  const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalSize > MAX_FILE_BYTES) {
     return jsonError("Bestand is te groot. Upload maximaal 20 MB.", 413);
   }
 
   const ingredients = parseIngredients(formData.get("ingredients"));
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const buffers = await Promise.all(
+    files.map(async (file) => Buffer.from(await file.arrayBuffer()))
+  );
 
   try {
-    const result = await parseInvoiceFile(
-      file.name,
-      file.type || "",
-      buffer,
-      ingredients
-    );
+    const result =
+      files.length > 1 && files.every(isImageUpload)
+        ? await parseInvoiceImageFiles(files, buffers, ingredients)
+        : await parseInvoiceFile(
+            files[0].name,
+            files[0].type || "",
+            buffers[0],
+            ingredients
+          );
 
     return NextResponse.json(result);
   } catch (error) {

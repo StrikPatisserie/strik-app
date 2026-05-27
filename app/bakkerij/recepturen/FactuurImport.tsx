@@ -83,7 +83,7 @@ export default function FactuurImport({
           >
             <p className="text-sm font-black">Sleep factuur hierheen</p>
             <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
-              CSV, Excel, PDF of afbeelding · maximaal 20 MB · bestand wordt niet bewaard
+              CSV, Excel, PDF of afbeelding · grote PDF wordt verkleind · bestand wordt niet bewaard
             </p>
             <input
               ref={fileInputRef}
