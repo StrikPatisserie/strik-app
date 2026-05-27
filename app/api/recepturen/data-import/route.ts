@@ -870,7 +870,7 @@ function getOrCreateImportedRecipe(
     salesPrice: 0,
     costPrice: 0,
     previousCostPrice: 0,
-    targetMargin: 75,
+    targetMargin: 80,
     currentMargin: 0,
     status: "draft",
     ingredients: [],

@@ -1098,7 +1098,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     salesPrice: type === "semiFinished" ? 0 : 0,
     costPrice: 0,
     previousCostPrice: 0,
-    targetMargin: type === "semiFinished" ? 0 : 75,
+    targetMargin: type === "semiFinished" ? 0 : 80,
     currentMargin: 0,
     status: "draft",
     ingredients: [],
