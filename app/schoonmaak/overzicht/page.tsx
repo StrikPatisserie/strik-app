@@ -236,7 +236,8 @@ function CleaningCard({ item }: Readonly<{ item: CleaningItem }>) {
                     />
                   ) : (
                     <div className="flex h-40 w-full items-center justify-center rounded-2xl bg-[#f8f6f3] p-4 text-center text-sm font-semibold text-gray-500">
-                      Foto geüpload, niet meer beschikbaar
+                      Preview ontbreekt. Nieuwe foto&apos;s worden vanaf nu
+                      kleiner opgeslagen.
                     </div>
                   )}
                   <p className="mt-2 truncate text-sm text-gray-600">

@@ -35,6 +35,10 @@ if (!defined('STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES')) {
     define('STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES', 90000);
 }
 
+if (!defined('STRIK_CLEANING_PHOTO_UPLOAD_MAX_BYTES')) {
+    define('STRIK_CLEANING_PHOTO_UPLOAD_MAX_BYTES', 750000);
+}
+
 if (!defined('STRIK_CLEANING_PHOTO_MARKER_PREFIX')) {
     define('STRIK_CLEANING_PHOTO_MARKER_PREFIX', '__strik_photo:');
 }
@@ -296,6 +300,107 @@ function strik_cleaning_v5_clean_photo_data_url($value, $max_bytes = STRIK_CLEAN
     }
 
     return $value;
+}
+
+function strik_cleaning_v5_photo_upload($request) {
+    $files = $request->get_file_params();
+
+    if (!isset($files['file']) || !is_array($files['file'])) {
+        return new WP_Error(
+            'strik_cleaning_photo_missing',
+            'Geen foto ontvangen.',
+            array('status' => 400)
+        );
+    }
+
+    $file = $files['file'];
+    $error = isset($file['error']) ? absint($file['error']) : UPLOAD_ERR_OK;
+
+    if ($error !== UPLOAD_ERR_OK) {
+        return new WP_Error(
+            'strik_cleaning_photo_upload_error',
+            'Foto uploaden is mislukt.',
+            array('status' => 400)
+        );
+    }
+
+    $size = isset($file['size']) ? absint($file['size']) : 0;
+    if ($size <= 0 || $size > STRIK_CLEANING_PHOTO_UPLOAD_MAX_BYTES) {
+        return new WP_Error(
+            'strik_cleaning_photo_too_large',
+            'Foto is te groot om veilig op te slaan.',
+            array('status' => 413)
+        );
+    }
+
+    $mime = isset($file['type']) ? sanitize_mime_type($file['type']) : '';
+    $allowed_mimes = array('image/jpeg', 'image/png', 'image/webp');
+
+    if (!in_array($mime, $allowed_mimes, true)) {
+        return new WP_Error(
+            'strik_cleaning_photo_type',
+            'Alleen jpg, png en webp foto’s zijn toegestaan.',
+            array('status' => 400)
+        );
+    }
+
+    require_once ABSPATH . 'wp-admin/includes/file.php';
+    require_once ABSPATH . 'wp-admin/includes/media.php';
+    require_once ABSPATH . 'wp-admin/includes/image.php';
+
+    $upload = wp_handle_upload(
+        $file,
+        array(
+            'test_form' => false,
+            'mimes' => array(
+                'jpg|jpeg|jpe' => 'image/jpeg',
+                'png' => 'image/png',
+                'webp' => 'image/webp',
+            ),
+        )
+    );
+
+    if (!is_array($upload) || isset($upload['error']) || empty($upload['file']) || empty($upload['url'])) {
+        return new WP_Error(
+            'strik_cleaning_photo_save_failed',
+            isset($upload['error']) ? $upload['error'] : 'Foto kon niet worden opgeslagen.',
+            array('status' => 500)
+        );
+    }
+
+    $label = sanitize_text_field((string) $request->get_param('label'));
+    $winkel = sanitize_text_field((string) $request->get_param('winkel'));
+    $datum = strik_cleaning_v5_clean_date((string) $request->get_param('datum'));
+    $title_parts = array_filter(array($datum, $winkel, $label));
+    $title = !empty($title_parts)
+        ? implode(' - ', $title_parts)
+        : sanitize_file_name(basename($upload['file']));
+
+    $attachment_id = wp_insert_attachment(
+        array(
+            'guid' => $upload['url'],
+            'post_mime_type' => $upload['type'],
+            'post_title' => $title,
+            'post_content' => '',
+            'post_status' => 'inherit',
+        ),
+        $upload['file']
+    );
+
+    if (is_wp_error($attachment_id)) {
+        return $attachment_id;
+    }
+
+    $metadata = wp_generate_attachment_metadata($attachment_id, $upload['file']);
+    if (!is_wp_error($metadata)) {
+        wp_update_attachment_metadata($attachment_id, $metadata);
+    }
+
+    return rest_ensure_response(array(
+        'id' => absint($attachment_id),
+        'url' => esc_url_raw($upload['url']),
+        'fileName' => sanitize_file_name(basename($upload['file'])),
+    ));
 }
 
 function strik_cleaning_v5_photos($items, $include_data_url = false) {
@@ -765,6 +870,14 @@ add_action('rest_api_init', function () {
         array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => 'strik_cleaning_v5_save',
+            'permission_callback' => 'strik_cleaning_v5_permission',
+        ),
+    ), true);
+
+    register_rest_route('strik/v1', '/cleaning-photo', array(
+        array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => 'strik_cleaning_v5_photo_upload',
             'permission_callback' => 'strik_cleaning_v5_permission',
         ),
     ), true);

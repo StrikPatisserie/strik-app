@@ -403,7 +403,7 @@ export function getCleaningItemPhotos(item: CleaningItem) {
   const uploadsByLabel = new Map<string, CleaningPhotoUpload>();
 
   item.fotoUploads?.forEach((upload) => {
-    if (upload.url || upload.dataUrl || upload.unavailable) {
+    if (upload.label || upload.fileName) {
       uploadsByLabel.set(upload.label, upload);
     }
   });

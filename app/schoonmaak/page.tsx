@@ -104,10 +104,21 @@ const FOTO_UPLOAD_MAX_ZIJDE = 520;
 const FOTO_UPLOAD_MIN_ZIJDE = 320;
 const FOTO_UPLOAD_DOEL_BYTES = 180_000;
 const FOTO_UPLOAD_KWALITEITEN = [0.38, 0.3, 0.24];
-const FOTO_FALLBACK_MAX_ZIJDE = 300;
-const FOTO_FALLBACK_MIN_ZIJDE = 220;
-const FOTO_FALLBACK_DOEL_BYTES = 55_000;
-const FOTO_FALLBACK_KWALITEITEN = [0.28, 0.22, 0.16];
+const FOTO_FALLBACK_MAX_DATA_URL_BYTES = 88_000;
+const FOTO_FALLBACK_VARIANTEN = [
+  {
+    maxZijde: 240,
+    minZijde: 150,
+    doelBytes: 36_000,
+    kwaliteiten: [0.24, 0.18, 0.12],
+  },
+  {
+    maxZijde: 180,
+    minZijde: 100,
+    doelBytes: 24_000,
+    kwaliteiten: [0.18, 0.12, 0.08],
+  },
+];
 
 function canvasNaarJpegBlob(canvas: HTMLCanvasElement, kwaliteit: number) {
   return new Promise<Blob | null>((resolve) => {
@@ -210,14 +221,24 @@ function verkleinFotoVoorUpload(file: File) {
 }
 
 async function maakKleineFotoPreviewDataUrl(file: File) {
-  const previewFile = await verkleinFoto(file, {
-    maxZijde: FOTO_FALLBACK_MAX_ZIJDE,
-    minZijde: FOTO_FALLBACK_MIN_ZIJDE,
-    doelBytes: FOTO_FALLBACK_DOEL_BYTES,
-    kwaliteiten: FOTO_FALLBACK_KWALITEITEN,
-  });
+  let bestePreview = "";
 
-  return readFileAsDataUrl(previewFile);
+  for (const variant of FOTO_FALLBACK_VARIANTEN) {
+    const previewFile = await verkleinFoto(file, variant);
+    const dataUrl = await readFileAsDataUrl(previewFile);
+
+    if (!bestePreview || dataUrl.length < bestePreview.length) {
+      bestePreview = dataUrl;
+    }
+
+    if (dataUrl.length <= FOTO_FALLBACK_MAX_DATA_URL_BYTES) {
+      return dataUrl;
+    }
+  }
+
+  return bestePreview.length <= FOTO_FALLBACK_MAX_DATA_URL_BYTES
+    ? bestePreview
+    : "";
 }
 
 const requiredFotoUploadLabels = [
@@ -837,6 +858,13 @@ function SchoonmaakForm() {
 
     async function fallbackPreview() {
       const dataUrl = await maakKleineFotoPreviewDataUrl(upload.file as File);
+      if (!dataUrl) {
+        return {
+          ...upload,
+          dataUrl: undefined,
+          unavailable: true,
+        };
+      }
 
       return {
         ...upload,
