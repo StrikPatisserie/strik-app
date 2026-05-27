@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { NextResponse } from "next/server";
@@ -76,11 +77,19 @@ type CanvasPolyfillModule = typeof import("@napi-rs/canvas") & {
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_OCR_PDF_PAGES = 3;
 const MAX_INVOICE_LINES = 600;
-const TESSERACT_WORKER_PATH = path.join(
-  process.cwd(),
-  "node_modules/tesseract.js/src/worker-script/node/index.js"
-);
 const TESSERACT_CACHE_PATH = path.join(tmpdir(), "strik-tesseract");
+
+function resolveTesseractWorkerPath() {
+  const relativePath = "node_modules/tesseract.js/src/worker-script/node/index.js";
+  const candidates = [
+    path.join(process.cwd(), relativePath),
+    path.join(process.cwd(), "..", relativePath),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate)) || candidates[0];
+}
+
+const TESSERACT_WORKER_PATH = resolveTesseractWorkerPath();
 
 const ARTICLE_HEADERS = [
   "artikelnummer",
@@ -323,12 +332,12 @@ function isVolumeIngredient(ingredient?: Ingredient) {
 function parsePackageSize(packageSize = "") {
   const normalized = packageSize.toLowerCase().replace(",", ".");
   const multiPack = normalized.match(
-    /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(kg|kilo|kilogram|g|gr|gram|l|ltr|liter|ml|st|stuks|stuk)\b/i
+    /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*(kg|kilo|kilogram|g|gr|gram|l|li|ltr|liter|ml|st|stuks|stuk)\b/i
   );
   const direct =
     multiPack ||
     normalized.match(
-      /(\d+(?:\.\d+)?)\s*(kg|kilo|kilogram|g|gr|gram|l|ltr|liter|ml|st|stuks|stuk)\b/i
+      /(\d+(?:\.\d+)?)\s*(kg|kilo|kilogram|g|gr|gram|l|li|ltr|liter|ml|st|stuks|stuk)\b/i
     );
 
   if (!direct) return null;
@@ -902,15 +911,17 @@ function isHefeInvoiceText(fileName: string, text: string) {
 function normalizeHefeUnit(unit: string) {
   const normalized = cleanCell(unit).toUpperCase().replace(/\s+/g, " ");
 
-  if (/\b(LI|L)\b/.test(normalized)) return "l";
+  if (/^(LI|L|UL|UI)$/.test(normalized) || /\b(LI|L|UL|UI)\b/.test(normalized)) {
+    return "l";
+  }
   if (/\bKG\b/.test(normalized)) return "kg";
-  if (/\bST\b/.test(normalized)) return "st";
+  if (/^(ST|U)$/.test(normalized) || /\bST\b/.test(normalized)) return "st";
 
   return normalized.toLowerCase();
 }
 
 function parseHefeTrailingMeasure(value: string) {
-  const match = value.match(/\s(\d+(?:[.,]\d+)?)\s*(KG|LI|L|ST|KT)$/i);
+  const match = value.match(/\s(\d+(?:[.,]\d+)?)\s*(KG|LI|L|UL|UI|ST|U|KT|PG)$/i);
   if (!match || match.index === undefined) return null;
 
   return {
@@ -922,8 +933,22 @@ function parseHefeTrailingMeasure(value: string) {
 }
 
 function parseHefeCountAndUnit(value: string) {
+  const compactWithTrailingQuantity = value.match(
+    /\s(\d+(?:[.,]\d+)?)\s*([A-Z]{1,4}\s*\d+(?:[.,]\d+)?\s*(?:KG|LI|L|UL|UI|ST|U))\s+(\d+(?:[.,]\d+)?)$/i
+  );
+
+  if (compactWithTrailingQuantity?.index !== undefined) {
+    return {
+      quantity:
+        parseDutchNumber(compactWithTrailingQuantity[3]) ||
+        parseDutchNumber(compactWithTrailingQuantity[1]),
+      unitSegment: cleanCell(compactWithTrailingQuantity[2]),
+      description: cleanCell(value.slice(0, compactWithTrailingQuantity.index)),
+    };
+  }
+
   const match = value.match(
-    /\s(\d+(?:[.,]\d+)?)\s+([A-Z]{1,3}\s*\d*(?:[.,]\d+)?\s*(?:KG|LI|L|ST)?(?:\s*\*)?(?:\s+\d+(?:[.,]\d+)?\s*(?:KG|LI|L|ST))?)$/i
+    /\s(\d+(?:[.,]\d+)?)\s*([A-Z]{1,4}\s*\d*(?:[.,]\d+)?\s*(?:KG|LI|L|UL|UI|ST|U)?(?:\s*\*)?(?:\s+\d+(?:[.,]\d+)?\s*(?:KG|LI|L|UL|UI|ST|U))?)$/i
   );
 
   if (!match || match.index === undefined) return null;
@@ -939,7 +964,11 @@ function correctedOcrTotal(totalPrice: number, expectedTotal: number) {
   if (!expectedTotal) return totalPrice;
   if (numbersAreClose(totalPrice, expectedTotal)) return totalPrice;
 
-  return expectedTotal;
+  return Math.round(expectedTotal * 100) / 100;
+}
+
+function hefeLineUsesBasePrice(unit: string) {
+  return unit === "kg" || unit === "l";
 }
 
 function parseHefePdfLines(text: string, ingredients: Ingredient[]) {
@@ -948,7 +977,7 @@ function parseHefePdfLines(text: string, ingredients: Ingredient[]) {
       if (!/^\d{4,7}\s/.test(line)) return null;
 
       const priceMatch = line.match(
-        /\s(\d+(?:[.,]\d{4}))\s+(-?\d[\d.,]*)(?:\s+[O0©\[\]]+)?$/i
+        /\s(\d+(?:[.,]\d{3,4}))\s+(-?\d[\d.,]*)(?:\s+[O0©\[\]]+)?$/i
       );
       if (!priceMatch || priceMatch.index === undefined) return null;
 
@@ -980,6 +1009,7 @@ function parseHefePdfLines(text: string, ingredients: Ingredient[]) {
       const rawTotalPrice = parseDutchNumber(priceMatch[2]);
       const quantity = contentQuantity || countInfo.quantity;
       const unit = contentUnit || normalizeHefeUnit(countInfo.unitSegment);
+      const priceKind = hefeLineUsesBasePrice(unit) ? "base" : "package";
       const totalPrice = correctedOcrTotal(
         rawTotalPrice,
         unitPrice * (quantity || countInfo.quantity || 1)
@@ -1002,7 +1032,7 @@ function parseHefePdfLines(text: string, ingredients: Ingredient[]) {
           unit,
           totalPrice,
           unitPrice,
-          priceKind: contentQuantity ? "base" : "package",
+          priceKind,
           packageSizeHint: `${countInfo.unitSegment} ${description}`,
         },
         ingredients
