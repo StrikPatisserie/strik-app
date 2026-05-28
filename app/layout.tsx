@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import BottomNav from "./BottomNav";
-import NotificationMonitor from "./NotificationMonitor";
+import AppChrome from "./AppChrome";
 
 export const metadata: Metadata = {
   title: "Strik Team app",
@@ -31,9 +30,7 @@ export default function RootLayout({
   return (
     <html lang="nl" className="bg-[#f4f0ea]">
       <body className="min-h-dvh bg-[#f4f0ea] text-[#2d2a26]">
-        <NotificationMonitor />
-        <div className="min-h-dvh bg-[#f4f0ea] pb-24">{children}</div>
-        <BottomNav />
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );

@@ -1338,7 +1338,7 @@ export default function RecepturenApp() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-white pb-28 text-[#111111]">
+    <main className="min-h-screen overflow-x-hidden bg-white text-[#111111]">
       <div className="grid min-h-screen grid-cols-[clamp(4.75rem,8vw,6.1rem)_minmax(0,1fr)]">
         <BakkerijSidebar
           active={mainTab !== "start"}
