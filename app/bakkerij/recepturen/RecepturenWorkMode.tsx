@@ -28,6 +28,7 @@ type ProductionTask = {
   id: string;
   label: string;
   group: "ingredients" | "semi" | "steps" | "finishing";
+  linkedRecipe?: Recipe;
 };
 
 const WORK_FILTERS: Array<{ id: WorkFilterId; label: string }> = [
@@ -770,17 +771,32 @@ function WorkRecipeDetail({
           <WorkPanel title="Eerst benodigde halffabricaten">
             <div className="grid gap-2">
               {scaledSemiFinished.length ? (
-                scaledSemiFinished.map((item) => (
-                  <button
-                    key={`${item.id}-${item.quantity}`}
-                    type="button"
-                    onClick={() => item.recipe && onSelectRecipe(item.recipe)}
-                    className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 rounded-2xl bg-[#fffdf8] p-3 text-left text-sm font-bold shadow-sm"
-                  >
-                    <span>{formatAmount(item.quantity, item.unit)}</span>
-                    <span className="font-black">{item.name}</span>
-                  </button>
-                ))
+                scaledSemiFinished.map((item) => {
+                  const linkedRecipe = item.recipe;
+
+                  return (
+                    <div
+                      key={`${item.id}-${item.quantity}`}
+                      className="grid gap-3 rounded-2xl bg-[#fffdf8] p-3 text-sm font-bold shadow-sm sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-center"
+                    >
+                      <span>{formatAmount(item.quantity, item.unit)}</span>
+                      <span className="font-black">{item.name}</span>
+                      {linkedRecipe ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelectRecipe(linkedRecipe)}
+                          className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
+                        >
+                          Open recept
+                        </button>
+                      ) : (
+                        <span className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/45">
+                          Niet gevonden
+                        </span>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
                 <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-bold text-[#2d2a26]/50">
                   Geen halffabricaten nodig.
@@ -855,6 +871,10 @@ function WorkRecipeDetail({
           semiFinished={scaledSemiFinished}
           steps={workSteps}
           finishingSteps={finishingSteps}
+          onOpenRecipe={(linkedRecipe) => {
+            setIsProducing(false);
+            onSelectRecipe(linkedRecipe);
+          }}
           onBack={() => setIsProducing(false)}
         />
       )}
@@ -960,6 +980,7 @@ function ProductionMode({
   semiFinished,
   steps,
   finishingSteps,
+  onOpenRecipe,
   onBack,
 }: Readonly<{
   recipe: Recipe;
@@ -970,6 +991,7 @@ function ProductionMode({
   semiFinished: ReturnType<typeof getScaledSemiFinished>;
   steps: string[];
   finishingSteps: string[];
+  onOpenRecipe: (recipe: Recipe) => void;
   onBack: () => void;
 }>) {
   const [checkedTasks, setCheckedTasks] = useState<Record<string, boolean>>({});
@@ -1101,18 +1123,21 @@ function ProductionMode({
               tasks={tasks.filter((task) => task.group === "ingredients")}
               checkedTasks={checkedTasks}
               onToggle={toggleTask}
+              onOpenRecipe={onOpenRecipe}
             />
             <ProductionTaskGroup
               title="Halffabricaten"
               tasks={tasks.filter((task) => task.group === "semi")}
               checkedTasks={checkedTasks}
               onToggle={toggleTask}
+              onOpenRecipe={onOpenRecipe}
             />
             <ProductionTaskGroup
               title="Stappen"
               tasks={tasks.filter((task) => task.group === "steps")}
               checkedTasks={checkedTasks}
               onToggle={toggleTask}
+              onOpenRecipe={onOpenRecipe}
             />
             {finishingSteps.length > 0 && (
               <ProductionTaskGroup
@@ -1120,6 +1145,7 @@ function ProductionMode({
                 tasks={tasks.filter((task) => task.group === "finishing")}
                 checkedTasks={checkedTasks}
                 onToggle={toggleTask}
+                onOpenRecipe={onOpenRecipe}
               />
             )}
           </div>
@@ -1269,6 +1295,7 @@ function createProductionTasks(
       id: `semi-${item.id}-${index}`,
       label: `${formatAmount(item.quantity, item.unit)} ${item.name}`,
       group: "semi" as const,
+      linkedRecipe: item.recipe,
     })),
     ...steps.map((step, index) => ({
       id: `step-${index}`,
@@ -1288,40 +1315,59 @@ function ProductionTaskGroup({
   tasks,
   checkedTasks,
   onToggle,
+  onOpenRecipe,
 }: Readonly<{
   title: string;
   tasks: ProductionTask[];
   checkedTasks: Record<string, boolean>;
   onToggle: (taskId: string) => void;
+  onOpenRecipe: (recipe: Recipe) => void;
 }>) {
   return (
     <section className="rounded-[1.25rem] bg-white p-4 shadow-sm">
       <h3 className="text-xl font-black">{title}</h3>
       <div className="mt-3 grid gap-2">
         {tasks.length ? (
-          tasks.map((task) => (
-            <button
-              key={task.id}
-              type="button"
-              onClick={() => onToggle(task.id)}
-              className={`flex gap-3 rounded-2xl p-4 text-left text-base font-black shadow-sm transition ${
-                checkedTasks[task.id]
-                  ? "bg-[#dce8d6] text-[#45663b]"
-                  : "bg-[#fffdf8] text-[#2d2a26]"
-              }`}
-            >
-              <span
-                className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 ${
+          tasks.map((task) => {
+            const linkedRecipe = task.linkedRecipe;
+
+            return (
+              <div
+                key={task.id}
+                className={`grid gap-2 rounded-2xl p-2 text-base font-black shadow-sm transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
                   checkedTasks[task.id]
-                    ? "border-[#45663b] bg-[#45663b] text-white"
-                    : "border-[#c3d3bc]"
+                    ? "bg-[#dce8d6] text-[#45663b]"
+                    : "bg-[#fffdf8] text-[#2d2a26]"
                 }`}
               >
-                {checkedTasks[task.id] ? "OK" : ""}
-              </span>
-              <span>{task.label}</span>
-            </button>
-          ))
+                <button
+                  type="button"
+                  onClick={() => onToggle(task.id)}
+                  className="flex min-w-0 gap-3 rounded-xl p-2 text-left"
+                >
+                  <span
+                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 text-xs ${
+                      checkedTasks[task.id]
+                        ? "border-[#45663b] bg-[#45663b] text-white"
+                        : "border-[#c3d3bc]"
+                    }`}
+                  >
+                    {checkedTasks[task.id] ? "OK" : ""}
+                  </span>
+                  <span>{task.label}</span>
+                </button>
+                {linkedRecipe && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenRecipe(linkedRecipe)}
+                    className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#45663b] shadow-sm"
+                  >
+                    Open recept
+                  </button>
+                )}
+              </div>
+            );
+          })
         ) : (
           <p className="rounded-2xl bg-[#f8f6f3] p-4 text-sm font-bold text-[#2d2a26]/50">
             Geen taken in deze categorie.
