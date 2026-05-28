@@ -786,16 +786,12 @@ export default function RecipeDetail({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#252525]/35 px-3 py-5 backdrop-blur-sm">
-      <div className="mx-auto max-w-[88rem] rounded-lg border border-[#d8d8d4] bg-[#f5f5f3] p-3 shadow-2xl">
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg bg-white p-4">
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-white/70 px-2 py-4 backdrop-blur-[1px]">
+      <div className="mx-auto w-[min(64rem,calc(100vw-1rem))] border border-[#111111] bg-white p-3 shadow-2xl">
+        <div className="flex flex-wrap items-start justify-between gap-3 bg-white p-2">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
-              {isEditing
-                ? "Recept aanpassen"
-                : recipe.type === "finalProduct"
-                ? "Recept detail"
-                : "Halffabricaat detail"}
+            <p className="text-sm italic text-[#111111]">
+              Recept kaart
             </p>
             <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">
               {isEditing ? draft.name || recipe.name : recipe.name}
@@ -818,14 +814,15 @@ export default function RecipeDetail({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-[#d8d8d4] bg-white px-4 py-2 text-sm font-black shadow-sm"
+            className="text-4xl font-light leading-none text-[#111111]"
+            aria-label="Sluit receptkaart"
           >
-            Sluit
+            ×
           </button>
         </div>
 
         {isEditing && (
-          <Panel className="mt-3 border-[#cfdcc8] bg-[#f7faf5] p-3">
+          <Panel className="mt-3 rounded-none border-[#cfdcc8] bg-[#efefef] p-3">
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
                 <p className="text-[0.68rem] font-black uppercase tracking-[0.15em] text-[#2d2a26]/42">
@@ -840,7 +837,7 @@ export default function RecipeDetail({
               </p>
             </div>
 
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            <div className="mt-3 grid grid-cols-2 border border-[#c3d3bc] bg-white sm:grid-cols-3 lg:grid-cols-6">
               {recipeEditSections.map((section) => {
                 if (section.id === "productie" && draft.type !== "finalProduct") {
                   return null;
@@ -853,14 +850,14 @@ export default function RecipeDetail({
                     key={section.id}
                     type="button"
                     onClick={() => setActiveEditSection(section.id)}
-                    className={`min-w-max rounded-full border px-4 py-2 text-left shadow-sm transition ${
+                    className={`min-w-0 border-r border-[#c3d3bc] px-3 py-2 text-center uppercase tracking-[0.12em] transition last:border-r-0 ${
                       isActive
-                        ? "border-[#8fb184] bg-[#c3d3bc] text-[#2d2a26]"
-                        : "border-[#dfe9d8] bg-white text-[#2d2a26]/65"
+                        ? "bg-[#c3d3bc] text-[#111111]"
+                        : "bg-white text-[#111111]"
                     }`}
                   >
-                    <span className="block text-sm font-black">
-                      {section.label}
+                    <span className="block truncate text-xs font-light sm:text-sm">
+                      {section.label === "Basis" ? "Algemeen" : section.label}
                     </span>
                   </button>
                 );
@@ -1139,11 +1136,11 @@ export default function RecipeDetail({
                             Productieplanning
                           </p>
                           <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-                            Vul de gemiddelde verkoop in. Na “product gemaakt”
-                            leert het systeem van het vorige interval en stelt
-                            dit gemiddelde automatisch bij.
+                            Vul de gemiddelde verkoop handmatig in. Producties
+                            tellen voorraad erbij op; voorraadcorrecties zetten
+                            de actuele stand.
                           </p>
-                          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(9rem,0.8fr)_minmax(9rem,0.8fr)_minmax(12rem,1fr)]">
+                          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(8rem,0.72fr)_minmax(8rem,0.72fr)_minmax(8rem,0.72fr)_minmax(8rem,0.72fr)]">
                             <EditTextField
                               label="Gemiddeld verkocht"
                               value={draft.averageSalesQuantity}
@@ -1165,6 +1162,41 @@ export default function RecipeDetail({
                                 label: salesPeriodText(period),
                               }))}
                             />
+                            <EditTextField
+                              label="Elke x dagen"
+                              value={draft.desiredProductionFrequencyDays}
+                              onChange={(value) =>
+                                updateDraft({
+                                  desiredProductionFrequencyDays: value,
+                                })
+                              }
+                              inputMode="decimal"
+                            />
+                            <EditTextField
+                              label="Batchadvies"
+                              value={draft.desiredProductionBatchQuantity}
+                              onChange={(value) =>
+                                updateDraft({
+                                  desiredProductionBatchQuantity: value,
+                                })
+                              }
+                              inputMode="decimal"
+                            />
+                          </div>
+                          <label className="mt-3 flex items-center gap-3 border border-[#cfdcc8] bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/60">
+                            <input
+                              type="checkbox"
+                              checked={draft.canProduceAhead}
+                              onChange={(event) =>
+                                updateDraft({
+                                  canProduceAhead: event.target.checked,
+                                })
+                              }
+                              className="h-4 w-4 accent-[#8fb184]"
+                            />
+                            Vooruit maken volgens vast ritme
+                          </label>
+                          <div className="mt-3">
                             <Metric
                               label="Leren uit productie"
                               value={
@@ -1370,6 +1402,58 @@ export default function RecipeDetail({
                         : "Nog invullen"
                     }
                   />
+                </div>
+
+                <div className="mt-4 grid gap-3 border border-[#c3d3bc] bg-white p-3 md:grid-cols-[minmax(8rem,0.75fr)_minmax(8rem,0.75fr)_minmax(8rem,0.75fr)_minmax(9rem,1fr)]">
+                  <EditTextField
+                    label="Gemiddeld verkocht"
+                    value={draft.averageSalesQuantity}
+                    onChange={(value) =>
+                      updateDraft({ averageSalesQuantity: value })
+                    }
+                    inputMode="decimal"
+                  />
+                  <SelectField
+                    label="Periode"
+                    value={draft.averageSalesPeriod}
+                    onChange={(value) =>
+                      updateDraft({ averageSalesPeriod: value as SalesPeriod })
+                    }
+                    options={salesPeriods.map((period) => ({
+                      value: period,
+                      label: salesPeriodText(period),
+                    }))}
+                  />
+                  <EditTextField
+                    label="Vaste batch"
+                    value={draft.desiredProductionBatchQuantity}
+                    onChange={(value) =>
+                      updateDraft({ desiredProductionBatchQuantity: value })
+                    }
+                    inputMode="decimal"
+                  />
+                  <label className="flex items-center gap-3 self-end border border-[#cfdcc8] bg-[#f7faf5] px-3 py-2.5 text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/60">
+                    <input
+                      type="checkbox"
+                      checked={draft.canProduceAhead}
+                      onChange={(event) =>
+                        updateDraft({ canProduceAhead: event.target.checked })
+                      }
+                      className="h-4 w-4 accent-[#8fb184]"
+                    />
+                    elke{" "}
+                    <input
+                      value={draft.desiredProductionFrequencyDays}
+                      onChange={(event) =>
+                        updateDraft({
+                          desiredProductionFrequencyDays: event.target.value,
+                        })
+                      }
+                      inputMode="decimal"
+                      className="h-8 w-14 border border-[#cfdcc8] bg-white px-2 text-center text-sm font-black tracking-normal outline-none"
+                    />
+                    dagen
+                  </label>
                 </div>
 
                 <div className="mt-4 grid gap-3 xl:grid-cols-2">
@@ -2382,6 +2466,9 @@ type RecipeDraft = {
   decorationMargin: string;
   averageSalesQuantity: string;
   averageSalesPeriod: SalesPeriod;
+  canProduceAhead: boolean;
+  desiredProductionFrequencyDays: string;
+  desiredProductionBatchQuantity: string;
   productionLog: ProductionLogEntry[];
   productionRequests: ProductionRequest[];
   version: string;
@@ -2434,6 +2521,16 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
     decorationMargin: formatInputNumber(recipe.decorationMargin ?? 30),
     averageSalesQuantity: formatInputNumber(recipe.averageSalesQuantity || 0),
     averageSalesPeriod: recipe.averageSalesPeriod || "week",
+    canProduceAhead: Boolean(recipe.canProduceAhead),
+    desiredProductionFrequencyDays: formatInputNumber(
+      recipe.desiredProductionFrequencyDays || 7
+    ),
+    desiredProductionBatchQuantity: formatInputNumber(
+      recipe.desiredProductionBatchQuantity ||
+        recipe.standardBatchQuantity ||
+        getBatchInfo(recipe)?.quantity ||
+        0
+    ),
     productionLog: productionLogForRecipe(recipe),
     productionRequests: normalizeProductionRequests(recipe.productionRequests || []),
     version: recipe.version,
@@ -2505,6 +2602,14 @@ function recipeDraftFromImportedRecipe(
       : current.averageSalesQuantity,
     averageSalesPeriod:
       importedRecipe.averageSalesPeriod || current.averageSalesPeriod,
+    canProduceAhead:
+      importedRecipe.canProduceAhead ?? current.canProduceAhead,
+    desiredProductionFrequencyDays: importedRecipe.desiredProductionFrequencyDays
+      ? formatInputNumber(importedRecipe.desiredProductionFrequencyDays)
+      : current.desiredProductionFrequencyDays,
+    desiredProductionBatchQuantity: importedRecipe.desiredProductionBatchQuantity
+      ? formatInputNumber(importedRecipe.desiredProductionBatchQuantity)
+      : current.desiredProductionBatchQuantity,
     workCategories:
       importedRecipe.type === "finalProduct" && importedRecipe.workCategories?.length
         ? importedRecipe.workCategories
@@ -2638,6 +2743,13 @@ function buildRecipeFromDraft(
       ? 0
       : parseDutchNumber(draft.averageSalesQuantity),
     averageSalesPeriod: isSemiFinished ? "week" : draft.averageSalesPeriod,
+    canProduceAhead: isSemiFinished ? false : draft.canProduceAhead,
+    desiredProductionFrequencyDays: isSemiFinished
+      ? 0
+      : Math.max(0, Math.round(parseDutchNumber(draft.desiredProductionFrequencyDays))),
+    desiredProductionBatchQuantity: isSemiFinished
+      ? 0
+      : parseDutchNumber(draft.desiredProductionBatchQuantity),
     lastProducedAt: isSemiFinished ? "" : draft.productionLog[0]?.date || "",
     lastProducedQuantity: isSemiFinished
       ? 0
@@ -3275,7 +3387,7 @@ function BakkerRecipeCard({
         </div>
 
         <div className="grid gap-5 sm:grid-cols-[1rem_minmax(0,1fr)]">
-          <div className="hidden bg-[#c3d3bc] sm:block" />
+          <div className={`hidden sm:block ${recipeCardStripeClass(recipe)}`} />
           <div
             className={`grid gap-4 ${
               recipe.type === "finalProduct"
@@ -3524,6 +3636,16 @@ function BakkerRecipeCard({
       </div>
     </div>
   );
+}
+
+function recipeCardStripeClass(recipe: Recipe) {
+  if (recipe.type === "semiFinished") return "bg-[#f6f2a4]";
+
+  const normalizedGroup = recipe.productGroup.toLocaleLowerCase("nl-NL");
+  if (normalizedGroup.includes("ijs")) return "bg-[#9fd0dc]";
+  if (normalizedGroup.includes("taart")) return "bg-[#e9c5dc]";
+
+  return "bg-[#c3d3bc]";
 }
 
 function ProductionShortcutDialog({

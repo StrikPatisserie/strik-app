@@ -199,19 +199,7 @@ export function recipeCostDelta(recipe: Recipe) {
 export function targetSalesPrice(recipe: Recipe) {
   if (!recipe.targetMargin || recipe.targetMargin >= 100) return recipe.salesPrice;
 
-  if (recipe.type !== "finalProduct") {
-    return recipe.costPrice / (1 - recipe.targetMargin / 100);
-  }
-
-  const extras = recipeExtraCostBreakdown(recipe);
-  const marginBaseCost = Math.max(
-    0,
-    recipe.costPrice - extras.packagingUnitCost
-  );
-  const baseTarget =
-    marginBaseCost / (1 - recipe.targetMargin / 100);
-
-  return baseTarget + extras.packagingUnitCost;
+  return recipe.costPrice / (1 - recipe.targetMargin / 100);
 }
 
 export function effectiveTargetMargin(recipe: Recipe) {
@@ -562,6 +550,73 @@ export function openProductionRequests(recipe: Recipe) {
   );
 }
 
+function latestProductionEntry(productionLog: ProductionLogEntry[]) {
+  return productionLog.find((entry) => entry.source !== "stock");
+}
+
+function daysBetweenDates(first: Date, second: Date) {
+  return Math.max(
+    0,
+    Math.floor((second.getTime() - first.getTime()) / 86400000)
+  );
+}
+
+function estimatedRemainingFromProductionLog(
+  productionLog: ProductionLogEntry[],
+  dailySales: number,
+  todayStart: Date
+) {
+  const oldestFirst = [...productionLog].sort((first, second) => {
+    const dateCompare = first.date.localeCompare(second.date);
+
+    return dateCompare || first.id.localeCompare(second.id);
+  });
+
+  let remainingQuantity = 0;
+  let cursorDate: Date | null = null;
+
+  for (const entry of oldestFirst) {
+    const entryDate = isoDateAtStartOfDay(entry.date);
+
+    if (cursorDate && dailySales > 0) {
+      remainingQuantity = Math.max(
+        0,
+        remainingQuantity - dailySales * daysBetweenDates(cursorDate, entryDate)
+      );
+    }
+
+    remainingQuantity =
+      entry.source === "stock"
+        ? entry.quantity
+        : remainingQuantity + entry.quantity;
+    cursorDate = entryDate;
+  }
+
+  if (cursorDate && dailySales > 0) {
+    remainingQuantity = Math.max(
+      0,
+      remainingQuantity - dailySales * daysBetweenDates(cursorDate, todayStart)
+    );
+  }
+
+  return roundPlanningQuantity(remainingQuantity);
+}
+
+function recurringProductionDate(recipe: Recipe, todayStart: Date) {
+  if (!recipe.canProduceAhead) return null;
+
+  const frequencyDays = Math.round(recipe.desiredProductionFrequencyDays || 0);
+  if (frequencyDays <= 0) return null;
+
+  const latestEntry = latestProductionEntry(productionLogForRecipe(recipe));
+  if (!latestEntry?.date) return todayStart;
+
+  const nextDate = isoDateAtStartOfDay(latestEntry.date);
+  nextDate.setDate(nextDate.getDate() + frequencyDays);
+
+  return nextDate;
+}
+
 export function syncRecipeProductionMetadata(recipe: Recipe): Recipe {
   if (recipe.type !== "finalProduct") {
     return {
@@ -572,6 +627,9 @@ export function syncRecipeProductionMetadata(recipe: Recipe): Recipe {
       lastProducedQuantity: 0,
       productionLog: [],
       productionRequests: [],
+      canProduceAhead: false,
+      desiredProductionFrequencyDays: 0,
+      desiredProductionBatchQuantity: 0,
     };
   }
 
@@ -579,8 +637,12 @@ export function syncRecipeProductionMetadata(recipe: Recipe): Recipe {
   const productionRequests = normalizeProductionRequests(
     recipe.productionRequests || []
   );
-  const latestEntry = productionLog[0];
+  const latestEntry = latestProductionEntry(productionLog);
   const averageSalesPeriod = recipe.averageSalesPeriod || "week";
+  const configuredAverageSalesQuantity =
+    recipe.averageSalesQuantity === undefined
+      ? undefined
+      : Math.max(0, recipe.averageSalesQuantity || 0);
   const learnedAverageSalesQuantity = learnedSalesAverageFromLog(
     productionLog,
     averageSalesPeriod
@@ -589,8 +651,16 @@ export function syncRecipeProductionMetadata(recipe: Recipe): Recipe {
   return {
     ...recipe,
     averageSalesQuantity:
-      learnedAverageSalesQuantity || Math.max(0, recipe.averageSalesQuantity || 0),
+      configuredAverageSalesQuantity ?? learnedAverageSalesQuantity,
     averageSalesPeriod,
+    canProduceAhead: Boolean(recipe.canProduceAhead),
+    desiredProductionFrequencyDays: Math.max(
+      0,
+      Math.round(recipe.desiredProductionFrequencyDays || 0)
+    ),
+    desiredProductionBatchQuantity: roundPlanningQuantity(
+      recipe.desiredProductionBatchQuantity || 0
+    ),
     lastProducedAt: latestEntry?.date || "",
     lastProducedQuantity: latestEntry?.quantity || 0,
     productionLog,
@@ -608,10 +678,13 @@ export function productionNeedForRecipe(
     syncedRecipe.averageSalesQuantity || 0
   );
   const averageSalesPeriod = syncedRecipe.averageSalesPeriod || "week";
+  const dailySales = averageSalesQuantity / salesPeriodDays(averageSalesPeriod);
+  const todayStart = dateAtStartOfDay(today);
+  const recurringDate = recurringProductionDate(syncedRecipe, todayStart);
   const lastProducedQuantity =
     syncedRecipe.lastProducedQuantity ?? recipeBatchQuantity(recipe);
 
-  if (syncedRecipe.type !== "finalProduct" || averageSalesQuantity <= 0) {
+  if (syncedRecipe.type !== "finalProduct") {
     return {
       recipe: syncedRecipe,
       status: "none",
@@ -626,54 +699,55 @@ export function productionNeedForRecipe(
     };
   }
 
-  const todayStart = dateAtStartOfDay(today);
   const lastProducedAt = syncedRecipe.lastProducedAt || "";
+  const estimatedRemainingQuantity = estimatedRemainingFromProductionLog(
+    syncedRecipe.productionLog || [],
+    dailySales,
+    todayStart
+  );
+  const requestedQuantity =
+    syncedRecipe.desiredProductionBatchQuantity ||
+    syncedRecipe.standardBatchQuantity ||
+    recipeBatchQuantity(syncedRecipe);
 
-  if (!lastProducedAt) {
+  if (averageSalesQuantity <= 0 && !recurringDate) {
     return {
       recipe: syncedRecipe,
-      status: "due",
-      averageSalesQuantity,
-      averageSalesPeriod,
-      lastProducedAt: "",
-      lastProducedQuantity,
-      nextProductionDate: todayIsoDate(),
-      daysUntilProduction: 0,
-      daysCovered: 0,
-      estimatedRemainingQuantity: 0,
-    };
-  }
-
-  const dailySales = averageSalesQuantity / salesPeriodDays(averageSalesPeriod);
-  if (lastProducedQuantity <= 0) {
-    return {
-      recipe: syncedRecipe,
-      status: "due",
+      status: "none",
       averageSalesQuantity,
       averageSalesPeriod,
       lastProducedAt,
       lastProducedQuantity,
-      nextProductionDate: todayIsoDate(),
-      daysUntilProduction: 0,
+      nextProductionDate: "",
+      daysUntilProduction: 9999,
       daysCovered: 0,
-      estimatedRemainingQuantity: 0,
+      estimatedRemainingQuantity,
     };
   }
 
-  const daysCovered = dailySales > 0 ? lastProducedQuantity / dailySales : 0;
-  const lastProducedDate = isoDateAtStartOfDay(lastProducedAt);
-  const nextProductionDateObject = new Date(lastProducedDate);
-  const daysSinceProduction = Math.max(
-    0,
-    Math.floor((todayStart.getTime() - lastProducedDate.getTime()) / 86400000)
-  );
-  const estimatedRemainingQuantity = roundPlanningQuantity(
-    Math.max(0, lastProducedQuantity - dailySales * daysSinceProduction)
-  );
+  const daysCovered = dailySales > 0 ? estimatedRemainingQuantity / dailySales : 0;
+  let nextProductionDateObject: Date | null = null;
+  let requestReason = "";
 
-  nextProductionDateObject.setDate(
-    lastProducedDate.getDate() + Math.max(1, Math.floor(daysCovered))
-  );
+  if (dailySales > 0) {
+    nextProductionDateObject = new Date(todayStart);
+    nextProductionDateObject.setDate(
+      todayStart.getDate() + Math.max(0, Math.floor(daysCovered))
+    );
+  }
+
+  if (
+    recurringDate &&
+    (!nextProductionDateObject ||
+      recurringDate.getTime() <= nextProductionDateObject.getTime())
+  ) {
+    nextProductionDateObject = recurringDate;
+    requestReason = "Vaste productie";
+  }
+
+  if (!nextProductionDateObject) {
+    nextProductionDateObject = new Date(todayStart);
+  }
 
   const daysUntilProduction = Math.ceil(
     (nextProductionDateObject.getTime() - todayStart.getTime()) / 86400000
@@ -698,6 +772,8 @@ export function productionNeedForRecipe(
     daysUntilProduction,
     daysCovered,
     estimatedRemainingQuantity,
+    requestReason,
+    requestedQuantity,
   };
 }
 
@@ -868,11 +944,13 @@ function learnedSalesAverageFromLog(
   productionLog: ProductionLogEntry[],
   averageSalesPeriod: SalesPeriod
 ) {
-  const oldestFirst = [...productionLog].sort((first, second) => {
-    const dateCompare = first.date.localeCompare(second.date);
+  const oldestFirst = productionLog
+    .filter((entry) => entry.source !== "stock")
+    .sort((first, second) => {
+      const dateCompare = first.date.localeCompare(second.date);
 
-    return dateCompare || first.id.localeCompare(second.id);
-  });
+      return dateCompare || first.id.localeCompare(second.id);
+    });
   let learnedAverage = 0;
 
   for (let index = 1; index < oldestFirst.length; index += 1) {

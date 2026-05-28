@@ -151,6 +151,9 @@ export type Recipe = {
   decorationMargin?: number;
   averageSalesQuantity?: number;
   averageSalesPeriod?: SalesPeriod;
+  canProduceAhead?: boolean;
+  desiredProductionFrequencyDays?: number;
+  desiredProductionBatchQuantity?: number;
   lastProducedAt?: string;
   lastProducedQuantity?: number;
   productionLog?: ProductionLogEntry[];

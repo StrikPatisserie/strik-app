@@ -1323,7 +1323,6 @@ export default function RecepturenApp() {
           <IngredientsList
             ingredients={ingredientItems}
             recipes={recipeItems}
-            onOpenRecipe={openRecipe}
             onUpdateIngredient={saveIngredient}
             onDeleteIngredient={deleteIngredient}
             onDeleteIngredients={(ingredientsToDelete) =>
@@ -1382,9 +1381,7 @@ export default function RecepturenApp() {
         />
 
         <div className="flex h-screen h-[100dvh] min-w-0 flex-col overflow-hidden">
-          {mainTab !== "start" && (
-            <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
-          )}
+          <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
 
           <div className="min-h-0 flex-1 overflow-hidden">
             {mainTab === "start" && (
@@ -1532,7 +1529,18 @@ function BakkerijTopNav({
   onSelect: (tab: MainTabId) => void;
 }>) {
   if (active === "start") {
-    return null;
+    return (
+      <header className="grid h-[clamp(2.95rem,5vw,3.9rem)] shrink-0 grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
+        <button
+          type="button"
+          onClick={() => onSelect("start")}
+          className="min-w-0 border-r border-[#c3d3bc] bg-white text-center text-[clamp(0.72rem,1.35vw,1rem)] font-light uppercase tracking-[0.16em] text-[#111111]"
+        >
+          BAKKERIJ
+        </button>
+        <div />
+      </header>
+    );
   }
 
   const tabs: Array<{ id: MainTabId; label: string }> = [
@@ -1724,12 +1732,6 @@ function BeheerHome({
             icon="/UI-apps_aanpassen.svg"
             onClick={() => onOpen("import")}
           />
-          <BeheerLinkRow
-            title="Voorpagina"
-            description="Aanbiedingsfoto per week in Management."
-            icon="/UI-apps_homepage.svg"
-            href="/management/bakkerij"
-          />
         </div>
       </div>
 
@@ -1908,38 +1910,6 @@ function BeheerRow({
   );
 }
 
-function BeheerLinkRow({
-  title,
-  description,
-  icon,
-  href,
-}: Readonly<{
-  title: string;
-  description: string;
-  icon: string;
-  href: string;
-}>) {
-  return (
-    <a
-      href={href}
-      className="grid grid-cols-[3rem_minmax(0,1fr)_2.75rem] items-center gap-4 border border-[#c3d3bc] bg-white p-4 text-left transition hover:bg-[#f8f8f6] active:scale-[0.99]"
-    >
-      <span className="flex h-12 w-12 items-center justify-center bg-[#c3d3bc]">
-        <img src={icon} alt="" className="h-7 w-7" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-xl font-black text-[#252525]">{title}</span>
-        <span className="mt-1 block text-sm font-bold text-[#707070]">
-          {description}
-        </span>
-      </span>
-      <span className="flex h-11 w-11 items-center justify-center bg-[#c3d3bc]">
-        <img src="/UI-apps_ga naar.svg" alt="" className="h-7 w-7" />
-      </span>
-    </a>
-  );
-}
-
 function createBlankRecipe(type: RecipeType): Recipe {
   const now = new Date().toISOString().slice(0, 10);
   const idPrefix = type === "semiFinished" ? "hf-new" : "recipe-new";
@@ -1983,6 +1953,9 @@ function createBlankRecipe(type: RecipeType): Recipe {
     decorationMargin: 0,
     averageSalesQuantity: 0,
     averageSalesPeriod: "week",
+    canProduceAhead: false,
+    desiredProductionFrequencyDays: 7,
+    desiredProductionBatchQuantity: type === "semiFinished" ? 0 : 40,
     lastProducedAt: "",
     lastProducedQuantity: 0,
     productionLog: [],

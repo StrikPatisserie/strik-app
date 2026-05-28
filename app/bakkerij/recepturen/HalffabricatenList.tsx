@@ -105,8 +105,8 @@ export default function HalffabricatenList({
         </div>
 
         {filteredRecipes.length ? (
-          <div className="overflow-hidden rounded-[1.15rem] border border-[#e7e0d8]">
-            <div className="hidden grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_9rem_8rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 xl:grid">
+          <div className="overflow-x-auto border border-[#e7e0d8]">
+            <div className="hidden grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_9rem_8rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 lg:grid lg:min-w-[55rem]">
               <span>Halffabricaat</span>
               <span>Groep</span>
               <span>Gewicht</span>
@@ -124,7 +124,7 @@ export default function HalffabricatenList({
                     key={recipe.id}
                     type="button"
                     onClick={() => onOpenRecipe(recipe)}
-                    className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_9rem_8rem_8rem] xl:items-center"
+                    className="grid w-full gap-3 px-4 py-2.5 text-left transition hover:bg-[#fffdf8] lg:min-w-[55rem] lg:grid-cols-[minmax(14rem,1.4fr)_9rem_9rem_9rem_8rem_8rem] lg:items-center"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-base font-black">

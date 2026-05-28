@@ -231,8 +231,8 @@ export default function PackagingList({
         </div>
 
         {filteredItems.length ? (
-          <div className="overflow-hidden rounded-[1.15rem] border border-[#e7e0d8]">
-            <div className="hidden grid-cols-[minmax(14rem,1.3fr)_8rem_8rem_8rem_8rem_7rem_10rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 xl:grid">
+          <div className="overflow-x-auto border border-[#e7e0d8]">
+            <div className="hidden grid-cols-[minmax(14rem,1.3fr)_8rem_8rem_8rem_8rem_7rem_10rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 lg:grid lg:min-w-[64rem]">
               <span>Verpakking</span>
               <span>Leverancier</span>
               <span>Artikel</span>
@@ -248,7 +248,7 @@ export default function PackagingList({
                 return (
                   <div
                     key={item.id}
-                    className="grid gap-3 px-4 py-4 xl:grid-cols-[minmax(14rem,1.3fr)_8rem_8rem_8rem_8rem_7rem_10rem] xl:items-center"
+                    className="grid gap-3 px-4 py-2.5 lg:min-w-[64rem] lg:grid-cols-[minmax(14rem,1.3fr)_8rem_8rem_8rem_8rem_7rem_10rem] lg:items-center"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-base font-black">{item.name}</p>

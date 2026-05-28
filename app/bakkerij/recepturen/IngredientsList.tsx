@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { Ingredient, Recipe } from "./types";
+import type { Ingredient, Recipe, RecipeUnit } from "./types";
 import {
   EmptyState,
   FilterSelect,
@@ -20,6 +20,8 @@ import {
   pricePerBaseUnitFromPackagePrice,
   recipesUsingIngredient,
 } from "./utils";
+
+const ingredientUnits: RecipeUnit[] = ["gram", "kg", "ml", "liter", "stuk"];
 
 function formatEditablePrice(value: number) {
   return value.toLocaleString("nl-NL", {
@@ -43,13 +45,11 @@ function parseDutchPriceInput(value: string) {
 export default function IngredientsList({
   ingredients,
   recipes,
-  onOpenRecipe,
   onUpdateIngredient,
   onDeleteIngredient,
 }: Readonly<{
   ingredients: Ingredient[];
   recipes: Recipe[];
-  onOpenRecipe?: (recipe: Recipe) => void;
   onUpdateIngredient: (ingredient: Ingredient) => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
   onDeleteIngredients?: (ingredients: Ingredient[]) => void;
@@ -100,6 +100,13 @@ export default function IngredientsList({
           title="Ingredienten"
           description="Database met leveranciersartikelen, prijshistorie, allergenen en recept-impact."
         />
+        <button
+          type="button"
+          onClick={() => setSelectedIngredient(createBlankIngredient())}
+          className="w-fit border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+        >
+          Nieuwe grondstof
+        </button>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(10rem,0.7fr))]">
           <SearchInput
@@ -139,8 +146,8 @@ export default function IngredientsList({
         </div>
 
         {filteredIngredients.length ? (
-          <div className="overflow-hidden rounded-[1.15rem] border border-[#e7e0d8]">
-            <div className="hidden grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_7rem_8rem_7rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 xl:grid">
+          <div className="overflow-x-auto border border-[#e7e0d8]">
+            <div className="hidden grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_7rem_8rem_7rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 lg:grid lg:min-w-[58rem]">
               <span>Ingredient</span>
               <span>Leverancier</span>
               <span>Artikel</span>
@@ -150,13 +157,7 @@ export default function IngredientsList({
               <span>Factuur</span>
             </div>
             <div className="divide-y divide-[#e7e0d8] bg-white">
-              {filteredIngredients.map((ingredient) => {
-                const semiFinishedRecipe = semiFinishedRecipeForIngredient(
-                  ingredient,
-                  recipes
-                );
-
-                return (
+              {filteredIngredients.map((ingredient) => (
                   <div
                     key={ingredient.id}
                     role="button"
@@ -168,30 +169,13 @@ export default function IngredientsList({
                         setSelectedIngredient(ingredient);
                       }
                     }}
-                    className="grid w-full cursor-pointer gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_7rem_8rem_7rem_8rem] xl:items-center"
+                    className="grid w-full cursor-pointer gap-3 px-4 py-2.5 text-left transition hover:bg-[#fffdf8] lg:min-w-[58rem] lg:grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_7rem_8rem_7rem_8rem] lg:items-center"
                   >
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <p className="truncate text-base font-black">
                           {ingredient.name}
                         </p>
-                        {isHfIngredient(ingredient) && (
-                          <span className="rounded-full bg-[#fff0bd] px-2 py-0.5 text-[0.62rem] font-black text-[#7a5a18]">
-                            HF
-                          </span>
-                        )}
-                        {semiFinishedRecipe && (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onOpenRecipe?.(semiFinishedRecipe);
-                            }}
-                            className="max-w-full truncate rounded-full border border-[#c3d3bc] bg-[#f7faf5] px-2.5 py-1 text-[0.65rem] font-black text-[#45663b]"
-                          >
-                            halffabricaat: {semiFinishedRecipe.name} ↗
-                          </button>
-                        )}
                       </div>
                       <p className="text-xs font-bold text-[#2d2a26]/45">
                         {ingredient.allergens.length
@@ -218,8 +202,7 @@ export default function IngredientsList({
                       {ingredient.lastInvoice}
                     </p>
                   </div>
-                );
-              })}
+                ))}
             </div>
           </div>
         ) : (
@@ -240,7 +223,6 @@ export default function IngredientsList({
             onDeleteIngredient(ingredient);
             setSelectedIngredient(null);
           }}
-          onOpenRecipe={onOpenRecipe}
           onClose={() => setSelectedIngredient(null)}
         />
       )}
@@ -253,19 +235,23 @@ function IngredientDetail({
   recipes,
   onUpdateIngredient,
   onDeleteIngredient,
-  onOpenRecipe,
   onClose,
 }: Readonly<{
   ingredient: Ingredient;
   recipes: Recipe[];
   onUpdateIngredient: (ingredient: Ingredient) => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
-  onOpenRecipe?: (recipe: Recipe) => void;
   onClose: () => void;
 }>) {
   const linkedRecipes = recipesUsingIngredient(recipes, ingredient.id);
-  const semiFinishedRecipe = semiFinishedRecipeForIngredient(ingredient, recipes);
   const [isLinking, setIsLinking] = useState(false);
+  const [name, setName] = useState(ingredient.name);
+  const [supplierName, setSupplierName] = useState(ingredient.supplier);
+  const [packageSize, setPackageSize] = useState(ingredient.packageSize);
+  const [recipeUnit, setRecipeUnit] = useState<RecipeUnit>(ingredient.recipeUnit);
+  const [allergensInput, setAllergensInput] = useState(
+    ingredient.allergens.join(", ")
+  );
   const [articleNumber, setArticleNumber] = useState(
     ingredient.supplierArticleNumber
   );
@@ -277,6 +263,31 @@ function IngredientDetail({
     ingredient.aliases.join("\n")
   );
   const [feedback, setFeedback] = useState("");
+
+  function saveBasics() {
+    const updatedIngredient = {
+      ...ingredient,
+      name: name.trim() || ingredient.name,
+      supplier: supplierName.trim() || ingredient.supplier,
+      packageSize: packageSize.trim() || ingredient.packageSize,
+      recipeUnit,
+      allergens: allergensInput
+        .split(/[\n,;]+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+      lastUpdated: new Date().toISOString().slice(0, 10),
+    };
+
+    onUpdateIngredient({
+      ...updatedIngredient,
+      pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(
+        ingredientPackagePrice(updatedIngredient),
+        updatedIngredient.recipeUnit
+      ),
+    });
+    setFeedback("Grondstof opgeslagen.");
+    window.setTimeout(() => setFeedback(""), 2000);
+  }
 
   function saveSupplierLink() {
     const pastedAliases = ingredientAliasesInput
@@ -317,8 +328,9 @@ function IngredientDetail({
       lastPrice: nextPackagePrice,
       pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(
         nextPackagePrice,
-        ingredient.recipeUnit
+        recipeUnit
       ),
+      recipeUnit,
       lastUpdated: new Date().toISOString().slice(0, 10),
       lastInvoice: "Handmatig aangepast",
     };
@@ -384,8 +396,66 @@ function IngredientDetail({
                 value={formatSignedPercent(ingredientPriceChange(ingredient), 1)}
                 className={changeBadgeClass(ingredientPriceChange(ingredient))}
               />
-              <MiniMetric label="Verpakking" value={ingredient.packageSize} />
+              <MiniMetric label="Verpakking" value={packageSize} />
               <MiniMetric label="Bijgewerkt" value={formatDate(ingredient.lastUpdated)} />
+            </div>
+            <div className="mt-4 grid gap-3 border border-[#cfdcc8] bg-[#f7faf5] p-3">
+              <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                Naam
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  className="border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                  Leverancier
+                  <input
+                    value={supplierName}
+                    onChange={(event) => setSupplierName(event.target.value)}
+                    className="border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                  Verpakking
+                  <input
+                    value={packageSize}
+                    onChange={(event) => setPackageSize(event.target.value)}
+                    className="border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                  Rekeneenheid
+                  <select
+                    value={recipeUnit}
+                    onChange={(event) => setRecipeUnit(event.target.value as RecipeUnit)}
+                    className="border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                  >
+                    {ingredientUnits.map((unit) => (
+                      <option key={unit} value={unit}>
+                        {unit}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                  Allergenen
+                  <input
+                    value={allergensInput}
+                    onChange={(event) => setAllergensInput(event.target.value)}
+                    placeholder="melk, gluten"
+                    className="border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={saveBasics}
+                className="w-fit border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+              >
+                Basis opslaan
+              </button>
             </div>
             <div className="mt-4 grid gap-3 rounded-2xl border border-[#cfdcc8] bg-[#f7faf5] p-3">
               <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
@@ -483,20 +553,6 @@ function IngredientDetail({
             title="Impact op recepten"
             description="Recepten waarin dit ingredient direct voorkomt."
           />
-          {semiFinishedRecipe && (
-            <button
-              type="button"
-              onClick={() => onOpenRecipe?.(semiFinishedRecipe)}
-              className="mt-3 w-full rounded-2xl border border-[#c3d3bc] bg-[#f7faf5] p-3 text-left"
-            >
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-[#45663b]">
-                Halffabricaat
-              </p>
-              <p className="mt-1 text-sm font-black">
-                Open recept: {semiFinishedRecipe.name}
-              </p>
-            </button>
-          )}
           <div className="mt-3 grid gap-2">
             {linkedRecipes.length ? (
               linkedRecipes.map((recipe) => (
@@ -548,36 +604,25 @@ function IngredientDetail({
   );
 }
 
-function isHfIngredient(ingredient: Ingredient) {
-  const normalizedName = normalizeSearch(ingredient.name);
-  const article = ingredient.supplierArticleNumber.toUpperCase();
+function createBlankIngredient(): Ingredient {
+  const now = new Date().toISOString().slice(0, 10);
 
-  return normalizedName.startsWith("hf ") || article.startsWith("HF");
-}
-
-function semiFinishedRecipeForIngredient(ingredient: Ingredient, recipes: Recipe[]) {
-  const possibleNames = [ingredient.name, ...ingredient.aliases]
-    .map(normalizeHfName)
-    .filter(Boolean);
-
-  return recipes.find((recipe) => {
-    if (recipe.type !== "semiFinished") return false;
-
-    const recipeName = normalizeHfName(recipe.name);
-    return possibleNames.some(
-      (name) =>
-        recipeName === name ||
-        recipeName.includes(name) ||
-        name.includes(recipeName)
-    );
-  });
-}
-
-function normalizeHfName(value: string) {
-  return normalizeSearch(value)
-    .replace(/^hf\s+/, "")
-    .replace(/^halffabricaat\s+/, "")
-    .trim();
+  return {
+    id: `ingredient-new-${Date.now()}`,
+    name: "Nieuwe grondstof",
+    supplier: "",
+    supplierArticleNumber: "",
+    packageSize: "1 kg",
+    recipeUnit: "gram",
+    lastPrice: 0,
+    previousPrice: 0,
+    pricePerBaseUnit: 0,
+    allergens: [],
+    lastUpdated: now,
+    status: "active",
+    lastInvoice: "Handmatig toegevoegd",
+    aliases: [],
+  };
 }
 
 function MiniMetric({
