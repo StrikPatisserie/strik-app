@@ -19,6 +19,29 @@ export type InvoiceImportStatus =
   | "ignored"
   | "reverted";
 
+export type BakeryHomeNote = {
+  id: string;
+  text: string;
+  updatedAt: string;
+};
+
+export type BakeryHomeOffer = {
+  id: string;
+  weekStart: string;
+  weekEnd: string;
+  label: string;
+  imageUrl: string;
+  mediaId?: number;
+  fileName?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BakeryHomeData = {
+  notes: BakeryHomeNote[];
+  offers: BakeryHomeOffer[];
+};
+
 export type Ingredient = {
   id: string;
   name: string;

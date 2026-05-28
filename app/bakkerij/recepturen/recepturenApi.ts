@@ -1,4 +1,5 @@
 import type {
+  BakeryHomeData,
   Ingredient,
   InvoiceImport,
   InvoiceLine,
@@ -11,6 +12,7 @@ export type RecepturenData = {
   recipes: Recipe[];
   packagingItems?: PackagingItem[];
   invoiceImports: InvoiceImport[];
+  bakeryHome?: BakeryHomeData;
   updatedAt?: string;
 };
 
@@ -29,6 +31,11 @@ const MAX_REVERTED_INVOICE_IMPORTS = 6;
 const MAX_IGNORED_INVOICE_IMPORTS = 4;
 const MAX_OTHER_INVOICE_IMPORTS = 4;
 const MAX_STORED_LINES_PER_INVOICE = 600;
+
+export const emptyBakeryHomeData: BakeryHomeData = {
+  notes: [],
+  offers: [],
+};
 
 function getWordPressRecepturenUrl() {
   const url = new URL(WORDPRESS_RECEPTUREN_API_URL);
@@ -59,6 +66,10 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
   if (!data || typeof data !== "object") return null;
 
   const record = data as Partial<RecepturenData>;
+  const bakeryHome =
+    record.bakeryHome && typeof record.bakeryHome === "object"
+      ? record.bakeryHome
+      : emptyBakeryHomeData;
 
   return {
     ingredients: Array.isArray(record.ingredients) ? record.ingredients : [],
@@ -69,6 +80,10 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
     invoiceImports: pruneInvoiceImports(
       Array.isArray(record.invoiceImports) ? record.invoiceImports : []
     ),
+    bakeryHome: {
+      notes: Array.isArray(bakeryHome.notes) ? bakeryHome.notes : [],
+      offers: Array.isArray(bakeryHome.offers) ? bakeryHome.offers : [],
+    },
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
   };
 }
@@ -163,6 +178,7 @@ function prepareRecepturenDataForStorage(data: RecepturenData) {
   return {
     ...data,
     invoiceImports: pruneInvoiceImports(data.invoiceImports),
+    bakeryHome: data.bakeryHome ?? emptyBakeryHomeData,
   };
 }
 

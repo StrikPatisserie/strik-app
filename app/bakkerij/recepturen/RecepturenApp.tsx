@@ -19,12 +19,16 @@ import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
 import RecepturenWorkMode from "./RecepturenWorkMode";
 import {
+  emptyBakeryHomeData,
   fetchRecepturenData,
   pruneInvoiceImports,
   saveRecepturenData,
   type RecepturenData,
 } from "./recepturenApi";
 import type {
+  BakeryHomeData,
+  BakeryHomeNote,
+  BakeryHomeOffer,
   Ingredient,
   InvoiceImport,
   InvoiceLine,
@@ -176,6 +180,69 @@ function sameSupplierArticle(
   );
 }
 
+const fallbackOfferImageUrl = "/bakkerij-aanbieding-papa.png";
+
+function dateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function dateFromKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return new Date();
+
+  return new Date(year, month - 1, day);
+}
+
+function addDays(value: string, days: number) {
+  const date = dateFromKey(value);
+  date.setDate(date.getDate() + days);
+
+  return dateKey(date);
+}
+
+function weekStartForDate(date = new Date()) {
+  const nextDate = new Date(date);
+  const day = nextDate.getDay() || 7;
+  nextDate.setHours(0, 0, 0, 0);
+  nextDate.setDate(nextDate.getDate() - day + 1);
+
+  return dateKey(nextDate);
+}
+
+function formatWeekRange(weekStart: string) {
+  const start = dateFromKey(weekStart);
+  const end = dateFromKey(addDays(weekStart, 6));
+  const formatter = new Intl.DateTimeFormat("nl-NL", {
+    day: "numeric",
+    month: "long",
+  });
+
+  return `${formatter.format(start)} t/m ${formatter.format(end)}`;
+}
+
+function normalizeBakeryHomeData(value?: BakeryHomeData): BakeryHomeData {
+  return {
+    notes: Array.isArray(value?.notes) ? value.notes : [],
+    offers: Array.isArray(value?.offers) ? value.offers : [],
+  };
+}
+
+function createBlankHomeNote(): BakeryHomeNote {
+  return {
+    id: `note-${Date.now()}`,
+    text: "",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function offerForWeek(home: BakeryHomeData, weekStart: string) {
+  return home.offers.find((offer) => offer.weekStart === weekStart);
+}
+
 export default function RecepturenApp() {
   const [mainTab, setMainTab] = useState<MainTabId>("start");
   const [beheerView, setBeheerView] = useState<BeheerView>("menu");
@@ -185,6 +252,11 @@ export default function RecepturenApp() {
   const [ingredientItems, setIngredientItems] = useState(ingredients);
   const [packagingItems, setPackagingItems] = useState(defaultPackagingItems);
   const [invoiceItems, setInvoiceItems] = useState(invoiceImports);
+  const [bakeryHome, setBakeryHome] =
+    useState<BakeryHomeData>(emptyBakeryHomeData);
+  const [selectedOfferWeek, setSelectedOfferWeek] = useState(weekStartForDate);
+  const [bakeryHomeStatus, setBakeryHomeStatus] = useState("");
+  const [offerUploadStatus, setOfferUploadStatus] = useState("");
   const [syncStatus, setSyncStatus] = useState("Lokale receptuurdata geladen.");
   const [isLoadingData, setIsLoadingData] = useState(true);
   const latestInvoice = invoiceItems[0] || invoiceImports[0];
@@ -196,6 +268,7 @@ export default function RecepturenApp() {
     const completeData: RecepturenData = {
       ...nextData,
       packagingItems: nextData.packagingItems ?? packagingItems,
+      bakeryHome: nextData.bakeryHome ?? bakeryHome,
     };
 
     setSyncStatus("Opslaan naar WordPress...");
@@ -204,6 +277,28 @@ export default function RecepturenApp() {
       setSyncStatus(
         result.ok ? successMessage : `Lokaal bijgewerkt. ${result.message}`
       );
+    });
+  }
+
+  function persistBakeryHome(
+    nextHome: BakeryHomeData,
+    successMessage = "Bakkerij voorpagina opgeslagen."
+  ) {
+    const normalizedHome = normalizeBakeryHomeData(nextHome);
+
+    setBakeryHome(normalizedHome);
+    setBakeryHomeStatus("Opslaan naar WordPress...");
+
+    void saveRecepturenData({
+      ingredients: ingredientItems,
+      recipes: recipeItems,
+      packagingItems,
+      invoiceImports: invoiceItems,
+      bakeryHome: normalizedHome,
+    }).then((result) => {
+      const message = result.ok ? successMessage : `Lokaal bijgewerkt. ${result.message}`;
+      setBakeryHomeStatus(message);
+      setSyncStatus(message);
     });
   }
 
@@ -271,8 +366,10 @@ export default function RecepturenApp() {
             ? result.data.invoiceImports
             : invoiceImports
         );
+        setBakeryHome(normalizeBakeryHomeData(result.data.bakeryHome));
         setSyncStatus("Recepturen uit WordPress geladen.");
       } else if (result.ok) {
+        setBakeryHome(normalizeBakeryHomeData(result.data.bakeryHome));
         setSyncStatus(
           "Lokale startdata geladen. Eerste wijziging wordt in WordPress opgeslagen."
         );
@@ -1003,6 +1100,7 @@ export default function RecepturenApp() {
       recipes: recipeItems,
       packagingItems,
       invoiceImports: invoiceItems,
+      bakeryHome,
     };
   }
 
@@ -1027,6 +1125,107 @@ export default function RecepturenApp() {
     setBeheerView(nextView);
   }
 
+  function selectOfferWeek(weekStart: string) {
+    setSelectedOfferWeek(weekStart);
+  }
+
+  function addBakeryNote() {
+    persistBakeryHome(
+      {
+        ...bakeryHome,
+        notes: [...bakeryHome.notes, createBlankHomeNote()],
+      },
+      "Nieuwe notitie opgeslagen."
+    );
+  }
+
+  function updateBakeryNoteText(noteId: string, text: string) {
+    setBakeryHome((current) => ({
+      ...current,
+      notes: current.notes.map((note) =>
+        note.id === noteId ? { ...note, text } : note
+      ),
+    }));
+  }
+
+  function saveBakeryNote(noteId: string, text: string) {
+    persistBakeryHome(
+      {
+        ...bakeryHome,
+        notes: bakeryHome.notes.map((note) =>
+          note.id === noteId
+            ? { ...note, text, updatedAt: new Date().toISOString() }
+            : note
+        ),
+      },
+      "Notitie opgeslagen."
+    );
+  }
+
+  function deleteBakeryNote(noteId: string) {
+    persistBakeryHome(
+      {
+        ...bakeryHome,
+        notes: bakeryHome.notes.filter((note) => note.id !== noteId),
+      },
+      "Notitie verwijderd."
+    );
+  }
+
+  async function uploadBakeryOfferImage(file: File | null, label: string) {
+    if (!file) return;
+
+    setOfferUploadStatus("Aanbieding uploaden naar WordPress...");
+
+    const formData = new FormData();
+    formData.set("file", file);
+    formData.set("weekStart", selectedOfferWeek);
+    formData.set("label", label);
+
+    const response = await fetch("/api/recepturen/home-photo", {
+      method: "POST",
+      body: formData,
+    }).catch(() => null);
+
+    const data = (await response?.json().catch(() => null)) as
+      | { id?: number; url?: string; fileName?: string; message?: string }
+      | null;
+
+    if (!response?.ok || !data?.url) {
+      setOfferUploadStatus(
+        data?.message || "Aanbieding uploaden is niet gelukt."
+      );
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const currentOffer = offerForWeek(bakeryHome, selectedOfferWeek);
+    const nextOffer: BakeryHomeOffer = {
+      id: currentOffer?.id || `offer-${Date.now()}`,
+      weekStart: selectedOfferWeek,
+      weekEnd: addDays(selectedOfferWeek, 6),
+      label: label.trim() || formatWeekRange(selectedOfferWeek),
+      imageUrl: data.url,
+      mediaId: data.id || 0,
+      fileName: data.fileName || file.name,
+      createdAt: currentOffer?.createdAt || now,
+      updatedAt: now,
+    };
+    const nextOffers = [
+      nextOffer,
+      ...bakeryHome.offers.filter((offer) => offer.weekStart !== selectedOfferWeek),
+    ];
+
+    persistBakeryHome(
+      {
+        ...bakeryHome,
+        offers: nextOffers,
+      },
+      "Aanbieding opgeslagen."
+    );
+    setOfferUploadStatus("Aanbieding opgeslagen.");
+  }
+
   function renderBeheerContent() {
     if (beheerView === "menu") {
       return (
@@ -1034,6 +1233,12 @@ export default function RecepturenApp() {
           syncStatus={syncStatus}
           isLoadingData={isLoadingData}
           latestInvoiceNumber={latestInvoice?.invoiceNumber || ""}
+          bakeryHome={bakeryHome}
+          selectedOfferWeek={selectedOfferWeek}
+          bakeryHomeStatus={bakeryHomeStatus}
+          offerUploadStatus={offerUploadStatus}
+          onSelectOfferWeek={selectOfferWeek}
+          onUploadOfferImage={uploadBakeryOfferImage}
           onOpen={openBeheerView}
           onDownloadExcel={downloadExcelBackup}
           onDownloadJson={downloadJsonBackup}
@@ -1047,7 +1252,7 @@ export default function RecepturenApp() {
           <button
             type="button"
             onClick={() => setBeheerView("menu")}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#d8d8d4] bg-white px-4 py-3 text-sm font-black text-[#252525] shadow-sm"
+            className="inline-flex items-center gap-2 border border-[#c3d3bc] bg-white px-4 py-3 text-sm font-black text-[#252525]"
           >
             <img src="/UI-apps_terug.svg" alt="" className="h-5 w-5" />
             Terug naar beheer
@@ -1133,8 +1338,8 @@ export default function RecepturenApp() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-auto bg-white text-[#111111]">
-      <div className="grid min-h-screen min-w-[62rem] grid-cols-[6.875rem_minmax(0,1fr)]">
+    <main className="min-h-screen overflow-x-hidden bg-white pb-28 text-[#111111]">
+      <div className="grid min-h-screen grid-cols-[clamp(4.75rem,8vw,6.1rem)_minmax(0,1fr)]">
         <BakkerijSidebar
           active={mainTab !== "start"}
           onStart={() => openMainTab("start")}
@@ -1144,11 +1349,22 @@ export default function RecepturenApp() {
         <div className="min-w-0">
           <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
 
-          <div className="min-h-[calc(100vh-6.875rem)]">
-            {mainTab === "start" && <BakkerijStartScreen />}
+          <div className="min-h-[calc(100vh_-_clamp(4.8rem,8vw,5.9rem))]">
+            {mainTab === "start" && (
+              <BakkerijStartScreen
+                home={bakeryHome}
+                selectedWeek={selectedOfferWeek}
+                status={bakeryHomeStatus}
+                onSelectWeek={selectOfferWeek}
+                onAddNote={addBakeryNote}
+                onUpdateNoteText={updateBakeryNoteText}
+                onSaveNote={saveBakeryNote}
+                onDeleteNote={deleteBakeryNote}
+              />
+            )}
 
             {mainTab === "recepten" && (
-              <div className="mx-auto max-w-[76rem] px-12 py-12">
+              <div className="mx-auto w-full max-w-[82rem] px-3 py-5 sm:px-5 lg:px-8">
                 <RecipesList
                   recipes={recipeItems}
                   onOpenRecipe={openRecipe}
@@ -1160,7 +1376,7 @@ export default function RecepturenApp() {
             )}
 
             {mainTab === "planning" && (
-              <div className="mx-auto max-w-[78rem] px-12 py-12">
+              <div className="mx-auto max-w-[78rem] px-3 py-5 sm:px-5 lg:px-8">
                 <RecepturenWorkMode
                   recipes={recipeItems}
                   ingredients={ingredientItems}
@@ -1174,7 +1390,7 @@ export default function RecepturenApp() {
             )}
 
             {mainTab === "beheer" && (
-              <div className="mx-auto max-w-[76rem] px-12 py-20">
+              <div className="mx-auto max-w-[78rem] px-3 py-5 sm:px-5 lg:px-8">
                 {renderBeheerContent()}
               </div>
             )}
@@ -1214,14 +1430,14 @@ function BakkerijSidebar({
       <button
         type="button"
         onClick={onStart}
-        className="flex h-[6.875rem] items-center justify-center border-b border-[#c3d3bc]"
+        className="flex h-[clamp(4.8rem,8.4vw,6rem)] items-center justify-center border-b border-[#c3d3bc]"
         aria-label="Start"
       >
-        <span className="block h-12 w-20 overflow-hidden">
+        <span className="block h-12 w-16 overflow-hidden sm:h-14 sm:w-20">
           <img
-            src="/strik-logo.png"
+            src="/strik logo icon.svg"
             alt=""
-            className="h-24 w-24 -translate-x-2 -translate-y-1 object-contain"
+            className="h-full w-full object-contain"
           />
         </span>
       </button>
@@ -1229,7 +1445,7 @@ function BakkerijSidebar({
       <button
         type="button"
         onClick={onRecipes}
-        className={`flex h-[6.875rem] items-center justify-center border-b border-[#c3d3bc] ${
+        className={`flex h-[clamp(4.8rem,8.4vw,6rem)] items-center justify-center border-b border-[#c3d3bc] ${
           active ? "bg-[#d75a48]" : "bg-white"
         }`}
         aria-label="Recepten"
@@ -1237,26 +1453,26 @@ function BakkerijSidebar({
         <img
           src="/apps strik_Bakkerij.svg"
           alt=""
-          className={`h-14 w-14 object-contain ${active ? "invert" : ""}`}
+          className={`h-12 w-12 object-contain sm:h-14 sm:w-14 ${active ? "invert" : ""}`}
         />
       </button>
 
       <a
         href="/schoonmaak"
-        className="flex h-[6.875rem] items-center justify-center border-b border-[#c3d3bc]"
+        className="flex h-[clamp(4.8rem,8.4vw,6rem)] items-center justify-center border-b border-[#c3d3bc]"
         aria-label="Schoonmaak"
       >
-        <img src="/UI-apps_schonmaak.svg" alt="" className="h-14 w-14 object-contain" />
+        <img src="/UI-apps_schonmaak.svg" alt="" className="h-12 w-12 object-contain sm:h-14 sm:w-14" />
       </a>
 
       <div className="flex-1" />
 
       <a
         href="/"
-        className="mb-7 flex h-16 items-center justify-center"
+        className="mb-5 flex h-14 items-center justify-center sm:mb-7 sm:h-16"
         aria-label="Terug"
       >
-        <img src="/UI-apps_terug.svg" alt="" className="h-14 w-14 object-contain" />
+        <img src="/UI-apps_terug.svg" alt="" className="h-12 w-12 object-contain sm:h-14 sm:w-14" />
       </a>
     </aside>
   );
@@ -1271,11 +1487,11 @@ function BakkerijTopNav({
 }>) {
   if (active === "start") {
     return (
-      <header className="grid h-[6.875rem] grid-cols-[16.25rem_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
+      <header className="grid h-[clamp(4.8rem,8vw,5.9rem)] grid-cols-[minmax(9rem,15rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
         <button
           type="button"
           onClick={() => onSelect("start")}
-          className="border-r border-[#c3d3bc] text-center text-[2.5rem] font-light uppercase tracking-[0.23em]"
+          className="border-r border-[#c3d3bc] text-center text-[clamp(1.65rem,3vw,2.35rem)] font-light uppercase tracking-[0.22em]"
         >
           START
         </button>
@@ -1291,13 +1507,13 @@ function BakkerijTopNav({
   ];
 
   return (
-    <header className="grid h-[6.875rem] grid-cols-[repeat(3,23.8rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
+    <header className="grid h-[clamp(4.8rem,8vw,5.9rem)] grid-cols-3 border-b border-[#c3d3bc] bg-white lg:grid-cols-[repeat(3,minmax(12rem,20rem))_minmax(0,1fr)]">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onSelect(tab.id)}
-          className={`border-r border-[#c3d3bc] text-center text-[2.15rem] uppercase tracking-[0.22em] ${
+          className={`border-r border-[#c3d3bc] text-center text-[clamp(1.15rem,2.2vw,1.9rem)] uppercase tracking-[0.18em] ${
             active === tab.id
               ? "bg-[#d75a48] font-black text-white"
               : "bg-white font-light text-[#111111]"
@@ -1306,67 +1522,120 @@ function BakkerijTopNav({
           {tab.label}
         </button>
       ))}
-      <div />
+      <div className="hidden lg:block" />
     </header>
   );
 }
 
-function BakkerijStartScreen() {
+function BakkerijStartScreen({
+  home,
+  selectedWeek,
+  status,
+  onSelectWeek,
+  onAddNote,
+  onUpdateNoteText,
+  onSaveNote,
+  onDeleteNote,
+}: Readonly<{
+  home: BakeryHomeData;
+  selectedWeek: string;
+  status: string;
+  onSelectWeek: (weekStart: string) => void;
+  onAddNote: () => void;
+  onUpdateNoteText: (noteId: string, text: string) => void;
+  onSaveNote: (noteId: string, text: string) => void;
+  onDeleteNote: (noteId: string) => void;
+}>) {
+  const offer = offerForWeek(home, selectedWeek);
+  const imageUrl = offer?.imageUrl || fallbackOfferImageUrl;
+
   return (
-    <section className="grid min-h-[calc(100vh-6.875rem)] grid-cols-[23.1rem_23.1rem] gap-[9.6rem] pl-[11.1rem] pt-[6.9rem]">
-      <div>
-        <h2 className="mb-10 text-center text-[2.15rem] font-light uppercase tracking-[0.24em]">
+    <section className="mx-auto grid min-h-[calc(100vh_-_clamp(4.8rem,8vw,5.9rem))] w-full max-w-[65rem] items-start gap-8 px-4 py-8 sm:px-7 md:grid-cols-[minmax(16rem,22rem)_minmax(17rem,24rem)] md:gap-10 lg:gap-16">
+      <div className="min-w-0">
+        <h2 className="mb-5 text-center text-[clamp(1.35rem,2.6vw,2rem)] font-light uppercase tracking-[0.22em]">
           AANBIEDING
         </h2>
-        <div className="w-[23.1rem]">
-          <div className="grid h-11 grid-cols-[2.8rem_2.8rem_minmax(0,1fr)] border border-[#6d746a] bg-[#c3d3bc] text-[#111111]">
-            <button type="button" className="border-r border-[#6d746a] text-5xl font-light leading-none">
+        <div className="mx-auto w-full max-w-[22rem]">
+          <div className="grid h-9 grid-cols-[2.4rem_2.4rem_minmax(0,1fr)] border border-[#6d746a] bg-[#c3d3bc] text-[#111111]">
+            <button
+              type="button"
+              onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
+              className="border-r border-[#6d746a] text-4xl font-light leading-none"
+              aria-label="Vorige week"
+            >
               ‹
             </button>
-            <button type="button" className="border-r border-[#6d746a] text-5xl font-light leading-none">
+            <button
+              type="button"
+              onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
+              className="border-r border-[#6d746a] text-4xl font-light leading-none"
+              aria-label="Volgende week"
+            >
               ›
             </button>
-            <div className="flex items-center justify-end pr-4 text-xl font-light">
-              1 t/m 7 juni
+            <div className="flex items-center justify-end pr-3 text-sm font-light sm:text-base">
+              {formatWeekRange(selectedWeek)}
             </div>
           </div>
-          <img
-            src="/bakkerij-aanbieding-papa.png"
-            alt="Liefste papa aanbieding"
-            className="block w-full border-x border-b border-transparent object-cover"
-          />
+          <div className="flex max-h-[52vh] min-h-[16rem] items-start justify-center overflow-hidden bg-white">
+            <img
+              src={imageUrl}
+              alt={offer?.label || "Aanbieding van de week"}
+              className="block max-h-[52vh] w-full object-contain"
+            />
+          </div>
         </div>
       </div>
 
-      <div>
-        <h2 className="mb-12 text-center text-[2.15rem] font-light uppercase tracking-[0.24em]">
+      <div className="min-w-0">
+        <h2 className="mb-6 text-center text-[clamp(1.35rem,2.6vw,2rem)] font-light uppercase tracking-[0.22em]">
           NOTITIES / TO DO
         </h2>
-        <div className="grid gap-5">
-          {[0, 1, 2].map((item) => (
-            <div
-              key={item}
-              className="relative h-[9.55rem] border border-[#4b4b4b] bg-white"
-            >
+        <div className="grid gap-4">
+          {home.notes.map((note) => (
+            <label key={note.id} className="relative block">
+              <textarea
+                value={note.text}
+                onChange={(event) => onUpdateNoteText(note.id, event.target.value)}
+                onBlur={(event) => onSaveNote(note.id, event.currentTarget.value)}
+                placeholder="Schrijf notitie..."
+                className="h-[clamp(6.5rem,14vh,8.5rem)] w-full resize-none border border-[#4b4b4b] bg-white px-4 py-3 text-base leading-relaxed text-[#111111] outline-none placeholder:text-[#9a9a9a] focus:border-[#111111]"
+              />
               <button
                 type="button"
+                onClick={() => onDeleteNote(note.id)}
                 className="absolute -right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#d75a48] text-3xl font-light leading-none text-white"
                 aria-label="Notitie verwijderen"
               >
                 -
               </button>
-            </div>
+            </label>
           ))}
+          {!home.notes.length && (
+            <button
+              type="button"
+              onClick={onAddNote}
+              className="h-[clamp(6.5rem,14vh,8.5rem)] border border-[#4b4b4b] bg-white px-4 py-3 text-left text-base text-[#9a9a9a]"
+            >
+              Schrijf notitie...
+            </button>
+          )}
         </div>
-        <div className="mt-9 flex justify-center">
+        <div className="mt-6 flex justify-center">
           <button
             type="button"
-            className="flex h-16 w-16 items-center justify-center rounded-full bg-[#c3d3bc] text-5xl font-light leading-none text-white"
+            onClick={onAddNote}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-[#c3d3bc] text-5xl font-light leading-none text-white"
             aria-label="Notitie toevoegen"
           >
             +
           </button>
         </div>
+        {status && (
+          <p className="mt-3 text-center text-xs font-bold text-[#707070]">
+            {status}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -1376,6 +1645,12 @@ function BeheerHome({
   syncStatus,
   isLoadingData,
   latestInvoiceNumber,
+  bakeryHome,
+  selectedOfferWeek,
+  bakeryHomeStatus,
+  offerUploadStatus,
+  onSelectOfferWeek,
+  onUploadOfferImage,
   onOpen,
   onDownloadExcel,
   onDownloadJson,
@@ -1383,13 +1658,19 @@ function BeheerHome({
   syncStatus: string;
   isLoadingData: boolean;
   latestInvoiceNumber: string;
+  bakeryHome: BakeryHomeData;
+  selectedOfferWeek: string;
+  bakeryHomeStatus: string;
+  offerUploadStatus: string;
+  onSelectOfferWeek: (weekStart: string) => void;
+  onUploadOfferImage: (file: File | null, label: string) => void;
   onOpen: (view: TabId) => void;
   onDownloadExcel: () => void;
   onDownloadJson: () => void;
 }>) {
   return (
-    <section className="grid gap-6 lg:grid-cols-2">
-      <div className="rounded-lg border border-[#d8d8d4] bg-white p-6 shadow-sm">
+    <section className="grid gap-5 lg:grid-cols-2">
+      <div className="border border-[#c3d3bc] bg-white p-6">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
           Gegevens
         </p>
@@ -1421,7 +1702,7 @@ function BeheerHome({
         </div>
       </div>
 
-      <div className="rounded-lg border border-[#d8d8d4] bg-white p-6 shadow-sm">
+      <div className="border border-[#c3d3bc] bg-white p-6">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
           Analyse
         </p>
@@ -1441,14 +1722,14 @@ function BeheerHome({
           <button
             type="button"
             onClick={onDownloadExcel}
-            className="rounded-lg border border-[#d8d8d4] bg-[#f5f5f3] px-4 py-3 text-left text-sm font-black text-[#252525]"
+            className="border border-[#c3d3bc] bg-[#f5f5f3] px-4 py-3 text-left text-sm font-black text-[#252525]"
           >
             Download Excel
           </button>
           <button
             type="button"
             onClick={onDownloadJson}
-            className="rounded-lg border border-[#d8d8d4] bg-white px-4 py-3 text-left text-sm font-black text-[#707070]"
+            className="border border-[#c3d3bc] bg-white px-4 py-3 text-left text-sm font-black text-[#707070]"
           >
             Herstelbestand downloaden
           </button>
@@ -1457,7 +1738,117 @@ function BeheerHome({
           {isLoadingData ? "Laden..." : syncStatus}
         </p>
       </div>
+
+      <BakeryHomeManager
+        home={bakeryHome}
+        selectedWeek={selectedOfferWeek}
+        status={bakeryHomeStatus}
+        uploadStatus={offerUploadStatus}
+        onSelectWeek={onSelectOfferWeek}
+        onUploadOfferImage={onUploadOfferImage}
+      />
     </section>
+  );
+}
+
+function BakeryHomeManager({
+  home,
+  selectedWeek,
+  status,
+  uploadStatus,
+  onSelectWeek,
+  onUploadOfferImage,
+}: Readonly<{
+  home: BakeryHomeData;
+  selectedWeek: string;
+  status: string;
+  uploadStatus: string;
+  onSelectWeek: (weekStart: string) => void;
+  onUploadOfferImage: (file: File | null, label: string) => void;
+}>) {
+  const [label, setLabel] = useState("");
+  const selectedOffer = offerForWeek(home, selectedWeek);
+
+  useEffect(() => {
+    setLabel(selectedOffer?.label || "");
+  }, [selectedOffer?.label, selectedWeek]);
+
+  return (
+    <div className="border border-[#c3d3bc] bg-white p-6 lg:col-span-2">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
+        Voorpagina
+      </p>
+      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
+        <div className="grid gap-4">
+          <div className="grid gap-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]">
+            <button
+              type="button"
+              onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
+              className="border border-[#c3d3bc] bg-[#c3d3bc] text-3xl leading-none"
+              aria-label="Vorige week"
+            >
+              ‹
+            </button>
+            <div className="flex items-center justify-center border border-[#c3d3bc] px-3 py-2 text-sm font-black uppercase tracking-[0.08em]">
+              {formatWeekRange(selectedWeek)}
+            </div>
+            <button
+              type="button"
+              onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
+              className="border border-[#c3d3bc] bg-[#c3d3bc] text-3xl leading-none"
+              aria-label="Volgende week"
+            >
+              ›
+            </button>
+          </div>
+
+          <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+            Label
+            <input
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              placeholder="Bijvoorbeeld Vaderdag aanbieding"
+              className="min-w-0 border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] outline-none focus:ring-2 focus:ring-[#c3d3bc]"
+            />
+          </label>
+
+          <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+            Aanbiedingfoto
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                void onUploadOfferImage(event.currentTarget.files?.[0] || null, label);
+                event.currentTarget.value = "";
+              }}
+              className="min-w-0 border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525]"
+            />
+          </label>
+
+          <p className="text-xs font-bold leading-relaxed text-[#707070]">
+            Foto's worden als WordPress media opgeslagen; de app bewaart alleen de link bij de juiste week.
+          </p>
+          {(uploadStatus || status) && (
+            <p className="text-xs font-bold text-[#707070]">
+              {uploadStatus || status}
+            </p>
+          )}
+        </div>
+
+        <div className="border border-[#c3d3bc] bg-[#f8f8f6] p-3">
+          <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+            Huidige foto
+          </p>
+          <div className="flex aspect-[4/5] items-center justify-center overflow-hidden bg-white">
+            <img
+              src={selectedOffer?.imageUrl || fallbackOfferImageUrl}
+              alt=""
+              className="h-full w-full object-contain"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1476,9 +1867,9 @@ function BeheerRow({
     <button
       type="button"
       onClick={onClick}
-      className="grid grid-cols-[3rem_minmax(0,1fr)_2.75rem] items-center gap-4 rounded-lg border border-[#d8d8d4] bg-white p-4 text-left transition hover:border-[#c3d3bc] hover:bg-[#f8f8f6] active:scale-[0.99]"
+      className="grid grid-cols-[3rem_minmax(0,1fr)_2.75rem] items-center gap-4 border border-[#c3d3bc] bg-white p-4 text-left transition hover:bg-[#f8f8f6] active:scale-[0.99]"
     >
-      <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#c3d3bc]">
+      <span className="flex h-12 w-12 items-center justify-center bg-[#c3d3bc]">
         <img src={icon} alt="" className="h-7 w-7" />
       </span>
       <span className="min-w-0">
@@ -1487,7 +1878,7 @@ function BeheerRow({
           {description}
         </span>
       </span>
-      <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#c3d3bc]">
+      <span className="flex h-11 w-11 items-center justify-center bg-[#c3d3bc]">
         <img src="/UI-apps_ga naar.svg" alt="" className="h-7 w-7" />
       </span>
     </button>

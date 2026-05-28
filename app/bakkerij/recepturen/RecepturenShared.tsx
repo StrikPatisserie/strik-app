@@ -7,7 +7,7 @@ export function Panel({
 }: Readonly<{ children: React.ReactNode; className?: string }>) {
   return (
     <section
-      className={`rounded-lg border border-[#d8d8d4] bg-white p-4 shadow-sm ${className}`}
+      className={`border border-[#c3d3bc] bg-white p-4 ${className}`}
     >
       {children}
     </section>
@@ -61,7 +61,7 @@ export function MetricCard({
           : "border-[#d8d8d4] bg-white";
 
   return (
-    <div className={`rounded-lg border p-4 shadow-sm ${toneClass}`}>
+    <div className={`border p-4 ${toneClass}`}>
       <p className="text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
         {label}
       </p>
@@ -124,7 +124,7 @@ export function FilterSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-lg border border-[#d8d8d4] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] focus:outline-none focus:ring-2 focus:ring-[#c3d3bc]"
+        className="min-w-0 border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] focus:outline-none focus:ring-2 focus:ring-[#c3d3bc]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -152,7 +152,7 @@ export function SearchInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="min-w-0 rounded-lg border border-[#d8d8d4] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] placeholder:text-[#8c8c8c] focus:outline-none focus:ring-2 focus:ring-[#c3d3bc]"
+        className="min-w-0 border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] placeholder:text-[#8c8c8c] focus:outline-none focus:ring-2 focus:ring-[#c3d3bc]"
       />
     </label>
   );
@@ -160,7 +160,7 @@ export function SearchInput({
 
 export function EmptyState({ text }: Readonly<{ text: string }>) {
   return (
-    <p className="rounded-lg bg-[#f5f5f3] p-4 text-sm font-bold text-[#707070]">
+    <p className="border border-[#c3d3bc] bg-[#f5f5f3] p-4 text-sm font-bold text-[#707070]">
       {text}
     </p>
   );
