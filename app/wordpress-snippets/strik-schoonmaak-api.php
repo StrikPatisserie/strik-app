@@ -7,6 +7,8 @@
  * Belangrijk:
  * - Houd maar een schoonmaak/cleaning snippet tegelijk actief.
  * - Deze snippet registreert GET en POST op /wp-json/strik/v1/cleaning.
+ * - Foto's gaan via POST /wp-json/strik/v1/cleaning-photo en worden na
+ *   de bewaartermijn automatisch opgeruimd.
  * - Normale app-calls lezen de snelle option-opslag.
  * - Oude WordPress posts met "ijsloket" data zijn optioneel via ?legacy=1.
  */
@@ -32,7 +34,7 @@ if (!defined('STRIK_CLEANING_PHOTO_RETENTION_DAYS')) {
 }
 
 if (!defined('STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES')) {
-    define('STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES', 90000);
+    define('STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES', 65000);
 }
 
 if (!defined('STRIK_CLEANING_PHOTO_UPLOAD_MAX_BYTES')) {
@@ -212,6 +214,41 @@ function strik_cleaning_v5_date_is_past_photo_retention($date) {
     return strcmp($date, strik_cleaning_v5_photo_cutoff_date()) < 0;
 }
 
+function strik_cleaning_v5_cleanup_expired_media_photos($force = false) {
+    if (!$force && get_transient('strik_cleaning_v5_photo_cleanup_done')) {
+        return;
+    }
+
+    $query = new WP_Query(array(
+        'post_type' => 'attachment',
+        'post_status' => 'inherit',
+        'posts_per_page' => 50,
+        'fields' => 'ids',
+        'meta_query' => array(
+            'relation' => 'AND',
+            array(
+                'key' => '_strik_cleaning_photo',
+                'value' => '1',
+                'compare' => '=',
+            ),
+            array(
+                'key' => '_strik_cleaning_photo_date',
+                'value' => strik_cleaning_v5_photo_cutoff_date(),
+                'compare' => '<',
+                'type' => 'DATE',
+            ),
+        ),
+    ));
+
+    if (!empty($query->posts)) {
+        foreach ($query->posts as $attachment_id) {
+            wp_delete_attachment(absint($attachment_id), true);
+        }
+    }
+
+    set_transient('strik_cleaning_v5_photo_cleanup_done', '1', DAY_IN_SECONDS);
+}
+
 function strik_cleaning_v5_parse_title($title) {
     $parts = preg_split('/\s+[–-]\s+/u', (string) $title);
 
@@ -303,6 +340,8 @@ function strik_cleaning_v5_clean_photo_data_url($value, $max_bytes = STRIK_CLEAN
 }
 
 function strik_cleaning_v5_photo_upload($request) {
+    strik_cleaning_v5_cleanup_expired_media_photos();
+
     $files = $request->get_file_params();
 
     if (!isset($files['file']) || !is_array($files['file'])) {
@@ -391,6 +430,11 @@ function strik_cleaning_v5_photo_upload($request) {
         return $attachment_id;
     }
 
+    update_post_meta($attachment_id, '_strik_cleaning_photo', '1');
+    if ($datum !== '') update_post_meta($attachment_id, '_strik_cleaning_photo_date', $datum);
+    if ($winkel !== '') update_post_meta($attachment_id, '_strik_cleaning_photo_winkel', $winkel);
+    if ($label !== '') update_post_meta($attachment_id, '_strik_cleaning_photo_label', $label);
+
     $metadata = wp_generate_attachment_metadata($attachment_id, $upload['file']);
     if (!is_wp_error($metadata)) {
         wp_update_attachment_metadata($attachment_id, $metadata);
@@ -426,9 +470,16 @@ function strik_cleaning_v5_photos($items, $include_data_url = false) {
             $photo['mediaId'] = 0;
         }
 
-        if ($photo['url'] === '' && isset($item['dataUrl']) && is_string($item['dataUrl'])) {
+        $inline_data_url = '';
+        if (isset($item['dataUrl']) && is_string($item['dataUrl'])) {
+            $inline_data_url = $item['dataUrl'];
+        } elseif (isset($item['previewDataUrl']) && is_string($item['previewDataUrl'])) {
+            $inline_data_url = $item['previewDataUrl'];
+        }
+
+        if ($photo['url'] === '' && $inline_data_url !== '') {
             $max_bytes = $include_data_url ? 600000 : STRIK_CLEANING_PHOTO_PREVIEW_MAX_BYTES;
-            $data_url = strik_cleaning_v5_clean_photo_data_url($item['dataUrl'], $max_bytes);
+            $data_url = strik_cleaning_v5_clean_photo_data_url($inline_data_url, $max_bytes);
             if ($data_url !== '') $photo['dataUrl'] = $data_url;
         }
 
@@ -785,6 +836,8 @@ function strik_cleaning_v5_get_items($include_legacy_posts = false, $include_dat
 }
 
 function strik_cleaning_v5_get($request) {
+    strik_cleaning_v5_cleanup_expired_media_photos();
+
     if ((string) $request->get_param('health') === '1') {
         return rest_ensure_response(strik_cleaning_v5_option_storage_stats());
     }
@@ -825,6 +878,8 @@ function strik_cleaning_v5_get($request) {
 }
 
 function strik_cleaning_v5_save($request) {
+    strik_cleaning_v5_cleanup_expired_media_photos();
+
     $params = $request->get_json_params();
     if (!is_array($params)) $params = array();
 

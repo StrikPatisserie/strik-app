@@ -104,19 +104,25 @@ const FOTO_UPLOAD_MAX_ZIJDE = 520;
 const FOTO_UPLOAD_MIN_ZIJDE = 320;
 const FOTO_UPLOAD_DOEL_BYTES = 180_000;
 const FOTO_UPLOAD_KWALITEITEN = [0.38, 0.3, 0.24];
-const FOTO_FALLBACK_MAX_DATA_URL_BYTES = 88_000;
+const FOTO_FALLBACK_MAX_DATA_URL_BYTES = 58_000;
 const FOTO_FALLBACK_VARIANTEN = [
   {
-    maxZijde: 240,
+    maxZijde: 260,
     minZijde: 150,
-    doelBytes: 36_000,
-    kwaliteiten: [0.24, 0.18, 0.12],
+    doelBytes: 28_000,
+    kwaliteiten: [0.22, 0.16, 0.1],
   },
   {
     maxZijde: 180,
     minZijde: 100,
-    doelBytes: 24_000,
-    kwaliteiten: [0.18, 0.12, 0.08],
+    doelBytes: 18_000,
+    kwaliteiten: [0.16, 0.1, 0.07],
+  },
+  {
+    maxZijde: 140,
+    minZijde: 80,
+    doelBytes: 12_000,
+    kwaliteiten: [0.12, 0.08, 0.05],
   },
 ];
 
@@ -239,6 +245,14 @@ async function maakKleineFotoPreviewDataUrl(file: File) {
   return bestePreview.length <= FOTO_FALLBACK_MAX_DATA_URL_BYTES
     ? bestePreview
     : "";
+}
+
+function isVeiligeFotoPreviewDataUrl(value?: string) {
+  return Boolean(
+    value &&
+      value.length <= FOTO_FALLBACK_MAX_DATA_URL_BYTES &&
+      /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(value)
+  );
 }
 
 const requiredFotoUploadLabels = [
@@ -388,6 +402,12 @@ function maakSignatuur(antwoorden: SchoonmaakAntwoorden) {
       fileName: upload.fileName,
       url: upload.url,
       mediaId: upload.mediaId,
+      dataUrl: upload.url
+        ? undefined
+        : upload.dataUrl
+          ? `${upload.dataUrl.length}:${upload.dataUrl.slice(0, 96)}`
+          : undefined,
+      unavailable: upload.unavailable,
     })),
   });
 }
@@ -826,7 +846,8 @@ function SchoonmaakForm() {
 
     try {
       const uploadFile = await verkleinFotoVoorUpload(file);
-      const previewUrl = await readFileAsDataUrl(uploadFile);
+      const compactePreview = await maakKleineFotoPreviewDataUrl(uploadFile);
+      const previewUrl = compactePreview || (await readFileAsDataUrl(uploadFile));
       photoUploadIdRef.current += 1;
       volgendeUploads = [
         ...fotoUploads.filter((upload) => upload.label !== label),
@@ -835,7 +856,7 @@ function SchoonmaakForm() {
           label,
           fileName: uploadFile.name,
           previewUrl,
-          dataUrl: previewUrl,
+          dataUrl: compactePreview || undefined,
           file: uploadFile,
         },
       ];
@@ -857,10 +878,13 @@ function SchoonmaakForm() {
     if (upload.url || !upload.file) return upload;
 
     async function fallbackPreview() {
-      const dataUrl = await maakKleineFotoPreviewDataUrl(upload.file as File);
+      const dataUrl =
+        (isVeiligeFotoPreviewDataUrl(upload.dataUrl) ? upload.dataUrl : "") ||
+        (await maakKleineFotoPreviewDataUrl(upload.file as File));
       if (!dataUrl) {
         return {
           ...upload,
+          file: undefined,
           dataUrl: undefined,
           unavailable: true,
         };
@@ -868,6 +892,7 @@ function SchoonmaakForm() {
 
       return {
         ...upload,
+        file: undefined,
         dataUrl,
         previewUrl: dataUrl,
       };
@@ -937,7 +962,10 @@ function SchoonmaakForm() {
     return {
       label: upload.label,
       fileName: upload.fileName,
-      dataUrl: upload.url ? undefined : upload.dataUrl,
+      dataUrl:
+        upload.url || !isVeiligeFotoPreviewDataUrl(upload.dataUrl)
+          ? undefined
+          : upload.dataUrl,
       url: upload.url,
       mediaId: upload.mediaId,
       unavailable: upload.unavailable,
