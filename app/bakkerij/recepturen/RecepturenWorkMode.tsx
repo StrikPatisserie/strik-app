@@ -272,6 +272,8 @@ function escapeHtml(value: string) {
 export default function RecepturenWorkMode({
   recipes,
   ingredients,
+  initialView = "recipes",
+  lockedView,
   onMarkProduced,
   onAdjustStock,
   onUpdateProductionLog,
@@ -279,6 +281,8 @@ export default function RecepturenWorkMode({
 }: Readonly<{
   recipes: Recipe[];
   ingredients: Ingredient[];
+  initialView?: WorkModeView;
+  lockedView?: WorkModeView;
   onMarkProduced: (
     recipe: Recipe,
     quantity: number,
@@ -295,7 +299,8 @@ export default function RecepturenWorkMode({
 }>) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<WorkFilterId>("all");
-  const [activeView, setActiveView] = useState<WorkModeView>("recipes");
+  const [activeView, setActiveView] = useState<WorkModeView>(initialView);
+  const visibleView = lockedView || activeView;
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [startInProduction, setStartInProduction] = useState(false);
   const [productionFeedback, setProductionFeedback] = useState("");
@@ -351,7 +356,8 @@ export default function RecepturenWorkMode({
         </p>
       )}
 
-      <div className="rounded-[1.15rem] border border-[#e2dbcf] bg-white/92 p-2 shadow-sm">
+      {!lockedView && (
+      <div className="rounded-[1.15rem] border border-[#d8d8d4] bg-white p-2 shadow-sm">
         <div className="grid gap-2 sm:grid-cols-2">
           {[
             { id: "recipes" as const, label: "Recept maken", hint: "Zoeken en starten" },
@@ -373,8 +379,9 @@ export default function RecepturenWorkMode({
           ))}
         </div>
       </div>
+      )}
 
-      {activeView === "planning" && (
+      {visibleView === "planning" && (
         <ProductionPlanningPanel
           recipes={recipes}
           onOpenRecipe={(recipe) => {
@@ -388,7 +395,7 @@ export default function RecepturenWorkMode({
         />
       )}
 
-      {activeView === "recipes" && (
+      {visibleView === "recipes" && (
       <>
       <div className="rounded-[1.1rem] border border-[#e2dbcf] bg-white/88 p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-end justify-between gap-2">

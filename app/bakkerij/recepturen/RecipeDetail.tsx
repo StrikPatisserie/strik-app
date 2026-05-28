@@ -175,16 +175,11 @@ export default function RecipeDetail({
   const selectedPackagingUnitCost =
     selectedRecipePackagingUnitCost(previewPackagingItems);
   const packagingUnitCost = manualPackagingUnitCost + selectedPackagingUnitCost;
-  const decorationUnitCost = parseDutchNumber(draft.decorationCost);
   const packagingTotal =
     !isSemiFinishedDraft
       ? packagingUnitCost * previewBatchQuantity
       : 0;
-  const decorationTotal =
-    !isSemiFinishedDraft
-      ? decorationUnitCost * previewBatchQuantity
-      : 0;
-  const extraTotal = packagingTotal + decorationTotal;
+  const extraTotal = packagingTotal;
   const previewBatchCost =
     Math.round((directTotal + semiFinishedTotal + extraTotal) * 100) / 100;
   const previewCostPrice = costPriceFromBatchCost(
@@ -679,9 +674,9 @@ export default function RecipeDetail({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#2d2a26]/35 px-3 py-5 backdrop-blur-sm">
-      <div className="mx-auto max-w-[88rem] rounded-[1.35rem] border border-[#e7e0d8] bg-[#f4f0ea] p-3 shadow-2xl">
-        <div className="flex flex-wrap items-start justify-between gap-3 rounded-[1rem] bg-white/88 p-3">
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#252525]/35 px-3 py-5 backdrop-blur-sm">
+      <div className="mx-auto max-w-[88rem] rounded-lg border border-[#d8d8d4] bg-[#f5f5f3] p-3 shadow-2xl">
+        <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg bg-white p-4">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
               {isEditing
@@ -711,7 +706,7 @@ export default function RecipeDetail({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-white px-4 py-2 text-sm font-black shadow-sm"
+            className="rounded-lg border border-[#d8d8d4] bg-white px-4 py-2 text-sm font-black shadow-sm"
           >
             Sluit
           </button>
@@ -916,7 +911,7 @@ export default function RecipeDetail({
                       </div>
 
                       {draft.type === "finalProduct" && (
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="grid gap-3 md:grid-cols-2">
                           <EditTextField
                             label="Verkoop"
                             value={draft.salesPrice}
@@ -930,22 +925,6 @@ export default function RecipeDetail({
                             value={draft.targetMargin}
                             onChange={(value) =>
                               updateDraft({ targetMargin: value })
-                            }
-                            inputMode="decimal"
-                          />
-                          <EditTextField
-                            label="Decoratie/stuk"
-                            value={draft.decorationCost}
-                            onChange={(value) =>
-                              updateDraft({ decorationCost: value })
-                            }
-                            inputMode="decimal"
-                          />
-                          <EditTextField
-                            label="Deco marge %"
-                            value={draft.decorationMargin}
-                            onChange={(value) =>
-                              updateDraft({ decorationMargin: value })
                             }
                             inputMode="decimal"
                           />
@@ -1767,7 +1746,7 @@ export default function RecipeDetail({
                     title="Afwerking"
                     values={draft.finishingSteps}
                     onChange={(values) => updateDraft({ finishingSteps: values })}
-                    placeholder="Decoratie of afwerking"
+                    placeholder="Laatste controle of afwerking"
                   />
                 )}
                 <ArrayEditor
@@ -1981,14 +1960,14 @@ export default function RecipeDetail({
                 title="Kostprijsopbouw"
                 description={
                   previewRecipe.type === "finalProduct"
-                    ? "Verpakking en decoratie staan per stuk in de invoer en worden voor de batch automatisch doorgerekend."
+                    ? "Verpakking staat per stuk in de invoer en wordt voor de batch automatisch doorgerekend."
                     : "Totaalgewicht komt automatisch uit de grondstoffen. Kostprijs is de inkoopprijs per kg."
                 }
               />
               <div
                 className={`mt-4 grid gap-3 sm:grid-cols-2 ${
                   previewRecipe.type === "finalProduct"
-                    ? "xl:grid-cols-7"
+                    ? "xl:grid-cols-6"
                     : "xl:grid-cols-4"
                 }`}
               >
@@ -2000,7 +1979,6 @@ export default function RecipeDetail({
                 {previewRecipe.type === "finalProduct" && (
                   <>
                     <Metric label="Verpakking" value={formatEuro(packagingTotal)} />
-                    <Metric label="Decoratie" value={formatEuro(decorationTotal)} />
                   </>
                 )}
                 {previewRecipe.type === "finalProduct" && (
@@ -2051,8 +2029,7 @@ export default function RecipeDetail({
                     {formatEuro(targetPrice)}
                   </p>
                   <p className="mt-1 text-xs font-bold text-[#2d2a26]/55">
-                    Basisrecept rekent met {formatPercent(previewRecipe.targetMargin)} marge,
-                    decoratie met {formatPercent(previewRecipe.decorationMargin ?? 30)}
+                    Basisrecept rekent met {formatPercent(previewRecipe.targetMargin)} marge
                     en verpakking tegen kostprijs. Daardoor is de totale
                     doelmarge hier {formatPercent(effectiveMarginTarget, 1)}.
                     Verkoopprijs moet met{" "}
@@ -2543,10 +2520,8 @@ function buildRecipeFromDraft(
     photoUpdatedAt: isSemiFinished ? "" : draft.photoUpdatedAt,
     notes: draft.notes.trim(),
     packagingCost: isSemiFinished ? 0 : parseDutchNumber(draft.packagingCost),
-    decorationCost: isSemiFinished ? 0 : parseDutchNumber(draft.decorationCost),
-    decorationMargin: isSemiFinished
-      ? 0
-      : parseDutchNumber(draft.decorationMargin) || 30,
+    decorationCost: 0,
+    decorationMargin: 0,
     averageSalesQuantity: isSemiFinished
       ? 0
       : parseDutchNumber(draft.averageSalesQuantity),

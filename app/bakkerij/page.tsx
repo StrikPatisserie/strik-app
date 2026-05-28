@@ -1,5 +1,5 @@
-import BakkerijDashboard from "./BakkerijDashboard";
+import RecepturenApp from "./recepturen/RecepturenApp";
 
 export default function BakkerijPage() {
-  return <BakkerijDashboard />;
+  return <RecepturenApp />;
 }

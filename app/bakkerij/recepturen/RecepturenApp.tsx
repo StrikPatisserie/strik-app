@@ -2,13 +2,11 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
-import StrikBackButton from "../../StrikBackButton";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList from "./IngredientsList";
 import MargeOverzicht from "./MargeOverzicht";
 import {
-  bakeryIcons,
   ingredients,
   invoiceImports,
   packagingItems as defaultPackagingItems,
@@ -63,7 +61,8 @@ const tabs = [
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
-type RecepturenMode = "work" | "management";
+type MainTabId = "recepten" | "planning" | "beheer";
+type BeheerView = TabId | "menu";
 
 function hasStoredRecepturenData(data: RecepturenData) {
   return Boolean(
@@ -178,8 +177,8 @@ function sameSupplierArticle(
 }
 
 export default function RecepturenApp() {
-  const [mode, setMode] = useState<RecepturenMode>("work");
-  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const [mainTab, setMainTab] = useState<MainTabId>("recepten");
+  const [beheerView, setBeheerView] = useState<BeheerView>("menu");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
   const [recipeItems, setRecipeItems] = useState(recipes);
@@ -1018,162 +1017,70 @@ export default function RecepturenApp() {
       .catch(() => setSyncStatus("Excel-backup kon niet worden gemaakt."));
   }
 
-  return (
-    <main className="min-h-screen bg-[#f4f0ea] px-3 py-4 pb-24 text-[#2d2a26] sm:px-4 sm:py-5">
-      <div className="mx-auto w-full max-w-7xl">
-        <StrikBackButton />
+  function openMainTab(nextTab: MainTabId) {
+    setMainTab(nextTab);
+    if (nextTab === "beheer") setBeheerView("menu");
+  }
 
-        <header className="mb-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#dce8d6] sm:h-12 sm:w-12">
-                <img
-                  src={bakeryIcons.recepturen}
-                  alt=""
-                  className="h-7 w-7 object-contain sm:h-8 sm:w-8"
-                />
-              </span>
-              <div className="min-w-0">
-                <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#8a5b10]">
-                  Bakkerij
-                </p>
-                <h1
-                  className="truncate text-4xl leading-none text-[#050505] sm:text-5xl"
-                  style={{
-                    fontFamily: "Butterscotch, Marker Felt, cursive",
-                    letterSpacing: "0",
-                  }}
-                >
-                  Recepturen
-                </h1>
-              </div>
-            </div>
+  function openBeheerView(nextView: TabId) {
+    setMainTab("beheer");
+    setBeheerView(nextView);
+  }
 
-            {mode === "management" && (
-              <div className="rounded-2xl border border-[#efc2bb] bg-[#fff4f1] px-3 py-2 text-right">
-                <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#a83e31]">
-                  Actie
-                </p>
-                <p className="text-lg font-black leading-none">8 marge</p>
-              </div>
-            )}
-          </div>
-        </header>
+  function renderBeheerContent() {
+    if (beheerView === "menu") {
+      return (
+        <BeheerHome
+          syncStatus={syncStatus}
+          isLoadingData={isLoadingData}
+          latestInvoiceNumber={latestInvoice?.invoiceNumber || ""}
+          onOpen={openBeheerView}
+          onDownloadExcel={downloadExcelBackup}
+          onDownloadJson={downloadJsonBackup}
+        />
+      );
+    }
 
-        <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] sm:items-center">
-          <div className="relative rounded-full bg-[#2d2a26] p-1.5 shadow-sm">
-            <span
-              className={`absolute inset-y-1.5 left-1.5 w-[calc(50%-0.375rem)] rounded-full bg-[#c3d3bc] transition-transform duration-200 ${
-                mode === "management" ? "translate-x-full" : "translate-x-0"
-              }`}
-            />
-            <div className="relative grid grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setMode("work")}
-                className={`rounded-full px-4 py-2.5 text-sm font-black transition ${
-                  mode === "work" ? "text-[#2d2a26]" : "text-white/68"
-                }`}
-              >
-                Werk
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("management")}
-                className={`rounded-full px-4 py-2.5 text-sm font-black transition ${
-                  mode === "management" ? "text-[#2d2a26]" : "text-white/68"
-                }`}
-              >
-                Management
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
-            {mode === "management" && (
-              <>
-                <button
-                  type="button"
-                  onClick={downloadExcelBackup}
-                  className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#2d2a26]/70 shadow-sm"
-                >
-                  Download Excel
-                </button>
-                <button
-                  type="button"
-                  onClick={downloadJsonBackup}
-                  className="rounded-full bg-[#fff0bd] px-3 py-2 text-xs font-black text-[#7a5a18] shadow-sm"
-                >
-                  Herstelbestand
-                </button>
-              </>
-            )}
-            <p className="text-xs font-bold leading-snug text-[#2d2a26]/50 sm:text-right">
-              {isLoadingData
-                ? "Laden..."
-                : mode === "work"
-                  ? "Recepten klaar."
-                  : syncStatus}
-            </p>
-          </div>
+    return (
+      <section className="grid gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setBeheerView("menu")}
+            className="inline-flex items-center gap-2 rounded-lg border border-[#d8d8d4] bg-white px-4 py-3 text-sm font-black text-[#252525] shadow-sm"
+          >
+            <img src="/UI-apps_terug.svg" alt="" className="h-5 w-5" />
+            Terug naar beheer
+          </button>
+          <p className="text-xs font-bold text-[#707070]">
+            {isLoadingData ? "Laden..." : syncStatus}
+          </p>
         </div>
 
-        {mode === "work" && (
-          <RecepturenWorkMode
+        {beheerView === "dashboard" && (
+          <RecepturenDashboard
             recipes={recipeItems}
             ingredients={ingredientItems}
-            onMarkProduced={markRecipeProduced}
-            onAdjustStock={adjustRecipeStock}
-            onUpdateProductionLog={updateProductionLogEntry}
-            onDeleteProductionLog={deleteProductionLogEntry}
+            invoice={latestInvoice}
           />
         )}
-
-        {mode === "management" && (
-          <nav className="sticky top-2 z-20 mb-5 overflow-x-auto rounded-[1.25rem] border border-[#e7e0d8] bg-white/95 p-2 shadow-sm backdrop-blur">
-            <div className="flex min-w-max gap-2">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`rounded-full px-4 py-2.5 text-sm font-black transition active:scale-[0.98] ${
-                    activeTab === tab.id
-                      ? "bg-[#c3d3bc] text-[#2d2a26]"
-                      : "bg-[#f8f6f3] text-[#2d2a26]/55 hover:text-[#2d2a26]"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </nav>
-        )}
-
-        {mode === "management" && activeTab === "dashboard" && (
-          <div className="grid gap-4">
-            <RecepturenDashboard
-              recipes={recipeItems}
-              ingredients={ingredientItems}
-              invoice={latestInvoice}
-            />
-          </div>
-        )}
-        {mode === "management" && activeTab === "recepten" && (
+        {beheerView === "recepten" && (
           <RecipesList
             recipes={recipeItems}
             onOpenRecipe={openRecipe}
             onCreateRecipe={() => createRecipe("finalProduct")}
+            onCreateSemiFinished={() => createRecipe("semiFinished")}
             onRecalculateAll={recalculateAllRecipes}
           />
         )}
-        {mode === "management" && activeTab === "halffabricaten" && (
+        {beheerView === "halffabricaten" && (
           <HalffabricatenList
             recipes={recipeItems}
             onOpenRecipe={openRecipe}
             onCreateRecipe={() => createRecipe("semiFinished")}
           />
         )}
-        {mode === "management" && activeTab === "ingredienten" && (
+        {beheerView === "ingredienten" && (
           <IngredientsList
             ingredients={ingredientItems}
             recipes={recipeItems}
@@ -1187,7 +1094,7 @@ export default function RecepturenApp() {
             }
           />
         )}
-        {mode === "management" && activeTab === "verpakkingen" && (
+        {beheerView === "verpakkingen" && (
           <PackagingList
             packagingItems={packagingItems}
             recipes={recipeItems}
@@ -1195,7 +1102,7 @@ export default function RecepturenApp() {
             onDeletePackagingItem={deletePackagingItem}
           />
         )}
-        {mode === "management" && activeTab === "import" && (
+        {beheerView === "import" && (
           <RecipeDataImport
             ingredients={ingredientItems}
             recipes={recipeItems}
@@ -1203,7 +1110,7 @@ export default function RecepturenApp() {
             onImportRecipes={importRecipes}
           />
         )}
-        {mode === "management" && activeTab === "factuurimport" && (
+        {beheerView === "factuurimport" && (
           <FactuurImport
             invoice={latestInvoice}
             ingredients={ingredientItems}
@@ -1218,13 +1125,116 @@ export default function RecepturenApp() {
             onImportInvoice={importInvoice}
           />
         )}
-        {mode === "management" && activeTab === "marge" && (
-          <MargeOverzicht
-            recipes={recipeItems}
-            onOpenRecipe={openRecipe}
-          />
+        {beheerView === "marge" && (
+          <MargeOverzicht recipes={recipeItems} onOpenRecipe={openRecipe} />
         )}
-        {mode === "management" && selectedRecipe && (
+      </section>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f5f5f3] text-[#252525]">
+      <div className="grid min-h-screen md:grid-cols-[5.5rem_minmax(0,1fr)]">
+        <aside className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[#d8d8d4] bg-white px-3 md:h-screen md:flex-col md:border-b-0 md:border-r md:py-5">
+          <a
+            href="/"
+            className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#f5f5f3]"
+            aria-label="Homepage"
+          >
+            <img src="/UI-apps_homepage.svg" alt="" className="h-8 w-8" />
+          </a>
+          <div className="flex items-center gap-2 md:grid md:gap-4">
+            <SidebarIcon
+              src="/UI-apps_recepten boek.svg"
+              label="Bakkerij"
+              active
+            />
+            <a
+              href="/schoonmaak"
+              className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#f5f5f3]"
+              aria-label="Schoonmaak"
+            >
+              <img src="/UI-apps_schonmaak.svg" alt="" className="h-8 w-8" />
+            </a>
+          </div>
+          <a
+            href="/"
+            className="hidden h-12 w-12 items-center justify-center rounded-lg bg-[#f5f5f3] md:flex"
+            aria-label="Terug"
+          >
+            <img src="/UI-apps_terug.svg" alt="" className="h-8 w-8" />
+          </a>
+        </aside>
+
+        <div className="min-w-0 px-4 py-5 sm:px-8 lg:px-12">
+          <div className="mx-auto grid w-full max-w-[92rem] gap-8">
+            <header className="grid gap-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
+                    Bakkerij
+                  </p>
+                  <h1
+                    className="mt-1 text-5xl leading-none text-[#050505] sm:text-7xl"
+                    style={{ fontFamily: "Butterscotch, Marker Felt, cursive" }}
+                  >
+                    Recepten
+                  </h1>
+                </div>
+                <p className="max-w-sm text-right text-xs font-bold leading-relaxed text-[#707070]">
+                  {isLoadingData ? "Laden..." : syncStatus}
+                </p>
+              </div>
+
+              <nav className="grid gap-3 sm:grid-cols-3">
+                {[
+                  { id: "recepten" as const, label: "RECEPTEN" },
+                  { id: "planning" as const, label: "PLANNING" },
+                  { id: "beheer" as const, label: "BEHEER" },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => openMainTab(item.id)}
+                    className={`rounded-lg border px-5 py-4 text-left text-xl font-black transition active:scale-[0.99] ${
+                      mainTab === item.id
+                        ? "border-[#c3d3bc] bg-[#c3d3bc] text-[#252525]"
+                        : "border-[#d8d8d4] bg-white text-[#8c8c8c] hover:text-[#252525]"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+            </header>
+
+            {mainTab === "recepten" && (
+              <RecipesList
+                recipes={recipeItems}
+                onOpenRecipe={openRecipe}
+                onCreateRecipe={() => createRecipe("finalProduct")}
+                onCreateSemiFinished={() => createRecipe("semiFinished")}
+                onRecalculateAll={recalculateAllRecipes}
+              />
+            )}
+
+            {mainTab === "planning" && (
+              <RecepturenWorkMode
+                recipes={recipeItems}
+                ingredients={ingredientItems}
+                lockedView="planning"
+                onMarkProduced={markRecipeProduced}
+                onAdjustStock={adjustRecipeStock}
+                onUpdateProductionLog={updateProductionLogEntry}
+                onDeleteProductionLog={deleteProductionLogEntry}
+              />
+            )}
+
+            {mainTab === "beheer" && renderBeheerContent()}
+          </div>
+        </div>
+
+        {selectedRecipe && (
           <RecipeDetail
             key={selectedRecipe.id}
             recipe={selectedRecipe}
@@ -1240,6 +1250,145 @@ export default function RecepturenApp() {
         )}
       </div>
     </main>
+  );
+}
+
+function SidebarIcon({
+  src,
+  label,
+  active = false,
+}: Readonly<{ src: string; label: string; active?: boolean }>) {
+  return (
+    <span
+      className={`flex h-12 w-12 items-center justify-center rounded-lg ${
+        active ? "bg-[#d75a48]" : "bg-[#f5f5f3]"
+      }`}
+      title={label}
+    >
+      <img src={src} alt="" className="h-8 w-8" />
+    </span>
+  );
+}
+
+function BeheerHome({
+  syncStatus,
+  isLoadingData,
+  latestInvoiceNumber,
+  onOpen,
+  onDownloadExcel,
+  onDownloadJson,
+}: Readonly<{
+  syncStatus: string;
+  isLoadingData: boolean;
+  latestInvoiceNumber: string;
+  onOpen: (view: TabId) => void;
+  onDownloadExcel: () => void;
+  onDownloadJson: () => void;
+}>) {
+  return (
+    <section className="grid gap-6 lg:grid-cols-2">
+      <div className="rounded-lg border border-[#d8d8d4] bg-white p-6 shadow-sm">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
+          Gegevens
+        </p>
+        <div className="mt-5 grid gap-3">
+          <BeheerRow
+            title="Grondstoffen"
+            description="Prijzen, leveranciers en koppelingen."
+            icon="/UI-apps_data.svg"
+            onClick={() => onOpen("ingredienten")}
+          />
+          <BeheerRow
+            title="Verpakkingen"
+            description="Verpakkingskosten per product."
+            icon="/UI-apps_data.svg"
+            onClick={() => onOpen("verpakkingen")}
+          />
+          <BeheerRow
+            title="Facturen inladen"
+            description={latestInvoiceNumber ? `Laatste: ${latestInvoiceNumber}` : "Beko/leveranciers importeren."}
+            icon="/UI-apps_link.svg"
+            onClick={() => onOpen("factuurimport")}
+          />
+          <BeheerRow
+            title="Bestand import"
+            description="Recepten of grondstoffen uit bestand."
+            icon="/UI-apps_aanpassen.svg"
+            onClick={() => onOpen("import")}
+          />
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-[#d8d8d4] bg-white p-6 shadow-sm">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
+          Analyse
+        </p>
+        <div className="mt-5 grid gap-3">
+          <BeheerRow
+            title="Dashboard"
+            description="Kostprijs, facturen en voorraadsignalen."
+            icon="/UI-apps_productie.svg"
+            onClick={() => onOpen("dashboard")}
+          />
+          <BeheerRow
+            title="Marge-overzicht"
+            description="Recepten met marge en verkoopadvies."
+            icon="/UI-apps_data.svg"
+            onClick={() => onOpen("marge")}
+          />
+          <button
+            type="button"
+            onClick={onDownloadExcel}
+            className="rounded-lg border border-[#d8d8d4] bg-[#f5f5f3] px-4 py-3 text-left text-sm font-black text-[#252525]"
+          >
+            Download Excel
+          </button>
+          <button
+            type="button"
+            onClick={onDownloadJson}
+            className="rounded-lg border border-[#d8d8d4] bg-white px-4 py-3 text-left text-sm font-black text-[#707070]"
+          >
+            Herstelbestand downloaden
+          </button>
+        </div>
+        <p className="mt-5 text-xs font-bold leading-relaxed text-[#707070]">
+          {isLoadingData ? "Laden..." : syncStatus}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function BeheerRow({
+  title,
+  description,
+  icon,
+  onClick,
+}: Readonly<{
+  title: string;
+  description: string;
+  icon: string;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="grid grid-cols-[3rem_minmax(0,1fr)_2.75rem] items-center gap-4 rounded-lg border border-[#d8d8d4] bg-white p-4 text-left transition hover:border-[#c3d3bc] hover:bg-[#f8f8f6] active:scale-[0.99]"
+    >
+      <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#c3d3bc]">
+        <img src={icon} alt="" className="h-7 w-7" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xl font-black text-[#252525]">{title}</span>
+        <span className="mt-1 block text-sm font-bold text-[#707070]">
+          {description}
+        </span>
+      </span>
+      <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#c3d3bc]">
+        <img src="/UI-apps_ga naar.svg" alt="" className="h-7 w-7" />
+      </span>
+    </button>
   );
 }
 
@@ -1283,7 +1432,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     packagingItems: [],
     packagingCost: 0,
     decorationCost: 0,
-    decorationMargin: 30,
+    decorationMargin: 0,
     averageSalesQuantity: 0,
     averageSalesPeriod: "week",
     lastProducedAt: "",

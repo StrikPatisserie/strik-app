@@ -7,7 +7,7 @@ export function Panel({
 }: Readonly<{ children: React.ReactNode; className?: string }>) {
   return (
     <section
-      className={`rounded-[1.35rem] border border-[#e7e0d8] bg-white/88 p-4 shadow-sm ${className}`}
+      className={`rounded-lg border border-[#d8d8d4] bg-white p-4 shadow-sm ${className}`}
     >
       {children}
     </section>
@@ -26,13 +26,13 @@ export function SectionTitle({
   return (
     <div>
       {eyebrow && (
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8c8c8c]">
           {eyebrow}
         </p>
       )}
-      <h2 className="mt-1 text-xl font-black leading-tight">{title}</h2>
+      <h2 className="mt-1 text-xl font-black leading-tight text-[#252525]">{title}</h2>
       {description && (
-        <p className="mt-1 max-w-3xl text-sm font-semibold leading-relaxed text-[#2d2a26]/55">
+        <p className="mt-1 max-w-3xl text-sm font-semibold leading-relaxed text-[#707070]">
           {description}
         </p>
       )}
@@ -53,20 +53,20 @@ export function MetricCard({
 }>) {
   const toneClass =
     tone === "good"
-      ? "border-[#c7ddbf] bg-[#f4faf0]"
+      ? "border-[#c3d3bc] bg-[#f6faf4]"
       : tone === "pressure"
-        ? "border-[#edd49b] bg-[#fff8e2]"
+        ? "border-[#c3d3bc] bg-[#f5f5f3]"
         : tone === "critical"
-          ? "border-[#efc2bb] bg-[#fff4f1]"
-          : "border-[#e7e0d8] bg-[#fffdf8]";
+          ? "border-[#d75a48] bg-[#fff4f1]"
+          : "border-[#d8d8d4] bg-white";
 
   return (
-    <div className={`rounded-[1.15rem] border p-4 shadow-sm ${toneClass}`}>
-      <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+    <div className={`rounded-lg border p-4 shadow-sm ${toneClass}`}>
+      <p className="text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
         {label}
       </p>
       <p className="mt-2 text-2xl font-black leading-none">{value}</p>
-      <p className="mt-2 text-xs font-bold leading-relaxed text-[#2d2a26]/50">
+      <p className="mt-2 text-xs font-bold leading-relaxed text-[#707070]">
         {detail}
       </p>
     </div>
@@ -76,8 +76,8 @@ export function MetricCard({
 export function MarginBadge({ status }: Readonly<{ status: MarginStatus }>) {
   const className =
     status === "good"
-      ? "bg-[#dce8d6] text-[#45663b]"
-      : "bg-[#ffe0dc] text-[#a83e31]";
+      ? "bg-[#c3d3bc] text-[#252525]"
+      : "bg-[#ffe0dc] text-[#d75a48]";
 
   return (
     <span
@@ -93,10 +93,10 @@ export function RecipeStatusBadge({
 }: Readonly<{ status: RecipeStatus }>) {
   const className =
     status === "active"
-      ? "bg-[#dce8d6] text-[#45663b]"
+      ? "bg-[#c3d3bc] text-[#252525]"
       : status === "draft"
-        ? "bg-[#fff0bd] text-[#8a5b10]"
-        : "bg-[#ece7df] text-[#2d2a26]/55";
+        ? "bg-[#efefed] text-[#252525]"
+        : "bg-[#efefed] text-[#707070]";
 
   return (
     <span
@@ -119,12 +119,12 @@ export function FilterSelect({
   options: Array<{ value: string; label: string }>;
 }>) {
   return (
-    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
       {label}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-lg border border-[#d8d8d4] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] focus:outline-none focus:ring-2 focus:ring-[#c3d3bc]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -146,13 +146,13 @@ export function SearchInput({
   placeholder: string;
 }>) {
   return (
-    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
       Zoeken
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-lg border border-[#d8d8d4] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] placeholder:text-[#8c8c8c] focus:outline-none focus:ring-2 focus:ring-[#c3d3bc]"
       />
     </label>
   );
@@ -160,7 +160,7 @@ export function SearchInput({
 
 export function EmptyState({ text }: Readonly<{ text: string }>) {
   return (
-    <p className="rounded-2xl bg-[#f8f6f3] p-4 text-sm font-bold text-[#2d2a26]/55">
+    <p className="rounded-lg bg-[#f5f5f3] p-4 text-sm font-bold text-[#707070]">
       {text}
     </p>
   );

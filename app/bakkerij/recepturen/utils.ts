@@ -206,19 +206,12 @@ export function targetSalesPrice(recipe: Recipe) {
   const extras = recipeExtraCostBreakdown(recipe);
   const marginBaseCost = Math.max(
     0,
-    recipe.costPrice - extras.packagingUnitCost - extras.decorationUnitCost
-  );
-  const decorationMargin = Math.min(
-    99,
-    Math.max(0, recipe.decorationMargin ?? 30)
+    recipe.costPrice - extras.packagingUnitCost
   );
   const baseTarget =
     marginBaseCost / (1 - recipe.targetMargin / 100);
-  const decorationTarget = extras.decorationUnitCost
-    ? extras.decorationUnitCost / (1 - decorationMargin / 100)
-    : 0;
 
-  return baseTarget + extras.packagingUnitCost + decorationTarget;
+  return baseTarget + extras.packagingUnitCost;
 }
 
 export function effectiveTargetMargin(recipe: Recipe) {
@@ -374,15 +367,12 @@ export function recipeExtraCostBreakdown(recipe: Recipe) {
     recipe.packagingItems || []
   );
   const packagingUnitCost = (recipe.packagingCost || 0) + selectedPackagingUnitCost;
-  const decorationUnitCost = recipe.decorationCost || 0;
+  const decorationUnitCost = 0;
   const packagingTotal =
     recipe.type === "finalProduct"
       ? packagingUnitCost * batchQuantity
       : packagingUnitCost;
-  const decorationTotal =
-    recipe.type === "finalProduct"
-      ? decorationUnitCost * batchQuantity
-      : decorationUnitCost;
+  const decorationTotal = 0;
 
   return {
     packagingUnitCost,
@@ -390,7 +380,7 @@ export function recipeExtraCostBreakdown(recipe: Recipe) {
     decorationUnitCost,
     packagingTotal: roundMoney(packagingTotal),
     decorationTotal: roundMoney(decorationTotal),
-    extraCost: roundMoney(packagingTotal + decorationTotal),
+    extraCost: roundMoney(packagingTotal),
   };
 }
 
@@ -1003,8 +993,8 @@ export function recalculateRecipeCosts(
         : recipe.batchSize,
     portionLabel: recipe.type === "semiFinished" ? "per kg" : recipe.portionLabel,
     packagingCost: recipe.type === "semiFinished" ? 0 : recipe.packagingCost,
-    decorationCost: recipe.type === "semiFinished" ? 0 : recipe.decorationCost,
-    decorationMargin: recipe.type === "semiFinished" ? 0 : recipe.decorationMargin,
+    decorationCost: 0,
+    decorationMargin: 0,
     targetMargin: recipe.type === "semiFinished" ? 0 : recipe.targetMargin,
     salesPrice: recipe.type === "semiFinished" ? 0 : recipe.salesPrice,
     photoHint: recipe.type === "semiFinished" ? "" : recipe.photoHint,
