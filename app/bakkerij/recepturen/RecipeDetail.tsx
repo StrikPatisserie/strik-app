@@ -101,6 +101,7 @@ export default function RecipeDetail({
   onDeleteRecipe,
   onSaveIngredient,
   onStartProduction,
+  onOpenRecipe,
 }: Readonly<{
   recipe: Recipe;
   ingredients: Ingredient[];
@@ -112,6 +113,7 @@ export default function RecipeDetail({
   onDeleteRecipe: (recipe: Recipe) => void;
   onSaveIngredient: (ingredient: Ingredient) => void;
   onStartProduction?: (recipe: Recipe, quantity: number) => void;
+  onOpenRecipe?: (recipe: Recipe) => void;
 }>) {
   const [isEditing, setIsEditing] = useState(startInEditMode);
   const [activeEditSection, setActiveEditSection] =
@@ -769,6 +771,7 @@ export default function RecipeDetail({
         onPrint={printProductionCard}
         onEdit={() => startEditing("basis")}
         onClose={onClose}
+        onOpenRecipe={onOpenRecipe}
       />
       {isProductionShortcutOpen && (
         <ProductionShortcutDialog
@@ -3209,6 +3212,7 @@ function BakkerRecipeCard({
   onPrint,
   onEdit,
   onClose,
+  onOpenRecipe,
 }: Readonly<{
   recipe: Recipe;
   ingredients: Ingredient[];
@@ -3225,6 +3229,7 @@ function BakkerRecipeCard({
   onPrint: () => void;
   onEdit: () => void;
   onClose: () => void;
+  onOpenRecipe?: (recipe: Recipe) => void;
 }>) {
   const baseQuantity = batchQuantity || getBatchInfo(recipe)?.quantity || 1;
   const multiplier = baseQuantity > 0 ? quantity / baseQuantity : 1;
@@ -3274,7 +3279,7 @@ function BakkerRecipeCard({
           <div
             className={`grid gap-4 ${
               recipe.type === "finalProduct"
-                ? "lg:grid-cols-[minmax(0,1.35fr)_18rem]"
+                ? "lg:grid-cols-[minmax(0,1.35fr)_12rem]"
                 : ""
             }`}
           >
@@ -3410,15 +3415,32 @@ function BakkerRecipeCard({
                     rows.map((row) => (
                       <div
                         key={row.id}
-                        className="grid grid-cols-[minmax(0,1fr)_4.2rem_3rem_minmax(5.5rem,auto)] gap-3 text-sm sm:text-base"
+                        className="grid grid-cols-[minmax(0,1fr)_4.2rem_3rem_minmax(5.7rem,auto)] gap-3 text-sm sm:text-base"
                       >
                         <span className="truncate font-black">{row.name}</span>
                         <span className="text-right font-black">
                           {formatInputNumber(row.quantity)}
                         </span>
                         <span className="font-black">{shortUnitLabel(row.unit)}</span>
-                        <span className="truncate text-right text-sm italic text-[#555555]">
-                          {row.isSemiFinished ? "halffabricaat ↪" : ""}
+                        <span className="flex min-w-0 justify-end">
+                          {row.linkedRecipe && onOpenRecipe ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenRecipe(row.linkedRecipe!)}
+                              className="inline-flex min-w-0 items-center justify-end gap-1 text-right text-sm italic text-[#555555]"
+                            >
+                              <span className="truncate">halffabricaat</span>
+                              <img
+                                src="/UI-apps_ga naar.svg"
+                                alt=""
+                                className="h-4 w-4 shrink-0"
+                              />
+                            </button>
+                          ) : row.isSemiFinished ? (
+                            <span className="truncate text-right text-sm italic text-[#555555]">
+                              halffabricaat
+                            </span>
+                          ) : null}
                         </span>
                       </div>
                     ))
@@ -3452,7 +3474,7 @@ function BakkerRecipeCard({
             </div>
 
             {recipe.type === "finalProduct" && (
-            <aside className="grid content-start gap-3 text-right text-sm italic">
+            <aside className="grid max-w-48 content-start gap-3 justify-self-end text-right text-sm italic">
               {recipe.photoPreviewDataUrl ? (
                 <img
                   src={recipe.photoPreviewDataUrl}
@@ -3581,6 +3603,7 @@ type RecipeCardIngredientRow = {
   quantity: number;
   unit: RecipeUnit;
   isSemiFinished: boolean;
+  linkedRecipe?: Recipe;
 };
 
 function recipeCardIngredientRows(
@@ -3601,6 +3624,7 @@ function recipeCardIngredientRows(
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: Boolean(linkedSemiFinished),
+      linkedRecipe: linkedSemiFinished || undefined,
     };
   });
   const semiRows = recipe.semiFinishedItems.map((item) => {
@@ -3612,6 +3636,7 @@ function recipeCardIngredientRows(
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: true,
+      linkedRecipe: linkedRecipe || undefined,
     };
   });
 

@@ -12,13 +12,11 @@ export default function RecipesList({
   recipes,
   onOpenRecipe,
   onCreateRecipe,
-  onCreateSemiFinished,
   onRecalculateAll,
 }: Readonly<{
   recipes: Recipe[];
   onOpenRecipe: (recipe: Recipe) => void;
   onCreateRecipe: () => void;
-  onCreateSemiFinished?: () => void;
   onRecalculateAll: () => void;
 }>) {
   const [search, setSearch] = useState("");
@@ -53,11 +51,11 @@ export default function RecipesList({
 
   return (
     <section className="grid h-full min-h-0 gap-2 overflow-hidden lg:grid-cols-[13.5rem_minmax(0,1fr)] xl:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside className="grid max-h-[15.5rem] gap-2 overflow-y-auto pb-2 lg:max-h-full">
+      <aside className="grid max-h-[13.5rem] gap-1.5 overflow-y-auto pb-2 lg:max-h-full lg:gap-2">
         <button
           type="button"
           onClick={onCreateRecipe}
-          className="grid h-10 grid-cols-[2.6rem_minmax(0,1fr)] items-center border border-[#c3d3bc] bg-white text-left text-sm font-black text-[#111111]"
+          className="grid h-9 grid-cols-[2.35rem_minmax(0,1fr)] items-center border border-[#c3d3bc] bg-white text-left text-sm font-black text-[#111111] lg:h-10 lg:grid-cols-[2.6rem_minmax(0,1fr)]"
         >
           <span className="flex h-full items-center justify-center bg-[#c3d3bc] text-2xl font-light">
             +
@@ -66,15 +64,15 @@ export default function RecipesList({
         </button>
 
         <div className="border border-[#c3d3bc] bg-white">
-          <div className="border-b border-[#c3d3bc] px-3 py-2.5">
-            <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#8c8c8c]">
+          <div className="border-b border-[#c3d3bc] px-2.5 py-2 lg:px-3 lg:py-2.5">
+            <p className="text-[0.6rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c] lg:text-[0.65rem]">
               Sorteren
             </p>
-            <h2 className="mt-0.5 text-lg font-black leading-tight">Recepten</h2>
+            <h2 className="mt-0.5 text-base font-black leading-tight lg:text-lg">Recepten</h2>
           </div>
 
-          <label className="grid grid-cols-[2.6rem_minmax(0,1fr)] border-b border-[#c3d3bc]">
-            <span className="flex h-10 items-center justify-center bg-[#c3d3bc] text-xl font-light">
+          <label className="grid grid-cols-[2.35rem_minmax(0,1fr)] border-b border-[#c3d3bc] lg:grid-cols-[2.6rem_minmax(0,1fr)]">
+            <span className="flex h-9 items-center justify-center bg-[#c3d3bc] text-xl font-light lg:h-10">
               ⌕
             </span>
             <input
@@ -85,7 +83,7 @@ export default function RecipesList({
             />
           </label>
 
-          <div className="grid gap-2 px-2.5 py-2.5">
+          <div className="grid gap-1.5 px-2 py-2 lg:gap-2 lg:px-2.5 lg:py-2.5">
             <CompactSelect
               label="per categorie"
               value={group}
@@ -113,16 +111,7 @@ export default function RecipesList({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-1">
-          {onCreateSemiFinished && (
-            <button
-              type="button"
-              onClick={onCreateSemiFinished}
-            className="border border-[#c3d3bc] bg-[#c3d3bc] px-3 py-2 text-left text-xs font-black text-[#252525]"
-            >
-              Nieuw halffabricaat
-            </button>
-          )}
+        <div className="grid gap-2">
           <button
             type="button"
             onClick={onRecalculateAll}
@@ -198,12 +187,12 @@ function CompactSelect({
   options: Array<{ value: string; label: string }>;
 }>) {
   return (
-    <label className="grid gap-1.5 text-center text-sm font-light">
+    <label className="grid gap-1 text-center text-xs font-light lg:gap-1.5 lg:text-sm">
       {label}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-full border-0 bg-[#c3d3bc] px-3 py-1.5 text-left text-sm font-light text-white outline-none"
+        className="min-w-0 rounded-full border-0 bg-[#c3d3bc] px-3 py-1.5 text-left text-xs font-light text-white outline-none lg:text-sm"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -228,9 +217,9 @@ function CompactCheckbox({
     <button
       type="button"
       onClick={onChange}
-      className="grid grid-cols-[2rem_minmax(0,1fr)] items-center border border-[#c3d3bc] text-left text-[0.72rem]"
+      className="grid grid-cols-[1.85rem_minmax(0,1fr)] items-center border border-[#c3d3bc] text-left text-[0.68rem] lg:grid-cols-[2rem_minmax(0,1fr)] lg:text-[0.72rem]"
     >
-      <span className="flex h-7 items-center justify-center border-r border-[#c3d3bc]">
+      <span className="flex h-6 items-center justify-center border-r border-[#c3d3bc] lg:h-7">
         <span className="flex h-4 w-4 items-center justify-center border border-[#111111] text-sm leading-none">
           {checked ? "✓" : ""}
         </span>

@@ -229,6 +229,7 @@ export default function IngredientsList({
 
       {selectedIngredient && (
         <IngredientDetail
+          key={selectedIngredient.id}
           ingredient={selectedIngredient}
           recipes={recipes}
           onUpdateIngredient={(ingredient) => {
@@ -272,11 +273,18 @@ function IngredientDetail({
     formatEditablePrice(ingredientPackagePrice(ingredient))
   );
   const [alias, setAlias] = useState("");
+  const [ingredientAliasesInput, setIngredientAliasesInput] = useState(
+    ingredient.aliases.join("\n")
+  );
   const [feedback, setFeedback] = useState("");
 
   function saveSupplierLink() {
+    const pastedAliases = ingredientAliasesInput
+      .split(/[\n,;]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
     const nextAliases = Array.from(
-      new Set([...ingredient.aliases, alias.trim()].filter(Boolean))
+      new Set([...ingredient.aliases, ...pastedAliases, alias.trim()].filter(Boolean))
     );
     const updatedIngredient = {
       ...ingredient,
@@ -288,8 +296,9 @@ function IngredientDetail({
 
     onUpdateIngredient(updatedIngredient);
     setAlias("");
+    setIngredientAliasesInput(nextAliases.join("\n"));
     setIsLinking(false);
-    setFeedback("Koppeling opgeslagen.");
+    setFeedback("Ingredientnamen opgeslagen.");
     window.setTimeout(() => setFeedback(""), 2000);
   }
 
@@ -410,6 +419,22 @@ function IngredientDetail({
                 </span>
               ))}
             </div>
+            <label className="mt-4 grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+              Ingredienten
+              <textarea
+                value={ingredientAliasesInput}
+                onChange={(event) => setIngredientAliasesInput(event.target.value)}
+                placeholder="Plak ingredientnamen uit Beko, elk op een nieuwe regel"
+                className="min-h-28 resize-y rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={saveSupplierLink}
+              className="mt-3 w-fit rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+            >
+              Ingredienten opslaan
+            </button>
             <button
               type="button"
               onClick={() => setIsLinking((current) => !current)}

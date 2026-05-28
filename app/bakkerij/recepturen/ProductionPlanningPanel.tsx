@@ -160,14 +160,14 @@ export default function ProductionPlanningPanel({
 
   return (
     <div className="grid gap-4">
-      <section className="grid gap-8 border border-[#c3d3bc] bg-white p-4 sm:p-6 lg:grid-cols-[minmax(20rem,0.9fr)_minmax(24rem,1.1fr)] lg:p-8">
+      <section className="grid gap-6 border border-[#c3d3bc] bg-white p-4 sm:p-5 lg:grid-cols-[minmax(18rem,0.82fr)_minmax(23rem,1.18fr)] lg:p-6">
         <div>
-          <h3 className="text-xl font-black">Weekplanning</h3>
-          <div className="mt-4 grid max-w-[25rem] grid-cols-[3rem_3rem_minmax(0,1fr)] border border-[#4b4b4b] bg-[#f5f5f3]">
+          <h3 className="text-lg font-black">Weekplanning</h3>
+          <div className="mt-3 grid max-w-[22rem] grid-cols-[2.45rem_2.45rem_minmax(0,1fr)] border border-[#4b4b4b] bg-[#f5f5f3]">
             <button
               type="button"
               onClick={() => setSelectedWeek(addDays(selectedWeek, -7))}
-              className="border-r border-[#4b4b4b] text-3xl font-light leading-none"
+              className="h-9 border-r border-[#4b4b4b] text-2xl font-light leading-none"
               aria-label="Vorige week"
             >
               ‹
@@ -175,17 +175,17 @@ export default function ProductionPlanningPanel({
             <button
               type="button"
               onClick={() => setSelectedWeek(addDays(selectedWeek, 7))}
-              className="border-r border-[#4b4b4b] text-3xl font-light leading-none"
+              className="h-9 border-r border-[#4b4b4b] text-2xl font-light leading-none"
               aria-label="Volgende week"
             >
               ›
             </button>
-            <div className="flex items-center justify-end px-3 text-sm font-light">
+            <div className="flex items-center justify-end px-3 text-xs font-light">
               {formatPlanningWeek(selectedWeek)}
             </div>
           </div>
 
-          <div className="mt-0 max-w-[25rem] border-x border-b border-[#8c8c8c]">
+          <div className="mt-0 max-w-[22rem] border-x border-b border-[#8c8c8c]">
             {visibleNeeds.length ? (
               visibleNeeds.map((need) => (
                 <PlanningListRow
@@ -222,9 +222,9 @@ export default function ProductionPlanningPanel({
                 requestId: firstNeed.manualRequestId,
               });
             }}
-            className="mt-10 grid h-14 max-w-[25rem] grid-cols-[4.5rem_minmax(0,1fr)] items-center border border-[#c3d3bc] bg-white text-left text-base font-black"
+            className="mt-6 grid h-11 max-w-[22rem] grid-cols-[3.4rem_minmax(0,1fr)] items-center border border-[#c3d3bc] bg-white text-left text-sm font-black"
           >
-            <span className="flex h-full items-center justify-center bg-[#c3d3bc] text-4xl font-light">
+            <span className="flex h-full items-center justify-center bg-[#c3d3bc] text-3xl font-light">
               +
             </span>
             <span className="px-4">handmatig toevoegen</span>
@@ -232,7 +232,7 @@ export default function ProductionPlanningPanel({
         </div>
 
         <div>
-          <h3 className="text-xl font-black">Huidige voorraad</h3>
+          <h3 className="text-lg font-black">Huidige voorraad</h3>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             <label className="grid h-9 grid-cols-[2.5rem_minmax(0,1fr)] items-center rounded-full border-2 border-[#111111] bg-white">
               <span className="text-center text-2xl leading-none">⌕</span>
@@ -257,7 +257,7 @@ export default function ProductionPlanningPanel({
             </button>
           </div>
 
-          <div className="mt-3 max-h-[34rem] overflow-y-auto border border-[#8c8c8c] bg-white p-3">
+          <div className="mt-3 max-h-[30rem] overflow-y-auto border border-[#8c8c8c] bg-white p-3">
             <div className="grid grid-cols-[minmax(0,1fr)_5rem_6rem] gap-3 border-b border-[#8c8c8c] pb-2 text-sm italic text-[#9a9a9a]">
               <span>product</span>
               <span className="text-right">voorraad</span>
@@ -361,12 +361,12 @@ function PlanningListRow({
     1;
 
   return (
-    <div className="grid min-h-[4.2rem] grid-cols-[3.2rem_minmax(0,1fr)_3.4rem] border-b border-[#8c8c8c] last:border-b-0">
+    <div className="grid min-h-[3.15rem] grid-cols-[2.55rem_minmax(0,1fr)_2.9rem] border-b border-[#8c8c8c] last:border-b-0">
       <span className={planningStripeClass(need.recipe)} />
       <button
         type="button"
         onClick={() => onOpenRecipe?.(need.recipe)}
-        className="min-w-0 px-4 text-left text-[clamp(1.25rem,2.4vw,2rem)] font-light"
+        className="min-w-0 px-3 text-left text-[clamp(1rem,1.8vw,1.35rem)] font-light"
       >
         <span className="block truncate">{need.recipe.name}</span>
       </button>
@@ -375,7 +375,7 @@ function PlanningListRow({
         onClick={() =>
           onMarkProduced?.(need.recipe, batchQuantity, need.manualRequestId)
         }
-        className="flex items-center justify-center text-3xl leading-none"
+        className="flex items-center justify-center text-2xl leading-none"
         aria-label={`${need.recipe.name} als gemaakt opslaan`}
       >
         ⇢

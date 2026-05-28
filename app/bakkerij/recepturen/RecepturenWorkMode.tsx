@@ -277,6 +277,7 @@ export default function RecepturenWorkMode({
   startRecipeId,
   startQuantity,
   startToken,
+  onOpenRecipeCard,
   onMarkProduced,
   onAdjustStock,
   onUpdateProductionLog,
@@ -289,6 +290,7 @@ export default function RecepturenWorkMode({
   startRecipeId?: string;
   startQuantity?: number;
   startToken?: number;
+  onOpenRecipeCard?: (recipe: Recipe) => void;
   onMarkProduced: (
     recipe: Recipe,
     quantity: number,
@@ -405,6 +407,10 @@ export default function RecepturenWorkMode({
         <ProductionPlanningPanel
           recipes={recipes}
           onOpenRecipe={(recipe) => {
+            if (onOpenRecipeCard) {
+              onOpenRecipeCard(recipe);
+              return;
+            }
             setStartInProduction(false);
             setSelectedStartQuantity(undefined);
             setSelectedRecipe(recipe);
@@ -1138,22 +1144,22 @@ function ProductionMode({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#f4f0ea] px-3 py-4 text-[#2d2a26]">
+    <div className="fixed inset-0 z-[90] overflow-y-auto bg-white px-3 py-4 text-[#111111]">
       <div className="mx-auto grid max-w-6xl gap-4">
-        <header className="rounded-[1.25rem] bg-white p-5 shadow-sm">
+        <header className="border border-[#111111] bg-white p-4 shadow-2xl sm:p-5">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#45663b]">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8c8c8c]">
                   Productiemodus
                 </p>
-                <h2 className="mt-1 text-3xl font-black leading-tight">
+                <h2 className="mt-1 text-[clamp(1.8rem,4vw,2.7rem)] font-light leading-tight">
                   {recipe.name}
                 </h2>
-                <p className="mt-2 text-lg font-black text-[#2d2a26]/65">
+                <p className="mt-2 text-base font-black text-[#555555]">
                   Batchgrootte: {formatBatch(batch)}
                 </p>
-                <p className="mt-1 text-sm font-black text-[#2d2a26]/55">
+                <p className="mt-1 text-sm font-black text-[#707070]">
                   Batchgewicht: {formatBatchWeight(batchWeightKg)}
                 </p>
               </div>
@@ -1161,28 +1167,28 @@ function ProductionMode({
                 <button
                   type="button"
                   onClick={() => setIsPaused((current) => !current)}
-                  className="rounded-full bg-[#fff0bd] px-5 py-3 text-sm font-black text-[#7a5a18] shadow-sm"
+                  className="border border-[#c3d3bc] bg-white px-4 py-2.5 text-sm font-black text-[#707070]"
                 >
                   {isPaused ? "Hervat" : "Pauzeer"}
                 </button>
                 <button
                   type="button"
                   onClick={completeAll}
-                  className="rounded-full bg-[#c3d3bc] px-5 py-3 text-sm font-black shadow-sm"
+                  className="border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black"
                 >
                   Afronden
                 </button>
                 <button
                   type="button"
                   onClick={resetChecklist}
-                  className="rounded-full bg-white px-5 py-3 text-sm font-black shadow-sm"
+                  className="border border-[#c3d3bc] bg-white px-4 py-2.5 text-sm font-black"
                 >
                   Reset checklist
                 </button>
                 <button
                   type="button"
                   onClick={onBack}
-                  className="rounded-full bg-white px-5 py-3 text-sm font-black shadow-sm"
+                  className="border border-[#c3d3bc] bg-white px-4 py-2.5 text-sm font-black"
                 >
                   Terug naar recept
                 </button>
@@ -1193,27 +1199,27 @@ function ProductionMode({
             )}
           </div>
           <div className="mt-5">
-            <div className="flex items-center justify-between gap-3 text-sm font-black text-[#2d2a26]/60">
+            <div className="flex items-center justify-between gap-3 text-sm font-black text-[#707070]">
               <span>
                 {completed} van {tasks.length} taken voltooid
               </span>
               <span>{progress}%</span>
             </div>
-            <div className="mt-2 h-4 overflow-hidden rounded-full bg-[#e5ddd2]">
+            <div className="mt-2 h-3 overflow-hidden border border-[#c3d3bc] bg-white">
               <div
-                className="h-full rounded-full bg-[#8fb184] transition-all"
+                className="h-full bg-[#c3d3bc] transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
           </div>
-          <div className="mt-4 flex w-fit rounded-full bg-[#f8f6f3] p-1">
+          <div className="mt-4 flex w-fit border border-[#c3d3bc] bg-white">
             {(["checklist", "focus"] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 onClick={() => setViewMode(mode)}
-                className={`rounded-full px-5 py-3 text-sm font-black ${
-                  viewMode === mode ? "bg-white shadow-sm" : "text-[#2d2a26]/55"
+                className={`border-r border-[#c3d3bc] px-5 py-2.5 text-sm font-black last:border-r-0 ${
+                  viewMode === mode ? "bg-[#c3d3bc]" : "text-[#707070]"
                 }`}
               >
                 {mode === "checklist" ? "Checklist" : "Focus"}
@@ -1223,7 +1229,7 @@ function ProductionMode({
         </header>
 
         {isPaused && (
-          <p className="rounded-[1.1rem] border border-[#ead7a6] bg-[#fff8e3] p-4 text-sm font-black text-[#7a5a18]">
+          <p className="border border-[#ead7a6] bg-[#fff8e3] p-4 text-sm font-black text-[#7a5a18]">
             Productie gepauzeerd. Checklist blijft lokaal bewaard zolang deze pagina open is.
           </p>
         )}
@@ -1262,22 +1268,22 @@ function ProductionMode({
             )}
           </div>
         ) : (
-          <section className="rounded-[1.4rem] bg-white p-6 text-center shadow-sm">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/42">
+          <section className="border border-[#c3d3bc] bg-white p-5 text-center">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8c8c8c]">
               Huidige stap
             </p>
             {focusTask ? (
               <>
-                <p className="mt-5 text-3xl font-black leading-tight">
+                <p className="mt-5 text-2xl font-black leading-tight">
                   {focusTask.label}
                 </p>
                 <button
                   type="button"
                   onClick={() => toggleTask(focusTask.id)}
-                  className={`mt-6 rounded-full px-8 py-4 text-lg font-black shadow-sm ${
+                  className={`mt-6 border border-[#c3d3bc] px-8 py-3 text-lg font-black ${
                     checkedTasks[focusTask.id]
                       ? "bg-[#dce8d6] text-[#45663b]"
-                      : "bg-[#c3d3bc] text-[#2d2a26]"
+                      : "bg-[#c3d3bc] text-[#111111]"
                   }`}
                 >
                   {checkedTasks[focusTask.id] ? "Gedaan" : "Afvinken"}
@@ -1286,7 +1292,7 @@ function ProductionMode({
                   <button
                     type="button"
                     onClick={() => setFocusIndex((current) => Math.max(0, current - 1))}
-                    className="rounded-full bg-[#f8f6f3] px-5 py-3 text-sm font-black shadow-sm"
+                    className="border border-[#c3d3bc] bg-white px-4 py-2.5 text-sm font-black"
                   >
                     Vorige stap
                   </button>
@@ -1297,7 +1303,7 @@ function ProductionMode({
                         Math.min(tasks.length - 1, current + 1)
                       )
                     }
-                    className="rounded-full bg-[#c3d3bc] px-5 py-3 text-sm font-black shadow-sm"
+                    className="border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black"
                   >
                     Volgende stap
                   </button>
@@ -1344,28 +1350,28 @@ function ProductionRegistrationDialog({
   const [date, setDate] = useState(todayIsoDate());
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#2d2a26]/42 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[1.4rem] border border-[#ded6ca] bg-white p-5 shadow-2xl">
-        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#45663b]">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#111111]/35 px-4">
+      <div className="w-full max-w-md border border-[#111111] bg-white p-5 shadow-2xl">
+        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c]">
           Opslaan
         </p>
-        <h3 className="mt-1 text-2xl font-black">{title}</h3>
-        <p className="mt-2 text-sm font-bold text-[#2d2a26]/55">
+        <h3 className="mt-1 text-2xl font-light">{title}</h3>
+        <p className="mt-2 text-sm font-bold text-[#707070]">
           Datum controleren voordat de voorraad/prognose wordt bijgewerkt.
         </p>
         <label className="mt-4 block">
-          <span className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+          <span className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
             Productiedatum
           </span>
           <input
             type="date"
             value={date}
             onChange={(event) => setDate(event.target.value)}
-            className="mt-1 w-full rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-base font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
+            className="mt-1 w-full border border-[#c3d3bc] bg-white px-4 py-3 text-base font-black outline-none"
           />
         </label>
-        <div className="mt-3 rounded-2xl bg-[#f8f6f3] p-3">
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+        <div className="mt-3 border border-[#c3d3bc] bg-[#f8f6f3] p-3">
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
             Aantal
           </p>
           <p className="mt-1 text-lg font-black">{formatAmount(quantity, unit)}</p>
@@ -1374,14 +1380,14 @@ function ProductionRegistrationDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black text-[#2d2a26]/60"
+            className="border border-[#c3d3bc] bg-white px-4 py-2.5 text-sm font-black text-[#707070]"
           >
             Annuleer
           </button>
           <button
             type="button"
             onClick={() => onConfirm(date || todayIsoDate())}
-            className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+            className="border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black"
           >
             Opslaan
           </button>
@@ -1436,8 +1442,8 @@ function ProductionTaskGroup({
   onOpenRecipe: (recipe: Recipe) => void;
 }>) {
   return (
-    <section className="rounded-[1.25rem] bg-white p-4 shadow-sm">
-      <h3 className="text-xl font-black">{title}</h3>
+    <section className="border border-[#c3d3bc] bg-white p-4">
+      <h3 className="text-lg font-black">{title}</h3>
       <div className="mt-3 grid gap-2">
         {tasks.length ? (
           tasks.map((task) => {
@@ -1446,19 +1452,19 @@ function ProductionTaskGroup({
             return (
               <div
                 key={task.id}
-                className={`grid gap-2 rounded-2xl p-2 text-base font-black shadow-sm transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
+                className={`grid gap-2 border p-2 text-sm font-black transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
                   checkedTasks[task.id]
-                    ? "bg-[#dce8d6] text-[#45663b]"
-                    : "bg-[#fffdf8] text-[#2d2a26]"
+                    ? "border-[#c3d3bc] bg-[#dce8d6] text-[#45663b]"
+                    : "border-[#c3d3bc] bg-white text-[#111111]"
                 }`}
               >
                 <button
                   type="button"
                   onClick={() => onToggle(task.id)}
-                  className="flex min-w-0 gap-3 rounded-xl p-2 text-left"
+                  className="flex min-w-0 gap-3 p-2 text-left"
                 >
                   <span
-                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 text-xs ${
+                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border text-[0.62rem] ${
                       checkedTasks[task.id]
                         ? "border-[#45663b] bg-[#45663b] text-white"
                         : "border-[#c3d3bc]"
@@ -1472,7 +1478,7 @@ function ProductionTaskGroup({
                   <button
                     type="button"
                     onClick={() => onOpenRecipe(linkedRecipe)}
-                    className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#45663b] shadow-sm"
+                    className="border border-[#c3d3bc] bg-white px-3 py-2 text-xs font-black text-[#45663b]"
                   >
                     Open recept
                   </button>
@@ -1481,7 +1487,7 @@ function ProductionTaskGroup({
             );
           })
         ) : (
-          <p className="rounded-2xl bg-[#f8f6f3] p-4 text-sm font-bold text-[#2d2a26]/50">
+          <p className="border border-[#c3d3bc] bg-[#f8f6f3] p-4 text-sm font-bold text-[#707070]">
             Geen taken in deze categorie.
           </p>
         )}

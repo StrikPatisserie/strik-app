@@ -165,7 +165,7 @@ export default function MargeOverzicht({
                   <span className="font-black">
                     {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
                   </span>
-                  <span className="font-black">
+                  <span className={`font-black ${marginTextClass(recipe)}`}>
                     {recipe.currentMargin ? formatPercent(recipe.currentMargin) : "-"}
                   </span>
                   <span className="font-black">
@@ -186,6 +186,12 @@ export default function MargeOverzicht({
       )}
     </section>
   );
+}
+
+function marginTextClass(recipe: Recipe) {
+  if (!recipe.currentMargin) return "text-[#707070]";
+
+  return recipe.currentMargin >= 80 ? "text-[#45663b]" : "text-[#d75a48]";
 }
 
 function causeForRecipe(recipe: Recipe) {

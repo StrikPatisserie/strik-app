@@ -307,6 +307,32 @@ export default function RecepturenApp() {
     });
   }
 
+  function persistBakeryHomeUpdate(
+    update: (current: BakeryHomeData) => BakeryHomeData,
+    successMessage = "Bakkerij voorpagina opgeslagen."
+  ) {
+    setBakeryHome((current) => {
+      const normalizedHome = normalizeBakeryHomeData(update(current));
+
+      setBakeryHomeStatus("Opslaan naar WordPress...");
+      void saveRecepturenData({
+        ingredients: ingredientItems,
+        recipes: recipeItems,
+        packagingItems,
+        invoiceImports: invoiceItems,
+        bakeryHome: normalizedHome,
+      }).then((result) => {
+        const message = result.ok
+          ? successMessage
+          : `Lokaal bijgewerkt. ${result.message}`;
+        setBakeryHomeStatus(message);
+        setSyncStatus(message);
+      });
+
+      return normalizedHome;
+    });
+  }
+
   function syncSelectedRecipe(nextRecipes: Recipe[]) {
     setSelectedRecipe((current) =>
       current ? nextRecipes.find((recipe) => recipe.id === current.id) || current : null
@@ -1145,11 +1171,11 @@ export default function RecepturenApp() {
   }
 
   function addBakeryNote() {
-    persistBakeryHome(
-      {
-        ...bakeryHome,
-        notes: [...bakeryHome.notes, createBlankHomeNote()],
-      },
+    persistBakeryHomeUpdate(
+      (current) => ({
+        ...current,
+        notes: [...current.notes, createBlankHomeNote()],
+      }),
       "Nieuwe notitie opgeslagen."
     );
   }
@@ -1164,25 +1190,25 @@ export default function RecepturenApp() {
   }
 
   function saveBakeryNote(noteId: string, text: string) {
-    persistBakeryHome(
-      {
-        ...bakeryHome,
-        notes: bakeryHome.notes.map((note) =>
+    persistBakeryHomeUpdate(
+      (current) => ({
+        ...current,
+        notes: current.notes.map((note) =>
           note.id === noteId
             ? { ...note, text, updatedAt: new Date().toISOString() }
             : note
         ),
-      },
+      }),
       "Notitie opgeslagen."
     );
   }
 
   function deleteBakeryNote(noteId: string) {
-    persistBakeryHome(
-      {
-        ...bakeryHome,
-        notes: bakeryHome.notes.filter((note) => note.id !== noteId),
-      },
+    persistBakeryHomeUpdate(
+      (current) => ({
+        ...current,
+        notes: current.notes.filter((note) => note.id !== noteId),
+      }),
       "Notitie verwijderd."
     );
   }
@@ -1283,7 +1309,6 @@ export default function RecepturenApp() {
             recipes={recipeItems}
             onOpenRecipe={openRecipe}
             onCreateRecipe={() => createRecipe("finalProduct")}
-            onCreateSemiFinished={() => createRecipe("semiFinished")}
             onRecalculateAll={recalculateAllRecipes}
           />
         )}
@@ -1348,18 +1373,20 @@ export default function RecepturenApp() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-white text-[#111111]">
-      <div className="grid min-h-screen grid-cols-[clamp(3.5rem,6.4vw,4.7rem)_minmax(0,1fr)]">
+    <main className="h-screen h-[100dvh] overflow-hidden bg-white text-[#111111]">
+      <div className="grid h-screen h-[100dvh] grid-cols-[clamp(3.5rem,6.4vw,4.7rem)_minmax(0,1fr)]">
         <BakkerijSidebar
           active={mainTab !== "start"}
           onStart={() => openMainTab("start")}
           onRecipes={() => openMainTab("recepten")}
         />
 
-        <div className="min-w-0">
-          <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
+        <div className="flex h-screen h-[100dvh] min-w-0 flex-col overflow-hidden">
+          {mainTab !== "start" && (
+            <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
+          )}
 
-          <div className="min-h-[calc(100vh_-_clamp(3.4rem,5.8vw,4.45rem))]">
+          <div className="min-h-0 flex-1 overflow-hidden">
             {mainTab === "start" && (
               <BakkerijStartScreen
                 home={bakeryHome}
@@ -1374,37 +1401,41 @@ export default function RecepturenApp() {
             )}
 
             {mainTab === "recepten" && (
-              <div className="mx-auto h-[calc(100dvh_-_clamp(3.4rem,5.8vw,4.45rem))] w-full max-w-[74rem] px-3 py-3 sm:px-5 lg:px-7">
+              <div className="mx-auto h-full w-full max-w-[74rem] px-3 py-3 sm:px-5 lg:px-7">
                 <RecipesList
                   recipes={recipeItems}
                   onOpenRecipe={openRecipe}
                   onCreateRecipe={() => createRecipe("finalProduct")}
-                  onCreateSemiFinished={() => createRecipe("semiFinished")}
                   onRecalculateAll={recalculateAllRecipes}
                 />
               </div>
             )}
 
             {mainTab === "planning" && (
-              <div className="mx-auto max-w-[78rem] px-3 py-3 sm:px-5 lg:px-8">
-                <RecepturenWorkMode
-                  recipes={recipeItems}
-                  ingredients={ingredientItems}
-                  lockedView="planning"
-                  startRecipeId={workStart?.recipeId}
-                  startQuantity={workStart?.quantity}
-                  startToken={workStart?.token}
-                  onMarkProduced={markRecipeProduced}
-                  onAdjustStock={adjustRecipeStock}
-                  onUpdateProductionLog={updateProductionLogEntry}
-                  onDeleteProductionLog={deleteProductionLogEntry}
-                />
+              <div className="h-full overflow-y-auto px-3 py-3 sm:px-5 lg:px-8">
+                <div className="mx-auto max-w-[78rem]">
+                  <RecepturenWorkMode
+                    recipes={recipeItems}
+                    ingredients={ingredientItems}
+                    lockedView="planning"
+                    startRecipeId={workStart?.recipeId}
+                    startQuantity={workStart?.quantity}
+                    startToken={workStart?.token}
+                    onOpenRecipeCard={openRecipe}
+                    onMarkProduced={markRecipeProduced}
+                    onAdjustStock={adjustRecipeStock}
+                    onUpdateProductionLog={updateProductionLogEntry}
+                    onDeleteProductionLog={deleteProductionLogEntry}
+                  />
+                </div>
               </div>
             )}
 
             {mainTab === "beheer" && (
-              <div className="mx-auto max-w-[78rem] px-3 py-3 sm:px-5 lg:px-8">
-                {renderBeheerContent()}
+              <div className="h-full overflow-y-auto px-3 py-3 sm:px-5 lg:px-8">
+                <div className="mx-auto max-w-[78rem]">
+                  {renderBeheerContent()}
+                </div>
               </div>
             )}
           </div>
@@ -1423,6 +1454,7 @@ export default function RecepturenApp() {
             onDeleteRecipe={deleteRecipe}
             onSaveIngredient={saveIngredient}
             onStartProduction={startRecipeProduction}
+            onOpenRecipe={openRecipe}
           />
         )}
       </div>
@@ -1440,7 +1472,7 @@ function BakkerijSidebar({
   onRecipes: () => void;
 }>) {
   return (
-    <aside className="relative flex min-h-screen flex-col border-r border-[#c3d3bc] bg-white">
+    <aside className="relative flex h-screen h-[100dvh] flex-col border-r border-[#c3d3bc] bg-white">
       <button
         type="button"
         onClick={onStart}
@@ -1471,13 +1503,13 @@ function BakkerijSidebar({
         />
       </button>
 
-      <a
-        href="/schoonmaak"
+      <button
+        type="button"
         className="flex h-[clamp(3.4rem,6.4vw,4.7rem)] items-center justify-center border-b border-[#c3d3bc]"
         aria-label="Schoonmaak"
       >
         <img src="/UI-apps_schonmaak.svg" alt="" className="h-9 w-9 object-contain sm:h-11 sm:w-11" />
-      </a>
+      </button>
 
       <div className="flex-1" />
 
@@ -1500,18 +1532,7 @@ function BakkerijTopNav({
   onSelect: (tab: MainTabId) => void;
 }>) {
   if (active === "start") {
-    return (
-      <header className="grid h-[clamp(3.4rem,5.8vw,4.45rem)] grid-cols-[minmax(6.2rem,10.5rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
-        <button
-          type="button"
-          onClick={() => onSelect("start")}
-          className="border-r border-[#c3d3bc] text-center text-[clamp(1rem,2.1vw,1.55rem)] font-light uppercase tracking-[0.14em] sm:tracking-[0.18em]"
-        >
-          START
-        </button>
-        <div />
-      </header>
-    );
+    return null;
   }
 
   const tabs: Array<{ id: MainTabId; label: string }> = [
@@ -1521,13 +1542,13 @@ function BakkerijTopNav({
   ];
 
   return (
-    <header className="grid h-[clamp(3.4rem,5.8vw,4.45rem)] grid-cols-3 border-b border-[#c3d3bc] bg-white lg:grid-cols-[repeat(3,minmax(9rem,15.5rem))_minmax(0,1fr)]">
+    <header className="grid h-[clamp(2.95rem,5vw,3.9rem)] shrink-0 grid-cols-3 border-b border-[#c3d3bc] bg-white lg:grid-cols-[repeat(3,minmax(8rem,14rem))_minmax(0,1fr)]">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onSelect(tab.id)}
-          className={`min-w-0 border-r border-[#c3d3bc] text-center text-[clamp(0.68rem,1.55vw,1.2rem)] uppercase tracking-[0.06em] sm:tracking-[0.13em] ${
+          className={`min-w-0 border-r border-[#c3d3bc] text-center text-[clamp(0.62rem,1.35vw,1rem)] uppercase tracking-[0.04em] sm:tracking-[0.11em] ${
             active === tab.id
               ? "bg-[#d75a48] font-black text-white"
               : "bg-white font-light text-[#111111]"
@@ -1564,7 +1585,7 @@ function BakkerijStartScreen({
   const imageUrl = offer?.imageUrl || fallbackOfferImageUrl;
 
   return (
-    <section className="mx-auto grid min-h-[calc(100vh_-_clamp(3.4rem,5.8vw,4.45rem))] w-full max-w-[58rem] items-start gap-6 px-4 py-7 sm:px-7 md:grid-cols-[minmax(14rem,20rem)_minmax(16rem,22rem)] md:gap-8 lg:gap-12">
+    <section className="mx-auto grid h-full w-full max-w-[58rem] items-start gap-6 overflow-y-auto px-4 py-7 sm:px-7 md:grid-cols-[minmax(14rem,20rem)_minmax(16rem,22rem)] md:gap-8 lg:gap-12">
       <div className="min-w-0">
         <h2 className="mb-4 text-center text-[clamp(1.1rem,2.2vw,1.65rem)] font-light uppercase tracking-[0.18em]">
           AANBIEDING
