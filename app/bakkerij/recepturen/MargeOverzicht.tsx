@@ -4,16 +4,12 @@ import type { Recipe } from "./types";
 import {
   EmptyState,
   FilterSelect,
-  MarginBadge,
-  Panel,
-  SectionTitle,
 } from "./RecepturenShared";
 import {
   changeBadgeClass,
   formatEuro,
   formatPercent,
   formatSignedPercent,
-  marginGap,
   marginStatusForRecipe,
   recipeCostChange,
   recipeCostDelta,
@@ -74,143 +70,121 @@ export default function MargeOverzicht({
   );
 
   return (
-    <Panel>
-      <div className="grid gap-4">
-        <SectionTitle
-          eyebrow="Marge"
-          title="Marge-overzicht"
-          description="Totaalmarge naast de adviesprijs. Decoratie loopt voortaan mee als gewone grondstof."
-        />
-
-        <div className="grid gap-3 lg:grid-cols-4">
-          <FilterSelect
-            label="Type"
-            value={typeFilter}
-            onChange={setTypeFilter}
-            options={[
-              { value: "both", label: "Allebei" },
-              { value: "finalProduct", label: "Eindproducten" },
-              { value: "semiFinished", label: "Halffabricaten" },
-            ]}
-          />
-          <FilterSelect
-            label="Risico"
-            value={riskFilter}
-            onChange={setRiskFilter}
-            options={[
-              { value: "all", label: "Alles" },
-              { value: "under", label: "Onder adviesprijs" },
-              { value: "increase", label: "Kostprijsstijging" },
-            ]}
-          />
-          <FilterSelect
-            label="Productgroep"
-            value={groupFilter}
-            onChange={setGroupFilter}
-            options={[
-              { value: "all", label: "Alle groepen" },
-              ...groupOptions.map((item) => ({ value: item, label: item })),
-            ]}
-          />
-          <FilterSelect
-            label="Leverancier-impact"
-            value={supplierImpact}
-            onChange={setSupplierImpact}
-            options={[
-              { value: "all", label: "Alle oorzaken" },
-              { value: "Room", label: "Room" },
-              { value: "Pistache", label: "Pistache" },
-              { value: "Roomkaas", label: "Roomkaas" },
-              { value: "Chocolade", label: "Chocolade" },
-            ]}
-          />
+    <section className="grid gap-3 border border-[#c3d3bc] bg-white p-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
+            Marge
+          </p>
+          <h2 className="text-xl font-black">Marge-overzicht</h2>
         </div>
+        <p className="text-xs font-bold text-[#707070]">
+          {filteredRecipes.length} regels
+        </p>
+      </div>
 
-        {filteredRecipes.length ? (
-          <div className="overflow-hidden rounded-[1.15rem] border border-[#e7e0d8]">
-            <div className="hidden grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_8rem_8rem_6rem_7rem_minmax(10rem,1fr)] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 xl:grid">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <FilterSelect
+          label="Type"
+          value={typeFilter}
+          onChange={setTypeFilter}
+          options={[
+            { value: "both", label: "Allebei" },
+            { value: "finalProduct", label: "Eindproducten" },
+            { value: "semiFinished", label: "Halffabricaten" },
+          ]}
+        />
+        <FilterSelect
+          label="Risico"
+          value={riskFilter}
+          onChange={setRiskFilter}
+          options={[
+            { value: "all", label: "Alles" },
+            { value: "under", label: "Onder adviesprijs" },
+            { value: "increase", label: "Kostprijsstijging" },
+          ]}
+        />
+        <FilterSelect
+          label="Productgroep"
+          value={groupFilter}
+          onChange={setGroupFilter}
+          options={[
+            { value: "all", label: "Alle groepen" },
+            ...groupOptions.map((item) => ({ value: item, label: item })),
+          ]}
+        />
+        <FilterSelect
+          label="Oorzaak"
+          value={supplierImpact}
+          onChange={setSupplierImpact}
+          options={[
+            { value: "all", label: "Alle oorzaken" },
+            { value: "Room", label: "Room" },
+            { value: "Pistache", label: "Pistache" },
+            { value: "Roomkaas", label: "Roomkaas" },
+            { value: "Chocolade", label: "Chocolade" },
+          ]}
+        />
+      </div>
+
+      {filteredRecipes.length ? (
+        <div className="max-h-[34rem] overflow-auto border border-[#d8d8d4]">
+          <div className="min-w-[48rem]">
+            <div className="grid grid-cols-[minmax(12rem,1.25fr)_7rem_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 border-b border-[#d8d8d4] bg-[#f5f5f3] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
               <span>Product</span>
               <span>Type</span>
-              <span>Kost oud</span>
-              <span>Kost nu</span>
+              <span>Kost</span>
               <span>Verkoop</span>
-              <span>Totaalmarge</span>
-              <span>Margestatus</span>
-              <span>Grootste oorzaak</span>
+              <span>Marge</span>
+              <span>Advies</span>
+              <span>Oorzaak</span>
             </div>
-            <div className="divide-y divide-[#e7e0d8] bg-white">
+            <div className="divide-y divide-[#d8d8d4]">
               {filteredRecipes.map((recipe) => (
                 <button
                   key={recipe.id}
                   type="button"
                   onClick={() => onOpenRecipe(recipe)}
-                  className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_8rem_8rem_6rem_7rem_minmax(10rem,1fr)] xl:items-center"
+                  className="grid w-full grid-cols-[minmax(12rem,1.25fr)_7rem_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 px-3 py-2 text-left text-sm hover:bg-[#f8f8f6]"
                 >
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-black">{recipe.name}</p>
+                  <span className="min-w-0">
+                    <span className="block truncate font-black">{recipe.name}</span>
                     <span
-                      className={`mt-1 inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-black ${changeBadgeClass(
+                      className={`mt-0.5 inline-flex px-1.5 py-0.5 text-[0.65rem] font-black ${changeBadgeClass(
                         recipeCostChange(recipe)
                       )}`}
                     >
                       {formatEuro(recipeCostDelta(recipe))} ·{" "}
                       {formatSignedPercent(recipeCostChange(recipe), 1)}
                     </span>
-                  </div>
-                  <p className="text-sm font-bold text-[#2d2a26]/62">
+                  </span>
+                  <span className="font-bold text-[#707070]">
                     {recipeTypeLabel(recipe.type)}
-                  </p>
-                  <p className="text-sm font-black">
-                    {formatEuro(recipe.previousCostPrice)}
-                  </p>
-                  <p className="text-sm font-black">{formatEuro(recipe.costPrice)}</p>
-                  <p className="text-sm font-black">
+                  </span>
+                  <span className="font-black">{formatEuro(recipe.costPrice)}</span>
+                  <span className="font-black">
                     {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
-                  </p>
-                  <div>
-                    <p className="text-sm font-black">
-                      {recipe.currentMargin ? formatPercent(recipe.currentMargin) : "-"}
-                    </p>
-                    {recipe.type === "finalProduct" && (
-                      <span
-                        className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-black ${changeBadgeClass(
-                          marginGap(recipe),
-                          true
-                        )}`}
-                      >
-                        {marginGap(recipe) >= 0 ? "marge ok" : "te laag"}
-                      </span>
-                    )}
-                  </div>
-                  <MarginBadge status={marginStatusForRecipe(recipe)} />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold">{causeForRecipe(recipe)}</p>
-                    {recipe.type === "finalProduct" && (
-                      <p className="text-xs font-bold text-[#2d2a26]/45">
-                        Adviesprijs: {formatEuro(targetSalesPrice(recipe))}
-                      </p>
-                    )}
-                  </div>
+                  </span>
+                  <span className="font-black">
+                    {recipe.currentMargin ? formatPercent(recipe.currentMargin) : "-"}
+                  </span>
+                  <span className="font-black">
+                    {recipe.type === "finalProduct"
+                      ? formatEuro(targetSalesPrice(recipe))
+                      : "-"}
+                  </span>
+                  <span className="truncate font-bold text-[#707070]">
+                    {causeForRecipe(recipe)}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
-        ) : (
-          <EmptyState text="Geen marge-items gevonden met deze filters." />
-        )}
-
-        <div className="rounded-[1.15rem] border border-[#ead7a6] bg-[#fff8e3] p-4">
-          <p className="text-sm font-black text-[#7a5a18]">
-            Voorbeeldadvies: verkoopprijs moet met €0,70 omhoog om doelmarge te
-            halen.
-          </p>
-          <p className="mt-1 text-xs font-bold text-[#2d2a26]/55">
-            Klik een product voor ingredient-impact, halffabricaat-impact,
-            margeval en adviesprijs.
-          </p>
         </div>
-      </div>
-    </Panel>
+      ) : (
+        <EmptyState text="Geen marge-items gevonden met deze filters." />
+      )}
+    </section>
   );
 }
 

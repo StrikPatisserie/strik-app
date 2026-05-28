@@ -100,6 +100,7 @@ export default function RecipeDetail({
   onSaveRecipe,
   onDeleteRecipe,
   onSaveIngredient,
+  onStartProduction,
 }: Readonly<{
   recipe: Recipe;
   ingredients: Ingredient[];
@@ -110,6 +111,7 @@ export default function RecipeDetail({
   onSaveRecipe: (recipe: Recipe) => void;
   onDeleteRecipe: (recipe: Recipe) => void;
   onSaveIngredient: (ingredient: Ingredient) => void;
+  onStartProduction?: (recipe: Recipe, quantity: number) => void;
 }>) {
   const [isEditing, setIsEditing] = useState(startInEditMode);
   const [activeEditSection, setActiveEditSection] =
@@ -124,6 +126,8 @@ export default function RecipeDetail({
     () => recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1
   );
   const [isRecipeStarted, setIsRecipeStarted] = useState(false);
+  const [isProductionShortcutOpen, setIsProductionShortcutOpen] =
+    useState(false);
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
   const [newWorkCategory, setNewWorkCategory] = useState("");
   const [newProductionEntry, setNewProductionEntry] = useState(() => ({
@@ -682,15 +686,41 @@ export default function RecipeDetail({
     if (parsed > 0) setCardQuantity(parsed);
   }
 
+  function scaleCardFromIngredient(rowId: string, desiredQuantity: number) {
+    const baseQuantity = previewBatchQuantity || getBatchInfo(previewRecipe)?.quantity || 1;
+    const baseRows = recipeCardIngredientRows(
+      previewRecipe,
+      ingredients,
+      recipes,
+      1
+    );
+    const selectedRow = baseRows.find((row) => row.id === rowId);
+
+    if (!selectedRow || selectedRow.quantity <= 0 || desiredQuantity <= 0) return;
+
+    setCardQuantity(
+      Math.max(
+        0.1,
+        Math.round(((baseQuantity * desiredQuantity) / selectedRow.quantity) * 1000) /
+          1000
+      )
+    );
+  }
+
   function startRecipeCard() {
     setIsRecipeStarted(true);
+    onStartProduction?.(previewRecipe, cardQuantity || previewBatchQuantity || 1);
     showFeedback("Recept gestart.");
   }
 
   function markRecipeCardMade() {
+    setIsProductionShortcutOpen(true);
+  }
+
+  function confirmRecipeCardMade(date: string) {
     const entry: ProductionLogEntry = {
       id: createLocalId("production"),
-      date: todayIsoDate(),
+      date,
       quantity: cardQuantity || previewBatchQuantity || 1,
       note: "Gemaakt via receptkaart",
       source: "work",
@@ -705,6 +735,7 @@ export default function RecipeDetail({
 
     onSaveRecipe(updatedRecipe);
     setDraft(createRecipeDraft(updatedRecipe));
+    setIsProductionShortcutOpen(false);
     showFeedback("Gemarkeerd als gemaakt.");
   }
 
@@ -721,6 +752,7 @@ export default function RecipeDetail({
 
   if (!isEditing) {
     return (
+      <>
       <BakkerRecipeCard
         recipe={previewRecipe}
         ingredients={ingredients}
@@ -731,12 +763,22 @@ export default function RecipeDetail({
         feedback={feedback}
         onQuantityChange={updateCardQuantity}
         onQuantityStep={changeCardQuantity}
+        onScaleFromIngredient={scaleCardFromIngredient}
         onStart={startRecipeCard}
         onMarkMade={markRecipeCardMade}
         onPrint={printProductionCard}
         onEdit={() => startEditing("basis")}
         onClose={onClose}
       />
+      {isProductionShortcutOpen && (
+        <ProductionShortcutDialog
+          recipe={previewRecipe}
+          quantity={cardQuantity || previewBatchQuantity || 1}
+          onCancel={() => setIsProductionShortcutOpen(false)}
+          onConfirm={confirmRecipeCardMade}
+        />
+      )}
+      </>
     );
   }
 
@@ -3109,9 +3151,15 @@ function createRecipePrintHtml(
     ol { padding-left: 22px; margin: 0; }
     li { margin: 8px 0; font-size: 17px; font-weight: 700; }
     .meta { margin-top: 18px; text-align: right; font-style: italic; }
+    .screen-actions { margin: 0 0 16px; }
+    .screen-actions button { border: 1px solid #c3d3bc; background: white; padding: 10px 16px; font-weight: 700; }
+    @media print { .screen-actions { display: none; } }
   </style>
 </head>
 <body>
+  <div class="screen-actions">
+    <button type="button" onclick="window.close()">Terug naar overzicht</button>
+  </div>
   <div class="card">
     <p class="eyebrow">Recept kaart</p>
     <div class="layout">
@@ -3155,6 +3203,7 @@ function BakkerRecipeCard({
   feedback,
   onQuantityChange,
   onQuantityStep,
+  onScaleFromIngredient,
   onStart,
   onMarkMade,
   onPrint,
@@ -3170,6 +3219,7 @@ function BakkerRecipeCard({
   feedback: string;
   onQuantityChange: (value: string) => void;
   onQuantityStep: (delta: number) => void;
+  onScaleFromIngredient: (rowId: string, desiredQuantity: number) => void;
   onStart: () => void;
   onMarkMade: () => void;
   onPrint: () => void;
@@ -3179,6 +3229,14 @@ function BakkerRecipeCard({
   const baseQuantity = batchQuantity || getBatchInfo(recipe)?.quantity || 1;
   const multiplier = baseQuantity > 0 ? quantity / baseQuantity : 1;
   const rows = recipeCardIngredientRows(recipe, ingredients, recipes, multiplier);
+  const baseRows = recipeCardIngredientRows(recipe, ingredients, recipes, 1);
+  const scalableRows = recipe.type === "semiFinished" ? baseRows : [];
+  const [scaleIngredientId, setScaleIngredientId] = useState(
+    () => scalableRows[0]?.id || ""
+  );
+  const [scaleAmount, setScaleAmount] = useState("");
+  const selectedScaleRow =
+    scalableRows.find((row) => row.id === scaleIngredientId) || scalableRows[0];
   const steps = recipe.preparationSteps.length
     ? recipe.preparationSteps
     : recipe.workInstructions || [];
@@ -3190,7 +3248,17 @@ function BakkerRecipeCard({
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-white/70 px-3 py-4 backdrop-blur-[1px]">
       <div className="mx-auto w-[min(61rem,calc(100vw-1rem))] border border-[#111111] bg-white px-4 py-4 shadow-2xl sm:px-6">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-sm italic text-[#111111]">Recept kaart</p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-8 items-center gap-1 border border-[#c3d3bc] bg-white px-2 text-xs font-black"
+            >
+              <img src="/UI-apps_terug.svg" alt="" className="h-5 w-5" />
+              Terug
+            </button>
+            <p className="text-sm italic text-[#111111]">Recept kaart</p>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -3203,7 +3271,13 @@ function BakkerRecipeCard({
 
         <div className="grid gap-5 sm:grid-cols-[1rem_minmax(0,1fr)]">
           <div className="hidden bg-[#c3d3bc] sm:block" />
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_18rem]">
+          <div
+            className={`grid gap-4 ${
+              recipe.type === "finalProduct"
+                ? "lg:grid-cols-[minmax(0,1.35fr)_18rem]"
+                : ""
+            }`}
+          >
             <div className="min-w-0">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -3215,7 +3289,7 @@ function BakkerRecipeCard({
                   </p>
                 </div>
 
-                <div className="grid grid-cols-[4.6rem_3.3rem_3.3rem_3.3rem] border border-[#c3d3bc] text-center text-sm uppercase tracking-[0.16em]">
+                <div className="grid grid-cols-[4.25rem_3rem_3rem_3rem] border border-[#c3d3bc] text-center text-xs uppercase tracking-[0.12em]">
                   <button
                     type="button"
                     onClick={onStart}
@@ -3228,7 +3302,7 @@ function BakkerRecipeCard({
                   <button
                     type="button"
                     onClick={onMarkMade}
-                    className={`border-r border-[#c3d3bc] px-2 py-3 text-3xl leading-none ${
+                    className={`border-r border-[#c3d3bc] px-2 py-2.5 text-2xl leading-none ${
                       madeToday ? "bg-[#c3d3bc]" : "bg-white"
                     }`}
                     aria-label="Gemaakt"
@@ -3238,7 +3312,7 @@ function BakkerRecipeCard({
                   <button
                     type="button"
                     onClick={onPrint}
-                    className="border-r border-[#c3d3bc] px-2 py-3 text-xs font-black tracking-normal"
+                    className="border-r border-[#c3d3bc] px-2 py-2.5 text-xs font-black tracking-normal"
                   >
                     Print
                   </button>
@@ -3282,6 +3356,53 @@ function BakkerRecipeCard({
                 </button>
               </div>
 
+              {recipe.type === "semiFinished" && scalableRows.length > 0 && (
+                <div className="mt-3 grid gap-2 border border-[#c3d3bc] bg-white p-3 sm:grid-cols-[minmax(0,1.15fr)_9rem_auto] sm:items-end">
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+                    Stuur op ingredient
+                    <select
+                      value={selectedScaleRow?.id || ""}
+                      onChange={(event) => {
+                        setScaleIngredientId(event.target.value);
+                        const parsed = parseDutchNumber(scaleAmount);
+                        if (parsed > 0) onScaleFromIngredient(event.target.value, parsed);
+                      }}
+                      className="min-w-0 border border-[#c3d3bc] bg-white px-2 py-2 text-sm font-black normal-case tracking-normal text-[#111111]"
+                    >
+                      {scalableRows.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+                    Hoeveelheid
+                    <input
+                      value={scaleAmount}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setScaleAmount(value);
+                        onScaleFromIngredient(
+                          selectedScaleRow?.id || "",
+                          parseDutchNumber(value)
+                        );
+                      }}
+                      inputMode="decimal"
+                      placeholder={
+                        selectedScaleRow
+                          ? formatInputNumber(selectedScaleRow.quantity)
+                          : "0"
+                      }
+                      className="min-w-0 border border-[#c3d3bc] bg-white px-2 py-2 text-sm font-black normal-case tracking-normal text-[#111111] outline-none"
+                    />
+                  </label>
+                  <span className="pb-2 text-xs font-black text-[#707070]">
+                    {selectedScaleRow ? shortUnitLabel(selectedScaleRow.unit) : ""}
+                  </span>
+                </div>
+              )}
+
               <div className="mt-5 bg-[#efefef] p-4">
                 <h3 className="text-base font-black">Ingredienten</h3>
                 <div className="mt-3 grid gap-1">
@@ -3323,8 +3444,14 @@ function BakkerRecipeCard({
                   )}
                 </ol>
               </div>
+              {recipe.type === "semiFinished" && feedback && (
+                <p className="mt-3 text-xs font-black text-[#45663b]">
+                  {feedback}
+                </p>
+              )}
             </div>
 
+            {recipe.type === "finalProduct" && (
             <aside className="grid content-start gap-3 text-right text-sm italic">
               {recipe.photoPreviewDataUrl ? (
                 <img
@@ -3334,7 +3461,7 @@ function BakkerRecipeCard({
                 />
               ) : (
                 <div className="flex aspect-square w-full items-center justify-center bg-[#efefef] text-3xl font-black not-italic text-[#8c8c8c]">
-                  {recipe.type === "semiFinished" ? "HF" : "R"}
+                  R
                 </div>
               )}
               <p>
@@ -3369,7 +3496,79 @@ function BakkerRecipeCard({
                 </p>
               )}
             </aside>
+            )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductionShortcutDialog({
+  recipe,
+  quantity,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  recipe: Recipe;
+  quantity: number;
+  onCancel: () => void;
+  onConfirm: (date: string) => void;
+}>) {
+  const [date, setDate] = useState(todayIsoDate());
+  const unit = getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk";
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-[#111111]/35 px-4">
+      <div className="grid w-full max-w-sm gap-3 border border-[#111111] bg-white p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm italic">Productie afronden</p>
+            <h3 className="mt-1 text-2xl font-light leading-tight">
+              {recipe.name}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-3xl font-light leading-none"
+            aria-label="Sluit"
+          >
+            ×
+          </button>
+        </div>
+        <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+          Datum
+          <input
+            type="date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            className="border border-[#c3d3bc] bg-white px-3 py-2 text-sm font-black normal-case tracking-normal text-[#111111]"
+          />
+        </label>
+        <div className="border border-[#c3d3bc] bg-[#f5f5f3] p-3">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+            Hoeveelheid
+          </p>
+          <p className="mt-1 text-lg font-black">
+            {formatInputNumber(quantity)} {unitLabelText(unit)}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="border border-[#c3d3bc] bg-white px-4 py-3 text-sm font-black text-[#707070]"
+          >
+            Terug
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(date)}
+            className="border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-3 text-sm font-black"
+          >
+            Opslaan
+          </button>
         </div>
       </div>
     </div>

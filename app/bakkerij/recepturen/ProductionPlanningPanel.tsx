@@ -3,6 +3,7 @@ import type { ProductionLogEntry, Recipe } from "./types";
 import { EmptyState, Panel, SectionTitle } from "./RecepturenShared";
 import {
   formatDate,
+  normalizeSearch,
   openProductionRequests,
   productionLogForRecipe,
   productionForecasts,
@@ -41,6 +42,9 @@ export default function ProductionPlanningPanel({
   onDeleteProductionLog?: (recipe: Recipe, entryId: string) => void;
   compact?: boolean;
 }>) {
+  const [selectedWeek, setSelectedWeek] = useState(weekStartForDate());
+  const [stockSearch, setStockSearch] = useState("");
+  const [stockFilter, setStockFilter] = useState<"all" | "attention">("all");
   const [pendingProduction, setPendingProduction] = useState<{
     recipe: Recipe;
     quantity: number;
@@ -56,6 +60,23 @@ export default function ProductionPlanningPanel({
   } | null>(null);
   const needs = productionNeeds(recipes);
   const forecasts = productionForecasts(recipes);
+  const filteredForecasts = useMemo(() => {
+    const query = normalizeSearch(stockSearch);
+
+    return forecasts.filter((need) => {
+      const matchesSearch =
+        !query ||
+        normalizeSearch(need.recipe.name).includes(query) ||
+        normalizeSearch(need.recipe.productGroup).includes(query);
+      const matchesFilter =
+        stockFilter === "all" ||
+        need.status === "overdue" ||
+        need.status === "due" ||
+        need.status === "soon";
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [forecasts, stockFilter, stockSearch]);
   const recentLogs = useMemo(
     () =>
       recipes
@@ -139,79 +160,35 @@ export default function ProductionPlanningPanel({
 
   return (
     <div className="grid gap-4">
-      <Panel className="border-[#ead7a6] bg-[#fff8e3]">
-        <PlanningHeader
-          actionCount={needs.length}
-          description="Een planningsoverzicht voor alle eindproducten: wat is er ongeveer over, wanneer is bijmaken nodig en welke extra batches staan handmatig gepland."
-        />
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-          <div>
-            <h3 className="text-base font-black">Weekplanning</h3>
-            <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-              Nu, te laat of binnen 7 dagen.
-            </p>
-            <div className="mt-3 grid gap-2">
-              {visibleNeeds.length ? (
-                visibleNeeds.map((need) => (
-                  <NeedRow
-                    key={needKey(need)}
-                    need={need}
-                    onOpenRecipe={onOpenRecipe}
-                    onMarkProduced={
-                      onMarkProduced
-                        ? (recipe, quantity, requestId) =>
-                            setPendingProduction({ recipe, quantity, requestId })
-                        : undefined
-                    }
-                  />
-                ))
-              ) : (
-                <EmptyState text="Geen productie voor deze week." />
-              )}
+      <section className="grid gap-8 border border-[#c3d3bc] bg-white p-4 sm:p-6 lg:grid-cols-[minmax(20rem,0.9fr)_minmax(24rem,1.1fr)] lg:p-8">
+        <div>
+          <h3 className="text-xl font-black">Weekplanning</h3>
+          <div className="mt-4 grid max-w-[25rem] grid-cols-[3rem_3rem_minmax(0,1fr)] border border-[#4b4b4b] bg-[#f5f5f3]">
+            <button
+              type="button"
+              onClick={() => setSelectedWeek(addDays(selectedWeek, -7))}
+              className="border-r border-[#4b4b4b] text-3xl font-light leading-none"
+              aria-label="Vorige week"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedWeek(addDays(selectedWeek, 7))}
+              className="border-r border-[#4b4b4b] text-3xl font-light leading-none"
+              aria-label="Volgende week"
+            >
+              ›
+            </button>
+            <div className="flex items-center justify-end px-3 text-sm font-light">
+              {formatPlanningWeek(selectedWeek)}
             </div>
           </div>
 
-          <div>
-            <h3 className="text-base font-black">Prognosevoorraad</h3>
-            <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-              Alle eindproducten met hun geschatte voorraad en volgende productiemoment.
-            </p>
-            <div className="mt-3 grid gap-2">
-              {forecasts.length ? (
-                forecasts.map((need) => (
-                  <ForecastRow
-                    key={need.recipe.id}
-                    need={need}
-                    onOpenRecipe={onOpenRecipe}
-                    onMarkProduced={
-                      onMarkProduced
-                        ? (recipe, quantity, requestId) =>
-                            setPendingProduction({ recipe, quantity, requestId })
-                        : undefined
-                    }
-                    onAdjustStock={
-                      onAdjustStock
-                        ? (recipe, quantity) => setPendingStock({ recipe, quantity })
-                        : undefined
-                    }
-                  />
-                ))
-              ) : (
-                <EmptyState text="Nog geen eindproducten voor planning." />
-              )}
-            </div>
-          </div>
-        </div>
-        {plannedRequests.length > 0 && (
-          <div className="mt-4">
-            <h3 className="text-base font-black">Extra geplande batches</h3>
-            <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-              Handmatig ingepland, bijvoorbeeld door aanbieding of grote bestelling.
-            </p>
-            <div className="mt-3 grid gap-2 lg:grid-cols-2">
-              {plannedRequests.map((need) => (
-                <NeedRow
+          <div className="mt-0 max-w-[25rem] border-x border-b border-[#8c8c8c]">
+            {visibleNeeds.length ? (
+              visibleNeeds.map((need) => (
+                <PlanningListRow
                   key={needKey(need)}
                   need={need}
                   onOpenRecipe={onOpenRecipe}
@@ -222,67 +199,91 @@ export default function ProductionPlanningPanel({
                       : undefined
                   }
                 />
-              ))}
-            </div>
+              ))
+            ) : (
+              <p className="p-4 text-sm font-bold text-[#707070]">
+                Geen productie voor deze week.
+              </p>
+            )}
           </div>
-        )}
-        {recentLogs.length > 0 && (
-          <div className="mt-4">
-            <h3 className="text-base font-black">Productielogboek</h3>
-            <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-              Laatste registraties. Hier kun je foutjes aanpassen of verwijderen.
-            </p>
-            <div className="mt-3 grid gap-2">
-              {recentLogs.map(({ recipe, entry }) => (
-                <div
-                  key={`${recipe.id}-${entry.id}`}
-                  className="grid gap-2 rounded-2xl border border-[#e7e0d8] bg-white/86 p-3 md:grid-cols-[minmax(0,1fr)_8rem_8rem_auto] md:items-center"
-                >
-                  <div>
-                    <p className="text-sm font-black">{recipe.name}</p>
-                    <p className="mt-1 text-xs font-bold text-[#2d2a26]/48">
-                      {entry.note ||
-                        (entry.source === "stock"
-                          ? "Voorraadcorrectie"
-                          : entry.source === "work"
-                            ? "Werkmodus"
-                            : "Handmatig")}
-                    </p>
-                  </div>
-                  <p className="text-sm font-black">{formatDate(entry.date)}</p>
-                  <p className="text-sm font-black">
-                    {quantityText(entry.quantity, recipe.standardBatchUnit)}
-                  </p>
-                  <div className="flex flex-wrap gap-2 md:justify-end">
-                    {onUpdateProductionLog && (
-                      <button
-                        type="button"
-                        onClick={() => setEditingLog({ recipe, entry })}
-                        className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black shadow-sm"
-                      >
-                        Pas aan
-                      </button>
-                    )}
-                    {onDeleteProductionLog && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm("Deze productieregistratie verwijderen?")) {
-                            onDeleteProductionLog(recipe, entry.id);
-                          }
-                        }}
-                        className="rounded-full bg-[#fff4f1] px-3 py-2 text-xs font-black text-[#a83e31]"
-                      >
-                        Verwijder
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const firstNeed = visibleNeeds[0];
+              if (!firstNeed || !onMarkProduced) return;
+              setPendingProduction({
+                recipe: firstNeed.recipe,
+                quantity:
+                  firstNeed.requestedQuantity ||
+                  firstNeed.recipe.standardBatchQuantity ||
+                  firstNeed.lastProducedQuantity ||
+                  1,
+                requestId: firstNeed.manualRequestId,
+              });
+            }}
+            className="mt-10 grid h-14 max-w-[25rem] grid-cols-[4.5rem_minmax(0,1fr)] items-center border border-[#c3d3bc] bg-white text-left text-base font-black"
+          >
+            <span className="flex h-full items-center justify-center bg-[#c3d3bc] text-4xl font-light">
+              +
+            </span>
+            <span className="px-4">handmatig toevoegen</span>
+          </button>
+        </div>
+
+        <div>
+          <h3 className="text-xl font-black">Huidige voorraad</h3>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <label className="grid h-9 grid-cols-[2.5rem_minmax(0,1fr)] items-center rounded-full border-2 border-[#111111] bg-white">
+              <span className="text-center text-2xl leading-none">⌕</span>
+              <input
+                value={stockSearch}
+                onChange={(event) => setStockSearch(event.target.value)}
+                placeholder="zoek"
+                className="min-w-0 bg-transparent pr-3 text-sm font-light outline-none placeholder:text-[#9a9a9a]"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() =>
+                setStockFilter((current) =>
+                  current === "all" ? "attention" : "all"
+                )
+              }
+              className="flex h-9 items-center gap-3 rounded-full border-2 border-[#111111] bg-white px-5 text-sm font-light"
+            >
+              filter
+              <span className="text-2xl leading-none">⌄</span>
+            </button>
           </div>
-        )}
-      </Panel>
+
+          <div className="mt-3 max-h-[34rem] overflow-y-auto border border-[#8c8c8c] bg-white p-3">
+            <div className="grid grid-cols-[minmax(0,1fr)_5rem_6rem] gap-3 border-b border-[#8c8c8c] pb-2 text-sm italic text-[#9a9a9a]">
+              <span>product</span>
+              <span className="text-right">voorraad</span>
+              <span className="text-right">laatste prod.</span>
+            </div>
+            {filteredForecasts.length ? (
+              filteredForecasts.map((need) => (
+                <InventoryListRow
+                  key={need.recipe.id}
+                  need={need}
+                  onOpenRecipe={onOpenRecipe}
+                  onAdjustStock={
+                    onAdjustStock
+                      ? (recipe, quantity) => setPendingStock({ recipe, quantity })
+                      : undefined
+                  }
+                />
+              ))
+            ) : (
+              <p className="p-4 text-sm font-bold text-[#707070]">
+                Geen voorraadregels gevonden.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
       {pendingProduction && onMarkProduced && (
         <ProductionDateDialog
           title="Productie opslaan"
@@ -340,6 +341,95 @@ function PlanningHeader({
       <span className="rounded-full bg-white px-3 py-1.5 text-sm font-black text-[#7a5a18] shadow-sm">
         {actionCount} acties
       </span>
+    </div>
+  );
+}
+
+function PlanningListRow({
+  need,
+  onOpenRecipe,
+  onMarkProduced,
+}: Readonly<{
+  need: ProductionNeed;
+  onOpenRecipe?: (recipe: Recipe) => void;
+  onMarkProduced?: (recipe: Recipe, quantity: number, requestId?: string) => void;
+}>) {
+  const batchQuantity =
+    need.requestedQuantity ||
+    need.recipe.standardBatchQuantity ||
+    need.lastProducedQuantity ||
+    1;
+
+  return (
+    <div className="grid min-h-[4.2rem] grid-cols-[3.2rem_minmax(0,1fr)_3.4rem] border-b border-[#8c8c8c] last:border-b-0">
+      <span className={planningStripeClass(need.recipe)} />
+      <button
+        type="button"
+        onClick={() => onOpenRecipe?.(need.recipe)}
+        className="min-w-0 px-4 text-left text-[clamp(1.25rem,2.4vw,2rem)] font-light"
+      >
+        <span className="block truncate">{need.recipe.name}</span>
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onMarkProduced?.(need.recipe, batchQuantity, need.manualRequestId)
+        }
+        className="flex items-center justify-center text-3xl leading-none"
+        aria-label={`${need.recipe.name} als gemaakt opslaan`}
+      >
+        ⇢
+      </button>
+    </div>
+  );
+}
+
+function InventoryListRow({
+  need,
+  onOpenRecipe,
+  onAdjustStock,
+}: Readonly<{
+  need: ProductionNeed;
+  onOpenRecipe?: (recipe: Recipe) => void;
+  onAdjustStock?: (recipe: Recipe, quantity: number) => void;
+}>) {
+  const attention =
+    need.status === "overdue" || need.status === "due" || need.status === "soon";
+  const lastProduction = need.lastProducedAt
+    ? `week ${weekNumberForDate(need.lastProducedAt)}`
+    : "-";
+
+  return (
+    <div
+      className={`grid grid-cols-[minmax(0,1fr)_5rem_6rem] gap-3 border-b border-[#8c8c8c] py-1.5 text-base last:border-b-0 ${
+        attention ? "text-[#d75a48]" : "text-[#111111]"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onOpenRecipe?.(need.recipe)}
+        className="truncate text-left font-light"
+      >
+        {need.recipe.name}
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onAdjustStock?.(need.recipe, need.estimatedRemainingQuantity)
+        }
+        className="text-right font-light italic"
+      >
+        {quantityText(need.estimatedRemainingQuantity, need.recipe.standardBatchUnit)}
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onAdjustStock?.(need.recipe, need.estimatedRemainingQuantity)
+        }
+        className="text-right font-light italic text-[#9a9a9a]"
+      >
+        {lastProduction}
+      </button>
     </div>
   );
 }
@@ -741,4 +831,70 @@ function quantityText(value: number, unit?: string) {
 
 function needKey(need: ProductionNeed) {
   return `${need.recipe.id}-${need.manualRequestId || "forecast"}`;
+}
+
+function dateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function dateFromKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return new Date();
+
+  return new Date(year, month - 1, day);
+}
+
+function addDays(value: string, days: number) {
+  const date = dateFromKey(value);
+  date.setDate(date.getDate() + days);
+
+  return dateKey(date);
+}
+
+function weekStartForDate(date = new Date()) {
+  const nextDate = new Date(date);
+  const day = nextDate.getDay() || 7;
+  nextDate.setHours(0, 0, 0, 0);
+  nextDate.setDate(nextDate.getDate() - day + 1);
+
+  return dateKey(nextDate);
+}
+
+function weekNumberForDate(value: string) {
+  const date = dateFromKey(value);
+  const target = new Date(date.valueOf());
+  const dayNumber = (date.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNumber + 3);
+  const firstThursday = new Date(target.getFullYear(), 0, 4);
+  const firstDayNumber = (firstThursday.getDay() + 6) % 7;
+  firstThursday.setDate(firstThursday.getDate() - firstDayNumber + 3);
+
+  return (
+    1 +
+    Math.round(
+      (target.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1000)
+    )
+  );
+}
+
+function formatPlanningWeek(weekStart: string) {
+  const start = dateFromKey(weekStart);
+  const end = dateFromKey(addDays(weekStart, 6));
+  const formatter = new Intl.DateTimeFormat("nl-NL", {
+    day: "numeric",
+    month: "long",
+  });
+
+  return `week ${weekNumberForDate(weekStart)} - ${formatter.format(start)} t/m ${formatter.format(end)}`;
+}
+
+function planningStripeClass(recipe: Recipe) {
+  const group = normalizeSearch(recipe.productGroup);
+  if (group.includes("ijs")) return "bg-[#9ccfdd]";
+  if (group.includes("taart")) return "bg-[#e9cadd]";
+
+  return "bg-[#c3d3bc]";
 }

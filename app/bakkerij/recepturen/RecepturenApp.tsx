@@ -248,6 +248,11 @@ export default function RecepturenApp() {
   const [beheerView, setBeheerView] = useState<BeheerView>("menu");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
+  const [workStart, setWorkStart] = useState<{
+    recipeId: string;
+    quantity: number;
+    token: number;
+  } | null>(null);
   const [recipeItems, setRecipeItems] = useState(recipes);
   const [ingredientItems, setIngredientItems] = useState(ingredients);
   const [packagingItems, setPackagingItems] = useState(defaultPackagingItems);
@@ -1125,6 +1130,16 @@ export default function RecepturenApp() {
     setBeheerView(nextView);
   }
 
+  function startRecipeProduction(recipe: Recipe, quantity: number) {
+    setWorkStart({
+      recipeId: recipe.id,
+      quantity,
+      token: Date.now(),
+    });
+    setSelectedRecipe(null);
+    setMainTab("planning");
+  }
+
   function selectOfferWeek(weekStart: string) {
     setSelectedOfferWeek(weekStart);
   }
@@ -1233,12 +1248,6 @@ export default function RecepturenApp() {
           syncStatus={syncStatus}
           isLoadingData={isLoadingData}
           latestInvoiceNumber={latestInvoice?.invoiceNumber || ""}
-          bakeryHome={bakeryHome}
-          selectedOfferWeek={selectedOfferWeek}
-          bakeryHomeStatus={bakeryHomeStatus}
-          offerUploadStatus={offerUploadStatus}
-          onSelectOfferWeek={selectOfferWeek}
-          onUploadOfferImage={uploadBakeryOfferImage}
           onOpen={openBeheerView}
           onDownloadExcel={downloadExcelBackup}
           onDownloadJson={downloadJsonBackup}
@@ -1340,7 +1349,7 @@ export default function RecepturenApp() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-white text-[#111111]">
-      <div className="grid min-h-screen grid-cols-[clamp(3.8rem,7vw,5.2rem)_minmax(0,1fr)]">
+      <div className="grid min-h-screen grid-cols-[clamp(3.5rem,6.4vw,4.7rem)_minmax(0,1fr)]">
         <BakkerijSidebar
           active={mainTab !== "start"}
           onStart={() => openMainTab("start")}
@@ -1350,7 +1359,7 @@ export default function RecepturenApp() {
         <div className="min-w-0">
           <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
 
-          <div className="min-h-[calc(100vh_-_clamp(3.9rem,6.6vw,5rem))]">
+          <div className="min-h-[calc(100vh_-_clamp(3.4rem,5.8vw,4.45rem))]">
             {mainTab === "start" && (
               <BakkerijStartScreen
                 home={bakeryHome}
@@ -1365,7 +1374,7 @@ export default function RecepturenApp() {
             )}
 
             {mainTab === "recepten" && (
-              <div className="mx-auto h-[calc(100dvh_-_clamp(3.9rem,6.6vw,5rem))] w-full max-w-[74rem] px-3 py-4 sm:px-5 lg:px-7">
+              <div className="mx-auto h-[calc(100dvh_-_clamp(3.4rem,5.8vw,4.45rem))] w-full max-w-[74rem] px-3 py-3 sm:px-5 lg:px-7">
                 <RecipesList
                   recipes={recipeItems}
                   onOpenRecipe={openRecipe}
@@ -1377,11 +1386,14 @@ export default function RecepturenApp() {
             )}
 
             {mainTab === "planning" && (
-              <div className="mx-auto max-w-[78rem] px-3 py-5 sm:px-5 lg:px-8">
+              <div className="mx-auto max-w-[78rem] px-3 py-3 sm:px-5 lg:px-8">
                 <RecepturenWorkMode
                   recipes={recipeItems}
                   ingredients={ingredientItems}
                   lockedView="planning"
+                  startRecipeId={workStart?.recipeId}
+                  startQuantity={workStart?.quantity}
+                  startToken={workStart?.token}
                   onMarkProduced={markRecipeProduced}
                   onAdjustStock={adjustRecipeStock}
                   onUpdateProductionLog={updateProductionLogEntry}
@@ -1391,7 +1403,7 @@ export default function RecepturenApp() {
             )}
 
             {mainTab === "beheer" && (
-              <div className="mx-auto max-w-[78rem] px-3 py-5 sm:px-5 lg:px-8">
+              <div className="mx-auto max-w-[78rem] px-3 py-3 sm:px-5 lg:px-8">
                 {renderBeheerContent()}
               </div>
             )}
@@ -1410,6 +1422,7 @@ export default function RecepturenApp() {
             onSaveRecipe={saveRecipe}
             onDeleteRecipe={deleteRecipe}
             onSaveIngredient={saveIngredient}
+            onStartProduction={startRecipeProduction}
           />
         )}
       </div>
@@ -1431,7 +1444,7 @@ function BakkerijSidebar({
       <button
         type="button"
         onClick={onStart}
-        className="flex h-[clamp(3.9rem,7vw,5rem)] items-center justify-center border-b border-[#c3d3bc]"
+        className="flex h-[clamp(3.4rem,6.4vw,4.7rem)] items-center justify-center border-b border-[#c3d3bc]"
         aria-label="Start"
       >
         <span className="block h-9 w-12 overflow-hidden sm:h-11 sm:w-16">
@@ -1446,7 +1459,7 @@ function BakkerijSidebar({
       <button
         type="button"
         onClick={onRecipes}
-        className={`flex h-[clamp(3.9rem,7vw,5rem)] items-center justify-center border-b border-[#c3d3bc] ${
+        className={`flex h-[clamp(3.4rem,6.4vw,4.7rem)] items-center justify-center border-b border-[#c3d3bc] ${
           active ? "bg-[#d75a48]" : "bg-white"
         }`}
         aria-label="Recepten"
@@ -1460,7 +1473,7 @@ function BakkerijSidebar({
 
       <a
         href="/schoonmaak"
-        className="flex h-[clamp(3.9rem,7vw,5rem)] items-center justify-center border-b border-[#c3d3bc]"
+        className="flex h-[clamp(3.4rem,6.4vw,4.7rem)] items-center justify-center border-b border-[#c3d3bc]"
         aria-label="Schoonmaak"
       >
         <img src="/UI-apps_schonmaak.svg" alt="" className="h-9 w-9 object-contain sm:h-11 sm:w-11" />
@@ -1488,11 +1501,11 @@ function BakkerijTopNav({
 }>) {
   if (active === "start") {
     return (
-      <header className="grid h-[clamp(3.9rem,6.6vw,5rem)] grid-cols-[minmax(7rem,12rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
+      <header className="grid h-[clamp(3.4rem,5.8vw,4.45rem)] grid-cols-[minmax(6.2rem,10.5rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
         <button
           type="button"
           onClick={() => onSelect("start")}
-          className="border-r border-[#c3d3bc] text-center text-[clamp(1.2rem,2.5vw,1.85rem)] font-light uppercase tracking-[0.16em] sm:tracking-[0.2em]"
+          className="border-r border-[#c3d3bc] text-center text-[clamp(1rem,2.1vw,1.55rem)] font-light uppercase tracking-[0.14em] sm:tracking-[0.18em]"
         >
           START
         </button>
@@ -1508,13 +1521,13 @@ function BakkerijTopNav({
   ];
 
   return (
-    <header className="grid h-[clamp(3.9rem,6.6vw,5rem)] grid-cols-3 border-b border-[#c3d3bc] bg-white lg:grid-cols-[repeat(3,minmax(10rem,17rem))_minmax(0,1fr)]">
+    <header className="grid h-[clamp(3.4rem,5.8vw,4.45rem)] grid-cols-3 border-b border-[#c3d3bc] bg-white lg:grid-cols-[repeat(3,minmax(9rem,15.5rem))_minmax(0,1fr)]">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onSelect(tab.id)}
-          className={`min-w-0 border-r border-[#c3d3bc] text-center text-[clamp(0.74rem,1.8vw,1.45rem)] uppercase tracking-[0.08em] sm:tracking-[0.16em] ${
+          className={`min-w-0 border-r border-[#c3d3bc] text-center text-[clamp(0.68rem,1.55vw,1.2rem)] uppercase tracking-[0.06em] sm:tracking-[0.13em] ${
             active === tab.id
               ? "bg-[#d75a48] font-black text-white"
               : "bg-white font-light text-[#111111]"
@@ -1551,7 +1564,7 @@ function BakkerijStartScreen({
   const imageUrl = offer?.imageUrl || fallbackOfferImageUrl;
 
   return (
-    <section className="mx-auto grid min-h-[calc(100vh_-_clamp(3.9rem,6.6vw,5rem))] w-full max-w-[58rem] items-start gap-6 px-4 py-7 sm:px-7 md:grid-cols-[minmax(14rem,20rem)_minmax(16rem,22rem)] md:gap-8 lg:gap-12">
+    <section className="mx-auto grid min-h-[calc(100vh_-_clamp(3.4rem,5.8vw,4.45rem))] w-full max-w-[58rem] items-start gap-6 px-4 py-7 sm:px-7 md:grid-cols-[minmax(14rem,20rem)_minmax(16rem,22rem)] md:gap-8 lg:gap-12">
       <div className="min-w-0">
         <h2 className="mb-4 text-center text-[clamp(1.1rem,2.2vw,1.65rem)] font-light uppercase tracking-[0.18em]">
           AANBIEDING
@@ -1648,12 +1661,6 @@ function BeheerHome({
   syncStatus,
   isLoadingData,
   latestInvoiceNumber,
-  bakeryHome,
-  selectedOfferWeek,
-  bakeryHomeStatus,
-  offerUploadStatus,
-  onSelectOfferWeek,
-  onUploadOfferImage,
   onOpen,
   onDownloadExcel,
   onDownloadJson,
@@ -1661,12 +1668,6 @@ function BeheerHome({
   syncStatus: string;
   isLoadingData: boolean;
   latestInvoiceNumber: string;
-  bakeryHome: BakeryHomeData;
-  selectedOfferWeek: string;
-  bakeryHomeStatus: string;
-  offerUploadStatus: string;
-  onSelectOfferWeek: (weekStart: string) => void;
-  onUploadOfferImage: (file: File | null, label: string) => void;
   onOpen: (view: TabId) => void;
   onDownloadExcel: () => void;
   onDownloadJson: () => void;
@@ -1701,6 +1702,12 @@ function BeheerHome({
             description="Recepten of grondstoffen uit bestand."
             icon="/UI-apps_aanpassen.svg"
             onClick={() => onOpen("import")}
+          />
+          <BeheerLinkRow
+            title="Voorpagina"
+            description="Aanbiedingsfoto per week in Management."
+            icon="/UI-apps_homepage.svg"
+            href="/management/bakkerij"
           />
         </div>
       </div>
@@ -1742,14 +1749,6 @@ function BeheerHome({
         </p>
       </div>
 
-      <BakeryHomeManager
-        home={bakeryHome}
-        selectedWeek={selectedOfferWeek}
-        status={bakeryHomeStatus}
-        uploadStatus={offerUploadStatus}
-        onSelectWeek={onSelectOfferWeek}
-        onUploadOfferImage={onUploadOfferImage}
-      />
     </section>
   );
 }
@@ -1885,6 +1884,38 @@ function BeheerRow({
         <img src="/UI-apps_ga naar.svg" alt="" className="h-7 w-7" />
       </span>
     </button>
+  );
+}
+
+function BeheerLinkRow({
+  title,
+  description,
+  icon,
+  href,
+}: Readonly<{
+  title: string;
+  description: string;
+  icon: string;
+  href: string;
+}>) {
+  return (
+    <a
+      href={href}
+      className="grid grid-cols-[3rem_minmax(0,1fr)_2.75rem] items-center gap-4 border border-[#c3d3bc] bg-white p-4 text-left transition hover:bg-[#f8f8f6] active:scale-[0.99]"
+    >
+      <span className="flex h-12 w-12 items-center justify-center bg-[#c3d3bc]">
+        <img src={icon} alt="" className="h-7 w-7" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xl font-black text-[#252525]">{title}</span>
+        <span className="mt-1 block text-sm font-bold text-[#707070]">
+          {description}
+        </span>
+      </span>
+      <span className="flex h-11 w-11 items-center justify-center bg-[#c3d3bc]">
+        <img src="/UI-apps_ga naar.svg" alt="" className="h-7 w-7" />
+      </span>
+    </a>
   );
 }
 

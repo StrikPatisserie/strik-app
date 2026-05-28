@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Ingredient, Recipe, RecipeUnit } from "./types";
 import ProductionPlanningPanel from "./ProductionPlanningPanel";
 import {
@@ -274,6 +274,9 @@ export default function RecepturenWorkMode({
   ingredients,
   initialView = "recipes",
   lockedView,
+  startRecipeId,
+  startQuantity,
+  startToken,
   onMarkProduced,
   onAdjustStock,
   onUpdateProductionLog,
@@ -283,6 +286,9 @@ export default function RecepturenWorkMode({
   ingredients: Ingredient[];
   initialView?: WorkModeView;
   lockedView?: WorkModeView;
+  startRecipeId?: string;
+  startQuantity?: number;
+  startToken?: number;
   onMarkProduced: (
     recipe: Recipe,
     quantity: number,
@@ -303,6 +309,8 @@ export default function RecepturenWorkMode({
   const visibleView = lockedView || activeView;
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [startInProduction, setStartInProduction] = useState(false);
+  const [selectedStartQuantity, setSelectedStartQuantity] =
+    useState<number | undefined>(undefined);
   const [productionFeedback, setProductionFeedback] = useState("");
   const workFilters = useMemo(() => {
     const customCategories = recipes
@@ -348,6 +356,18 @@ export default function RecepturenWorkMode({
     window.setTimeout(() => setProductionFeedback(""), 2600);
   }
 
+  useEffect(() => {
+    if (!startRecipeId) return;
+
+    const recipe = findRecipe(recipes, startRecipeId);
+    if (!recipe) return;
+
+    setActiveView("planning");
+    setSelectedRecipe(recipe);
+    setSelectedStartQuantity(startQuantity);
+    setStartInProduction(true);
+  }, [recipes, startQuantity, startRecipeId, startToken]);
+
   return (
     <section className="grid gap-4">
       {productionFeedback && (
@@ -386,6 +406,7 @@ export default function RecepturenWorkMode({
           recipes={recipes}
           onOpenRecipe={(recipe) => {
             setStartInProduction(false);
+            setSelectedStartQuantity(undefined);
             setSelectedRecipe(recipe);
           }}
           onMarkProduced={markProduced}
@@ -443,10 +464,12 @@ export default function RecepturenWorkMode({
               recipe={recipe}
               onOpen={() => {
                 setStartInProduction(false);
+                setSelectedStartQuantity(undefined);
                 setSelectedRecipe(recipe);
               }}
               onStart={() => {
                 setStartInProduction(true);
+                setSelectedStartQuantity(undefined);
                 setSelectedRecipe(recipe);
               }}
             />
@@ -462,11 +485,14 @@ export default function RecepturenWorkMode({
 
       {selectedRecipe && (
         <WorkRecipeDetail
-          key={`${selectedRecipe.id}-${startInProduction ? "production" : "detail"}`}
+          key={`${selectedRecipe.id}-${startInProduction ? "production" : "detail"}-${
+            selectedStartQuantity || ""
+          }-${startToken || ""}`}
           recipe={selectedRecipe}
           recipes={recipes}
           ingredients={ingredients}
           startInProduction={startInProduction}
+          initialQuantity={selectedStartQuantity}
           onSelectRecipe={setSelectedRecipe}
           onMarkProduced={markProduced}
           onClose={() => setSelectedRecipe(null)}
@@ -485,11 +511,12 @@ function RecipeWorkCard({
   const categories = recipe.type === "finalProduct"
     ? workCategoriesForRecipe(recipe).slice(0, 3)
     : ["halffabricaten"];
+  const showThumb = recipe.type === "finalProduct";
 
   return (
     <article className="grid gap-3 rounded-[1.05rem] border border-[#e2dbcf] bg-white/92 p-3 shadow-sm">
-      <div className="grid grid-cols-[4.25rem_minmax(0,1fr)] gap-3">
-        <RecipeWorkThumb recipe={recipe} />
+      <div className={`grid gap-3 ${showThumb ? "grid-cols-[4.25rem_minmax(0,1fr)]" : ""}`}>
+        {showThumb && <RecipeWorkThumb recipe={recipe} />}
         <div className="min-w-0">
           <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/42">
             {recipe.productGroup}
@@ -581,6 +608,7 @@ function WorkRecipeDetail({
   recipes,
   ingredients,
   startInProduction,
+  initialQuantity,
   onSelectRecipe,
   onMarkProduced,
   onClose,
@@ -589,6 +617,7 @@ function WorkRecipeDetail({
   recipes: Recipe[];
   ingredients: Ingredient[];
   startInProduction: boolean;
+  initialQuantity?: number;
   onSelectRecipe: (recipe: Recipe) => void;
   onMarkProduced: (
     recipe: Recipe,
@@ -599,8 +628,21 @@ function WorkRecipeDetail({
   onClose: () => void;
 }>) {
   const standardBatch = getStandardBatch(recipe);
-  const [batchQuantity, setBatchQuantity] = useState(standardBatch.quantity);
+  const [batchQuantity, setBatchQuantity] = useState(
+    initialQuantity || standardBatch.quantity
+  );
   const [isProducing, setIsProducing] = useState(startInProduction);
+  const baseScaleRows = useMemo(
+    () => [
+      ...getScaledIngredients(recipe, ingredients, 1),
+      ...getScaledSemiFinished(recipe, recipes, 1),
+    ],
+    [ingredients, recipe, recipes]
+  );
+  const [scaleIngredientId, setScaleIngredientId] = useState(
+    () => baseScaleRows[0]?.id || ""
+  );
+  const [scaleIngredientAmount, setScaleIngredientAmount] = useState("");
   const [isRegisteringProduction, setIsRegisteringProduction] = useState(false);
   const activeBatch = { ...standardBatch, quantity: batchQuantity };
   const multiplier = standardBatch.quantity
@@ -621,6 +663,27 @@ function WorkRecipeDetail({
     const step = getBatchStep(standardBatch);
 
     setBatchQuantity((current) => Math.max(step, current + step * direction));
+  }
+
+  function scaleFromIngredient(rowId: string, value: string) {
+    setScaleIngredientAmount(value);
+
+    const selectedRow =
+      baseScaleRows.find((row) => row.id === rowId) || baseScaleRows[0];
+    const desiredQuantity = parseDutchNumber(value);
+
+    if (!selectedRow || selectedRow.quantity <= 0 || desiredQuantity <= 0) {
+      return;
+    }
+
+    setBatchQuantity(
+      Math.max(
+        getBatchStep(standardBatch),
+        Math.round(
+          ((standardBatch.quantity * desiredQuantity) / selectedRow.quantity) * 1000
+        ) / 1000
+      )
+    );
   }
 
   function printProductionCard() {
@@ -729,6 +792,48 @@ function WorkRecipeDetail({
               <p className="mt-1 text-sm font-black text-[#2d2a26]/58">
                 Batchgewicht: {formatBatchWeight(batchWeightKg)}
               </p>
+              {recipe.type === "semiFinished" && baseScaleRows.length > 0 && (
+                <div className="mt-3 grid gap-2 border border-[#c3d3bc] bg-white p-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end">
+                  <label className="grid gap-1 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                    Stuur op ingredient
+                    <select
+                      value={scaleIngredientId || baseScaleRows[0]?.id || ""}
+                      onChange={(event) => {
+                        setScaleIngredientId(event.target.value);
+                        if (scaleIngredientAmount) {
+                          scaleFromIngredient(event.target.value, scaleIngredientAmount);
+                        }
+                      }}
+                      className="min-w-0 border border-[#d8d0c4] bg-white px-3 py-2 text-sm font-black normal-case tracking-normal text-[#2d2a26]"
+                    >
+                      {baseScaleRows.map((row) => (
+                        <option key={row.id} value={row.id}>
+                          {row.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                    Hoeveelheid
+                    <input
+                      value={scaleIngredientAmount}
+                      onChange={(event) =>
+                        scaleFromIngredient(
+                          scaleIngredientId || baseScaleRows[0]?.id || "",
+                          event.target.value
+                        )
+                      }
+                      inputMode="decimal"
+                      placeholder="4000"
+                      className="min-w-0 border border-[#d8d0c4] bg-white px-3 py-2 text-sm font-black normal-case tracking-normal text-[#2d2a26] outline-none"
+                    />
+                  </label>
+                  <span className="pb-2 text-xs font-black text-[#2d2a26]/50">
+                    {baseScaleRows.find((row) => row.id === scaleIngredientId)?.unit ||
+                      baseScaleRows[0]?.unit}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <button

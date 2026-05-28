@@ -24,6 +24,14 @@ const topItems = [
     icon: strikIcons.newsManagement,
     tone: "green" as const,
   },
+  {
+    href: "/management/bakkerij",
+    label: "Bakkerij",
+    title: "Voorpagina beheren",
+    description: "Kies per week de aanbiedingsfoto voor de bakkers.",
+    icon: strikIcons.bakkerij,
+    tone: "light" as const,
+  },
 ];
 
 const bottomItems = [
