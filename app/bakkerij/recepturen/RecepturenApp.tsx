@@ -180,6 +180,29 @@ function sameSupplierArticle(
   );
 }
 
+function mergeRecipeIngredientLines(lines: Recipe["ingredients"]) {
+  const mergedLines: Recipe["ingredients"] = [];
+
+  lines.forEach((line) => {
+    const existingLine = mergedLines.find(
+      (item) =>
+        item.ingredientId === line.ingredientId &&
+        item.unit === line.unit &&
+        (item.wastePercentage || 0) === (line.wastePercentage || 0)
+    );
+
+    if (existingLine) {
+      existingLine.quantity += line.quantity;
+      existingLine.costContribution += line.costContribution;
+      return;
+    }
+
+    mergedLines.push({ ...line });
+  });
+
+  return mergedLines;
+}
+
 const fallbackOfferImageUrl = "/bakkerij-aanbieding-papa.png";
 
 function dateKey(date: Date) {
@@ -680,6 +703,85 @@ export default function RecepturenApp() {
 
   function deleteIngredient(ingredient: Ingredient) {
     deleteIngredients([ingredient], `${ingredient.name} verwijderd.`);
+  }
+
+  function mergeDuplicateIngredient(
+    sourceIngredient: Ingredient,
+    targetIngredient: Ingredient
+  ) {
+    if (sourceIngredient.id === targetIngredient.id) return;
+
+    const source = ingredientItems.find(
+      (ingredient) => ingredient.id === sourceIngredient.id
+    );
+    const target = ingredientItems.find(
+      (ingredient) => ingredient.id === targetIngredient.id
+    );
+
+    if (!source || !target) return;
+
+    const aliasByKey = new Map<string, string>();
+    [
+      ...target.aliases,
+      source.name,
+      source.supplierArticleNumber,
+      ...source.aliases,
+    ].forEach((alias) => {
+      const cleanAlias = alias.trim();
+      const key = normalizeSearch(cleanAlias);
+
+      if (cleanAlias && key && key !== normalizeSearch(target.name)) {
+        aliasByKey.set(key, cleanAlias);
+      }
+    });
+
+    const mergedTarget: Ingredient = {
+      ...target,
+      aliases: Array.from(aliasByKey.values()),
+      lastUpdated: new Date().toISOString().slice(0, 10),
+    };
+    const nextIngredients = ingredientItems
+      .map((ingredient) =>
+        ingredient.id === target.id ? mergedTarget : ingredient
+      )
+      .filter((ingredient) => ingredient.id !== source.id);
+    const recipesWithMergedIngredient = recipeItems.map((recipe) => ({
+      ...recipe,
+      ingredients: mergeRecipeIngredientLines(
+        recipe.ingredients.map((line) =>
+          line.ingredientId === source.id
+            ? { ...line, ingredientId: target.id }
+            : line
+        )
+      ),
+    }));
+    const nextRecipes = recalculateAllRecipeCosts(
+      recipesWithMergedIngredient,
+      nextIngredients,
+      { markAsUpdated: true },
+      packagingItems
+    );
+    const nextInvoices = invoiceItems.map((invoice) => ({
+      ...invoice,
+      lines: invoice.lines.map((line) =>
+        line.matchedIngredientId === source.id
+          ? { ...line, matchedIngredientId: target.id }
+          : line
+      ),
+    }));
+
+    setIngredientItems(nextIngredients);
+    setRecipeItems(nextRecipes);
+    setInvoiceItems(nextInvoices);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: nextIngredients,
+        recipes: nextRecipes,
+        invoiceImports: nextInvoices,
+      },
+      `${source.name} samengevoegd met ${target.name}.`
+    );
   }
 
   function updateInvoiceLine(
@@ -1325,6 +1427,7 @@ export default function RecepturenApp() {
             recipes={recipeItems}
             onUpdateIngredient={saveIngredient}
             onDeleteIngredient={deleteIngredient}
+            onMergeIngredient={mergeDuplicateIngredient}
             onDeleteIngredients={(ingredientsToDelete) =>
               deleteIngredients(
                 ingredientsToDelete,
@@ -1473,7 +1576,7 @@ function BakkerijSidebar({
       <button
         type="button"
         onClick={onStart}
-        className="flex h-[clamp(3.4rem,6.4vw,4.7rem)] items-center justify-center border-b border-[#c3d3bc]"
+        className="flex h-[clamp(2.95rem,5vw,3.9rem)] items-center justify-center border-b border-[#c3d3bc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#8fb184]"
         aria-label="Start"
       >
         <span className="block h-9 w-12 overflow-hidden sm:h-11 sm:w-16">
@@ -1488,7 +1591,7 @@ function BakkerijSidebar({
       <button
         type="button"
         onClick={onRecipes}
-        className={`flex h-[clamp(3.4rem,6.4vw,4.7rem)] items-center justify-center border-b border-[#c3d3bc] ${
+        className={`flex h-[clamp(2.95rem,5vw,3.9rem)] items-center justify-center border-b border-[#c3d3bc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#8fb184] ${
           active ? "bg-[#d75a48]" : "bg-white"
         }`}
         aria-label="Recepten"
@@ -1502,7 +1605,7 @@ function BakkerijSidebar({
 
       <button
         type="button"
-        className="flex h-[clamp(3.4rem,6.4vw,4.7rem)] items-center justify-center border-b border-[#c3d3bc]"
+        className="flex h-[clamp(2.95rem,5vw,3.9rem)] items-center justify-center border-b border-[#c3d3bc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#8fb184]"
         aria-label="Schoonmaak"
       >
         <img src="/UI-apps_schonmaak.svg" alt="" className="h-9 w-9 object-contain sm:h-11 sm:w-11" />

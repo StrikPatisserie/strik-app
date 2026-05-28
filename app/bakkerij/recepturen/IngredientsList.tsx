@@ -18,6 +18,7 @@ import {
   normalizeSearch,
   packagePriceLabel,
   pricePerBaseUnitFromPackagePrice,
+  quantityLabel,
   recipesUsingIngredient,
 } from "./utils";
 
@@ -47,11 +48,13 @@ export default function IngredientsList({
   recipes,
   onUpdateIngredient,
   onDeleteIngredient,
+  onMergeIngredient,
 }: Readonly<{
   ingredients: Ingredient[];
   recipes: Recipe[];
   onUpdateIngredient: (ingredient: Ingredient) => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
+  onMergeIngredient: (sourceIngredient: Ingredient, targetIngredient: Ingredient) => void;
   onDeleteIngredients?: (ingredients: Ingredient[]) => void;
 }>) {
   const [search, setSearch] = useState("");
@@ -59,6 +62,9 @@ export default function IngredientsList({
   const [allergen, setAllergen] = useState("all");
   const [priceChange, setPriceChange] = useState("all");
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(
+    null
+  );
+  const [linkedIngredient, setLinkedIngredient] = useState<Ingredient | null>(
     null
   );
   const suppliers = Array.from(new Set(ingredients.map((item) => item.supplier)));
@@ -147,17 +153,24 @@ export default function IngredientsList({
 
         {filteredIngredients.length ? (
           <div className="overflow-x-auto border border-[#e7e0d8]">
-            <div className="hidden grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_7rem_8rem_7rem_8rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 lg:grid lg:min-w-[58rem]">
+            <div className="hidden grid-cols-[minmax(12rem,1.25fr)_7rem_7rem_6.5rem_7rem_6.5rem_7rem_7rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 lg:grid lg:min-w-[65rem]">
               <span>Ingredient</span>
               <span>Leverancier</span>
               <span>Artikel</span>
               <span>Eenheid</span>
               <span>Prijs /kg</span>
               <span>Wijziging</span>
+              <span>Gekoppeld aan</span>
               <span>Factuur</span>
             </div>
             <div className="divide-y divide-[#e7e0d8] bg-white">
-              {filteredIngredients.map((ingredient) => (
+              {filteredIngredients.map((ingredient) => {
+                const linkedRecipes = recipesUsingIngredient(
+                  recipes,
+                  ingredient.id
+                );
+
+                return (
                   <div
                     key={ingredient.id}
                     role="button"
@@ -169,7 +182,7 @@ export default function IngredientsList({
                         setSelectedIngredient(ingredient);
                       }
                     }}
-                    className="grid w-full cursor-pointer gap-3 px-4 py-2.5 text-left transition hover:bg-[#fffdf8] lg:min-w-[58rem] lg:grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_7rem_8rem_7rem_8rem] lg:items-center"
+                    className="grid w-full cursor-pointer gap-3 px-4 py-2.5 text-left transition hover:bg-[#fffdf8] lg:min-w-[65rem] lg:grid-cols-[minmax(12rem,1.25fr)_7rem_7rem_6.5rem_7rem_6.5rem_7rem_7rem] lg:items-center"
                   >
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -198,11 +211,31 @@ export default function IngredientsList({
                     >
                       {formatSignedPercent(ingredientPriceChange(ingredient), 1)}
                     </span>
+                    <button
+                      type="button"
+                      disabled={!linkedRecipes.length}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setLinkedIngredient(ingredient);
+                      }}
+                      className={`w-fit text-left text-xs font-black underline-offset-4 ${
+                        linkedRecipes.length
+                          ? "text-[#45663b] hover:underline"
+                          : "cursor-default text-[#2d2a26]/35"
+                      }`}
+                    >
+                      {linkedRecipes.length
+                        ? `${linkedRecipes.length} recept${
+                            linkedRecipes.length === 1 ? "" : "en"
+                          }`
+                        : "geen"}
+                    </button>
                     <p className="text-xs font-bold text-[#2d2a26]/45">
                       {ingredient.lastInvoice}
                     </p>
                   </div>
-                ))}
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -214,10 +247,15 @@ export default function IngredientsList({
         <IngredientDetail
           key={selectedIngredient.id}
           ingredient={selectedIngredient}
+          ingredients={ingredients}
           recipes={recipes}
           onUpdateIngredient={(ingredient) => {
             onUpdateIngredient(ingredient);
             setSelectedIngredient(ingredient);
+          }}
+          onMergeIngredient={(sourceIngredient, targetIngredient) => {
+            onMergeIngredient(sourceIngredient, targetIngredient);
+            setSelectedIngredient(null);
           }}
           onDeleteIngredient={(ingredient) => {
             onDeleteIngredient(ingredient);
@@ -226,25 +264,46 @@ export default function IngredientsList({
           onClose={() => setSelectedIngredient(null)}
         />
       )}
+
+      {linkedIngredient && (
+        <IngredientRecipeLinks
+          ingredient={linkedIngredient}
+          recipes={recipesUsingIngredient(recipes, linkedIngredient.id)}
+          onClose={() => setLinkedIngredient(null)}
+        />
+      )}
     </Panel>
   );
 }
 
 function IngredientDetail({
   ingredient,
+  ingredients,
   recipes,
   onUpdateIngredient,
+  onMergeIngredient,
   onDeleteIngredient,
   onClose,
 }: Readonly<{
   ingredient: Ingredient;
+  ingredients: Ingredient[];
   recipes: Recipe[];
   onUpdateIngredient: (ingredient: Ingredient) => void;
+  onMergeIngredient: (
+    sourceIngredient: Ingredient,
+    targetIngredient: Ingredient
+  ) => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
   onClose: () => void;
 }>) {
   const linkedRecipes = recipesUsingIngredient(recipes, ingredient.id);
+  const mergeCandidates = ingredients
+    .filter((item) => item.id !== ingredient.id)
+    .sort((first, second) => first.name.localeCompare(second.name, "nl-NL"));
   const [isLinking, setIsLinking] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState(
+    mergeCandidates[0]?.id || ""
+  );
   const [name, setName] = useState(ingredient.name);
   const [supplierName, setSupplierName] = useState(ingredient.supplier);
   const [packageSize, setPackageSize] = useState(ingredient.packageSize);
@@ -349,6 +408,24 @@ function IngredientDetail({
     );
 
     if (confirmed) onDeleteIngredient(ingredient);
+  }
+
+  function requestMergeIngredient() {
+    const targetIngredient = mergeCandidates.find(
+      (item) => item.id === mergeTargetId
+    );
+
+    if (!targetIngredient) {
+      setFeedback("Kies eerst de grondstof waarmee je wilt samenvoegen.");
+      window.setTimeout(() => setFeedback(""), 2000);
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${ingredient.name} samenvoegen met ${targetIngredient.name}? Alle receptregels en factuurkoppelingen gaan daarna naar ${targetIngredient.name}.`
+    );
+
+    if (confirmed) onMergeIngredient(ingredient, targetIngredient);
   }
 
   return (
@@ -579,6 +656,42 @@ function IngredientDetail({
           </div>
         </Panel>
 
+        <Panel className="mt-4 border-[#d9cfbf] bg-[#fffdf8]">
+          <SectionTitle
+            title="Grondstof samenvoegen"
+            description="Gebruik dit voor dubbele grondstoffen, zoals dezelfde roomboter die meerdere keren is ingelezen."
+          />
+          <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+              Samenvoegen met
+              <select
+                value={mergeTargetId}
+                onChange={(event) => setMergeTargetId(event.target.value)}
+                className="border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+              >
+                {mergeCandidates.length ? (
+                  mergeCandidates.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name}
+                      {candidate.supplier ? ` - ${candidate.supplier}` : ""}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Geen andere grondstoffen</option>
+                )}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={!mergeCandidates.length}
+              onClick={requestMergeIngredient}
+              className="border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Samenvoegen
+            </button>
+          </div>
+        </Panel>
+
         <Panel className="mt-4 border-[#efc2bb] bg-[#fff4f1]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -623,6 +736,83 @@ function createBlankIngredient(): Ingredient {
     lastInvoice: "Handmatig toegevoegd",
     aliases: [],
   };
+}
+
+function IngredientRecipeLinks({
+  ingredient,
+  recipes,
+  onClose,
+}: Readonly<{
+  ingredient: Ingredient;
+  recipes: Recipe[];
+  onClose: () => void;
+}>) {
+  return (
+    <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#2d2a26]/35 px-3 py-5 backdrop-blur-sm">
+      <div className="mx-auto max-w-2xl border border-[#111111] bg-white p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
+              Gekoppeld aan
+            </p>
+            <h2 className="mt-1 text-2xl font-black leading-tight">
+              {ingredient.name}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-3xl font-light leading-none"
+            aria-label="Sluit"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="mt-5 divide-y divide-[#d9d2c9] border-y border-[#d9d2c9]">
+          {recipes.length ? (
+            recipes.map((recipe) => {
+              const linkedLines = recipe.ingredients.filter(
+                (line) => line.ingredientId === ingredient.id
+              );
+              const linkedQuantity = linkedLines
+                .map((line) => quantityLabel(line.quantity, line.unit))
+                .join(" + ");
+
+              return (
+                <div
+                  key={recipe.id}
+                  className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_9rem_8rem] sm:items-center"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-black">
+                      {recipe.name}
+                    </p>
+                    <p className="text-xs font-bold text-[#2d2a26]/45">
+                      {recipe.productGroup || "Geen categorie"} ·{" "}
+                      {recipe.type === "semiFinished"
+                        ? "halffabricaat"
+                        : "eindproduct"}
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold text-[#2d2a26]/60">
+                    {linkedQuantity || "-"}
+                  </p>
+                  <p className="text-sm font-black">
+                    {formatEuro(recipe.costPrice)}
+                  </p>
+                </div>
+              );
+            })
+          ) : (
+            <p className="py-4 text-sm font-bold text-[#2d2a26]/45">
+              Deze grondstof staat nog niet in recepten.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function MiniMetric({
