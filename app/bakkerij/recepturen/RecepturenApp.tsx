@@ -61,7 +61,7 @@ const tabs = [
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
-type MainTabId = "recepten" | "planning" | "beheer";
+type MainTabId = "start" | "recepten" | "planning" | "beheer";
 type BeheerView = TabId | "menu";
 
 function hasStoredRecepturenData(data: RecepturenData) {
@@ -177,7 +177,7 @@ function sameSupplierArticle(
 }
 
 export default function RecepturenApp() {
-  const [mainTab, setMainTab] = useState<MainTabId>("recepten");
+  const [mainTab, setMainTab] = useState<MainTabId>("start");
   const [beheerView, setBeheerView] = useState<BeheerView>("menu");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
@@ -1133,104 +1133,51 @@ export default function RecepturenApp() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f5f3] text-[#252525]">
-      <div className="grid min-h-screen md:grid-cols-[5.5rem_minmax(0,1fr)]">
-        <aside className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[#d8d8d4] bg-white px-3 md:h-screen md:flex-col md:border-b-0 md:border-r md:py-5">
-          <a
-            href="/"
-            className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#f5f5f3]"
-            aria-label="Homepage"
-          >
-            <img src="/UI-apps_homepage.svg" alt="" className="h-8 w-8" />
-          </a>
-          <div className="flex items-center gap-2 md:grid md:gap-4">
-            <SidebarIcon
-              src="/UI-apps_recepten boek.svg"
-              label="Bakkerij"
-              active
-            />
-            <a
-              href="/schoonmaak"
-              className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#f5f5f3]"
-              aria-label="Schoonmaak"
-            >
-              <img src="/UI-apps_schonmaak.svg" alt="" className="h-8 w-8" />
-            </a>
-          </div>
-          <a
-            href="/"
-            className="hidden h-12 w-12 items-center justify-center rounded-lg bg-[#f5f5f3] md:flex"
-            aria-label="Terug"
-          >
-            <img src="/UI-apps_terug.svg" alt="" className="h-8 w-8" />
-          </a>
-        </aside>
+    <main className="min-h-screen overflow-x-auto bg-white text-[#111111]">
+      <div className="grid min-h-screen min-w-[62rem] grid-cols-[6.875rem_minmax(0,1fr)]">
+        <BakkerijSidebar
+          active={mainTab !== "start"}
+          onStart={() => openMainTab("start")}
+          onRecipes={() => openMainTab("recepten")}
+        />
 
-        <div className="min-w-0 px-4 py-5 sm:px-8 lg:px-12">
-          <div className="mx-auto grid w-full max-w-[92rem] gap-8">
-            <header className="grid gap-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
-                    Bakkerij
-                  </p>
-                  <h1
-                    className="mt-1 text-5xl leading-none text-[#050505] sm:text-7xl"
-                    style={{ fontFamily: "Butterscotch, Marker Felt, cursive" }}
-                  >
-                    Recepten
-                  </h1>
-                </div>
-                <p className="max-w-sm text-right text-xs font-bold leading-relaxed text-[#707070]">
-                  {isLoadingData ? "Laden..." : syncStatus}
-                </p>
-              </div>
+        <div className="min-w-0">
+          <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
 
-              <nav className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { id: "recepten" as const, label: "RECEPTEN" },
-                  { id: "planning" as const, label: "PLANNING" },
-                  { id: "beheer" as const, label: "BEHEER" },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => openMainTab(item.id)}
-                    className={`rounded-lg border px-5 py-4 text-left text-xl font-black transition active:scale-[0.99] ${
-                      mainTab === item.id
-                        ? "border-[#c3d3bc] bg-[#c3d3bc] text-[#252525]"
-                        : "border-[#d8d8d4] bg-white text-[#8c8c8c] hover:text-[#252525]"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </nav>
-            </header>
+          <div className="min-h-[calc(100vh-6.875rem)]">
+            {mainTab === "start" && <BakkerijStartScreen />}
 
             {mainTab === "recepten" && (
-              <RecipesList
-                recipes={recipeItems}
-                onOpenRecipe={openRecipe}
-                onCreateRecipe={() => createRecipe("finalProduct")}
-                onCreateSemiFinished={() => createRecipe("semiFinished")}
-                onRecalculateAll={recalculateAllRecipes}
-              />
+              <div className="mx-auto max-w-[76rem] px-12 py-12">
+                <RecipesList
+                  recipes={recipeItems}
+                  onOpenRecipe={openRecipe}
+                  onCreateRecipe={() => createRecipe("finalProduct")}
+                  onCreateSemiFinished={() => createRecipe("semiFinished")}
+                  onRecalculateAll={recalculateAllRecipes}
+                />
+              </div>
             )}
 
             {mainTab === "planning" && (
-              <RecepturenWorkMode
-                recipes={recipeItems}
-                ingredients={ingredientItems}
-                lockedView="planning"
-                onMarkProduced={markRecipeProduced}
-                onAdjustStock={adjustRecipeStock}
-                onUpdateProductionLog={updateProductionLogEntry}
-                onDeleteProductionLog={deleteProductionLogEntry}
-              />
+              <div className="mx-auto max-w-[78rem] px-12 py-12">
+                <RecepturenWorkMode
+                  recipes={recipeItems}
+                  ingredients={ingredientItems}
+                  lockedView="planning"
+                  onMarkProduced={markRecipeProduced}
+                  onAdjustStock={adjustRecipeStock}
+                  onUpdateProductionLog={updateProductionLogEntry}
+                  onDeleteProductionLog={deleteProductionLogEntry}
+                />
+              </div>
             )}
 
-            {mainTab === "beheer" && renderBeheerContent()}
+            {mainTab === "beheer" && (
+              <div className="mx-auto max-w-[76rem] px-12 py-20">
+                {renderBeheerContent()}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1253,20 +1200,175 @@ export default function RecepturenApp() {
   );
 }
 
-function SidebarIcon({
-  src,
-  label,
-  active = false,
-}: Readonly<{ src: string; label: string; active?: boolean }>) {
+function BakkerijSidebar({
+  active,
+  onStart,
+  onRecipes,
+}: Readonly<{
+  active: boolean;
+  onStart: () => void;
+  onRecipes: () => void;
+}>) {
   return (
-    <span
-      className={`flex h-12 w-12 items-center justify-center rounded-lg ${
-        active ? "bg-[#d75a48]" : "bg-[#f5f5f3]"
-      }`}
-      title={label}
-    >
-      <img src={src} alt="" className="h-8 w-8" />
-    </span>
+    <aside className="relative flex min-h-screen flex-col border-r border-[#c3d3bc] bg-white">
+      <button
+        type="button"
+        onClick={onStart}
+        className="flex h-[6.875rem] items-center justify-center border-b border-[#c3d3bc]"
+        aria-label="Start"
+      >
+        <span className="block h-12 w-20 overflow-hidden">
+          <img
+            src="/strik-logo.png"
+            alt=""
+            className="h-24 w-24 -translate-x-2 -translate-y-1 object-contain"
+          />
+        </span>
+      </button>
+
+      <button
+        type="button"
+        onClick={onRecipes}
+        className={`flex h-[6.875rem] items-center justify-center border-b border-[#c3d3bc] ${
+          active ? "bg-[#d75a48]" : "bg-white"
+        }`}
+        aria-label="Recepten"
+      >
+        <img
+          src="/apps strik_Bakkerij.svg"
+          alt=""
+          className={`h-14 w-14 object-contain ${active ? "invert" : ""}`}
+        />
+      </button>
+
+      <a
+        href="/schoonmaak"
+        className="flex h-[6.875rem] items-center justify-center border-b border-[#c3d3bc]"
+        aria-label="Schoonmaak"
+      >
+        <img src="/UI-apps_schonmaak.svg" alt="" className="h-14 w-14 object-contain" />
+      </a>
+
+      <div className="flex-1" />
+
+      <a
+        href="/"
+        className="mb-7 flex h-16 items-center justify-center"
+        aria-label="Terug"
+      >
+        <img src="/UI-apps_terug.svg" alt="" className="h-14 w-14 object-contain" />
+      </a>
+    </aside>
+  );
+}
+
+function BakkerijTopNav({
+  active,
+  onSelect,
+}: Readonly<{
+  active: MainTabId;
+  onSelect: (tab: MainTabId) => void;
+}>) {
+  if (active === "start") {
+    return (
+      <header className="grid h-[6.875rem] grid-cols-[16.25rem_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
+        <button
+          type="button"
+          onClick={() => onSelect("start")}
+          className="border-r border-[#c3d3bc] text-center text-[2.5rem] font-light uppercase tracking-[0.23em]"
+        >
+          START
+        </button>
+        <div />
+      </header>
+    );
+  }
+
+  const tabs: Array<{ id: MainTabId; label: string }> = [
+    { id: "recepten", label: "RECEPTEN" },
+    { id: "planning", label: "PLANNING" },
+    { id: "beheer", label: "BEHEER" },
+  ];
+
+  return (
+    <header className="grid h-[6.875rem] grid-cols-[repeat(3,23.8rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          onClick={() => onSelect(tab.id)}
+          className={`border-r border-[#c3d3bc] text-center text-[2.15rem] uppercase tracking-[0.22em] ${
+            active === tab.id
+              ? "bg-[#d75a48] font-black text-white"
+              : "bg-white font-light text-[#111111]"
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+      <div />
+    </header>
+  );
+}
+
+function BakkerijStartScreen() {
+  return (
+    <section className="grid min-h-[calc(100vh-6.875rem)] grid-cols-[23.1rem_23.1rem] gap-[9.6rem] pl-[11.1rem] pt-[6.9rem]">
+      <div>
+        <h2 className="mb-10 text-center text-[2.15rem] font-light uppercase tracking-[0.24em]">
+          AANBIEDING
+        </h2>
+        <div className="w-[23.1rem]">
+          <div className="grid h-11 grid-cols-[2.8rem_2.8rem_minmax(0,1fr)] border border-[#6d746a] bg-[#c3d3bc] text-[#111111]">
+            <button type="button" className="border-r border-[#6d746a] text-5xl font-light leading-none">
+              ‹
+            </button>
+            <button type="button" className="border-r border-[#6d746a] text-5xl font-light leading-none">
+              ›
+            </button>
+            <div className="flex items-center justify-end pr-4 text-xl font-light">
+              1 t/m 7 juni
+            </div>
+          </div>
+          <img
+            src="/bakkerij-aanbieding-papa.png"
+            alt="Liefste papa aanbieding"
+            className="block w-full border-x border-b border-transparent object-cover"
+          />
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-12 text-center text-[2.15rem] font-light uppercase tracking-[0.24em]">
+          NOTITIES / TO DO
+        </h2>
+        <div className="grid gap-5">
+          {[0, 1, 2].map((item) => (
+            <div
+              key={item}
+              className="relative h-[9.55rem] border border-[#4b4b4b] bg-white"
+            >
+              <button
+                type="button"
+                className="absolute -right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#d75a48] text-3xl font-light leading-none text-white"
+                aria-label="Notitie verwijderen"
+              >
+                -
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="mt-9 flex justify-center">
+          <button
+            type="button"
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-[#c3d3bc] text-5xl font-light leading-none text-white"
+            aria-label="Notitie toevoegen"
+          >
+            +
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
