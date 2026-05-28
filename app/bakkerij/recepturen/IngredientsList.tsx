@@ -43,15 +43,16 @@ function parseDutchPriceInput(value: string) {
 export default function IngredientsList({
   ingredients,
   recipes,
+  onOpenRecipe,
   onUpdateIngredient,
   onDeleteIngredient,
-  onDeleteIngredients,
 }: Readonly<{
   ingredients: Ingredient[];
   recipes: Recipe[];
+  onOpenRecipe?: (recipe: Recipe) => void;
   onUpdateIngredient: (ingredient: Ingredient) => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
-  onDeleteIngredients: (ingredients: Ingredient[]) => void;
+  onDeleteIngredients?: (ingredients: Ingredient[]) => void;
 }>) {
   const [search, setSearch] = useState("");
   const [supplier, setSupplier] = useState("all");
@@ -64,7 +65,6 @@ export default function IngredientsList({
   const allergens = Array.from(
     new Set(ingredients.flatMap((item) => item.allergens))
   ).sort((first, second) => first.localeCompare(second, "nl-NL"));
-  const hfIngredients = ingredients.filter(isHfIngredient);
 
   const filteredIngredients = useMemo(() => {
     const query = normalizeSearch(search);
@@ -100,36 +100,6 @@ export default function IngredientsList({
           title="Ingredienten"
           description="Database met leveranciersartikelen, prijshistorie, allergenen en recept-impact."
         />
-
-        {hfIngredients.length > 0 && (
-          <div className="rounded-[1.15rem] border border-[#ead7a6] bg-[#fff8e3] p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-black text-[#7a5a18]">
-                  {hfIngredients.length} HF-items staan nog tussen grondstoffen
-                </p>
-                <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
-                  Halffabricaten horen in het halffabricaten-overzicht. Opruimen
-                  verwijdert deze HF-grondstoffen uit de grondstoffenlijst en uit
-                  directe receptregels.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const confirmed = window.confirm(
-                    `${hfIngredients.length} HF-grondstoffen verwijderen uit de grondstoffenlijst? Halffabricaatrecepten zelf blijven bestaan.`
-                  );
-
-                  if (confirmed) onDeleteIngredients(hfIngredients);
-                }}
-                className="rounded-full bg-[#fff0bd] px-4 py-2.5 text-sm font-black text-[#7a5a18] shadow-sm"
-              >
-                HF opruimen
-              </button>
-            </div>
-          </div>
-        )}
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(10rem,0.7fr))]">
           <SearchInput
@@ -180,50 +150,76 @@ export default function IngredientsList({
               <span>Factuur</span>
             </div>
             <div className="divide-y divide-[#e7e0d8] bg-white">
-              {filteredIngredients.map((ingredient) => (
-                <button
-                  key={ingredient.id}
-                  type="button"
-                  onClick={() => setSelectedIngredient(ingredient)}
-                  className="grid w-full gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_7rem_8rem_7rem_8rem] xl:items-center"
-                >
-                  <div className="min-w-0">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <p className="truncate text-base font-black">
-                        {ingredient.name}
+              {filteredIngredients.map((ingredient) => {
+                const semiFinishedRecipe = semiFinishedRecipeForIngredient(
+                  ingredient,
+                  recipes
+                );
+
+                return (
+                  <div
+                    key={ingredient.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedIngredient(ingredient)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedIngredient(ingredient);
+                      }
+                    }}
+                    className="grid w-full cursor-pointer gap-3 px-4 py-4 text-left transition hover:bg-[#fffdf8] xl:grid-cols-[minmax(13rem,1.2fr)_8rem_8rem_7rem_8rem_7rem_8rem] xl:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <p className="truncate text-base font-black">
+                          {ingredient.name}
+                        </p>
+                        {isHfIngredient(ingredient) && (
+                          <span className="rounded-full bg-[#fff0bd] px-2 py-0.5 text-[0.62rem] font-black text-[#7a5a18]">
+                            HF
+                          </span>
+                        )}
+                        {semiFinishedRecipe && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenRecipe?.(semiFinishedRecipe);
+                            }}
+                            className="max-w-full truncate rounded-full border border-[#c3d3bc] bg-[#f7faf5] px-2.5 py-1 text-[0.65rem] font-black text-[#45663b]"
+                          >
+                            halffabricaat: {semiFinishedRecipe.name} ↗
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-[#2d2a26]/45">
+                        {ingredient.allergens.length
+                          ? ingredient.allergens.join(", ")
+                          : "Geen allergenen"}
                       </p>
-                      {isHfIngredient(ingredient) && (
-                        <span className="rounded-full bg-[#fff0bd] px-2 py-0.5 text-[0.62rem] font-black text-[#7a5a18]">
-                          HF
-                        </span>
-                      )}
                     </div>
+                    <p className="text-sm font-bold text-[#2d2a26]/62">
+                      {ingredient.supplier}
+                    </p>
+                    <p className="text-sm font-bold">{ingredient.supplierArticleNumber}</p>
+                    <p className="text-sm font-bold">{ingredient.packageSize}</p>
+                    <p className="text-sm font-black">
+                      {formatEuro(ingredientPackagePrice(ingredient))}
+                    </p>
+                    <span
+                      className={`w-fit rounded-full px-2.5 py-1 text-xs font-black ${changeBadgeClass(
+                        ingredientPriceChange(ingredient)
+                      )}`}
+                    >
+                      {formatSignedPercent(ingredientPriceChange(ingredient), 1)}
+                    </span>
                     <p className="text-xs font-bold text-[#2d2a26]/45">
-                      {ingredient.allergens.length
-                        ? ingredient.allergens.join(", ")
-                        : "Geen allergenen"}
+                      {ingredient.lastInvoice}
                     </p>
                   </div>
-                  <p className="text-sm font-bold text-[#2d2a26]/62">
-                    {ingredient.supplier}
-                  </p>
-                  <p className="text-sm font-bold">{ingredient.supplierArticleNumber}</p>
-                  <p className="text-sm font-bold">{ingredient.packageSize}</p>
-                  <p className="text-sm font-black">
-                    {formatEuro(ingredientPackagePrice(ingredient))}
-                  </p>
-                  <span
-                    className={`w-fit rounded-full px-2.5 py-1 text-xs font-black ${changeBadgeClass(
-                      ingredientPriceChange(ingredient)
-                    )}`}
-                  >
-                    {formatSignedPercent(ingredientPriceChange(ingredient), 1)}
-                  </span>
-                  <p className="text-xs font-bold text-[#2d2a26]/45">
-                    {ingredient.lastInvoice}
-                  </p>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -243,6 +239,7 @@ export default function IngredientsList({
             onDeleteIngredient(ingredient);
             setSelectedIngredient(null);
           }}
+          onOpenRecipe={onOpenRecipe}
           onClose={() => setSelectedIngredient(null)}
         />
       )}
@@ -255,15 +252,18 @@ function IngredientDetail({
   recipes,
   onUpdateIngredient,
   onDeleteIngredient,
+  onOpenRecipe,
   onClose,
 }: Readonly<{
   ingredient: Ingredient;
   recipes: Recipe[];
   onUpdateIngredient: (ingredient: Ingredient) => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
+  onOpenRecipe?: (recipe: Recipe) => void;
   onClose: () => void;
 }>) {
   const linkedRecipes = recipesUsingIngredient(recipes, ingredient.id);
+  const semiFinishedRecipe = semiFinishedRecipeForIngredient(ingredient, recipes);
   const [isLinking, setIsLinking] = useState(false);
   const [articleNumber, setArticleNumber] = useState(
     ingredient.supplierArticleNumber
@@ -456,8 +456,22 @@ function IngredientDetail({
         <Panel className="mt-4">
           <SectionTitle
             title="Impact op recepten"
-            description="Recepten waarin dit ingredient direct voorkomt. Halffabricaat-impact wordt later verdiept via de calculatie-engine."
+            description="Recepten waarin dit ingredient direct voorkomt."
           />
+          {semiFinishedRecipe && (
+            <button
+              type="button"
+              onClick={() => onOpenRecipe?.(semiFinishedRecipe)}
+              className="mt-3 w-full rounded-2xl border border-[#c3d3bc] bg-[#f7faf5] p-3 text-left"
+            >
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-[#45663b]">
+                Halffabricaat
+              </p>
+              <p className="mt-1 text-sm font-black">
+                Open recept: {semiFinishedRecipe.name}
+              </p>
+            </button>
+          )}
           <div className="mt-3 grid gap-2">
             {linkedRecipes.length ? (
               linkedRecipes.map((recipe) => (
@@ -514,6 +528,31 @@ function isHfIngredient(ingredient: Ingredient) {
   const article = ingredient.supplierArticleNumber.toUpperCase();
 
   return normalizedName.startsWith("hf ") || article.startsWith("HF");
+}
+
+function semiFinishedRecipeForIngredient(ingredient: Ingredient, recipes: Recipe[]) {
+  const possibleNames = [ingredient.name, ...ingredient.aliases]
+    .map(normalizeHfName)
+    .filter(Boolean);
+
+  return recipes.find((recipe) => {
+    if (recipe.type !== "semiFinished") return false;
+
+    const recipeName = normalizeHfName(recipe.name);
+    return possibleNames.some(
+      (name) =>
+        recipeName === name ||
+        recipeName.includes(name) ||
+        name.includes(recipeName)
+    );
+  });
+}
+
+function normalizeHfName(value: string) {
+  return normalizeSearch(value)
+    .replace(/^hf\s+/, "")
+    .replace(/^halffabricaat\s+/, "")
+    .trim();
 }
 
 function MiniMetric({

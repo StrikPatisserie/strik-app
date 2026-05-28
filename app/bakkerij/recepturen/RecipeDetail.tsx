@@ -39,6 +39,7 @@ import {
   productionNeedForRecipe,
   productionNeedLabel,
   quantityLabel,
+  recipeTypeLabel,
   recipeCostChange,
   recipeCostDelta,
   salesPeriodLabel,
@@ -119,6 +120,10 @@ export default function RecipeDetail({
   const [isAddingNewIngredient, setIsAddingNewIngredient] = useState(false);
   const [recipeImportWarnings, setRecipeImportWarnings] = useState<string[]>([]);
   const [draft, setDraft] = useState(() => createRecipeDraft(recipe));
+  const [cardQuantity, setCardQuantity] = useState(
+    () => recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1
+  );
+  const [isRecipeStarted, setIsRecipeStarted] = useState(false);
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
   const [newWorkCategory, setNewWorkCategory] = useState("");
   const [newProductionEntry, setNewProductionEntry] = useState(() => ({
@@ -654,12 +659,53 @@ export default function RecipeDetail({
     }
 
     printWindow.document.write(
-      createRecipePrintHtml(previewRecipe, ingredients, recipes)
+      createRecipePrintHtml(
+        previewRecipe,
+        ingredients,
+        recipes,
+        cardQuantity,
+        previewBatchQuantity
+      )
     );
     printWindow.document.close();
     printWindow.focus();
     window.setTimeout(() => printWindow.print(), 150);
     showFeedback("Printvenster geopend.");
+  }
+
+  function changeCardQuantity(delta: number) {
+    setCardQuantity((current) => Math.max(0.1, Math.round((current + delta) * 10) / 10));
+  }
+
+  function updateCardQuantity(value: string) {
+    const parsed = parseDutchNumber(value);
+    if (parsed > 0) setCardQuantity(parsed);
+  }
+
+  function startRecipeCard() {
+    setIsRecipeStarted(true);
+    showFeedback("Recept gestart.");
+  }
+
+  function markRecipeCardMade() {
+    const entry: ProductionLogEntry = {
+      id: createLocalId("production"),
+      date: todayIsoDate(),
+      quantity: cardQuantity || previewBatchQuantity || 1,
+      note: "Gemaakt via receptkaart",
+      source: "work",
+    };
+    const updatedRecipe = syncRecipeProductionMetadata({
+      ...previewRecipe,
+      productionLog: normalizeProductionLog([
+        entry,
+        ...productionLogForRecipe(previewRecipe),
+      ]),
+    });
+
+    onSaveRecipe(updatedRecipe);
+    setDraft(createRecipeDraft(updatedRecipe));
+    showFeedback("Gemarkeerd als gemaakt.");
   }
 
   function recalculateRecipeCost() {
@@ -671,6 +717,27 @@ export default function RecipeDetail({
 
     onSaveRecipe(updatedRecipe);
     showFeedback("Kostprijs opnieuw berekend.");
+  }
+
+  if (!isEditing) {
+    return (
+      <BakkerRecipeCard
+        recipe={previewRecipe}
+        ingredients={ingredients}
+        recipes={recipes}
+        quantity={cardQuantity}
+        batchQuantity={previewBatchQuantity}
+        isStarted={isRecipeStarted}
+        feedback={feedback}
+        onQuantityChange={updateCardQuantity}
+        onQuantityStep={changeCardQuantity}
+        onStart={startRecipeCard}
+        onMarkMade={markRecipeCardMade}
+        onPrint={printProductionCard}
+        onEdit={() => startEditing("basis")}
+        onClose={onClose}
+      />
+    );
   }
 
   return (
@@ -2992,71 +3059,79 @@ function createRecipeText(
 function createRecipePrintHtml(
   recipe: Recipe,
   ingredients: Ingredient[],
-  recipes: Recipe[]
+  recipes: Recipe[],
+  quantity = recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1,
+  batchQuantity = recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1
 ) {
-  const batchWeight = formatBatchWeight(
-    recipeMadeWeightKg(recipe.ingredients, recipe.semiFinishedItems)
-  );
-  const ingredientRows = recipe.ingredients
-    .map((item) => {
-      const ingredient = findIngredient(ingredients, item.ingredientId);
-
-      return `<tr><td>${escapeHtml(ingredient?.name || item.ingredientId)}</td><td>${escapeHtml(
-        quantityLabel(item.quantity, item.unit)
-      )}</td><td>${escapeHtml(formatEuro(item.costContribution))}</td></tr>`;
-    })
+  const multiplier = batchQuantity > 0 ? quantity / batchQuantity : 1;
+  const ingredientRows = recipeCardIngredientRows(
+    recipe,
+    ingredients,
+    recipes,
+    multiplier
+  )
+    .map(
+      (item) =>
+        `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(
+          formatInputNumber(item.quantity)
+        )}</td><td>${escapeHtml(shortUnitLabel(item.unit))}</td><td>${escapeHtml(
+          item.isSemiFinished ? "halffabricaat" : ""
+        )}</td></tr>`
+    )
     .join("");
-  const semiRows = recipe.semiFinishedItems
-    .map((item) => {
-      const linkedRecipe = findRecipe(recipes, item.semiFinishedRecipeId);
-
-      return `<tr><td>${escapeHtml(
-        linkedRecipe?.name || item.semiFinishedRecipeId
-      )}</td><td>${escapeHtml(quantityLabel(item.quantity, item.unit))}</td><td>${escapeHtml(
-        formatEuro(item.costContribution)
-      )}</td></tr>`;
-    })
-    .join("");
-  const steps = recipe.preparationSteps
+  const steps = (recipe.preparationSteps.length
+    ? recipe.preparationSteps
+    : recipe.workInstructions || []
+  )
     .map((step) => `<li>${escapeHtml(step)}</li>`)
     .join("");
+  const unit = getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk";
 
   return `<!doctype html>
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(recipe.name)} productiekaart</title>
+  <title>${escapeHtml(recipe.name)} receptkaart</title>
   <style>
-    body { font-family: Arial, sans-serif; color: #2d2a26; margin: 32px; }
-    h1 { font-size: 28px; margin: 0 0 6px; }
-    h2 { font-size: 16px; margin: 24px 0 8px; }
-    p { margin: 4px 0; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    th, td { border-bottom: 1px solid #ddd5ca; padding: 8px; text-align: left; font-size: 13px; }
-    th { background: #f4f0ea; }
-    .meta { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 16px; }
-    .box { border: 1px solid #ddd5ca; border-radius: 10px; padding: 10px; }
-    ol { padding-left: 22px; }
+    body { font-family: Arial, sans-serif; color: #111; margin: 28px; }
+    .card { border: 1px solid #111; padding: 24px; }
+    .eyebrow { font-style: italic; margin: 0 0 24px; }
+    .layout { display: grid; grid-template-columns: 14px 1fr; gap: 24px; }
+    .stripe { background: #c3d3bc; }
+    h1 { font-size: 36px; font-weight: 300; margin: 0; }
+    .type { font-style: italic; margin: 4px 0 12px; }
+    .qty { margin: 14px 0 18px; font-weight: 700; }
+    .box { background: #efefef; padding: 18px 24px; margin-top: 18px; }
+    h2 { font-size: 17px; margin: 0 0 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 4px 0; font-size: 17px; font-weight: 700; }
+    td:nth-child(2), td:nth-child(3), td:nth-child(4) { text-align: right; }
+    ol { padding-left: 22px; margin: 0; }
+    li { margin: 8px 0; font-size: 17px; font-weight: 700; }
+    .meta { margin-top: 18px; text-align: right; font-style: italic; }
   </style>
 </head>
 <body>
-  <h1>${escapeHtml(recipe.name)}</h1>
-  <p>${escapeHtml(recipe.productGroup)} - ${escapeHtml(recipe.version)}</p>
-  <div class="meta">
-    <div class="box"><strong>Batch</strong><br />${escapeHtml(recipe.batchSize)}</div>
-    <div class="box"><strong>Batchgewicht</strong><br />${escapeHtml(batchWeight)}</div>
-    <div class="box"><strong>Portie</strong><br />${escapeHtml(recipe.portionLabel)}</div>
-    <div class="box"><strong>Kostprijs</strong><br />${escapeHtml(formatEuro(recipe.costPrice))}</div>
-    <div class="box"><strong>Marge</strong><br />${escapeHtml(formatPercent(recipe.currentMargin))}</div>
+  <div class="card">
+    <p class="eyebrow">Recept kaart</p>
+    <div class="layout">
+      <div class="stripe"></div>
+      <main>
+        <h1>${escapeHtml(recipe.name)}</h1>
+        <p class="type">${escapeHtml(recipe.productGroup || recipeTypeLabel(recipe.type))}</p>
+        <p class="qty">${escapeHtml(formatInputNumber(quantity))} ${escapeHtml(unitLabelText(unit))}</p>
+        <section class="box">
+          <h2>Ingredienten</h2>
+          <table><tbody>${ingredientRows || "<tr><td colspan=\"4\">Nog geen ingredienten.</td></tr>"}</tbody></table>
+        </section>
+        <section class="box">
+          <h2>Stappen</h2>
+          <ol>${steps || "<li>Nog geen stappen ingevuld.</li>"}</ol>
+        </section>
+        <p class="meta">laatst gewijzigd: <strong>${escapeHtml(formatDate(recipe.lastUpdated))}</strong></p>
+      </main>
+    </div>
   </div>
-  <h2>Ingredienten</h2>
-  <table><thead><tr><th>Naam</th><th>Hoeveelheid</th><th>Kostprijs</th></tr></thead><tbody>${ingredientRows || "<tr><td colspan=\"3\">Geen directe ingredienten.</td></tr>"}</tbody></table>
-  <h2>Halffabricaten</h2>
-  <table><thead><tr><th>Naam</th><th>Hoeveelheid</th><th>Kostprijs</th></tr></thead><tbody>${semiRows || "<tr><td colspan=\"3\">Geen halffabricaten.</td></tr>"}</tbody></table>
-  <h2>Bereidingswijze</h2>
-  <ol>${steps}</ol>
-  <h2>Notities</h2>
-  <p>${escapeHtml(recipe.internalNotes || recipe.notes || "-")}</p>
 </body>
 </html>`;
 }
@@ -3068,6 +3143,316 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function BakkerRecipeCard({
+  recipe,
+  ingredients,
+  recipes,
+  quantity,
+  batchQuantity,
+  isStarted,
+  feedback,
+  onQuantityChange,
+  onQuantityStep,
+  onStart,
+  onMarkMade,
+  onPrint,
+  onEdit,
+  onClose,
+}: Readonly<{
+  recipe: Recipe;
+  ingredients: Ingredient[];
+  recipes: Recipe[];
+  quantity: number;
+  batchQuantity: number;
+  isStarted: boolean;
+  feedback: string;
+  onQuantityChange: (value: string) => void;
+  onQuantityStep: (delta: number) => void;
+  onStart: () => void;
+  onMarkMade: () => void;
+  onPrint: () => void;
+  onEdit: () => void;
+  onClose: () => void;
+}>) {
+  const baseQuantity = batchQuantity || getBatchInfo(recipe)?.quantity || 1;
+  const multiplier = baseQuantity > 0 ? quantity / baseQuantity : 1;
+  const rows = recipeCardIngredientRows(recipe, ingredients, recipes, multiplier);
+  const steps = recipe.preparationSteps.length
+    ? recipe.preparationSteps
+    : recipe.workInstructions || [];
+  const madeToday = productionLogForRecipe(recipe).some(
+    (entry) => entry.date === todayIsoDate()
+  );
+
+  return (
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-white/70 px-3 py-4 backdrop-blur-[1px]">
+      <div className="mx-auto w-[min(61rem,calc(100vw-1rem))] border border-[#111111] bg-white px-4 py-4 shadow-2xl sm:px-6">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-sm italic text-[#111111]">Recept kaart</p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-4xl font-light leading-none text-[#111111]"
+            aria-label="Sluit receptkaart"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-[1rem_minmax(0,1fr)]">
+          <div className="hidden bg-[#c3d3bc] sm:block" />
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_18rem]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="truncate text-[clamp(1.8rem,4vw,2.7rem)] font-light leading-none">
+                    {recipe.name}
+                  </h2>
+                  <p className="mt-1 text-base italic text-[#555555]">
+                    {recipe.productGroup || recipeTypeLabel(recipe.type)}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-[4.6rem_3.3rem_3.3rem_3.3rem] border border-[#c3d3bc] text-center text-sm uppercase tracking-[0.16em]">
+                  <button
+                    type="button"
+                    onClick={onStart}
+                    className={`border-r border-[#c3d3bc] px-2 py-3 ${
+                      isStarted ? "bg-[#c3d3bc]" : "bg-white"
+                    }`}
+                  >
+                    Start
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onMarkMade}
+                    className={`border-r border-[#c3d3bc] px-2 py-3 text-3xl leading-none ${
+                      madeToday ? "bg-[#c3d3bc]" : "bg-white"
+                    }`}
+                    aria-label="Gemaakt"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onPrint}
+                    className="border-r border-[#c3d3bc] px-2 py-3 text-xs font-black tracking-normal"
+                  >
+                    Print
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onEdit}
+                    className="px-2 py-3 text-2xl leading-none"
+                    aria-label="Aanpassen"
+                  >
+                    ✎
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2 pl-1">
+                <button
+                  type="button"
+                  onClick={() => onQuantityStep(-1)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-2xl shadow"
+                  aria-label="Hoeveelheid verlagen"
+                >
+                  -
+                </button>
+                <input
+                  value={formatInputNumber(quantity)}
+                  onChange={(event) => onQuantityChange(event.target.value)}
+                  inputMode="decimal"
+                  className="h-9 w-24 rounded-xl border border-[#e4d8cb] bg-white text-center text-sm font-black outline-none"
+                  aria-label="Hoeveelheid"
+                />
+                <span className="text-sm font-black text-[#707070]">
+                  {unitLabelText(getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk")}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onQuantityStep(1)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-2xl shadow"
+                  aria-label="Hoeveelheid verhogen"
+                >
+                  +
+                </button>
+              </div>
+
+              <div className="mt-5 bg-[#efefef] p-4">
+                <h3 className="text-base font-black">Ingredienten</h3>
+                <div className="mt-3 grid gap-1">
+                  {rows.length ? (
+                    rows.map((row) => (
+                      <div
+                        key={row.id}
+                        className="grid grid-cols-[minmax(0,1fr)_4.2rem_3rem_minmax(5.5rem,auto)] gap-3 text-sm sm:text-base"
+                      >
+                        <span className="truncate font-black">{row.name}</span>
+                        <span className="text-right font-black">
+                          {formatInputNumber(row.quantity)}
+                        </span>
+                        <span className="font-black">{shortUnitLabel(row.unit)}</span>
+                        <span className="truncate text-right text-sm italic text-[#555555]">
+                          {row.isSemiFinished ? "halffabricaat ↪" : ""}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm font-bold text-[#707070]">
+                      Nog geen ingredienten.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 bg-[#efefef] p-4">
+                <h3 className="text-base font-black">Stappen</h3>
+                <ol className="mt-3 grid gap-2 text-sm font-black sm:text-base">
+                  {steps.length ? (
+                    steps.map((step, index) => (
+                      <li key={`${step}-${index}`}>
+                        {index + 1}. {step}
+                      </li>
+                    ))
+                  ) : (
+                    <li>Nog geen stappen ingevuld.</li>
+                  )}
+                </ol>
+              </div>
+            </div>
+
+            <aside className="grid content-start gap-3 text-right text-sm italic">
+              {recipe.photoPreviewDataUrl ? (
+                <img
+                  src={recipe.photoPreviewDataUrl}
+                  alt={recipe.photoHint || recipe.name}
+                  className="aspect-square w-full object-cover"
+                />
+              ) : (
+                <div className="flex aspect-square w-full items-center justify-center bg-[#efefef] text-3xl font-black not-italic text-[#8c8c8c]">
+                  {recipe.type === "semiFinished" ? "HF" : "R"}
+                </div>
+              )}
+              <p>
+                categorie: <strong>{recipe.productGroup || recipeTypeLabel(recipe.type)}</strong>
+              </p>
+              <p>
+                laatst gewijzigd: <strong>{formatDate(recipe.lastUpdated)}</strong>
+              </p>
+              {recipe.lastProducedQuantity ? (
+                <p>
+                  laatste gemaakt:{" "}
+                  <strong>
+                    {quantityLabel(
+                      recipe.lastProducedQuantity,
+                      getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk"
+                    )}
+                  </strong>
+                </p>
+              ) : null}
+              {recipe.averageSalesQuantity ? (
+                <p>
+                  gemiddeld per periode:{" "}
+                  <strong>
+                    {formatInputNumber(recipe.averageSalesQuantity)}/
+                    {salesPeriodText(recipe.averageSalesPeriod || "week")}
+                  </strong>
+                </p>
+              ) : null}
+              {feedback && (
+                <p className="mt-2 text-left text-xs font-black not-italic text-[#45663b]">
+                  {feedback}
+                </p>
+              )}
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type RecipeCardIngredientRow = {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: RecipeUnit;
+  isSemiFinished: boolean;
+};
+
+function recipeCardIngredientRows(
+  recipe: Recipe,
+  ingredients: Ingredient[],
+  recipes: Recipe[],
+  multiplier: number
+): RecipeCardIngredientRow[] {
+  const directRows = recipe.ingredients.map((item) => {
+    const ingredient = findIngredient(ingredients, item.ingredientId);
+    const linkedSemiFinished = ingredient
+      ? semiFinishedRecipeForIngredient(ingredient, recipes)
+      : null;
+
+    return {
+      id: `ingredient-${item.ingredientId}`,
+      name: ingredient?.name || item.ingredientId,
+      quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
+      unit: item.unit,
+      isSemiFinished: Boolean(linkedSemiFinished),
+    };
+  });
+  const semiRows = recipe.semiFinishedItems.map((item) => {
+    const linkedRecipe = findRecipe(recipes, item.semiFinishedRecipeId);
+
+    return {
+      id: `semi-${item.semiFinishedRecipeId}`,
+      name: linkedRecipe?.name || item.semiFinishedRecipeId,
+      quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
+      unit: item.unit,
+      isSemiFinished: true,
+    };
+  });
+
+  return [...directRows, ...semiRows];
+}
+
+function semiFinishedRecipeForIngredient(ingredient: Ingredient, recipes: Recipe[]) {
+  const possibleNames = [ingredient.name, ...ingredient.aliases]
+    .map(normalizeHfRecipeName)
+    .filter(Boolean);
+
+  return recipes.find((recipe) => {
+    if (recipe.type !== "semiFinished") return false;
+    const recipeName = normalizeHfRecipeName(recipe.name);
+
+    return possibleNames.some(
+      (name) =>
+        recipeName === name ||
+        recipeName.includes(name) ||
+        name.includes(recipeName)
+    );
+  });
+}
+
+function normalizeHfRecipeName(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/^hf\s+/, "")
+    .replace(/^halffabricaat\s+/, "")
+    .trim();
+}
+
+function shortUnitLabel(unit: RecipeUnit) {
+  if (unit === "gram") return "gr";
+  if (unit === "liter") return "l";
+
+  return unit;
 }
 
 function EditorBlock({

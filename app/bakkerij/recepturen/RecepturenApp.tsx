@@ -1289,6 +1289,7 @@ export default function RecepturenApp() {
           <IngredientsList
             ingredients={ingredientItems}
             recipes={recipeItems}
+            onOpenRecipe={openRecipe}
             onUpdateIngredient={saveIngredient}
             onDeleteIngredient={deleteIngredient}
             onDeleteIngredients={(ingredientsToDelete) =>
@@ -1339,7 +1340,7 @@ export default function RecepturenApp() {
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-white text-[#111111]">
-      <div className="grid min-h-screen grid-cols-[clamp(4.75rem,8vw,6.1rem)_minmax(0,1fr)]">
+      <div className="grid min-h-screen grid-cols-[clamp(3.8rem,7vw,5.2rem)_minmax(0,1fr)]">
         <BakkerijSidebar
           active={mainTab !== "start"}
           onStart={() => openMainTab("start")}
@@ -1349,7 +1350,7 @@ export default function RecepturenApp() {
         <div className="min-w-0">
           <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
 
-          <div className="min-h-[calc(100vh_-_clamp(4.8rem,8vw,5.9rem))]">
+          <div className="min-h-[calc(100vh_-_clamp(3.9rem,6.6vw,5rem))]">
             {mainTab === "start" && (
               <BakkerijStartScreen
                 home={bakeryHome}
@@ -1364,7 +1365,7 @@ export default function RecepturenApp() {
             )}
 
             {mainTab === "recepten" && (
-              <div className="mx-auto w-full max-w-[82rem] px-3 py-5 sm:px-5 lg:px-8">
+              <div className="mx-auto h-[calc(100dvh_-_clamp(3.9rem,6.6vw,5rem))] w-full max-w-[74rem] px-3 py-4 sm:px-5 lg:px-7">
                 <RecipesList
                   recipes={recipeItems}
                   onOpenRecipe={openRecipe}
@@ -1430,10 +1431,10 @@ function BakkerijSidebar({
       <button
         type="button"
         onClick={onStart}
-        className="flex h-[clamp(4.8rem,8.4vw,6rem)] items-center justify-center border-b border-[#c3d3bc]"
+        className="flex h-[clamp(3.9rem,7vw,5rem)] items-center justify-center border-b border-[#c3d3bc]"
         aria-label="Start"
       >
-        <span className="block h-12 w-16 overflow-hidden sm:h-14 sm:w-20">
+        <span className="block h-9 w-12 overflow-hidden sm:h-11 sm:w-16">
           <img
             src="/strik logo icon.svg"
             alt=""
@@ -1445,7 +1446,7 @@ function BakkerijSidebar({
       <button
         type="button"
         onClick={onRecipes}
-        className={`flex h-[clamp(4.8rem,8.4vw,6rem)] items-center justify-center border-b border-[#c3d3bc] ${
+        className={`flex h-[clamp(3.9rem,7vw,5rem)] items-center justify-center border-b border-[#c3d3bc] ${
           active ? "bg-[#d75a48]" : "bg-white"
         }`}
         aria-label="Recepten"
@@ -1453,26 +1454,26 @@ function BakkerijSidebar({
         <img
           src="/apps strik_Bakkerij.svg"
           alt=""
-          className={`h-12 w-12 object-contain sm:h-14 sm:w-14 ${active ? "invert" : ""}`}
+          className={`h-9 w-9 object-contain sm:h-11 sm:w-11 ${active ? "invert" : ""}`}
         />
       </button>
 
       <a
         href="/schoonmaak"
-        className="flex h-[clamp(4.8rem,8.4vw,6rem)] items-center justify-center border-b border-[#c3d3bc]"
+        className="flex h-[clamp(3.9rem,7vw,5rem)] items-center justify-center border-b border-[#c3d3bc]"
         aria-label="Schoonmaak"
       >
-        <img src="/UI-apps_schonmaak.svg" alt="" className="h-12 w-12 object-contain sm:h-14 sm:w-14" />
+        <img src="/UI-apps_schonmaak.svg" alt="" className="h-9 w-9 object-contain sm:h-11 sm:w-11" />
       </a>
 
       <div className="flex-1" />
 
       <a
         href="/"
-        className="mb-5 flex h-14 items-center justify-center sm:mb-7 sm:h-16"
+        className="mb-4 flex h-12 items-center justify-center sm:mb-6 sm:h-14"
         aria-label="Terug"
       >
-        <img src="/UI-apps_terug.svg" alt="" className="h-12 w-12 object-contain sm:h-14 sm:w-14" />
+        <img src="/UI-apps_terug.svg" alt="" className="h-9 w-9 object-contain sm:h-11 sm:w-11" />
       </a>
     </aside>
   );
@@ -1487,11 +1488,11 @@ function BakkerijTopNav({
 }>) {
   if (active === "start") {
     return (
-      <header className="grid h-[clamp(4.8rem,8vw,5.9rem)] grid-cols-[minmax(9rem,15rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
+      <header className="grid h-[clamp(3.9rem,6.6vw,5rem)] grid-cols-[minmax(7rem,12rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
         <button
           type="button"
           onClick={() => onSelect("start")}
-          className="border-r border-[#c3d3bc] text-center text-[clamp(1.65rem,3vw,2.35rem)] font-light uppercase tracking-[0.22em]"
+          className="border-r border-[#c3d3bc] text-center text-[clamp(1.2rem,2.5vw,1.85rem)] font-light uppercase tracking-[0.16em] sm:tracking-[0.2em]"
         >
           START
         </button>
@@ -1507,13 +1508,13 @@ function BakkerijTopNav({
   ];
 
   return (
-    <header className="grid h-[clamp(4.8rem,8vw,5.9rem)] grid-cols-3 border-b border-[#c3d3bc] bg-white lg:grid-cols-[repeat(3,minmax(12rem,20rem))_minmax(0,1fr)]">
+    <header className="grid h-[clamp(3.9rem,6.6vw,5rem)] grid-cols-3 border-b border-[#c3d3bc] bg-white lg:grid-cols-[repeat(3,minmax(10rem,17rem))_minmax(0,1fr)]">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onSelect(tab.id)}
-          className={`border-r border-[#c3d3bc] text-center text-[clamp(1.15rem,2.2vw,1.9rem)] uppercase tracking-[0.18em] ${
+          className={`min-w-0 border-r border-[#c3d3bc] text-center text-[clamp(0.74rem,1.8vw,1.45rem)] uppercase tracking-[0.08em] sm:tracking-[0.16em] ${
             active === tab.id
               ? "bg-[#d75a48] font-black text-white"
               : "bg-white font-light text-[#111111]"
@@ -1550,17 +1551,18 @@ function BakkerijStartScreen({
   const imageUrl = offer?.imageUrl || fallbackOfferImageUrl;
 
   return (
-    <section className="mx-auto grid min-h-[calc(100vh_-_clamp(4.8rem,8vw,5.9rem))] w-full max-w-[65rem] items-start gap-8 px-4 py-8 sm:px-7 md:grid-cols-[minmax(16rem,22rem)_minmax(17rem,24rem)] md:gap-10 lg:gap-16">
+    <section className="mx-auto grid min-h-[calc(100vh_-_clamp(3.9rem,6.6vw,5rem))] w-full max-w-[58rem] items-start gap-6 px-4 py-7 sm:px-7 md:grid-cols-[minmax(14rem,20rem)_minmax(16rem,22rem)] md:gap-8 lg:gap-12">
       <div className="min-w-0">
-        <h2 className="mb-5 text-center text-[clamp(1.35rem,2.6vw,2rem)] font-light uppercase tracking-[0.22em]">
+        <h2 className="mb-4 text-center text-[clamp(1.1rem,2.2vw,1.65rem)] font-light uppercase tracking-[0.18em]">
           AANBIEDING
         </h2>
-        <div className="mx-auto w-full max-w-[22rem]">
-          <div className="grid h-9 grid-cols-[2.4rem_2.4rem_minmax(0,1fr)] border border-[#6d746a] bg-[#c3d3bc] text-[#111111]">
+        <div className="mx-auto max-w-full text-center">
+          <figure className="inline-block max-w-full text-left">
+          <div className="grid h-8 w-full grid-cols-[2.1rem_2.1rem_minmax(0,1fr)] border border-[#6d746a] bg-[#c3d3bc] text-[#111111]">
             <button
               type="button"
               onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
-              className="border-r border-[#6d746a] text-4xl font-light leading-none"
+              className="border-r border-[#6d746a] text-3xl font-light leading-none"
               aria-label="Vorige week"
             >
               ‹
@@ -1568,27 +1570,28 @@ function BakkerijStartScreen({
             <button
               type="button"
               onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
-              className="border-r border-[#6d746a] text-4xl font-light leading-none"
+              className="border-r border-[#6d746a] text-3xl font-light leading-none"
               aria-label="Volgende week"
             >
               ›
             </button>
-            <div className="flex items-center justify-end pr-3 text-sm font-light sm:text-base">
+            <div className="flex items-center justify-end pr-3 text-xs font-light sm:text-sm">
               {formatWeekRange(selectedWeek)}
             </div>
           </div>
-          <div className="flex max-h-[52vh] min-h-[16rem] items-start justify-center overflow-hidden bg-white">
+          <div className="flex max-h-[48vh] min-h-[13rem] items-start justify-center overflow-hidden bg-white">
             <img
               src={imageUrl}
               alt={offer?.label || "Aanbieding van de week"}
-              className="block max-h-[52vh] w-full object-contain"
+              className="block max-h-[48vh] max-w-full object-contain"
             />
           </div>
+          </figure>
         </div>
       </div>
 
       <div className="min-w-0">
-        <h2 className="mb-6 text-center text-[clamp(1.35rem,2.6vw,2rem)] font-light uppercase tracking-[0.22em]">
+        <h2 className="mb-5 text-center text-[clamp(1.1rem,2.2vw,1.65rem)] font-light uppercase tracking-[0.18em]">
           NOTITIES / TO DO
         </h2>
         <div className="grid gap-4">
@@ -1599,12 +1602,12 @@ function BakkerijStartScreen({
                 onChange={(event) => onUpdateNoteText(note.id, event.target.value)}
                 onBlur={(event) => onSaveNote(note.id, event.currentTarget.value)}
                 placeholder="Schrijf notitie..."
-                className="h-[clamp(6.5rem,14vh,8.5rem)] w-full resize-none border border-[#4b4b4b] bg-white px-4 py-3 text-base leading-relaxed text-[#111111] outline-none placeholder:text-[#9a9a9a] focus:border-[#111111]"
+                className="h-[clamp(5.7rem,12vh,7.3rem)] w-full resize-none border border-[#4b4b4b] bg-white px-3 py-2.5 text-sm leading-relaxed text-[#111111] outline-none placeholder:text-[#9a9a9a] focus:border-[#111111]"
               />
               <button
                 type="button"
                 onClick={() => onDeleteNote(note.id)}
-                className="absolute -right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-[#d75a48] text-3xl font-light leading-none text-white"
+                className="absolute -right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-[#d75a48] text-2xl font-light leading-none text-white"
                 aria-label="Notitie verwijderen"
               >
                 -
@@ -1615,7 +1618,7 @@ function BakkerijStartScreen({
             <button
               type="button"
               onClick={onAddNote}
-              className="h-[clamp(6.5rem,14vh,8.5rem)] border border-[#4b4b4b] bg-white px-4 py-3 text-left text-base text-[#9a9a9a]"
+              className="h-[clamp(5.7rem,12vh,7.3rem)] border border-[#4b4b4b] bg-white px-3 py-2.5 text-left text-sm text-[#9a9a9a]"
             >
               Schrijf notitie...
             </button>
@@ -1625,7 +1628,7 @@ function BakkerijStartScreen({
           <button
             type="button"
             onClick={onAddNote}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-[#c3d3bc] text-5xl font-light leading-none text-white"
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-[#c3d3bc] text-4xl font-light leading-none text-white"
             aria-label="Notitie toevoegen"
           >
             +
