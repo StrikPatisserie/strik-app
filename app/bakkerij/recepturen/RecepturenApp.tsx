@@ -203,8 +203,6 @@ function mergeRecipeIngredientLines(lines: Recipe["ingredients"]) {
   return mergedLines;
 }
 
-const fallbackOfferImageUrl = "/bakkerij-aanbieding-papa.png";
-
 function dateKey(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1693,7 +1691,6 @@ function BakkerijStartScreen({
   onDeleteNote: (noteId: string) => void;
 }>) {
   const offer = offerForWeek(home, selectedWeek);
-  const imageUrl = offer?.imageUrl || fallbackOfferImageUrl;
 
   return (
     <section className="mx-auto grid h-full w-full max-w-[58rem] items-start gap-6 overflow-y-auto px-4 py-7 sm:px-7 md:grid-cols-[minmax(14rem,20rem)_minmax(16rem,22rem)] md:gap-8 lg:gap-12">
@@ -1724,12 +1721,18 @@ function BakkerijStartScreen({
               {formatWeekRange(selectedWeek)}
             </div>
           </div>
-          <div className="flex max-h-[48vh] min-h-[13rem] items-start justify-center overflow-hidden bg-white">
-            <img
-              src={imageUrl}
-              alt={offer?.label || "Aanbieding van de week"}
-              className="block max-h-[48vh] max-w-full object-contain"
-            />
+          <div className="flex max-h-[48vh] min-h-[13rem] items-center justify-center overflow-hidden border border-[#e7e0d8] bg-white">
+            {offer?.imageUrl ? (
+              <img
+                src={offer.imageUrl}
+                alt={offer.label || "Aanbieding van de week"}
+                className="block max-h-[48vh] max-w-full object-contain"
+              />
+            ) : (
+              <p className="px-6 text-center text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/35">
+                Geen aanbieding ingesteld
+              </p>
+            )}
           </div>
           </figure>
         </div>
@@ -1968,11 +1971,17 @@ function BakeryHomeManager({
             Huidige foto
           </p>
           <div className="flex aspect-[4/5] items-center justify-center overflow-hidden bg-white">
-            <img
-              src={selectedOffer?.imageUrl || fallbackOfferImageUrl}
-              alt=""
-              className="h-full w-full object-contain"
-            />
+            {selectedOffer?.imageUrl ? (
+              <img
+                src={selectedOffer.imageUrl}
+                alt=""
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <p className="px-4 text-center text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/35">
+                Nog geen foto voor deze week
+              </p>
+            )}
           </div>
         </div>
       </div>

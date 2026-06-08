@@ -4,16 +4,18 @@ export const dynamic = "force-dynamic";
 
 const WORDPRESS_RECEPTUREN_HOME_PHOTO_URL =
   "https://strik-patisserie.nl/wp-json/strik/v1/recepturen-home-photo";
+const WORDPRESS_RECEPTUREN_HOME_PHOTO_FALLBACK_URL =
+  "https://strik-patisserie.nl/wp-json/strik/v1/recepturen/home-photo";
 const RECEPTUREN_API_KEY =
   process.env.WORDPRESS_RECEPTUREN_API_KEY ||
   process.env.WORDPRESS_STRIK_API_KEY ||
   "schoonmaak-ijs-strik";
 
-function getWordPressHomePhotoUrl() {
-  const url = new URL(WORDPRESS_RECEPTUREN_HOME_PHOTO_URL);
+function getWordPressHomePhotoUrl(endpoint = WORDPRESS_RECEPTUREN_HOME_PHOTO_URL) {
+  const url = new URL(endpoint);
   url.searchParams.set("key", RECEPTUREN_API_KEY);
 
-  return url;
+  return url.toString();
 }
 
 async function readJson(response: Response) {
@@ -21,6 +23,15 @@ async function readJson(response: Response) {
 }
 
 function getMessage(data: unknown, fallback: string) {
+  if (
+    data &&
+    typeof data === "object" &&
+    "code" in data &&
+    data.code === "rest_no_route"
+  ) {
+    return "De WordPress recepturen-snippet mist de aanbiedingfoto-route. Werk de snippet 'strik-recepturen-api.php' bij in WordPress en probeer opnieuw.";
+  }
+
   if (
     data &&
     typeof data === "object" &&
@@ -32,6 +43,16 @@ function getMessage(data: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+async function uploadToWordPress(formData: FormData, endpoint: string) {
+  return fetch(getWordPressHomePhotoUrl(endpoint), {
+    method: "POST",
+    body: formData,
+    headers: {
+      Accept: "application/json",
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -62,14 +83,26 @@ export async function POST(request: Request) {
   if (typeof label === "string") formData.set("label", label);
 
   try {
-    const response = await fetch(getWordPressHomePhotoUrl(), {
-      method: "POST",
-      body: formData,
-      headers: {
-        Accept: "application/json",
-      },
-    });
-    const data = await readJson(response);
+    let response = await uploadToWordPress(
+      formData,
+      WORDPRESS_RECEPTUREN_HOME_PHOTO_URL
+    );
+    let data = await readJson(response);
+
+    if (
+      !response.ok &&
+      response.status === 404 &&
+      data &&
+      typeof data === "object" &&
+      "code" in data &&
+      data.code === "rest_no_route"
+    ) {
+      response = await uploadToWordPress(
+        formData,
+        WORDPRESS_RECEPTUREN_HOME_PHOTO_FALLBACK_URL
+      );
+      data = await readJson(response);
+    }
 
     if (!response.ok) {
       return NextResponse.json(

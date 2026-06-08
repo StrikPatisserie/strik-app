@@ -7,9 +7,11 @@
  * De app gebruikt:
  * - GET /wp-json/strik/v1/recepturen?key=...
  * - PUT/POST /wp-json/strik/v1/recepturen?key=...
+ * - POST /wp-json/strik/v1/recepturen-home-photo?key=...
  *
  * Hiermee worden recepturen, ingredienten en Beko factuurimports in WordPress
- * opgeslagen zodat koppelingen en prijsupdates niet alleen lokaal/mockdata zijn.
+ * opgeslagen zodat koppelingen, prijsupdates en voorpagina-aanbiedingen niet
+ * alleen lokaal/mockdata zijn.
  */
 
 if (!defined('STRIK_RECEPTUREN_API_KEY')) {
@@ -401,6 +403,14 @@ add_action('rest_api_init', function () {
     ));
 
     register_rest_route('strik/v1', '/recepturen-home-photo', array(
+        array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => 'strik_recepturen_v1_home_photo_upload',
+            'permission_callback' => 'strik_recepturen_v1_permission',
+        ),
+    ));
+
+    register_rest_route('strik/v1', '/recepturen/home-photo', array(
         array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => 'strik_recepturen_v1_home_photo_upload',
