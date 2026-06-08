@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchRecepturenData } from "../bakkerij/recepturen/recepturenApi";
+import type { BakeryHomeOffer } from "../bakkerij/recepturen/types";
 import type { TodayStaffSchedule, TodayStaffShop } from "../tamigoApi";
 
 type LoadState = "loading" | "ready" | "error";
@@ -37,6 +39,54 @@ function getShopAccent(shopName: string) {
       name: "text-[#2d2a26]",
     }
   );
+}
+
+function dateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function dateFromKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return new Date();
+
+  return new Date(year, month - 1, day);
+}
+
+function addDays(value: string, days: number) {
+  const date = dateFromKey(value);
+  date.setDate(date.getDate() + days);
+
+  return dateKey(date);
+}
+
+function weekStartForDate(date = new Date()) {
+  const nextDate = new Date(date);
+  const day = nextDate.getDay() || 7;
+  nextDate.setHours(0, 0, 0, 0);
+  nextDate.setDate(nextDate.getDate() - day + 1);
+
+  return dateKey(nextDate);
+}
+
+function formatWeekRange(weekStart: string) {
+  const start = dateFromKey(weekStart);
+  const end = dateFromKey(addDays(weekStart, 6));
+  const formatter = new Intl.DateTimeFormat("nl-NL", {
+    day: "numeric",
+    month: "long",
+  });
+
+  return `${formatter.format(start)} t/m ${formatter.format(end)}`;
+}
+
+function currentBakeryOffer(offers: BakeryHomeOffer[] = []) {
+  const currentWeek = weekStartForDate();
+
+  return offers.find((offer) => offer.weekStart === currentWeek) || null;
 }
 
 function LoadingRows() {
@@ -142,23 +192,37 @@ function ShopRow({
 export default function TodayStaffWidget() {
   const [state, setState] = useState<LoadState>("loading");
   const [schedule, setSchedule] = useState<TodayStaffSchedule | null>(null);
+  const [bakeryOffer, setBakeryOffer] = useState<BakeryHomeOffer | null>(null);
 
   useEffect(() => {
     let ignoreResult = false;
 
-    async function loadSchedule() {
+    async function loadScheduleAndOffer() {
       try {
-        const res = await fetch("/api/tamigo-shifts-today", {
-          cache: "no-store",
-        });
+        const [scheduleResult, recepturenResult] = await Promise.allSettled([
+          fetch("/api/tamigo-shifts-today", {
+            cache: "no-store",
+          }),
+          fetchRecepturenData(),
+        ]);
 
-        if (!res.ok) {
+        if (ignoreResult) return;
+
+        if (recepturenResult.status === "fulfilled" && recepturenResult.value.ok) {
+          setBakeryOffer(
+            currentBakeryOffer(recepturenResult.value.data.bakeryHome?.offers)
+          );
+        }
+
+        if (scheduleResult.status !== "fulfilled") {
           throw new Error("Tamigo rooster ophalen is mislukt.");
         }
 
-        const data = (await res.json()) as TodayStaffSchedule;
+        if (!scheduleResult.value.ok) {
+          throw new Error("Tamigo rooster ophalen is mislukt.");
+        }
 
-        if (ignoreResult) return;
+        const data = (await scheduleResult.value.json()) as TodayStaffSchedule;
 
         setSchedule(data);
         setState("ready");
@@ -170,7 +234,7 @@ export default function TodayStaffWidget() {
       }
     }
 
-    void loadSchedule();
+    void loadScheduleAndOffer();
 
     return () => {
       ignoreResult = true;
@@ -199,7 +263,37 @@ export default function TodayStaffWidget() {
             ))}
           </div>
         )}
+
+        {bakeryOffer?.imageUrl && (
+          <BakeryOfferThumbnail offer={bakeryOffer} />
+        )}
       </div>
     </section>
+  );
+}
+
+function BakeryOfferThumbnail({
+  offer,
+}: Readonly<{
+  offer: BakeryHomeOffer;
+}>) {
+  return (
+    <article className="mt-4 overflow-hidden rounded-2xl border border-[#c3d3bc] bg-white">
+      <div className="grid h-8 grid-cols-[minmax(0,1fr)_auto] border-b border-[#c3d3bc] bg-[#c3d3bc]">
+        <h3 className="flex items-center px-3 text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/75">
+          Aanbieding
+        </h3>
+        <p className="flex items-center px-3 text-xs font-bold text-[#2d2a26]/70">
+          {formatWeekRange(offer.weekStart)}
+        </p>
+      </div>
+      <div className="bg-white p-2">
+        <img
+          src={offer.imageUrl}
+          alt={offer.label || "Aanbieding van de week"}
+          className="mx-auto max-h-44 w-full object-contain"
+        />
+      </div>
+    </article>
   );
 }
