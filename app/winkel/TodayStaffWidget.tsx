@@ -83,10 +83,8 @@ function formatWeekRange(weekStart: string) {
   return `${formatter.format(start)} t/m ${formatter.format(end)}`;
 }
 
-function currentBakeryOffer(offers: BakeryHomeOffer[] = []) {
-  const currentWeek = weekStartForDate();
-
-  return offers.find((offer) => offer.weekStart === currentWeek) || null;
+function offerForWeek(offers: BakeryHomeOffer[] = [], weekStart: string) {
+  return offers.find((offer) => offer.weekStart === weekStart) || null;
 }
 
 function LoadingRows() {
@@ -192,7 +190,8 @@ function ShopRow({
 export default function TodayStaffWidget() {
   const [state, setState] = useState<LoadState>("loading");
   const [schedule, setSchedule] = useState<TodayStaffSchedule | null>(null);
-  const [bakeryOffer, setBakeryOffer] = useState<BakeryHomeOffer | null>(null);
+  const [bakeryOffers, setBakeryOffers] = useState<BakeryHomeOffer[]>([]);
+  const [selectedOfferWeek, setSelectedOfferWeek] = useState(weekStartForDate);
 
   useEffect(() => {
     let ignoreResult = false;
@@ -209,9 +208,7 @@ export default function TodayStaffWidget() {
         if (ignoreResult) return;
 
         if (recepturenResult.status === "fulfilled" && recepturenResult.value.ok) {
-          setBakeryOffer(
-            currentBakeryOffer(recepturenResult.value.data.bakeryHome?.offers)
-          );
+          setBakeryOffers(recepturenResult.value.data.bakeryHome?.offers || []);
         }
 
         if (scheduleResult.status !== "fulfilled") {
@@ -264,8 +261,12 @@ export default function TodayStaffWidget() {
           </div>
         )}
 
-        {bakeryOffer?.imageUrl && (
-          <BakeryOfferThumbnail offer={bakeryOffer} />
+        {bakeryOffers.length > 0 && (
+          <BakeryOfferThumbnail
+            offers={bakeryOffers}
+            selectedWeek={selectedOfferWeek}
+            onSelectWeek={setSelectedOfferWeek}
+          />
         )}
       </div>
     </section>
@@ -273,26 +274,53 @@ export default function TodayStaffWidget() {
 }
 
 function BakeryOfferThumbnail({
-  offer,
+  offers,
+  selectedWeek,
+  onSelectWeek,
 }: Readonly<{
-  offer: BakeryHomeOffer;
+  offers: BakeryHomeOffer[];
+  selectedWeek: string;
+  onSelectWeek: (weekStart: string) => void;
 }>) {
+  const offer = offerForWeek(offers, selectedWeek);
+
   return (
     <article className="mt-4 overflow-hidden rounded-2xl border border-[#c3d3bc] bg-white">
-      <div className="grid h-8 grid-cols-[minmax(0,1fr)_auto] border-b border-[#c3d3bc] bg-[#c3d3bc]">
+      <div className="grid h-8 grid-cols-[2rem_2rem_minmax(0,1fr)] border-b border-[#6d746a] bg-[#c3d3bc]">
+        <button
+          type="button"
+          onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
+          className="border-r border-[#6d746a] text-2xl font-light leading-none text-[#2d2a26]"
+          aria-label="Vorige week"
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
+          className="border-r border-[#6d746a] text-2xl font-light leading-none text-[#2d2a26]"
+          aria-label="Volgende week"
+        >
+          ›
+        </button>
         <h3 className="flex items-center px-3 text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/75">
-          Aanbieding
+          <span className="min-w-0 truncate">
+            Aanbieding · {formatWeekRange(selectedWeek)}
+          </span>
         </h3>
-        <p className="flex items-center px-3 text-xs font-bold text-[#2d2a26]/70">
-          {formatWeekRange(offer.weekStart)}
-        </p>
       </div>
-      <div className="bg-white p-2">
-        <img
-          src={offer.imageUrl}
-          alt={offer.label || "Aanbieding van de week"}
-          className="mx-auto max-h-44 w-full object-contain"
-        />
+      <div className="flex min-h-36 items-center justify-center bg-white p-2">
+        {offer?.imageUrl ? (
+          <img
+            src={offer.imageUrl}
+            alt={offer.label || "Aanbieding van de week"}
+            className="mx-auto max-h-44 w-full object-contain"
+          />
+        ) : (
+          <p className="px-4 text-center text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/35">
+            Geen aanbieding deze week
+          </p>
+        )}
       </div>
     </article>
   );
