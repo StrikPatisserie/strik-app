@@ -7,102 +7,87 @@ const sections = [
     href: "/winkel",
     title: "Winkel",
     subtitle: "Nieuws, agenda en info",
-    button: "bg-[#dbe6d4]",
-    badge: "bg-[#b2c8a9]",
-    icon: "W",
-    image: strikIcons.winkel,
+    icon: strikIcons.winkel,
   },
   {
     href: "/ijs",
     title: "IJs",
     subtitle: "Info en schoonmaak",
-    button: "bg-[#f1d28f]",
-    badge: "bg-[#e3bd62]",
-    icon: "IJ",
-    image: strikIcons.ijs,
+    icon: strikIcons.ijs,
   },
   {
     href: "/bakkerij",
     title: "Bakkerij",
     subtitle: "Recepturen en productie",
-    button: "bg-[#eadfcf]",
-    badge: "bg-[#c3d3bc]",
-    icon: "B",
-    image: strikIcons.bakkerij,
+    icon: strikIcons.bakkerij,
   },
   {
     href: "/management",
     title: "Management",
     subtitle: "Overzicht en beheer",
-    button: "bg-[#eef3ea]",
-    badge: "bg-[#cfdcc8]",
-    icon: "M",
-    image: strikIcons.management,
+    icon: strikIcons.management,
     locked: true,
   },
 ];
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#f4f0ea] px-4 py-6 text-[#2d2a26]">
+    <main className="min-h-screen bg-[#faf8f5] px-4 py-12 text-[#1a1815]">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md flex-col justify-center pb-20">
-        <header className="mb-9 text-center">
+        {/* HEADER */}
+        <header className="mb-16 text-center">
           <img
             src="/strik-logo.png"
             alt="Strik"
-            className="mx-auto h-24 w-auto object-contain"
+            className="mx-auto h-16 w-auto object-contain"
           />
-          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.24em] text-[#2d2a26]/50">
+          <h1 className="mt-8 text-4xl font-extrabold tracking-tight">
+            Team App
+          </h1>
+          <p className="mt-2 text-sm font-medium text-[#8b8278]">
             Strik Patisserie
           </p>
-          <h1
-            className="mt-2 text-[3.1rem] leading-none text-[#2d2a26]"
-            style={{
-              fontFamily: "Butterscotch, Marker Felt, cursive",
-              letterSpacing: "0.01em",
-            }}
-          >
-            Strik Team app
-          </h1>
         </header>
 
-        <nav className="mx-auto w-full max-w-sm space-y-3">
+        {/* NAVIGATION GRID */}
+        <nav className="space-y-3">
           {sections.map((section) => (
             <Link
               key={section.href}
               href={section.href}
-              className={`group flex items-center gap-4 rounded-[1.75rem] px-4 py-3.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${section.button}`}
+              className={`group block rounded-xl border border-[#e8e4de] bg-white p-4 transition-all hover:border-[#d9d2c9] hover:shadow-md active:scale-[0.98] ${
+                section.locked ? "pointer-events-none opacity-50" : ""
+              }`}
             >
-              <span
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold ${section.badge}`}
-              >
-                <img
-                  src={section.image}
-                  alt=""
-                  className="h-8 w-8 object-contain"
-                />
-              </span>
-
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2">
-                  <span className="text-lg font-bold leading-tight">
-                    {section.title}
-                  </span>
-                  {section.locked && (
-                    <span className="relative block h-4 w-4 rounded-b-sm bg-[#2d2a26]">
-                      <span className="absolute -top-3 left-1/2 h-4 w-3 -translate-x-1/2 rounded-t-full border-2 border-[#2d2a26] border-b-0" />
-                      <span className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
-                    </span>
-                  )}
-                </span>
-                <span className="mt-0.5 block text-sm font-semibold text-[#2d2a26]/55">
-                  {section.subtitle}
-                </span>
-              </span>
-
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/60 text-xl font-light transition group-hover:bg-white">
-                →
-              </span>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#ecf4ed]">
+                      <img
+                        src={section.icon}
+                        alt=""
+                        className="h-6 w-6 object-contain"
+                      />
+                    </div>
+                    <div>
+                      <h2 className="font-semibold text-[#1a1815]">
+                        {section.title}
+                      </h2>
+                      <p className="text-sm text-[#a39c91]">
+                        {section.subtitle}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {!section.locked && (
+                  <div className="ml-2 text-[#d9d2c9] transition-transform group-hover:translate-x-1">
+                    →
+                  </div>
+                )}
+                {section.locked && (
+                  <div className="ml-2 text-[#d9d2c9]">🔒</div>
+                )}
+              </div>
             </Link>
           ))}
         </nav>

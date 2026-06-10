@@ -10,27 +10,27 @@ import WinkelFeaturedCards from "./WinkelFeaturedCards";
 const items = [
   {
     href: "/winkel/schoonmaak-registratie",
-    label: "Registratie",
-    title: "Schoonmaak & registratie",
-    description: "Temperatuurregistratie per winkel.",
+    label: "Temperatuur",
+    title: "Schoonmaak",
+    description: "Registratie per winkel.",
     icon: strikIcons.cleaning,
-    tone: "blue" as const,
+    tone: "neutral" as const,
   },
   {
     href: "/bruidstaarten",
-    label: "Studio & agenda",
+    label: "Studio",
     title: "Bruidstaarten",
-    description: "Aanvragen en afspraken voor bruidstaarten.",
+    description: "Aanvragen en afspraken.",
     icon: strikIcons.bruidstaart,
-    tone: "pink" as const,
+    tone: "neutral" as const,
   },
   {
     href: "/info",
-    label: "Documenten",
-    title: "Belangrijke info",
-    description: "Allergenen, taartinformatie en bestanden.",
+    label: "Info",
+    title: "Documenten",
+    description: "Allergenen en bestanden.",
     icon: strikIcons.info,
-    tone: "light" as const,
+    tone: "neutral" as const,
   },
 ];
 
@@ -41,7 +41,6 @@ export default function WinkelPage() {
         title="Winkel"
         description="Alles voor de winkel op één plek."
         icon={strikIcons.winkel}
-        tone="green"
       />
 
       <div className="space-y-4">

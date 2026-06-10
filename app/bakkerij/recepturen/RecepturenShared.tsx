@@ -7,7 +7,7 @@ export function Panel({
 }: Readonly<{ children: React.ReactNode; className?: string }>) {
   return (
     <section
-      className={`border border-[#c3d3bc] bg-white p-4 ${className}`}
+      className={`border border-[#e8e4de] bg-white rounded-lg p-4 ${className}`}
     >
       {children}
     </section>
@@ -26,13 +26,13 @@ export function SectionTitle({
   return (
     <div>
       {eyebrow && (
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#8c8c8c]">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#8b8278]">
           {eyebrow}
         </p>
       )}
-      <h2 className="mt-1 text-xl font-black leading-tight text-[#252525]">{title}</h2>
+      <h2 className="mt-2 text-2xl font-bold leading-tight text-[#1a1815]">{title}</h2>
       {description && (
-        <p className="mt-1 max-w-3xl text-sm font-semibold leading-relaxed text-[#707070]">
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#a39c91]">
           {description}
         </p>
       )}
@@ -53,20 +53,20 @@ export function MetricCard({
 }>) {
   const toneClass =
     tone === "good"
-      ? "border-[#c3d3bc] bg-[#f6faf4]"
+      ? "border-[#d6e5d8] bg-[#f6faf4]"
       : tone === "pressure"
-        ? "border-[#c3d3bc] bg-[#f5f5f3]"
+        ? "border-[#e8e4de] bg-[#faf8f5]"
         : tone === "critical"
-          ? "border-[#d75a48] bg-[#fff4f1]"
-          : "border-[#d8d8d4] bg-white";
+          ? "border-[#fee2e2] bg-[#fef2f2]"
+          : "border-[#e8e4de] bg-white";
 
   return (
-    <div className={`border p-4 ${toneClass}`}>
-      <p className="text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+    <div className={`border rounded-lg p-4 ${toneClass}`}>
+      <p className="text-xs font-semibold uppercase tracking-wider text-[#8b8278]">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-black leading-none">{value}</p>
-      <p className="mt-2 text-xs font-bold leading-relaxed text-[#707070]">
+      <p className="mt-3 text-3xl font-bold leading-none text-[#1a1815]">{value}</p>
+      <p className="mt-2 text-xs leading-relaxed text-[#a39c91]">
         {detail}
       </p>
     </div>
@@ -76,12 +76,12 @@ export function MetricCard({
 export function MarginBadge({ status }: Readonly<{ status: MarginStatus }>) {
   const className =
     status === "good"
-      ? "bg-[#c3d3bc] text-[#252525]"
-      : "bg-[#ffe0dc] text-[#d75a48]";
+      ? "bg-[#ecf4ed] text-[#4a6d5a]"
+      : "bg-[#fef2f2] text-[#c42828]";
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${className}`}
+      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${className}`}
     >
       {marginStatusLabel(status)}
     </span>
@@ -93,14 +93,14 @@ export function RecipeStatusBadge({
 }: Readonly<{ status: RecipeStatus }>) {
   const className =
     status === "active"
-      ? "bg-[#c3d3bc] text-[#252525]"
+      ? "bg-[#ecf4ed] text-[#4a6d5a]"
       : status === "draft"
-        ? "bg-[#efefed] text-[#252525]"
-        : "bg-[#efefed] text-[#707070]";
+        ? "bg-[#f5f2ee] text-[#6b645b]"
+        : "bg-[#f5f2ee] text-[#a39c91]";
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${className}`}
+      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${className}`}
     >
       {recipeStatusLabel(status)}
     </span>
@@ -119,12 +119,12 @@ export function FilterSelect({
   options: Array<{ value: string; label: string }>;
 }>) {
   return (
-    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+    <label className="grid gap-1 text-xs font-semibold uppercase tracking-wider text-[#8b8278]">
       {label}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] focus:outline-none focus:ring-2 focus:ring-[#c3d3bc]"
+        className="min-w-0 border border-[#e8e4de] bg-white rounded-md px-3 py-2 text-sm font-medium normal-case tracking-normal text-[#1a1815] focus:outline-none focus:ring-2 focus:ring-[#ecf4ed]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -146,13 +146,13 @@ export function SearchInput({
   placeholder: string;
 }>) {
   return (
-    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+    <label className="grid gap-1 text-xs font-semibold uppercase tracking-wider text-[#8b8278]">
       Zoeken
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="min-w-0 border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] placeholder:text-[#8c8c8c] focus:outline-none focus:ring-2 focus:ring-[#c3d3bc]"
+        className="min-w-0 border border-[#e8e4de] bg-white rounded-md px-3 py-2 text-sm font-medium normal-case tracking-normal text-[#1a1815] placeholder:text-[#a39c91] focus:outline-none focus:ring-2 focus:ring-[#ecf4ed]"
       />
     </label>
   );
@@ -160,7 +160,7 @@ export function SearchInput({
 
 export function EmptyState({ text }: Readonly<{ text: string }>) {
   return (
-    <p className="border border-[#c3d3bc] bg-[#f5f5f3] p-4 text-sm font-bold text-[#707070]">
+    <p className="border border-[#e8e4de] bg-[#faf8f5] rounded-lg p-4 text-sm font-medium text-[#a39c91]">
       {text}
     </p>
   );

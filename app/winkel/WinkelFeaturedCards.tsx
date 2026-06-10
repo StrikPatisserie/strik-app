@@ -22,10 +22,10 @@ const agendaItem = {
 
 function NewsFeaturedCard({ showBadge }: Readonly<{ showBadge: boolean }>) {
   return (
-    <article className="relative flex h-36 flex-col rounded-[1.5rem] border border-[#e7e0d8]/80 bg-[#dce8d6] p-3.5 text-center shadow-sm">
+    <article className="relative flex h-32 flex-col rounded-xl border border-[#e8e4de] bg-white p-4 text-center">
       {showBadge && (
-        <span className="absolute right-3 top-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#e24b3b] px-1.5 text-xs font-black text-white shadow-sm">
-          1
+        <span className="absolute right-3 top-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-xs font-semibold text-white">
+          New
         </span>
       )}
 
@@ -34,14 +34,14 @@ function NewsFeaturedCard({ showBadge }: Readonly<{ showBadge: boolean }>) {
         className="group flex min-h-0 flex-1 flex-col items-center justify-between"
         aria-label="Nieuws openen"
       >
-        <span className="text-xl font-black leading-tight text-[#050505]">
+        <span className="font-semibold text-[#1a1815]">
           Nieuws
         </span>
         <span className="flex min-h-0 flex-1 items-center justify-center">
           <img
             src={strikIcons.news}
             alt=""
-            className="h-16 w-16 object-contain transition group-hover:scale-105"
+            className="h-14 w-14 object-contain transition group-hover:scale-110"
           />
         </span>
       </Link>
@@ -55,16 +55,16 @@ function AgendaFeaturedCard() {
   return (
     <Link
       href={agendaItem.href}
-      className="group flex h-36 flex-col items-center justify-between rounded-[1.5rem] border border-[#e7e0d8]/80 bg-[#f1d28f] p-3.5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
+      className="group flex h-32 flex-col items-center justify-between rounded-xl border border-[#e8e4de] bg-white p-4 text-center transition hover:shadow-md active:scale-[0.97]"
     >
-      <span className="text-xl font-black leading-tight text-[#050505]">
+      <span className="font-semibold text-[#1a1815]">
         {agendaItem.title}
       </span>
       <span className="flex min-h-0 flex-1 items-center justify-center">
         <img
           src={agendaItem.icon}
           alt=""
-          className="h-[4.5rem] w-[4.5rem] object-contain transition group-hover:scale-105"
+          className="h-14 w-14 object-contain transition group-hover:scale-110"
         />
       </span>
     </Link>

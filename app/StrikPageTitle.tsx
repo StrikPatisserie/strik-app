@@ -56,15 +56,14 @@ export default function StrikPageTitle({ title }: Readonly<{ title: string }>) {
   }, [baseFontSize, title]);
 
   return (
-    <div ref={wrapperRef} className="mx-auto w-full text-center">
+    <div ref={wrapperRef} className="w-full">
       <h1
         ref={titleRef}
-        className="mx-auto inline-block max-w-full whitespace-normal break-normal leading-none text-[#050505]"
+        className="inline-block max-w-full whitespace-normal break-normal leading-tight font-bold text-[#1a1815]"
         style={{
-          fontFamily: "Butterscotch, Marker Felt, cursive",
           fontSize: `${fontSize}rem`,
           hyphens: "none",
-          letterSpacing: "0",
+          letterSpacing: "-0.02em",
           overflowWrap: "normal",
           wordBreak: "normal",
         }}

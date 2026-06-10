@@ -12,7 +12,7 @@ const primaryItems = [
     title: "IJs bestellen",
     description: "Open direct de zakelijke EXTRAvestiging bestelsite.",
     icon: strikIcons.ijs,
-    tone: "green" as const,
+    tone: "primary" as const,
     size: "large" as const,
   },
   {
@@ -21,7 +21,7 @@ const primaryItems = [
     title: "Opstartplan",
     description: "Dagelijkse opstartchecklist voor de ijssalons.",
     icon: strikIcons.opstartplan,
-    tone: "blue" as const,
+    tone: "secondary" as const,
     size: "large" as const,
   },
   {
@@ -30,7 +30,7 @@ const primaryItems = [
     title: "Afsluitplan",
     description: "Dagelijkse afsluitchecklist voor de ijssalons.",
     icon: strikIcons.afsluitplan,
-    tone: "honey" as const,
+    tone: "warning" as const,
     size: "large" as const,
   },
 ];
@@ -42,7 +42,7 @@ const secondaryItems = [
     title: "Info",
     description: "Allergenen en andere documenten voor de ijssalons.",
     icon: strikIcons.info,
-    tone: "muted" as const,
+    tone: "neutral" as const,
     size: "compact" as const,
   },
 ];
@@ -54,7 +54,6 @@ export default function IJsPage() {
         title="IJs"
         description="Alles voor de ijssalons."
         icon={strikIcons.ijs}
-        tone="medium"
       />
 
       <div className="space-y-3">

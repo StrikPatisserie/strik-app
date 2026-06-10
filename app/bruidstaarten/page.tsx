@@ -12,7 +12,7 @@ const items = [
     title: "Bruidstaart Studio",
     description: "Stel een bruidstaart samen als aanvraag.",
     icon: strikIcons.bruidstaart,
-    tone: "pink" as const,
+    tone: "primary" as const,
   },
   {
     href: "/bruidstaarten/agenda",
@@ -20,7 +20,7 @@ const items = [
     title: "Bruidstaart agenda",
     description: "Bruidstaartafspraken voor Ziekerstraat.",
     icon: strikIcons.bruidstaart,
-    tone: "medium" as const,
+    tone: "secondary" as const,
   },
   {
     href: "https://strik-patisserie.nl/wp-content/uploads/2025/06/bruidstaart-inspiratie.pdf",
@@ -28,7 +28,7 @@ const items = [
     title: "Bruidstaart voorbeelden",
     description: "Bekijk voorbeelden en inspiratie uit WordPress.",
     icon: strikIcons.info,
-    tone: "light" as const,
+    tone: "neutral" as const,
     target: "_blank" as const,
     rel: "noopener noreferrer",
   },
@@ -41,7 +41,6 @@ export default function BruidstaartenPage() {
         title="Bruidstaarten"
         description="Bruidstaart Studio en bruidstaartafspraken."
         icon={strikIcons.bruidstaart}
-        tone="honey"
       />
 
       <div className="space-y-4">

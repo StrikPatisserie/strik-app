@@ -53,13 +53,13 @@ function Card({
 }) {
   return (
     <article
-      className={`relative w-full max-w-sm overflow-hidden rounded-3xl border shadow-sm ${
-        important ? "border-red-200 bg-red-50" : "border-[#ebe7df] bg-white"
+      className={`relative w-full max-w-sm overflow-hidden rounded-xl border ${
+        important ? "border-[#fee2e2] bg-[#fef2f2]" : "border-[#e8e4de] bg-white"
       }`}
     >
       {isNew && (
-        <span className="absolute right-4 top-4 z-10 flex h-7 min-w-7 items-center justify-center rounded-full bg-[#e24b3b] px-2 text-sm font-black text-white shadow-sm">
-          1
+        <span className="absolute right-3 top-3 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-xs font-semibold text-white">
+          New
         </span>
       )}
 
@@ -67,20 +67,20 @@ function Card({
         <img
           src={post.image}
           alt={post.title}
-          className="h-44 w-full object-cover"
+          className="h-40 w-full object-cover"
         />
       )}
 
       <div className="p-4">
-        <p className="text-xs text-gray-500">
+        <p className="text-xs font-medium text-[#a39c91]">
           {new Date(post.date).toLocaleDateString("nl-NL")}
         </p>
 
-        <h2 className="mt-1 text-lg font-bold leading-tight">
+        <h2 className="mt-2 text-base font-semibold leading-tight text-[#1a1815]">
           {stripImportantTitle(post.title)}
         </h2>
 
-        <p className="mt-2 text-sm leading-relaxed text-gray-700">
+        <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">
           {post.content}
         </p>
       </div>

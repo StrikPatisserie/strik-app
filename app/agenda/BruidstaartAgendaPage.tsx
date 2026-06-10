@@ -107,81 +107,80 @@ export default function BruidstaartAgendaPage() {
         title="Bruidstaart agenda"
         description="Bruidstaartafspraken voor Ziekerstraat."
         icon={strikIcons.bruidstaart}
-        tone="green"
       />
 
-      <div className="mb-6 flex items-center justify-between rounded-[1.5rem] border border-[#e7e0d8] bg-white p-2 shadow-sm">
+      <div className="mb-6 flex items-center justify-between rounded-xl border border-[#e8e4de] bg-white p-2">
         <button
           onClick={() => setWeekOffset((prev) => prev - 1)}
-          className="rounded-full bg-[#f8f6f3] px-4 py-2 text-lg font-bold active:scale-95"
+          className="rounded-lg bg-[#f5f2ee] px-3 py-2 text-lg font-semibold text-[#8b8278] active:scale-95"
         >
           ←
         </button>
 
         <div className="text-center">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-[#a39c91]">
             {weekOffset === 0
               ? "Deze week"
               : weekOffset > 0
               ? `${weekOffset} week vooruit`
               : `${Math.abs(weekOffset)} week terug`}
           </p>
-          <p className="text-sm font-bold">
+          <p className="text-sm font-semibold text-[#1a1815]">
             {formatDateRange(startOfWeek, endOfWeek)}
           </p>
         </div>
 
         <button
           onClick={() => setWeekOffset((prev) => prev + 1)}
-          className="rounded-full bg-[#c3d3bc] px-4 py-2 text-lg font-bold active:scale-95"
+          className="rounded-lg bg-[#ecf4ed] px-3 py-2 text-lg font-semibold text-[#4a6d5a] active:scale-95"
         >
           →
         </button>
       </div>
 
       {Object.keys(gegroepeerd).length === 0 && (
-        <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">
+        <div className="rounded-xl border border-[#e8e4de] bg-white p-5">
+          <p className="text-sm text-[#a39c91]">
             Geen afspraken in deze week
           </p>
         </div>
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {Object.entries(gegroepeerd).map(([dag, items]) => (
           <section key={dag}>
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-base font-bold capitalize">{dag}</h2>
-              <span className="rounded-full bg-white px-3 py-1 text-xs text-gray-500 shadow-sm">
+              <h2 className="text-base font-semibold capitalize text-[#1a1815]">{dag}</h2>
+              <span className="rounded-full bg-[#f5f2ee] px-3 py-1 text-xs font-medium text-[#8b8278]">
                 {items.length} afspraak{items.length === 1 ? "" : "en"}
               </span>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {items.map((b, i) => (
                 <div
                   key={i}
-                  className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 shadow-sm"
+                  className="rounded-xl border border-[#e8e4de] bg-white p-4"
                 >
                   <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-lg font-bold leading-tight">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold leading-tight text-[#1a1815]">
                         {cleanText(b.naam)}
                       </p>
-                      <p className="mt-1 text-sm text-gray-500">
+                      <p className="mt-1 text-sm text-[#a39c91]">
                         {b.telefoon
                           ? cleanText(b.telefoon)
                           : "Geen telefoonnummer"}
                       </p>
                     </div>
 
-                    <div className="shrink-0 rounded-full bg-[#c3d3bc] px-4 py-2 text-sm font-bold">
+                    <div className="shrink-0 rounded-lg bg-[#ecf4ed] px-3 py-1.5 text-sm font-semibold text-[#4a6d5a]">
                       {getTime(b.datum)}
                     </div>
                   </div>
 
                   {b.details && (
-                    <p className="mt-3 rounded-2xl bg-[#f8f6f3] p-3 text-sm leading-relaxed text-gray-600">
+                    <p className="mt-3 rounded-lg bg-[#f5f2ee] p-3 text-sm leading-relaxed text-[#6b645b]">
                       {cleanText(b.details)}
                     </p>
                   )}

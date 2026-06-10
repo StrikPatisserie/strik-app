@@ -80,7 +80,7 @@ export default function PriceUpdateReview({
             <MiniMetric label="Genegeerd" value={String(ignoredLines.length)} />
             <MiniMetric label="Teruggedraaid" value={String(revertedLines.length)} />
           </div>
-          <div className="flex flex-wrap gap-2 rounded-[1.15rem] border border-[#e7e0d8] bg-[#fffdf8] p-3">
+          <div className="flex flex-wrap gap-2 rounded-lg border border-[#e8e4de] bg-white p-3">
             <button
               type="button"
               onClick={() => onIgnoreInvoice(invoice.id)}
@@ -93,7 +93,7 @@ export default function PriceUpdateReview({
               type="button"
               onClick={() => onRevertInvoice(invoice.id)}
               disabled={!canRevertInvoice}
-              className="rounded-full bg-[#ffe0dc] px-4 py-2.5 text-sm font-black text-[#a83e31] shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-full bg-[#fee2e2] px-4 py-2.5 text-sm font-semibold text-[#c42828] disabled:cursor-not-allowed disabled:opacity-45"
             >
               Factuur terugdraaien
             </button>
@@ -135,7 +135,7 @@ export default function PriceUpdateReview({
             unmatchedLines.map((line, index) => (
               <div
                 key={invoiceLineKey(line, index)}
-                className="rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3"
+                className="rounded-lg border border-[#f3d4a4] bg-[#fef9f3] p-3"
               >
                 <p className="text-sm font-black">{line.description}</p>
                 <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
@@ -154,7 +154,7 @@ export default function PriceUpdateReview({
                   <button
                     type="button"
                     onClick={() => onCreateIngredientFromLine(invoice.id, line)}
-                    className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black text-[#2d2a26] shadow-sm"
+                    className="rounded-full bg-[#ecf4ed] px-3 py-2 text-xs font-semibold text-[#4a6d5a]"
                   >
                     Nieuw artikel toevoegen
                   </button>
@@ -200,7 +200,7 @@ function ReviewLine({
   const impact = invoiceLineImpact(line, recipes);
 
   return (
-    <div className="rounded-[1.15rem] border border-[#e7e0d8] bg-[#fffdf8] p-4">
+    <div className="rounded-lg border border-[#e8e4de] bg-white p-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div>
           <p className="text-lg font-black leading-tight">{line.description}</p>
@@ -244,7 +244,7 @@ function ReviewLine({
         <button
           type="button"
           onClick={() => onApprove(invoiceId, line)}
-          className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+          className="rounded-full bg-[#ecf4ed] px-4 py-2.5 text-sm font-semibold text-[#4a6d5a]"
         >
           Goedkeuren
         </button>
@@ -324,7 +324,7 @@ function IngredientMatchControls({
       <button
         type="button"
         onClick={() => setIsOpen(false)}
-        className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black text-[#2d2a26]/55"
+        className="rounded-full bg-[#f5f2ee] px-4 py-2.5 text-sm font-medium text-[#a39c91]"
       >
         Annuleer
       </button>

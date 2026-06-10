@@ -51,9 +51,9 @@ export default function StrikBackButton() {
   return (
     <Link
       href={parentRoute}
-      className="mb-1 inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-sm font-bold text-[#2d2a26]/70 shadow-sm transition active:scale-[0.98]"
+      className="mb-4 inline-flex items-center gap-2 rounded-lg border border-[#e8e4de] bg-white px-3 py-2 text-sm font-medium text-[#8b8278] transition hover:bg-[#faf8f5] active:scale-[0.97]"
     >
-      <span className="text-lg leading-none">←</span>
+      <span className="text-base leading-none">←</span>
       Terug
     </Link>
   );

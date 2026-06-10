@@ -15,28 +15,28 @@ const SHOP_ACCENTS: Record<
   }
 > = {
   Lent: {
-    card: "border-[#a8bf9e]/55 bg-[#eef6ea]",
-    name: "text-[#3b6b43]",
+    card: "border-[#d6e5d8] bg-[#f6faf4]",
+    name: "text-[#4a6d5a]",
   },
   Heyendaal: {
-    card: "border-[#d9b761]/45 bg-[#fff6dc]",
+    card: "border-[#f3d4a4] bg-[#fef9f3]",
     name: "text-[#8a5b10]",
   },
   Ziekerstraat: {
-    card: "border-[#d98f87]/45 bg-[#fff0ed]",
-    name: "text-[#9f382f]",
+    card: "border-[#fee2e2] bg-[#fef2f2]",
+    name: "text-[#c42828]",
   },
   Daalseweg: {
-    card: "border-[#9ebac4]/50 bg-[#eef6f8]",
-    name: "text-[#4e6c74]",
+    card: "border-[#e0f2fe] bg-[#f0f9ff]",
+    name: "text-[#0369a1]",
   },
 };
 
 function getShopAccent(shopName: string) {
   return (
     SHOP_ACCENTS[shopName] || {
-      card: "border-[#e7e0d8]/80 bg-[#f7f4ef]",
-      name: "text-[#2d2a26]",
+      card: "border-[#e8e4de] bg-white",
+      name: "text-[#1a1815]",
     }
   );
 }
@@ -93,11 +93,11 @@ function LoadingRows() {
       {[0, 1, 2, 3].map((item) => (
         <div
           key={item}
-          className="rounded-2xl bg-[#f7f4ef] px-3 py-3"
+          className="rounded-lg bg-[#f5f2ee] px-3 py-3"
         >
           <div className="animate-pulse space-y-2">
-            <div className="h-4 w-28 rounded-full bg-[#2d2a26]/10" />
-            <div className="h-3 w-44 rounded-full bg-[#2d2a26]/10" />
+            <div className="h-4 w-28 rounded-full bg-[#1a1815]/10" />
+            <div className="h-3 w-44 rounded-full bg-[#1a1815]/10" />
           </div>
         </div>
       ))}

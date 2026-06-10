@@ -17,8 +17,8 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-4 left-1/2 z-50 w-[92%] max-w-md -translate-x-1/2 rounded-full border border-[#e7e0d8] bg-white/95 px-3 py-2 shadow-lg backdrop-blur">
-      <div className="grid grid-cols-5 gap-1">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#e8e4de] bg-white/95 px-4 py-3 backdrop-blur-md">
+      <div className="mx-auto flex max-w-md items-center justify-between gap-0.5">
         {items.map((item) => {
           const active =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
@@ -27,14 +27,14 @@ export default function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center justify-center gap-1 rounded-full px-1.5 py-3 text-center text-xs font-semibold transition active:scale-95 sm:text-sm ${
+              className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-2 py-3 text-center text-xs font-semibold transition-colors ${
                 active
-                  ? "bg-[#c3d3bc] text-[#2d2a26]"
-                  : "text-gray-500 hover:bg-[#f8f6f3]"
+                  ? "bg-[#ecf4ed] text-[#4a6d5a]"
+                  : "text-[#8b8278] hover:text-[#6b645b]"
               }`}
             >
-              <img src={item.icon} alt="" className="h-4 w-4 object-contain" />
-              {item.label}
+              <img src={item.icon} alt="" className="h-5 w-5 object-contain" />
+              <span className="text-[0.625rem] leading-tight">{item.label}</span>
             </Link>
           );
         })}

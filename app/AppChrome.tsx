@@ -15,7 +15,7 @@ export default function AppChrome({
     <>
       <NotificationMonitor />
       <div
-        className={`min-h-dvh bg-[#f4f0ea] ${
+        className={`min-h-dvh bg-[#faf8f5] ${
           isBakeryEnvironment ? "" : "pb-24"
         }`}
       >
