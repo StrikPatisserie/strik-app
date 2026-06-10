@@ -58,13 +58,13 @@ export default function WinkelSidebar() {
 
   return (
     <>
-      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[5.75rem] lg:shrink-0 lg:flex-col lg:items-center lg:gap-4 lg:rounded-r-[3.5rem] lg:border-r lg:border-[#c6d8bf] lg:bg-[#c3d3bc] lg:px-3 lg:py-6">
+      <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-[7rem] md:shrink-0 md:flex-col md:items-center md:gap-5 md:rounded-r-[4rem] md:border-r md:border-[#c6d8bf] md:bg-[#c3d3bc] md:px-4 md:py-6">
         <Link
           href="/"
-          className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80 shadow-sm"
+          className="mb-7 flex h-14 w-14 items-center justify-center rounded-3xl bg-white/80 shadow-sm"
           title="Strik"
         >
-          <img src="/strik-logo.png" alt="Strik" className="h-8 w-8 object-contain" />
+          <img src="/strik-logo.png" alt="Strik" className="h-9 w-9 object-contain" />
         </Link>
         {mainNavItems.map((item) => {
           const active =
@@ -76,7 +76,7 @@ export default function WinkelSidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex h-12 w-12 items-center justify-center rounded-2xl transition ${
+              className={`flex h-14 w-14 items-center justify-center rounded-3xl transition ${
                 active
                   ? "bg-white text-[#ef5737] shadow-sm ring-1 ring-white/80"
                   : "hover:bg-white/45"
@@ -86,7 +86,7 @@ export default function WinkelSidebar() {
               <img
                 src={item.icon}
                 alt=""
-                className="h-6 w-6 object-contain"
+                className="h-7 w-7 object-contain"
               />
               <span className="sr-only">{item.label}</span>
             </Link>
@@ -95,7 +95,7 @@ export default function WinkelSidebar() {
       </aside>
 
       {showWinkelSubNav && (
-        <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[4.6rem] lg:shrink-0 lg:flex-col lg:items-center lg:gap-3 lg:rounded-r-[3rem] lg:border-r lg:border-[#e7e0d8] lg:bg-white/85 lg:px-2 lg:py-24">
+        <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-[5.4rem] md:shrink-0 md:flex-col md:items-center md:gap-4 md:rounded-r-[3.2rem] md:border-r md:border-[#e7e0d8] md:bg-white/85 md:px-2 md:py-24">
           {winkelNavItems.map((item) => {
             const active = isActivePath(pathname, item.href);
 
@@ -103,7 +103,7 @@ export default function WinkelSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex h-11 w-11 items-center justify-center rounded-2xl transition ${
+                className={`flex h-12 w-12 items-center justify-center rounded-2xl transition ${
                   active
                     ? "bg-[#ef5737] shadow-sm"
                     : "hover:bg-[#f8f6f3]"
@@ -113,7 +113,7 @@ export default function WinkelSidebar() {
                 <img
                   src={item.icon}
                   alt=""
-                  className={`h-5 w-5 object-contain ${active ? "brightness-0 invert" : ""}`}
+                  className={`h-6 w-6 object-contain ${active ? "brightness-0 invert" : ""}`}
                 />
                 <span className="sr-only">{item.label}</span>
               </Link>
@@ -123,7 +123,7 @@ export default function WinkelSidebar() {
       )}
 
       {showWinkelSubNav && (
-        <nav className="fixed bottom-[5rem] left-2 right-2 z-40 rounded-xl border border-[#e7e0d8] bg-white/95 p-1.5 shadow-sm backdrop-blur lg:hidden">
+        <nav className="fixed bottom-[5rem] left-2 right-2 z-40 rounded-xl border border-[#e7e0d8] bg-white/95 p-1.5 shadow-sm backdrop-blur md:hidden">
           <div className="flex gap-1 overflow-x-auto">
             {winkelNavItems.map((item) => {
               const active = isActivePath(pathname, item.href);

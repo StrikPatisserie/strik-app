@@ -55,13 +55,13 @@ export default function CompactStaffOverview() {
   return (
     <details
       open
-      className="group rounded-[1rem] border border-[#d9d6d1] bg-white shadow-sm sm:rounded-[1.25rem]"
+      className="group rounded-[0.9rem] border border-[#e1ded8] bg-white/85 shadow-sm sm:rounded-[1.15rem]"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[1rem] bg-[#e8e8e6] px-4 py-3 [&::-webkit-details-marker]:hidden sm:rounded-[1.25rem] sm:px-5 sm:py-4">
-        <h2 className="text-lg font-black leading-tight text-[#1a1815] sm:text-2xl sm:font-normal">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[0.9rem] bg-[#f0f1ee] px-3 py-2.5 [&::-webkit-details-marker]:hidden sm:rounded-[1.15rem] sm:px-5 sm:py-3">
+        <h2 className="text-[0.85rem] font-black uppercase leading-tight tracking-[0.14em] text-[#2d2a26]/70 sm:text-lg sm:tracking-[0.12em]">
           wie werkt er vandaag
         </h2>
-        <span className="text-2xl font-light leading-none transition group-open:rotate-180 sm:text-4xl">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ef5737] text-sm font-black leading-none text-white transition group-open:rotate-180 sm:h-8 sm:w-8">
           v
         </span>
       </summary>
@@ -83,10 +83,7 @@ export default function CompactStaffOverview() {
       {state === "ready" && schedule && (
         <div className="px-4 py-2 sm:px-5 sm:py-4">
           {schedule.shops.map((shop) => {
-            const iceShift = shop.iceEmployees?.[0];
-            const iceText = iceShift
-              ? `ijs ${iceShift.shifts.map((s) => s.timeLabel).join(",")}`
-              : "";
+            const iceEmployees = shop.iceEmployees || [];
 
             return (
               <section
@@ -100,11 +97,6 @@ export default function CompactStaffOverview() {
                   >
                     {shop.shop}
                   </p>
-                  {iceText && (
-                    <p className="text-xs italic leading-tight text-[#2d2a26]/80 sm:text-sm">
-                      {iceText}
-                    </p>
-                  )}
                 </div>
                 <div className="mt-1 space-y-0.5">
                   {shop.employees.length ? (
@@ -125,6 +117,28 @@ export default function CompactStaffOverview() {
                     </p>
                   )}
                 </div>
+                {iceEmployees.length > 0 && (
+                  <div className="mt-2 rounded-xl border border-[#c3d3bc] bg-[#dce8d6] px-3 py-2">
+                    <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#4a6d5a]">
+                      ijssalon
+                    </p>
+                    <div className="mt-1 space-y-1">
+                      {iceEmployees.map((employee) => (
+                        <div
+                          key={employee.id}
+                          className="grid gap-1 text-xs font-bold leading-tight text-[#263b28] sm:grid-cols-[minmax(0,1fr)_auto] sm:text-sm"
+                        >
+                          <span>{employee.employeeName}</span>
+                          <span className="text-[#4a6d5a] sm:text-right">
+                            {employee.shifts
+                              .map((shift) => shift.timeLabel)
+                              .join(", ")}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {shop.absences.length > 0 && (
                   <p className="mt-2 text-xs font-bold text-[#2d2a26]/50">
                     Afwezig:{" "}

@@ -145,22 +145,22 @@ export default function CompactAgendaPanel() {
   const weekEvents = expandEvents(events, weekStart);
 
   return (
-    <section className="rounded-[1rem] border border-[#d9d6d1] bg-[#e8e8e6] p-3 shadow-sm sm:rounded-[1.25rem] sm:p-4">
-      <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3">
+    <section className="min-w-0 rounded-[0.9rem] border border-[#d9d6d1] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.25rem] sm:p-4">
+      <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1 sm:mb-3 sm:gap-3">
         <div>
-          <h2 className="text-xl font-black leading-tight text-[#1a1815] sm:text-2xl sm:font-normal">
+          <h2 className="text-[0.78rem] font-black uppercase leading-tight tracking-[0.18em] text-[#1a1815] sm:text-2xl sm:font-normal sm:normal-case sm:tracking-normal">
             agenda
           </h2>
-          <p className="mt-0.5 text-xs text-[#2d2a26]/70 sm:mt-1 sm:text-sm">
+          <p className="mt-0.5 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-[#2d2a26]/50 sm:mt-1 sm:text-sm sm:font-normal sm:normal-case sm:tracking-normal sm:text-[#2d2a26]/70">
             week {weekNumberForDate(weekStart)}
           </p>
         </div>
-        <div className="flex items-center gap-1 text-[#050505] sm:gap-2">
+        <div className="flex items-center gap-0.5 text-[#050505] sm:gap-2">
           <button
             type="button"
             onClick={() => setWeekStart(addDays(weekStart, -7))}
             aria-label="Vorige week"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-3xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
           >
             ‹
           </button>
@@ -168,29 +168,29 @@ export default function CompactAgendaPanel() {
             type="button"
             onClick={() => setWeekStart(addDays(weekStart, 7))}
             aria-label="Volgende week"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-3xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
           >
             ›
           </button>
         </div>
       </div>
 
-      <div className="min-h-[8.5rem] rounded-[0.85rem] bg-white/70 p-3 sm:min-h-[17rem] sm:rounded-[1rem] sm:p-4">
+      <div className="min-h-[12rem] rounded-[0.75rem] bg-white/70 p-2 sm:min-h-[17rem] sm:rounded-[1rem] sm:p-4">
         {weekEvents.length ? (
-          <div className="space-y-2 sm:space-y-3">
-            {weekEvents.slice(0, 4).map((event) => (
+          <div className="space-y-1.5 sm:space-y-3">
+            {weekEvents.slice(0, 3).map((event) => (
               <Link
                 key={`${event.id}-${dateKey(event.displayDate)}`}
                 href="/strik-agenda"
                 className="block border-b border-[#d9d6d1] pb-1.5 last:border-b-0 sm:pb-2"
               >
-                <p className="text-xs font-black text-[#1a1815] sm:text-sm">
+                <p className="text-[0.68rem] font-black leading-tight text-[#1a1815] sm:text-sm">
                   {formatDayLabel(event.displayDate)}
                 </p>
-                <p className="mt-0.5 text-xs leading-snug text-[#2d2a26]/80 sm:text-sm">
+                <p className="mt-0.5 text-[0.68rem] leading-snug text-[#2d2a26]/80 sm:text-sm">
                   {event.title}
                 </p>
-                <p className="mt-0.5 text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#ef5737] sm:mt-1 sm:text-[0.68rem]">
+                <p className="mt-0.5 text-[0.55rem] font-black uppercase tracking-[0.1em] text-[#ef5737] sm:mt-1 sm:text-[0.68rem]">
                   {getEventTypeLabel(event.type)} ·{" "}
                   {event.source === "tamigo"
                     ? "Team"
@@ -200,7 +200,7 @@ export default function CompactAgendaPanel() {
             ))}
           </div>
         ) : (
-          <p className="pt-12 text-center text-xs font-bold text-[#2d2a26]/45 sm:pt-20 sm:text-sm">
+          <p className="pt-16 text-center text-[0.68rem] font-bold text-[#2d2a26]/45 sm:pt-20 sm:text-sm">
             {status || "Geen agenda-items deze week"}
           </p>
         )}
