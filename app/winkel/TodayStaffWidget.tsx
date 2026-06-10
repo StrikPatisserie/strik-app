@@ -128,23 +128,23 @@ function ShopRow({
   return (
     <details
       open={openByDefault}
-      className={`group overflow-hidden rounded-[1.75rem] border ${accent.card} transition hover:shadow-lg`}
+      className={`group overflow-hidden rounded-[1.5rem] border ${accent.card} transition hover:shadow-lg`}
     >
-      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-4">
+      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-3 py-3">
         <div>
-          <h3 className={`text-base font-black leading-tight ${accent.name}`}>
+          <h3 className={`text-sm font-black leading-tight ${accent.name}`}>
             {shop.shop}
           </h3>
-          <p className="mt-1 text-sm text-[#2d2a26]/65">
+          <p className="mt-1 text-xs text-[#2d2a26]/65">
             {shop.employees.length} medewerker(s) vandaag
           </p>
         </div>
-        <div className="rounded-2xl bg-white/80 px-3 py-2 text-sm font-semibold text-[#2d2a26] shadow-sm">
+        <div className="rounded-2xl bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-[#2d2a26] shadow-sm">
           {iceShiftText}
         </div>
       </summary>
 
-      <div className="border-t border-[#e8e4de] bg-white/80 px-4 py-4">
+      <div className="border-t border-[#e8e4de] bg-white/80 px-3 py-3">
         {shop.employees.length > 0 ? (
           <ul className="space-y-2">
             {shop.employees.map((employee) => (
@@ -152,10 +152,10 @@ function ShopRow({
                 key={employee.id}
                 className="grid grid-cols-[minmax(0,1fr)_auto] gap-3"
               >
-                <span className="min-w-0 break-words text-sm font-bold leading-snug text-[#2d2a26]">
+                <span className="min-w-0 break-words text-sm font-semibold leading-snug text-[#2d2a26]">
                   {employee.employeeName}
                 </span>
-                <span className="max-w-[9.5rem] text-right text-xs font-bold leading-snug text-[#2d2a26]/55">
+                <span className="max-w-[9.5rem] text-right text-[0.75rem] font-semibold leading-snug text-[#2d2a26]/55">
                   {employee.shifts.map((shift) => shift.timeLabel).join(", ")}
                 </span>
               </li>
@@ -176,7 +176,7 @@ function ShopRow({
               {shop.absences.map((absence) => (
                 <li
                   key={absence.id}
-                  className="flex items-center justify-between gap-2 rounded-2xl bg-white/80 px-3 py-2 text-xs font-bold text-[#2d2a26]/65"
+                  className="flex items-center justify-between gap-2 rounded-2xl bg-white/80 px-3 py-2 text-[0.75rem] font-semibold text-[#2d2a26]/65"
                 >
                   <span className="min-w-0 truncate">{absence.employeeName}</span>
                   <span
@@ -263,7 +263,7 @@ export default function TodayStaffWidget() {
 
   return (
     <section className="rounded-[1.5rem] border border-[#e7e0d8]/80 bg-white/80 p-4 shadow-sm">
-      <h2 className="text-xl font-black leading-tight text-[#050505]">
+      <h2 className="text-lg font-black leading-tight text-[#050505]">
         Wie werkt vandaag?
       </h2>
 
@@ -313,7 +313,7 @@ function BakeryOfferThumbnail({
         <button
           type="button"
           onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
-          className="border-r border-[#6d746a] text-2xl font-light leading-none text-[#2d2a26]"
+          className="border-r border-[#6d746a] text-xl font-light leading-none text-[#2d2a26]"
           aria-label="Vorige week"
         >
           ‹
@@ -321,12 +321,12 @@ function BakeryOfferThumbnail({
         <button
           type="button"
           onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
-          className="border-r border-[#6d746a] text-2xl font-light leading-none text-[#2d2a26]"
+          className="border-r border-[#6d746a] text-xl font-light leading-none text-[#2d2a26]"
           aria-label="Volgende week"
         >
           ›
         </button>
-        <h3 className="flex items-center px-3 text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/75">
+        <h3 className="flex items-center px-3 text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#2d2a26]/75">
           <span className="min-w-0 truncate">
             Aanbieding · {formatWeekRange(selectedWeek)}
           </span>

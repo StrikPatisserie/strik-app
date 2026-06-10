@@ -23,7 +23,7 @@ function formatWeekText(weekStart: string) {
 }
 
 function dashboardCardClass() {
-  return "group rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 shadow-sm transition hover:shadow-md";
+  return "group rounded-[1.5rem] border border-[#e7e0d8] bg-white p-3 shadow-sm transition hover:shadow-md";
 }
 
 function DashboardStatCard({
@@ -42,21 +42,21 @@ function DashboardStatCard({
   badge?: string | number;
 }>) {
   return (
-    <Link href={href} className={`${dashboardCardClass()} min-h-[10rem]`}>
-      <div className="flex items-center justify-between gap-3">
+    <Link href={href} className={`${dashboardCardClass()} min-h-[9rem]`}>
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8b8278]">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
             {title}
           </p>
-          <p className="mt-3 text-2xl font-black text-[#1a1815]">{value}</p>
-          <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">{subtitle}</p>
+          <p className="mt-2 text-xl font-black text-[#1a1815]">{value}</p>
+          <p className="mt-1 text-xs leading-snug text-[#6b645b]">{subtitle}</p>
         </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-[#f6faf4] text-[#4a6d5a]">
-          <img src={icon} alt="" className="h-6 w-6 object-contain" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-3xl bg-[#f6faf4] text-[#4a6d5a]">
+          <img src={icon} alt="" className="h-5 w-5 object-contain" />
         </div>
       </div>
       {badge ? (
-        <span className="mt-4 inline-flex rounded-full bg-[#ecf4ed] px-3 py-1 text-xs font-semibold text-[#4a6d5a]">
+        <span className="mt-3 inline-flex rounded-full bg-[#ecf4ed] px-2.5 py-1 text-[0.65rem] font-semibold text-[#4a6d5a]">
           {badge}
         </span>
       ) : null}
@@ -69,19 +69,19 @@ function OfferHero({ offer }: Readonly<{ offer: BakeryHomeOffer | null }>) {
 
   if (!offer) {
     return (
-      <article className="rounded-[2rem] border border-[#e7e0d8] bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between gap-4">
+      <article className="rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8b8278]">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
               Weekaanbieding
             </p>
-            <h2 className="mt-3 text-2xl font-black text-[#1a1815]">Aanbieding niet beschikbaar</h2>
-            <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">
+            <h2 className="mt-2 text-xl font-black text-[#1a1815]">Aanbieding niet beschikbaar</h2>
+            <p className="mt-2 text-sm leading-snug text-[#6b645b]">
               De aanbieding wordt geladen zodra de data beschikbaar is.
             </p>
           </div>
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#f6faf4] text-[#4a6d5a]">
-            <img src={strikIcons.bakkerij} alt="Aanbieding" className="h-7 w-7 object-contain" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#f6faf4] text-[#4a6d5a]">
+            <img src={strikIcons.bakkerij} alt="Aanbieding" className="h-6 w-6 object-contain" />
           </div>
         </div>
       </article>
@@ -89,25 +89,25 @@ function OfferHero({ offer }: Readonly<{ offer: BakeryHomeOffer | null }>) {
   }
 
   return (
-    <article className="rounded-[2rem] border border-[#e7e0d8] bg-white p-6 shadow-sm">
+    <article className="rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8b8278]">
+          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
             Weekaanbieding
           </p>
-          <h2 className="mt-3 text-3xl font-black text-[#1a1815]">{offerTitle}</h2>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-[#6b645b]">
-            Bekijk het volledige aanbod voor deze week.
+          <h2 className="mt-2 text-2xl font-black text-[#1a1815]">{offerTitle}</h2>
+          <p className="mt-2 max-w-xl text-sm leading-snug text-[#6b645b]">
+            Bekijk het aanbod voor deze week.
           </p>
         </div>
-        <div className="rounded-[1.5rem] bg-[#f6faf4] p-4 text-center shadow-sm sm:max-w-xs">
+        <div className="rounded-[1.5rem] bg-[#f6faf4] p-3 text-center shadow-sm sm:max-w-xs">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#4a6d5a]">week van</p>
-          <p className="mt-3 text-xl font-black text-[#214456]">{formatWeekText(offer.weekStart)}</p>
+          <p className="mt-2 text-lg font-black text-[#214456]">{formatWeekText(offer.weekStart)}</p>
         </div>
       </div>
       {offer.imageUrl ? (
-        <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-[#e8e4de] bg-[#faf8f5]">
-          <img src={offer.imageUrl} alt={offerTitle} className="h-56 w-full object-cover" />
+        <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-[#e8e4de] bg-[#faf8f5]">
+          <img src={offer.imageUrl} alt={offerTitle} className="h-44 w-full object-cover" />
         </div>
       ) : null}
     </article>

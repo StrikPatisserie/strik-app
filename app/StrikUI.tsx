@@ -54,24 +54,24 @@ const actionCardSizeClasses = {
     arrow: "h-8 w-8 text-base flex-shrink-0",
   },
   regular: {
-    card: "gap-4 rounded-xl p-4",
-    iconWrap: "h-12 w-12",
-    icon: "h-7 w-7",
+    card: "gap-3 rounded-xl p-3",
+    iconWrap: "h-10 w-10",
+    icon: "h-6 w-6",
     label:
-      "mb-1 inline-block text-[0.7rem] font-semibold uppercase tracking-wider text-[#8b8278]",
-    title: "text-base font-bold leading-tight text-[#1a1815]",
-    description: "mt-1 block text-sm leading-relaxed text-[#a39c91]",
-    arrow: "h-10 w-10 text-lg flex-shrink-0",
+      "mb-1 inline-block text-[0.66rem] font-semibold uppercase tracking-wider text-[#8b8278]",
+    title: "text-sm font-bold leading-tight text-[#1a1815]",
+    description: "mt-1 block text-xs leading-snug text-[#a39c91]",
+    arrow: "h-8 w-8 text-base flex-shrink-0",
   },
   large: {
-    card: "gap-4 rounded-xl p-5",
-    iconWrap: "h-14 w-14",
-    icon: "h-8 w-8",
+    card: "gap-3 rounded-xl p-4",
+    iconWrap: "h-12 w-12",
+    icon: "h-6 w-6",
     label:
-      "mb-1.5 inline-block text-[0.7rem] font-semibold uppercase tracking-wider text-[#8b8278]",
-    title: "text-lg font-bold leading-tight text-[#1a1815]",
-    description: "mt-1 block text-sm leading-relaxed text-[#a39c91]",
-    arrow: "h-11 w-11 text-xl flex-shrink-0",
+      "mb-1 inline-block text-[0.66rem] font-semibold uppercase tracking-wider text-[#8b8278]",
+    title: "text-base font-bold leading-tight text-[#1a1815]",
+    description: "mt-1 block text-sm leading-snug text-[#a39c91]",
+    arrow: "h-9 w-9 text-lg flex-shrink-0",
   },
 };
 
@@ -80,20 +80,20 @@ type ActionCardSize = keyof typeof actionCardSizeClasses;
 const squareActionCardSizeClasses = {
   compact: {
     card: "grid-rows-[3rem_1fr] rounded-lg p-3",
-    title: "text-base font-bold",
-    icon: "h-12 w-12",
+    title: "text-sm font-bold",
+    icon: "h-10 w-10",
     badge: "right-2 top-2 h-5 min-w-5 px-1.5 text-xs",
   },
   regular: {
-    card: "grid-rows-[4rem_1fr] rounded-xl p-4",
-    title: "text-lg font-bold",
-    icon: "h-16 w-16",
+    card: "grid-rows-[3.5rem_1fr] rounded-xl p-3",
+    title: "text-base font-bold",
+    icon: "h-12 w-12",
     badge: "right-3 top-3 h-6 min-w-6 px-2 text-sm",
   },
   large: {
-    card: "grid-rows-[5rem_1fr] rounded-xl p-5",
-    title: "text-xl font-bold",
-    icon: "h-20 w-20",
+    card: "grid-rows-[4rem_1fr] rounded-xl p-4",
+    title: "text-lg font-bold",
+    icon: "h-16 w-16",
     badge: "right-4 top-4 h-7 min-w-7 px-2 text-sm",
   },
 };
@@ -108,8 +108,8 @@ export function StrikShell({
   wide?: boolean;
 }>) {
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-4 py-6 pb-28 text-[#1a1815] sm:px-6 lg:px-8">
-      <div className={`mx-auto w-full ${wide ? "max-w-7xl" : "max-w-5xl"}`}>
+    <main className="min-h-screen bg-[#faf8f5] px-4 py-5 pb-24 text-[#1a1815] sm:px-6 lg:px-7">
+      <div className={`mx-auto w-full ${wide ? "max-w-6xl" : "max-w-4xl"}`}>
         <StrikBackButton />
         {children}
       </div>
@@ -133,22 +133,22 @@ export function StrikPageHeader({
   const toneClass = tone ? toneClasses[tone] : toneClasses.neutral;
 
   return (
-    <header className="mb-6 flex flex-col gap-4 rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm sm:p-6">
-      <div className="flex flex-wrap items-center gap-4">
+    <header className="mb-5 flex flex-col gap-4 rounded-[1.5rem] border border-[#e7e0d8] bg-white/90 p-4 shadow-sm sm:p-5">
+      <div className="flex flex-wrap items-center gap-3">
         {icon && (
-          <div className={`flex h-12 w-12 items-center justify-center rounded-3xl ${toneClass}`}>
-            <img src={icon} alt="" className="h-7 w-7 object-contain" />
+          <div className={`flex h-10 w-10 items-center justify-center rounded-3xl ${toneClass}`}>
+            <img src={icon} alt="" className="h-6 w-6 object-contain" />
           </div>
         )}
         <div className="min-w-0">
           {kicker && (
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
               {kicker}
             </p>
           )}
           <StrikPageTitle title={title} />
           {description && (
-            <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">
+            <p className="mt-2 text-sm leading-normal text-[#6b645b]">
               {description}
             </p>
           )}
@@ -168,9 +168,9 @@ export function SectionHeader({
   action?: React.ReactNode;
 }>) {
   return (
-    <div className="flex flex-col gap-3 rounded-3xl border border-[#e8e4de] bg-white/90 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-2xl border border-[#e8e4de] bg-white/90 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h2 className="text-xl font-black text-[#1a1815]">{title}</h2>
+        <h2 className="text-lg font-black text-[#1a1815]">{title}</h2>
         {description && (
           <p className="mt-1 text-sm text-[#6b645b]">{description}</p>
         )}
