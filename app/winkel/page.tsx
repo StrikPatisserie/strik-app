@@ -1,83 +1,54 @@
-import {
-  SectionHeader,
-  StrikActionCard,
-  StrikPageHeader,
-  StrikShell,
-  strikIcons,
-} from "../StrikUI";
-import TodayStaffWidget from "./TodayStaffWidget";
-import WinkelFeaturedCards from "./WinkelFeaturedCards";
+/* eslint-disable @next/next/no-img-element */
+import Link from "next/link";
+import CompactAgendaPanel from "../CompactAgendaPanel";
+import CompactStaffOverview from "../CompactStaffOverview";
+import WeeklyOfferPanel from "../WeeklyOfferPanel";
+import { strikIcons } from "../StrikUI";
 
-const items = [
-  {
-    href: "/nieuws",
-    label: "Nieuws",
-    title: "Laatste berichten",
-    description: "Belangrijk nieuws voor de winkel.",
-    icon: strikIcons.news,
-    tone: "green" as const,
-  },
-  {
-    href: "/strik-agenda",
-    label: "Agenda",
-    title: "Vandaag & deze week",
-    description: "Teamactiviteiten en verjaardagen.",
-    icon: strikIcons.agenda,
-    tone: "blue" as const,
-  },
-  {
-    href: "/winkel/schoonmaak-registratie",
-    label: "Registratie",
-    title: "Schoonmaak",
-    description: "Temperatuur en checklists.",
-    icon: strikIcons.cleaning,
-    tone: "neutral" as const,
-  },
-  {
-    href: "/bruidstaarten",
-    label: "Bruidstaarten",
-    title: "Studio",
-    description: "Bestellingen en afspraken.",
-    icon: strikIcons.bruidstaart,
-    tone: "neutral" as const,
-  },
-  {
-    href: "/info",
-    label: "Info",
-    title: "Documenten",
-    description: "Allergenen en winkelinfo.",
-    icon: strikIcons.info,
-    tone: "neutral" as const,
-  },
+const quickLinks = [
+  { href: "/winkel/haccp", label: "HACCP", icon: strikIcons.cleaning },
+  { href: "/nieuws", label: "Nieuws", icon: strikIcons.news },
+  { href: "/bruidstaarten", label: "Bruidstaarten", icon: strikIcons.bruidstaart },
+  { href: "/info", label: "Documenten", icon: strikIcons.info },
 ];
 
 export default function WinkelPage() {
   return (
-    <StrikShell wide>
-      <StrikPageHeader
-        kicker="Dagstart"
-        title="Vandaag in de winkel"
-        description="Direct zicht op medewerkers, aanbiedingen en belangrijke acties."
-        icon={strikIcons.winkel}
-      />
-
-      <div className="space-y-6">
-        <WinkelFeaturedCards />
-
-        <TodayStaffWidget />
-
-        <div className="space-y-4">
-          <SectionHeader
-            title="Snelle acties"
-            description="Direct naar de belangrijkste winkeltools."
+    <main className="min-h-screen bg-[#faf8f5] px-4 py-5 text-[#050505] sm:px-6 lg:px-10">
+      <div className="mx-auto max-w-6xl space-y-7">
+        <header className="flex flex-wrap items-center gap-4 pb-1">
+          <img
+            src={strikIcons.winkel}
+            alt=""
+            className="h-9 w-9 object-contain"
           />
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {items.map((item) => (
-              <StrikActionCard key={item.href} {...item} />
+          <h1 className="text-3xl font-normal uppercase tracking-[0.32em] text-[#ef5737] sm:text-4xl">
+            Winkel overzicht
+          </h1>
+        </header>
+
+        <div className="grid gap-7 lg:grid-cols-2">
+          <CompactAgendaPanel />
+          <WeeklyOfferPanel />
+        </div>
+
+        <section className="rounded-[1.25rem] border border-[#d9d6d1] bg-white p-3 shadow-sm">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {quickLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center gap-3 rounded-2xl bg-[#f8f6f3] px-3 py-2.5 text-sm font-black text-[#2d2a26] transition hover:bg-[#e8e8e6]"
+              >
+                <img src={item.icon} alt="" className="h-5 w-5 object-contain" />
+                {item.label}
+              </Link>
             ))}
           </div>
-        </div>
+        </section>
+
+        <CompactStaffOverview />
       </div>
-    </StrikShell>
+    </main>
   );
 }

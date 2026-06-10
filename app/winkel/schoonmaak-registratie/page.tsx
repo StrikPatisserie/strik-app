@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
+import { StrikShell } from "../../StrikUI";
 import {
   fetchCleaningItems,
   stripInternalTemperatureRegistrations,
@@ -511,6 +511,23 @@ export default function SchoonmaakRegistratiePage() {
   const extraRowIdRef = useRef(0);
   const [addFeedback, setAddFeedback] = useState("");
   const selectedWinkel = getSelectedWinkel(winkelId);
+  const missingRegistrationCount = form.temperatuurRegistraties.filter(
+    (item) => !getMeasuredTemperature(item).trim()
+  ).length;
+  const problemRegistrationCount = form.temperatuurRegistraties.filter((item) =>
+    isActionRequiredStatus(
+      evaluateTemperature(
+        normalizeTemperatureDeviceType(item.deviceType, item.naam),
+        getMeasuredTemperature(item)
+      ).status
+    )
+  ).length;
+  const summaryStatus =
+    missingRegistrationCount > 0
+      ? `${missingRegistrationCount} ontbreekt`
+      : problemRegistrationCount > 0
+        ? `${problemRegistrationCount} afwijking`
+        : "Alles OK";
 
   function createPayload(nextForm = form): TemperaturePayload {
     return {
@@ -845,48 +862,53 @@ export default function SchoonmaakRegistratiePage() {
 
   return (
     <StrikShell wide>
-      <StrikPageHeader
-        title="Schoonmaak & registratie"
-        description="Digitale registraties voor de winkels."
-        icon={strikIcons.cleaning}
-        tone="blue"
-      />
-
       <div className="space-y-4">
-        <section className="rounded-[1.75rem] border border-[#d6e5d8] bg-[#f6faf8] p-5 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#4a6d5a]/70">
-            Schoonmaak & registratie
-          </p>
-          <h2 className="mt-1 text-2xl font-black text-[#1a1815]">Temperatuurregistratie</h2>
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e7e0d8] pb-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#ef5737]">
+              HACCP
+            </p>
+            <h1 className="mt-1 text-2xl font-black uppercase tracking-[0.12em] text-[#1a1815] sm:text-3xl">
+              Temperatuur registratie
+            </h1>
+          </div>
+          <Link
+            href={`/winkel/schoonmaak-registratie/overzicht?winkel=${winkelId}`}
+            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
+          >
+            Maandoverzicht
+          </Link>
+        </header>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        <section className="rounded-[1.25rem] border border-[#d9d6d1] bg-white p-4 shadow-sm">
+          <div className="grid gap-3 lg:grid-cols-[1fr_14rem_14rem]">
+            <div className="grid gap-2 sm:grid-cols-4">
             {winkelOptions.map((winkel) => (
               <button
                 key={winkel.id}
                 type="button"
                 onClick={() => setWinkelId(winkel.id)}
-                className={`rounded-3xl border px-4 py-3 text-sm font-bold transition active:scale-[0.98] ${
+                className={`rounded-2xl border px-3 py-2 text-sm font-black transition active:scale-[0.98] ${
                   winkelId === winkel.id
-                    ? "border-[#6d9caf] bg-white text-[#214456] shadow-sm"
-                    : "border-[#e8e4de] bg-white/90 text-[#2d2a26]/75 hover:border-[#c3d3bc]"
+                    ? "border-[#ef5737] bg-[#fff0ed] text-[#a0382f] shadow-sm"
+                    : "border-[#e8e4de] bg-[#f8f6f3] text-[#2d2a26]/75 hover:border-[#c3d3bc]"
                 }`}
               >
                 {winkel.label}
               </button>
             ))}
-          </div>
+            </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm font-black text-[#2d2a26]/65">
+            <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
               Dag
               <input
                 type="date"
                 value={datum}
                 onChange={(event) => setDatum(event.target.value)}
-                className="rounded-3xl border border-[#d6e5d8] bg-white px-4 py-3 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                className="rounded-2xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#ef5737]"
               />
             </label>
-            <label className="grid gap-1 text-sm font-black text-[#2d2a26]/65">
+            <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
               Naam
               <input
                 value={form.naam}
@@ -894,32 +916,41 @@ export default function SchoonmaakRegistratiePage() {
                   updateForm({ ...form, naam: event.target.value })
                 }
                 placeholder="Naam medewerker"
-                className="rounded-3xl border border-[#d6e5d8] bg-white px-4 py-3 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                className="rounded-2xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#ef5737]"
               />
             </label>
           </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {[
+              { id: "meetpunten", value: `${form.temperatuurRegistraties.length} meetpunten` },
+              { id: "ontbreekt", value: `${missingRegistrationCount} ontbreekt` },
+              { id: "status", value: summaryStatus },
+            ].map((item) => (
+              <div
+                key={item.id}
+                className="rounded-2xl bg-[#f8f6f3] px-3 py-2 text-sm font-black text-[#2d2a26]"
+              >
+                {item.value}
+              </div>
+            ))}
+          </div>
         </section>
 
-        <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm">
+        <section className="rounded-[1.25rem] border border-[#e7e0d8] bg-white/90 p-4 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h3 className="text-xl font-black text-[#1a1815]">Meetpunten</h3>
-              <p className="mt-1 text-sm font-bold text-[#2d2a26]/60">
+              <h2 className="text-xl font-black text-[#1a1815]">Meetpunten</h2>
+              <p className="mt-1 text-xs font-bold uppercase tracking-[0.1em] text-[#2d2a26]/45">
                 {selectedWinkel.label} · {datum}
               </p>
             </div>
             <div className="grid justify-items-start gap-2 sm:justify-items-end">
               <div className="flex flex-wrap justify-end gap-2">
-                <Link
-                  href={`/winkel/schoonmaak-registratie/overzicht?winkel=${winkelId}`}
-                  className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#214456] shadow-sm ring-1 ring-[#e8e4de] transition hover:bg-[#f7f9f8]"
-                >
-                  Maandoverzicht
-                </Link>
                 <button
                   type="button"
                   onClick={addRegistrationRow}
-                  className="rounded-full bg-[#dbe9ee] px-4 py-2 text-sm font-black text-[#214456] shadow-sm transition hover:bg-[#cfe2e8]"
+                  className="rounded-full bg-[#fff0ed] px-4 py-2 text-sm font-black text-[#a0382f] shadow-sm transition hover:bg-[#f9ded8]"
                 >
                   + Meetpunt
                 </button>
@@ -1081,7 +1112,7 @@ export default function SchoonmaakRegistratiePage() {
             type="button"
             onClick={() => void submitPayload(createPayload())}
             disabled={opslaanBezig}
-            className="mt-4 w-full rounded-full bg-[#4a6d5a] px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-[#3d5849] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55"
+            className="sticky bottom-40 mt-4 w-full rounded-full bg-[#d95749] px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-[#c8493d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 lg:static"
           >
             {opslaanBezig ? "Opslaan..." : "Opslaan"}
           </button>

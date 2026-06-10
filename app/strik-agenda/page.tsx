@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
+import { StrikShell } from "../StrikUI";
 import {
   TeamAgendaEvent,
   TeamAgendaEventType,
@@ -142,43 +142,43 @@ async function fetchTamigoBirthdayEvents() {
 
 function EventCard({ event }: { event: DisplayEvent }) {
   return (
-    <article className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 shadow-sm">
+    <article className="rounded-[1.1rem] border border-[#e7e0d8] bg-white p-3 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="w-16 shrink-0 rounded-2xl bg-[#f8f6f3] px-2 py-3 text-center">
-          <p className="text-xs font-bold uppercase text-[#2d2a26]/45">
+        <div className="w-14 shrink-0 rounded-2xl bg-[#f8f6f3] px-2 py-2 text-center">
+          <p className="text-[0.68rem] font-bold uppercase text-[#2d2a26]/45">
             {event.displayDate.toLocaleDateString("nl-NL", {
               month: "short",
             })}
           </p>
-          <p className="text-2xl font-bold leading-none">
+          <p className="text-xl font-black leading-none">
             {event.displayDate.getDate()}
           </p>
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
+          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-bold ${
+              className={`rounded-full px-2.5 py-1 text-[0.68rem] font-black ${
                 typeClasses[event.type]
               }`}
             >
               {getEventTypeLabel(event.type)}
             </span>
-            <span className="rounded-full bg-[#f8f6f3] px-3 py-1 text-xs font-bold text-[#2d2a26]/55">
+            <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-[0.68rem] font-black text-[#2d2a26]/55">
               {event.source === "tamigo"
                 ? "Team"
                 : getAudienceLabel(event.audience)}
             </span>
           </div>
 
-          <h2 className="text-lg font-bold leading-tight">{event.title}</h2>
-          <p className="mt-1 text-sm font-semibold capitalize text-[#2d2a26]/55">
+          <h2 className="text-base font-black leading-tight">{event.title}</h2>
+          <p className="mt-1 text-xs font-bold capitalize text-[#2d2a26]/55">
             {formatDay(event.displayDate)}
             {event.recurringYearly ? " · jaarlijks" : ""}
           </p>
 
           {event.description && (
-            <p className="mt-3 rounded-2xl bg-[#f8f6f3] p-3 text-sm leading-relaxed text-[#6b645b]">
+            <p className="mt-2 rounded-2xl bg-[#f8f6f3] p-2.5 text-sm leading-relaxed text-[#6b645b]">
               {event.description}
             </p>
           )}
@@ -293,24 +293,26 @@ export default function StrikAgendaPage() {
 
   return (
     <StrikShell>
-      <StrikPageHeader
-        title="Strik agenda"
-        description="Vandaag, deze week en komende maand in één overzicht."
-        icon={strikIcons.strikAgenda}
-        tone="honey"
-      />
+      <header className="mb-4 border-b border-[#e7e0d8] pb-3">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#ef5737]">
+          Winkel
+        </p>
+        <h1 className="mt-1 text-2xl font-black uppercase tracking-[0.12em] text-[#1a1815] sm:text-3xl">
+          Agenda
+        </h1>
+      </header>
 
-      <div className="space-y-5">
-        <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
+      <div className="space-y-4">
+        <section className="rounded-[1.25rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {viewOptions.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => setViewMode(option.value)}
-                className={`rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                className={`rounded-2xl px-3 py-2 text-sm font-black transition ${
                   viewMode === option.value
-                    ? "bg-[#c3d3bc] text-[#2d2a26] shadow-sm"
+                    ? "bg-[#ef5737] text-white shadow-sm"
                     : "bg-[#f8f6f3] text-[#2d2a26]/70 hover:bg-[#ecf4ed]"
                 }`}
               >
@@ -325,20 +327,13 @@ export default function StrikAgendaPage() {
         </section>
 
         {viewMode === "today" && (
-          <section className="space-y-4">
-            <div className="rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-[#1a1815]">Vandaag</h2>
-              <p className="mt-2 text-sm text-[#6b645b]">
-                Teamactiviteiten en verjaardagen die vandaag spelen.
-              </p>
-            </div>
-
+          <section className="space-y-3">
             {todayEvents.length === 0 ? (
-              <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 text-sm text-[#6b645b] shadow-sm">
+              <div className="rounded-[1.1rem] border border-[#e7e0d8] bg-white p-4 text-sm font-bold text-[#6b645b] shadow-sm">
                 Geen activiteiten voor vandaag.
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid gap-3">
                 {todayEvents.map((event) => (
                   <EventCard
                     key={`${event.id}-${formatDateKey(event.displayDate)}`}
@@ -351,20 +346,13 @@ export default function StrikAgendaPage() {
         )}
 
         {viewMode === "week" && (
-          <section className="space-y-4">
-            <div className="rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-[#1a1815]">Deze week</h2>
-              <p className="mt-2 text-sm text-[#6b645b]">
-                De komende zeven dagen in één compact overzicht.
-              </p>
-            </div>
-
+          <section className="space-y-3">
             {weekEvents.length === 0 ? (
-              <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 text-sm text-[#6b645b] shadow-sm">
+              <div className="rounded-[1.1rem] border border-[#e7e0d8] bg-white p-4 text-sm font-bold text-[#6b645b] shadow-sm">
                 Geen activiteiten deze week.
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid gap-3">
                 {weekEvents.map((event) => (
                   <EventCard
                     key={`${event.id}-${formatDateKey(event.displayDate)}`}
@@ -377,20 +365,13 @@ export default function StrikAgendaPage() {
         )}
 
         {viewMode === "month" && (
-          <section className="space-y-4">
-            <div className="rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-semibold text-[#1a1815]">Komende maand</h2>
-              <p className="mt-2 text-sm text-[#6b645b]">
-                Een overzicht van de belangrijkste agenda-items in de komende 30 dagen.
-              </p>
-            </div>
-
+          <section className="space-y-3">
             {monthEvents.length === 0 ? (
-              <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 text-sm text-[#6b645b] shadow-sm">
+              <div className="rounded-[1.1rem] border border-[#e7e0d8] bg-white p-4 text-sm font-bold text-[#6b645b] shadow-sm">
                 Geen activiteiten in de komende maand.
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid gap-3">
                 {monthEvents.map((event) => (
                   <EventCard
                     key={`${event.id}-${formatDateKey(event.displayDate)}`}
@@ -403,13 +384,13 @@ export default function StrikAgendaPage() {
         )}
 
         {viewMode === "all" && (
-          <section className="space-y-6">
+          <section className="space-y-4">
             {Object.entries(groupedEvents).map(([period, items]) => (
               <div key={period} className="space-y-3">
-                <div className="rounded-[1.75rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
-                  <h2 className="text-lg font-semibold text-[#1a1815]">{period}</h2>
+                <div className="rounded-[1.1rem] border border-[#e7e0d8] bg-white p-3 shadow-sm">
+                  <h2 className="text-base font-black text-[#1a1815]">{period}</h2>
                 </div>
-                <div className="grid gap-4">
+                <div className="grid gap-3">
                   {items.map((event) => (
                     <EventCard
                       key={`${event.id}-${formatDateKey(event.displayDate)}`}

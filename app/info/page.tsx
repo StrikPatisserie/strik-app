@@ -1,5 +1,6 @@
-import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
+import { StrikShell } from "../StrikUI";
 import { fetchWordPressPdfFilesByLabel } from "../wordpressMedia";
+import DocumentLibrary from "./DocumentLibrary";
 
 export const dynamic = "force-dynamic";
 
@@ -8,40 +9,16 @@ export default async function InfoPage() {
 
   return (
     <StrikShell>
-      <StrikPageHeader
-        title="Belangrijke winkelinfo"
-        description="Algemene documenten voor de winkel, zoals prijs- en bedrijfsinformatie."
-        icon={strikIcons.info}
-      />
+      <header className="mb-4 border-b border-[#e7e0d8] pb-3">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#ef5737]">
+          Winkel
+        </p>
+        <h1 className="mt-1 text-2xl font-black uppercase tracking-[0.12em] text-[#1a1815] sm:text-3xl">
+          Documenten
+        </h1>
+      </header>
 
-      <div className="space-y-3">
-        {files.length === 0 ? (
-          <div className="rounded-lg border border-[#e8e4de] bg-white p-5 text-sm text-[#a39c91]">
-            Geen winkeldocumenten gevonden. Zet in WordPress bij het bestand in
-            de titel, het bijschrift of de beschrijving &quot;winkel&quot;.
-          </div>
-        ) : (
-          files.map((file) => (
-            <a
-              key={file.id}
-              href={file.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block rounded-xl border border-[#e8e4de] bg-white p-4 transition hover:shadow-md active:scale-[0.97]"
-            >
-              <p className="text-xs font-medium text-[#a39c91]">
-                {new Date(file.date).toLocaleDateString("nl-NL")}
-              </p>
-
-              <h2 className="mt-1.5 text-base font-semibold text-[#1a1815]">{file.title}</h2>
-
-              <div className="mt-3 inline-block rounded-lg bg-[#ecf4ed] px-3 py-1.5 text-xs font-medium text-[#4a6d5a]">
-                PDF openen
-              </div>
-            </a>
-          ))
-        )}
-      </div>
+      <DocumentLibrary files={files} />
     </StrikShell>
   );
 }

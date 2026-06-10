@@ -1,4 +1,4 @@
-import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
+import { StrikShell } from "../StrikUI";
 import NieuwsList from "./NieuwsList";
 import {
   NEWS_API_URL,
@@ -29,12 +29,14 @@ export default async function NieuwsPage() {
 
   return (
     <StrikShell wide>
-      <StrikPageHeader
-        title="Nieuws"
-        description="Belangrijke informatie voor intern gebruik."
-        icon={strikIcons.news}
-        tone="green"
-      />
+      <header className="mb-4 border-b border-[#e7e0d8] pb-3">
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#ef5737]">
+          Winkel
+        </p>
+        <h1 className="mt-1 text-2xl font-black uppercase tracking-[0.12em] text-[#1a1815] sm:text-3xl">
+          Nieuws
+        </h1>
+      </header>
 
       <NieuwsList
         important={important}

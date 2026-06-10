@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
+import { StrikShell } from "../../../StrikUI";
 import {
   fetchCleaningItems,
   stripInternalTemperatureRegistrations,
@@ -350,6 +350,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
   >("all");
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [includeMissingRows, setIncludeMissingRows] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -633,43 +634,49 @@ export default function TemperatuurRegistratieOverzichtPage() {
 
   return (
     <StrikShell wide>
-      <StrikPageHeader
-        title="Temperatuurregistratie"
-        description="Maandoverzicht per winkel voor controle en export."
-        icon={strikIcons.cleaning}
-        tone="blue"
-      />
-
       <div className="space-y-4">
-        <section className="rounded-[1.75rem] border border-[#c8dbe2] bg-[#dbe9ee] p-5 shadow-sm">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e7e0d8] pb-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#ef5737]">
+              HACCP overzicht
+            </p>
+            <h1 className="mt-1 text-2xl font-black uppercase tracking-[0.12em] text-[#1a1815] sm:text-3xl">
+              Temperatuurregistratie
+            </h1>
+            <p className="mt-1 text-sm font-bold text-[#2d2a26]/55">
+              {locationLabel} · {periodLabel}
+            </p>
+          </div>
+          <Link
+            href="/winkel/schoonmaak-registratie"
+            className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
+          >
+            Registratie invullen
+          </Link>
+        </header>
+
+        <section className="rounded-[1.25rem] border border-[#d9d6d1] bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/55">
-                HACCP overzicht
-              </p>
-              <h2 className="mt-1 text-2xl font-black">{periodLabel}</h2>
+              <h2 className="text-lg font-black text-[#1a1815]">
+                Export en controle
+              </h2>
               <p className="mt-1 text-sm font-bold text-[#2d2a26]/55">
-                {locationLabel}
+                {rows.length} regels in de huidige selectie.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link
-                href="/winkel/schoonmaak-registratie"
-                className="rounded-full bg-white px-4 py-2.5 text-sm font-black shadow-sm"
-              >
-                Registratie invullen
-              </Link>
               <button
                 type="button"
                 onClick={downloadPdf}
-                className="rounded-full bg-white px-4 py-2.5 text-sm font-black shadow-sm"
+                className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black shadow-sm"
               >
                 Download PDF
               </button>
               <button
                 type="button"
                 onClick={downloadCsv}
-                className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+                className="rounded-full bg-[#d95749] px-4 py-2.5 text-sm font-black text-white shadow-sm"
               >
                 Download CSV/Excel
               </button>
@@ -677,8 +684,23 @@ export default function TemperatuurRegistratieOverzichtPage() {
           </div>
         </section>
 
-        <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[10rem_10rem_7rem_1fr_11rem]">
+        <section className="rounded-[1.25rem] border border-[#e7e0d8] bg-white/90 p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3 lg:hidden">
+            <p className="text-sm font-black text-[#1a1815]">Filters</p>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((current) => !current)}
+              className="rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black"
+            >
+              {filtersOpen ? "Sluit filters" : "Toon filters"}
+            </button>
+          </div>
+
+          <div
+            className={`mt-3 gap-3 lg:mt-0 lg:grid lg:grid-cols-[9rem_9rem_6rem_1fr_10rem] ${
+              filtersOpen ? "grid" : "hidden"
+            }`}
+          >
             <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
               Winkel
               <select
@@ -759,25 +781,25 @@ export default function TemperatuurRegistratieOverzichtPage() {
             </label>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => updateMonth(-1)}
-                className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black shadow-sm"
+                className="rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black shadow-sm"
               >
                 Vorige maand
               </button>
               <button
                 type="button"
                 onClick={() => updateMonth(1)}
-                className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black shadow-sm"
+                className="rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black shadow-sm"
               >
                 Volgende maand
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              <label className="flex items-center gap-2 rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black">
+              <label className="flex items-center gap-2 rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black">
                 <input
                   type="checkbox"
                   checked={onlyProblems}
@@ -786,7 +808,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
                 />
                 Alleen afwijkingen
               </label>
-              <label className="flex items-center gap-2 rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black">
+              <label className="flex items-center gap-2 rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black">
                 <input
                   type="checkbox"
                   checked={includeMissingRows}
@@ -809,38 +831,38 @@ export default function TemperatuurRegistratieOverzichtPage() {
 
         <section className="overflow-hidden rounded-[1.75rem] border border-[#e7e0d8] bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-[72rem] w-full border-collapse text-left text-sm">
+            <table className="min-w-[72rem] w-full border-collapse text-left text-xs">
               <thead className="bg-[#f8f6f3] text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
                 <tr>
-                  <th className="px-3 py-3">Datum</th>
-                  <th className="px-3 py-3">Tijd</th>
-                  <th className="px-3 py-3">Winkel</th>
-                  <th className="px-3 py-3">Apparaatnaam</th>
-                  <th className="px-3 py-3">Type</th>
-                  <th className="px-3 py-3">Gemeten temperatuur</th>
-                  <th className="px-3 py-3">Akkoord / afwijking</th>
-                  <th className="px-3 py-3">Actie bij afwijking</th>
-                  <th className="px-3 py-3">Ingevuld door</th>
-                  <th className="px-3 py-3">Opmerking</th>
+                  <th className="px-3 py-2">Datum</th>
+                  <th className="px-3 py-2">Tijd</th>
+                  <th className="px-3 py-2">Winkel</th>
+                  <th className="px-3 py-2">Apparaatnaam</th>
+                  <th className="px-3 py-2">Type</th>
+                  <th className="px-3 py-2">Gemeten temperatuur</th>
+                  <th className="px-3 py-2">Akkoord / afwijking</th>
+                  <th className="px-3 py-2">Actie bij afwijking</th>
+                  <th className="px-3 py-2">Ingevuld door</th>
+                  <th className="px-3 py-2">Opmerking</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length ? (
                   rows.map((row) => (
                     <tr key={row.key} className="border-t border-[#eee7de]">
-                      <td className="px-3 py-3 font-bold">
+                      <td className="px-3 py-2 font-bold">
                         {formatDutchDate(row.date)}
                       </td>
-                      <td className="px-3 py-3">{row.time}</td>
-                      <td className="px-3 py-3">{row.location}</td>
-                      <td className="px-3 py-3 font-bold">{row.deviceName}</td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-2">{row.time}</td>
+                      <td className="px-3 py-2">{row.location}</td>
+                      <td className="px-3 py-2 font-bold">{row.deviceName}</td>
+                      <td className="px-3 py-2">
                         {getDeviceTypeLabel(row.deviceType)}
                       </td>
-                      <td className="px-3 py-3 font-black">
+                      <td className="px-3 py-2 font-black">
                         {row.temperature || "-"}
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-2">
                         <span
                           className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-black ${statusClass(
                             row.status
@@ -849,11 +871,11 @@ export default function TemperatuurRegistratieOverzichtPage() {
                           {row.statusLabel}
                         </span>
                       </td>
-                      <td className="max-w-[16rem] px-3 py-3 text-[#2d2a26]/70">
+                      <td className="max-w-[16rem] px-3 py-2 text-[#2d2a26]/70">
                         {row.actionTaken || "-"}
                       </td>
-                      <td className="px-3 py-3">{row.enteredBy || "-"}</td>
-                      <td className="max-w-[16rem] px-3 py-3 text-[#2d2a26]/70">
+                      <td className="px-3 py-2">{row.enteredBy || "-"}</td>
+                      <td className="max-w-[16rem] px-3 py-2 text-[#2d2a26]/70">
                         {row.note || "-"}
                       </td>
                     </tr>

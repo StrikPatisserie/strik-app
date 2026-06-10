@@ -53,14 +53,21 @@ function Card({
   isNew?: boolean;
   featured?: boolean;
 }) {
+  const cleanContent = post.content.trim();
+  const excerptLength = featured ? 280 : 120;
+  const hasLongContent = cleanContent.length > excerptLength;
+  const excerpt = hasLongContent
+    ? `${cleanContent.slice(0, excerptLength).trim()}...`
+    : cleanContent;
+
   return (
     <article
-      className={`relative overflow-hidden rounded-[1.75rem] border ${
-        important ? "border-[#fee2e2] bg-[#fef2f2]" : "border-[#e8e4de] bg-white"
-      } ${featured ? "lg:col-span-2" : ""}`}
+      className={`relative overflow-hidden rounded-[1.1rem] border shadow-sm ${
+        important ? "border-[#efb4aa] bg-[#fff0ed]" : "border-[#e8e4de] bg-white"
+      } ${featured ? "" : "sm:grid sm:grid-cols-[7.5rem_minmax(0,1fr)]"}`}
     >
       {isNew && (
-        <span className="absolute right-4 top-4 z-10 flex h-7 min-w-[2rem] items-center justify-center rounded-full bg-[#ef4444] px-2 text-xs font-semibold text-white">
+        <span className="absolute right-3 top-3 z-10 flex h-6 min-w-[2rem] items-center justify-center rounded-full bg-[#ef5737] px-2 text-xs font-black text-white">
           Nieuw
         </span>
       )}
@@ -69,20 +76,32 @@ function Card({
         <img
           src={post.image}
           alt={post.title}
-          className={`w-full object-cover ${featured ? "h-64" : "h-44"}`}
+          className={`w-full object-cover ${
+            featured ? "h-52" : "h-32 sm:h-full"
+          }`}
         />
       )}
 
-      <div className="p-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
+      <div className="p-4">
+        <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
           {new Date(post.date).toLocaleDateString("nl-NL")}
         </p>
-        <h2 className={`mt-3 font-semibold text-[#1a1815] ${featured ? "text-2xl" : "text-base"}`}>
+        <h2 className={`mt-2 font-black leading-tight text-[#1a1815] ${featured ? "text-2xl" : "text-base"}`}>
           {stripImportantTitle(post.title)}
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-[#6b645b]">
-          {post.content}
+        <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">
+          {excerpt}
         </p>
+        {hasLongContent && (
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs font-black uppercase tracking-[0.1em] text-[#ef5737]">
+              Lees meer
+            </summary>
+            <p className="mt-2 whitespace-pre-wrap rounded-2xl bg-white/70 p-3 text-sm leading-relaxed text-[#6b645b]">
+              {cleanContent}
+            </p>
+          </details>
+        )}
       </div>
     </article>
   );
@@ -129,7 +148,7 @@ export default function NieuwsList({
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)]">
       {featured && (
         <section>
           <Card
@@ -142,7 +161,7 @@ export default function NieuwsList({
         </section>
       )}
 
-      <section className="grid gap-4 md:grid-cols-2">
+      <section className="grid gap-3">
         {remainingNews.map((post) => (
           <Card
             key={post.id}
