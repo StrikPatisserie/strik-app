@@ -107,8 +107,10 @@ function LoadingRows() {
 
 function ShopRow({
   shop,
+  openByDefault,
 }: Readonly<{
   shop: TodayStaffShop;
+  openByDefault: boolean;
 }>) {
   const accent = getShopAccent(shop.shop);
   const iceEmployees = shop.iceEmployees || [];
@@ -124,66 +126,75 @@ function ShopRow({
     : "geen ijsdienst vandaag";
 
   return (
-    <article className={`rounded-2xl border px-3 py-3 ${accent.card}`}>
-      <h3 className={`text-base font-black leading-tight ${accent.name}`}>
-        {shop.shop}
-      </h3>
-
-      {shop.employees.length > 0 ? (
-        <ul className="mt-2 space-y-1.5">
-          {shop.employees.map((employee) => (
-            <li
-              key={employee.id}
-              className="grid grid-cols-[minmax(0,1fr)_auto] gap-3"
-            >
-              <span className="min-w-0 break-words text-sm font-bold leading-snug text-[#2d2a26]">
-                {employee.employeeName}
-              </span>
-              <span className="max-w-[9.5rem] text-right text-xs font-bold leading-snug text-[#2d2a26]/55">
-                {employee.shifts.map((shift) => shift.timeLabel).join(", ")}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-1.5 text-sm font-semibold text-[#2d2a26]/50">
-          Geen diensten vandaag
-        </p>
-      )}
-
-      {shop.iceEmployees && (
-        <p className="mt-2 rounded-xl bg-white/50 px-2.5 py-2 text-xs font-semibold italic leading-snug text-[#2d2a26]/60">
-          IJs: {iceShiftText}
-        </p>
-      )}
-
-      {shop.absences.length > 0 && (
-        <div className="mt-2 rounded-xl bg-white/55 px-2.5 py-2">
-          <p className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
-            Afwezig
+    <details
+      open={openByDefault}
+      className={`group overflow-hidden rounded-[1.75rem] border ${accent.card} transition hover:shadow-lg`}
+    >
+      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-4 py-4">
+        <div>
+          <h3 className={`text-base font-black leading-tight ${accent.name}`}>
+            {shop.shop}
+          </h3>
+          <p className="mt-1 text-sm text-[#2d2a26]/65">
+            {shop.employees.length} medewerker(s) vandaag
           </p>
-          <ul className="mt-1 space-y-1">
-            {shop.absences.map((absence) => (
+        </div>
+        <div className="rounded-2xl bg-white/80 px-3 py-2 text-sm font-semibold text-[#2d2a26] shadow-sm">
+          {iceShiftText}
+        </div>
+      </summary>
+
+      <div className="border-t border-[#e8e4de] bg-white/80 px-4 py-4">
+        {shop.employees.length > 0 ? (
+          <ul className="space-y-2">
+            {shop.employees.map((employee) => (
               <li
-                key={absence.id}
-                className="flex items-center justify-between gap-2 text-xs font-bold text-[#2d2a26]/65"
+                key={employee.id}
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-3"
               >
-                <span className="min-w-0 truncate">{absence.employeeName}</span>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] uppercase tracking-[0.06em] ${
-                    absence.type === "sick"
-                      ? "bg-[#f8dfd8] text-[#9f382f]"
-                      : "bg-[#e8f0f2] text-[#4e6c74]"
-                  }`}
-                >
-                  {absence.label}
+                <span className="min-w-0 break-words text-sm font-bold leading-snug text-[#2d2a26]">
+                  {employee.employeeName}
+                </span>
+                <span className="max-w-[9.5rem] text-right text-xs font-bold leading-snug text-[#2d2a26]/55">
+                  {employee.shifts.map((shift) => shift.timeLabel).join(", ")}
                 </span>
               </li>
             ))}
           </ul>
-        </div>
-      )}
-    </article>
+        ) : (
+          <p className="text-sm font-semibold text-[#2d2a26]/50">
+            Geen diensten vandaag
+          </p>
+        )}
+
+        {shop.absences.length > 0 && (
+          <div className="mt-4 rounded-2xl bg-[#f8f6f3] p-3">
+            <p className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+              Afwezig
+            </p>
+            <ul className="mt-2 space-y-2">
+              {shop.absences.map((absence) => (
+                <li
+                  key={absence.id}
+                  className="flex items-center justify-between gap-2 rounded-2xl bg-white/80 px-3 py-2 text-xs font-bold text-[#2d2a26]/65"
+                >
+                  <span className="min-w-0 truncate">{absence.employeeName}</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[0.62rem] uppercase tracking-[0.06em] ${
+                      absence.type === "sick"
+                        ? "bg-[#f8dfd8] text-[#9f382f]"
+                        : "bg-[#e8f0f2] text-[#4e6c74]"
+                    }`}
+                  >
+                    {absence.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -192,6 +203,18 @@ export default function TodayStaffWidget() {
   const [schedule, setSchedule] = useState<TodayStaffSchedule | null>(null);
   const [bakeryOffers, setBakeryOffers] = useState<BakeryHomeOffer[]>([]);
   const [selectedOfferWeek, setSelectedOfferWeek] = useState(weekStartForDate);
+  const [wideView, setWideView] = useState(false);
+
+  useEffect(() => {
+    const updateWideView = () => setWideView(window.innerWidth >= 1024);
+
+    updateWideView();
+    window.addEventListener("resize", updateWideView);
+
+    return () => {
+      window.removeEventListener("resize", updateWideView);
+    };
+  }, []);
 
   useEffect(() => {
     let ignoreResult = false;
@@ -256,7 +279,7 @@ export default function TodayStaffWidget() {
         {state === "ready" && schedule && (
           <div className="space-y-2">
             {schedule.shops.map((shop) => (
-              <ShopRow key={shop.shop} shop={shop} />
+              <ShopRow key={shop.shop} shop={shop} openByDefault={wideView} />
             ))}
           </div>
         )}

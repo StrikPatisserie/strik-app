@@ -6,7 +6,7 @@ const sections = [
   {
     href: "/winkel",
     title: "Winkel",
-    subtitle: "Nieuws, agenda en info",
+    subtitle: "Dagstart en snel overzicht",
     icon: strikIcons.winkel,
   },
   {
@@ -24,73 +24,55 @@ const sections = [
   {
     href: "/management",
     title: "Management",
-    subtitle: "Overzicht en beheer",
+    subtitle: "Overzicht en acties",
     icon: strikIcons.management,
-    locked: true,
   },
 ];
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-4 py-12 text-[#1a1815]">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md flex-col justify-center pb-20">
-        {/* HEADER */}
-        <header className="mb-16 text-center">
-          <img
-            src="/strik-logo.png"
-            alt="Strik"
-            className="mx-auto h-16 w-auto object-contain"
-          />
-          <h1 className="mt-8 text-4xl font-extrabold tracking-tight">
-            Team App
-          </h1>
-          <p className="mt-2 text-sm font-medium text-[#8b8278]">
-            Strik Patisserie
-          </p>
-        </header>
+    <main className="min-h-screen bg-[#faf8f5] px-4 py-6 text-[#1a1815] sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <section className="rounded-[2rem] border border-[#e7e0d8] bg-white p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
+                Interne startpagina
+              </p>
+              <h1 className="mt-3 text-3xl font-black tracking-tight text-[#1a1815] sm:text-4xl">
+                Strik Team App
+              </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#6b645b]">
+                Een moderne werkplek voor winkel, ijs, bakkerij en management.
+                Vind snel nieuws, agenda's, registraties en dagelijks overzicht.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 rounded-3xl bg-[#f6faf4] px-4 py-3 text-sm font-semibold text-[#4a6d5a] shadow-sm">
+              <img src="/strik-logo.png" alt="Strik" className="h-10 w-10 rounded-2xl object-contain" />
+              <span>Warm, helder en professioneel werken.</span>
+            </div>
+          </div>
+        </section>
 
-        {/* NAVIGATION GRID */}
-        <nav className="space-y-3">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {sections.map((section) => (
             <Link
               key={section.href}
               href={section.href}
-              className={`group block rounded-xl border border-[#e8e4de] bg-white p-4 transition-all hover:border-[#d9d2c9] hover:shadow-md active:scale-[0.98] ${
-                section.locked ? "pointer-events-none opacity-50" : ""
-              }`}
+              className="group overflow-hidden rounded-[1.75rem] border border-[#e8e4de] bg-white p-5 transition hover:shadow-md"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#ecf4ed]">
-                      <img
-                        src={section.icon}
-                        alt=""
-                        className="h-6 w-6 object-contain"
-                      />
-                    </div>
-                    <div>
-                      <h2 className="font-semibold text-[#1a1815]">
-                        {section.title}
-                      </h2>
-                      <p className="text-sm text-[#a39c91]">
-                        {section.subtitle}
-                      </p>
-                    </div>
-                  </div>
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-[#ecf4ed]">
+                  <img src={section.icon} alt="" className="h-6 w-6 object-contain" />
                 </div>
-                {!section.locked && (
-                  <div className="ml-2 text-[#d9d2c9] transition-transform group-hover:translate-x-1">
-                    →
-                  </div>
-                )}
-                {section.locked && (
-                  <div className="ml-2 text-[#d9d2c9]">🔒</div>
-                )}
+                <div>
+                  <h2 className="text-lg font-bold text-[#1a1815]">{section.title}</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-[#6b645b]">{section.subtitle}</p>
+                </div>
               </div>
             </Link>
           ))}
-        </nav>
+        </section>
       </div>
     </main>
   );

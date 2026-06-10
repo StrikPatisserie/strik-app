@@ -46,20 +46,22 @@ function Card({
   post,
   important = false,
   isNew = false,
+  featured = false,
 }: {
   post: NewsPost;
   important?: boolean;
   isNew?: boolean;
+  featured?: boolean;
 }) {
   return (
     <article
-      className={`relative w-full max-w-sm overflow-hidden rounded-xl border ${
+      className={`relative overflow-hidden rounded-[1.75rem] border ${
         important ? "border-[#fee2e2] bg-[#fef2f2]" : "border-[#e8e4de] bg-white"
-      }`}
+      } ${featured ? "lg:col-span-2" : ""}`}
     >
       {isNew && (
-        <span className="absolute right-3 top-3 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-xs font-semibold text-white">
-          New
+        <span className="absolute right-4 top-4 z-10 flex h-7 min-w-[2rem] items-center justify-center rounded-full bg-[#ef4444] px-2 text-xs font-semibold text-white">
+          Nieuw
         </span>
       )}
 
@@ -67,20 +69,18 @@ function Card({
         <img
           src={post.image}
           alt={post.title}
-          className="h-40 w-full object-cover"
+          className={`w-full object-cover ${featured ? "h-64" : "h-44"}`}
         />
       )}
 
-      <div className="p-4">
-        <p className="text-xs font-medium text-[#a39c91]">
+      <div className="p-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
           {new Date(post.date).toLocaleDateString("nl-NL")}
         </p>
-
-        <h2 className="mt-2 text-base font-semibold leading-tight text-[#1a1815]">
+        <h2 className={`mt-3 font-semibold text-[#1a1815] ${featured ? "text-2xl" : "text-base"}`}>
           {stripImportantTitle(post.title)}
         </h2>
-
-        <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">
+        <p className="mt-3 text-sm leading-relaxed text-[#6b645b]">
           {post.content}
         </p>
       </div>
@@ -94,11 +94,13 @@ export default function NieuwsList({
   latestKey,
   latestDate,
 }: NieuwsListProps) {
-  const [readState, setReadState] = useState<ReadState>({
-    key: "",
-    date: "",
-    hydrated: false,
-  });
+  const [readState, setReadState] = useState<ReadState>(
+    {
+      key: "",
+      date: "",
+      hydrated: false,
+    }
+  );
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -120,36 +122,35 @@ export default function NieuwsList({
     return () => window.clearTimeout(timeoutId);
   }, [latestDate, latestKey]);
 
-  return (
-    <>
-      {important.length > 0 && (
-        <section className="mb-8">
-          <p className="mb-3 text-sm font-semibold text-red-500">Belangrijk</p>
+  const featured = important.length > 0 ? important[0] : normal[0];
+  const remainingNews = [
+    ...important.slice(featured && important[0] === featured ? 1 : 0),
+    ...normal.filter((post) => post.id !== featured?.id),
+  ];
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {important.map((post) => (
-              <Card
-                key={post.id}
-                post={post}
-                important
-                isNew={isNewPost(post, readState, latestKey)}
-              />
-            ))}
-          </div>
+  return (
+    <div className="space-y-8">
+      {featured && (
+        <section>
+          <Card
+            key={featured.id}
+            post={featured}
+            featured
+            important={important.length > 0}
+            isNew={isNewPost(featured, readState, latestKey)}
+          />
         </section>
       )}
 
-      <section>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {normal.map((post) => (
-            <Card
-              key={post.id}
-              post={post}
-              isNew={isNewPost(post, readState, latestKey)}
-            />
-          ))}
-        </div>
+      <section className="grid gap-4 md:grid-cols-2">
+        {remainingNews.map((post) => (
+          <Card
+            key={post.id}
+            post={post}
+            isNew={isNewPost(post, readState, latestKey)}
+          />
+        ))}
       </section>
-    </>
+    </div>
   );
 }

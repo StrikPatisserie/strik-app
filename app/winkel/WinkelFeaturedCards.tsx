@@ -1,10 +1,9 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import NotificationToggle from "../NotificationToggle";
-import { strikIcons } from "../StrikUI";
+import { fetchRecepturenData } from "../bakkerij/recepturen/recepturenApi";
+import type { BakeryHomeOffer } from "../bakkerij/recepturen/types";
 import {
   NEWS_API_URL,
   NEWS_READ_EVENT,
@@ -13,113 +12,184 @@ import {
   getLatestNewsPost,
   getNewsPostKey,
 } from "../nieuws/newsState";
+import { strikIcons } from "../StrikUI";
 
-const agendaItem = {
-  href: "/strik-agenda",
-  title: "Strik agenda",
-  icon: strikIcons.strikAgenda,
-};
+function formatWeekText(weekStart: string) {
+  const date = new Date(weekStart);
+  return date.toLocaleDateString("nl-NL", {
+    day: "numeric",
+    month: "long",
+  });
+}
 
-function NewsFeaturedCard({ showBadge }: Readonly<{ showBadge: boolean }>) {
+function dashboardCardClass() {
+  return "group rounded-[1.5rem] border border-[#e7e0d8] bg-white p-4 shadow-sm transition hover:shadow-md";
+}
+
+function DashboardStatCard({
+  href,
+  title,
+  value,
+  subtitle,
+  icon,
+  badge,
+}: Readonly<{
+  href: string;
+  title: string;
+  value: string;
+  subtitle: string;
+  icon: string;
+  badge?: string | number;
+}>) {
   return (
-    <article className="relative flex h-32 flex-col rounded-xl border border-[#e8e4de] bg-white p-4 text-center">
-      {showBadge && (
-        <span className="absolute right-3 top-3 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-xs font-semibold text-white">
-          New
+    <Link href={href} className={`${dashboardCardClass()} min-h-[10rem]`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8b8278]">
+            {title}
+          </p>
+          <p className="mt-3 text-2xl font-black text-[#1a1815]">{value}</p>
+          <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">{subtitle}</p>
+        </div>
+        <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-[#f6faf4] text-[#4a6d5a]">
+          <img src={icon} alt="" className="h-6 w-6 object-contain" />
+        </div>
+      </div>
+      {badge ? (
+        <span className="mt-4 inline-flex rounded-full bg-[#ecf4ed] px-3 py-1 text-xs font-semibold text-[#4a6d5a]">
+          {badge}
         </span>
-      )}
-
-      <Link
-        href="/nieuws"
-        className="group flex min-h-0 flex-1 flex-col items-center justify-between"
-        aria-label="Nieuws openen"
-      >
-        <span className="font-semibold text-[#1a1815]">
-          Nieuws
-        </span>
-        <span className="flex min-h-0 flex-1 items-center justify-center">
-          <img
-            src={strikIcons.news}
-            alt=""
-            className="h-14 w-14 object-contain transition group-hover:scale-110"
-          />
-        </span>
-      </Link>
-
-      <NotificationToggle variant="inline" />
-    </article>
+      ) : null}
+    </Link>
   );
 }
 
-function AgendaFeaturedCard() {
+function OfferHero({ offer }: Readonly<{ offer: BakeryHomeOffer | null }>) {
+  const offerTitle = offer?.label || "Aanbieding van de week";
+
+  if (!offer) {
+    return (
+      <article className="rounded-[2rem] border border-[#e7e0d8] bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8b8278]">
+              Weekaanbieding
+            </p>
+            <h2 className="mt-3 text-2xl font-black text-[#1a1815]">Aanbieding niet beschikbaar</h2>
+            <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">
+              De aanbieding wordt geladen zodra de data beschikbaar is.
+            </p>
+          </div>
+          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#f6faf4] text-[#4a6d5a]">
+            <img src={strikIcons.bakkerij} alt="Aanbieding" className="h-7 w-7 object-contain" />
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   return (
-    <Link
-      href={agendaItem.href}
-      className="group flex h-32 flex-col items-center justify-between rounded-xl border border-[#e8e4de] bg-white p-4 text-center transition hover:shadow-md active:scale-[0.97]"
-    >
-      <span className="font-semibold text-[#1a1815]">
-        {agendaItem.title}
-      </span>
-      <span className="flex min-h-0 flex-1 items-center justify-center">
-        <img
-          src={agendaItem.icon}
-          alt=""
-          className="h-14 w-14 object-contain transition group-hover:scale-110"
-        />
-      </span>
-    </Link>
+    <article className="rounded-[2rem] border border-[#e7e0d8] bg-white p-6 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8b8278]">
+            Weekaanbieding
+          </p>
+          <h2 className="mt-3 text-3xl font-black text-[#1a1815]">{offerTitle}</h2>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-[#6b645b]">
+            Bekijk het volledige aanbod voor deze week.
+          </p>
+        </div>
+        <div className="rounded-[1.5rem] bg-[#f6faf4] p-4 text-center shadow-sm sm:max-w-xs">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#4a6d5a]">week van</p>
+          <p className="mt-3 text-xl font-black text-[#214456]">{formatWeekText(offer.weekStart)}</p>
+        </div>
+      </div>
+      {offer.imageUrl ? (
+        <div className="mt-6 overflow-hidden rounded-[1.5rem] border border-[#e8e4de] bg-[#faf8f5]">
+          <img src={offer.imageUrl} alt={offerTitle} className="h-56 w-full object-cover" />
+        </div>
+      ) : null}
+    </article>
   );
 }
 
 export default function WinkelFeaturedCards() {
   const [latestNewsKey, setLatestNewsKey] = useState("");
   const [showNewsBadge, setShowNewsBadge] = useState(false);
+  const [offer, setOffer] = useState<BakeryHomeOffer | null>(null);
+  const [staffCount, setStaffCount] = useState<number>(0);
+  const [birthdayCount, setBirthdayCount] = useState<number | null>(null);
 
   useEffect(() => {
     let ignoreResult = false;
 
-    function updateBadge(nextLatestKey: string) {
-      const readKey = localStorage.getItem(NEWS_READ_KEY);
-      setShowNewsBadge(Boolean(nextLatestKey && readKey !== nextLatestKey));
-    }
-
-    async function loadLatestNews() {
+    async function loadAllData() {
       try {
-        const res = await fetch(NEWS_API_URL, { cache: "no-store" });
-        const posts = (await res.json()) as NewsPostPreview[];
-        const latestPost = getLatestNewsPost(posts);
-        const nextLatestKey = latestPost ? getNewsPostKey(latestPost) : "";
+        const [newsRes, shiftsRes, employeesRes, bakeryRes] = await Promise.allSettled([
+          fetch(NEWS_API_URL, { cache: "no-store" }),
+          fetch("/api/tamigo-shifts-today", { cache: "no-store" }),
+          fetch("/api/tamigo-employees?view=shop", { cache: "no-store" }),
+          fetchRecepturenData(),
+        ]);
 
         if (ignoreResult) return;
 
-        setLatestNewsKey(nextLatestKey);
-        updateBadge(nextLatestKey);
+        if (newsRes.status === "fulfilled") {
+          const posts = (await newsRes.value.json()) as NewsPostPreview[];
+          const latestPost = getLatestNewsPost(posts);
+          const nextLatestKey = latestPost ? getNewsPostKey(latestPost) : "";
+          setLatestNewsKey(nextLatestKey);
+          const readKey = localStorage.getItem(NEWS_READ_KEY);
+          setShowNewsBadge(Boolean(nextLatestKey && readKey !== nextLatestKey));
+        }
+
+        if (shiftsRes.status === "fulfilled" && shiftsRes.value.ok) {
+          const schedule = (await shiftsRes.value.json()) as { shops?: Array<{ employees?: Array<unknown> }> };
+          const shops = schedule.shops || [];
+          setStaffCount(
+            shops.reduce((total, shop) => total + (shop.employees?.length || 0), 0)
+          );
+        }
+
+        if (employeesRes.status === "fulfilled" && employeesRes.value.ok) {
+          const employeeData = (await employeesRes.value.json()) as {
+            events?: Array<{ daysUntil?: number }>;
+          };
+          const events = Array.isArray(employeeData.events) ? employeeData.events : [];
+          setBirthdayCount(
+            events.filter((event) => event.daysUntil === 0).length
+          );
+        }
+
+        if (bakeryRes.status === "fulfilled" && bakeryRes.value.ok) {
+          setOffer(bakeryRes.value.data.bakeryHome?.offers?.[0] || null);
+        }
       } catch {
         if (!ignoreResult) {
-          setLatestNewsKey("");
           setShowNewsBadge(false);
         }
       }
     }
 
+    void loadAllData();
+
+    return () => {
+      ignoreResult = true;
+    };
+  }, []);
+
+  useEffect(() => {
     function refreshBadge() {
-      if (latestNewsKey) {
-        updateBadge(latestNewsKey);
-        return;
-      }
-
-      void loadLatestNews();
+      const readKey = localStorage.getItem(NEWS_READ_KEY);
+      setShowNewsBadge(Boolean(latestNewsKey && readKey !== latestNewsKey));
     }
-
-    const timeoutId = window.setTimeout(loadLatestNews, 0);
 
     window.addEventListener(NEWS_READ_EVENT, refreshBadge);
     window.addEventListener("focus", refreshBadge);
     document.addEventListener("visibilitychange", refreshBadge);
 
     return () => {
-      ignoreResult = true;
-      window.clearTimeout(timeoutId);
       window.removeEventListener(NEWS_READ_EVENT, refreshBadge);
       window.removeEventListener("focus", refreshBadge);
       document.removeEventListener("visibilitychange", refreshBadge);
@@ -127,9 +197,45 @@ export default function WinkelFeaturedCards() {
   }, [latestNewsKey]);
 
   return (
-    <div className="grid w-full grid-cols-2 gap-3">
-      <NewsFeaturedCard showBadge={showNewsBadge} />
-      <AgendaFeaturedCard />
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardStatCard
+          href="/strik-agenda"
+          title="Jarigen vandaag"
+          value={birthdayCount === null ? "–" : `${birthdayCount}`}
+          subtitle={
+            birthdayCount === 0
+              ? "Geen verjaardagen vandaag"
+              : `${birthdayCount} medewerker(s)`
+          }
+          icon={strikIcons.agenda}
+          badge={birthdayCount && birthdayCount > 0 ? "🎉" : undefined}
+        />
+        <DashboardStatCard
+          href="/winkel"
+          title="Medewerkers vandaag"
+          value={staffCount ? `${staffCount}` : "–"}
+          subtitle="Afgelopen dienstoverzicht"
+          icon={strikIcons.winkel}
+        />
+        <DashboardStatCard
+          href="/nieuws"
+          title="Nieuws"
+          value={showNewsBadge ? "Nieuw" : "Actueel"}
+          subtitle="Belangrijk winkelnieuws"
+          icon={strikIcons.news}
+          badge={showNewsBadge ? "Nieuw" : undefined}
+        />
+        <DashboardStatCard
+          href="/winkel/schoonmaak-registratie"
+          title="Registratie"
+          value="Temperatuur"
+          subtitle="Snel naar registratie"
+          icon={strikIcons.cleaning}
+        />
+      </div>
+
+      <OfferHero offer={offer} />
     </div>
   );
 }

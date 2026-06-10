@@ -853,11 +853,11 @@ export default function SchoonmaakRegistratiePage() {
       />
 
       <div className="space-y-4">
-        <section className="rounded-[1.75rem] border border-[#c8dbe2] bg-[#dbe9ee] p-5 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/55">
+        <section className="rounded-[1.75rem] border border-[#d6e5d8] bg-[#f6faf8] p-5 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#4a6d5a]/70">
             Schoonmaak & registratie
           </p>
-          <h2 className="mt-1 text-2xl font-black">Temperatuurregistratie</h2>
+          <h2 className="mt-1 text-2xl font-black text-[#1a1815]">Temperatuurregistratie</h2>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-4">
             {winkelOptions.map((winkel) => (
@@ -865,10 +865,10 @@ export default function SchoonmaakRegistratiePage() {
                 key={winkel.id}
                 type="button"
                 onClick={() => setWinkelId(winkel.id)}
-                className={`rounded-2xl border px-3 py-3 text-sm font-black shadow-sm transition active:scale-[0.98] ${
+                className={`rounded-3xl border px-4 py-3 text-sm font-bold transition active:scale-[0.98] ${
                   winkelId === winkel.id
-                    ? "border-[#6d9caf] bg-white text-[#214456]"
-                    : "border-white/60 bg-white/45 text-[#2d2a26]/60"
+                    ? "border-[#6d9caf] bg-white text-[#214456] shadow-sm"
+                    : "border-[#e8e4de] bg-white/90 text-[#2d2a26]/75 hover:border-[#c3d3bc]"
                 }`}
               >
                 {winkel.label}
@@ -883,7 +883,7 @@ export default function SchoonmaakRegistratiePage() {
                 type="date"
                 value={datum}
                 onChange={(event) => setDatum(event.target.value)}
-                className="rounded-2xl border border-[#bdd2da] bg-white p-4 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                className="rounded-3xl border border-[#d6e5d8] bg-white px-4 py-3 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
               />
             </label>
             <label className="grid gap-1 text-sm font-black text-[#2d2a26]/65">
@@ -894,38 +894,38 @@ export default function SchoonmaakRegistratiePage() {
                   updateForm({ ...form, naam: event.target.value })
                 }
                 placeholder="Naam medewerker"
-                className="rounded-2xl border border-[#bdd2da] bg-white p-4 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                className="rounded-3xl border border-[#d6e5d8] bg-white px-4 py-3 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
               />
             </label>
           </div>
         </section>
 
         <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h3 className="text-xl font-black">Meetpunten</h3>
-              <p className="mt-1 text-sm font-bold text-[#2d2a26]/50">
+              <h3 className="text-xl font-black text-[#1a1815]">Meetpunten</h3>
+              <p className="mt-1 text-sm font-bold text-[#2d2a26]/60">
                 {selectedWinkel.label} · {datum}
               </p>
             </div>
-            <div className="grid justify-items-end gap-1">
+            <div className="grid justify-items-start gap-2 sm:justify-items-end">
               <div className="flex flex-wrap justify-end gap-2">
                 <Link
                   href={`/winkel/schoonmaak-registratie/overzicht?winkel=${winkelId}`}
-                  className="rounded-full bg-white px-4 py-2 text-sm font-black shadow-sm"
+                  className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#214456] shadow-sm ring-1 ring-[#e8e4de] transition hover:bg-[#f7f9f8]"
                 >
                   Maandoverzicht
                 </Link>
                 <button
                   type="button"
                   onClick={addRegistrationRow}
-                  className="rounded-full bg-[#dbe9ee] px-4 py-2 text-sm font-black shadow-sm"
+                  className="rounded-full bg-[#dbe9ee] px-4 py-2 text-sm font-black text-[#214456] shadow-sm transition hover:bg-[#cfe2e8]"
                 >
                   + Meetpunt
                 </button>
               </div>
               {addFeedback && (
-                <p className="text-xs font-black text-[#6d9caf]">
+                <p className="text-xs font-black text-[#4a6d5a]">
                   {addFeedback}
                 </p>
               )}
@@ -1081,7 +1081,7 @@ export default function SchoonmaakRegistratiePage() {
             type="button"
             onClick={() => void submitPayload(createPayload())}
             disabled={opslaanBezig}
-            className="mt-4 w-full rounded-full bg-[#c3d3bc] px-5 py-4 text-base font-black shadow-sm transition active:scale-[0.98] disabled:opacity-55"
+            className="mt-4 w-full rounded-full bg-[#4a6d5a] px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-[#3d5849] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55"
           >
             {opslaanBezig ? "Opslaan..." : "Opslaan"}
           </button>

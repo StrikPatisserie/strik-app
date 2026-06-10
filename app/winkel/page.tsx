@@ -1,4 +1,5 @@
 import {
+  SectionHeader,
   StrikActionCard,
   StrikPageHeader,
   StrikShell,
@@ -9,18 +10,34 @@ import WinkelFeaturedCards from "./WinkelFeaturedCards";
 
 const items = [
   {
+    href: "/nieuws",
+    label: "Nieuws",
+    title: "Laatste berichten",
+    description: "Belangrijk nieuws voor de winkel.",
+    icon: strikIcons.news,
+    tone: "green" as const,
+  },
+  {
+    href: "/strik-agenda",
+    label: "Agenda",
+    title: "Vandaag & deze week",
+    description: "Teamactiviteiten en verjaardagen.",
+    icon: strikIcons.agenda,
+    tone: "blue" as const,
+  },
+  {
     href: "/winkel/schoonmaak-registratie",
-    label: "Temperatuur",
+    label: "Registratie",
     title: "Schoonmaak",
-    description: "Registratie per winkel.",
+    description: "Temperatuur en checklists.",
     icon: strikIcons.cleaning,
     tone: "neutral" as const,
   },
   {
     href: "/bruidstaarten",
-    label: "Studio",
-    title: "Bruidstaarten",
-    description: "Aanvragen en afspraken.",
+    label: "Bruidstaarten",
+    title: "Studio",
+    description: "Bestellingen en afspraken.",
     icon: strikIcons.bruidstaart,
     tone: "neutral" as const,
   },
@@ -28,7 +45,7 @@ const items = [
     href: "/info",
     label: "Info",
     title: "Documenten",
-    description: "Allergenen en bestanden.",
+    description: "Allergenen en winkelinfo.",
     icon: strikIcons.info,
     tone: "neutral" as const,
   },
@@ -36,21 +53,30 @@ const items = [
 
 export default function WinkelPage() {
   return (
-    <StrikShell>
+    <StrikShell wide>
       <StrikPageHeader
-        title="Winkel"
-        description="Alles voor de winkel op één plek."
+        kicker="Dagstart"
+        title="Vandaag in de winkel"
+        description="Direct zicht op medewerkers, aanbiedingen en belangrijke acties."
         icon={strikIcons.winkel}
       />
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         <WinkelFeaturedCards />
 
-        {items.map((item) => (
-          <StrikActionCard key={item.href} {...item} />
-        ))}
-
         <TodayStaffWidget />
+
+        <div className="space-y-4">
+          <SectionHeader
+            title="Snelle acties"
+            description="Direct naar de belangrijkste winkeltools."
+          />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {items.map((item) => (
+              <StrikActionCard key={item.href} {...item} />
+            ))}
+          </div>
+        </div>
       </div>
     </StrikShell>
   );

@@ -108,8 +108,8 @@ export function StrikShell({
   wide?: boolean;
 }>) {
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-4 py-6 pb-28 text-[#1a1815]">
-      <div className={`mx-auto w-full ${wide ? "max-w-3xl" : "max-w-md"}`}>
+    <main className="min-h-screen bg-[#faf8f5] px-4 py-6 pb-28 text-[#1a1815] sm:px-6 lg:px-8">
+      <div className={`mx-auto w-full ${wide ? "max-w-7xl" : "max-w-5xl"}`}>
         <StrikBackButton />
         {children}
       </div>
@@ -122,6 +122,7 @@ export function StrikPageHeader({
   description,
   icon,
   kicker,
+  tone,
 }: Readonly<{
   title: string;
   description?: string;
@@ -129,21 +130,53 @@ export function StrikPageHeader({
   kicker?: string;
   tone?: Tone;
 }>) {
+  const toneClass = tone ? toneClasses[tone] : toneClasses.neutral;
+
   return (
-    <header className="mb-8 pt-2">
-      {icon && (
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#ecf4ed] mb-4">
-          <img src={icon} alt="" className="h-7 w-7 object-contain" />
+    <header className="mb-6 flex flex-col gap-4 rounded-[1.75rem] border border-[#e7e0d8] bg-white/90 p-5 shadow-sm sm:p-6">
+      <div className="flex flex-wrap items-center gap-4">
+        {icon && (
+          <div className={`flex h-12 w-12 items-center justify-center rounded-3xl ${toneClass}`}>
+            <img src={icon} alt="" className="h-7 w-7 object-contain" />
+          </div>
+        )}
+        <div className="min-w-0">
+          {kicker && (
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
+              {kicker}
+            </p>
+          )}
+          <StrikPageTitle title={title} />
+          {description && (
+            <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">
+              {description}
+            </p>
+          )}
         </div>
-      )}
-      {kicker && (
-        <p className="text-xs font-semibold uppercase tracking-wider text-[#8b8278] mb-2">
-          {kicker}
-        </p>
-      )}
-      <StrikPageTitle title={title} />
-      {description && <p className="mt-2 text-sm text-[#a39c91]">{description}</p>}
+      </div>
     </header>
+  );
+}
+
+export function SectionHeader({
+  title,
+  description,
+  action,
+}: Readonly<{
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}>) {
+  return (
+    <div className="flex flex-col gap-3 rounded-3xl border border-[#e8e4de] bg-white/90 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 className="text-xl font-black text-[#1a1815]">{title}</h2>
+        {description && (
+          <p className="mt-1 text-sm text-[#6b645b]">{description}</p>
+        )}
+      </div>
+      {action}
+    </div>
   );
 }
 
