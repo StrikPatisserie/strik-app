@@ -81,22 +81,22 @@ export default function WeeklyOfferPanel() {
   }, []);
 
   return (
-    <section className="rounded-[1.25rem] border border-[#d9d6d1] bg-[#e8e8e6] p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="rounded-[1rem] border border-[#d9d6d1] bg-[#e8e8e6] p-3 shadow-sm sm:rounded-[1.25rem] sm:p-4">
+      <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3">
         <div>
-          <h2 className="text-center text-2xl font-normal leading-tight text-[#1a1815]">
+          <h2 className="text-xl font-black leading-tight text-[#1a1815] sm:text-2xl sm:font-normal">
             aanbieding
           </h2>
-          <p className="mt-1 text-center text-sm text-[#2d2a26]/70">
+          <p className="mt-0.5 text-xs text-[#2d2a26]/70 sm:mt-1 sm:text-sm">
             week {weekNumberForDate(selectedWeek)}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[#050505]">
+        <div className="flex items-center gap-1 text-[#050505] sm:gap-2">
           <button
             type="button"
             onClick={() => setSelectedWeek(addDays(selectedWeek, -7))}
             aria-label="Vorige week"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-4xl font-light leading-none hover:bg-white/75"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-3xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
           >
             ‹
           </button>
@@ -104,22 +104,22 @@ export default function WeeklyOfferPanel() {
             type="button"
             onClick={() => setSelectedWeek(addDays(selectedWeek, 7))}
             aria-label="Volgende week"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-4xl font-light leading-none hover:bg-white/75"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-3xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
           >
             ›
           </button>
         </div>
       </div>
 
-      <div className="flex min-h-[17rem] items-center justify-center overflow-hidden rounded-[1rem] bg-white">
+      <div className="flex min-h-[10rem] items-center justify-center overflow-hidden rounded-[0.85rem] bg-white sm:min-h-[17rem] sm:rounded-[1rem]">
         {offer?.imageUrl ? (
           <img
             src={offer.imageUrl}
             alt={offer.label || "Aanbieding van de week"}
-            className="max-h-[17rem] w-full object-contain"
+            className="max-h-[10rem] w-full object-contain sm:max-h-[17rem]"
           />
         ) : (
-          <p className="px-5 text-center text-sm font-black uppercase tracking-[0.12em] text-[#2d2a26]/35">
+          <p className="px-5 text-center text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/35 sm:text-sm">
             {status || "Geen aanbieding deze week"}
           </p>
         )}

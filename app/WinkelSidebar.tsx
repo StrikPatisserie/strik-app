@@ -123,7 +123,7 @@ export default function WinkelSidebar() {
       )}
 
       {showWinkelSubNav && (
-        <nav className="fixed bottom-[5.65rem] left-3 right-3 z-40 rounded-2xl border border-[#e7e0d8] bg-white/95 p-2 shadow-sm backdrop-blur lg:hidden">
+        <nav className="fixed bottom-[5rem] left-2 right-2 z-40 rounded-xl border border-[#e7e0d8] bg-white/95 p-1.5 shadow-sm backdrop-blur lg:hidden">
           <div className="flex gap-1 overflow-x-auto">
             {winkelNavItems.map((item) => {
               const active = isActivePath(pathname, item.href);
@@ -132,7 +132,7 @@ export default function WinkelSidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-black ${
+                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[0.72rem] font-black ${
                     active
                       ? "bg-[#ef5737] text-white"
                       : "bg-[#f8f6f3] text-[#2d2a26]/65"
@@ -141,7 +141,7 @@ export default function WinkelSidebar() {
                   <img
                     src={item.icon}
                     alt=""
-                    className={`h-4 w-4 object-contain ${active ? "brightness-0 invert" : ""}`}
+                    className={`h-3.5 w-3.5 object-contain ${active ? "brightness-0 invert" : ""}`}
                   />
                   {item.label}
                 </Link>

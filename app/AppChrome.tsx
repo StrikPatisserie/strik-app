@@ -32,7 +32,7 @@ export default function AppChrome({
             className={`flex-1 overflow-auto ${
               !isBakeryEnvironment
                 ? isWinkelWorkArea
-                  ? "pb-40 lg:pb-0"
+                  ? "pb-32 lg:pb-0"
                   : "pb-24 lg:pb-0"
                 : ""
             }`}
