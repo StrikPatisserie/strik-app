@@ -148,10 +148,10 @@ export default function CompactAgendaPanel() {
     <section className="min-w-0 rounded-[0.9rem] border border-[#d9d6d1] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.25rem] sm:p-4">
       <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1 sm:mb-3 sm:gap-3">
         <div>
-          <h2 className="text-[0.78rem] font-black uppercase leading-tight tracking-[0.18em] text-[#1a1815] sm:text-2xl sm:font-normal sm:normal-case sm:tracking-normal">
+          <h2 className="winkel-card-heading text-[#1a1815]">
             agenda
           </h2>
-          <p className="mt-0.5 text-[0.62rem] font-bold uppercase tracking-[0.12em] text-[#2d2a26]/50 sm:mt-1 sm:text-sm sm:font-normal sm:normal-case sm:tracking-normal sm:text-[#2d2a26]/70">
+          <p className="winkel-meta-label mt-0.5 text-[#2d2a26]/55 sm:mt-1 sm:text-[#2d2a26]/70">
             week {weekNumberForDate(weekStart)}
           </p>
         </div>

@@ -221,6 +221,49 @@ h6 {
   line-height: var(--line-height-normal);
 }
 
+.winkel-page-heading {
+  font-family: "Overpass", StrikGotham, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: clamp(1rem, 4.4vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1.08;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.winkel-page-heading-icon {
+  display: block;
+  width: clamp(1rem, 4.4vw, 1.8rem);
+  height: clamp(1rem, 4.4vw, 1.8rem);
+  background: #ef5737;
+  mask: url("/icons_strik_winkel.svg") center / contain no-repeat;
+  -webkit-mask: url("/icons_strik_winkel.svg") center / contain no-repeat;
+}
+
+.winkel-card-heading,
+.winkel-section-heading,
+.winkel-meta-label {
+  font-family: "Overpass", StrikGotham, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.winkel-card-heading {
+  font-size: clamp(0.95rem, 3vw, 1.35rem);
+  line-height: 1.1;
+}
+
+.winkel-section-heading {
+  font-size: clamp(1rem, 3.2vw, 1.45rem);
+  line-height: 1.12;
+}
+
+.winkel-meta-label {
+  font-size: clamp(0.72rem, 2vw, 0.95rem);
+  line-height: 1.2;
+}
+
 /* FOCUS STATES */
 :focus-visible {
   outline: 2px solid var(--sage-600);

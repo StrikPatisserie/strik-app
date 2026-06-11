@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { strikIcons } from "./StrikUI";
 
 const mainNavItems = [
-  { href: "/", label: "Home", icon: "/strik-logo.png" },
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJs", icon: strikIcons.ijs },
   { href: "/bakkerij", label: "Bakkerij", icon: strikIcons.bakkerij },
@@ -86,7 +85,7 @@ export default function WinkelSidebar() {
               <img
                 src={item.icon}
                 alt=""
-                className="h-7 w-7 object-contain"
+                className="h-9 w-9 object-contain"
               />
               <span className="sr-only">{item.label}</span>
             </Link>
@@ -103,7 +102,7 @@ export default function WinkelSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex h-12 w-12 items-center justify-center rounded-2xl transition ${
+                className={`flex h-14 w-14 items-center justify-center rounded-2xl transition ${
                   active
                     ? "bg-[#ef5737] shadow-sm"
                     : "hover:bg-[#f8f6f3]"
@@ -113,7 +112,7 @@ export default function WinkelSidebar() {
                 <img
                   src={item.icon}
                   alt=""
-                  className={`h-6 w-6 object-contain ${active ? "brightness-0 invert" : ""}`}
+                  className={`h-8 w-8 object-contain ${active ? "brightness-0 invert" : ""}`}
                 />
                 <span className="sr-only">{item.label}</span>
               </Link>
