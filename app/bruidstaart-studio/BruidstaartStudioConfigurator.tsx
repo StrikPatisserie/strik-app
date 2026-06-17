@@ -1279,7 +1279,7 @@ function TrashIcon() {
   );
 }
 
-function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
+export function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   const visualizerId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [downloadStatus, setDownloadStatus] = useState("");

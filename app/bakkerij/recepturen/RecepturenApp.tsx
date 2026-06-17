@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList from "./IngredientsList";
@@ -18,6 +18,25 @@ import RecipeDataImport from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
 import RecepturenWorkMode from "./RecepturenWorkMode";
+import { CakeVisualizer } from "../../bruidstaart-studio/BruidstaartStudioConfigurator";
+import { cakeSizes } from "../../bruidstaart-studio/data";
+import {
+  calculateWeddingCakePrice,
+  createProductionForm,
+  findOption,
+  formatEuro,
+  getDecorationColorNotes,
+  getDecorationNoteTexts,
+  getDecorationSurcharges,
+  getSelectedWeddingCakeLabels,
+  getTopperNoteTexts,
+  getTopperSurcharges,
+} from "../../bruidstaart-studio/pricing";
+import {
+  getWeddingCakeStudioUrl,
+  normalizeDraftList,
+  type WeddingCakeDraft,
+} from "../../bruidstaart-studio/studioApi";
 import {
   emptyBakeryHomeData,
   fetchRecepturenData,
@@ -243,6 +262,60 @@ function formatWeekRange(weekStart: string) {
   });
 
   return `${formatter.format(start)} t/m ${formatter.format(end)}`;
+}
+
+function formatBakeryDate(value?: string, fallback = "geen datum") {
+  if (!value) return fallback;
+
+  const date = dateFromKey(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  }).format(date);
+}
+
+function getWeddingCakeDeliveryDate(draft: WeddingCakeDraft) {
+  return draft.config.contact.deliveryDate || draft.config.contact.weddingDate || "";
+}
+
+function uniqueWeddingCakeDrafts(drafts: WeddingCakeDraft[]) {
+  const draftsByCode = new Map<string, WeddingCakeDraft>();
+
+  drafts.forEach((draft) => {
+    const key = draft.code.trim().toLowerCase();
+    if (!key) return;
+
+    const existing = draftsByCode.get(key);
+    if (!existing || draft.updatedAt > existing.updatedAt) {
+      draftsByCode.set(key, draft);
+    }
+  });
+
+  return Array.from(draftsByCode.values()).sort((first, second) => {
+    const dateCompare = getWeddingCakeDeliveryDate(first).localeCompare(
+      getWeddingCakeDeliveryDate(second)
+    );
+
+    if (dateCompare) return dateCompare;
+
+    return first.code.localeCompare(second.code, "nl-NL");
+  });
+}
+
+function weekDatesFor(weekStart: string) {
+  return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+}
+
+function weddingCakeCustomerName(draft: WeddingCakeDraft) {
+  const name = [draft.config.contact.names, draft.config.contact.surname]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return name || [draft.names, draft.surname].filter(Boolean).join(" ").trim();
 }
 
 function normalizeBakeryHomeData(value?: BakeryHomeData): BakeryHomeData {
@@ -1473,8 +1546,8 @@ export default function RecepturenApp() {
   }
 
   return (
-    <main className="h-screen h-[100dvh] overflow-hidden bg-white text-[#111111]">
-      <div className="grid h-screen h-[100dvh] grid-cols-[clamp(3.5rem,6.4vw,4.7rem)_minmax(0,1fr)]">
+    <main className="h-screen h-[100dvh] overflow-hidden bg-[#faf8f5] text-[#111111]">
+      <div className="grid h-screen h-[100dvh] grid-cols-[clamp(6.6rem,9vw,7.4rem)_minmax(0,1fr)]">
         <BakkerijSidebar
           active={mainTab !== "start"}
           onStart={() => openMainTab("start")}
@@ -1570,14 +1643,14 @@ function BakkerijSidebar({
   onRecipes: () => void;
 }>) {
   return (
-    <aside className="relative flex h-screen h-[100dvh] flex-col border-r border-[#c3d3bc] bg-white">
+    <aside className="relative flex h-screen h-[100dvh] flex-col items-center gap-5 rounded-r-[4rem] border-r border-[#c6d8bf] bg-[#c3d3bc] px-4 py-6 shadow-sm">
       <button
         type="button"
         onClick={onStart}
-        className="flex h-[clamp(2.95rem,5vw,3.9rem)] items-center justify-center border-b border-[#c3d3bc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#8fb184]"
+        className="flex h-14 w-14 items-center justify-center rounded-3xl bg-white/85 shadow-sm ring-1 ring-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184]"
         aria-label="Start"
       >
-        <span className="block h-9 w-12 overflow-hidden sm:h-11 sm:w-16">
+        <span className="block h-9 w-9 overflow-hidden">
           <img
             src="/strik logo icon.svg"
             alt=""
@@ -1589,34 +1662,36 @@ function BakkerijSidebar({
       <button
         type="button"
         onClick={onRecipes}
-        className={`flex h-[clamp(2.95rem,5vw,3.9rem)] items-center justify-center border-b border-[#c3d3bc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#8fb184] ${
-          active ? "bg-[#d75a48]" : "bg-white"
+        className={`flex h-14 w-14 items-center justify-center rounded-3xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184] ${
+          active
+            ? "bg-[#ef5737] shadow-sm ring-1 ring-white/70"
+            : "bg-white hover:bg-white/85"
         }`}
         aria-label="Recepten"
       >
         <img
           src="/apps strik_Bakkerij.svg"
           alt=""
-          className={`h-9 w-9 object-contain sm:h-11 sm:w-11 ${active ? "invert" : ""}`}
+          className={`h-9 w-9 object-contain ${active ? "brightness-0 invert" : ""}`}
         />
       </button>
 
       <button
         type="button"
-        className="flex h-[clamp(2.95rem,5vw,3.9rem)] items-center justify-center border-b border-[#c3d3bc] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#8fb184]"
+        className="flex h-14 w-14 items-center justify-center rounded-3xl transition hover:bg-white/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184]"
         aria-label="Schoonmaak"
       >
-        <img src="/UI-apps_schonmaak.svg" alt="" className="h-9 w-9 object-contain sm:h-11 sm:w-11" />
+        <img src="/UI-apps_schonmaak.svg" alt="" className="h-9 w-9 object-contain" />
       </button>
 
       <div className="flex-1" />
 
       <a
         href="/"
-        className="mb-4 flex h-12 items-center justify-center sm:mb-6 sm:h-14"
+        className="mb-1 flex h-14 w-14 items-center justify-center rounded-3xl transition hover:bg-white/55"
         aria-label="Terug"
       >
-        <img src="/UI-apps_terug.svg" alt="" className="h-9 w-9 object-contain sm:h-11 sm:w-11" />
+        <img src="/UI-apps_terug.svg" alt="" className="h-9 w-9 object-contain" />
       </a>
     </aside>
   );
@@ -1631,15 +1706,17 @@ function BakkerijTopNav({
 }>) {
   if (active === "start") {
     return (
-      <header className="grid h-[clamp(2.95rem,5vw,3.9rem)] shrink-0 grid-cols-[minmax(8rem,14rem)_minmax(0,1fr)] border-b border-[#c3d3bc] bg-white">
+      <header className="flex h-[clamp(4.8rem,7vw,6.2rem)] shrink-0 items-center justify-center border-b border-[#e8e4de] bg-[#faf8f5] px-4">
         <button
           type="button"
           onClick={() => onSelect("start")}
-          className="min-w-0 border-r border-[#c3d3bc] bg-white text-center text-[clamp(0.72rem,1.35vw,1rem)] font-light uppercase tracking-[0.16em] text-[#111111]"
+          className="flex min-w-0 items-center justify-center gap-4"
         >
-          BAKKERIJ
+          <span className="bakkerij-page-heading-icon shrink-0" aria-hidden="true" />
+          <h1 className="bakkerij-page-heading min-w-0 text-[#ef5737]">
+            Bakkerij overzicht
+          </h1>
         </button>
-        <div />
       </header>
     );
   }
@@ -1651,22 +1728,23 @@ function BakkerijTopNav({
   ];
 
   return (
-    <header className="grid h-[clamp(2.95rem,5vw,3.9rem)] shrink-0 grid-cols-3 border-b border-[#c3d3bc] bg-white lg:grid-cols-[repeat(3,minmax(8rem,14rem))_minmax(0,1fr)]">
+    <header className="flex h-[clamp(4.6rem,6vw,5.8rem)] shrink-0 items-center border-b border-[#e8e4de] bg-[#faf8f5] px-4">
+      <div className="flex min-w-0 gap-2 rounded-full border border-[#d6e5d8] bg-white/85 p-1 shadow-sm">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           onClick={() => onSelect(tab.id)}
-          className={`min-w-0 border-r border-[#c3d3bc] text-center text-[clamp(0.62rem,1.35vw,1rem)] uppercase tracking-[0.04em] sm:tracking-[0.11em] ${
+          className={`min-w-0 rounded-full px-4 py-2.5 text-center text-[clamp(0.62rem,1.35vw,0.9rem)] uppercase tracking-[0.11em] transition ${
             active === tab.id
-              ? "bg-[#d75a48] font-black text-white"
-              : "bg-white font-light text-[#111111]"
+              ? "bg-[#ef5737] font-black text-white shadow-sm"
+              : "font-bold text-[#2d2a26]/55 hover:bg-[#f6faf4] hover:text-[#2d2a26]"
           }`}
         >
           {tab.label}
         </button>
       ))}
-      <div className="hidden lg:block" />
+      </div>
     </header>
   );
 }
@@ -1693,102 +1771,460 @@ function BakkerijStartScreen({
   const offer = offerForWeek(home, selectedWeek);
 
   return (
-    <section className="mx-auto grid h-full w-full max-w-[58rem] items-start gap-6 overflow-y-auto px-4 py-7 sm:px-7 md:grid-cols-[minmax(14rem,20rem)_minmax(16rem,22rem)] md:gap-8 lg:gap-12">
-      <div className="min-w-0">
-        <h2 className="mb-4 text-center text-[clamp(1.1rem,2.2vw,1.65rem)] font-light uppercase tracking-[0.18em]">
-          AANBIEDING
-        </h2>
-        <div className="mx-auto max-w-full text-center">
-          <figure className="inline-block max-w-full text-left">
-          <div className="grid h-8 w-full grid-cols-[2.1rem_2.1rem_minmax(0,1fr)] border border-[#6d746a] bg-[#c3d3bc] text-[#111111]">
-            <button
-              type="button"
-              onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
-              className="border-r border-[#6d746a] text-3xl font-light leading-none"
-              aria-label="Vorige week"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
-              className="border-r border-[#6d746a] text-3xl font-light leading-none"
-              aria-label="Volgende week"
-            >
-              ›
-            </button>
-            <div className="flex items-center justify-end pr-3 text-xs font-light sm:text-sm">
-              {formatWeekRange(selectedWeek)}
-            </div>
-          </div>
-          <div className="flex max-h-[48vh] min-h-[13rem] items-center justify-center overflow-hidden border border-[#e7e0d8] bg-white">
-            {offer?.imageUrl ? (
-              <img
-                src={offer.imageUrl}
-                alt={offer.label || "Aanbieding van de week"}
-                className="block max-h-[48vh] max-w-full object-contain"
-              />
-            ) : (
-              <p className="px-6 text-center text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/35">
-                Geen aanbieding ingesteld
-              </p>
-            )}
-          </div>
-          </figure>
-        </div>
-      </div>
-
-      <div className="min-w-0">
-        <h2 className="mb-5 text-center text-[clamp(1.1rem,2.2vw,1.65rem)] font-light uppercase tracking-[0.18em]">
-          NOTITIES / TO DO
-        </h2>
-        <div className="grid gap-4">
-          {home.notes.map((note) => (
-            <label key={note.id} className="relative block">
-              <textarea
-                value={note.text}
-                onChange={(event) => onUpdateNoteText(note.id, event.target.value)}
-                onBlur={(event) => onSaveNote(note.id, event.currentTarget.value)}
-                placeholder="Schrijf notitie..."
-                className="h-[clamp(5.7rem,12vh,7.3rem)] w-full resize-none border border-[#4b4b4b] bg-white px-3 py-2.5 text-sm leading-relaxed text-[#111111] outline-none placeholder:text-[#9a9a9a] focus:border-[#111111]"
-              />
+    <section className="mx-auto h-full w-full max-w-[76rem] overflow-y-auto px-4 py-7 sm:px-7">
+      <div className="grid items-start gap-6 md:grid-cols-[minmax(14rem,22rem)_minmax(16rem,24rem)] md:justify-center md:gap-8 lg:gap-12">
+        <div className="min-w-0">
+          <h2 className="bakkerij-panel-heading mb-4 text-center text-[#111111]">
+            aanbieding
+          </h2>
+          <div className="mx-auto max-w-full text-center">
+            <figure className="inline-block max-w-full text-left">
+            <div className="grid h-8 w-full grid-cols-[2.1rem_2.1rem_minmax(0,1fr)] border border-[#6d746a] bg-[#c3d3bc] text-[#111111]">
               <button
                 type="button"
-                onClick={() => onDeleteNote(note.id)}
-                className="absolute -right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-[#d75a48] text-2xl font-light leading-none text-white"
-                aria-label="Notitie verwijderen"
+                onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
+                className="border-r border-[#6d746a] text-3xl font-light leading-none"
+                aria-label="Vorige week"
               >
-                -
+                ‹
               </button>
-            </label>
-          ))}
-          {!home.notes.length && (
+              <button
+                type="button"
+                onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
+                className="border-r border-[#6d746a] text-3xl font-light leading-none"
+                aria-label="Volgende week"
+              >
+                ›
+              </button>
+              <div className="flex items-center justify-end pr-3 text-xs font-light sm:text-sm">
+                {formatWeekRange(selectedWeek)}
+              </div>
+            </div>
+            <div className="flex max-h-[48vh] min-h-[13rem] items-center justify-center overflow-hidden border border-[#e7e0d8] bg-white">
+              {offer?.imageUrl ? (
+                <img
+                  src={offer.imageUrl}
+                  alt={offer.label || "Aanbieding van de week"}
+                  className="block max-h-[48vh] max-w-full object-contain"
+                />
+              ) : (
+                <p className="px-6 text-center text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/35">
+                  Geen aanbieding ingesteld
+                </p>
+              )}
+            </div>
+            </figure>
+          </div>
+        </div>
+
+        <div className="min-w-0">
+          <h2 className="bakkerij-panel-heading mb-5 text-center text-[#111111]">
+            notities / to do
+          </h2>
+          <div className="grid gap-4">
+            {home.notes.map((note) => (
+              <label key={note.id} className="relative block">
+                <textarea
+                  value={note.text}
+                  onChange={(event) => onUpdateNoteText(note.id, event.target.value)}
+                  onBlur={(event) => onSaveNote(note.id, event.currentTarget.value)}
+                  placeholder="Schrijf notitie..."
+                  className="h-[clamp(5.7rem,12vh,7.3rem)] w-full resize-none border border-[#4b4b4b] bg-white px-3 py-2.5 text-sm leading-relaxed text-[#111111] outline-none placeholder:text-[#9a9a9a] focus:border-[#111111]"
+                />
+                <button
+                  type="button"
+                  onClick={() => onDeleteNote(note.id)}
+                  className="absolute -right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-[#d75a48] text-2xl font-light leading-none text-white"
+                  aria-label="Notitie verwijderen"
+                >
+                  -
+                </button>
+              </label>
+            ))}
+            {!home.notes.length && (
+              <button
+                type="button"
+                onClick={onAddNote}
+                className="h-[clamp(5.7rem,12vh,7.3rem)] border border-[#4b4b4b] bg-white px-3 py-2.5 text-left text-sm text-[#9a9a9a]"
+              >
+                Schrijf notitie...
+              </button>
+            )}
+          </div>
+          <div className="mt-6 flex justify-center">
             <button
               type="button"
               onClick={onAddNote}
-              className="h-[clamp(5.7rem,12vh,7.3rem)] border border-[#4b4b4b] bg-white px-3 py-2.5 text-left text-sm text-[#9a9a9a]"
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#c3d3bc] text-4xl font-light leading-none text-white"
+              aria-label="Notitie toevoegen"
             >
-              Schrijf notitie...
+              +
             </button>
+          </div>
+          {status && (
+            <p className="mt-3 text-center text-xs font-bold text-[#707070]">
+              {status}
+            </p>
           )}
         </div>
-        <div className="mt-6 flex justify-center">
+      </div>
+
+      <BakkerijWeddingCakeAgenda />
+    </section>
+  );
+}
+
+function BakkerijWeddingCakeAgenda() {
+  const [weekStart, setWeekStart] = useState(weekStartForDate);
+  const [drafts, setDrafts] = useState<WeddingCakeDraft[]>([]);
+  const [selectedDraft, setSelectedDraft] = useState<WeddingCakeDraft | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState("");
+  const weekDates = weekDatesFor(weekStart);
+
+  useEffect(() => {
+    let ignoreResult = false;
+
+    async function loadAgenda() {
+      const agendaDates = weekDatesFor(weekStart);
+
+      setIsLoading(true);
+      setStatus("Bruidstaart agenda laden...");
+
+      try {
+        const results = await Promise.all(
+          agendaDates.map(async (date) => {
+            const response = await fetch(getWeddingCakeStudioUrl("", date), {
+              cache: "no-store",
+            });
+
+            if (!response.ok) {
+              throw new Error(`WordPress gaf status ${response.status}.`);
+            }
+
+            return normalizeDraftList(await response.json());
+          })
+        );
+        if (ignoreResult) return;
+
+        const definitiveDrafts = uniqueWeddingCakeDrafts(results.flat()).filter(
+          (draft) => draft.config.completed
+        );
+
+        setDrafts(definitiveDrafts);
+        setSelectedDraft((current) =>
+          current &&
+          definitiveDrafts.some((draft) => draft.code === current.code)
+            ? current
+            : null
+        );
+        setStatus(
+          definitiveDrafts.length
+            ? `${definitiveDrafts.length} definitieve bruidstaart${
+                definitiveDrafts.length === 1 ? "" : "en"
+              } gevonden.`
+            : "Geen definitieve bruidstaarten in deze week."
+        );
+      } catch (error) {
+        if (ignoreResult) return;
+        setDrafts([]);
+        setSelectedDraft(null);
+        setStatus(
+          error instanceof Error
+            ? `Bruidstaart agenda niet beschikbaar. ${error.message}`
+            : "Bruidstaart agenda niet beschikbaar."
+        );
+      } finally {
+        if (!ignoreResult) setIsLoading(false);
+      }
+    }
+
+    void loadAgenda();
+
+    return () => {
+      ignoreResult = true;
+    };
+  }, [weekStart]);
+
+  const groupedDrafts = weekDates.map((date) => ({
+    date,
+    drafts: drafts.filter((draft) => getWeddingCakeDeliveryDate(draft) === date),
+  }));
+
+  return (
+    <section className="mt-8 rounded-[1.75rem] border border-[#bdd2b6] bg-[#dfead9] p-4 shadow-sm sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="bakkerij-panel-heading text-[#30462f]">
+            bruidstaart agenda
+          </h2>
+          <p className="mt-1 text-sm font-bold text-[#30462f]/65">
+            {formatWeekRange(weekStart)}
+          </p>
+        </div>
+        <div className="flex overflow-hidden rounded-full border border-[#bdd2b6] bg-white/80 shadow-sm">
           <button
             type="button"
-            onClick={onAddNote}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-[#c3d3bc] text-4xl font-light leading-none text-white"
-            aria-label="Notitie toevoegen"
+            onClick={() => setWeekStart(addDays(weekStart, -7))}
+            className="flex h-11 w-12 items-center justify-center border-r border-[#d6e5d8] text-3xl leading-none text-[#30462f]"
+            aria-label="Vorige week bruidstaarten"
           >
-            +
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekStart(weekStartForDate())}
+            className="px-4 text-sm font-bold text-[#30462f]"
+          >
+            deze week
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekStart(addDays(weekStart, 7))}
+            className="flex h-11 w-12 items-center justify-center border-l border-[#d6e5d8] text-3xl leading-none text-[#30462f]"
+            aria-label="Volgende week bruidstaarten"
+          >
+            ›
           </button>
         </div>
-        {status && (
-          <p className="mt-3 text-center text-xs font-bold text-[#707070]">
-            {status}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)]">
+        <div className="rounded-[1.25rem] bg-white/75 p-3">
+          <div className="grid gap-2 md:grid-cols-7">
+            {groupedDrafts.map((group) => (
+              <div
+                key={group.date}
+                className="min-h-[8.5rem] rounded-[1rem] bg-[#faf8f5] p-3 ring-1 ring-[#d6e5d8]"
+              >
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#30462f]/45">
+                  {formatBakeryDate(group.date).split(" ")[0]}
+                </p>
+                <p className="text-sm font-black text-[#30462f]">
+                  {formatBakeryDate(group.date).replace(/^[^ ]+\s/, "")}
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {group.drafts.map((draft) => {
+                    const size = findOption(cakeSizes, draft.config.sizeId);
+                    const isSelected = selectedDraft?.code === draft.code;
+
+                    return (
+                      <button
+                        key={draft.code}
+                        type="button"
+                        onClick={() => setSelectedDraft(draft)}
+                        className={`rounded-[0.9rem] p-2 text-left text-xs transition ${
+                          isSelected
+                            ? "bg-[#ef5737] text-white shadow-sm"
+                            : "bg-white text-[#2d2a26] hover:bg-[#fff4ee]"
+                        }`}
+                      >
+                        <span className="block font-black">
+                          {weddingCakeCustomerName(draft) || draft.code}
+                        </span>
+                        <span
+                          className={`mt-1 block font-bold ${
+                            isSelected ? "text-white/80" : "text-[#2d2a26]/50"
+                          }`}
+                        >
+                          {size ? `${size.code} · ${size.personsLabel}` : draft.code}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {!group.drafts.length && (
+                    <p className="text-xs text-[#30462f]/35">Geen taarten</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs font-bold text-[#30462f]/55">
+            {isLoading ? "Laden..." : status}
           </p>
-        )}
+        </div>
+
+        <div className="min-w-0 rounded-[1.25rem] bg-white/85 p-4 shadow-sm">
+          {selectedDraft ? (
+            <BakkerijWeddingCakeDetail draft={selectedDraft} />
+          ) : (
+            <div className="flex min-h-[18rem] items-center justify-center rounded-[1rem] border border-dashed border-[#bdd2b6] px-5 text-center text-sm font-bold leading-relaxed text-[#30462f]/55">
+              Klik op een definitieve bruidstaart om de productiekaart en
+              printversie te openen.
+            </div>
+          )}
+        </div>
       </div>
     </section>
+  );
+}
+
+function BakkerijWeddingCakeDetail({
+  draft,
+}: Readonly<{ draft: WeddingCakeDraft }>) {
+  const config = draft.config;
+  const labels = getSelectedWeddingCakeLabels(config);
+  const price = calculateWeddingCakePrice(config);
+  const productionForm = createProductionForm(config);
+  const decorationNoteTexts = getDecorationNoteTexts(config);
+  const decorationColorNotes = getDecorationColorNotes(config);
+  const decorationSurcharges = getDecorationSurcharges(config);
+  const topperNoteTexts = getTopperNoteTexts(config);
+  const topperSurcharges = getTopperSurcharges(config);
+  const customerName = weddingCakeCustomerName(draft) || draft.code;
+  const deliveryDate = getWeddingCakeDeliveryDate(draft);
+
+  return (
+    <article className="min-w-0">
+      <div className="studio-no-print mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ef5737]">
+            definitieve bestelling
+          </p>
+          <h3 className="mt-1 text-2xl font-black leading-tight text-[#2d2a26]">
+            {customerName}
+          </h3>
+          <p className="mt-1 text-sm font-bold text-[#2d2a26]/55">
+            {formatBakeryDate(deliveryDate)} · code {draft.code}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="rounded-full bg-[#ef5737] px-5 py-3 text-sm font-black text-white shadow-sm"
+        >
+          Print
+        </button>
+      </div>
+
+      <div className="studio-no-print grid gap-4">
+        <CakeVisualizer config={config} />
+
+        <div className="grid gap-2 text-sm text-[#2d2a26]">
+          <BakkerijWeddingCakeRow label="Formaat">
+            {labels.size || "-"}
+          </BakkerijWeddingCakeRow>
+          <BakkerijWeddingCakeRow label="Stijl">
+            {labels.style || "-"}
+          </BakkerijWeddingCakeRow>
+          <BakkerijWeddingCakeRow label="Smaak">
+            {labels.filling || "-"}
+          </BakkerijWeddingCakeRow>
+          <BakkerijWeddingCakeRow label="Kleur">
+            {labels.color || "-"}
+          </BakkerijWeddingCakeRow>
+          <BakkerijWeddingCakeRow label="Layout">
+            {labels.layout || "-"}
+          </BakkerijWeddingCakeRow>
+          <BakkerijWeddingCakeRow label="Decoratie">
+            {labels.decorations.length ? labels.decorations.join(", ") : "geen"}
+          </BakkerijWeddingCakeRow>
+          {decorationColorNotes.length > 0 && (
+            <BakkerijWeddingCakeRow label="Decoratie kleuren">
+              {decorationColorNotes
+                .map((item) => `${item.label}: ${item.color}`)
+                .join(" | ")}
+            </BakkerijWeddingCakeRow>
+          )}
+          {decorationNoteTexts.length > 0 && (
+            <BakkerijWeddingCakeRow label="Decoratie opmerkingen">
+              {decorationNoteTexts.join(" | ")}
+            </BakkerijWeddingCakeRow>
+          )}
+          {decorationSurcharges.length > 0 && (
+            <BakkerijWeddingCakeRow label="Decoratie toeslagen">
+              {decorationSurcharges
+                .map(
+                  (surcharge) =>
+                    `${surcharge.description || "extra wens"} (${formatEuro(
+                      surcharge.amount
+                    )})`
+                )
+                .join(" | ")}
+            </BakkerijWeddingCakeRow>
+          )}
+          <BakkerijWeddingCakeRow label="Topper">
+            {labels.topper || "Geen topper"}
+          </BakkerijWeddingCakeRow>
+          {config.topperInitialsText && (
+            <BakkerijWeddingCakeRow label="Topper tekst">
+              {config.topperInitialsText}
+            </BakkerijWeddingCakeRow>
+          )}
+          {topperNoteTexts.length > 0 && (
+            <BakkerijWeddingCakeRow label="Topper opmerkingen">
+              {topperNoteTexts.join(" | ")}
+            </BakkerijWeddingCakeRow>
+          )}
+          {topperSurcharges.length > 0 && (
+            <BakkerijWeddingCakeRow label="Topper toeslagen">
+              {topperSurcharges
+                .map(
+                  (surcharge) =>
+                    `${surcharge.description || "extra wens"} (${formatEuro(
+                      surcharge.amount
+                    )})`
+                )
+                .join(" | ")}
+            </BakkerijWeddingCakeRow>
+          )}
+          <BakkerijWeddingCakeRow label="Levering">
+            {config.contact.deliveryMethod === "delivery" ? "Bezorgen" : "Afhalen"}
+            {config.contact.deliveryAddress
+              ? ` · ${config.contact.deliveryAddress}`
+              : ""}
+          </BakkerijWeddingCakeRow>
+          {config.contact.notes && (
+            <BakkerijWeddingCakeRow label="Opmerking klant">
+              {config.contact.notes}
+            </BakkerijWeddingCakeRow>
+          )}
+        </div>
+
+        <p className="rounded-[1rem] bg-[#faf8f5] px-4 py-3 text-sm font-bold text-[#2d2a26]/60">
+          Indicatie: {formatEuro(price.total)}
+          {price.hasQuoteItems ? " + onderdelen op aanvraag" : ""}
+        </p>
+      </div>
+
+      <section className="studio-print-report hidden bg-white text-black">
+        <div className="mb-5 flex items-start justify-between gap-6 border-b border-black/20 pb-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em]">
+              Strik Team app
+            </p>
+            <h1 className="mt-2 text-3xl font-black">
+              Bruidstaart productie
+            </h1>
+            <p className="mt-1 text-sm">
+              {formatBakeryDate(deliveryDate)} · {customerName}
+            </p>
+          </div>
+          <div className="text-right text-sm">
+            <p className="font-bold">Code</p>
+            <p className="text-2xl font-black">{draft.code}</p>
+          </div>
+        </div>
+        <div className="grid gap-5 print:grid-cols-[15rem_minmax(0,1fr)]">
+          <CakeVisualizer config={config} />
+          <pre className="whitespace-pre-wrap rounded-none border-0 bg-white p-0 text-[11px] leading-relaxed">
+            {productionForm}
+          </pre>
+        </div>
+      </section>
+    </article>
+  );
+}
+
+function BakkerijWeddingCakeRow({
+  label,
+  children,
+}: Readonly<{ label: string; children: ReactNode }>) {
+  return (
+    <p className="rounded-[0.9rem] bg-[#faf8f5] px-3 py-2 leading-relaxed">
+      <span className="font-black text-[#2d2a26]">{label}:</span>{" "}
+      <span className="text-[#2d2a26]/75">{children}</span>
+    </p>
   );
 }
 
