@@ -39,10 +39,13 @@ import {
   deleteLocalDraft,
   getWeddingCakeDeleteUrl,
   getWeddingCakeStudioUrl,
+  getWeddingCakeYearOverviewUrl,
+  hasWeddingCakeYearOverviewMeta,
   normalizeDraft,
   normalizeDraftList,
   saveLocalDraft,
   searchLocalDrafts,
+  searchLocalDraftsByYear,
   WeddingCakeDraft,
 } from "./studioApi";
 import {
@@ -572,6 +575,27 @@ function formatWeekDayLabel(value: string) {
     weekday: "long",
     day: "2-digit",
     month: "2-digit",
+  }).format(date);
+}
+
+function getCurrentYearString() {
+  return String(new Date().getFullYear());
+}
+
+function getDraftOverviewMonthKey(draft: WeddingCakeDraft) {
+  const date = getDraftOverviewDate(draft);
+  return date.match(/^\d{4}-\d{2}/) ? date.slice(0, 7) : "zonder-datum";
+}
+
+function formatMonthYearLabel(value: string) {
+  if (value === "zonder-datum") return "zonder datum";
+
+  const date = dateFromIsoDate(`${value}-01`);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    month: "long",
+    year: "numeric",
   }).format(date);
 }
 
@@ -3431,6 +3455,15 @@ export default function BruidstaartStudioConfigurator() {
   >([]);
   const [weekOverviewStatus, setWeekOverviewStatus] = useState("");
   const [weekOverviewLoading, setWeekOverviewLoading] = useState(false);
+  const [allOverviewOpen, setAllOverviewOpen] = useState(false);
+  const [allOverviewYear, setAllOverviewYear] = useState(
+    getCurrentYearString
+  );
+  const [allOverviewResults, setAllOverviewResults] = useState<
+    WeddingCakeDraft[]
+  >([]);
+  const [allOverviewStatus, setAllOverviewStatus] = useState("");
+  const [allOverviewLoading, setAllOverviewLoading] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState("");
   const step = steps[stepIndex];
 
@@ -3481,6 +3514,19 @@ export default function BruidstaartStudioConfigurator() {
       })),
     [weekOverviewDates, weekOverviewResults]
   );
+  const allOverviewGroups = useMemo(() => {
+    const groups = new Map<string, WeddingCakeDraft[]>();
+
+    allOverviewResults.forEach((draft) => {
+      const monthKey = getDraftOverviewMonthKey(draft);
+      groups.set(monthKey, [...(groups.get(monthKey) || []), draft]);
+    });
+
+    return Array.from(groups.entries()).map(([monthKey, drafts]) => ({
+      monthKey,
+      drafts,
+    }));
+  }, [allOverviewResults]);
   const borderDecorationOptions = useMemo(
     () =>
       decorationOptions.filter(
@@ -4065,6 +4111,14 @@ export default function BruidstaartStudioConfigurator() {
     return draft.config.completed ? "definitief" : "concept";
   }
 
+  function mergeDraftIntoAllOverview(draft: WeddingCakeDraft) {
+    const year = getDraftOverviewDate(draft).slice(0, 4);
+
+    if (!allOverviewOpen || year !== allOverviewYear) return;
+
+    setAllOverviewResults((current) => uniqueDrafts([...current, draft]));
+  }
+
   async function saveDraft() {
     const code = config.contact.recognitionCode.trim();
 
@@ -4088,11 +4142,13 @@ export default function BruidstaartStudioConfigurator() {
       const savedDraft = normalizeDraft(await res.json()) || draft;
       saveLocalDraft(savedDraft);
       setDraftResults([savedDraft]);
+      mergeDraftIntoAllOverview(savedDraft);
       setDraftStatus("Bestelling opgeslagen in WordPress.");
       showSaveFeedback();
     } catch {
       saveLocalDraft(draft);
       setDraftResults([draft]);
+      mergeDraftIntoAllOverview(draft);
       setDraftStatus(
         "WordPress-opslag is nog niet actief; bestelling is lokaal opgeslagen."
       );
@@ -4143,6 +4199,7 @@ export default function BruidstaartStudioConfigurator() {
     const dates = getWeekDates(normalizedStart);
 
     setWeekOverviewOpen(true);
+    setAllOverviewOpen(false);
     setWeekOverviewStart(normalizedStart);
     setWeekOverviewLoading(true);
     setWeekOverviewStatus("Weekoverzicht laden...");
@@ -4191,6 +4248,76 @@ export default function BruidstaartStudioConfigurator() {
     }
   }
 
+  function createAllOverviewStatus(
+    drafts: WeddingCakeDraft[],
+    year: string,
+    sourceLabel = ""
+  ) {
+    const definitiveCount = drafts.filter(
+      (draft) => draft.config.completed
+    ).length;
+    const conceptCount = drafts.length - definitiveCount;
+    const sourceSuffix = sourceLabel ? ` ${sourceLabel}` : "";
+
+    return drafts.length
+      ? `${drafts.length} bruidstaart${
+          drafts.length === 1 ? "" : "en"
+        } gevonden voor ${year}${sourceSuffix}. Definitief: ${definitiveCount}, concept: ${conceptCount}.`
+      : `Geen bruidstaarten gevonden voor ${year}${sourceSuffix}.`;
+  }
+
+  function normalizeOverviewYear(value: string) {
+    const year = value.replace(/\D/g, "").slice(0, 4);
+    return year.length === 4 ? year : getCurrentYearString();
+  }
+
+  async function loadAllOverview(year = allOverviewYear) {
+    const normalizedYear = normalizeOverviewYear(
+      year || getCurrentYearString()
+    );
+
+    setAllOverviewOpen(true);
+    setWeekOverviewOpen(false);
+    setAllOverviewYear(normalizedYear);
+    setAllOverviewLoading(true);
+    setAllOverviewStatus("Jaaroverzicht laden...");
+
+    try {
+      const res = await fetch(getWeddingCakeYearOverviewUrl(normalizedYear), {
+        cache: "no-store",
+      });
+
+      if (!res.ok) throw new Error("WordPress niet beschikbaar.");
+
+      const data = await res.json();
+      if (!hasWeddingCakeYearOverviewMeta(data, normalizedYear)) {
+        throw new Error("WordPress snippet is nog niet bijgewerkt.");
+      }
+
+      const wordpressDrafts = normalizeDraftList(data);
+      const localDrafts = searchLocalDraftsByYear(normalizedYear);
+      const drafts = uniqueDrafts([...wordpressDrafts, ...localDrafts]);
+
+      setAllOverviewResults(drafts);
+      setAllOverviewStatus(
+        createAllOverviewStatus(
+          drafts,
+          normalizedYear,
+          localDrafts.length ? "inclusief lokale concepten op dit apparaat" : ""
+        )
+      );
+    } catch {
+      const drafts = uniqueDrafts(searchLocalDraftsByYear(normalizedYear));
+
+      setAllOverviewResults(drafts);
+      setAllOverviewStatus(
+        createAllOverviewStatus(drafts, normalizedYear, "lokaal op dit apparaat")
+      );
+    } finally {
+      setAllOverviewLoading(false);
+    }
+  }
+
   function toggleWeekOverview() {
     if (weekOverviewOpen) {
       setWeekOverviewOpen(false);
@@ -4198,6 +4325,15 @@ export default function BruidstaartStudioConfigurator() {
     }
 
     void loadWeekOverview(weekOverviewStart || getWeekStartIso());
+  }
+
+  function toggleAllOverview() {
+    if (allOverviewOpen) {
+      setAllOverviewOpen(false);
+      return;
+    }
+
+    void loadAllOverview(allOverviewYear || getCurrentYearString());
   }
 
   function loadDraft(draft: WeddingCakeDraft) {
@@ -4257,6 +4393,11 @@ export default function BruidstaartStudioConfigurator() {
           (item) => item.code.toLowerCase() !== draft.code.toLowerCase()
         )
       );
+      setAllOverviewResults((current) =>
+        current.filter(
+          (item) => item.code.toLowerCase() !== draft.code.toLowerCase()
+        )
+      );
     };
 
     try {
@@ -4301,12 +4442,18 @@ export default function BruidstaartStudioConfigurator() {
       setDraftResults((current) =>
         current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
       );
+      setAllOverviewResults((current) =>
+        current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
+      );
       setConfig(createEmptyWeddingCakeConfig());
       setDraftStatus(`Bestelling ${code} verwijderd.`);
       goToStep(0);
     } catch {
       deleteLocalDraft(code);
       setDraftResults((current) =>
+        current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
+      );
+      setAllOverviewResults((current) =>
         current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
       );
       setConfig(createEmptyWeddingCakeConfig());
@@ -4540,13 +4687,30 @@ export default function BruidstaartStudioConfigurator() {
                       Zoek op herkenningscode, achternaam of leverdatum.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={toggleWeekOverview}
-                    className="rounded-full border border-[#ead8aa] bg-white/55 px-3 py-1.5 text-xs font-black text-[#2d2a26]/45 shadow-sm transition hover:text-[#2d2a26]/70"
-                  >
-                    {weekOverviewOpen ? "Sluit weekoverzicht" : "Weekoverzicht"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={toggleWeekOverview}
+                      className={`rounded-full border border-[#ead8aa] px-3 py-1.5 text-xs font-black shadow-sm transition ${
+                        weekOverviewOpen
+                          ? "bg-[#dce8d6] text-[#2d2a26]"
+                          : "bg-white/55 text-[#2d2a26]/45 hover:text-[#2d2a26]/70"
+                      }`}
+                    >
+                      {weekOverviewOpen ? "Sluit weekoverzicht" : "Weekoverzicht"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleAllOverview}
+                      className={`rounded-full border border-[#ead8aa] px-3 py-1.5 text-xs font-black shadow-sm transition ${
+                        allOverviewOpen
+                          ? "bg-[#f1d28f] text-[#2d2a26]"
+                          : "bg-white/55 text-[#2d2a26]/45 hover:text-[#2d2a26]/70"
+                      }`}
+                    >
+                      {allOverviewOpen ? "Sluit toon alle" : "Toon alle"}
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto]">
                   <input
@@ -4730,6 +4894,143 @@ export default function BruidstaartStudioConfigurator() {
                                   Geen bruidstaarten.
                                 </p>
                               )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+                )}
+                {allOverviewOpen && (
+                  <section className="mt-4 grid gap-3 rounded-[1.2rem] border border-[#ead8aa] bg-white/65 p-3">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-[#2d2a26]">
+                          Alle bruidstaarten
+                        </p>
+                        <p className="mt-0.5 text-xs font-bold text-[#2d2a26]/50">
+                          Concepten en definitieve bestellingen in {allOverviewYear}.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void loadAllOverview(String(Number(allOverviewYear) - 1))
+                          }
+                          disabled={allOverviewLoading}
+                          className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
+                        >
+                          Vorig jaar
+                        </button>
+                        <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                          Jaar
+                          <input
+                            value={allOverviewYear}
+                            onChange={(event) => {
+                              setAllOverviewYear(event.target.value);
+                              setAllOverviewResults([]);
+                              setAllOverviewStatus("");
+                            }}
+                            inputMode="numeric"
+                            className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void loadAllOverview(String(Number(allOverviewYear) + 1))
+                          }
+                          disabled={allOverviewLoading}
+                          className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
+                        >
+                          Volgend jaar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void loadAllOverview()}
+                          disabled={allOverviewLoading}
+                          className="rounded-full bg-[#f1d28f] px-4 py-2 text-xs font-black text-[#2d2a26] shadow-sm disabled:opacity-50"
+                        >
+                          {allOverviewLoading ? "Laden..." : "Toon alle"}
+                        </button>
+                      </div>
+                    </div>
+                    {allOverviewStatus && (
+                      <p className="text-xs font-bold text-[#2d2a26]/55">
+                        {allOverviewStatus}
+                      </p>
+                    )}
+                    {allOverviewGroups.length > 0 && (
+                      <div className="grid gap-3">
+                        {allOverviewGroups.map((group) => {
+                          const definitiveCount = group.drafts.filter(
+                            (draft) => draft.config.completed
+                          ).length;
+
+                          return (
+                            <div
+                              key={group.monthKey}
+                              className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-black capitalize">
+                                  {formatMonthYearLabel(group.monthKey)}
+                                </p>
+                                <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                                  {group.drafts.length} totaal · {definitiveCount} definitief
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                {group.drafts.map((draft) => {
+                                  const orderStatus = getOrderStatusLabel(draft);
+                                  const overviewDate = getDraftOverviewDate(draft);
+                                  const size = findOption(cakeSizes, draft.config.sizeId);
+
+                                  return (
+                                    <button
+                                      key={`${group.monthKey}-${draft.code}-${draft.updatedAt}`}
+                                      type="button"
+                                      onClick={() => loadDraft(draft)}
+                                      className="rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3 text-left shadow-sm transition active:scale-[0.99]"
+                                    >
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-black">
+                                          {draft.code}
+                                        </span>
+                                        <span
+                                          className={`rounded-full px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] ${
+                                            orderStatus === "definitief"
+                                              ? "bg-[#dce8d6] text-[#4c6842]"
+                                              : "bg-[#f8f6f3] text-[#2d2a26]/55"
+                                          }`}
+                                        >
+                                          {orderStatus}
+                                        </span>
+                                        {draft.config.paid && (
+                                          <span className="rounded-full bg-[#e8f0f2] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
+                                            betaald
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="mt-1 text-sm font-semibold text-[#2d2a26]/60">
+                                        {formatDutchShortDate(overviewDate)} ·{" "}
+                                        {draft.surname || draft.names || "Geen naam"}
+                                      </p>
+                                      <p className="mt-0.5 text-xs font-bold text-[#2d2a26]/40">
+                                        {size
+                                          ? `${size.label} (${size.personsLabel})`
+                                          : "Geen formaat"}{" "}
+                                        · bijgewerkt{" "}
+                                        {formatDutchShortDate(
+                                          draft.updatedAt.slice(0, 10),
+                                          "-"
+                                        )}
+                                      </p>
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                           );
                         })}

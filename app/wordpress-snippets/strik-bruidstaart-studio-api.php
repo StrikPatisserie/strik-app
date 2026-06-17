@@ -4,6 +4,7 @@
  *
  * Plaats deze snippet in WordPress. De app gebruikt:
  * GET /wp-json/strik/v1/wedding-cakes?key=...&search=JANSEN&deliveryDate=2026-05-12
+ * GET /wp-json/strik/v1/wedding-cakes?key=...&year=2026&limit=all
  * PUT /wp-json/strik/v1/wedding-cakes?key=...
  * DELETE /wp-json/strik/v1/wedding-cakes?key=...&code=BRUID123
  */
@@ -68,6 +69,13 @@ function strik_wedding_cakes_text($value) {
 }
 }
 
+if (!function_exists('strik_wedding_cakes_year')) {
+function strik_wedding_cakes_year($value) {
+    $year = preg_replace('/[^0-9]/', '', (string) $value);
+    return strlen($year) === 4 ? $year : '';
+}
+}
+
 if (!function_exists('strik_wedding_cakes_get_contact')) {
 function strik_wedding_cakes_get_contact($draft) {
     if (!isset($draft['config']) || !is_array($draft['config'])) {
@@ -79,6 +87,38 @@ function strik_wedding_cakes_get_contact($draft) {
     }
 
     return $draft['config']['contact'];
+}
+}
+
+if (!function_exists('strik_wedding_cakes_overview_date')) {
+function strik_wedding_cakes_overview_date($draft) {
+    $contact = strik_wedding_cakes_get_contact($draft);
+
+    foreach (array('deliveryDate', 'weddingDate') as $key) {
+        if (!empty($contact[$key])) {
+            return strik_wedding_cakes_text($contact[$key]);
+        }
+    }
+
+    if (!empty($draft['updatedAt'])) {
+        return substr(strik_wedding_cakes_text($draft['updatedAt']), 0, 10);
+    }
+
+    if (!empty($draft['createdAt'])) {
+        return substr(strik_wedding_cakes_text($draft['createdAt']), 0, 10);
+    }
+
+    return '';
+}
+}
+
+if (!function_exists('strik_wedding_cakes_matches_year')) {
+function strik_wedding_cakes_matches_year($draft, $year) {
+    if ($year === '') {
+        return true;
+    }
+
+    return substr(strik_wedding_cakes_overview_date($draft), 0, 4) === $year;
 }
 }
 
@@ -109,26 +149,52 @@ if (!function_exists('strik_wedding_cakes_get')) {
 function strik_wedding_cakes_get($request) {
     $search = strik_wedding_cakes_text($request->get_param('search'));
     $delivery_date = strik_wedding_cakes_text($request->get_param('deliveryDate'));
+    $year = strik_wedding_cakes_year($request->get_param('year'));
+    $limit = strik_wedding_cakes_text($request->get_param('limit'));
     $drafts = array_values(strik_wedding_cakes_get_all());
     $filtered = array();
 
     foreach ($drafts as $draft) {
-        if (!is_array($draft) || !strik_wedding_cakes_matches($draft, $search, $delivery_date)) {
+        if (
+            !is_array($draft)
+            || !strik_wedding_cakes_matches($draft, $search, $delivery_date)
+            || !strik_wedding_cakes_matches_year($draft, $year)
+        ) {
             continue;
         }
 
         $filtered[] = $draft;
     }
 
-    usort($filtered, function ($a, $b) {
+    usort($filtered, function ($a, $b) use ($year) {
+        if ($year !== '') {
+            $date_compare = strcmp(
+                strik_wedding_cakes_overview_date($a),
+                strik_wedding_cakes_overview_date($b)
+            );
+
+            if ($date_compare) return $date_compare;
+
+            return strcmp(
+                isset($a['code']) ? $a['code'] : '',
+                isset($b['code']) ? $b['code'] : ''
+            );
+        }
+
         return strcmp(
             isset($b['updatedAt']) ? $b['updatedAt'] : '',
             isset($a['updatedAt']) ? $a['updatedAt'] : ''
         );
     });
 
+    $response_drafts = $limit === 'all'
+        ? $filtered
+        : array_slice($filtered, 0, 50);
+
     return rest_ensure_response(array(
-        'drafts' => array_slice($filtered, 0, 50),
+        'drafts' => $response_drafts,
+        'total' => count($filtered),
+        'year' => $year,
     ));
 }
 }
@@ -252,3 +318,164 @@ add_action('rest_api_init', function () {
         ),
     ));
 });
+
+if (!function_exists('strik_wedding_cakes_admin_date')) {
+function strik_wedding_cakes_admin_date($value) {
+    $value = strik_wedding_cakes_text($value);
+    return $value !== '' ? $value : '-';
+}
+}
+
+if (!function_exists('strik_wedding_cakes_admin_value')) {
+function strik_wedding_cakes_admin_value($array, $key, $fallback = '-') {
+    if (!is_array($array) || !isset($array[$key])) {
+        return $fallback;
+    }
+
+    $value = strik_wedding_cakes_text($array[$key]);
+    return $value !== '' ? $value : $fallback;
+}
+}
+
+if (!function_exists('strik_wedding_cakes_admin_years')) {
+function strik_wedding_cakes_admin_years($drafts) {
+    $years = array();
+
+    foreach ($drafts as $draft) {
+        if (!is_array($draft)) continue;
+
+        $year = substr(strik_wedding_cakes_overview_date($draft), 0, 4);
+        if (strlen($year) === 4) {
+            $years[$year] = true;
+        }
+    }
+
+    $years = array_keys($years);
+    rsort($years, SORT_STRING);
+
+    if (empty($years)) {
+        $years[] = wp_date('Y');
+    }
+
+    return $years;
+}
+}
+
+if (!function_exists('strik_wedding_cakes_admin_menu')) {
+function strik_wedding_cakes_admin_menu() {
+    add_menu_page(
+        'Bruidstaarten',
+        'Bruidstaarten',
+        'manage_options',
+        'strik-bruidstaarten',
+        'strik_wedding_cakes_admin_page',
+        'dashicons-heart',
+        26
+    );
+}
+}
+
+add_action('admin_menu', 'strik_wedding_cakes_admin_menu');
+
+if (!function_exists('strik_wedding_cakes_admin_page')) {
+function strik_wedding_cakes_admin_page() {
+    if (!current_user_can('manage_options')) wp_die('Geen toegang.');
+
+    $all_drafts = array_values(strik_wedding_cakes_get_all());
+    $years = strik_wedding_cakes_admin_years($all_drafts);
+    $selected_year = strik_wedding_cakes_year(isset($_GET['jaar']) ? wp_unslash($_GET['jaar']) : '');
+    if ($selected_year === '') {
+        $selected_year = isset($years[0]) ? $years[0] : wp_date('Y');
+    }
+
+    $drafts = array_values(array_filter($all_drafts, function ($draft) use ($selected_year) {
+        return is_array($draft) && strik_wedding_cakes_matches_year($draft, $selected_year);
+    }));
+
+    usort($drafts, function ($a, $b) {
+        $date_compare = strcmp(
+            strik_wedding_cakes_overview_date($b),
+            strik_wedding_cakes_overview_date($a)
+        );
+
+        if ($date_compare) return $date_compare;
+
+        return strcmp(
+            isset($a['code']) ? $a['code'] : '',
+            isset($b['code']) ? $b['code'] : ''
+        );
+    });
+
+    $completed_count = 0;
+    foreach ($drafts as $draft) {
+        if (!empty($draft['config']['completed'])) $completed_count += 1;
+    }
+
+    echo '<div class="wrap">';
+    echo '<h1>Bruidstaarten</h1>';
+    echo '<p>Reserve-overzicht van de bruidstaart studio. Concepten en definitieve bestellingen staan samen in deze lijst.</p>';
+
+    echo '<form method="get" style="margin: 1rem 0;">';
+    echo '<input type="hidden" name="page" value="strik-bruidstaarten">';
+    echo '<label for="strik-wedding-cakes-year"><strong>Jaar</strong></label> ';
+    echo '<select id="strik-wedding-cakes-year" name="jaar">';
+    foreach ($years as $year) {
+        echo '<option value="' . esc_attr($year) . '"' . selected($selected_year, $year, false) . '>' . esc_html($year) . '</option>';
+    }
+    echo '</select> ';
+    submit_button('Toon jaar', 'secondary', '', false);
+    echo '</form>';
+
+    echo '<p>Gevonden bruidstaarten in <strong>' . esc_html($selected_year) . '</strong>: <strong>' . esc_html(count($drafts)) . '</strong>';
+    echo ' &middot; Definitief: <strong>' . esc_html($completed_count) . '</strong>';
+    echo ' &middot; Concept: <strong>' . esc_html(count($drafts) - $completed_count) . '</strong></p>';
+
+    if (empty($drafts)) {
+        echo '<div class="notice notice-warning"><p>Nog geen bruidstaarten gevonden voor dit jaar.</p></div>';
+        echo '</div>';
+        return;
+    }
+
+    echo '<table class="widefat striped">';
+    echo '<thead><tr><th>Leverdatum</th><th>Trouwdatum</th><th>Status</th><th>Code</th><th>Naam</th><th>Bijgewerkt</th><th>Details</th></tr></thead><tbody>';
+
+    foreach ($drafts as $draft) {
+        $config = isset($draft['config']) && is_array($draft['config']) ? $draft['config'] : array();
+        $contact = isset($config['contact']) && is_array($config['contact']) ? $config['contact'] : array();
+        $status = !empty($config['completed']) ? 'Definitief' : 'Concept';
+        $paid = !empty($config['paid']) ? 'Ja' : 'Nee';
+        $name = trim(
+            strik_wedding_cakes_admin_value($draft, 'surname', '') . ' ' .
+            strik_wedding_cakes_admin_value($draft, 'names', '')
+        );
+        if ($name === '') $name = '-';
+
+        echo '<tr>';
+        echo '<td>' . esc_html(strik_wedding_cakes_admin_date(isset($contact['deliveryDate']) ? $contact['deliveryDate'] : '')) . '</td>';
+        echo '<td>' . esc_html(strik_wedding_cakes_admin_date(isset($contact['weddingDate']) ? $contact['weddingDate'] : '')) . '</td>';
+        echo '<td>' . esc_html($status) . '</td>';
+        echo '<td><code>' . esc_html(strik_wedding_cakes_admin_value($draft, 'code')) . '</code></td>';
+        echo '<td>' . esc_html($name) . '</td>';
+        echo '<td>' . esc_html(strik_wedding_cakes_admin_date(isset($draft['updatedAt']) ? substr($draft['updatedAt'], 0, 16) : '')) . '</td>';
+        echo '<td><details><summary>Bekijk</summary>';
+        echo '<p><strong>Contact</strong><br>';
+        echo 'Telefoon: ' . esc_html(strik_wedding_cakes_admin_value($contact, 'phone')) . '<br>';
+        echo 'E-mail: ' . esc_html(strik_wedding_cakes_admin_value($contact, 'email')) . '<br>';
+        echo 'Levering: ' . esc_html(strik_wedding_cakes_admin_value($contact, 'deliveryMethod')) . '<br>';
+        echo 'Adres: ' . esc_html(strik_wedding_cakes_admin_value($contact, 'deliveryAddress')) . '</p>';
+        echo '<p><strong>Betaald:</strong> ' . esc_html($paid) . '</p>';
+
+        if (!empty($contact['notes'])) {
+            echo '<p><strong>Notities:</strong><br>' . nl2br(esc_html($contact['notes'])) . '</p>';
+        }
+
+        echo '<p><strong>Volledige configuratie:</strong></p>';
+        echo '<pre style="max-height: 28rem; overflow: auto; white-space: pre-wrap; background: #f6f7f7; padding: 10px;">' . esc_html(wp_json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) . '</pre>';
+        echo '</details></td>';
+        echo '</tr>';
+    }
+
+    echo '</tbody></table>';
+    echo '</div>';
+}
+}

@@ -40,6 +40,14 @@ export function getWeddingCakeDeleteUrl(code: string) {
   return url;
 }
 
+export function getWeddingCakeYearOverviewUrl(year: string) {
+  const url = getWeddingCakeStudioUrl();
+  url.searchParams.set("year", year.trim());
+  url.searchParams.set("limit", "all");
+
+  return url;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -195,6 +203,14 @@ export function normalizeDraftList(value: unknown): WeddingCakeDraft[] {
   });
 }
 
+export function hasWeddingCakeYearOverviewMeta(value: unknown, year: string) {
+  return (
+    isRecord(value) &&
+    value.year === year &&
+    typeof value.total === "number"
+  );
+}
+
 export function loadLocalDrafts() {
   if (typeof window === "undefined") return [];
 
@@ -256,6 +272,18 @@ export function searchLocalDrafts(search: string, deliveryDate = "") {
       contact.weddingDate === dateTerm;
 
     return matchesTerm && matchesDeliveryDate;
+  });
+}
+
+export function searchLocalDraftsByYear(year: string) {
+  const yearTerm = year.trim();
+  if (!yearTerm) return loadLocalDrafts();
+
+  return loadLocalDrafts().filter((draft) => {
+    const contact = draft.config.contact;
+    const overviewDate = contact.deliveryDate || contact.weddingDate || "";
+
+    return overviewDate.startsWith(yearTerm);
   });
 }
 
