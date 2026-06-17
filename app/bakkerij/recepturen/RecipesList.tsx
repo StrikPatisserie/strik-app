@@ -50,7 +50,7 @@ export default function RecipesList({
   }, [group, recipes, search, status, type]);
 
   return (
-    <section className="grid h-full min-h-0 gap-2 overflow-hidden lg:grid-cols-[13.5rem_minmax(0,1fr)] xl:grid-cols-[15rem_minmax(0,1fr)]">
+    <section className="grid h-full min-h-0 gap-2 overflow-hidden lg:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)]">
       <aside className="grid max-h-[13.5rem] gap-1.5 overflow-y-auto pb-2 lg:max-h-full lg:gap-2">
         <button
           type="button"
@@ -147,10 +147,10 @@ export default function RecipesList({
                   >
                     <span className={`h-full min-h-[3.35rem] ${recipeStripeClass(recipe)}`} />
                     <div className="min-w-0 px-3 py-2">
-                      <p className="truncate text-[clamp(0.98rem,2vw,1.35rem)] font-light leading-tight text-[#111111]">
+                      <p className="truncate text-[clamp(0.82rem,2vw,1.3rem)] font-light leading-tight text-[#111111]">
                         {recipe.name}
                       </p>
-                      <p className="mt-0.5 truncate text-[0.68rem] font-bold text-[#707070]">
+                      <p className="mt-0.5 truncate text-[0.6rem] font-bold text-[#707070] sm:text-[0.68rem]">
                         {recipe.productGroup || "geen groep"} - gewijzigd {formatDate(recipe.lastUpdated)}
                       </p>
                     </div>

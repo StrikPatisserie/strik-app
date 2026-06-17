@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { type ReactNode, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList from "./IngredientsList";
@@ -86,6 +87,10 @@ const tabs = [
 type TabId = (typeof tabs)[number]["id"];
 type MainTabId = "start" | "recepten" | "planning" | "beheer";
 type BeheerView = TabId | "menu";
+
+function mainTabForPath(pathname: string): MainTabId {
+  return pathname.startsWith("/bakkerij/recepturen") ? "recepten" : "start";
+}
 
 function hasStoredRecepturenData(data: RecepturenData) {
   return Boolean(
@@ -338,7 +343,10 @@ function offerForWeek(home: BakeryHomeData, weekStart: string) {
 }
 
 export default function RecepturenApp() {
-  const [mainTab, setMainTab] = useState<MainTabId>("start");
+  const pathname = usePathname();
+  const [mainTab, setMainTab] = useState<MainTabId>(() =>
+    mainTabForPath(pathname)
+  );
   const [beheerView, setBeheerView] = useState<BeheerView>("menu");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
@@ -1546,70 +1554,60 @@ export default function RecepturenApp() {
   }
 
   return (
-    <main className="h-screen h-[100dvh] overflow-hidden bg-[#faf8f5] text-[#111111]">
-      <div className="grid h-screen h-[100dvh] grid-cols-[clamp(6.6rem,9vw,7.4rem)_minmax(0,1fr)]">
-        <BakkerijSidebar
-          active={mainTab !== "start"}
-          onStart={() => openMainTab("start")}
-          onRecipes={() => openMainTab("recepten")}
-        />
+    <main className="h-[calc(100dvh-8.5rem)] overflow-hidden bg-[#faf8f5] text-[#111111] md:h-screen md:h-[100dvh]">
+      <div className="flex h-[calc(100dvh-8.5rem)] min-w-0 flex-col overflow-hidden md:h-screen md:h-[100dvh]">
+        <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
 
-        <div className="flex h-screen h-[100dvh] min-w-0 flex-col overflow-hidden">
-          <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {mainTab === "start" && (
+            <BakkerijStartScreen
+              home={bakeryHome}
+              selectedWeek={selectedOfferWeek}
+              status={bakeryHomeStatus}
+              onSelectWeek={selectOfferWeek}
+              onAddNote={addBakeryNote}
+              onUpdateNoteText={updateBakeryNoteText}
+              onSaveNote={saveBakeryNote}
+              onDeleteNote={deleteBakeryNote}
+            />
+          )}
 
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {mainTab === "start" && (
-              <BakkerijStartScreen
-                home={bakeryHome}
-                selectedWeek={selectedOfferWeek}
-                status={bakeryHomeStatus}
-                onSelectWeek={selectOfferWeek}
-                onAddNote={addBakeryNote}
-                onUpdateNoteText={updateBakeryNoteText}
-                onSaveNote={saveBakeryNote}
-                onDeleteNote={deleteBakeryNote}
+          {mainTab === "recepten" && (
+            <div className="h-full w-full px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
+              <RecipesList
+                recipes={recipeItems}
+                onOpenRecipe={openRecipe}
+                onCreateRecipe={() => createRecipe("finalProduct")}
+                onRecalculateAll={recalculateAllRecipes}
               />
-            )}
+            </div>
+          )}
 
-            {mainTab === "recepten" && (
-              <div className="mx-auto h-full w-full max-w-[74rem] px-3 py-3 sm:px-5 lg:px-7">
-                <RecipesList
+          {mainTab === "planning" && (
+            <div className="h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
+              <div className="w-full">
+                <RecepturenWorkMode
                   recipes={recipeItems}
-                  onOpenRecipe={openRecipe}
-                  onCreateRecipe={() => createRecipe("finalProduct")}
-                  onRecalculateAll={recalculateAllRecipes}
+                  ingredients={ingredientItems}
+                  lockedView="planning"
+                  startRecipeId={workStart?.recipeId}
+                  startQuantity={workStart?.quantity}
+                  startToken={workStart?.token}
+                  onOpenRecipeCard={openRecipe}
+                  onMarkProduced={markRecipeProduced}
+                  onAdjustStock={adjustRecipeStock}
+                  onUpdateProductionLog={updateProductionLogEntry}
+                  onDeleteProductionLog={deleteProductionLogEntry}
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            {mainTab === "planning" && (
-              <div className="h-full overflow-y-auto px-3 py-3 sm:px-5 lg:px-8">
-                <div className="mx-auto max-w-[78rem]">
-                  <RecepturenWorkMode
-                    recipes={recipeItems}
-                    ingredients={ingredientItems}
-                    lockedView="planning"
-                    startRecipeId={workStart?.recipeId}
-                    startQuantity={workStart?.quantity}
-                    startToken={workStart?.token}
-                    onOpenRecipeCard={openRecipe}
-                    onMarkProduced={markRecipeProduced}
-                    onAdjustStock={adjustRecipeStock}
-                    onUpdateProductionLog={updateProductionLogEntry}
-                    onDeleteProductionLog={deleteProductionLogEntry}
-                  />
-                </div>
-              </div>
-            )}
-
-            {mainTab === "beheer" && (
-              <div className="h-full overflow-y-auto px-3 py-3 sm:px-5 lg:px-8">
-                <div className="mx-auto max-w-[78rem]">
-                  {renderBeheerContent()}
-                </div>
-              </div>
-            )}
-          </div>
+          {mainTab === "beheer" && (
+            <div className="h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
+              <div className="w-full">{renderBeheerContent()}</div>
+            </div>
+          )}
         </div>
 
         {selectedRecipe && (
@@ -1630,70 +1628,6 @@ export default function RecepturenApp() {
         )}
       </div>
     </main>
-  );
-}
-
-function BakkerijSidebar({
-  active,
-  onStart,
-  onRecipes,
-}: Readonly<{
-  active: boolean;
-  onStart: () => void;
-  onRecipes: () => void;
-}>) {
-  return (
-    <aside className="relative flex h-screen h-[100dvh] flex-col items-center gap-5 rounded-r-[4rem] border-r border-[#c6d8bf] bg-[#c3d3bc] px-4 py-6 shadow-sm">
-      <button
-        type="button"
-        onClick={onStart}
-        className="flex h-14 w-14 items-center justify-center rounded-3xl bg-white/85 shadow-sm ring-1 ring-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184]"
-        aria-label="Start"
-      >
-        <span className="block h-9 w-9 overflow-hidden">
-          <img
-            src="/strik logo icon.svg"
-            alt=""
-            className="h-full w-full object-contain"
-          />
-        </span>
-      </button>
-
-      <button
-        type="button"
-        onClick={onRecipes}
-        className={`flex h-14 w-14 items-center justify-center rounded-3xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184] ${
-          active
-            ? "bg-[#ef5737] shadow-sm ring-1 ring-white/70"
-            : "bg-white hover:bg-white/85"
-        }`}
-        aria-label="Recepten"
-      >
-        <img
-          src="/apps strik_Bakkerij.svg"
-          alt=""
-          className={`h-9 w-9 object-contain ${active ? "brightness-0 invert" : ""}`}
-        />
-      </button>
-
-      <button
-        type="button"
-        className="flex h-14 w-14 items-center justify-center rounded-3xl transition hover:bg-white/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184]"
-        aria-label="Schoonmaak"
-      >
-        <img src="/UI-apps_schonmaak.svg" alt="" className="h-9 w-9 object-contain" />
-      </button>
-
-      <div className="flex-1" />
-
-      <a
-        href="/"
-        className="mb-1 flex h-14 w-14 items-center justify-center rounded-3xl transition hover:bg-white/55"
-        aria-label="Terug"
-      >
-        <img src="/UI-apps_terug.svg" alt="" className="h-9 w-9 object-contain" />
-      </a>
-    </aside>
   );
 }
 

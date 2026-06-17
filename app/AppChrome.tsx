@@ -9,7 +9,7 @@ export default function AppChrome({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
-  const isBakeryEnvironment =
+  const isBakeryWorkArea =
     pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
   const isWinkelWorkArea =
     pathname === "/winkel" ||
@@ -20,28 +20,25 @@ export default function AppChrome({
     pathname.startsWith("/bruidstaarten") ||
     pathname === "/schoonmaak" ||
     pathname.startsWith("/schoonmaak/");
+  const isWorkArea = isWinkelWorkArea || isBakeryWorkArea;
 
   return (
     <>
       <NotificationMonitor />
       <div className="min-h-dvh bg-[#faf8f5]">
         <div className="flex min-h-dvh flex-row">
-          {!isBakeryEnvironment && <WinkelSidebar />}
+          <WinkelSidebar />
 
           <main
             className={`flex-1 overflow-auto ${
-              !isBakeryEnvironment
-                ? isWinkelWorkArea
-                  ? "pb-32 md:pb-0"
-                  : "pb-24 md:pb-0"
-                : ""
+              isWorkArea ? "pb-32 md:pb-0" : "pb-24 md:pb-0"
             }`}
           >
             {children}
           </main>
         </div>
       </div>
-      {!isBakeryEnvironment && <BottomNav />}
+      <BottomNav />
     </>
   );
 }

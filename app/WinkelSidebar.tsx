@@ -8,7 +8,7 @@ import { strikIcons } from "./StrikUI";
 const mainNavItems = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJs", icon: strikIcons.ijs },
-  { href: "/bakkerij", label: "Bakkerij", icon: strikIcons.bakkerij },
+  { href: "/bakkerij/recepturen", label: "Bakkerij", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
 ];
 
@@ -21,9 +21,16 @@ const winkelNavItems = [
   { href: "/info", label: "Documenten", icon: strikIcons.info },
 ];
 
+const bakkerijNavItems = [
+  { href: "/bakkerij", label: "Overzicht", icon: strikIcons.bakkerij },
+  { href: "/bakkerij/recepturen", label: "Recepten", icon: strikIcons.recepturen },
+  { href: "/bakkerij/schoonmaak", label: "Schoonmaak", icon: strikIcons.cleaning },
+];
+
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/winkel") return pathname === "/winkel";
+  if (href === "/bakkerij") return pathname === "/bakkerij";
 
   if (href === "/winkel/haccp") {
     return (
@@ -51,9 +58,16 @@ function isWinkelWorkArea(pathname: string) {
   );
 }
 
+function isBakkerijWorkArea(pathname: string) {
+  return pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
+}
+
 export default function WinkelSidebar() {
   const pathname = usePathname();
   const showWinkelSubNav = isWinkelWorkArea(pathname);
+  const showBakkerijSubNav = isBakkerijWorkArea(pathname);
+  const subNavItems = showBakkerijSubNav ? bakkerijNavItems : winkelNavItems;
+  const showSubNav = showWinkelSubNav || showBakkerijSubNav;
 
   return (
     <>
@@ -69,6 +83,8 @@ export default function WinkelSidebar() {
           const active =
             item.href === "/winkel"
               ? showWinkelSubNav
+              : item.label === "Bakkerij"
+                ? showBakkerijSubNav
               : isActivePath(pathname, item.href);
 
           return (
@@ -93,9 +109,9 @@ export default function WinkelSidebar() {
         })}
       </aside>
 
-      {showWinkelSubNav && (
+      {showSubNav && (
         <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-[5.4rem] md:shrink-0 md:flex-col md:items-center md:gap-4 md:rounded-r-[3.2rem] md:border-r md:border-[#e7e0d8] md:bg-white/85 md:px-2 md:py-24">
-          {winkelNavItems.map((item) => {
+          {subNavItems.map((item) => {
             const active = isActivePath(pathname, item.href);
 
             return (
@@ -121,10 +137,10 @@ export default function WinkelSidebar() {
         </aside>
       )}
 
-      {showWinkelSubNav && (
+      {showSubNav && (
         <nav className="fixed bottom-[5rem] left-2 right-2 z-40 rounded-xl border border-[#e7e0d8] bg-white/95 p-1.5 shadow-sm backdrop-blur md:hidden">
           <div className="flex gap-1 overflow-x-auto">
-            {winkelNavItems.map((item) => {
+            {subNavItems.map((item) => {
               const active = isActivePath(pathname, item.href);
 
               return (
