@@ -4542,17 +4542,24 @@ export default function BruidstaartStudioConfigurator() {
     }
   }
 
-  function startAgain() {
+  function resetCakeDesign() {
     const confirmed = window.confirm(
-      "Wil je echt alle gegevens wissen en opnieuw beginnen?"
+      "Wil je echt het taartontwerp wissen? De klantgegevens blijven bestaan."
     );
 
     if (!confirmed) return;
 
-    setConfig(createEmptyWeddingCakeConfig());
+    setConfig((current) => ({
+      ...createEmptyWeddingCakeConfig(),
+      contact: { ...current.contact },
+      paid: current.paid,
+      completed: false,
+    }));
     setDraftResults([]);
-    setDraftStatus("Nieuw formulier gestart.");
-    goToStep(0);
+    setDraftStatus(
+      "Taartontwerp gewist. Klantgegevens blijven staan; bestelling staat weer als concept."
+    );
+    goToStep(1);
   }
 
   const canGoBack = stepIndex > 0;
@@ -4737,13 +4744,13 @@ export default function BruidstaartStudioConfigurator() {
 
       {step.id === "overzicht" && (
         <section className="studio-no-print ml-auto max-w-[44rem] rounded-[0.85rem] border border-[#ecd9a9] bg-[#fff4d1] p-1.5 shadow-sm">
-          <div className="grid gap-1.5 lg:grid-cols-[4.1rem_minmax(0,1fr)_auto] lg:items-center">
+          <div className="grid gap-1.5 lg:grid-cols-[3.2rem_minmax(0,1fr)_auto] lg:items-center">
             <div>
-              <h3 className="text-[0.43rem] font-bold italic uppercase tracking-[0.06em] text-[#2d2a26]/50 sm:text-[0.48rem]">
+              <h3 className="text-[0.28rem] font-bold italic uppercase tracking-[0.06em] text-[#2d2a26]/50 sm:text-[0.32rem]">
                 Huidige bestelling
               </h3>
-              <p className="text-[0.43rem] font-semibold italic leading-tight text-[#2d2a26]/35 sm:text-[0.48rem]">
-                Opslaan of opnieuw beginnen.
+              <p className="text-[0.34rem] font-semibold italic leading-tight text-[#2d2a26]/35 sm:text-[0.38rem]">
+                Ontwerp resetten.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-1.5">
@@ -4797,9 +4804,9 @@ export default function BruidstaartStudioConfigurator() {
               </button>
               <button
                 type="button"
-                onClick={startAgain}
-                aria-label="Begin opnieuw"
-                title="Begin opnieuw"
+                onClick={resetCakeDesign}
+                aria-label="Taartontwerp wissen"
+                title="Taartontwerp wissen"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[#2d2a26] shadow-sm transition active:scale-[0.98]"
               >
                 <RestartIcon />
