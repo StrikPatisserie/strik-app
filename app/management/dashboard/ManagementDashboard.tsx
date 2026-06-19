@@ -25,6 +25,8 @@ type DashboardRow = {
 };
 
 type DashboardResponse = {
+  period: "week" | "month";
+  periodLabel: string;
   year: number;
   week: number;
   previousWeek: { year: number; week: number };
@@ -149,9 +151,11 @@ function Metric({
 function DashboardRowCard({
   row,
   compareLabel,
+  period,
 }: Readonly<{
   row: DashboardRow;
   compareLabel: string;
+  period: "week" | "month";
 }>) {
   return (
     <article className="rounded-[1.25rem] border border-[#e7e0d8]/80 bg-white/90 p-3 shadow-sm">
@@ -197,7 +201,10 @@ function DashboardRowCard({
               {row.laborCostStatus === "missing" ? "geen data" : row.laborCostStatus}
             </span>
           </div>
-          <Metric label="Vorige week" value={formatIndex(row.previousWeekIndex)} />
+          <Metric
+            label={period === "month" ? "Vorige periode" : "Vorige week"}
+            value={formatIndex(row.previousWeekIndex)}
+          />
           <Metric label={compareLabel} value={formatIndex(row.manualCompareIndex)} />
         </div>
       </div>
@@ -221,6 +228,7 @@ function DashboardRowCard({
 
 export default function ManagementDashboard() {
   const now = new Date();
+  const [period, setPeriod] = useState<"week" | "month">("week");
   const [year, setYear] = useState(getIsoWeekYear(now));
   const [week, setWeek] = useState(getIsoWeek(now));
   const [compareYear, setCompareYear] = useState(getIsoWeekYear(now) - 1);
@@ -238,6 +246,7 @@ export default function ManagementDashboard() {
 
       try {
         const params = new URLSearchParams({
+          period,
           year: String(year),
           week: String(week),
           compareYear: String(compareYear),
@@ -280,7 +289,7 @@ export default function ManagementDashboard() {
     return () => {
       ignoreResult = true;
     };
-  }, [compareWeek, compareYear, week, year]);
+  }, [compareWeek, compareYear, period, week, year]);
 
   const compareLabel = useMemo(
     () => `${compareYear} · week ${compareWeek}`,
@@ -296,7 +305,27 @@ export default function ManagementDashboard() {
   return (
     <div className="space-y-4">
       <section className="rounded-[1.5rem] border border-[#e7e0d8]/80 bg-white/85 p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[auto_7rem_7rem_minmax(0,1fr)_7rem_7rem_auto] lg:items-end">
+        <div className="mb-3 grid grid-cols-2 rounded-full bg-[#f8f6f3] p-1">
+          {[
+            ["week", "Week"],
+            ["month", "Maand"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setPeriod(value as "week" | "month")}
+              className={`rounded-full px-3 py-2 text-sm font-black transition ${
+                period === value
+                  ? "bg-[#ef533b] text-white shadow-sm"
+                  : "text-[#2d2a26]/50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[auto_7rem_7rem_minmax(0,1fr)_minmax(0,1fr)_7rem_7rem_auto] lg:items-end">
           <button
             type="button"
             onClick={() => moveWeek(-1)}
@@ -328,7 +357,15 @@ export default function ManagementDashboard() {
           </label>
           <div className="rounded-2xl bg-[#f8f6f3] px-4 py-3 text-center">
             <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-              Handmatige vergelijkweek
+              Periode
+            </p>
+            <p className="text-sm font-black text-[#1a1815]">
+              {data?.periodLabel || `Week ${week} · ${year}`}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-[#f8f6f3] px-4 py-3 text-center">
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+              Vergelijk
             </p>
             <p className="text-sm font-black text-[#1a1815]">{compareLabel}</p>
           </div>
@@ -408,6 +445,7 @@ export default function ManagementDashboard() {
                 key={row.shop}
                 row={row}
                 compareLabel={compareLabel}
+                period={data.period}
               />
             ))}
           </section>

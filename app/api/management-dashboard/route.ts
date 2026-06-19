@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import {
   getTamigoStatusCode,
   getWeekLaborCostScheduleForIsoWeek,
+  type LaborCostSchedule,
 } from "../../tamigoApi";
 import {
   findRevenueRecord,
-  getRevenueTotal,
   revenueShops,
+  type RevenueRecord,
   type RevenueShop,
 } from "../../management/revenueData";
 import { getMergedRevenueData } from "../../management/revenueServer";
@@ -15,9 +16,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Status = "green" | "orange" | "red" | "missing";
+type Period = "week" | "month";
+type PeriodWeek = { year: number; week: number };
 
 function getIsoWeekYear(date: Date) {
-  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNumber = target.getUTCDay() || 7;
   target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
 
@@ -25,7 +28,7 @@ function getIsoWeekYear(date: Date) {
 }
 
 function getIsoWeek(date: Date) {
-  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   const dayNumber = target.getUTCDay() || 7;
   target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
   const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
@@ -33,8 +36,23 @@ function getIsoWeek(date: Date) {
   return Math.ceil(((target.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 }
 
+function getIsoParts(date: Date): PeriodWeek {
+  return {
+    year: getIsoWeekYear(date),
+    week: getIsoWeek(date),
+  };
+}
+
 function getWeeksInIsoYear(year: number) {
   return getIsoWeek(new Date(Date.UTC(year, 11, 28)));
+}
+
+function getIsoWeekStartDate(year: number, week: number) {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  jan4.setUTCDate(jan4.getUTCDate() - jan4Day + 1 + (week - 1) * 7);
+
+  return jan4;
 }
 
 function getPreviousWeek(year: number, week: number) {
@@ -46,6 +64,32 @@ function getPreviousWeek(year: number, week: number) {
   return { year: previousYear, week: getWeeksInIsoYear(previousYear) };
 }
 
+function getShiftedMonthWeek(year: number, week: number, monthOffset: number) {
+  const weekStart = getIsoWeekStartDate(year, week);
+  const anchor = new Date(
+    Date.UTC(
+      weekStart.getUTCFullYear(),
+      weekStart.getUTCMonth() + monthOffset,
+      15
+    )
+  );
+
+  return getIsoParts(anchor);
+}
+
+function getShiftedYearWeek(year: number, week: number, yearOffset: number) {
+  const weekStart = getIsoWeekStartDate(year, week);
+  const anchor = new Date(
+    Date.UTC(
+      weekStart.getUTCFullYear() + yearOffset,
+      weekStart.getUTCMonth(),
+      15
+    )
+  );
+
+  return getIsoParts(anchor);
+}
+
 function numberParam(url: URL, key: string, fallback: number) {
   const value = Number(url.searchParams.get(key));
 
@@ -54,6 +98,62 @@ function numberParam(url: URL, key: string, fallback: number) {
 
 function clampWeek(week: number) {
   return Math.max(1, Math.min(53, Math.trunc(week)));
+}
+
+function getPeriod(url: URL): Period {
+  return url.searchParams.get("period") === "month" ? "month" : "week";
+}
+
+function dedupeWeeks(weeks: PeriodWeek[]) {
+  const seen = new Set<string>();
+
+  return weeks.filter((week) => {
+    const key = `${week.year}-${week.week}`;
+    if (seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function getPeriodWeeks(year: number, week: number, period: Period) {
+  if (period === "week") return [{ year, week }];
+
+  const selectedWeekStart = getIsoWeekStartDate(year, week);
+  const monthYear = selectedWeekStart.getUTCFullYear();
+  const month = selectedWeekStart.getUTCMonth();
+  const monthStart = new Date(Date.UTC(monthYear, month, 1));
+  const monthEnd = new Date(Date.UTC(monthYear, month + 1, 1));
+  const firstDay = monthStart.getUTCDay() || 7;
+  const cursor = new Date(monthStart);
+  cursor.setUTCDate(cursor.getUTCDate() - firstDay + 1);
+
+  const weeks: PeriodWeek[] = [];
+  while (cursor < monthEnd) {
+    weeks.push(getIsoParts(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 7);
+  }
+
+  return dedupeWeeks(weeks);
+}
+
+function getPeriodLabel(year: number, week: number, period: Period) {
+  if (period === "week") return `Week ${week} · ${year}`;
+
+  const selectedWeekStart = getIsoWeekStartDate(year, week);
+  const monthLabel = new Intl.DateTimeFormat("nl-NL", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(selectedWeekStart);
+
+  return monthLabel;
+}
+
+function getCompareAnchor(year: number, week: number, period: Period) {
+  return period === "month"
+    ? getShiftedMonthWeek(year, week, -12)
+    : { year: year - 1, week };
 }
 
 function percentDifference(current: number | null, compare: number | null) {
@@ -90,69 +190,134 @@ function getLaborCostStatus(shop: RevenueShop, value: number | null): Status {
   return "red";
 }
 
+function sumRevenue(
+  records: RevenueRecord[],
+  weeks: PeriodWeek[],
+  shop: RevenueShop
+) {
+  let amount = 0;
+  let foundCount = 0;
+  let hasManual = false;
+  const notes: string[] = [];
+
+  for (const periodWeek of weeks) {
+    const record = findRevenueRecord(records, periodWeek.year, periodWeek.week, shop);
+    if (!record) continue;
+
+    amount += record.amount;
+    foundCount += 1;
+    if (record.source === "manual") hasManual = true;
+    if (record.note) notes.push(record.note);
+  }
+
+  return {
+    amount: foundCount > 0 ? Number(amount.toFixed(2)) : null,
+    missing: foundCount < weeks.length,
+    note: [...new Set(notes)].join(" · "),
+    source: foundCount === 0 ? null : hasManual ? "manual" : "excel",
+  };
+}
+
+async function fetchLaborSchedules(weeks: PeriodWeek[]) {
+  const results = await Promise.allSettled(
+    weeks.map((week) =>
+      getWeekLaborCostScheduleForIsoWeek(week.year, week.week)
+    )
+  );
+  const schedules: LaborCostSchedule[] = [];
+  const warnings: string[] = [];
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      schedules.push(result.value);
+      continue;
+    }
+
+    const status = getTamigoStatusCode(result.reason);
+    warnings.push(
+      status === 403
+        ? "Tamigo gaf geen toegang tot rooster/loonkosten voor een periode."
+        : "Tamigo uren en loonkosten konden voor een periode niet geladen worden."
+    );
+  }
+
+  return {
+    schedules,
+    warning: [...new Set(warnings)].join(" "),
+  };
+}
+
+function sumLaborForShop(schedules: LaborCostSchedule[], shop: RevenueShop) {
+  return schedules.reduce(
+    (totals, schedule) => {
+      for (const day of schedule.days) {
+        const dayShop = day.shops.find((item) => item.shop === shop);
+        if (!dayShop) continue;
+
+        totals.hours += dayShop.hours;
+        totals.cost += dayShop.cost;
+        totals.missingHours += dayShop.missingHours;
+        totals.missingShifts += dayShop.missingShifts;
+      }
+
+      return totals;
+    },
+    { hours: 0, cost: 0, missingHours: 0, missingShifts: 0 }
+  );
+}
+
 export async function GET(request: Request) {
   const now = new Date();
   const url = new URL(request.url);
-  const year = numberParam(url, "year", getIsoWeekYear(now));
-  const week = clampWeek(numberParam(url, "week", getIsoWeek(now)));
-  const previousWeek = getPreviousWeek(year, week);
-  const sameWeekLastYear = { year: year - 1, week };
-  const compareYear = numberParam(url, "compareYear", sameWeekLastYear.year);
-  const compareWeek = clampWeek(
-    numberParam(url, "compareWeek", sameWeekLastYear.week)
+  const period = getPeriod(url);
+  const currentDate = new Date(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
   );
-  const revenue = await getMergedRevenueData();
-  let laborSchedule: Awaited<ReturnType<typeof getWeekLaborCostScheduleForIsoWeek>> | null =
-    null;
-  let laborWarning = "";
-
-  try {
-    laborSchedule = await getWeekLaborCostScheduleForIsoWeek(year, week);
-  } catch (error) {
-    const status = getTamigoStatusCode(error);
-    laborWarning =
-      status === 403
-        ? "Tamigo gaf geen toegang tot rooster/loonkosten voor deze week."
-        : "Tamigo uren en loonkosten konden tijdelijk niet geladen worden.";
-  }
+  const year = numberParam(url, "year", getIsoWeekYear(currentDate));
+  const week = clampWeek(numberParam(url, "week", getIsoWeek(currentDate)));
+  const previousPeriod =
+    period === "month"
+      ? getShiftedMonthWeek(year, week, -1)
+      : getPreviousWeek(year, week);
+  const samePeriodLastYear = getCompareAnchor(year, week, period);
+  const compareYear = numberParam(url, "compareYear", samePeriodLastYear.year);
+  const compareWeek = clampWeek(
+    numberParam(url, "compareWeek", samePeriodLastYear.week)
+  );
+  const periodWeeks = getPeriodWeeks(year, week, period);
+  const previousPeriodWeeks = getPeriodWeeks(
+    previousPeriod.year,
+    previousPeriod.week,
+    period
+  );
+  const samePeriodLastYearWeeks = getPeriodWeeks(
+    samePeriodLastYear.year,
+    samePeriodLastYear.week,
+    period
+  );
+  const manualPeriodWeeks = getPeriodWeeks(compareYear, compareWeek, period);
+  const [revenue, labor] = await Promise.all([
+    getMergedRevenueData(),
+    fetchLaborSchedules(periodWeeks),
+  ]);
 
   const rows = revenueShops.map((shop) => {
-    const currentRevenue = findRevenueRecord(revenue.records, year, week, shop);
-    const previousRevenue = findRevenueRecord(
+    const currentRevenue = sumRevenue(revenue.records, periodWeeks, shop);
+    const previousRevenue = sumRevenue(revenue.records, previousPeriodWeeks, shop);
+    const lastYearRevenue = sumRevenue(
       revenue.records,
-      previousWeek.year,
-      previousWeek.week,
+      samePeriodLastYearWeeks,
       shop
     );
-    const lastYearRevenue = findRevenueRecord(
-      revenue.records,
-      sameWeekLastYear.year,
-      sameWeekLastYear.week,
-      shop
-    );
-    const manualRevenue = findRevenueRecord(
-      revenue.records,
-      compareYear,
-      compareWeek,
-      shop
-    );
-    const laborShop = laborSchedule?.days.reduce(
-      (totals, day) => {
-        const dayShop = day.shops.find((item) => item.shop === shop);
-        if (!dayShop) return totals;
-
-        return {
-          hours: totals.hours + dayShop.hours,
-          cost: totals.cost + dayShop.cost,
-          missingHours: totals.missingHours + dayShop.missingHours,
-          missingShifts: totals.missingShifts + dayShop.missingShifts,
-        };
-      },
-      { hours: 0, cost: 0, missingHours: 0, missingShifts: 0 }
-    );
-    const revenueAmount = currentRevenue?.amount ?? null;
-    const hours = laborShop ? Number(laborShop.hours.toFixed(2)) : null;
-    const laborCost = laborShop ? Number(laborShop.cost.toFixed(2)) : null;
+    const manualRevenue = sumRevenue(revenue.records, manualPeriodWeeks, shop);
+    const laborShop = sumLaborForShop(labor.schedules, shop);
+    const revenueAmount = currentRevenue.amount;
+    const hours = labor.schedules.length
+      ? Number(laborShop.hours.toFixed(2))
+      : null;
+    const laborCost = labor.schedules.length
+      ? Number(laborShop.cost.toFixed(2))
+      : null;
     const productivity =
       revenueAmount !== null && hours && hours > 0
         ? Number((revenueAmount / hours).toFixed(2))
@@ -167,34 +332,32 @@ export async function GET(request: Request) {
       year,
       week,
       revenue: revenueAmount,
-      revenueMissing: revenueAmount === null,
+      revenueMissing: currentRevenue.missing,
       hours,
       laborCost,
-      missingLaborHours: laborShop
-        ? Number(laborShop.missingHours.toFixed(2))
-        : 0,
-      missingLaborShifts: laborShop?.missingShifts || 0,
+      missingLaborHours: Number(laborShop.missingHours.toFixed(2)),
+      missingLaborShifts: laborShop.missingShifts,
       productivity,
       productivityStatus: getProductivityStatus(shop, productivity),
       laborCostPercentage,
       laborCostStatus: getLaborCostStatus(shop, laborCostPercentage),
       previousWeekIndex: percentDifference(
         revenueAmount,
-        previousRevenue?.amount ?? null
+        previousRevenue.amount
       ),
       sameWeekLastYearIndex: percentDifference(
         revenueAmount,
-        lastYearRevenue?.amount ?? null
+        lastYearRevenue.amount
       ),
       manualCompareIndex: percentDifference(
         revenueAmount,
-        manualRevenue?.amount ?? null
+        manualRevenue.amount
       ),
-      note: currentRevenue?.note || "",
-      source: currentRevenue?.source || null,
+      note: currentRevenue.note,
+      source: currentRevenue.source,
     };
   });
-  const totalRevenue = getRevenueTotal(revenue.records, year, week);
+  const totalRevenue = rows.reduce((total, row) => total + (row.revenue || 0), 0);
   const totalHours = rows.reduce((total, row) => total + (row.hours || 0), 0);
   const totalLaborCost = rows.reduce(
     (total, row) => total + (row.laborCost || 0),
@@ -204,13 +367,16 @@ export async function GET(request: Request) {
   return NextResponse.json(
     {
       generatedAt: now.toISOString(),
+      period,
+      periodLabel: getPeriodLabel(year, week, period),
+      periodWeeks,
       year,
       week,
-      previousWeek,
-      sameWeekLastYear,
+      previousWeek: previousPeriod,
+      sameWeekLastYear: samePeriodLastYear,
       manualCompare: { year: compareYear, week: compareWeek },
       storage: revenue.storage,
-      laborWarning,
+      laborWarning: labor.warning,
       totals: {
         revenue: Number(totalRevenue.toFixed(2)),
         hours: Number(totalHours.toFixed(2)),
