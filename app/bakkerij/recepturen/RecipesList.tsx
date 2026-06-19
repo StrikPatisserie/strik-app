@@ -23,6 +23,7 @@ export default function RecipesList({
   const [group, setGroup] = useState("all");
   const [status, setStatus] = useState("all");
   const [type, setType] = useState("all");
+  const [recalculateStatus, setRecalculateStatus] = useState("");
 
   const groupOptions = useMemo(
     () =>
@@ -111,14 +112,26 @@ export default function RecipesList({
           </div>
         </div>
 
-        <div className="hidden gap-2 lg:grid">
+        <div className="hidden items-start gap-2 self-start lg:flex">
           <button
             type="button"
-            onClick={onRecalculateAll}
-            className="border border-[#c3d3bc] bg-white px-3 py-2 text-left text-xs font-black text-[#707070]"
+            onClick={() => {
+              setRecalculateStatus("bezig...");
+              onRecalculateAll();
+              window.setTimeout(() => setRecalculateStatus("herberekend"), 80);
+              window.setTimeout(() => setRecalculateStatus(""), 2200);
+            }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#c3d3bc] bg-white text-lg font-black leading-none text-[#45663b] shadow-sm transition hover:bg-[#f8f8f6] active:scale-95"
+            aria-label="Herbereken alle kostprijzen"
+            title="Herbereken alles"
           >
-            Herbereken alles
+            ⟳
           </button>
+          {recalculateStatus && (
+            <span className="self-center text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+              {recalculateStatus}
+            </span>
+          )}
         </div>
       </aside>
 

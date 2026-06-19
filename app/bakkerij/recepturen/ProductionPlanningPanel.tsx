@@ -261,10 +261,10 @@ export default function ProductionPlanningPanel({
 
   return (
     <div className="grid gap-4">
-      <section className="grid gap-5 border border-[#c3d3bc] bg-white p-3 sm:p-4 lg:grid-cols-[minmax(17rem,0.78fr)_minmax(23rem,1.22fr)] lg:p-5">
+      <section className="grid gap-5 border border-[#c3d3bc] bg-white p-3 sm:p-4 lg:grid-cols-[minmax(24rem,0.95fr)_minmax(26rem,1.05fr)] lg:p-5">
         <div>
           <h3 className="text-lg font-black">Weekplanning</h3>
-          <div className="mt-3 grid max-w-[22rem] grid-cols-[2.45rem_2.45rem_minmax(0,1fr)] border border-[#4b4b4b] bg-[#f5f5f3]">
+          <div className="mt-3 grid w-full grid-cols-[2.45rem_2.45rem_minmax(0,1fr)] border border-[#4b4b4b] bg-[#f5f5f3]">
             <button
               type="button"
               onClick={() => setSelectedWeek(addDays(selectedWeek, -7))}
@@ -286,7 +286,7 @@ export default function ProductionPlanningPanel({
             </div>
           </div>
 
-          <div className="mt-0 max-w-[22rem] border-x border-b border-[#8c8c8c]">
+          <div className="mt-0 w-full border-x border-b border-[#8c8c8c]">
             {weekPlanningRows.length ? (
               weekPlanningRows.map((row) =>
                 row.type === "recipe" ? (
@@ -318,7 +318,7 @@ export default function ProductionPlanningPanel({
             )}
           </div>
 
-          <div className="mt-5 flex max-w-[22rem] gap-2">
+          <div className="mt-5 flex w-full gap-2">
             <button
               type="button"
               onClick={() => setManualProductionOpen(true)}
