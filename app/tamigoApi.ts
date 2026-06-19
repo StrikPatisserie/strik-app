@@ -9,8 +9,10 @@ const TAMIGO_MAX_EMPLOYEE_PAGES = getPositiveNumber(
 const AMSTERDAM_TIME_ZONE = "Europe/Amsterdam";
 
 let cachedTamigoSessionToken: string | null = null;
+let cachedTamigoLaborSessionToken: string | null = null;
 
 type JsonRecord = Record<string, unknown>;
+type TamigoAuthScope = "default" | "labor";
 
 type TamigoSimpleEmployee = {
   EmployeeId?: string;
@@ -278,8 +280,11 @@ function getPositiveNumber(value: string | undefined, fallback: number) {
     : fallback;
 }
 
-function getTamigoApiKey() {
-  const apiKey = process.env.TAMIGO_API_KEY;
+function getTamigoApiKey(scope: TamigoAuthScope = "default") {
+  const apiKey =
+    scope === "labor" && process.env.TAMIGO_LOON_API_KEY
+      ? process.env.TAMIGO_LOON_API_KEY
+      : process.env.TAMIGO_API_KEY;
 
   if (!apiKey) {
     throw new TamigoConfigurationError("Tamigo API key is nog niet ingesteld.");
@@ -288,7 +293,17 @@ function getTamigoApiKey() {
   return apiKey;
 }
 
-function getTamigoApplicationName() {
+function getTamigoApplicationName(scope: TamigoAuthScope = "default") {
+  if (scope === "labor") {
+    return (
+      process.env.TAMIGO_LOON_APPLICATION_NAME ||
+      process.env.TAMIGO_APPLICATION_NAME ||
+      process.env.TAMIGO_API_NAME ||
+      process.env.TAMIGO_APP_NAME ||
+      ""
+    );
+  }
+
   return (
     process.env.TAMIGO_APPLICATION_NAME ||
     process.env.TAMIGO_API_NAME ||
@@ -297,15 +312,18 @@ function getTamigoApplicationName() {
   );
 }
 
-async function getTamigoAccessToken() {
-  const applicationName = getTamigoApplicationName();
+async function getTamigoAccessToken(scope: TamigoAuthScope = "default") {
+  const applicationName = getTamigoApplicationName(scope);
 
   if (!applicationName) {
-    return getTamigoApiKey();
+    return getTamigoApiKey(scope);
   }
 
-  if (cachedTamigoSessionToken) {
-    return cachedTamigoSessionToken;
+  const cachedToken =
+    scope === "labor" ? cachedTamigoLaborSessionToken : cachedTamigoSessionToken;
+
+  if (cachedToken) {
+    return cachedToken;
   }
 
   const response = await fetch(createTamigoUrl("/v2/Login/Application"), {
@@ -316,7 +334,7 @@ async function getTamigoAccessToken() {
     },
     body: JSON.stringify({
       Name: applicationName,
-      Key: getTamigoApiKey(),
+      Key: getTamigoApiKey(scope),
     }),
     cache: "no-store",
   });
@@ -334,7 +352,14 @@ async function getTamigoAccessToken() {
     throw new TamigoApiError("Tamigo gaf geen sessietoken terug.");
   }
 
-  cachedTamigoSessionToken = textFrom(data.SessionToken);
+  const sessionToken = textFrom(data.SessionToken);
+
+  if (scope === "labor") {
+    cachedTamigoLaborSessionToken = sessionToken;
+    return cachedTamigoLaborSessionToken;
+  }
+
+  cachedTamigoSessionToken = sessionToken;
 
   return cachedTamigoSessionToken;
 }
@@ -390,12 +415,16 @@ function getErrorMessage(data: unknown, fallback: string) {
   );
 }
 
-async function tamigoGet(path: string, params?: Record<string, string>) {
+async function tamigoGet(
+  path: string,
+  params?: Record<string, string>,
+  scope: TamigoAuthScope = "default"
+) {
   const response = await fetch(createTamigoUrl(path, params), {
     method: "GET",
     headers: {
       Accept: "application/json",
-      "x-tamigo-token": await getTamigoAccessToken(),
+      "x-tamigo-token": await getTamigoAccessToken(scope),
     },
     cache: "no-store",
   });
@@ -404,8 +433,8 @@ async function tamigoGet(path: string, params?: Record<string, string>) {
 
   if (!response.ok) {
     const authorizationMessage =
-      response.status === 401 && !getTamigoApplicationName()
-        ? "Tamigo API authorisatie mislukt. Als dit een application key is, stel ook TAMIGO_APPLICATION_NAME in."
+      response.status === 401 && !getTamigoApplicationName(scope)
+        ? "Tamigo API authorisatie mislukt. Als dit een application key is, stel ook de bijbehorende applicatienaam in."
         : "Tamigo API-verzoek is mislukt.";
 
     throw new TamigoApiError(
@@ -539,10 +568,14 @@ export async function fetchTamigoEmployeesPage(page = 0) {
 }
 
 async function fetchTamigoEmployeeDetailsPage(page = 0) {
-  const data = await tamigoGet("/v2/Employees/GetEmployeeDetails/", {
-    page: String(page),
-    includedeleted: "false",
-  });
+  const data = await tamigoGet(
+    "/v2/Employees/GetEmployeeDetails/",
+    {
+      page: String(page),
+      includedeleted: "false",
+    },
+    "labor"
+  );
 
   return getArrayRecords(data).map(toDetailedEmployee);
 }
