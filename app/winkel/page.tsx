@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import CompactAgendaPanel from "../CompactAgendaPanel";
+import CompactLatestNewsPanel from "../CompactLatestNewsPanel";
 import CompactStaffOverview from "../CompactStaffOverview";
 import WeeklyOfferPanel from "../WeeklyOfferPanel";
 import { strikIcons } from "../StrikUI";
@@ -23,9 +24,9 @@ export default function WinkelPage() {
           </h1>
         </header>
 
-        <div className="grid grid-cols-2 gap-2 sm:gap-6 lg:gap-7">
-          <CompactAgendaPanel />
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,0.82fr)_minmax(0,1fr)] sm:gap-6 lg:gap-7">
           <WeeklyOfferPanel />
+          <CompactLatestNewsPanel />
         </div>
 
         <section className="rounded-[0.9rem] border border-[#c3d3bc] bg-[#dce8d6] p-1.5 shadow-sm sm:rounded-[1.25rem] sm:p-3">
@@ -42,6 +43,8 @@ export default function WinkelPage() {
             ))}
           </div>
         </section>
+
+        <CompactAgendaPanel />
 
         <CompactStaffOverview />
       </div>

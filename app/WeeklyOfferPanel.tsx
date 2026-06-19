@@ -111,12 +111,12 @@ export default function WeeklyOfferPanel() {
         </div>
       </div>
 
-      <div className="flex min-h-[12rem] items-center justify-center overflow-hidden rounded-[0.75rem] bg-white sm:min-h-[17rem] sm:rounded-[1rem]">
+      <div className="mx-auto flex aspect-[210/297] w-full max-w-[18rem] items-center justify-center overflow-hidden rounded-[0.75rem] bg-white sm:max-w-[23rem] sm:rounded-[1rem] lg:max-w-[24rem]">
         {offer?.imageUrl ? (
           <img
             src={offer.imageUrl}
             alt={offer.label || "Aanbieding van de week"}
-            className="h-[12rem] w-full object-cover sm:h-auto sm:max-h-[17rem] sm:object-contain"
+            className="h-full w-full object-contain"
           />
         ) : (
           <p className="px-3 text-center text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/35 sm:px-5 sm:text-sm">
