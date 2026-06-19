@@ -54,6 +54,7 @@ import type {
   InvoiceLine,
   PackagingItem,
   ProductionLogEntry,
+  ProductionRequest,
   Recipe,
   RecipeType,
   RecipeUnit,
@@ -62,6 +63,7 @@ import {
   ingredientPackagePrice,
   normalizeSearch,
   normalizePackagePrice,
+  normalizeProductionRequests,
   pricePerBaseUnitFromPackagePrice,
   productionLogForRecipe,
   quantityLabel,
@@ -614,6 +616,58 @@ export default function RecepturenApp() {
         invoiceImports: invoiceItems,
       },
       `${recipeToProduce.name} staat als gemaakt geregistreerd.`
+    );
+  }
+
+  function planRecipeProduction(
+    recipeToPlan: Recipe,
+    quantity: number,
+    date: string,
+    reason?: string
+  ) {
+    const cleanDate = date.trim();
+    const cleanQuantity = Math.max(0, quantity);
+
+    if (!cleanDate || cleanQuantity <= 0) {
+      persistRecepturenData(
+        {
+          ingredients: ingredientItems,
+          recipes: recipeItems,
+          invoiceImports: invoiceItems,
+        },
+        "Vul een datum en hoeveelheid in om productie te plannen."
+      );
+      return;
+    }
+
+    const request: ProductionRequest = {
+      id: createRecepturenLocalId("request"),
+      date: cleanDate,
+      quantity: cleanQuantity,
+      reason: reason?.trim() || "Handmatige weekplanning",
+      status: "open",
+    };
+    const nextRecipes = recipeItems.map((recipe) =>
+      recipe.id === recipeToPlan.id
+        ? {
+            ...recipe,
+            productionRequests: normalizeProductionRequests([
+              request,
+              ...(recipe.productionRequests || []),
+            ]),
+          }
+        : recipe
+    );
+
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        invoiceImports: invoiceItems,
+      },
+      `${recipeToPlan.name} is toegevoegd aan de weekplanning.`
     );
   }
 
@@ -1595,6 +1649,7 @@ export default function RecepturenApp() {
                   startToken={workStart?.token}
                   onOpenRecipeCard={openRecipe}
                   onMarkProduced={markRecipeProduced}
+                  onPlanProduction={planRecipeProduction}
                   onAdjustStock={adjustRecipeStock}
                   onUpdateProductionLog={updateProductionLogEntry}
                   onDeleteProductionLog={deleteProductionLogEntry}
@@ -2469,6 +2524,10 @@ function localDateFromInput(value: string) {
   if (!match) return new Date(value);
 
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function createRecepturenLocalId(prefix: string) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function backupStamp() {

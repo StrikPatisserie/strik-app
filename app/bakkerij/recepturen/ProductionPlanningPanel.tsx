@@ -20,6 +20,7 @@ export default function ProductionPlanningPanel({
   recipes,
   onOpenRecipe,
   onMarkProduced,
+  onPlanProduction,
   onAdjustStock,
   onUpdateProductionLog,
   onDeleteProductionLog,
@@ -32,6 +33,12 @@ export default function ProductionPlanningPanel({
     quantity: number,
     requestId?: string,
     date?: string
+  ) => void;
+  onPlanProduction?: (
+    recipe: Recipe,
+    quantity: number,
+    date: string,
+    reason?: string
   ) => void;
   onAdjustStock?: (recipe: Recipe, quantity: number, date: string) => void;
   onUpdateProductionLog?: (
@@ -61,6 +68,29 @@ export default function ProductionPlanningPanel({
   } | null>(null);
   const needs = productionNeeds(recipes);
   const forecasts = productionForecasts(recipes);
+  const weekPlanningNeeds = useMemo(
+    () =>
+      [
+        ...recipes.flatMap((recipe) =>
+          openProductionRequests(recipe).map((request) =>
+            productionNeedForRequest(recipe, request)
+          )
+        ),
+        ...forecasts,
+      ]
+        .filter((need) => isDateInWeek(need.nextProductionDate, selectedWeek))
+        .sort(
+          (first, second) =>
+            (first.nextProductionDate || "").localeCompare(
+              second.nextProductionDate || ""
+            ) ||
+            first.recipe.name.localeCompare(second.recipe.name, "nl-NL") ||
+            (first.manualRequestId || "").localeCompare(
+              second.manualRequestId || ""
+            )
+        ),
+    [forecasts, recipes, selectedWeek]
+  );
   const filteredForecasts = useMemo(() => {
     const query = normalizeSearch(stockSearch);
 
@@ -96,18 +126,7 @@ export default function ProductionPlanningPanel({
         .slice(0, 24),
     [recipes]
   );
-  const plannedRequests = recipes
-    .flatMap((recipe) =>
-      openProductionRequests(recipe).map((request) =>
-        productionNeedForRequest(recipe, request)
-      )
-    )
-    .sort(
-      (first, second) =>
-        first.daysUntilProduction - second.daysUntilProduction ||
-        first.recipe.name.localeCompare(second.recipe.name, "nl-NL")
-    );
-  const visibleNeeds = needs.slice(0, compact ? 4 : 8);
+  const compactNeeds = needs.slice(0, 4);
 
   if (compact) {
     return (
@@ -117,9 +136,9 @@ export default function ProductionPlanningPanel({
           description="Gebaseerd op gemiddelde verkoop, extra geplande batches en laatste productie."
         />
 
-        {visibleNeeds.length ? (
+        {compactNeeds.length ? (
           <div className="mt-4 grid gap-2">
-            {visibleNeeds.map((need) => (
+            {compactNeeds.map((need) => (
               <NeedRow
                 key={needKey(need)}
                 need={need}
@@ -187,8 +206,8 @@ export default function ProductionPlanningPanel({
           </div>
 
           <div className="mt-0 max-w-[22rem] border-x border-b border-[#8c8c8c]">
-            {visibleNeeds.length ? (
-              visibleNeeds.map((need) => (
+            {weekPlanningNeeds.length ? (
+              weekPlanningNeeds.map((need) => (
                 <PlanningListRow
                   key={needKey(need)}
                   need={need}
@@ -211,7 +230,7 @@ export default function ProductionPlanningPanel({
           <button
             type="button"
             onClick={() => setManualProductionOpen(true)}
-            disabled={!onMarkProduced}
+            disabled={!onPlanProduction}
             className="mt-5 grid h-10 max-w-[22rem] grid-cols-[3rem_minmax(0,1fr)] items-center border border-[#c3d3bc] bg-white text-left text-sm font-black"
           >
             <span className="flex h-full items-center justify-center bg-[#c3d3bc] text-3xl font-light">
@@ -274,12 +293,14 @@ export default function ProductionPlanningPanel({
           </div>
         </div>
       </section>
-      {manualProductionOpen && onMarkProduced && (
+      {manualProductionOpen && onPlanProduction && (
         <ManualProductionDialog
           recipes={recipes}
+          defaultDate={selectedWeek}
           onCancel={() => setManualProductionOpen(false)}
-          onConfirm={(recipe, quantity, date) => {
-            onMarkProduced(recipe, quantity, undefined, date);
+          onConfirm={(recipe, quantity, date, reason) => {
+            onPlanProduction(recipe, quantity, date, reason);
+            setSelectedWeek(weekStartForDate(dateFromKey(date)));
             setManualProductionOpen(false);
           }}
         />
@@ -329,19 +350,27 @@ export default function ProductionPlanningPanel({
 
 function ManualProductionDialog({
   recipes,
+  defaultDate,
   onCancel,
   onConfirm,
 }: Readonly<{
   recipes: Recipe[];
+  defaultDate: string;
   onCancel: () => void;
-  onConfirm: (recipe: Recipe, quantity: number, date: string) => void;
+  onConfirm: (
+    recipe: Recipe,
+    quantity: number,
+    date: string,
+    reason: string
+  ) => void;
 }>) {
   const availableRecipes = recipes
     .filter((recipe) => recipe.status !== "old")
     .sort((first, second) => first.name.localeCompare(second.name, "nl-NL"));
   const [recipeId, setRecipeId] = useState(availableRecipes[0]?.id || "");
-  const [date, setDate] = useState(todayIsoDate());
+  const [date, setDate] = useState(defaultDate || todayIsoDate());
   const [quantityValue, setQuantityValue] = useState("");
+  const [reason, setReason] = useState("");
   const selectedRecipe =
     availableRecipes.find((recipe) => recipe.id === recipeId) ||
     availableRecipes[0];
@@ -378,6 +407,17 @@ function ManualProductionDialog({
         value={quantityValue}
         onChange={setQuantityValue}
       />
+      <label className="block">
+        <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+          Notitie
+        </span>
+        <input
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder="Bijv. aanbieding, bestelling of voorraad"
+          className="mt-1 w-full rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-sm font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
+        />
+      </label>
       {selectedRecipe && (
         <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-black text-[#2d2a26]/65">
           Wordt opgeslagen als {quantityText(quantity, selectedRecipe.standardBatchUnit)}.
@@ -387,7 +427,7 @@ function ManualProductionDialog({
         onCancel={onCancel}
         onSave={() => {
           if (!selectedRecipe) return;
-          onConfirm(selectedRecipe, quantity, date);
+          onConfirm(selectedRecipe, quantity, date, reason);
         }}
       />
     </PlanningDialog>
@@ -903,7 +943,9 @@ function quantityText(value: number, unit?: string) {
 }
 
 function needKey(need: ProductionNeed) {
-  return `${need.recipe.id}-${need.manualRequestId || "forecast"}`;
+  return `${need.recipe.id}-${need.manualRequestId || "forecast"}-${
+    need.nextProductionDate || ""
+  }`;
 }
 
 function dateKey(date: Date) {
@@ -934,6 +976,12 @@ function weekStartForDate(date = new Date()) {
   nextDate.setDate(nextDate.getDate() - day + 1);
 
   return dateKey(nextDate);
+}
+
+function isDateInWeek(value: string | undefined, weekStart: string) {
+  if (!value) return false;
+
+  return value >= weekStart && value <= addDays(weekStart, 6);
 }
 
 function weekNumberForDate(value: string) {
