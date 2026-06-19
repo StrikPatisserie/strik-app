@@ -6,6 +6,10 @@ const TAMIGO_MAX_EMPLOYEE_PAGES = getPositiveNumber(
   process.env.TAMIGO_MAX_EMPLOYEE_PAGES,
   50
 );
+const TAMIGO_AVERAGE_HOURLY_RATE = getPositiveNumber(
+  process.env.TAMIGO_AVERAGE_HOURLY_RATE,
+  18.5
+);
 const AMSTERDAM_TIME_ZONE = "Europe/Amsterdam";
 
 let cachedTamigoSessionToken: string | null = null;
@@ -184,6 +188,8 @@ export type LaborCostTotals = {
   directHourlyCost: number;
   derivedMonthlyHours: number;
   derivedMonthlyCost: number;
+  estimatedAverageHours: number;
+  estimatedAverageCost: number;
   missingHours: number;
   missingShifts: number;
   missingEmployeeShifts: number;
@@ -1147,6 +1153,8 @@ function emptyLaborCostTotals(): LaborCostTotals {
     directHourlyCost: 0,
     derivedMonthlyHours: 0,
     derivedMonthlyCost: 0,
+    estimatedAverageHours: 0,
+    estimatedAverageCost: 0,
     missingHours: 0,
     missingShifts: 0,
     missingEmployeeShifts: 0,
@@ -1171,6 +1179,8 @@ function normalizeLaborCostTotals<T extends LaborCostTotals>(totals: T): T {
     directHourlyCost: roundMoney(totals.directHourlyCost),
     derivedMonthlyHours: roundHours(totals.derivedMonthlyHours),
     derivedMonthlyCost: roundMoney(totals.derivedMonthlyCost),
+    estimatedAverageHours: roundHours(totals.estimatedAverageHours),
+    estimatedAverageCost: roundMoney(totals.estimatedAverageCost),
     missingHours: roundHours(totals.missingHours),
   };
 }
@@ -1183,6 +1193,8 @@ function addLaborCostTotals(target: LaborCostTotals, source: LaborCostTotals) {
   target.directHourlyCost += source.directHourlyCost;
   target.derivedMonthlyHours += source.derivedMonthlyHours;
   target.derivedMonthlyCost += source.derivedMonthlyCost;
+  target.estimatedAverageHours += source.estimatedAverageHours;
+  target.estimatedAverageCost += source.estimatedAverageCost;
   target.missingHours += source.missingHours;
   target.missingShifts += source.missingShifts;
   target.missingEmployeeShifts += source.missingEmployeeShifts;
@@ -1384,6 +1396,49 @@ function addMissingLaborCost(
   }
 
   totals.missingWageShifts += 1;
+}
+
+function getAverageLaborFallbackRate(totals: LaborCostTotals) {
+  const knownHours = totals.directHourlyHours + totals.derivedMonthlyHours;
+  const knownCost = totals.directHourlyCost + totals.derivedMonthlyCost;
+
+  if (knownHours > 0 && knownCost > 0) {
+    return knownCost / knownHours;
+  }
+
+  return TAMIGO_AVERAGE_HOURLY_RATE;
+}
+
+function addAverageLaborFallback(totals: LaborCostTotals, hourlyRate: number) {
+  if (totals.missingHours <= 0 || hourlyRate <= 0) return;
+
+  const estimatedCost = totals.missingHours * hourlyRate;
+  totals.cost += estimatedCost;
+  totals.estimatedAverageHours += totals.missingHours;
+  totals.estimatedAverageCost += estimatedCost;
+}
+
+function normalizeLaborCostDayWithFallback(
+  day: LaborCostDay,
+  hourlyRate: number
+): LaborCostDay {
+  const shops = day.shops.map((shop) => {
+    const nextShop = { ...shop };
+    addAverageLaborFallback(nextShop, hourlyRate);
+
+    return normalizeLaborCostTotals(nextShop);
+  });
+  const totals = emptyLaborCostTotals();
+
+  for (const shop of shops) {
+    addLaborCostTotals(totals, shop);
+  }
+
+  return {
+    ...day,
+    shops,
+    totals: normalizeLaborCostTotals(totals),
+  };
 }
 
 async function fetchDepartmentSchedule(
@@ -1672,7 +1727,7 @@ async function getLaborCostScheduleFromWeekStart(
   );
   let unassignedIceShifts = 0;
 
-  const days = dates.map((date): LaborCostDay => {
+  const rawDays = dates.map((date): LaborCostDay => {
     const shopsByName = new Map<ShopName, LaborCostShop>(
       SHOP_DEPARTMENTS.map((department) => [
         department.shop,
@@ -1706,10 +1761,9 @@ async function getLaborCostScheduleFromWeekStart(
       addShiftToLaborCostTotals(shopTotals, shift, employeeById);
     }
 
-    const shops = SHOP_DEPARTMENTS.map((department) =>
-      normalizeLaborCostTotals(
+    const shops = SHOP_DEPARTMENTS.map(
+      (department) =>
         shopsByName.get(department.shop) || createEmptyLaborCostShop(department)
-      )
     );
     const totals = emptyLaborCostTotals();
 
@@ -1725,15 +1779,24 @@ async function getLaborCostScheduleFromWeekStart(
         month: "short",
       }),
       shops,
-      totals: normalizeLaborCostTotals(totals),
+      totals,
     };
   });
+  const preliminaryTotals = emptyLaborCostTotals();
+
+  for (const day of rawDays) {
+    addLaborCostTotals(preliminaryTotals, day.totals);
+  }
+
+  const averageFallbackRate = getAverageLaborFallbackRate(preliminaryTotals);
+  const days = rawDays.map((day) =>
+    normalizeLaborCostDayWithFallback(day, averageFallbackRate)
+  );
   const totals = emptyLaborCostTotals();
 
   for (const day of days) {
     addLaborCostTotals(totals, day.totals);
   }
-
   const normalizedTotals = normalizeLaborCostTotals(totals);
   const notes = [
     "Individuele uurlonen worden niet naar de browser gestuurd; alleen geaggregeerde totalen.",
@@ -1742,7 +1805,7 @@ async function getLaborCostScheduleFromWeekStart(
 
   if (normalizedTotals.missingHours > 0) {
     notes.push(
-      `${normalizedTotals.missingHours.toLocaleString("nl-NL")} uur mist nog een medewerker- of loonmatch in Tamigo.`
+      `${normalizedTotals.missingHours.toLocaleString("nl-NL")} uur mist nog een medewerker- of loonmatch in Tamigo en is ingevuld met gemiddeld uurloon.`
     );
   }
 

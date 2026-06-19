@@ -37,9 +37,10 @@ function formatHours(value: number) {
 
 function getAverageRate(totals: LaborCostTotals) {
   const paidHours = totals.directHourlyHours + totals.derivedMonthlyHours;
+  const paidCost = totals.directHourlyCost + totals.derivedMonthlyCost;
   if (paidHours <= 0) return 0;
 
-  return totals.cost / paidHours;
+  return paidCost / paidHours;
 }
 
 function MetricCard({
@@ -124,6 +125,15 @@ function ShopCostCard({ shop }: Readonly<{ shop: LaborCostShop }>) {
           <span>Maandloon omgerekend</span>
           <span>{formatCost(shop.derivedMonthlyCost)}</span>
         </div>
+        {shop.estimatedAverageHours > 0 && (
+          <div className="flex justify-between gap-3 text-[#a23b30]">
+            <span>Gemiddeld ingevuld</span>
+            <span>
+              {formatCost(shop.estimatedAverageCost)} ·{" "}
+              {formatHours(shop.estimatedAverageHours)}
+            </span>
+          </div>
+        )}
         <div className={`flex justify-between gap-3 ${missingTone}`}>
           <span>Ontbrekende loonuren</span>
           <span>{formatHours(shop.missingHours)}</span>
@@ -245,6 +255,10 @@ export default function ManagementLaborCosts() {
             current.derivedMonthlyHours + shop.derivedMonthlyHours,
           derivedMonthlyCost:
             current.derivedMonthlyCost + shop.derivedMonthlyCost,
+          estimatedAverageHours:
+            current.estimatedAverageHours + shop.estimatedAverageHours,
+          estimatedAverageCost:
+            current.estimatedAverageCost + shop.estimatedAverageCost,
           missingHours: current.missingHours + shop.missingHours,
           missingShifts: current.missingShifts + shop.missingShifts,
           missingEmployeeShifts:
@@ -263,6 +277,12 @@ export default function ManagementLaborCosts() {
               directHourlyCost: Number(totals.directHourlyCost.toFixed(2)),
               derivedMonthlyHours: Number(totals.derivedMonthlyHours.toFixed(2)),
               derivedMonthlyCost: Number(totals.derivedMonthlyCost.toFixed(2)),
+              estimatedAverageHours: Number(
+                totals.estimatedAverageHours.toFixed(2)
+              ),
+              estimatedAverageCost: Number(
+                totals.estimatedAverageCost.toFixed(2)
+              ),
               missingHours: Number(totals.missingHours.toFixed(2)),
             },
           ]
@@ -333,7 +353,7 @@ export default function ManagementLaborCosts() {
             <MetricCard
               label="Ontbrekend"
               value={formatHours(schedule.totals.missingHours)}
-              sub={`${schedule.totals.missingShifts} diensten niet volledig berekend`}
+              sub={`${schedule.totals.missingShifts} diensten ingevuld met gemiddeld uurloon`}
             />
           </section>
 

@@ -378,13 +378,17 @@ function DashboardRowCard({
       </div>
 
       {(row.revenueMissing || row.note || row.missingLaborHours > 0) && (
-        <div className="mt-1.5 rounded-md bg-[#f8f6f3] px-2 py-1 text-[0.58rem] font-bold leading-tight text-[#6b645b] sm:text-[0.68rem]">
+        <div className="mt-1.5 rounded-md bg-[#fff4f1] px-2 py-1 text-[0.58rem] font-bold leading-tight text-[#a23b30] sm:text-[0.68rem]">
           {row.revenueMissing && (
             <span className="mr-2 text-[#ef533b]">Omzet mist.</span>
           )}
           {row.missingLaborHours > 0 && (
-            <span className="mr-2">
-              {decimalFormatter.format(row.missingLaborHours)}u zonder loonmatch.
+            <span className="mr-2 inline-flex items-center gap-1">
+              <span className="grid h-3.5 w-3.5 place-items-center rounded-full bg-[#ef533b] text-[0.58rem] leading-none text-white">
+                !
+              </span>
+              {decimalFormatter.format(row.missingLaborHours)}u zonder loonmatch
+              (ingevuld met gemiddeld uurloon).
             </span>
           )}
           {row.note && <span>{row.note}</span>}
@@ -585,24 +589,6 @@ export default function ManagementDashboard() {
     <div className="space-y-2 sm:space-y-3">
       <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/88 p-2 shadow-sm">
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => nudgeDraftPeriod(-1)}
-              aria-label="Vorige periode"
-              className="grid h-7 w-7 place-items-center rounded-full bg-[#f8f6f3] text-base font-black leading-none text-[#1a1815] shadow-sm active:scale-[0.96]"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              onClick={() => nudgeDraftPeriod(1)}
-              aria-label="Volgende periode"
-              className="grid h-7 w-7 place-items-center rounded-full bg-[#f8f6f3] text-base font-black leading-none text-[#1a1815] shadow-sm active:scale-[0.96]"
-            >
-              ›
-            </button>
-          </div>
           <p className="min-w-0 truncate text-[0.68rem] font-black uppercase tracking-[0.08em] text-[#ef533b] sm:text-xs">
             {data?.periodLabel || formatPeriodLabel(period, year, week, month)}
           </p>
@@ -675,13 +661,24 @@ export default function ManagementDashboard() {
             </label>
           )}
 
-          <button
-            type="button"
-            onClick={applyFilters}
-            className="h-8 rounded-md bg-[#ef533b] px-3 text-[0.68rem] font-black uppercase tracking-[0.08em] text-white shadow-sm active:scale-[0.98]"
-          >
-            Ga
-          </button>
+          <div className="flex h-8 items-end gap-1">
+            <button
+              type="button"
+              onClick={() => nudgeDraftPeriod(-1)}
+              aria-label="Week eerder"
+              className="grid h-8 w-8 place-items-center rounded-md bg-[#f8f6f3] text-base font-black leading-none text-[#1a1815] shadow-sm active:scale-[0.96]"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => nudgeDraftPeriod(1)}
+              aria-label="Week verder"
+              className="grid h-8 w-8 place-items-center rounded-md bg-[#f8f6f3] text-base font-black leading-none text-[#1a1815] shadow-sm active:scale-[0.96]"
+            >
+              ›
+            </button>
+          </div>
 
           <button
             type="button"
@@ -694,11 +691,6 @@ export default function ManagementDashboard() {
           >
             vergelijk
           </button>
-        </div>
-
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.58rem] font-bold text-[#8b8278] sm:text-[0.68rem]">
-          <span>klaar: {draftLabel}</span>
-          {showCompare && <span>actief: {compareLabel}</span>}
         </div>
 
         {compareOpen && (
@@ -772,20 +764,34 @@ export default function ManagementDashboard() {
               </div>
             )}
 
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-[0.58rem] font-bold leading-tight text-[#8b8278] sm:text-[0.68rem]">
-                Kies vergelijking en druk daarna op Ga.
-              </p>
-              <button
-                type="button"
-                onClick={resetCompare}
-                className="h-7 rounded-full bg-white px-2.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#6b645b] shadow-sm active:scale-[0.98]"
-              >
-                reset
-              </button>
-            </div>
+            <p className="mt-2 text-[0.58rem] font-bold leading-tight text-[#8b8278] sm:text-[0.68rem]">
+              Kies vergelijking en druk daarna op Ga.
+            </p>
           </div>
         )}
+
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.58rem] font-bold text-[#8b8278] sm:text-[0.68rem]">
+            <span>klaar: {draftLabel}</span>
+            {showCompare && <span>actief: {compareLabel}</span>}
+          </div>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={resetCompare}
+              className="h-7 rounded-md bg-[#f8f6f3] px-2.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#6b645b] shadow-sm active:scale-[0.98]"
+            >
+              reset
+            </button>
+            <button
+              type="button"
+              onClick={applyFilters}
+              className="h-8 rounded-md bg-[#ef533b] px-3 text-[0.68rem] font-black uppercase tracking-[0.08em] text-white shadow-sm active:scale-[0.98]"
+            >
+              Ga
+            </button>
+          </div>
+        </div>
       </section>
 
       {state === "loading" && (
