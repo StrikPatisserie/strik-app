@@ -568,14 +568,27 @@ export async function fetchTamigoEmployeesPage(page = 0) {
 }
 
 async function fetchTamigoEmployeeDetailsPage(page = 0) {
-  const data = await tamigoGet(
-    "/v2/Employees/GetEmployeeDetails/",
-    {
-      page: String(page),
-      includedeleted: "false",
-    },
-    "labor"
-  );
+  const params = {
+    page: String(page),
+    includedeleted: "false",
+  };
+  let data: unknown;
+
+  try {
+    data = await tamigoGet("/v2/Employees/GetEmployeeDetails/", params, "labor");
+  } catch (error) {
+    const status = getTamigoStatusCode(error);
+    if (status !== 401 && status !== 403) throw error;
+
+    try {
+      data = await tamigoGet("/v2/Employees/GetEmployeeDetails/", params);
+    } catch (fallbackError) {
+      const fallbackStatus = getTamigoStatusCode(fallbackError);
+      if (fallbackStatus !== 401 && fallbackStatus !== 403) throw fallbackError;
+
+      return [];
+    }
+  }
 
   return getArrayRecords(data).map(toDetailedEmployee);
 }

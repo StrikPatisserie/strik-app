@@ -239,8 +239,8 @@ function getCompareLabel(
   target: { year: number; week: number; month: number }
 ) {
   if (mode === "none") return "";
-  if (mode === "previous") return period === "month" ? "vorige maand" : "vorige week";
-  if (mode === "lastYear") return "vorig jaar";
+  if (mode === "previous") return period === "month" ? "maand eerder" : "week eerder";
+  if (mode === "lastYear") return "jaar eerder";
 
   return period === "month"
     ? `${monthNames[target.month - 1]} ${target.year}`
@@ -303,9 +303,9 @@ function DashboardRowCard({
         }`}
       >
         <div className="flex min-w-0 items-center justify-between gap-1 sm:block">
-          <h2 className="truncate text-[0.72rem] font-black uppercase leading-tight tracking-[0.04em] text-[#1a1815] sm:text-xs">
+          <p className="whitespace-nowrap text-[0.62rem] font-black uppercase leading-none tracking-[0.08em] text-[#1a1815] sm:text-[0.68rem]">
             {row.shop}
-          </h2>
+          </p>
           <p className="shrink-0 text-[0.52rem] font-bold leading-tight text-[#8b8278] sm:mt-0.5 sm:text-[0.62rem]">
             {source}
           </p>
@@ -705,8 +705,8 @@ export default function ManagementDashboard() {
           <div className="mt-2 rounded-md border border-[#e7e0d8]/80 bg-[#f8f6f3] p-2">
             <div className="grid grid-cols-3 gap-1">
               {[
-                ["previous", draftPeriod === "month" ? "vorige maand" : "vorige week"],
-                ["lastYear", "vorig jaar"],
+                ["previous", draftPeriod === "month" ? "maand eerder" : "week eerder"],
+                ["lastYear", "jaar eerder"],
                 ["custom", "anders"],
               ].map(([value, label]) => (
                 <button
