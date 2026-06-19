@@ -280,6 +280,7 @@ export default function RecepturenWorkMode({
   onOpenRecipeCard,
   onMarkProduced,
   onPlanProduction,
+  onDeleteProductionRequest,
   onAdjustStock,
   onUpdateProductionLog,
   onDeleteProductionLog,
@@ -304,6 +305,7 @@ export default function RecepturenWorkMode({
     date: string,
     reason?: string
   ) => void;
+  onDeleteProductionRequest: (recipe: Recipe, requestId: string) => void;
   onAdjustStock: (recipe: Recipe, quantity: number, date: string) => void;
   onUpdateProductionLog: (
     recipe: Recipe,
@@ -424,6 +426,7 @@ export default function RecepturenWorkMode({
           }}
           onMarkProduced={markProduced}
           onPlanProduction={onPlanProduction}
+          onDeleteProductionRequest={onDeleteProductionRequest}
           onAdjustStock={onAdjustStock}
           onUpdateProductionLog={onUpdateProductionLog}
           onDeleteProductionLog={onDeleteProductionLog}

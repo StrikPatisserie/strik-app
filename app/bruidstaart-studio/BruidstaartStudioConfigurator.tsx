@@ -4744,12 +4744,12 @@ export default function BruidstaartStudioConfigurator() {
 
       {step.id === "overzicht" && (
         <section className="studio-no-print ml-auto max-w-[44rem] rounded-[0.85rem] border border-[#ecd9a9] bg-[#fff4d1] p-1.5 shadow-sm">
-          <div className="grid gap-1.5 lg:grid-cols-[3.2rem_minmax(0,1fr)_auto] lg:items-center">
-            <div>
-              <h3 className="text-[0.28rem] font-bold italic uppercase tracking-[0.06em] text-[#2d2a26]/50 sm:text-[0.32rem]">
+          <div className="grid gap-1.5 lg:grid-cols-[6.8rem_minmax(0,1fr)_auto] lg:items-center">
+            <div className="min-w-0">
+              <p className="text-[0.68rem] font-semibold italic leading-tight text-[#2d2a26]/55">
                 Huidige bestelling
-              </h3>
-              <p className="text-[0.34rem] font-semibold italic leading-tight text-[#2d2a26]/35 sm:text-[0.38rem]">
+              </p>
+              <p className="text-[0.48rem] font-semibold italic leading-tight text-[#2d2a26]/35">
                 Ontwerp resetten.
               </p>
             </div>

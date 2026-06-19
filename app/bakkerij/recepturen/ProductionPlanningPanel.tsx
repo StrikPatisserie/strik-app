@@ -21,6 +21,7 @@ export default function ProductionPlanningPanel({
   onOpenRecipe,
   onMarkProduced,
   onPlanProduction,
+  onDeleteProductionRequest,
   onAdjustStock,
   onUpdateProductionLog,
   onDeleteProductionLog,
@@ -40,6 +41,7 @@ export default function ProductionPlanningPanel({
     date: string,
     reason?: string
   ) => void;
+  onDeleteProductionRequest?: (recipe: Recipe, requestId: string) => void;
   onAdjustStock?: (recipe: Recipe, quantity: number, date: string) => void;
   onUpdateProductionLog?: (
     recipe: Recipe,
@@ -218,6 +220,7 @@ export default function ProductionPlanningPanel({
                           setPendingProduction({ recipe, quantity, requestId })
                       : undefined
                   }
+                  onDeleteProductionRequest={onDeleteProductionRequest}
                 />
               ))
             ) : (
@@ -456,19 +459,22 @@ function PlanningListRow({
   need,
   onOpenRecipe,
   onMarkProduced,
+  onDeleteProductionRequest,
 }: Readonly<{
   need: ProductionNeed;
   onOpenRecipe?: (recipe: Recipe) => void;
   onMarkProduced?: (recipe: Recipe, quantity: number, requestId?: string) => void;
+  onDeleteProductionRequest?: (recipe: Recipe, requestId: string) => void;
 }>) {
   const batchQuantity =
     need.requestedQuantity ||
     need.recipe.standardBatchQuantity ||
     need.lastProducedQuantity ||
     1;
+  const manualRequestId = need.manualRequestId;
 
   return (
-    <div className="grid min-h-[2.75rem] grid-cols-[2.3rem_minmax(0,1fr)_2.6rem] border-b border-[#8c8c8c] last:border-b-0">
+    <div className="grid min-h-[2.75rem] grid-cols-[2.3rem_minmax(0,1fr)_4.9rem] border-b border-[#8c8c8c] last:border-b-0">
       <span className={planningStripeClass(need.recipe)} />
       <button
         type="button"
@@ -483,16 +489,32 @@ function PlanningListRow({
           {quantityText(batchQuantity, need.recipe.standardBatchUnit)}
         </span>
       </button>
-      <button
-        type="button"
-        onClick={() =>
-          onMarkProduced?.(need.recipe, batchQuantity, need.manualRequestId)
-        }
-        className="flex items-center justify-center text-2xl leading-none"
-        aria-label={`${need.recipe.name} als gemaakt opslaan`}
-      >
-        ⇢
-      </button>
+      <div className="flex items-center justify-center gap-1 px-1">
+        <button
+          type="button"
+          onClick={() =>
+            onMarkProduced?.(need.recipe, batchQuantity, need.manualRequestId)
+          }
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-[#c3d3bc] text-sm font-black leading-none text-[#1f2d1a]"
+          aria-label={`${need.recipe.name} als gemaakt opslaan`}
+          title="Markeer als gemaakt"
+        >
+          ✓
+        </button>
+        {manualRequestId && onDeleteProductionRequest && (
+          <button
+            type="button"
+            onClick={() =>
+              onDeleteProductionRequest(need.recipe, manualRequestId)
+            }
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fff4f1] text-sm font-black leading-none text-[#a83e31]"
+            aria-label={`${need.recipe.name} uit planning verwijderen`}
+            title="Uit planning verwijderen"
+          >
+            ×
+          </button>
+        )}
+      </div>
     </div>
   );
 }

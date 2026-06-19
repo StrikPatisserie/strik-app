@@ -671,6 +671,33 @@ export default function RecepturenApp() {
     );
   }
 
+  function deleteRecipeProductionRequest(
+    recipeToUpdate: Recipe,
+    requestId: string
+  ) {
+    const nextRecipes = recipeItems.map((recipe) =>
+      recipe.id === recipeToUpdate.id
+        ? {
+            ...recipe,
+            productionRequests: (recipe.productionRequests || []).filter(
+              (request) => request.id !== requestId
+            ),
+          }
+        : recipe
+    );
+
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        invoiceImports: invoiceItems,
+      },
+      `${recipeToUpdate.name} is uit de weekplanning gehaald.`
+    );
+  }
+
   function adjustRecipeStock(recipeToAdjust: Recipe, quantity: number, date: string) {
     const adjustedAt = date ? localDateFromInput(date) : new Date();
     const nextRecipes = recipeItems.map((recipe) =>
@@ -1650,6 +1677,7 @@ export default function RecepturenApp() {
                   onOpenRecipeCard={openRecipe}
                   onMarkProduced={markRecipeProduced}
                   onPlanProduction={planRecipeProduction}
+                  onDeleteProductionRequest={deleteRecipeProductionRequest}
                   onAdjustStock={adjustRecipeStock}
                   onUpdateProductionLog={updateProductionLogEntry}
                   onDeleteProductionLog={deleteProductionLogEntry}
