@@ -187,11 +187,11 @@ export default function CompactAgendaPanel() {
                 <p className="text-[0.68rem] font-black leading-tight text-[#1a1815] sm:text-sm">
                   {formatDayLabel(event.displayDate)}
                 </p>
-                <p className="mt-0.5 text-[0.68rem] leading-snug text-[#2d2a26]/80 sm:text-sm">
+                <p className="mt-0.5 text-[0.7rem] font-black leading-snug text-[#ef5737] sm:text-sm">
                   {event.title}
                 </p>
-                <p className="mt-0.5 text-[0.55rem] font-black uppercase tracking-[0.1em] text-[#ef5737] sm:mt-1 sm:text-[0.68rem]">
-                  {getEventTypeLabel(event.type)} ·{" "}
+                <p className="mt-0.5 text-[0.55rem] font-normal leading-tight text-[#8d877f] sm:mt-1 sm:text-[0.68rem]">
+                  {getEventTypeLabel(event.type)} -{" "}
                   {event.source === "tamigo"
                     ? "Team"
                     : getAudienceLabel(event.audience)}
