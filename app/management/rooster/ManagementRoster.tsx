@@ -116,19 +116,15 @@ function ShiftSummary({ shop }: Readonly<{ shop: TodayStaffShop }>) {
 
 function ShopBlock({
   shop,
-  compact = false,
 }: Readonly<{
   shop: TodayStaffShop;
-  compact?: boolean;
 }>) {
   const accent = getShopAccent(shop.shop);
 
   return (
-    <article className="rounded-2xl border border-[#e7e0d8]/80 bg-white/90 p-3 shadow-sm">
+    <article className={`rounded-xl border p-2 shadow-sm ${accent.section}`}>
       <h3
-        className={`rounded-2xl border px-3 py-2 text-center font-black leading-tight shadow-sm ${accent.header} ${
-          compact ? "text-base" : "text-lg"
-        }`}
+        className={`rounded-lg border px-2.5 py-1.5 text-center text-sm font-black leading-tight shadow-sm ${accent.header}`}
       >
         {shop.shop}
       </h3>
@@ -141,9 +137,9 @@ function ShopBlock({
 
 function DaySection({ day }: Readonly<{ day: WeekStaffDay }>) {
   return (
-    <section className="rounded-[1.5rem] border border-[#e7e0d8]/80 bg-white/70 p-3 shadow-sm">
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-lg font-black capitalize text-[#050505]">
+    <section className="rounded-2xl border border-[#e7e0d8]/80 bg-white/75 p-3 shadow-sm">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h2 className="text-base font-black capitalize text-[#050505]">
           {day.weekdayLabel}
         </h2>
         <p className="text-sm font-bold text-[#2d2a26]/50">{day.dateLabel}</p>
@@ -151,7 +147,7 @@ function DaySection({ day }: Readonly<{ day: WeekStaffDay }>) {
 
       <div className="grid gap-2 md:grid-cols-2">
         {day.shops.map((shop) => (
-          <ShopBlock key={shop.shop} shop={shop} compact />
+          <ShopBlock key={shop.shop} shop={shop} />
         ))}
       </div>
     </section>
@@ -168,9 +164,9 @@ function ShopSection({
   const accent = getShopAccent(shopName);
 
   return (
-    <section className={`rounded-[1.5rem] border p-3 shadow-sm ${accent.section}`}>
+    <section className={`rounded-2xl border p-3 shadow-sm ${accent.section}`}>
       <h2
-        className={`mb-3 rounded-2xl border px-4 py-3 text-center text-xl font-black ${accent.header}`}
+        className={`mb-2 rounded-lg border px-3 py-2 text-center text-base font-black ${accent.header}`}
       >
         {shopName}
       </h2>
@@ -182,12 +178,12 @@ function ShopSection({
           return (
             <article
               key={day.date}
-              className="rounded-2xl border border-[#e7e0d8]/80 bg-white/90 p-3 shadow-sm"
+              className="rounded-xl border border-[#e7e0d8]/80 bg-white/90 p-2 shadow-sm"
             >
               <div
-                className={`mb-2 rounded-xl px-3 py-2 text-center ${accent.pill}`}
+                className={`mb-2 rounded-lg px-2.5 py-1.5 text-center ${accent.pill}`}
               >
-                <h3 className="text-base font-black capitalize leading-tight">
+                <h3 className="text-sm font-black capitalize leading-tight">
                   {day.weekdayLabel}
                 </h3>
                 <p className="text-xs font-bold opacity-65">

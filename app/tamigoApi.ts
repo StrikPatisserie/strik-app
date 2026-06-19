@@ -691,6 +691,19 @@ function getAmsterdamWeekStartDate(weekOffset = 0, now = new Date()) {
   return addDaysToDateString(today, mondayOffset + weekOffset * 7);
 }
 
+function getIsoWeekStartDate(year: number, week: number) {
+  const clampedWeek = Math.max(1, Math.min(53, Math.trunc(week)));
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  jan4.setUTCDate(jan4.getUTCDate() - jan4Day + 1 + (clampedWeek - 1) * 7);
+
+  return formatDate(
+    jan4.getUTCFullYear(),
+    jan4.getUTCMonth() + 1,
+    jan4.getUTCDate()
+  );
+}
+
 function createDateRange(from: string, to: string) {
   const dates: string[] = [];
   let current = from;
@@ -1577,6 +1590,24 @@ export async function getWeekLaborCostSchedule(
 ): Promise<LaborCostSchedule> {
   const now = new Date();
   const from = getAmsterdamWeekStartDate(weekOffset, now);
+
+  return getLaborCostScheduleFromWeekStart(from, now);
+}
+
+export async function getWeekLaborCostScheduleForIsoWeek(
+  year: number,
+  week: number
+): Promise<LaborCostSchedule> {
+  return getLaborCostScheduleFromWeekStart(
+    getIsoWeekStartDate(Math.trunc(year), week),
+    new Date()
+  );
+}
+
+async function getLaborCostScheduleFromWeekStart(
+  from: string,
+  now: Date
+): Promise<LaborCostSchedule> {
   const to = addDaysToDateString(from, 7);
   const dates = createDateRange(from, to);
   const [employees, departmentSchedules, iceShifts] = await Promise.all([

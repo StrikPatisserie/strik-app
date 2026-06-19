@@ -107,10 +107,8 @@ function LoadingRows() {
 
 function ShopRow({
   shop,
-  openByDefault,
 }: Readonly<{
   shop: TodayStaffShop;
-  openByDefault: boolean;
 }>) {
   const accent = getShopAccent(shop.shop);
   const iceEmployees = shop.iceEmployees || [];
@@ -127,10 +125,9 @@ function ShopRow({
 
   return (
     <details
-      open={openByDefault}
       className={`group overflow-hidden rounded-[1.5rem] border ${accent.card} transition hover:shadow-lg`}
     >
-      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-3 py-3">
+      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-3 px-3 py-3 [&::-webkit-details-marker]:hidden">
         <div>
           <h3 className={`text-sm font-black leading-tight ${accent.name}`}>
             {shop.shop}
@@ -142,6 +139,9 @@ function ShopRow({
         <div className="rounded-2xl bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-[#2d2a26] shadow-sm">
           {iceShiftText}
         </div>
+        <span className="ml-auto flex h-7 w-7 items-center justify-center rounded-full bg-white/80 text-base font-black leading-none text-[#2d2a26]/55 shadow-sm transition group-open:rotate-90">
+          ›
+        </span>
       </summary>
 
       <div className="border-t border-[#e8e4de] bg-white/80 px-3 py-3">
@@ -203,18 +203,6 @@ export default function TodayStaffWidget() {
   const [schedule, setSchedule] = useState<TodayStaffSchedule | null>(null);
   const [bakeryOffers, setBakeryOffers] = useState<BakeryHomeOffer[]>([]);
   const [selectedOfferWeek, setSelectedOfferWeek] = useState(weekStartForDate);
-  const [wideView, setWideView] = useState(false);
-
-  useEffect(() => {
-    const updateWideView = () => setWideView(window.innerWidth >= 1024);
-
-    updateWideView();
-    window.addEventListener("resize", updateWideView);
-
-    return () => {
-      window.removeEventListener("resize", updateWideView);
-    };
-  }, []);
 
   useEffect(() => {
     let ignoreResult = false;
@@ -263,8 +251,8 @@ export default function TodayStaffWidget() {
 
   return (
     <section className="rounded-[1.5rem] border border-[#e7e0d8]/80 bg-white/80 p-4 shadow-sm">
-      <h2 className="text-lg font-black leading-tight text-[#050505]">
-        Wie werkt vandaag?
+      <h2 className="winkel-section-heading text-[#6f6f6f]">
+        wie werkt vandaag?
       </h2>
 
       <div className="mt-3">
@@ -279,7 +267,7 @@ export default function TodayStaffWidget() {
         {state === "ready" && schedule && (
           <div className="space-y-2">
             {schedule.shops.map((shop) => (
-              <ShopRow key={shop.shop} shop={shop} openByDefault={wideView} />
+              <ShopRow key={shop.shop} shop={shop} />
             ))}
           </div>
         )}

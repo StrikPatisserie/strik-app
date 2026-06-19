@@ -4,33 +4,24 @@ import {
   StrikShell,
   strikIcons,
 } from "../StrikUI";
-import ManagementAgendaCard from "./ManagementAgendaCard";
 import WordPressStatusPanel from "./WordPressStatusPanel";
 
 const topItems = [
   {
-    href: "/schoonmaak/overzicht",
-    label: "IJs",
-    title: "Schoonmaak overzicht",
-    description: "Bekijk registraties per datum en ijssalon.",
-    icon: strikIcons.cleaningManagement,
+    href: "/management/dashboard",
+    label: "Analyse",
+    title: "Dashboard",
+    description: "Vergelijk omzet, uren, productiviteit en loonkosten.",
+    icon: strikIcons.management,
     tone: "medium" as const,
   },
   {
-    href: "/management/nieuws",
-    label: "Nieuws",
-    title: "Nieuws beheren",
-    description: "Plaats, wijzig of verwijder interne nieuwsberichten.",
-    icon: strikIcons.newsManagement,
+    href: "/management/gegevens",
+    label: "Brondata",
+    title: "Gegevens",
+    description: "Agenda, aanbieding, nieuws en weekomzetten beheren.",
+    icon: strikIcons.info,
     tone: "green" as const,
-  },
-  {
-    href: "/management/bakkerij",
-    label: "Bakkerij",
-    title: "Voorpagina beheren",
-    description: "Kies per week de aanbiedingsfoto voor de bakkers.",
-    icon: strikIcons.bakkerij,
-    tone: "light" as const,
   },
 ];
 
@@ -50,6 +41,14 @@ const bottomItems = [
     description: "Bekijk ingezette uren en loonkosten per winkel en per dag.",
     icon: strikIcons.management,
     tone: "light" as const,
+  },
+  {
+    href: "/schoonmaak/overzicht",
+    label: "IJs",
+    title: "Schoonmaak overzicht",
+    description: "Bekijk registraties per datum en ijssalon.",
+    icon: strikIcons.cleaningManagement,
+    tone: "medium" as const,
   },
   {
     href: "/management/notities",
@@ -76,7 +75,6 @@ export default function ManagementPage() {
         {topItems.map((item) => (
           <StrikActionCard key={item.href} {...item} />
         ))}
-        <ManagementAgendaCard />
         {bottomItems.map((item) => (
           <StrikActionCard key={item.href} {...item} />
         ))}

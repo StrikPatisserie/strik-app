@@ -259,6 +259,17 @@ h6 {
   -webkit-mask: url("/apps%20strik_Bakkerij.svg") center / contain no-repeat;
 }
 
+.strik-page-title {
+  color: #ef5737;
+  font-family: "Overpass", StrikGotham, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: clamp(1rem, 4.4vw, 1.8rem);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
 .bakkerij-panel-heading {
   font-family: "Overpass", StrikGotham, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: clamp(1rem, 3vw, 1.35rem);
