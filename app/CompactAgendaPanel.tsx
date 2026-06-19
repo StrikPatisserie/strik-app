@@ -175,7 +175,7 @@ export default function CompactAgendaPanel() {
         </div>
       </div>
 
-      <div className="min-h-[12rem] rounded-[0.75rem] bg-white/70 p-2 sm:min-h-[17rem] sm:rounded-[1rem] sm:p-4">
+      <div className="rounded-[0.75rem] bg-white/70 p-2 sm:rounded-[1rem] sm:p-4">
         {weekEvents.length ? (
           <div className="space-y-1.5 sm:space-y-3">
             {weekEvents.slice(0, 3).map((event) => (
@@ -200,7 +200,7 @@ export default function CompactAgendaPanel() {
             ))}
           </div>
         ) : (
-          <p className="pt-16 text-center text-[0.68rem] font-bold text-[#2d2a26]/45 sm:pt-20 sm:text-sm">
+          <p className="py-4 text-center text-[0.68rem] font-bold text-[#2d2a26]/45 sm:py-6 sm:text-sm">
             {status || "Geen agenda-items deze week"}
           </p>
         )}

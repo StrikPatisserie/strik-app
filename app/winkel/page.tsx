@@ -24,7 +24,7 @@ export default function WinkelPage() {
           </h1>
         </header>
 
-        <div className="grid gap-2 sm:grid-cols-[minmax(0,0.82fr)_minmax(0,1fr)] sm:gap-6 lg:gap-7">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,0.82fr)_minmax(0,1fr)] sm:gap-6 lg:gap-7">
           <WeeklyOfferPanel />
           <CompactLatestNewsPanel />
         </div>

@@ -1280,7 +1280,13 @@ function TrashIcon() {
   );
 }
 
-export function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
+export function CakeVisualizer({
+  config,
+  compact = false,
+}: {
+  config: WeddingCakeConfig;
+  compact?: boolean;
+}) {
   const visualizerId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [downloadStatus, setDownloadStatus] = useState("");
@@ -2943,23 +2949,45 @@ export function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
   }
 
   return (
-    <div className="rounded-[1.5rem] border border-[#e7e0d8] bg-[#fffdf8] p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <div
+      className={
+        compact
+          ? "rounded-[1rem] border border-[#e7e0d8] bg-[#fffdf8] p-2.5"
+          : "rounded-[1.5rem] border border-[#e7e0d8] bg-[#fffdf8] p-4"
+      }
+    >
+      <div
+        className={
+          compact
+            ? "mb-1.5 flex items-start justify-between gap-2"
+            : "mb-3 flex items-center justify-between gap-3"
+        }
+      >
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45">
+          <p
+            className={
+              compact
+                ? "text-[0.56rem] font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45"
+                : "text-xs font-bold uppercase tracking-[0.18em] text-[#2d2a26]/45"
+            }
+          >
             Schets
           </p>
-          <p className="text-lg font-black">
+          <p className={compact ? "text-sm font-black" : "text-lg font-black"}>
             {size ? `${size.label} · ${size.personsLabel}` : "Nog geen formaat"}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           {uniqueLayerColors.length > 0 && (
-            <div className="flex -space-x-2">
+            <div className={compact ? "flex -space-x-1.5" : "flex -space-x-2"}>
               {uniqueLayerColors.slice(0, 4).map((color) => (
                 <span
                   key={color.id}
-                  className="h-8 w-8 rounded-full border-2 border-white shadow-sm"
+                  className={
+                    compact
+                      ? "h-6 w-6 rounded-full border-2 border-white shadow-sm"
+                      : "h-8 w-8 rounded-full border-2 border-white shadow-sm"
+                  }
                   style={{
                     backgroundColor: color.swatchColor || "#fff",
                     outline: `1px solid ${
@@ -2974,7 +3002,11 @@ export function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           <button
             type="button"
             onClick={() => void downloadVisualizerImage()}
-            className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm transition active:scale-[0.98]"
+            className={
+              compact
+                ? "rounded-full bg-[#c3d3bc] px-2.5 py-1.5 text-[0.65rem] font-black shadow-sm transition active:scale-[0.98]"
+                : "rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm transition active:scale-[0.98]"
+            }
           >
             Download
           </button>
@@ -2983,7 +3015,11 @@ export function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
       <svg
         ref={svgRef}
         viewBox="0 0 260 280"
-        className="h-auto w-full text-[#1f1d1a]"
+        className={
+          compact
+            ? "mx-auto h-auto w-full max-w-[14rem] text-[#1f1d1a]"
+            : "h-auto w-full text-[#1f1d1a]"
+        }
         aria-label="Bruidstaart visualisatie"
       >
         <defs>
@@ -3299,12 +3335,24 @@ export function CakeVisualizer({ config }: { config: WeddingCakeConfig }) {
           );
         })}
       </svg>
-      <p className="mt-2 text-xs font-bold leading-relaxed text-[#2d2a26]/50">
+      <p
+        className={
+          compact
+            ? "mt-1 text-[0.62rem] font-bold leading-snug text-[#2d2a26]/50"
+            : "mt-2 text-xs font-bold leading-relaxed text-[#2d2a26]/50"
+        }
+      >
         Schets op basis van formaat, kleur, layout, decoratie en toppers. De
         echte afwerking blijft maatwerk.
       </p>
       {downloadStatus && (
-        <p className="mt-2 text-xs font-black text-[#6f8b64]">
+        <p
+          className={
+            compact
+              ? "mt-1 text-[0.62rem] font-black text-[#6f8b64]"
+              : "mt-2 text-xs font-black text-[#6f8b64]"
+          }
+        >
           {downloadStatus}
         </p>
       )}
@@ -4668,17 +4716,17 @@ export default function BruidstaartStudioConfigurator() {
       </nav>
 
       {step.id === "overzicht" && (
-        <section className="studio-no-print ml-auto max-w-3xl rounded-[1rem] border border-[#ecd9a9] bg-[#fff4d1] p-2.5 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
+        <section className="studio-no-print ml-auto max-w-2xl rounded-[0.85rem] border border-[#ecd9a9] bg-[#fff4d1] p-2 shadow-sm">
+          <div className="grid gap-2 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
             <div>
-              <h3 className="text-xs font-black uppercase tracking-[0.08em]">
+              <h3 className="text-[0.64rem] font-black uppercase tracking-[0.08em]">
                 Huidige bestelling
               </h3>
-              <p className="text-[0.68rem] font-bold text-[#2d2a26]/45">
+              <p className="text-[0.58rem] font-bold text-[#2d2a26]/45">
                 Opslaan of opnieuw beginnen.
               </p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-1.5">
               <input
                 value={config.contact.recognitionCode}
                 onChange={(event) =>
@@ -4691,7 +4739,7 @@ export default function BruidstaartStudioConfigurator() {
                   )
                 }
                 placeholder="Herkenningscode"
-                className="min-w-0 rounded-xl border border-[#ecd9a9] bg-white/90 px-3 py-2 text-sm font-bold"
+                className="min-w-0 rounded-lg border border-[#ecd9a9] bg-white/90 px-2.5 py-1.5 text-xs font-bold"
               />
               <input
                 value={config.contact.surname}
@@ -4701,14 +4749,14 @@ export default function BruidstaartStudioConfigurator() {
                   )
                 }
                 placeholder="Achternaam klant"
-                className="min-w-0 rounded-xl border border-[#ecd9a9] bg-white/90 px-3 py-2 text-sm font-bold"
+                className="min-w-0 rounded-lg border border-[#ecd9a9] bg-white/90 px-2.5 py-1.5 text-xs font-bold"
               />
             </div>
-            <div className="flex flex-wrap gap-2 lg:justify-end">
+            <div className="flex flex-wrap gap-1.5 lg:justify-end">
               <button
                 type="button"
                 onClick={() => void saveDraft()}
-                className={`rounded-full px-3 py-2 text-xs font-black shadow-sm transition ${
+                className={`rounded-full px-2.5 py-1.5 text-[0.64rem] font-black shadow-sm transition ${
                   saveFeedback
                     ? "bg-[#dce8d6] text-[#2d2a26]"
                     : "bg-[#c3d3bc]"
@@ -4721,21 +4769,23 @@ export default function BruidstaartStudioConfigurator() {
               <button
                 type="button"
                 onClick={deleteCurrentDraft}
-                className="rounded-full bg-[#e15f59] px-3 py-2 text-xs font-black text-white shadow-sm"
+                aria-label="Bestelling verwijderen"
+                title="Bestelling verwijderen"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[#e15f59] text-white shadow-sm transition active:scale-[0.98]"
               >
-                Verwijder
+                <TrashIcon />
               </button>
               <button
                 type="button"
                 onClick={startAgain}
-                className="rounded-full bg-white/90 px-3 py-2 text-xs font-black shadow-sm"
+                className="rounded-full bg-white/90 px-2.5 py-1.5 text-[0.64rem] font-black shadow-sm"
               >
                 Begin opnieuw
               </button>
             </div>
           </div>
           {(saveFeedback || draftStatus) && (
-            <p className="mt-2 text-xs font-bold italic text-[#2d2a26]/55">
+            <p className="mt-1.5 text-[0.62rem] font-bold italic text-[#2d2a26]/55">
               {saveFeedback || draftStatus}
             </p>
           )}
@@ -6032,9 +6082,9 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "overzicht" && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="grid gap-2 sm:grid-cols-2">
-                <label className="flex items-center gap-2 rounded-[1rem] border border-[#e7e0d8] bg-white p-3 text-sm font-black shadow-sm">
+                <label className="flex items-center gap-2 rounded-[0.85rem] border border-[#e7e0d8] bg-white p-2.5 text-xs font-black shadow-sm">
                   <input
                     type="checkbox"
                     checked={config.paid}
@@ -6044,11 +6094,11 @@ export default function BruidstaartStudioConfigurator() {
                         paid: event.target.checked,
                       }))
                     }
-                    className="h-5 w-5 accent-[#8fb184]"
+                    className="h-4 w-4 accent-[#8fb184]"
                   />
                   Heeft betaald
                 </label>
-                <label className="flex items-center gap-2 rounded-[1rem] border border-[#e7e0d8] bg-white p-3 text-sm font-black shadow-sm">
+                <label className="flex items-center gap-2 rounded-[0.85rem] border border-[#e7e0d8] bg-white p-2.5 text-xs font-black shadow-sm">
                   <input
                     type="checkbox"
                     checked={config.completed}
@@ -6073,7 +6123,7 @@ export default function BruidstaartStudioConfigurator() {
                         completed: checked,
                       }));
                     }}
-                    className="h-5 w-5 accent-[#8fb184]"
+                    className="h-4 w-4 accent-[#8fb184]"
                   />
                   Bestelling definitief
                 </label>
@@ -6086,7 +6136,7 @@ export default function BruidstaartStudioConfigurator() {
           <aside
             className={`h-fit rounded-[1rem] border border-[#e7e0d8] bg-white/90 p-3 shadow-sm ${
               step.id === "overzicht"
-                ? "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(15rem,0.42fr)] lg:items-start"
+                ? "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(13rem,17rem)] lg:items-start"
                 : "space-y-3 lg:sticky lg:top-5"
             }`}
           >
@@ -6126,17 +6176,17 @@ export default function BruidstaartStudioConfigurator() {
             <div
               className={
                 step.id === "overzicht"
-                  ? "order-2 max-w-[19rem] justify-self-end lg:order-2"
+                  ? "order-2 w-full max-w-[17rem] justify-self-end self-start lg:order-2"
                   : ""
               }
             >
-              <CakeVisualizer config={config} />
+              <CakeVisualizer config={config} compact={step.id === "overzicht"} />
             </div>
 
             <div
               className={
                 step.id === "overzicht"
-                  ? "order-1 space-y-2 lg:order-1"
+                  ? "order-1 space-y-2 lg:order-1 lg:pr-2"
                   : "space-y-3"
               }
             >
@@ -6238,12 +6288,12 @@ export default function BruidstaartStudioConfigurator() {
                 {price.lines.map((line) => (
                   <div
                     key={line.label}
-                    className="mb-1 flex items-start justify-between gap-3 text-xs"
+                    className="mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 text-xs"
                   >
-                    <span className="leading-snug text-[#2d2a26]/65">
+                    <span className="min-w-0 leading-snug text-[#2d2a26]/65">
                       {line.label}
                     </span>
-                    <span className="shrink-0 font-bold">
+                    <span className="whitespace-nowrap font-bold">
                       {line.quote ? "n.t.b." : formatEuro(line.amount)}
                     </span>
                   </div>
