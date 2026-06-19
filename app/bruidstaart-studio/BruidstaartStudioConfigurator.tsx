@@ -811,19 +811,21 @@ function optionSelectLabel(option: StudioOption) {
 function LayerOptionSelectGrid({
   layers,
   options,
+  placeholder,
   valueForLayer,
   onChange,
 }: {
   layers: CakeLayer[];
   options: StudioOption[];
+  placeholder: string;
   valueForLayer: (layerId: string) => string;
   onChange: (layerId: string, optionId: string) => void;
 }) {
   return (
     <div className="grid gap-2">
       {layers.map((layer) => {
-        const selected =
-          findOption(options, valueForLayer(layer.id)) || options[0];
+        const selectedId = valueForLayer(layer.id);
+        const selected = findOption(options, selectedId);
 
         return (
           <label
@@ -851,10 +853,11 @@ function LayerOptionSelectGrid({
               </span>
             </span>
             <select
-              value={selected?.id || ""}
+              value={selectedId}
               onChange={(event) => onChange(layer.id, event.target.value)}
               className="mt-2 w-full rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
             >
+              <option value="">{placeholder}</option>
               {options.map((option) => (
                 <option key={option.id} value={option.id}>
                   {optionSelectLabel(option)}
@@ -3323,6 +3326,14 @@ function updateContact<K extends keyof ContactDetails>(
   };
 }
 
+function getSelectedLayerChoiceId(
+  layerId: string,
+  optionIds: Record<string, string> | undefined,
+  fallbackId: string
+) {
+  return optionIds?.[layerId] || fallbackId || "";
+}
+
 function createStudioItemId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -3351,13 +3362,6 @@ function getAllowedBorderDecorationIds(styleId: WeddingCakeConfig["styleId"]) {
   return [];
 }
 
-function getDefaultBorderDecorationId(styleId: WeddingCakeConfig["styleId"]) {
-  if (styleId === "klassiek") return MARZIPAN_BAND_DECORATION_ID;
-  if (styleId === "vanille-creme" || styleId === "naked") return "geen-rand";
-
-  return "";
-}
-
 function normalizeDecorationIdsForStyle(
   decorationIds: string[],
   styleId: WeddingCakeConfig["styleId"]
@@ -3366,15 +3370,13 @@ function normalizeDecorationIdsForStyle(
   const selectedBorderId = decorationIds.find(
     (id) => BORDER_DECORATION_IDS.includes(id) && allowedBorderIds.includes(id)
   );
-  const fallbackBorderId = getDefaultBorderDecorationId(styleId);
   const nonBorderIds = decorationIds.filter(
     (id) => !BORDER_DECORATION_IDS.includes(id)
   );
 
-  return [
-    selectedBorderId || fallbackBorderId,
-    ...nonBorderIds,
-  ].filter(Boolean);
+  return [selectedBorderId, ...nonBorderIds].filter(
+    (id): id is string => Boolean(id)
+  );
 }
 
 function createEmptyWeddingCakeConfig(): WeddingCakeConfig {
@@ -4567,9 +4569,17 @@ export default function BruidstaartStudioConfigurator() {
       }
     }
 
-    if (stepId === "gegevens") {
-      if (!current.contact.names.trim()) missing.push("namen bruidspaar");
-      if (!current.contact.deliveryDate) missing.push("leverdatum");
+    return Array.from(new Set(missing));
+  }
+
+  function getFinalRequiredMissingFields(current = config) {
+    const missing = getBaseMissingFields(current);
+
+    if (!current.contact.email.trim()) missing.push("e-mail klant");
+    if (!current.contact.deliveryDate) missing.push("leverdatum");
+    if (!current.contact.deliveryMethod) missing.push("afhalen of bezorgen");
+    if (!current.contact.deliveryAddress.trim()) {
+      missing.push("leveradres/afhaallocatie");
     }
 
     return Array.from(new Set(missing));
@@ -4577,13 +4587,12 @@ export default function BruidstaartStudioConfigurator() {
 
   function getCompletionWarnings(current = config) {
     const missing = [
-      ...getBaseMissingFields(current),
       ...getStepMissingFields("formaat", current),
       ...getStepMissingFields("stijl", current),
       ...getStepMissingFields("smaak", current),
       ...getStepMissingFields("kleur", current),
       ...getStepMissingFields("layout", current),
-      ...getStepMissingFields("gegevens", current),
+      ...getFinalRequiredMissingFields(current),
     ];
 
     return Array.from(new Set(missing));
@@ -4623,6 +4632,19 @@ export default function BruidstaartStudioConfigurator() {
     goToStep(stepIndex + 1);
   }
 
+  const currentStepMissingFields = getStepMissingFields();
+  const finalRequiredMissingFields = getFinalRequiredMissingFields();
+  const visibleWarningFields =
+    step.id === "overzicht"
+      ? getCompletionWarnings()
+      : step.id === "gegevens"
+      ? finalRequiredMissingFields
+      : currentStepMissingFields;
+  const hasVisibleWarnings = visibleWarningFields.length > 0;
+  const visibleDraftStatus = draftStatus.startsWith("Je hebt nog")
+    ? ""
+    : draftStatus;
+
   return (
     <div className="space-y-3">
       <nav className="studio-no-print rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-2 shadow-sm">
@@ -4649,7 +4671,9 @@ export default function BruidstaartStudioConfigurator() {
         <section className="studio-no-print ml-auto max-w-3xl rounded-[1rem] border border-[#ecd9a9] bg-[#fff4d1] p-2.5 shadow-sm">
           <div className="grid gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
             <div>
-              <h3 className="text-sm font-black">Huidige bestelling</h3>
+              <h3 className="text-xs font-black uppercase tracking-[0.08em]">
+                Huidige bestelling
+              </h3>
               <p className="text-[0.68rem] font-bold text-[#2d2a26]/45">
                 Opslaan of opnieuw beginnen.
               </p>
@@ -4719,10 +4743,20 @@ export default function BruidstaartStudioConfigurator() {
       )}
 
       {step.id !== "start" && (
-        <section className="studio-no-print rounded-[0.9rem] border border-[#efb8ad] bg-[#fff3f0] p-2.5 shadow-sm">
+        <section
+          className={`studio-no-print rounded-[0.9rem] border p-2.5 shadow-sm ${
+            hasVisibleWarnings
+              ? "border-[#efb8ad] bg-[#fff3f0]"
+              : "border-[#cfdcc8] bg-[#f7faf5]"
+          }`}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#ef5737]">
+              <p
+                className={`text-[0.58rem] font-black uppercase tracking-[0.14em] ${
+                  hasVisibleWarnings ? "text-[#ef5737]" : "text-[#6d8665]"
+                }`}
+              >
                 Stap {stepIndex + 1} van {steps.length}
               </p>
               <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -4768,36 +4802,27 @@ export default function BruidstaartStudioConfigurator() {
 
           <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/80">
             <div
-              className="h-full rounded-full bg-[#ef5737]"
+              className={`h-full rounded-full ${
+                hasVisibleWarnings ? "bg-[#ef5737]" : "bg-[#8fb184]"
+              }`}
               style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
             />
           </div>
-          {draftStatus && (
+          {hasVisibleWarnings ? (
             <p className="mt-2 text-[0.68rem] font-bold text-[#9f382f]">
-              {draftStatus}
+              {step.id === "gegevens" || step.id === "overzicht"
+                ? `Nog niet compleet voor definitief: ${visibleWarningFields.join(
+                    ", "
+                  )}.`
+                : `Je hebt nog velden om in te vullen: ${visibleWarningFields.join(
+                    ", "
+                  )}.`}
             </p>
-          )}
-        </section>
-      )}
-
-      {step.id === "overzicht" && (
-        <section className="studio-no-print rounded-[0.9rem] border border-[#e7e0d8] bg-white/85 p-2.5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h3 className="text-sm font-black leading-tight">Overzicht</h3>
-              <p className="mt-0.5 text-[0.68rem] font-semibold leading-snug text-[#2d2a26]/55 sm:text-xs">
-                Controleer de visualisatie en details. Gebruik daarna printen
-                of mailen.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={copyProductionForm}
-              className="rounded-full bg-[#f8f6f3] px-3 py-2 text-[0.68rem] font-black shadow-sm"
-            >
-              {copied ? "Gekopieerd" : "Formulier kopiëren"}
-            </button>
-          </div>
+          ) : visibleDraftStatus ? (
+            <p className="mt-2 text-[0.68rem] font-bold text-[#4f7048]">
+              {visibleDraftStatus}
+            </p>
+          ) : null}
         </section>
       )}
 
@@ -5346,8 +5371,11 @@ export default function BruidstaartStudioConfigurator() {
                     key={option.id}
                     option={option}
                     selected={
-                      getLayerFilling(config, activeLayers[0].id).id ===
-                      option.id
+                      getSelectedLayerChoiceId(
+                        activeLayers[0].id,
+                        config.layerFillingIds,
+                        config.fillingId
+                      ) === option.id
                     }
                     onClick={() => setLayerFilling(activeLayers[0].id, option.id)}
                   />
@@ -5364,12 +5392,17 @@ export default function BruidstaartStudioConfigurator() {
                           {layer.label} · {layer.personsLabel}
                         </span>
                         <select
-                          value={getLayerFilling(config, layer.id).id}
+                          value={getSelectedLayerChoiceId(
+                            layer.id,
+                            config.layerFillingIds,
+                            config.fillingId
+                          )}
                           onChange={(event) =>
                             setLayerFilling(layer.id, event.target.value)
                           }
                           className="mt-2 w-full rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-bold"
                         >
+                          <option value="">Kies smaak</option>
                           {fillingOptions.map((option) => (
                             <option key={option.id} value={option.id}>
                               {option.label}
@@ -5400,7 +5433,14 @@ export default function BruidstaartStudioConfigurator() {
               <LayerOptionSelectGrid
                 layers={activeLayers}
                 options={allowedColors}
-                valueForLayer={(layerId) => getLayerColor(config, layerId).id}
+                placeholder="Kies kleur"
+                valueForLayer={(layerId) =>
+                  getSelectedLayerChoiceId(
+                    layerId,
+                    config.layerColorIds,
+                    config.colorId
+                  )
+                }
                 onChange={setLayerColor}
               />
             )
@@ -5419,7 +5459,14 @@ export default function BruidstaartStudioConfigurator() {
               <LayerOptionSelectGrid
                 layers={activeLayers}
                 options={allowedLayouts}
-                valueForLayer={(layerId) => getLayerLayout(config, layerId).id}
+                placeholder="Kies layout"
+                valueForLayer={(layerId) =>
+                  getSelectedLayerChoiceId(
+                    layerId,
+                    config.layerLayoutIds,
+                    config.layoutId
+                  )
+                }
                 onChange={setLayerLayout}
               />
             )
@@ -6013,10 +6060,11 @@ export default function BruidstaartStudioConfigurator() {
 
                         if (missing.length) {
                           window.alert(
-                            `Let op: nog niet alles is ingevuld. Controleer ${missing
-                              .slice(0, 5)
-                              .join(", ")} voordat je deze bestelling definitief maakt.`
+                            `Kan niet definitief opslaan zonder dat alle gegevens zijn ingevuld. Ontbreekt nog: ${missing.join(
+                              ", "
+                            )}.`
                           );
+                          return;
                         }
                       }
 
@@ -6035,141 +6083,174 @@ export default function BruidstaartStudioConfigurator() {
         </section>
 
         {step.id !== "start" && (
-        <aside className="h-fit space-y-3 rounded-[1rem] border border-[#e7e0d8] bg-white/90 p-3 shadow-sm lg:sticky lg:top-5">
-          <CakeVisualizer config={config} />
-
-          {step.id === "overzicht" && (
-            <div className="grid gap-2 sm:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="rounded-full bg-[#f1d28f] px-3 py-2 text-xs font-black shadow-sm"
-              >
-                Printen
-              </button>
-              <button
-                type="button"
-                onClick={() => openMail(STRIK_STUDIO_EMAIL)}
-                className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
-              >
-                Mail naar Strik
-              </button>
-              <button
-                type="button"
-                onClick={() => openMail(config.contact.email)}
-                className="rounded-full bg-white px-3 py-2 text-xs font-black shadow-sm"
-              >
-                Mail naar klant
-              </button>
-            </div>
-          )}
-
-          <div>
-          <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-[#2d2a26]/45">
-            Live prijs
-          </p>
-          <p className="mt-0.5 text-2xl font-black">{formatEuro(price.total)}</p>
-          </div>
-          {price.hasQuoteItems && (
-            <p className="mt-2 rounded-2xl bg-[#fff7e3] p-3 text-xs font-bold leading-relaxed text-[#5d4717]">
-              Sommige onderdelen staan op aanvraag en zitten nog niet in het
-              totaal.
-            </p>
-          )}
-
-          <div className="mt-3 space-y-2 text-xs leading-snug sm:text-sm">
-            <p>
-              <span className="font-bold">Stijl:</span> {labels.style}
-            </p>
-            <p>
-              <span className="font-bold">Formaat:</span> {labels.size}
-            </p>
-            <p>
-              <span className="font-bold">Smaak:</span> {labels.filling}
-            </p>
-            <p>
-              <span className="font-bold">Kleur:</span> {labels.color}
-            </p>
-            <p>
-              <span className="font-bold">Layout:</span> {labels.layout}
-            </p>
-            <p>
-              <span className="font-bold">Decoratie:</span>{" "}
-              {labels.decorations.length ? labels.decorations.join(", ") : "geen"}
-            </p>
-            {decorationNoteTexts.length > 0 && (
-              <p>
-                <span className="font-bold">Decoratie opmerkingen:</span>{" "}
-                {decorationNoteTexts.join(" | ")}
-              </p>
-            )}
-            {decorationColorNotes.length > 0 && (
-              <p>
-                <span className="font-bold">Decoratie kleuren:</span>{" "}
-                {decorationColorNotes
-                  .map((item) => `${item.label}: ${item.color}`)
-                  .join(" | ")}
-              </p>
-            )}
-            {decorationSurcharges.length > 0 && (
-              <p>
-                <span className="font-bold">Decoratie toeslagen:</span>{" "}
-                {decorationSurcharges
-                  .map(
-                    (surcharge) =>
-                      `${surcharge.description || "extra wens"} (${formatEuro(
-                        surcharge.amount
-                      )})`
-                  )
-                  .join(" | ")}
-              </p>
-            )}
-            <p>
-              <span className="font-bold">Topper:</span> {labels.topper}
-            </p>
-            {config.topperInitialsText && (
-              <p>
-                <span className="font-bold">Topper initialen:</span>{" "}
-                {config.topperInitialsText}
-              </p>
-            )}
-            {topperNoteTexts.length > 0 && (
-              <p>
-                <span className="font-bold">Topper opmerkingen:</span>{" "}
-                {topperNoteTexts.join(" | ")}
-              </p>
-            )}
-            {topperSurcharges.length > 0 && (
-              <p>
-                <span className="font-bold">Topper toeslagen:</span>{" "}
-                {topperSurcharges
-                  .map(
-                    (surcharge) =>
-                      `${surcharge.description || "extra wens"} (${formatEuro(
-                        surcharge.amount
-                      )})`
-                  )
-                  .join(" | ")}
-              </p>
-            )}
-          </div>
-
-          <div className="mt-3 border-t border-[#e7e0d8] pt-3">
-            {price.lines.map((line) => (
-              <div
-                key={line.label}
-                className="mb-1.5 flex items-start justify-between gap-3 text-xs sm:text-sm"
-              >
-                <span className="leading-snug text-[#2d2a26]/65">
-                  {line.label}
-                </span>
-                <span className="shrink-0 font-bold">
-                  {line.quote ? "n.t.b." : formatEuro(line.amount)}
-                </span>
+          <aside
+            className={`h-fit rounded-[1rem] border border-[#e7e0d8] bg-white/90 p-3 shadow-sm ${
+              step.id === "overzicht"
+                ? "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(15rem,0.42fr)] lg:items-start"
+                : "space-y-3 lg:sticky lg:top-5"
+            }`}
+          >
+            {step.id === "overzicht" && (
+              <div className="grid gap-2 sm:grid-cols-4 lg:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="rounded-full bg-[#f1d28f] px-3 py-2 text-xs font-black shadow-sm"
+                >
+                  Printen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openMail(STRIK_STUDIO_EMAIL)}
+                  className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
+                >
+                  Mail naar Strik
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openMail(config.contact.email)}
+                  className="rounded-full bg-white px-3 py-2 text-xs font-black shadow-sm"
+                >
+                  Mail naar klant
+                </button>
+                <button
+                  type="button"
+                  onClick={copyProductionForm}
+                  className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black shadow-sm"
+                >
+                  {copied ? "Gekopieerd" : "Formulier kopiëren"}
+                </button>
               </div>
-            ))}
-          </div>
-        </aside>
+            )}
+
+            <div
+              className={
+                step.id === "overzicht"
+                  ? "order-2 max-w-[19rem] justify-self-end lg:order-2"
+                  : ""
+              }
+            >
+              <CakeVisualizer config={config} />
+            </div>
+
+            <div
+              className={
+                step.id === "overzicht"
+                  ? "order-1 space-y-2 lg:order-1"
+                  : "space-y-3"
+              }
+            >
+              <div>
+                <p className="text-[0.6rem] font-bold uppercase tracking-[0.14em] text-[#2d2a26]/45">
+                  Live prijs
+                </p>
+                <p className="mt-0.5 text-lg font-black">
+                  {formatEuro(price.total)}
+                </p>
+              </div>
+              {price.hasQuoteItems && (
+                <p className="rounded-xl bg-[#fff7e3] p-2 text-[0.68rem] font-bold leading-relaxed text-[#5d4717]">
+                  Sommige onderdelen staan op aanvraag en zitten nog niet in het
+                  totaal.
+                </p>
+              )}
+
+              <div className="space-y-1.5 text-xs leading-snug">
+                <p>
+                  <span className="font-bold">Stijl:</span> {labels.style}
+                </p>
+                <p>
+                  <span className="font-bold">Formaat:</span> {labels.size}
+                </p>
+                <p>
+                  <span className="font-bold">Smaak:</span> {labels.filling}
+                </p>
+                <p>
+                  <span className="font-bold">Kleur:</span> {labels.color}
+                </p>
+                <p>
+                  <span className="font-bold">Layout:</span> {labels.layout}
+                </p>
+                <p>
+                  <span className="font-bold">Decoratie:</span>{" "}
+                  {labels.decorations.length
+                    ? labels.decorations.join(", ")
+                    : "geen"}
+                </p>
+                {decorationNoteTexts.length > 0 && (
+                  <p>
+                    <span className="font-bold">Decoratie opmerkingen:</span>{" "}
+                    {decorationNoteTexts.join(" | ")}
+                  </p>
+                )}
+                {decorationColorNotes.length > 0 && (
+                  <p>
+                    <span className="font-bold">Decoratie kleuren:</span>{" "}
+                    {decorationColorNotes
+                      .map((item) => `${item.label}: ${item.color}`)
+                      .join(" | ")}
+                  </p>
+                )}
+                {decorationSurcharges.length > 0 && (
+                  <p>
+                    <span className="font-bold">Decoratie toeslagen:</span>{" "}
+                    {decorationSurcharges
+                      .map(
+                        (surcharge) =>
+                          `${surcharge.description || "extra wens"} (${formatEuro(
+                            surcharge.amount
+                          )})`
+                      )
+                      .join(" | ")}
+                  </p>
+                )}
+                <p>
+                  <span className="font-bold">Topper:</span> {labels.topper}
+                </p>
+                {config.topperInitialsText && (
+                  <p>
+                    <span className="font-bold">Topper initialen:</span>{" "}
+                    {config.topperInitialsText}
+                  </p>
+                )}
+                {topperNoteTexts.length > 0 && (
+                  <p>
+                    <span className="font-bold">Topper opmerkingen:</span>{" "}
+                    {topperNoteTexts.join(" | ")}
+                  </p>
+                )}
+                {topperSurcharges.length > 0 && (
+                  <p>
+                    <span className="font-bold">Topper toeslagen:</span>{" "}
+                    {topperSurcharges
+                      .map(
+                        (surcharge) =>
+                          `${surcharge.description || "extra wens"} (${formatEuro(
+                            surcharge.amount
+                          )})`
+                      )
+                      .join(" | ")}
+                  </p>
+                )}
+              </div>
+
+              <div className="border-t border-[#e7e0d8] pt-2">
+                {price.lines.map((line) => (
+                  <div
+                    key={line.label}
+                    className="mb-1 flex items-start justify-between gap-3 text-xs"
+                  >
+                    <span className="leading-snug text-[#2d2a26]/65">
+                      {line.label}
+                    </span>
+                    <span className="shrink-0 font-bold">
+                      {line.quote ? "n.t.b." : formatEuro(line.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
         )}
       </div>
 
