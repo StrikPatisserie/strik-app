@@ -30,17 +30,9 @@ const bottomItems = [
     href: "/management/rooster",
     label: "Tamigo",
     title: "Rooster",
-    description: "Bekijk per week wie er werkt, ziek is of vakantie heeft.",
+    description: "Werkrooster en loonkosten in één overzicht.",
     icon: strikIcons.strikAgenda,
     tone: "medium" as const,
-  },
-  {
-    href: "/management/loonkosten",
-    label: "Tamigo",
-    title: "Loonkosten",
-    description: "Bekijk ingezette uren en loonkosten per winkel en per dag.",
-    icon: strikIcons.management,
-    tone: "light" as const,
   },
   {
     href: "/schoonmaak/overzicht",

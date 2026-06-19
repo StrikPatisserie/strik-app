@@ -54,15 +54,14 @@ export default function CompactStaffOverview() {
 
   return (
     <details
-      open
       className="group rounded-[0.9rem] border border-[#e1ded8] bg-white/85 shadow-sm sm:rounded-[1.15rem]"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[0.9rem] bg-[#f0f1ee] px-3 py-2.5 [&::-webkit-details-marker]:hidden sm:rounded-[1.15rem] sm:px-5 sm:py-3">
         <h2 className="winkel-section-heading text-[#2d2a26]/70">
           wie werkt er vandaag
         </h2>
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ef5737] text-sm font-black leading-none text-white transition group-open:rotate-180 sm:h-8 sm:w-8">
-          v
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ef5737] text-base font-black leading-none text-white transition group-open:rotate-180 sm:h-8 sm:w-8 sm:text-lg">
+          ⌄
         </span>
       </summary>
 

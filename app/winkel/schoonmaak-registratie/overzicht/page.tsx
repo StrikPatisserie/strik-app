@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { StrikShell } from "../../../StrikUI";
+import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
 import {
   fetchCleaningItems,
   stripInternalTemperatureRegistrations,
@@ -635,25 +635,20 @@ export default function TemperatuurRegistratieOverzichtPage() {
   return (
     <StrikShell wide>
       <div className="space-y-4">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e7e0d8] pb-3">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#ef5737]">
-              HACCP overzicht
-            </p>
-            <h1 className="mt-1 text-2xl font-black uppercase tracking-[0.12em] text-[#1a1815] sm:text-3xl">
-              Temperatuurregistratie
-            </h1>
-            <p className="mt-1 text-sm font-bold text-[#2d2a26]/55">
-              {locationLabel} · {periodLabel}
-            </p>
-          </div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <StrikPageHeader
+            title="Temperatuurregistratie"
+            description={`${locationLabel} · ${periodLabel}`}
+            kicker="HACCP overzicht"
+            icon={strikIcons.cleaning}
+          />
           <Link
             href="/winkel/schoonmaak-registratie"
             className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
           >
             Registratie invullen
           </Link>
-        </header>
+        </div>
 
         <section className="rounded-[1.25rem] border border-[#d9d6d1] bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">

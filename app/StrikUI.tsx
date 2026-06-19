@@ -122,7 +122,6 @@ export function StrikPageHeader({
   description,
   icon,
   kicker,
-  tone,
 }: Readonly<{
   title: string;
   description?: string;
@@ -130,30 +129,28 @@ export function StrikPageHeader({
   kicker?: string;
   tone?: Tone;
 }>) {
-  const toneClass = tone ? toneClasses[tone] : toneClasses.neutral;
-
   return (
-    <header className="mb-5 flex flex-col gap-4 rounded-[1.5rem] border border-[#e7e0d8] bg-white/90 p-4 shadow-sm sm:p-5">
-      <div className="flex flex-wrap items-center gap-3">
+    <header className="mb-4 flex min-w-0 flex-col gap-1.5 pb-1 sm:mb-5">
+      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
         {icon && (
-          <div className={`flex h-10 w-10 items-center justify-center rounded-3xl ${toneClass}`}>
-            <img src={icon} alt="" className="h-6 w-6 object-contain" />
-          </div>
+          <span
+            aria-hidden="true"
+            className="block h-[clamp(1rem,4.4vw,1.8rem)] w-[clamp(1rem,4.4vw,1.8rem)] shrink-0 bg-[#ef5737]"
+            style={{
+              WebkitMask: `url("${icon}") center / contain no-repeat`,
+              mask: `url("${icon}") center / contain no-repeat`,
+            }}
+          />
         )}
         <div className="min-w-0">
-          {kicker && (
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
-              {kicker}
-            </p>
-          )}
           <StrikPageTitle title={title} />
-          {description && (
-            <p className="mt-2 text-sm leading-normal text-[#6b645b]">
-              {description}
-            </p>
-          )}
         </div>
       </div>
+      {(kicker || description) && (
+        <p className="max-w-2xl pl-[calc(clamp(1rem,4.4vw,1.8rem)+0.75rem)] text-xs font-normal leading-snug tracking-normal text-[#6b645b] sm:pl-[calc(clamp(1rem,4.4vw,1.8rem)+1rem)] sm:text-sm">
+          {[kicker?.toLowerCase(), description].filter(Boolean).join(" · ")}
+        </p>
+      )}
     </header>
   );
 }

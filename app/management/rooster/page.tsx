@@ -1,17 +1,17 @@
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
-import ManagementRoster from "./ManagementRoster";
+import ManagementRosterTabs from "./ManagementRosterTabs";
 
 export default function ManagementRosterPage() {
   return (
     <StrikShell wide>
       <StrikPageHeader
         title="Rooster"
-        description="Weekoverzicht per winkel of per dag."
+        description="Werkrooster en loonkosten per winkel."
         icon={strikIcons.strikAgenda}
         tone="light"
       />
 
-      <ManagementRoster />
+      <ManagementRosterTabs />
     </StrikShell>
   );
 }

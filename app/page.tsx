@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { strikIcons } from "./StrikUI";
+import StrikPageTitle from "./StrikPageTitle";
 
 const sections = [
   {
@@ -31,44 +32,38 @@ const sections = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-4 py-6 text-[#1a1815] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-5">
-        <section className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[#8b8278]">
-                Interne startpagina
-              </p>
-              <h1 className="mt-3 text-2xl font-black tracking-tight text-[#1a1815] sm:text-3xl">
-                Strik Team App
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-snug text-[#6b645b]">
-                Werk snel en overzichtelijk met winkel, ijs, bakkerij en management.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 rounded-3xl bg-[#f6faf4] px-4 py-3 text-sm font-semibold text-[#4a6d5a] shadow-sm">
-              <img src="/strik-logo.png" alt="Strik" className="h-9 w-9 rounded-2xl object-contain" />
-              <span>Rustige, compacte start.</span>
-            </div>
-          </div>
-        </section>
+    <main className="min-h-screen bg-[#faf8f5] px-3 py-5 text-[#1a1815] sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl space-y-4 sm:space-y-5">
+        <header className="flex min-w-0 items-center gap-3 pb-1 sm:gap-4">
+          <span
+            aria-hidden="true"
+            className="block h-[clamp(1rem,4.4vw,1.8rem)] w-[clamp(1rem,4.4vw,1.8rem)] shrink-0 bg-[#ef5737]"
+            style={{
+              WebkitMask: `url("${strikIcons.management}") center / contain no-repeat`,
+              mask: `url("${strikIcons.management}") center / contain no-repeat`,
+            }}
+          />
+          <StrikPageTitle title="Strik Team App" />
+        </header>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
           {sections.map((section) => (
             <Link
               key={section.href}
               href={section.href}
-              className="group overflow-hidden rounded-[1.75rem] border border-[#e8e4de] bg-white p-5 transition hover:shadow-md"
+              className="group flex min-h-24 items-center gap-3 rounded-lg border border-[#ded8cf] bg-white/82 p-3 transition hover:bg-white hover:shadow-sm active:scale-[0.98] sm:min-h-28 sm:p-4"
             >
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-[#ecf4ed]">
-                  <img src={section.icon} alt="" className="h-6 w-6 object-contain" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-[#1a1815]">{section.title}</h2>
-                  <p className="mt-1 text-sm leading-relaxed text-[#6b645b]">{section.subtitle}</p>
-                </div>
-              </div>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#ecf4ed] sm:h-11 sm:w-11">
+                <img src={section.icon} alt="" className="h-5 w-5 object-contain sm:h-6 sm:w-6" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold leading-tight text-[#1a1815] sm:text-base">
+                  {section.title}
+                </span>
+                <span className="mt-0.5 block text-[0.68rem] font-semibold leading-tight text-[#6b645b] sm:text-xs">
+                  {section.subtitle}
+                </span>
+              </span>
             </Link>
           ))}
         </section>
