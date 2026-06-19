@@ -7,10 +7,10 @@ import {
 
 const haccpLinks = [
   {
-    href: "/schoonmaak",
+    href: "/winkel/haccp",
     label: "Winkel",
     title: "Schoonmaakrooster",
-    description: "Open het winkel-schoonmaakplan.",
+    description: "Winkel-schoonmaakplan volgt nog.",
     icon: strikIcons.cleaning,
     tone: "primary" as const,
   },

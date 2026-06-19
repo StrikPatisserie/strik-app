@@ -67,7 +67,7 @@ function Card({
 
   return (
     <article
-      className={`relative grid h-full overflow-hidden rounded-[0.9rem] border shadow-sm ${
+      className={`relative grid h-full grid-rows-[auto_1fr] overflow-hidden rounded-[0.9rem] border shadow-sm ${
         important ? "border-[#efb4aa] bg-[#fff0ed]" : "border-[#e8e4de] bg-white"
       }`}
     >
@@ -94,7 +94,7 @@ function Card({
         <h2 className="mt-1.5 text-base font-black leading-tight text-[#1a1815]">
           {stripImportantTitle(post.title)}
         </h2>
-        <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">
+        <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-[#6b645b]">
           {excerpt}
         </p>
         {hasLongContent && (
@@ -154,7 +154,7 @@ export default function NieuwsList({
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <section className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {allNews.map((post) => (
         <Card
           key={post.id}

@@ -1703,21 +1703,26 @@ function BakkerijStartScreen({
   onDeleteNote: (noteId: string) => void;
 }>) {
   const offer = offerForWeek(home, selectedWeek);
+  const visibleNotes = home.notes.slice(0, 3);
 
   return (
-    <section className="mx-auto h-full w-full max-w-[76rem] overflow-y-auto px-4 py-7 sm:px-7">
-      <div className="grid items-start gap-6 md:grid-cols-[minmax(14rem,22rem)_minmax(16rem,24rem)] md:justify-center md:gap-8 lg:gap-12">
-        <div className="min-w-0">
-          <h2 className="bakkerij-panel-heading mb-4 text-center text-[#111111]">
-            aanbieding
-          </h2>
-          <div className="mx-auto max-w-full text-center">
-            <figure className="inline-block max-w-full text-left">
-            <div className="grid h-8 w-full grid-cols-[2.1rem_2.1rem_minmax(0,1fr)] border border-[#6d746a] bg-[#c3d3bc] text-[#111111]">
+    <section className="mx-auto h-full w-full max-w-[76rem] overflow-y-auto px-3 py-3 sm:px-6 sm:py-5">
+      <div className="grid grid-cols-2 items-start gap-2 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] sm:gap-5 lg:gap-7">
+        <section className="min-w-0 rounded-[1.15rem] border border-[#d7d4cf] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.45rem] sm:p-3">
+          <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-1.5">
+            <div className="min-w-0">
+              <h2 className="winkel-card-heading text-[clamp(1.15rem,3.4vw,1.95rem)]">
+                aanbieding
+              </h2>
+              <p className="text-[0.62rem] font-normal italic leading-tight text-[#6f6961] sm:text-[0.76rem]">
+                {formatWeekRange(selectedWeek)}
+              </p>
+            </div>
+            <div className="col-span-2 flex items-center gap-1 self-start">
               <button
                 type="button"
                 onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
-                className="border-r border-[#6d746a] text-3xl font-light leading-none"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/65 text-2xl font-light leading-none text-[#111111] shadow-sm sm:h-8 sm:w-8"
                 aria-label="Vorige week"
               >
                 ‹
@@ -1725,50 +1730,61 @@ function BakkerijStartScreen({
               <button
                 type="button"
                 onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
-                className="border-r border-[#6d746a] text-3xl font-light leading-none"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/65 text-2xl font-light leading-none text-[#111111] shadow-sm sm:h-8 sm:w-8"
                 aria-label="Volgende week"
               >
                 ›
               </button>
-              <div className="flex items-center justify-end pr-3 text-xs font-light sm:text-sm">
-                {formatWeekRange(selectedWeek)}
-              </div>
             </div>
-            <div className="flex max-h-[48vh] min-h-[13rem] items-center justify-center overflow-hidden border border-[#e7e0d8] bg-white">
+          </div>
+          <div className="mx-auto flex aspect-[210/297] w-full max-w-[10.5rem] items-center justify-center overflow-hidden rounded-[1rem] bg-white sm:max-w-[17rem] lg:max-w-[18.5rem]">
               {offer?.imageUrl ? (
                 <img
                   src={offer.imageUrl}
                   alt={offer.label || "Aanbieding van de week"}
-                  className="block max-h-[48vh] max-w-full object-contain"
+                  className="h-full w-full object-contain"
                 />
               ) : (
-                <p className="px-6 text-center text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/35">
+                <p className="px-3 text-center text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/35 sm:text-xs">
                   Geen aanbieding ingesteld
                 </p>
               )}
-            </div>
-            </figure>
           </div>
-        </div>
+        </section>
 
-        <div className="min-w-0">
-          <h2 className="bakkerij-panel-heading mb-5 text-center text-[#111111]">
-            notities / to do
-          </h2>
-          <div className="grid gap-4">
-            {home.notes.map((note) => (
+        <section className="min-w-0 rounded-[1.15rem] border border-[#d7d4cf] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.45rem] sm:p-3">
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="winkel-card-heading text-[clamp(1.05rem,3.2vw,1.9rem)]">
+                notities
+              </h2>
+              <p className="text-[0.62rem] font-normal italic leading-tight text-[#6f6961] sm:text-[0.76rem]">
+                to do
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onAddNote}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/80 text-2xl font-light leading-none text-[#30462f] shadow-sm sm:h-10 sm:w-10"
+              aria-label="Notitie toevoegen"
+            >
+              +
+            </button>
+          </div>
+          <div className="grid gap-2">
+            {visibleNotes.map((note) => (
               <label key={note.id} className="relative block">
                 <textarea
                   value={note.text}
                   onChange={(event) => onUpdateNoteText(note.id, event.target.value)}
                   onBlur={(event) => onSaveNote(note.id, event.currentTarget.value)}
                   placeholder="Schrijf notitie..."
-                  className="h-[clamp(5.7rem,12vh,7.3rem)] w-full resize-none border border-[#4b4b4b] bg-white px-3 py-2.5 text-sm leading-relaxed text-[#111111] outline-none placeholder:text-[#9a9a9a] focus:border-[#111111]"
+                  className="h-[4.3rem] w-full resize-none rounded-[0.8rem] border border-[#e2ded8] bg-white px-2.5 py-2 text-[0.7rem] font-semibold leading-snug text-[#2d2a26] outline-none placeholder:text-[#9a9a9a] focus:border-[#30462f] sm:h-[5.2rem] sm:text-sm"
                 />
                 <button
                   type="button"
                   onClick={() => onDeleteNote(note.id)}
-                  className="absolute -right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-[#d75a48] text-2xl font-light leading-none text-white"
+                  className="absolute -right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#d75a48] text-lg font-light leading-none text-white"
                   aria-label="Notitie verwijderen"
                 >
                   -
@@ -1779,28 +1795,23 @@ function BakkerijStartScreen({
               <button
                 type="button"
                 onClick={onAddNote}
-                className="h-[clamp(5.7rem,12vh,7.3rem)] border border-[#4b4b4b] bg-white px-3 py-2.5 text-left text-sm text-[#9a9a9a]"
+                className="h-[9rem] rounded-[0.9rem] border border-[#e2ded8] bg-white px-3 py-2.5 text-left text-xs font-semibold text-[#9a9a9a] sm:h-[12rem] sm:text-sm"
               >
                 Schrijf notitie...
               </button>
             )}
           </div>
-          <div className="mt-6 flex justify-center">
-            <button
-              type="button"
-              onClick={onAddNote}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#c3d3bc] text-4xl font-light leading-none text-white"
-              aria-label="Notitie toevoegen"
-            >
-              +
-            </button>
-          </div>
+          {home.notes.length > visibleNotes.length && (
+            <p className="mt-2 text-[0.62rem] font-bold text-[#30462f]/55">
+              +{home.notes.length - visibleNotes.length} extra notitie
+            </p>
+          )}
           {status && (
-            <p className="mt-3 text-center text-xs font-bold text-[#707070]">
+            <p className="mt-2 text-[0.62rem] font-bold text-[#707070] sm:text-xs">
               {status}
             </p>
           )}
-        </div>
+        </section>
       </div>
 
       <BakkerijWeddingCakeAgenda />
@@ -1886,44 +1897,54 @@ function BakkerijWeddingCakeAgenda() {
   }));
 
   return (
-    <section className="mt-8 rounded-[1.75rem] border border-[#bdd2b6] bg-[#dfead9] p-4 shadow-sm sm:p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="bakkerij-panel-heading text-[#30462f]">
+    <details className="group mt-4 rounded-[1.2rem] border border-[#bdd2b6] bg-[#dfead9] shadow-sm sm:mt-5">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[1.2rem] bg-[#f6faf4] px-3 py-2.5 marker:hidden sm:px-4 sm:py-3">
+        <span className="min-w-0">
+          <span className="block text-[0.85rem] font-black uppercase tracking-[0.12em] text-[#30462f] sm:text-sm">
             bruidstaart agenda
-          </h2>
-          <p className="mt-1 text-sm font-bold text-[#30462f]/65">
+          </span>
+          <span className="mt-0.5 block text-[0.66rem] font-semibold italic text-[#30462f]/60 sm:text-xs">
             {formatWeekRange(weekStart)}
-          </p>
-        </div>
-        <div className="flex overflow-hidden rounded-full border border-[#bdd2b6] bg-white/80 shadow-sm">
-          <button
-            type="button"
-            onClick={() => setWeekStart(addDays(weekStart, -7))}
-            className="flex h-11 w-12 items-center justify-center border-r border-[#d6e5d8] text-3xl leading-none text-[#30462f]"
-            aria-label="Vorige week bruidstaarten"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            onClick={() => setWeekStart(weekStartForDate())}
-            className="px-4 text-sm font-bold text-[#30462f]"
-          >
-            deze week
-          </button>
-          <button
-            type="button"
-            onClick={() => setWeekStart(addDays(weekStart, 7))}
-            className="flex h-11 w-12 items-center justify-center border-l border-[#d6e5d8] text-3xl leading-none text-[#30462f]"
-            aria-label="Volgende week bruidstaarten"
-          >
-            ›
-          </button>
-        </div>
-      </div>
+          </span>
+        </span>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ef5737] text-lg font-black leading-none text-white transition group-open:rotate-180">
+          ˅
+        </span>
+      </summary>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)]">
+      <div className="p-3 sm:p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-bold text-[#30462f]/55">
+            {isLoading ? "Laden..." : status}
+          </p>
+          <div className="flex overflow-hidden rounded-full border border-[#bdd2b6] bg-white/80 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setWeekStart(addDays(weekStart, -7))}
+              className="flex h-9 w-10 items-center justify-center border-r border-[#d6e5d8] text-2xl leading-none text-[#30462f]"
+              aria-label="Vorige week bruidstaarten"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStart(weekStartForDate())}
+              className="px-3 text-xs font-bold text-[#30462f]"
+            >
+              deze week
+            </button>
+            <button
+              type="button"
+              onClick={() => setWeekStart(addDays(weekStart, 7))}
+              className="flex h-9 w-10 items-center justify-center border-l border-[#d6e5d8] text-2xl leading-none text-[#30462f]"
+              aria-label="Volgende week bruidstaarten"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)]">
         <div className="rounded-[1.25rem] bg-white/75 p-3">
           <div className="grid gap-2 md:grid-cols-7">
             {groupedDrafts.map((group) => (
@@ -1973,9 +1994,6 @@ function BakkerijWeddingCakeAgenda() {
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs font-bold text-[#30462f]/55">
-            {isLoading ? "Laden..." : status}
-          </p>
         </div>
 
         <div className="min-w-0 rounded-[1.25rem] bg-white/85 p-4 shadow-sm">
@@ -1989,7 +2007,8 @@ function BakkerijWeddingCakeAgenda() {
           )}
         </div>
       </div>
-    </section>
+      </div>
+    </details>
   );
 }
 

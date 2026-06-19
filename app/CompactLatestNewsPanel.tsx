@@ -62,7 +62,7 @@ export default function CompactLatestNewsPanel() {
   }, []);
 
   const excerpt = latestPost
-    ? stripHtml(latestPost.content || "").slice(0, 110)
+    ? stripHtml(latestPost.content || "").slice(0, 72)
     : "";
 
   return (
@@ -85,7 +85,7 @@ export default function CompactLatestNewsPanel() {
         </span>
       </div>
 
-      <div className="flex min-h-[8.5rem] flex-1 flex-col justify-between rounded-[0.75rem] bg-white/70 p-2 sm:min-h-[12.5rem] sm:rounded-[1rem] sm:p-3">
+      <div className="flex min-h-[8.5rem] flex-1 flex-col justify-between rounded-[0.75rem] bg-white/70 p-2 sm:min-h-[11rem] sm:rounded-[1rem] sm:p-3">
         {latestPost ? (
           <>
             <div>
@@ -101,18 +101,18 @@ export default function CompactLatestNewsPanel() {
               <p className="text-[0.56rem] font-black uppercase tracking-[0.12em] text-[#8d877f] sm:text-[0.62rem]">
                 Nieuwsbericht
               </p>
-              <h3 className="mt-1 text-[0.9rem] font-black leading-tight text-[#ef5737] sm:text-lg">
+              <h3 className="mt-1 line-clamp-2 text-[0.72rem] font-black leading-tight text-[#ef5737] sm:text-base">
                 {stripImportantTitle(latestPost.title)}
               </h3>
               {excerpt && (
-                <p className="mt-1.5 text-[0.66rem] font-normal leading-snug text-[#5f5750] sm:text-xs">
+                <p className="mt-1 line-clamp-3 text-[0.54rem] font-normal leading-snug text-[#5f5750] sm:mt-1.5 sm:text-xs">
                   {excerpt}
-                  {stripHtml(latestPost.content || "").length > 110 ? "..." : ""}
+                  {stripHtml(latestPost.content || "").length > 72 ? "..." : ""}
                 </p>
               )}
             </div>
-            <span className="mt-2 text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#31462f] sm:text-[0.66rem]">
-              Open nieuws
+            <span className="mt-1.5 text-[0.54rem] font-black uppercase tracking-[0.12em] text-[#31462f] sm:mt-2 sm:text-[0.66rem]">
+              Lees verder
             </span>
           </>
         ) : (

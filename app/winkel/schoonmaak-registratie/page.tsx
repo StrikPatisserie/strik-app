@@ -405,15 +405,15 @@ function TemperatureValueInput({
   }
 
   return (
-    <label className="grid min-w-0 gap-1 text-[0.68rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
+    <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
       {label}
       <span className="grid grid-cols-[auto_minmax(0,1fr)] gap-1">
-        <span className="grid gap-1">
+        <span className="grid gap-0.5">
           <button
             type="button"
             onClick={() => updateSign("+")}
             aria-label={`${label} positief maken`}
-            className={`h-5 w-5 rounded-full text-[0.62rem] font-black leading-none shadow-sm ${
+            className={`h-4 w-4 rounded-full text-[0.52rem] font-black leading-none shadow-sm sm:h-5 sm:w-5 sm:text-[0.62rem] ${
               isNegative
                 ? "bg-white text-[#2d2a26]/45"
                 : "bg-[#dbe9ee] text-[#214456]"
@@ -425,7 +425,7 @@ function TemperatureValueInput({
             type="button"
             onClick={() => updateSign("-")}
             aria-label={`${label} negatief maken`}
-            className={`h-5 w-5 rounded-full text-[0.62rem] font-black leading-none shadow-sm ${
+            className={`h-4 w-4 rounded-full text-[0.52rem] font-black leading-none shadow-sm sm:h-5 sm:w-5 sm:text-[0.62rem] ${
               isNegative
                 ? "bg-[#dbe9ee] text-[#214456]"
                 : "bg-white text-[#2d2a26]/45"
@@ -440,7 +440,7 @@ function TemperatureValueInput({
           onChange={(event) => onChange(event.target.value)}
           inputMode="decimal"
           placeholder="0,0"
-          className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-2.5 py-2 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+          className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1.5 py-1.5 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:px-2 sm:text-sm"
         />
       </span>
     </label>
@@ -862,7 +862,7 @@ export default function SchoonmaakRegistratiePage() {
 
   return (
     <StrikShell wide>
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <StrikPageHeader
             title="Temperatuur registratie"
@@ -871,24 +871,24 @@ export default function SchoonmaakRegistratiePage() {
           />
           <Link
             href={`/winkel/schoonmaak-registratie/overzicht?winkel=${winkelId}`}
-            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
+            className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
           >
             Maandoverzicht
           </Link>
         </div>
 
-        <section className="rounded-[1.25rem] border border-[#d9d6d1] bg-white p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[1fr_14rem_14rem]">
-            <div className="grid gap-2 sm:grid-cols-4">
+        <section className="max-w-4xl rounded-[0.95rem] border border-[#c3d3bc] bg-[#dfead9] p-2.5 shadow-sm sm:p-3">
+          <div className="grid gap-2 lg:grid-cols-[1fr_10.5rem_11rem]">
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {winkelOptions.map((winkel) => (
               <button
                 key={winkel.id}
                 type="button"
                 onClick={() => setWinkelId(winkel.id)}
-                className={`rounded-2xl border px-3 py-2 text-sm font-black transition active:scale-[0.98] ${
+                className={`rounded-lg border px-2 py-1.5 text-[0.68rem] font-black transition active:scale-[0.98] sm:text-xs ${
                   winkelId === winkel.id
-                    ? "border-[#ef5737] bg-[#fff0ed] text-[#a0382f] shadow-sm"
-                    : "border-[#e8e4de] bg-[#f8f6f3] text-[#2d2a26]/75 hover:border-[#c3d3bc]"
+                    ? "border-[#4a7658] bg-white text-[#30462f] shadow-sm"
+                    : "border-[#c3d3bc] bg-[#f6faf4] text-[#30462f]/70 hover:border-[#8fab86]"
                 }`}
               >
                 {winkel.label}
@@ -896,16 +896,16 @@ export default function SchoonmaakRegistratiePage() {
             ))}
             </div>
 
-            <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+            <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#30462f]/55">
               Dag
               <input
                 type="date"
                 value={datum}
                 onChange={(event) => setDatum(event.target.value)}
-                className="rounded-2xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#ef5737]"
+                className="rounded-lg border border-[#c3d3bc] bg-white px-2 py-1.5 text-xs font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#4a7658]"
               />
             </label>
-            <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+            <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#30462f]/55">
               Naam
               <input
                 value={form.naam}
@@ -913,12 +913,12 @@ export default function SchoonmaakRegistratiePage() {
                   updateForm({ ...form, naam: event.target.value })
                 }
                 placeholder="Naam medewerker"
-                className="rounded-2xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#ef5737]"
+                className="rounded-lg border border-[#c3d3bc] bg-white px-2 py-1.5 text-xs font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#4a7658]"
               />
             </label>
           </div>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="mt-2 grid grid-cols-3 gap-1.5">
             {[
               { id: "meetpunten", value: `${form.temperatuurRegistraties.length} meetpunten` },
               { id: "ontbreekt", value: `${missingRegistrationCount} ontbreekt` },
@@ -926,7 +926,7 @@ export default function SchoonmaakRegistratiePage() {
             ].map((item) => (
               <div
                 key={item.id}
-                className="rounded-2xl bg-[#f8f6f3] px-3 py-2 text-sm font-black text-[#2d2a26]"
+                className="rounded-lg bg-[#f6faf4] px-2 py-1 text-[0.62rem] font-black text-[#30462f] sm:text-xs"
               >
                 {item.value}
               </div>
@@ -934,11 +934,11 @@ export default function SchoonmaakRegistratiePage() {
           </div>
         </section>
 
-        <section className="rounded-[1.25rem] border border-[#e7e0d8] bg-white/90 p-4 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <section className="rounded-[0.95rem] border border-[#e7e0d8] bg-white/90 p-2.5 shadow-sm sm:p-3">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-xl font-black text-[#1a1815]">Meetpunten</h2>
-              <p className="mt-1 text-xs font-bold uppercase tracking-[0.1em] text-[#2d2a26]/45">
+              <h2 className="text-base font-black text-[#1a1815] sm:text-lg">Meetpunten</h2>
+              <p className="text-[0.58rem] font-bold uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-xs">
                 {selectedWinkel.label} · {datum}
               </p>
             </div>
@@ -947,20 +947,20 @@ export default function SchoonmaakRegistratiePage() {
                 <button
                   type="button"
                   onClick={addRegistrationRow}
-                  className="rounded-full bg-[#fff0ed] px-4 py-2 text-sm font-black text-[#a0382f] shadow-sm transition hover:bg-[#f9ded8]"
+                  className="rounded-full bg-[#fff0ed] px-3 py-1.5 text-xs font-black text-[#a0382f] shadow-sm transition hover:bg-[#f9ded8]"
                 >
                   + Meetpunt
                 </button>
               </div>
               {addFeedback && (
-                <p className="text-xs font-black text-[#4a6d5a]">
+                <p className="text-[0.62rem] font-black text-[#4a6d5a] sm:text-xs">
                   {addFeedback}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3">
+          <div className="mt-2 grid gap-2">
             {form.temperatuurRegistraties.map((item, index) => {
               const isDefaultRow = isDefaultTemperatureRow(winkelId, item);
               const deviceType = normalizeTemperatureDeviceType(
@@ -978,9 +978,9 @@ export default function SchoonmaakRegistratiePage() {
                   ref={(element) => {
                     registrationRowRefs.current[item.id] = element;
                   }}
-                  className="grid gap-2 rounded-[1.1rem] border border-[#e7e0d8] bg-[#f8f6f3] p-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_7.5rem_7.25rem_7.25rem_7.5rem_auto]"
+                  className="grid grid-cols-[minmax(5.3rem,1fr)_3.55rem_3.9rem_3.9rem_3.7rem] items-end gap-1 rounded-[0.75rem] border border-[#e7e0d8] bg-[#f8f6f3] p-1.5 sm:grid-cols-[minmax(8rem,1fr)_5.25rem_5.2rem_5.2rem_5rem_auto] sm:gap-2 sm:p-2"
                 >
-                  <label className="grid min-w-0 gap-1 text-[0.68rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
+                  <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
                     Apparaat {index + 1}
                     <input
                       value={item.naam}
@@ -988,10 +988,10 @@ export default function SchoonmaakRegistratiePage() {
                         updateRegistration(item.id, "naam", event.target.value)
                       }
                       placeholder="Bijvoorbeeld koeling"
-                      className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-2.5 py-2 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                      className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1.5 py-1.5 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:px-2 sm:text-sm"
                     />
                   </label>
-                  <label className="grid min-w-0 gap-1 text-[0.68rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
+                  <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
                     Type
                     <select
                       value={deviceType}
@@ -1002,7 +1002,7 @@ export default function SchoonmaakRegistratiePage() {
                           event.target.value as TemperatureDeviceType
                         )
                       }
-                      className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-2.5 py-2 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                      className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1 py-1.5 text-[0.64rem] font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:px-2 sm:text-sm"
                     >
                       {deviceTypeOptions.map((option) => (
                         <option key={option.id} value={option.id}>
@@ -1026,11 +1026,11 @@ export default function SchoonmaakRegistratiePage() {
                     }
                   />
                   <div className="grid min-w-0 content-end gap-1">
-                    <p className="text-[0.68rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
+                    <p className="text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
                       Status
                     </p>
                     <span
-                      className={`rounded-full border px-2.5 py-1.5 text-center text-xs font-black ${statusPillClass(
+                      className={`rounded-full border px-1.5 py-1 text-center text-[0.58rem] font-black sm:text-xs ${statusPillClass(
                         evaluation.status
                       )}`}
                     >
@@ -1043,13 +1043,13 @@ export default function SchoonmaakRegistratiePage() {
                     <button
                       type="button"
                       onClick={() => removeRegistrationRow(item.id)}
-                      className="self-end rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#c94f43] shadow-sm"
+                      className="col-span-full justify-self-start rounded-full bg-white px-2 py-1 text-[0.58rem] font-black text-[#c94f43] shadow-sm sm:col-auto sm:self-end sm:text-xs"
                     >
                       Verwijder
                     </button>
                   )}
                   {isActionRequiredStatus(evaluation.status) && (
-                    <label className="grid gap-1 text-[0.68rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45 xl:col-span-3">
+                    <label className="col-span-full grid gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem] xl:col-span-3">
                       Actie bij afwijking
                       <textarea
                         value={item.actionTaken || ""}
@@ -1061,12 +1061,12 @@ export default function SchoonmaakRegistratiePage() {
                           )
                         }
                         placeholder={evaluation.actionHint}
-                        className="min-h-16 rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                        className="min-h-12 rounded-lg border border-[#e7e0d8] bg-white p-2 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:text-sm"
                       />
                     </label>
                   )}
                   <label
-                    className={`grid gap-1 text-[0.68rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45 ${
+                    className={`col-span-full grid gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem] ${
                       isActionRequiredStatus(evaluation.status)
                         ? "xl:col-span-3"
                         : "xl:col-span-6"
@@ -1079,7 +1079,7 @@ export default function SchoonmaakRegistratiePage() {
                         updateRegistration(item.id, "note", event.target.value)
                       }
                       placeholder="Bijvoorbeeld deur open geweest of net bijgevuld"
-                      className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+                      className="rounded-lg border border-[#e7e0d8] bg-white p-2 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:text-sm"
                     />
                   </label>
                 </div>
@@ -1087,7 +1087,7 @@ export default function SchoonmaakRegistratiePage() {
             })}
           </div>
 
-          <label className="mt-4 grid gap-2 text-sm font-black text-[#2d2a26]/65">
+          <label className="mt-3 grid gap-1.5 text-xs font-black text-[#2d2a26]/65">
             Opmerking
             <textarea
               value={form.opmerking}
@@ -1095,12 +1095,12 @@ export default function SchoonmaakRegistratiePage() {
                 updateForm({ ...form, opmerking: event.target.value })
               }
               placeholder="Afwijkingen, acties of bijzonderheden"
-              className="min-h-28 rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+              className="min-h-16 rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
             />
           </label>
 
           {(status || ladenBezig) && (
-            <p className="mt-3 rounded-2xl bg-[#f8f6f3] p-3 text-sm font-bold text-[#2d2a26]/60">
+            <p className="mt-2 rounded-xl bg-[#f8f6f3] p-2 text-xs font-bold text-[#2d2a26]/60">
               {ladenBezig ? "Laden..." : status}
             </p>
           )}
@@ -1109,7 +1109,7 @@ export default function SchoonmaakRegistratiePage() {
             type="button"
             onClick={() => void submitPayload(createPayload())}
             disabled={opslaanBezig}
-            className="sticky bottom-40 mt-4 w-full rounded-full bg-[#d95749] px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-[#c8493d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 lg:static"
+            className="sticky bottom-40 mt-3 w-full rounded-full bg-[#d95749] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#c8493d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 lg:static"
           >
             {opslaanBezig ? "Opslaan..." : "Opslaan"}
           </button>

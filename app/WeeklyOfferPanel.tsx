@@ -47,6 +47,34 @@ function weekNumberForDate(value: string) {
   );
 }
 
+function formatShortWeekRange(value: string) {
+  const start = dateFromKey(value);
+  const end = dateFromKey(addDays(value, 6));
+  const monthFormatter = new Intl.DateTimeFormat("nl-NL", { month: "short" });
+  const startMonth = monthFormatter.format(start).replace(".", "");
+  const endMonth = monthFormatter.format(end).replace(".", "");
+
+  if (start.getMonth() === end.getMonth()) {
+    return `${start.getDate()} t/m ${end.getDate()} ${endMonth}`;
+  }
+
+  return `${start.getDate()} ${startMonth} t/m ${end.getDate()} ${endMonth}`;
+}
+
+function weekDisplayLabel(value: string) {
+  const currentWeek = weekStartForDate();
+  const dayDiff = Math.round(
+    (dateFromKey(value).getTime() - dateFromKey(currentWeek).getTime()) /
+      86400000
+  );
+
+  if (dayDiff === 0) return "deze week";
+  if (dayDiff === -7) return "vorige week";
+  if (dayDiff === 7) return "volgende week";
+
+  return `week ${weekNumberForDate(value)}`;
+}
+
 function offerForWeek(offers: BakeryHomeOffer[], weekStart: string) {
   return offers.find((offer) => offer.weekStart === weekStart) || null;
 }
@@ -88,7 +116,10 @@ export default function WeeklyOfferPanel() {
             aanbieding
           </h2>
           <p className="winkel-meta-label mt-0.5 text-[#2d2a26]/55 sm:mt-1 sm:text-[#2d2a26]/70">
-            week {weekNumberForDate(selectedWeek)}
+            <span>{weekDisplayLabel(selectedWeek)}</span>
+            <span className="ml-1 font-normal italic text-[#2d2a26]/42">
+              {formatShortWeekRange(selectedWeek)}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-0.5 text-[#050505] sm:gap-2">

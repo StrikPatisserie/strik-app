@@ -1280,6 +1280,24 @@ function TrashIcon() {
   );
 }
 
+function RestartIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.2"
+    >
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 4v6h6" />
+    </svg>
+  );
+}
+
 export function CakeVisualizer({
   config,
   compact = false,
@@ -4486,7 +4504,7 @@ export default function BruidstaartStudioConfigurator() {
     }
 
     const confirmed = window.confirm(
-      `Bestelling ${code} verwijderen en dit formulier leegmaken?`
+      `Wil je bestelling ${code} echt verwijderen en alle gegevens wissen?`
     );
 
     if (!confirmed) return;
@@ -4525,7 +4543,9 @@ export default function BruidstaartStudioConfigurator() {
   }
 
   function startAgain() {
-    const confirmed = window.confirm("Alles leegmaken en opnieuw beginnen?");
+    const confirmed = window.confirm(
+      "Wil je echt alle gegevens wissen en opnieuw beginnen?"
+    );
 
     if (!confirmed) return;
 
@@ -4716,13 +4736,13 @@ export default function BruidstaartStudioConfigurator() {
       </nav>
 
       {step.id === "overzicht" && (
-        <section className="studio-no-print ml-auto max-w-2xl rounded-[0.85rem] border border-[#ecd9a9] bg-[#fff4d1] p-2 shadow-sm">
-          <div className="grid gap-2 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
+        <section className="studio-no-print ml-auto max-w-[44rem] rounded-[0.85rem] border border-[#ecd9a9] bg-[#fff4d1] p-1.5 shadow-sm">
+          <div className="grid gap-1.5 lg:grid-cols-[4.1rem_minmax(0,1fr)_auto] lg:items-center">
             <div>
-              <h3 className="text-[0.64rem] font-black uppercase tracking-[0.08em]">
+              <h3 className="text-[0.43rem] font-bold italic uppercase tracking-[0.06em] text-[#2d2a26]/50 sm:text-[0.48rem]">
                 Huidige bestelling
               </h3>
-              <p className="text-[0.58rem] font-bold text-[#2d2a26]/45">
+              <p className="text-[0.43rem] font-semibold italic leading-tight text-[#2d2a26]/35 sm:text-[0.48rem]">
                 Opslaan of opnieuw beginnen.
               </p>
             </div>
@@ -4739,7 +4759,7 @@ export default function BruidstaartStudioConfigurator() {
                   )
                 }
                 placeholder="Herkenningscode"
-                className="min-w-0 rounded-lg border border-[#ecd9a9] bg-white/90 px-2.5 py-1.5 text-xs font-bold"
+                className="min-w-0 rounded-lg border border-[#ecd9a9] bg-white/90 px-2 py-1.5 text-[0.72rem] font-bold"
               />
               <input
                 value={config.contact.surname}
@@ -4749,7 +4769,7 @@ export default function BruidstaartStudioConfigurator() {
                   )
                 }
                 placeholder="Achternaam klant"
-                className="min-w-0 rounded-lg border border-[#ecd9a9] bg-white/90 px-2.5 py-1.5 text-xs font-bold"
+                className="min-w-0 rounded-lg border border-[#ecd9a9] bg-white/90 px-2 py-1.5 text-[0.72rem] font-bold"
               />
             </div>
             <div className="flex flex-wrap gap-1.5 lg:justify-end">
@@ -4778,9 +4798,11 @@ export default function BruidstaartStudioConfigurator() {
               <button
                 type="button"
                 onClick={startAgain}
-                className="rounded-full bg-white/90 px-2.5 py-1.5 text-[0.64rem] font-black shadow-sm"
+                aria-label="Begin opnieuw"
+                title="Begin opnieuw"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-[#2d2a26] shadow-sm transition active:scale-[0.98]"
               >
-                Begin opnieuw
+                <RestartIcon />
               </button>
             </div>
           </div>

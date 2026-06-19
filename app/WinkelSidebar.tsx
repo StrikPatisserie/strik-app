@@ -9,7 +9,7 @@ import { strikIcons } from "./StrikUI";
 const mainNavItems = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJs", icon: strikIcons.ijs },
-  { href: "/bakkerij/recepturen", label: "Bakkerij", icon: strikIcons.bakkerij },
+  { href: "/bakkerij", label: "Bakkerij", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
 ];
 
