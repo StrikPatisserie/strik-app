@@ -49,6 +49,7 @@ function strik_recepturen_v1_defaults() {
         'recipes' => array(),
         'packagingItems' => array(),
         'invoiceImports' => array(),
+        'manualProductionPlanningItems' => array(),
         'bakeryHome' => array(
             'notes' => array(),
             'offers' => array(),
@@ -198,6 +199,44 @@ function strik_recepturen_v1_normalize_bakery_home($value) {
 }
 }
 
+if (!function_exists('strik_recepturen_v1_normalize_manual_planning_items')) {
+function strik_recepturen_v1_normalize_manual_planning_items($value) {
+    if (!is_array($value)) {
+        return array();
+    }
+
+    $items = array();
+    foreach (array_slice($value, 0, 500) as $index => $item) {
+        if (!is_array($item)) continue;
+
+        $title = isset($item['title']) ? strik_recepturen_v1_text($item['title'], 160) : '';
+        $date = isset($item['date']) ? strik_recepturen_v1_clean_date($item['date']) : '';
+
+        if ($title === '' || $date === '') continue;
+
+        $quantity = isset($item['quantity']) ? (float) $item['quantity'] : 1;
+
+        $items[] = array(
+            'id' => isset($item['id']) && $item['id'] !== ''
+                ? sanitize_text_field($item['id'])
+                : 'manual-planning-' . ($index + 1),
+            'date' => $date,
+            'title' => $title,
+            'quantity' => max(0, $quantity),
+            'unit' => isset($item['unit']) && $item['unit'] !== ''
+                ? strik_recepturen_v1_text($item['unit'], 40)
+                : 'stuks',
+            'note' => isset($item['note']) ? strik_recepturen_v1_text($item['note'], 400) : '',
+            'status' => isset($item['status']) && $item['status'] === 'done' ? 'done' : 'open',
+            'createdAt' => isset($item['createdAt']) ? strik_recepturen_v1_text($item['createdAt'], 120) : '',
+            'completedAt' => isset($item['completedAt']) ? strik_recepturen_v1_clean_date($item['completedAt']) : '',
+        );
+    }
+
+    return $items;
+}
+}
+
 if (!function_exists('strik_recepturen_v1_normalize_data')) {
 function strik_recepturen_v1_normalize_data($data) {
     if (!is_array($data)) {
@@ -220,6 +259,9 @@ function strik_recepturen_v1_normalize_data($data) {
         'invoiceImports' => strik_recepturen_v1_limit_list(
             isset($data['invoiceImports']) ? $data['invoiceImports'] : array(),
             100
+        ),
+        'manualProductionPlanningItems' => strik_recepturen_v1_normalize_manual_planning_items(
+            isset($data['manualProductionPlanningItems']) ? $data['manualProductionPlanningItems'] : array()
         ),
         'bakeryHome' => strik_recepturen_v1_normalize_bakery_home(
             isset($data['bakeryHome']) ? $data['bakeryHome'] : array()

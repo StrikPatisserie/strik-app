@@ -1,5 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
-import type { ProductionLogEntry, Recipe } from "./types";
+import type {
+  ManualProductionPlanningItem,
+  ProductionLogEntry,
+  Recipe,
+} from "./types";
 import { EmptyState, Panel, SectionTitle } from "./RecepturenShared";
 import {
   formatDate,
@@ -16,18 +20,47 @@ import {
   type ProductionNeed,
 } from "./utils";
 
+type WeekPlanningRow =
+  | {
+      type: "recipe";
+      sortDate: string;
+      sortTitle: string;
+      need: ProductionNeed;
+    }
+  | {
+      type: "manual";
+      sortDate: string;
+      sortTitle: string;
+      item: ManualProductionPlanningItem;
+    };
+
+type ProductionHistoryRow = {
+  id: string;
+  date: string;
+  title: string;
+  quantity: number;
+  unit?: string;
+  note: string;
+  label: string;
+};
+
 export default function ProductionPlanningPanel({
   recipes,
+  manualPlanningItems = [],
   onOpenRecipe,
   onMarkProduced,
   onPlanProduction,
   onDeleteProductionRequest,
+  onPlanManualProduction,
+  onMarkManualPlanningItemDone,
+  onDeleteManualPlanningItem,
   onAdjustStock,
   onUpdateProductionLog,
   onDeleteProductionLog,
   compact = false,
 }: Readonly<{
   recipes: Recipe[];
+  manualPlanningItems?: ManualProductionPlanningItem[];
   onOpenRecipe?: (recipe: Recipe) => void;
   onMarkProduced?: (
     recipe: Recipe,
@@ -42,6 +75,15 @@ export default function ProductionPlanningPanel({
     reason?: string
   ) => void;
   onDeleteProductionRequest?: (recipe: Recipe, requestId: string) => void;
+  onPlanManualProduction?: (
+    title: string,
+    quantity: number,
+    unit: string,
+    date: string,
+    note?: string
+  ) => void;
+  onMarkManualPlanningItemDone?: (itemId: string) => void;
+  onDeleteManualPlanningItem?: (itemId: string) => void;
   onAdjustStock?: (recipe: Recipe, quantity: number, date: string) => void;
   onUpdateProductionLog?: (
     recipe: Recipe,
@@ -64,15 +106,16 @@ export default function ProductionPlanningPanel({
     quantity: number;
   } | null>(null);
   const [manualProductionOpen, setManualProductionOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<{
     recipe: Recipe;
     entry: ProductionLogEntry;
   } | null>(null);
   const needs = productionNeeds(recipes);
   const forecasts = productionForecasts(recipes);
-  const weekPlanningNeeds = useMemo(
-    () =>
-      [
+  const weekPlanningRows = useMemo<WeekPlanningRow[]>(
+    () => {
+      const recipeRows: WeekPlanningRow[] = [
         ...recipes.flatMap((recipe) =>
           openProductionRequests(recipe).map((request) =>
             productionNeedForRequest(recipe, request)
@@ -81,17 +124,31 @@ export default function ProductionPlanningPanel({
         ...forecasts,
       ]
         .filter((need) => isDateInWeek(need.nextProductionDate, selectedWeek))
-        .sort(
-          (first, second) =>
-            (first.nextProductionDate || "").localeCompare(
-              second.nextProductionDate || ""
-            ) ||
-            first.recipe.name.localeCompare(second.recipe.name, "nl-NL") ||
-            (first.manualRequestId || "").localeCompare(
-              second.manualRequestId || ""
-            )
-        ),
-    [forecasts, recipes, selectedWeek]
+        .map((need) => ({
+          type: "recipe" as const,
+          sortDate: need.nextProductionDate || "",
+          sortTitle: need.recipe.name,
+          need,
+        }));
+
+      const manualRows: WeekPlanningRow[] = manualPlanningItems
+        .filter(
+          (item) => item.status !== "done" && isDateInWeek(item.date, selectedWeek)
+        )
+        .map((item) => ({
+          type: "manual" as const,
+          sortDate: item.date,
+          sortTitle: item.title,
+          item,
+        }));
+
+      return [...recipeRows, ...manualRows].sort(
+        (first, second) =>
+          first.sortDate.localeCompare(second.sortDate) ||
+          first.sortTitle.localeCompare(second.sortTitle, "nl-NL")
+      );
+    },
+    [forecasts, manualPlanningItems, recipes, selectedWeek]
   );
   const filteredForecasts = useMemo(() => {
     const query = normalizeSearch(stockSearch);
@@ -110,23 +167,45 @@ export default function ProductionPlanningPanel({
       return matchesSearch && matchesFilter;
     });
   }, [forecasts, stockFilter, stockSearch]);
-  const recentLogs = useMemo(
-    () =>
-      recipes
-        .filter((recipe) => recipe.type === "finalProduct")
-        .flatMap((recipe) =>
-          productionLogForRecipe(recipe).map((entry) => ({ recipe, entry }))
-        )
-        .sort((first, second) => {
-          const dateCompare = second.entry.date.localeCompare(first.entry.date);
+  const historyRows = useMemo<ProductionHistoryRow[]>(
+    () => {
+      const recipeRows = recipes.flatMap((recipe) =>
+        productionLogForRecipe(recipe)
+          .filter((entry) => isDateInWeek(entry.date, selectedWeek))
+          .map((entry) => ({
+            id: `${recipe.id}-${entry.id}`,
+            date: entry.date,
+            title: recipe.name,
+            quantity: entry.quantity,
+            unit: recipe.standardBatchUnit,
+            note: entry.note || "",
+            label: "Recept",
+          }))
+      );
 
-          return (
-            dateCompare ||
-            first.recipe.name.localeCompare(second.recipe.name, "nl-NL")
-          );
-        })
-        .slice(0, 24),
-    [recipes]
+      const manualRows = manualPlanningItems
+        .filter(
+          (item) =>
+            item.status === "done" &&
+            isDateInWeek(item.completedAt || item.date, selectedWeek)
+        )
+        .map((item) => ({
+          id: item.id,
+          date: item.completedAt || item.date,
+          title: item.title,
+          quantity: item.quantity,
+          unit: item.unit,
+          note: item.note,
+          label: "Los product",
+        }));
+
+      return [...recipeRows, ...manualRows].sort(
+        (first, second) =>
+          first.date.localeCompare(second.date) ||
+          first.title.localeCompare(second.title, "nl-NL")
+      );
+    },
+    [manualPlanningItems, recipes, selectedWeek]
   );
   const compactNeeds = needs.slice(0, 4);
 
@@ -208,21 +287,30 @@ export default function ProductionPlanningPanel({
           </div>
 
           <div className="mt-0 max-w-[22rem] border-x border-b border-[#8c8c8c]">
-            {weekPlanningNeeds.length ? (
-              weekPlanningNeeds.map((need) => (
-                <PlanningListRow
-                  key={needKey(need)}
-                  need={need}
-                  onOpenRecipe={onOpenRecipe}
-                  onMarkProduced={
-                    onMarkProduced
-                      ? (recipe, quantity, requestId) =>
-                          setPendingProduction({ recipe, quantity, requestId })
-                      : undefined
-                  }
-                  onDeleteProductionRequest={onDeleteProductionRequest}
-                />
-              ))
+            {weekPlanningRows.length ? (
+              weekPlanningRows.map((row) =>
+                row.type === "recipe" ? (
+                  <PlanningListRow
+                    key={needKey(row.need)}
+                    need={row.need}
+                    onOpenRecipe={onOpenRecipe}
+                    onMarkProduced={
+                      onMarkProduced
+                        ? (recipe, quantity, requestId) =>
+                            setPendingProduction({ recipe, quantity, requestId })
+                        : undefined
+                    }
+                    onDeleteProductionRequest={onDeleteProductionRequest}
+                  />
+                ) : (
+                  <ManualPlanningListRow
+                    key={row.item.id}
+                    item={row.item}
+                    onMarkDone={onMarkManualPlanningItemDone}
+                    onDelete={onDeleteManualPlanningItem}
+                  />
+                )
+              )
             ) : (
               <p className="p-4 text-sm font-bold text-[#707070]">
                 Geen productie voor deze week.
@@ -230,17 +318,26 @@ export default function ProductionPlanningPanel({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setManualProductionOpen(true)}
-            disabled={!onPlanProduction}
-            className="mt-5 grid h-10 max-w-[22rem] grid-cols-[3rem_minmax(0,1fr)] items-center border border-[#c3d3bc] bg-white text-left text-sm font-black"
-          >
-            <span className="flex h-full items-center justify-center bg-[#c3d3bc] text-3xl font-light">
-              +
-            </span>
-            <span className="px-4">handmatig toevoegen</span>
-          </button>
+          <div className="mt-5 flex max-w-[22rem] gap-2">
+            <button
+              type="button"
+              onClick={() => setManualProductionOpen(true)}
+              disabled={!onPlanProduction && !onPlanManualProduction}
+              className="grid h-10 flex-1 grid-cols-[3rem_minmax(0,1fr)] items-center border border-[#c3d3bc] bg-white text-left text-sm font-black disabled:opacity-45"
+            >
+              <span className="flex h-full items-center justify-center bg-[#c3d3bc] text-3xl font-light">
+                +
+              </span>
+              <span className="px-4">handmatig toevoegen</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryOpen(true)}
+              className="h-10 rounded-full bg-[#f8f6f3] px-4 text-xs font-black text-[#2d2a26]/72 shadow-sm"
+            >
+              geschiedenis
+            </button>
+          </div>
         </div>
 
         <div>
@@ -296,16 +393,32 @@ export default function ProductionPlanningPanel({
           </div>
         </div>
       </section>
-      {manualProductionOpen && onPlanProduction && (
+      {manualProductionOpen && (onPlanProduction || onPlanManualProduction) && (
         <ManualProductionDialog
           recipes={recipes}
           defaultDate={selectedWeek}
           onCancel={() => setManualProductionOpen(false)}
-          onConfirm={(recipe, quantity, date, reason) => {
+          onConfirmRecipe={(recipe, quantity, date, reason) => {
+            if (!onPlanProduction) return;
             onPlanProduction(recipe, quantity, date, reason);
             setSelectedWeek(weekStartForDate(dateFromKey(date)));
             setManualProductionOpen(false);
           }}
+          onConfirmManual={(title, quantity, unit, date, note) => {
+            if (!onPlanManualProduction) return;
+            onPlanManualProduction(title, quantity, unit, date, note);
+            setSelectedWeek(weekStartForDate(dateFromKey(date)));
+            setManualProductionOpen(false);
+          }}
+        />
+      )}
+      {historyOpen && (
+        <ProductionHistoryDialog
+          weekStart={selectedWeek}
+          rows={historyRows}
+          onPreviousWeek={() => setSelectedWeek(addDays(selectedWeek, -7))}
+          onNextWeek={() => setSelectedWeek(addDays(selectedWeek, 7))}
+          onCancel={() => setHistoryOpen(false)}
         />
       )}
       {pendingProduction && onMarkProduced && (
@@ -355,24 +468,35 @@ function ManualProductionDialog({
   recipes,
   defaultDate,
   onCancel,
-  onConfirm,
+  onConfirmRecipe,
+  onConfirmManual,
 }: Readonly<{
   recipes: Recipe[];
   defaultDate: string;
   onCancel: () => void;
-  onConfirm: (
+  onConfirmRecipe: (
     recipe: Recipe,
     quantity: number,
     date: string,
     reason: string
   ) => void;
+  onConfirmManual: (
+    title: string,
+    quantity: number,
+    unit: string,
+    date: string,
+    note: string
+  ) => void;
 }>) {
   const availableRecipes = recipes
     .filter((recipe) => recipe.status !== "old")
     .sort((first, second) => first.name.localeCompare(second.name, "nl-NL"));
+  const [mode, setMode] = useState<"recipe" | "manual">("recipe");
   const [recipeId, setRecipeId] = useState(availableRecipes[0]?.id || "");
   const [date, setDate] = useState(defaultDate || todayIsoDate());
+  const [manualTitle, setManualTitle] = useState("");
   const [quantityValue, setQuantityValue] = useState("");
+  const [manualUnit, setManualUnit] = useState("stuks");
   const [reason, setReason] = useState("");
   const selectedRecipe =
     availableRecipes.find((recipe) => recipe.id === recipeId) ||
@@ -385,25 +509,73 @@ function ManualProductionDialog({
 
   return (
     <PlanningDialog title="Handmatig toevoegen" onCancel={onCancel}>
-      <label className="block">
-        <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-          Recept
-        </span>
-        <select
-          value={selectedRecipe?.id || ""}
-          onChange={(event) => {
-            setRecipeId(event.target.value);
-            setQuantityValue("");
-          }}
-          className="mt-1 w-full rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-sm font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
-        >
-          {availableRecipes.map((recipe) => (
-            <option key={recipe.id} value={recipe.id}>
-              {recipe.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="grid grid-cols-2 rounded-full bg-[#f8f6f3] p-1">
+        {[
+          { id: "recipe" as const, label: "Recept" },
+          { id: "manual" as const, label: "Los product" },
+        ].map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => {
+              setMode(item.id);
+              setQuantityValue("");
+            }}
+            className={`rounded-full px-4 py-2 text-sm font-black ${
+              mode === item.id
+                ? "bg-[#f2533d] text-white shadow-sm"
+                : "text-[#2d2a26]/55"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {mode === "recipe" ? (
+        <label className="block">
+          <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+            Recept
+          </span>
+          <select
+            value={selectedRecipe?.id || ""}
+            onChange={(event) => {
+              setRecipeId(event.target.value);
+              setQuantityValue("");
+            }}
+            className="mt-1 w-full rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-sm font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
+          >
+            {availableRecipes.map((recipe) => (
+              <option key={recipe.id} value={recipe.id}>
+                {recipe.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem]">
+          <label className="block">
+            <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+              Product
+            </span>
+            <input
+              value={manualTitle}
+              onChange={(event) => setManualTitle(event.target.value)}
+              placeholder="Koningsdag chocolaatjes"
+              className="mt-1 w-full rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-sm font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+              Eenheid
+            </span>
+            <input
+              value={manualUnit}
+              onChange={(event) => setManualUnit(event.target.value)}
+              className="mt-1 w-full rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-sm font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
+            />
+          </label>
+        </div>
+      )}
       <DateInput value={date} onChange={setDate} />
       <NumberInput
         label="Hoeveelheid"
@@ -421,16 +593,28 @@ function ManualProductionDialog({
           className="mt-1 w-full rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-sm font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
         />
       </label>
-      {selectedRecipe && (
+      {mode === "recipe" && selectedRecipe && (
         <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-black text-[#2d2a26]/65">
           Wordt opgeslagen als {quantityText(quantity, selectedRecipe.standardBatchUnit)}.
+        </p>
+      )}
+      {mode === "manual" && manualTitle.trim() && (
+        <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-black text-[#2d2a26]/65">
+          Wordt opgeslagen als {quantityText(quantity, manualUnit)} voor{" "}
+          {manualTitle.trim()}.
         </p>
       )}
       <DialogActions
         onCancel={onCancel}
         onSave={() => {
+          if (mode === "manual") {
+            if (!manualTitle.trim()) return;
+            onConfirmManual(manualTitle, quantity || 1, manualUnit, date, reason);
+            return;
+          }
+
           if (!selectedRecipe) return;
-          onConfirm(selectedRecipe, quantity, date, reason);
+          onConfirmRecipe(selectedRecipe, quantity, date, reason);
         }}
       />
     </PlanningDialog>
@@ -514,6 +698,51 @@ function PlanningListRow({
             ×
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ManualPlanningListRow({
+  item,
+  onMarkDone,
+  onDelete,
+}: Readonly<{
+  item: ManualProductionPlanningItem;
+  onMarkDone?: (itemId: string) => void;
+  onDelete?: (itemId: string) => void;
+}>) {
+  return (
+    <div className="grid min-h-[2.75rem] grid-cols-[2.3rem_minmax(0,1fr)_4.9rem] border-b border-[#8c8c8c] last:border-b-0">
+      <span className="bg-[#f3d48d]" />
+      <div className="min-w-0 px-3 py-1 text-left">
+        <span className="block truncate text-[clamp(0.95rem,1.65vw,1.2rem)] font-light">
+          {item.title}
+        </span>
+        <span className="block truncate text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#707070]">
+          {item.note || "Los product"} · {quantityText(item.quantity, item.unit)} ·{" "}
+          {formatDate(item.date)}
+        </span>
+      </div>
+      <div className="flex items-center justify-center gap-1 px-1">
+        <button
+          type="button"
+          onClick={() => onMarkDone?.(item.id)}
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-[#c3d3bc] text-sm font-black leading-none text-[#1f2d1a]"
+          aria-label={`${item.title} als gemaakt markeren`}
+          title="Markeer als gemaakt"
+        >
+          ✓
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete?.(item.id)}
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fff4f1] text-sm font-black leading-none text-[#a83e31]"
+          aria-label={`${item.title} uit planning verwijderen`}
+          title="Uit planning verwijderen"
+        >
+          ×
+        </button>
       </div>
     </div>
   );
@@ -756,6 +985,76 @@ function ProductionDateDialog({
         </p>
       </div>
       <DialogActions onCancel={onCancel} onSave={() => onConfirm(date)} />
+    </PlanningDialog>
+  );
+}
+
+function ProductionHistoryDialog({
+  weekStart,
+  rows,
+  onPreviousWeek,
+  onNextWeek,
+  onCancel,
+}: Readonly<{
+  weekStart: string;
+  rows: ProductionHistoryRow[];
+  onPreviousWeek: () => void;
+  onNextWeek: () => void;
+  onCancel: () => void;
+}>) {
+  return (
+    <PlanningDialog title="Geschiedenis" onCancel={onCancel}>
+      <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center rounded-2xl border border-[#d8d0c4] bg-[#fffdf8]">
+        <button
+          type="button"
+          onClick={onPreviousWeek}
+          className="h-10 border-r border-[#d8d0c4] text-2xl font-light"
+          aria-label="Week eerder"
+        >
+          ‹
+        </button>
+        <p className="px-3 text-center text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/62">
+          {formatPlanningWeek(weekStart)}
+        </p>
+        <button
+          type="button"
+          onClick={onNextWeek}
+          className="h-10 border-l border-[#d8d0c4] text-2xl font-light"
+          aria-label="Week verder"
+        >
+          ›
+        </button>
+      </div>
+      <div className="max-h-[22rem] overflow-y-auto rounded-2xl border border-[#e7e0d8] bg-white">
+        {rows.length ? (
+          rows.map((row) => (
+            <div
+              key={row.id}
+              className="grid grid-cols-[4.2rem_minmax(0,1fr)_4.8rem] gap-2 border-b border-[#eee7dd] px-3 py-2 last:border-b-0"
+            >
+              <span className="text-xs font-black text-[#8c8c8c]">
+                {formatDate(row.date)}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-black">
+                  {row.title}
+                </span>
+                <span className="block truncate text-[0.68rem] font-bold text-[#2d2a26]/48">
+                  {row.label}
+                  {row.note ? ` · ${row.note}` : ""}
+                </span>
+              </span>
+              <span className="text-right text-xs font-black">
+                {quantityText(row.quantity, row.unit)}
+              </span>
+            </div>
+          ))
+        ) : (
+          <p className="p-4 text-sm font-bold text-[#707070]">
+            Nog niets geproduceerd in deze week.
+          </p>
+        )}
+      </div>
     </PlanningDialog>
   );
 }

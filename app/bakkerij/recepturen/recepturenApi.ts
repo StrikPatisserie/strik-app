@@ -3,6 +3,7 @@ import type {
   Ingredient,
   InvoiceImport,
   InvoiceLine,
+  ManualProductionPlanningItem,
   PackagingItem,
   Recipe,
 } from "./types";
@@ -13,6 +14,7 @@ export type RecepturenData = {
   packagingItems?: PackagingItem[];
   invoiceImports: InvoiceImport[];
   bakeryHome?: BakeryHomeData;
+  manualProductionPlanningItems?: ManualProductionPlanningItem[];
   updatedAt?: string;
 };
 
@@ -31,6 +33,7 @@ const MAX_REVERTED_INVOICE_IMPORTS = 6;
 const MAX_IGNORED_INVOICE_IMPORTS = 4;
 const MAX_OTHER_INVOICE_IMPORTS = 4;
 const MAX_STORED_LINES_PER_INVOICE = 600;
+const MAX_MANUAL_PLANNING_ITEMS = 500;
 
 export const emptyBakeryHomeData: BakeryHomeData = {
   notes: [],
@@ -84,8 +87,52 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
       notes: Array.isArray(bakeryHome.notes) ? bakeryHome.notes : [],
       offers: Array.isArray(bakeryHome.offers) ? bakeryHome.offers : [],
     },
+    manualProductionPlanningItems: normalizeManualProductionPlanningItems(
+      record.manualProductionPlanningItems
+    ),
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
   };
+}
+
+function cleanStoredText(value: unknown, maxLength = 600) {
+  return typeof value === "string" ? value.slice(0, maxLength) : "";
+}
+
+function cleanStoredDate(value: unknown) {
+  if (typeof value !== "string") return "";
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+}
+
+export function normalizeManualProductionPlanningItems(
+  value: unknown
+): ManualProductionPlanningItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .slice(0, MAX_MANUAL_PLANNING_ITEMS)
+    .flatMap((item, index): ManualProductionPlanningItem[] => {
+      if (!item || typeof item !== "object") return [];
+
+      const record = item as Partial<ManualProductionPlanningItem>;
+      const title = cleanStoredText(record.title, 160).trim();
+      const date = cleanStoredDate(record.date);
+      const quantity = Number(record.quantity);
+
+      if (!title || !date) return [];
+
+      return [{
+        id: cleanStoredText(record.id, 80) || `manual-planning-${index + 1}`,
+        date,
+        title,
+        quantity: Number.isFinite(quantity) ? Math.max(0, quantity) : 1,
+        unit: cleanStoredText(record.unit, 40).trim() || "stuks",
+        note: cleanStoredText(record.note, 400).trim(),
+        status: record.status === "done" ? "done" : "open",
+        createdAt: cleanStoredText(record.createdAt, 120),
+        completedAt: cleanStoredDate(record.completedAt),
+      }];
+    });
 }
 
 function hasReviewWork(invoice: InvoiceImport) {
@@ -179,6 +226,9 @@ function prepareRecepturenDataForStorage(data: RecepturenData) {
     ...data,
     invoiceImports: pruneInvoiceImports(data.invoiceImports),
     bakeryHome: data.bakeryHome ?? emptyBakeryHomeData,
+    manualProductionPlanningItems: normalizeManualProductionPlanningItems(
+      data.manualProductionPlanningItems
+    ),
   };
 }
 

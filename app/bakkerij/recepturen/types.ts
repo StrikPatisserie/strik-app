@@ -112,6 +112,18 @@ export type ProductionRequest = {
   status: ProductionRequestStatus;
 };
 
+export type ManualProductionPlanningItem = {
+  id: string;
+  date: string;
+  title: string;
+  quantity: number;
+  unit: string;
+  note: string;
+  status: ProductionRequestStatus;
+  createdAt: string;
+  completedAt?: string;
+};
+
 export type Recipe = {
   id: string;
   name: string;

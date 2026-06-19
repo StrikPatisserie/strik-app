@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Ingredient, Recipe, RecipeUnit } from "./types";
+import type {
+  Ingredient,
+  ManualProductionPlanningItem,
+  Recipe,
+  RecipeUnit,
+} from "./types";
 import ProductionPlanningPanel from "./ProductionPlanningPanel";
 import {
   findIngredient,
@@ -272,6 +277,7 @@ function escapeHtml(value: string) {
 export default function RecepturenWorkMode({
   recipes,
   ingredients,
+  manualPlanningItems,
   initialView = "recipes",
   lockedView,
   startRecipeId,
@@ -281,12 +287,16 @@ export default function RecepturenWorkMode({
   onMarkProduced,
   onPlanProduction,
   onDeleteProductionRequest,
+  onPlanManualProduction,
+  onMarkManualPlanningItemDone,
+  onDeleteManualPlanningItem,
   onAdjustStock,
   onUpdateProductionLog,
   onDeleteProductionLog,
 }: Readonly<{
   recipes: Recipe[];
   ingredients: Ingredient[];
+  manualPlanningItems?: ManualProductionPlanningItem[];
   initialView?: WorkModeView;
   lockedView?: WorkModeView;
   startRecipeId?: string;
@@ -306,6 +316,15 @@ export default function RecepturenWorkMode({
     reason?: string
   ) => void;
   onDeleteProductionRequest: (recipe: Recipe, requestId: string) => void;
+  onPlanManualProduction?: (
+    title: string,
+    quantity: number,
+    unit: string,
+    date: string,
+    note?: string
+  ) => void;
+  onMarkManualPlanningItemDone?: (itemId: string) => void;
+  onDeleteManualPlanningItem?: (itemId: string) => void;
   onAdjustStock: (recipe: Recipe, quantity: number, date: string) => void;
   onUpdateProductionLog: (
     recipe: Recipe,
@@ -415,6 +434,7 @@ export default function RecepturenWorkMode({
       {visibleView === "planning" && (
         <ProductionPlanningPanel
           recipes={recipes}
+          manualPlanningItems={manualPlanningItems || []}
           onOpenRecipe={(recipe) => {
             if (onOpenRecipeCard) {
               onOpenRecipeCard(recipe);
@@ -427,6 +447,9 @@ export default function RecepturenWorkMode({
           onMarkProduced={markProduced}
           onPlanProduction={onPlanProduction}
           onDeleteProductionRequest={onDeleteProductionRequest}
+          onPlanManualProduction={onPlanManualProduction}
+          onMarkManualPlanningItemDone={onMarkManualPlanningItemDone}
+          onDeleteManualPlanningItem={onDeleteManualPlanningItem}
           onAdjustStock={onAdjustStock}
           onUpdateProductionLog={onUpdateProductionLog}
           onDeleteProductionLog={onDeleteProductionLog}

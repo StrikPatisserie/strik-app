@@ -52,6 +52,7 @@ import type {
   Ingredient,
   InvoiceImport,
   InvoiceLine,
+  ManualProductionPlanningItem,
   PackagingItem,
   ProductionLogEntry,
   ProductionRequest,
@@ -99,7 +100,8 @@ function hasStoredRecepturenData(data: RecepturenData) {
     data.ingredients.length ||
       data.recipes.length ||
       data.invoiceImports.length ||
-      (data.packagingItems?.length || 0)
+      (data.packagingItems?.length || 0) ||
+      (data.manualProductionPlanningItems?.length || 0)
   );
 }
 
@@ -361,6 +363,9 @@ export default function RecepturenApp() {
   const [ingredientItems, setIngredientItems] = useState(ingredients);
   const [packagingItems, setPackagingItems] = useState(defaultPackagingItems);
   const [invoiceItems, setInvoiceItems] = useState(invoiceImports);
+  const [manualPlanningItems, setManualPlanningItems] = useState<
+    ManualProductionPlanningItem[]
+  >([]);
   const [bakeryHome, setBakeryHome] =
     useState<BakeryHomeData>(emptyBakeryHomeData);
   const [selectedOfferWeek, setSelectedOfferWeek] = useState(weekStartForDate);
@@ -378,6 +383,8 @@ export default function RecepturenApp() {
       ...nextData,
       packagingItems: nextData.packagingItems ?? packagingItems,
       bakeryHome: nextData.bakeryHome ?? bakeryHome,
+      manualProductionPlanningItems:
+        nextData.manualProductionPlanningItems ?? manualPlanningItems,
     };
 
     setSyncStatus("Opslaan naar WordPress...");
@@ -404,6 +411,7 @@ export default function RecepturenApp() {
       packagingItems,
       invoiceImports: invoiceItems,
       bakeryHome: normalizedHome,
+      manualProductionPlanningItems: manualPlanningItems,
     }).then((result) => {
       const message = result.ok ? successMessage : `Lokaal bijgewerkt. ${result.message}`;
       setBakeryHomeStatus(message);
@@ -425,6 +433,7 @@ export default function RecepturenApp() {
         packagingItems,
         invoiceImports: invoiceItems,
         bakeryHome: normalizedHome,
+        manualProductionPlanningItems: manualPlanningItems,
       }).then((result) => {
         const message = result.ok
           ? successMessage
@@ -502,9 +511,11 @@ export default function RecepturenApp() {
             : invoiceImports
         );
         setBakeryHome(normalizeBakeryHomeData(result.data.bakeryHome));
+        setManualPlanningItems(result.data.manualProductionPlanningItems || []);
         setSyncStatus("Recepturen uit WordPress geladen.");
       } else if (result.ok) {
         setBakeryHome(normalizeBakeryHomeData(result.data.bakeryHome));
+        setManualPlanningItems(result.data.manualProductionPlanningItems || []);
         setSyncStatus(
           "Lokale startdata geladen. Eerste wijziging wordt in WordPress opgeslagen."
         );
@@ -695,6 +706,93 @@ export default function RecepturenApp() {
         invoiceImports: invoiceItems,
       },
       `${recipeToUpdate.name} is uit de weekplanning gehaald.`
+    );
+  }
+
+  function persistManualPlanningItems(
+    nextItems: ManualProductionPlanningItem[],
+    successMessage: string
+  ) {
+    setManualPlanningItems(nextItems);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: recipeItems,
+        invoiceImports: invoiceItems,
+        manualProductionPlanningItems: nextItems,
+      },
+      successMessage
+    );
+  }
+
+  function planManualProductionItem(
+    title: string,
+    quantity: number,
+    unit: string,
+    date: string,
+    note?: string
+  ) {
+    const cleanTitle = title.trim();
+    const cleanDate = date.trim();
+    const cleanQuantity = Math.max(0, quantity);
+
+    if (!cleanTitle || !cleanDate || cleanQuantity <= 0) {
+      persistRecepturenData(
+        {
+          ingredients: ingredientItems,
+          recipes: recipeItems,
+          invoiceImports: invoiceItems,
+          manualProductionPlanningItems: manualPlanningItems,
+        },
+        "Vul een product, datum en hoeveelheid in om productie te plannen."
+      );
+      return;
+    }
+
+    const item: ManualProductionPlanningItem = {
+      id: createRecepturenLocalId("manual-plan"),
+      date: cleanDate,
+      title: cleanTitle,
+      quantity: cleanQuantity,
+      unit: unit.trim() || "stuks",
+      note: note?.trim() || "Handmatige weekplanning",
+      status: "open",
+      createdAt: new Date().toISOString(),
+    };
+
+    persistManualPlanningItems(
+      [item, ...manualPlanningItems],
+      `${cleanTitle} is toegevoegd aan de weekplanning.`
+    );
+  }
+
+  function markManualPlanningItemDone(itemId: string) {
+    const item = manualPlanningItems.find((current) => current.id === itemId);
+    const nextItems = manualPlanningItems.map((current) =>
+      current.id === itemId
+        ? {
+            ...current,
+            status: "done" as const,
+            completedAt: current.completedAt || current.date,
+          }
+        : current
+    );
+
+    persistManualPlanningItems(
+      nextItems,
+      `${item?.title || "Planningregel"} is afgevinkt.`
+    );
+  }
+
+  function deleteManualPlanningItem(itemId: string) {
+    const item = manualPlanningItems.find((current) => current.id === itemId);
+    const nextItems = manualPlanningItems.filter(
+      (current) => current.id !== itemId
+    );
+
+    persistManualPlanningItems(
+      nextItems,
+      `${item?.title || "Planningregel"} is uit de weekplanning gehaald.`
     );
   }
 
@@ -1670,6 +1768,7 @@ export default function RecepturenApp() {
                 <RecepturenWorkMode
                   recipes={recipeItems}
                   ingredients={ingredientItems}
+                  manualPlanningItems={manualPlanningItems}
                   lockedView="planning"
                   startRecipeId={workStart?.recipeId}
                   startQuantity={workStart?.quantity}
@@ -1678,6 +1777,9 @@ export default function RecepturenApp() {
                   onMarkProduced={markRecipeProduced}
                   onPlanProduction={planRecipeProduction}
                   onDeleteProductionRequest={deleteRecipeProductionRequest}
+                  onPlanManualProduction={planManualProductionItem}
+                  onMarkManualPlanningItemDone={markManualPlanningItemDone}
+                  onDeleteManualPlanningItem={deleteManualPlanningItem}
                   onAdjustStock={adjustRecipeStock}
                   onUpdateProductionLog={updateProductionLogEntry}
                   onDeleteProductionLog={deleteProductionLogEntry}
