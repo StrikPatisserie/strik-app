@@ -44,6 +44,14 @@ const bottomItems = [
     tone: "medium" as const,
   },
   {
+    href: "/management/loonkosten",
+    label: "Tamigo",
+    title: "Loonkosten",
+    description: "Bekijk ingezette uren en loonkosten per winkel en per dag.",
+    icon: strikIcons.management,
+    tone: "light" as const,
+  },
+  {
     href: "/management/notities",
     label: "Winkels",
     title: "Notities",

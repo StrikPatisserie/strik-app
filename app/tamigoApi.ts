@@ -26,12 +26,37 @@ type TamigoDetailedEmployee = {
   Email?: string;
   WageNumber?: string;
   EmployerNumber?: string;
+  CurrentPaymentModel?: string;
+  CurrentWageRateType?: string;
+  HistoricalWages?: TamigoHistoricalWage[];
+  WageRateTypes?: TamigoWageRateType[];
+  StandardHours?: number;
+  ContractHours?: TamigoContractHours[];
   From?: string;
   To?: string;
   Birthdate?: string;
   DeletedOn?: string;
   IsActive?: boolean;
   IsUserEnabled?: boolean;
+};
+
+type TamigoHistoricalWage = {
+  StartDate?: string;
+  Wage?: number;
+};
+
+type TamigoWageRateType = {
+  StartDate?: string;
+  EndDate?: string;
+  PaymentModel?: string;
+  WageRateTypeName?: string;
+};
+
+type TamigoContractHours = {
+  StartDate?: string;
+  EndDate?: string;
+  ContractHours?: number;
+  ContractHoursMonthly?: number;
 };
 
 type TamigoShift = {
@@ -52,6 +77,8 @@ type TamigoShift = {
   ShiftActivityShortName?: string;
   AbsencePercentage?: number;
   IsProductive?: boolean;
+  ShiftHours?: number;
+  BreakCodeHours?: number;
 };
 
 type TamigoLeavePerDay = {
@@ -143,6 +170,46 @@ export type WeekStaffSchedule = {
   weekLabel: string;
   shops: ShopName[];
   days: WeekStaffDay[];
+};
+
+type LaborCostReason = "missingEmployee" | "missingWage";
+
+export type LaborCostTotals = {
+  shifts: number;
+  hours: number;
+  cost: number;
+  directHourlyHours: number;
+  directHourlyCost: number;
+  derivedMonthlyHours: number;
+  derivedMonthlyCost: number;
+  missingHours: number;
+  missingShifts: number;
+  missingEmployeeShifts: number;
+  missingWageShifts: number;
+};
+
+export type LaborCostShop = LaborCostTotals & {
+  shop: ShopName;
+  departmentName: string;
+};
+
+export type LaborCostDay = {
+  date: string;
+  weekdayLabel: string;
+  dateLabel: string;
+  shops: LaborCostShop[];
+  totals: LaborCostTotals;
+};
+
+export type LaborCostSchedule = {
+  generatedAt: string;
+  from: string;
+  to: string;
+  weekLabel: string;
+  shops: ShopName[];
+  days: LaborCostDay[];
+  totals: LaborCostTotals;
+  notes: string[];
 };
 
 const SHOP_DEPARTMENTS: ShopDepartment[] = [
@@ -384,12 +451,49 @@ function toDetailedEmployee(value: JsonRecord): TamigoDetailedEmployee {
     Email: textFrom(value.Email),
     WageNumber: textFrom(value.WageNumber),
     EmployerNumber: textFrom(value.EmployerNumber),
+    CurrentPaymentModel: textFrom(value.CurrentPaymentModel),
+    CurrentWageRateType: textFrom(value.CurrentWageRateType),
+    HistoricalWages: getArrayRecords(value.HistoricalWages).map(
+      toTamigoHistoricalWage
+    ),
+    WageRateTypes: getArrayRecords(value.WageRateTypes).map(
+      toTamigoWageRateType
+    ),
+    StandardHours: numberFrom(value.StandardHours),
+    ContractHours: getArrayRecords(value.ContractHours).map(
+      toTamigoContractHours
+    ),
     From: textFrom(value.From),
     To: textFrom(value.To),
     Birthdate: textFrom(value.Birthdate),
     DeletedOn: textFrom(value.DeletedOn),
     IsActive: boolFrom(value.IsActive),
     IsUserEnabled: boolFrom(value.IsUserEnabled),
+  };
+}
+
+function toTamigoHistoricalWage(value: JsonRecord): TamigoHistoricalWage {
+  return {
+    StartDate: textFrom(value.StartDate),
+    Wage: numberFrom(value.Wage),
+  };
+}
+
+function toTamigoWageRateType(value: JsonRecord): TamigoWageRateType {
+  return {
+    StartDate: textFrom(value.StartDate),
+    EndDate: textFrom(value.EndDate),
+    PaymentModel: textFrom(value.PaymentModel),
+    WageRateTypeName: textFrom(value.WageRateTypeName),
+  };
+}
+
+function toTamigoContractHours(value: JsonRecord): TamigoContractHours {
+  return {
+    StartDate: textFrom(value.StartDate),
+    EndDate: textFrom(value.EndDate),
+    ContractHours: numberFrom(value.ContractHours),
+    ContractHoursMonthly: numberFrom(value.ContractHoursMonthly),
   };
 }
 
@@ -412,6 +516,8 @@ function toTamigoShift(value: JsonRecord): TamigoShift {
     ShiftActivityShortName: textFrom(value.ShiftActivityShortName),
     AbsencePercentage: numberFrom(value.AbsencePercentage),
     IsProductive: boolFrom(value.IsProductive),
+    ShiftHours: numberFrom(value.ShiftHours),
+    BreakCodeHours: numberFrom(value.BreakCodeHours),
   };
 }
 
@@ -973,6 +1079,254 @@ function toDepartmentDaySchedule(
   ]);
 }
 
+function emptyLaborCostTotals(): LaborCostTotals {
+  return {
+    shifts: 0,
+    hours: 0,
+    cost: 0,
+    directHourlyHours: 0,
+    directHourlyCost: 0,
+    derivedMonthlyHours: 0,
+    derivedMonthlyCost: 0,
+    missingHours: 0,
+    missingShifts: 0,
+    missingEmployeeShifts: 0,
+    missingWageShifts: 0,
+  };
+}
+
+function roundHours(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function roundMoney(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function normalizeLaborCostTotals<T extends LaborCostTotals>(totals: T): T {
+  return {
+    ...totals,
+    hours: roundHours(totals.hours),
+    cost: roundMoney(totals.cost),
+    directHourlyHours: roundHours(totals.directHourlyHours),
+    directHourlyCost: roundMoney(totals.directHourlyCost),
+    derivedMonthlyHours: roundHours(totals.derivedMonthlyHours),
+    derivedMonthlyCost: roundMoney(totals.derivedMonthlyCost),
+    missingHours: roundHours(totals.missingHours),
+  };
+}
+
+function addLaborCostTotals(target: LaborCostTotals, source: LaborCostTotals) {
+  target.shifts += source.shifts;
+  target.hours += source.hours;
+  target.cost += source.cost;
+  target.directHourlyHours += source.directHourlyHours;
+  target.directHourlyCost += source.directHourlyCost;
+  target.derivedMonthlyHours += source.derivedMonthlyHours;
+  target.derivedMonthlyCost += source.derivedMonthlyCost;
+  target.missingHours += source.missingHours;
+  target.missingShifts += source.missingShifts;
+  target.missingEmployeeShifts += source.missingEmployeeShifts;
+  target.missingWageShifts += source.missingWageShifts;
+}
+
+function createEmptyLaborCostShop(department: ShopDepartment): LaborCostShop {
+  return {
+    shop: department.shop,
+    departmentName: department.departmentName,
+    ...emptyLaborCostTotals(),
+  };
+}
+
+function getShiftHours(shift: TamigoShift) {
+  const shiftHours = numberFrom(shift.ShiftHours);
+  if (shiftHours && shiftHours > 0) return shiftHours;
+
+  const start = parseTamigoDateTime(shift.StartDateTime);
+  const end = parseTamigoDateTime(shift.EndDateTime);
+  if (!start || !end) return 0;
+
+  const rawHours = (end.getTime() - start.getTime()) / (60 * 60 * 1000);
+  const breakHours = numberFrom(shift.BreakCodeHours) || 0;
+
+  return Math.max(0, rawHours - breakHours);
+}
+
+function isDateInHistoryRange(
+  startDateText: string | undefined,
+  endDateText: string | undefined,
+  date: Date
+) {
+  const startDate = parseDateOnly(startDateText);
+  if (startDate && startDate > date) return false;
+
+  const endDate = parseDateOnly(endDateText);
+  if (!endDate) return true;
+
+  endDate.setHours(23, 59, 59, 999);
+
+  return endDate >= date;
+}
+
+function getApplicableWage(
+  employee: TamigoDetailedEmployee,
+  shiftDate: string
+) {
+  const date = parseDateOnly(shiftDate);
+  if (!date) return null;
+
+  const wages = (employee.HistoricalWages || [])
+    .filter((wage) => {
+      if (!Number.isFinite(wage.Wage)) return false;
+
+      const startDate = parseDateOnly(wage.StartDate);
+      return !startDate || startDate <= date;
+    })
+    .sort((a, b) =>
+      (b.StartDate || "").localeCompare(a.StartDate || "")
+    );
+
+  return wages[0] || null;
+}
+
+function getApplicableWageRateType(
+  employee: TamigoDetailedEmployee,
+  shiftDate: string
+) {
+  const date = parseDateOnly(shiftDate);
+  if (!date) return null;
+
+  return (
+    (employee.WageRateTypes || []).find((wageRateType) =>
+      isDateInHistoryRange(wageRateType.StartDate, wageRateType.EndDate, date)
+    ) || null
+  );
+}
+
+function getApplicableWeeklyContractHours(
+  employee: TamigoDetailedEmployee,
+  shiftDate: string
+) {
+  const date = parseDateOnly(shiftDate);
+  if (!date) return employee.StandardHours || 0;
+
+  const contract = (employee.ContractHours || []).find((item) =>
+    isDateInHistoryRange(item.StartDate, item.EndDate, date)
+  );
+  const weeklyHours = numberFrom(contract?.ContractHours);
+  if (weeklyHours && weeklyHours > 0) return weeklyHours;
+
+  const monthlyHours = numberFrom(contract?.ContractHoursMonthly);
+  if (monthlyHours && monthlyHours > 0) return (monthlyHours * 12) / 52;
+
+  return employee.StandardHours || 0;
+}
+
+function getEmployeePaymentModel(
+  employee: TamigoDetailedEmployee,
+  shiftDate: string
+) {
+  return (
+    textFrom(getApplicableWageRateType(employee, shiftDate)?.PaymentModel) ||
+    textFrom(employee.CurrentPaymentModel)
+  );
+}
+
+function getShiftHourlyRate(
+  employee: TamigoDetailedEmployee,
+  shiftDate: string
+):
+  | {
+      hourlyRate: number;
+      basis: "hourly" | "monthlyDerived";
+    }
+  | null {
+  const wage = getApplicableWage(employee, shiftDate);
+  const wageValue = wage?.Wage;
+
+  if (!Number.isFinite(wageValue) || !wageValue || wageValue <= 0) {
+    return null;
+  }
+
+  const paymentModel = getEmployeePaymentModel(employee, shiftDate).toLowerCase();
+  const monthlyModel = paymentModel.includes("month");
+
+  if (!monthlyModel) {
+    return {
+      hourlyRate: wageValue,
+      basis: "hourly",
+    };
+  }
+
+  if (wageValue <= 100) {
+    return {
+      hourlyRate: wageValue,
+      basis: "hourly",
+    };
+  }
+
+  const weeklyContractHours = getApplicableWeeklyContractHours(employee, shiftDate);
+  if (!weeklyContractHours || weeklyContractHours <= 0) return null;
+
+  return {
+    hourlyRate: wageValue / ((weeklyContractHours * 52) / 12),
+    basis: "monthlyDerived",
+  };
+}
+
+function addShiftToLaborCostTotals(
+  totals: LaborCostTotals,
+  shift: TamigoShift,
+  employeeById: Map<string, TamigoDetailedEmployee>
+) {
+  const hours = getShiftHours(shift);
+  if (hours <= 0) return;
+
+  totals.shifts += 1;
+  totals.hours += hours;
+
+  const employee = employeeById.get(textFrom(shift.EmployeeId));
+  if (!employee) {
+    addMissingLaborCost(totals, hours, "missingEmployee");
+    return;
+  }
+
+  const shiftDate = getShiftDate(shift);
+  const rate = getShiftHourlyRate(employee, shiftDate);
+  if (!rate) {
+    addMissingLaborCost(totals, hours, "missingWage");
+    return;
+  }
+
+  const cost = hours * rate.hourlyRate;
+  totals.cost += cost;
+
+  if (rate.basis === "monthlyDerived") {
+    totals.derivedMonthlyHours += hours;
+    totals.derivedMonthlyCost += cost;
+    return;
+  }
+
+  totals.directHourlyHours += hours;
+  totals.directHourlyCost += cost;
+}
+
+function addMissingLaborCost(
+  totals: LaborCostTotals,
+  hours: number,
+  reason: LaborCostReason
+) {
+  totals.missingHours += hours;
+  totals.missingShifts += 1;
+
+  if (reason === "missingEmployee") {
+    totals.missingEmployeeShifts += 1;
+    return;
+  }
+
+  totals.missingWageShifts += 1;
+}
+
 async function fetchDepartmentSchedule(
   department: ShopDepartment,
   from: string,
@@ -1215,6 +1569,127 @@ export async function getWeekStaffSchedule(
     })}`,
     shops: SHOP_DEPARTMENTS.map((department) => department.shop),
     days,
+  };
+}
+
+export async function getWeekLaborCostSchedule(
+  weekOffset = 0
+): Promise<LaborCostSchedule> {
+  const now = new Date();
+  const from = getAmsterdamWeekStartDate(weekOffset, now);
+  const to = addDaysToDateString(from, 7);
+  const dates = createDateRange(from, to);
+  const [employees, departmentSchedules, iceShifts] = await Promise.all([
+    fetchTamigoEmployeeDetails(),
+    Promise.all(
+      SHOP_DEPARTMENTS.map((department) =>
+        fetchDepartmentSchedule(department, from, to)
+      )
+    ),
+    fetchShiftsForDepartment(ICE_LOKET_DEPARTMENT, from, to),
+  ]);
+  const employeeById = new Map(
+    employees.flatMap((employee) =>
+      employee.EmployeeId ? [[employee.EmployeeId, employee] as const] : []
+    )
+  );
+  let unassignedIceShifts = 0;
+
+  const days = dates.map((date): LaborCostDay => {
+    const shopsByName = new Map<ShopName, LaborCostShop>(
+      SHOP_DEPARTMENTS.map((department) => [
+        department.shop,
+        createEmptyLaborCostShop(department),
+      ])
+    );
+
+    for (const { department, shifts } of departmentSchedules) {
+      const shopTotals = shopsByName.get(department.shop);
+      if (!shopTotals) continue;
+
+      for (const shift of shifts) {
+        if (getShiftDate(shift) !== date || isAbsenceShift(shift)) continue;
+
+        addShiftToLaborCostTotals(shopTotals, shift, employeeById);
+      }
+    }
+
+    for (const shift of iceShifts) {
+      if (getShiftDate(shift) !== date || isAbsenceShift(shift)) continue;
+
+      const shop = getIceShiftShop(shift);
+      if (!shop) {
+        unassignedIceShifts += 1;
+        continue;
+      }
+
+      const shopTotals = shopsByName.get(shop);
+      if (!shopTotals) continue;
+
+      addShiftToLaborCostTotals(shopTotals, shift, employeeById);
+    }
+
+    const shops = SHOP_DEPARTMENTS.map((department) =>
+      normalizeLaborCostTotals(
+        shopsByName.get(department.shop) || createEmptyLaborCostShop(department)
+      )
+    );
+    const totals = emptyLaborCostTotals();
+
+    for (const shop of shops) {
+      addLaborCostTotals(totals, shop);
+    }
+
+    return {
+      date,
+      weekdayLabel: formatDateLabel(date, { weekday: "long" }),
+      dateLabel: formatDateLabel(date, {
+        day: "numeric",
+        month: "short",
+      }),
+      shops,
+      totals: normalizeLaborCostTotals(totals),
+    };
+  });
+  const totals = emptyLaborCostTotals();
+
+  for (const day of days) {
+    addLaborCostTotals(totals, day.totals);
+  }
+
+  const normalizedTotals = normalizeLaborCostTotals(totals);
+  const notes = [
+    "Individuele uurlonen worden niet naar de browser gestuurd; alleen geaggregeerde totalen.",
+    "Maandloon wordt omgerekend naar een uurbedrag op basis van contracturen in Tamigo.",
+  ];
+
+  if (normalizedTotals.missingHours > 0) {
+    notes.push(
+      `${normalizedTotals.missingHours.toLocaleString("nl-NL")} uur mist nog een medewerker- of loonmatch in Tamigo.`
+    );
+  }
+
+  if (unassignedIceShifts > 0) {
+    notes.push(
+      `${unassignedIceShifts} IJsloket-diensten konden niet automatisch aan een winkel gekoppeld worden.`
+    );
+  }
+
+  return {
+    generatedAt: now.toISOString(),
+    from,
+    to,
+    weekLabel: `${formatDateLabel(from, {
+      day: "numeric",
+      month: "short",
+    })} - ${formatDateLabel(addDaysToDateString(to, -1), {
+      day: "numeric",
+      month: "short",
+    })}`,
+    shops: SHOP_DEPARTMENTS.map((department) => department.shop),
+    days,
+    totals: normalizedTotals,
+    notes,
   };
 }
 
