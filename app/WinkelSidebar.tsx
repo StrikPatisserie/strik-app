@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import NewsUnreadBadge from "./NewsUnreadBadge";
 import { strikIcons } from "./StrikUI";
 
 const mainNavItems = [
@@ -118,7 +119,7 @@ export default function WinkelSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex h-14 w-14 items-center justify-center rounded-2xl transition ${
+                className={`relative flex h-14 w-14 items-center justify-center rounded-2xl transition ${
                   active
                     ? "bg-[#ef5737] shadow-sm"
                     : "hover:bg-[#f8f6f3]"
@@ -130,6 +131,9 @@ export default function WinkelSidebar() {
                   alt=""
                   className={`h-8 w-8 object-contain ${active ? "brightness-0 invert" : ""}`}
                 />
+                {item.href === "/nieuws" && (
+                  <NewsUnreadBadge className="right-1 top-1" />
+                )}
                 <span className="sr-only">{item.label}</span>
               </Link>
             );
@@ -147,7 +151,7 @@ export default function WinkelSidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[0.72rem] font-black ${
+                  className={`relative flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[0.72rem] font-black ${
                     active
                       ? "bg-[#ef5737] text-white"
                       : "bg-[#f8f6f3] text-[#2d2a26]/65"
@@ -159,6 +163,9 @@ export default function WinkelSidebar() {
                     className={`h-3.5 w-3.5 object-contain ${active ? "brightness-0 invert" : ""}`}
                   />
                   {item.label}
+                  {item.href === "/nieuws" && (
+                    <NewsUnreadBadge className="-right-1 -top-1" />
+                  )}
                 </Link>
               );
             })}

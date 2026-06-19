@@ -81,8 +81,8 @@ export default function WeeklyOfferPanel() {
   }, []);
 
   return (
-    <section className="min-w-0 rounded-[0.9rem] border border-[#d9d6d1] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.25rem] sm:p-4">
-      <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1 sm:mb-3 sm:gap-3">
+    <section className="min-w-0 rounded-[0.9rem] border border-[#d9d6d1] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.25rem] sm:p-3">
+      <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1 sm:mb-2 sm:gap-2">
         <div>
           <h2 className="winkel-card-heading text-[#1a1815]">
             aanbieding
@@ -111,7 +111,7 @@ export default function WeeklyOfferPanel() {
         </div>
       </div>
 
-      <div className="mx-auto flex aspect-[210/297] w-full max-w-[18rem] items-center justify-center overflow-hidden rounded-[0.75rem] bg-white sm:max-w-[23rem] sm:rounded-[1rem] lg:max-w-[24rem]">
+      <div className="mx-auto flex aspect-[210/297] w-full max-w-[11rem] items-center justify-center overflow-hidden rounded-[0.75rem] bg-white sm:max-w-[17rem] sm:rounded-[1rem] lg:max-w-[18rem]">
         {offer?.imageUrl ? (
           <img
             src={offer.imageUrl}

@@ -42,19 +42,24 @@ function isNewPost(post: NewsPost, readState: ReadState, latestKey: string) {
   return postTime > readTime || (postTime === readTime && postKey !== readState.key);
 }
 
+function stripHtml(value: string) {
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function Card({
   post,
   important = false,
   isNew = false,
-  featured = false,
 }: {
   post: NewsPost;
   important?: boolean;
   isNew?: boolean;
-  featured?: boolean;
 }) {
-  const cleanContent = post.content.trim();
-  const excerptLength = featured ? 280 : 120;
+  const cleanContent = stripHtml(post.content || "");
+  const excerptLength = 150;
   const hasLongContent = cleanContent.length > excerptLength;
   const excerpt = hasLongContent
     ? `${cleanContent.slice(0, excerptLength).trim()}...`
@@ -62,9 +67,9 @@ function Card({
 
   return (
     <article
-      className={`relative overflow-hidden rounded-[1.1rem] border shadow-sm ${
+      className={`relative grid h-full overflow-hidden rounded-[0.9rem] border shadow-sm ${
         important ? "border-[#efb4aa] bg-[#fff0ed]" : "border-[#e8e4de] bg-white"
-      } ${featured ? "" : "sm:grid sm:grid-cols-[7.5rem_minmax(0,1fr)]"}`}
+      }`}
     >
       {isNew && (
         <span className="absolute right-3 top-3 z-10 flex h-6 min-w-[2rem] items-center justify-center rounded-full bg-[#ef5737] px-2 text-xs font-black text-white">
@@ -72,21 +77,21 @@ function Card({
         </span>
       )}
 
-      {post.image && (
+      {post.image ? (
         <img
           src={post.image}
           alt={post.title}
-          className={`w-full object-cover ${
-            featured ? "h-52" : "h-32 sm:h-full"
-          }`}
+          className="aspect-[3/2] w-full object-cover"
         />
+      ) : (
+        <div className="aspect-[3/2] w-full bg-[#f8f6f3]" />
       )}
 
-      <div className="p-4">
+      <div className="p-3 sm:p-4">
         <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
           {new Date(post.date).toLocaleDateString("nl-NL")}
         </p>
-        <h2 className={`mt-2 font-black leading-tight text-[#1a1815] ${featured ? "text-2xl" : "text-base"}`}>
+        <h2 className="mt-1.5 text-base font-black leading-tight text-[#1a1815]">
           {stripImportantTitle(post.title)}
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-[#6b645b]">
@@ -141,35 +146,23 @@ export default function NieuwsList({
     return () => window.clearTimeout(timeoutId);
   }, [latestDate, latestKey]);
 
-  const featured = important.length > 0 ? important[0] : normal[0];
-  const remainingNews = [
-    ...important.slice(featured && important[0] === featured ? 1 : 0),
-    ...normal.filter((post) => post.id !== featured?.id),
-  ];
+  const allNews = [...important, ...normal]
+    .filter(
+      (post, index, posts) =>
+        posts.findIndex((item) => item.id === post.id) === index
+    )
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(22rem,0.95fr)]">
-      {featured && (
-        <section>
-          <Card
-            key={featured.id}
-            post={featured}
-            featured
-            important={important.length > 0}
-            isNew={isNewPost(featured, readState, latestKey)}
-          />
-        </section>
-      )}
-
-      <section className="grid gap-3">
-        {remainingNews.map((post) => (
-          <Card
-            key={post.id}
-            post={post}
-            isNew={isNewPost(post, readState, latestKey)}
-          />
-        ))}
-      </section>
-    </div>
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {allNews.map((post) => (
+        <Card
+          key={post.id}
+          post={post}
+          important={post.title.includes("[BELANGRIJK]")}
+          isNew={isNewPost(post, readState, latestKey)}
+        />
+      ))}
+    </section>
   );
 }

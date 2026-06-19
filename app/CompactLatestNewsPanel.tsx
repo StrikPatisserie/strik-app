@@ -9,6 +9,7 @@ import {
   getLatestNewsPost,
   stripImportantTitle,
 } from "./nieuws/newsState";
+import NewsUnreadBadge from "./NewsUnreadBadge";
 import { strikIcons } from "./StrikUI";
 
 function stripHtml(value: string) {
@@ -61,15 +62,15 @@ export default function CompactLatestNewsPanel() {
   }, []);
 
   const excerpt = latestPost
-    ? stripHtml(latestPost.content || "").slice(0, 180)
+    ? stripHtml(latestPost.content || "").slice(0, 110)
     : "";
 
   return (
     <Link
       href="/nieuws"
-      className="group flex min-w-0 flex-col rounded-[0.9rem] border border-[#d9d6d1] bg-[#e8e8e6] p-2 shadow-sm transition hover:shadow-md sm:rounded-[1.25rem] sm:p-4"
+      className="group flex min-w-0 flex-col rounded-[0.9rem] border border-[#d9d6d1] bg-[#e8e8e6] p-2 shadow-sm transition hover:shadow-md sm:rounded-[1.25rem] sm:p-3"
     >
-      <div className="mb-2 flex items-start justify-between gap-3 sm:mb-3">
+      <div className="mb-1.5 flex items-start justify-between gap-2 sm:mb-2">
         <div>
           <h2 className="winkel-card-heading text-[#1a1815]">
             laatste nieuws
@@ -78,17 +79,18 @@ export default function CompactLatestNewsPanel() {
             {latestPost ? formatDate(latestPost.date) : "actueel"}
           </p>
         </div>
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/75 sm:h-10 sm:w-10">
+        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/75 sm:h-9 sm:w-9">
           <img src={strikIcons.news} alt="" className="h-4 w-4 object-contain sm:h-5 sm:w-5" />
+          <NewsUnreadBadge className="-right-1 -top-1" />
         </span>
       </div>
 
-      <div className="flex min-h-[12rem] flex-1 flex-col justify-between rounded-[0.75rem] bg-white/70 p-3 sm:min-h-[17rem] sm:rounded-[1rem] sm:p-5">
+      <div className="flex min-h-[8.5rem] flex-1 flex-col justify-between rounded-[0.75rem] bg-white/70 p-2 sm:min-h-[12.5rem] sm:rounded-[1rem] sm:p-3">
         {latestPost ? (
           <>
             <div>
               {latestPost.image && (
-                <div className="mb-3 aspect-[4/3] overflow-hidden rounded-[0.7rem] bg-[#f8f6f3] sm:rounded-[0.9rem]">
+                <div className="mb-2 aspect-[3/2] overflow-hidden rounded-[0.7rem] bg-[#f8f6f3] sm:rounded-[0.9rem]">
                   <img
                     src={latestPost.image}
                     alt=""
@@ -96,20 +98,20 @@ export default function CompactLatestNewsPanel() {
                   />
                 </div>
               )}
-              <p className="text-[0.7rem] font-black uppercase tracking-[0.12em] text-[#8d877f]">
+              <p className="text-[0.56rem] font-black uppercase tracking-[0.12em] text-[#8d877f] sm:text-[0.62rem]">
                 Nieuwsbericht
               </p>
-              <h3 className="mt-2 text-xl font-black leading-tight text-[#ef5737] sm:text-2xl">
+              <h3 className="mt-1 text-[0.9rem] font-black leading-tight text-[#ef5737] sm:text-lg">
                 {stripImportantTitle(latestPost.title)}
               </h3>
               {excerpt && (
-                <p className="mt-2 text-sm font-semibold leading-snug text-[#5f5750] sm:text-base">
+                <p className="mt-1.5 text-[0.66rem] font-normal leading-snug text-[#5f5750] sm:text-xs">
                   {excerpt}
-                  {stripHtml(latestPost.content || "").length > 180 ? "..." : ""}
+                  {stripHtml(latestPost.content || "").length > 110 ? "..." : ""}
                 </p>
               )}
             </div>
-            <span className="mt-4 text-xs font-black uppercase tracking-[0.12em] text-[#31462f]">
+            <span className="mt-2 text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#31462f] sm:text-[0.66rem]">
               Open nieuws
             </span>
           </>

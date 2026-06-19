@@ -4887,17 +4887,17 @@ export default function BruidstaartStudioConfigurator() {
       >
         <section className="rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-2.5 shadow-sm sm:p-3">
           {step.id === "start" && (
-            <div className="grid gap-2">
-              <div className="rounded-[1rem] border border-[#d6e5d8] bg-[#ecf4ed] p-3 shadow-sm sm:p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="grid gap-4">
+              <div className="rounded-[0.85rem] border border-[#d6e5d8] bg-[#ecf4ed] p-2.5 shadow-sm sm:p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#6f8069]">
+                    <p className="text-[0.56rem] font-black uppercase tracking-[0.14em] text-[#6f8069]">
                       Nieuwe aanvraag
                     </p>
-                    <h3 className="mt-1 text-base font-black leading-tight text-[#1a1815]">
+                    <h3 className="mt-0.5 text-sm font-black leading-tight text-[#1a1815]">
                       Start nieuwe bruidstaart
                     </h3>
-                    <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
+                    <p className="mt-0.5 text-[0.68rem] font-semibold leading-snug text-[#6b645b]">
                       Vul eerst de basis in. Daarna wordt elke stap automatisch
                       opgeslagen.
                     </p>
@@ -4909,12 +4909,12 @@ export default function BruidstaartStudioConfigurator() {
                       setDraftResults([]);
                       setDraftStatus("Nieuw formulier gestart.");
                     }}
-                    className="rounded-full bg-white/75 px-3 py-1.5 text-[0.68rem] font-black text-[#2d2a26]/55 shadow-sm"
+                    className="rounded-full bg-white/75 px-2.5 py-1.5 text-[0.62rem] font-black text-[#2d2a26]/55 shadow-sm"
                   >
                     Leegmaken
                   </button>
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <input
                     value={config.contact.recognitionCode}
                     onChange={(event) =>
@@ -4927,7 +4927,7 @@ export default function BruidstaartStudioConfigurator() {
                       )
                     }
                     placeholder="Herkenningscode"
-                    className="min-w-0 rounded-xl border border-[#cdddc8] bg-white px-3 py-2 text-sm font-bold"
+                    className="min-w-0 rounded-lg border border-[#cdddc8] bg-white px-2.5 py-1.5 text-xs font-bold"
                   />
                   <input
                     value={config.contact.surname}
@@ -4937,43 +4937,43 @@ export default function BruidstaartStudioConfigurator() {
                       )
                     }
                     placeholder="Achternaam klant"
-                    className="min-w-0 rounded-xl border border-[#cdddc8] bg-white px-3 py-2 text-sm font-bold"
+                    className="min-w-0 rounded-lg border border-[#cdddc8] bg-white px-2.5 py-1.5 text-xs font-bold"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => void saveAndGoNext()}
-                  className="mt-3 w-full rounded-full bg-[#ef5737] px-4 py-2.5 text-xs font-black uppercase tracking-[0.08em] text-white shadow-sm sm:w-auto"
+                  className="mt-2.5 w-full rounded-full bg-[#ef5737] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.08em] text-white shadow-sm sm:w-auto"
                 >
                   {saveFeedback === "opslaan..."
                     ? "Opslaan..."
                     : "Opslaan & volgende"}
                 </button>
                 {draftStatus && (
-                  <p className="mt-2 text-xs font-bold text-[#9f382f]">
+                  <p className="mt-2 text-[0.68rem] font-bold text-[#9f382f]">
                     {draftStatus}
                   </p>
                 )}
               </div>
 
-              <div className="rounded-[1rem] border border-[#ead8aa] bg-[#fff7df] p-3 shadow-sm sm:p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="rounded-[0.85rem] border border-[#ead8aa] bg-[#fff7df] p-2.5 shadow-sm sm:p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-[0.66rem] font-semibold uppercase tracking-wider text-[#8b8278]">
+                    <p className="text-[0.56rem] font-semibold uppercase tracking-wider text-[#8b8278]">
                       Bestaande aanvraag
                     </p>
-                    <h3 className="mt-1 text-base font-bold leading-tight text-[#1a1815]">
+                    <h3 className="mt-0.5 text-sm font-bold leading-tight text-[#1a1815]">
                       Bruidstaart ophalen
                     </h3>
-                    <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
+                    <p className="mt-0.5 text-[0.68rem] font-semibold leading-snug text-[#6b645b]">
                       Zoek op herkenningscode, achternaam of leverdatum.
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={toggleWeekOverview}
-                      className={`rounded-full border border-[#ead8aa] px-3 py-1.5 text-xs font-black shadow-sm transition ${
+                      className={`rounded-full border border-[#ead8aa] px-2.5 py-1.5 text-[0.64rem] font-black shadow-sm transition ${
                         weekOverviewOpen
                           ? "bg-[#dce8d6] text-[#2d2a26]"
                           : "bg-white/55 text-[#2d2a26]/45 hover:text-[#2d2a26]/70"
@@ -4984,7 +4984,7 @@ export default function BruidstaartStudioConfigurator() {
                     <button
                       type="button"
                       onClick={toggleAllOverview}
-                      className={`rounded-full border border-[#ead8aa] px-3 py-1.5 text-xs font-black shadow-sm transition ${
+                      className={`rounded-full border border-[#ead8aa] px-2.5 py-1.5 text-[0.64rem] font-black shadow-sm transition ${
                         allOverviewOpen
                           ? "bg-[#f1d28f] text-[#2d2a26]"
                           : "bg-white/55 text-[#2d2a26]/45 hover:text-[#2d2a26]/70"
