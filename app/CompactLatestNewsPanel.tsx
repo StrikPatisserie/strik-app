@@ -87,6 +87,15 @@ export default function CompactLatestNewsPanel() {
         {latestPost ? (
           <>
             <div>
+              {latestPost.image && (
+                <div className="mb-3 aspect-[4/3] overflow-hidden rounded-[0.7rem] bg-[#f8f6f3] sm:rounded-[0.9rem]">
+                  <img
+                    src={latestPost.image}
+                    alt=""
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                  />
+                </div>
+              )}
               <p className="text-[0.7rem] font-black uppercase tracking-[0.12em] text-[#8d877f]">
                 Nieuwsbericht
               </p>

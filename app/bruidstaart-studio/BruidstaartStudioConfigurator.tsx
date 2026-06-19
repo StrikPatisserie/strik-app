@@ -705,7 +705,7 @@ function OptionCard({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-[1rem] border p-3 text-left shadow-sm transition active:scale-[0.99] ${
+      className={`rounded-[0.85rem] border p-2.5 text-left shadow-sm transition active:scale-[0.99] ${
         selected
           ? "border-[#8fb184] bg-[#dce8d6]"
           : "border-[#e7e0d8] bg-white"
@@ -715,7 +715,7 @@ function OptionCard({
         <div className="flex min-w-0 items-start gap-2">
           {option.swatchColor && (
             <span
-              className="mt-0.5 h-9 w-9 shrink-0 rounded-full border-2 shadow-inner"
+              className="mt-0.5 h-7 w-7 shrink-0 rounded-full border-2 shadow-inner"
               style={{
                 backgroundColor: option.swatchColor,
                 borderColor: option.swatchBorder || "rgba(45, 42, 38, 0.12)",
@@ -723,15 +723,17 @@ function OptionCard({
             />
           )}
           <div className="min-w-0">
-            <p className="text-sm font-bold leading-tight">{option.label}</p>
+            <p className="text-xs font-bold leading-tight sm:text-sm">
+              {option.label}
+            </p>
             {option.description && (
-              <p className="mt-1 text-xs font-semibold leading-snug text-[#2d2a26]/55">
+              <p className="mt-0.5 text-[0.68rem] font-semibold leading-snug text-[#2d2a26]/55 sm:text-xs">
                 {option.description}
               </p>
             )}
           </div>
         </div>
-        <span className="shrink-0 rounded-full bg-white/70 px-2.5 py-1 text-[0.65rem] font-bold text-[#2d2a26]/55">
+        <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-[0.58rem] font-bold text-[#2d2a26]/55 sm:text-[0.62rem]">
           {optionPriceLabel(option)}
         </span>
       </div>
@@ -754,13 +756,13 @@ function SizeCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-[9.5rem] min-w-0 flex-col gap-2 overflow-hidden rounded-[1rem] border p-3 text-left shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184] active:scale-[0.99] ${
+      className={`flex min-h-[8rem] min-w-0 flex-col gap-1.5 overflow-hidden rounded-[0.9rem] border p-2.5 text-left shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8fb184] active:scale-[0.99] ${
         selected
           ? "border-[#8fb184] bg-[#dce8d6]"
           : "border-[#e7e0d8] bg-white"
       }`}
     >
-      <div className="flex h-16 w-full items-center justify-center overflow-hidden rounded-xl bg-white/75 p-1.5">
+      <div className="flex h-12 w-full items-center justify-center overflow-hidden rounded-lg bg-white/75 p-1.5 sm:h-14">
         <Image
           src={size.iconPath}
           alt=""
@@ -772,17 +774,19 @@ function SizeCard({
       </div>
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-black leading-tight">{size.label}</p>
+            <p className="text-xs font-black leading-tight sm:text-sm">
+              {size.label}
+            </p>
           {size.surchargePerPerson && (
             <span className="shrink-0 whitespace-nowrap rounded-full bg-white/70 px-2 py-0.5 text-right text-[0.62rem] font-bold leading-tight text-[#8a5b10]">
               + {formatEuro(size.surchargePerPerson)} p.p.
             </span>
           )}
         </div>
-        <p className="mt-0.5 text-sm font-black leading-tight text-[#2d2a26]/65">
+        <p className="mt-0.5 text-xs font-black leading-tight text-[#2d2a26]/65">
           {size.personsLabel}
         </p>
-        <p className="mt-1 text-[0.68rem] font-bold leading-snug text-[#2d2a26]/45">
+        <p className="mt-0.5 text-[0.62rem] font-bold leading-snug text-[#2d2a26]/45">
           {sizeCompositionText(size.id)}
         </p>
       </div>
@@ -816,7 +820,7 @@ function LayerOptionSelectGrid({
   onChange: (layerId: string, optionId: string) => void;
 }) {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2">
       {layers.map((layer) => {
         const selected =
           findOption(options, valueForLayer(layer.id)) || options[0];
@@ -824,12 +828,12 @@ function LayerOptionSelectGrid({
         return (
           <label
             key={layer.id}
-            className="rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 shadow-sm"
+            className="rounded-[0.95rem] border border-[#e7e0d8] bg-white p-2.5 shadow-sm"
           >
-            <span className="flex items-center gap-3">
+            <span className="flex items-center gap-2">
               {selected?.swatchColor && (
                 <span
-                  className="h-10 w-10 shrink-0 rounded-full border-2 shadow-inner"
+                  className="h-7 w-7 shrink-0 rounded-full border-2 shadow-inner"
                   style={{
                     backgroundColor: selected.swatchColor,
                     borderColor:
@@ -838,10 +842,10 @@ function LayerOptionSelectGrid({
                 />
               )}
               <span className="min-w-0">
-                <span className="block text-sm font-black leading-tight">
+                <span className="block text-xs font-black leading-tight sm:text-sm">
                   {layer.label}
                 </span>
-                <span className="mt-0.5 block text-xs font-bold text-[#2d2a26]/45">
+                <span className="mt-0.5 block text-[0.65rem] font-bold text-[#2d2a26]/45">
                   {layer.personsLabel}
                 </span>
               </span>
@@ -849,7 +853,7 @@ function LayerOptionSelectGrid({
             <select
               value={selected?.id || ""}
               onChange={(event) => onChange(layer.id, event.target.value)}
-              className="mt-3 w-full rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+              className="mt-2 w-full rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
             >
               {options.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -4115,12 +4119,20 @@ export default function BruidstaartStudioConfigurator() {
 
   async function saveDraft(silentMissingCode = false) {
     const code = config.contact.recognitionCode.trim();
+    const surname = config.contact.surname.trim();
 
     if (!code) {
       if (!silentMissingCode) {
         setDraftStatus("Vul eerst een herkenningscode in.");
       }
-      return;
+      return false;
+    }
+
+    if (!surname) {
+      if (!silentMissingCode) {
+        setDraftStatus("Vul eerst de achternaam van de klant in.");
+      }
+      return false;
     }
 
     setSaveFeedback("opslaan...");
@@ -4141,6 +4153,7 @@ export default function BruidstaartStudioConfigurator() {
       mergeDraftIntoAllOverview(savedDraft);
       setDraftStatus("Bestelling opgeslagen in WordPress.");
       showSaveFeedback();
+      return true;
     } catch {
       saveLocalDraft(draft);
       setDraftResults([draft]);
@@ -4149,6 +4162,7 @@ export default function BruidstaartStudioConfigurator() {
         "WordPress-opslag is nog niet actief; bestelling is lokaal opgeslagen."
       );
       showSaveFeedback();
+      return true;
     }
   }
 
@@ -4474,6 +4488,113 @@ export default function BruidstaartStudioConfigurator() {
   const canGoBack = stepIndex > 0;
   const canGoNext = stepIndex < steps.length - 1;
 
+  function getBaseMissingFields(current = config) {
+    const missing: string[] = [];
+
+    if (!current.contact.recognitionCode.trim()) {
+      missing.push("herkenningscode");
+    }
+
+    if (!current.contact.surname.trim()) {
+      missing.push("achternaam klant");
+    }
+
+    return missing;
+  }
+
+  function hasLayerChoices(
+    current: WeddingCakeConfig,
+    layers: CakeLayer[],
+    layerIds: Record<string, string>,
+    fallbackId: string
+  ) {
+    return layers.every((layer) => Boolean(layerIds?.[layer.id] || fallbackId));
+  }
+
+  function getStepMissingFields(stepId = step.id, current = config) {
+    const missing = getBaseMissingFields(current);
+    const layers = getCakeDesignGroups(current);
+
+    if (stepId === "formaat" && !current.sizeId) {
+      missing.push("formaat");
+    }
+
+    if (stepId === "stijl" && !current.styleId) {
+      missing.push("stijl");
+    }
+
+    if (stepId === "smaak") {
+      if (!current.sizeId || !layers.length) {
+        missing.push("formaat");
+      } else if (
+        !hasLayerChoices(
+          current,
+          layers,
+          current.layerFillingIds,
+          current.fillingId
+        )
+      ) {
+        missing.push("smaak per laag");
+      }
+    }
+
+    if (stepId === "kleur") {
+      if (!current.styleId) missing.push("stijl");
+      if (!current.sizeId || !layers.length) missing.push("formaat");
+      if (
+        current.styleId &&
+        layers.length &&
+        !hasLayerChoices(current, layers, current.layerColorIds, current.colorId)
+      ) {
+        missing.push("kleur per laag");
+      }
+    }
+
+    if (stepId === "layout") {
+      if (!current.styleId) missing.push("stijl");
+      if (!current.sizeId || !layers.length) missing.push("formaat");
+      if (
+        current.styleId &&
+        layers.length &&
+        !hasLayerChoices(
+          current,
+          layers,
+          current.layerLayoutIds,
+          current.layoutId
+        )
+      ) {
+        missing.push("layout per laag");
+      }
+    }
+
+    if (stepId === "gegevens") {
+      if (!current.contact.names.trim()) missing.push("namen bruidspaar");
+      if (!current.contact.deliveryDate) missing.push("leverdatum");
+    }
+
+    return Array.from(new Set(missing));
+  }
+
+  function getCompletionWarnings(current = config) {
+    const missing = [
+      ...getBaseMissingFields(current),
+      ...getStepMissingFields("formaat", current),
+      ...getStepMissingFields("stijl", current),
+      ...getStepMissingFields("smaak", current),
+      ...getStepMissingFields("kleur", current),
+      ...getStepMissingFields("layout", current),
+      ...getStepMissingFields("gegevens", current),
+    ];
+
+    return Array.from(new Set(missing));
+  }
+
+  function showMissingFieldsMessage(missing: string[]) {
+    setDraftStatus(
+      `Je hebt nog velden om in te vullen: ${missing.join(", ")}.`
+    );
+  }
+
   function goToStep(nextIndex: number) {
     setStepIndex(Math.max(0, Math.min(steps.length - 1, nextIndex)));
 
@@ -4487,8 +4608,16 @@ export default function BruidstaartStudioConfigurator() {
   async function saveAndGoNext() {
     if (!canGoNext) return;
 
-    if (config.contact.recognitionCode.trim()) {
-      await saveDraft(true);
+    const missing = getStepMissingFields();
+    if (missing.length) {
+      showMissingFieldsMessage(missing);
+      return;
+    }
+
+    const saved = await saveDraft(true);
+    if (!saved) {
+      setDraftStatus("Je bestelling is nog niet opgeslagen.");
+      return;
     }
 
     goToStep(stepIndex + 1);
@@ -4515,68 +4644,6 @@ export default function BruidstaartStudioConfigurator() {
           ))}
         </div>
       </nav>
-
-      {stepIndex > 0 && step.id !== "overzicht" && (
-        <section className="studio-no-print rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-2.5 shadow-sm">
-          <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
-            <div>
-              <h3 className="text-sm font-black">Bestelling opslaan</h3>
-              <p className="text-[0.68rem] font-bold text-[#2d2a26]/45">
-                Tussendoor veilig bewaren.
-              </p>
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                value={config.contact.recognitionCode}
-                onChange={(event) =>
-                  setConfig((current) =>
-                    updateContact(
-                      current,
-                      "recognitionCode",
-                      event.target.value
-                    )
-                  )
-                }
-                placeholder="Herkenningscode"
-                className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-3 py-2 text-sm"
-              />
-              <input
-                value={config.contact.surname}
-                onChange={(event) =>
-                  setConfig((current) =>
-                    updateContact(current, "surname", event.target.value)
-                  )
-                }
-                placeholder="Achternaam"
-                className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <button
-                type="button"
-                onClick={() => void saveDraft()}
-                className={`rounded-full px-4 py-2 text-xs font-bold shadow-sm transition ${
-                  saveFeedback
-                    ? "bg-[#dce8d6] text-[#2d2a26]"
-                    : "bg-[#c3d3bc]"
-                }`}
-              >
-                {saveFeedback === "opslaan..." ? "Opslaan..." : "Opslaan"}
-              </button>
-              {saveFeedback && (
-                <p className="mt-1 text-center text-xs italic text-[#8fb184]">
-                  {saveFeedback}
-                </p>
-              )}
-            </div>
-          </div>
-          {draftStatus && (
-            <p className="mt-2 text-xs font-bold text-[#2d2a26]/55">
-              {draftStatus}
-            </p>
-          )}
-        </section>
-      )}
 
       {step.id === "overzicht" && (
         <section className="studio-no-print ml-auto max-w-3xl rounded-[1rem] border border-[#ecd9a9] bg-[#fff4d1] p-2.5 shadow-sm">
@@ -4651,75 +4718,168 @@ export default function BruidstaartStudioConfigurator() {
         </section>
       )}
 
-      <section className="studio-no-print rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[0.68rem] font-bold uppercase tracking-[0.16em] text-[#2d2a26]/45">
-              Stap {stepIndex + 1} van {steps.length}
-            </p>
-            <h2 className="mt-0.5 text-lg font-bold sm:text-xl">{step.title}</h2>
-            <p className="mt-0.5 text-xs font-semibold leading-snug text-[#2d2a26]/55 sm:text-sm">
-              {step.description}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            {step.id !== "start" && (
-              <div className="rounded-xl bg-[#f1d28f]/70 px-3 py-2 text-right">
-                <p className="text-[0.65rem] font-bold text-[#2d2a26]/55">Indicatie</p>
-                <p className="text-base font-black sm:text-lg">{formatEuro(price.total)}</p>
+      {step.id !== "start" && (
+        <section className="studio-no-print rounded-[0.9rem] border border-[#efb8ad] bg-[#fff3f0] p-2.5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#ef5737]">
+                Stap {stepIndex + 1} van {steps.length}
+              </p>
+              <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <h2 className="text-sm font-black leading-tight text-[#1a1815] sm:text-base">
+                  {step.title}
+                </h2>
+                <p className="text-[0.68rem] font-semibold leading-tight text-[#2d2a26]/55 sm:text-xs">
+                  {step.description}
+                </p>
               </div>
-            )}
-            {canGoNext && (
-              <button
-                type="button"
-                onClick={() => void saveAndGoNext()}
-                className="rounded-full bg-[#c3d3bc] px-3 py-2 text-[0.68rem] font-black text-[#2d2a26] shadow-sm sm:text-xs"
-              >
-                Opslaan & volgende
-              </button>
-            )}
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {canGoBack && (
+                <button
+                  type="button"
+                  onClick={() => goToStep(stepIndex - 1)}
+                  className="rounded-full bg-white px-3 py-2 text-[0.68rem] font-black text-[#2d2a26]/60 shadow-sm"
+                >
+                  Vorige
+                </button>
+              )}
+              <div className="rounded-xl bg-white/80 px-2.5 py-1.5 text-right">
+                <p className="text-[0.55rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                  Indicatie
+                </p>
+                <p className="text-sm font-black leading-none">
+                  {formatEuro(price.total)}
+                </p>
+              </div>
+              {canGoNext && (
+                <button
+                  type="button"
+                  onClick={() => void saveAndGoNext()}
+                  className="rounded-full bg-[#ef5737] px-3.5 py-2 text-[0.68rem] font-black text-white shadow-sm sm:text-xs"
+                >
+                  {saveFeedback === "opslaan..."
+                    ? "Opslaan..."
+                    : "Opslaan & volgende"}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="h-1.5 overflow-hidden rounded-full bg-[#f8f6f3]">
-          <div
-            className="h-full rounded-full bg-[#c3d3bc]"
-            style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
-          />
-        </div>
-      </section>
+          <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/80">
+            <div
+              className="h-full rounded-full bg-[#ef5737]"
+              style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
+            />
+          </div>
+          {draftStatus && (
+            <p className="mt-2 text-[0.68rem] font-bold text-[#9f382f]">
+              {draftStatus}
+            </p>
+          )}
+        </section>
+      )}
+
+      {step.id === "overzicht" && (
+        <section className="studio-no-print rounded-[0.9rem] border border-[#e7e0d8] bg-white/85 p-2.5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="text-sm font-black leading-tight">Overzicht</h3>
+              <p className="mt-0.5 text-[0.68rem] font-semibold leading-snug text-[#2d2a26]/55 sm:text-xs">
+                Controleer de visualisatie en details. Gebruik daarna printen
+                of mailen.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={copyProductionForm}
+              className="rounded-full bg-[#f8f6f3] px-3 py-2 text-[0.68rem] font-black shadow-sm"
+            >
+              {copied ? "Gekopieerd" : "Formulier kopiëren"}
+            </button>
+          </div>
+        </section>
+      )}
 
       <div
         className={`studio-no-print grid gap-3 ${
           step.id === "start"
             ? ""
             : step.id === "overzicht"
-              ? "lg:grid-cols-[minmax(0,0.62fr)_minmax(22rem,0.95fr)]"
+              ? ""
               : "lg:grid-cols-[minmax(0,1fr)_20rem]"
         }`}
       >
-        <section className="rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm sm:p-4">
+        <section className="rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-2.5 shadow-sm sm:p-3">
           {step.id === "start" && (
-            <div className="grid gap-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setConfig(createEmptyWeddingCakeConfig());
-                  setDraftStatus("");
-                  goToStep(1);
-                }}
-                className="rounded-[1rem] border border-[#d6e5d8] bg-[#ecf4ed] p-4 text-left shadow-sm transition active:scale-[0.99]"
-              >
-                <p className="text-[0.66rem] font-semibold uppercase tracking-wider text-[#8b8278]">
-                  Nieuwe aanvraag
-                </p>
-                <h3 className="mt-1 text-base font-bold leading-tight text-[#1a1815]">
-                  Start nieuwe bruidstaart
-                </h3>
-                <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
-                  Begin direct met een lege bestelling.
-                </p>
-              </button>
+            <div className="grid gap-2">
+              <div className="rounded-[1rem] border border-[#d6e5d8] bg-[#ecf4ed] p-3 shadow-sm sm:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#6f8069]">
+                      Nieuwe aanvraag
+                    </p>
+                    <h3 className="mt-1 text-base font-black leading-tight text-[#1a1815]">
+                      Start nieuwe bruidstaart
+                    </h3>
+                    <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
+                      Vul eerst de basis in. Daarna wordt elke stap automatisch
+                      opgeslagen.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfig(createEmptyWeddingCakeConfig());
+                      setDraftResults([]);
+                      setDraftStatus("Nieuw formulier gestart.");
+                    }}
+                    className="rounded-full bg-white/75 px-3 py-1.5 text-[0.68rem] font-black text-[#2d2a26]/55 shadow-sm"
+                  >
+                    Leegmaken
+                  </button>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <input
+                    value={config.contact.recognitionCode}
+                    onChange={(event) =>
+                      setConfig((current) =>
+                        updateContact(
+                          current,
+                          "recognitionCode",
+                          event.target.value
+                        )
+                      )
+                    }
+                    placeholder="Herkenningscode"
+                    className="min-w-0 rounded-xl border border-[#cdddc8] bg-white px-3 py-2 text-sm font-bold"
+                  />
+                  <input
+                    value={config.contact.surname}
+                    onChange={(event) =>
+                      setConfig((current) =>
+                        updateContact(current, "surname", event.target.value)
+                      )
+                    }
+                    placeholder="Achternaam klant"
+                    className="min-w-0 rounded-xl border border-[#cdddc8] bg-white px-3 py-2 text-sm font-bold"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void saveAndGoNext()}
+                  className="mt-3 w-full rounded-full bg-[#ef5737] px-4 py-2.5 text-xs font-black uppercase tracking-[0.08em] text-white shadow-sm sm:w-auto"
+                >
+                  {saveFeedback === "opslaan..."
+                    ? "Opslaan..."
+                    : "Opslaan & volgende"}
+                </button>
+                {draftStatus && (
+                  <p className="mt-2 text-xs font-bold text-[#9f382f]">
+                    {draftStatus}
+                  </p>
+                )}
+              </div>
 
               <div className="rounded-[1rem] border border-[#ead8aa] bg-[#fff7df] p-3 shadow-sm sm:p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -5085,7 +5245,7 @@ export default function BruidstaartStudioConfigurator() {
                     )}
                   </section>
                 )}
-                {draftStatus && (
+                {draftStatus && !draftStatus.startsWith("Je hebt nog") && (
                   <p className="mt-3 text-sm font-bold text-[#2d2a26]/55">
                     {draftStatus}
                   </p>
@@ -5161,7 +5321,7 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "formaat" && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2 sm:grid-cols-2">
               {cakeSizes.map((size) => (
                 <SizeCard
                   key={size.id}
@@ -5174,7 +5334,7 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "smaak" && (
-            <div className="grid gap-3">
+            <div className="grid gap-2">
               {activeLayers.length === 0 ? (
                 <p className="rounded-[1.4rem] bg-[#f8f6f3] p-4 text-sm font-bold text-[#2d2a26]/55">
                   Kies eerst een formaat. Daarna kun je per laag de smaak
@@ -5193,14 +5353,14 @@ export default function BruidstaartStudioConfigurator() {
                   />
                 ))
               ) : (
-                <div className="grid gap-4">
+                <div className="grid gap-2">
                   {activeLayers.map((layer) => (
                     <div
                       key={layer.id}
-                      className="rounded-[1.4rem] border border-[#e7e0d8] bg-white p-4 shadow-sm"
+                      className="rounded-[0.95rem] border border-[#e7e0d8] bg-white p-2.5 shadow-sm"
                     >
                       <label className="block">
-                        <span className="text-sm font-black">
+                        <span className="text-xs font-black sm:text-sm">
                           {layer.label} · {layer.personsLabel}
                         </span>
                         <select
@@ -5208,7 +5368,7 @@ export default function BruidstaartStudioConfigurator() {
                           onChange={(event) =>
                             setLayerFilling(layer.id, event.target.value)
                           }
-                          className="mt-2 w-full rounded-2xl border border-[#e7e0d8] bg-white p-4 font-bold"
+                          className="mt-2 w-full rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-bold"
                         >
                           {fillingOptions.map((option) => (
                             <option key={option.id} value={option.id}>
@@ -5658,8 +5818,8 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "gegevens" && (
-            <div className="grid gap-3">
-              <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <input
                   value={config.contact.recognitionCode}
                   onChange={(event) =>
@@ -5672,7 +5832,7 @@ export default function BruidstaartStudioConfigurator() {
                     )
                   }
                   placeholder="Herkenningscode"
-                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                  className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
                 />
                 <input
                   value={config.contact.surname}
@@ -5682,7 +5842,7 @@ export default function BruidstaartStudioConfigurator() {
                     )
                   }
                   placeholder="Achternaam klant"
-                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                  className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
                 />
               </div>
               <input
@@ -5693,9 +5853,9 @@ export default function BruidstaartStudioConfigurator() {
                   )
                 }
                 placeholder="Namen bruidspaar"
-                className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
               />
-              <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(13rem,1fr)]">
+              <div className="grid gap-2 md:grid-cols-[minmax(0,2fr)_minmax(13rem,1fr)]">
                 <input
                   value={config.contact.email}
                   onChange={(event) =>
@@ -5705,7 +5865,7 @@ export default function BruidstaartStudioConfigurator() {
                   }
                   placeholder="E-mail"
                   type="email"
-                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                  className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
                 />
                 <input
                   value={config.contact.phone}
@@ -5715,11 +5875,11 @@ export default function BruidstaartStudioConfigurator() {
                     )
                   }
                   placeholder="Telefoon"
-                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                  className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
                 />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-sm font-bold text-[#2d2a26]/55">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-bold text-[#2d2a26]/55">
                   Trouwdatum
                   <input
                     value={config.contact.weddingDate}
@@ -5733,10 +5893,10 @@ export default function BruidstaartStudioConfigurator() {
                       )
                     }
                     type="date"
-                    className="rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-normal text-[#2d2a26]"
+                    className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-normal text-[#2d2a26]"
                   />
                 </label>
-                <label className="grid gap-1 text-sm font-bold text-[#2d2a26]/55">
+                <label className="grid gap-1 text-xs font-bold text-[#2d2a26]/55">
                   Leverdatum
                   <input
                     value={config.contact.deliveryDate}
@@ -5750,11 +5910,11 @@ export default function BruidstaartStudioConfigurator() {
                       )
                     }
                     type="date"
-                    className="rounded-2xl border border-[#e7e0d8] bg-white p-4 text-base font-normal text-[#2d2a26]"
+                    className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-normal text-[#2d2a26]"
                   />
                 </label>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {(["pickup", "delivery"] as const).map((method) => (
                   <button
                     key={method}
@@ -5764,7 +5924,7 @@ export default function BruidstaartStudioConfigurator() {
                         updateContact(current, "deliveryMethod", method)
                       )
                     }
-                    className={`rounded-2xl border p-4 text-left font-bold ${
+                    className={`rounded-xl border p-2.5 text-left text-sm font-bold ${
                       config.contact.deliveryMethod === method
                         ? "border-[#8fb184] bg-[#dce8d6]"
                         : "border-[#e7e0d8] bg-white"
@@ -5786,9 +5946,9 @@ export default function BruidstaartStudioConfigurator() {
                   )
                 }
                 placeholder="Leveringsadres of afhaallocatie"
-                className="min-h-24 rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                className="min-h-16 rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
               />
-              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+              <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                 <input
                   value={config.contact.invoiceName}
                   onChange={(event) =>
@@ -5797,7 +5957,7 @@ export default function BruidstaartStudioConfigurator() {
                     )
                   }
                   placeholder="Factuurnaam"
-                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                  className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
                 />
                 <input
                   value={config.contact.invoiceEmail}
@@ -5808,7 +5968,7 @@ export default function BruidstaartStudioConfigurator() {
                   }
                   placeholder="Factuur e-mail"
                   type="email"
-                  className="rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                  className="rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
                 />
               </div>
               <textarea
@@ -5819,7 +5979,7 @@ export default function BruidstaartStudioConfigurator() {
                   )
                 }
                 placeholder="Extra wensen, allergenen, planning, inspiratie"
-                className="min-h-32 rounded-2xl border border-[#e7e0d8] bg-white p-4"
+                className="min-h-20 rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
               />
             </div>
           )}
@@ -5845,30 +6005,30 @@ export default function BruidstaartStudioConfigurator() {
                   <input
                     type="checkbox"
                     checked={config.completed}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+
+                      if (checked) {
+                        const missing = getCompletionWarnings();
+
+                        if (missing.length) {
+                          window.alert(
+                            `Let op: nog niet alles is ingevuld. Controleer ${missing
+                              .slice(0, 5)
+                              .join(", ")} voordat je deze bestelling definitief maakt.`
+                          );
+                        }
+                      }
+
                       setConfig((current) => ({
                         ...current,
-                        completed: event.target.checked,
-                      }))
-                    }
+                        completed: checked,
+                      }));
+                    }}
                     className="h-5 w-5 accent-[#8fb184]"
                   />
                   Bestelling definitief
                 </label>
-              </div>
-              <div className="rounded-[1rem] border border-[#e7e0d8] bg-[#f8f6f3] p-3">
-                <h3 className="text-base font-black">Overzicht</h3>
-                <p className="mt-1 text-sm font-semibold leading-snug text-[#2d2a26]/60">
-                  Controleer de visualisatie en details rechts. Gebruik daarna
-                  printen of mailen.
-                </p>
-                <button
-                  type="button"
-                  onClick={copyProductionForm}
-                  className="mt-3 rounded-full bg-white px-4 py-2 text-xs font-black shadow-sm"
-                >
-                  {copied ? "Gekopieerd" : "Formulier kopiëren"}
-                </button>
               </div>
             </div>
           )}
@@ -6012,26 +6172,6 @@ export default function BruidstaartStudioConfigurator() {
         </aside>
         )}
       </div>
-
-      {step.id !== "start" && (
-      <div className="studio-no-print flex gap-2">
-        <button
-          type="button"
-          onClick={() => goToStep(stepIndex - 1)}
-          disabled={!canGoBack}
-          className="rounded-full bg-white px-4 py-2.5 text-sm font-bold shadow-sm disabled:opacity-40"
-        >
-          Vorige
-        </button>
-        <button
-          type="button"
-          onClick={() => (canGoNext ? void saveAndGoNext() : goToStep(0))}
-          className="min-w-0 flex-1 rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-bold shadow-sm"
-        >
-          {canGoNext ? "Opslaan & volgende" : "Terug naar start"}
-        </button>
-      </div>
-      )}
 
       <section className="studio-print-report hidden bg-white text-black">
         <div className="mb-5 flex items-start justify-between gap-6 border-b border-black/20 pb-4">
