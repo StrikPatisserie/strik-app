@@ -2237,7 +2237,7 @@ export default function RecipeDetail({
             </Panel>
 
             <div className="grid gap-4 xl:grid-cols-2">
-              <Panel>
+              <Panel className="border-[#c3d3bc] bg-[#edf5ea]">
                 <SectionTitle title="Ingredienten direct in recept" />
                 <div className="mt-3 grid gap-2">
                   {previewRecipe.ingredients.length ? (
@@ -2264,7 +2264,7 @@ export default function RecipeDetail({
                 </div>
               </Panel>
 
-              <Panel>
+              <Panel className="border-[#c3d3bc] bg-[#f5faf2]">
                 <SectionTitle title="Gekoppelde halffabricaten" />
                 <div className="mt-3 grid gap-2">
                   {previewRecipe.semiFinishedItems.length ? (
@@ -3362,55 +3362,55 @@ function BakkerRecipeCard({
   );
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-white/70 px-3 py-4 backdrop-blur-[1px]">
-      <div className="mx-auto w-[min(61rem,calc(100vw-1rem))] border border-[#111111] bg-white px-4 py-4 shadow-2xl sm:px-6">
-        <div className="flex items-start justify-between gap-3">
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-white/70 px-2 py-2 backdrop-blur-[1px] sm:py-4">
+      <div className="mx-auto w-[min(60rem,calc(100vw-0.75rem))] border border-[#d7d2cb] bg-white px-3 py-3 shadow-2xl sm:px-5">
+        <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-8 items-center gap-1 border border-[#c3d3bc] bg-white px-2 text-xs font-black"
+              className="inline-flex h-7 items-center gap-1 border border-[#c3d3bc] bg-white px-2 text-[0.68rem] font-black"
             >
-              <img src="/UI-apps_terug.svg" alt="" className="h-5 w-5" />
+              <img src="/UI-apps_terug.svg" alt="" className="h-4 w-4" />
               Terug
             </button>
-            <p className="text-sm italic text-[#111111]">Recept kaart</p>
+            <p className="text-xs italic text-[#111111]/60">Recept kaart</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-4xl font-light leading-none text-[#111111]"
+            className="text-3xl font-light leading-none text-[#111111]"
             aria-label="Sluit receptkaart"
           >
             ×
           </button>
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-[1rem_minmax(0,1fr)]">
+        <div className="grid gap-3 sm:grid-cols-[0.65rem_minmax(0,1fr)]">
           <div className={`hidden sm:block ${recipeCardStripeClass(recipe)}`} />
           <div
-            className={`grid gap-4 ${
+            className={`grid gap-3 ${
               recipe.type === "finalProduct"
-                ? "lg:grid-cols-[minmax(0,1.35fr)_12rem]"
+                ? "lg:grid-cols-[minmax(0,1.4fr)_10rem]"
                 : ""
             }`}
           >
             <div className="min-w-0">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h2 className="truncate text-[clamp(1.8rem,4vw,2.7rem)] font-light leading-none">
+                  <h2 className="truncate text-[clamp(1.25rem,3.2vw,1.8rem)] font-light leading-none">
                     {recipe.name}
                   </h2>
-                  <p className="mt-1 text-base italic text-[#555555]">
+                  <p className="mt-1 text-xs italic text-[#555555]">
                     {recipe.productGroup || recipeTypeLabel(recipe.type)}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-[4.25rem_3rem_3rem_3rem] border border-[#c3d3bc] text-center text-xs uppercase tracking-[0.12em]">
+                <div className="grid grid-cols-[3.35rem_2.35rem_2.6rem_2.35rem] border border-[#c3d3bc] text-center text-[0.58rem] uppercase tracking-[0.08em]">
                   <button
                     type="button"
                     onClick={onStart}
-                    className={`border-r border-[#c3d3bc] px-2 py-3 ${
+                    className={`border-r border-[#c3d3bc] px-1.5 py-2 ${
                       isStarted ? "bg-[#c3d3bc]" : "bg-white"
                     }`}
                   >
@@ -3419,7 +3419,7 @@ function BakkerRecipeCard({
                   <button
                     type="button"
                     onClick={onMarkMade}
-                    className={`border-r border-[#c3d3bc] px-2 py-2.5 text-2xl leading-none ${
+                    className={`border-r border-[#c3d3bc] px-1.5 py-1.5 text-xl leading-none ${
                       madeToday ? "bg-[#c3d3bc]" : "bg-white"
                     }`}
                     aria-label="Gemaakt"
@@ -3429,14 +3429,14 @@ function BakkerRecipeCard({
                   <button
                     type="button"
                     onClick={onPrint}
-                    className="border-r border-[#c3d3bc] px-2 py-2.5 text-xs font-black tracking-normal"
+                    className="border-r border-[#c3d3bc] px-1.5 py-2 text-[0.58rem] font-black tracking-normal"
                   >
                     Print
                   </button>
                   <button
                     type="button"
                     onClick={onEdit}
-                    className="px-2 py-3 text-2xl leading-none"
+                    className="px-1.5 py-2 text-xl leading-none"
                     aria-label="Aanpassen"
                   >
                     ✎
@@ -3444,11 +3444,11 @@ function BakkerRecipeCard({
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 pl-1">
+              <div className="mt-2 flex items-center gap-1.5 pl-0.5">
                 <button
                   type="button"
                   onClick={() => onQuantityStep(-1)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-2xl shadow"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xl shadow"
                   aria-label="Hoeveelheid verlagen"
                 >
                   -
@@ -3457,16 +3457,16 @@ function BakkerRecipeCard({
                   value={formatInputNumber(quantity)}
                   onChange={(event) => onQuantityChange(event.target.value)}
                   inputMode="decimal"
-                  className="h-9 w-24 rounded-xl border border-[#e4d8cb] bg-white text-center text-sm font-black outline-none"
+                  className="h-8 w-20 rounded-lg border border-[#e4d8cb] bg-white text-center text-xs font-black outline-none"
                   aria-label="Hoeveelheid"
                 />
-                <span className="text-sm font-black text-[#707070]">
+                <span className="text-xs font-black text-[#707070]">
                   {unitLabelText(getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk")}
                 </span>
                 <button
                   type="button"
                   onClick={() => onQuantityStep(1)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-2xl shadow"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xl shadow"
                   aria-label="Hoeveelheid verhogen"
                 >
                   +
@@ -3520,36 +3520,38 @@ function BakkerRecipeCard({
                 </div>
               )}
 
-              <div className="mt-5 bg-[#efefef] p-4">
-                <h3 className="text-base font-black">Ingredienten</h3>
-                <div className="mt-3 grid gap-1">
+              <div className="mt-3 rounded-[0.95rem] border border-[#c3d3bc] bg-[#edf5ea] p-2.5">
+                <h3 className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#30462f]">
+                  Ingredienten
+                </h3>
+                <div className="mt-2 grid gap-1.5">
                   {rows.length ? (
                     rows.map((row) => (
                       <div
                         key={row.id}
-                        className="grid grid-cols-[minmax(0,1fr)_4.2rem_3rem_minmax(5.7rem,auto)] gap-3 text-sm sm:text-base"
+                        className="grid grid-cols-[minmax(0,1fr)_3.3rem_2.35rem_minmax(4.5rem,auto)] items-center gap-2 rounded-lg bg-white/78 px-2 py-1.5 text-xs sm:grid-cols-[minmax(0,1fr)_4rem_2.8rem_minmax(5.7rem,auto)] sm:text-sm"
                       >
-                        <span className="truncate font-black">{row.name}</span>
-                        <span className="text-right font-black">
+                        <span className="truncate font-black text-[#1a1815]">{row.name}</span>
+                        <span className="text-right font-black text-[#30462f]">
                           {formatInputNumber(row.quantity)}
                         </span>
-                        <span className="font-black">{shortUnitLabel(row.unit)}</span>
+                        <span className="font-black text-[#30462f]/80">{shortUnitLabel(row.unit)}</span>
                         <span className="flex min-w-0 justify-end">
                           {row.linkedRecipe && onOpenRecipe ? (
                             <button
                               type="button"
                               onClick={() => onOpenRecipe(row.linkedRecipe!)}
-                              className="inline-flex min-w-0 items-center justify-end gap-1 text-right text-sm italic text-[#555555]"
+                              className="inline-flex min-w-0 items-center justify-end gap-1 text-right text-[0.68rem] italic text-[#555555] sm:text-xs"
                             >
                               <span className="truncate">halffabricaat</span>
                               <img
                                 src="/UI-apps_ga naar.svg"
                                 alt=""
-                                className="h-4 w-4 shrink-0"
+                              className="h-3.5 w-3.5 shrink-0"
                               />
                             </button>
                           ) : row.isSemiFinished ? (
-                            <span className="truncate text-right text-sm italic text-[#555555]">
+                            <span className="truncate text-right text-[0.68rem] italic text-[#555555] sm:text-xs">
                               halffabricaat
                             </span>
                           ) : null}
@@ -3557,16 +3559,16 @@ function BakkerRecipeCard({
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm font-bold text-[#707070]">
+                    <p className="rounded-lg bg-white/70 p-2 text-xs font-bold text-[#707070]">
                       Nog geen ingredienten.
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="mt-4 bg-[#efefef] p-4">
-                <h3 className="text-base font-black">Stappen</h3>
-                <ol className="mt-3 grid gap-2 text-sm font-black sm:text-base">
+              <div className="mt-3 rounded-[0.95rem] bg-[#f3f2ef] p-2.5">
+                <h3 className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/55">Stappen</h3>
+                <ol className="mt-2 grid gap-1.5 text-xs font-semibold leading-snug text-[#2d2a26]/72 sm:text-sm">
                   {steps.length ? (
                     steps.map((step, index) => (
                       <li key={`${step}-${index}`}>
@@ -3586,15 +3588,15 @@ function BakkerRecipeCard({
             </div>
 
             {recipe.type === "finalProduct" && (
-            <aside className="grid max-w-48 content-start gap-3 justify-self-end text-right text-sm italic">
+            <aside className="grid max-w-40 content-start gap-2 justify-self-end text-right text-[0.72rem] italic text-[#555555]">
               {recipe.photoPreviewDataUrl ? (
                 <img
                   src={recipe.photoPreviewDataUrl}
                   alt={recipe.photoHint || recipe.name}
-                  className="aspect-square w-full object-cover"
+                  className="aspect-square w-full rounded-lg object-cover"
                 />
               ) : (
-                <div className="flex aspect-square w-full items-center justify-center bg-[#efefef] text-3xl font-black not-italic text-[#8c8c8c]">
+                <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-[#efefef] text-2xl font-black not-italic text-[#8c8c8c]">
                   R
                 </div>
               )}
@@ -4200,12 +4202,12 @@ function LineItem({
   value,
 }: Readonly<{ title: string; meta: string; value: string }>) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#d9e5d4] bg-white/80 p-2">
       <div className="min-w-0">
-        <p className="truncate text-sm font-black">{title}</p>
-        <p className="text-xs font-bold text-[#2d2a26]/45">{meta}</p>
+        <p className="truncate text-xs font-black sm:text-sm">{title}</p>
+        <p className="text-[0.62rem] font-bold text-[#2d2a26]/45 sm:text-xs">{meta}</p>
       </div>
-      <p className="shrink-0 text-sm font-black">{value}</p>
+      <p className="shrink-0 text-xs font-black sm:text-sm">{value}</p>
     </div>
   );
 }

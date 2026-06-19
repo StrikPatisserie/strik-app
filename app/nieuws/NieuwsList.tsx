@@ -58,12 +58,14 @@ function Card({
   important?: boolean;
   isNew?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const cleanContent = stripHtml(post.content || "");
   const excerptLength = 150;
   const hasLongContent = cleanContent.length > excerptLength;
   const excerpt = hasLongContent
     ? `${cleanContent.slice(0, excerptLength).trim()}...`
     : cleanContent;
+  const visibleContent = expanded ? cleanContent : excerpt;
 
   return (
     <article
@@ -94,18 +96,21 @@ function Card({
         <h2 className="mt-1.5 text-base font-black leading-tight text-[#1a1815]">
           {stripImportantTitle(post.title)}
         </h2>
-        <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-[#6b645b]">
-          {excerpt}
+        <p
+          className={`mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#6b645b] ${
+            expanded ? "" : "line-clamp-3"
+          }`}
+        >
+          {visibleContent}
         </p>
         {hasLongContent && (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-xs font-black uppercase tracking-[0.1em] text-[#ef5737]">
-              Lees meer
-            </summary>
-            <p className="mt-2 whitespace-pre-wrap rounded-2xl bg-white/70 p-3 text-sm leading-relaxed text-[#6b645b]">
-              {cleanContent}
-            </p>
-          </details>
+          <button
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+            className="mt-2 text-left text-xs font-black uppercase tracking-[0.1em] text-[#ef5737]"
+          >
+            {expanded ? "Lees minder" : "Lees meer"}
+          </button>
         )}
       </div>
     </article>

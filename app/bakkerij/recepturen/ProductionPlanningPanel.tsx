@@ -54,6 +54,7 @@ export default function ProductionPlanningPanel({
     recipe: Recipe;
     quantity: number;
   } | null>(null);
+  const [manualProductionOpen, setManualProductionOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<{
     recipe: Recipe;
     entry: ProductionLogEntry;
@@ -209,19 +210,8 @@ export default function ProductionPlanningPanel({
 
           <button
             type="button"
-            onClick={() => {
-              const firstNeed = visibleNeeds[0];
-              if (!firstNeed || !onMarkProduced) return;
-              setPendingProduction({
-                recipe: firstNeed.recipe,
-                quantity:
-                  firstNeed.requestedQuantity ||
-                  firstNeed.recipe.standardBatchQuantity ||
-                  firstNeed.lastProducedQuantity ||
-                  1,
-                requestId: firstNeed.manualRequestId,
-              });
-            }}
+            onClick={() => setManualProductionOpen(true)}
+            disabled={!onMarkProduced}
             className="mt-5 grid h-10 max-w-[22rem] grid-cols-[3rem_minmax(0,1fr)] items-center border border-[#c3d3bc] bg-white text-left text-sm font-black"
           >
             <span className="flex h-full items-center justify-center bg-[#c3d3bc] text-3xl font-light">
@@ -284,6 +274,16 @@ export default function ProductionPlanningPanel({
           </div>
         </div>
       </section>
+      {manualProductionOpen && onMarkProduced && (
+        <ManualProductionDialog
+          recipes={recipes}
+          onCancel={() => setManualProductionOpen(false)}
+          onConfirm={(recipe, quantity, date) => {
+            onMarkProduced(recipe, quantity, undefined, date);
+            setManualProductionOpen(false);
+          }}
+        />
+      )}
       {pendingProduction && onMarkProduced && (
         <ProductionDateDialog
           title="Productie opslaan"
@@ -324,6 +324,73 @@ export default function ProductionPlanningPanel({
         />
       )}
     </div>
+  );
+}
+
+function ManualProductionDialog({
+  recipes,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  recipes: Recipe[];
+  onCancel: () => void;
+  onConfirm: (recipe: Recipe, quantity: number, date: string) => void;
+}>) {
+  const availableRecipes = recipes
+    .filter((recipe) => recipe.status !== "old")
+    .sort((first, second) => first.name.localeCompare(second.name, "nl-NL"));
+  const [recipeId, setRecipeId] = useState(availableRecipes[0]?.id || "");
+  const [date, setDate] = useState(todayIsoDate());
+  const [quantityValue, setQuantityValue] = useState("");
+  const selectedRecipe =
+    availableRecipes.find((recipe) => recipe.id === recipeId) ||
+    availableRecipes[0];
+  const fallbackQuantity =
+    selectedRecipe?.standardBatchQuantity ||
+    selectedRecipe?.lastProducedQuantity ||
+    1;
+  const quantity = parsePlanningNumber(quantityValue) || fallbackQuantity;
+
+  return (
+    <PlanningDialog title="Handmatig toevoegen" onCancel={onCancel}>
+      <label className="block">
+        <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+          Recept
+        </span>
+        <select
+          value={selectedRecipe?.id || ""}
+          onChange={(event) => {
+            setRecipeId(event.target.value);
+            setQuantityValue("");
+          }}
+          className="mt-1 w-full rounded-2xl border border-[#d8d0c4] bg-[#fffdf8] px-4 py-3 text-sm font-black outline-none focus:ring-2 focus:ring-[#8fb184]"
+        >
+          {availableRecipes.map((recipe) => (
+            <option key={recipe.id} value={recipe.id}>
+              {recipe.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <DateInput value={date} onChange={setDate} />
+      <NumberInput
+        label="Hoeveelheid"
+        value={quantityValue}
+        onChange={setQuantityValue}
+      />
+      {selectedRecipe && (
+        <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-black text-[#2d2a26]/65">
+          Wordt opgeslagen als {quantityText(quantity, selectedRecipe.standardBatchUnit)}.
+        </p>
+      )}
+      <DialogActions
+        onCancel={onCancel}
+        onSave={() => {
+          if (!selectedRecipe) return;
+          onConfirm(selectedRecipe, quantity, date);
+        }}
+      />
+    </PlanningDialog>
   );
 }
 
