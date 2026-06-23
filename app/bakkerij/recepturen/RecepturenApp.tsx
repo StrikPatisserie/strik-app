@@ -105,6 +105,21 @@ function hasStoredRecepturenData(data: RecepturenData) {
   );
 }
 
+function hasMeaningfulInvoicePriceChange(line: InvoiceLine) {
+  if (!line.oldPrice) return true;
+
+  const absoluteChange = Math.abs(line.newPrice - line.oldPrice);
+  const percentageChange = Math.abs(line.percentageChange);
+
+  return absoluteChange >= 0.005 && percentageChange >= 0.1;
+}
+
+function reviewStatusForInvoiceLine(line: InvoiceLine) {
+  if (!line.matchedIngredientId) return "pending" as const;
+
+  return hasMeaningfulInvoicePriceChange(line) ? "pending" as const : "ignored" as const;
+}
+
 function invoiceStatusForLines(lines: InvoiceLine[]): InvoiceImport["status"] {
   if (lines.some((item) => item.reviewStatus === "pending")) return "review";
   if (lines.length && lines.every((item) => item.reviewStatus === "ignored")) {
@@ -113,6 +128,16 @@ function invoiceStatusForLines(lines: InvoiceLine[]): InvoiceImport["status"] {
   if (lines.some((item) => item.reviewStatus === "reverted")) return "reverted";
 
   return "processed";
+}
+
+function normalizeInvoiceReviewStatuses(invoice: InvoiceImport): InvoiceImport {
+  const lines = invoice.lines.map((line) =>
+    line.reviewStatus === "pending"
+      ? { ...line, reviewStatus: reviewStatusForInvoiceLine(line) }
+      : line
+  );
+
+  return { ...invoice, lines, status: invoiceStatusForLines(lines) };
 }
 
 function sameInvoiceLine(item: InvoiceLine, selectedLine: InvoiceLine) {
@@ -1274,9 +1299,25 @@ export default function RecepturenApp() {
     line: InvoiceLine,
     ingredientId: string
   ) {
+    const matchedIngredient = ingredientItems.find(
+      (ingredient) => ingredient.id === ingredientId
+    );
+    const oldPrice = matchedIngredient ? ingredientPackagePrice(matchedIngredient) : 0;
+    const percentageChange = oldPrice
+      ? ((line.newPrice - oldPrice) / oldPrice) * 100
+      : 0;
+    const nextLine = {
+      ...line,
+      matchedIngredientId: ingredientId,
+      oldPrice,
+      percentageChange,
+    };
+
     updateInvoiceLine(invoiceId, line, {
       matchedIngredientId: ingredientId,
-      reviewStatus: "pending",
+      oldPrice,
+      percentageChange,
+      reviewStatus: reviewStatusForInvoiceLine(nextLine),
     });
   }
 
@@ -1380,7 +1421,8 @@ export default function RecepturenApp() {
   }
 
   function importInvoice(invoice: InvoiceImport) {
-    const nextInvoices = pruneInvoiceImports([invoice, ...invoiceItems]);
+    const normalizedInvoice = normalizeInvoiceReviewStatuses(invoice);
+    const nextInvoices = pruneInvoiceImports([normalizedInvoice, ...invoiceItems]);
 
     setInvoiceItems(nextInvoices);
     persistRecepturenData(
@@ -1742,7 +1784,6 @@ export default function RecepturenApp() {
           <FactuurImport
             invoice={latestInvoice}
             ingredients={ingredientItems}
-            recipes={recipeItems}
             onApproveLine={approveInvoiceLine}
             onIgnoreLine={ignoreInvoiceLine}
             onIgnoreInvoice={ignoreInvoice}

@@ -1,13 +1,12 @@
 import { useState } from "react";
-import type { Ingredient, InvoiceImport, InvoiceLine, Recipe } from "./types";
-import { EmptyState, Panel, SectionTitle } from "./RecepturenShared";
+import type { Ingredient, InvoiceImport, InvoiceLine } from "./types";
+import { EmptyState } from "./RecepturenShared";
 import {
   changeBadgeClass,
   findIngredient,
   formatDate,
   formatEuro,
   formatSignedPercent,
-  invoiceLineImpact,
   normalizePackagePrice,
 } from "./utils";
 
@@ -15,10 +14,18 @@ function invoiceLineKey(line: InvoiceLine, index: number) {
   return line.id || `${line.articleNumber}-${line.description}-${index}`;
 }
 
+function isMeaningfulInvoicePriceChange(line: InvoiceLine) {
+  if (!line.oldPrice) return true;
+
+  const absoluteChange = Math.abs(line.newPrice - line.oldPrice);
+  const percentageChange = Math.abs(line.percentageChange);
+
+  return absoluteChange >= 0.005 && percentageChange >= 0.1;
+}
+
 export default function PriceUpdateReview({
   invoice,
   ingredients,
-  recipes,
   onApproveLine,
   onIgnoreLine,
   onIgnoreInvoice,
@@ -29,7 +36,6 @@ export default function PriceUpdateReview({
 }: Readonly<{
   invoice: InvoiceImport;
   ingredients: Ingredient[];
-  recipes: Recipe[];
   onApproveLine: (invoiceId: string, line: InvoiceLine) => void;
   onIgnoreLine: (invoiceId: string, line: InvoiceLine) => void;
   onIgnoreInvoice: (invoiceId: string) => void;
@@ -43,7 +49,10 @@ export default function PriceUpdateReview({
   onCreateIngredientFromLine: (invoiceId: string, line: InvoiceLine) => void;
 }>) {
   const pendingLines = invoice.lines.filter(
-    (line) => line.reviewStatus === "pending" && line.matchedIngredientId
+    (line) =>
+      line.reviewStatus === "pending" &&
+      line.matchedIngredientId &&
+      isMeaningfulInvoicePriceChange(line)
   );
   const unmatchedLines = invoice.lines.filter(
     (line) => line.reviewStatus === "pending" && !line.matchedIngredientId
@@ -66,104 +75,129 @@ export default function PriceUpdateReview({
   const canRevertInvoice = approvedLines.some((line) => line.matchedIngredientId);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <Panel>
-        <SectionTitle
-          eyebrow="Goedkeuring"
-          title="Prijsupdates controleren"
-          description="Nieuwe factuurprijzen worden eerst beoordeeld voordat ze ingredientprijzen overschrijven."
-        />
-        <div className="mt-4 grid gap-3">
-          <div className="grid gap-2 sm:grid-cols-4">
-            <MiniMetric label="Open" value={String(pendingLines.length)} />
-            <MiniMetric label="Goedgekeurd" value={String(approvedLines.length)} />
-            <MiniMetric label="Genegeerd" value={String(ignoredLines.length)} />
-            <MiniMetric label="Teruggedraaid" value={String(revertedLines.length)} />
+    <div className="grid gap-3">
+      <section className="rounded-xl border border-[#e8e4de] bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#eee8df] px-3 py-2">
+          <div>
+            <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#ef4b34]">
+              Prijsupdates controleren
+            </p>
+            <p className="mt-0.5 text-xs font-bold text-[#2d2a26]/50">
+              Alleen echte prijsverschillen staan open.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-2 rounded-lg border border-[#e8e4de] bg-white p-3">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-black">
+            <span className="rounded-full bg-[#fff4f1] px-2 py-1 text-[#a83e31]">
+              open {pendingLines.length}
+            </span>
+            <span className="rounded-full bg-[#edf5ea] px-2 py-1 text-[#45663b]">
+              goed {approvedLines.length}
+            </span>
+            <span className="rounded-full bg-[#f5f2ee] px-2 py-1 text-[#7b7168]">
+              genegeerd {ignoredLines.length}
+            </span>
+            <span className="rounded-full bg-[#fdf1f1] px-2 py-1 text-[#9a3838]">
+              terug {revertedLines.length}
+            </span>
+          </div>
+        </div>
+        <div className="grid gap-2 px-3 py-2">
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={() => onIgnoreInvoice(invoice.id)}
               disabled={!canIgnoreInvoice}
-              className="rounded-full bg-white px-4 py-2.5 text-sm font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-full bg-[#f5f2ee] px-3 py-1.5 text-xs font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
             >
-              Hele factuur negeren
+              factuur negeren
             </button>
             <button
               type="button"
               onClick={() => onRevertInvoice(invoice.id)}
               disabled={!canRevertInvoice}
-              className="rounded-full bg-[#fee2e2] px-4 py-2.5 text-sm font-semibold text-[#c42828] disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-full bg-[#fee2e2] px-3 py-1.5 text-xs font-black text-[#c42828] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              Factuur terugdraaien
+              terugdraaien
             </button>
             <button
               type="button"
               onClick={() => onDeleteInvoice(invoice.id)}
-              className="rounded-full border border-[#efc2bb] bg-white px-4 py-2.5 text-sm font-black text-[#a83e31] shadow-sm"
+              className="rounded-full border border-[#efc2bb] bg-white px-3 py-1.5 text-xs font-black text-[#a83e31] shadow-sm"
             >
-              Factuur verwijderen
+              verwijderen
             </button>
           </div>
           {pendingLines.length ? (
-            pendingLines.map((line, index) => (
-              <ReviewLine
-                key={invoiceLineKey(line, index)}
-                invoiceId={invoice.id}
-                line={line}
-                ingredients={ingredients}
-                recipes={recipes}
-                onApprove={onApproveLine}
-                onIgnore={onIgnoreLine}
-                onMatch={onMatchLine}
-              />
-            ))
+            <div className="overflow-hidden rounded-lg border border-[#e8e4de]">
+              <div className="hidden grid-cols-[minmax(10rem,1.4fr)_minmax(9rem,1fr)_5.7rem_5.7rem_4.8rem_minmax(10rem,auto)] gap-2 bg-[#f7faf5] px-2 py-1.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45 lg:grid">
+                <span>Artikel</span>
+                <span>Ingredient</span>
+                <span className="text-right">Oud</span>
+                <span className="text-right">Nieuw</span>
+                <span className="text-right">%</span>
+                <span className="text-right">Actie</span>
+              </div>
+              {pendingLines.map((line, index) => (
+                <ReviewLine
+                  key={invoiceLineKey(line, index)}
+                  invoiceId={invoice.id}
+                  line={line}
+                  ingredients={ingredients}
+                  onApprove={onApproveLine}
+                  onIgnore={onIgnoreLine}
+                  onMatch={onMatchLine}
+                />
+              ))}
+            </div>
           ) : (
             <EmptyState text="Geen open prijsupdates op deze factuur." />
           )}
         </div>
-      </Panel>
+      </section>
 
-      <Panel>
-        <SectionTitle
-          eyebrow="Nog te koppelen"
-          title="Onbekende artikelen"
-          description="Deze regels moeten aan een ingredient of nieuw artikel worden gekoppeld."
-        />
-        <div className="mt-4 grid gap-2">
+      <section className="rounded-xl border border-[#f3d4a4] bg-[#fffaf0]">
+        <div className="flex items-center justify-between gap-2 border-b border-[#f3d4a4] px-3 py-2">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-[#7a5a18]">
+            Onbekende artikelen
+          </p>
+          <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-[#7a5a18]">
+            {unmatchedLines.length}
+          </span>
+        </div>
+        <div className="grid gap-1.5 p-2">
           {unmatchedLines.length ? (
             unmatchedLines.map((line, index) => (
               <div
                 key={invoiceLineKey(line, index)}
-                className="rounded-lg border border-[#f3d4a4] bg-[#fef9f3] p-3"
+                className="grid gap-2 rounded-lg border border-[#f3d4a4] bg-white px-2 py-1.5 lg:grid-cols-[minmax(12rem,1fr)_8rem_minmax(12rem,auto)] lg:items-center"
               >
-                <p className="text-sm font-black">{line.description}</p>
-                <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-                  Artikel {line.articleNumber} ·{" "}
-                  {formatEuro(normalizePackagePrice(line.pricePerUnit))}
-                  {" /kg"}
-                </p>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-black">{line.description}</p>
+                  <p className="text-[0.65rem] font-bold text-[#2d2a26]/45">
+                    {line.articleNumber || "-"} · {formatEuro(normalizePackagePrice(line.pricePerUnit))}
+                  </p>
+                </div>
                 <IngredientMatchControls
                   invoiceId={invoice.id}
                   line={line}
                   ingredients={ingredients}
                   onMatch={onMatchLine}
-                  buttonClassName="mt-3 rounded-full bg-white px-3 py-2 text-xs font-black text-[#7a5a18] shadow-sm"
+                  buttonClassName="rounded-full bg-[#fff8e3] px-2.5 py-1.5 text-[0.68rem] font-black text-[#7a5a18] shadow-sm"
                 />
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="flex flex-wrap justify-end gap-1.5">
                   <button
                     type="button"
                     onClick={() => onCreateIngredientFromLine(invoice.id, line)}
-                    className="rounded-full bg-[#ecf4ed] px-3 py-2 text-xs font-semibold text-[#4a6d5a]"
+                    className="rounded-full bg-[#ecf4ed] px-2.5 py-1.5 text-[0.68rem] font-black text-[#4a6d5a]"
                   >
-                    Nieuw artikel toevoegen
+                    nieuw
                   </button>
                   <button
                     type="button"
                     onClick={() => onIgnoreLine(invoice.id, line)}
-                    className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#a83e31] shadow-sm"
+                    className="rounded-full bg-white px-2.5 py-1.5 text-[0.68rem] font-black text-[#a83e31] shadow-sm"
                   >
-                    Negeren
+                    negeren
                   </button>
                 </div>
               </div>
@@ -172,7 +206,7 @@ export default function PriceUpdateReview({
             <EmptyState text="Alle factuurregels zijn gekoppeld." />
           )}
         </div>
-      </Panel>
+      </section>
     </div>
   );
 }
@@ -181,7 +215,6 @@ function ReviewLine({
   invoiceId,
   line,
   ingredients,
-  recipes,
   onApprove,
   onIgnore,
   onMatch,
@@ -189,7 +222,6 @@ function ReviewLine({
   invoiceId: string;
   line: InvoiceLine;
   ingredients: Ingredient[];
-  recipes: Recipe[];
   onApprove: (invoiceId: string, line: InvoiceLine) => void;
   onIgnore: (invoiceId: string, line: InvoiceLine) => void;
   onMatch: (invoiceId: string, line: InvoiceLine, ingredientId: string) => void;
@@ -197,71 +229,57 @@ function ReviewLine({
   const ingredient = line.matchedIngredientId
     ? findIngredient(ingredients, line.matchedIngredientId)
     : undefined;
-  const impact = invoiceLineImpact(line, recipes);
 
   return (
-    <div className="rounded-lg border border-[#e8e4de] bg-white p-4">
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-        <div>
-          <p className="text-lg font-black leading-tight">{line.description}</p>
-          <p className="mt-1 text-sm font-bold text-[#2d2a26]/55">
-            Gekoppeld aan ingredient: {ingredient?.name || "nog onbekend"}
-          </p>
-        </div>
-        <span
-          className={`w-fit rounded-full px-3 py-1 text-sm font-black ${changeBadgeClass(
-            line.percentageChange
-          )}`}
-        >
-          {formatSignedPercent(line.percentageChange, 2)}
-        </span>
-      </div>
-
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <MiniMetric
-          label="Oude prijs /kg"
-          value={formatEuro(normalizePackagePrice(line.oldPrice))}
-        />
-        <MiniMetric
-          label="Nieuwe prijs /kg"
-          value={formatEuro(normalizePackagePrice(line.newPrice))}
-        />
-        <MiniMetric label="Factuurregel" value={`${line.quantity} ${line.unit}`} />
-      </div>
-
-      <div className="mt-4 rounded-2xl bg-white p-3">
-        <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/40">
-          Recept-impact
-        </p>
-        <p className="mt-1 text-sm font-bold text-[#2d2a26]/62">
-          {impact.length
-            ? impact.join(", ")
-            : "Impact loopt via gekoppelde halffabricaten of is nog niet berekend."}
+    <div className="grid gap-2 border-t border-[#eee8df] bg-white px-2 py-1.5 first:border-t-0 lg:grid-cols-[minmax(10rem,1.4fr)_minmax(9rem,1fr)_5.7rem_5.7rem_4.8rem_minmax(10rem,auto)] lg:items-center">
+      <div className="min-w-0">
+        <p className="truncate text-xs font-black leading-tight">{line.description}</p>
+        <p className="text-[0.65rem] font-bold text-[#2d2a26]/45">
+          {line.articleNumber || "-"} · {line.quantity} {line.unit}
         </p>
       </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => onApprove(invoiceId, line)}
-          className="rounded-full bg-[#ecf4ed] px-4 py-2.5 text-sm font-semibold text-[#4a6d5a]"
-        >
-          Goedkeuren
-        </button>
-        <button
-          type="button"
-          onClick={() => onIgnore(invoiceId, line)}
-          className="rounded-full bg-white px-4 py-2.5 text-sm font-black shadow-sm"
-        >
-          Negeren
-        </button>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-black">
+          {ingredient?.name || "nog onbekend"}
+        </p>
         <IngredientMatchControls
           invoiceId={invoiceId}
           line={line}
           ingredients={ingredients}
           onMatch={onMatch}
-          buttonClassName="rounded-full border border-[#e7e0d8] bg-white/70 px-4 py-2.5 text-sm font-black shadow-sm"
+          buttonClassName="mt-1 text-[0.65rem] font-black text-[#45663b] underline underline-offset-2"
         />
+      </div>
+      <p className="text-xs font-black lg:text-right">
+        {formatEuro(normalizePackagePrice(line.oldPrice))}
+      </p>
+      <p className="text-xs font-black lg:text-right">
+        {formatEuro(normalizePackagePrice(line.newPrice))}
+      </p>
+      <p className="lg:text-right">
+        <span
+          className={`inline-flex rounded-full px-2 py-0.5 text-[0.68rem] font-black ${changeBadgeClass(
+            line.percentageChange
+          )}`}
+        >
+          {formatSignedPercent(line.percentageChange, 1)}
+        </span>
+      </p>
+      <div className="flex flex-wrap justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={() => onApprove(invoiceId, line)}
+          className="rounded-full bg-[#ecf4ed] px-2.5 py-1.5 text-[0.68rem] font-black text-[#4a6d5a]"
+        >
+          goed
+        </button>
+        <button
+          type="button"
+          onClick={() => onIgnore(invoiceId, line)}
+          className="rounded-full bg-[#f5f2ee] px-2.5 py-1.5 text-[0.68rem] font-black text-[#7b7168]"
+        >
+          negeer
+        </button>
       </div>
     </div>
   );
@@ -298,11 +316,11 @@ function IngredientMatchControls({
   }
 
   return (
-    <div className="grid w-full gap-2 rounded-2xl border border-[#e7e0d8] bg-white/80 p-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+    <div className="grid w-full gap-1.5 rounded-xl border border-[#e7e0d8] bg-white/90 p-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
       <select
         value={ingredientId}
         onChange={(event) => setIngredientId(event.target.value)}
-        className="min-w-0 rounded-2xl border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-2 py-1.5 text-xs font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       >
         {ingredients.map((ingredient) => (
           <option key={ingredient.id} value={ingredient.id}>
@@ -317,14 +335,14 @@ function IngredientMatchControls({
           onMatch(invoiceId, line, ingredientId);
           setIsOpen(false);
         }}
-        className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+        className="rounded-full bg-[#c3d3bc] px-3 py-1.5 text-xs font-black shadow-sm"
       >
         Opslaan
       </button>
       <button
         type="button"
         onClick={() => setIsOpen(false)}
-        className="rounded-full bg-[#f5f2ee] px-4 py-2.5 text-sm font-medium text-[#a39c91]"
+        className="rounded-full bg-[#f5f2ee] px-3 py-1.5 text-xs font-black text-[#a39c91]"
       >
         Annuleer
       </button>
@@ -337,11 +355,11 @@ function MiniMetric({
   value,
 }: Readonly<{ label: string; value: string }>) {
   return (
-    <div className="rounded-2xl bg-white p-3">
-      <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/40">
+    <div className="rounded-lg bg-white/85 px-2 py-1.5">
+      <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/40">
         {label}
       </p>
-      <p className="mt-1 text-sm font-black">{value}</p>
+      <p className="mt-0.5 truncate text-xs font-black">{value}</p>
     </div>
   );
 }
@@ -349,10 +367,12 @@ function MiniMetric({
 export function InvoiceSummary({ invoice }: Readonly<{ invoice: InvoiceImport }>) {
   const matched = invoice.lines.filter((line) => line.matchedIngredientId).length;
   const unmatched = invoice.lines.length - matched;
-  const changes = invoice.lines.filter((line) => line.percentageChange > 0).length;
+  const changes = invoice.lines.filter(
+    (line) => line.matchedIngredientId && isMeaningfulInvoicePriceChange(line)
+  ).length;
 
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-1.5 sm:grid-cols-4 lg:grid-cols-8">
       <MiniMetric label="Leverancier" value={invoice.supplier} />
       <MiniMetric label="Factuur" value={invoice.invoiceNumber} />
       <MiniMetric label="Factuurdatum" value={formatDate(invoice.invoiceDate)} />

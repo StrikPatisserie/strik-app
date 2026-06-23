@@ -401,6 +401,25 @@ function getPercentageChange(oldPrice: number, newPrice: number) {
   return ((newPrice - oldPrice) / oldPrice) * 100;
 }
 
+function hasMeaningfulPriceChange(oldPrice: number, newPrice: number) {
+  if (!oldPrice) return true;
+
+  const absoluteChange = Math.abs(newPrice - oldPrice);
+  const percentageChange = Math.abs(getPercentageChange(oldPrice, newPrice));
+
+  return absoluteChange >= 0.005 && percentageChange >= 0.1;
+}
+
+function reviewStatusForPrice(
+  oldPrice: number,
+  newPrice: number,
+  isMatched: boolean
+) {
+  if (!isMatched) return "pending" as const;
+
+  return hasMeaningfulPriceChange(oldPrice, newPrice) ? "pending" as const : "ignored" as const;
+}
+
 function priceForIngredientUnit(
   pricePerUnit: number,
   unit: string,
@@ -530,7 +549,11 @@ function createSupplierInvoiceLine(
     oldPrice,
     newPrice: pricePerUnit,
     percentageChange: getPercentageChange(oldPrice, pricePerUnit),
-    reviewStatus: "pending",
+    reviewStatus: reviewStatusForPrice(
+      oldPrice,
+      pricePerUnit,
+      Boolean(matchedIngredient)
+    ),
   };
 }
 
@@ -576,7 +599,11 @@ function createInvoiceLine(
     oldPrice,
     newPrice: pricePerUnit,
     percentageChange: getPercentageChange(oldPrice, pricePerUnit),
-    reviewStatus: "pending",
+    reviewStatus: reviewStatusForPrice(
+      oldPrice,
+      pricePerUnit,
+      Boolean(matchedIngredient)
+    ),
   };
 }
 
@@ -744,7 +771,11 @@ function createBekoInvoiceLine(
     oldPrice,
     newPrice: pricePerUnit,
     percentageChange: getPercentageChange(oldPrice, pricePerUnit),
-    reviewStatus: "pending",
+    reviewStatus: reviewStatusForPrice(
+      oldPrice,
+      pricePerUnit,
+      Boolean(matchedIngredient)
+    ),
   };
 }
 

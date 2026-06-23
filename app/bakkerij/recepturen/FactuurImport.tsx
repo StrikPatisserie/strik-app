@@ -1,13 +1,11 @@
 import { useRef, useState } from "react";
-import type { Ingredient, InvoiceImport, InvoiceLine, Recipe } from "./types";
-import { Panel, SectionTitle } from "./RecepturenShared";
+import type { Ingredient, InvoiceImport, InvoiceLine } from "./types";
 import { parseBekoInvoiceFile } from "./invoiceImportParser";
 import PriceUpdateReview, { InvoiceSummary } from "./PriceUpdateReview";
 
 export default function FactuurImport({
   invoice,
   ingredients,
-  recipes,
   onApproveLine,
   onIgnoreLine,
   onIgnoreInvoice,
@@ -19,7 +17,6 @@ export default function FactuurImport({
 }: Readonly<{
   invoice: InvoiceImport;
   ingredients: Ingredient[];
-  recipes: Recipe[];
   onImportInvoice: (invoice: InvoiceImport) => void;
   onApproveLine: (invoiceId: string, line: InvoiceLine) => void;
   onIgnoreLine: (invoiceId: string, line: InvoiceLine) => void;
@@ -61,7 +58,7 @@ export default function FactuurImport({
         ? ` Let op: ${result.warnings.join(" ")}`
         : "";
       setUploadMessage(
-        `${file.name} ingeladen: ${result.invoice.lines.length} regels, ${result.invoice.lines.filter((line) => line.matchedIngredientId).length} automatisch gekoppeld. Het bestand zelf is niet opgeslagen.${warningText}`
+        `${file.name} ingeladen: ${result.invoice.lines.length} regels, ${result.invoice.lines.filter((line) => line.matchedIngredientId).length} gekoppeld.${warningText}`
       );
     } catch {
       setUploadMessage("Factuur kon niet gelezen worden.");
@@ -73,26 +70,38 @@ export default function FactuurImport({
   }
 
   return (
-    <div className="grid gap-4">
-      <Panel>
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-center">
-          <SectionTitle
-            eyebrow="Factuurimport"
-            title="Upload factuur of receptbestand"
-            description="Beko, Zeelandia, Sligro, Roelofsen, Fruit op Maat en Hefe van Haag worden automatisch gelezen uit CSV, Excel, tekst-PDF of OCR."
-          />
-          <div
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              void handleSelectedFile(event.dataTransfer.files?.[0]);
-            }}
-            className="rounded-[1.15rem] border-2 border-dashed border-[#cfdcc8] bg-[#f7faf5] p-5 text-center"
-          >
-            <p className="text-sm font-black">Sleep factuur hierheen</p>
-            <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
-              CSV, Excel, PDF of afbeelding · grote PDF wordt verkleind · bestand wordt niet bewaard
-            </p>
+    <div className="grid gap-3">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+        <div>
+          <p className="text-[0.7rem] font-black uppercase tracking-[0.14em] text-[#ef4b34]">
+            Factuurimport
+          </p>
+          <h2 className="mt-1 text-2xl font-black leading-tight text-[#2d2a26]">
+            Factuur inladen
+          </h2>
+          <p className="mt-1 max-w-2xl text-xs font-bold leading-relaxed text-[#2d2a26]/50">
+            Upload Beko, Zeelandia, Sligro, Roelofsen, Fruit op Maat of Hefe.
+            Alleen echte prijsverschillen blijven als actie open staan.
+          </p>
+        </div>
+
+        <div
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            void handleSelectedFile(event.dataTransfer.files?.[0]);
+          }}
+          className="rounded-xl border border-dashed border-[#cfdcc8] bg-[#f7faf5] px-3 py-2 shadow-sm"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-black text-[#2d2a26]">
+                Upload bestand
+              </p>
+              <p className="truncate text-[0.65rem] font-bold text-[#2d2a26]/45">
+                PDF, Excel, CSV of foto
+              </p>
+            </div>
             <input
               ref={fileInputRef}
               type="file"
@@ -106,34 +115,43 @@ export default function FactuurImport({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isImporting}
-              className="mt-4 rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+              className="shrink-0 rounded-full bg-[#c3d3bc] px-3 py-1.5 text-xs font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isImporting ? "Inladen..." : "Bestand kiezen"}
+              {isImporting ? "Lezen..." : "Kies"}
             </button>
-            {uploadMessage && (
-              <p className="mt-3 text-xs font-bold leading-relaxed text-[#45663b]">
-                {uploadMessage}
-              </p>
-            )}
           </div>
         </div>
-      </Panel>
+      </div>
 
-      <Panel>
-        <SectionTitle
-          eyebrow="Analyse"
-          title="Herkende factuur"
-          description="Na upload wordt de leverancier herkend en worden artikelen eerst ter controle aan ingredienten gekoppeld."
-        />
-        <div className="mt-4">
+      {uploadMessage && (
+        <p className="rounded-xl border border-[#d7e4d3] bg-[#f7faf5] px-3 py-2 text-xs font-bold leading-relaxed text-[#45663b]">
+          {uploadMessage}
+        </p>
+      )}
+
+      <section className="sticky top-2 z-20 rounded-xl border border-[#ead7a6] bg-[#fff8e3] px-3 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#7a5a18]/65">
+              Herkende factuur
+            </p>
+            <p className="truncate text-xs font-black text-[#2d2a26]">
+              {invoice.supplier} · {invoice.invoiceNumber || "zonder nummer"} ·{" "}
+              {formatInvoiceDate(invoice.invoiceDate)}
+            </p>
+          </div>
+          <span className="rounded-full bg-white/85 px-2 py-1 text-[0.68rem] font-black text-[#7a5a18]">
+            {invoice.lines.length} regels
+          </span>
+        </div>
+        <div className="mt-2">
           <InvoiceSummary invoice={invoice} />
         </div>
-      </Panel>
+      </section>
 
       <PriceUpdateReview
         invoice={invoice}
         ingredients={ingredients}
-        recipes={recipes}
         onApproveLine={onApproveLine}
         onIgnoreLine={onIgnoreLine}
         onIgnoreInvoice={onIgnoreInvoice}
@@ -142,29 +160,11 @@ export default function FactuurImport({
         onMatchLine={onMatchLine}
         onCreateIngredientFromLine={onCreateIngredientFromLine}
       />
-
-      <Panel>
-        <SectionTitle
-          eyebrow="Lerende koppelingen"
-          title="Meerdere namen, één ingredient"
-          description="De app bewaart aliases zodat toekomstige facturen sneller gematcht worden."
-        />
-        <div className="mt-4 grid gap-2 lg:grid-cols-3">
-          {["Debic Slagroom 35% 10L", "Room 35%", "Slagroom Debic"].map(
-            (alias) => (
-              <div
-                key={alias}
-                className="rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3"
-              >
-                <p className="text-sm font-black">{alias}</p>
-                <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
-                  gekoppeld aan Slagroom 35%
-                </p>
-              </div>
-            )
-          )}
-        </div>
-      </Panel>
     </div>
   );
+}
+
+function formatInvoiceDate(date: string) {
+  if (!date) return "geen datum";
+  return date;
 }
