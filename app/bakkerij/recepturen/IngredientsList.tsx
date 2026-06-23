@@ -67,7 +67,9 @@ export default function IngredientsList({
   const [linkedIngredient, setLinkedIngredient] = useState<Ingredient | null>(
     null
   );
-  const suppliers = Array.from(new Set(ingredients.map((item) => item.supplier)));
+  const suppliers = Array.from(
+    new Set(ingredients.map((item) => item.supplier))
+  ).filter(Boolean);
   const allergens = Array.from(
     new Set(ingredients.flatMap((item) => item.allergens))
   ).sort((first, second) => first.localeCompare(second, "nl-NL"));
@@ -165,10 +167,7 @@ export default function IngredientsList({
             </div>
             <div className="divide-y divide-[#e7e0d8] bg-white">
               {filteredIngredients.map((ingredient) => {
-                const linkedRecipes = recipesUsingIngredient(
-                  recipes,
-                  ingredient.id
-                );
+                const linkedRecipes = recipesUsingIngredient(recipes, ingredient.id);
 
                 return (
                   <div
@@ -182,30 +181,39 @@ export default function IngredientsList({
                         setSelectedIngredient(ingredient);
                       }
                     }}
-                    className="grid w-full cursor-pointer gap-3 px-4 py-2.5 text-left transition hover:bg-[#fffdf8] lg:min-w-[65rem] lg:grid-cols-[minmax(12rem,1.25fr)_7rem_7rem_6.5rem_7rem_6.5rem_7rem_7rem] lg:items-center"
+                    className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_4.8rem_3.7rem] items-center gap-2 px-2.5 py-1.5 text-left transition hover:bg-[#fffdf8] lg:min-w-[65rem] lg:grid-cols-[minmax(12rem,1.25fr)_7rem_7rem_6.5rem_7rem_6.5rem_7rem_7rem] lg:gap-3 lg:px-4 lg:py-2.5"
                   >
                     <div className="min-w-0">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <p className="truncate text-base font-black">
+                      <div className="flex min-w-0 items-baseline gap-1.5">
+                        <p className="truncate text-[0.82rem] font-black leading-5 lg:text-base lg:leading-normal">
                           {ingredient.name}
                         </p>
+                        {ingredient.supplierArticleNumber && (
+                          <span className="hidden shrink-0 text-[0.68rem] font-bold leading-none text-[#2d2a26]/35 sm:inline lg:hidden">
+                            {ingredient.supplierArticleNumber}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs font-bold text-[#2d2a26]/45">
+                      <p className="hidden text-xs font-bold text-[#2d2a26]/45 lg:block">
                         {ingredient.allergens.length
                           ? ingredient.allergens.join(", ")
                           : "Geen allergenen"}
                       </p>
                     </div>
-                    <p className="text-sm font-bold text-[#2d2a26]/62">
+                    <p className="hidden text-sm font-bold text-[#2d2a26]/62 lg:block">
                       {ingredient.supplier}
                     </p>
-                    <p className="text-sm font-bold">{ingredient.supplierArticleNumber}</p>
-                    <p className="text-sm font-bold">{ingredient.packageSize}</p>
-                    <p className="text-sm font-black">
+                    <p className="hidden text-sm font-bold lg:block">
+                      {ingredient.supplierArticleNumber}
+                    </p>
+                    <p className="hidden text-sm font-bold lg:block">
+                      {ingredient.packageSize}
+                    </p>
+                    <p className="text-right text-[0.78rem] font-black leading-5 tabular-nums lg:text-left lg:text-sm lg:leading-normal">
                       {formatEuro(ingredientPackagePrice(ingredient))}
                     </p>
                     <span
-                      className={`w-fit rounded-full px-2.5 py-1 text-xs font-black ${changeBadgeClass(
+                      className={`w-fit justify-self-end rounded-full px-1.5 py-0.5 text-[0.66rem] font-black leading-4 lg:justify-self-start lg:px-2.5 lg:py-1 lg:text-xs ${changeBadgeClass(
                         ingredientPriceChange(ingredient)
                       )}`}
                     >
@@ -218,7 +226,7 @@ export default function IngredientsList({
                         event.stopPropagation();
                         setLinkedIngredient(ingredient);
                       }}
-                      className={`w-fit text-left text-xs font-black underline-offset-4 ${
+                      className={`hidden w-fit text-left text-xs font-black underline-offset-4 lg:block ${
                         linkedRecipes.length
                           ? "text-[#45663b] hover:underline"
                           : "cursor-default text-[#2d2a26]/35"
@@ -230,7 +238,7 @@ export default function IngredientsList({
                           }`
                         : "geen"}
                     </button>
-                    <p className="text-xs font-bold text-[#2d2a26]/45">
+                    <p className="hidden text-xs font-bold text-[#2d2a26]/45 lg:block">
                       {ingredient.lastInvoice}
                     </p>
                   </div>

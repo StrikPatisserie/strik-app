@@ -4,8 +4,10 @@ import * as XLSX from "xlsx";
 import type {
   Ingredient,
   Recipe,
+  RecipeImportCandidate,
   RecipeIngredient,
   RecipeUnit,
+  SemiFinishedUsage,
 } from "@/app/bakkerij/recepturen/types";
 import {
   normalizeSearch,
@@ -58,6 +60,7 @@ type RecipeColumnMap = {
 type ParsedImport = {
   ingredients?: Ingredient[];
   recipes?: Recipe[];
+  unresolvedItems?: RecipeImportCandidate[];
   warnings: string[];
   message: string;
 };
@@ -90,10 +93,11 @@ type LooseIngredientCandidate = {
   rawLine: string;
 };
 
-type MissingIngredientContext = {
+type ImportResolutionContext = {
   availableIngredients: Ingredient[];
-  createdIngredients: Ingredient[];
-  existingIds: Set<string>;
+  availableRecipes: Recipe[];
+  unresolvedItems: RecipeImportCandidate[];
+  candidateIds: Set<string>;
   warnings: string[];
 };
 
@@ -175,6 +179,17 @@ function parseExistingIngredients(value: FormDataEntryValue | null) {
   try {
     const parsed = JSON.parse(value) as unknown;
     return Array.isArray(parsed) ? (parsed as Ingredient[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseExistingRecipes(value: FormDataEntryValue | null) {
+  if (typeof value !== "string" || !value.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? (parsed as Recipe[]) : [];
   } catch {
     return [];
   }
@@ -346,76 +361,152 @@ function findMatchingIngredient(name: string, ingredients: Ingredient[]) {
   return scored[0]?.ingredient;
 }
 
-function importIngredientUnitFromRecipeLine(unit: RecipeUnit): RecipeUnit {
-  if (unit === "kg" || unit === "gram") return "gram";
-  if (unit === "liter" || unit === "ml") return "ml";
-
-  return "stuk";
-}
-
-function averageImportPriceForUnit(ingredients: Ingredient[], unit: RecipeUnit) {
-  const sameUnitPrices = ingredients
-    .filter((ingredient) => ingredient.recipeUnit === unit)
-    .map((ingredient) => ingredient.lastPrice || ingredient.pricePerBaseUnit)
-    .filter((price) => Number.isFinite(price) && price > 0);
-  const fallbackPrices = ingredients
-    .map((ingredient) => ingredient.lastPrice || ingredient.pricePerBaseUnit)
-    .filter((price) => Number.isFinite(price) && price > 0);
-  const prices = sameUnitPrices.length ? sameUnitPrices : fallbackPrices;
-
-  if (!prices.length) {
-    return unit === "stuk" ? 1 : 5;
-  }
-
-  return Math.round((prices.reduce((total, price) => total + price, 0) / prices.length) * 100) / 100;
-}
-
-function packageSizeForImportUnit(unit: RecipeUnit) {
-  if (unit === "ml") return "1 liter";
-  if (unit === "stuk") return "1 stuk";
-
-  return "1 kg";
-}
-
-function getOrCreateMissingIngredient(
-  name: string,
-  lineUnit: RecipeUnit,
-  context: MissingIngredientContext
-) {
-  const allIngredients = [
-    ...context.createdIngredients,
-    ...context.availableIngredients,
-  ];
-  const existing = findMatchingIngredient(name, allIngredients);
-  if (existing) return existing;
-
-  const recipeUnit = importIngredientUnitFromRecipeLine(lineUnit);
-  const lastPrice = averageImportPriceForUnit(context.availableIngredients, recipeUnit);
-  const today = new Date().toISOString().slice(0, 10);
-  const ingredient: Ingredient = {
-    id: uniqueId("ing-auto", name, context.existingIds),
-    name,
-    supplier: "Receptimport",
-    supplierArticleNumber: "-",
-    packageSize: packageSizeForImportUnit(recipeUnit),
-    recipeUnit,
-    lastPrice,
-    previousPrice: lastPrice,
-    pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(lastPrice, recipeUnit),
+function recipeMatchScore(candidateName: string, recipe: Recipe) {
+  return ingredientMatchScore(candidateName, {
+    id: recipe.id,
+    name: recipe.name,
+    supplier: "",
+    supplierArticleNumber: "",
+    packageSize: "",
+    recipeUnit: recipe.standardBatchUnit || "gram",
+    lastPrice: 0,
+    previousPrice: 0,
+    pricePerBaseUnit: 0,
     allergens: [],
-    lastUpdated: today,
+    lastUpdated: recipe.lastUpdated,
     status: "active",
-    lastInvoice: "Gemiddelde importprijs",
-    aliases: [name],
+    lastInvoice: "",
+    aliases: [recipe.name, recipe.productGroup].filter(Boolean),
+  });
+}
+
+function findMatchingSemiFinished(name: string, recipes: Recipe[]) {
+  const scored = recipes
+    .filter((recipe) => recipe.type === "semiFinished")
+    .map((recipe) => ({
+      recipe,
+      score: recipeMatchScore(name, recipe),
+    }))
+    .filter((item) => item.score >= 68)
+    .sort((left, right) => right.score - left.score);
+
+  return scored[0]?.recipe;
+}
+
+function isLikelySemiFinishedName(name: string) {
+  const normalized = normalizeSearch(name);
+
+  return /\b(hf|halffabricaat|halffabricaten|basis|vulling|vullingen|mousse|bavarois|creme|cr[eè]me|room|ganache|gelei|compote|deeg|beslag|bodem|spijs|banketbakkersroom)\b/.test(
+    normalized
+  );
+}
+
+function createUnresolvedImportCandidate(
+  recipe: Recipe,
+  name: string,
+  quantity: number,
+  unit: RecipeUnit,
+  sourceLine: string,
+  context: ImportResolutionContext
+) {
+  const suggestedKind = isLikelySemiFinishedName(name)
+    ? "semiFinished"
+    : "ingredient";
+  const candidate: RecipeImportCandidate = {
+    id: uniqueId(
+      "import-choice",
+      `${recipe.name}-${name}-${quantity}-${unit}`,
+      context.candidateIds
+    ),
+    recipeName: recipe.name,
+    name,
+    quantity,
+    unit,
+    sourceLine,
+    suggestedKind,
   };
 
-  context.createdIngredients.push(ingredient);
+  context.unresolvedItems.push(candidate);
   pushWarning(
     context.warnings,
-    `Nieuwe grondstof "${name}" aangemaakt met gemiddelde inkoopprijs. Controleer later de echte prijs.`
+    `"${name}" is niet automatisch gekoppeld. Kies zelf een bestaande grondstof of halffabricaat voordat je opslaat.`
   );
 
-  return ingredient;
+  return candidate;
+}
+
+function addResolvedIngredientLine(
+  recipe: Recipe,
+  ingredient: Ingredient,
+  quantity: number,
+  unit: RecipeUnit
+) {
+  const line: RecipeIngredient = {
+    ingredientId: ingredient.id,
+    quantity,
+    unit,
+    costContribution: 0,
+  };
+
+  recipe.ingredients.push(line);
+}
+
+function addResolvedSemiFinishedLine(
+  recipe: Recipe,
+  semiFinishedRecipe: Recipe,
+  quantity: number,
+  unit: RecipeUnit
+) {
+  const line: SemiFinishedUsage = {
+    semiFinishedRecipeId: semiFinishedRecipe.id,
+    quantity,
+    unit,
+    costContribution: 0,
+  };
+
+  recipe.semiFinishedItems.push(line);
+}
+
+function addImportedRecipeComponent(
+  recipe: Recipe,
+  name: string,
+  quantity: number,
+  unit: RecipeUnit,
+  sourceLine: string,
+  context?: ImportResolutionContext
+) {
+  if (!name || !quantity) return false;
+
+  const matchingSemiFinished = context
+    ? findMatchingSemiFinished(name, context.availableRecipes)
+    : undefined;
+  if (matchingSemiFinished) {
+    addResolvedSemiFinishedLine(recipe, matchingSemiFinished, quantity, unit);
+    return true;
+  }
+
+  const shouldSkipIngredientMatch = isLikelySemiFinishedName(name);
+  const matchingIngredient =
+    !shouldSkipIngredientMatch && context
+      ? findMatchingIngredient(name, context.availableIngredients)
+      : undefined;
+  if (matchingIngredient) {
+    addResolvedIngredientLine(recipe, matchingIngredient, quantity, unit);
+    return true;
+  }
+
+  if (context) {
+    createUnresolvedImportCandidate(
+      recipe,
+      name,
+      quantity,
+      unit,
+      sourceLine,
+      context
+    );
+  }
+
+  return false;
 }
 
 function getCell(row: string[], index?: number) {
@@ -837,9 +928,8 @@ function parseIngredientRows(rows: string[][]) {
 
 function parseRecipeRows(
   rows: string[][],
-  ingredients: Ingredient[],
   fileName: string,
-  missingIngredientContext?: MissingIngredientContext
+  importResolutionContext?: ImportResolutionContext
 ) {
   const cleanRows = rows
     .map((row) => row.map(cleanCell))
@@ -903,25 +993,14 @@ function parseRecipeRows(
     }
 
     if (ingredientName && quantity) {
-      const matchedIngredient =
-        findMatchingIngredient(ingredientName, ingredients) ||
-        (missingIngredientContext
-          ? getOrCreateMissingIngredient(
-              ingredientName,
-              unit,
-              missingIngredientContext
-            )
-          : undefined);
-      if (matchedIngredient) {
-        const line: RecipeIngredient = {
-          ingredientId: matchedIngredient.id,
-          quantity,
-          unit,
-          costContribution: 0,
-        };
-
-        recipe.ingredients.push(line);
-      }
+      addImportedRecipeComponent(
+        recipe,
+        ingredientName,
+        quantity,
+        unit,
+        row.filter(Boolean).join(" "),
+        importResolutionContext
+      );
     }
 
     if (step && !recipe.preparationSteps.includes(step)) {
@@ -995,24 +1074,22 @@ function getOrCreateImportedRecipe(
 function addLooseIngredientCandidate(
   recipe: Recipe,
   candidate: LooseIngredientCandidate,
-  ingredients: Ingredient[],
   warnings: string[],
   unmatched: string[],
-  missingIngredientContext?: MissingIngredientContext
+  importResolutionContext?: ImportResolutionContext
 ) {
   if (!candidate.name || !candidate.quantity) return;
 
-  const matchedIngredient =
-    findMatchingIngredient(candidate.name, ingredients) ||
-    (missingIngredientContext
-      ? getOrCreateMissingIngredient(
-          candidate.name,
-          candidate.unit,
-          missingIngredientContext
-        )
-      : undefined);
+  const isResolved = addImportedRecipeComponent(
+    recipe,
+    candidate.name,
+    candidate.quantity,
+    candidate.unit,
+    candidate.rawLine,
+    importResolutionContext
+  );
 
-  if (!matchedIngredient) {
+  if (!isResolved) {
     unmatched.push(
       `${candidate.quantity} ${unitLabel(candidate.unit)} ${candidate.name}`
     );
@@ -1020,15 +1097,7 @@ function addLooseIngredientCandidate(
       warnings,
       `Controleer grondstof "${candidate.name}": niet automatisch gekoppeld.`
     );
-    return;
   }
-
-  recipe.ingredients.push({
-    ingredientId: matchedIngredient.id,
-    quantity: candidate.quantity,
-    unit: candidate.unit,
-    costContribution: 0,
-  });
 }
 
 function applyLooseNotes(recipe: Recipe, unmatched: string[]) {
@@ -1048,10 +1117,9 @@ function applyLooseNotes(recipe: Recipe, unmatched: string[]) {
 
 function parseLooseRecipeSheet(
   sheet: ParsedSheet,
-  ingredients: Ingredient[],
   fileName: string,
   ids: Set<string>,
-  missingIngredientContext?: MissingIngredientContext
+  importResolutionContext?: ImportResolutionContext
 ) {
   const warnings: string[] = [];
   const today = new Date().toISOString().slice(0, 10);
@@ -1120,20 +1188,29 @@ function parseLooseRecipeSheet(
     }
 
     const ingredientCandidate = parseLooseIngredientRow(row, section);
-    const matchedLooseIngredient = ingredientCandidate
-      ? findMatchingIngredient(ingredientCandidate.name, ingredients)
-      : undefined;
+    const matchedLooseComponent =
+      ingredientCandidate && importResolutionContext
+        ? findMatchingSemiFinished(
+            ingredientCandidate.name,
+            importResolutionContext.availableRecipes
+          ) ||
+          (!isLikelySemiFinishedName(ingredientCandidate.name)
+            ? findMatchingIngredient(
+                ingredientCandidate.name,
+                importResolutionContext.availableIngredients
+              )
+            : undefined)
+        : undefined;
     if (
       ingredientCandidate &&
-      (section === "ingredients" || matchedLooseIngredient)
+      (section === "ingredients" || matchedLooseComponent)
     ) {
       addLooseIngredientCandidate(
         recipe,
         ingredientCandidate,
-        ingredients,
         warnings,
         unmatched,
-        missingIngredientContext
+        importResolutionContext
       );
       sawLikelyRecipeData = true;
       return;
@@ -1169,6 +1246,7 @@ function parseLooseRecipeSheet(
   if (
     !sawLikelyRecipeData &&
     !recipe.ingredients.length &&
+    !recipe.semiFinishedItems.length &&
     !recipe.preparationSteps.length &&
     !recipe.internalNotes
   ) {
@@ -1187,9 +1265,8 @@ function parseLooseRecipeSheet(
 
 function parseLooseRecipeSheets(
   sheets: ParsedSheet[],
-  ingredients: Ingredient[],
   fileName: string,
-  missingIngredientContext?: MissingIngredientContext
+  importResolutionContext?: ImportResolutionContext
 ) {
   const ids = new Set<string>();
   const recipes: Recipe[] = [];
@@ -1198,10 +1275,9 @@ function parseLooseRecipeSheets(
   sheets.forEach((sheet) => {
     const parsed = parseLooseRecipeSheet(
       sheet,
-      ingredients,
       fileName,
       ids,
-      missingIngredientContext
+      importResolutionContext
     );
     parsed.warnings.forEach((warning) => pushWarning(warnings, warning));
 
@@ -1219,17 +1295,28 @@ function parseLooseRecipeSheets(
 function recipeHasImportContent(recipe: Recipe) {
   return Boolean(
     recipe.ingredients.length ||
+      recipe.semiFinishedItems.length ||
       recipe.preparationSteps.length ||
       recipe.finishingSteps?.length ||
       recipe.internalNotes
   );
 }
 
+function recipeHasImportCandidates(
+  recipe: Recipe,
+  context: ImportResolutionContext
+) {
+  const recipeName = normalizeSearch(recipe.name);
+
+  return context.unresolvedItems.some(
+    (item) => normalizeSearch(item.recipeName) === recipeName
+  );
+}
+
 function parseTextRecipe(
   text: string,
-  ingredients: Ingredient[],
   fileName: string,
-  missingIngredientContext?: MissingIngredientContext
+  importResolutionContext?: ImportResolutionContext
 ) {
   const lines = compactTextLines(text);
   const warnings: string[] = [];
@@ -1261,23 +1348,20 @@ function parseTextRecipe(
       const quantity = parseDutchNumber(ingredientMatch[1]);
       const unit = recipeLineUnitFromText(ingredientMatch[2]);
       const ingredientName = ingredientMatch[3].replace(/[.;:]$/, "").trim();
-      const matchedIngredient =
-        findMatchingIngredient(ingredientName, ingredients) ||
-        (missingIngredientContext
-          ? getOrCreateMissingIngredient(
-              ingredientName,
-              unit,
-              missingIngredientContext
-            )
-          : undefined);
+      const isResolved = addImportedRecipeComponent(
+        recipe,
+        ingredientName,
+        quantity,
+        unit,
+        line,
+        importResolutionContext
+      );
 
-      if (matchedIngredient) {
-        recipe.ingredients.push({
-          ingredientId: matchedIngredient.id,
-          quantity,
-          unit,
-          costContribution: 0,
-        });
+      if (!isResolved) {
+        pushWarning(
+          warnings,
+          `Controleer grondstof "${ingredientName}": niet automatisch gekoppeld.`
+        );
       }
 
       return;
@@ -1389,7 +1473,8 @@ async function parseImportFile(
   fileName: string,
   mimeType: string,
   buffer: Buffer,
-  ingredients: Ingredient[]
+  ingredients: Ingredient[],
+  recipes: Recipe[]
 ): Promise<ParsedImport> {
   const { rows, text, sheets, warnings: fileWarnings } =
     await rowsAndTextFromFile(fileName, mimeType, buffer);
@@ -1407,53 +1492,61 @@ async function parseImportFile(
     };
   }
 
-  const createdIngredients: Ingredient[] = [];
-  const missingIngredientContext: MissingIngredientContext = {
+  const importResolutionContext: ImportResolutionContext = {
     availableIngredients: ingredients,
-    createdIngredients,
-    existingIds: new Set(ingredients.map((ingredient) => ingredient.id)),
+    availableRecipes: recipes,
+    unresolvedItems: [],
+    candidateIds: new Set(),
     warnings: [],
   };
   const parsedRows = parseRecipeRows(
     rows,
-    ingredients,
     fileName,
-    missingIngredientContext
+    importResolutionContext
   );
-  const parsedLoose = parsedRows.recipes.some(recipeHasImportContent)
+  const parsedLoose = parsedRows.recipes.some(
+    (recipe) =>
+      recipeHasImportContent(recipe) ||
+      recipeHasImportCandidates(recipe, importResolutionContext)
+  )
     ? parsedRows
     : parseLooseRecipeSheets(
         sheets,
-        ingredients,
         fileName,
-        missingIngredientContext
+        importResolutionContext
       );
   const parsedText = parsedLoose.recipes.some(recipeHasImportContent)
     ? parsedLoose
-    : parseTextRecipe(text, ingredients, fileName, missingIngredientContext);
-  const recipes = parsedText.recipes.filter(recipeHasImportContent);
+    : parseTextRecipe(text, fileName, importResolutionContext);
+  const importedRecipes = parsedText.recipes.filter(
+    (recipe) =>
+      recipeHasImportContent(recipe) ||
+      recipeHasImportCandidates(recipe, importResolutionContext)
+  );
 
-  if (!recipes.length) {
+  if (!importedRecipes.length) {
     throw new Error(
       "Geen recepten herkend. Probeer een Excel/PDF met receptnaam, grondstoffen of bereidingsregels."
     );
   }
 
+  const unresolvedCount = importResolutionContext.unresolvedItems.length;
+
   return {
-    ingredients: createdIngredients,
-    recipes: recipes.slice(0, MAX_IMPORT_RECIPES),
+    recipes: importedRecipes.slice(0, MAX_IMPORT_RECIPES),
+    unresolvedItems: importResolutionContext.unresolvedItems,
     warnings: [
       ...fileWarnings,
-      ...missingIngredientContext.warnings,
+      ...importResolutionContext.warnings,
       ...parsedText.warnings,
     ].slice(0, MAX_IMPORT_WARNINGS),
-    message: `${Math.min(recipes.length, MAX_IMPORT_RECIPES)} recept${
-      Math.min(recipes.length, MAX_IMPORT_RECIPES) === 1 ? "" : "en"
+    message: `${Math.min(importedRecipes.length, MAX_IMPORT_RECIPES)} recept${
+      Math.min(importedRecipes.length, MAX_IMPORT_RECIPES) === 1 ? "" : "en"
     } herkend${
-      createdIngredients.length
-        ? ` en ${createdIngredients.length} nieuwe grondstof${
-            createdIngredients.length === 1 ? "" : "fen"
-          } aangemaakt`
+      unresolvedCount
+        ? `. ${unresolvedCount} regel${
+            unresolvedCount === 1 ? "" : "s"
+          } vraagt nog om een keuze`
         : ""
     }. Het originele bestand is niet opgeslagen.`,
   };
@@ -1480,6 +1573,7 @@ export async function POST(request: Request) {
   const kindValue = String(formData.get("kind") || "recipes");
   const kind: ImportKind = kindValue === "ingredients" ? "ingredients" : "recipes";
   const ingredients = parseExistingIngredients(formData.get("ingredients"));
+  const recipes = parseExistingRecipes(formData.get("recipes"));
   const buffer = Buffer.from(await file.arrayBuffer());
 
   try {
@@ -1488,7 +1582,8 @@ export async function POST(request: Request) {
       file.name,
       file.type || "",
       buffer,
-      ingredients
+      ingredients,
+      recipes
     );
 
     return NextResponse.json(result);

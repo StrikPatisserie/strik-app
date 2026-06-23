@@ -5,6 +5,8 @@ import type {
   ProductionLogEntry,
   ProductionRequest,
   Recipe,
+  RecipeImportCandidate,
+  RecipeImportCandidateKind,
   RecipeIngredient,
   RecipePackagingLine,
   RecipeStatus,
@@ -88,8 +90,14 @@ type RecipeEditSection =
 type RecipeImportResponse = {
   recipes?: Recipe[];
   ingredients?: Ingredient[];
+  unresolvedItems?: RecipeImportCandidate[];
   warnings?: string[];
   message?: string;
+};
+
+type ImportCandidateChoice = {
+  kind: RecipeImportCandidateKind;
+  targetId: string;
 };
 
 export default function RecipeDetail({
@@ -102,7 +110,6 @@ export default function RecipeDetail({
   onSaveRecipe,
   onDeleteRecipe,
   onSaveIngredient,
-  onSaveIngredients,
   onStartProduction,
   onOpenRecipe,
 }: Readonly<{
@@ -127,6 +134,12 @@ export default function RecipeDetail({
   const [isImportingRecipe, setIsImportingRecipe] = useState(false);
   const [isAddingNewIngredient, setIsAddingNewIngredient] = useState(false);
   const [recipeImportWarnings, setRecipeImportWarnings] = useState<string[]>([]);
+  const [recipeImportCandidates, setRecipeImportCandidates] = useState<
+    RecipeImportCandidate[]
+  >([]);
+  const [importCandidateChoices, setImportCandidateChoices] = useState<
+    Record<string, ImportCandidateChoice>
+  >({});
   const [draft, setDraft] = useState(() => createRecipeDraft(recipe));
   const [cardQuantity, setCardQuantity] = useState(
     () => recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1
@@ -137,6 +150,7 @@ export default function RecipeDetail({
   const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
   const [quickIngredientName, setQuickIngredientName] = useState("");
+  const [quickSemiFinishedName, setQuickSemiFinishedName] = useState("");
   const [draggedIngredientLineId, setDraggedIngredientLineId] = useState("");
   const [newWorkCategory, setNewWorkCategory] = useState("");
   const [newProductionEntry, setNewProductionEntry] = useState(() => ({
@@ -320,6 +334,8 @@ export default function RecipeDetail({
 
     setIsImportingRecipe(true);
     setRecipeImportWarnings([]);
+    setRecipeImportCandidates([]);
+    setImportCandidateChoices({});
 
     try {
       const formData = new FormData();
@@ -343,21 +359,19 @@ export default function RecipeDetail({
         throw new Error("Geen recept herkend in dit bestand.");
       }
 
-      if (data.ingredients?.length) {
-        if (onSaveIngredients) {
-          onSaveIngredients(
-            data.ingredients,
-            `${data.ingredients.length} nieuwe grondstof${
-              data.ingredients.length === 1 ? "" : "fen"
-            } aangemaakt uit receptimport.`
-          );
-        } else {
-          data.ingredients.forEach((ingredient) => onSaveIngredient(ingredient));
-        }
-      }
+      const unresolvedItems = data.unresolvedItems || [];
       setDraft((current) => recipeDraftFromImportedRecipe(current, importedRecipe));
       setActiveEditSection("basis");
       setRecipeImportWarnings(data.warnings || []);
+      setRecipeImportCandidates(unresolvedItems);
+      setImportCandidateChoices(
+        Object.fromEntries(
+          unresolvedItems.map((item) => [
+            item.id,
+            { kind: item.suggestedKind, targetId: "" },
+          ])
+        )
+      );
       showFeedback(data.message || "Receptbestand ingelezen.");
     } catch (error) {
       showFeedback(
@@ -506,6 +520,173 @@ export default function RecipeDetail({
         (line) => line.id !== lineId
       ),
     }));
+  }
+
+  function moveSemiFinishedLine(lineId: string, direction: -1 | 1) {
+    setDraft((current) => {
+      const fromIndex = current.semiFinishedItems.findIndex(
+        (line) => line.id === lineId
+      );
+      const toIndex = fromIndex + direction;
+
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        toIndex >= current.semiFinishedItems.length
+      ) {
+        return current;
+      }
+
+      const semiFinishedItems = [...current.semiFinishedItems];
+      const [movedLine] = semiFinishedItems.splice(fromIndex, 1);
+      semiFinishedItems.splice(toIndex, 0, movedLine);
+
+      return { ...current, semiFinishedItems };
+    });
+  }
+
+  function updateImportCandidateChoice(
+    candidateId: string,
+    changes: Partial<ImportCandidateChoice>
+  ) {
+    setImportCandidateChoices((current) => {
+      const previous = current[candidateId] || {
+        kind: "ingredient" as const,
+        targetId: "",
+      };
+      const kind = changes.kind || previous.kind;
+
+      return {
+        ...current,
+        [candidateId]: {
+          kind,
+          targetId:
+            changes.kind && changes.kind !== previous.kind
+              ? ""
+              : changes.targetId ?? previous.targetId,
+        },
+      };
+    });
+  }
+
+  function removeImportCandidate(candidateId: string) {
+    setRecipeImportCandidates((current) =>
+      current.filter((candidate) => candidate.id !== candidateId)
+    );
+    setImportCandidateChoices((current) => {
+      const next = { ...current };
+      delete next[candidateId];
+      return next;
+    });
+  }
+
+  function addIngredientFromImportCandidate(
+    candidate: RecipeImportCandidate,
+    ingredientId: string
+  ) {
+    const ingredient = findIngredient(availableIngredients, ingredientId);
+
+    setDraft((current) => ({
+      ...current,
+      ingredients: [
+        ...current.ingredients,
+        {
+          id: createLocalId("ingredient-line"),
+          ingredientId,
+          quantity: formatInputNumber(candidate.quantity),
+          unit: candidate.unit || ingredient?.recipeUnit || "gram",
+          costContribution: 0,
+        },
+      ],
+    }));
+    removeImportCandidate(candidate.id);
+  }
+
+  function addSemiFinishedFromImportCandidate(
+    candidate: RecipeImportCandidate,
+    recipeId: string
+  ) {
+    setDraft((current) => ({
+      ...current,
+      semiFinishedItems: [
+        ...current.semiFinishedItems,
+        {
+          id: createLocalId("semi-line"),
+          semiFinishedRecipeId: recipeId,
+          quantity: formatInputNumber(candidate.quantity),
+          unit: candidate.unit,
+          costContribution: 0,
+        },
+      ],
+    }));
+    removeImportCandidate(candidate.id);
+  }
+
+  function createIngredientFromImportCandidate(
+    candidate: RecipeImportCandidate
+  ) {
+    const recipeUnit = baseRecipeUnitForImport(candidate.unit);
+    const packagePrice = averagePackagePriceForUnit(ingredients, recipeUnit);
+    const normalizedPrice = normalizePackagePrice(packagePrice, recipeUnit);
+    const ingredient: Ingredient = {
+      id: uniqueIngredientId(candidate.name, ingredients),
+      name: candidate.name,
+      supplier: "Receptimport",
+      supplierArticleNumber: "-",
+      packageSize:
+        recipeUnit === "stuk" ? "1 stuk" : recipeUnit === "ml" ? "1 liter" : "1 kg",
+      recipeUnit,
+      lastPrice: normalizedPrice,
+      previousPrice: normalizedPrice,
+      pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(
+        normalizedPrice,
+        recipeUnit
+      ),
+      allergens: [],
+      lastUpdated: todayIsoDate(),
+      status: "active",
+      lastInvoice: "Gemiddelde prijs - later controleren",
+      aliases: [candidate.name],
+    };
+
+    onSaveIngredient(ingredient);
+    addIngredientFromImportCandidate(candidate, ingredient.id);
+    showFeedback("Nieuwe grondstof aangemaakt met gemiddelde prijs.");
+  }
+
+  function createSemiFinishedFromImportCandidate(
+    candidate: RecipeImportCandidate
+  ) {
+    const semiFinishedRecipe = createBlankSemiFinishedRecipe(
+      candidate.name,
+      recipes,
+      baseRecipeUnitForImport(candidate.unit)
+    );
+
+    onSaveRecipe(semiFinishedRecipe);
+    addSemiFinishedFromImportCandidate(candidate, semiFinishedRecipe.id);
+    showFeedback("Halffabricaat als concept aangemaakt.");
+  }
+
+  function resolveImportCandidate(candidate: RecipeImportCandidate) {
+    const choice = importCandidateChoices[candidate.id] || {
+      kind: candidate.suggestedKind,
+      targetId: "",
+    };
+
+    if (!choice.targetId) {
+      showFeedback("Kies eerst een bestaande kaart.");
+      return;
+    }
+
+    if (choice.kind === "semiFinished") {
+      addSemiFinishedFromImportCandidate(candidate, choice.targetId);
+      showFeedback("Halffabricaat gekoppeld.");
+      return;
+    }
+
+    addIngredientFromImportCandidate(candidate, choice.targetId);
+    showFeedback("Grondstof gekoppeld.");
   }
 
   function addPackagingLine(packagingId = activePackagingOptions[0]?.id || "") {
@@ -662,6 +843,33 @@ export default function RecipeDetail({
     }));
     setQuickIngredientName("");
     showFeedback("Grondstof aangemaakt met gemiddelde prijs.");
+  }
+
+  function createQuickSemiFinished() {
+    const name = quickSemiFinishedName.trim();
+    if (!name) {
+      showFeedback("Typ eerst de naam van het halffabricaat.");
+      return;
+    }
+
+    const semiFinishedRecipe = createBlankSemiFinishedRecipe(name, recipes);
+
+    onSaveRecipe(semiFinishedRecipe);
+    setDraft((current) => ({
+      ...current,
+      semiFinishedItems: [
+        ...current.semiFinishedItems,
+        {
+          id: createLocalId("semi-line"),
+          semiFinishedRecipeId: semiFinishedRecipe.id,
+          quantity: "0",
+          unit: semiFinishedRecipe.standardBatchUnit || "gram",
+          costContribution: 0,
+        },
+      ],
+    }));
+    setQuickSemiFinishedName("");
+    showFeedback("Halffabricaat als concept aangemaakt.");
   }
 
   function addProductionLogEntry() {
@@ -869,6 +1077,119 @@ export default function RecipeDetail({
     showFeedback("Kostprijs opnieuw berekend.");
   }
 
+  const importCandidateReview = recipeImportCandidates.length ? (
+    <div className="rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-[#7a5a18]">
+            Nog kiezen uit import
+          </p>
+          <p className="mt-1 text-sm font-black">
+            {recipeImportCandidates.length} regel
+            {recipeImportCandidates.length === 1 ? "" : "s"} vragen om jouw keuze
+          </p>
+        </div>
+        <p className="max-w-md text-xs font-bold leading-snug text-[#2d2a26]/55">
+          Onbekend wordt niet meer automatisch grondstof. Kies bestaand, maak
+          een nieuwe grondstof of maak een halffabricaat-concept.
+        </p>
+      </div>
+      <div className="mt-3 grid gap-2">
+        {recipeImportCandidates.map((candidate) => {
+          const choice = importCandidateChoices[candidate.id] || {
+            kind: candidate.suggestedKind,
+            targetId: "",
+          };
+
+          return (
+            <div
+              key={candidate.id}
+              className="grid gap-2 rounded-xl border border-[#ead7a6] bg-white p-2 lg:grid-cols-[minmax(13rem,1fr)_7rem_minmax(13rem,1.2fr)_auto_auto_auto_auto] lg:items-end"
+            >
+              <div>
+                <p className="text-sm font-black">{candidate.name}</p>
+                <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
+                  {formatInputNumber(candidate.quantity)}{" "}
+                  {unitLabelText(candidate.unit)}
+                  {candidate.recipeName ? ` · ${candidate.recipeName}` : ""}
+                </p>
+              </div>
+              <SelectField
+                label="Soort"
+                value={choice.kind}
+                onChange={(value) =>
+                  updateImportCandidateChoice(candidate.id, {
+                    kind: value as RecipeImportCandidateKind,
+                  })
+                }
+                options={[
+                  { value: "ingredient", label: "Grondstof" },
+                  { value: "semiFinished", label: "Halffabricaat" },
+                ]}
+              />
+              {choice.kind === "semiFinished" ? (
+                <SelectField
+                  label="Bestaand"
+                  value={choice.targetId}
+                  onChange={(value) =>
+                    updateImportCandidateChoice(candidate.id, {
+                      targetId: value,
+                    })
+                  }
+                  options={[
+                    { value: "", label: "Kies halffabricaat" },
+                    ...semiFinishedOptions.map((item) => ({
+                      value: item.id,
+                      label: item.name,
+                    })),
+                  ]}
+                />
+              ) : (
+                <IngredientSearchField
+                  ingredients={availableIngredients}
+                  value={choice.targetId}
+                  onChange={(value) =>
+                    updateImportCandidateChoice(candidate.id, {
+                      targetId: value,
+                    })
+                  }
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => resolveImportCandidate(candidate)}
+                className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
+              >
+                Koppel
+              </button>
+              <button
+                type="button"
+                onClick={() => createIngredientFromImportCandidate(candidate)}
+                className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#45663b] shadow-sm"
+              >
+                Nieuwe grondstof
+              </button>
+              <button
+                type="button"
+                onClick={() => createSemiFinishedFromImportCandidate(candidate)}
+                className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#7a5a18] shadow-sm"
+              >
+                Nieuw halffab
+              </button>
+              <button
+                type="button"
+                onClick={() => removeImportCandidate(candidate.id)}
+                className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#a83e31] shadow-sm"
+              >
+                Negeer
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  ) : null;
+
   if (!isEditing) {
     return (
       <>
@@ -1000,6 +1321,8 @@ export default function RecipeDetail({
                   </ul>
                 </div>
               )}
+
+              {importCandidateReview}
 
               <div className="grid gap-2 md:grid-cols-[minmax(12rem,1.4fr)_7rem_8rem_7rem_7rem]">
                 <EditTextField
@@ -1163,7 +1486,7 @@ export default function RecipeDetail({
                     );
                   })}
 
-                  {draft.semiFinishedItems.map((line) => {
+                  {draft.semiFinishedItems.map((line, index) => {
                     const normalizedLine = normalizeSemiFinishedDraft(
                       line,
                       recipes
@@ -1221,13 +1544,34 @@ export default function RecipeDetail({
                           label="Kost"
                           value={formatEuro(normalizedLine.costContribution)}
                         />
-                        <button
-                          type="button"
-                          onClick={() => removeSemiFinishedLine(line.id)}
-                          className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#a83e31] shadow-sm"
-                        >
-                          ×
-                        </button>
+                        <div className="flex items-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => moveSemiFinishedLine(line.id, -1)}
+                            disabled={index === 0}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#7a5a18] shadow-sm disabled:opacity-30"
+                            aria-label="Halffabricaat omhoog"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveSemiFinishedLine(line.id, 1)}
+                            disabled={index === draft.semiFinishedItems.length - 1}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#7a5a18] shadow-sm disabled:opacity-30"
+                            aria-label="Halffabricaat omlaag"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeSemiFinishedLine(line.id)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#a83e31] shadow-sm"
+                            aria-label="Halffabricaat verwijderen"
+                          >
+                            ×
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -1263,6 +1607,23 @@ export default function RecipeDetail({
                       className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#45663b] shadow-sm"
                     >
                       maak grondstof
+                    </button>
+                  </div>
+                  <div className="grid min-w-[16rem] flex-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <input
+                      value={quickSemiFinishedName}
+                      onChange={(event) =>
+                        setQuickSemiFinishedName(event.target.value)
+                      }
+                      placeholder="Nieuw halffabricaat"
+                      className="rounded-full border border-[#ead7a6] bg-white px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#f2d58d]"
+                    />
+                    <button
+                      type="button"
+                      onClick={createQuickSemiFinished}
+                      className="rounded-full bg-[#fff8e3] px-3 py-2 text-xs font-black text-[#7a5a18] shadow-sm"
+                    >
+                      maak halffab
                     </button>
                   </div>
                 </div>
@@ -2355,7 +2716,7 @@ export default function RecipeDetail({
               {activeEditSection === "halffabricaten" && (
               <EditorBlock title="Halffabricaten">
                 <div className="grid gap-2">
-                  {draft.semiFinishedItems.map((line) => {
+                  {draft.semiFinishedItems.map((line, index) => {
                     const normalizedLine = normalizeSemiFinishedDraft(
                       line,
                       recipes
@@ -2410,13 +2771,33 @@ export default function RecipeDetail({
                           label="Kost"
                           value={formatEuro(normalizedLine.costContribution)}
                         />
-                        <button
-                          type="button"
-                          onClick={() => removeSemiFinishedLine(line.id)}
-                          className="self-end rounded-full bg-[#fff4f1] px-3 py-2 text-sm font-black text-[#a83e31]"
-                        >
-                          Verwijder
-                        </button>
+                        <div className="flex items-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => moveSemiFinishedLine(line.id, -1)}
+                            disabled={index === 0}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff8e3] text-sm font-black text-[#7a5a18] disabled:opacity-30"
+                            aria-label="Halffabricaat omhoog"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveSemiFinishedLine(line.id, 1)}
+                            disabled={index === draft.semiFinishedItems.length - 1}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff8e3] text-sm font-black text-[#7a5a18] disabled:opacity-30"
+                            aria-label="Halffabricaat omlaag"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeSemiFinishedLine(line.id)}
+                            className="self-end rounded-full bg-[#fff4f1] px-3 py-2 text-sm font-black text-[#a83e31]"
+                          >
+                            Verwijder
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -3650,6 +4031,85 @@ function uniqueIngredientId(name: string, ingredients: Ingredient[]) {
   }
 
   return id;
+}
+
+function uniqueRecipeId(name: string, recipes: Recipe[]) {
+  const base =
+    name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 32) || "halffabricaat";
+  let id = `recipe-${base}`;
+  let counter = 1;
+
+  while (recipes.some((recipe) => recipe.id === id)) {
+    counter += 1;
+    id = `recipe-${base}-${counter}`;
+  }
+
+  return id;
+}
+
+function createBlankSemiFinishedRecipe(
+  name: string,
+  recipes: Recipe[],
+  batchUnit: RecipeUnit = "gram"
+): Recipe {
+  return {
+    id: uniqueRecipeId(name, recipes),
+    name,
+    type: "semiFinished",
+    productGroup: "Halffabricaat",
+    standardBatchQuantity: batchUnit === "stuk" ? 1 : undefined,
+    standardBatchUnit: batchUnit,
+    salesPrice: 0,
+    costPrice: 0,
+    previousCostPrice: 0,
+    targetMargin: 0,
+    currentMargin: 0,
+    status: "draft",
+    ingredients: [],
+    semiFinishedItems: [],
+    packagingItems: [],
+    workInstructions: [],
+    preparationSteps: [],
+    finishingSteps: [],
+    equipment: [],
+    allergens: [],
+    internalNotes: "Aangemaakt als halffabricaat-concept. Vul later de receptuur aan.",
+    isWorkModeVisible: true,
+    workCategories: [],
+    version: "concept",
+    lastUpdated: todayIsoDate(),
+    portionLabel: `per ${unitLabelText(batchUnit)}`,
+    batchSize: batchUnit === "stuk" ? "1 stuk" : "",
+    photoHint: "",
+    photoPreviewDataUrl: "",
+    photoFileName: "",
+    photoUpdatedAt: "",
+    notes: "",
+    linkedFinalProductIds: [],
+    packagingCost: 0,
+    decorationCost: 0,
+    decorationMargin: 0,
+    averageSalesQuantity: 0,
+    averageSalesPeriod: "week",
+    canProduceAhead: false,
+    desiredProductionFrequencyDays: 0,
+    desiredProductionBatchQuantity: 0,
+    productionLog: [],
+    productionRequests: [],
+  };
+}
+
+function baseRecipeUnitForImport(unit: RecipeUnit): RecipeUnit {
+  if (unit === "kg" || unit === "gram") return "gram";
+  if (unit === "liter" || unit === "ml") return "ml";
+
+  return "stuk";
 }
 
 function averagePackagePriceForUnit(ingredients: Ingredient[], unit: RecipeUnit) {

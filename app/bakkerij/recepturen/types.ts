@@ -74,6 +74,18 @@ export type SemiFinishedUsage = {
   costContribution: number;
 };
 
+export type RecipeImportCandidateKind = "ingredient" | "semiFinished";
+
+export type RecipeImportCandidate = {
+  id: string;
+  recipeName: string;
+  name: string;
+  quantity: number;
+  unit: RecipeUnit;
+  sourceLine: string;
+  suggestedKind: RecipeImportCandidateKind;
+};
+
 export type PackagingItem = {
   id: string;
   name: string;
