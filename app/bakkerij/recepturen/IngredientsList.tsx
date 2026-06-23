@@ -47,12 +47,14 @@ export default function IngredientsList({
   ingredients,
   recipes,
   onUpdateIngredient,
+  onOpenImport,
   onDeleteIngredient,
   onMergeIngredient,
 }: Readonly<{
   ingredients: Ingredient[];
   recipes: Recipe[];
   onUpdateIngredient: (ingredient: Ingredient) => void;
+  onOpenImport: () => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
   onMergeIngredient: (sourceIngredient: Ingredient, targetIngredient: Ingredient) => void;
   onDeleteIngredients?: (ingredients: Ingredient[]) => void;
@@ -108,13 +110,22 @@ export default function IngredientsList({
           title="Ingredienten"
           description="Database met leveranciersartikelen, prijshistorie, allergenen en recept-impact."
         />
-        <button
-          type="button"
-          onClick={() => setSelectedIngredient(createBlankIngredient())}
-          className="w-fit border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
-        >
-          Nieuwe grondstof
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedIngredient(createBlankIngredient())}
+            className="border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+          >
+            Nieuwe grondstof
+          </button>
+          <button
+            type="button"
+            onClick={onOpenImport}
+            className="border border-[#ead7a6] bg-[#fff8e3] px-4 py-2.5 text-sm font-black text-[#7a5a18] shadow-sm"
+          >
+            Bestand uploaden
+          </button>
+        </div>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(10rem,0.7fr))]">
           <SearchInput

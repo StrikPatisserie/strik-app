@@ -12,11 +12,13 @@ export default function RecipesList({
   recipes,
   onOpenRecipe,
   onCreateRecipe,
+  onOpenImport,
   onRecalculateAll,
 }: Readonly<{
   recipes: Recipe[];
   onOpenRecipe: (recipe: Recipe) => void;
   onCreateRecipe: () => void;
+  onOpenImport: () => void;
   onRecalculateAll: () => void;
 }>) {
   const [search, setSearch] = useState("");
@@ -62,6 +64,16 @@ export default function RecipesList({
             +
           </span>
           <span className="truncate px-2">Nieuw recept</span>
+        </button>
+        <button
+          type="button"
+          onClick={onOpenImport}
+          className="grid h-8 grid-cols-[2rem_minmax(0,1fr)] items-center border border-[#e7e0d8] bg-[#fffdf8] text-left text-xs font-black text-[#111111] lg:h-10 lg:grid-cols-[2.6rem_minmax(0,1fr)] lg:text-sm"
+        >
+          <span className="flex h-full items-center justify-center bg-[#f3e7bd] text-[0.65rem] font-black uppercase text-[#7a5a18] lg:text-xs">
+            XL
+          </span>
+          <span className="truncate px-2">Bestand uploaden</span>
         </button>
 
         <div className="min-h-0 border border-[#c3d3bc] bg-white">

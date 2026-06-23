@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Ingredient, Recipe } from "./types";
 import { EmptyState, Panel, SectionTitle } from "./RecepturenShared";
 
-type ImportKind = "recipes" | "ingredients";
+export type ImportKind = "recipes" | "ingredients";
 
 type ImportResponse = {
   recipes?: Recipe[];
@@ -13,19 +13,25 @@ type ImportResponse = {
 
 export default function RecipeDataImport({
   ingredients,
+  initialKind = "recipes",
   recipes,
   onImportIngredients,
   onImportRecipes,
 }: Readonly<{
   ingredients: Ingredient[];
+  initialKind?: ImportKind;
   recipes: Recipe[];
   onImportIngredients: (ingredients: Ingredient[]) => void;
   onImportRecipes: (recipes: Recipe[], ingredients?: Ingredient[]) => void;
 }>) {
-  const [kind, setKind] = useState<ImportKind>("recipes");
+  const [kind, setKind] = useState<ImportKind>(initialKind);
   const [isUploading, setIsUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [warnings, setWarnings] = useState<string[]>([]);
+
+  useEffect(() => {
+    setKind(initialKind);
+  }, [initialKind]);
 
   async function uploadFile(file: File | null) {
     if (!file) return;

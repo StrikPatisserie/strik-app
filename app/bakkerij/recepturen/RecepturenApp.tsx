@@ -15,7 +15,7 @@ import {
 } from "./mockData";
 import PackagingList from "./PackagingList";
 import RecipeDetail from "./RecipeDetail";
-import RecipeDataImport from "./RecipeDataImport";
+import RecipeDataImport, { type ImportKind } from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
 import RecepturenWorkMode from "./RecepturenWorkMode";
@@ -76,18 +76,18 @@ import {
   syncRecipeProductionMetadata,
 } from "./utils";
 
-const tabs = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "recepten", label: "Recepten" },
-  { id: "halffabricaten", label: "Halffabricaten" },
-  { id: "ingredienten", label: "Ingredienten" },
-  { id: "verpakkingen", label: "Verpakkingen" },
-  { id: "import", label: "Bestand import" },
-  { id: "factuurimport", label: "Factuurimport" },
-  { id: "marge", label: "Marge-overzicht" },
+const beheerViewIds = [
+  "dashboard",
+  "recepten",
+  "halffabricaten",
+  "ingredienten",
+  "verpakkingen",
+  "import",
+  "factuurimport",
+  "marge",
 ] as const;
 
-type TabId = (typeof tabs)[number]["id"];
+type TabId = (typeof beheerViewIds)[number];
 type MainTabId = "start" | "recepten" | "planning" | "beheer";
 type BeheerView = TabId | "menu";
 
@@ -514,6 +514,7 @@ export default function RecepturenApp() {
     mainTabForPath(pathname)
   );
   const [beheerView, setBeheerView] = useState<BeheerView>("menu");
+  const [importKind, setImportKind] = useState<ImportKind>("recipes");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
   const [workStart, setWorkStart] = useState<{
@@ -1754,6 +1755,12 @@ export default function RecepturenApp() {
     setBeheerView(nextView);
   }
 
+  function openDataImport(kind: ImportKind) {
+    setImportKind(kind);
+    setMainTab("beheer");
+    setBeheerView("import");
+  }
+
   function startRecipeProduction(recipe: Recipe, quantity: number) {
     setWorkStart({
       recipeId: recipe.id,
@@ -1907,6 +1914,7 @@ export default function RecepturenApp() {
             recipes={recipeItems}
             onOpenRecipe={openRecipe}
             onCreateRecipe={() => createRecipe("finalProduct")}
+            onOpenImport={() => openDataImport("recipes")}
             onRecalculateAll={recalculateAllRecipes}
           />
         )}
@@ -1924,6 +1932,7 @@ export default function RecepturenApp() {
             onUpdateIngredient={saveIngredient}
             onDeleteIngredient={deleteIngredient}
             onMergeIngredient={mergeDuplicateIngredient}
+            onOpenImport={() => openDataImport("ingredients")}
             onDeleteIngredients={(ingredientsToDelete) =>
               deleteIngredients(
                 ingredientsToDelete,
@@ -1943,6 +1952,7 @@ export default function RecepturenApp() {
         {beheerView === "import" && (
           <RecipeDataImport
             ingredients={ingredientItems}
+            initialKind={importKind}
             recipes={recipeItems}
             onImportIngredients={importIngredients}
             onImportRecipes={importRecipes}
@@ -1995,6 +2005,7 @@ export default function RecepturenApp() {
                 recipes={recipeItems}
                 onOpenRecipe={openRecipe}
                 onCreateRecipe={() => createRecipe("finalProduct")}
+                onOpenImport={() => openDataImport("recipes")}
                 onRecalculateAll={recalculateAllRecipes}
               />
             </div>
@@ -2668,12 +2679,6 @@ function BeheerHome({
             description={latestInvoiceNumber ? `Laatste: ${latestInvoiceNumber}` : "Beko/leveranciers importeren."}
             icon="/UI-apps_link.svg"
             onClick={() => onOpen("factuurimport")}
-          />
-          <BeheerRow
-            title="Bestand import"
-            description="Recepten of grondstoffen uit bestand."
-            icon="/UI-apps_aanpassen.svg"
-            onClick={() => onOpen("import")}
           />
         </div>
       </div>
