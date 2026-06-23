@@ -23,6 +23,10 @@ function isMeaningfulInvoicePriceChange(line: InvoiceLine) {
   return absoluteChange >= 0.005 && percentageChange >= 0.1;
 }
 
+type CreateIngredientOptions = {
+  forceNew?: boolean;
+};
+
 export default function PriceUpdateReview({
   invoice,
   ingredients,
@@ -46,7 +50,11 @@ export default function PriceUpdateReview({
     line: InvoiceLine,
     ingredientId: string
   ) => void;
-  onCreateIngredientFromLine: (invoiceId: string, line: InvoiceLine) => void;
+  onCreateIngredientFromLine: (
+    invoiceId: string,
+    line: InvoiceLine,
+    options?: CreateIngredientOptions
+  ) => void;
 }>) {
   const pendingLines = invoice.lines.filter(
     (line) =>
@@ -129,7 +137,7 @@ export default function PriceUpdateReview({
           </div>
           {pendingLines.length ? (
             <div className="overflow-hidden rounded-lg border border-[#e8e4de]">
-              <div className="hidden grid-cols-[minmax(10rem,1.4fr)_minmax(9rem,1fr)_5.7rem_5.7rem_4.8rem_minmax(10rem,auto)] gap-2 bg-[#f7faf5] px-2 py-1.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45 lg:grid">
+              <div className="hidden grid-cols-[minmax(10rem,1.4fr)_minmax(9rem,1fr)_5.7rem_5.7rem_4.8rem_minmax(13rem,auto)] gap-2 bg-[#f7faf5] px-2 py-1.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45 lg:grid">
                 <span>Artikel</span>
                 <span>Ingredient</span>
                 <span className="text-right">Oud</span>
@@ -146,6 +154,7 @@ export default function PriceUpdateReview({
                   onApprove={onApproveLine}
                   onIgnore={onIgnoreLine}
                   onMatch={onMatchLine}
+                  onCreateIngredient={onCreateIngredientFromLine}
                 />
               ))}
             </div>
@@ -158,7 +167,7 @@ export default function PriceUpdateReview({
       <section className="rounded-xl border border-[#f3d4a4] bg-[#fffaf0]">
         <div className="flex items-center justify-between gap-2 border-b border-[#f3d4a4] px-3 py-2">
           <p className="text-xs font-black uppercase tracking-[0.12em] text-[#7a5a18]">
-            Onbekende artikelen
+            Nieuwe grondstoffen gedetecteerd
           </p>
           <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-[#7a5a18]">
             {unmatchedLines.length}
@@ -176,6 +185,9 @@ export default function PriceUpdateReview({
                   <p className="text-[0.65rem] font-bold text-[#2d2a26]/45">
                     {line.articleNumber || "-"} · {formatEuro(normalizePackagePrice(line.pricePerUnit))}
                   </p>
+                  <p className="mt-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#7a5a18]">
+                    nieuwe grondstof gedetecteerd
+                  </p>
                 </div>
                 <IngredientMatchControls
                   invoiceId={invoice.id}
@@ -190,7 +202,7 @@ export default function PriceUpdateReview({
                     onClick={() => onCreateIngredientFromLine(invoice.id, line)}
                     className="rounded-full bg-[#ecf4ed] px-2.5 py-1.5 text-[0.68rem] font-black text-[#4a6d5a]"
                   >
-                    nieuw
+                    voeg toe
                   </button>
                   <button
                     type="button"
@@ -218,6 +230,7 @@ function ReviewLine({
   onApprove,
   onIgnore,
   onMatch,
+  onCreateIngredient,
 }: Readonly<{
   invoiceId: string;
   line: InvoiceLine;
@@ -225,13 +238,18 @@ function ReviewLine({
   onApprove: (invoiceId: string, line: InvoiceLine) => void;
   onIgnore: (invoiceId: string, line: InvoiceLine) => void;
   onMatch: (invoiceId: string, line: InvoiceLine, ingredientId: string) => void;
+  onCreateIngredient: (
+    invoiceId: string,
+    line: InvoiceLine,
+    options?: CreateIngredientOptions
+  ) => void;
 }>) {
   const ingredient = line.matchedIngredientId
     ? findIngredient(ingredients, line.matchedIngredientId)
     : undefined;
 
   return (
-    <div className="grid gap-2 border-t border-[#eee8df] bg-white px-2 py-1.5 first:border-t-0 lg:grid-cols-[minmax(10rem,1.4fr)_minmax(9rem,1fr)_5.7rem_5.7rem_4.8rem_minmax(10rem,auto)] lg:items-center">
+    <div className="grid gap-2 border-t border-[#eee8df] bg-white px-2 py-1.5 first:border-t-0 lg:grid-cols-[minmax(10rem,1.4fr)_minmax(9rem,1fr)_5.7rem_5.7rem_4.8rem_minmax(13rem,auto)] lg:items-center">
       <div className="min-w-0">
         <p className="truncate text-xs font-black leading-tight">{line.description}</p>
         <p className="text-[0.65rem] font-bold text-[#2d2a26]/45">
@@ -272,6 +290,13 @@ function ReviewLine({
           className="rounded-full bg-[#ecf4ed] px-2.5 py-1.5 text-[0.68rem] font-black text-[#4a6d5a]"
         >
           goed
+        </button>
+        <button
+          type="button"
+          onClick={() => onCreateIngredient(invoiceId, line, { forceNew: true })}
+          className="rounded-full bg-[#fff8e3] px-2.5 py-1.5 text-[0.68rem] font-black text-[#7a5a18]"
+        >
+          voeg toe
         </button>
         <button
           type="button"

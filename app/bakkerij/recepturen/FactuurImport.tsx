@@ -28,7 +28,11 @@ export default function FactuurImport({
     line: InvoiceLine,
     ingredientId: string
   ) => void;
-  onCreateIngredientFromLine: (invoiceId: string, line: InvoiceLine) => void;
+  onCreateIngredientFromLine: (
+    invoiceId: string,
+    line: InvoiceLine,
+    options?: { forceNew?: boolean }
+  ) => void;
 }>) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadMessage, setUploadMessage] = useState("");

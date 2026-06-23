@@ -1321,17 +1321,23 @@ export default function RecepturenApp() {
     });
   }
 
-  function createIngredientFromInvoiceLine(invoiceId: string, line: InvoiceLine) {
+  function createIngredientFromInvoiceLine(
+    invoiceId: string,
+    line: InvoiceLine,
+    options?: { forceNew?: boolean }
+  ) {
     const invoice = invoiceItems.find((item) => item.id === invoiceId);
     const supplier = invoice?.supplier || "Onbekend";
-    const existingIngredient = ingredientItems.find((ingredient) =>
-      sameSupplierArticle(ingredient, line.articleNumber, supplier)
-    );
+    const existingIngredient = options?.forceNew
+      ? undefined
+      : ingredientItems.find((ingredient) =>
+          sameSupplierArticle(ingredient, line.articleNumber, supplier)
+        );
     const isSameInvoiceArticle = (item: InvoiceLine) =>
       item.articleNumber === line.articleNumber &&
       normalizeSearch(item.description) === normalizeSearch(line.description) &&
       item.reviewStatus === "pending" &&
-      !item.matchedIngredientId;
+      (options?.forceNew || !item.matchedIngredientId);
 
     if (existingIngredient) {
       const nextInvoices = invoiceItems.map((item) => {
