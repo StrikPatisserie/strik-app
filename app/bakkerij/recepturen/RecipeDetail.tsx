@@ -68,10 +68,8 @@ const recipeEditSections: Array<{
   label: string;
   hint: string;
 }> = [
-  { id: "basis", label: "Basis", hint: "Naam, batch, prijs en foto" },
+  { id: "basis", label: "Verpakking", hint: "Verpakking en foto" },
   { id: "productie", label: "Productie", hint: "Logboek en planning" },
-  { id: "grondstoffen", label: "Grondstoffen", hint: "Wat gaat erin" },
-  { id: "halffabricaten", label: "Halffabricaten", hint: "Voorwerk" },
   { id: "stappen", label: "Stappen", hint: "Bereiding" },
   { id: "notities", label: "Notities", hint: "Allergenen" },
 ];
@@ -79,8 +77,6 @@ const recipeEditSections: Array<{
 type RecipeEditSection =
   | "basis"
   | "productie"
-  | "grondstoffen"
-  | "halffabricaten"
   | "stappen"
   | "notities";
 
@@ -129,7 +125,6 @@ export default function RecipeDetail({
   const [feedback, setFeedback] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isImportingRecipe, setIsImportingRecipe] = useState(false);
-  const [isAddingNewIngredient, setIsAddingNewIngredient] = useState(false);
   const [recipeImportWarnings, setRecipeImportWarnings] = useState<string[]>([]);
   const [recipeImportCandidates, setRecipeImportCandidates] = useState<
     RecipeImportCandidate[]
@@ -146,9 +141,6 @@ export default function RecipeDetail({
     useState(false);
   const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
-  const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
-  const [quickIngredientName, setQuickIngredientName] = useState("");
-  const [quickSemiFinishedName, setQuickSemiFinishedName] = useState("");
   const [draggedIngredientLineId, setDraggedIngredientLineId] = useState("");
   const [newProductionEntry, setNewProductionEntry] = useState(() => ({
     date: todayIsoDate(),
@@ -698,66 +690,8 @@ export default function RecipeDetail({
     }));
   }
 
-  function createNewIngredient() {
-    const name = newIngredient.name.trim();
-    const enteredPackagePrice = parseDutchNumber(newIngredient.packagePrice);
-
-    if (!name) {
-      showFeedback("Vul eerst een ingredientnaam in.");
-      return;
-    }
-
-    const recipeUnit = newIngredient.recipeUnit;
-    const packagePrice =
-      enteredPackagePrice || averagePackagePriceForUnit(ingredients, recipeUnit);
-    const normalizedPrice = normalizePackagePrice(packagePrice, recipeUnit);
-    const ingredient: Ingredient = {
-      id: uniqueIngredientId(name, ingredients),
-      name,
-      supplier: newIngredient.supplier.trim() || "Handmatig",
-      supplierArticleNumber: newIngredient.supplierArticleNumber.trim() || "-",
-      packageSize: newIngredient.packageSize.trim() || "1 kg",
-      recipeUnit,
-      lastPrice: normalizedPrice,
-      previousPrice: normalizedPrice,
-      pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(
-        normalizedPrice,
-        recipeUnit
-      ),
-      allergens: parseList(newIngredient.allergens),
-      lastUpdated: todayIsoDate(),
-      status: "active",
-      lastInvoice: enteredPackagePrice
-        ? "Handmatig toegevoegd"
-        : "Gemiddelde prijs - later controleren",
-      aliases: Array.from(new Set([name, ...parseList(newIngredient.aliases)])),
-    };
-
-    onSaveIngredient(ingredient);
-    setDraft((current) => ({
-      ...current,
-      ingredients: [
-        ...current.ingredients,
-        {
-          id: createLocalId("ingredient-line"),
-          ingredientId: ingredient.id,
-          quantity: "0",
-          unit: ingredient.recipeUnit,
-          costContribution: 0,
-        },
-      ],
-    }));
-    setNewIngredient(createIngredientDraft());
-    setIsAddingNewIngredient(false);
-    showFeedback(
-      enteredPackagePrice
-        ? "Ingredient toegevoegd."
-        : "Ingredient toegevoegd met gemiddelde prijs."
-    );
-  }
-
-  function createQuickIngredient() {
-    const name = quickIngredientName.trim();
+  function createQuickIngredient(nameValue: string, lineId?: string) {
+    const name = nameValue.trim();
     if (!name) {
       showFeedback("Typ eerst de grondstofnaam.");
       return;
@@ -789,23 +723,32 @@ export default function RecipeDetail({
     onSaveIngredient(ingredient);
     setDraft((current) => ({
       ...current,
-      ingredients: [
-        ...current.ingredients,
-        {
-          id: createLocalId("ingredient-line"),
-          ingredientId: ingredient.id,
-          quantity: "0",
-          unit: ingredient.recipeUnit,
-          costContribution: 0,
-        },
-      ],
+      ingredients: lineId
+        ? current.ingredients.map((line) =>
+            line.id === lineId
+              ? {
+                  ...line,
+                  ingredientId: ingredient.id,
+                  unit: ingredient.recipeUnit,
+                }
+              : line
+          )
+        : [
+            ...current.ingredients,
+            {
+              id: createLocalId("ingredient-line"),
+              ingredientId: ingredient.id,
+              quantity: "0",
+              unit: ingredient.recipeUnit,
+              costContribution: 0,
+            },
+          ],
     }));
-    setQuickIngredientName("");
     showFeedback("Grondstof aangemaakt met gemiddelde prijs.");
   }
 
-  function createQuickSemiFinished() {
-    const name = quickSemiFinishedName.trim();
+  function createQuickSemiFinished(nameValue: string, lineId?: string) {
+    const name = nameValue.trim();
     if (!name) {
       showFeedback("Typ eerst de naam van het halffabricaat.");
       return;
@@ -816,18 +759,27 @@ export default function RecipeDetail({
     onSaveRecipe(semiFinishedRecipe);
     setDraft((current) => ({
       ...current,
-      semiFinishedItems: [
-        ...current.semiFinishedItems,
-        {
-          id: createLocalId("semi-line"),
-          semiFinishedRecipeId: semiFinishedRecipe.id,
-          quantity: "0",
-          unit: semiFinishedRecipe.standardBatchUnit || "gram",
-          costContribution: 0,
-        },
-      ],
+      semiFinishedItems: lineId
+        ? current.semiFinishedItems.map((line) =>
+            line.id === lineId
+              ? {
+                  ...line,
+                  semiFinishedRecipeId: semiFinishedRecipe.id,
+                  unit: semiFinishedRecipe.standardBatchUnit || line.unit,
+                }
+              : line
+          )
+        : [
+            ...current.semiFinishedItems,
+            {
+              id: createLocalId("semi-line"),
+              semiFinishedRecipeId: semiFinishedRecipe.id,
+              quantity: "0",
+              unit: semiFinishedRecipe.standardBatchUnit || "gram",
+              costContribution: 0,
+            },
+          ],
     }));
-    setQuickSemiFinishedName("");
     showFeedback("Halffabricaat als concept aangemaakt.");
   }
 
@@ -1230,10 +1182,15 @@ export default function RecipeDetail({
 
         {isEditing && (
           <Panel className="mt-2 rounded-none border-[#cfdcc8] bg-[#efefef] p-2">
-            <div className="grid gap-2 rounded-[1rem] border border-[#c3d3bc] bg-[#f7fbf5] p-2 shadow-sm">
+            <div className="grid gap-2 border border-[#c3d3bc] bg-[#f7fbf5] p-2 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-xl font-black leading-tight">Onderdelen</h3>
+                  <h3 className="text-xl font-black leading-tight">Ingredienten</h3>
+                  <p className="mt-1 text-xs italic text-[#2d2a26]/45">
+                    {draft.type === "finalProduct"
+                      ? `kost ${formatEuro(previewCostPrice)}/stuk · batch ${formatEuro(previewBatchCost)}`
+                      : `kost ${formatEuro(previewCostPrice)}/kg · batch ${formatEuro(previewBatchCost)}`}
+                  </p>
                 </div>
                 <div className="flex flex-wrap items-center justify-end gap-2">
                   <RecipeTypeToggle
@@ -1242,9 +1199,10 @@ export default function RecipeDetail({
                       updateDraft({ type: value });
                       if (
                         value === "semiFinished" &&
-                        activeEditSection === "productie"
+                        (activeEditSection === "productie" ||
+                          activeEditSection === "basis")
                       ) {
-                        setActiveEditSection("basis");
+                        setActiveEditSection("stappen");
                       }
                     }}
                   />
@@ -1261,13 +1219,6 @@ export default function RecipeDetail({
                       }}
                     />
                   </label>
-                  <button
-                    type="button"
-                    onClick={saveRecipeDraft}
-                    className="rounded-full bg-[#ef4b34] px-4 py-2 text-xs font-black text-white shadow-sm"
-                  >
-                    Opslaan
-                  </button>
                 </div>
               </div>
 
@@ -1289,8 +1240,8 @@ export default function RecipeDetail({
               <div
                 className={`grid gap-2 ${
                   draft.type === "finalProduct"
-                    ? "md:grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,0.9fr)_7rem]"
-                    : "md:grid-cols-[minmax(12rem,1fr)]"
+                    ? "md:grid-cols-[minmax(12rem,1.3fr)_minmax(9rem,0.8fr)_6.5rem_6.5rem_7rem]"
+                    : "md:grid-cols-[minmax(12rem,1fr)_9rem]"
                 }`}
               >
                 <EditTextField
@@ -1309,6 +1260,25 @@ export default function RecipeDetail({
                       ]).map((option) => option.label)}
                     />
                     <EditTextField
+                      label="Batch"
+                      value={draft.standardBatchQuantity}
+                      onChange={(value) =>
+                        updateDraft({ standardBatchQuantity: value })
+                      }
+                      inputMode="decimal"
+                    />
+                    <SelectField
+                      label="Eenheid"
+                      value={draft.standardBatchUnit}
+                      onChange={(value) =>
+                        updateDraft({ standardBatchUnit: value as RecipeUnit })
+                      }
+                      options={recipeUnits.map((unit) => ({
+                        value: unit,
+                        label: unitLabelText(unit),
+                      }))}
+                    />
+                    <EditTextField
                       label="Verkoop"
                       value={draft.salesPrice}
                       onChange={(value) => updateDraft({ salesPrice: value })}
@@ -1316,16 +1286,17 @@ export default function RecipeDetail({
                     />
                   </>
                 )}
+                {draft.type === "semiFinished" && (
+                  <Metric
+                    label="Batch"
+                    value={formatBatchWeight(previewMadeWeightKg)}
+                    className="bg-white"
+                  />
+                )}
               </div>
 
-              <div className="grid gap-2 rounded-[1rem] border border-[#d7e4d1] bg-white p-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="rounded-full bg-[#edf5ea] px-3 py-1 text-xs font-black text-[#45663b]">
-                    Batch totaal {formatEuro(previewBatchCost)}
-                  </p>
-                </div>
-
-                <div className="grid gap-2">
+              <div className="grid gap-0 border border-[#d7e4d1] bg-white">
+                <div className="grid gap-0 divide-y divide-[#d7e4d1]">
                   {draft.ingredients.map((line, index) => {
                     const ingredient = findIngredient(
                       availableIngredients,
@@ -1347,16 +1318,19 @@ export default function RecipeDetail({
                           setDraggedIngredientLineId("");
                         }}
                         onDragEnd={() => setDraggedIngredientLineId("")}
-                        className={`grid cursor-move gap-1.5 rounded-lg border border-[#e2ecd9] bg-[#f8fbf5] p-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end ${
+                        className={`grid cursor-move gap-1.5 bg-white px-2 py-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end ${
                           draggedIngredientLineId === line.id ? "opacity-55" : ""
                         }`}
                       >
-                        <span className="self-center rounded-full bg-white px-2 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#45663b]">
+                        <span className="self-center text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#45663b]">
                           grondstof
                         </span>
                         <IngredientSearchField
                           ingredients={availableIngredients}
                           value={line.ingredientId}
+                          onCreateFromQuery={(name) =>
+                            createQuickIngredient(name, line.id)
+                          }
                           onChange={(value) => {
                             const selectedIngredient = findIngredient(
                               availableIngredients,
@@ -1441,14 +1415,17 @@ export default function RecipeDetail({
                     return (
                       <div
                         key={line.id}
-                        className="grid gap-1.5 rounded-lg border border-[#ead7a6] bg-[#fff8e3] p-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end"
+                        className="grid gap-1.5 bg-[#fffdf4] px-2 py-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end"
                       >
-                        <span className="self-center rounded-full bg-white px-2 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#7a5a18]">
+                        <span className="self-center text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#7a5a18]">
                           halffab
                         </span>
-                        <SelectField
-                          label="Naam"
+                        <SemiFinishedSearchField
+                          recipes={semiFinishedOptions}
                           value={line.semiFinishedRecipeId}
+                          onCreateFromQuery={(name) =>
+                            createQuickSemiFinished(name, line.id)
+                          }
                           onChange={(value) =>
                             updateSemiFinishedLine(line.id, {
                               semiFinishedRecipeId: value,
@@ -1457,13 +1434,6 @@ export default function RecipeDetail({
                                 line.unit,
                             })
                           }
-                          options={[
-                            { value: "", label: "Kies halffabricaat" },
-                            ...semiFinishedOptions.map((item) => ({
-                              value: item.id,
-                              label: item.name,
-                            })),
-                          ]}
                         />
                         <EditTextField
                           label="Aantal"
@@ -1523,7 +1493,7 @@ export default function RecipeDetail({
                   })}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 border-t border-[#d7e4d1] bg-[#fbfcf9] px-2 py-2">
                   <button
                     type="button"
                     onClick={() => addIngredientLine()}
@@ -1538,54 +1508,10 @@ export default function RecipeDetail({
                   >
                     + halffabricaat
                   </button>
-                  <div className="grid min-w-[16rem] flex-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <input
-                      value={quickIngredientName}
-                      onChange={(event) =>
-                        setQuickIngredientName(event.target.value)
-                      }
-                      placeholder="Nieuwe grondstofnaam"
-                      className="rounded-full border border-[#d8d0c4] bg-white px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#8fb184]"
-                    />
-                    <button
-                      type="button"
-                      onClick={createQuickIngredient}
-                      className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#45663b] shadow-sm"
-                    >
-                      maak grondstof
-                    </button>
-                  </div>
-                  <div className="grid min-w-[16rem] flex-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-                    <input
-                      value={quickSemiFinishedName}
-                      onChange={(event) =>
-                        setQuickSemiFinishedName(event.target.value)
-                      }
-                      placeholder="Nieuw halffabricaat"
-                      className="rounded-full border border-[#ead7a6] bg-white px-4 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#f2d58d]"
-                    />
-                    <button
-                      type="button"
-                      onClick={createQuickSemiFinished}
-                      className="rounded-full bg-[#fff8e3] px-3 py-2 text-xs font-black text-[#7a5a18] shadow-sm"
-                    >
-                      maak halffab
-                    </button>
-                  </div>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 text-xs font-black text-[#2d2a26]/55">
-                <span>
-                  Kostprijs:{" "}
-                  <strong className="text-[#45663b]">
-                    {formatEuro(previewCostPrice)}
-                  </strong>
-                </span>
-                <span>
-                  Batchgewicht:{" "}
-                  <strong>{formatBatchWeight(previewMadeWeightKg)}</strong>
-                </span>
                 {feedback && (
                   <span className="text-[#45663b]">{feedback}</span>
                 )}
@@ -1594,23 +1520,30 @@ export default function RecipeDetail({
 
             <button
               type="button"
-              onClick={() => setIsAdvancedOpen((current) => !current)}
+              onClick={() => {
+                if (
+                  !isAdvancedOpen &&
+                  draft.type !== "finalProduct" &&
+                  (activeEditSection === "basis" ||
+                    activeEditSection === "productie")
+                ) {
+                  setActiveEditSection("stappen");
+                }
+                setIsAdvancedOpen((current) => !current);
+              }}
               className="mt-2 w-fit rounded-full border border-[#c3d3bc] bg-white px-4 py-2 text-sm font-black text-[#2d2a26] shadow-sm"
             >
               {isAdvancedOpen ? "Verberg uitgebreid" : "Uitgebreid"}
             </button>
 
             {isAdvancedOpen && (
-              <div className="mt-2 rounded-[1rem] border border-[#dfe9d8] bg-white/75 p-2">
+              <div className="mt-2 border border-[#dfe9d8] bg-white/75 p-2">
 
             <div className="grid grid-cols-2 border border-[#c3d3bc] bg-white sm:grid-cols-3 lg:grid-cols-6">
               {recipeEditSections.map((section) => {
-                if (section.id === "productie" && draft.type !== "finalProduct") {
-                  return null;
-                }
                 if (
-                  section.id === "grondstoffen" ||
-                  section.id === "halffabricaten"
+                  draft.type !== "finalProduct" &&
+                  (section.id === "productie" || section.id === "basis")
                 ) {
                   return null;
                 }
@@ -1629,7 +1562,7 @@ export default function RecipeDetail({
                     }`}
                   >
                     <span className="block truncate text-xs font-light sm:text-sm">
-                      {section.label === "Basis" ? "Algemeen" : section.label}
+                      {section.label}
                     </span>
                   </button>
                 );
@@ -1637,91 +1570,15 @@ export default function RecipeDetail({
             </div>
 
             <div className="mt-3 grid gap-3">
-              {activeEditSection === "basis" && (
-                <EditorBlock title="Instellingen">
-                  <div
-                    className={
-                      draft.type === "finalProduct"
-                        ? "grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]"
-                        : "grid gap-3"
-                    }
-                  >
+              {activeEditSection === "basis" && draft.type === "finalProduct" && (
+                <EditorBlock title="Verpakking">
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
                     <div className="grid content-start gap-3">
-                      <div className="rounded-2xl bg-white/70 p-3">
-                        <div
-                          className={`grid gap-3 ${
-                            draft.type === "semiFinished"
-                              ? "md:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,0.8fr)]"
-                              : "md:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,0.8fr)_8rem]"
-                          }`}
-                        >
-                          <div>
-                            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-                              Batch
-                            </p>
-                            <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
-                              {draft.type === "semiFinished"
-                                ? "Automatisch totaalgewicht uit grondstoffen."
-                                : "Hoeveel maak je in één keer?"}
-                            </p>
-                          </div>
-                          {draft.type === "semiFinished" ? (
-                            <>
-                              <Metric
-                                label="Gemaakt gewicht"
-                                value={`${formatInputNumber(previewBatchQuantity)} kg`}
-                              />
-                              <Metric
-                                label="Inkoop/kg"
-                                value={formatEuro(previewCostPrice)}
-                              />
-                            </>
-                          ) : (
-                            <>
-                              <EditTextField
-                                label="Aantal"
-                                value={draft.standardBatchQuantity}
-                                onChange={(value) =>
-                                  updateDraft({ standardBatchQuantity: value })
-                                }
-                                inputMode="decimal"
-                              />
-                              <SelectField
-                                label="Eenheid"
-                                value={draft.standardBatchUnit}
-                                onChange={(value) =>
-                                  updateDraft({ standardBatchUnit: value as RecipeUnit })
-                                }
-                                options={recipeUnits.map((unit) => ({
-                                  value: unit,
-                                  label: unitLabelText(unit),
-                                }))}
-                              />
-                              <Metric
-                                label="Batchgewicht"
-                                value={formatBatchWeight(previewMadeWeightKg)}
-                              />
-                            </>
-                          )}
-                        </div>
-                        {draft.type === "finalProduct" && (
-                          <p className="mt-2 text-xs font-bold text-[#2d2a26]/45">
-                            Telt alle g/kg en l/ml uit de grondstoffen en
-                            halffabricaten mee.
-                          </p>
-                        )}
-                      </div>
-
-                      {draft.type === "finalProduct" && (
-                        <div className="rounded-2xl border border-[#dfe9d8] bg-white p-3">
+                        <div className="border border-[#dfe9d8] bg-white p-2">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-black">
                                 Verpakking
-                              </p>
-                              <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-                                Kies uit de verpakkingslijst of vul een eigen
-                                bedrag per stuk in.
                               </p>
                             </div>
                             <Metric
@@ -1730,7 +1587,7 @@ export default function RecipeDetail({
                             />
                           </div>
 
-                          <div className="mt-3 grid gap-2">
+                          <div className="mt-2 divide-y divide-[#dfe9d8] border border-[#dfe9d8]">
                             {draft.packagingItems.map((line) => {
                               const normalizedLine = previewPackagingItems.find(
                                 (item) => item.id === line.id
@@ -1739,7 +1596,7 @@ export default function RecipeDetail({
                               return (
                                 <div
                                   key={line.id}
-                                  className="grid gap-2 rounded-2xl border border-[#dfe9d8] bg-[#fffdf8] p-3 lg:grid-cols-[minmax(12rem,1fr)_7rem_7rem_auto]"
+                                  className="grid gap-2 bg-white px-2 py-1.5 lg:grid-cols-[minmax(12rem,1fr)_7rem_7rem_auto]"
                                 >
                                   <PackagingSearchField
                                     packagingItems={activePackagingOptions}
@@ -1769,9 +1626,10 @@ export default function RecipeDetail({
                                   <button
                                     type="button"
                                     onClick={() => removePackagingLine(line.id)}
-                                    className="self-end rounded-full bg-[#fff4f1] px-3 py-2 text-sm font-black text-[#a83e31]"
+                                    className="flex h-9 w-9 items-center justify-center self-end rounded-full bg-[#fff4f1] text-sm font-black text-[#a83e31]"
+                                    aria-label="Verpakking verwijderen"
                                   >
-                                    Verwijder
+                                    ×
                                   </button>
                                 </div>
                               );
@@ -1794,101 +1652,18 @@ export default function RecipeDetail({
                               }
                               inputMode="decimal"
                             />
-                            <p className="text-xs font-bold text-[#2d2a26]/45">
+                            <p className="text-xs italic text-[#2d2a26]/45">
                               Lijst: {formatEuro(selectedPackagingUnitCost)} +
                               eigen: {formatEuro(manualPackagingUnitCost)}
                             </p>
                           </div>
                         </div>
-                      )}
-
-                      {draft.type === "finalProduct" && (
-                        <div className="rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
-                          <p className="text-sm font-black">
-                            Productieplanning
-                          </p>
-                          <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-                            Vul de gemiddelde verkoop handmatig in. Producties
-                            tellen voorraad erbij op; voorraadcorrecties zetten
-                            de actuele stand.
-                          </p>
-                          <div className="mt-3 grid gap-3 md:grid-cols-[minmax(8rem,0.72fr)_minmax(8rem,0.72fr)_minmax(8rem,0.72fr)_minmax(8rem,0.72fr)]">
-                            <EditTextField
-                              label="Gemiddeld verkocht"
-                              value={draft.averageSalesQuantity}
-                              onChange={(value) =>
-                                updateDraft({ averageSalesQuantity: value })
-                              }
-                              inputMode="decimal"
-                            />
-                            <SelectField
-                              label="Periode"
-                              value={draft.averageSalesPeriod}
-                              onChange={(value) =>
-                                updateDraft({
-                                  averageSalesPeriod: value as SalesPeriod,
-                                })
-                              }
-                              options={salesPeriods.map((period) => ({
-                                value: period,
-                                label: salesPeriodText(period),
-                              }))}
-                            />
-                            <EditTextField
-                              label="Elke x dagen"
-                              value={draft.desiredProductionFrequencyDays}
-                              onChange={(value) =>
-                                updateDraft({
-                                  desiredProductionFrequencyDays: value,
-                                })
-                              }
-                              inputMode="decimal"
-                            />
-                            <EditTextField
-                              label="Batchadvies"
-                              value={draft.desiredProductionBatchQuantity}
-                              onChange={(value) =>
-                                updateDraft({
-                                  desiredProductionBatchQuantity: value,
-                                })
-                              }
-                              inputMode="decimal"
-                            />
-                          </div>
-                          <label className="mt-3 flex items-center gap-3 border border-[#cfdcc8] bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/60">
-                            <input
-                              type="checkbox"
-                              checked={draft.canProduceAhead}
-                              onChange={(event) =>
-                                updateDraft({
-                                  canProduceAhead: event.target.checked,
-                                })
-                              }
-                              className="h-4 w-4 accent-[#8fb184]"
-                            />
-                            Vooruit maken volgens vast ritme
-                          </label>
-                          <div className="mt-3">
-                            <Metric
-                              label="Leren uit productie"
-                              value={
-                                recipe.lastProducedAt
-                                  ? `Sinds ${formatDate(recipe.lastProducedAt)} · ${
-                                      recipe.lastProducedQuantity || "-"
-                                    } stuks`
-                                  : "Start na eerste registratie"
-                              }
-                            />
-                          </div>
-                        </div>
-                      )}
 
                     </div>
 
-                    {draft.type === "finalProduct" && (
-                    <div className="grid content-start gap-2 rounded-2xl border border-[#dfe9d8] bg-white/76 p-3">
+                    <div className="grid content-start gap-2 border border-[#dfe9d8] bg-white/76 p-2">
                       <div
-                        className={`flex aspect-[4/3] items-center justify-center rounded-2xl border border-[#dfe9d8] bg-[#eadfcf] bg-cover bg-center p-3 text-center ${
+                        className={`flex aspect-[4/3] items-center justify-center border border-[#dfe9d8] bg-[#eadfcf] bg-cover bg-center p-3 text-center ${
                           draft.photoPreviewDataUrl ? "shadow-inner" : ""
                         }`}
                         style={
@@ -1933,9 +1708,6 @@ export default function RecipeDetail({
                           </button>
                         )}
                       </div>
-                      <p className="text-xs font-bold leading-snug text-[#2d2a26]/50">
-                        Alleen een kleine preview wordt opgeslagen.
-                      </p>
                       <EditTextField
                         label="Foto tekst"
                         value={draft.photoHint}
@@ -1948,7 +1720,6 @@ export default function RecipeDetail({
                         </p>
                       )}
                     </div>
-                    )}
                   </div>
                 </EditorBlock>
               )}
@@ -2051,13 +1822,10 @@ export default function RecipeDetail({
                   </label>
                 </div>
 
-                <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                  <div className="rounded-2xl border border-[#dfe9d8] bg-white p-3">
+                <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                  <div className="border border-[#dfe9d8] bg-white p-2">
                     <p className="text-sm font-black">Productielogboek</p>
-                    <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-                      Wanneer is dit recept gemaakt en hoeveel? Dit voedt de prognose.
-                    </p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto]">
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto]">
                       <DateField
                         label="Datum"
                         value={newProductionEntry.date}
@@ -2097,12 +1865,12 @@ export default function RecipeDetail({
                         Toevoegen
                       </button>
                     </div>
-                    <div className="mt-3 grid gap-2">
+                    <div className="mt-3 divide-y divide-[#dfe9d8] border border-[#dfe9d8]">
                       {draft.productionLog.length ? (
                         draft.productionLog.map((entry) => (
                           <div
                             key={entry.id}
-                            className="grid gap-2 rounded-2xl bg-[#fffdf8] p-3 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto] sm:items-center"
+                            className="grid gap-2 bg-white px-2 py-1.5 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto] sm:items-center"
                           >
                             <DateField
                               label="Datum"
@@ -2139,26 +1907,24 @@ export default function RecipeDetail({
                             <button
                               type="button"
                               onClick={() => removeProductionLogEntry(entry.id)}
-                              className="rounded-full bg-[#fff4f1] px-3 py-2 text-xs font-black text-[#a83e31]"
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#fff4f1] text-xs font-black text-[#a83e31]"
+                              aria-label="Productieregel verwijderen"
                             >
-                              Verwijder
+                              ×
                             </button>
                           </div>
                         ))
                       ) : (
-                        <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-bold text-[#2d2a26]/50">
+                        <p className="bg-[#f8f6f3] p-2 text-sm font-bold text-[#2d2a26]/50">
                           Nog geen producties geregistreerd.
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
+                  <div className="border border-[#ead7a6] bg-[#fff8e3] p-2">
                     <p className="text-sm font-black">Extra productie plannen</p>
-                    <p className="mt-1 text-xs font-bold text-[#2d2a26]/50">
-                      Bijvoorbeeld voor een aanbieding, grote bestelling of drukke week.
-                    </p>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto]">
+                    <div className="mt-2 grid gap-2 sm:grid-cols-[9rem_8rem_minmax(0,1fr)_auto]">
                       <DateField
                         label="Datum"
                         value={newProductionRequest.date}
@@ -2198,12 +1964,12 @@ export default function RecipeDetail({
                         Plan
                       </button>
                     </div>
-                    <div className="mt-3 grid gap-2">
+                    <div className="mt-3 divide-y divide-[#ead7a6] border border-[#ead7a6] bg-white">
                       {draft.productionRequests.length ? (
                         draft.productionRequests.map((request) => (
                           <div
                             key={request.id}
-                            className="grid gap-2 rounded-2xl bg-white p-3 sm:grid-cols-[8rem_8rem_minmax(0,1fr)_auto] sm:items-center"
+                            className="grid gap-2 px-2 py-1.5 sm:grid-cols-[8rem_8rem_minmax(0,1fr)_auto] sm:items-center"
                           >
                             <p className="text-sm font-black">
                               {formatDate(request.date)}
@@ -2221,340 +1987,20 @@ export default function RecipeDetail({
                             <button
                               type="button"
                               onClick={() => removeProductionRequest(request.id)}
-                              className="rounded-full bg-[#fff4f1] px-3 py-2 text-xs font-black text-[#a83e31]"
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#fff4f1] text-xs font-black text-[#a83e31]"
+                              aria-label="Geplande productie verwijderen"
                             >
-                              Verwijder
+                              ×
                             </button>
                           </div>
                         ))
                       ) : (
-                        <p className="rounded-2xl bg-white p-3 text-sm font-bold text-[#2d2a26]/50">
+                        <p className="p-2 text-sm font-bold text-[#2d2a26]/50">
                           Geen extra geplande producties.
                         </p>
                       )}
                     </div>
                   </div>
-                </div>
-              </EditorBlock>
-              )}
-
-              {activeEditSection === "grondstoffen" && (
-              <EditorBlock title="Grondstoffen">
-                <div className="grid gap-2">
-                  {draft.ingredients.map((line, index) => {
-                    const selectedIngredient = findIngredient(
-                      availableIngredients,
-                      line.ingredientId
-                    );
-                    const normalizedLine = normalizeIngredientDraft(
-                      line,
-                      availableIngredients
-                    );
-
-                    return (
-                      <div
-                        key={line.id}
-                        className="grid gap-2 rounded-2xl border border-[#dfe9d8] bg-white p-3 lg:grid-cols-[minmax(12rem,1fr)_7rem_7rem_7rem_auto]"
-                      >
-                        <IngredientSearchField
-                          ingredients={availableIngredients}
-                          value={line.ingredientId}
-                          onChange={(value) => {
-                            const ingredient = findIngredient(
-                              availableIngredients,
-                              value
-                            );
-                            updateIngredientLine(line.id, {
-                              ingredientId: value,
-                              unit: ingredient?.recipeUnit || line.unit,
-                            });
-                          }}
-                        />
-                        <EditTextField
-                          label="Aantal"
-                          value={line.quantity}
-                          onChange={(value) =>
-                            updateIngredientLine(line.id, { quantity: value })
-                          }
-                          inputMode="decimal"
-                        />
-                        <SelectField
-                          label="Eenheid"
-                          value={line.unit}
-                          onChange={(value) =>
-                            updateIngredientLine(line.id, {
-                              unit: value as RecipeUnit,
-                            })
-                          }
-                          options={recipeUnits.map((unit) => ({
-                            value: unit,
-                            label: unitLabelText(unit),
-                          }))}
-                        />
-                        <Metric
-                          label="Kost"
-                          value={formatEuro(normalizedLine.costContribution)}
-                        />
-                        <div className="flex items-end gap-1 self-end">
-                          <button
-                            type="button"
-                            onClick={() => moveIngredientLine(line.id, -1)}
-                            disabled={index === 0}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#edf5ea] text-xs font-black text-[#45663b] disabled:opacity-30"
-                            aria-label="Grondstof omhoog"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveIngredientLine(line.id, 1)}
-                            disabled={index === draft.ingredients.length - 1}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#edf5ea] text-xs font-black text-[#45663b] disabled:opacity-30"
-                            aria-label="Grondstof omlaag"
-                          >
-                            ↓
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeIngredientLine(line.id)}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff4f1] text-sm font-black text-[#a83e31]"
-                            aria-label="Grondstof verwijderen"
-                          >
-                            ×
-                          </button>
-                        </div>
-                        {selectedIngredient && (
-                          <p className="text-xs font-bold text-[#2d2a26]/45 lg:col-span-5">
-                            {selectedIngredient.supplier} -{" "}
-                            {selectedIngredient.packageSize} -{" "}
-                            {formatEuro(selectedIngredient.pricePerBaseUnit)} per
-                            basiseenheid
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => addIngredientLine()}
-                    className="w-fit rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
-                  >
-                    Grondstofregel toevoegen
-                  </button>
-                </div>
-
-                <div className="mt-4 rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-black">Nieuwe grondstof</p>
-                      <p className="mt-1 text-xs font-bold text-[#2d2a26]/45">
-                        Gebruik dit alleen als de grondstof nog niet in de lijst staat.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingNewIngredient((current) => !current)}
-                      className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
-                    >
-                      {isAddingNewIngredient ? "Sluit invoer" : "Nieuwe grondstof toevoegen"}
-                    </button>
-                  </div>
-
-                  {isAddingNewIngredient && (
-                    <div className="mt-3 grid gap-2 lg:grid-cols-3">
-                      <EditTextField
-                        label="Naam"
-                        value={newIngredient.name}
-                        onChange={(value) =>
-                          setNewIngredient((current) => ({
-                            ...current,
-                            name: value,
-                          }))
-                        }
-                      />
-                      <EditTextField
-                        label="Leverancier"
-                        value={newIngredient.supplier}
-                        onChange={(value) =>
-                          setNewIngredient((current) => ({
-                            ...current,
-                            supplier: value,
-                          }))
-                        }
-                      />
-                      <EditTextField
-                        label="Artikelnummer"
-                        value={newIngredient.supplierArticleNumber}
-                        onChange={(value) =>
-                          setNewIngredient((current) => ({
-                            ...current,
-                            supplierArticleNumber: value,
-                          }))
-                        }
-                      />
-                      <EditTextField
-                        label="Verpakking"
-                        value={newIngredient.packageSize}
-                        onChange={(value) =>
-                          setNewIngredient((current) => ({
-                            ...current,
-                            packageSize: value,
-                          }))
-                        }
-                      />
-                      <SelectField
-                        label="Rekeneenheid"
-                        value={newIngredient.recipeUnit}
-                        onChange={(value) =>
-                          setNewIngredient((current) => ({
-                            ...current,
-                            recipeUnit: value as RecipeUnit,
-                          }))
-                        }
-                        options={recipeUnits.map((unit) => ({
-                          value: unit,
-                          label: unitLabelText(unit),
-                        }))}
-                      />
-                      <EditTextField
-                        label="Prijs /kg, /l of /st"
-                        value={newIngredient.packagePrice}
-                        onChange={(value) =>
-                          setNewIngredient((current) => ({
-                            ...current,
-                            packagePrice: value,
-                          }))
-                        }
-                        inputMode="decimal"
-                      />
-                      <EditTextField
-                        label="Allergenen"
-                        value={newIngredient.allergens}
-                        onChange={(value) =>
-                          setNewIngredient((current) => ({
-                            ...current,
-                            allergens: value,
-                          }))
-                        }
-                      />
-                      <EditTextField
-                        label="Aliases"
-                        value={newIngredient.aliases}
-                        onChange={(value) =>
-                          setNewIngredient((current) => ({
-                            ...current,
-                            aliases: value,
-                          }))
-                        }
-                      />
-                      <button
-                        type="button"
-                        onClick={createNewIngredient}
-                        className="self-end rounded-full bg-[#c3d3bc] px-4 py-3 text-sm font-black shadow-sm"
-                      >
-                        Toevoegen en gebruiken
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </EditorBlock>
-              )}
-
-              {activeEditSection === "halffabricaten" && (
-              <EditorBlock title="Halffabricaten">
-                <div className="grid gap-2">
-                  {draft.semiFinishedItems.map((line, index) => {
-                    const normalizedLine = normalizeSemiFinishedDraft(
-                      line,
-                      recipes
-                    );
-
-                    return (
-                      <div
-                        key={line.id}
-                        className="grid gap-2 rounded-2xl border border-[#dfe9d8] bg-white p-3 lg:grid-cols-[minmax(12rem,1fr)_7rem_7rem_7rem_auto]"
-                      >
-                        <SelectField
-                          label="Halffabricaat"
-                          value={line.semiFinishedRecipeId}
-                          onChange={(value) =>
-                            updateSemiFinishedLine(line.id, {
-                              semiFinishedRecipeId: value,
-                              unit:
-                                getBatchInfo(findRecipe(recipes, value))?.unit ||
-                                line.unit,
-                            })
-                          }
-                          options={[
-                            { value: "", label: "Kies halffabricaat" },
-                            ...semiFinishedOptions.map((item) => ({
-                              value: item.id,
-                              label: item.name,
-                            })),
-                          ]}
-                        />
-                        <EditTextField
-                          label="Aantal"
-                          value={line.quantity}
-                          onChange={(value) =>
-                            updateSemiFinishedLine(line.id, { quantity: value })
-                          }
-                          inputMode="decimal"
-                        />
-                        <SelectField
-                          label="Eenheid"
-                          value={line.unit}
-                          onChange={(value) =>
-                            updateSemiFinishedLine(line.id, {
-                              unit: value as RecipeUnit,
-                            })
-                          }
-                          options={recipeUnits.map((unit) => ({
-                            value: unit,
-                            label: unitLabelText(unit),
-                          }))}
-                        />
-                        <Metric
-                          label="Kost"
-                          value={formatEuro(normalizedLine.costContribution)}
-                        />
-                        <div className="flex items-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => moveSemiFinishedLine(line.id, -1)}
-                            disabled={index === 0}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff8e3] text-sm font-black text-[#7a5a18] disabled:opacity-30"
-                            aria-label="Halffabricaat omhoog"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveSemiFinishedLine(line.id, 1)}
-                            disabled={index === draft.semiFinishedItems.length - 1}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff8e3] text-sm font-black text-[#7a5a18] disabled:opacity-30"
-                            aria-label="Halffabricaat omlaag"
-                          >
-                            ↓
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeSemiFinishedLine(line.id)}
-                            className="self-end rounded-full bg-[#fff4f1] px-3 py-2 text-sm font-black text-[#a83e31]"
-                          >
-                            Verwijder
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => addSemiFinishedLine()}
-                    className="w-fit rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
-                  >
-                    Halffabricaat toevoegen
-                  </button>
                 </div>
               </EditorBlock>
               )}
@@ -2615,78 +2061,66 @@ export default function RecipeDetail({
               </div>
             )}
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={saveRecipeDraft}
-                className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
-              >
-                Recept opslaan
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDraft(createRecipeDraft(recipe));
-                  setIsEditing(false);
-                }}
-                className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#2d2a26]/60 shadow-sm"
-              >
-                Annuleer
-              </button>
-              <p className="text-sm font-black text-[#45663b]">
-                {draft.type === "finalProduct"
-                  ? `Nieuwe kostprijs/stuk: ${formatEuro(previewCostPrice)}`
-                  : `Nieuwe kostprijs/kg: ${formatEuro(previewCostPrice)}`}
-              </p>
-              {draft.type === "finalProduct" && (
-                <p className="text-sm font-black text-[#2d2a26]/55">
-                  Batch totaal: {formatEuro(previewBatchCost)}
-                </p>
-              )}
-              {feedback && (
-                <p className="text-sm font-black text-[#45663b]">
-                  {feedback}
-                </p>
-              )}
-            </div>
-
-            <div className="mt-3 rounded-2xl border border-[#efc2bb] bg-[#fff4f1] p-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-[#a83e31]">
-                    Recept verwijderen
-                  </p>
-                  <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/55">
-                    {recipeUsageCount
-                      ? `Dit recept wordt in ${recipeUsageCount} ander recept gebruikt. Die koppeling wordt ook verwijderd.`
-                      : "Dit haalt het recept uit het management- en werkoverzicht."}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {isConfirmingDelete && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#d8d0c4] pt-2">
+              <div className="min-h-6 text-xs font-black text-[#45663b]">
+                {feedback || ""}
+              </div>
+              <div className="flex items-center gap-2">
+                {isConfirmingDelete && (
+                  <>
+                    <span className="text-xs font-black text-[#a83e31]">
+                      Weet je zeker?
+                    </span>
                     <button
                       type="button"
                       onClick={() => setIsConfirmingDelete(false)}
-                      className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#2d2a26]/60 shadow-sm"
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-[#d8d0c4] bg-white text-[#2d2a26]/55 shadow-sm"
+                      aria-label="Verwijderen annuleren"
                     >
-                      Toch houden
+                      <XIcon />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={requestDeleteRecipe}
-                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black shadow-sm ${
-                      isConfirmingDelete
-                        ? "bg-[#a83e31] text-white"
-                        : "bg-white text-[#a83e31]"
-                    }`}
-                  >
-                    <TrashIcon />
-                    {isConfirmingDelete
-                      ? "Ja, definitief verwijderen"
-                      : "Verwijder recept"}
-                  </button>
-                </div>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={saveRecipeDraft}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[#c3d3bc] text-[#111111] shadow-sm"
+                  aria-label="Recept opslaan"
+                >
+                  <CheckIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(createRecipeDraft(recipe));
+                    setIsEditing(false);
+                  }}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#d8d0c4] bg-white text-[#2d2a26]/60 shadow-sm"
+                  aria-label="Annuleren"
+                >
+                  <XIcon />
+                </button>
+                <button
+                  type="button"
+                  onClick={requestDeleteRecipe}
+                  title={
+                    recipeUsageCount
+                      ? `Wordt in ${recipeUsageCount} ander recept gebruikt`
+                      : "Recept verwijderen"
+                  }
+                  className={`flex h-9 w-9 items-center justify-center rounded-full shadow-sm ${
+                    isConfirmingDelete
+                      ? "bg-[#a83e31] text-white"
+                      : "bg-[#fff4f1] text-[#a83e31]"
+                  }`}
+                  aria-label={
+                    isConfirmingDelete
+                      ? "Verwijderen bevestigen"
+                      : "Recept verwijderen"
+                  }
+                >
+                  <TrashIcon />
+                </button>
               </div>
             </div>
           </Panel>
@@ -3126,17 +2560,6 @@ type RecipeDraft = {
   notes: string;
 };
 
-type NewIngredientDraft = {
-  name: string;
-  supplier: string;
-  supplierArticleNumber: string;
-  packageSize: string;
-  recipeUnit: RecipeUnit;
-  packagePrice: string;
-  allergens: string;
-  aliases: string;
-};
-
 function createRecipeDraft(recipe: Recipe): RecipeDraft {
   return {
     name: recipe.name,
@@ -3289,19 +2712,6 @@ function recipeDraftFromImportedRecipe(
     internalNotes: importedRecipe.internalNotes || current.internalNotes,
     notes: importedRecipe.notes || current.notes,
     photoHint: importedRecipe.photoHint || current.photoHint,
-  };
-}
-
-function createIngredientDraft(): NewIngredientDraft {
-  return {
-    name: "",
-    supplier: "",
-    supplierArticleNumber: "",
-    packageSize: "1 kg",
-    recipeUnit: "gram",
-    packagePrice: "",
-    allergens: "",
-    aliases: "",
   };
 }
 
@@ -4701,7 +4111,7 @@ function EditorBlock({
   children,
 }: Readonly<{ title: string; children: React.ReactNode }>) {
   return (
-    <div className="rounded-2xl border border-[#dfe9d8] bg-white/72 p-3">
+    <div className="border border-[#dfe9d8] bg-white/72 p-2">
       <p className="mb-2 text-sm font-black">{title}</p>
       {children}
     </div>
@@ -4734,7 +4144,7 @@ function ArrayEditor({
                 onChange(next);
               }}
               placeholder={placeholder}
-              className="min-h-20 flex-1 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+              className="min-h-16 flex-1 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
             />
             <button
               type="button"
@@ -4919,10 +4329,12 @@ function IngredientSearchField({
   ingredients,
   value,
   onChange,
+  onCreateFromQuery,
 }: Readonly<{
   ingredients: Ingredient[];
   value: string;
   onChange: (value: string) => void;
+  onCreateFromQuery?: (name: string) => void;
 }>) {
   const selectedIngredient = findIngredient(ingredients, value);
   const [query, setQuery] = useState(selectedIngredient?.name || value || "");
@@ -4941,6 +4353,7 @@ function IngredientSearchField({
       return left.ingredient.name.localeCompare(right.ingredient.name, "nl-NL");
     })
     .map(({ ingredient }) => ingredient);
+  const canCreate = Boolean(onCreateFromQuery && query.trim());
 
   return (
     <label className="relative grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
@@ -4983,9 +4396,119 @@ function IngredientSearchField({
             ))
           ) : (
             <p className="px-3 py-2 text-sm font-bold text-[#2d2a26]/45">
-              Geen grondstof gevonden. Typ bijvoorbeeld alleen een deel van de
-              naam.
+              Geen grondstof gevonden.
             </p>
+          )}
+          {canCreate && (
+            <button
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onCreateFromQuery?.(query);
+                setQuery(query.trim());
+                setIsOpen(false);
+              }}
+              className="mt-1 flex w-full items-center gap-2 border-t border-[#dfe9d8] px-3 py-2 text-left text-sm font-black text-[#45663b] hover:bg-[#f8f6f3]"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#c3d3bc] text-[#111111]">
+                +
+              </span>
+              grondstof toevoegen
+            </button>
+          )}
+        </div>
+      )}
+    </label>
+  );
+}
+
+function SemiFinishedSearchField({
+  recipes,
+  value,
+  onChange,
+  onCreateFromQuery,
+}: Readonly<{
+  recipes: Recipe[];
+  value: string;
+  onChange: (value: string) => void;
+  onCreateFromQuery?: (name: string) => void;
+}>) {
+  const selectedRecipe = findRecipe(recipes, value);
+  const [query, setQuery] = useState(selectedRecipe?.name || value || "");
+  const [isOpen, setIsOpen] = useState(false);
+  const normalizedQuery = normalizeIngredientQuery(query);
+  const suggestions = recipes
+    .map((recipe) => ({
+      recipe,
+      score: semiFinishedSearchScore(recipe, normalizedQuery),
+    }))
+    .filter(({ score }) => !normalizedQuery || score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+
+      return left.recipe.name.localeCompare(right.recipe.name, "nl-NL");
+    })
+    .map(({ recipe }) => recipe);
+  const canCreate = Boolean(onCreateFromQuery && query.trim());
+
+  return (
+    <label className="relative grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+      Halffabricaat
+      <input
+        value={query}
+        onBlur={() => window.setTimeout(() => setIsOpen(false), 140)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        placeholder="Typ halffabricaat"
+        className="min-w-0 rounded-xl border border-[#ead7a6] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#f2d58d]"
+      />
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-[#ead7a6] bg-white p-1.5 text-left normal-case tracking-normal shadow-xl">
+          {suggestions.length ? (
+            suggestions.map((recipe) => (
+              <button
+                key={recipe.id}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onChange(recipe.id);
+                  setQuery(recipe.name);
+                  setIsOpen(false);
+                }}
+                className={`grid w-full gap-0.5 rounded-xl px-3 py-2 text-left text-sm hover:bg-[#fff8e3] ${
+                  recipe.id === value ? "bg-[#fff8e3]" : ""
+                }`}
+              >
+                <span className="font-black text-[#2d2a26]">{recipe.name}</span>
+                <span className="truncate text-xs font-bold text-[#2d2a26]/45">
+                  {recipe.batchSize || recipeTypeLabel(recipe.type)}
+                </span>
+              </button>
+            ))
+          ) : (
+            <p className="px-3 py-2 text-sm font-bold text-[#2d2a26]/45">
+              Geen halffabricaat gevonden.
+            </p>
+          )}
+          {canCreate && (
+            <button
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onCreateFromQuery?.(query);
+                setQuery(query.trim());
+                setIsOpen(false);
+              }}
+              className="mt-1 flex w-full items-center gap-2 border-t border-[#ead7a6] px-3 py-2 text-left text-sm font-black text-[#7a5a18] hover:bg-[#fff8e3]"
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f2d58d] text-[#111111]">
+                +
+              </span>
+              halffabricaat toevoegen
+            </button>
           )}
         </div>
       )}
@@ -5151,6 +4674,33 @@ function packagingSearchScore(item: PackagingItem, normalizedQuery: string) {
   return 0;
 }
 
+function semiFinishedSearchScore(recipe: Recipe, normalizedQuery: string) {
+  if (!normalizedQuery) return 1;
+
+  const queryWords = ingredientQueryWords(normalizedQuery);
+  if (!queryWords.length) return 1;
+
+  const haystack = [
+    recipe.name,
+    recipe.productGroup,
+    recipe.batchSize,
+    recipe.version,
+  ]
+    .map(normalizeIngredientQuery)
+    .join(" ");
+  const compactHaystack = haystack.replace(/\s+/g, "");
+  const compactQuery = normalizedQuery.replace(/\s+/g, "");
+
+  if (haystack === normalizedQuery) return 120;
+  if (haystack.split(/\s+/).includes(normalizedQuery)) return 95;
+  if (queryWords.every((word) => haystack.includes(word))) return 80;
+  if (compactQuery.length >= 4 && compactHaystack.includes(compactQuery)) {
+    return 62;
+  }
+
+  return 0;
+}
+
 function LineItem({
   title,
   meta,
@@ -5184,6 +4734,41 @@ function TrashIcon() {
       <path d="M19 6l-1 14H6L5 6" />
       <path d="M10 11v5" />
       <path d="M14 11v5" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.4"
+      viewBox="0 0 24 24"
+    >
+      <path d="M5 12.5l4.2 4.2L19 7" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.4"
+      viewBox="0 0 24 24"
+    >
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
     </svg>
   );
 }
