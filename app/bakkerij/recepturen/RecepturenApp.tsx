@@ -2890,7 +2890,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     allergens: [],
     internalNotes: "",
     isWorkModeVisible: true,
-    workCategories: type === "semiFinished" ? [] : ["gebak"],
+    workCategories: [],
     version: "v1",
     lastUpdated: now,
     portionLabel: type === "semiFinished" ? "1 kg" : "1 stuk",
@@ -2990,8 +2990,6 @@ async function downloadRecepturenExcelBackup(data: RecepturenData) {
       kostprijs: recipe.costPrice,
       marge: recipe.currentMargin,
       doelmarge: recipe.targetMargin,
-      zichtbaarWerkmodus: recipe.isWorkModeVisible !== false,
-      categorieen: recipe.workCategories?.join(", ") || "",
       laatstGewijzigd: recipe.lastUpdated,
       opmerkingen: recipe.internalNotes || recipe.notes || "",
     }))

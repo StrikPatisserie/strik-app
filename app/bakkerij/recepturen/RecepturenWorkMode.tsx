@@ -16,9 +16,9 @@ import {
   todayIsoDate,
 } from "./utils";
 import {
-  defaultWorkCategoryOptions,
-  workCategoriesForRecipe,
-  workCategoryLabel,
+  recipeGroupIdForRecipe,
+  recipeGroupLabel,
+  recipeGroupOptionsForRecipes,
 } from "./workCategories";
 
 type WorkFilterId = string;
@@ -38,7 +38,6 @@ type ProductionTask = {
 
 const WORK_FILTERS: Array<{ id: WorkFilterId; label: string }> = [
   { id: "all", label: "Alles" },
-  ...defaultWorkCategoryOptions,
   { id: "halffabricaten", label: "Halffabricaten" },
 ];
 
@@ -121,7 +120,7 @@ function recipeMatchesFilter(recipe: Recipe, filter: WorkFilterId) {
   if (filter === "all") return true;
   if (filter === "halffabricaten") return recipe.type === "semiFinished";
 
-  return recipe.type === "finalProduct" && workCategoriesForRecipe(recipe).includes(filter);
+  return recipe.type === "finalProduct" && recipeGroupIdForRecipe(recipe) === filter;
 }
 
 function getRecipeTypeLabel(recipe: Recipe) {
@@ -343,29 +342,16 @@ export default function RecepturenWorkMode({
     useState<number | undefined>(undefined);
   const [productionFeedback, setProductionFeedback] = useState("");
   const workFilters = useMemo(() => {
-    const customCategories = recipes
-      .flatMap((recipe) =>
-        recipe.type === "finalProduct" ? workCategoriesForRecipe(recipe) : []
-      )
-      .filter(
-        (category) =>
-          !WORK_FILTERS.some((filterOption) => filterOption.id === category)
-      );
+    const recipeGroups = recipeGroupOptionsForRecipes(
+      recipes.filter((recipe) => recipe.type === "finalProduct")
+    );
 
-    return [
-      ...WORK_FILTERS,
-      ...Array.from(new Set(customCategories)).map((category) => ({
-        id: category,
-        label: workCategoryLabel(category),
-      })),
-    ];
+    return [WORK_FILTERS[0], ...recipeGroups, WORK_FILTERS[1]];
   }, [recipes]);
   const visibleRecipes = useMemo(() => {
     const query = normalizeSearch(search);
 
     return recipes.filter((recipe) => {
-      if (recipe.isWorkModeVisible === false) return false;
-
       const matchesSearch =
         !query ||
         normalizeSearch(recipe.name).includes(query) ||
@@ -549,7 +535,7 @@ function RecipeWorkCard({
 }: Readonly<{ recipe: Recipe; onOpen: () => void; onStart: () => void }>) {
   const batch = getStandardBatch(recipe);
   const categories = recipe.type === "finalProduct"
-    ? workCategoriesForRecipe(recipe).slice(0, 3)
+    ? [recipeGroupIdForRecipe(recipe)]
     : ["halffabricaten"];
   const showThumb = recipe.type === "finalProduct";
 
@@ -580,7 +566,7 @@ function RecipeWorkCard({
           >
             {category === "halffabricaten"
               ? "Halffabricaat"
-              : workCategoryLabel(category)}
+              : recipeGroupLabel(category)}
           </span>
         ))}
         {recipe.allergens.length ? (
