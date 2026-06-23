@@ -135,6 +135,7 @@ export default function RecipeDetail({
     useState(false);
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
   const [quickIngredientName, setQuickIngredientName] = useState("");
+  const [draggedIngredientLineId, setDraggedIngredientLineId] = useState("");
   const [newWorkCategory, setNewWorkCategory] = useState("");
   const [newProductionEntry, setNewProductionEntry] = useState(() => ({
     date: todayIsoDate(),
@@ -424,6 +425,48 @@ export default function RecipeDetail({
       ...current,
       ingredients: current.ingredients.filter((line) => line.id !== lineId),
     }));
+  }
+
+  function moveIngredientLine(lineId: string, direction: -1 | 1) {
+    setDraft((current) => {
+      const fromIndex = current.ingredients.findIndex((line) => line.id === lineId);
+      const toIndex = fromIndex + direction;
+
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        toIndex >= current.ingredients.length
+      ) {
+        return current;
+      }
+
+      const ingredients = [...current.ingredients];
+      const [movedLine] = ingredients.splice(fromIndex, 1);
+      ingredients.splice(toIndex, 0, movedLine);
+
+      return { ...current, ingredients };
+    });
+  }
+
+  function moveIngredientLineTo(lineId: string, targetLineId: string) {
+    if (!lineId || lineId === targetLineId) return;
+
+    setDraft((current) => {
+      const fromIndex = current.ingredients.findIndex((line) => line.id === lineId);
+      const toIndex = current.ingredients.findIndex(
+        (line) => line.id === targetLineId
+      );
+
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+        return current;
+      }
+
+      const ingredients = [...current.ingredients];
+      const [movedLine] = ingredients.splice(fromIndex, 1);
+      ingredients.splice(toIndex, 0, movedLine);
+
+      return { ...current, ingredients };
+    });
   }
 
   function addSemiFinishedLine(recipeId = semiFinishedOptions[0]?.id || "") {
@@ -997,7 +1040,7 @@ export default function RecipeDetail({
                 </div>
 
                 <div className="grid gap-2">
-                  {draft.ingredients.map((line) => {
+                  {draft.ingredients.map((line, index) => {
                     const ingredient = findIngredient(
                       availableIngredients,
                       line.ingredientId
@@ -1010,7 +1053,17 @@ export default function RecipeDetail({
                     return (
                       <div
                         key={line.id}
-                        className="grid gap-2 rounded-xl border border-[#e2ecd9] bg-[#f8fbf5] p-2 md:grid-cols-[4.5rem_minmax(12rem,1fr)_6rem_6rem_6rem_auto] md:items-end"
+                        draggable
+                        onDragStart={() => setDraggedIngredientLineId(line.id)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => {
+                          moveIngredientLineTo(draggedIngredientLineId, line.id);
+                          setDraggedIngredientLineId("");
+                        }}
+                        onDragEnd={() => setDraggedIngredientLineId("")}
+                        className={`grid cursor-move gap-2 rounded-xl border border-[#e2ecd9] bg-[#f8fbf5] p-2 md:grid-cols-[4.5rem_minmax(12rem,1fr)_6rem_6rem_6rem_auto] md:items-end ${
+                          draggedIngredientLineId === line.id ? "opacity-55" : ""
+                        }`}
                       >
                         <span className="self-center rounded-full bg-white px-2 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#45663b]">
                           grondstof
@@ -1054,13 +1107,34 @@ export default function RecipeDetail({
                           label="Kost"
                           value={formatEuro(normalizedLine.costContribution)}
                         />
-                        <button
-                          type="button"
-                          onClick={() => removeIngredientLine(line.id)}
-                          className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#a83e31] shadow-sm"
-                        >
-                          ×
-                        </button>
+                        <div className="flex items-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => moveIngredientLine(line.id, -1)}
+                            disabled={index === 0}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#45663b] shadow-sm disabled:opacity-30"
+                            aria-label="Grondstof omhoog"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveIngredientLine(line.id, 1)}
+                            disabled={index === draft.ingredients.length - 1}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#45663b] shadow-sm disabled:opacity-30"
+                            aria-label="Grondstof omlaag"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeIngredientLine(line.id)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#a83e31] shadow-sm"
+                            aria-label="Grondstof verwijderen"
+                          >
+                            ×
+                          </button>
+                        </div>
                         {ingredient?.lastInvoice ===
                           "Gemiddelde prijs - later controleren" && (
                           <p className="text-[0.7rem] font-black text-[#a83e31] md:col-span-6">
@@ -2042,7 +2116,7 @@ export default function RecipeDetail({
               {activeEditSection === "grondstoffen" && (
               <EditorBlock title="Grondstoffen">
                 <div className="grid gap-2">
-                  {draft.ingredients.map((line) => {
+                  {draft.ingredients.map((line, index) => {
                     const selectedIngredient = findIngredient(
                       availableIngredients,
                       line.ingredientId
@@ -2096,13 +2170,34 @@ export default function RecipeDetail({
                           label="Kost"
                           value={formatEuro(normalizedLine.costContribution)}
                         />
-                        <button
-                          type="button"
-                          onClick={() => removeIngredientLine(line.id)}
-                          className="self-end rounded-full bg-[#fff4f1] px-3 py-2 text-sm font-black text-[#a83e31]"
-                        >
-                          Verwijder
-                        </button>
+                        <div className="flex items-end gap-1 self-end">
+                          <button
+                            type="button"
+                            onClick={() => moveIngredientLine(line.id, -1)}
+                            disabled={index === 0}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#edf5ea] text-xs font-black text-[#45663b] disabled:opacity-30"
+                            aria-label="Grondstof omhoog"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveIngredientLine(line.id, 1)}
+                            disabled={index === draft.ingredients.length - 1}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#edf5ea] text-xs font-black text-[#45663b] disabled:opacity-30"
+                            aria-label="Grondstof omlaag"
+                          >
+                            ↓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeIngredientLine(line.id)}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff4f1] text-sm font-black text-[#a83e31]"
+                            aria-label="Grondstof verwijderen"
+                          >
+                            ×
+                          </button>
+                        </div>
                         {selectedIngredient && (
                           <p className="text-xs font-bold text-[#2d2a26]/45 lg:col-span-5">
                             {selectedIngredient.supplier} -{" "}
@@ -3784,6 +3879,9 @@ function BakkerRecipeCard({
   const madeToday = productionLogForRecipe(recipe).some(
     (entry) => entry.date === todayIsoDate()
   );
+  const cardMargin = recipe.salesPrice
+    ? calculateMargin(recipe.salesPrice, recipe.costPrice)
+    : 0;
 
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-white/70 px-2 py-2 backdrop-blur-[1px] sm:py-4">
@@ -3943,6 +4041,33 @@ function BakkerRecipeCard({
                   </span>
                 </div>
               )}
+
+              <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-[0.95rem] border border-[#dfe9d8] bg-white p-2">
+                <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
+                  <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
+                    Winkelprijs
+                  </p>
+                  <p className="mt-0.5 text-sm font-black text-[#1a1815]">
+                    {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
+                  <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
+                    Kostprijs
+                  </p>
+                  <p className="mt-0.5 text-sm font-black text-[#1a1815]">
+                    {formatEuro(recipe.costPrice)}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
+                  <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
+                    Marge
+                  </p>
+                  <p className="mt-0.5 text-sm font-black text-[#1a1815]">
+                    {cardMargin ? formatPercent(cardMargin) : "-"}
+                  </p>
+                </div>
+              </div>
 
               <div className="mt-3 rounded-[0.95rem] border border-[#c3d3bc] bg-[#edf5ea] p-2.5">
                 <h3 className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#30462f]">
@@ -4162,17 +4287,14 @@ function recipeCardIngredientRows(
 ): RecipeCardIngredientRow[] {
   const directRows = recipe.ingredients.map((item) => {
     const ingredient = findIngredient(ingredients, item.ingredientId);
-    const linkedSemiFinished = ingredient
-      ? semiFinishedRecipeForIngredient(ingredient, recipes)
-      : null;
 
     return {
       id: `ingredient-${item.ingredientId}`,
       name: ingredient?.name || item.ingredientId,
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
-      isSemiFinished: Boolean(linkedSemiFinished),
-      linkedRecipe: linkedSemiFinished || undefined,
+      isSemiFinished: false,
+      linkedRecipe: undefined,
     };
   });
   const semiRows = recipe.semiFinishedItems.map((item) => {
@@ -4189,35 +4311,6 @@ function recipeCardIngredientRows(
   });
 
   return [...directRows, ...semiRows];
-}
-
-function semiFinishedRecipeForIngredient(ingredient: Ingredient, recipes: Recipe[]) {
-  const possibleNames = [ingredient.name, ...ingredient.aliases]
-    .map(normalizeHfRecipeName)
-    .filter(Boolean);
-
-  return recipes.find((recipe) => {
-    if (recipe.type !== "semiFinished") return false;
-    const recipeName = normalizeHfRecipeName(recipe.name);
-
-    return possibleNames.some(
-      (name) =>
-        recipeName === name ||
-        recipeName.includes(name) ||
-        name.includes(recipeName)
-    );
-  });
-}
-
-function normalizeHfRecipeName(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/^hf\s+/, "")
-    .replace(/^halffabricaat\s+/, "")
-    .trim();
 }
 
 function shortUnitLabel(unit: RecipeUnit) {
