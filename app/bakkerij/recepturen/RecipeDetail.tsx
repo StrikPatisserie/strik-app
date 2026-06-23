@@ -145,6 +145,7 @@ export default function RecipeDetail({
   const [isProductionShortcutOpen, setIsProductionShortcutOpen] =
     useState(false);
   const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
   const [quickIngredientName, setQuickIngredientName] = useState("");
   const [quickSemiFinishedName, setQuickSemiFinishedName] = useState("");
@@ -1228,22 +1229,25 @@ export default function RecipeDetail({
         </div>
 
         {isEditing && (
-          <Panel className="mt-3 rounded-none border-[#cfdcc8] bg-[#efefef] p-3">
-            <div className="grid gap-3 rounded-[1.15rem] border border-[#c3d3bc] bg-[#f7fbf5] p-3 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+          <Panel className="mt-2 rounded-none border-[#cfdcc8] bg-[#efefef] p-2">
+            <div className="grid gap-2 rounded-[1rem] border border-[#c3d3bc] bg-[#f7fbf5] p-2 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#ef4b34]">
-                    Snel recept
-                  </p>
-                  <h3 className="text-xl font-black leading-tight">
-                    In 1 minuut de basis erin
-                  </h3>
-                  <p className="mt-1 max-w-2xl text-xs font-bold leading-snug text-[#2d2a26]/55">
-                    Eerst naam, batch en grondstoffen. Prijzen, foto, planning en
-                    andere randzaken kun je later verfijnen.
-                  </p>
+                  <h3 className="text-xl font-black leading-tight">Onderdelen</h3>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <RecipeTypeToggle
+                    value={draft.type}
+                    onChange={(value) => {
+                      updateDraft({ type: value });
+                      if (
+                        value === "semiFinished" &&
+                        activeEditSection === "productie"
+                      ) {
+                        setActiveEditSection("basis");
+                      }
+                    }}
+                  />
                   <label className="cursor-pointer rounded-full bg-white px-3 py-2 text-xs font-black text-[#2d2a26]/70 shadow-sm">
                     {isImportingRecipe ? "Lezen..." : "Bestand inlezen"}
                     <input
@@ -1282,56 +1286,40 @@ export default function RecipeDetail({
 
               {importCandidateReview}
 
-              <div className="grid gap-2 md:grid-cols-[minmax(12rem,1.4fr)_7rem_8rem_7rem_7rem]">
+              <div
+                className={`grid gap-2 ${
+                  draft.type === "finalProduct"
+                    ? "md:grid-cols-[minmax(12rem,1.4fr)_minmax(9rem,0.9fr)_7rem]"
+                    : "md:grid-cols-[minmax(12rem,1fr)]"
+                }`}
+              >
                 <EditTextField
                   label="Naam"
                   value={draft.name}
                   onChange={(value) => updateDraft({ name: value })}
                 />
-                <EditTextField
-                  label="Batch"
-                  value={draft.standardBatchQuantity}
-                  onChange={(value) =>
-                    updateDraft({ standardBatchQuantity: value })
-                  }
-                  inputMode="decimal"
-                />
-                <SelectField
-                  label="Eenheid"
-                  value={draft.standardBatchUnit}
-                  onChange={(value) =>
-                    updateDraft({ standardBatchUnit: value as RecipeUnit })
-                  }
-                  options={recipeUnits.map((unit) => ({
-                    value: unit,
-                    label: unitLabelText(unit),
-                  }))}
-                />
-                <EditTextField
-                  label="Verkoop"
-                  value={draft.salesPrice}
-                  onChange={(value) => updateDraft({ salesPrice: value })}
-                  inputMode="decimal"
-                />
-                <EditTextField
-                  label="Marge %"
-                  value={draft.targetMargin}
-                  onChange={(value) => updateDraft({ targetMargin: value })}
-                  inputMode="decimal"
-                />
+                {draft.type === "finalProduct" && (
+                  <>
+                    <GroupComboField
+                      label="Groep"
+                      value={draft.productGroup}
+                      onChange={(value) => updateDraft({ productGroup: value })}
+                      options={recipeGroupOptionsForRecipes(recipes, [
+                        draft.productGroup,
+                      ]).map((option) => option.label)}
+                    />
+                    <EditTextField
+                      label="Verkoop"
+                      value={draft.salesPrice}
+                      onChange={(value) => updateDraft({ salesPrice: value })}
+                      inputMode="decimal"
+                    />
+                  </>
+                )}
               </div>
 
-              <div className="grid gap-2 rounded-2xl border border-[#d7e4d1] bg-white p-3">
+              <div className="grid gap-2 rounded-[1rem] border border-[#d7e4d1] bg-white p-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-black">
-                      Grondstoffen en halffabricaten
-                    </p>
-                    <p className="text-xs font-bold text-[#2d2a26]/45">
-                      Alles in één lijst. Nieuwe grondstof? Typ naam en maak
-                      hem meteen aan met gemiddelde prijs.
-                    </p>
-                  </div>
                   <p className="rounded-full bg-[#edf5ea] px-3 py-1 text-xs font-black text-[#45663b]">
                     Batch totaal {formatEuro(previewBatchCost)}
                   </p>
@@ -1359,7 +1347,7 @@ export default function RecipeDetail({
                           setDraggedIngredientLineId("");
                         }}
                         onDragEnd={() => setDraggedIngredientLineId("")}
-                        className={`grid cursor-move gap-2 rounded-xl border border-[#e2ecd9] bg-[#f8fbf5] p-2 md:grid-cols-[4.5rem_minmax(12rem,1fr)_6rem_6rem_6rem_auto] md:items-end ${
+                        className={`grid cursor-move gap-1.5 rounded-lg border border-[#e2ecd9] bg-[#f8fbf5] p-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end ${
                           draggedIngredientLineId === line.id ? "opacity-55" : ""
                         }`}
                       >
@@ -1453,7 +1441,7 @@ export default function RecipeDetail({
                     return (
                       <div
                         key={line.id}
-                        className="grid gap-2 rounded-xl border border-[#ead7a6] bg-[#fff8e3] p-2 md:grid-cols-[4.5rem_minmax(12rem,1fr)_6rem_6rem_6rem_auto] md:items-end"
+                        className="grid gap-1.5 rounded-lg border border-[#ead7a6] bg-[#fff8e3] p-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end"
                       >
                         <span className="self-center rounded-full bg-white px-2 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#7a5a18]">
                           halffab
@@ -1587,26 +1575,6 @@ export default function RecipeDetail({
                 </div>
               </div>
 
-              <div className="grid gap-2 lg:grid-cols-[1.1fr_0.9fr_0.9fr]">
-                <TextAreaField
-                  label="Productiestappen"
-                  value={draft.preparationSteps.join("\n")}
-                  onChange={(value) =>
-                    updateDraft({ preparationSteps: parseTextLines(value) })
-                  }
-                />
-                <TextAreaField
-                  label="Notities"
-                  value={draft.internalNotes}
-                  onChange={(value) => updateDraft({ internalNotes: value })}
-                />
-                <EditTextField
-                  label="Allergenen"
-                  value={draft.allergens}
-                  onChange={(value) => updateDraft({ allergens: value })}
-                />
-              </div>
-
               <div className="flex flex-wrap items-center gap-3 text-xs font-black text-[#2d2a26]/55">
                 <span>
                   Kostprijs:{" "}
@@ -1624,28 +1592,26 @@ export default function RecipeDetail({
               </div>
             </div>
 
-            <details className="mt-3 rounded-[1.15rem] border border-[#dfe9d8] bg-white/75 p-3">
-              <summary className="cursor-pointer text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/55">
-                Extra instellingen, foto, verpakking en planning
-              </summary>
-              <div className="mt-3">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <p className="text-[0.68rem] font-black uppercase tracking-[0.15em] text-[#2d2a26]/42">
-                  Aanpassen
-                </p>
-                <h3 className="text-lg font-black leading-tight">
-                  Kies onderdeel
-                </h3>
-              </div>
-              <p className="text-xs font-bold text-[#2d2a26]/45">
-                Per tabje aanpassen. Rustig en overzichtelijk.
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsAdvancedOpen((current) => !current)}
+              className="mt-2 w-fit rounded-full border border-[#c3d3bc] bg-white px-4 py-2 text-sm font-black text-[#2d2a26] shadow-sm"
+            >
+              {isAdvancedOpen ? "Verberg uitgebreid" : "Uitgebreid"}
+            </button>
 
-            <div className="mt-3 grid grid-cols-2 border border-[#c3d3bc] bg-white sm:grid-cols-3 lg:grid-cols-6">
+            {isAdvancedOpen && (
+              <div className="mt-2 rounded-[1rem] border border-[#dfe9d8] bg-white/75 p-2">
+
+            <div className="grid grid-cols-2 border border-[#c3d3bc] bg-white sm:grid-cols-3 lg:grid-cols-6">
               {recipeEditSections.map((section) => {
                 if (section.id === "productie" && draft.type !== "finalProduct") {
+                  return null;
+                }
+                if (
+                  section.id === "grondstoffen" ||
+                  section.id === "halffabricaten"
+                ) {
                   return null;
                 }
 
@@ -1672,7 +1638,7 @@ export default function RecipeDetail({
 
             <div className="mt-3 grid gap-3">
               {activeEditSection === "basis" && (
-                <EditorBlock title="Basis en foto">
+                <EditorBlock title="Instellingen">
                   <div
                     className={
                       draft.type === "finalProduct"
@@ -1681,88 +1647,6 @@ export default function RecipeDetail({
                     }
                   >
                     <div className="grid content-start gap-3">
-                      <div className="rounded-2xl border border-[#dfe9d8] bg-[#fffdf8] p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-black">
-                              Receptbestand inlezen
-                            </p>
-                            <p className="mt-1 text-xs font-bold leading-snug text-[#2d2a26]/50">
-                              Upload PDF, Excel of CSV. Daarna kun je alles nog
-                              controleren en aanpassen. Het bestand zelf wordt
-                              niet opgeslagen.
-                            </p>
-                          </div>
-                          <label className="cursor-pointer rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm">
-                            {isImportingRecipe ? "Lezen..." : "Bestand kiezen"}
-                            <input
-                              type="file"
-                              accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf"
-                              disabled={isImportingRecipe}
-                              className="sr-only"
-                              onChange={(event) => {
-                                void importRecipeFile(
-                                  event.target.files?.[0] || null
-                                );
-                                event.currentTarget.value = "";
-                              }}
-                            />
-                          </label>
-                        </div>
-                        {recipeImportWarnings.length > 0 && (
-                          <div className="mt-3 rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
-                            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#7a5a18]">
-                              Controlepunten
-                            </p>
-                            <ul className="mt-2 grid gap-1 text-xs font-bold text-[#2d2a26]/60">
-                              {recipeImportWarnings.slice(0, 6).map((warning) => (
-                                <li key={warning}>{warning}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                        <EditTextField
-                          label="Naam"
-                          value={draft.name}
-                          onChange={(value) => updateDraft({ name: value })}
-                        />
-                        <GroupComboField
-                          label="Groep"
-                          value={draft.productGroup}
-                          onChange={(value) =>
-                            updateDraft({ productGroup: value })
-                          }
-                          options={recipeGroupOptionsForRecipes(recipes, [
-                            draft.productGroup,
-                          ]).map((option) => option.label)}
-                        />
-                        <SelectField
-                          label="Soort"
-                          value={draft.type}
-                          onChange={(value) =>
-                            updateDraft({ type: value as RecipeType })
-                          }
-                          options={[
-                            { value: "finalProduct", label: "Eindproduct" },
-                            { value: "semiFinished", label: "Halffabricaat" },
-                          ]}
-                        />
-                        <SelectField
-                          label="Status"
-                          value={draft.status}
-                          onChange={(value) =>
-                            updateDraft({ status: value as RecipeStatus })
-                          }
-                          options={recipeStatuses.map((status) => ({
-                            value: status,
-                            label: recipeStatusText(status),
-                          }))}
-                        />
-                      </div>
-
                       <div className="rounded-2xl bg-white/70 p-3">
                         <div
                           className={`grid gap-3 ${
@@ -1827,27 +1711,6 @@ export default function RecipeDetail({
                           </p>
                         )}
                       </div>
-
-                      {draft.type === "finalProduct" && (
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <EditTextField
-                            label="Verkoop"
-                            value={draft.salesPrice}
-                            onChange={(value) =>
-                              updateDraft({ salesPrice: value })
-                            }
-                            inputMode="decimal"
-                          />
-                          <EditTextField
-                            label="Basis marge %"
-                            value={draft.targetMargin}
-                            onChange={(value) =>
-                              updateDraft({ targetMargin: value })
-                            }
-                            inputMode="decimal"
-                          />
-                        </div>
-                      )}
 
                       {draft.type === "finalProduct" && (
                         <div className="rounded-2xl border border-[#dfe9d8] bg-white p-3">
@@ -2750,7 +2613,7 @@ export default function RecipeDetail({
               )}
             </div>
               </div>
-            </details>
+            )}
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
@@ -4912,7 +4775,7 @@ function EditTextField({
         value={value}
         inputMode={inputMode}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />
     </label>
   );
@@ -4939,7 +4802,7 @@ function GroupComboField({
         list={listId}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />
       <datalist id={listId}>
         {uniqueOptions.map((option) => (
@@ -4947,6 +4810,36 @@ function GroupComboField({
         ))}
       </datalist>
     </label>
+  );
+}
+
+function RecipeTypeToggle({
+  value,
+  onChange,
+}: Readonly<{
+  value: RecipeType;
+  onChange: (value: RecipeType) => void;
+}>) {
+  return (
+    <div className="grid grid-cols-2 overflow-hidden rounded-full border border-[#c3d3bc] bg-white p-0.5 shadow-sm">
+      {[
+        { value: "finalProduct" as const, label: "Eindrecept" },
+        { value: "semiFinished" as const, label: "Halffabricaat" },
+      ].map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+          className={`rounded-full px-3 py-1.5 text-xs font-black transition ${
+            value === option.value
+              ? "bg-[#c3d3bc] text-[#2d2a26]"
+              : "text-[#2d2a26]/55"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -4966,7 +4859,7 @@ function DateField({
         type="date"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />
     </label>
   );
@@ -4987,7 +4880,7 @@ function TextAreaField({
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-24 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-h-20 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />
     </label>
   );
@@ -5010,7 +4903,7 @@ function SelectField({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -5061,7 +4954,7 @@ function IngredientSearchField({
         }}
         onFocus={() => setIsOpen(true)}
         placeholder="Typ bijvoorbeeld slagroom"
-        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />
       {isOpen && (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-[#dfe9d8] bg-white p-1.5 text-left normal-case tracking-normal shadow-xl">
@@ -5138,7 +5031,7 @@ function PackagingSearchField({
         }}
         onFocus={() => setIsOpen(true)}
         placeholder="Typ doos, deksel of bodem"
-        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-2.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />
       {isOpen && (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-[#dfe9d8] bg-white p-1.5 text-left normal-case tracking-normal shadow-xl">
@@ -5180,11 +5073,11 @@ function Metric({
   className = "bg-[#f8f6f3]",
 }: Readonly<{ label: string; value: string; className?: string }>) {
   return (
-    <div className={`rounded-2xl p-3 ${className}`}>
+    <div className={`rounded-xl p-2 ${className}`}>
       <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] opacity-60">
         {label}
       </p>
-      <p className="mt-1 text-sm font-black">{value}</p>
+      <p className="text-sm font-black">{value}</p>
     </div>
   );
 }

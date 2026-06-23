@@ -2880,7 +2880,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     previousCostPrice: 0,
     targetMargin: type === "semiFinished" ? 0 : 80,
     currentMargin: 0,
-    status: "draft",
+    status: "active",
     ingredients: [],
     semiFinishedItems: [],
     workInstructions: [],
