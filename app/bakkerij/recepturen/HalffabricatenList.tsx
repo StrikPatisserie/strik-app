@@ -35,10 +35,31 @@ export default function HalffabricatenList({
   const groups = useMemo(
     () =>
       Array.from(
-        new Set(semiFinished.map((recipe) => recipe.productGroup))
+        new Set(
+          semiFinished
+            .map((recipe) => recipe.productGroup)
+            .filter((group): group is string => Boolean(group?.trim()))
+        )
       ).sort((first, second) => first.localeCompare(second, "nl-NL")),
     [semiFinished]
   );
+  const summary = useMemo(() => {
+    const usedCount = semiFinished.filter(
+      (recipe) => linkedFinalProducts(recipes, recipe.id).length > 0
+    ).length;
+    const averageCostPrice = semiFinished.length
+      ? semiFinished.reduce((total, recipe) => total + recipe.costPrice, 0) /
+        semiFinished.length
+      : 0;
+
+    return {
+      total: semiFinished.length,
+      usedCount,
+      draftCount: semiFinished.filter((recipe) => recipe.status === "draft")
+        .length,
+      averageCostPrice,
+    };
+  }, [recipes, semiFinished]);
   const filteredRecipes = useMemo(() => {
     const query = normalizeSearch(search);
 
@@ -65,7 +86,7 @@ export default function HalffabricatenList({
           <SectionTitle
             eyebrow="Basisrecepten"
             title="Halffabricaten"
-            description="Overzicht van vullingen, mousses, bodems en andere bouwstenen."
+            description="Kostprijscontrole voor vullingen, mousses, bodems en andere bouwstenen."
           />
           <button
             type="button"
@@ -74,6 +95,29 @@ export default function HalffabricatenList({
           >
             Nieuw halffabricaat
           </button>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <HalffabricatenMetric
+            label="Halffabricaten"
+            value={summary.total}
+            detail="Alle basisrecepten"
+          />
+          <HalffabricatenMetric
+            label="In gebruik"
+            value={summary.usedCount}
+            detail="Gekoppeld aan eindproduct"
+          />
+          <HalffabricatenMetric
+            label="Concept"
+            value={summary.draftCount}
+            detail="Nog aanvullen of controleren"
+          />
+          <HalffabricatenMetric
+            label="Gem. kostprijs"
+            value={formatEuro(summary.averageCostPrice)}
+            detail="Gemiddelde per rekeneenheid"
+          />
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_repeat(2,minmax(10rem,0.8fr))]">
@@ -161,5 +205,29 @@ export default function HalffabricatenList({
         )}
       </div>
     </Panel>
+  );
+}
+
+function HalffabricatenMetric({
+  label,
+  value,
+  detail,
+}: Readonly<{
+  label: string;
+  value: string | number;
+  detail: string;
+}>) {
+  return (
+    <div className="rounded-lg border border-[#eadfcb] bg-[#fffdf8] px-3 py-2">
+      <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#7a5a18]/70">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-black leading-none text-[#2d2a26]">
+        {value}
+      </p>
+      <p className="mt-1 text-[0.7rem] font-bold leading-snug text-[#2d2a26]/45">
+        {detail}
+      </p>
+    </div>
   );
 }

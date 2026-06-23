@@ -1,10 +1,7 @@
 import { useMemo, useState } from "react";
 import { productGroups } from "./mockData";
 import type { Recipe } from "./types";
-import {
-  EmptyState,
-  FilterSelect,
-} from "./RecepturenShared";
+import { EmptyState, FilterSelect } from "./RecepturenShared";
 import {
   changeBadgeClass,
   formatEuro,
@@ -13,7 +10,6 @@ import {
   marginStatusForRecipe,
   recipeCostChange,
   recipeCostDelta,
-  recipeTypeLabel,
   targetSalesPrice,
 } from "./utils";
 
@@ -24,34 +20,29 @@ export default function MargeOverzicht({
   recipes: Recipe[];
   onOpenRecipe: (recipe: Recipe) => void;
 }>) {
-  const [typeFilter, setTypeFilter] = useState("both");
   const [riskFilter, setRiskFilter] = useState("all");
   const [groupFilter, setGroupFilter] = useState("all");
   const [supplierImpact, setSupplierImpact] = useState("all");
+  const finalProductRecipes = useMemo(
+    () => recipes.filter((recipe) => recipe.type === "finalProduct"),
+    [recipes]
+  );
   const groupOptions = useMemo(
     () =>
       Array.from(
         new Set([
           ...productGroups,
-          "Basis",
-          "Vullingen",
-          "Mousses",
-          "Afwerking",
-          ...recipes
+          ...finalProductRecipes
             .map((recipe) => recipe.productGroup)
             .filter((group): group is string => Boolean(group?.trim())),
         ])
       ),
-    [recipes]
+    [finalProductRecipes]
   );
 
   const filteredRecipes = useMemo(
     () =>
-      recipes.filter((recipe) => {
-        const matchesType =
-          typeFilter === "both" ||
-          (typeFilter === "finalProduct" && recipe.type === "finalProduct") ||
-          (typeFilter === "semiFinished" && recipe.type === "semiFinished");
+      finalProductRecipes.filter((recipe) => {
         const matchesRisk =
           riskFilter === "all" ||
           (riskFilter === "under" && marginStatusForRecipe(recipe) !== "good") ||
@@ -64,9 +55,9 @@ export default function MargeOverzicht({
             supplierImpact.toLocaleLowerCase("nl-NL")
           );
 
-        return matchesType && matchesRisk && matchesGroup && matchesSupplier;
+        return matchesRisk && matchesGroup && matchesSupplier;
       }),
-    [groupFilter, recipes, riskFilter, supplierImpact, typeFilter]
+    [finalProductRecipes, groupFilter, riskFilter, supplierImpact]
   );
 
   return (
@@ -76,24 +67,18 @@ export default function MargeOverzicht({
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
             Marge
           </p>
-          <h2 className="text-xl font-black">Marge-overzicht</h2>
+          <h2 className="text-xl font-black">Marge eindproducten</h2>
+          <p className="mt-1 max-w-2xl text-xs font-bold leading-relaxed text-[#707070]">
+            Alleen verkoopbare eindproducten. Halffabricaten staan apart onder
+            kostprijscontrole.
+          </p>
         </div>
         <p className="text-xs font-bold text-[#707070]">
-          {filteredRecipes.length} regels
+          {filteredRecipes.length} van {finalProductRecipes.length} eindproducten
         </p>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <FilterSelect
-          label="Type"
-          value={typeFilter}
-          onChange={setTypeFilter}
-          options={[
-            { value: "both", label: "Allebei" },
-            { value: "finalProduct", label: "Eindproducten" },
-            { value: "semiFinished", label: "Halffabricaten" },
-          ]}
-        />
+      <div className="grid gap-2 sm:grid-cols-3">
         <FilterSelect
           label="Risico"
           value={riskFilter}
@@ -129,10 +114,9 @@ export default function MargeOverzicht({
 
       {filteredRecipes.length ? (
         <div className="max-h-[34rem] overflow-auto border border-[#d8d8d4]">
-          <div className="min-w-[48rem]">
-            <div className="grid grid-cols-[minmax(12rem,1.25fr)_7rem_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 border-b border-[#d8d8d4] bg-[#f5f5f3] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+          <div className="min-w-[42rem]">
+            <div className="grid grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 border-b border-[#d8d8d4] bg-[#f5f5f3] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
               <span>Product</span>
-              <span>Type</span>
               <span>Kost</span>
               <span>Verkoop</span>
               <span>Marge</span>
@@ -145,7 +129,7 @@ export default function MargeOverzicht({
                   key={recipe.id}
                   type="button"
                   onClick={() => onOpenRecipe(recipe)}
-                  className="grid w-full grid-cols-[minmax(12rem,1.25fr)_7rem_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 px-3 py-2 text-left text-sm hover:bg-[#f8f8f6]"
+                  className="grid w-full grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 px-3 py-2 text-left text-sm hover:bg-[#f8f8f6]"
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-black">{recipe.name}</span>
@@ -158,9 +142,6 @@ export default function MargeOverzicht({
                       {formatSignedPercent(recipeCostChange(recipe), 1)}
                     </span>
                   </span>
-                  <span className="font-bold text-[#707070]">
-                    {recipeTypeLabel(recipe.type)}
-                  </span>
                   <span className="font-black">{formatEuro(recipe.costPrice)}</span>
                   <span className="font-black">
                     {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
@@ -169,9 +150,7 @@ export default function MargeOverzicht({
                     {recipe.currentMargin ? formatPercent(recipe.currentMargin) : "-"}
                   </span>
                   <span className="font-black">
-                    {recipe.type === "finalProduct"
-                      ? formatEuro(targetSalesPrice(recipe))
-                      : "-"}
+                    {formatEuro(targetSalesPrice(recipe))}
                   </span>
                   <span className="truncate font-bold text-[#707070]">
                     {causeForRecipe(recipe)}
@@ -182,7 +161,7 @@ export default function MargeOverzicht({
           </div>
         </div>
       ) : (
-        <EmptyState text="Geen marge-items gevonden met deze filters." />
+        <EmptyState text="Geen eindproducten gevonden met deze margefilters." />
       )}
     </section>
   );
