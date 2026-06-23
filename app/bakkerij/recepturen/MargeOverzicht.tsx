@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { productGroups } from "./mockData";
 import type { Recipe } from "./types";
 import { EmptyState, FilterSelect } from "./RecepturenShared";
 import {
@@ -8,6 +7,7 @@ import {
   formatPercent,
   formatSignedPercent,
   marginStatusForRecipe,
+  normalizeSearch,
   recipeCostChange,
   recipeCostDelta,
   targetSalesPrice,
@@ -28,15 +28,21 @@ export default function MargeOverzicht({
     [recipes]
   );
   const groupOptions = useMemo(
-    () =>
-      Array.from(
-        new Set([
-          ...productGroups,
-          ...finalProductRecipes
-            .map((recipe) => recipe.productGroup)
-            .filter((group): group is string => Boolean(group?.trim())),
-        ])
-      ),
+    () => {
+      const groups = new Map<string, string>();
+
+      finalProductRecipes.forEach((recipe) => {
+        const label = recipe.productGroup.trim();
+        const value = normalizeSearch(label);
+        if (!value || groups.has(value)) return;
+
+        groups.set(value, label);
+      });
+
+      return Array.from(groups, ([value, label]) => ({ value, label })).sort(
+        (first, second) => first.label.localeCompare(second.label, "nl-NL")
+      );
+    },
     [finalProductRecipes]
   );
 
@@ -48,7 +54,8 @@ export default function MargeOverzicht({
           (riskFilter === "under" && marginStatusForRecipe(recipe) !== "good") ||
           (riskFilter === "increase" && recipe.costPrice > recipe.previousCostPrice);
         const matchesGroup =
-          groupFilter === "all" || recipe.productGroup === groupFilter;
+          groupFilter === "all" ||
+          normalizeSearch(recipe.productGroup) === groupFilter;
         const matchesSupplier =
           supplierImpact === "all" ||
           causeForRecipe(recipe).toLocaleLowerCase("nl-NL").includes(
@@ -95,7 +102,7 @@ export default function MargeOverzicht({
           onChange={setGroupFilter}
           options={[
             { value: "all", label: "Alle groepen" },
-            ...groupOptions.map((item) => ({ value: item, label: item })),
+            ...groupOptions,
           ]}
         />
         <FilterSelect
