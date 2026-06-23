@@ -364,35 +364,141 @@ function parsePackageSize(packageSize = "") {
   return { amount, unit };
 }
 
+function normalizeArticleNumber(value: string) {
+  return normalizeSearch(value).replace(/[^a-z0-9]/g, "").replace(/^0+/, "");
+}
+
+const MATCH_STOP_WORDS = new Set([
+  "a",
+  "bak",
+  "beker",
+  "blik",
+  "bl",
+  "can",
+  "doos",
+  "ds",
+  "emmer",
+  "fles",
+  "g",
+  "gr",
+  "gram",
+  "hk",
+  "kg",
+  "kilo",
+  "kilogram",
+  "l",
+  "li",
+  "liter",
+  "ltr",
+  "ml",
+  "pak",
+  "per",
+  "st",
+  "stuk",
+  "stuks",
+  "tray",
+  "verpakt",
+  "verse",
+  "zak",
+]);
+
+const BROAD_SINGLE_MATCH_WORDS = new Set([
+  "appel",
+  "boter",
+  "brood",
+  "choco",
+  "kaas",
+  "melk",
+  "room",
+  "suiker",
+]);
+
+function matchTokens(value: string) {
+  return normalizeSearch(value)
+    .replace(/(\d+)(kg|g|gr|gram|l|li|ltr|liter|ml|st|stuk|stuks)\b/g, " ")
+    .split(/[^a-z0-9]+/g)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1 && !MATCH_STOP_WORDS.has(token));
+}
+
+function uniqueTokens(value: string) {
+  return Array.from(new Set(matchTokens(value)));
+}
+
+function ingredientNameMatchScore(description: string, alias: string) {
+  const descriptionTokens = uniqueTokens(description);
+  const aliasTokens = uniqueTokens(alias);
+
+  if (!descriptionTokens.length || !aliasTokens.length) return 0;
+
+  const descriptionSet = new Set(descriptionTokens);
+  const sharedTokens = aliasTokens.filter((token) => descriptionSet.has(token));
+  if (!sharedTokens.length) return 0;
+
+  if (aliasTokens.length === 1) {
+    const [token] = aliasTokens;
+    const exactDescription =
+      descriptionTokens.length === 1 && descriptionTokens[0] === token;
+    const distinctiveToken =
+      token.length >= 6 && !BROAD_SINGLE_MATCH_WORDS.has(token);
+
+    return exactDescription || distinctiveToken ? sharedTokens.length : 0;
+  }
+
+  const aliasCoverage = sharedTokens.length / aliasTokens.length;
+  const descriptionCoverage = sharedTokens.length / descriptionTokens.length;
+
+  if (
+    sharedTokens.length >= 2 &&
+    aliasCoverage >= 0.6 &&
+    descriptionCoverage >= 0.45
+  ) {
+    return sharedTokens.length + aliasCoverage + descriptionCoverage;
+  }
+
+  return 0;
+}
+
 function findMatchingIngredient(
   articleNumber: string,
   description: string,
   ingredients: Ingredient[]
 ) {
-  const normalizedDescription = normalizeSearch(description);
-  const normalizedArticleNumber = articleNumber.replace(/^0+/, "").trim();
+  const normalizedArticleNumber = normalizeArticleNumber(articleNumber);
+  const articleMatches = normalizedArticleNumber
+    ? ingredients.filter(
+        (ingredient) =>
+          normalizeArticleNumber(ingredient.supplierArticleNumber) ===
+          normalizedArticleNumber
+      )
+    : [];
 
-  return ingredients.find((ingredient) => {
-    const ingredientArticle = ingredient.supplierArticleNumber.trim();
+  if (articleMatches.length === 1) return articleMatches[0];
 
-    if (
-      normalizedArticleNumber &&
-      ingredientArticle.replace(/^0+/, "") === normalizedArticleNumber
-    ) {
-      return true;
-    }
-
-    return [ingredient.name, ...ingredient.aliases].some((alias) => {
-      const normalizedAlias = normalizeSearch(alias);
-
-      return (
-        normalizedAlias &&
-        normalizedDescription &&
-        (normalizedDescription.includes(normalizedAlias) ||
-          normalizedAlias.includes(normalizedDescription))
+  const candidates = (articleMatches.length ? articleMatches : ingredients)
+    .map((ingredient) => {
+      const bestNameScore = [ingredient.name, ...ingredient.aliases].reduce(
+        (bestScore, alias) =>
+          Math.max(bestScore, ingredientNameMatchScore(description, alias)),
+        0
       );
-    });
-  });
+      const articleScore = articleMatches.includes(ingredient) ? 100 : 0;
+
+      return {
+        ingredient,
+        nameScore: bestNameScore,
+        score: articleScore + bestNameScore,
+      };
+    })
+    .filter((candidate) =>
+      articleMatches.length > 1 ? candidate.nameScore > 0 : candidate.score > 0
+    )
+    .sort((a, b) => b.score - a.score);
+
+  const best = candidates[0];
+  if (!best) return undefined;
+
+  return best.ingredient;
 }
 
 function getPercentageChange(oldPrice: number, newPrice: number) {
