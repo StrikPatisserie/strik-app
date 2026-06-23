@@ -3501,6 +3501,17 @@ function formatInputNumber(value: number) {
   return String(Math.round(value * 10000) / 10000).replace(".", ",");
 }
 
+function formatRecipeCardQuantity(value: number) {
+  if (!value) return "0";
+
+  const decimals = Math.abs(value) < 10 ? 2 : 1;
+
+  return value.toLocaleString("nl-NL", {
+    maximumFractionDigits: decimals,
+    minimumFractionDigits: 0,
+  });
+}
+
 async function createSmallRecipePhotoPreview(file: File) {
   const sourceDataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(sourceDataUrl);
@@ -3749,7 +3760,7 @@ function createRecipePrintHtml(
     .map(
       (item) =>
         `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(
-          formatInputNumber(item.quantity)
+          formatRecipeCardQuantity(item.quantity)
         )}</td><td>${escapeHtml(shortUnitLabel(item.unit))}</td><td>${escapeHtml(
           item.isSemiFinished ? "halffabricaat" : ""
         )}</td></tr>`
@@ -4082,7 +4093,7 @@ function BakkerRecipeCard({
                       >
                         <span className="truncate font-black text-[#1a1815]">{row.name}</span>
                         <span className="text-right font-black text-[#30462f]">
-                          {formatInputNumber(row.quantity)}
+                          {formatRecipeCardQuantity(row.quantity)}
                         </span>
                         <span className="font-black text-[#30462f]/80">{shortUnitLabel(row.unit)}</span>
                         <span className="flex min-w-0 justify-end">
