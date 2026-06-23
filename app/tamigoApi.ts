@@ -257,7 +257,7 @@ const ICE_LOKET_DEPARTMENT: ShopDepartment = {
 const ICE_SHIFT_LOCATION_ALIASES: Record<ShopName, string[]> = {
   Heyendaal: ["HEY", "HEYENDAAL", "HEYENDAALSEWEG"],
   Lent: ["LENT", "ORANJE", "ORANJE MARIEPLEIN"],
-  Ziekerstraat: ["ZIEKER", "ZIEKERSTRAAT"],
+  Ziekerstraat: ["ZIEK", "ZIEKER", "ZIEKERSTRAAT", "ZIEKER STRAAT"],
   Daalseweg: ["DAAL", "DAALSEWEG"],
 };
 
@@ -1065,6 +1065,13 @@ function normalizeIceLocationText(value: string) {
     .trim();
 }
 
+function hasIceLocationAlias(locationText: string, alias: string) {
+  const normalizedAlias = normalizeIceLocationText(alias);
+  if (!normalizedAlias) return false;
+
+  return ` ${locationText} `.includes(` ${normalizedAlias} `);
+}
+
 function getIceShiftShop(shift: TamigoShift): ShopName | null {
   const locationText = normalizeIceLocationText(
     [shift.Comments, shift.Comments2].filter(Boolean).join(" ")
@@ -1073,11 +1080,7 @@ function getIceShiftShop(shift: TamigoShift): ShopName | null {
   if (!locationText) return null;
 
   for (const [shop, aliases] of Object.entries(ICE_SHIFT_LOCATION_ALIASES)) {
-    if (
-      aliases.some((alias) =>
-        locationText.includes(normalizeIceLocationText(alias))
-      )
-    ) {
+    if (aliases.some((alias) => hasIceLocationAlias(locationText, alias))) {
       return shop as ShopName;
     }
   }
