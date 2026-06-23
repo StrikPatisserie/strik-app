@@ -906,6 +906,21 @@ export default function RecepturenApp() {
     );
   }
 
+  function saveIngredients(
+    updatedIngredients: Ingredient[],
+    successMessage = "Grondstoffen opgeslagen en kostprijzen opnieuw berekend."
+  ) {
+    if (!updatedIngredients.length) return;
+
+    const nextIngredients = mergeIngredients(ingredientItems, updatedIngredients);
+
+    recalculateRecipesWithIngredients(
+      nextIngredients,
+      invoiceItems,
+      successMessage
+    );
+  }
+
   function deleteIngredients(
     ingredientsToDelete: Ingredient[],
     successMessage?: string
@@ -1390,28 +1405,41 @@ export default function RecepturenApp() {
     );
   }
 
-  function importRecipes(importedRecipes: Recipe[]) {
+  function importRecipes(
+    importedRecipes: Recipe[],
+    importedIngredients: Ingredient[] = []
+  ) {
     if (!importedRecipes.length) return;
 
+    const nextIngredients = importedIngredients.length
+      ? mergeIngredients(ingredientItems, importedIngredients)
+      : ingredientItems;
     const mergedRecipes = mergeRecipes(recipeItems, importedRecipes);
     const nextRecipes = recalculateAllRecipeCosts(
       mergedRecipes,
-      ingredientItems,
+      nextIngredients,
       {
         markAsUpdated: true,
       },
       packagingItems
     );
 
+    setIngredientItems(nextIngredients);
     setRecipeItems(nextRecipes);
     syncSelectedRecipe(nextRecipes);
     persistRecepturenData(
       {
-        ingredients: ingredientItems,
+        ingredients: nextIngredients,
         recipes: nextRecipes,
         invoiceImports: invoiceItems,
       },
-      `${importedRecipes.length} recepten ingeladen en kostprijzen berekend.`
+      `${importedRecipes.length} recepten ingeladen${
+        importedIngredients.length
+          ? ` met ${importedIngredients.length} nieuwe grondstof${
+              importedIngredients.length === 1 ? "" : "fen"
+            }`
+          : ""
+      } en kostprijzen berekend.`
     );
   }
 
@@ -1807,6 +1835,7 @@ export default function RecepturenApp() {
             onSaveRecipe={saveRecipe}
             onDeleteRecipe={deleteRecipe}
             onSaveIngredient={saveIngredient}
+            onSaveIngredients={saveIngredients}
             onStartProduction={startRecipeProduction}
             onOpenRecipe={openRecipe}
           />

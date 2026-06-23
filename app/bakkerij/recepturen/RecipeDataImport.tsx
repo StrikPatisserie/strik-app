@@ -20,7 +20,7 @@ export default function RecipeDataImport({
   ingredients: Ingredient[];
   recipes: Recipe[];
   onImportIngredients: (ingredients: Ingredient[]) => void;
-  onImportRecipes: (recipes: Recipe[]) => void;
+  onImportRecipes: (recipes: Recipe[], ingredients?: Ingredient[]) => void;
 }>) {
   const [kind, setKind] = useState<ImportKind>("recipes");
   const [isUploading, setIsUploading] = useState(false);
@@ -56,7 +56,7 @@ export default function RecipeDataImport({
       }
 
       if (kind === "recipes" && data.recipes?.length) {
-        onImportRecipes(data.recipes);
+        onImportRecipes(data.recipes, data.ingredients || []);
       }
 
       setWarnings(data.warnings || []);
