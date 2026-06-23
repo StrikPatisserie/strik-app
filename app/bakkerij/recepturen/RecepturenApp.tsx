@@ -2646,12 +2646,6 @@ function BeheerHome({
         </p>
         <div className="mt-5 grid gap-3">
           <BeheerRow
-            title="Eindproducten"
-            description="Receptkaarten met verkoopprijs, marge en productie."
-            icon="/UI-apps_data.svg"
-            onClick={() => onOpen("recepten")}
-          />
-          <BeheerRow
             title="Halffabricaten"
             description="Basisrecepten met kostprijs, batch en gebruik."
             icon="/UI-apps_productie.svg"
