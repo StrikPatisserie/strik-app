@@ -276,7 +276,7 @@ export default function IngredientsList({
   );
 }
 
-function IngredientDetail({
+export function IngredientDetail({
   ingredient,
   ingredients,
   recipes,

@@ -25,6 +25,7 @@ function isMeaningfulInvoicePriceChange(line: InvoiceLine) {
 
 type CreateIngredientOptions = {
   forceNew?: boolean;
+  openEditor?: boolean;
 };
 
 export default function PriceUpdateReview({
@@ -37,6 +38,7 @@ export default function PriceUpdateReview({
   onDeleteInvoice,
   onMatchLine,
   onCreateIngredientFromLine,
+  onEditIngredient,
 }: Readonly<{
   invoice: InvoiceImport;
   ingredients: Ingredient[];
@@ -55,6 +57,7 @@ export default function PriceUpdateReview({
     line: InvoiceLine,
     options?: CreateIngredientOptions
   ) => void;
+  onEditIngredient: (ingredient: Ingredient) => void;
 }>) {
   const pendingLines = invoice.lines.filter(
     (line) =>
@@ -155,6 +158,7 @@ export default function PriceUpdateReview({
                   onIgnore={onIgnoreLine}
                   onMatch={onMatchLine}
                   onCreateIngredient={onCreateIngredientFromLine}
+                  onEditIngredient={onEditIngredient}
                 />
               ))}
             </div>
@@ -176,43 +180,16 @@ export default function PriceUpdateReview({
         <div className="grid gap-1.5 p-2">
           {unmatchedLines.length ? (
             unmatchedLines.map((line, index) => (
-              <div
+              <UnmatchedLine
                 key={invoiceLineKey(line, index)}
-                className="grid gap-2 rounded-lg border border-[#f3d4a4] bg-white px-2 py-1.5 lg:grid-cols-[minmax(12rem,1fr)_8rem_minmax(12rem,auto)] lg:items-center"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-black">{line.description}</p>
-                  <p className="text-[0.65rem] font-bold text-[#2d2a26]/45">
-                    {line.articleNumber || "-"} · {formatEuro(normalizePackagePrice(line.pricePerUnit))}
-                  </p>
-                  <p className="mt-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#7a5a18]">
-                    nieuwe grondstof gedetecteerd
-                  </p>
-                </div>
-                <IngredientMatchControls
-                  invoiceId={invoice.id}
-                  line={line}
-                  ingredients={ingredients}
-                  onMatch={onMatchLine}
-                  buttonClassName="rounded-full bg-[#fff8e3] px-2.5 py-1.5 text-[0.68rem] font-black text-[#7a5a18] shadow-sm"
-                />
-                <div className="flex flex-wrap justify-end gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => onCreateIngredientFromLine(invoice.id, line)}
-                    className="rounded-full bg-[#ecf4ed] px-2.5 py-1.5 text-[0.68rem] font-black text-[#4a6d5a]"
-                  >
-                    voeg toe
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onIgnoreLine(invoice.id, line)}
-                    className="rounded-full bg-white px-2.5 py-1.5 text-[0.68rem] font-black text-[#a83e31] shadow-sm"
-                  >
-                    negeren
-                  </button>
-                </div>
-              </div>
+                invoiceId={invoice.id}
+                line={line}
+                ingredients={ingredients}
+                onMatch={onMatchLine}
+                onIgnore={onIgnoreLine}
+                onCreateIngredient={onCreateIngredientFromLine}
+                onEditIngredient={onEditIngredient}
+              />
             ))
           ) : (
             <EmptyState text="Alle factuurregels zijn gekoppeld." />
@@ -231,6 +208,7 @@ function ReviewLine({
   onIgnore,
   onMatch,
   onCreateIngredient,
+  onEditIngredient,
 }: Readonly<{
   invoiceId: string;
   line: InvoiceLine;
@@ -243,7 +221,9 @@ function ReviewLine({
     line: InvoiceLine,
     options?: CreateIngredientOptions
   ) => void;
+  onEditIngredient: (ingredient: Ingredient) => void;
 }>) {
+  const [isMatching, setIsMatching] = useState(false);
   const ingredient = line.matchedIngredientId
     ? findIngredient(ingredients, line.matchedIngredientId)
     : undefined;
@@ -260,13 +240,24 @@ function ReviewLine({
         <p className="truncate text-xs font-black">
           {ingredient?.name || "nog onbekend"}
         </p>
-        <IngredientMatchControls
-          invoiceId={invoiceId}
-          line={line}
-          ingredients={ingredients}
-          onMatch={onMatch}
-          buttonClassName="mt-1 text-[0.65rem] font-black text-[#45663b] underline underline-offset-2"
-        />
+        <div className="mt-1 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setIsMatching(true)}
+            className="text-[0.65rem] font-black text-[#45663b] underline underline-offset-2"
+          >
+            Koppeling aanpassen
+          </button>
+          {ingredient && (
+            <button
+              type="button"
+              onClick={() => onEditIngredient(ingredient)}
+              className="text-[0.65rem] font-black text-[#7a5a18] underline underline-offset-2"
+            >
+              Grondstof aanpassen
+            </button>
+          )}
+        </div>
       </div>
       <p className="text-xs font-black lg:text-right">
         {formatEuro(normalizePackagePrice(line.oldPrice))}
@@ -293,7 +284,12 @@ function ReviewLine({
         </button>
         <button
           type="button"
-          onClick={() => onCreateIngredient(invoiceId, line, { forceNew: true })}
+          onClick={() =>
+            onCreateIngredient(invoiceId, line, {
+              forceNew: true,
+              openEditor: true,
+            })
+          }
           className="rounded-full bg-[#fff8e3] px-2.5 py-1.5 text-[0.68rem] font-black text-[#7a5a18]"
         >
           voeg toe
@@ -306,71 +302,198 @@ function ReviewLine({
           negeer
         </button>
       </div>
+      {isMatching && (
+        <div className="lg:col-span-6">
+          <IngredientMatchEditor
+            invoiceId={invoiceId}
+            line={line}
+            ingredients={ingredients}
+            onMatch={onMatch}
+            onCancel={() => setIsMatching(false)}
+            onMatched={() => setIsMatching(false)}
+            onEditIngredient={onEditIngredient}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
-function IngredientMatchControls({
+function UnmatchedLine({
   invoiceId,
   line,
   ingredients,
   onMatch,
-  buttonClassName,
+  onIgnore,
+  onCreateIngredient,
+  onEditIngredient,
 }: Readonly<{
   invoiceId: string;
   line: InvoiceLine;
   ingredients: Ingredient[];
   onMatch: (invoiceId: string, line: InvoiceLine, ingredientId: string) => void;
-  buttonClassName: string;
+  onIgnore: (invoiceId: string, line: InvoiceLine) => void;
+  onCreateIngredient: (
+    invoiceId: string,
+    line: InvoiceLine,
+    options?: CreateIngredientOptions
+  ) => void;
+  onEditIngredient: (ingredient: Ingredient) => void;
 }>) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [ingredientId, setIngredientId] = useState(
-    line.matchedIngredientId || ingredients[0]?.id || ""
-  );
-
-  if (!isOpen) {
-    return (
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className={buttonClassName}
-      >
-        Koppeling aanpassen
-      </button>
-    );
-  }
+  const [isMatching, setIsMatching] = useState(false);
 
   return (
-    <div className="grid w-full gap-1.5 rounded-xl border border-[#e7e0d8] bg-white/90 p-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
-      <select
-        value={ingredientId}
-        onChange={(event) => setIngredientId(event.target.value)}
-        className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-2 py-1.5 text-xs font-bold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
-      >
-        {ingredients.map((ingredient) => (
-          <option key={ingredient.id} value={ingredient.id}>
-            {ingredient.name} · {ingredient.supplierArticleNumber}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        onClick={() => {
-          if (!ingredientId) return;
-          onMatch(invoiceId, line, ingredientId);
-          setIsOpen(false);
-        }}
-        className="rounded-full bg-[#c3d3bc] px-3 py-1.5 text-xs font-black shadow-sm"
-      >
-        Opslaan
-      </button>
-      <button
-        type="button"
-        onClick={() => setIsOpen(false)}
-        className="rounded-full bg-[#f5f2ee] px-3 py-1.5 text-xs font-black text-[#a39c91]"
-      >
-        Annuleer
-      </button>
+    <div className="grid gap-2 rounded-lg border border-[#f3d4a4] bg-white px-2 py-1.5 lg:grid-cols-[minmax(12rem,1fr)_minmax(16rem,auto)] lg:items-center">
+      <div className="min-w-0">
+        <p className="truncate text-xs font-black">{line.description}</p>
+        <p className="text-[0.65rem] font-bold text-[#2d2a26]/45">
+          {line.articleNumber || "-"} ·{" "}
+          {formatEuro(normalizePackagePrice(line.pricePerUnit))}
+        </p>
+        <p className="mt-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#7a5a18]">
+          nieuwe grondstof gedetecteerd
+        </p>
+      </div>
+      <div className="flex flex-wrap justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={() => setIsMatching(true)}
+          className="rounded-full bg-[#fff8e3] px-2.5 py-1.5 text-[0.68rem] font-black text-[#7a5a18] shadow-sm"
+        >
+          koppel bestaand
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onCreateIngredient(invoiceId, line, { openEditor: true })
+          }
+          className="rounded-full bg-[#ecf4ed] px-2.5 py-1.5 text-[0.68rem] font-black text-[#4a6d5a]"
+        >
+          voeg toe
+        </button>
+        <button
+          type="button"
+          onClick={() => onIgnore(invoiceId, line)}
+          className="rounded-full bg-white px-2.5 py-1.5 text-[0.68rem] font-black text-[#a83e31] shadow-sm"
+        >
+          negeren
+        </button>
+      </div>
+      {isMatching && (
+        <div className="lg:col-span-2">
+          <IngredientMatchEditor
+            invoiceId={invoiceId}
+            line={line}
+            ingredients={ingredients}
+            onMatch={onMatch}
+            onCancel={() => setIsMatching(false)}
+            onMatched={() => setIsMatching(false)}
+            onEditIngredient={onEditIngredient}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IngredientMatchEditor({
+  invoiceId,
+  line,
+  ingredients,
+  onMatch,
+  onCancel,
+  onMatched,
+  onEditIngredient,
+}: Readonly<{
+  invoiceId: string;
+  line: InvoiceLine;
+  ingredients: Ingredient[];
+  onMatch: (invoiceId: string, line: InvoiceLine, ingredientId: string) => void;
+  onCancel: () => void;
+  onMatched: () => void;
+  onEditIngredient: (ingredient: Ingredient) => void;
+}>) {
+  const [ingredientId, setIngredientId] = useState(line.matchedIngredientId || "");
+  const [query, setQuery] = useState("");
+  const selectedIngredient = ingredientId
+    ? findIngredient(ingredients, ingredientId)
+    : undefined;
+  const normalizedQuery = query.trim().toLocaleLowerCase("nl-NL");
+  const visibleIngredients = ingredients
+    .filter((ingredient) => {
+      if (!normalizedQuery) return true;
+      const haystack = [
+        ingredient.name,
+        ingredient.supplier,
+        ingredient.supplierArticleNumber,
+        ...ingredient.aliases,
+      ]
+        .join(" ")
+        .toLocaleLowerCase("nl-NL");
+
+      return haystack.includes(normalizedQuery);
+    })
+    .slice(0, 120);
+
+  return (
+    <div className="grid w-full gap-2 rounded-xl border border-[#e7e0d8] bg-[#fffdf8] p-2 sm:grid-cols-[minmax(10rem,0.9fr)_minmax(14rem,1.3fr)_auto] sm:items-end">
+      <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
+        Zoek grondstof
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="naam of artikelnummer"
+          className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-2 py-1.5 text-xs font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        />
+      </label>
+      <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
+        Bestaande grondstof
+        <select
+          value={ingredientId}
+          onChange={(event) => setIngredientId(event.target.value)}
+          className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-2 py-1.5 text-xs font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+        >
+          <option value="">Kies grondstof...</option>
+          {visibleIngredients.map((ingredient) => (
+            <option key={ingredient.id} value={ingredient.id}>
+              {ingredient.name}
+              {ingredient.supplierArticleNumber
+                ? ` · ${ingredient.supplierArticleNumber}`
+                : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="flex flex-wrap justify-end gap-1.5">
+        {selectedIngredient && (
+          <button
+            type="button"
+            onClick={() => onEditIngredient(selectedIngredient)}
+            className="rounded-full bg-[#fff8e3] px-3 py-1.5 text-xs font-black text-[#7a5a18] shadow-sm"
+          >
+            Grondstof aanpassen
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={!ingredientId}
+          onClick={() => {
+            if (!ingredientId) return;
+            onMatch(invoiceId, line, ingredientId);
+            onMatched();
+          }}
+          className="rounded-full bg-[#c3d3bc] px-3 py-1.5 text-xs font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          Opslaan
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-full bg-[#f5f2ee] px-3 py-1.5 text-xs font-black text-[#a39c91]"
+        >
+          Annuleer
+        </button>
+      </div>
     </div>
   );
 }

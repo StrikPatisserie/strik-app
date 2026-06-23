@@ -5,7 +5,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
-import IngredientsList from "./IngredientsList";
+import IngredientsList, { IngredientDetail } from "./IngredientsList";
 import MargeOverzicht from "./MargeOverzicht";
 import {
   ingredients,
@@ -130,12 +130,149 @@ function invoiceStatusForLines(lines: InvoiceLine[]): InvoiceImport["status"] {
   return "processed";
 }
 
-function normalizeInvoiceReviewStatuses(invoice: InvoiceImport): InvoiceImport {
-  const lines = invoice.lines.map((line) =>
-    line.reviewStatus === "pending"
-      ? { ...line, reviewStatus: reviewStatusForInvoiceLine(line) }
-      : line
+function normalizeInvoiceArticle(value: string) {
+  return normalizeSearch(value).replace(/[^a-z0-9]/g, "").replace(/^0+/, "");
+}
+
+const invoiceMatchStopWords = new Set([
+  "bak",
+  "beker",
+  "blik",
+  "doos",
+  "ds",
+  "emmer",
+  "fles",
+  "g",
+  "gr",
+  "gram",
+  "hk",
+  "kg",
+  "kilo",
+  "kilogram",
+  "l",
+  "li",
+  "liter",
+  "ltr",
+  "ml",
+  "pak",
+  "per",
+  "st",
+  "stuk",
+  "stuks",
+  "tray",
+  "verpakt",
+  "verse",
+  "zak",
+]);
+
+const broadInvoiceMatchWords = new Set([
+  "appel",
+  "boter",
+  "brood",
+  "choco",
+  "kaas",
+  "melk",
+  "room",
+  "suiker",
+]);
+
+function invoiceMatchTokens(value: string) {
+  return normalizeSearch(value)
+    .replace(/(\d+)(kg|g|gr|gram|l|li|ltr|liter|ml|st|stuk|stuks)\b/g, " ")
+    .split(/[^a-z0-9]+/g)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1 && !invoiceMatchStopWords.has(token));
+}
+
+function uniqueInvoiceTokens(value: string) {
+  return Array.from(new Set(invoiceMatchTokens(value)));
+}
+
+function invoiceNameMatchScore(description: string, alias: string) {
+  const descriptionTokens = uniqueInvoiceTokens(description);
+  const aliasTokens = uniqueInvoiceTokens(alias);
+
+  if (!descriptionTokens.length || !aliasTokens.length) return 0;
+
+  const descriptionSet = new Set(descriptionTokens);
+  const sharedTokens = aliasTokens.filter((token) => descriptionSet.has(token));
+  if (!sharedTokens.length) return 0;
+
+  if (aliasTokens.length === 1) {
+    const [token] = aliasTokens;
+    const exactDescription =
+      descriptionTokens.length === 1 && descriptionTokens[0] === token;
+    const distinctiveToken =
+      token.length >= 6 && !broadInvoiceMatchWords.has(token);
+
+    return exactDescription || distinctiveToken ? sharedTokens.length : 0;
+  }
+
+  const aliasCoverage = sharedTokens.length / aliasTokens.length;
+  const descriptionCoverage = sharedTokens.length / descriptionTokens.length;
+
+  if (
+    sharedTokens.length >= 2 &&
+    aliasCoverage >= 0.6 &&
+    descriptionCoverage >= 0.45
+  ) {
+    return sharedTokens.length + aliasCoverage + descriptionCoverage;
+  }
+
+  return 0;
+}
+
+function invoiceLineMatchesIngredient(
+  line: InvoiceLine,
+  ingredient?: Ingredient
+) {
+  if (!ingredient) return false;
+
+  const lineArticle = normalizeInvoiceArticle(line.articleNumber);
+  const ingredientArticle = normalizeInvoiceArticle(
+    ingredient.supplierArticleNumber
   );
+  const articleMatches = Boolean(
+    lineArticle && ingredientArticle && lineArticle === ingredientArticle
+  );
+  const articleMismatches = Boolean(
+    lineArticle && ingredientArticle && lineArticle !== ingredientArticle
+  );
+
+  if (articleMatches) return true;
+  if (articleMismatches) return false;
+
+  return [ingredient.name, ...ingredient.aliases].some(
+    (alias) => invoiceNameMatchScore(line.description, alias) > 0
+  );
+}
+
+function normalizeInvoiceReviewStatuses(
+  invoice: InvoiceImport,
+  ingredientsForMatching: Ingredient[]
+): InvoiceImport {
+  const lines = invoice.lines.map((line) => {
+    const matchedIngredient = line.matchedIngredientId
+      ? ingredientsForMatching.find(
+          (ingredient) => ingredient.id === line.matchedIngredientId
+        )
+      : undefined;
+    const safeLine =
+      line.matchedIngredientId &&
+      !invoiceLineMatchesIngredient(line, matchedIngredient)
+        ? {
+            ...line,
+            matchedIngredientId: undefined,
+            oldPrice: 0,
+            percentageChange: 0,
+            reviewStatus: "pending" as const,
+          }
+        : line;
+
+    return safeLine.reviewStatus === "pending"
+      ? { ...safeLine, reviewStatus: reviewStatusForInvoiceLine(safeLine) }
+      : safeLine;
+  });
 
   return { ...invoice, lines, status: invoiceStatusForLines(lines) };
 }
@@ -386,6 +523,8 @@ export default function RecepturenApp() {
   } | null>(null);
   const [recipeItems, setRecipeItems] = useState(recipes);
   const [ingredientItems, setIngredientItems] = useState(ingredients);
+  const [invoiceIngredientEditor, setInvoiceIngredientEditor] =
+    useState<Ingredient | null>(null);
   const [packagingItems, setPackagingItems] = useState(defaultPackagingItems);
   const [invoiceItems, setInvoiceItems] = useState(invoiceImports);
   const [manualPlanningItems, setManualPlanningItems] = useState<
@@ -521,9 +660,14 @@ export default function RecepturenApp() {
       if (ignoreResult) return;
 
       if (result.ok && hasStoredRecepturenData(result.data)) {
-        setIngredientItems(
-          result.data.ingredients.length ? result.data.ingredients : ingredients
-        );
+        const loadedIngredients = result.data.ingredients.length
+          ? result.data.ingredients
+          : ingredients;
+        const loadedInvoices = result.data.invoiceImports.length
+          ? result.data.invoiceImports
+          : invoiceImports;
+
+        setIngredientItems(loadedIngredients);
         setRecipeItems(result.data.recipes.length ? result.data.recipes : recipes);
         setPackagingItems(
           Array.isArray(result.data.packagingItems)
@@ -531,9 +675,9 @@ export default function RecepturenApp() {
             : defaultPackagingItems
         );
         setInvoiceItems(
-          result.data.invoiceImports.length
-            ? result.data.invoiceImports
-            : invoiceImports
+          loadedInvoices.map((invoice) =>
+            normalizeInvoiceReviewStatuses(invoice, loadedIngredients)
+          )
         );
         setBakeryHome(normalizeBakeryHomeData(result.data.bakeryHome));
         setManualPlanningItems(result.data.manualProductionPlanningItems || []);
@@ -929,6 +1073,9 @@ export default function RecepturenApp() {
       invoiceItems,
       "Ingredient opgeslagen en kostprijzen opnieuw berekend."
     );
+    setInvoiceIngredientEditor((current) =>
+      current?.id === updatedIngredient.id ? updatedIngredient : current
+    );
   }
 
   function saveIngredients(
@@ -1321,10 +1468,16 @@ export default function RecepturenApp() {
     });
   }
 
+  function openInvoiceIngredientEditor(ingredient: Ingredient) {
+    setInvoiceIngredientEditor(
+      ingredientItems.find((item) => item.id === ingredient.id) || ingredient
+    );
+  }
+
   function createIngredientFromInvoiceLine(
     invoiceId: string,
     line: InvoiceLine,
-    options?: { forceNew?: boolean }
+    options?: { forceNew?: boolean; openEditor?: boolean }
   ) {
     const invoice = invoiceItems.find((item) => item.id === invoiceId);
     const supplier = invoice?.supplier || "Onbekend";
@@ -1357,6 +1510,9 @@ export default function RecepturenApp() {
       });
 
       setInvoiceItems(nextInvoices);
+      if (options?.openEditor) {
+        setInvoiceIngredientEditor(existingIngredient);
+      }
       persistRecepturenData(
         {
           ingredients: ingredientItems,
@@ -1424,10 +1580,16 @@ export default function RecepturenApp() {
       nextInvoices,
       `${newIngredient.name} toegevoegd als nieuwe grondstof en prijs toegepast.`
     );
+    if (options?.openEditor) {
+      setInvoiceIngredientEditor(newIngredient);
+    }
   }
 
   function importInvoice(invoice: InvoiceImport) {
-    const normalizedInvoice = normalizeInvoiceReviewStatuses(invoice);
+    const normalizedInvoice = normalizeInvoiceReviewStatuses(
+      invoice,
+      ingredientItems
+    );
     const nextInvoices = pruneInvoiceImports([normalizedInvoice, ...invoiceItems]);
 
     setInvoiceItems(nextInvoices);
@@ -1797,6 +1959,7 @@ export default function RecepturenApp() {
             onDeleteInvoice={deleteInvoice}
             onMatchLine={matchInvoiceLine}
             onCreateIngredientFromLine={createIngredientFromInvoiceLine}
+            onEditIngredient={openInvoiceIngredientEditor}
             onImportInvoice={importInvoice}
           />
         )}
@@ -1885,6 +2048,24 @@ export default function RecepturenApp() {
             onSaveIngredients={saveIngredients}
             onStartProduction={startRecipeProduction}
             onOpenRecipe={openRecipe}
+          />
+        )}
+        {invoiceIngredientEditor && (
+          <IngredientDetail
+            key={invoiceIngredientEditor.id}
+            ingredient={invoiceIngredientEditor}
+            ingredients={ingredientItems}
+            recipes={recipeItems}
+            onUpdateIngredient={saveIngredient}
+            onMergeIngredient={(sourceIngredient, targetIngredient) => {
+              mergeDuplicateIngredient(sourceIngredient, targetIngredient);
+              setInvoiceIngredientEditor(null);
+            }}
+            onDeleteIngredient={(ingredient) => {
+              deleteIngredient(ingredient);
+              setInvoiceIngredientEditor(null);
+            }}
+            onClose={() => setInvoiceIngredientEditor(null)}
           />
         )}
       </div>

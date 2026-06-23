@@ -13,6 +13,7 @@ export default function FactuurImport({
   onDeleteInvoice,
   onMatchLine,
   onCreateIngredientFromLine,
+  onEditIngredient,
   onImportInvoice,
 }: Readonly<{
   invoice: InvoiceImport;
@@ -31,8 +32,9 @@ export default function FactuurImport({
   onCreateIngredientFromLine: (
     invoiceId: string,
     line: InvoiceLine,
-    options?: { forceNew?: boolean }
+    options?: { forceNew?: boolean; openEditor?: boolean }
   ) => void;
+  onEditIngredient: (ingredient: Ingredient) => void;
 }>) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadMessage, setUploadMessage] = useState("");
@@ -163,6 +165,7 @@ export default function FactuurImport({
         onDeleteInvoice={onDeleteInvoice}
         onMatchLine={onMatchLine}
         onCreateIngredientFromLine={onCreateIngredientFromLine}
+        onEditIngredient={onEditIngredient}
       />
     </div>
   );

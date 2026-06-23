@@ -475,7 +475,16 @@ function findMatchingIngredient(
 
   if (articleMatches.length === 1) return articleMatches[0];
 
-  const candidates = (articleMatches.length ? articleMatches : ingredients)
+  const nameMatchPool = normalizedArticleNumber
+    ? ingredients.filter((ingredient) => {
+        const ingredientArticle = normalizeArticleNumber(
+          ingredient.supplierArticleNumber
+        );
+
+        return !ingredientArticle || ingredientArticle === normalizedArticleNumber;
+      })
+    : ingredients;
+  const candidates = (articleMatches.length ? articleMatches : nameMatchPool)
     .map((ingredient) => {
       const bestNameScore = [ingredient.name, ...ingredient.aliases].reduce(
         (bestScore, alias) =>
