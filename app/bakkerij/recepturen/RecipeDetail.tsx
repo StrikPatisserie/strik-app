@@ -58,6 +58,7 @@ import {
 const recipeUnits: RecipeUnit[] = ["gram", "kg", "ml", "liter", "stuk"];
 const recipeStatuses: RecipeStatus[] = ["active", "draft", "old"];
 const salesPeriods: SalesPeriod[] = ["week", "month", "year"];
+type RecipePrintVariant = "work" | "calculation";
 const RECIPE_PHOTO_MAX_SOURCE_BYTES = 12 * 1024 * 1024;
 const RECIPE_PHOTO_MAX_SIDE = 360;
 const RECIPE_PHOTO_MIN_SIDE = 180;
@@ -133,6 +134,7 @@ export default function RecipeDetail({
   const [isRecipeStarted, setIsRecipeStarted] = useState(false);
   const [isProductionShortcutOpen, setIsProductionShortcutOpen] =
     useState(false);
+  const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
   const [newIngredient, setNewIngredient] = useState(createIngredientDraft());
   const [quickIngredientName, setQuickIngredientName] = useState("");
   const [draggedIngredientLineId, setDraggedIngredientLineId] = useState("");
@@ -766,7 +768,7 @@ export default function RecipeDetail({
     }
   }
 
-  function printProductionCard() {
+  function printProductionCard(variant: RecipePrintVariant) {
     const printWindow = window.open("", "_blank", "width=980,height=760");
 
     if (!printWindow) {
@@ -780,13 +782,18 @@ export default function RecipeDetail({
         ingredients,
         recipes,
         cardQuantity,
-        previewBatchQuantity
+        previewBatchQuantity,
+        variant
       )
     );
     printWindow.document.close();
     printWindow.focus();
     window.setTimeout(() => printWindow.print(), 150);
-    showFeedback("Printvenster geopend.");
+    showFeedback(
+      variant === "calculation"
+        ? "Calculatie printvenster geopend."
+        : "Werkkaart printvenster geopend."
+    );
   }
 
   function changeCardQuantity(delta: number) {
@@ -878,11 +885,21 @@ export default function RecipeDetail({
         onScaleFromIngredient={scaleCardFromIngredient}
         onStart={startRecipeCard}
         onMarkMade={markRecipeCardMade}
-        onPrint={printProductionCard}
+        onPrint={() => setIsPrintChoiceOpen(true)}
         onEdit={() => startEditing("basis")}
         onClose={onClose}
         onOpenRecipe={onOpenRecipe}
       />
+      {isPrintChoiceOpen && (
+        <RecipePrintChoiceDialog
+          recipe={previewRecipe}
+          onCancel={() => setIsPrintChoiceOpen(false)}
+          onChoose={(variant) => {
+            setIsPrintChoiceOpen(false);
+            printProductionCard(variant);
+          }}
+        />
+      )}
       {isProductionShortcutOpen && (
         <ProductionShortcutDialog
           recipe={previewRecipe}
@@ -2894,7 +2911,7 @@ export default function RecipeDetail({
           </button>
           <button
             type="button"
-            onClick={printProductionCard}
+            onClick={() => setIsPrintChoiceOpen(true)}
             className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
           >
             Productiekaart printen
@@ -3748,22 +3765,29 @@ function createRecipePrintHtml(
   ingredients: Ingredient[],
   recipes: Recipe[],
   quantity = recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1,
-  batchQuantity = recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1
+  batchQuantity = recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1,
+  variant: RecipePrintVariant = "work"
 ) {
   const multiplier = batchQuantity > 0 ? quantity / batchQuantity : 1;
-  const ingredientRows = recipeCardIngredientRows(
+  const isCalculation = variant === "calculation";
+  const calculationRows = recipeCalculationPrintRows(
     recipe,
     ingredients,
     recipes,
     multiplier
-  )
+  );
+  const ingredientRows = calculationRows
     .map(
       (item) =>
         `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(
           formatRecipeCardQuantity(item.quantity)
         )}</td><td>${escapeHtml(shortUnitLabel(item.unit))}</td><td>${escapeHtml(
           item.isSemiFinished ? "halffabricaat" : ""
-        )}</td></tr>`
+        )}</td>${
+          isCalculation
+            ? `<td>${escapeHtml(formatEuro(item.costContribution))}</td>`
+            : ""
+        }</tr>`
     )
     .join("");
   const steps = (recipe.preparationSteps.length
@@ -3773,12 +3797,52 @@ function createRecipePrintHtml(
     .map((step) => `<li>${escapeHtml(step)}</li>`)
     .join("");
   const unit = getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk";
+  const selectedTotalCost = roundMoney(recipe.costPrice * quantity);
+  const selectedTotalSales =
+    recipe.type === "finalProduct" && recipe.salesPrice
+      ? roundMoney(recipe.salesPrice * quantity)
+      : 0;
+  const currentMargin = recipe.salesPrice
+    ? calculateMargin(recipe.salesPrice, recipe.costPrice)
+    : 0;
+  const printTitle =
+    variant === "calculation" ? "Calculatiekaart" : "Recept / werkkaart";
+  const summaryCards = isCalculation
+    ? `<section class="summary">
+        <div><span>Kostprijs</span><strong>${escapeHtml(
+          formatEuro(recipe.costPrice)
+        )}</strong></div>
+        <div><span>Verkoopprijs</span><strong>${escapeHtml(
+          recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"
+        )}</strong></div>
+        <div><span>Marge</span><strong>${escapeHtml(
+          currentMargin ? formatPercent(currentMargin) : "-"
+        )}</strong></div>
+        <div><span>Totale kost</span><strong>${escapeHtml(
+          formatEuro(selectedTotalCost)
+        )}</strong></div>
+        <div><span>Totale verkoop</span><strong>${escapeHtml(
+          selectedTotalSales ? formatEuro(selectedTotalSales) : "-"
+        )}</strong></div>
+        <div><span>Doelmarge</span><strong>${escapeHtml(
+          recipe.targetMargin ? formatPercent(recipe.targetMargin, 1) : "-"
+        )}</strong></div>
+      </section>`
+    : "";
+  const tableHeader = isCalculation
+    ? "<thead><tr><th>Naam</th><th>Aantal</th><th>Eenheid</th><th>Soort</th><th>Kost</th></tr></thead>"
+    : "";
+  const costFooter = isCalculation
+    ? `<tfoot><tr><td colspan="4">Totaal calculatie</td><td>${escapeHtml(
+        formatEuro(selectedTotalCost)
+      )}</td></tr></tfoot>`
+    : "";
 
   return `<!doctype html>
 <html lang="nl">
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(recipe.name)} receptkaart</title>
+  <title>${escapeHtml(recipe.name)} ${escapeHtml(printTitle)}</title>
   <style>
     body { font-family: Arial, sans-serif; color: #111; margin: 28px; }
     .card { border: 1px solid #111; padding: 24px; }
@@ -3790,9 +3854,15 @@ function createRecipePrintHtml(
     .qty { margin: 14px 0 18px; font-weight: 700; }
     .box { background: #efefef; padding: 18px 24px; margin-top: 18px; }
     h2 { font-size: 17px; margin: 0 0 12px; }
+    .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 18px 0; }
+    .summary div { border: 1px solid #c3d3bc; padding: 10px 12px; }
+    .summary span { display: block; color: #666; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .summary strong { display: block; margin-top: 5px; font-size: 17px; }
     table { width: 100%; border-collapse: collapse; }
-    td { padding: 4px 0; font-size: 17px; font-weight: 700; }
-    td:nth-child(2), td:nth-child(3), td:nth-child(4) { text-align: right; }
+    th { padding: 0 0 8px; color: #666; font-size: 11px; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
+    td { border-top: 1px solid #d8d8d8; padding: 6px 0; font-size: 16px; font-weight: 700; }
+    td:nth-child(n+2), th:nth-child(n+2) { text-align: right; }
+    tfoot td { border-top: 2px solid #111; font-size: 17px; }
     ol { padding-left: 22px; margin: 0; }
     li { margin: 8px 0; font-size: 17px; font-weight: 700; }
     .meta { margin-top: 18px; text-align: right; font-style: italic; }
@@ -3806,16 +3876,20 @@ function createRecipePrintHtml(
     <button type="button" onclick="window.close()">Terug naar overzicht</button>
   </div>
   <div class="card">
-    <p class="eyebrow">Recept kaart</p>
+    <p class="eyebrow">${escapeHtml(printTitle)}</p>
     <div class="layout">
       <div class="stripe"></div>
       <main>
         <h1>${escapeHtml(recipe.name)}</h1>
         <p class="type">${escapeHtml(recipe.productGroup || recipeTypeLabel(recipe.type))}</p>
         <p class="qty">${escapeHtml(formatInputNumber(quantity))} ${escapeHtml(unitLabelText(unit))}</p>
+        ${summaryCards}
         <section class="box">
           <h2>Ingredienten</h2>
-          <table><tbody>${ingredientRows || "<tr><td colspan=\"4\">Nog geen ingredienten.</td></tr>"}</tbody></table>
+          <table>${tableHeader}<tbody>${
+            ingredientRows ||
+            `<tr><td colspan="${isCalculation ? "5" : "4"}">Nog geen ingredienten.</td></tr>`
+          }</tbody>${costFooter}</table>
         </section>
         <section class="box">
           <h2>Stappen</h2>
@@ -4210,6 +4284,61 @@ function recipeCardStripeClass(recipe: Recipe) {
   return "bg-[#c3d3bc]";
 }
 
+function RecipePrintChoiceDialog({
+  recipe,
+  onCancel,
+  onChoose,
+}: Readonly<{
+  recipe: Recipe;
+  onCancel: () => void;
+  onChoose: (variant: RecipePrintVariant) => void;
+}>) {
+  return (
+    <div className="fixed inset-0 z-[96] flex items-center justify-center bg-[#111111]/35 px-4">
+      <div className="grid w-full max-w-md gap-3 rounded-[1.1rem] border border-[#d7d2cb] bg-white p-4 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs italic text-[#2d2a26]/55">Printen</p>
+            <h3 className="mt-1 text-xl font-black leading-tight">
+              {recipe.name}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-3xl font-light leading-none"
+            aria-label="Sluit printkeuze"
+          >
+            ×
+          </button>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => onChoose("work")}
+            className="rounded-2xl border border-[#c3d3bc] bg-[#edf5ea] p-4 text-left shadow-sm"
+          >
+            <span className="block text-sm font-black">Recept / werkkaart</span>
+            <span className="mt-1 block text-xs font-bold leading-snug text-[#2d2a26]/55">
+              Ingredienten en stappen voor productie, zonder uitgebreide kosten.
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onChoose("calculation")}
+            className="rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-4 text-left shadow-sm"
+          >
+            <span className="block text-sm font-black">Calculatie</span>
+            <span className="mt-1 block text-xs font-bold leading-snug text-[#2d2a26]/55">
+              Kostprijs, verkoopprijs, marge en kostenregels.
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProductionShortcutDialog({
   recipe,
   quantity,
@@ -4290,6 +4419,10 @@ type RecipeCardIngredientRow = {
   linkedRecipe?: Recipe;
 };
 
+type RecipeCalculationPrintRow = RecipeCardIngredientRow & {
+  costContribution: number;
+};
+
 function recipeCardIngredientRows(
   recipe: Recipe,
   ingredients: Ingredient[],
@@ -4318,6 +4451,42 @@ function recipeCardIngredientRows(
       unit: item.unit,
       isSemiFinished: true,
       linkedRecipe: linkedRecipe || undefined,
+    };
+  });
+
+  return [...directRows, ...semiRows];
+}
+
+function recipeCalculationPrintRows(
+  recipe: Recipe,
+  ingredients: Ingredient[],
+  recipes: Recipe[],
+  multiplier: number
+): RecipeCalculationPrintRow[] {
+  const directRows = recipe.ingredients.map((item) => {
+    const ingredient = findIngredient(ingredients, item.ingredientId);
+
+    return {
+      id: `ingredient-${item.ingredientId}`,
+      name: ingredient?.name || item.ingredientId,
+      quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
+      unit: item.unit,
+      isSemiFinished: false,
+      linkedRecipe: undefined,
+      costContribution: roundMoney(item.costContribution * multiplier),
+    };
+  });
+  const semiRows = recipe.semiFinishedItems.map((item) => {
+    const linkedRecipe = findRecipe(recipes, item.semiFinishedRecipeId);
+
+    return {
+      id: `semi-${item.semiFinishedRecipeId}`,
+      name: linkedRecipe?.name || item.semiFinishedRecipeId,
+      quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
+      unit: item.unit,
+      isSemiFinished: true,
+      linkedRecipe: linkedRecipe || undefined,
+      costContribution: roundMoney(item.costContribution * multiplier),
     };
   });
 
