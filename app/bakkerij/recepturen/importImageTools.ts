@@ -1,7 +1,7 @@
 const OCR_IMAGE_MAX_SOURCE_BYTES = 35 * 1024 * 1024;
-const OCR_IMAGE_MAX_SIDES = [2200, 1800, 1400];
-const OCR_IMAGE_QUALITIES = [0.86, 0.74, 0.62];
-const OCR_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
+const OCR_IMAGE_MAX_SIDES = [1600, 1200, 900];
+const OCR_IMAGE_QUALITIES = [0.78, 0.66, 0.55];
+const OCR_IMAGE_MAX_BYTES = 1.5 * 1024 * 1024;
 
 export function isRecipeImportImage(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase() || "";
@@ -36,9 +36,12 @@ export async function prepareRecipeImportFile(file: File) {
     const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
     canvas.width = Math.max(1, Math.round(image.width * scale));
     canvas.height = Math.max(1, Math.round(image.height * scale));
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    enhanceCanvasForOcr(context, canvas.width, canvas.height);
 
     for (const quality of OCR_IMAGE_QUALITIES) {
       const blob = await canvasToJpegBlob(canvas, quality);
@@ -59,6 +62,28 @@ export async function prepareRecipeImportFile(file: File) {
   return new File([bestBlob], ocrJpegFileName(file.name), {
     type: "image/jpeg",
   });
+}
+
+function enhanceCanvasForOcr(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number
+) {
+  const imageData = context.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    const luminance =
+      pixels[index] * 0.299 +
+      pixels[index + 1] * 0.587 +
+      pixels[index + 2] * 0.114;
+    const contrast = Math.max(0, Math.min(255, (luminance - 128) * 1.7 + 128));
+    pixels[index] = contrast;
+    pixels[index + 1] = contrast;
+    pixels[index + 2] = contrast;
+  }
+
+  context.putImageData(imageData, 0, 0);
 }
 
 function readFileAsDataUrl(file: File) {

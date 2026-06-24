@@ -110,7 +110,7 @@ const MAX_IMPORT_ROWS = 3500;
 const MAX_IMPORT_TEXT_CHARS = 260000;
 const MAX_IMPORT_RECIPES = 25;
 const MAX_IMPORT_WARNINGS = 40;
-const OCR_TIMEOUT_MS = 45000;
+const OCR_TIMEOUT_MS = 25000;
 const TESSERACT_CACHE_PATH = path.join(tmpdir(), "strik-tesseract");
 const INGREDIENT_NAME_HEADERS = [
   "ingredient",
@@ -163,7 +163,7 @@ const AMOUNT_WITH_UNIT_PATTERN = new RegExp(
   "i"
 );
 const LOOSE_INGREDIENT_NOISE =
-  /\b(kostprijs|verkoop|marge|prijs|totaal|btw|factuur|advies|batch totaal|per stuk)\b/i;
+  /\b(kostprijs|verkoop|marge|prijs|totaal|btw|factuur|advies|batch totaal|opbrengst|porties|per stuk)\b/i;
 
 function resolveTesseractWorkerPath() {
   const relativePath = "node_modules/tesseract.js/src/worker-script/node/index.js";
@@ -592,6 +592,20 @@ function compactTextLines(text: string) {
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
+}
+
+function normalizeOcrRecipeText(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/\b(\d+(?:[.,]\d+)?)\s*(?:g\s*r|q\s*r|qf|qr|yr|g)\b/gi, "$1 gr")
+        .replace(/\bslag\s*room\b/gi, "slagroom")
+        .replace(/\bgela\s*tine\b/gi, "gelatine")
+        .replace(/\bpure\s+choco(?:lade)?\b/gi, "pure choco")
+        .replace(/\bbrown(?:ie)?\b/gi, "brownie")
+    )
+    .join("\n");
 }
 
 function pushWarning(warnings: string[], message: string) {
@@ -1342,11 +1356,21 @@ function parseTextRecipe(
 
   const today = new Date().toISOString().slice(0, 10);
   const ids = new Set<string>();
+  const titleLine = lines.find((line) => /^recept\b/i.test(line));
+  const explicitName = titleLine
+    ?.replace(/^recept\s*[:=-]?\s*/i, "")
+    .trim();
   const name =
-    lines.find((line) => !/^(recept|ingredienten|bereiding|werkwijze)\b/i.test(line)) ||
+    explicitName ||
+    lines.find(
+      (line) =>
+        !/^(recept|ingredienten|bereiding|werkwijze)\b/i.test(line) &&
+        !parseLooseIngredientLine(line)
+    ) ||
     fileName.replace(/\.[^.]+$/, "");
   const recipe = getOrCreateImportedRecipe(new Map(), name, ids, today, fileName);
   const batchLine = lines.find((line) => /batch|opbrengst|porties|stuks/i.test(line));
+  const unmatched: string[] = [];
   const batchMatch = batchLine?.match(
     /(\d+(?:[.,]\d+)?)\s*(kg|g|gram|l|liter|ml|st|stuk|stuks)\b/i
   );
@@ -1358,41 +1382,32 @@ function parseTextRecipe(
   }
 
   lines.forEach((line) => {
-    const ingredientMatch = line.match(
-      /^(\d+(?:[.,]\d+)?)\s*(kg|g|gram|l|liter|ml|st|stuk|stuks)\s+(.+)$/i
-    );
+    if (line !== titleLine && line !== batchLine) {
+      const looseIngredient = parseLooseIngredientLine(line);
 
-    if (ingredientMatch) {
-      const quantity = parseDutchNumber(ingredientMatch[1]);
-      const unit = recipeLineUnitFromText(ingredientMatch[2]);
-      const ingredientName = ingredientMatch[3].replace(/[.;:]$/, "").trim();
-      const isResolved = addImportedRecipeComponent(
-        recipe,
-        ingredientName,
-        quantity,
-        unit,
-        line,
-        importResolutionContext
-      );
-
-      if (!isResolved) {
-        pushWarning(
+      if (looseIngredient) {
+        addLooseIngredientCandidate(
+          recipe,
+          looseIngredient,
           warnings,
-          `Controleer grondstof "${ingredientName}": niet automatisch gekoppeld.`
+          unmatched,
+          importResolutionContext
         );
-      }
 
-      return;
+        return;
+      }
     }
 
     if (
       !line.includes(":") &&
-      !/^ingredienten|bereiding|werkwijze|recept$/i.test(line) &&
+      !/^ingredienten|bereiding|werkwijze|recept\b/i.test(line) &&
       line !== recipe.name
     ) {
       recipe.preparationSteps.push(line);
     }
   });
+
+  applyLooseNotes(recipe, unmatched);
 
   return { recipes: [recipe], warnings };
 }
@@ -1522,7 +1537,10 @@ async function rowsAndTextFromFile(
     warnings.push(
       "Foto gelezen met OCR. Controleer handschrift en hoeveelheden extra goed."
     );
-    const text = limitText(await extractTextWithOcr(buffer), warnings);
+    const text = limitText(
+      normalizeOcrRecipeText(await extractTextWithOcr(buffer)),
+      warnings
+    );
     const rows = limitRows(
       compactTextLines(text).map((line) => line.split(/\t|;|\s{2,}/)),
       warnings
@@ -1603,7 +1621,7 @@ async function parseImportFile(
 
   if (!importedRecipes.length) {
     throw new Error(
-      "Geen recepten herkend. Probeer een Excel/PDF met receptnaam, grondstoffen of bereidingsregels."
+      "Geen recepten herkend. Probeer een Excel/PDF/foto met receptnaam, grondstoffen of bereidingsregels."
     );
   }
 

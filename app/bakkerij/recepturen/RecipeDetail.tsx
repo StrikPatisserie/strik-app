@@ -64,7 +64,7 @@ const RECIPE_PHOTO_MAX_SIDE = 360;
 const RECIPE_PHOTO_MIN_SIDE = 180;
 const RECIPE_PHOTO_MAX_DATA_URL_LENGTH = 45000;
 const RECIPE_PHOTO_QUALITIES = [0.3, 0.22, 0.16, 0.1];
-const RECIPE_IMPORT_TIMEOUT_MS = 70000;
+const RECIPE_IMPORT_TIMEOUT_MS = 30000;
 const recipeEditSections: Array<{
   id: RecipeEditSection;
   label: string;

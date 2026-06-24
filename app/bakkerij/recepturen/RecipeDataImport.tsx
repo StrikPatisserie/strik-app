@@ -12,7 +12,7 @@ type ImportResponse = {
   message?: string;
 };
 
-const IMPORT_TIMEOUT_MS = 70000;
+const IMPORT_TIMEOUT_MS = 30000;
 
 export default function RecipeDataImport({
   ingredients,
