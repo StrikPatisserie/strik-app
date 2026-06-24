@@ -163,19 +163,28 @@ export default function RecipesList({
           </div>
 
           <div className="flex items-center justify-between gap-2 md:col-span-4">
-            <button
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setGroup("all");
-                setStatus("all");
-                setType("all");
-                setSortBy("name");
-              }}
-              className="h-8 border border-[#e7e0d8] bg-[#fffdf8] px-3 text-xs font-black text-[#707070]"
-            >
-              Reset
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setGroup("all");
+                  setStatus("all");
+                  setType("all");
+                  setSortBy("name");
+                }}
+                className="h-8 border border-[#e7e0d8] bg-[#fffdf8] px-3 text-xs font-black text-[#707070]"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="h-8 border border-[#c3d3bc] bg-[#c3d3bc] px-4 text-xs font-black text-[#24401f]"
+              >
+                Ga
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               {recalculateStatus && (
                 <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
