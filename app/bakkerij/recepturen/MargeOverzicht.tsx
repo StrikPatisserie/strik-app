@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import type { Recipe } from "./types";
 import { EmptyState, FilterSelect } from "./RecepturenShared";
 import {
-  changeBadgeClass,
   formatEuro,
   formatPercent,
   formatSignedPercent,
@@ -162,22 +161,24 @@ export default function MargeOverzicht({
                   className="grid w-full grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 px-3 py-2 text-left text-sm hover:bg-[#f8f8f6]"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-black">{recipe.name}</span>
-                    <span
-                      className={`mt-0.5 inline-flex px-1.5 py-0.5 text-[0.65rem] font-black ${changeBadgeClass(
-                        recipeCostChange(recipe)
-                      )}`}
-                    >
-                      {formatEuro(recipeCostDelta(recipe))} ·{" "}
-                      {formatSignedPercent(recipeCostChange(recipe), 1)}
+                    <span className="block truncate text-[0.82rem] font-black leading-tight md:text-[1rem] lg:text-[1.05rem]">
+                      {recipe.name}
                     </span>
                   </span>
                   <span className="font-black">{formatEuro(recipe.costPrice)}</span>
                   <span className="font-black">
                     {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
                   </span>
-                  <span className={`font-black ${marginTextClass(recipe)}`}>
-                    {recipe.currentMargin ? formatPercent(recipe.currentMargin) : "-"}
+                  <span>
+                    <span
+                      className={`inline-flex h-6 min-w-[3.4rem] items-center justify-center rounded-full px-2 text-[0.68rem] font-black ${marginBadgeClass(
+                        recipe.currentMargin
+                      )}`}
+                    >
+                      {Number.isFinite(recipe.currentMargin)
+                        ? formatPercent(recipe.currentMargin)
+                        : "-"}
+                    </span>
                   </span>
                   <span className="font-black">
                     {formatEuro(targetSalesPrice(recipe))}
@@ -211,10 +212,12 @@ const causeOptions = [
   { value: "Chocolade", label: "Chocolade" },
 ];
 
-function marginTextClass(recipe: Recipe) {
-  if (!recipe.currentMargin) return "text-[#707070]";
+function marginBadgeClass(currentMargin: number) {
+  if (!Number.isFinite(currentMargin)) return "bg-[#f1eee9] text-[#707070]";
+  if (currentMargin < 73) return "bg-[#ffe0dc] text-[#9f4035]";
+  if (currentMargin < 80) return "bg-[#eef0c7] text-[#6a631d]";
 
-  return recipe.currentMargin >= 80 ? "text-[#45663b]" : "text-[#d75a48]";
+  return "bg-[#dce8d6] text-[#45663b]";
 }
 
 function causeForRecipe(recipe: Recipe) {
