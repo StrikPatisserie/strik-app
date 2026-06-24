@@ -53,7 +53,6 @@ import {
 import {
   recipeGroupOptionsForRecipes,
 } from "./workCategories";
-import { prepareRecipeImportFile } from "./importImageTools";
 
 const recipeUnits: RecipeUnit[] = ["gram", "kg", "ml", "liter", "stuk"];
 const recipeStatuses: RecipeStatus[] = ["active", "draft", "old"];
@@ -65,6 +64,8 @@ const RECIPE_PHOTO_MIN_SIDE = 180;
 const RECIPE_PHOTO_MAX_DATA_URL_LENGTH = 45000;
 const RECIPE_PHOTO_QUALITIES = [0.3, 0.22, 0.16, 0.1];
 const RECIPE_IMPORT_TIMEOUT_MS = 30000;
+const RECIPE_IMPORT_FILE_ACCEPT =
+  ".xlsx,.xls,.csv,.txt,.tsv,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values,text/plain";
 const recipeEditSections: Array<{
   id: RecipeEditSection;
   label: string;
@@ -291,9 +292,8 @@ export default function RecipeDetail({
     setImportCandidateChoices({});
 
     try {
-      const uploadFile = await prepareRecipeImportFile(file);
       const formData = new FormData();
-      formData.set("file", uploadFile);
+      formData.set("file", file);
       formData.set("kind", "recipes");
       formData.set("ingredients", JSON.stringify(availableIngredients));
       formData.set("recipes", JSON.stringify(recipes));
@@ -336,7 +336,7 @@ export default function RecipeDetail({
     } catch (error) {
       showFeedback(
         error instanceof DOMException && error.name === "AbortError"
-          ? "Foto lezen duurt te lang. Maak een scherpere, lichtere foto en probeer opnieuw."
+          ? "Bestand lezen duurt te lang. Probeer een kleiner PDF- of Excelbestand."
           : error instanceof Error
             ? error.message
             : "Bestand kon niet gelezen worden."
@@ -1223,7 +1223,7 @@ export default function RecipeDetail({
                     {isImportingRecipe ? "Lezen..." : "Bestand inlezen"}
                     <input
                       type="file"
-                      accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,image/*"
+                      accept={RECIPE_IMPORT_FILE_ACCEPT}
                       disabled={isImportingRecipe}
                       className="sr-only"
                       onChange={(event) => {

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Ingredient, Recipe } from "./types";
 import { EmptyState, Panel, SectionTitle } from "./RecepturenShared";
-import { prepareRecipeImportFile } from "./importImageTools";
 
 export type ImportKind = "recipes" | "ingredients";
 
@@ -13,6 +12,8 @@ type ImportResponse = {
 };
 
 const IMPORT_TIMEOUT_MS = 30000;
+const IMPORT_FILE_ACCEPT =
+  ".xlsx,.xls,.csv,.txt,.tsv,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values,text/plain";
 
 export default function RecipeDataImport({
   ingredients,
@@ -44,9 +45,8 @@ export default function RecipeDataImport({
     setWarnings([]);
 
     try {
-      const uploadFile = await prepareRecipeImportFile(file);
       const formData = new FormData();
-      formData.set("file", uploadFile);
+      formData.set("file", file);
       formData.set("kind", kind);
       formData.set("ingredients", JSON.stringify(ingredients));
       formData.set("recipes", JSON.stringify(recipes));
@@ -80,7 +80,7 @@ export default function RecipeDataImport({
     } catch (error) {
       setMessage(
         error instanceof DOMException && error.name === "AbortError"
-          ? "Foto lezen duurt te lang. Maak een scherpere, lichtere foto en probeer opnieuw."
+          ? "Bestand lezen duurt te lang. Probeer een kleiner PDF- of Excelbestand."
           : error instanceof Error
             ? error.message
             : "Bestand kon niet gelezen worden."
@@ -133,7 +133,7 @@ export default function RecipeDataImport({
               {isUploading ? "Lezen..." : "Bestand kiezen"}
               <input
                 type="file"
-                accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,image/*"
+                accept={IMPORT_FILE_ACCEPT}
                 disabled={isUploading}
                 className="sr-only"
                 onChange={(event) => {
