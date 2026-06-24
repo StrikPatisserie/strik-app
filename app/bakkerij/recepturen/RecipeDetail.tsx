@@ -53,6 +53,7 @@ import {
 import {
   recipeGroupOptionsForRecipes,
 } from "./workCategories";
+import { prepareRecipeImportFile } from "./importImageTools";
 
 const recipeUnits: RecipeUnit[] = ["gram", "kg", "ml", "liter", "stuk"];
 const recipeStatuses: RecipeStatus[] = ["active", "draft", "old"];
@@ -63,6 +64,7 @@ const RECIPE_PHOTO_MAX_SIDE = 360;
 const RECIPE_PHOTO_MIN_SIDE = 180;
 const RECIPE_PHOTO_MAX_DATA_URL_LENGTH = 45000;
 const RECIPE_PHOTO_QUALITIES = [0.3, 0.22, 0.16, 0.1];
+const RECIPE_IMPORT_TIMEOUT_MS = 70000;
 const recipeEditSections: Array<{
   id: RecipeEditSection;
   label: string;
@@ -289,17 +291,24 @@ export default function RecipeDetail({
     setImportCandidateChoices({});
 
     try {
+      const uploadFile = await prepareRecipeImportFile(file);
       const formData = new FormData();
-      formData.set("file", file);
+      formData.set("file", uploadFile);
       formData.set("kind", "recipes");
       formData.set("ingredients", JSON.stringify(availableIngredients));
       formData.set("recipes", JSON.stringify(recipes));
+      const controller = new AbortController();
+      const timeout = window.setTimeout(
+        () => controller.abort(),
+        RECIPE_IMPORT_TIMEOUT_MS
+      );
 
       const response = await fetch("/api/recepturen/data-import", {
         method: "POST",
         body: formData,
-      });
-      const data = (await response.json()) as RecipeImportResponse;
+        signal: controller.signal,
+      }).finally(() => window.clearTimeout(timeout));
+      const data = (await readImportResponse(response)) as RecipeImportResponse;
 
       if (!response.ok) {
         throw new Error(data.message || "Bestand kon niet gelezen worden.");
@@ -326,7 +335,11 @@ export default function RecipeDetail({
       showFeedback(data.message || "Receptbestand ingelezen.");
     } catch (error) {
       showFeedback(
-        error instanceof Error ? error.message : "Bestand kon niet gelezen worden."
+        error instanceof DOMException && error.name === "AbortError"
+          ? "Foto lezen duurt te lang. Maak een scherpere, lichtere foto en probeer opnieuw."
+          : error instanceof Error
+            ? error.message
+            : "Bestand kon niet gelezen worden."
       );
     } finally {
       setIsImportingRecipe(false);
@@ -3054,6 +3067,18 @@ function formatRecipeCardQuantity(value: number) {
     maximumFractionDigits: decimals,
     minimumFractionDigits: 0,
   });
+}
+
+async function readImportResponse(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return {
+      message: response.ok
+        ? "Bestand kon niet gelezen worden."
+        : "Import duurde te lang of gaf geen geldige reactie.",
+    };
+  }
 }
 
 async function createSmallRecipePhotoPreview(file: File) {

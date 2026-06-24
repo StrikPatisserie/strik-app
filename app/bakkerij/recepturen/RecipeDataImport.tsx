@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Ingredient, Recipe } from "./types";
 import { EmptyState, Panel, SectionTitle } from "./RecepturenShared";
+import { prepareRecipeImportFile } from "./importImageTools";
 
 export type ImportKind = "recipes" | "ingredients";
 
@@ -10,6 +11,8 @@ type ImportResponse = {
   warnings?: string[];
   message?: string;
 };
+
+const IMPORT_TIMEOUT_MS = 70000;
 
 export default function RecipeDataImport({
   ingredients,
@@ -41,17 +44,24 @@ export default function RecipeDataImport({
     setWarnings([]);
 
     try {
+      const uploadFile = await prepareRecipeImportFile(file);
       const formData = new FormData();
-      formData.set("file", file);
+      formData.set("file", uploadFile);
       formData.set("kind", kind);
       formData.set("ingredients", JSON.stringify(ingredients));
       formData.set("recipes", JSON.stringify(recipes));
+      const controller = new AbortController();
+      const timeout = window.setTimeout(
+        () => controller.abort(),
+        IMPORT_TIMEOUT_MS
+      );
 
       const response = await fetch("/api/recepturen/data-import", {
         method: "POST",
         body: formData,
-      });
-      const data = (await response.json()) as ImportResponse;
+        signal: controller.signal,
+      }).finally(() => window.clearTimeout(timeout));
+      const data = (await readImportResponse(response)) as ImportResponse;
 
       if (!response.ok) {
         throw new Error(data.message || "Bestand kon niet gelezen worden.");
@@ -69,7 +79,11 @@ export default function RecipeDataImport({
       setMessage(data.message || "Bestand ingelezen.");
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Bestand kon niet gelezen worden."
+        error instanceof DOMException && error.name === "AbortError"
+          ? "Foto lezen duurt te lang. Maak een scherpere, lichtere foto en probeer opnieuw."
+          : error instanceof Error
+            ? error.message
+            : "Bestand kon niet gelezen worden."
       );
     } finally {
       setIsUploading(false);
@@ -161,4 +175,16 @@ export default function RecipeDataImport({
       </div>
     </Panel>
   );
+}
+
+async function readImportResponse(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return {
+      message: response.ok
+        ? "Bestand kon niet gelezen worden."
+        : "Import duurde te lang of gaf geen geldige reactie.",
+    };
+  }
 }

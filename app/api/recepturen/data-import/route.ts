@@ -110,6 +110,7 @@ const MAX_IMPORT_ROWS = 3500;
 const MAX_IMPORT_TEXT_CHARS = 260000;
 const MAX_IMPORT_RECIPES = 25;
 const MAX_IMPORT_WARNINGS = 40;
+const OCR_TIMEOUT_MS = 45000;
 const TESSERACT_CACHE_PATH = path.join(tmpdir(), "strik-tesseract");
 const INGREDIENT_NAME_HEADERS = [
   "ingredient",
@@ -1430,12 +1431,22 @@ async function extractTextWithOcr(image: Buffer) {
     cachePath: TESSERACT_CACHE_PATH,
     workerPath: TESSERACT_WORKER_PATH,
   });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    const result = await worker.recognize(image);
+    const result = await Promise.race([
+      worker.recognize(image),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("OCR duurde te lang.")),
+          OCR_TIMEOUT_MS
+        );
+      }),
+    ]);
 
     return result.data.text || "";
   } finally {
+    if (timeout) clearTimeout(timeout);
     await worker.terminate();
   }
 }
