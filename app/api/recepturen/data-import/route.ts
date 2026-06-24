@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
@@ -16,6 +19,7 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type ImportKind = "recipes" | "ingredients";
 
@@ -106,6 +110,7 @@ const MAX_IMPORT_ROWS = 3500;
 const MAX_IMPORT_TEXT_CHARS = 260000;
 const MAX_IMPORT_RECIPES = 25;
 const MAX_IMPORT_WARNINGS = 40;
+const TESSERACT_CACHE_PATH = path.join(tmpdir(), "strik-tesseract");
 const INGREDIENT_NAME_HEADERS = [
   "ingredient",
   "grondstof",
@@ -158,6 +163,18 @@ const AMOUNT_WITH_UNIT_PATTERN = new RegExp(
 );
 const LOOSE_INGREDIENT_NOISE =
   /\b(kostprijs|verkoop|marge|prijs|totaal|btw|factuur|advies|batch totaal|per stuk)\b/i;
+
+function resolveTesseractWorkerPath() {
+  const relativePath = "node_modules/tesseract.js/src/worker-script/node/index.js";
+  const candidates = [
+    path.join(process.cwd(), relativePath),
+    path.join(process.cwd(), "..", relativePath),
+  ];
+
+  return candidates.find((candidate) => existsSync(candidate)) || candidates[0];
+}
+
+const TESSERACT_WORKER_PATH = resolveTesseractWorkerPath();
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ message }, { status });
@@ -1407,6 +1424,31 @@ async function extractPdfText(buffer: Buffer) {
   }
 }
 
+async function extractTextWithOcr(image: Buffer) {
+  const { createWorker } = await import("tesseract.js");
+  const worker = await createWorker("eng", 1, {
+    cachePath: TESSERACT_CACHE_PATH,
+    workerPath: TESSERACT_WORKER_PATH,
+  });
+
+  try {
+    const result = await worker.recognize(image);
+
+    return result.data.text || "";
+  } finally {
+    await worker.terminate();
+  }
+}
+
+function isImageFile(fileName: string, mimeType: string) {
+  const extension = getExtension(fileName);
+
+  return (
+    mimeType.startsWith("image/") ||
+    ["png", "jpg", "jpeg", "webp", "tif", "tiff"].includes(extension)
+  );
+}
+
 async function rowsAndTextFromFile(
   fileName: string,
   mimeType: string,
@@ -1446,6 +1488,30 @@ async function rowsAndTextFromFile(
 
   if (extension === "pdf" || mimeType.includes("pdf")) {
     const text = limitText(await extractPdfText(buffer), warnings);
+    const rows = limitRows(
+      compactTextLines(text).map((line) => line.split(/\t|;|\s{2,}/)),
+      warnings
+    );
+
+    return {
+      rows,
+      text,
+      sheets: [
+        {
+          name: fileName.replace(/\.[^.]+$/, ""),
+          rows,
+          text,
+        },
+      ],
+      warnings,
+    };
+  }
+
+  if (isImageFile(fileName, mimeType)) {
+    warnings.push(
+      "Foto gelezen met OCR. Controleer handschrift en hoeveelheden extra goed."
+    );
+    const text = limitText(await extractTextWithOcr(buffer), warnings);
     const rows = limitRows(
       compactTextLines(text).map((line) => line.split(/\t|;|\s{2,}/)),
       warnings

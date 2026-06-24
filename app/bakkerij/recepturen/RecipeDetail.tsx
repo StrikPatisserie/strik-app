@@ -1210,7 +1210,7 @@ export default function RecipeDetail({
                     {isImportingRecipe ? "Lezen..." : "Bestand inlezen"}
                     <input
                       type="file"
-                      accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf"
+                      accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,image/*"
                       disabled={isImportingRecipe}
                       className="sr-only"
                       onChange={(event) => {

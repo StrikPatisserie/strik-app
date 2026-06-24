@@ -119,7 +119,7 @@ export default function RecipeDataImport({
               {isUploading ? "Lezen..." : "Bestand kiezen"}
               <input
                 type="file"
-                accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf"
+                accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,image/*"
                 disabled={isUploading}
                 className="sr-only"
                 onChange={(event) => {
