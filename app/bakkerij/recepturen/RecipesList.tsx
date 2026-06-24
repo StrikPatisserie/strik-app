@@ -213,7 +213,7 @@ export default function RecipesList({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col border border-[#c3d3bc] bg-white">
         {filteredRecipes.length ? (
           <>
-            <div className="hidden shrink-0 grid-cols-[1.5rem_minmax(16rem,1.6fr)_9rem_8rem_7rem_7.5rem] border-b border-[#c3d3bc] bg-[#f5f5f3] text-[0.6rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c] md:grid">
+            <div className="hidden shrink-0 border-b border-[#c3d3bc] bg-[#f5f5f3] text-[0.56rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c] md:grid md:grid-cols-[1.25rem_minmax(12rem,1fr)_6.5rem_6rem_5rem_5.75rem] lg:grid-cols-[1.25rem_minmax(18rem,42rem)_7.5rem_7rem_6rem_6.5rem] xl:grid-cols-[1.25rem_minmax(20rem,48rem)_8rem_7.5rem_6rem_6.5rem]">
               <span />
               <span>Recept</span>
               <span>Soort</span>
@@ -228,27 +228,27 @@ export default function RecipesList({
                     key={recipe.id}
                     type="button"
                     onClick={() => onOpenRecipe(recipe)}
-                    className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center border-b border-[#c3d3bc] text-left transition hover:bg-[#f8f8f6] md:grid-cols-[1.5rem_minmax(16rem,1.6fr)_9rem_8rem_7rem_7.5rem]"
+                    className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center border-b border-[#c3d3bc] text-left transition hover:bg-[#f8f8f6] md:grid-cols-[1.25rem_minmax(12rem,1fr)_6.5rem_6rem_5rem_5.75rem] lg:grid-cols-[1.25rem_minmax(18rem,42rem)_7.5rem_7rem_6rem_6.5rem] xl:grid-cols-[1.25rem_minmax(20rem,48rem)_8rem_7.5rem_6rem_6.5rem]"
                   >
-                    <span className={`h-full min-h-[3rem] md:min-h-[2.6rem] ${recipeStripeClass(recipe)}`} />
-                    <div className="min-w-0 px-2 py-1.5 md:py-1">
-                      <p className="truncate text-[clamp(0.72rem,1.55vw,1rem)] font-light leading-tight text-[#111111]">
+                    <span className={`h-full min-h-[3rem] md:min-h-[2.15rem] ${recipeStripeClass(recipe)}`} />
+                    <div className="min-w-0 px-2 py-1.5 md:py-0.5">
+                      <p className="truncate text-[clamp(0.72rem,1.55vw,1rem)] font-light leading-tight text-[#111111] md:text-[0.88rem]">
                         {recipe.name}
                       </p>
-                      <p className="mt-0.5 truncate text-[0.5rem] font-bold text-[#707070] sm:text-[0.6rem]">
+                      <p className="mt-0.5 truncate text-[0.5rem] font-bold text-[#707070] sm:text-[0.6rem] md:hidden">
                         {compactRecipeMeta(recipe)}
                       </p>
                     </div>
-                    <p className="hidden truncate px-2 text-[0.72rem] font-black text-[#707070] md:block">
+                    <p className="hidden truncate px-2 text-[0.62rem] font-black text-[#707070] md:block">
                       {recipeTypeLabel(recipe.type)}
                     </p>
-                    <p className="hidden truncate px-2 text-[0.72rem] font-bold text-[#707070] md:block">
+                    <p className="hidden truncate px-2 text-[0.62rem] font-bold text-[#707070] md:block">
                       {recipe.productGroup || "-"}
                     </p>
-                    <p className="hidden truncate px-2 text-[0.72rem] font-bold text-[#707070] md:block">
+                    <p className="hidden truncate px-2 text-[0.62rem] font-bold text-[#707070] md:block">
                       {recipe.batchSize || "-"}
                     </p>
-                    <p className="hidden truncate px-2 text-[0.72rem] font-bold text-[#707070] md:block">
+                    <p className="hidden truncate px-2 text-[0.62rem] font-bold text-[#707070] md:block">
                       {formatDate(recipe.lastUpdated)}
                     </p>
                   </button>
