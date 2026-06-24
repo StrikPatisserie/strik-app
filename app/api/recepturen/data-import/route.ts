@@ -105,12 +105,21 @@ type ImportResolutionContext = {
   warnings: string[];
 };
 
+type JsonRecord = Record<string, unknown>;
+
+type OcrWorker = {
+  recognize: (image: Buffer) => Promise<{ data: { text?: string } }>;
+  terminate: () => Promise<unknown>;
+};
+
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const MAX_IMPORT_ROWS = 3500;
 const MAX_IMPORT_TEXT_CHARS = 260000;
 const MAX_IMPORT_RECIPES = 25;
 const MAX_IMPORT_WARNINGS = 40;
-const OCR_TIMEOUT_MS = 25000;
+const OCR_TIMEOUT_MS = 12000;
+const OPENAI_VISION_TIMEOUT_MS = 22000;
+const OPENAI_VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4.1-mini";
 const TESSERACT_CACHE_PATH = path.join(tmpdir(), "strik-tesseract");
 const INGREDIENT_NAME_HEADERS = [
   "ingredient",
@@ -179,6 +188,10 @@ const TESSERACT_WORKER_PATH = resolveTesseractWorkerPath();
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ message }, { status });
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function isUploadedFile(value: FormDataEntryValue | null): value is UploadedFile {
@@ -1440,17 +1453,108 @@ async function extractPdfText(buffer: Buffer) {
   }
 }
 
-async function extractTextWithOcr(image: Buffer) {
-  const { createWorker } = await import("tesseract.js");
-  const worker = await createWorker("eng", 1, {
-    cachePath: TESSERACT_CACHE_PATH,
-    workerPath: TESSERACT_WORKER_PATH,
+function extractOpenAiOutputText(response: unknown) {
+  if (!isRecord(response)) return "";
+
+  if (typeof response.output_text === "string") {
+    return response.output_text;
+  }
+
+  const output = Array.isArray(response.output) ? response.output : [];
+  const parts: string[] = [];
+
+  output.forEach((item) => {
+    if (!isRecord(item)) return;
+
+    const content = Array.isArray(item.content) ? item.content : [];
+    content.forEach((contentItem) => {
+      if (!isRecord(contentItem)) return;
+
+      if (typeof contentItem.text === "string") {
+        parts.push(contentItem.text);
+      }
+    });
   });
-  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  return parts.join("\n").trim();
+}
+
+async function extractTextWithVision(image: Buffer, mimeType: string) {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return "";
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENAI_VISION_TIMEOUT_MS);
+  const imageMimeType = mimeType.startsWith("image/") ? mimeType : "image/jpeg";
 
   try {
-    const result = await Promise.race([
-      worker.recognize(image),
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: OPENAI_VISION_MODEL,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text:
+                  "Lees dit Nederlandse bakkerijrecept uit de foto. " +
+                  "Geef alleen platte tekst terug: eerste regel 'Recept: <naam>' " +
+                  "en daarna per ingredient exact 'aantal eenheid naam'. " +
+                  "Gebruik gr, kg, ml, liter of stuk als eenheid. " +
+                  "Laat twijfelachtige woorden weg in plaats van te gokken.",
+              },
+              {
+                type: "input_image",
+                image_url: `data:${imageMimeType};base64,${image.toString("base64")}`,
+                detail: "high",
+              },
+            ],
+          },
+        ],
+        max_output_tokens: 700,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error("AI-visie kon de foto niet lezen.");
+    }
+
+    return extractOpenAiOutputText(await response.json());
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("AI-visie duurde te lang.");
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function extractTextWithOcr(image: Buffer) {
+  let worker: OcrWorker | undefined;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const task = (async () => {
+    const { createWorker } = await import("tesseract.js");
+    worker = await createWorker("eng", 1, {
+      cachePath: TESSERACT_CACHE_PATH,
+      workerPath: TESSERACT_WORKER_PATH,
+    });
+    const result = await worker.recognize(image);
+
+    return result.data.text || "";
+  })();
+
+  try {
+    return await Promise.race([
+      task,
       new Promise<never>((_, reject) => {
         timeout = setTimeout(
           () => reject(new Error("OCR duurde te lang.")),
@@ -1458,11 +1562,9 @@ async function extractTextWithOcr(image: Buffer) {
         );
       }),
     ]);
-
-    return result.data.text || "";
   } finally {
     if (timeout) clearTimeout(timeout);
-    await worker.terminate();
+    await worker?.terminate().catch(() => undefined);
   }
 }
 
@@ -1534,26 +1636,52 @@ async function rowsAndTextFromFile(
   }
 
   if (isImageFile(fileName, mimeType)) {
-    warnings.push(
-      "Foto gelezen met OCR. Controleer handschrift en hoeveelheden extra goed."
-    );
-    const text = limitText(
-      normalizeOcrRecipeText(await extractTextWithOcr(buffer)),
-      warnings
-    );
+    let text = "";
+    const hasVisionKey = Boolean(process.env.OPENAI_API_KEY?.trim());
+
+    if (hasVisionKey) {
+      try {
+        text = normalizeOcrRecipeText(await extractTextWithVision(buffer, mimeType));
+        warnings.push(
+          "Foto gelezen met AI-visie. Controleer handschrift en hoeveelheden extra goed."
+        );
+      } catch {
+        pushWarning(
+          warnings,
+          "AI-visie kon de foto niet lezen; korte OCR-fallback geprobeerd."
+        );
+      }
+    }
+
+    if (!text.trim()) {
+      try {
+        text = normalizeOcrRecipeText(await extractTextWithOcr(buffer));
+        warnings.push(
+          "Foto gelezen met OCR. Controleer handschrift en hoeveelheden extra goed."
+        );
+      } catch {
+        throw new Error(
+          hasVisionKey
+            ? "Foto kon niet automatisch gelezen worden. Probeer een scherpere foto recht van boven."
+            : "Foto's van handgeschreven recepten hebben AI-visie nodig. Stel OPENAI_API_KEY in of upload een Excel/PDF/tekstbestand."
+        );
+      }
+    }
+
+    const limitedText = limitText(text, warnings);
     const rows = limitRows(
-      compactTextLines(text).map((line) => line.split(/\t|;|\s{2,}/)),
+      compactTextLines(limitedText).map((line) => line.split(/\t|;|\s{2,}/)),
       warnings
     );
 
     return {
       rows,
-      text,
+      text: limitedText,
       sheets: [
         {
           name: fileName.replace(/\.[^.]+$/, ""),
           rows,
-          text,
+          text: limitedText,
         },
       ],
       warnings,
