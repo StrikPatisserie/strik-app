@@ -5,19 +5,16 @@ const bakkerijLinks = [
   {
     href: "/bakkerij/recepten",
     label: "Recepten",
-    description: "Alleen bakkerijrecepten en halffabricaten.",
     icon: strikIcons.recepturen,
   },
   {
     href: "/bakkerij/productieplanning",
     label: "Productieplanning",
-    description: "Wat er gemaakt moet worden en vaste planning.",
     icon: strikIcons.bakkerij,
   },
   {
     href: "/bakkerij/haccp",
     label: "HACCP",
-    description: "Controlelijsten voor de bakkerij.",
     icon: strikIcons.cleaning,
   },
 ];
@@ -27,27 +24,26 @@ export default function ProductieBakkerijPage() {
     <StrikShell>
       <StrikPageHeader
         title="Bakkerij"
-        description="Recepten, productieplanning en HACCP voor de bakkerij."
         icon={strikIcons.winkel}
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-2">
         {bakkerijLinks.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className="flex min-h-40 flex-col justify-between rounded-xl border border-[#cbdcc5] bg-[#ecf4ed] p-4 shadow-sm transition hover:bg-[#f6faf4]"
+            className="flex min-h-16 items-center justify-between border border-[#cbdcc5] bg-white px-3 py-2 shadow-sm transition hover:bg-[#f6faf4] active:scale-[0.99]"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/80">
-              <img src={item.icon} alt="" className="h-7 w-7 object-contain" />
-            </span>
-            <span>
-              <span className="block text-xl font-black text-[#1a1815]">
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#c3d3bc]">
+                <img src={item.icon} alt="" className="h-6 w-6 object-contain" />
+              </span>
+              <span className="truncate text-xl font-black text-[#1a1815]">
                 {item.label}
               </span>
-              <span className="mt-1 block text-sm font-semibold leading-snug text-[#2d2a26]/58">
-                {item.description}
-              </span>
+            </span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#c3d3bc] text-xl font-black">
+              &gt;
             </span>
           </Link>
         ))}

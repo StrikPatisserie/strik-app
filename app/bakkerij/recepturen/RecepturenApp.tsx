@@ -2322,45 +2322,45 @@ const productionOverviewLinks = [
   {
     href: "/bakkerij/bakkerij",
     label: "Bakkerij",
-    description: "Recepten, planning en HACCP",
     icon: strikIcons.winkel,
-    tone: "border-[#cbdcc5] bg-[#ecf4ed]",
+    iconTone: "bg-[#c3d3bc]",
+    tone: "border-[#cbdcc5] bg-white hover:bg-[#f6faf4]",
   },
   {
     href: "/bakkerij/ijs-chocolade",
     label: "IJs & chocolade",
-    description: "Recepten, bestellen en HACCP",
     icon: strikIcons.ijs,
-    tone: "border-[#eadb8b] bg-[#fff8d8]",
+    iconTone: "bg-[#f7df83]",
+    tone: "border-[#eadb8b] bg-white hover:bg-[#fff8d8]",
   },
   {
     href: "/bakkerij/management",
     label: "Management",
-    description: "Grondstoffen, marges en imports",
     icon: strikIcons.management,
-    tone: "border-[#e7e0d8] bg-white",
+    iconTone: "bg-[#c3d3bc]",
+    tone: "border-[#e7e0d8] bg-white hover:bg-[#f6faf4]",
   },
 ];
 
 function ProductionOverviewLinks() {
   return (
-    <section className="mt-3 grid gap-2 sm:mt-5 sm:grid-cols-3">
+    <section className="mt-3 grid gap-2 sm:mt-5">
       {productionOverviewLinks.map((item) => (
         <Link
           key={item.href}
           href={item.href}
-          className={`flex min-h-20 items-center gap-3 rounded-[1rem] border p-3 shadow-sm transition hover:shadow-md active:scale-[0.98] sm:min-h-24 sm:p-4 ${item.tone}`}
+          className={`flex min-h-16 items-center justify-between border px-3 py-2 shadow-sm transition active:scale-[0.99] ${item.tone}`}
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/80 shadow-sm">
-            <img src={item.icon} alt="" className="h-7 w-7 object-contain" />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-lg font-black leading-tight text-[#111111]">
+          <span className="flex min-w-0 items-center gap-3">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center ${item.iconTone}`}>
+              <img src={item.icon} alt="" className="h-6 w-6 object-contain" />
+            </span>
+            <span className="truncate text-xl font-black leading-tight text-[#111111]">
               {item.label}
             </span>
-            <span className="mt-0.5 block text-xs font-bold leading-tight text-[#2d2a26]/55">
-              {item.description}
-            </span>
+          </span>
+          <span className={`flex h-10 w-10 shrink-0 items-center justify-center text-xl font-black ${item.iconTone}`}>
+            &gt;
           </span>
         </Link>
       ))}
