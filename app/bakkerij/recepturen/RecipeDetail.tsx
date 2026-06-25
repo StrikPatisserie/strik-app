@@ -3674,6 +3674,11 @@ function BakkerRecipeCard({
   const madeToday = productionLogForRecipe(recipe).some(
     (entry) => entry.date === todayIsoDate()
   );
+  const latestMadeEntry = productionLogForRecipe(recipe).find(
+    (entry) => entry.source !== "stock"
+  );
+  const batchInfo = getBatchInfo(recipe);
+  const productionUnit = batchInfo?.unit || recipe.standardBatchUnit || "stuk";
   const cardMargin = recipe.salesPrice
     ? calculateMargin(recipe.salesPrice, recipe.costPrice)
     : 0;
@@ -3950,14 +3955,19 @@ function BakkerRecipeCard({
               <p>
                 laatst gewijzigd: <strong>{formatDate(recipe.lastUpdated)}</strong>
               </p>
-              {recipe.lastProducedQuantity ? (
+              {latestMadeEntry ? (
                 <p>
-                  laatste gemaakt:{" "}
+                  laatst gemaakt op:{" "}
                   <strong>
-                    {quantityLabel(
-                      recipe.lastProducedQuantity,
-                      getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk"
-                    )}
+                    {formatDate(latestMadeEntry.date)}
+                  </strong>
+                </p>
+              ) : null}
+              {latestMadeEntry ? (
+                <p>
+                  hoeveelheid:{" "}
+                  <strong>
+                    {quantityLabel(latestMadeEntry.quantity, productionUnit)}
                   </strong>
                 </p>
               ) : null}

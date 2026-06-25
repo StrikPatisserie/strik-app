@@ -237,6 +237,82 @@ function strik_recepturen_v1_normalize_manual_planning_items($value) {
 }
 }
 
+if (!function_exists('strik_recepturen_v1_normalize_production_log')) {
+function strik_recepturen_v1_normalize_production_log($value) {
+    if (!is_array($value)) {
+        return array();
+    }
+
+    $items = array();
+    foreach (array_slice($value, 0, 250) as $index => $item) {
+        if (!is_array($item)) continue;
+
+        $date = isset($item['date']) ? strik_recepturen_v1_clean_date($item['date']) : '';
+        $quantity = isset($item['quantity']) ? (float) $item['quantity'] : 0;
+        $source = isset($item['source']) ? sanitize_text_field($item['source']) : 'manual';
+
+        if (!in_array($source, array('work', 'manual', 'stock'), true)) {
+            $source = 'manual';
+        }
+        if ($date === '' || ($source === 'stock' ? $quantity < 0 : $quantity <= 0)) continue;
+
+        $items[] = array(
+            'id' => isset($item['id']) && $item['id'] !== ''
+                ? sanitize_text_field($item['id'])
+                : 'production-' . ($index + 1),
+            'date' => $date,
+            'quantity' => $quantity,
+            'note' => isset($item['note']) ? strik_recepturen_v1_text($item['note'], 240) : '',
+            'source' => $source,
+        );
+    }
+
+    usort($items, function ($first, $second) {
+        return strcmp($second['date'], $first['date']);
+    });
+
+    return $items;
+}
+}
+
+if (!function_exists('strik_recepturen_v1_normalize_recipes')) {
+function strik_recepturen_v1_normalize_recipes($value) {
+    $recipes = strik_recepturen_v1_limit_list($value, 3000);
+
+    foreach ($recipes as &$recipe) {
+        $production_log = strik_recepturen_v1_normalize_production_log(
+            isset($recipe['productionLog']) ? $recipe['productionLog'] : array()
+        );
+        $latest_production = null;
+
+        foreach ($production_log as $entry) {
+            if (!isset($entry['source']) || $entry['source'] !== 'stock') {
+                $latest_production = $entry;
+                break;
+            }
+        }
+
+        $legacy_date = isset($recipe['lastProducedAt'])
+            ? strik_recepturen_v1_clean_date($recipe['lastProducedAt'])
+            : '';
+        $legacy_quantity = isset($recipe['lastProducedQuantity'])
+            ? (float) $recipe['lastProducedQuantity']
+            : 0;
+
+        $recipe['productionLog'] = $production_log;
+        $recipe['lastProducedAt'] = $latest_production
+            ? $latest_production['date']
+            : $legacy_date;
+        $recipe['lastProducedQuantity'] = $latest_production
+            ? (float) $latest_production['quantity']
+            : max(0, $legacy_quantity);
+    }
+    unset($recipe);
+
+    return $recipes;
+}
+}
+
 if (!function_exists('strik_recepturen_v1_normalize_data')) {
 function strik_recepturen_v1_normalize_data($data) {
     if (!is_array($data)) {
@@ -248,9 +324,8 @@ function strik_recepturen_v1_normalize_data($data) {
             isset($data['ingredients']) ? $data['ingredients'] : array(),
             5000
         ),
-        'recipes' => strik_recepturen_v1_limit_list(
-            isset($data['recipes']) ? $data['recipes'] : array(),
-            3000
+        'recipes' => strik_recepturen_v1_normalize_recipes(
+            isset($data['recipes']) ? $data['recipes'] : array()
         ),
         'packagingItems' => strik_recepturen_v1_limit_list(
             isset($data['packagingItems']) ? $data['packagingItems'] : array(),

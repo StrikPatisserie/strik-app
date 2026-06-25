@@ -712,9 +712,12 @@ export default function RecepturenApp({
         const loadedInvoices = result.data.invoiceImports.length
           ? result.data.invoiceImports
           : invoiceImports;
+        const loadedRecipes = (
+          result.data.recipes.length ? result.data.recipes : recipes
+        ).map(syncRecipeProductionMetadata);
 
         setIngredientItems(loadedIngredients);
-        setRecipeItems(result.data.recipes.length ? result.data.recipes : recipes);
+        setRecipeItems(loadedRecipes);
         setPackagingItems(
           Array.isArray(result.data.packagingItems)
             ? result.data.packagingItems
