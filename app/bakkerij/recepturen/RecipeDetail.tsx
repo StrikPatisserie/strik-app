@@ -3683,6 +3683,9 @@ function BakkerRecipeCard({
   const latestMadeEntry = productionLogForRecipe(recipe).find(
     (entry) => entry.source !== "stock"
   );
+  const productionHistory = productionLogForRecipe(recipe)
+    .filter((entry) => entry.source !== "stock")
+    .slice(0, 4);
   const batchInfo = getBatchInfo(recipe);
   const productionUnit = batchInfo?.unit || recipe.standardBatchUnit || "stuk";
   const cardMargin = recipe.salesPrice
@@ -3921,20 +3924,46 @@ function BakkerRecipeCard({
                 </div>
               </div>
 
-              <div className="mt-3 rounded-[0.95rem] bg-[#f3f2ef] p-2.5">
-                <h3 className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/55">Stappen</h3>
-                <ol className="mt-2 grid gap-1.5 text-xs font-semibold leading-snug text-[#2d2a26]/72 sm:text-sm">
-                  {steps.length ? (
-                    steps.map((step, index) => (
+              <div className="mt-2 border border-[#dfe9d8] bg-white/70 px-2 py-1.5 text-[0.68rem] font-bold text-[#2d2a26]/58">
+                <p className="font-black uppercase tracking-[0.12em] text-[#45663b]">
+                  Productie geschiedenis
+                </p>
+                {productionHistory.length ? (
+                  <div className="mt-1 grid gap-1">
+                    {productionHistory.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-2"
+                      >
+                        <span>{formatDate(entry.date)}</span>
+                        <span className="truncate italic">
+                          {entry.note || "Gemaakt"}
+                        </span>
+                        <span className="font-black text-[#30462f]">
+                          {quantityLabel(entry.quantity, productionUnit)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 italic">Nog geen productie geregistreerd.</p>
+                )}
+              </div>
+
+              {steps.length > 0 && (
+                <details className="mt-2 border border-[#e1ddd6] bg-[#f8f6f3] px-2 py-1.5 text-xs font-semibold leading-snug text-[#2d2a26]/72 sm:text-sm">
+                  <summary className="cursor-pointer text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/52">
+                    Stappen ({steps.length})
+                  </summary>
+                  <ol className="mt-2 grid gap-1.5">
+                    {steps.map((step, index) => (
                       <li key={`${step}-${index}`}>
                         {index + 1}. {step}
                       </li>
-                    ))
-                  ) : (
-                    <li>Nog geen stappen ingevuld.</li>
-                  )}
-                </ol>
-              </div>
+                    ))}
+                  </ol>
+                </details>
+              )}
               {recipe.type === "semiFinished" && feedback && (
                 <p className="mt-3 text-xs font-black text-[#45663b]">
                   {feedback}
