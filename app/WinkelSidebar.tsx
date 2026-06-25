@@ -9,7 +9,7 @@ import { strikIcons } from "./StrikUI";
 const mainNavItems = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJs", icon: strikIcons.ijs },
-  { href: "/bakkerij", label: "Bakkerij", icon: strikIcons.bakkerij },
+  { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
 ];
 
@@ -23,8 +23,9 @@ const winkelNavItems = [
 ];
 
 const bakkerijNavItems = [
+  { href: "/bakkerij/overzicht", label: "Overzicht", icon: strikIcons.recepturen },
   { href: "/bakkerij", label: "Bakkerij", icon: strikIcons.bakkerij },
-  { href: "/bakkerij/ijs-chocolade", label: "IJs & choco", icon: strikIcons.ijs },
+  { href: "/bakkerij/ijs-chocolade", label: "IJs", icon: strikIcons.ijs },
   { href: "/bakkerij/management", label: "Management", icon: strikIcons.management },
 ];
 
@@ -93,7 +94,7 @@ export default function WinkelSidebar() {
           const active =
             item.href === "/winkel"
               ? showWinkelSubNav
-              : item.label === "Bakkerij"
+              : item.href === "/bakkerij"
                 ? showBakkerijSubNav
               : isActivePath(pathname, item.href);
 

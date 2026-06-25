@@ -9,7 +9,7 @@ const items = [
   { href: "/", label: "Home", icon: "/strik-logo.png" },
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJs", icon: strikIcons.ijs },
-  { href: "/bakkerij", label: "Bakkerij", icon: strikIcons.bakkerij },
+  { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
 ];
 

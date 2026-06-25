@@ -3,6 +3,14 @@ import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 
 const bakerySections = [
   {
+    label: "Overzicht",
+    title: "Overzicht",
+    description: "Aanbieding van de week, notities en bruidstaartplanning.",
+    icon: strikIcons.recepturen,
+    tone: "bg-white border-[#e7e0d8]",
+    links: [{ href: "/bakkerij/overzicht", label: "Open overzicht" }],
+  },
+  {
     label: "Bakkerij",
     title: "Bakkerij",
     description: "Recepten, productieplanning en HACCP voor de bakkerij.",
@@ -40,13 +48,13 @@ export default function BakkerijDashboard() {
   return (
     <StrikShell>
       <StrikPageHeader
-        title="Bakkerij"
-        description="Kies je werkgebied: bakkerij, ijs & chocolade of management."
+        title="Productie"
+        description="Kies je werkgebied: overzicht, bakkerij, ijs of management."
         icon={strikIcons.bakkerij}
         tone="honey"
       />
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {bakerySections.map((section) => (
           <section
             key={section.label}

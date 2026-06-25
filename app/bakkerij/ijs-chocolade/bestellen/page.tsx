@@ -11,6 +11,7 @@ import { formatEuro } from "../../recepturen/utils";
 type QuantityMap = Record<string, number>;
 type CustomOrderLine = {
   id: string;
+  articleNumber: string;
   name: string;
   packageSize: string;
   quantity: number;
@@ -39,6 +40,7 @@ export default function HefeBestellenPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Alles");
   const [customName, setCustomName] = useState("");
+  const [customArticleNumber, setCustomArticleNumber] = useState("");
   const [customPackage, setCustomPackage] = useState("");
   const [customQuantity, setCustomQuantity] = useState(1);
   const [customLines, setCustomLines] = useState<CustomOrderLine[]>([]);
@@ -85,12 +87,14 @@ export default function HefeBestellenPage() {
       ...current,
       {
         id: `custom-${Date.now()}`,
+        articleNumber: customArticleNumber.trim(),
         name,
         packageSize: customPackage.trim(),
         quantity: Math.max(1, customQuantity),
       },
     ]);
     setCustomName("");
+    setCustomArticleNumber("");
     setCustomPackage("");
     setCustomQuantity(1);
   }
@@ -106,8 +110,9 @@ export default function HefeBestellenPage() {
     });
     const customOrderLines = customLines.map((item) => {
       const packageText = item.packageSize ? ` (${item.packageSize})` : "";
+      const articleText = item.articleNumber ? `${item.articleNumber} - ` : "";
 
-      return `- ${item.quantity} x ${item.name}${packageText}`;
+      return `- ${item.quantity} x ${articleText}${item.name}${packageText}`;
     });
     const today = new Intl.DateTimeFormat("nl-NL", {
       day: "2-digit",
@@ -249,11 +254,17 @@ export default function HefeBestellenPage() {
         <p className="mb-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
           Losse regel
         </p>
-        <div className="grid gap-2 md:grid-cols-[1fr_12rem_7rem_auto]">
+        <div className="grid gap-2 md:grid-cols-[1fr_10rem_12rem_7rem_auto]">
           <input
             value={customName}
             onChange={(event) => setCustomName(event.target.value)}
             placeholder="productnaam"
+            className="min-h-11 border border-[#d7ccb7] px-3 text-base font-bold outline-none focus:border-[#8aa37d]"
+          />
+          <input
+            value={customArticleNumber}
+            onChange={(event) => setCustomArticleNumber(event.target.value)}
+            placeholder="art.nr"
             className="min-h-11 border border-[#d7ccb7] px-3 text-base font-bold outline-none focus:border-[#8aa37d]"
           />
           <input
@@ -287,6 +298,7 @@ export default function HefeBestellenPage() {
               >
                 <span>
                   {item.quantity} x {item.name}
+                  {item.articleNumber ? ` - ${item.articleNumber}` : ""}
                   {item.packageSize ? ` (${item.packageSize})` : ""}
                 </span>
                 <button

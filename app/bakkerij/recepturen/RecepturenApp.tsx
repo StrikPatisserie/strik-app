@@ -120,14 +120,10 @@ function recipeMatchesScope(recipe: Recipe, scope: RecepturenScope) {
   if (scope === "all") return true;
 
   const group = normalizeSearch(recipe.productGroup);
-  const name = normalizeSearch(recipe.name);
   const isIceChocolate =
     group.includes("ijs") ||
     group.includes("choco") ||
-    group.includes("chocolade") ||
-    name.includes("ijs") ||
-    name.includes("choco") ||
-    name.includes("chocolade");
+    group.includes("chocolade");
 
   return scope === "iceChocolate" ? isIceChocolate : !isIceChocolate;
 }
