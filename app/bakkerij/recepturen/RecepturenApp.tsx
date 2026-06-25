@@ -1,8 +1,10 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
+import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import { strikIcons } from "../../StrikUI";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList, { IngredientDetail } from "./IngredientsList";
@@ -100,6 +102,7 @@ type RecepturenAppProps = {
   lockedTab?: MainTabId;
   hideTopNav?: boolean;
   initialBeheerView?: BeheerView;
+  showProductionLinks?: boolean;
 };
 
 function mainTabForPath(pathname: string): MainTabId {
@@ -547,6 +550,7 @@ export default function RecepturenApp({
   lockedTab,
   hideTopNav = false,
   initialBeheerView = "menu",
+  showProductionLinks = false,
 }: Readonly<RecepturenAppProps> = {}) {
   const pathname = usePathname();
   const [mainTab, setMainTab] = useState<MainTabId>(() =>
@@ -2037,6 +2041,7 @@ export default function RecepturenApp({
               onUpdateNoteText={updateBakeryNoteText}
               onSaveNote={saveBakeryNote}
               onDeleteNote={deleteBakeryNote}
+              showProductionLinks={showProductionLinks}
             />
           )}
 
@@ -2183,6 +2188,7 @@ function BakkerijStartScreen({
   onUpdateNoteText,
   onSaveNote,
   onDeleteNote,
+  showProductionLinks,
 }: Readonly<{
   home: BakeryHomeData;
   selectedWeek: string;
@@ -2192,6 +2198,7 @@ function BakkerijStartScreen({
   onUpdateNoteText: (noteId: string, text: string) => void;
   onSaveNote: (noteId: string, text: string) => void;
   onDeleteNote: (noteId: string) => void;
+  showProductionLinks?: boolean;
 }>) {
   const offer = offerForWeek(home, selectedWeek);
   const visibleNotes = home.notes.slice(0, 3);
@@ -2306,6 +2313,57 @@ function BakkerijStartScreen({
       </div>
 
       <BakkerijWeddingCakeAgenda />
+      {showProductionLinks && <ProductionOverviewLinks />}
+    </section>
+  );
+}
+
+const productionOverviewLinks = [
+  {
+    href: "/bakkerij/bakkerij",
+    label: "Bakkerij",
+    description: "Recepten, planning en HACCP",
+    icon: strikIcons.winkel,
+    tone: "border-[#cbdcc5] bg-[#ecf4ed]",
+  },
+  {
+    href: "/bakkerij/ijs-chocolade",
+    label: "IJs & chocolade",
+    description: "Recepten, bestellen en HACCP",
+    icon: strikIcons.ijs,
+    tone: "border-[#eadb8b] bg-[#fff8d8]",
+  },
+  {
+    href: "/bakkerij/management",
+    label: "Management",
+    description: "Grondstoffen, marges en imports",
+    icon: strikIcons.management,
+    tone: "border-[#e7e0d8] bg-white",
+  },
+];
+
+function ProductionOverviewLinks() {
+  return (
+    <section className="mt-3 grid gap-2 sm:mt-5 sm:grid-cols-3">
+      {productionOverviewLinks.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          className={`flex min-h-20 items-center gap-3 rounded-[1rem] border p-3 shadow-sm transition hover:shadow-md active:scale-[0.98] sm:min-h-24 sm:p-4 ${item.tone}`}
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/80 shadow-sm">
+            <img src={item.icon} alt="" className="h-7 w-7 object-contain" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-lg font-black leading-tight text-[#111111]">
+              {item.label}
+            </span>
+            <span className="mt-0.5 block text-xs font-bold leading-tight text-[#2d2a26]/55">
+              {item.description}
+            </span>
+          </span>
+        </Link>
+      ))}
     </section>
   );
 }

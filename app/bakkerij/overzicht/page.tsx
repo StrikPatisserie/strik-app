@@ -7,6 +7,7 @@ export default function BakkerijOverzichtPage() {
       initialTab="start"
       lockedTab="start"
       hideTopNav
+      showProductionLinks
     />
   );
 }

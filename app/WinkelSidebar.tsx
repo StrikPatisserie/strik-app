@@ -24,7 +24,7 @@ const winkelNavItems = [
 
 const bakkerijNavItems = [
   { href: "/bakkerij/overzicht", label: "Overzicht", icon: strikIcons.news },
-  { href: "/bakkerij", label: "Bakkerij", icon: strikIcons.bakkerij },
+  { href: "/bakkerij/bakkerij", label: "Bakkerij", icon: strikIcons.winkel },
   { href: "/bakkerij/ijs-chocolade", label: "IJs & chocolade", icon: strikIcons.ijs },
   { href: "/bakkerij/management", label: "Management", icon: strikIcons.management },
 ];
@@ -32,9 +32,13 @@ const bakkerijNavItems = [
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/winkel") return pathname === "/winkel";
-  if (href === "/bakkerij") {
+  if (href === "/bakkerij/overzicht") {
+    return pathname === "/bakkerij" || pathname === href;
+  }
+
+  if (href === "/bakkerij/bakkerij") {
     return (
-      pathname === "/bakkerij" ||
+      pathname === href ||
       pathname.startsWith("/bakkerij/recepten") ||
       pathname.startsWith("/bakkerij/recepturen") ||
       pathname.startsWith("/bakkerij/productieplanning") ||
