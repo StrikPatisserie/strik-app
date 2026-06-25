@@ -5,19 +5,16 @@ const haccpLinks = [
   {
     href: "/schoonmaak?plan=opstart",
     label: "Opstart",
-    description: "Dagelijkse opstartchecklist voor de ijssalons.",
     icon: strikIcons.opstartplan,
   },
   {
     href: "/schoonmaak?plan=afsluit",
     label: "Afsluit",
-    description: "Dagelijkse afsluitchecklist voor ijs.",
     icon: strikIcons.afsluitplan,
   },
   {
     href: "/winkel/schoonmaak-registratie",
     label: "Temperaturen",
-    description: "Registraties en controles voor de ijslocaties.",
     icon: strikIcons.cleaning,
   },
 ];
@@ -27,26 +24,26 @@ export default function IjsChocoladeHaccpPage() {
     <StrikShell>
       <StrikPageHeader
         title="HACCP"
-        kicker="IJs & chocolade"
-        description="Snel naar de ijs-checklists en registraties."
         icon={strikIcons.cleaning}
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-2">
         {haccpLinks.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className="flex min-h-36 flex-col justify-between rounded-xl border border-[#d6e5d8] bg-white p-4 shadow-sm transition hover:bg-[#f6faf4]"
+            className="flex min-h-16 items-center justify-between border border-[#eadb8b] bg-white px-3 py-2 shadow-sm transition hover:bg-[#fff8d8] active:scale-[0.99]"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#ecf4ed]">
-              <img src={item.icon} alt="" className="h-7 w-7 object-contain" />
-            </span>
-            <span>
-              <span className="block text-lg font-black">{item.label}</span>
-              <span className="mt-1 block text-sm font-semibold leading-snug text-[#2d2a26]/58">
-                {item.description}
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#f7df83]">
+                <img src={item.icon} alt="" className="h-6 w-6 object-contain" />
               </span>
+              <span className="truncate text-xl font-black text-[#1a1815]">
+                {item.label}
+              </span>
+            </span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#f7df83] text-xl font-black">
+              &gt;
             </span>
           </Link>
         ))}

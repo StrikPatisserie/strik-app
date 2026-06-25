@@ -2337,8 +2337,8 @@ const productionOverviewLinks = [
     href: "/bakkerij/management",
     label: "Management",
     icon: strikIcons.management,
-    iconTone: "bg-[#c3d3bc]",
-    tone: "border-[#e7e0d8] bg-white hover:bg-[#f6faf4]",
+    iconTone: "bg-[#b9d7ea]",
+    tone: "border-[#bcd7e8] bg-white hover:bg-[#edf5fb]",
   },
 ];
 
@@ -2745,77 +2745,103 @@ function BeheerHome({
   onDownloadExcel: () => void;
   onDownloadJson: () => void;
 }>) {
+  const managementRows = [
+    {
+      title: "Halffabricaten",
+      icon: "/UI-apps_productie.svg",
+      onClick: () => onOpen("halffabricaten" as TabId),
+    },
+    {
+      title: "Grondstoffen",
+      icon: "/UI-apps_data.svg",
+      onClick: () => onOpen("ingredienten" as TabId),
+    },
+    {
+      title: "Verpakkingen",
+      icon: "/UI-apps_data.svg",
+      onClick: () => onOpen("verpakkingen" as TabId),
+    },
+    {
+      title: "Facturen inladen",
+      icon: "/UI-apps_link.svg",
+      onClick: () => onOpen("factuurimport" as TabId),
+    },
+    {
+      title: "Dashboard",
+      icon: "/UI-apps_productie.svg",
+      onClick: () => onOpen("dashboard" as TabId),
+    },
+    {
+      title: "Marge-overzicht",
+      icon: "/UI-apps_data.svg",
+      onClick: () => onOpen("marge" as TabId),
+    },
+  ];
+
   return (
-    <section className="grid gap-5 lg:grid-cols-2">
-      <div className="border border-[#c3d3bc] bg-white p-6">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
-          Gegevens
-        </p>
-        <div className="mt-5 grid gap-3">
-          <BeheerRow
-            title="Halffabricaten"
-            description="Basisrecepten met kostprijs, batch en gebruik."
-            icon="/UI-apps_productie.svg"
-            onClick={() => onOpen("halffabricaten")}
-          />
-          <BeheerRow
-            title="Grondstoffen"
-            description="Prijzen, leveranciers en koppelingen."
-            icon="/UI-apps_data.svg"
-            onClick={() => onOpen("ingredienten")}
-          />
-          <BeheerRow
-            title="Verpakkingen"
-            description="Verpakkingskosten per product."
-            icon="/UI-apps_data.svg"
-            onClick={() => onOpen("verpakkingen")}
-          />
-          <BeheerRow
-            title="Facturen inladen"
-            description={latestInvoiceNumber ? `Laatste: ${latestInvoiceNumber}` : "Beko/leveranciers importeren."}
-            icon="/UI-apps_link.svg"
-            onClick={() => onOpen("factuurimport")}
-          />
-        </div>
-      </div>
+    <section className="grid gap-3">
+      <header className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="block h-7 w-7 shrink-0 bg-[#ef5737]"
+          style={{
+            WebkitMask: `url("${strikIcons.management}") center / contain no-repeat`,
+            mask: `url("${strikIcons.management}") center / contain no-repeat`,
+          }}
+        />
+        <h1 className="text-3xl font-black uppercase tracking-[0.16em] text-[#ef5737] sm:text-4xl">
+          Management
+        </h1>
+      </header>
 
-      <div className="border border-[#c3d3bc] bg-white p-6">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
-          Analyse
-        </p>
-        <div className="mt-5 grid gap-3">
+      <div className="grid gap-2">
+        {managementRows.map((row) => (
           <BeheerRow
-            title="Dashboard"
-            description="Kostprijs, facturen en voorraadsignalen."
-            icon="/UI-apps_productie.svg"
-            onClick={() => onOpen("dashboard")}
+            key={row.title}
+            title={row.title}
+            icon={row.icon}
+            onClick={row.onClick}
           />
-          <BeheerRow
-            title="Marge-overzicht"
-            description="Alleen eindproducten met verkoopadvies."
-            icon="/UI-apps_data.svg"
-            onClick={() => onOpen("marge")}
-          />
-          <button
-            type="button"
-            onClick={onDownloadExcel}
-            className="border border-[#c3d3bc] bg-[#f5f5f3] px-4 py-3 text-left text-sm font-black text-[#252525]"
-          >
-            Download Excel
-          </button>
-          <button
-            type="button"
-            onClick={onDownloadJson}
-            className="border border-[#c3d3bc] bg-white px-4 py-3 text-left text-sm font-black text-[#707070]"
-          >
-            Herstelbestand downloaden
-          </button>
-        </div>
-        <p className="mt-5 text-xs font-bold leading-relaxed text-[#707070]">
-          {isLoadingData ? "Laden..." : syncStatus}
-        </p>
+        ))}
+        <button
+          type="button"
+          onClick={onDownloadExcel}
+          className="flex min-h-16 items-center justify-between border border-[#bcd7e8] bg-white px-3 py-2 text-left text-sm font-black text-[#252525] shadow-sm transition hover:bg-[#edf5fb] active:scale-[0.99]"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea]">
+              XL
+            </span>
+            <span className="truncate text-xl font-black text-[#1a1815]">
+              Download Excel
+            </span>
+          </span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea] text-xl font-black">
+            &gt;
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onDownloadJson}
+          className="flex min-h-16 items-center justify-between border border-[#bcd7e8] bg-white px-3 py-2 text-left text-sm font-black text-[#252525] shadow-sm transition hover:bg-[#edf5fb] active:scale-[0.99]"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea]">
+              ↺
+            </span>
+            <span className="truncate text-xl font-black text-[#1a1815]">
+              Herstelbestand downloaden
+            </span>
+          </span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea] text-xl font-black">
+            &gt;
+          </span>
+        </button>
       </div>
-
+      <p className="text-xs font-bold leading-relaxed text-[#707070]">
+        {isLoadingData ? "Laden..." : syncStatus}
+        {latestInvoiceNumber ? ` Laatste factuur: ${latestInvoiceNumber}.` : ""}
+      </p>
     </section>
   );
 }
@@ -2929,12 +2955,10 @@ function BakeryHomeManager({
 
 function BeheerRow({
   title,
-  description,
   icon,
   onClick,
 }: Readonly<{
   title: string;
-  description: string;
   icon: string;
   onClick: () => void;
 }>) {
@@ -2942,19 +2966,18 @@ function BeheerRow({
     <button
       type="button"
       onClick={onClick}
-      className="grid grid-cols-[3rem_minmax(0,1fr)_2.75rem] items-center gap-4 border border-[#c3d3bc] bg-white p-4 text-left transition hover:bg-[#f8f8f6] active:scale-[0.99]"
+      className="flex min-h-16 items-center justify-between border border-[#bcd7e8] bg-white px-3 py-2 text-left shadow-sm transition hover:bg-[#edf5fb] active:scale-[0.99]"
     >
-      <span className="flex h-12 w-12 items-center justify-center bg-[#c3d3bc]">
-        <img src={icon} alt="" className="h-7 w-7" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-xl font-black text-[#252525]">{title}</span>
-        <span className="mt-1 block text-sm font-bold text-[#707070]">
-          {description}
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea]">
+          <img src={icon} alt="" className="h-6 w-6" />
+        </span>
+        <span className="truncate text-xl font-black text-[#1a1815]">
+          {title}
         </span>
       </span>
-      <span className="flex h-11 w-11 items-center justify-center bg-[#c3d3bc]">
-        <img src="/UI-apps_ga naar.svg" alt="" className="h-7 w-7" />
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea] text-xl font-black">
+        &gt;
       </span>
     </button>
   );

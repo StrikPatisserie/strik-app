@@ -5,7 +5,6 @@ const bakerySections = [
   {
     label: "Overzicht",
     title: "Overzicht",
-    description: "Aanbieding van de week, notities en bruidstaartplanning.",
     icon: strikIcons.news,
     tone: "bg-white border-[#e7e0d8]",
     links: [{ href: "/bakkerij/overzicht", label: "Open overzicht" }],
@@ -13,7 +12,6 @@ const bakerySections = [
   {
     label: "Bakkerij",
     title: "Bakkerij",
-    description: "Recepten, productieplanning en HACCP voor de bakkerij.",
     icon: strikIcons.bakkerij,
     tone: "bg-[#ecf4ed] border-[#c8dcc2]",
     links: [
@@ -25,7 +23,6 @@ const bakerySections = [
   {
     label: "IJs & chocolade",
     title: "IJs & chocolade",
-    description: "Eigen recepten, HACCP en Hefe-bestellingen op de iPad.",
     icon: strikIcons.ijs,
     tone: "bg-[#fff8d8] border-[#eadb8b]",
     links: [
@@ -37,9 +34,8 @@ const bakerySections = [
   {
     label: "Management",
     title: "Management",
-    description: "Globaal beheer voor grondstoffen, facturen en marges.",
     icon: strikIcons.management,
-    tone: "bg-white border-[#e7e0d8]",
+    tone: "bg-[#edf5fb] border-[#bcd7e8]",
     links: [{ href: "/bakkerij/management", label: "Beheer" }],
   },
 ];
@@ -49,7 +45,6 @@ export default function BakkerijDashboard() {
     <StrikShell>
       <StrikPageHeader
         title="Productie"
-        description="Kies je werkgebied: overzicht, bakkerij, ijs of management."
         icon={strikIcons.bakkerij}
         tone="honey"
       />
@@ -71,9 +66,6 @@ export default function BakkerijDashboard() {
                 <h2 className="mt-1 text-2xl font-black leading-tight">
                   {section.title}
                 </h2>
-                <p className="mt-1 text-sm font-semibold leading-snug text-[#2d2a26]/58">
-                  {section.description}
-                </p>
               </div>
             </div>
 
