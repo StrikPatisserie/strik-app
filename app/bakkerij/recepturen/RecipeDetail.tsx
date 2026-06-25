@@ -1575,10 +1575,9 @@ export default function RecipeDetail({
                 if (
                   !isAdvancedOpen &&
                   draft.type !== "finalProduct" &&
-                  (activeEditSection === "basis" ||
-                    activeEditSection === "productie")
+                  activeEditSection === "basis"
                 ) {
-                  setActiveEditSection("stappen");
+                  setActiveEditSection("productie");
                 }
                 setIsAdvancedOpen((current) => !current);
               }}
@@ -1594,7 +1593,7 @@ export default function RecipeDetail({
               {recipeEditSections.map((section) => {
                 if (
                   draft.type !== "finalProduct" &&
-                  (section.id === "productie" || section.id === "basis")
+                  section.id === "basis"
                 ) {
                   return null;
                 }
@@ -1775,103 +1774,107 @@ export default function RecipeDetail({
                 </EditorBlock>
               )}
 
-              {activeEditSection === "productie" && draft.type === "finalProduct" && (
+              {activeEditSection === "productie" && (
               <EditorBlock title="Productieplanning">
-                <div className="grid gap-3 lg:grid-cols-4">
-                  <Metric
-                    label="Geschat over"
-                    value={
-                      productionPreview.status === "none"
-                        ? "-"
-                        : planningQuantityLabel(
-                            productionPreview.estimatedRemainingQuantity,
-                            draft.standardBatchUnit
-                          )
-                    }
-                  />
-                  <Metric
-                    label="Volgende productie"
-                    value={
-                      productionPreview.nextProductionDate
-                        ? formatDate(productionPreview.nextProductionDate)
-                        : "Nog onbekend"
-                    }
-                    className={productionNeedClass(productionPreview.status)}
-                  />
-                  <Metric
-                    label="Status"
-                    value={
-                      productionPreview.status === "none"
-                        ? "Geen prognose"
-                        : productionNeedLabel(productionPreview)
-                    }
-                    className={productionNeedClass(productionPreview.status)}
-                  />
-                  <Metric
-                    label="Verkooptempo"
-                    value={
-                      productionPreview.averageSalesQuantity
-                        ? `${productionPreview.averageSalesQuantity.toLocaleString(
-                            "nl-NL"
-                          )} per ${salesPeriodLabel(
-                            productionPreview.averageSalesPeriod
-                          )}`
-                        : "Nog invullen"
-                    }
-                  />
-                </div>
+                {draft.type === "finalProduct" && (
+                  <>
+                    <div className="grid gap-3 lg:grid-cols-4">
+                      <Metric
+                        label="Geschat over"
+                        value={
+                          productionPreview.status === "none"
+                            ? "-"
+                            : planningQuantityLabel(
+                                productionPreview.estimatedRemainingQuantity,
+                                draft.standardBatchUnit
+                              )
+                        }
+                      />
+                      <Metric
+                        label="Volgende productie"
+                        value={
+                          productionPreview.nextProductionDate
+                            ? formatDate(productionPreview.nextProductionDate)
+                            : "Nog onbekend"
+                        }
+                        className={productionNeedClass(productionPreview.status)}
+                      />
+                      <Metric
+                        label="Status"
+                        value={
+                          productionPreview.status === "none"
+                            ? "Geen prognose"
+                            : productionNeedLabel(productionPreview)
+                        }
+                        className={productionNeedClass(productionPreview.status)}
+                      />
+                      <Metric
+                        label="Verkooptempo"
+                        value={
+                          productionPreview.averageSalesQuantity
+                            ? `${productionPreview.averageSalesQuantity.toLocaleString(
+                                "nl-NL"
+                              )} per ${salesPeriodLabel(
+                                productionPreview.averageSalesPeriod
+                              )}`
+                            : "Nog invullen"
+                        }
+                      />
+                    </div>
 
-                <div className="mt-4 grid gap-3 border border-[#c3d3bc] bg-white p-3 md:grid-cols-[minmax(8rem,0.75fr)_minmax(8rem,0.75fr)_minmax(8rem,0.75fr)_minmax(9rem,1fr)]">
-                  <EditTextField
-                    label="Gemiddeld verkocht"
-                    value={draft.averageSalesQuantity}
-                    onChange={(value) =>
-                      updateDraft({ averageSalesQuantity: value })
-                    }
-                    inputMode="decimal"
-                  />
-                  <SelectField
-                    label="Periode"
-                    value={draft.averageSalesPeriod}
-                    onChange={(value) =>
-                      updateDraft({ averageSalesPeriod: value as SalesPeriod })
-                    }
-                    options={salesPeriods.map((period) => ({
-                      value: period,
-                      label: salesPeriodText(period),
-                    }))}
-                  />
-                  <EditTextField
-                    label="Vaste batch"
-                    value={draft.desiredProductionBatchQuantity}
-                    onChange={(value) =>
-                      updateDraft({ desiredProductionBatchQuantity: value })
-                    }
-                    inputMode="decimal"
-                  />
-                  <label className="flex items-center gap-3 self-end border border-[#cfdcc8] bg-[#f7faf5] px-3 py-2.5 text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/60">
-                    <input
-                      type="checkbox"
-                      checked={draft.canProduceAhead}
-                      onChange={(event) =>
-                        updateDraft({ canProduceAhead: event.target.checked })
-                      }
-                      className="h-4 w-4 accent-[#8fb184]"
-                    />
-                    elke{" "}
-                    <input
-                      value={draft.desiredProductionFrequencyDays}
-                      onChange={(event) =>
-                        updateDraft({
-                          desiredProductionFrequencyDays: event.target.value,
-                        })
-                      }
-                      inputMode="decimal"
-                      className="h-8 w-14 border border-[#cfdcc8] bg-white px-2 text-center text-sm font-black tracking-normal outline-none"
-                    />
-                    dagen
-                  </label>
-                </div>
+                    <div className="mt-4 grid gap-3 border border-[#c3d3bc] bg-white p-3 md:grid-cols-[minmax(8rem,0.75fr)_minmax(8rem,0.75fr)_minmax(8rem,0.75fr)_minmax(9rem,1fr)]">
+                      <EditTextField
+                        label="Gemiddeld verkocht"
+                        value={draft.averageSalesQuantity}
+                        onChange={(value) =>
+                          updateDraft({ averageSalesQuantity: value })
+                        }
+                        inputMode="decimal"
+                      />
+                      <SelectField
+                        label="Periode"
+                        value={draft.averageSalesPeriod}
+                        onChange={(value) =>
+                          updateDraft({ averageSalesPeriod: value as SalesPeriod })
+                        }
+                        options={salesPeriods.map((period) => ({
+                          value: period,
+                          label: salesPeriodText(period),
+                        }))}
+                      />
+                      <EditTextField
+                        label="Vaste batch"
+                        value={draft.desiredProductionBatchQuantity}
+                        onChange={(value) =>
+                          updateDraft({ desiredProductionBatchQuantity: value })
+                        }
+                        inputMode="decimal"
+                      />
+                      <label className="flex items-center gap-3 self-end border border-[#cfdcc8] bg-[#f7faf5] px-3 py-2.5 text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/60">
+                        <input
+                          type="checkbox"
+                          checked={draft.canProduceAhead}
+                          onChange={(event) =>
+                            updateDraft({ canProduceAhead: event.target.checked })
+                          }
+                          className="h-4 w-4 accent-[#8fb184]"
+                        />
+                        elke{" "}
+                        <input
+                          value={draft.desiredProductionFrequencyDays}
+                          onChange={(event) =>
+                            updateDraft({
+                              desiredProductionFrequencyDays: event.target.value,
+                            })
+                          }
+                          inputMode="decimal"
+                          className="h-8 w-14 border border-[#cfdcc8] bg-white px-2 text-center text-sm font-black tracking-normal outline-none"
+                        />
+                        dagen
+                      </label>
+                    </div>
+                  </>
+                )}
 
                 <div className="mt-3 grid gap-3 xl:grid-cols-2">
                   <div className="border border-[#dfe9d8] bg-white p-2">
@@ -2471,13 +2474,15 @@ export default function RecipeDetail({
                 </Panel>
               )}
 
-              {previewRecipe.type === "finalProduct" && (
-                <ProductionHistoryPanel
-                  history={productionHistory}
-                  nextProductionDate={productionPreview.nextProductionDate}
-                  recipe={previewRecipe}
-                />
-              )}
+              <ProductionHistoryPanel
+                history={productionHistory}
+                nextProductionDate={
+                  previewRecipe.type === "finalProduct"
+                    ? productionPreview.nextProductionDate
+                    : ""
+                }
+                recipe={previewRecipe}
+              />
 
               <Panel>
                 <SectionTitle title="Allergenen en interne notities" />
@@ -2800,6 +2805,9 @@ function buildRecipeFromDraft(
     standardBatchUnit,
     draft.batchSize || recipe.batchSize
   );
+  const latestProductionEntry = draft.productionLog.find(
+    (entry) => entry.source !== "stock"
+  );
 
   const updatedRecipe: Recipe = {
     ...recipe,
@@ -2850,11 +2858,9 @@ function buildRecipeFromDraft(
     desiredProductionBatchQuantity: isSemiFinished
       ? 0
       : parseDutchNumber(draft.desiredProductionBatchQuantity),
-    lastProducedAt: isSemiFinished ? "" : draft.productionLog[0]?.date || "",
-    lastProducedQuantity: isSemiFinished
-      ? 0
-      : draft.productionLog[0]?.quantity || 0,
-    productionLog: isSemiFinished ? [] : draft.productionLog,
+    lastProducedAt: latestProductionEntry?.date || "",
+    lastProducedQuantity: latestProductionEntry?.quantity || 0,
+    productionLog: draft.productionLog,
     productionRequests: isSemiFinished ? [] : draft.productionRequests,
   };
 

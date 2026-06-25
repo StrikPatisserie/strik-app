@@ -647,14 +647,17 @@ function recurringProductionDate(recipe: Recipe, todayStart: Date) {
 }
 
 export function syncRecipeProductionMetadata(recipe: Recipe): Recipe {
+  const productionLog = normalizeProductionLog(productionLogForRecipe(recipe));
+  const latestEntry = latestProductionEntry(productionLog);
+
   if (recipe.type !== "finalProduct") {
     return {
       ...recipe,
       averageSalesQuantity: 0,
       averageSalesPeriod: "week",
-      lastProducedAt: "",
-      lastProducedQuantity: 0,
-      productionLog: [],
+      lastProducedAt: latestEntry?.date || "",
+      lastProducedQuantity: latestEntry?.quantity || 0,
+      productionLog,
       productionRequests: [],
       canProduceAhead: false,
       desiredProductionFrequencyDays: 0,
@@ -662,11 +665,9 @@ export function syncRecipeProductionMetadata(recipe: Recipe): Recipe {
     };
   }
 
-  const productionLog = normalizeProductionLog(productionLogForRecipe(recipe));
   const productionRequests = normalizeProductionRequests(
     recipe.productionRequests || []
   );
-  const latestEntry = latestProductionEntry(productionLog);
   const averageSalesPeriod = recipe.averageSalesPeriod || "week";
   const configuredAverageSalesQuantity =
     recipe.averageSalesQuantity === undefined
