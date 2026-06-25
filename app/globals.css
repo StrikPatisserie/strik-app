@@ -236,8 +236,8 @@ h6 {
   width: clamp(1rem, 4.4vw, 1.8rem);
   height: clamp(1rem, 4.4vw, 1.8rem);
   background: #ef5737;
-  mask: url("/icons_strik_winkel.svg") center / contain no-repeat;
-  -webkit-mask: url("/icons_strik_winkel.svg") center / contain no-repeat;
+  mask: url("/APP_iconss__overview.svg") center / contain no-repeat;
+  -webkit-mask: url("/APP_iconss__overview.svg") center / contain no-repeat;
 }
 
 .bakkerij-page-heading {
@@ -257,6 +257,15 @@ h6 {
   background: #ef5737;
   mask: url("/apps%20strik_Bakkerij.svg") center / contain no-repeat;
   -webkit-mask: url("/apps%20strik_Bakkerij.svg") center / contain no-repeat;
+}
+
+.productie-page-heading-icon {
+  display: block;
+  width: clamp(1rem, 4.4vw, 1.8rem);
+  height: clamp(1rem, 4.4vw, 1.8rem);
+  background: #ef5737;
+  mask: url("/APP_iconss__overview.svg") center / contain no-repeat;
+  -webkit-mask: url("/APP_iconss__overview.svg") center / contain no-repeat;
 }
 
 .strik-page-title {

@@ -14,7 +14,7 @@ const mainNavItems = [
 ];
 
 const winkelNavItems = [
-  { href: "/winkel", label: "Overzicht", icon: strikIcons.winkel },
+  { href: "/winkel", label: "Overzicht", icon: strikIcons.overview },
   { href: "/winkel/haccp", label: "HACCP", icon: strikIcons.cleaning },
   { href: "/bruidstaarten", label: "Bruidstaarten", icon: strikIcons.bruidstaart },
   { href: "/strik-agenda", label: "Agenda", icon: strikIcons.strikAgenda },
@@ -23,10 +23,10 @@ const winkelNavItems = [
 ];
 
 const bakkerijNavItems = [
-  { href: "/bakkerij/overzicht", label: "Overzicht", icon: strikIcons.news },
-  { href: "/bakkerij/bakkerij", label: "Bakkerij", icon: strikIcons.winkel },
+  { href: "/bakkerij/overzicht", label: "Overzicht", icon: strikIcons.overview },
+  { href: "/bakkerij/bakkerij", label: "Bakkerij", icon: strikIcons.gebak },
   { href: "/bakkerij/ijs-chocolade", label: "IJs & chocolade", icon: strikIcons.ijs },
-  { href: "/bakkerij/management", label: "Management", icon: strikIcons.management },
+  { href: "/bakkerij/management", label: "Data", icon: strikIcons.data },
 ];
 
 function isActivePath(pathname: string, href: string) {

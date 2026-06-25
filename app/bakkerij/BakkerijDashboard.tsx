@@ -5,14 +5,14 @@ const bakerySections = [
   {
     label: "Overzicht",
     title: "Overzicht",
-    icon: strikIcons.news,
+    icon: strikIcons.overview,
     tone: "bg-white border-[#e7e0d8]",
     links: [{ href: "/bakkerij/overzicht", label: "Open overzicht" }],
   },
   {
     label: "Bakkerij",
     title: "Bakkerij",
-    icon: strikIcons.bakkerij,
+    icon: strikIcons.gebak,
     tone: "bg-[#ecf4ed] border-[#c8dcc2]",
     links: [
       { href: "/bakkerij/recepten", label: "Recepten" },
@@ -32,11 +32,11 @@ const bakerySections = [
     ],
   },
   {
-    label: "Management",
-    title: "Management",
-    icon: strikIcons.management,
+    label: "Data",
+    title: "Data",
+    icon: strikIcons.data,
     tone: "bg-[#edf5fb] border-[#bcd7e8]",
-    links: [{ href: "/bakkerij/management", label: "Beheer" }],
+    links: [{ href: "/bakkerij/management", label: "Data" }],
   },
 ];
 

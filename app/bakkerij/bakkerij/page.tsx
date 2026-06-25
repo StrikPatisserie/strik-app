@@ -24,7 +24,7 @@ export default function ProductieBakkerijPage() {
     <StrikShell>
       <StrikPageHeader
         title="Bakkerij"
-        icon={strikIcons.winkel}
+        icon={strikIcons.gebak}
       />
 
       <div className="grid gap-2">

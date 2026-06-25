@@ -1938,7 +1938,7 @@ export default function RecepturenApp({
             className="inline-flex items-center gap-2 border border-[#c3d3bc] bg-white px-4 py-3 text-sm font-black text-[#252525]"
           >
             <img src="/UI-apps_terug.svg" alt="" className="h-5 w-5" />
-            Terug naar beheer
+            Terug naar data
           </button>
           <p className="text-xs font-bold text-[#707070]">
             {isLoadingData ? "Laden..." : syncStatus}
@@ -2154,7 +2154,7 @@ function BakkerijTopNav({
   const tabs: Array<{ id: MainTabId; label: string }> = [
     { id: "recepten", label: "RECEPTEN" },
     { id: "planning", label: "PLANNING" },
-    { id: "beheer", label: "BEHEER" },
+    { id: "beheer", label: "DATA" },
   ];
 
   return (
@@ -2206,6 +2206,17 @@ function BakkerijStartScreen({
   return (
     <section className="mx-auto h-full w-full max-w-[76rem] overflow-y-auto px-3 py-3 sm:px-6 sm:py-5">
       <div className="grid grid-cols-2 items-start gap-2 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] sm:gap-5 lg:gap-7">
+        {showProductionLinks && (
+          <header className="col-span-2 flex min-w-0 items-center gap-3 pb-1 sm:gap-4">
+            <span
+              className="productie-page-heading-icon shrink-0"
+              aria-hidden="true"
+            />
+            <h1 className="winkel-page-heading min-w-0 text-[#ef5737]">
+              Productie overzicht
+            </h1>
+          </header>
+        )}
         <section className="min-w-0 rounded-[1.15rem] border border-[#d7d4cf] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.45rem] sm:p-3">
           <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-1.5">
             <div className="min-w-0">
@@ -2322,7 +2333,7 @@ const productionOverviewLinks = [
   {
     href: "/bakkerij/bakkerij",
     label: "Bakkerij",
-    icon: strikIcons.winkel,
+    icon: strikIcons.gebak,
     iconTone: "bg-[#c3d3bc]",
     tone: "border-[#cbdcc5] bg-white hover:bg-[#f6faf4]",
   },
@@ -2335,8 +2346,8 @@ const productionOverviewLinks = [
   },
   {
     href: "/bakkerij/management",
-    label: "Management",
-    icon: strikIcons.management,
+    label: "Data",
+    icon: strikIcons.data,
     iconTone: "bg-[#b9d7ea]",
     tone: "border-[#bcd7e8] bg-white hover:bg-[#edf5fb]",
   },
@@ -2785,12 +2796,12 @@ function BeheerHome({
           aria-hidden="true"
           className="block h-7 w-7 shrink-0 bg-[#ef5737]"
           style={{
-            WebkitMask: `url("${strikIcons.management}") center / contain no-repeat`,
-            mask: `url("${strikIcons.management}") center / contain no-repeat`,
+            WebkitMask: `url("${strikIcons.data}") center / contain no-repeat`,
+            mask: `url("${strikIcons.data}") center / contain no-repeat`,
           }}
         />
         <h1 className="text-3xl font-black uppercase tracking-[0.16em] text-[#ef5737] sm:text-4xl">
-          Management
+          Data
         </h1>
       </header>
 
