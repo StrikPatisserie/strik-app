@@ -962,7 +962,12 @@ export default function RecipeDetail({
 
   function startRecipeCard() {
     setIsRecipeStarted(true);
-    onStartProduction?.(previewRecipe, cardQuantity || previewBatchQuantity || 1);
+    if (onStartProduction) {
+      onStartProduction(previewRecipe, cardQuantity || previewBatchQuantity || 1);
+      onClose();
+      return;
+    }
+
     showFeedback("Recept gestart.");
   }
 

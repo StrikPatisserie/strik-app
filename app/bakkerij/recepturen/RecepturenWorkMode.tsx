@@ -32,7 +32,16 @@ type BatchInfo = {
 type ProductionTask = {
   id: string;
   label: string;
-  group: "ingredients" | "semi" | "steps" | "finishing";
+  group: "ingredients" | "steps";
+  linkedRecipe?: Recipe;
+};
+
+type WorkIngredientLine = {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: RecipeUnit;
+  kind: "ingredient" | "semi";
   linkedRecipe?: Recipe;
 };
 
@@ -135,19 +144,6 @@ function getWorkSteps(recipe: Recipe) {
   return steps.filter((step) => step.trim());
 }
 
-function getFinishingSteps(recipe: Recipe) {
-  if (recipe.type === "semiFinished") return [];
-
-  if (recipe.finishingSteps?.length) {
-    return recipe.finishingSteps.filter((step) => step.trim());
-  }
-
-  return [
-    "Controleer uitstraling, structuur en batchlabel.",
-    "Zet product in koeling, vriezer of klaarzetruimte volgens planning.",
-  ];
-}
-
 function getWorkNotes(recipe: Recipe) {
   const rawNote = recipe.internalNotes || recipe.notes || "";
   const safeLines = rawNote
@@ -194,31 +190,46 @@ function getScaledSemiFinished(
   });
 }
 
+function combineWorkIngredientLines(
+  ingredients: ReturnType<typeof getScaledIngredients>,
+  semiFinished: ReturnType<typeof getScaledSemiFinished>
+): WorkIngredientLine[] {
+  return [
+    ...ingredients.map((item) => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+      kind: "ingredient" as const,
+    })),
+    ...semiFinished.map((item) => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+      kind: "semi" as const,
+      linkedRecipe: item.recipe,
+    })),
+  ];
+}
+
 function createPrintHtml(
   recipe: Recipe,
   batch: BatchInfo,
   batchWeightKg: number,
   ingredients: ReturnType<typeof getScaledIngredients>,
   semiFinished: ReturnType<typeof getScaledSemiFinished>,
-  steps: string[],
-  finishingSteps: string[]
+  steps: string[]
 ) {
-  const ingredientRows = ingredients
+  const ingredientRows = combineWorkIngredientLines(ingredients, semiFinished)
     .map(
       (item) =>
-        `<tr><td>${escapeHtml(formatAmount(item.quantity, item.unit))}</td><td>${escapeHtml(item.name)}</td></tr>`
-    )
-    .join("");
-  const semiRows = semiFinished
-    .map(
-      (item) =>
-        `<tr><td>${escapeHtml(formatAmount(item.quantity, item.unit))}</td><td>${escapeHtml(item.name)}</td></tr>`
+        `<tr><td>${escapeHtml(formatAmount(item.quantity, item.unit))}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(
+          item.kind === "semi" ? "Halffabricaat" : "Grondstof"
+        )}</td></tr>`
     )
     .join("");
   const stepRows = steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
-  const finishingRows = finishingSteps
-    .map((step) => `<li>${escapeHtml(step)}</li>`)
-    .join("");
   const photoBlock = recipe.type === "finalProduct" && recipe.photoPreviewDataUrl
     ? `<div class="photo"><img src="${escapeHtml(
         recipe.photoPreviewDataUrl
@@ -250,16 +261,9 @@ function createPrintHtml(
   <p><strong>Batchgewicht:</strong> ${escapeHtml(formatBatchWeight(batchWeightKg))}</p>
   ${photoBlock}
   <h2>Ingredienten</h2>
-  <table><tbody>${ingredientRows || "<tr><td>Geen directe ingredienten.</td></tr>"}</tbody></table>
-  <h2>Benodigde halffabricaten</h2>
-  <table><tbody>${semiRows || "<tr><td>Geen halffabricaten.</td></tr>"}</tbody></table>
+  <table><tbody>${ingredientRows || "<tr><td>Geen ingredienten.</td></tr>"}</tbody></table>
   <h2>Bereidingswijze</h2>
   <ol>${stepRows}</ol>
-  ${
-    finishingRows
-      ? `<h2>Afwerking</h2><ol>${finishingRows}</ol>`
-      : ""
-  }
 </body>
 </html>`;
 }
@@ -670,6 +674,7 @@ function WorkRecipeDetail({
   );
   const [scaleIngredientAmount, setScaleIngredientAmount] = useState("");
   const [isRegisteringProduction, setIsRegisteringProduction] = useState(false);
+  const [areStepsOpen, setAreStepsOpen] = useState(false);
   const activeBatch = { ...standardBatch, quantity: batchQuantity };
   const multiplier = standardBatch.quantity
     ? batchQuantity / standardBatch.quantity
@@ -677,8 +682,8 @@ function WorkRecipeDetail({
   const batchWeightKg = scaledRecipeBatchWeightKg(recipe, multiplier);
   const scaledIngredients = getScaledIngredients(recipe, ingredients, multiplier);
   const scaledSemiFinished = getScaledSemiFinished(recipe, recipes, multiplier);
+  const ingredientLines = combineWorkIngredientLines(scaledIngredients, scaledSemiFinished);
   const workSteps = getWorkSteps(recipe);
-  const finishingSteps = getFinishingSteps(recipe);
   const workNotes = getWorkNotes(recipe);
 
   function setMultiplier(multiplierValue: number) {
@@ -724,8 +729,7 @@ function WorkRecipeDetail({
         batchWeightKg,
         scaledIngredients,
         scaledSemiFinished,
-        workSteps,
-        finishingSteps
+        workSteps
       )
     );
     printWindow.document.close();
@@ -887,57 +891,43 @@ function WorkRecipeDetail({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="mt-4 grid gap-4">
           <WorkPanel title="Ingredienten">
-            <div className="grid gap-2">
-              {scaledIngredients.length ? (
-                scaledIngredients.map((item) => (
-                  <WorkQuantityLine
-                    key={`${item.id}-${item.quantity}`}
-                    quantity={formatAmount(item.quantity, item.unit)}
-                    name={item.name}
-                  />
-                ))
-              ) : (
-                <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-bold text-[#2d2a26]/50">
-                  Geen directe ingredienten.
-                </p>
-              )}
-            </div>
-          </WorkPanel>
-
-          <WorkPanel title="Eerst benodigde halffabricaten">
-            <div className="grid gap-2">
-              {scaledSemiFinished.length ? (
-                scaledSemiFinished.map((item) => {
-                  const linkedRecipe = item.recipe;
-
-                  return (
-                    <div
-                      key={`${item.id}-${item.quantity}`}
-                      className="grid gap-3 rounded-2xl bg-[#fffdf8] p-3 text-sm font-bold shadow-sm sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-center"
-                    >
-                      <span>{formatAmount(item.quantity, item.unit)}</span>
-                      <span className="font-black">{item.name}</span>
-                      {linkedRecipe ? (
+            <div className="overflow-hidden rounded-[1rem] border border-[#e2dbcf] bg-white">
+              {ingredientLines.length ? (
+                ingredientLines.map((item) => (
+                  <div
+                    key={`${item.kind}-${item.id}-${item.quantity}`}
+                    className="grid gap-2 border-b border-[#e2dbcf] px-3 py-2 text-sm last:border-b-0 sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-center"
+                  >
+                    <span className="font-black text-[#45663b]">
+                      {formatAmount(item.quantity, item.unit)}
+                    </span>
+                    <span className="min-w-0 font-black">{item.name}</span>
+                    {item.kind === "semi" ? (
+                      item.linkedRecipe ? (
                         <button
                           type="button"
-                          onClick={() => onSelectRecipe(linkedRecipe)}
-                          className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
+                          onClick={() => onSelectRecipe(item.linkedRecipe!)}
+                          className="w-fit rounded-full bg-[#fff0bd] px-3 py-1.5 text-xs font-black text-[#7a5a18] shadow-sm"
                         >
                           Open recept
                         </button>
                       ) : (
-                        <span className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/45">
-                          Niet gevonden
+                        <span className="w-fit rounded-full bg-[#f8f6f3] px-3 py-1.5 text-xs font-black text-[#2d2a26]/45">
+                          Halffabricaat niet gevonden
                         </span>
-                      )}
-                    </div>
-                  );
-                })
+                      )
+                    ) : (
+                      <span className="hidden text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/35 sm:block">
+                        Grondstof
+                      </span>
+                    )}
+                  </div>
+                ))
               ) : (
-                <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-bold text-[#2d2a26]/50">
-                  Geen halffabricaten nodig.
+                <p className="p-3 text-sm font-bold text-[#2d2a26]/50">
+                  Geen ingredienten.
                 </p>
               )}
             </div>
@@ -945,32 +935,41 @@ function WorkRecipeDetail({
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
-          <WorkPanel title="Bereidingswijze">
-            <ol className="grid gap-2">
-              {workSteps.map((step, index) => (
-                <li key={`${step}-${index}`} className="flex gap-3 rounded-2xl bg-[#fffdf8] p-4">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#c3d3bc] text-sm font-black">
-                    {index + 1}
-                  </span>
-                  <span className="text-base font-semibold leading-relaxed text-[#2d2a26]/72">
-                    {step}
-                  </span>
-                </li>
-              ))}
-            </ol>
+          <WorkPanel title="Productiestappen">
+            <button
+              type="button"
+              onClick={() => setAreStepsOpen((current) => !current)}
+              className="flex w-full items-center justify-between gap-3 rounded-2xl bg-[#fffdf8] px-4 py-3 text-left text-sm font-black shadow-sm"
+            >
+              <span>{workSteps.length || 0} stappen</span>
+              <span className="text-lg">{areStepsOpen ? "-" : "+"}</span>
+            </button>
+            {areStepsOpen && (
+              <ol className="mt-2 overflow-hidden rounded-[1rem] border border-[#e2dbcf] bg-white">
+                {workSteps.length ? (
+                  workSteps.map((step, index) => (
+                    <li
+                      key={`${step}-${index}`}
+                      className="grid grid-cols-[2.5rem_minmax(0,1fr)] border-b border-[#e2dbcf] text-sm last:border-b-0"
+                    >
+                      <span className="bg-[#f4f0ea] px-3 py-2 text-center font-black">
+                        {index + 1}
+                      </span>
+                      <span className="px-3 py-2 font-semibold leading-snug text-[#2d2a26]/72">
+                        {step}
+                      </span>
+                    </li>
+                  ))
+                ) : (
+                  <li className="px-3 py-2 text-sm font-bold text-[#2d2a26]/50">
+                    Geen productiestappen geregistreerd.
+                  </li>
+                )}
+              </ol>
+            )}
           </WorkPanel>
 
           <div className="grid gap-4">
-            {finishingSteps.length > 0 && (
-              <WorkPanel title="Afwerking">
-                <div className="grid gap-2">
-                  {finishingSteps.map((step, index) => (
-                    <WorkChecklistPreview key={`${step}-${index}`} label={step} />
-                  ))}
-                </div>
-              </WorkPanel>
-            )}
-
             <WorkPanel title="Allergenen">
               <div className="flex flex-wrap gap-2">
                 {recipe.allergens.length ? (
@@ -1008,7 +1007,6 @@ function WorkRecipeDetail({
           ingredients={scaledIngredients}
           semiFinished={scaledSemiFinished}
           steps={workSteps}
-          finishingSteps={finishingSteps}
           onOpenRecipe={(linkedRecipe) => {
             setIsProducing(false);
             onSelectRecipe(linkedRecipe);
@@ -1088,27 +1086,6 @@ function RecipeWorkPhoto({
   );
 }
 
-function WorkQuantityLine({
-  quantity,
-  name,
-}: Readonly<{ quantity: string; name: string }>) {
-  return (
-    <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 rounded-2xl bg-[#fffdf8] p-3 text-sm font-bold shadow-sm">
-      <span>{quantity}</span>
-      <span className="font-black">{name}</span>
-    </div>
-  );
-}
-
-function WorkChecklistPreview({ label }: Readonly<{ label: string }>) {
-  return (
-    <div className="flex gap-3 rounded-2xl bg-[#fffdf8] p-3 text-sm font-semibold text-[#2d2a26]/70">
-      <span className="mt-0.5 h-5 w-5 rounded-md border-2 border-[#c3d3bc]" />
-      <span>{label}</span>
-    </div>
-  );
-}
-
 function ProductionMode({
   recipe,
   batch,
@@ -1117,7 +1094,6 @@ function ProductionMode({
   ingredients,
   semiFinished,
   steps,
-  finishingSteps,
   onOpenRecipe,
   onBack,
 }: Readonly<{
@@ -1128,7 +1104,6 @@ function ProductionMode({
   ingredients: ReturnType<typeof getScaledIngredients>;
   semiFinished: ReturnType<typeof getScaledSemiFinished>;
   steps: string[];
-  finishingSteps: string[];
   onOpenRecipe: (recipe: Recipe) => void;
   onBack: () => void;
 }>) {
@@ -1138,8 +1113,8 @@ function ProductionMode({
   const [focusIndex, setFocusIndex] = useState(0);
   const [isFinishingProduction, setIsFinishingProduction] = useState(false);
   const tasks = useMemo(
-    () => createProductionTasks(ingredients, semiFinished, steps, finishingSteps),
-    [finishingSteps, ingredients, semiFinished, steps]
+    () => createProductionTasks(ingredients, semiFinished, steps),
+    [ingredients, semiFinished, steps]
   );
   const completed = tasks.filter((task) => checkedTasks[task.id]).length;
   const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
@@ -1255,37 +1230,23 @@ function ProductionMode({
         )}
 
         {viewMode === "checklist" ? (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4">
             <ProductionTaskGroup
               title="Ingredienten"
               tasks={tasks.filter((task) => task.group === "ingredients")}
               checkedTasks={checkedTasks}
               onToggle={toggleTask}
               onOpenRecipe={onOpenRecipe}
+              defaultOpen
             />
             <ProductionTaskGroup
-              title="Halffabricaten"
-              tasks={tasks.filter((task) => task.group === "semi")}
-              checkedTasks={checkedTasks}
-              onToggle={toggleTask}
-              onOpenRecipe={onOpenRecipe}
-            />
-            <ProductionTaskGroup
-              title="Stappen"
+              title="Productiestappen"
               tasks={tasks.filter((task) => task.group === "steps")}
               checkedTasks={checkedTasks}
               onToggle={toggleTask}
               onOpenRecipe={onOpenRecipe}
+              defaultOpen={false}
             />
-            {finishingSteps.length > 0 && (
-              <ProductionTaskGroup
-                title="Afwerking"
-                tasks={tasks.filter((task) => task.group === "finishing")}
-                checkedTasks={checkedTasks}
-                onToggle={toggleTask}
-                onOpenRecipe={onOpenRecipe}
-              />
-            )}
           </div>
         ) : (
           <section className="border border-[#c3d3bc] bg-white p-5 text-center">
@@ -1420,8 +1381,7 @@ function ProductionRegistrationDialog({
 function createProductionTasks(
   ingredients: ReturnType<typeof getScaledIngredients>,
   semiFinished: ReturnType<typeof getScaledSemiFinished>,
-  steps: string[],
-  finishingSteps: string[]
+  steps: string[]
 ): ProductionTask[] {
   return [
     ...ingredients.map((item, index) => ({
@@ -1432,18 +1392,13 @@ function createProductionTasks(
     ...semiFinished.map((item, index) => ({
       id: `semi-${item.id}-${index}`,
       label: `${formatAmount(item.quantity, item.unit)} ${item.name}`,
-      group: "semi" as const,
+      group: "ingredients" as const,
       linkedRecipe: item.recipe,
     })),
     ...steps.map((step, index) => ({
       id: `step-${index}`,
       label: step,
       group: "steps" as const,
-    })),
-    ...finishingSteps.map((step, index) => ({
-      id: `finishing-${index}`,
-      label: step,
-      group: "finishing" as const,
     })),
   ];
 }
@@ -1454,64 +1409,79 @@ function ProductionTaskGroup({
   checkedTasks,
   onToggle,
   onOpenRecipe,
+  defaultOpen = true,
 }: Readonly<{
   title: string;
   tasks: ProductionTask[];
   checkedTasks: Record<string, boolean>;
   onToggle: (taskId: string) => void;
   onOpenRecipe: (recipe: Recipe) => void;
+  defaultOpen?: boolean;
 }>) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
   return (
     <section className="border border-[#c3d3bc] bg-white p-4">
-      <h3 className="text-lg font-black">{title}</h3>
-      <div className="mt-3 grid gap-2">
-        {tasks.length ? (
-          tasks.map((task) => {
-            const linkedRecipe = task.linkedRecipe;
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
+        <span className="text-lg font-black">{title}</span>
+        <span className="text-sm font-black text-[#707070]">
+          {tasks.length} {tasks.length === 1 ? "regel" : "regels"} {isOpen ? "-" : "+"}
+        </span>
+      </button>
+      {isOpen && (
+        <div className="mt-3 grid gap-2">
+          {tasks.length ? (
+            tasks.map((task) => {
+              const linkedRecipe = task.linkedRecipe;
 
-            return (
-              <div
-                key={task.id}
-                className={`grid gap-2 border p-2 text-sm font-black transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
-                  checkedTasks[task.id]
-                    ? "border-[#c3d3bc] bg-[#dce8d6] text-[#45663b]"
-                    : "border-[#c3d3bc] bg-white text-[#111111]"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => onToggle(task.id)}
-                  className="flex min-w-0 gap-3 p-2 text-left"
+              return (
+                <div
+                  key={task.id}
+                  className={`grid gap-2 border p-2 text-sm font-black transition sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
+                    checkedTasks[task.id]
+                      ? "border-[#c3d3bc] bg-[#dce8d6] text-[#45663b]"
+                      : "border-[#c3d3bc] bg-white text-[#111111]"
+                  }`}
                 >
-                  <span
-                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border text-[0.62rem] ${
-                      checkedTasks[task.id]
-                        ? "border-[#45663b] bg-[#45663b] text-white"
-                        : "border-[#c3d3bc]"
-                    }`}
-                  >
-                    {checkedTasks[task.id] ? "OK" : ""}
-                  </span>
-                  <span>{task.label}</span>
-                </button>
-                {linkedRecipe && (
                   <button
                     type="button"
-                    onClick={() => onOpenRecipe(linkedRecipe)}
-                    className="border border-[#c3d3bc] bg-white px-3 py-2 text-xs font-black text-[#45663b]"
+                    onClick={() => onToggle(task.id)}
+                    className="flex min-w-0 gap-3 p-2 text-left"
                   >
-                    Open recept
+                    <span
+                      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border text-[0.62rem] ${
+                        checkedTasks[task.id]
+                          ? "border-[#45663b] bg-[#45663b] text-white"
+                          : "border-[#c3d3bc]"
+                      }`}
+                    >
+                      {checkedTasks[task.id] ? "OK" : ""}
+                    </span>
+                    <span>{task.label}</span>
                   </button>
-                )}
-              </div>
-            );
-          })
-        ) : (
-          <p className="border border-[#c3d3bc] bg-[#f8f6f3] p-4 text-sm font-bold text-[#707070]">
-            Geen taken in deze categorie.
-          </p>
-        )}
-      </div>
+                  {linkedRecipe && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenRecipe(linkedRecipe)}
+                      className="border border-[#c3d3bc] bg-white px-3 py-2 text-xs font-black text-[#45663b]"
+                    >
+                      Open recept
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <p className="border border-[#c3d3bc] bg-[#f8f6f3] p-4 text-sm font-bold text-[#707070]">
+              Geen taken in deze categorie.
+            </p>
+          )}
+        </div>
+      )}
     </section>
   );
 }
