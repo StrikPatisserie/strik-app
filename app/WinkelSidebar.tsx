@@ -23,15 +23,24 @@ const winkelNavItems = [
 ];
 
 const bakkerijNavItems = [
-  { href: "/bakkerij", label: "Overzicht", icon: strikIcons.bakkerij },
-  { href: "/bakkerij/recepturen", label: "Recepten", icon: strikIcons.recepturen },
-  { href: "/bakkerij/schoonmaak", label: "Schoonmaak", icon: strikIcons.cleaning },
+  { href: "/bakkerij", label: "Bakkerij", icon: strikIcons.bakkerij },
+  { href: "/bakkerij/ijs-chocolade", label: "IJs & choco", icon: strikIcons.ijs },
+  { href: "/bakkerij/management", label: "Management", icon: strikIcons.management },
 ];
 
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/winkel") return pathname === "/winkel";
-  if (href === "/bakkerij") return pathname === "/bakkerij";
+  if (href === "/bakkerij") {
+    return (
+      pathname === "/bakkerij" ||
+      pathname.startsWith("/bakkerij/recepten") ||
+      pathname.startsWith("/bakkerij/recepturen") ||
+      pathname.startsWith("/bakkerij/productieplanning") ||
+      pathname.startsWith("/bakkerij/haccp") ||
+      pathname.startsWith("/bakkerij/schoonmaak")
+    );
+  }
 
   if (href === "/winkel/haccp") {
     return (

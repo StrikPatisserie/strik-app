@@ -1,6 +1,6 @@
-import RecepturenApp from "./RecepturenApp";
+import RecepturenApp from "../recepturen/RecepturenApp";
 
-export default function RecepturenPage() {
+export default function BakkerijReceptenPage() {
   return (
     <RecepturenApp
       scope="bakery"

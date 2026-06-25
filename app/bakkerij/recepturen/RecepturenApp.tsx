@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
@@ -60,6 +60,7 @@ import type {
   RecipeType,
   RecipeUnit,
 } from "./types";
+import { hefeIngredients } from "./hefeOrderData";
 import {
   ingredientPackagePrice,
   normalizeSearch,
@@ -91,9 +92,44 @@ const beheerViewIds = [
 type TabId = (typeof beheerViewIds)[number];
 type MainTabId = "start" | "recepten" | "planning" | "beheer";
 type BeheerView = TabId | "menu";
+type RecepturenScope = "all" | "bakery" | "iceChocolate";
+
+type RecepturenAppProps = {
+  scope?: RecepturenScope;
+  initialTab?: MainTabId;
+  lockedTab?: MainTabId;
+  hideTopNav?: boolean;
+  initialBeheerView?: BeheerView;
+};
 
 function mainTabForPath(pathname: string): MainTabId {
-  return pathname.startsWith("/bakkerij/recepturen") ? "recepten" : "start";
+  if (pathname.startsWith("/bakkerij/management")) return "beheer";
+  if (pathname.startsWith("/bakkerij/productieplanning")) return "planning";
+  if (
+    pathname.startsWith("/bakkerij/recepten") ||
+    pathname.startsWith("/bakkerij/recepturen") ||
+    pathname.startsWith("/bakkerij/ijs-chocolade/recepten")
+  ) {
+    return "recepten";
+  }
+
+  return "start";
+}
+
+function recipeMatchesScope(recipe: Recipe, scope: RecepturenScope) {
+  if (scope === "all") return true;
+
+  const group = normalizeSearch(recipe.productGroup);
+  const name = normalizeSearch(recipe.name);
+  const isIceChocolate =
+    group.includes("ijs") ||
+    group.includes("choco") ||
+    group.includes("chocolade") ||
+    name.includes("ijs") ||
+    name.includes("choco") ||
+    name.includes("chocolade");
+
+  return scope === "iceChocolate" ? isIceChocolate : !isIceChocolate;
 }
 
 function hasStoredRecepturenData(data: RecepturenData) {
@@ -509,17 +545,26 @@ function offerForWeek(home: BakeryHomeData, weekStart: string) {
   return home.offers.find((offer) => offer.weekStart === weekStart);
 }
 
-export default function RecepturenApp() {
+export default function RecepturenApp({
+  scope = "all",
+  initialTab,
+  lockedTab,
+  hideTopNav = false,
+  initialBeheerView = "menu",
+}: Readonly<RecepturenAppProps> = {}) {
   const pathname = usePathname();
   const [mainTab, setMainTab] = useState<MainTabId>(() =>
-    mainTabForPath(pathname)
+    lockedTab || initialTab || mainTabForPath(pathname)
   );
-  const [beheerView, setBeheerView] = useState<BeheerView>("menu");
+  const [beheerView, setBeheerView] =
+    useState<BeheerView>(initialBeheerView);
   const [importKind, setImportKind] = useState<ImportKind>("recipes");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
   const [recipeItems, setRecipeItems] = useState(recipes);
-  const [ingredientItems, setIngredientItems] = useState(ingredients);
+  const [ingredientItems, setIngredientItems] = useState(() =>
+    mergeHefeSeedIngredients(ingredients)
+  );
   const [invoiceIngredientEditor, setInvoiceIngredientEditor] =
     useState<Ingredient | null>(null);
   const [packagingItems, setPackagingItems] = useState(defaultPackagingItems);
@@ -535,6 +580,10 @@ export default function RecepturenApp() {
   const [syncStatus, setSyncStatus] = useState("Lokale receptuurdata geladen.");
   const [isLoadingData, setIsLoadingData] = useState(true);
   const latestInvoice = invoiceItems[0] || invoiceImports[0];
+  const scopedRecipeItems = useMemo(
+    () => recipeItems.filter((recipe) => recipeMatchesScope(recipe, scope)),
+    [recipeItems, scope]
+  );
 
   function persistRecepturenData(
     nextData: RecepturenData,
@@ -658,8 +707,8 @@ export default function RecepturenApp() {
 
       if (result.ok && hasStoredRecepturenData(result.data)) {
         const loadedIngredients = result.data.ingredients.length
-          ? result.data.ingredients
-          : ingredients;
+          ? mergeHefeSeedIngredients(result.data.ingredients)
+          : mergeHefeSeedIngredients(ingredients);
         const loadedInvoices = result.data.invoiceImports.length
           ? result.data.invoiceImports
           : invoiceImports;
@@ -1049,8 +1098,16 @@ export default function RecepturenApp() {
   }
 
   function createRecipe(type: RecipeType) {
+    const blankRecipe = createBlankRecipe(type);
+
+    if (scope === "iceChocolate") {
+      blankRecipe.productGroup = "IJs";
+      blankRecipe.workCategories = ["IJs"];
+      blankRecipe.photoHint = type === "semiFinished" ? "" : "Nieuw ijsrecept";
+    }
+
     setRecipeEditorStartsOpen(true);
-    setSelectedRecipe(createBlankRecipe(type));
+    setSelectedRecipe(blankRecipe);
   }
 
   function saveIngredient(updatedIngredient: Ingredient) {
@@ -1969,7 +2026,9 @@ export default function RecepturenApp() {
   return (
     <main className="h-[calc(100dvh-8.5rem)] overflow-hidden bg-[#faf8f5] text-[#111111] md:h-screen md:h-[100dvh]">
       <div className="flex h-[calc(100dvh-8.5rem)] min-w-0 flex-col overflow-hidden md:h-screen md:h-[100dvh]">
-        <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
+        {!hideTopNav && (
+          <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
+        )}
 
         <div className="min-h-0 flex-1 overflow-hidden">
           {mainTab === "start" && (
@@ -1988,7 +2047,7 @@ export default function RecepturenApp() {
           {mainTab === "recepten" && (
             <div className="h-full w-full px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
               <RecipesList
-                recipes={recipeItems}
+                recipes={scopedRecipeItems}
                 onOpenRecipe={openRecipe}
                 onCreateRecipe={() => createRecipe("finalProduct")}
                 onOpenImport={() => openDataImport("recipes")}
@@ -2001,7 +2060,7 @@ export default function RecepturenApp() {
             <div className="h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
               <div className="w-full">
                 <RecepturenWorkMode
-                  recipes={recipeItems}
+                  recipes={scopedRecipeItems}
                   ingredients={ingredientItems}
                   manualPlanningItems={manualPlanningItems}
                   lockedView="planning"
@@ -3230,6 +3289,41 @@ function mergeIngredients(
       };
     } else {
       merged.unshift(importedIngredient);
+    }
+  });
+
+  return merged;
+}
+
+function mergeHefeSeedIngredients(currentIngredients: Ingredient[]) {
+  const merged = [...currentIngredients];
+
+  hefeIngredients.forEach((hefeIngredient) => {
+    const existingIndex = merged.findIndex((ingredient) => {
+      const sameArticle =
+        hefeIngredient.supplierArticleNumber !== "-" &&
+        ingredient.supplierArticleNumber !== "-" &&
+        normalizeSearch(ingredient.supplierArticleNumber) ===
+          normalizeSearch(hefeIngredient.supplierArticleNumber);
+      const sameName =
+        normalizeSearch(ingredient.name) === normalizeSearch(hefeIngredient.name);
+
+      return sameArticle || sameName;
+    });
+
+    if (existingIndex >= 0) {
+      merged[existingIndex] = {
+        ...merged[existingIndex],
+        aliases: Array.from(
+          new Set([
+            ...merged[existingIndex].aliases,
+            ...hefeIngredient.aliases,
+            hefeIngredient.name,
+          ])
+        ),
+      };
+    } else {
+      merged.push(hefeIngredient);
     }
   });
 
