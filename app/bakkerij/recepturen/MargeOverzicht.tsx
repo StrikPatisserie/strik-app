@@ -8,6 +8,7 @@ import {
   marginStatusForRecipe,
   normalizeSearch,
   recipeCostChange,
+  recipeCurrentMargin,
   recipeCostDelta,
   targetSalesPrice,
 } from "./utils";
@@ -99,8 +100,7 @@ export default function MargeOverzicht({
           </p>
           <h2 className="text-xl font-black">Marge eindproducten</h2>
           <p className="mt-1 max-w-2xl text-xs font-bold leading-relaxed text-[#707070]">
-            Alleen verkoopbare eindproducten. Halffabricaten staan apart onder
-            kostprijscontrole.
+            Verkoopprijzen zijn incl. 9% btw. Kostprijzen en marges rekenen ex btw.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -146,48 +146,52 @@ export default function MargeOverzicht({
           <div className="min-w-[42rem]">
             <div className="grid grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 border-b border-[#d8d8d4] bg-[#f5f5f3] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
               <span>Product</span>
-              <span>Kost</span>
-              <span>Verkoop</span>
-              <span>Marge</span>
-              <span>Advies</span>
+              <span>Kost ex.</span>
+              <span>Verkoop incl.</span>
+              <span>Marge ex.</span>
+              <span>Advies incl.</span>
               <span>Oorzaak</span>
             </div>
             <div className="divide-y divide-[#d8d8d4]">
-              {filteredRecipes.map((recipe) => (
-                <button
-                  key={recipe.id}
-                  type="button"
-                  onClick={() => onOpenRecipe(recipe)}
-                  className="grid w-full grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 px-3 py-2 text-left text-sm hover:bg-[#f8f8f6]"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-[0.82rem] font-black leading-tight md:text-[1rem] lg:text-[1.05rem]">
-                      {recipe.name}
+              {filteredRecipes.map((recipe) => {
+                const currentMargin = recipeCurrentMargin(recipe);
+
+                return (
+                  <button
+                    key={recipe.id}
+                    type="button"
+                    onClick={() => onOpenRecipe(recipe)}
+                    className="grid w-full grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 px-3 py-2 text-left text-sm hover:bg-[#f8f8f6]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[0.82rem] font-black leading-tight md:text-[1rem] lg:text-[1.05rem]">
+                        {recipe.name}
+                      </span>
                     </span>
-                  </span>
-                  <span className="font-black">{formatEuro(recipe.costPrice)}</span>
-                  <span className="font-black">
-                    {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
-                  </span>
-                  <span>
-                    <span
-                      className={`inline-flex h-6 min-w-[3.4rem] items-center justify-center rounded-full px-2 text-[0.68rem] font-black ${marginBadgeClass(
-                        recipe.currentMargin
-                      )}`}
-                    >
-                      {Number.isFinite(recipe.currentMargin)
-                        ? formatPercent(recipe.currentMargin)
-                        : "-"}
+                    <span className="font-black">{formatEuro(recipe.costPrice)}</span>
+                    <span className="font-black">
+                      {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
                     </span>
-                  </span>
-                  <span className="font-black">
-                    {formatEuro(targetSalesPrice(recipe))}
-                  </span>
-                  <span className="truncate font-bold text-[#707070]">
-                    {causeForRecipe(recipe)}
-                  </span>
-                </button>
-              ))}
+                    <span>
+                      <span
+                        className={`inline-flex h-6 min-w-[3.4rem] items-center justify-center rounded-full px-2 text-[0.68rem] font-black ${marginBadgeClass(
+                          currentMargin
+                        )}`}
+                      >
+                        {Number.isFinite(currentMargin)
+                          ? formatPercent(currentMargin)
+                          : "-"}
+                      </span>
+                    </span>
+                    <span className="font-black">
+                      {formatEuro(targetSalesPrice(recipe))}
+                    </span>
+                    <span className="truncate font-bold text-[#707070]">
+                      {causeForRecipe(recipe)}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -234,18 +238,20 @@ function causeForRecipe(recipe: Recipe) {
 }
 
 function createMarginPrintRow(recipe: Recipe) {
+  const currentMargin = recipeCurrentMargin(recipe);
+
   return {
     name: recipe.name,
     cost: formatEuro(recipe.costPrice),
     sales: recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-",
-    margin: recipe.currentMargin ? formatPercent(recipe.currentMargin) : "-",
+    margin: currentMargin ? formatPercent(currentMargin) : "-",
     advice: formatEuro(targetSalesPrice(recipe)),
     cause: causeForRecipe(recipe),
     change: `${formatEuro(recipeCostDelta(recipe))} / ${formatSignedPercent(
       recipeCostChange(recipe),
       1
     )}`,
-    isLowMargin: Boolean(recipe.currentMargin && recipe.currentMargin < 80),
+    isLowMargin: Boolean(currentMargin && currentMargin < 80),
   };
 }
 
@@ -302,7 +308,7 @@ function createMarginPrintHtml({
     <div class="meta">${filters.map(escapeHtml).join("<br>")}</div>
   </header>
   <table>
-    <thead><tr><th>Product</th><th>Kost</th><th>Verkoop</th><th>Marge</th><th>Advies</th><th>Oorzaak</th></tr></thead>
+    <thead><tr><th>Product</th><th>Kost ex.</th><th>Verkoop incl.</th><th>Marge ex.</th><th>Advies incl.</th><th>Oorzaak</th></tr></thead>
     <tbody>${rowHtml || "<tr><td colspan=\"6\">Geen eindproducten gevonden.</td></tr>"}</tbody>
   </table>
 </body>

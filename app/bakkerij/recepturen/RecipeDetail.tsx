@@ -22,6 +22,7 @@ import {
   SectionTitle,
 } from "./RecepturenShared";
 import {
+  calculateMargin,
   changeBadgeClass,
   directIngredientCost,
   effectiveTargetMargin,
@@ -44,6 +45,7 @@ import {
   recipeTypeLabel,
   recipeCostChange,
   recipeCostDelta,
+  RECIPE_SALES_VAT_RATE,
   salesPeriodLabel,
   normalizeRecipePackagingLines,
   selectedRecipePackagingUnitCost,
@@ -1292,10 +1294,13 @@ export default function RecipeDetail({
                       }))}
                     />
                     <EditTextField
-                      label="Verkoop"
+                      label="Verkoopprijs"
                       value={draft.salesPrice}
                       onChange={(value) => updateDraft({ salesPrice: value })}
                       inputMode="decimal"
+                      info={`Winkelprijs incl. ${Math.round(
+                        RECIPE_SALES_VAT_RATE * 100
+                      )}% btw. Alle kostprijzen blijven ex btw.`}
                     />
                   </>
                 )}
@@ -2183,7 +2188,7 @@ export default function RecipeDetail({
             <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
               {previewRecipe.type === "finalProduct" && (
                 <Metric
-                  label="Verkoopprijs"
+                  label="Verkoop incl. btw"
                   value={salesPrice ? formatEuro(salesPrice) : "-"}
                 />
               )}
@@ -2194,7 +2199,7 @@ export default function RecipeDetail({
               {previewRecipe.type === "finalProduct" && (
                 <>
                   <Metric
-                    label="Marge"
+                    label="Marge ex. btw"
                     value={
                       calculateMargin(salesPrice, previewCostPrice)
                         ? formatPercent(calculateMargin(salesPrice, previewCostPrice))
@@ -2306,14 +2311,14 @@ export default function RecipeDetail({
               {previewRecipe.type === "finalProduct" && (
                 <div className="mt-4 rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
                   <p className="text-sm font-black text-[#7a5a18]">
-                    Adviesprijs volgens marge-instellingen:{" "}
+                    Adviesprijs incl. btw volgens marge-instellingen:{" "}
                     {formatEuro(targetPrice)}
                   </p>
                   <p className="mt-1 text-xs font-bold text-[#2d2a26]/55">
-                    Basisrecept rekent met {formatPercent(previewRecipe.targetMargin)} marge
+                    Basisrecept rekent ex btw met {formatPercent(previewRecipe.targetMargin)} marge
                     en verpakking tegen kostprijs. Daardoor is de totale
                     doelmarge hier {formatPercent(effectiveMarginTarget, 1)}.
-                    Verkoopprijs moet met{" "}
+                    Winkelprijs moet met{" "}
                     {formatEuro(Math.max(0, targetPrice - previewRecipe.salesPrice))}{" "}
                     omhoog om de doelmarge te halen.
                   </p>
@@ -3038,12 +3043,6 @@ function parseDutchNumber(value: string) {
   return Math.max(0, Math.round(number * 10000) / 10000);
 }
 
-function calculateMargin(salesPrice: number, costPrice: number) {
-  if (!salesPrice) return 0;
-
-  return Math.round(((salesPrice - costPrice) / salesPrice) * 1000) / 10;
-}
-
 function roundMoney(value: number) {
   return Math.round(value * 1000) / 1000;
 }
@@ -3369,8 +3368,8 @@ function createRecipeText(
     `Batch: ${recipe.batchSize}`,
     `Batchgewicht: ${batchWeight}`,
     `Portie: ${recipe.portionLabel}`,
-    `Kostprijs: ${formatEuro(recipe.costPrice)}`,
-    `Verkoopprijs: ${recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}`,
+    `Kostprijs ex btw: ${formatEuro(recipe.costPrice)}`,
+    `Verkoopprijs incl btw: ${recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}`,
     "",
     "Ingredienten",
     ingredientLines.length ? ingredientLines.join("\n") : "-",
@@ -3440,19 +3439,19 @@ function createRecipePrintHtml(
     variant === "calculation" ? "Calculatiekaart" : "Recept / werkkaart";
   const summaryCards = isCalculation
     ? `<section class="summary">
-        <div><span>Kostprijs</span><strong>${escapeHtml(
+        <div><span>Kostprijs ex.</span><strong>${escapeHtml(
           formatEuro(recipe.costPrice)
         )}</strong></div>
-        <div><span>Verkoopprijs</span><strong>${escapeHtml(
+        <div><span>Verkoop incl.</span><strong>${escapeHtml(
           recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"
         )}</strong></div>
-        <div><span>Marge</span><strong>${escapeHtml(
+        <div><span>Marge ex.</span><strong>${escapeHtml(
           currentMargin ? formatPercent(currentMargin) : "-"
         )}</strong></div>
-        <div><span>Totale kost</span><strong>${escapeHtml(
+        <div><span>Totale kost ex.</span><strong>${escapeHtml(
           formatEuro(selectedTotalCost)
         )}</strong></div>
-        <div><span>Totale verkoop</span><strong>${escapeHtml(
+        <div><span>Totale verkoop incl.</span><strong>${escapeHtml(
           selectedTotalSales ? formatEuro(selectedTotalSales) : "-"
         )}</strong></div>
         <div><span>Doelmarge</span><strong>${escapeHtml(
@@ -3761,7 +3760,7 @@ function BakkerRecipeCard({
               <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-[0.95rem] border border-[#dfe9d8] bg-white p-2">
                 <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
                   <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
-                    Winkelprijs
+                    Winkelprijs incl.
                   </p>
                   <p className="mt-0.5 text-sm font-black text-[#1a1815]">
                     {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
@@ -3769,7 +3768,7 @@ function BakkerRecipeCard({
                 </div>
                 <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
                   <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
-                    Kostprijs
+                    Kostprijs ex.
                   </p>
                   <p className="mt-0.5 text-sm font-black text-[#1a1815]">
                     {formatEuro(recipe.costPrice)}
@@ -3777,7 +3776,7 @@ function BakkerRecipeCard({
                 </div>
                 <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
                   <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
-                    Marge
+                    Marge ex.
                   </p>
                   <p className="mt-0.5 text-sm font-black text-[#1a1815]">
                     {cardMargin ? formatPercent(cardMargin) : "-"}
@@ -4197,15 +4196,28 @@ function EditTextField({
   value,
   onChange,
   inputMode,
+  info,
 }: Readonly<{
   label: string;
   value: string;
   onChange: (value: string) => void;
   inputMode?: "decimal";
+  info?: string;
 }>) {
   return (
     <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-      {label}
+      <span className="flex items-center gap-1">
+        {label}
+        {info && (
+          <span
+            className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[#c3d3bc] bg-[#f4f8f2] text-[0.58rem] font-black normal-case tracking-normal text-[#45663b]"
+            title={info}
+            aria-label={info}
+          >
+            i
+          </span>
+        )}
+      </span>
       <input
         value={value}
         inputMode={inputMode}

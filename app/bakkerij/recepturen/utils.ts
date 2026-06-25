@@ -15,6 +15,8 @@ import type {
   SemiFinishedUsage,
 } from "./types";
 
+export const RECIPE_SALES_VAT_RATE = 0.09;
+
 export function formatEuro(value: number) {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
@@ -199,14 +201,16 @@ export function recipeCostDelta(recipe: Recipe) {
 export function targetSalesPrice(recipe: Recipe) {
   if (!recipe.targetMargin || recipe.targetMargin >= 100) return recipe.salesPrice;
 
-  return recipe.costPrice / (1 - recipe.targetMargin / 100);
+  const targetNetSalesPrice = recipe.costPrice / (1 - recipe.targetMargin / 100);
+
+  return netSalesPriceToGross(targetNetSalesPrice);
 }
 
 export function effectiveTargetMargin(recipe: Recipe) {
   const targetPrice = targetSalesPrice(recipe);
   if (!targetPrice) return 0;
 
-  return Math.round(((targetPrice - recipe.costPrice) / targetPrice) * 1000) / 10;
+  return calculateMargin(targetPrice, recipe.costPrice);
 }
 
 export function normalizeSearch(value: string) {
@@ -232,9 +236,34 @@ export function roundMoney(value: number) {
 }
 
 export function calculateMargin(salesPrice: number, costPrice: number) {
-  if (!salesPrice) return 0;
+  const netSalesPrice = grossSalesPriceToNet(salesPrice);
+  if (!netSalesPrice) return 0;
 
-  return Math.round(((salesPrice - costPrice) / salesPrice) * 1000) / 10;
+  return Math.round(((netSalesPrice - costPrice) / netSalesPrice) * 1000) / 10;
+}
+
+export function recipeCurrentMargin(recipe: Recipe) {
+  if (recipe.type === "semiFinished") return 0;
+
+  return calculateMargin(recipe.salesPrice, recipe.costPrice);
+}
+
+export function grossSalesPriceToNet(
+  salesPrice: number,
+  vatRate = RECIPE_SALES_VAT_RATE
+) {
+  if (!Number.isFinite(salesPrice) || salesPrice <= 0) return 0;
+
+  return salesPrice / (1 + vatRate);
+}
+
+export function netSalesPriceToGross(
+  salesPrice: number,
+  vatRate = RECIPE_SALES_VAT_RATE
+) {
+  if (!Number.isFinite(salesPrice) || salesPrice <= 0) return 0;
+
+  return salesPrice * (1 + vatRate);
 }
 
 export function unitFromText(value: string): RecipeUnit {
