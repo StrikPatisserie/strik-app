@@ -2980,7 +2980,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     ingredients: [],
     semiFinishedItems: [],
     workInstructions: [],
-    preparationSteps: ["Vul hier de eerste productiestap in."],
+    preparationSteps: [],
     finishingSteps: [],
     equipment: [],
     allergens: [],

@@ -5,6 +5,7 @@ import { EmptyState } from "./RecepturenShared";
 import {
   formatDate,
   normalizeSearch,
+  productionLogForRecipe,
   recipeTypeLabel,
 } from "./utils";
 
@@ -55,7 +56,10 @@ export default function RecipesList({
       })
       .sort((a, b) => {
         if (sortBy === "updated") {
-          return dateValue(b.lastUpdated) - dateValue(a.lastUpdated);
+          return (
+            latestProductionValue(b) - latestProductionValue(a) ||
+            a.name.localeCompare(b.name, "nl")
+          );
         }
 
         if (sortBy === "group") {
@@ -138,7 +142,7 @@ export default function RecipesList({
             onChange={setSortBy}
             options={[
               { value: "name", label: "Naam" },
-              { value: "updated", label: "Laatst gewijzigd" },
+              { value: "updated", label: "Laatste productie" },
               { value: "group", label: "Categorie" },
               { value: "type", label: "Soort" },
             ]}
@@ -213,13 +217,13 @@ export default function RecipesList({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col border border-[#c3d3bc] bg-white">
         {filteredRecipes.length ? (
           <>
-            <div className="hidden shrink-0 border-b border-[#c3d3bc] bg-[#f5f5f3] text-[0.56rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c] md:grid md:grid-cols-[1.25rem_minmax(12rem,1fr)_6.5rem_6rem_5rem_5.75rem] lg:grid-cols-[1.25rem_minmax(18rem,42rem)_7.5rem_7rem_6rem_6.5rem] xl:grid-cols-[1.25rem_minmax(20rem,48rem)_8rem_7.5rem_6rem_6.5rem]">
+            <div className="hidden shrink-0 border-b border-[#c3d3bc] bg-[#f5f5f3] text-[0.56rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c] md:grid md:grid-cols-[1.25rem_minmax(12rem,1fr)_6.5rem_6rem_5rem_7.25rem] lg:grid-cols-[1.25rem_minmax(18rem,42rem)_7.5rem_7rem_6rem_8rem] xl:grid-cols-[1.25rem_minmax(20rem,48rem)_8rem_7.5rem_6rem_8rem]">
               <span />
               <span>Recept</span>
               <span>Soort</span>
               <span>Categorie</span>
               <span>Batch</span>
-              <span>Gewijzigd</span>
+              <span>Laatste productie</span>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto bg-white">
               {filteredRecipes.map((recipe) => {
@@ -228,7 +232,7 @@ export default function RecipesList({
                     key={recipe.id}
                     type="button"
                     onClick={() => onOpenRecipe(recipe)}
-                    className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center border-b border-[#c3d3bc] text-left transition hover:bg-[#f8f8f6] md:grid-cols-[1.25rem_minmax(12rem,1fr)_6.5rem_6rem_5rem_5.75rem] lg:grid-cols-[1.25rem_minmax(18rem,42rem)_7.5rem_7rem_6rem_6.5rem] xl:grid-cols-[1.25rem_minmax(20rem,48rem)_8rem_7.5rem_6rem_6.5rem]"
+                    className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center border-b border-[#c3d3bc] text-left transition hover:bg-[#f8f8f6] md:grid-cols-[1.25rem_minmax(12rem,1fr)_6.5rem_6rem_5rem_7.25rem] lg:grid-cols-[1.25rem_minmax(18rem,42rem)_7.5rem_7rem_6rem_8rem] xl:grid-cols-[1.25rem_minmax(20rem,48rem)_8rem_7.5rem_6rem_8rem]"
                   >
                     <span className={`h-full min-h-[3rem] md:min-h-[2.15rem] ${recipeStripeClass(recipe)}`} />
                     <div className="min-w-0 px-2 py-1.5 md:py-0.5">
@@ -249,7 +253,7 @@ export default function RecipesList({
                       {recipe.batchSize || "-"}
                     </p>
                     <p className="hidden truncate px-2 text-[0.62rem] font-bold text-[#707070] md:block">
-                      {formatDate(recipe.lastUpdated)}
+                      {latestProductionLabel(recipe)}
                     </p>
                   </button>
                 );
@@ -270,11 +274,31 @@ function dateValue(value: string) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+function latestProductionEntry(recipe: Recipe) {
+  return productionLogForRecipe(recipe).find((entry) => entry.source !== "stock");
+}
+
+function latestProductionValue(recipe: Recipe) {
+  const entry = latestProductionEntry(recipe);
+
+  return entry ? dateValue(entry.date) : 0;
+}
+
+function latestProductionLabel(recipe: Recipe) {
+  const entry = latestProductionEntry(recipe);
+
+  return entry ? formatDate(entry.date) : "-";
+}
+
 function compactRecipeMeta(recipe: Recipe) {
+  const latestProduction = latestProductionLabel(recipe);
+
   return [
     recipe.productGroup || recipeTypeLabel(recipe.type),
     recipe.batchSize,
-    `gewijzigd ${formatDate(recipe.lastUpdated)}`,
+    latestProduction === "-"
+      ? "nog niet gemaakt"
+      : `laatste productie ${latestProduction}`,
   ]
     .filter(Boolean)
     .join(" · ");

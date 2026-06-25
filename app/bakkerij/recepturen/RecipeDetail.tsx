@@ -67,6 +67,7 @@ const RECIPE_PHOTO_MIN_SIDE = 180;
 const RECIPE_PHOTO_MAX_DATA_URL_LENGTH = 45000;
 const RECIPE_PHOTO_QUALITIES = [0.3, 0.22, 0.16, 0.1];
 const RECIPE_IMPORT_TIMEOUT_MS = 30000;
+const EMPTY_PREPARATION_STEP_TEXT = "Vul hier de eerste productiestap in.";
 const RECIPE_IMPORT_FILE_ACCEPT =
   ".xlsx,.xls,.csv,.txt,.tsv,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values,text/plain";
 const recipeEditSections: Array<{
@@ -233,6 +234,10 @@ export default function RecipeDetail({
     previewCostPrice
   );
   const productionPreview = productionNeedForRecipe(previewRecipe);
+  const visiblePreparationSteps = cleanRecipeSteps(previewRecipe.preparationSteps);
+  const productionHistory = productionLogForRecipe(previewRecipe)
+    .filter((entry) => entry.source !== "stock")
+    .slice(0, 6);
   const targetPrice = targetSalesPrice(previewRecipe);
   const effectiveMarginTarget = effectiveTargetMargin(previewRecipe);
   const recipeUsageCount = recipes.filter((item) =>
@@ -2445,24 +2450,34 @@ export default function RecipeDetail({
             )}
 
             <div className="grid gap-4 xl:grid-cols-2">
-              <Panel>
-                <SectionTitle title="Bereidingswijze" />
-                <ol className="mt-3 grid gap-2">
-                  {previewRecipe.preparationSteps.map((step, index) => (
-                    <li
-                      key={`${step}-${index}`}
-                      className="flex gap-3 rounded-2xl bg-[#fffdf8] p-3"
-                    >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#c3d3bc] text-sm font-black">
-                        {index + 1}
-                      </span>
-                      <span className="text-sm font-semibold leading-relaxed text-[#2d2a26]/70">
-                        {step}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              </Panel>
+              {visiblePreparationSteps.length > 0 && (
+                <Panel>
+                  <SectionTitle title="Bereidingswijze" />
+                  <ol className="mt-3 grid gap-2">
+                    {visiblePreparationSteps.map((step, index) => (
+                      <li
+                        key={`${step}-${index}`}
+                        className="flex gap-3 rounded-2xl bg-[#fffdf8] p-3"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#c3d3bc] text-sm font-black">
+                          {index + 1}
+                        </span>
+                        <span className="text-sm font-semibold leading-relaxed text-[#2d2a26]/70">
+                          {step}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </Panel>
+              )}
+
+              {previewRecipe.type === "finalProduct" && (
+                <ProductionHistoryPanel
+                  history={productionHistory}
+                  nextProductionDate={productionPreview.nextProductionDate}
+                  recipe={previewRecipe}
+                />
+              )}
 
               <Panel>
                 <SectionTitle title="Allergenen en interne notities" />
@@ -2607,6 +2622,8 @@ type RecipeDraft = {
 };
 
 function createRecipeDraft(recipe: Recipe): RecipeDraft {
+  const preparationSteps = cleanRecipeSteps(recipe.preparationSteps);
+
   return {
     name: recipe.name,
     type: recipe.type,
@@ -2665,9 +2682,7 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
       costContribution: item.costContribution,
       nameSnapshot: item.nameSnapshot || "",
     })),
-    preparationSteps: recipe.preparationSteps.length
-      ? recipe.preparationSteps
-      : [""],
+    preparationSteps,
     workInstructions: recipe.workInstructions?.length
       ? recipe.workInstructions
       : [""],
@@ -2683,6 +2698,8 @@ function recipeDraftFromImportedRecipe(
   current: RecipeDraft,
   importedRecipe: Recipe
 ): RecipeDraft {
+  const preparationSteps = cleanRecipeSteps(importedRecipe.preparationSteps);
+
   return {
     ...current,
     name: importedRecipe.name || current.name,
@@ -2740,8 +2757,8 @@ function recipeDraftFromImportedRecipe(
           nameSnapshot: item.nameSnapshot || "",
         }))
       : current.packagingItems,
-    preparationSteps: importedRecipe.preparationSteps.length
-      ? importedRecipe.preparationSteps
+    preparationSteps: preparationSteps.length
+      ? preparationSteps
       : current.preparationSteps,
     workInstructions: importedRecipe.workInstructions?.length
       ? importedRecipe.workInstructions
@@ -2801,7 +2818,7 @@ function buildRecipeFromDraft(
     semiFinishedItems,
     packagingItems: isSemiFinished ? [] : packagingItems,
     workInstructions: cleanList(draft.workInstructions),
-    preparationSteps: cleanList(draft.preparationSteps),
+    preparationSteps: cleanRecipeSteps(draft.preparationSteps),
     finishingSteps: isSemiFinished ? [] : cleanList(draft.finishingSteps),
     equipment: cleanList(draft.equipment),
     allergens: parseList(draft.allergens),
@@ -3334,6 +3351,39 @@ function recipeStatusText(status: RecipeStatus) {
   return "Oud recept";
 }
 
+function isEmptyPreparationStep(value: string) {
+  const normalized = value.trim();
+
+  return !normalized || normalized === EMPTY_PREPARATION_STEP_TEXT;
+}
+
+function cleanRecipeSteps(steps: string[] = []) {
+  return steps
+    .map((step) => step.trim())
+    .filter((step) => !isEmptyPreparationStep(step));
+}
+
+function weekLabelForDate(value: string) {
+  const week = isoWeekNumber(value);
+
+  return week ? `week ${week}` : formatDate(value);
+}
+
+function isoWeekNumber(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return 0;
+
+  const target = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+  );
+  const dayNumber = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
+
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+
+  return Math.ceil(((target.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
 function unitLabelText(unit: RecipeUnit) {
   if (unit === "gram") return "gram";
   if (unit === "kg") return "kg";
@@ -3406,7 +3456,7 @@ function createRecipeText(
     semiFinishedLines.length ? semiFinishedLines.join("\n") : "-",
     "",
     "Bereiding",
-    recipe.preparationSteps
+    cleanRecipeSteps(recipe.preparationSteps)
       .map((step, index) => `${index + 1}. ${step}`)
       .join("\n"),
     "",
@@ -3448,8 +3498,9 @@ function createRecipePrintHtml(
         }</tr>`
     )
     .join("");
-  const steps = (recipe.preparationSteps.length
-    ? recipe.preparationSteps
+  const cleanPreparationSteps = cleanRecipeSteps(recipe.preparationSteps);
+  const steps = (cleanPreparationSteps.length
+    ? cleanPreparationSteps
     : recipe.workInstructions || []
   )
     .map((step) => `<li>${escapeHtml(step)}</li>`)
@@ -3616,8 +3667,9 @@ function BakkerRecipeCard({
   const [scaleAmount, setScaleAmount] = useState("");
   const selectedScaleRow =
     scalableRows.find((row) => row.id === scaleIngredientId) || scalableRows[0];
-  const steps = recipe.preparationSteps.length
-    ? recipe.preparationSteps
+  const cleanPreparationSteps = cleanRecipeSteps(recipe.preparationSteps);
+  const steps = cleanPreparationSteps.length
+    ? cleanPreparationSteps
     : recipe.workInstructions || [];
   const madeToday = productionLogForRecipe(recipe).some(
     (entry) => entry.date === todayIsoDate()
@@ -3940,6 +3992,44 @@ function recipeCardStripeClass(recipe: Recipe) {
   if (normalizedGroup.includes("taart")) return "bg-[#e9c5dc]";
 
   return "bg-[#c3d3bc]";
+}
+
+function ProductionHistoryPanel({
+  history,
+  nextProductionDate,
+  recipe,
+}: Readonly<{
+  history: ProductionLogEntry[];
+  nextProductionDate: string;
+  recipe: Recipe;
+}>) {
+  const unit = getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk";
+
+  return (
+    <Panel>
+      <SectionTitle title="Productie geschiedenis" />
+      <div className="mt-3 grid gap-2">
+        {history.length ? (
+          history.map((entry) => (
+            <LineItem
+              key={entry.id}
+              title={formatDate(entry.date)}
+              meta={entry.note || "Gemaakt"}
+              value={quantityLabel(entry.quantity, unit)}
+            />
+          ))
+        ) : (
+          <p className="rounded-2xl bg-[#f8f6f3] p-3 text-sm font-bold text-[#2d2a26]/45">
+            Nog geen productie geregistreerd.
+          </p>
+        )}
+      </div>
+      <p className="mt-3 rounded-full bg-[#f4f8f2] px-3 py-2 text-xs font-black italic text-[#45663b]">
+        Verwacht weer maken:{" "}
+        {nextProductionDate ? weekLabelForDate(nextProductionDate) : "nog onbekend"}
+      </p>
+    </Panel>
+  );
 }
 
 function RecipePrintChoiceDialog({
