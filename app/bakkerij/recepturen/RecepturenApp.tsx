@@ -518,11 +518,6 @@ export default function RecepturenApp() {
   const [importKind, setImportKind] = useState<ImportKind>("recipes");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
-  const [workStart, setWorkStart] = useState<{
-    recipeId: string;
-    quantity: number;
-    token: number;
-  } | null>(null);
   const [recipeItems, setRecipeItems] = useState(recipes);
   const [ingredientItems, setIngredientItems] = useState(ingredients);
   const [invoiceIngredientEditor, setInvoiceIngredientEditor] =
@@ -1762,16 +1757,6 @@ export default function RecepturenApp() {
     setBeheerView("import");
   }
 
-  function startRecipeProduction(recipe: Recipe, quantity: number) {
-    setWorkStart({
-      recipeId: recipe.id,
-      quantity,
-      token: Date.now(),
-    });
-    setSelectedRecipe(null);
-    setMainTab("planning");
-  }
-
   function selectOfferWeek(weekStart: string) {
     setSelectedOfferWeek(weekStart);
   }
@@ -2020,9 +2005,6 @@ export default function RecepturenApp() {
                   ingredients={ingredientItems}
                   manualPlanningItems={manualPlanningItems}
                   lockedView="planning"
-                  startRecipeId={workStart?.recipeId}
-                  startQuantity={workStart?.quantity}
-                  startToken={workStart?.token}
                   onOpenRecipeCard={openRecipe}
                   onMarkProduced={markRecipeProduced}
                   onPlanProduction={planRecipeProduction}
@@ -2058,7 +2040,7 @@ export default function RecepturenApp() {
             onDeleteRecipe={deleteRecipe}
             onSaveIngredient={saveIngredient}
             onSaveIngredients={saveIngredients}
-            onStartProduction={startRecipeProduction}
+            onMarkProduced={markRecipeProduced}
             onOpenRecipe={openRecipe}
           />
         )}

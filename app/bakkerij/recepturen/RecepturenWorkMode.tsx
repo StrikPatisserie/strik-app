@@ -633,12 +633,13 @@ function RecipeWorkThumb({ recipe }: Readonly<{ recipe: Recipe }>) {
   );
 }
 
-function WorkRecipeDetail({
+export function WorkRecipeDetail({
   recipe,
   recipes,
   ingredients,
   startInProduction,
   initialQuantity,
+  closeOnBackFromProduction = false,
   onSelectRecipe,
   onMarkProduced,
   onClose,
@@ -648,6 +649,7 @@ function WorkRecipeDetail({
   ingredients: Ingredient[];
   startInProduction: boolean;
   initialQuantity?: number;
+  closeOnBackFromProduction?: boolean;
   onSelectRecipe: (recipe: Recipe) => void;
   onMarkProduced: (
     recipe: Recipe,
@@ -1011,7 +1013,14 @@ function WorkRecipeDetail({
             setIsProducing(false);
             onSelectRecipe(linkedRecipe);
           }}
-          onBack={() => setIsProducing(false)}
+          onBack={() => {
+            if (closeOnBackFromProduction) {
+              onClose();
+              return;
+            }
+
+            setIsProducing(false);
+          }}
         />
       )}
       {isRegisteringProduction && (

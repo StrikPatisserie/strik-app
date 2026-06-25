@@ -55,6 +55,7 @@ import {
 import {
   recipeGroupOptionsForRecipes,
 } from "./workCategories";
+import { WorkRecipeDetail } from "./RecepturenWorkMode";
 
 const recipeUnits: RecipeUnit[] = ["gram", "kg", "ml", "liter", "stuk"];
 const recipeStatuses: RecipeStatus[] = ["active", "draft", "old"];
@@ -108,7 +109,7 @@ export default function RecipeDetail({
   onSaveRecipe,
   onDeleteRecipe,
   onSaveIngredient,
-  onStartProduction,
+  onMarkProduced,
   onOpenRecipe,
 }: Readonly<{
   recipe: Recipe;
@@ -121,7 +122,12 @@ export default function RecipeDetail({
   onDeleteRecipe: (recipe: Recipe) => void;
   onSaveIngredient: (ingredient: Ingredient) => void;
   onSaveIngredients?: (ingredients: Ingredient[], message?: string) => void;
-  onStartProduction?: (recipe: Recipe, quantity: number) => void;
+  onMarkProduced: (
+    recipe: Recipe,
+    quantity: number,
+    requestId?: string,
+    date?: string
+  ) => void;
   onOpenRecipe?: (recipe: Recipe) => void;
 }>) {
   const [isEditing, setIsEditing] = useState(startInEditMode);
@@ -142,6 +148,10 @@ export default function RecipeDetail({
     () => recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1
   );
   const [isRecipeStarted, setIsRecipeStarted] = useState(false);
+  const [productionStart, setProductionStart] = useState<{
+    quantity: number;
+    token: number;
+  } | null>(null);
   const [isProductionShortcutOpen, setIsProductionShortcutOpen] =
     useState(false);
   const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
@@ -961,14 +971,10 @@ export default function RecipeDetail({
   }
 
   function startRecipeCard() {
-    setIsRecipeStarted(true);
-    if (onStartProduction) {
-      onStartProduction(previewRecipe, cardQuantity || previewBatchQuantity || 1);
-      onClose();
-      return;
-    }
+    const quantity = cardQuantity || previewBatchQuantity || 1;
 
-    showFeedback("Recept gestart.");
+    setIsRecipeStarted(true);
+    setProductionStart({ quantity, token: Date.now() });
   }
 
   function markRecipeCardMade() {
@@ -1158,6 +1164,23 @@ export default function RecipeDetail({
           quantity={cardQuantity || previewBatchQuantity || 1}
           onCancel={() => setIsProductionShortcutOpen(false)}
           onConfirm={confirmRecipeCardMade}
+        />
+      )}
+      {productionStart && (
+        <WorkRecipeDetail
+          key={`${previewRecipe.id}-production-${productionStart.token}`}
+          recipe={previewRecipe}
+          recipes={recipes}
+          ingredients={ingredients}
+          startInProduction
+          initialQuantity={productionStart.quantity}
+          closeOnBackFromProduction
+          onSelectRecipe={(linkedRecipe) => {
+            setProductionStart(null);
+            onOpenRecipe?.(linkedRecipe);
+          }}
+          onMarkProduced={onMarkProduced}
+          onClose={() => setProductionStart(null)}
         />
       )}
       </>
