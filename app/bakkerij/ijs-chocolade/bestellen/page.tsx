@@ -1,11 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
 import {
   hefeOrderItems,
   type HefeOrderItem,
 } from "../../recepturen/hefeOrderData";
+import {
+  fetchRecepturenData,
+  saveRecepturenData,
+  type RecepturenData,
+} from "../../recepturen/recepturenApi";
+import type { Ingredient, RecipeUnit } from "../../recepturen/types";
 import { formatEuro } from "../../recepturen/utils";
 
 type QuantityMap = Record<string, number>;
@@ -16,6 +22,18 @@ type CustomOrderLine = {
   packageSize: string;
   quantity: number;
 };
+
+const HEFE_SUPPLIER = "Hefe van Haag";
+
+function normalizeKey(value: string) {
+  return value.trim().toLocaleLowerCase("nl-NL");
+}
+
+function slugify(value: string) {
+  return normalizeKey(value)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 function hefeCategory(item: HefeOrderItem) {
   const text = `${item.name} ${item.packageSize}`.toLocaleLowerCase("nl-NL");
@@ -35,24 +53,180 @@ function selectedQuantity(quantities: QuantityMap, id: string) {
   return Math.max(0, quantities[id] || 0);
 }
 
+function recipeUnitForOrder(name: string, packageSize: string): RecipeUnit {
+  if (/\bLI\b|\bl\b|liter/i.test(packageSize)) return "liter";
+  if (/\bST\b|stuk|stuks/i.test(packageSize)) return "stuk";
+  if (/hörnchen|deckel|spaten|becher/i.test(name)) return "stuk";
+
+  return "gram";
+}
+
+function baseUnitFactor(unit: RecipeUnit) {
+  return unit === "gram" || unit === "ml" ? 1000 : 1;
+}
+
+function parsePrice(value: string) {
+  const normalized = value
+    .trim()
+    .replace(/\s/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function isHefeIngredient(ingredient: Ingredient) {
+  return normalizeKey(ingredient.supplier).includes("hefe");
+}
+
+function ingredientToHefeOrderItem(ingredient: Ingredient): HefeOrderItem {
+  return {
+    id: ingredient.id || `hefe-${slugify(ingredient.name)}`,
+    name: ingredient.name,
+    packageSize: ingredient.packageSize || "-",
+    articleNumber: ingredient.supplierArticleNumber || "",
+    recipeUnit: ingredient.recipeUnit,
+    lastPrice: Number(ingredient.lastPrice) || 0,
+    pricePerBaseUnit: Number(ingredient.pricePerBaseUnit) || 0,
+    note: ingredient.lastInvoice === "Hefe bestellijst handmatig"
+      ? "handmatig toegevoegd"
+      : "",
+  };
+}
+
+function mergeHefeOrderItems(baseItems: HefeOrderItem[], storedItems: HefeOrderItem[]) {
+  const merged = [...baseItems];
+
+  storedItems.forEach((item) => {
+    const articleKey = normalizeKey(item.articleNumber);
+    const nameKey = normalizeKey(item.name);
+    const existingIndex = merged.findIndex((candidate) => {
+      const candidateArticle = normalizeKey(candidate.articleNumber);
+      const candidateName = normalizeKey(candidate.name);
+
+      return (
+        (articleKey !== "" && candidateArticle === articleKey) ||
+        candidateName === nameKey
+      );
+    });
+
+    if (existingIndex >= 0) {
+      merged[existingIndex] = {
+        ...merged[existingIndex],
+        ...item,
+        id: merged[existingIndex].id,
+      };
+      return;
+    }
+
+    merged.push(item);
+  });
+
+  return merged;
+}
+
+function createIngredientFromCustomLine(
+  line: CustomOrderLine,
+  priceText: string
+): Ingredient {
+  const recipeUnit = recipeUnitForOrder(line.name, line.packageSize);
+  const lastPrice = parsePrice(priceText);
+  const articleKey = line.articleNumber.trim() || slugify(line.name);
+
+  return {
+    id: `hefe-${slugify(articleKey || line.name)}-${Date.now()}`,
+    name: line.name,
+    supplier: HEFE_SUPPLIER,
+    supplierArticleNumber: line.articleNumber.trim(),
+    packageSize: line.packageSize.trim() || "-",
+    recipeUnit,
+    lastPrice,
+    previousPrice: lastPrice,
+    pricePerBaseUnit: Number((lastPrice / baseUnitFactor(recipeUnit)).toFixed(6)),
+    allergens: [],
+    lastUpdated: new Date().toISOString().slice(0, 10),
+    status: "active",
+    lastInvoice: "Hefe bestellijst handmatig",
+    aliases: [
+      line.name,
+      line.articleNumber.trim(),
+      line.articleNumber.trim() ? `Hefe ${line.articleNumber.trim()}` : "",
+    ].filter(Boolean),
+  };
+}
+
+function mergeIngredientIntoData(data: RecepturenData, ingredient: Ingredient) {
+  const articleKey = normalizeKey(ingredient.supplierArticleNumber);
+  const nameKey = normalizeKey(ingredient.name);
+  const ingredients = [...data.ingredients];
+  const existingIndex = ingredients.findIndex((candidate) => {
+    const candidateArticle = normalizeKey(candidate.supplierArticleNumber);
+    const candidateName = normalizeKey(candidate.name);
+
+    return (
+      isHefeIngredient(candidate) &&
+      ((articleKey !== "" && candidateArticle === articleKey) ||
+        candidateName === nameKey)
+    );
+  });
+
+  if (existingIndex >= 0) {
+    const existing = ingredients[existingIndex];
+    ingredients[existingIndex] = {
+      ...existing,
+      name: ingredient.name,
+      supplier: HEFE_SUPPLIER,
+      supplierArticleNumber: ingredient.supplierArticleNumber,
+      packageSize: ingredient.packageSize,
+      recipeUnit: ingredient.recipeUnit,
+      lastPrice: ingredient.lastPrice,
+      previousPrice: existing.lastPrice || ingredient.previousPrice,
+      pricePerBaseUnit: ingredient.pricePerBaseUnit,
+      lastUpdated: ingredient.lastUpdated,
+      status: "active",
+      lastInvoice: ingredient.lastInvoice,
+      aliases: Array.from(
+        new Set([...(existing.aliases || []), ...ingredient.aliases])
+      ),
+    };
+  } else {
+    ingredients.push(ingredient);
+  }
+
+  return {
+    ...data,
+    ingredients,
+  };
+}
+
 export default function HefeBestellenPage() {
   const [quantities, setQuantities] = useState<QuantityMap>({});
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Alles");
+  const [storedHefeItems, setStoredHefeItems] = useState<HefeOrderItem[]>([]);
   const [customName, setCustomName] = useState("");
   const [customArticleNumber, setCustomArticleNumber] = useState("");
   const [customPackage, setCustomPackage] = useState("");
   const [customQuantity, setCustomQuantity] = useState(1);
+  const [customPrice, setCustomPrice] = useState("");
+  const [saveAsIngredient, setSaveAsIngredient] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
   const [customLines, setCustomLines] = useState<CustomOrderLine[]>([]);
 
+  const allHefeOrderItems = useMemo(
+    () => mergeHefeOrderItems(hefeOrderItems, storedHefeItems),
+    [storedHefeItems]
+  );
+
   const categories = useMemo(
-    () => ["Alles", ...Array.from(new Set(hefeOrderItems.map(hefeCategory)))],
-    []
+    () => ["Alles", ...Array.from(new Set(allHefeOrderItems.map(hefeCategory)))],
+    [allHefeOrderItems]
   );
   const filteredItems = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("nl-NL");
 
-    return hefeOrderItems.filter((item) => {
+    return allHefeOrderItems.filter((item) => {
       const matchesCategory =
         category === "Alles" || hefeCategory(item) === category;
       const matchesSearch =
@@ -62,8 +236,8 @@ export default function HefeBestellenPage() {
 
       return matchesCategory && matchesSearch;
     });
-  }, [category, search]);
-  const selectedItems = hefeOrderItems.filter(
+  }, [allHefeOrderItems, category, search]);
+  const selectedItems = allHefeOrderItems.filter(
     (item) => selectedQuantity(quantities, item.id) > 0
   );
   const selectedCount =
@@ -72,6 +246,27 @@ export default function HefeBestellenPage() {
       0
     ) + customLines.reduce((total, item) => total + item.quantity, 0);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadStoredHefeItems() {
+      const result = await fetchRecepturenData();
+      if (!isMounted || !result.ok) return;
+
+      setStoredHefeItems(
+        result.data.ingredients
+          .filter(isHefeIngredient)
+          .map(ingredientToHefeOrderItem)
+      );
+    }
+
+    loadStoredHefeItems();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   function setItemQuantity(itemId: string, nextQuantity: number) {
     setQuantities((current) => ({
       ...current,
@@ -79,24 +274,51 @@ export default function HefeBestellenPage() {
     }));
   }
 
-  function addCustomLine() {
+  async function addCustomLine() {
     const name = customName.trim();
     if (!name) return;
 
+    setSaveStatus("");
+    const line: CustomOrderLine = {
+      id: `custom-${Date.now()}`,
+      articleNumber: customArticleNumber.trim(),
+      name,
+      packageSize: customPackage.trim(),
+      quantity: Math.max(1, customQuantity),
+    };
+
     setCustomLines((current) => [
       ...current,
-      {
-        id: `custom-${Date.now()}`,
-        articleNumber: customArticleNumber.trim(),
-        name,
-        packageSize: customPackage.trim(),
-        quantity: Math.max(1, customQuantity),
-      },
+      line,
     ]);
+
+    if (saveAsIngredient) {
+      const ingredient = createIngredientFromCustomLine(line, customPrice);
+      const loadResult = await fetchRecepturenData();
+
+      if (!loadResult.ok) {
+        setSaveStatus(loadResult.message);
+      } else {
+        const saveResult = await saveRecepturenData(
+          mergeIngredientIntoData(loadResult.data, ingredient)
+        );
+
+        if (saveResult.ok) {
+          setStoredHefeItems((current) =>
+            mergeHefeOrderItems(current, [ingredientToHefeOrderItem(ingredient)])
+          );
+          setSaveStatus("Opgeslagen als Hefe-grondstof.");
+        } else {
+          setSaveStatus(saveResult.message);
+        }
+      }
+    }
+
     setCustomName("");
     setCustomArticleNumber("");
     setCustomPackage("");
     setCustomQuantity(1);
+    setCustomPrice("");
   }
 
   function mailOrder() {
@@ -254,7 +476,7 @@ export default function HefeBestellenPage() {
         <p className="mb-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
           Losse regel
         </p>
-        <div className="grid gap-2 md:grid-cols-[1fr_10rem_12rem_7rem_auto]">
+        <div className="grid gap-2 md:grid-cols-[1fr_9rem_10rem_6rem_8rem_auto]">
           <input
             value={customName}
             onChange={(event) => setCustomName(event.target.value)}
@@ -281,6 +503,13 @@ export default function HefeBestellenPage() {
             inputMode="numeric"
             className="min-h-11 border border-[#d7ccb7] px-3 text-base font-bold outline-none focus:border-[#8aa37d]"
           />
+          <input
+            value={customPrice}
+            onChange={(event) => setCustomPrice(event.target.value)}
+            placeholder="prijs"
+            inputMode="decimal"
+            className="min-h-11 border border-[#d7ccb7] px-3 text-base font-bold outline-none focus:border-[#8aa37d]"
+          />
           <button
             type="button"
             onClick={addCustomLine}
@@ -288,6 +517,21 @@ export default function HefeBestellenPage() {
           >
             Voeg toe
           </button>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-sm font-black text-[#2d2a26]/65">
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={saveAsIngredient}
+              onChange={(event) => setSaveAsIngredient(event.target.checked)}
+              className="h-4 w-4 accent-[#8aa37d]"
+            />
+            Bewaar ook als Hefe-grondstof
+          </label>
+          <span>Prijs is ex btw, per kg/l/stuk.</span>
+          {saveStatus && (
+            <span className="text-[#4f744d]">{saveStatus}</span>
+          )}
         </div>
         {customLines.length > 0 && (
           <div className="mt-3 grid gap-1">
