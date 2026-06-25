@@ -23,9 +23,9 @@ const winkelNavItems = [
 ];
 
 const bakkerijNavItems = [
-  { href: "/bakkerij/overzicht", label: "Overzicht", icon: strikIcons.recepturen },
+  { href: "/bakkerij/overzicht", label: "Overzicht", icon: strikIcons.news },
   { href: "/bakkerij", label: "Bakkerij", icon: strikIcons.bakkerij },
-  { href: "/bakkerij/ijs-chocolade", label: "IJs", icon: strikIcons.ijs },
+  { href: "/bakkerij/ijs-chocolade", label: "IJs & chocolade", icon: strikIcons.ijs },
   { href: "/bakkerij/management", label: "Management", icon: strikIcons.management },
 ];
 

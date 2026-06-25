@@ -6,7 +6,7 @@ const bakerySections = [
     label: "Overzicht",
     title: "Overzicht",
     description: "Aanbieding van de week, notities en bruidstaartplanning.",
-    icon: strikIcons.recepturen,
+    icon: strikIcons.news,
     tone: "bg-white border-[#e7e0d8]",
     links: [{ href: "/bakkerij/overzicht", label: "Open overzicht" }],
   },
@@ -30,8 +30,8 @@ const bakerySections = [
     tone: "bg-[#fff8d8] border-[#eadb8b]",
     links: [
       { href: "/bakkerij/ijs-chocolade/recepten", label: "Recepten" },
-      { href: "/bakkerij/ijs-chocolade/haccp", label: "HACCP" },
       { href: "/bakkerij/ijs-chocolade/bestellen", label: "Bestellen" },
+      { href: "/bakkerij/ijs-chocolade/haccp", label: "HACCP" },
     ],
   },
   {

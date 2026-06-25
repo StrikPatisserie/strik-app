@@ -18,8 +18,8 @@ const sections = [
   },
   {
     href: "/bakkerij",
-    title: "Bakkerij",
-    subtitle: "Recepturen en productie",
+    title: "Productie",
+    subtitle: "Overzicht, bakkerij en beheer",
     icon: strikIcons.bakkerij,
   },
   {
