@@ -1,5 +1,5 @@
-import Link from "next/link";
 import {
+  StrikMenuLink,
   StrikPageHeader,
   StrikShell,
   strikIcons,
@@ -10,11 +10,13 @@ const bakkerijHaccpLinks = [
     href: "/bakkerij/schoonmaak/schoonmaakrooster",
     title: "Schoonmaakrooster",
     icon: strikIcons.cleaning,
+    tone: "green" as const,
   },
   {
     href: "/bakkerij/schoonmaak/temperatuurregistratie",
     title: "Temperatuurregistratie",
     icon: strikIcons.cleaning,
+    tone: "green" as const,
   },
 ];
 
@@ -28,23 +30,13 @@ export default function BakkerijSchoonmaakPage() {
 
       <div className="grid gap-2">
         {bakkerijHaccpLinks.map((item) => (
-          <Link
+          <StrikMenuLink
             key={item.href}
             href={item.href}
-            className="flex min-h-16 items-center justify-between border border-[#cbdcc5] bg-white px-3 py-2 shadow-sm transition hover:bg-[#f6faf4] active:scale-[0.99]"
-          >
-            <span className="flex min-w-0 items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#c3d3bc]">
-                <img src={item.icon} alt="" className="h-6 w-6 object-contain" />
-              </span>
-              <span className="truncate text-xl font-black text-[#1a1815]">
-                {item.title}
-              </span>
-            </span>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#c3d3bc] text-xl font-black">
-              &gt;
-            </span>
-          </Link>
+            title={item.title}
+            icon={item.icon}
+            tone={item.tone}
+          />
         ))}
       </div>
     </StrikShell>

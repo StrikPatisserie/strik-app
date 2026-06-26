@@ -1,5 +1,5 @@
 import {
-  StrikActionCard,
+  StrikMenuLink,
   StrikPageHeader,
   StrikShell,
   strikIcons,
@@ -8,19 +8,15 @@ import {
 const haccpLinks = [
   {
     href: "/winkel/haccp",
-    label: "Winkel",
     title: "Schoonmaakrooster",
-    description: "Winkel-schoonmaakplan volgt nog.",
     icon: strikIcons.cleaning,
-    tone: "primary" as const,
+    tone: "green" as const,
   },
   {
     href: "/winkel/schoonmaak-registratie",
-    label: "Winkel",
     title: "Temperatuurregistratie",
-    description: "Vul de temperatuurcontrole in.",
     icon: strikIcons.cleaning,
-    tone: "secondary" as const,
+    tone: "yellow" as const,
   },
 ];
 
@@ -29,13 +25,12 @@ export default function HaccpPage() {
     <StrikShell>
       <StrikPageHeader
         title="HACCP"
-        description="Schoonmaak en temperatuurcontrole voor de winkel."
         icon={strikIcons.cleaning}
       />
 
-      <div className="space-y-4">
+      <div className="grid gap-2">
         {haccpLinks.map((item) => (
-          <StrikActionCard key={item.href} {...item} />
+          <StrikMenuLink key={item.href} {...item} />
         ))}
       </div>
     </StrikShell>

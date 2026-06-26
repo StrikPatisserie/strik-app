@@ -12,7 +12,8 @@ export const strikIcons = {
   cleaning: "/icons_strik_cleaning.svg",
   cleaningManagement: "/icons_strik_cleaning%20management.svg",
   afsluitplan: "/icons_strik_afsluitplan.svg",
-  ijs: "/icons_strik_ijs.svg",
+  ijs: "/APP_icons_ijsje.svg",
+  ijsChocolade: "/APP_icons_ijsenchoco.svg",
   info: "/icons_strik_info.svg",
   management: "/icons_strik_management.svg",
   news: "/icons_strik_news.svg",
@@ -102,6 +103,133 @@ const squareActionCardSizeClasses = {
 };
 
 type SquareActionCardSize = keyof typeof squareActionCardSizeClasses;
+
+const menuToneClasses = {
+  green: {
+    border: "border-[#cbdcc5]",
+    hover: "hover:bg-[#f6faf4]",
+    block: "bg-[#c3d3bc]",
+  },
+  yellow: {
+    border: "border-[#eadb8b]",
+    hover: "hover:bg-[#fff8d8]",
+    block: "bg-[#f7df83]",
+  },
+  blue: {
+    border: "border-[#bcd7e8]",
+    hover: "hover:bg-[#edf5fb]",
+    block: "bg-[#b9d7ea]",
+  },
+  neutral: {
+    border: "border-[#e8e4de]",
+    hover: "hover:bg-[#faf8f5]",
+    block: "bg-[#ddd7cd]",
+  },
+};
+
+type MenuTone = keyof typeof menuToneClasses;
+
+function StrikMenuRowContent({
+  title,
+  icon,
+  symbol,
+  tone,
+}: Readonly<{
+  title: string;
+  icon?: string;
+  symbol?: React.ReactNode;
+  tone: MenuTone;
+}>) {
+  const toneClass = menuToneClasses[tone];
+
+  return (
+    <>
+      <span className="flex min-w-0 items-center gap-3">
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center ${toneClass.block}`}
+        >
+          {icon ? (
+            <img src={icon} alt="" className="h-6 w-6 object-contain" />
+          ) : (
+            <span className="text-sm font-black text-[#1a1815]">
+              {symbol}
+            </span>
+          )}
+        </span>
+        <span className="truncate text-xl font-black text-[#1a1815]">
+          {title}
+        </span>
+      </span>
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center text-xl font-black ${toneClass.block}`}
+        aria-hidden="true"
+      >
+        &gt;
+      </span>
+    </>
+  );
+}
+
+export function StrikMenuLink({
+  href,
+  title,
+  icon,
+  symbol,
+  tone = "green",
+}: Readonly<{
+  href: string;
+  title: string;
+  icon?: string;
+  symbol?: React.ReactNode;
+  tone?: MenuTone;
+}>) {
+  const toneClass = menuToneClasses[tone];
+
+  return (
+    <Link
+      href={href}
+      className={`flex min-h-16 items-center justify-between border bg-white px-3 py-2 shadow-sm transition active:scale-[0.99] ${toneClass.border} ${toneClass.hover}`}
+    >
+      <StrikMenuRowContent
+        title={title}
+        icon={icon}
+        symbol={symbol}
+        tone={tone}
+      />
+    </Link>
+  );
+}
+
+export function StrikMenuButton({
+  title,
+  icon,
+  symbol,
+  tone = "green",
+  onClick,
+}: Readonly<{
+  title: string;
+  icon?: string;
+  symbol?: React.ReactNode;
+  tone?: MenuTone;
+  onClick: () => void;
+}>) {
+  const toneClass = menuToneClasses[tone];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-16 items-center justify-between border bg-white px-3 py-2 text-left shadow-sm transition active:scale-[0.99] ${toneClass.border} ${toneClass.hover}`}
+    >
+      <StrikMenuRowContent
+        title={title}
+        icon={icon}
+        symbol={symbol}
+        tone={tone}
+      />
+    </button>
+  );
+}
 
 export function StrikShell({
   children,

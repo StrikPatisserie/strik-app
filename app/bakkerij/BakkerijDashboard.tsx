@@ -23,7 +23,7 @@ const bakerySections = [
   {
     label: "IJs & chocolade",
     title: "IJs & chocolade",
-    icon: strikIcons.ijs,
+    icon: strikIcons.ijsChocolade,
     tone: "bg-[#fff8d8] border-[#eadb8b]",
     links: [
       { href: "/bakkerij/ijs-chocolade/recepten", label: "Recepten" },

@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { strikIcons } from "../../StrikUI";
+import { StrikMenuButton, strikIcons } from "../../StrikUI";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList, { IngredientDetail } from "./IngredientsList";
@@ -2343,7 +2343,7 @@ const productionOverviewLinks = [
   {
     href: "/bakkerij/ijs-chocolade",
     label: "IJs & chocolade",
-    icon: strikIcons.ijs,
+    icon: strikIcons.ijsChocolade,
     iconTone: "bg-[#f7df83]",
     tone: "border-[#eadb8b] bg-white hover:bg-[#fff8d8]",
   },
@@ -2793,17 +2793,17 @@ function BeheerHome({
   ];
 
   return (
-    <section className="grid gap-3">
-      <header className="flex items-center gap-3">
+    <section className="grid gap-4">
+      <header className="mb-1 flex min-w-0 items-center gap-3 pb-1 sm:gap-4">
         <span
           aria-hidden="true"
-          className="block h-7 w-7 shrink-0 bg-[#ef5737]"
+          className="block h-[clamp(1rem,4.4vw,1.8rem)] w-[clamp(1rem,4.4vw,1.8rem)] shrink-0 bg-[#ef5737]"
           style={{
             WebkitMask: `url("${strikIcons.data}") center / contain no-repeat`,
             mask: `url("${strikIcons.data}") center / contain no-repeat`,
           }}
         />
-        <h1 className="text-3xl font-black uppercase tracking-[0.16em] text-[#ef5737] sm:text-4xl">
+        <h1 className="min-w-0 text-[clamp(2rem,8vw,4.4rem)] font-black uppercase leading-none tracking-[0.18em] text-[#ef5737]">
           Data
         </h1>
       </header>
@@ -2817,40 +2817,18 @@ function BeheerHome({
             onClick={row.onClick}
           />
         ))}
-        <button
-          type="button"
+        <StrikMenuButton
+          title="Download Excel"
+          symbol="XL"
+          tone="blue"
           onClick={onDownloadExcel}
-          className="flex min-h-16 items-center justify-between border border-[#bcd7e8] bg-white px-3 py-2 text-left text-sm font-black text-[#252525] shadow-sm transition hover:bg-[#edf5fb] active:scale-[0.99]"
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea]">
-              XL
-            </span>
-            <span className="truncate text-xl font-black text-[#1a1815]">
-              Download Excel
-            </span>
-          </span>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea] text-xl font-black">
-            &gt;
-          </span>
-        </button>
-        <button
-          type="button"
+        />
+        <StrikMenuButton
+          title="Herstelbestand downloaden"
+          symbol="JSON"
+          tone="blue"
           onClick={onDownloadJson}
-          className="flex min-h-16 items-center justify-between border border-[#bcd7e8] bg-white px-3 py-2 text-left text-sm font-black text-[#252525] shadow-sm transition hover:bg-[#edf5fb] active:scale-[0.99]"
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea]">
-              ↺
-            </span>
-            <span className="truncate text-xl font-black text-[#1a1815]">
-              Herstelbestand downloaden
-            </span>
-          </span>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea] text-xl font-black">
-            &gt;
-          </span>
-        </button>
+        />
       </div>
       <p className="text-xs font-bold leading-relaxed text-[#707070]">
         {isLoadingData ? "Laden..." : syncStatus}
@@ -2977,23 +2955,12 @@ function BeheerRow({
   onClick: () => void;
 }>) {
   return (
-    <button
-      type="button"
+    <StrikMenuButton
+      title={title}
+      icon={icon}
+      tone="blue"
       onClick={onClick}
-      className="flex min-h-16 items-center justify-between border border-[#bcd7e8] bg-white px-3 py-2 text-left shadow-sm transition hover:bg-[#edf5fb] active:scale-[0.99]"
-    >
-      <span className="flex min-w-0 items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea]">
-          <img src={icon} alt="" className="h-6 w-6" />
-        </span>
-        <span className="truncate text-xl font-black text-[#1a1815]">
-          {title}
-        </span>
-      </span>
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[#b9d7ea] text-xl font-black">
-        &gt;
-      </span>
-    </button>
+    />
   );
 }
 

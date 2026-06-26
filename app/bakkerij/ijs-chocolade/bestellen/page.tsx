@@ -420,7 +420,7 @@ export default function HefeBestellenPage() {
         title="Hefe bestellen"
         kicker="IJs & chocolade"
         description="Plus de aantallen, voeg eventueel een losse regel toe en mail de bestelling."
-        icon={strikIcons.ijs}
+        icon={strikIcons.ijsChocolade}
       />
 
       <section className="mb-3 grid gap-2 rounded-xl border border-[#eadb8b] bg-[#fff8d8] p-3 shadow-sm lg:grid-cols-[1fr_auto]">
