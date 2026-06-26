@@ -2085,7 +2085,13 @@ export default function RecepturenApp({
 
           {mainTab === "beheer" && (
             <div className="h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
-              <div className="w-full">{renderBeheerContent()}</div>
+              <div
+                className={
+                  beheerView === "menu" ? "mx-auto w-full max-w-4xl" : "w-full"
+                }
+              >
+                {renderBeheerContent()}
+              </div>
             </div>
           )}
         </div>

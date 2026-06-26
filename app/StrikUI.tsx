@@ -12,7 +12,7 @@ export const strikIcons = {
   cleaning: "/icons_strik_cleaning.svg",
   cleaningManagement: "/icons_strik_cleaning%20management.svg",
   afsluitplan: "/icons_strik_afsluitplan.svg",
-  ijs: "/APP_icons_ijsje.svg",
+  ijs: "/APP_icons_strik%20ijsbakje.svg",
   ijsChocolade: "/APP_icons_ijsenchoco.svg",
   info: "/icons_strik_info.svg",
   management: "/icons_strik_management.svg",
