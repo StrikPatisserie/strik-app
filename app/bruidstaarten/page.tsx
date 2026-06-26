@@ -1,5 +1,5 @@
 import {
-  StrikActionCard,
+  StrikMenuLink,
   StrikPageHeader,
   StrikShell,
   strikIcons,
@@ -8,25 +8,19 @@ import {
 const items = [
   {
     href: "/bruidstaarten/studio",
-    label: "Aanvraag",
     title: "Bruidstaart Studio",
-    description: "Stel een bruidstaart samen als aanvraag.",
     icon: strikIcons.bruidstaart,
-    tone: "primary" as const,
+    tone: "green" as const,
   },
   {
     href: "/bruidstaarten/agenda",
-    label: "Ziekerstraat",
     title: "Bruidstaart agenda",
-    description: "Bruidstaartafspraken voor Ziekerstraat.",
     icon: strikIcons.bruidstaart,
-    tone: "secondary" as const,
+    tone: "yellow" as const,
   },
   {
     href: "https://strik-patisserie.nl/wp-content/uploads/2025/06/bruidstaart-inspiratie.pdf",
-    label: "Inspiratie PDF",
     title: "Bruidstaart voorbeelden",
-    description: "Bekijk voorbeelden en inspiratie uit WordPress.",
     icon: strikIcons.info,
     tone: "neutral" as const,
     target: "_blank" as const,
@@ -39,13 +33,12 @@ export default function BruidstaartenPage() {
     <StrikShell>
       <StrikPageHeader
         title="Bruidstaarten"
-        description="Bruidstaart Studio en bruidstaartafspraken."
         icon={strikIcons.bruidstaart}
       />
 
-      <div className="space-y-4">
+      <div className="grid gap-2">
         {items.map((item) => (
-          <StrikActionCard key={item.href} {...item} />
+          <StrikMenuLink key={item.href} {...item} />
         ))}
       </div>
     </StrikShell>

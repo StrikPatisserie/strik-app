@@ -176,18 +176,24 @@ export function StrikMenuLink({
   icon,
   symbol,
   tone = "green",
+  target,
+  rel,
 }: Readonly<{
   href: string;
   title: string;
   icon?: string;
   symbol?: React.ReactNode;
   tone?: MenuTone;
+  target?: "_self" | "_blank" | "_parent" | "_top";
+  rel?: string;
 }>) {
   const toneClass = menuToneClasses[tone];
 
   return (
     <Link
       href={href}
+      target={target}
+      rel={rel}
       className={`flex min-h-16 items-center justify-between border bg-white px-3 py-2 shadow-sm transition active:scale-[0.99] ${toneClass.border} ${toneClass.hover}`}
     >
       <StrikMenuRowContent
