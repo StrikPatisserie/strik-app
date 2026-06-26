@@ -25,7 +25,11 @@ const winkelNavItems = [
 const bakkerijNavItems = [
   { href: "/bakkerij/overzicht", label: "Overzicht", icon: strikIcons.overview },
   { href: "/bakkerij/bakkerij", label: "Bakkerij", icon: strikIcons.gebak },
-  { href: "/bakkerij/ijs-chocolade", label: "IJs & chocolade", icon: strikIcons.ijs },
+  {
+    href: "/bakkerij/ijs-chocolade",
+    label: "IJs & chocolade",
+    icon: strikIcons.ijsChocolade,
+  },
   { href: "/bakkerij/management", label: "Data", icon: strikIcons.data },
 ];
 
