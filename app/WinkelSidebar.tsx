@@ -6,6 +6,14 @@ import { usePathname } from "next/navigation";
 import NewsUnreadBadge from "./NewsUnreadBadge";
 import { strikIcons } from "./StrikUI";
 
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  desktopIconClass?: string;
+  mobileIconClass?: string;
+};
+
 const mainNavItems = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJs", icon: strikIcons.ijs },
@@ -24,7 +32,13 @@ const winkelNavItems = [
 
 const bakkerijNavItems = [
   { href: "/bakkerij/overzicht", label: "Overzicht", icon: strikIcons.overview },
-  { href: "/bakkerij/bakkerij", label: "Bakkerij", icon: strikIcons.gebak },
+  {
+    href: "/bakkerij/bakkerij",
+    label: "Bakkerij",
+    icon: strikIcons.gebak,
+    desktopIconClass: "h-10 w-10",
+    mobileIconClass: "h-4 w-4",
+  },
   {
     href: "/bakkerij/ijs-chocolade",
     label: "IJs & chocolade",
@@ -85,7 +99,7 @@ export default function WinkelSidebar() {
   const pathname = usePathname();
   const showWinkelSubNav = isWinkelWorkArea(pathname);
   const showBakkerijSubNav = isBakkerijWorkArea(pathname);
-  const subNavItems = showBakkerijSubNav ? bakkerijNavItems : winkelNavItems;
+  const subNavItems: NavItem[] = showBakkerijSubNav ? bakkerijNavItems : winkelNavItems;
   const showSubNav = showWinkelSubNav || showBakkerijSubNav;
 
   return (
@@ -147,7 +161,7 @@ export default function WinkelSidebar() {
                 <img
                   src={item.icon}
                   alt=""
-                  className={`h-8 w-8 object-contain ${active ? "brightness-0 invert" : ""}`}
+                  className={`${item.desktopIconClass ?? "h-8 w-8"} object-contain ${active ? "brightness-0 invert" : ""}`}
                 />
                 {item.href === "/nieuws" && (
                   <NewsUnreadBadge className="right-1 top-1" />
@@ -178,7 +192,7 @@ export default function WinkelSidebar() {
                   <img
                     src={item.icon}
                     alt=""
-                    className={`h-3.5 w-3.5 object-contain ${active ? "brightness-0 invert" : ""}`}
+                    className={`${item.mobileIconClass ?? "h-3.5 w-3.5"} object-contain ${active ? "brightness-0 invert" : ""}`}
                   />
                   {item.label}
                   {item.href === "/nieuws" && (
