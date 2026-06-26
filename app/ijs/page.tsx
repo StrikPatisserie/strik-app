@@ -36,7 +36,7 @@ export default function IJsPage() {
   return (
     <StrikShell>
       <StrikPageHeader
-        title="IJs"
+        title="IJssalons"
         icon={strikIcons.ijs}
       />
 

@@ -36,7 +36,7 @@ const bottomItems = [
   },
   {
     href: "/schoonmaak/overzicht",
-    label: "IJs",
+    label: "IJssalons",
     title: "Schoonmaak overzicht",
     description: "Bekijk registraties per datum en ijssalon.",
     icon: strikIcons.cleaningManagement,

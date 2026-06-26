@@ -12,7 +12,7 @@ const sections = [
   },
   {
     href: "/ijs",
-    title: "IJs",
+    title: "IJssalons",
     subtitle: "Info en schoonmaak",
     icon: strikIcons.ijs,
   },

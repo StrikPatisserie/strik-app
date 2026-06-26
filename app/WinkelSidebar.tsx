@@ -16,7 +16,7 @@ type NavItem = {
 
 const mainNavItems = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
-  { href: "/ijs", label: "IJs", icon: strikIcons.ijs },
+  { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
   { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
 ];
