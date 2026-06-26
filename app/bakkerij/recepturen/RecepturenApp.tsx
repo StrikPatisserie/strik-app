@@ -2052,6 +2052,7 @@ export default function RecepturenApp({
             <div className="h-full w-full px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
               <RecipesList
                 recipes={scopedRecipeItems}
+                scope={scope}
                 onOpenRecipe={openRecipe}
                 onCreateRecipe={() => createRecipe("finalProduct")}
                 onOpenImport={() => openDataImport("recipes")}

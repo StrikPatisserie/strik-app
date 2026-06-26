@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { productGroups } from "./mockData";
 import type { Recipe } from "./types";
 import { EmptyState } from "./RecepturenShared";
@@ -11,12 +11,14 @@ import {
 
 export default function RecipesList({
   recipes,
+  scope = "all",
   onOpenRecipe,
   onCreateRecipe,
   onOpenImport,
   onRecalculateAll,
 }: Readonly<{
   recipes: Recipe[];
+  scope?: RecipeListScope;
   onOpenRecipe: (recipe: Recipe) => void;
   onCreateRecipe: () => void;
   onOpenImport: () => void;
@@ -30,7 +32,7 @@ export default function RecipesList({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [recalculateStatus, setRecalculateStatus] = useState("");
 
-  const groupOptions = useMemo(
+  const allGroupOptions = useMemo(
     () =>
       Array.from(
         new Set([
@@ -42,13 +44,33 @@ export default function RecipesList({
       ),
     [recipes]
   );
+  const groupOptions = useMemo(() => {
+    if (scope === "iceChocolate") return iceChocolateFilterGroups;
+    if (scope === "bakery") {
+      return allGroupOptions.filter((item) => !isIceChocolateCategory(item));
+    }
+
+    return allGroupOptions;
+  }, [allGroupOptions, scope]);
+
+  useEffect(() => {
+    const allowedGroups = new Set([
+      "all",
+      ...groupOptions.map((item) => normalizeSearch(item)),
+    ]);
+
+    if (!allowedGroups.has(normalizeSearch(group))) {
+      setGroup("all");
+    }
+  }, [group, groupOptions]);
+
   const filteredRecipes = useMemo(() => {
     const query = normalizeSearch(search);
 
     return recipes
       .filter((recipe) => {
         const matchesSearch = !query || normalizeSearch(recipe.name).includes(query);
-        const matchesGroup = group === "all" || recipe.productGroup === group;
+        const matchesGroup = recipeMatchesGroupFilter(recipe, group);
         const matchesStatus = status === "all" || recipe.status === status;
         const matchesType = type === "all" || recipe.type === type;
 
@@ -266,6 +288,35 @@ export default function RecipesList({
       </div>
     </section>
   );
+}
+
+type RecipeListScope = "all" | "bakery" | "iceChocolate";
+
+const iceChocolateFilterGroups = ["IJs", "Chocolade"];
+
+function isIceCategory(value: string) {
+  return normalizeSearch(value).includes("ijs");
+}
+
+function isChocolateCategory(value: string) {
+  const normalized = normalizeSearch(value);
+
+  return normalized.includes("choco") || normalized.includes("chocolade");
+}
+
+function isIceChocolateCategory(value: string) {
+  return isIceCategory(value) || isChocolateCategory(value);
+}
+
+function recipeMatchesGroupFilter(recipe: Recipe, group: string) {
+  if (group === "all") return true;
+
+  const recipeGroup = recipe.productGroup || "";
+
+  if (group === "IJs") return isIceCategory(recipeGroup);
+  if (group === "Chocolade") return isChocolateCategory(recipeGroup);
+
+  return normalizeSearch(recipeGroup) === normalizeSearch(group);
 }
 
 function dateValue(value: string) {
