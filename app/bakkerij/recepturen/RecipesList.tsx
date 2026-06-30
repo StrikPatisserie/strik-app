@@ -292,7 +292,7 @@ export default function RecipesList({
 
 type RecipeListScope = "all" | "bakery" | "iceChocolate";
 
-const iceChocolateFilterGroups = ["IJs", "Chocolade"];
+const iceChocolateFilterGroups = ["IJs", "Chocolade", "Bonbons"];
 
 function isIceCategory(value: string) {
   return normalizeSearch(value).includes("ijs");
@@ -304,8 +304,12 @@ function isChocolateCategory(value: string) {
   return normalized.includes("choco") || normalized.includes("chocolade");
 }
 
+function isBonbonCategory(value: string) {
+  return normalizeSearch(value).includes("bonbon");
+}
+
 function isIceChocolateCategory(value: string) {
-  return isIceCategory(value) || isChocolateCategory(value);
+  return isIceCategory(value) || isChocolateCategory(value) || isBonbonCategory(value);
 }
 
 function recipeMatchesGroupFilter(recipe: Recipe, group: string) {
@@ -315,6 +319,7 @@ function recipeMatchesGroupFilter(recipe: Recipe, group: string) {
 
   if (group === "IJs") return isIceCategory(recipeGroup);
   if (group === "Chocolade") return isChocolateCategory(recipeGroup);
+  if (group === "Bonbons") return isBonbonCategory(recipeGroup);
 
   return normalizeSearch(recipeGroup) === normalizeSearch(group);
 }

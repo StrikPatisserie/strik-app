@@ -9,7 +9,8 @@ export const productGroups: string[] = [
   "Vullingen",
   "Bodems & beslag",
   "Petit Gateau",
-  "Gebak"
+  "Gebak",
+  "Bonbons"
 ];
 
 export const packagingItems: PackagingItem[] = [

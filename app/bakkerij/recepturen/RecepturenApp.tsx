@@ -126,7 +126,8 @@ function recipeMatchesScope(recipe: Recipe, scope: RecepturenScope) {
   const isIceChocolate =
     group.includes("ijs") ||
     group.includes("choco") ||
-    group.includes("chocolade");
+    group.includes("chocolade") ||
+    group.includes("bonbon");
 
   return scope === "iceChocolate" ? isIceChocolate : !isIceChocolate;
 }
