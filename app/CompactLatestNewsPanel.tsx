@@ -13,6 +13,7 @@ import {
 } from "./nieuws/newsState";
 import NewsUnreadBadge from "./NewsUnreadBadge";
 import { strikIcons } from "./StrikUI";
+import newsletterDefaultImage from "./nieuws/newsletter-default.png";
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -61,6 +62,10 @@ export default function CompactLatestNewsPanel() {
     : "";
   const excerpt = latestPostPlainText.slice(0, 72);
   const newsletter = latestPost ? isNewsletterPost(latestPost) : false;
+  const imageSrc =
+    latestPost && newsletter
+      ? newsletterDefaultImage.src
+      : latestPost?.image || "";
 
   return (
     <Link
@@ -86,10 +91,10 @@ export default function CompactLatestNewsPanel() {
         {latestPost ? (
           <>
             <div>
-              {latestPost.image && (
+              {imageSrc && (
                 <div className="mb-2 aspect-[3/2] overflow-hidden rounded-[0.7rem] bg-[#f8f6f3] sm:rounded-[0.9rem]">
                   <img
-                    src={latestPost.image}
+                    src={imageSrc}
                     alt=""
                     className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
                   />

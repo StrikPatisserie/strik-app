@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import { NewsRichContent } from "../../nieuws/NewsRichContent";
+import newsletterDefaultImage from "../../nieuws/newsletter-default.png";
 import {
   IMPORTANT_NEWS_MARKER,
   NEWSLETTER_MARKER,
@@ -423,6 +424,13 @@ export default function NieuwsBeheerPage() {
                     : "border-[#e8e4de] bg-white"
                 }`}
               >
+                {nieuwsbrief && (
+                  <img
+                    src={newsletterDefaultImage.src}
+                    alt=""
+                    className="-mx-4 -mt-4 mb-4 aspect-[3/2] w-[calc(100%+2rem)] rounded-t-[1rem] object-cover"
+                  />
+                )}
                 <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
                   Vandaag
                 </p>
@@ -467,9 +475,13 @@ export default function NieuwsBeheerPage() {
                   isNewsletterPost(post) ? "border-[#dfd4c4]" : "border-[#e7e0d8]"
                 }`}
               >
-                {post.image && (
+                {(isNewsletterPost(post) || post.image) && (
                   <img
-                    src={post.image}
+                    src={
+                      isNewsletterPost(post)
+                        ? newsletterDefaultImage.src
+                        : post.image || ""
+                    }
                     alt={stripNewsTitleMarkers(post.title)}
                     className="h-44 w-full object-cover"
                   />
