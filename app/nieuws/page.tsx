@@ -5,6 +5,7 @@ import {
   NewsPost,
   getLatestNewsPost,
   getNewsPostKey,
+  isImportantNewsPost,
 } from "./newsState";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +21,11 @@ export default async function NieuwsPage() {
   const latestDate = latestPost?.date || "";
 
   const important = posts
-    .filter((p) => p.title.includes("[BELANGRIJK]"))
+    .filter(isImportantNewsPost)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const normal = posts
-    .filter((p) => !p.title.includes("[BELANGRIJK]"))
+    .filter((p) => !isImportantNewsPost(p))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (

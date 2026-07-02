@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { NEWS_API_URL, stripNewsTitleMarkers } from "./nieuws/newsState";
 
 type NewsPost = {
   id: string | number;
@@ -8,7 +9,6 @@ type NewsPost = {
   date: string;
 };
 
-const NEWS_URL = "https://strik-patisserie.nl/wp-json/strik/v1/news";
 const ENABLED_KEY = "strik-notifications-enabled";
 const LATEST_NEWS_KEY = "strik-latest-news-id";
 const CHECK_INTERVAL = 60_000;
@@ -26,7 +26,7 @@ function getPostKey(post: NewsPost) {
 }
 
 async function getLatestPost() {
-  const res = await fetch(NEWS_URL, { cache: "no-store" });
+  const res = await fetch(NEWS_API_URL, { cache: "no-store" });
   const posts = (await res.json()) as NewsPost[];
 
   return posts.sort(
@@ -38,7 +38,7 @@ async function showNewsNotification(post: NewsPost) {
   const registration = await navigator.serviceWorker.ready;
 
   await registration.showNotification("Nieuw nieuwsbericht", {
-    body: post.title.replace("[BELANGRIJK]", "").trim(),
+    body: stripNewsTitleMarkers(post.title),
     icon: "/icon.png",
     badge: "/apple-icon.png",
     data: { url: "/nieuws" },

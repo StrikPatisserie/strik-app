@@ -6,18 +6,13 @@ import { useEffect, useState } from "react";
 import {
   NEWS_API_URL,
   NewsPost,
+  getNewsPlainText,
   getLatestNewsPost,
-  stripImportantTitle,
+  isNewsletterPost,
+  stripNewsTitleMarkers,
 } from "./nieuws/newsState";
 import NewsUnreadBadge from "./NewsUnreadBadge";
 import { strikIcons } from "./StrikUI";
-
-function stripHtml(value: string) {
-  return value
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -61,9 +56,11 @@ export default function CompactLatestNewsPanel() {
     };
   }, []);
 
-  const excerpt = latestPost
-    ? stripHtml(latestPost.content || "").slice(0, 72)
+  const latestPostPlainText = latestPost
+    ? getNewsPlainText(latestPost.content || "").replace(/\s+/g, " ")
     : "";
+  const excerpt = latestPostPlainText.slice(0, 72);
+  const newsletter = latestPost ? isNewsletterPost(latestPost) : false;
 
   return (
     <Link
@@ -99,15 +96,15 @@ export default function CompactLatestNewsPanel() {
                 </div>
               )}
               <p className="text-[0.56rem] font-black uppercase tracking-[0.12em] text-[#8d877f] sm:text-[0.62rem]">
-                Nieuwsbericht
+                {newsletter ? "Nieuwsbrief" : "Nieuwsbericht"}
               </p>
               <h3 className="mt-1 line-clamp-2 text-[0.72rem] font-black leading-tight text-[#ef5737] sm:text-base">
-                {stripImportantTitle(latestPost.title)}
+                {stripNewsTitleMarkers(latestPost.title)}
               </h3>
               {excerpt && (
                 <p className="mt-1 line-clamp-3 text-[0.54rem] font-normal leading-snug text-[#5f5750] sm:mt-1.5 sm:text-xs">
                   {excerpt}
-                  {stripHtml(latestPost.content || "").length > 72 ? "..." : ""}
+                  {latestPostPlainText.length > 72 ? "..." : ""}
                 </p>
               )}
             </div>

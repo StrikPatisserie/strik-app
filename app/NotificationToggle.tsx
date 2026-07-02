@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
+import { NEWS_API_URL } from "./nieuws/newsState";
 
 const ENABLED_KEY = "strik-notifications-enabled";
 const LATEST_NEWS_KEY = "strik-latest-news-id";
-const NEWS_URL = "https://strik-patisserie.nl/wp-json/strik/v1/news";
 
 type PermissionState = NotificationPermission | "unsupported";
 
@@ -37,7 +37,7 @@ function isStandaloneApp() {
 }
 
 async function rememberCurrentLatestPost() {
-  const res = await fetch(NEWS_URL, { cache: "no-store" });
+  const res = await fetch(NEWS_API_URL, { cache: "no-store" });
   const posts = (await res.json()) as Array<{
     id: string | number;
     date: string;

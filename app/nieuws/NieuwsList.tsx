@@ -6,9 +6,13 @@ import {
   NEWS_READ_EVENT,
   NEWS_READ_KEY,
   NewsPost,
+  getNewsPlainText,
   getNewsPostKey,
-  stripImportantTitle,
+  isImportantNewsPost,
+  isNewsletterPost,
+  stripNewsTitleMarkers,
 } from "./newsState";
+import { NewsRichContent } from "./NewsRichContent";
 
 type ReadState = {
   key: string;
@@ -42,13 +46,6 @@ function isNewPost(post: NewsPost, readState: ReadState, latestKey: string) {
   return postTime > readTime || (postTime === readTime && postKey !== readState.key);
 }
 
-function stripHtml(value: string) {
-  return value
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function Card({
   post,
   important = false,
@@ -59,18 +56,24 @@ function Card({
   isNew?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const cleanContent = stripHtml(post.content || "");
-  const excerptLength = 150;
+  const newsletter = isNewsletterPost(post);
+  const cleanContent = getNewsPlainText(post.content || "");
+  const excerptLength = newsletter ? 260 : 150;
   const hasLongContent = cleanContent.length > excerptLength;
   const excerpt = hasLongContent
     ? `${cleanContent.slice(0, excerptLength).trim()}...`
     : cleanContent;
-  const visibleContent = expanded ? cleanContent : excerpt;
 
   return (
     <article
-      className={`relative grid h-full grid-rows-[auto_1fr] overflow-hidden rounded-[0.9rem] border shadow-sm ${
-        important ? "border-[#efb4aa] bg-[#fff0ed]" : "border-[#e8e4de] bg-white"
+      className={`relative grid h-full overflow-hidden rounded-[0.9rem] border shadow-sm ${
+        newsletter ? "sm:col-span-2 xl:col-span-2" : ""
+      } ${
+        newsletter
+          ? "border-[#dfd4c4] bg-[#fffdf8]"
+          : important
+          ? "border-[#efb4aa] bg-[#fff0ed]"
+          : "border-[#e8e4de] bg-white"
       }`}
     >
       {isNew && (
@@ -79,37 +82,74 @@ function Card({
         </span>
       )}
 
-      {post.image ? (
+      {newsletter && !post.image ? (
+        <div className="border-b border-[#eadfce] bg-[#f8f1e6] px-4 py-5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="rounded-full bg-white px-3 py-1 text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#ef5737] shadow-sm">
+              Nieuwsbrief
+            </span>
+            <span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
+              Groot bericht
+            </span>
+          </div>
+        </div>
+      ) : post.image ? (
         <img
           src={post.image}
-          alt={post.title}
-          className="aspect-[3/2] w-full object-cover"
+          alt={stripNewsTitleMarkers(post.title)}
+          className={`${newsletter ? "aspect-[5/2]" : "aspect-[3/2]"} w-full object-cover`}
         />
       ) : (
         <div className="aspect-[3/2] w-full bg-[#f8f6f3]" />
       )}
 
-      <div className="p-3 sm:p-4">
+      <div className={newsletter ? "p-4 sm:p-5" : "p-3 sm:p-4"}>
         <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
           {new Date(post.date).toLocaleDateString("nl-NL")}
         </p>
-        <h2 className="mt-1.5 text-base font-black leading-tight text-[#1a1815]">
-          {stripImportantTitle(post.title)}
-        </h2>
-        <p
-          className={`mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#6b645b] ${
-            expanded ? "" : "line-clamp-3"
-          }`}
+        <h2
+          className={
+            newsletter
+              ? "mt-1.5 text-2xl font-black leading-tight text-[#1a1815] sm:text-3xl"
+              : "mt-1.5 text-base font-black leading-tight text-[#1a1815]"
+          }
         >
-          {visibleContent}
-        </p>
+          {stripNewsTitleMarkers(post.title)}
+        </h2>
+        {newsletter && (
+          <p className="mt-2 inline-flex rounded-full bg-[#f8f1e6] px-3 py-1 text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
+            Nieuwsbrief
+          </p>
+        )}
+
+        {expanded ? (
+          <NewsRichContent
+            content={post.content || ""}
+            tone={newsletter ? "newsletter" : "normal"}
+            className="mt-4"
+          />
+        ) : (
+          <p
+            className={`mt-3 text-sm leading-relaxed text-[#6b645b] ${
+              newsletter ? "sm:text-[0.95rem] sm:leading-7" : "line-clamp-3"
+            }`}
+          >
+            {excerpt}
+          </p>
+        )}
         {hasLongContent && (
           <button
             type="button"
             onClick={() => setExpanded((current) => !current)}
             className="mt-2 text-left text-xs font-black uppercase tracking-[0.1em] text-[#ef5737]"
           >
-            {expanded ? "Lees minder" : "Lees meer"}
+            {expanded
+              ? newsletter
+                ? "Sluit nieuwsbrief"
+                : "Lees minder"
+              : newsletter
+              ? "Lees nieuwsbrief"
+              : "Lees meer"}
           </button>
         )}
       </div>
@@ -164,7 +204,7 @@ export default function NieuwsList({
         <Card
           key={post.id}
           post={post}
-          important={post.title.includes("[BELANGRIJK]")}
+          important={isImportantNewsPost(post)}
           isNew={isNewPost(post, readState, latestKey)}
         />
       ))}
