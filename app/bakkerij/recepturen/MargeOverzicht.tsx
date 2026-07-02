@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Recipe } from "./types";
 import { EmptyState, FilterSelect } from "./RecepturenShared";
 import {
+  calculateMargin,
   formatEuro,
   formatPercent,
   formatSignedPercent,
@@ -23,6 +24,9 @@ export default function MargeOverzicht({
   const [riskFilter, setRiskFilter] = useState("all");
   const [groupFilter, setGroupFilter] = useState("all");
   const [supplierImpact, setSupplierImpact] = useState("all");
+  const [promotionPrices, setPromotionPrices] = useState<Record<string, string>>(
+    {}
+  );
   const finalProductRecipes = useMemo(
     () => recipes.filter((recipe) => recipe.type === "finalProduct"),
     [recipes]
@@ -143,30 +147,39 @@ export default function MargeOverzicht({
 
       {filteredRecipes.length ? (
         <div className="min-h-0 overflow-auto border border-[#d8d8d4]">
-          <div className="min-w-[42rem]">
-            <div className="grid grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 border-b border-[#d8d8d4] bg-[#f5f5f3] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+          <div className="min-w-[42rem] lg:min-w-[64rem]">
+            <div className="grid grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 border-b border-[#d8d8d4] bg-[#f5f5f3] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c] lg:grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)_11rem]">
               <span>Product</span>
               <span>Kost ex.</span>
               <span>Verkoop incl.</span>
               <span>Marge ex.</span>
               <span>Advies incl.</span>
               <span>Oorzaak</span>
+              <span className="hidden lg:block">Reclameprijs berekenen</span>
             </div>
             <div className="divide-y divide-[#d8d8d4]">
               {filteredRecipes.map((recipe) => {
                 const currentMargin = recipeCurrentMargin(recipe);
+                const promotionPriceInput = promotionPrices[recipe.id] || "";
+                const promotionPrice = parseDutchMoney(promotionPriceInput);
+                const promotionMargin =
+                  promotionPrice > 0
+                    ? calculateMargin(promotionPrice, recipe.costPrice)
+                    : null;
 
                 return (
-                  <button
+                  <div
                     key={recipe.id}
-                    type="button"
-                    onClick={() => onOpenRecipe(recipe)}
-                    className="grid w-full grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 px-3 py-2 text-left text-sm hover:bg-[#f8f8f6]"
+                    className="grid w-full grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 px-3 py-2 text-left text-sm hover:bg-[#f8f8f6] lg:grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)_11rem]"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-[0.82rem] font-black leading-tight md:text-[1rem] lg:text-[1.05rem]">
+                      <button
+                        type="button"
+                        onClick={() => onOpenRecipe(recipe)}
+                        className="block max-w-full truncate text-left text-[0.82rem] font-black leading-tight hover:text-[#ef5737] md:text-[1rem] lg:text-[1.05rem]"
+                      >
                         {recipe.name}
-                      </span>
+                      </button>
                     </span>
                     <span className="font-black">{formatEuro(recipe.costPrice)}</span>
                     <span className="font-black">
@@ -189,7 +202,38 @@ export default function MargeOverzicht({
                     <span className="truncate font-bold text-[#707070]">
                       {causeForRecipe(recipe)}
                     </span>
-                  </button>
+                    <span className="hidden min-w-0 items-center gap-2 lg:flex">
+                      <span className="relative min-w-0 flex-1">
+                        <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[0.68rem] font-black text-[#8c8c8c]">
+                          €
+                        </span>
+                        <input
+                          aria-label={`Reclameprijs voor ${recipe.name}`}
+                          value={promotionPriceInput}
+                          onChange={(event) =>
+                            setPromotionPrices((current) => ({
+                              ...current,
+                              [recipe.id]: event.target.value,
+                            }))
+                          }
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          className="h-8 w-full rounded-md border border-[#d8d8d4] bg-white pl-5 pr-2 text-xs font-black text-[#1a1815] outline-none focus:border-[#c3d3bc] focus:ring-2 focus:ring-[#dce8d6]"
+                        />
+                      </span>
+                      <span
+                        className={`inline-flex h-7 min-w-[3.2rem] items-center justify-center rounded-full px-2 text-[0.65rem] font-black ${
+                          promotionMargin === null
+                            ? "bg-[#f1eee9] text-[#707070]"
+                            : marginBadgeClass(promotionMargin)
+                        }`}
+                      >
+                        {promotionMargin === null
+                          ? "-"
+                          : formatPercent(promotionMargin)}
+                      </span>
+                    </span>
+                  </div>
                 );
               })}
             </div>
@@ -235,6 +279,21 @@ function causeForRecipe(recipe: Recipe) {
   }
 
   return recipe.costPrice > recipe.previousCostPrice ? "Ingredientmix" : "Stabiel";
+}
+
+function parseDutchMoney(value: string) {
+  const parsed = Number(
+    value
+      .trim()
+      .replace(/\s/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .replace(/[^\d.-]/g, "")
+  );
+
+  if (!Number.isFinite(parsed)) return 0;
+
+  return Math.max(0, Math.round(parsed * 100) / 100);
 }
 
 function createMarginPrintRow(recipe: Recipe) {
