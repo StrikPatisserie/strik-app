@@ -44,35 +44,30 @@ export default function RecepturenDashboard({
 
   if (compact) {
     return (
-      <section className="rounded-lg border border-[#e8e4de] bg-white/90 p-3 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#8b8278]">
-              Dashboard
-            </p>
-            <h2 className="mt-1 text-lg font-black leading-tight text-[#1a1815]">
-              Recepturen in het kort
-            </h2>
-          </div>
-          <div className="rounded-lg border border-[#e8e4de] bg-[#faf8f5] px-3 py-2 text-right text-xs font-black text-[#2d2a26]">
+      <section className="rounded-lg border border-[#e8e4de] bg-white/90 p-2.5 shadow-sm sm:p-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
+            Recepturen kort
+          </p>
+          <div className="shrink-0 rounded-md border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-right text-[0.65rem] font-black leading-tight text-[#2d2a26]">
             {invoice.invoiceNumber}
-            <span className="block text-[0.65rem] text-[#2d2a26]/45">
+            <span className="block text-[0.58rem] text-[#2d2a26]/45">
               {formatDate(invoice.invoiceDate)}
             </span>
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
           <CompactMetric label="Eindproducten" value={finalProducts.length} />
           <CompactMetric label="Onder marge" value={underMargin.length} tone="critical" />
           <CompactMetric label="Prijsupdates" value={pendingInvoiceLines} tone="pressure" />
           <CompactMetric label="Nieuwe artikelen" value={newInvoiceArticles} />
         </div>
 
-        <div className="mt-3 grid gap-2 lg:grid-cols-2">
+        <div className="mt-2 grid gap-2 lg:grid-cols-2">
           <CompactChangeList
-            title="Grootste grondstofstijgingen"
-            items={biggestIngredientChanges.slice(0, 3).map((ingredient) => ({
+            title="Grondstofstijgingen"
+            items={biggestIngredientChanges.slice(0, 2).map((ingredient) => ({
               id: ingredient.id,
               title: ingredient.name,
               detail: ingredient.supplier,
@@ -80,13 +75,12 @@ export default function RecepturenDashboard({
             }))}
           />
           <CompactChangeList
-            title="Grootste kostprijsstijgingen"
-            items={biggestRecipeChanges.slice(0, 3).map((recipe) => ({
+            title="Kostprijsstijgingen"
+            items={biggestRecipeChanges.slice(0, 2).map((recipe) => ({
               id: recipe.id,
               title: recipe.name,
               detail: recipe.productGroup,
               value: recipeCostChange(recipe),
-              marginStatus: marginStatusForRecipe(recipe),
             }))}
           />
         </div>
@@ -255,11 +249,11 @@ function CompactMetric({
         : "border-[#dbe9ee] bg-[#f4f9fb] text-[#1a1815]";
 
   return (
-    <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
-      <p className="text-[0.58rem] font-black uppercase tracking-[0.12em] opacity-60">
+    <div className={`min-h-11 rounded-md border px-2 py-1.5 ${toneClass}`}>
+      <p className="truncate text-[0.52rem] font-black uppercase tracking-[0.1em] opacity-60">
         {label}
       </p>
-      <p className="mt-1 text-xl font-black leading-none">{value}</p>
+      <p className="mt-0.5 text-base font-black leading-none sm:text-lg">{value}</p>
     </div>
   );
 }
@@ -278,27 +272,27 @@ function CompactChangeList({
   }>;
 }>) {
   return (
-    <div className="rounded-lg border border-[#e8e4de] bg-[#fffdf8] p-3">
-      <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
+    <div className="rounded-md border border-[#e8e4de] bg-[#fffdf8] p-2">
+      <p className="text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
         {title}
       </p>
-      <div className="mt-2 grid gap-1.5">
+      <div className="mt-1.5 grid gap-1">
         {items.map((item) => (
           <div
             key={item.id}
-            className="flex items-center justify-between gap-2 rounded-md bg-[#faf8f5] px-2.5 py-2"
+            className="flex min-w-0 items-center justify-between gap-2 rounded-md bg-[#faf8f5] px-2 py-1.5"
           >
             <div className="min-w-0">
-              <p className="truncate text-xs font-black leading-tight text-[#1a1815]">
+              <p className="truncate text-[0.72rem] font-black leading-tight text-[#1a1815] sm:text-xs">
                 {item.title}
               </p>
-              <p className="truncate text-[0.65rem] font-bold text-[#2d2a26]/45">
+              <p className="hidden truncate text-[0.62rem] font-bold text-[#2d2a26]/45 sm:block">
                 {item.detail}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <span
-                className={`rounded-full px-2 py-0.5 text-[0.65rem] font-black ${changeBadgeClass(
+                className={`rounded-full px-1.5 py-0.5 text-[0.58rem] font-black sm:px-2 sm:text-[0.65rem] ${changeBadgeClass(
                   item.value
                 )}`}
               >

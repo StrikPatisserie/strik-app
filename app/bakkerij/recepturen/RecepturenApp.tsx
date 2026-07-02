@@ -2092,7 +2092,7 @@ export default function RecepturenApp({
             <div className="h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
               <div
                 className={
-                  beheerView === "menu" ? "mx-auto w-full max-w-4xl" : "w-full"
+                  beheerView === "menu" ? "mx-auto w-full max-w-6xl" : "w-full"
                 }
               >
                 {renderBeheerContent()}
@@ -2780,55 +2780,59 @@ function BeheerHome({
   const dataTiles = [
     {
       title: "Grondstoffen",
-      detail: "prijzen, leveranciers en koppelingen",
       icon: "/UI-apps_data.svg",
       onClick: () => onOpen("ingredienten" as TabId),
     },
     {
       title: "Verpakkingen",
-      detail: "dozen, bodems en verpakkingskosten",
       icon: "/UI-apps_data.svg",
       onClick: () => onOpen("verpakkingen" as TabId),
     },
     {
       title: "Halffabricaten",
-      detail: "basisrecepten en tussenproducten",
       icon: "/UI-apps_productie.svg",
       onClick: () => onOpen("halffabricaten" as TabId),
     },
   ];
 
   return (
-    <section className="grid gap-4">
+    <section className="grid gap-2.5 sm:gap-3">
       <header className="mb-1 flex min-w-0 items-center gap-3 pb-1 sm:gap-4">
         <span
           aria-hidden="true"
-          className="block h-[clamp(1rem,4.4vw,1.8rem)] w-[clamp(1rem,4.4vw,1.8rem)] shrink-0 bg-[#ef5737]"
+          className="block h-[clamp(0.9rem,3.2vw,1.5rem)] w-[clamp(0.9rem,3.2vw,1.5rem)] shrink-0 bg-[#ef5737]"
           style={{
             WebkitMask: `url("${strikIcons.data}") center / contain no-repeat`,
             mask: `url("${strikIcons.data}") center / contain no-repeat`,
           }}
         />
-        <h1 className="min-w-0 text-[clamp(2rem,8vw,4.4rem)] font-black uppercase leading-none tracking-[0.18em] text-[#ef5737]">
+        <h1 className="min-w-0 text-[clamp(2rem,6vw,3.4rem)] font-black uppercase leading-none tracking-[0.16em] text-[#ef5737]">
           Data
         </h1>
       </header>
 
-      <div className="grid gap-3">
+      <div className="grid gap-2.5">
         <button
           type="button"
           onClick={() => onOpen("marge" as TabId)}
-          className="group grid min-h-[7.5rem] gap-3 rounded-lg border border-[#ef5737]/25 bg-[#fff4f1] p-4 text-left shadow-sm transition active:scale-[0.99] sm:grid-cols-[1fr_auto] sm:items-center"
+          className="group flex min-h-14 items-center justify-between gap-3 rounded-lg border border-[#ef5737]/30 bg-[#fff4f1] px-3 py-2.5 text-left shadow-sm transition hover:bg-[#fff0eb] active:scale-[0.99] sm:min-h-16 sm:px-4"
         >
-          <span className="min-w-0">
-            <span className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#a83e31]">
-              Meest gebruikt
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#ef5737] sm:h-10 sm:w-10">
+              <span
+                aria-hidden="true"
+                className="block h-5 w-5 bg-white"
+                style={{
+                  WebkitMask: `url("${strikIcons.data}") center / contain no-repeat`,
+                  mask: `url("${strikIcons.data}") center / contain no-repeat`,
+                }}
+              />
             </span>
-            <span className="mt-2 block text-[clamp(1.8rem,5vw,3.1rem)] font-black leading-none text-[#1a1815]">
+            <span className="truncate text-xl font-black leading-tight text-[#1a1815] sm:text-2xl">
               Marge overzicht
             </span>
           </span>
-          <span className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-[#ef5737] text-2xl font-black text-white shadow-sm transition group-active:scale-[0.96]">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#ef5737] text-xl font-black text-white shadow-sm transition group-active:scale-[0.96] sm:h-10 sm:w-10">
             &gt;
           </span>
         </button>
@@ -2838,22 +2842,21 @@ function BeheerHome({
             <DataTileButton
               key={tile.title}
               title={tile.title}
-              detail={tile.detail}
               icon={tile.icon}
               onClick={tile.onClick}
             />
           ))}
         </div>
 
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-end">
-          <div className="relative sm:w-[13rem]">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+          <div className="relative min-w-0 sm:w-[12rem]">
             <DataIconButton
               title="Download recepten"
               icon={<DownloadIcon />}
               onClick={() => setDownloadsOpen((current) => !current)}
             />
             {downloadsOpen && (
-              <div className="z-20 mt-2 grid gap-1 rounded-lg border border-[#dbe9ee] bg-white p-1.5 shadow-lg sm:absolute sm:right-0 sm:top-full sm:w-[13rem]">
+              <div className="absolute left-0 right-0 z-20 mt-2 grid gap-1 rounded-lg border border-[#dbe9ee] bg-white p-1.5 shadow-lg sm:left-auto sm:right-0 sm:top-full sm:w-[13rem]">
                 <button
                   type="button"
                   onClick={() => {
@@ -2877,11 +2880,13 @@ function BeheerHome({
               </div>
             )}
           </div>
-          <DataIconButton
-            title="Facturen inladen"
-            icon={<UploadIcon />}
-            onClick={() => onOpen("factuurimport" as TabId)}
-          />
+          <div className="min-w-0 sm:w-[12rem]">
+            <DataIconButton
+              title="Facturen inladen"
+              icon={<UploadIcon />}
+              onClick={() => onOpen("factuurimport" as TabId)}
+            />
+          </div>
         </div>
       </div>
 
@@ -2902,12 +2907,10 @@ function BeheerHome({
 
 function DataTileButton({
   title,
-  detail,
   icon,
   onClick,
 }: Readonly<{
   title: string;
-  detail: string;
   icon: string;
   onClick: () => void;
 }>) {
@@ -2915,23 +2918,18 @@ function DataTileButton({
     <button
       type="button"
       onClick={onClick}
-      className="group grid min-h-[6.2rem] gap-3 rounded-lg border border-[#dbe9ee] bg-white p-3 text-left shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99]"
+      className="group flex min-h-14 items-center justify-between gap-3 rounded-lg border border-[#dbe9ee] bg-white px-3 py-2.5 text-left shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99] sm:min-h-16"
     >
-      <span className="flex items-start justify-between gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#b9d7ea]">
-          <img src={icon} alt="" className="h-6 w-6 object-contain" />
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#b9d7ea] sm:h-10 sm:w-10">
+          <img src={icon} alt="" className="h-5 w-5 object-contain sm:h-6 sm:w-6" />
         </span>
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e8f3f8] text-base font-black transition group-active:scale-[0.96]">
-          &gt;
-        </span>
-      </span>
-      <span className="min-w-0">
-        <span className="block text-base font-black leading-tight text-[#1a1815]">
+        <span className="truncate text-lg font-black leading-tight text-[#1a1815] md:text-base lg:text-lg">
           {title}
         </span>
-        <span className="mt-1 block text-xs font-bold leading-snug text-[#2d2a26]/48">
-          {detail}
-        </span>
+      </span>
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e8f3f8] text-base font-black transition group-active:scale-[0.96]">
+        &gt;
       </span>
     </button>
   );
@@ -2950,7 +2948,7 @@ function DataIconButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#dbe9ee] bg-white px-3 py-2 text-xs font-black text-[#1a1815] shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99] sm:w-[13rem]"
+      className="inline-flex min-h-11 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-[#dbe9ee] bg-white px-2.5 py-2 text-xs font-black text-[#1a1815] shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99]"
     >
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#b9d7ea] text-[#1a1815]">
         {icon}
