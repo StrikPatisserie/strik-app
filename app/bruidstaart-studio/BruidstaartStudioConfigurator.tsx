@@ -1345,7 +1345,8 @@ export function CakeVisualizer({
 
     return groups;
   }, []);
-  const layerColors = config.styleId
+  const showLayerColorSummary = config.styleId !== "naked";
+  const layerColors = showLayerColorSummary && config.styleId
     ? visualLayers.map((layer) => getLayerColor(config, layer.id))
     : [];
   const uniqueLayerColors = layerColors.filter(
@@ -1553,6 +1554,221 @@ export function CakeVisualizer({
     }
 
     return null;
+  }
+
+  function renderNakedLayer(
+    layerId: string,
+    index: number,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    layoutId: string
+  ) {
+    const isOpen = layoutId.includes("open");
+    const clipId = `${visualizerId}-cake-layer-pattern-${index}`;
+    const creamBase = isOpen ? "#f4e2c7" : "#f8edd9";
+    const creamLight = isOpen ? "#fff0d5" : "#fff6e3";
+    const creamShade = isOpen ? "#d8b884" : "#e8cf9f";
+    const crumbBase = isOpen ? "#bd742c" : "#c68945";
+    const crumbDark = isOpen ? "#8f4e1d" : "#9b612b";
+    const crumbBands = [
+      {
+        center: 0.17,
+        thickness: isOpen ? 7.8 : 4.4,
+        opacity: isOpen ? 0.84 : 0.58,
+      },
+      {
+        center: 0.48,
+        thickness: isOpen ? 8.8 : 5.2,
+        opacity: isOpen ? 0.9 : 0.64,
+      },
+      {
+        center: 0.82,
+        thickness: isOpen ? 7.2 : 4.6,
+        opacity: isOpen ? 0.8 : 0.56,
+      },
+    ];
+    const creamStrokes = [
+      { center: 0.06, width: isOpen ? 3.2 : 5.8, opacity: isOpen ? 0.46 : 0.76 },
+      { center: 0.32, width: isOpen ? 3.6 : 6.5, opacity: isOpen ? 0.42 : 0.82 },
+      { center: 0.64, width: isOpen ? 3.4 : 6.2, opacity: isOpen ? 0.4 : 0.78 },
+      { center: 0.96, width: isOpen ? 2.8 : 5.2, opacity: isOpen ? 0.36 : 0.7 },
+    ];
+    const speckleCount = isOpen ? 46 : 30;
+
+    function bandPath(centerRatio: number, thickness: number, item: number) {
+      const centerY = y + height * centerRatio;
+      const top = centerY - thickness / 2;
+      const bottom = centerY + thickness / 2;
+      const wobble = [1.8, 1.15, 1.45][item % 3];
+
+      return `M ${x + 2.5} ${top} C ${x + width * 0.2} ${
+        top - wobble
+      }, ${x + width * 0.45} ${top + wobble * 0.65}, ${
+        x + width * 0.68
+      } ${top - wobble * 0.25} C ${x + width * 0.82} ${
+        top - wobble * 0.9
+      }, ${x + width - 3} ${top + wobble * 0.45}, ${x + width - 2.5} ${
+        top + wobble * 0.1
+      } L ${x + width - 2.5} ${bottom} C ${x + width * 0.76} ${
+        bottom + wobble
+      }, ${x + width * 0.45} ${bottom - wobble * 0.5}, ${
+        x + width * 0.24
+      } ${bottom + wobble * 0.25} C ${x + width * 0.12} ${
+        bottom + wobble * 0.7
+      }, ${x + 3} ${bottom - wobble * 0.2}, ${x + 2.5} ${bottom} Z`;
+    }
+
+    return (
+      <g key={layerId}>
+        <ellipse
+          cx="130"
+          cy={y + height + 2.2}
+          rx={width * 0.43}
+          ry="2.8"
+          fill="currentColor"
+          filter={`url(#${visualizerId}-soft-layer-shadow)`}
+          opacity={index === 0 ? "0.055" : "0.075"}
+        />
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          rx="7.5"
+          ry="8.2"
+          fill={creamBase}
+          stroke="#6f5438"
+          strokeWidth="0.82"
+          opacity="0.99"
+        />
+        <g clipPath={`url(#${clipId})`}>
+          <rect
+            x={x}
+            y={y}
+            width={width}
+            height={height}
+            fill={creamBase}
+          />
+          {crumbBands.map((band, item) => (
+            <g key={`${layerId}-crumb-${item}`}>
+              <path
+                d={bandPath(band.center, band.thickness, item)}
+                fill={crumbBase}
+                opacity={band.opacity}
+              />
+              <path
+                d={bandPath(band.center, band.thickness * 0.42, item + 1)}
+                fill={crumbDark}
+                opacity={isOpen ? 0.26 : 0.14}
+              />
+            </g>
+          ))}
+          {Array.from({ length: speckleCount }, (_item, item) => {
+            const band = crumbBands[item % crumbBands.length];
+            const seedX = (item * 37 + index * 19) % 100;
+            const seedY = ((item * 17 + index * 11) % 13) - 6;
+            const speckleX = x + width * (0.04 + seedX * 0.0092);
+            const speckleY =
+              y + height * band.center + seedY * (isOpen ? 0.42 : 0.28);
+            const radius = [0.45, 0.7, 0.55, 0.36][item % 4];
+
+            return (
+              <ellipse
+                key={`${layerId}-speckle-${item}`}
+                cx={speckleX}
+                cy={speckleY}
+                rx={radius * (item % 3 === 0 ? 1.7 : 1.05)}
+                ry={radius}
+                fill={item % 5 === 0 ? crumbDark : crumbBase}
+                opacity={isOpen ? 0.46 : 0.28}
+              />
+            );
+          })}
+          {creamStrokes.map((stroke, item) => {
+            const strokeY = y + height * stroke.center;
+
+            return (
+              <path
+                key={`${layerId}-cream-stroke-${item}`}
+                d={`M ${x + 5} ${strokeY} C ${x + width * 0.28} ${
+                  strokeY - [1.4, -0.4, 0.9, -0.8][item]
+                }, ${x + width * 0.6} ${
+                  strokeY + [0.6, -1.1, 0.5, 0.9][item]
+                }, ${x + width - 5} ${strokeY - [0.3, 0.8, -0.6, 0.4][item]}`}
+                fill="none"
+                stroke={creamLight}
+                strokeLinecap="round"
+                strokeWidth={stroke.width}
+                opacity={stroke.opacity}
+              />
+            );
+          })}
+          <rect
+            x={x + width * 0.78}
+            y={y + 1}
+            width={width * 0.2}
+            height={height - 2}
+            fill="#8f6846"
+            opacity={isOpen ? 0.055 : 0.04}
+          />
+          <rect
+            x={x + 1}
+            y={y + 1}
+            width={width * 0.18}
+            height={height - 2}
+            fill="#fff6e4"
+            opacity={isOpen ? 0.18 : 0.24}
+          />
+        </g>
+        <rect
+          x={x + 0.9}
+          y={y + 0.9}
+          width={width - 1.8}
+          height={height - 1.8}
+          rx="6.8"
+          ry="7.4"
+          fill={`url(#${visualizerId}-layer-highlight-${index})`}
+          opacity={isOpen ? 0.46 : 0.58}
+        />
+        <path
+          d={`M ${x + 8} ${y + 4.2} C ${x + width * 0.28} ${y + 0.8}, ${
+            x + width * 0.72
+          } ${y + 0.8}, ${x + width - 8} ${y + 4.2} C ${
+            x + width * 0.72
+          } ${y + 8.2}, ${x + width * 0.28} ${y + 8.2}, ${x + 8} ${
+            y + 4.2
+          } Z`}
+          fill={creamLight}
+          stroke={creamShade}
+          strokeWidth="0.45"
+          opacity={isOpen ? 0.62 : 0.78}
+        />
+        <path
+          d={`M ${x + 8} ${y + 4.5} C ${x + width * 0.3} ${y + 1.5}, ${
+            x + width * 0.7
+          } ${y + 1.5}, ${x + width - 8} ${y + 4.5}`}
+          fill="none"
+          stroke="#fffaf0"
+          strokeLinecap="round"
+          strokeWidth="1"
+          opacity={isOpen ? 0.5 : 0.66}
+        />
+        <path
+          d={`M ${x + 5} ${y + height - 4.2} C ${x + width * 0.32} ${
+            y + height - 1.4
+          }, ${x + width * 0.66} ${y + height - 1.5}, ${x + width - 5} ${
+            y + height - 4.2
+          }`}
+          fill="none"
+          stroke={isOpen ? crumbDark : creamShade}
+          strokeLinecap="round"
+          strokeWidth={isOpen ? "2.5" : "1.6"}
+          opacity={isOpen ? 0.34 : 0.22}
+        />
+      </g>
+    );
   }
 
   const topLayer = visualLayers[visualLayers.length - 1];
@@ -3196,6 +3412,18 @@ export function CakeVisualizer({
             ? getLayerLayout(config, layer.id)
             : undefined;
 
+          if (config.styleId === "naked" && layerLayout?.id.includes("naked")) {
+            return renderNakedLayer(
+              layer.id,
+              index,
+              x,
+              y,
+              width,
+              height,
+              layerLayout.id
+            );
+          }
+
           return (
             <g key={layer.id}>
               <ellipse
@@ -3368,8 +3596,9 @@ export function CakeVisualizer({
             : "mt-2 text-xs font-bold leading-relaxed text-[#2d2a26]/50"
         }
       >
-        Schets op basis van formaat, kleur, layout, decoratie en toppers. De
-        echte afwerking blijft maatwerk.
+        Schets op basis van formaat,{" "}
+        {config.styleId === "naked" ? "" : "kleur, "}layout, decoratie en
+        toppers. De echte afwerking blijft maatwerk.
       </p>
       {downloadStatus && (
         <p
