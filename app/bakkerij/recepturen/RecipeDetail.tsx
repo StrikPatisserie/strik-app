@@ -100,6 +100,20 @@ type ImportCandidateChoice = {
   targetId: string;
 };
 
+type QuickCreateKind = "ingredient" | "semiFinished";
+
+type QuickCreateRequest = {
+  kind: QuickCreateKind;
+  name: string;
+  lineId?: string;
+};
+
+type QuickCreateDetails = QuickCreateRequest & {
+  amount: number;
+  unit: RecipeUnit;
+  price: number;
+};
+
 export default function RecipeDetail({
   recipe,
   ingredients,
@@ -158,6 +172,8 @@ export default function RecipeDetail({
   const [isPrintChoiceOpen, setIsPrintChoiceOpen] = useState(false);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [draggedIngredientLineId, setDraggedIngredientLineId] = useState("");
+  const [quickCreateRequest, setQuickCreateRequest] =
+    useState<QuickCreateRequest | null>(null);
   const [newProductionEntry, setNewProductionEntry] = useState(() => ({
     date: todayIsoDate(),
     quantity: formatInputNumber(
@@ -720,25 +736,50 @@ export default function RecipeDetail({
     }));
   }
 
-  function createQuickIngredient(nameValue: string, lineId?: string) {
-    const name = nameValue.trim();
+  function requestQuickCreate(
+    kind: QuickCreateKind,
+    nameValue: string,
+    lineId?: string
+  ) {
+    setQuickCreateRequest({
+      kind,
+      name: nameValue.trim(),
+      lineId,
+    });
+  }
+
+  function confirmQuickCreate(details: QuickCreateDetails) {
+    if (details.kind === "semiFinished") {
+      createQuickSemiFinished(details);
+    } else {
+      createQuickIngredient(details);
+    }
+
+    setQuickCreateRequest(null);
+  }
+
+  function createQuickIngredient(details: QuickCreateDetails) {
+    const name = details.name.trim();
     if (!name) {
       showFeedback("Typ eerst de grondstofnaam.");
       return;
     }
 
-    const recipeUnit: RecipeUnit = "gram";
-    const packagePrice = averagePackagePriceForUnit(ingredients, recipeUnit);
-    const normalizedPrice = normalizePackagePrice(packagePrice, recipeUnit);
+    const recipeUnit = recipeUnitForPackageUnit(details.unit);
+    const normalizedPrice = packagePriceForRecipeUnit(
+      details.price,
+      details.amount,
+      details.unit
+    );
     const ingredient: Ingredient = {
       id: uniqueIngredientId(name, ingredients),
       name,
       supplier: "Snel toegevoegd",
       supplierArticleNumber: "-",
-      packageSize: "1 kg",
+      packageSize: quickPackageSizeLabel(details.amount, details.unit),
       recipeUnit,
       lastPrice: normalizedPrice,
-      previousPrice: normalizedPrice,
+      previousPrice: 0,
       pricePerBaseUnit: pricePerBaseUnitFromPackagePrice(
         normalizedPrice,
         recipeUnit
@@ -746,16 +787,16 @@ export default function RecipeDetail({
       allergens: [],
       lastUpdated: todayIsoDate(),
       status: "active",
-      lastInvoice: "Gemiddelde prijs - later controleren",
+      lastInvoice: "Snel toegevoegd - later aanvullen",
       aliases: [name],
     };
 
     onSaveIngredient(ingredient);
     setDraft((current) => ({
       ...current,
-      ingredients: lineId
+      ingredients: details.lineId
         ? current.ingredients.map((line) =>
-            line.id === lineId
+            line.id === details.lineId
               ? {
                   ...line,
                   ingredientId: ingredient.id,
@@ -774,24 +815,38 @@ export default function RecipeDetail({
             },
           ],
     }));
-    showFeedback("Grondstof aangemaakt met gemiddelde prijs.");
+    showFeedback("Grondstof aangemaakt. Pas later uitgebreid aan.");
   }
 
-  function createQuickSemiFinished(nameValue: string, lineId?: string) {
-    const name = nameValue.trim();
+  function createQuickSemiFinished(details: QuickCreateDetails) {
+    const name = details.name.trim();
     if (!name) {
       showFeedback("Typ eerst de naam van het halffabricaat.");
       return;
     }
 
-    const semiFinishedRecipe = createBlankSemiFinishedRecipe(name, recipes);
+    const costPrice = unitPriceFromBatchPrice(
+      details.price,
+      details.amount
+    );
+    const semiFinishedRecipe: Recipe = {
+      ...createBlankSemiFinishedRecipe(name, recipes, details.unit),
+      standardBatchQuantity: details.amount,
+      standardBatchUnit: details.unit,
+      costPrice,
+      previousCostPrice: 0,
+      batchSize: quickPackageSizeLabel(details.amount, details.unit),
+      internalNotes:
+        "Snel aangemaakt vanuit receptinvoer. Pas later uitgebreid aan.",
+      lastUpdated: todayIsoDate(),
+    };
 
     onSaveRecipe(semiFinishedRecipe);
     setDraft((current) => ({
       ...current,
-      semiFinishedItems: lineId
+      semiFinishedItems: details.lineId
         ? current.semiFinishedItems.map((line) =>
-            line.id === lineId
+            line.id === details.lineId
               ? {
                   ...line,
                   semiFinishedRecipeId: semiFinishedRecipe.id,
@@ -810,7 +865,7 @@ export default function RecipeDetail({
             },
           ],
     }));
-    showFeedback("Halffabricaat als concept aangemaakt.");
+    showFeedback("Halffabricaat aangemaakt. Pas later uitgebreid aan.");
   }
 
   function addProductionLogEntry() {
@@ -1194,6 +1249,13 @@ export default function RecipeDetail({
 
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-white/70 px-2 py-4 backdrop-blur-[1px]">
+      {quickCreateRequest && (
+        <QuickCreateRecipeItemDialog
+          request={quickCreateRequest}
+          onCancel={() => setQuickCreateRequest(null)}
+          onConfirm={confirmQuickCreate}
+        />
+      )}
       <div className="mx-auto w-[min(64rem,calc(100vw-1rem))] border border-[#111111] bg-white p-3 shadow-2xl">
         <div className="flex flex-wrap items-start justify-between gap-3 bg-white p-2">
           <div>
@@ -1380,7 +1442,7 @@ export default function RecipeDetail({
                           ingredients={availableIngredients}
                           value={line.ingredientId}
                           onCreateFromQuery={(name) =>
-                            createQuickIngredient(name, line.id)
+                            requestQuickCreate("ingredient", name, line.id)
                           }
                           onChange={(value) => {
                             const selectedIngredient = findIngredient(
@@ -1475,7 +1537,7 @@ export default function RecipeDetail({
                           recipes={semiFinishedOptions}
                           value={line.semiFinishedRecipeId}
                           onCreateFromQuery={(name) =>
-                            createQuickSemiFinished(name, line.id)
+                            requestQuickCreate("semiFinished", name, line.id)
                           }
                           onChange={(value) =>
                             updateSemiFinishedLine(line.id, {
@@ -3333,6 +3395,36 @@ function baseRecipeUnitForImport(unit: RecipeUnit): RecipeUnit {
   return "stuk";
 }
 
+function recipeUnitForPackageUnit(unit: RecipeUnit): RecipeUnit {
+  if (unit === "kg" || unit === "gram") return "gram";
+  if (unit === "liter" || unit === "ml") return "ml";
+
+  return "stuk";
+}
+
+function packagePriceForRecipeUnit(
+  price: number,
+  amount: number,
+  unit: RecipeUnit
+) {
+  const unitAmount =
+    unit === "gram" || unit === "ml" ? amount / 1000 : amount;
+
+  if (unitAmount <= 0) return 0;
+
+  return roundMoney(price / unitAmount);
+}
+
+function unitPriceFromBatchPrice(price: number, amount: number) {
+  if (amount <= 0) return 0;
+
+  return roundMoney(price / amount);
+}
+
+function quickPackageSizeLabel(amount: number, unit: RecipeUnit) {
+  return `${formatInputNumber(amount) || "1"} ${unitLabelText(unit)}`;
+}
+
 function averagePackagePriceForUnit(ingredients: Ingredient[], unit: RecipeUnit) {
   const pricesForUnit = ingredients
     .filter((ingredient) => ingredient.recipeUnit === unit)
@@ -4077,6 +4169,175 @@ function ProductionHistoryPanel({
   );
 }
 
+function QuickCreateRecipeItemDialog({
+  request,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  request: QuickCreateRequest;
+  onCancel: () => void;
+  onConfirm: (details: QuickCreateDetails) => void;
+}>) {
+  const isIngredient = request.kind === "ingredient";
+  const [name, setName] = useState(request.name);
+  const [amountInput, setAmountInput] = useState("1");
+  const [unit, setUnit] = useState<RecipeUnit>("kg");
+  const [priceInput, setPriceInput] = useState("");
+  const [error, setError] = useState("");
+
+  function submitQuickCreate() {
+    const cleanName = name.trim();
+    const amount = parseDutchNumber(amountInput);
+    const hasPriceInput = priceInput.trim().length > 0;
+    const price = parseDutchNumber(priceInput);
+
+    if (!cleanName) {
+      setError(
+        isIngredient
+          ? "Vul eerst de naam van de grondstof in."
+          : "Vul eerst de naam van het halffabricaat in."
+      );
+      return;
+    }
+
+    if (amount <= 0) {
+      setError("Vul een gewicht of hoeveelheid groter dan 0 in.");
+      return;
+    }
+
+    if (!hasPriceInput) {
+      setError("Vul een prijs in. Gebruik 0 als je die later controleert.");
+      return;
+    }
+
+    onConfirm({
+      kind: request.kind,
+      name: cleanName,
+      lineId: request.lineId,
+      amount,
+      unit,
+      price,
+    });
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[96] flex items-center justify-center bg-[#111111]/35 px-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitQuickCreate();
+        }}
+        className="grid w-full max-w-lg gap-4 rounded-[1.1rem] border border-[#d7d2cb] bg-white p-4 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-[#ef5b43]">
+              {isIngredient ? "Nieuwe grondstof" : "Nieuw halffabricaat"}
+            </p>
+            <h3 className="mt-1 text-2xl font-black leading-tight text-[#2d2a26]">
+              Eerst even invullen
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-3xl font-light leading-none text-[#2d2a26]"
+            aria-label="Sluit snelle invoer"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[1fr_7rem_8rem]">
+          <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 sm:col-span-3">
+            Naam
+            <input
+              autoFocus
+              value={name}
+              onChange={(event) => {
+                setName(event.target.value);
+                setError("");
+              }}
+              placeholder={isIngredient ? "Compound" : "Citroenvulling"}
+              className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+            {isIngredient ? "Verpakking" : "Batch"}
+            <input
+              value={amountInput}
+              onChange={(event) => {
+                setAmountInput(event.target.value);
+                setError("");
+              }}
+              inputMode="decimal"
+              className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+            />
+          </label>
+          <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+            Eenheid
+            <select
+              value={unit}
+              onChange={(event) => setUnit(event.target.value as RecipeUnit)}
+              className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+            >
+              {recipeUnits.map((item) => (
+                <option key={item} value={item}>
+                  {unitLabelText(item)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+            {isIngredient ? "Pakketprijs" : "Batchprijs"}
+            <input
+              value={priceInput}
+              onChange={(event) => {
+                setPriceInput(event.target.value);
+                setError("");
+              }}
+              inputMode="decimal"
+              placeholder="0,00"
+              className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-black normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+            />
+          </label>
+        </div>
+
+        <div className="rounded-2xl bg-[#f8f6f3] px-3 py-2 text-xs font-bold leading-relaxed text-[#2d2a26]/60">
+          {isIngredient
+            ? "De app rekent hiermee de prijs per kg, liter of stuk uit."
+            : "De app gebruikt dit als tijdelijke kostprijs voor dit halffabricaat."}{" "}
+          Pas later uitgebreid aan.
+        </div>
+
+        {error && (
+          <p className="text-sm font-black text-[#a83e31]">{error}</p>
+        )}
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-full border border-[#d7d2cb] bg-white px-4 py-3 text-sm font-black text-[#707070]"
+          >
+            Annuleren
+          </button>
+          <button
+            type="submit"
+            className="rounded-full border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-3 text-sm font-black text-[#24401f]"
+          >
+            Toevoegen
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function RecipePrintChoiceDialog({
   recipe,
   onCancel,
@@ -4613,7 +4874,7 @@ function IngredientSearchField({
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#c3d3bc] text-[#111111]">
                 +
               </span>
-              grondstof toevoegen
+              nieuwe grondstof invullen
             </button>
           )}
         </div>
@@ -4707,7 +4968,7 @@ function SemiFinishedSearchField({
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f2d58d] text-[#111111]">
                 +
               </span>
-              halffabricaat toevoegen
+              nieuw halffabricaat invullen
             </button>
           )}
         </div>
