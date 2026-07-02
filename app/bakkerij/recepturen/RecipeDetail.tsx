@@ -1306,7 +1306,13 @@ export default function RecipeDetail({
                   <RecipeTypeToggle
                     value={draft.type}
                     onChange={(value) => {
-                      updateDraft({ type: value });
+                      updateDraft({
+                        type: value,
+                        productGroup:
+                          value === "semiFinished"
+                            ? semiFinishedProductGroupFallback(draft)
+                            : finalProductGroupFallback(draft),
+                      });
                       if (
                         value === "semiFinished" &&
                         (activeEditSection === "productie" ||
@@ -1351,7 +1357,7 @@ export default function RecipeDetail({
                 className={`grid gap-2 ${
                   draft.type === "finalProduct"
                     ? "md:grid-cols-[minmax(12rem,1.3fr)_minmax(9rem,0.8fr)_6.5rem_6.5rem_7rem]"
-                    : "md:grid-cols-[minmax(12rem,1fr)_9rem]"
+                    : "md:grid-cols-[minmax(12rem,1fr)_minmax(9rem,0.8fr)_9rem]"
                 }`}
               >
                 <EditTextField
@@ -1359,16 +1365,18 @@ export default function RecipeDetail({
                   value={draft.name}
                   onChange={(value) => updateDraft({ name: value })}
                 />
+                <GroupComboField
+                  label="Categorie"
+                  value={draft.productGroup}
+                  onChange={(value) => updateDraft({ productGroup: value })}
+                  options={recipeGroupOptionsForRecipes(recipes, [
+                    draft.productGroup,
+                    draft.type === "semiFinished" ? "Bodems & beslag" : "Gebak",
+                    draft.type === "semiFinished" ? "Vullingen" : "Petit Gateau",
+                  ]).map((option) => option.label)}
+                />
                 {draft.type === "finalProduct" && (
                   <>
-                    <GroupComboField
-                      label="Groep"
-                      value={draft.productGroup}
-                      onChange={(value) => updateDraft({ productGroup: value })}
-                      options={recipeGroupOptionsForRecipes(recipes, [
-                        draft.productGroup,
-                      ]).map((option) => option.label)}
-                    />
                     <EditTextField
                       label="Batch"
                       value={draft.standardBatchQuantity}
@@ -3423,6 +3431,48 @@ function unitPriceFromBatchPrice(price: number, amount: number) {
 
 function quickPackageSizeLabel(amount: number, unit: RecipeUnit) {
   return `${formatInputNumber(amount) || "1"} ${unitLabelText(unit)}`;
+}
+
+function semiFinishedProductGroupFallback(draft: RecipeDraft) {
+  const currentGroup = draft.productGroup.trim();
+  const normalizedGroup = currentGroup.toLocaleLowerCase("nl-NL");
+
+  if (
+    normalizedGroup === "vullingen" ||
+    normalizedGroup === "bodems & beslag" ||
+    normalizedGroup === "halffabricaat"
+  ) {
+    return currentGroup;
+  }
+
+  const normalizedName = draft.name.toLocaleLowerCase("nl-NL");
+
+  if (
+    normalizedName.includes("beslag") ||
+    normalizedName.includes("bodem") ||
+    normalizedName.includes("cake") ||
+    normalizedName.includes("biscuit")
+  ) {
+    return "Bodems & beslag";
+  }
+
+  return "Vullingen";
+}
+
+function finalProductGroupFallback(draft: RecipeDraft) {
+  const currentGroup = draft.productGroup.trim();
+  const normalizedGroup = currentGroup.toLocaleLowerCase("nl-NL");
+
+  if (
+    currentGroup &&
+    normalizedGroup !== "vullingen" &&
+    normalizedGroup !== "bodems & beslag" &&
+    normalizedGroup !== "halffabricaat"
+  ) {
+    return currentGroup;
+  }
+
+  return "Gebak";
 }
 
 function averagePackagePriceForUnit(ingredients: Ingredient[], unit: RecipeUnit) {
