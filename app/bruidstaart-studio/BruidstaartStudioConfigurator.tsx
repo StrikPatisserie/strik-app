@@ -174,6 +174,14 @@ const steps: { id: StepId; title: string; description: string }[] = [
   },
 ];
 
+function getVisibleSteps(styleId: WeddingCakeConfig["styleId"]) {
+  if (styleId === "naked") {
+    return steps.filter((step) => step.id !== "kleur");
+  }
+
+  return steps;
+}
+
 function optionPriceLabel(option: StudioOption) {
   if (option.price.mode === "included") return "Inbegrepen";
   if (option.price.mode === "quote") return "Op aanvraag";
@@ -3531,7 +3539,12 @@ export default function BruidstaartStudioConfigurator() {
   const [allOverviewStatus, setAllOverviewStatus] = useState("");
   const [allOverviewLoading, setAllOverviewLoading] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState("");
-  const step = steps[stepIndex];
+  const visibleSteps = useMemo(
+    () => getVisibleSteps(config.styleId),
+    [config.styleId]
+  );
+  const currentStepIndex = Math.min(stepIndex, visibleSteps.length - 1);
+  const step = visibleSteps[currentStepIndex];
 
   const allowedLayouts = useMemo(
     () =>
@@ -4047,6 +4060,7 @@ export default function BruidstaartStudioConfigurator() {
   }
 
   function createMailBody() {
+    const showColor = config.styleId !== "naked";
     const priceLines = price.lines.length
       ? price.lines
           .map(
@@ -4083,7 +4097,7 @@ export default function BruidstaartStudioConfigurator() {
       `Stijl: ${labels.style || "-"}`,
       `Formaat/opbouw: ${labels.size || "-"}`,
       `Smaak/vulling: ${labels.filling || "-"}`,
-      `Kleur: ${labels.color || "-"}`,
+      ...(showColor ? [`Kleur: ${labels.color || "-"}`] : []),
       `Layout: ${labels.layout || "-"}`,
       `Decoratie: ${
         labels.decorations.length ? labels.decorations.join(", ") : "geen"
@@ -4454,7 +4468,10 @@ export default function BruidstaartStudioConfigurator() {
       layerLayoutIds: layerLayoutIdsForSize(nextConfig.sizeId, nextConfig),
     });
     setDraftStatus(`Bestelling ${draft.code} geladen.`);
-    goToStep(steps.length - 1);
+    goToStepForStyle(
+      getVisibleSteps(nextConfig.styleId).length - 1,
+      nextConfig.styleId
+    );
   }
 
   async function deleteDraft(draft: WeddingCakeDraft) {
@@ -4562,8 +4579,8 @@ export default function BruidstaartStudioConfigurator() {
     goToStep(1);
   }
 
-  const canGoBack = stepIndex > 0;
-  const canGoNext = stepIndex < steps.length - 1;
+  const canGoBack = currentStepIndex > 0;
+  const canGoNext = currentStepIndex < visibleSteps.length - 1;
 
   function getBaseMissingFields(current = config) {
     const missing: string[] = [];
@@ -4665,7 +4682,9 @@ export default function BruidstaartStudioConfigurator() {
       ...getStepMissingFields("formaat", current),
       ...getStepMissingFields("stijl", current),
       ...getStepMissingFields("smaak", current),
-      ...getStepMissingFields("kleur", current),
+      ...(current.styleId === "naked"
+        ? []
+        : getStepMissingFields("kleur", current)),
       ...getStepMissingFields("layout", current),
       ...getFinalRequiredMissingFields(current),
     ];
@@ -4680,8 +4699,21 @@ export default function BruidstaartStudioConfigurator() {
   }
 
   function goToStep(nextIndex: number) {
-    setStepIndex(Math.max(0, Math.min(steps.length - 1, nextIndex)));
+    setStepIndex(Math.max(0, Math.min(visibleSteps.length - 1, nextIndex)));
+    scrollStudioToTop();
+  }
 
+  function goToStepForStyle(
+    nextIndex: number,
+    styleId: WeddingCakeConfig["styleId"]
+  ) {
+    const nextVisibleSteps = getVisibleSteps(styleId);
+
+    setStepIndex(Math.max(0, Math.min(nextVisibleSteps.length - 1, nextIndex)));
+    scrollStudioToTop();
+  }
+
+  function scrollStudioToTop() {
     if (typeof window !== "undefined") {
       window.requestAnimationFrame(() => {
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -4704,7 +4736,7 @@ export default function BruidstaartStudioConfigurator() {
       return;
     }
 
-    goToStep(stepIndex + 1);
+    goToStep(currentStepIndex + 1);
   }
 
   const currentStepMissingFields = getStepMissingFields();
@@ -4724,13 +4756,13 @@ export default function BruidstaartStudioConfigurator() {
     <div className="space-y-3">
       <nav className="studio-no-print rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-2 shadow-sm">
         <div className="grid grid-cols-5 gap-1 sm:grid-cols-10">
-          {steps.map((item, index) => (
+          {visibleSteps.map((item, index) => (
             <button
               key={item.id}
               type="button"
               onClick={() => goToStep(index)}
               className={`min-w-0 rounded-lg px-1.5 py-1.5 text-[0.62rem] font-black leading-tight transition sm:text-[0.68rem] ${
-                stepIndex === index
+                currentStepIndex === index
                   ? "bg-[#c3d3bc] text-[#2d2a26]"
                   : "bg-[#f8f6f3] text-[#2d2a26]/55"
               }`}
@@ -4836,7 +4868,7 @@ export default function BruidstaartStudioConfigurator() {
                   hasVisibleWarnings ? "text-[#ef5737]" : "text-[#6d8665]"
                 }`}
               >
-                Stap {stepIndex + 1} van {steps.length}
+                Stap {currentStepIndex + 1} van {visibleSteps.length}
               </p>
               <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <h2 className="text-sm font-black leading-tight text-[#1a1815] sm:text-base">
@@ -4851,7 +4883,7 @@ export default function BruidstaartStudioConfigurator() {
               {canGoBack && (
                 <button
                   type="button"
-                  onClick={() => goToStep(stepIndex - 1)}
+                  onClick={() => goToStep(currentStepIndex - 1)}
                   className="rounded-full bg-white px-3 py-2 text-[0.68rem] font-black text-[#2d2a26]/60 shadow-sm"
                 >
                   Vorige
@@ -4884,7 +4916,9 @@ export default function BruidstaartStudioConfigurator() {
               className={`h-full rounded-full ${
                 hasVisibleWarnings ? "bg-[#ef5737]" : "bg-[#8fb184]"
               }`}
-              style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
+              style={{
+                width: `${((currentStepIndex + 1) / visibleSteps.length) * 100}%`,
+              }}
             />
           </div>
           {hasVisibleWarnings ? (
@@ -6056,7 +6090,7 @@ export default function BruidstaartStudioConfigurator() {
                         : "border-[#e7e0d8] bg-white"
                     }`}
                   >
-                    {method === "pickup" ? "Afhalen" : "Bezorgen"}
+                    {method === "pickup" ? "Afhalen" : "Bezorgen (+ €10)"}
                   </button>
                 ))}
               </div>
@@ -6244,9 +6278,11 @@ export default function BruidstaartStudioConfigurator() {
                 <p>
                   <span className="font-bold">Smaak:</span> {labels.filling}
                 </p>
-                <p>
-                  <span className="font-bold">Kleur:</span> {labels.color}
-                </p>
+                {config.styleId !== "naked" && (
+                  <p>
+                    <span className="font-bold">Kleur:</span> {labels.color}
+                  </p>
+                )}
                 <p>
                   <span className="font-bold">Layout:</span> {labels.layout}
                 </p>

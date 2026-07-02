@@ -17,6 +17,7 @@ import {
 } from "./types";
 
 const CHOCOLATE_INITIALS_TOPPER_ID = "chocolade-initialen-geschreven";
+const DELIVERY_FEE = 10;
 
 export function formatEuro(amount: number) {
   return new Intl.NumberFormat("nl-NL", {
@@ -403,9 +404,11 @@ export function calculateWeddingCakePrice(
   }
 
   fillingLinesForConfig(config).forEach((line) => lines.push(line));
-  layerOptionLinesForConfig(config, getLayerColor, "Kleur").forEach((line) =>
-    lines.push(line)
-  );
+  if (config.styleId !== "naked") {
+    layerOptionLinesForConfig(config, getLayerColor, "Kleur").forEach((line) =>
+      lines.push(line)
+    );
+  }
   layerOptionLinesForConfig(config, getLayerLayout, "Layout").forEach((line) =>
     lines.push(line)
   );
@@ -441,6 +444,13 @@ export function calculateWeddingCakePrice(
       amount: surcharge.amount,
     });
   });
+
+  if (config.contact.deliveryMethod === "delivery") {
+    lines.push({
+      label: "Bezorgkosten",
+      amount: DELIVERY_FEE,
+    });
+  }
 
   const total = lines.reduce((sum, line) => sum + line.amount, 0);
 
@@ -498,7 +508,7 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
         }`
       : "",
     filling: config.fillingId ? getSelectedFillingSummary(config) : "",
-    color: config.colorId
+    color: config.styleId !== "naked" && config.colorId
       ? getSelectedLayerOptionSummary(config, getLayerColor)
       : "",
     layout: config.layoutId
@@ -512,6 +522,7 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
 export function createProductionForm(config: WeddingCakeConfig) {
   const labels = getSelectedWeddingCakeLabels(config);
   const price = calculateWeddingCakePrice(config);
+  const showColor = config.styleId !== "naked";
   const decorationNotes = getDecorationNoteTexts(config);
   const decorationSurcharges = getDecorationSurcharges(config);
   const decorationColorNotes = getDecorationColorNotes(config);
@@ -540,7 +551,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
     `Stijl: ${labels.style}`,
     `Formaat/opbouw: ${labels.size}`,
     `Smaak/vulling: ${labels.filling}`,
-    `Kleur: ${labels.color}`,
+    ...(showColor ? [`Kleur: ${labels.color}`] : []),
     `Layout: ${labels.layout}`,
     `Decoratie: ${labels.decorations.length ? labels.decorations.join(", ") : "geen"}`,
     `Decoratie opmerkingen: ${decorationNotes.length ? decorationNotes.join(" | ") : "-"}`,
