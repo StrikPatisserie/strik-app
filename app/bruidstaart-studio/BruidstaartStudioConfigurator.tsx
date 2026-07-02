@@ -431,6 +431,9 @@ const sharedDecorationColorOptions = colorOptions.filter(
 );
 type RoseColorMode = "same" | "multiple";
 type FlowerPlacementId = (typeof FLOWER_PLACEMENT_OPTIONS)[number]["id"];
+type WeddingCakeConfigUpdate =
+  | WeddingCakeConfig
+  | ((current: WeddingCakeConfig) => WeddingCakeConfig);
 
 function isRoseDecorationId(id: string) {
   return ROSE_DECORATION_IDS.includes(id);
@@ -3742,9 +3745,11 @@ function uniqueDrafts(drafts: WeddingCakeDraft[]) {
 }
 
 export default function BruidstaartStudioConfigurator() {
-  const [config, setConfig] = useState<WeddingCakeConfig>(
+  const [config, setConfigState] = useState<WeddingCakeConfig>(
     createEmptyWeddingCakeConfig
   );
+  const finalOrderEditProtectionRef = useRef(false);
+  const finalOrderEditConfirmedRef = useRef(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [copied, setCopied] = useState(false);
   const [draftSearch, setDraftSearch] = useState("");
@@ -3858,6 +3863,42 @@ export default function BruidstaartStudioConfigurator() {
       ),
     []
   );
+
+  function markFinalOrderProtected(isProtected: boolean) {
+    finalOrderEditProtectionRef.current = isProtected;
+    finalOrderEditConfirmedRef.current = false;
+  }
+
+  function setConfig(
+    update: WeddingCakeConfigUpdate,
+    options: { skipFinalOrderCheck?: boolean } = {}
+  ) {
+    if (
+      !options.skipFinalOrderCheck &&
+      config.completed &&
+      finalOrderEditProtectionRef.current &&
+      !finalOrderEditConfirmedRef.current
+    ) {
+      const confirmed = window.confirm(
+        "Weet je zeker dat je een wijziging wilt aanbrengen in deze definitieve bestelling? Sla de definitieve bestelling daarna opnieuw op."
+      );
+
+      if (!confirmed) {
+        setDraftStatus(
+          "Wijziging geannuleerd. De definitieve bestelling is niet aangepast."
+        );
+        return false;
+      }
+
+      finalOrderEditConfirmedRef.current = true;
+      setDraftStatus(
+        "Definitieve bestelling geopend voor wijzigingen. Sla opnieuw op als je klaar bent."
+      );
+    }
+
+    setConfigState(update);
+    return true;
+  }
 
   function layerOptionIdsForSize(
     sizeId: string,
@@ -4464,6 +4505,7 @@ export default function BruidstaartStudioConfigurator() {
       mergeDraftIntoAllOverview(savedDraft);
       setDraftStatus("Bestelling opgeslagen in WordPress.");
       showSaveFeedback();
+      markFinalOrderProtected(Boolean(savedDraft.config.completed));
       return true;
     } catch {
       saveLocalDraft(draft);
@@ -4473,6 +4515,7 @@ export default function BruidstaartStudioConfigurator() {
         "WordPress-opslag is nog niet actief; bestelling is lokaal opgeslagen."
       );
       showSaveFeedback();
+      markFinalOrderProtected(Boolean(draft.config.completed));
       return true;
     }
   }
@@ -4686,7 +4729,7 @@ export default function BruidstaartStudioConfigurator() {
       },
     };
 
-    setConfig({
+    const loadedConfig = {
       ...nextConfig,
       decorationIds: normalizeDecorationIdsForStyle(
         nextConfig.decorationIds,
@@ -4695,7 +4738,10 @@ export default function BruidstaartStudioConfigurator() {
       layerFillingIds: layerFillingIdsForSize(nextConfig.sizeId, nextConfig),
       layerColorIds: layerColorIdsForSize(nextConfig.sizeId, nextConfig),
       layerLayoutIds: layerLayoutIdsForSize(nextConfig.sizeId, nextConfig),
-    });
+    };
+
+    setConfigState(loadedConfig);
+    markFinalOrderProtected(Boolean(loadedConfig.completed));
     setDraftStatus(`Bestelling ${draft.code} geladen.`);
     goToStepForStyle(
       getVisibleSteps(nextConfig.styleId).length - 1,
@@ -4769,7 +4815,8 @@ export default function BruidstaartStudioConfigurator() {
       setAllOverviewResults((current) =>
         current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
       );
-      setConfig(createEmptyWeddingCakeConfig());
+      setConfigState(createEmptyWeddingCakeConfig());
+      markFinalOrderProtected(false);
       setDraftStatus(`Bestelling ${code} verwijderd.`);
       goToStep(0);
     } catch {
@@ -4780,7 +4827,8 @@ export default function BruidstaartStudioConfigurator() {
       setAllOverviewResults((current) =>
         current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
       );
-      setConfig(createEmptyWeddingCakeConfig());
+      setConfigState(createEmptyWeddingCakeConfig());
+      markFinalOrderProtected(false);
       setDraftStatus(
         "Bestelling is lokaal verwijderd. Werk de WordPress snippet bij om ook op elk device te kunnen verwijderen."
       );
@@ -4795,12 +4843,15 @@ export default function BruidstaartStudioConfigurator() {
 
     if (!confirmed) return;
 
-    setConfig((current) => ({
+    const updated = setConfig((current) => ({
       ...createEmptyWeddingCakeConfig(),
       contact: { ...current.contact },
       paid: current.paid,
       completed: false,
     }));
+    if (!updated) return;
+
+    markFinalOrderProtected(false);
     setDraftResults([]);
     setDraftStatus(
       "Taartontwerp gewist. Klantgegevens blijven staan; bestelling staat weer als concept."
@@ -5197,7 +5248,10 @@ export default function BruidstaartStudioConfigurator() {
                   <button
                     type="button"
                     onClick={() => {
-                      setConfig(createEmptyWeddingCakeConfig());
+                      const updated = setConfig(createEmptyWeddingCakeConfig());
+                      if (!updated) return;
+
+                      markFinalOrderProtected(false);
                       setDraftResults([]);
                       setDraftStatus("Nieuw formulier gestart.");
                     }}
@@ -6410,10 +6464,13 @@ export default function BruidstaartStudioConfigurator() {
                         }
                       }
 
-                      setConfig((current) => ({
+                      const updated = setConfig((current) => ({
                         ...current,
                         completed: checked,
                       }));
+                      if (updated) {
+                        markFinalOrderProtected(false);
+                      }
                     }}
                     className="h-4 w-4 accent-[#8fb184]"
                   />
