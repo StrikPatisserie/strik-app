@@ -13,10 +13,12 @@ export default function RecepturenDashboard({
   recipes,
   ingredients,
   invoice,
+  compact = false,
 }: Readonly<{
   recipes: Recipe[];
   ingredients: Ingredient[];
   invoice: InvoiceImport;
+  compact?: boolean;
 }>) {
   const finalProducts = recipes.filter((recipe) => recipe.type === "finalProduct");
   const semiFinished = recipes.filter((recipe) => recipe.type === "semiFinished");
@@ -33,6 +35,64 @@ export default function RecepturenDashboard({
   const biggestRecipeChanges = [...finalProducts]
     .sort((first, second) => recipeCostChange(second) - recipeCostChange(first))
     .slice(0, 4);
+  const pendingInvoiceLines = invoice.lines.filter(
+    (line) => line.reviewStatus === "pending"
+  ).length;
+  const newInvoiceArticles = invoice.lines.filter(
+    (line) => !line.matchedIngredientId
+  ).length;
+
+  if (compact) {
+    return (
+      <section className="rounded-lg border border-[#e8e4de] bg-white/90 p-3 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#8b8278]">
+              Dashboard
+            </p>
+            <h2 className="mt-1 text-lg font-black leading-tight text-[#1a1815]">
+              Recepturen in het kort
+            </h2>
+          </div>
+          <div className="rounded-lg border border-[#e8e4de] bg-[#faf8f5] px-3 py-2 text-right text-xs font-black text-[#2d2a26]">
+            {invoice.invoiceNumber}
+            <span className="block text-[0.65rem] text-[#2d2a26]/45">
+              {formatDate(invoice.invoiceDate)}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <CompactMetric label="Eindproducten" value={finalProducts.length} />
+          <CompactMetric label="Onder marge" value={underMargin.length} tone="critical" />
+          <CompactMetric label="Prijsupdates" value={pendingInvoiceLines} tone="pressure" />
+          <CompactMetric label="Nieuwe artikelen" value={newInvoiceArticles} />
+        </div>
+
+        <div className="mt-3 grid gap-2 lg:grid-cols-2">
+          <CompactChangeList
+            title="Grootste grondstofstijgingen"
+            items={biggestIngredientChanges.slice(0, 3).map((ingredient) => ({
+              id: ingredient.id,
+              title: ingredient.name,
+              detail: ingredient.supplier,
+              value: ingredientPriceChange(ingredient),
+            }))}
+          />
+          <CompactChangeList
+            title="Grootste kostprijsstijgingen"
+            items={biggestRecipeChanges.slice(0, 3).map((recipe) => ({
+              id: recipe.id,
+              title: recipe.name,
+              detail: recipe.productGroup,
+              value: recipeCostChange(recipe),
+              marginStatus: marginStatusForRecipe(recipe),
+            }))}
+          />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div className="grid gap-4">
@@ -91,13 +151,13 @@ export default function RecepturenDashboard({
         />
         <MetricCard
           label="Prijsupdates open"
-          value={invoice.lines.filter((line) => line.reviewStatus === "pending").length}
+          value={pendingInvoiceLines}
           detail="Regels wachten op goedkeuring"
           tone="pressure"
         />
         <MetricCard
           label="Nieuwe artikelen"
-          value={invoice.lines.filter((line) => !line.matchedIngredientId).length}
+          value={newInvoiceArticles}
           detail="Moeten nog gekoppeld worden"
         />
         <MetricCard
@@ -173,6 +233,81 @@ export default function RecepturenDashboard({
             })}
           </div>
         </Panel>
+      </div>
+    </div>
+  );
+}
+
+function CompactMetric({
+  label,
+  value,
+  tone = "neutral",
+}: Readonly<{
+  label: string;
+  value: string | number;
+  tone?: "neutral" | "pressure" | "critical";
+}>) {
+  const toneClass =
+    tone === "critical"
+      ? "border-[#fee2e2] bg-[#fff6f4] text-[#a83e31]"
+      : tone === "pressure"
+        ? "border-[#f3d4a4] bg-[#fffaf1] text-[#7a5a18]"
+        : "border-[#dbe9ee] bg-[#f4f9fb] text-[#1a1815]";
+
+  return (
+    <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
+      <p className="text-[0.58rem] font-black uppercase tracking-[0.12em] opacity-60">
+        {label}
+      </p>
+      <p className="mt-1 text-xl font-black leading-none">{value}</p>
+    </div>
+  );
+}
+
+function CompactChangeList({
+  title,
+  items,
+}: Readonly<{
+  title: string;
+  items: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    value: number;
+    marginStatus?: ReturnType<typeof marginStatusForRecipe>;
+  }>;
+}>) {
+  return (
+    <div className="rounded-lg border border-[#e8e4de] bg-[#fffdf8] p-3">
+      <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
+        {title}
+      </p>
+      <div className="mt-2 grid gap-1.5">
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className="flex items-center justify-between gap-2 rounded-md bg-[#faf8f5] px-2.5 py-2"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-xs font-black leading-tight text-[#1a1815]">
+                {item.title}
+              </p>
+              <p className="truncate text-[0.65rem] font-bold text-[#2d2a26]/45">
+                {item.detail}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[0.65rem] font-black ${changeBadgeClass(
+                  item.value
+                )}`}
+              >
+                {formatSignedPercent(item.value, 1)}
+              </span>
+              {item.marginStatus && <MarginBadge status={item.marginStatus} />}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

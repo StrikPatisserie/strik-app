@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { StrikMenuButton, strikIcons } from "../../StrikUI";
+import { strikIcons } from "../../StrikUI";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList, { IngredientDetail } from "./IngredientsList";
@@ -1926,6 +1926,9 @@ export default function RecepturenApp({
           syncStatus={syncStatus}
           isLoadingData={isLoadingData}
           latestInvoiceNumber={latestInvoice?.invoiceNumber || ""}
+          recipes={recipeItems}
+          ingredients={ingredientItems}
+          invoice={latestInvoice}
           onOpen={openBeheerView}
           onDownloadExcel={downloadExcelBackup}
           onDownloadJson={downloadJsonBackup}
@@ -2756,6 +2759,9 @@ function BeheerHome({
   syncStatus,
   isLoadingData,
   latestInvoiceNumber,
+  recipes,
+  ingredients,
+  invoice,
   onOpen,
   onDownloadExcel,
   onDownloadJson,
@@ -2763,40 +2769,32 @@ function BeheerHome({
   syncStatus: string;
   isLoadingData: boolean;
   latestInvoiceNumber: string;
+  recipes: Recipe[];
+  ingredients: Ingredient[];
+  invoice: InvoiceImport;
   onOpen: (view: TabId) => void;
   onDownloadExcel: () => void;
   onDownloadJson: () => void;
 }>) {
-  const managementRows = [
-    {
-      title: "Halffabricaten",
-      icon: "/UI-apps_productie.svg",
-      onClick: () => onOpen("halffabricaten" as TabId),
-    },
+  const [downloadsOpen, setDownloadsOpen] = useState(false);
+  const dataTiles = [
     {
       title: "Grondstoffen",
+      detail: "prijzen, leveranciers en koppelingen",
       icon: "/UI-apps_data.svg",
       onClick: () => onOpen("ingredienten" as TabId),
     },
     {
       title: "Verpakkingen",
+      detail: "dozen, bodems en verpakkingskosten",
       icon: "/UI-apps_data.svg",
       onClick: () => onOpen("verpakkingen" as TabId),
     },
     {
-      title: "Facturen inladen",
-      icon: "/UI-apps_link.svg",
-      onClick: () => onOpen("factuurimport" as TabId),
-    },
-    {
-      title: "Dashboard",
+      title: "Halffabricaten",
+      detail: "basisrecepten en tussenproducten",
       icon: "/UI-apps_productie.svg",
-      onClick: () => onOpen("dashboard" as TabId),
-    },
-    {
-      title: "Marge-overzicht",
-      icon: "/UI-apps_data.svg",
-      onClick: () => onOpen("marge" as TabId),
+      onClick: () => onOpen("halffabricaten" as TabId),
     },
   ];
 
@@ -2816,33 +2814,179 @@ function BeheerHome({
         </h1>
       </header>
 
-      <div className="grid gap-2">
-        {managementRows.map((row) => (
-          <BeheerRow
-            key={row.title}
-            title={row.title}
-            icon={row.icon}
-            onClick={row.onClick}
+      <div className="grid gap-3">
+        <button
+          type="button"
+          onClick={() => onOpen("marge" as TabId)}
+          className="group grid min-h-[7.5rem] gap-3 rounded-lg border border-[#ef5737]/25 bg-[#fff4f1] p-4 text-left shadow-sm transition active:scale-[0.99] sm:grid-cols-[1fr_auto] sm:items-center"
+        >
+          <span className="min-w-0">
+            <span className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#a83e31]">
+              Meest gebruikt
+            </span>
+            <span className="mt-2 block text-[clamp(1.8rem,5vw,3.1rem)] font-black leading-none text-[#1a1815]">
+              Marge overzicht
+            </span>
+          </span>
+          <span className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-[#ef5737] text-2xl font-black text-white shadow-sm transition group-active:scale-[0.96]">
+            &gt;
+          </span>
+        </button>
+
+        <div className="grid gap-2 md:grid-cols-3">
+          {dataTiles.map((tile) => (
+            <DataTileButton
+              key={tile.title}
+              title={tile.title}
+              detail={tile.detail}
+              icon={tile.icon}
+              onClick={tile.onClick}
+            />
+          ))}
+        </div>
+
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:justify-end">
+          <div className="relative sm:w-[13rem]">
+            <DataIconButton
+              title="Download recepten"
+              icon={<DownloadIcon />}
+              onClick={() => setDownloadsOpen((current) => !current)}
+            />
+            {downloadsOpen && (
+              <div className="z-20 mt-2 grid gap-1 rounded-lg border border-[#dbe9ee] bg-white p-1.5 shadow-lg sm:absolute sm:right-0 sm:top-full sm:w-[13rem]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDownloadsOpen(false);
+                    onDownloadExcel();
+                  }}
+                  className="rounded-md px-3 py-2 text-left text-xs font-black text-[#1a1815] hover:bg-[#f4f9fb]"
+                >
+                  Excel downloaden
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDownloadsOpen(false);
+                    onDownloadJson();
+                  }}
+                  className="rounded-md px-3 py-2 text-left text-xs font-black text-[#1a1815] hover:bg-[#f4f9fb]"
+                >
+                  Herstelbestand
+                </button>
+              </div>
+            )}
+          </div>
+          <DataIconButton
+            title="Facturen inladen"
+            icon={<UploadIcon />}
+            onClick={() => onOpen("factuurimport" as TabId)}
           />
-        ))}
-        <StrikMenuButton
-          title="Download Excel"
-          symbol="XL"
-          tone="blue"
-          onClick={onDownloadExcel}
-        />
-        <StrikMenuButton
-          title="Herstelbestand downloaden"
-          symbol="JSON"
-          tone="blue"
-          onClick={onDownloadJson}
-        />
+        </div>
       </div>
+
+      <RecepturenDashboard
+        compact
+        recipes={recipes}
+        ingredients={ingredients}
+        invoice={invoice}
+      />
+
       <p className="text-xs font-bold leading-relaxed text-[#707070]">
         {isLoadingData ? "Laden..." : syncStatus}
         {latestInvoiceNumber ? ` Laatste factuur: ${latestInvoiceNumber}.` : ""}
       </p>
     </section>
+  );
+}
+
+function DataTileButton({
+  title,
+  detail,
+  icon,
+  onClick,
+}: Readonly<{
+  title: string;
+  detail: string;
+  icon: string;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group grid min-h-[6.2rem] gap-3 rounded-lg border border-[#dbe9ee] bg-white p-3 text-left shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99]"
+    >
+      <span className="flex items-start justify-between gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#b9d7ea]">
+          <img src={icon} alt="" className="h-6 w-6 object-contain" />
+        </span>
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e8f3f8] text-base font-black transition group-active:scale-[0.96]">
+          &gt;
+        </span>
+      </span>
+      <span className="min-w-0">
+        <span className="block text-base font-black leading-tight text-[#1a1815]">
+          {title}
+        </span>
+        <span className="mt-1 block text-xs font-bold leading-snug text-[#2d2a26]/48">
+          {detail}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function DataIconButton({
+  title,
+  icon,
+  onClick,
+}: Readonly<{
+  title: string;
+  icon: ReactNode;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#dbe9ee] bg-white px-3 py-2 text-xs font-black text-[#1a1815] shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99] sm:w-[13rem]"
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#b9d7ea] text-[#1a1815]">
+        {icon}
+      </span>
+      <span className="truncate">{title}</span>
+    </button>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.2"
+      />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        d="M12 20V10m0 0 4 4m-4-4-4 4M5 6h14"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.2"
+      />
+    </svg>
   );
 }
 
@@ -2950,25 +3094,6 @@ function BakeryHomeManager({
         </div>
       </div>
     </div>
-  );
-}
-
-function BeheerRow({
-  title,
-  icon,
-  onClick,
-}: Readonly<{
-  title: string;
-  icon: string;
-  onClick: () => void;
-}>) {
-  return (
-    <StrikMenuButton
-      title={title}
-      icon={icon}
-      tone="blue"
-      onClick={onClick}
-    />
   );
 }
 
