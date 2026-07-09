@@ -13,6 +13,7 @@ import {
   evaluateTemperature,
   getDeviceTypeLabel,
   getMeasuredTemperature,
+  getTemperatureDeviceName,
   getWinkelLabel,
   inferDeviceType,
   isAttentionOrDeviationStatus,
@@ -291,7 +292,9 @@ function buildRows(
 
     if (!isFutureMonth) {
       selectedLocationIds.forEach((locationId) => {
-        temperatureRowsByWinkel[locationId].forEach((deviceName) => {
+        temperatureRowsByWinkel[locationId].forEach((device) => {
+          const deviceName = getTemperatureDeviceName(device);
+
           for (let day = 1; day <= lastDay; day += 1) {
             const date = toDateInput(year, month, day);
             const key = `${date}|${locationId}|${normalizeDeviceName(
@@ -466,13 +469,13 @@ export default function TemperatuurRegistratieOverzichtPage() {
 
     if (locationFilter === "all") {
       winkelOptions.forEach((winkel) => {
-        temperatureRowsByWinkel[winkel.id].forEach((deviceName) =>
-          names.add(deviceName)
+        temperatureRowsByWinkel[winkel.id].forEach((device) =>
+          names.add(getTemperatureDeviceName(device))
         );
       });
     } else {
-      temperatureRowsByWinkel[locationFilter].forEach((deviceName) =>
-        names.add(deviceName)
+      temperatureRowsByWinkel[locationFilter].forEach((device) =>
+        names.add(getTemperatureDeviceName(device))
       );
     }
 

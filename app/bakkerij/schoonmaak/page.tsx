@@ -18,6 +18,12 @@ const bakkerijHaccpLinks = [
     icon: strikIcons.cleaning,
     tone: "green" as const,
   },
+  {
+    href: "/bakkerij/schoonmaak/goederenregistratie",
+    title: "Goederenregistratie",
+    icon: strikIcons.cleaning,
+    tone: "green" as const,
+  },
 ];
 
 export default function BakkerijSchoonmaakPage() {

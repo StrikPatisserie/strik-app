@@ -6,6 +6,10 @@ export const winkelOptions = [
 ] as const;
 
 export type WinkelId = (typeof winkelOptions)[number]["id"];
+export type TemperatureLocationOption = {
+  id: string;
+  label: string;
+};
 
 export type TemperatureDeviceType = "koeling" | "vriezer";
 
@@ -23,6 +27,8 @@ export type TemperatureRegistration = {
   temperatuur?: string;
   temperature?: string;
   deviceType?: TemperatureDeviceType;
+  department?: string;
+  maxTemperature?: number;
   status?: TemperatureStatus;
   actionTaken?: string;
   note?: string;
@@ -50,7 +56,20 @@ export const deviceTypeOptions: {
   { id: "vriezer", label: "Vriezer" },
 ];
 
-export const temperatureRowsByWinkel: Record<WinkelId, string[]> = {
+export type TemperatureDeviceConfig =
+  | string
+  | {
+      name: string;
+      department?: string;
+      deviceType?: TemperatureDeviceType;
+      maxTemperature?: number;
+    };
+
+export function getTemperatureDeviceName(device: TemperatureDeviceConfig) {
+  return typeof device === "string" ? device : device.name;
+}
+
+export const temperatureRowsByWinkel: Record<WinkelId, TemperatureDeviceConfig[]> = {
   heyendaal: [
     "zelfbedienings vriezer winkel",
     "zelfbedieningskoeling winkel",
@@ -88,6 +107,61 @@ export const temperatureRowsByWinkel: Record<WinkelId, string[]> = {
     "vriescel achter",
     "koelcen achter",
     "koelwerkbank achter",
+  ],
+};
+
+function bakeryCooling(name: string, department: string): TemperatureDeviceConfig {
+  return {
+    name,
+    department,
+    deviceType: "koeling",
+    maxTemperature: 4,
+  };
+}
+
+function bakeryFreezer(
+  name: string,
+  department: string,
+  maxTemperature = -18
+): TemperatureDeviceConfig {
+  return {
+    name,
+    department,
+    deviceType: "vriezer",
+    maxTemperature,
+  };
+}
+
+export const bakkerijTemperatureOptions = [
+  { id: "bakkerij", label: "Bakkerij" },
+] as const satisfies readonly TemperatureLocationOption[];
+
+export const bakkerijTemperatureRows: Record<string, TemperatureDeviceConfig[]> = {
+  bakkerij: [
+    bakeryCooling("Koelwerkbank", "Choco/ijs"),
+    bakeryCooling("Ketel 120L", "Choco/ijs"),
+    bakeryCooling("Ketel 60L", "Choco/ijs"),
+    bakeryFreezer("Diepvries links", "Choco/ijs"),
+    bakeryFreezer("Diepvries rechts", "Choco/ijs"),
+    bakeryFreezer("Diepvries oliebollenruimte", "Choco/ijs"),
+    bakeryFreezer("Vriescel centraal", "Magazijn"),
+    bakeryFreezer("Vriescel achter", "Magazijn"),
+    bakeryCooling("Koelcel achter", "Magazijn"),
+    bakeryFreezer("Vriescel overkapping buiten", "Magazijn"),
+    bakeryFreezer("Gebakjes vriezer", "Magazijn"),
+    bakeryCooling("Koelwerkbank achter", "Magazijn"),
+    bakeryCooling("Koelcel garage", "Inpak"),
+    bakeryCooling("Koelcel inpak", "Inpak"),
+    bakeryFreezer("Vriescel inpak", "Inpak"),
+    bakeryCooling("0-kast naast kookpitten", "Bakkerij"),
+    bakeryCooling("0-kast naast vrieskast", "Bakkerij"),
+    bakeryCooling("Koelwerkbank voor", "Bakkerij"),
+    bakeryCooling("Koelkast 2-deurs", "Bakkerij"),
+    bakeryFreezer("Vrieskast creme", "Bakkerij"),
+    bakeryFreezer("Vrieskast links", "Bakkerij"),
+    bakeryFreezer("Vrieskast midden", "Bakkerij"),
+    bakeryFreezer("Vrieskast rechts", "Bakkerij"),
+    bakeryFreezer("Diepvries huur i.v.t.", "Bakkerij"),
   ],
 };
 
@@ -175,7 +249,8 @@ export function getMeasuredTemperature(
 
 export function evaluateTemperature(
   deviceType: TemperatureDeviceType,
-  value?: string
+  value?: string,
+  maxTemperature?: number
 ): {
   status: TemperatureStatus;
   label: string;
@@ -193,6 +268,18 @@ export function evaluateTemperature(
       actionRequired: false,
       actionHint: "",
     };
+  }
+
+  if (Number.isFinite(maxTemperature)) {
+    if (temperature <= Number(maxTemperature)) {
+      return okEvaluation();
+    }
+
+    return deviationEvaluation(
+      `Temperatuur is boven de toegestane max van ${formatTemperatureLimit(
+        Number(maxTemperature)
+      )} °C. Noteer de actie en corrigeer direct.`
+    );
   }
 
   if (deviceType === "vriezer") {
@@ -247,13 +334,20 @@ function attentionEvaluation() {
   };
 }
 
-function deviationEvaluation() {
+function deviationEvaluation(actionHint?: string) {
   return {
     status: "deviation" as const,
     label: "Afwijking - actie verplicht",
     shortLabel: "Rood",
     actionRequired: true,
     actionHint:
+      actionHint ||
       "Producten beoordelen/verplaatsen, leidinggevende of monteur inschakelen en bij twijfel blokkeren of weggooien.",
   };
+}
+
+export function formatTemperatureLimit(value: number) {
+  return Number.isInteger(value)
+    ? String(value)
+    : value.toLocaleString("nl-NL", { maximumFractionDigits: 1 });
 }

@@ -11,13 +11,16 @@ import {
 import {
   deviceTypeOptions,
   evaluateTemperature,
+  formatTemperatureLimit,
   getMeasuredTemperature,
   inferDeviceType,
   isActionRequiredStatus,
   normalizeDeviceName,
   normalizeTemperatureDeviceType,
   temperatureRowsByWinkel,
+  type TemperatureDeviceConfig,
   winkelOptions,
+  type TemperatureLocationOption,
   type TemperatureDeviceType,
   type TemperaturePayload,
   type TemperatureRecord,
@@ -58,16 +61,31 @@ function createTemperatureRowId(prefix: string, index: number) {
   return `${normalizedPrefix || "meetpunt"}-${index + 1}`;
 }
 
+function normalizeDeviceConfig(
+  device: TemperatureDeviceConfig = ""
+): Exclude<TemperatureDeviceConfig, string> {
+  if (typeof device === "string") {
+    return { name: device };
+  }
+
+  return device;
+}
+
 function createTemperatureRow(
-  naam = "",
+  device: TemperatureDeviceConfig = "",
   id = "meetpunt-1"
 ): TemperatureRegistration {
+  const config = normalizeDeviceConfig(device);
+  const naam = config.name;
+
   return {
     id,
     naam,
     displayTemperatuur: "",
     handTemperatuur: "",
-    deviceType: inferDeviceType(naam),
+    deviceType: config.deviceType || inferDeviceType(naam),
+    department: config.department || "",
+    maxTemperature: config.maxTemperature,
     actionTaken: "",
     note: "",
   };
@@ -86,38 +104,48 @@ function setTemperatureSign(value: string, sign: "+" | "-") {
   return sign === "-" ? `-${valueWithoutSign}` : valueWithoutSign;
 }
 
-function createDefaultTemperatureRows(winkelId: WinkelId) {
-  return temperatureRowsByWinkel[winkelId].map((naam, index) =>
-    createTemperatureRow(naam, createTemperatureRowId(winkelId, index))
+function createDefaultTemperatureRows(
+  locationId: string,
+  rowsByLocation: Record<string, TemperatureDeviceConfig[]>
+) {
+  return (rowsByLocation[locationId] || []).map((device, index) =>
+    createTemperatureRow(device, createTemperatureRowId(locationId, index))
   );
 }
 
 function isDefaultTemperatureRow(
-  winkelId: WinkelId,
-  item: TemperatureRegistration
+  locationId: string,
+  item: TemperatureRegistration,
+  rowsByLocation: Record<string, TemperatureDeviceConfig[]>
 ) {
   const itemName = normalizeDeviceName(item.naam);
 
-  return temperatureRowsByWinkel[winkelId].some(
-    (name) => normalizeDeviceName(name) === itemName
+  return (rowsByLocation[locationId] || []).some(
+    (device) =>
+      normalizeDeviceName(normalizeDeviceConfig(device).name) === itemName
   );
 }
 
-function getDraftKey(winkelId: WinkelId, datum: string) {
-  return `strik-temperatuurregistratie-${datum}-${winkelId}`;
+function getDraftKey(locationId: string, datum: string) {
+  return `strik-temperatuurregistratie-${datum}-${locationId}`;
 }
 
-function getSelectedWinkel(winkelId: WinkelId) {
+function getSelectedLocation(
+  locationId: string,
+  locationOptions: readonly TemperatureLocationOption[]
+) {
   return (
-    winkelOptions.find((winkel) => winkel.id === winkelId) || winkelOptions[0]
+    locationOptions.find((location) => location.id === locationId) ||
+    locationOptions[0]
   );
 }
 
 function normalizeRegistrations(
   items: TemperatureRegistration[] | undefined,
-  winkelId: WinkelId
+  locationId: string,
+  rowsByLocation: Record<string, TemperatureDeviceConfig[]>
 ) {
-  const defaultRows = createDefaultTemperatureRows(winkelId);
+  const defaultRows = createDefaultTemperatureRows(locationId, rowsByLocation);
 
   if (!Array.isArray(items) || !items.length) {
     return defaultRows;
@@ -130,6 +158,10 @@ function normalizeRegistrations(
     handTemperatuur:
       item.handTemperatuur || item.temperature || item.temperatuur || "",
     deviceType: normalizeTemperatureDeviceType(item.deviceType, item.naam || ""),
+    department: item.department || "",
+    maxTemperature: Number.isFinite(item.maxTemperature)
+      ? Number(item.maxTemperature)
+      : undefined,
     actionTaken: item.actionTaken || "",
     note: item.note || "",
   }));
@@ -149,6 +181,10 @@ function normalizeRegistrations(
       displayTemperatuur: matchingItem.displayTemperatuur,
       handTemperatuur: matchingItem.handTemperatuur,
       deviceType: matchingItem.deviceType || defaultRow.deviceType,
+      department: matchingItem.department || defaultRow.department,
+      maxTemperature: Number.isFinite(matchingItem.maxTemperature)
+        ? matchingItem.maxTemperature
+        : defaultRow.maxTemperature,
       actionTaken: matchingItem.actionTaken,
       note: matchingItem.note,
     };
@@ -166,7 +202,11 @@ function cleanRegistrations(items: TemperatureRegistration[]) {
         item.naam
       );
       const measuredTemperature = getMeasuredTemperature(item);
-      const evaluation = evaluateTemperature(deviceType, measuredTemperature);
+      const evaluation = evaluateTemperature(
+        deviceType,
+        measuredTemperature,
+        item.maxTemperature
+      );
 
       return {
         id: item.id,
@@ -175,6 +215,8 @@ function cleanRegistrations(items: TemperatureRegistration[]) {
         handTemperatuur: item.handTemperatuur.trim(),
         temperature: measuredTemperature,
         deviceType,
+        department: item.department || "",
+        maxTemperature: item.maxTemperature,
         status: evaluation.status,
         actionTaken: (item.actionTaken || "").trim(),
         note: (item.note || "").trim(),
@@ -204,6 +246,8 @@ function makeSignature(payload: TemperaturePayload) {
       handTemperatuur: item.handTemperatuur,
       temperature: item.temperature,
       deviceType: item.deviceType,
+      department: item.department,
+      maxTemperature: item.maxTemperature,
       status: item.status,
       actionTaken: item.actionTaken,
       note: item.note,
@@ -236,7 +280,7 @@ function normalizeMatchValue(value: string) {
 
 function recordMatchesWinkel(
   item: TemperatureRecord,
-  winkelId: WinkelId,
+  winkelId: string,
   winkelLabel: string
 ) {
   const itemWinkel = normalizeMatchValue(item.winkel || "");
@@ -259,7 +303,7 @@ function getLocationIdFromName(value: string) {
 
 function cleaningItemMatchesWinkel(
   item: CleaningItem,
-  winkelId: WinkelId,
+  winkelId: string,
   datum: string
 ) {
   return (
@@ -310,7 +354,7 @@ function payloadHasRegistrationContent(payload: TemperaturePayload) {
 
 function getMissingRegistrationStatus(
   data: TemperatureRecord[],
-  winkelId: WinkelId,
+  winkelId: string,
   winkelLabel: string,
   datum: string
 ) {
@@ -447,11 +491,11 @@ function TemperatureValueInput({
   );
 }
 
-function readLocalDraft(winkelId: WinkelId, datum: string) {
+function readLocalDraft(locationId: string, datum: string) {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = window.localStorage.getItem(getDraftKey(winkelId, datum));
+    const raw = window.localStorage.getItem(getDraftKey(locationId, datum));
     if (!raw) return null;
 
     const draft = JSON.parse(raw) as TemperatureDraft;
@@ -462,12 +506,12 @@ function readLocalDraft(winkelId: WinkelId, datum: string) {
   }
 }
 
-function saveLocalDraft(winkelId: WinkelId, payload: TemperaturePayload) {
+function saveLocalDraft(locationId: string, payload: TemperaturePayload) {
   if (typeof window === "undefined") return;
 
   try {
     window.localStorage.setItem(
-      getDraftKey(winkelId, payload.datum),
+      getDraftKey(locationId, payload.datum),
       JSON.stringify({
         ...payload,
         verzondenSignatuur: makeSignature(payload),
@@ -481,25 +525,51 @@ function saveLocalDraft(winkelId: WinkelId, payload: TemperaturePayload) {
 
 function payloadToFormState(
   payload: TemperaturePayload,
-  winkelId: WinkelId
+  locationId: string,
+  rowsByLocation: Record<string, TemperatureDeviceConfig[]>
 ): FormState {
   return {
     naam: payload.naam || "",
     opmerking: payload.opmerking || "",
     temperatuurRegistraties: normalizeRegistrations(
       payload.temperatuurRegistraties,
-      winkelId
+      locationId,
+      rowsByLocation
     ),
   };
 }
 
-export default function SchoonmaakRegistratiePage() {
-  const [winkelId, setWinkelId] = useState<WinkelId>("ziekerstraat");
+type TemperatureRegistrationPageProps = {
+  title?: string;
+  kicker?: string;
+  locationOptions?: readonly TemperatureLocationOption[];
+  rowsByLocation?: Record<string, TemperatureDeviceConfig[]>;
+  defaultLocationId?: string;
+  overviewHref?: ((locationId: string) => string | null) | null;
+  loadCleaningFallback?: boolean;
+};
+
+export function TemperatureRegistrationPage({
+  title = "Temperatuur registratie",
+  kicker = "HACCP",
+  locationOptions = winkelOptions,
+  rowsByLocation = temperatureRowsByWinkel,
+  defaultLocationId,
+  overviewHref = (locationId) =>
+    `/winkel/schoonmaak-registratie/overzicht?winkel=${locationId}`,
+  loadCleaningFallback = true,
+}: Readonly<TemperatureRegistrationPageProps> = {}) {
+  const initialLocationId =
+    defaultLocationId || locationOptions[0]?.id || "ziekerstraat";
+  const [winkelId, setWinkelId] = useState(initialLocationId);
   const [datum, setDatum] = useState(getVandaag);
   const [form, setForm] = useState<FormState>({
     naam: "",
     opmerking: "",
-    temperatuurRegistraties: createDefaultTemperatureRows("ziekerstraat"),
+    temperatuurRegistraties: createDefaultTemperatureRows(
+      initialLocationId,
+      rowsByLocation
+    ),
   });
   const [status, setStatus] = useState("");
   const [ladenBezig, setLadenBezig] = useState(false);
@@ -510,7 +580,9 @@ export default function SchoonmaakRegistratiePage() {
   const verzondenSignatuurRef = useRef("");
   const extraRowIdRef = useRef(0);
   const [addFeedback, setAddFeedback] = useState("");
-  const selectedWinkel = getSelectedWinkel(winkelId);
+  const selectedWinkel = getSelectedLocation(winkelId, locationOptions);
+  const currentOverviewHref =
+    typeof overviewHref === "function" ? overviewHref(winkelId) : overviewHref;
   const missingRegistrationCount = form.temperatuurRegistraties.filter(
     (item) => !getMeasuredTemperature(item).trim()
   ).length;
@@ -518,7 +590,8 @@ export default function SchoonmaakRegistratiePage() {
     isActionRequiredStatus(
       evaluateTemperature(
         normalizeTemperatureDeviceType(item.deviceType, item.naam),
-        getMeasuredTemperature(item)
+        getMeasuredTemperature(item),
+        item.maxTemperature
       ).status
     )
   ).length;
@@ -583,7 +656,8 @@ export default function SchoonmaakRegistratiePage() {
         );
         const evaluation = evaluateTemperature(
           deviceType,
-          getMeasuredTemperature(item)
+          getMeasuredTemperature(item),
+          item.maxTemperature
         );
 
         return (
@@ -746,7 +820,7 @@ export default function SchoonmaakRegistratiePage() {
       ) {
         const signature = makeSignature(payload);
 
-        setForm(payloadToFormState(payload, winkelId));
+        setForm(payloadToFormState(payload, winkelId, rowsByLocation));
         verzondenSignatuurRef.current = signature;
         setStatus(nextStatus);
       }
@@ -760,10 +834,10 @@ export default function SchoonmaakRegistratiePage() {
       }
 
       try {
-        const [result, cleaningResult] = await Promise.all([
-          fetchTemperatureRegistrations(),
-          fetchCleaningItems(),
-        ]);
+        const result = await fetchTemperatureRegistrations();
+        const cleaningResult = loadCleaningFallback
+          ? await fetchCleaningItems()
+          : null;
 
         if (negeerResultaat) return;
 
@@ -791,7 +865,7 @@ export default function SchoonmaakRegistratiePage() {
           return;
         }
 
-        if (cleaningResult.ok) {
+        if (cleaningResult?.ok) {
           const cleaningPayload = sortCleaningByLatest(
             cleaningResult.data.filter((item) =>
               cleaningItemMatchesWinkel(item, winkelId, datum)
@@ -818,7 +892,10 @@ export default function SchoonmaakRegistratiePage() {
           setForm({
             naam: "",
             opmerking: "",
-            temperatuurRegistraties: createDefaultTemperatureRows(winkelId),
+            temperatuurRegistraties: createDefaultTemperatureRows(
+              winkelId,
+              rowsByLocation
+            ),
           });
           verzondenSignatuurRef.current = "";
           setStatus(
@@ -843,7 +920,10 @@ export default function SchoonmaakRegistratiePage() {
             setForm({
               naam: "",
               opmerking: "",
-              temperatuurRegistraties: createDefaultTemperatureRows(winkelId),
+              temperatuurRegistraties: createDefaultTemperatureRows(
+                winkelId,
+                rowsByLocation
+              ),
             });
             verzondenSignatuurRef.current = "";
           }
@@ -858,29 +938,31 @@ export default function SchoonmaakRegistratiePage() {
     return () => {
       negeerResultaat = true;
     };
-  }, [datum, selectedWinkel.label, winkelId]);
+  }, [datum, loadCleaningFallback, rowsByLocation, selectedWinkel.label, winkelId]);
 
   return (
     <StrikShell wide>
       <div className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <StrikPageHeader
-            title="Temperatuur registratie"
-            kicker="HACCP"
+            title={title}
+            kicker={kicker}
             icon={strikIcons.cleaning}
           />
-          <Link
-            href={`/winkel/schoonmaak-registratie/overzicht?winkel=${winkelId}`}
-            className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
-          >
-            Maandoverzicht
-          </Link>
+          {currentOverviewHref && (
+            <Link
+              href={currentOverviewHref}
+              className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
+            >
+              Maandoverzicht
+            </Link>
+          )}
         </div>
 
         <section className="max-w-4xl rounded-[0.95rem] border border-[#c3d3bc] bg-[#dfead9] p-2.5 shadow-sm sm:p-3">
           <div className="grid gap-2 lg:grid-cols-[1fr_10.5rem_11rem]">
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-            {winkelOptions.map((winkel) => (
+            {locationOptions.map((winkel) => (
               <button
                 key={winkel.id}
                 type="button"
@@ -962,14 +1044,19 @@ export default function SchoonmaakRegistratiePage() {
 
           <div className="mt-2 grid gap-2">
             {form.temperatuurRegistraties.map((item, index) => {
-              const isDefaultRow = isDefaultTemperatureRow(winkelId, item);
+              const isDefaultRow = isDefaultTemperatureRow(
+                winkelId,
+                item,
+                rowsByLocation
+              );
               const deviceType = normalizeTemperatureDeviceType(
                 item.deviceType,
                 item.naam
               );
               const evaluation = evaluateTemperature(
                 deviceType,
-                getMeasuredTemperature(item)
+                getMeasuredTemperature(item),
+                item.maxTemperature
               );
 
               return (
@@ -981,7 +1068,14 @@ export default function SchoonmaakRegistratiePage() {
                   className="grid grid-cols-[minmax(5.3rem,1fr)_3.55rem_3.9rem_3.9rem_3.7rem] items-end gap-1 rounded-[0.75rem] border border-[#e7e0d8] bg-[#f8f6f3] p-1.5 sm:grid-cols-[minmax(8rem,1fr)_5.25rem_5.2rem_5.2rem_5rem_auto] sm:gap-2 sm:p-2"
                 >
                   <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
-                    Apparaat {index + 1}
+                    <span className="flex min-w-0 items-center justify-between gap-1">
+                      <span>Apparaat {index + 1}</span>
+                      {item.department && (
+                        <span className="truncate rounded-full bg-white px-1.5 py-0.5 text-[0.48rem] text-[#45663b] sm:text-[0.56rem]">
+                          {item.department}
+                        </span>
+                      )}
+                    </span>
                     <input
                       value={item.naam}
                       onChange={(event) =>
@@ -990,6 +1084,11 @@ export default function SchoonmaakRegistratiePage() {
                       placeholder="Bijvoorbeeld koeling"
                       className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1.5 py-1.5 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:px-2 sm:text-sm"
                     />
+                    {Number.isFinite(item.maxTemperature) && (
+                      <span className="text-[0.52rem] font-black normal-case tracking-normal text-[#a0382f] sm:text-[0.6rem]">
+                        max {formatTemperatureLimit(Number(item.maxTemperature))} °C
+                      </span>
+                    )}
                   </label>
                   <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
                     Type
@@ -1117,4 +1216,8 @@ export default function SchoonmaakRegistratiePage() {
       </div>
     </StrikShell>
   );
+}
+
+export default function SchoonmaakRegistratiePage() {
+  return <TemperatureRegistrationPage />;
 }
