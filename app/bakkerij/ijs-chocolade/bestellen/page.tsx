@@ -11,7 +11,12 @@ import {
   saveRecepturenData,
   type RecepturenData,
 } from "../../recepturen/recepturenApi";
-import type { Ingredient, RecipeUnit } from "../../recepturen/types";
+import type {
+  HefeOrderHistoryEntry,
+  HefeOrderHistoryLine,
+  Ingredient,
+  RecipeUnit,
+} from "../../recepturen/types";
 import { formatEuro } from "../../recepturen/utils";
 
 type QuantityMap = Record<string, number>;
@@ -25,6 +30,8 @@ type CustomOrderLine = {
 
 const HEFE_SUPPLIER = "Hefe van Haag";
 const HEFE_ORDER_RECIPIENT = "verkoop@hefe-van-haag.nl";
+const MAX_HEFE_HISTORY_DISPLAY = 8;
+const MAX_HEFE_HISTORY_STORAGE = 26;
 
 function normalizeKey(value: string) {
   return value.trim().toLocaleLowerCase("nl-NL");
@@ -201,6 +208,65 @@ function mergeIngredientIntoData(data: RecepturenData, ingredient: Ingredient) {
   };
 }
 
+function createHefeHistoryLines(
+  selectedItems: HefeOrderItem[],
+  quantities: QuantityMap,
+  customLines: CustomOrderLine[]
+): HefeOrderHistoryLine[] {
+  const itemLines = selectedItems.flatMap((item): HefeOrderHistoryLine[] => {
+    const quantity = selectedQuantity(quantities, item.id);
+    if (quantity <= 0) return [];
+
+    return [{
+      id: `hefe-line-${item.id}-${Date.now()}`,
+      articleNumber: item.articleNumber,
+      name: item.name,
+      packageSize: item.packageSize,
+      quantity,
+      note: item.note || "",
+    }];
+  });
+  const manualLines = customLines.map((line): HefeOrderHistoryLine => ({
+    id: `hefe-line-${line.id}`,
+    articleNumber: line.articleNumber,
+    name: line.name,
+    packageSize: line.packageSize,
+    quantity: line.quantity,
+  }));
+
+  return [...itemLines, ...manualLines];
+}
+
+function createHefeHistoryEntry(
+  selectedItems: HefeOrderItem[],
+  quantities: QuantityMap,
+  customLines: CustomOrderLine[],
+  subject: string
+): HefeOrderHistoryEntry {
+  const orderedAt = new Date().toISOString();
+
+  return {
+    id: `hefe-order-${Date.now()}`,
+    orderedAt,
+    subject,
+    recipient: HEFE_ORDER_RECIPIENT,
+    lines: createHefeHistoryLines(selectedItems, quantities, customLines),
+  };
+}
+
+function hefeHistoryDateLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 export default function HefeBestellenPage() {
   const [quantities, setQuantities] = useState<QuantityMap>({});
   const [search, setSearch] = useState("");
@@ -216,6 +282,8 @@ export default function HefeBestellenPage() {
   const [customLines, setCustomLines] = useState<CustomOrderLine[]>([]);
   const [mailMenuOpen, setMailMenuOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
+  const [orderHistory, setOrderHistory] = useState<HefeOrderHistoryEntry[]>([]);
+  const [historyStatus, setHistoryStatus] = useState("");
 
   const allHefeOrderItems = useMemo(
     () => mergeHefeOrderItems(hefeOrderItems, storedHefeItems),
@@ -261,6 +329,7 @@ export default function HefeBestellenPage() {
           .filter(isHefeIngredient)
           .map(ingredientToHefeOrderItem)
       );
+      setOrderHistory(result.data.hefeOrderHistory || []);
     }
 
     loadStoredHefeItems();
@@ -358,12 +427,54 @@ export default function HefeBestellenPage() {
     return { body, subject };
   }
 
+  async function saveOrderHistoryCopy(subject: string) {
+    const historyEntry = createHefeHistoryEntry(
+      selectedItems,
+      quantities,
+      customLines,
+      subject
+    );
+    if (!historyEntry.lines.length) return;
+
+    setHistoryStatus("Bestelling opslaan...");
+    setOrderHistory((current) =>
+      [historyEntry, ...current]
+        .filter(
+          (entry, index, entries) =>
+            entries.findIndex((candidate) => candidate.id === entry.id) === index
+        )
+        .slice(0, MAX_HEFE_HISTORY_STORAGE)
+    );
+
+    const loadResult = await fetchRecepturenData();
+    if (!loadResult.ok) {
+      setHistoryStatus(`Niet opgeslagen: ${loadResult.message}`);
+      return;
+    }
+
+    const saveResult = await saveRecepturenData({
+      ...loadResult.data,
+      hefeOrderHistory: [
+        historyEntry,
+        ...(loadResult.data.hefeOrderHistory || []),
+      ].slice(0, MAX_HEFE_HISTORY_STORAGE),
+    });
+
+    if (saveResult.ok) {
+      setOrderHistory(saveResult.data.hefeOrderHistory || []);
+      setHistoryStatus("Bestelling opgeslagen in WordPress.");
+    } else {
+      setHistoryStatus(`Niet opgeslagen: ${saveResult.message}`);
+    }
+  }
+
   function openOrderInMailApp(kind: "default" | "gmail" | "outlook") {
     if (!selectedCount) return;
 
     const { body, subject } = createOrderMailContent();
     setMailMenuOpen(false);
     setCopyStatus("");
+    void saveOrderHistoryCopy(subject);
 
     if (kind === "gmail") {
       const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
@@ -396,6 +507,7 @@ export default function HefeBestellenPage() {
     const { body, subject } = createOrderMailContent();
     const text = `${subject}\n\nAan: ${HEFE_ORDER_RECIPIENT}\n\n${body}`;
     setMailMenuOpen(false);
+    void saveOrderHistoryCopy(subject);
 
     try {
       await navigator.clipboard.writeText(text);
@@ -490,8 +602,55 @@ export default function HefeBestellenPage() {
               {copyStatus}
             </p>
           )}
+          {historyStatus && (
+            <p className="mt-1 text-xs font-black text-[#4f744d]">
+              {historyStatus}
+            </p>
+          )}
         </div>
       </section>
+
+      {orderHistory.length > 0 && (
+        <section className="mb-3 border border-[#d7ccb7] bg-white p-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
+              Eerdere bestellingen
+            </p>
+            <span className="text-xs font-black text-[#2d2a26]/45">
+              {orderHistory.length}
+            </span>
+          </div>
+          <div className="grid gap-1.5">
+            {orderHistory.slice(0, MAX_HEFE_HISTORY_DISPLAY).map((entry) => (
+              <details
+                key={entry.id}
+                className="border border-[#e7e0d8] bg-[#faf8f5] px-3 py-2"
+              >
+                <summary className="cursor-pointer text-sm font-black text-[#1a1815]">
+                  {hefeHistoryDateLabel(entry.orderedAt)} · {entry.lines.length} regels
+                </summary>
+                <div className="mt-2 grid gap-1 text-sm font-bold text-[#2d2a26]/72">
+                  {entry.lines.map((line) => (
+                    <div
+                      key={line.id}
+                      className="grid gap-1 border-t border-[#e7e0d8] pt-1.5 sm:grid-cols-[4rem_minmax(0,1fr)_7rem_8rem]"
+                    >
+                      <span className="font-black">{line.quantity} x</span>
+                      <span className="min-w-0 truncate">{line.name}</span>
+                      <span className="text-[#2d2a26]/48">
+                        {line.articleNumber || "-"}
+                      </span>
+                      <span className="text-[#2d2a26]/48">
+                        {line.packageSize || "-"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="overflow-hidden border border-[#cbdcc5] bg-white shadow-sm">
         <div className="grid grid-cols-[4.5rem_1fr_7rem_9rem_8rem] border-b border-[#dbe8d7] bg-[#f3f1ec] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45 max-lg:hidden">

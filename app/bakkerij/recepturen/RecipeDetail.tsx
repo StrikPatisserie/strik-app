@@ -123,6 +123,7 @@ export default function RecipeDetail({
   onClose,
   onSaveRecipe,
   onDeleteRecipe,
+  onDuplicateRecipe,
   onSaveIngredient,
   onMarkProduced,
   onOpenRecipe,
@@ -135,6 +136,7 @@ export default function RecipeDetail({
   onClose: () => void;
   onSaveRecipe: (recipe: Recipe) => void;
   onDeleteRecipe: (recipe: Recipe) => void;
+  onDuplicateRecipe?: (recipe: Recipe) => void;
   onSaveIngredient: (ingredient: Ingredient) => void;
   onSaveIngredients?: (ingredients: Ingredient[], message?: string) => void;
   onMarkProduced: (
@@ -150,6 +152,7 @@ export default function RecipeDetail({
     useState<RecipeEditSection>("basis");
   const [feedback, setFeedback] = useState("");
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isConfirmingDuplicate, setIsConfirmingDuplicate] = useState(false);
   const [isImportingRecipe, setIsImportingRecipe] = useState(false);
   const [recipeImportWarnings, setRecipeImportWarnings] = useState<string[]>([]);
   const [recipeImportCandidates, setRecipeImportCandidates] = useState<
@@ -198,6 +201,7 @@ export default function RecipeDetail({
   const semiFinishedOptions = recipes.filter(
     (item) => item.type === "semiFinished" && item.id !== recipe.id
   );
+  const draftRecipeRows = orderedDraftRows(draft);
   const previewIngredients = normalizeIngredientDrafts(
     draft.ingredients,
     availableIngredients
@@ -398,6 +402,7 @@ export default function RecipeDetail({
   function requestDeleteRecipe() {
     if (!isConfirmingDelete) {
       setIsConfirmingDelete(true);
+      setIsConfirmingDuplicate(false);
       showFeedback("Klik nog een keer op verwijderen om te bevestigen.");
       return;
     }
@@ -405,7 +410,20 @@ export default function RecipeDetail({
     onDeleteRecipe(recipe);
   }
 
-  function addIngredientLine(ingredientId = availableIngredients[0]?.id || "") {
+  function requestDuplicateRecipe() {
+    if (!onDuplicateRecipe) return;
+
+    if (!isConfirmingDuplicate) {
+      setIsConfirmingDuplicate(true);
+      setIsConfirmingDelete(false);
+      showFeedback("Wil je dit recept dupliceren? Klik nog een keer om te bevestigen.");
+      return;
+    }
+
+    onDuplicateRecipe(previewRecipe);
+  }
+
+  function addIngredientLine(ingredientId = "") {
     setDraft((current) => ({
       ...current,
       ingredients: [
@@ -416,6 +434,7 @@ export default function RecipeDetail({
           quantity: "0",
           unit: findIngredient(availableIngredients, ingredientId)?.recipeUnit || "gram",
           costContribution: 0,
+          sortOrder: nextRecipeDraftSortOrder(current),
         },
       ],
     }));
@@ -440,49 +459,7 @@ export default function RecipeDetail({
     }));
   }
 
-  function moveIngredientLine(lineId: string, direction: -1 | 1) {
-    setDraft((current) => {
-      const fromIndex = current.ingredients.findIndex((line) => line.id === lineId);
-      const toIndex = fromIndex + direction;
-
-      if (
-        fromIndex < 0 ||
-        toIndex < 0 ||
-        toIndex >= current.ingredients.length
-      ) {
-        return current;
-      }
-
-      const ingredients = [...current.ingredients];
-      const [movedLine] = ingredients.splice(fromIndex, 1);
-      ingredients.splice(toIndex, 0, movedLine);
-
-      return { ...current, ingredients };
-    });
-  }
-
-  function moveIngredientLineTo(lineId: string, targetLineId: string) {
-    if (!lineId || lineId === targetLineId) return;
-
-    setDraft((current) => {
-      const fromIndex = current.ingredients.findIndex((line) => line.id === lineId);
-      const toIndex = current.ingredients.findIndex(
-        (line) => line.id === targetLineId
-      );
-
-      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
-        return current;
-      }
-
-      const ingredients = [...current.ingredients];
-      const [movedLine] = ingredients.splice(fromIndex, 1);
-      ingredients.splice(toIndex, 0, movedLine);
-
-      return { ...current, ingredients };
-    });
-  }
-
-  function addSemiFinishedLine(recipeId = semiFinishedOptions[0]?.id || "") {
+  function addSemiFinishedLine(recipeId = "") {
     setDraft((current) => ({
       ...current,
       semiFinishedItems: [
@@ -493,6 +470,7 @@ export default function RecipeDetail({
           quantity: "0",
           unit: getBatchInfo(findRecipe(recipes, recipeId))?.unit || "kg",
           costContribution: 0,
+          sortOrder: nextRecipeDraftSortOrder(current),
         },
       ],
     }));
@@ -519,26 +497,41 @@ export default function RecipeDetail({
     }));
   }
 
-  function moveSemiFinishedLine(lineId: string, direction: -1 | 1) {
+  function moveRecipeComponentLine(rowKey: string, direction: -1 | 1) {
     setDraft((current) => {
-      const fromIndex = current.semiFinishedItems.findIndex(
-        (line) => line.id === lineId
-      );
+      const rows = orderedDraftRows(current);
+      const fromIndex = rows.findIndex((row) => row.key === rowKey);
       const toIndex = fromIndex + direction;
 
-      if (
-        fromIndex < 0 ||
-        toIndex < 0 ||
-        toIndex >= current.semiFinishedItems.length
-      ) {
+      if (fromIndex < 0 || toIndex < 0 || toIndex >= rows.length) {
         return current;
       }
 
-      const semiFinishedItems = [...current.semiFinishedItems];
-      const [movedLine] = semiFinishedItems.splice(fromIndex, 1);
-      semiFinishedItems.splice(toIndex, 0, movedLine);
+      const nextRows = [...rows];
+      const [movedRow] = nextRows.splice(fromIndex, 1);
+      nextRows.splice(toIndex, 0, movedRow);
 
-      return { ...current, semiFinishedItems };
+      return renumberRecipeDraftRows(current, nextRows);
+    });
+  }
+
+  function moveRecipeComponentLineTo(rowKey: string, targetRowKey: string) {
+    if (!rowKey || rowKey === targetRowKey) return;
+
+    setDraft((current) => {
+      const rows = orderedDraftRows(current);
+      const fromIndex = rows.findIndex((row) => row.key === rowKey);
+      const toIndex = rows.findIndex((row) => row.key === targetRowKey);
+
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+        return current;
+      }
+
+      const nextRows = [...rows];
+      const [movedRow] = nextRows.splice(fromIndex, 1);
+      nextRows.splice(toIndex, 0, movedRow);
+
+      return renumberRecipeDraftRows(current, nextRows);
     });
   }
 
@@ -593,6 +586,7 @@ export default function RecipeDetail({
           quantity: formatInputNumber(candidate.quantity),
           unit: candidate.unit || ingredient?.recipeUnit || "gram",
           costContribution: 0,
+          sortOrder: nextRecipeDraftSortOrder(current),
         },
       ],
     }));
@@ -613,6 +607,7 @@ export default function RecipeDetail({
           quantity: formatInputNumber(candidate.quantity),
           unit: candidate.unit,
           costContribution: 0,
+          sortOrder: nextRecipeDraftSortOrder(current),
         },
       ],
     }));
@@ -812,6 +807,7 @@ export default function RecipeDetail({
               quantity: "0",
               unit: ingredient.recipeUnit,
               costContribution: 0,
+              sortOrder: nextRecipeDraftSortOrder(current),
             },
           ],
     }));
@@ -862,6 +858,7 @@ export default function RecipeDetail({
               quantity: "0",
               unit: semiFinishedRecipe.standardBatchUnit || "gram",
               costContribution: 0,
+              sortOrder: nextRecipeDraftSortOrder(current),
             },
           ],
     }));
@@ -1418,130 +1415,146 @@ export default function RecipeDetail({
 
               <div className="grid gap-0 border border-[#d7e4d1] bg-white">
                 <div className="grid gap-0 divide-y divide-[#d7e4d1]">
-                  {draft.ingredients.map((line, index) => {
-                    const ingredient = findIngredient(
-                      availableIngredients,
-                      line.ingredientId
-                    );
-                    const normalizedLine = normalizeIngredientDraft(
-                      line,
-                      availableIngredients
-                    );
+                  {draftRecipeRows.map((row, index) => {
+                    if (row.kind === "ingredient") {
+                      const line = row.line;
+                      const ingredient = findIngredient(
+                        availableIngredients,
+                        line.ingredientId
+                      );
+                      const normalizedLine = normalizeIngredientDraft(
+                        line,
+                        availableIngredients
+                      );
+
+                      return (
+                        <div
+                          key={row.key}
+                          draggable
+                          onDragStart={() => setDraggedIngredientLineId(row.key)}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={() => {
+                            moveRecipeComponentLineTo(
+                              draggedIngredientLineId,
+                              row.key
+                            );
+                            setDraggedIngredientLineId("");
+                          }}
+                          onDragEnd={() => setDraggedIngredientLineId("")}
+                          className={`grid cursor-move gap-1.5 bg-white px-2 py-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end ${
+                            draggedIngredientLineId === row.key ? "opacity-55" : ""
+                          }`}
+                        >
+                          <span className="self-center text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#45663b]">
+                            grondstof
+                          </span>
+                          <IngredientSearchField
+                            key={`${line.id}-${line.ingredientId}`}
+                            ingredients={availableIngredients}
+                            value={line.ingredientId}
+                            onCreateFromQuery={(name) =>
+                              requestQuickCreate("ingredient", name, line.id)
+                            }
+                            onChange={(value) => {
+                              const selectedIngredient = findIngredient(
+                                availableIngredients,
+                                value
+                              );
+                              updateIngredientLine(line.id, {
+                                ingredientId: value,
+                                unit: selectedIngredient?.recipeUnit || line.unit,
+                              });
+                            }}
+                          />
+                          <EditTextField
+                            label="Aantal"
+                            value={line.quantity}
+                            onChange={(value) =>
+                              updateIngredientLine(line.id, { quantity: value })
+                            }
+                            inputMode="decimal"
+                          />
+                          <SelectField
+                            label="Eenheid"
+                            value={line.unit}
+                            onChange={(value) =>
+                              updateIngredientLine(line.id, {
+                                unit: value as RecipeUnit,
+                              })
+                            }
+                            options={recipeUnits.map((unit) => ({
+                              value: unit,
+                              label: unitLabelText(unit),
+                            }))}
+                          />
+                          <Metric
+                            label="Kost"
+                            value={formatEuro(normalizedLine.costContribution)}
+                          />
+                          <div className="flex items-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => moveRecipeComponentLine(row.key, -1)}
+                              disabled={index === 0}
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#45663b] shadow-sm disabled:opacity-30"
+                              aria-label="Regel omhoog"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveRecipeComponentLine(row.key, 1)}
+                              disabled={index === draftRecipeRows.length - 1}
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#45663b] shadow-sm disabled:opacity-30"
+                              aria-label="Regel omlaag"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeIngredientLine(line.id)}
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#a83e31] shadow-sm"
+                              aria-label="Grondstof verwijderen"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          {ingredient?.lastInvoice ===
+                            "Gemiddelde prijs - later controleren" && (
+                            <p className="text-[0.7rem] font-black text-[#a83e31] md:col-span-6">
+                              ! gemiddelde prijs gebruikt, later echte inkoopprijs
+                              controleren
+                            </p>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    const line = row.line;
+                    const normalizedLine = normalizeSemiFinishedDraft(line, recipes);
+                    const linkedRecipe = findRecipe(recipes, line.semiFinishedRecipeId);
+                    const batchInfo = getBatchInfo(linkedRecipe);
 
                     return (
                       <div
-                        key={line.id}
+                        key={row.key}
                         draggable
-                        onDragStart={() => setDraggedIngredientLineId(line.id)}
+                        onDragStart={() => setDraggedIngredientLineId(row.key)}
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={() => {
-                          moveIngredientLineTo(draggedIngredientLineId, line.id);
+                          moveRecipeComponentLineTo(draggedIngredientLineId, row.key);
                           setDraggedIngredientLineId("");
                         }}
                         onDragEnd={() => setDraggedIngredientLineId("")}
-                        className={`grid cursor-move gap-1.5 bg-white px-2 py-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end ${
-                          draggedIngredientLineId === line.id ? "opacity-55" : ""
+                        className={`grid cursor-move gap-1.5 bg-[#fffdf4] px-2 py-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end ${
+                          draggedIngredientLineId === row.key ? "opacity-55" : ""
                         }`}
-                      >
-                        <span className="self-center text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#45663b]">
-                          grondstof
-                        </span>
-                        <IngredientSearchField
-                          ingredients={availableIngredients}
-                          value={line.ingredientId}
-                          onCreateFromQuery={(name) =>
-                            requestQuickCreate("ingredient", name, line.id)
-                          }
-                          onChange={(value) => {
-                            const selectedIngredient = findIngredient(
-                              availableIngredients,
-                              value
-                            );
-                            updateIngredientLine(line.id, {
-                              ingredientId: value,
-                              unit: selectedIngredient?.recipeUnit || line.unit,
-                            });
-                          }}
-                        />
-                        <EditTextField
-                          label="Aantal"
-                          value={line.quantity}
-                          onChange={(value) =>
-                            updateIngredientLine(line.id, { quantity: value })
-                          }
-                          inputMode="decimal"
-                        />
-                        <SelectField
-                          label="Eenheid"
-                          value={line.unit}
-                          onChange={(value) =>
-                            updateIngredientLine(line.id, {
-                              unit: value as RecipeUnit,
-                            })
-                          }
-                          options={recipeUnits.map((unit) => ({
-                            value: unit,
-                            label: unitLabelText(unit),
-                          }))}
-                        />
-                        <Metric
-                          label="Kost"
-                          value={formatEuro(normalizedLine.costContribution)}
-                        />
-                        <div className="flex items-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => moveIngredientLine(line.id, -1)}
-                            disabled={index === 0}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#45663b] shadow-sm disabled:opacity-30"
-                            aria-label="Grondstof omhoog"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => moveIngredientLine(line.id, 1)}
-                            disabled={index === draft.ingredients.length - 1}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#45663b] shadow-sm disabled:opacity-30"
-                            aria-label="Grondstof omlaag"
-                          >
-                            ↓
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeIngredientLine(line.id)}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#a83e31] shadow-sm"
-                            aria-label="Grondstof verwijderen"
-                          >
-                            ×
-                          </button>
-                        </div>
-                        {ingredient?.lastInvoice ===
-                          "Gemiddelde prijs - later controleren" && (
-                          <p className="text-[0.7rem] font-black text-[#a83e31] md:col-span-6">
-                            ! gemiddelde prijs gebruikt, later echte inkoopprijs
-                            controleren
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {draft.semiFinishedItems.map((line, index) => {
-                    const normalizedLine = normalizeSemiFinishedDraft(
-                      line,
-                      recipes
-                    );
-
-                    return (
-                      <div
-                        key={line.id}
-                        className="grid gap-1.5 bg-[#fffdf4] px-2 py-1.5 md:grid-cols-[4.2rem_minmax(12rem,1fr)_5.5rem_5.8rem_5rem_auto] md:items-end"
                       >
                         <span className="self-center text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#7a5a18]">
                           halffab
                         </span>
                         <SemiFinishedSearchField
+                          key={`${line.id}-${line.semiFinishedRecipeId}`}
                           recipes={semiFinishedOptions}
                           value={line.semiFinishedRecipeId}
                           onCreateFromQuery={(name) =>
@@ -1584,19 +1597,35 @@ export default function RecipeDetail({
                         <div className="flex items-end gap-1">
                           <button
                             type="button"
-                            onClick={() => moveSemiFinishedLine(line.id, -1)}
+                            onClick={() =>
+                              batchInfo &&
+                              updateSemiFinishedLine(line.id, {
+                                quantity: formatInputNumber(batchInfo.quantity),
+                                unit: batchInfo.unit,
+                              })
+                            }
+                            disabled={!batchInfo}
+                            className="flex h-8 min-w-8 items-center justify-center rounded-full bg-white px-2 text-[0.62rem] font-black text-[#7a5a18] shadow-sm disabled:opacity-30"
+                            aria-label="Gebruik 1x receptgewicht"
+                            title="Gebruik 1x receptgewicht"
+                          >
+                            1x
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveRecipeComponentLine(row.key, -1)}
                             disabled={index === 0}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#7a5a18] shadow-sm disabled:opacity-30"
-                            aria-label="Halffabricaat omhoog"
+                            aria-label="Regel omhoog"
                           >
                             ↑
                           </button>
                           <button
                             type="button"
-                            onClick={() => moveSemiFinishedLine(line.id, 1)}
-                            disabled={index === draft.semiFinishedItems.length - 1}
+                            onClick={() => moveRecipeComponentLine(row.key, 1)}
+                            disabled={index === draftRecipeRows.length - 1}
                             className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-black text-[#7a5a18] shadow-sm disabled:opacity-30"
-                            aria-label="Halffabricaat omlaag"
+                            aria-label="Regel omlaag"
                           >
                             ↓
                           </button>
@@ -1612,6 +1641,12 @@ export default function RecipeDetail({
                       </div>
                     );
                   })}
+
+                  {!draftRecipeRows.length && (
+                    <p className="px-3 py-4 text-sm font-bold text-[#707070]">
+                      Nog geen receptregels.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 border-t border-[#d7e4d1] bg-[#fbfcf9] px-2 py-2">
@@ -2190,6 +2225,21 @@ export default function RecipeDetail({
                 {feedback || ""}
               </div>
               <div className="flex items-center gap-2">
+                {isConfirmingDuplicate && (
+                  <>
+                    <span className="text-xs font-black text-[#45663b]">
+                      Recept dupliceren?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmingDuplicate(false)}
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-[#d8d0c4] bg-white text-[#2d2a26]/55 shadow-sm"
+                      aria-label="Dupliceren annuleren"
+                    >
+                      <XIcon />
+                    </button>
+                  </>
+                )}
                 {isConfirmingDelete && (
                   <>
                     <span className="text-xs font-black text-[#a83e31]">
@@ -2218,12 +2268,33 @@ export default function RecipeDetail({
                   onClick={() => {
                     setDraft(createRecipeDraft(recipe));
                     setIsEditing(false);
+                    setIsConfirmingDelete(false);
+                    setIsConfirmingDuplicate(false);
                   }}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-[#d8d0c4] bg-white text-[#2d2a26]/60 shadow-sm"
                   aria-label="Annuleren"
                 >
                   <XIcon />
                 </button>
+                {onDuplicateRecipe && (
+                  <button
+                    type="button"
+                    onClick={requestDuplicateRecipe}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full shadow-sm ${
+                      isConfirmingDuplicate
+                        ? "bg-[#c3d3bc] text-[#111111]"
+                        : "bg-[#f7fbf4] text-[#45663b]"
+                    }`}
+                    aria-label={
+                      isConfirmingDuplicate
+                        ? "Dupliceren bevestigen"
+                        : "Recept dupliceren"
+                    }
+                    title="Recept dupliceren"
+                  >
+                    <CopyIcon />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={requestDeleteRecipe}
@@ -2639,6 +2710,7 @@ type RecipeIngredientDraft = {
   quantity: string;
   unit: RecipeUnit;
   costContribution: number;
+  sortOrder: number;
 };
 
 type SemiFinishedDraft = {
@@ -2647,6 +2719,7 @@ type SemiFinishedDraft = {
   quantity: string;
   unit: RecipeUnit;
   costContribution: number;
+  sortOrder: number;
 };
 
 type RecipePackagingDraft = {
@@ -2696,6 +2769,99 @@ type RecipeDraft = {
   notes: string;
 };
 
+type RecipeComponentDraftRow =
+  | {
+      kind: "ingredient";
+      key: string;
+      line: RecipeIngredientDraft;
+    }
+  | {
+      kind: "semiFinished";
+      key: string;
+      line: SemiFinishedDraft;
+    };
+type RecipeComponentDraftRowWithFallback = RecipeComponentDraftRow & {
+  fallbackOrder: number;
+};
+
+function recipeLineSortOrder(value: number | undefined, fallback: number) {
+  return Number.isFinite(value) ? Number(value) : fallback;
+}
+
+function recipeDraftRowKey(
+  kind: RecipeComponentDraftRow["kind"],
+  id: string
+) {
+  return `${kind}:${id}`;
+}
+
+function orderedDraftRows(draft: RecipeDraft): RecipeComponentDraftRow[] {
+  const rows: RecipeComponentDraftRowWithFallback[] = [
+    ...draft.ingredients.map((line, index) => ({
+      kind: "ingredient" as const,
+      key: recipeDraftRowKey("ingredient", line.id),
+      line,
+      fallbackOrder: index,
+    })),
+    ...draft.semiFinishedItems.map((line, index) => ({
+      kind: "semiFinished" as const,
+      key: recipeDraftRowKey("semiFinished", line.id),
+      line,
+      fallbackOrder: draft.ingredients.length + index,
+    })),
+  ];
+
+  return rows
+    .sort((a, b) => {
+      const orderDifference =
+        recipeLineSortOrder(a.line.sortOrder, a.fallbackOrder) -
+        recipeLineSortOrder(b.line.sortOrder, b.fallbackOrder);
+
+      return orderDifference || a.fallbackOrder - b.fallbackOrder;
+    })
+    .map((row) =>
+      row.kind === "ingredient"
+        ? { kind: row.kind, key: row.key, line: row.line }
+        : { kind: row.kind, key: row.key, line: row.line }
+    );
+}
+
+function nextRecipeDraftSortOrder(draft: RecipeDraft) {
+  const rows = orderedDraftRows(draft);
+  const highestSortOrder = rows.reduce(
+    (highest, row, index) =>
+      Math.max(highest, recipeLineSortOrder(row.line.sortOrder, index)),
+    -1
+  );
+
+  return highestSortOrder + 1;
+}
+
+function renumberRecipeDraftRows(
+  draft: RecipeDraft,
+  rows: RecipeComponentDraftRow[]
+): RecipeDraft {
+  const sortOrderByKey = new Map(
+    rows.map((row, index) => [row.key, index])
+  );
+
+  return {
+    ...draft,
+    ingredients: draft.ingredients.map((line) => ({
+      ...line,
+      sortOrder:
+        sortOrderByKey.get(recipeDraftRowKey("ingredient", line.id)) ??
+        line.sortOrder,
+    })),
+    semiFinishedItems: draft.semiFinishedItems.map((line) => ({
+      ...line,
+      sortOrder:
+        sortOrderByKey.get(recipeDraftRowKey("semiFinished", line.id)) ??
+        line.sortOrder,
+    })),
+  };
+}
+
 function createRecipeDraft(recipe: Recipe): RecipeDraft {
   const preparationSteps = cleanRecipeSteps(recipe.preparationSteps);
 
@@ -2735,19 +2901,24 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
     photoPreviewDataUrl: recipe.photoPreviewDataUrl || "",
     photoFileName: recipe.photoFileName || "",
     photoUpdatedAt: recipe.photoUpdatedAt || "",
-    ingredients: recipe.ingredients.map((item) => ({
+    ingredients: recipe.ingredients.map((item, index) => ({
       id: createLocalId("ingredient-line"),
       ingredientId: item.ingredientId,
       quantity: formatInputNumber(item.quantity),
       unit: item.unit,
       costContribution: item.costContribution,
+      sortOrder: recipeLineSortOrder(item.sortOrder, index),
     })),
-    semiFinishedItems: recipe.semiFinishedItems.map((item) => ({
+    semiFinishedItems: recipe.semiFinishedItems.map((item, index) => ({
       id: createLocalId("semi-line"),
       semiFinishedRecipeId: item.semiFinishedRecipeId,
       quantity: formatInputNumber(item.quantity),
       unit: item.unit,
       costContribution: item.costContribution,
+      sortOrder: recipeLineSortOrder(
+        item.sortOrder,
+        recipe.ingredients.length + index
+      ),
     })),
     packagingItems: (recipe.packagingItems || []).map((item) => ({
       id: item.id || createLocalId("packaging-line"),
@@ -2805,21 +2976,26 @@ function recipeDraftFromImportedRecipe(
       ? formatInputNumber(importedRecipe.desiredProductionBatchQuantity)
       : current.desiredProductionBatchQuantity,
     ingredients: importedRecipe.ingredients.length
-      ? importedRecipe.ingredients.map((item) => ({
+      ? importedRecipe.ingredients.map((item, index) => ({
           id: createLocalId("ingredient-line"),
           ingredientId: item.ingredientId,
           quantity: formatInputNumber(item.quantity),
           unit: item.unit,
           costContribution: item.costContribution,
+          sortOrder: recipeLineSortOrder(item.sortOrder, index),
         }))
       : current.ingredients,
     semiFinishedItems: importedRecipe.semiFinishedItems.length
-      ? importedRecipe.semiFinishedItems.map((item) => ({
+      ? importedRecipe.semiFinishedItems.map((item, index) => ({
           id: createLocalId("semi-line"),
           semiFinishedRecipeId: item.semiFinishedRecipeId,
           quantity: formatInputNumber(item.quantity),
           unit: item.unit,
           costContribution: item.costContribution,
+          sortOrder: recipeLineSortOrder(
+            item.sortOrder,
+            importedRecipe.ingredients.length + index
+          ),
         }))
       : current.semiFinishedItems,
     packagingItems: importedRecipe.packagingItems?.length
@@ -2990,6 +3166,7 @@ function normalizeIngredientDraft(
     costContribution: ingredient
       ? ingredientCostForQuantity(ingredient, quantity, line.unit)
       : 0,
+    sortOrder: line.sortOrder,
   };
 }
 
@@ -3016,6 +3193,7 @@ function normalizeSemiFinishedDraft(
     costContribution: linkedRecipe
       ? semiFinishedCostForQuantity(linkedRecipe, quantity, line.unit)
       : 0,
+    sortOrder: line.sortOrder,
   };
 }
 
@@ -3354,6 +3532,7 @@ function createBlankSemiFinishedRecipe(
     name,
     type: "semiFinished",
     productGroup: "Halffabricaat",
+    createdAt: todayIsoDate(),
     standardBatchQuantity: batchUnit === "stuk" ? 1 : undefined,
     standardBatchUnit: batchUnit,
     salesPrice: 0,
@@ -4533,32 +4712,46 @@ function recipeCardIngredientRows(
   recipes: Recipe[],
   multiplier: number
 ): RecipeCardIngredientRow[] {
-  const directRows = recipe.ingredients.map((item) => {
+  const directRows = recipe.ingredients.map((item, index) => {
     const ingredient = findIngredient(ingredients, item.ingredientId);
 
     return {
-      id: `ingredient-${item.ingredientId}`,
+      id: `ingredient-${index}-${item.ingredientId}`,
       name: ingredient?.name || item.ingredientId,
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: false,
       linkedRecipe: undefined,
+      sortOrder: recipeLineSortOrder(item.sortOrder, index),
     };
   });
-  const semiRows = recipe.semiFinishedItems.map((item) => {
+  const semiRows = recipe.semiFinishedItems.map((item, index) => {
     const linkedRecipe = findRecipe(recipes, item.semiFinishedRecipeId);
 
     return {
-      id: `semi-${item.semiFinishedRecipeId}`,
+      id: `semi-${index}-${item.semiFinishedRecipeId}`,
       name: linkedRecipe?.name || item.semiFinishedRecipeId,
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: true,
       linkedRecipe: linkedRecipe || undefined,
+      sortOrder: recipeLineSortOrder(
+        item.sortOrder,
+        recipe.ingredients.length + index
+      ),
     };
   });
 
-  return [...directRows, ...semiRows];
+  return [...directRows, ...semiRows]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      quantity: row.quantity,
+      unit: row.unit,
+      isSemiFinished: row.isSemiFinished,
+      linkedRecipe: row.linkedRecipe,
+    }));
 }
 
 function recipeCalculationPrintRows(
@@ -4567,34 +4760,49 @@ function recipeCalculationPrintRows(
   recipes: Recipe[],
   multiplier: number
 ): RecipeCalculationPrintRow[] {
-  const directRows = recipe.ingredients.map((item) => {
+  const directRows = recipe.ingredients.map((item, index) => {
     const ingredient = findIngredient(ingredients, item.ingredientId);
 
     return {
-      id: `ingredient-${item.ingredientId}`,
+      id: `ingredient-${index}-${item.ingredientId}`,
       name: ingredient?.name || item.ingredientId,
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: false,
       linkedRecipe: undefined,
       costContribution: roundMoney(item.costContribution * multiplier),
+      sortOrder: recipeLineSortOrder(item.sortOrder, index),
     };
   });
-  const semiRows = recipe.semiFinishedItems.map((item) => {
+  const semiRows = recipe.semiFinishedItems.map((item, index) => {
     const linkedRecipe = findRecipe(recipes, item.semiFinishedRecipeId);
 
     return {
-      id: `semi-${item.semiFinishedRecipeId}`,
+      id: `semi-${index}-${item.semiFinishedRecipeId}`,
       name: linkedRecipe?.name || item.semiFinishedRecipeId,
       quantity: Math.round(item.quantity * multiplier * 10000) / 10000,
       unit: item.unit,
       isSemiFinished: true,
       linkedRecipe: linkedRecipe || undefined,
       costContribution: roundMoney(item.costContribution * multiplier),
+      sortOrder: recipeLineSortOrder(
+        item.sortOrder,
+        recipe.ingredients.length + index
+      ),
     };
   });
 
-  return [...directRows, ...semiRows];
+  return [...directRows, ...semiRows]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      quantity: row.quantity,
+      unit: row.unit,
+      isSemiFinished: row.isSemiFinished,
+      linkedRecipe: row.linkedRecipe,
+      costContribution: row.costContribution,
+    }));
 }
 
 function shortUnitLabel(unit: RecipeUnit) {
@@ -4947,6 +5155,7 @@ function SemiFinishedSearchField({
   const selectedRecipe = findRecipe(recipes, value);
   const [query, setQuery] = useState(selectedRecipe?.name || value || "");
   const [isOpen, setIsOpen] = useState(false);
+
   const normalizedQuery = normalizeIngredientQuery(query);
   const suggestions = recipes
     .map((recipe) => ({
@@ -5245,6 +5454,24 @@ function TrashIcon() {
       <path d="M19 6l-1 14H6L5 6" />
       <path d="M10 11v5" />
       <path d="M14 11v5" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.2"
+      viewBox="0 0 24 24"
+    >
+      <path d="M8 8h10v12H8z" />
+      <path d="M5 16H4V4h12v1" />
     </svg>
   );
 }

@@ -1,5 +1,7 @@
 import type {
   BakeryHomeData,
+  HefeOrderHistoryEntry,
+  HefeOrderHistoryLine,
   Ingredient,
   InvoiceImport,
   InvoiceLine,
@@ -13,6 +15,7 @@ export type RecepturenData = {
   recipes: Recipe[];
   packagingItems?: PackagingItem[];
   invoiceImports: InvoiceImport[];
+  hefeOrderHistory?: HefeOrderHistoryEntry[];
   bakeryHome?: BakeryHomeData;
   manualProductionPlanningItems?: ManualProductionPlanningItem[];
   updatedAt?: string;
@@ -34,6 +37,8 @@ const MAX_IGNORED_INVOICE_IMPORTS = 4;
 const MAX_OTHER_INVOICE_IMPORTS = 4;
 const MAX_STORED_LINES_PER_INVOICE = 600;
 const MAX_MANUAL_PLANNING_ITEMS = 500;
+const MAX_HEFE_ORDER_HISTORY = 26;
+const MAX_HEFE_ORDER_LINES = 160;
 
 export const emptyBakeryHomeData: BakeryHomeData = {
   notes: [],
@@ -83,6 +88,7 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
     invoiceImports: pruneInvoiceImports(
       Array.isArray(record.invoiceImports) ? record.invoiceImports : []
     ),
+    hefeOrderHistory: normalizeHefeOrderHistory(record.hefeOrderHistory),
     bakeryHome: {
       notes: Array.isArray(bakeryHome.notes) ? bakeryHome.notes : [],
       offers: Array.isArray(bakeryHome.offers) ? bakeryHome.offers : [],
@@ -92,6 +98,57 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
     ),
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
   };
+}
+
+function normalizeHefeOrderHistoryLine(
+  value: unknown,
+  index: number
+): HefeOrderHistoryLine | null {
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Partial<HefeOrderHistoryLine>;
+  const name = cleanStoredText(record.name, 180).trim();
+  const quantity = Number(record.quantity);
+
+  if (!name || !Number.isFinite(quantity) || quantity <= 0) return null;
+
+  return {
+    id: cleanStoredText(record.id, 80) || `hefe-line-${index + 1}`,
+    articleNumber: cleanStoredText(record.articleNumber, 80).trim(),
+    name,
+    packageSize: cleanStoredText(record.packageSize, 120).trim(),
+    quantity: Math.max(0, quantity),
+    note: cleanStoredText(record.note, 180).trim(),
+  };
+}
+
+function normalizeHefeOrderHistory(value: unknown): HefeOrderHistoryEntry[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .slice(0, MAX_HEFE_ORDER_HISTORY)
+    .flatMap((entry, index): HefeOrderHistoryEntry[] => {
+      if (!entry || typeof entry !== "object") return [];
+
+      const record = entry as Partial<HefeOrderHistoryEntry>;
+      const orderedAt = cleanStoredText(record.orderedAt, 120).trim();
+      const lines = Array.isArray(record.lines)
+        ? record.lines
+            .slice(0, MAX_HEFE_ORDER_LINES)
+            .map(normalizeHefeOrderHistoryLine)
+            .filter((line): line is HefeOrderHistoryLine => Boolean(line))
+        : [];
+
+      if (!orderedAt || !lines.length) return [];
+
+      return [{
+        id: cleanStoredText(record.id, 80) || `hefe-order-${index + 1}`,
+        orderedAt,
+        subject: cleanStoredText(record.subject, 180).trim(),
+        recipient: cleanStoredText(record.recipient, 180).trim(),
+        lines,
+      }];
+    });
 }
 
 function cleanStoredText(value: unknown, maxLength = 600) {
@@ -225,6 +282,7 @@ function prepareRecepturenDataForStorage(data: RecepturenData) {
   return {
     ...data,
     invoiceImports: pruneInvoiceImports(data.invoiceImports),
+    hefeOrderHistory: normalizeHefeOrderHistory(data.hefeOrderHistory),
     bakeryHome: data.bakeryHome ?? emptyBakeryHomeData,
     manualProductionPlanningItems: normalizeManualProductionPlanningItems(
       data.manualProductionPlanningItems

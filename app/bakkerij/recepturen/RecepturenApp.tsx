@@ -51,6 +51,7 @@ import type {
   BakeryHomeData,
   BakeryHomeNote,
   BakeryHomeOffer,
+  HefeOrderHistoryEntry,
   Ingredient,
   InvoiceImport,
   InvoiceLine,
@@ -562,6 +563,7 @@ export default function RecepturenApp({
   const [importKind, setImportKind] = useState<ImportKind>("recipes");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [recipeEditorStartsOpen, setRecipeEditorStartsOpen] = useState(false);
+  const [, setRecipeNavigationStack] = useState<string[]>([]);
   const [recipeItems, setRecipeItems] = useState(recipes);
   const [ingredientItems, setIngredientItems] = useState(() =>
     mergeHefeSeedIngredients(ingredients)
@@ -570,6 +572,9 @@ export default function RecepturenApp({
     useState<Ingredient | null>(null);
   const [packagingItems, setPackagingItems] = useState(defaultPackagingItems);
   const [invoiceItems, setInvoiceItems] = useState(invoiceImports);
+  const [hefeOrderHistory, setHefeOrderHistory] = useState<
+    HefeOrderHistoryEntry[]
+  >([]);
   const [manualPlanningItems, setManualPlanningItems] = useState<
     ManualProductionPlanningItem[]
   >([]);
@@ -593,6 +598,7 @@ export default function RecepturenApp({
     const completeData: RecepturenData = {
       ...nextData,
       packagingItems: nextData.packagingItems ?? packagingItems,
+      hefeOrderHistory: nextData.hefeOrderHistory ?? hefeOrderHistory,
       bakeryHome: nextData.bakeryHome ?? bakeryHome,
       manualProductionPlanningItems:
         nextData.manualProductionPlanningItems ?? manualPlanningItems,
@@ -621,6 +627,7 @@ export default function RecepturenApp({
       recipes: recipeItems,
       packagingItems,
       invoiceImports: invoiceItems,
+      hefeOrderHistory,
       bakeryHome: normalizedHome,
       manualProductionPlanningItems: manualPlanningItems,
     }).then((result) => {
@@ -643,6 +650,7 @@ export default function RecepturenApp({
         recipes: recipeItems,
         packagingItems,
         invoiceImports: invoiceItems,
+        hefeOrderHistory,
         bakeryHome: normalizedHome,
         manualProductionPlanningItems: manualPlanningItems,
       }).then((result) => {
@@ -729,10 +737,12 @@ export default function RecepturenApp({
             normalizeInvoiceReviewStatuses(invoice, loadedIngredients)
           )
         );
+        setHefeOrderHistory(result.data.hefeOrderHistory || []);
         setBakeryHome(normalizeBakeryHomeData(result.data.bakeryHome));
         setManualPlanningItems(result.data.manualProductionPlanningItems || []);
         setSyncStatus("Recepturen uit WordPress geladen.");
       } else if (result.ok) {
+        setHefeOrderHistory(result.data.hefeOrderHistory || []);
         setBakeryHome(normalizeBakeryHomeData(result.data.bakeryHome));
         setManualPlanningItems(result.data.manualProductionPlanningItems || []);
         setSyncStatus(
@@ -803,6 +813,7 @@ export default function RecepturenApp({
     setRecipeItems(recalculatedRecipes);
     setSelectedRecipe(null);
     setRecipeEditorStartsOpen(false);
+    setRecipeNavigationStack([]);
     persistRecepturenData(
       {
         ingredients: ingredientItems,
@@ -1096,9 +1107,33 @@ export default function RecepturenApp({
     );
   }
 
-  function openRecipe(recipe: Recipe) {
+  function openRecipe(
+    recipe: Recipe,
+    options: { fromRecipeId?: string } = {}
+  ) {
     setRecipeEditorStartsOpen(false);
+    setRecipeNavigationStack((current) =>
+      options.fromRecipeId ? [...current, options.fromRecipeId] : []
+    );
     setSelectedRecipe(recipe);
+  }
+
+  function closeSelectedRecipe() {
+    setRecipeEditorStartsOpen(false);
+    setRecipeNavigationStack((current) => {
+      const previousRecipeId = current[current.length - 1];
+
+      if (!previousRecipeId) {
+        setSelectedRecipe(null);
+        return [];
+      }
+
+      setSelectedRecipe(
+        recipeItems.find((recipe) => recipe.id === previousRecipeId) || null
+      );
+
+      return current.slice(0, -1);
+    });
   }
 
   function createRecipe(type: RecipeType) {
@@ -1111,7 +1146,65 @@ export default function RecepturenApp({
     }
 
     setRecipeEditorStartsOpen(true);
+    setRecipeNavigationStack([]);
     setSelectedRecipe(blankRecipe);
+  }
+
+  function duplicateRecipe(recipeToDuplicate: Recipe) {
+    const now = new Date().toISOString().slice(0, 10);
+    const idPrefix =
+      recipeToDuplicate.type === "semiFinished" ? "hf-new" : "recipe-new";
+    const duplicate: Recipe = {
+      ...recipeToDuplicate,
+      id: uniqueNewRecipeId(idPrefix, recipeItems),
+      name: `${recipeToDuplicate.name} kopie`,
+      createdAt: now,
+      lastUpdated: now,
+      previousCostPrice: recipeToDuplicate.costPrice,
+      ingredients: recipeToDuplicate.ingredients.map((line, index) => ({
+        ...line,
+        sortOrder: Number.isFinite(line.sortOrder)
+          ? line.sortOrder
+          : index,
+      })),
+      semiFinishedItems: recipeToDuplicate.semiFinishedItems.map(
+        (line, index) => ({
+          ...line,
+          sortOrder: Number.isFinite(line.sortOrder)
+            ? line.sortOrder
+            : recipeToDuplicate.ingredients.length + index,
+        })
+      ),
+      packagingItems: (recipeToDuplicate.packagingItems || []).map((line) => ({
+        ...line,
+      })),
+      linkedFinalProductIds: [],
+      lastProducedAt: "",
+      lastProducedQuantity: 0,
+      productionLog: [],
+      productionRequests: [],
+    };
+    const nextRecipes = recalculateAllRecipeCosts(
+      [duplicate, ...recipeItems],
+      ingredientItems,
+      { markAsUpdated: true },
+      packagingItems
+    );
+    const nextDuplicate =
+      nextRecipes.find((recipe) => recipe.id === duplicate.id) || duplicate;
+
+    setRecipeItems(nextRecipes);
+    setSelectedRecipe(nextDuplicate);
+    setRecipeEditorStartsOpen(true);
+    setRecipeNavigationStack([]);
+    persistRecepturenData(
+      {
+        ingredients: ingredientItems,
+        recipes: nextRecipes,
+        invoiceImports: invoiceItems,
+      },
+      "Recept gedupliceerd en opgeslagen."
+    );
   }
 
   function saveIngredient(updatedIngredient: Ingredient) {
@@ -2109,13 +2202,16 @@ export default function RecepturenApp({
             recipes={recipeItems}
             packagingItems={packagingItems}
             startInEditMode={recipeEditorStartsOpen}
-            onClose={() => setSelectedRecipe(null)}
+            onClose={closeSelectedRecipe}
             onSaveRecipe={saveRecipe}
             onDeleteRecipe={deleteRecipe}
+            onDuplicateRecipe={duplicateRecipe}
             onSaveIngredient={saveIngredient}
             onSaveIngredients={saveIngredients}
             onMarkProduced={markRecipeProduced}
-            onOpenRecipe={openRecipe}
+            onOpenRecipe={(recipe) =>
+              openRecipe(recipe, { fromRecipeId: selectedRecipe.id })
+            }
           />
         )}
         {invoiceIngredientEditor && (
@@ -3104,6 +3200,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     name: type === "semiFinished" ? "Nieuw halffabricaat" : "Nieuw recept",
     type,
     productGroup: type === "semiFinished" ? "Vullingen" : "Gebak",
+    createdAt: now,
     standardBatchQuantity: type === "semiFinished" ? 1 : 40,
     standardBatchUnit: type === "semiFinished" ? "kg" : "stuk",
     salesPrice: type === "semiFinished" ? 0 : 0,
@@ -3146,6 +3243,19 @@ function createBlankRecipe(type: RecipeType): Recipe {
     productionLog: [],
     productionRequests: [],
   };
+}
+
+function uniqueNewRecipeId(prefix: string, currentRecipes: Recipe[]) {
+  const baseId = `${prefix}-${Date.now()}`;
+  let id = baseId;
+  let counter = 1;
+
+  while (currentRecipes.some((recipe) => recipe.id === id)) {
+    counter += 1;
+    id = `${baseId}-${counter}`;
+  }
+
+  return id;
 }
 
 function localDateFromInput(value: string) {

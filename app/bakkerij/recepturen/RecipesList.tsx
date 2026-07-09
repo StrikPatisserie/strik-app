@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { productGroups } from "./mockData";
 import type { Recipe } from "./types";
 import { EmptyState } from "./RecepturenShared";
@@ -53,15 +53,13 @@ export default function RecipesList({
     return allGroupOptions;
   }, [allGroupOptions, scope]);
 
-  useEffect(() => {
+  const activeGroup = useMemo(() => {
     const allowedGroups = new Set([
       "all",
       ...groupOptions.map((item) => normalizeSearch(item)),
     ]);
 
-    if (!allowedGroups.has(normalizeSearch(group))) {
-      setGroup("all");
-    }
+    return allowedGroups.has(normalizeSearch(group)) ? group : "all";
   }, [group, groupOptions]);
 
   const filteredRecipes = useMemo(() => {
@@ -70,7 +68,7 @@ export default function RecipesList({
     return recipes
       .filter((recipe) => {
         const matchesSearch = !query || normalizeSearch(recipe.name).includes(query);
-        const matchesGroup = recipeMatchesGroupFilter(recipe, group);
+        const matchesGroup = recipeMatchesGroupFilter(recipe, activeGroup);
         const matchesStatus = status === "all" || recipe.status === status;
         const matchesType = type === "all" || recipe.type === type;
 
@@ -80,6 +78,13 @@ export default function RecipesList({
         if (sortBy === "updated") {
           return (
             latestProductionValue(b) - latestProductionValue(a) ||
+            a.name.localeCompare(b.name, "nl")
+          );
+        }
+
+        if (sortBy === "created") {
+          return (
+            recipeCreatedValue(b) - recipeCreatedValue(a) ||
             a.name.localeCompare(b.name, "nl")
           );
         }
@@ -100,7 +105,7 @@ export default function RecipesList({
 
         return a.name.localeCompare(b.name, "nl");
       });
-  }, [group, recipes, search, sortBy, status, type]);
+  }, [activeGroup, recipes, search, sortBy, status, type]);
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
@@ -130,28 +135,28 @@ export default function RecipesList({
         </div>
       </div>
 
-      {filtersOpen && (
-        <div className="grid gap-2 border border-[#c3d3bc] bg-white p-2 shadow-sm md:ml-auto md:w-[min(100%,48rem)] md:grid-cols-[1.2fr_1fr_1fr_auto] md:items-end">
-          <label className="grid gap-1">
-            <span className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c]">
-              Zoek
-            </span>
-            <span className="grid h-9 grid-cols-[2.2rem_minmax(0,1fr)] border border-[#c3d3bc]">
-              <span className="flex items-center justify-center bg-[#c3d3bc] text-base">
-                <SearchIcon />
-              </span>
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="zoek"
-                className="min-w-0 px-2 text-sm font-light outline-none placeholder:text-[#9a9a9a]"
-              />
-            </span>
-          </label>
+      <label className="grid gap-1 border border-[#c3d3bc] bg-white p-2 shadow-sm">
+        <span className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c]">
+          Zoek recept
+        </span>
+        <span className="grid h-9 grid-cols-[2.2rem_minmax(0,1fr)] border border-[#c3d3bc]">
+          <span className="flex items-center justify-center bg-[#c3d3bc] text-base">
+            <SearchIcon />
+          </span>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="typ om snel te zoeken"
+            className="min-w-0 px-2 text-sm font-light outline-none placeholder:text-[#9a9a9a]"
+          />
+        </span>
+      </label>
 
+      {filtersOpen && (
+        <div className="grid gap-2 border border-[#c3d3bc] bg-white p-2 shadow-sm md:ml-auto md:w-[min(100%,38rem)] md:grid-cols-[1fr_1fr_auto] md:items-end">
           <CompactSelect
             label="Categorie"
-            value={group}
+            value={activeGroup}
             onChange={setGroup}
             options={[
               { value: "all", label: "Alle categorieen" },
@@ -165,6 +170,7 @@ export default function RecipesList({
             options={[
               { value: "name", label: "Naam" },
               { value: "updated", label: "Laatste productie" },
+              { value: "created", label: "Datum toegevoegd" },
               { value: "group", label: "Categorie" },
               { value: "type", label: "Soort" },
             ]}
@@ -188,7 +194,7 @@ export default function RecipesList({
             />
           </div>
 
-          <div className="flex items-center justify-between gap-2 md:col-span-4">
+          <div className="flex items-center justify-between gap-2 md:col-span-3">
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -338,6 +344,19 @@ function latestProductionValue(recipe: Recipe) {
   const entry = latestProductionEntry(recipe);
 
   return entry ? dateValue(entry.date) : 0;
+}
+
+function recipeCreatedValue(recipe: Recipe) {
+  if (recipe.createdAt) return dateValue(recipe.createdAt);
+
+  const timestampMatch = recipe.id.match(/(?:recipe-new|hf-new)-(\d{10,})/);
+  if (timestampMatch) {
+    const timestamp = Number(timestampMatch[1]);
+
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  return dateValue(recipe.lastUpdated);
 }
 
 function latestProductionLabel(recipe: Recipe) {

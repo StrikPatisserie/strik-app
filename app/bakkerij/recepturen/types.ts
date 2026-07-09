@@ -65,6 +65,7 @@ export type RecipeIngredient = {
   unit: RecipeUnit;
   wastePercentage?: number;
   costContribution: number;
+  sortOrder?: number;
 };
 
 export type SemiFinishedUsage = {
@@ -72,6 +73,7 @@ export type SemiFinishedUsage = {
   quantity: number;
   unit: RecipeUnit;
   costContribution: number;
+  sortOrder?: number;
 };
 
 export type RecipeImportCandidateKind = "ingredient" | "semiFinished";
@@ -141,6 +143,7 @@ export type Recipe = {
   name: string;
   type: RecipeType;
   productGroup: string;
+  createdAt?: string;
   standardBatchQuantity?: number;
   standardBatchUnit?: RecipeUnit;
   salesPrice: number;
@@ -210,6 +213,23 @@ export type InvoiceImport = {
   uploadedAt: string;
   status: InvoiceImportStatus;
   lines: InvoiceLine[];
+};
+
+export type HefeOrderHistoryLine = {
+  id: string;
+  articleNumber: string;
+  name: string;
+  packageSize: string;
+  quantity: number;
+  note?: string;
+};
+
+export type HefeOrderHistoryEntry = {
+  id: string;
+  orderedAt: string;
+  subject: string;
+  recipient: string;
+  lines: HefeOrderHistoryLine[];
 };
 
 export type StockEntry = {
