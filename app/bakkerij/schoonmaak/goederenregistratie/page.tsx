@@ -6,9 +6,10 @@ import {
   fetchTemperatureRegistrations,
   saveTemperatureRegistration,
 } from "../../../winkel/schoonmaak-registratie/temperatureRegistrationApi";
-import type {
-  TemperatureRecord,
-  TemperatureRegistration,
+import {
+  parseTemperatureValue,
+  type TemperatureRecord,
+  type TemperatureRegistration,
 } from "../../../winkel/schoonmaak-registratie/temperatureRegistrationShared";
 
 type GoodsTemperatureType = "koel" | "vries" | "nvt";
@@ -21,6 +22,7 @@ type GoodsRegistrationEntry = {
   supplierName: string;
   productName: string;
   temperatureType: GoodsTemperatureType;
+  actualTemperature: string;
   thtOk: YesNo;
   packagingOk: YesNo;
   labelOk: YesNo;
@@ -70,6 +72,13 @@ function parseStoredGoodsEntry(
         data.temperatureType === "nvt"
           ? data.temperatureType
           : "nvt",
+      actualTemperature:
+        typeof data.actualTemperature === "string"
+          ? data.actualTemperature
+          : registration.handTemperatuur ||
+            registration.temperature ||
+            registration.temperatuur ||
+            "",
       thtOk: data.thtOk === "nee" ? "nee" : "ja",
       packagingOk: data.packagingOk === "nee" ? "nee" : "ja",
       labelOk: data.labelOk === "nee" ? "nee" : "ja",
@@ -82,7 +91,9 @@ function parseStoredGoodsEntry(
 function goodsEntryToRegistration(
   entry: GoodsRegistrationEntry
 ): TemperatureRegistration {
+  const temperatureHasDeviation = isTemperatureDeviation(entry);
   const hasDeviation =
+    temperatureHasDeviation ||
     entry.thtOk === "nee" ||
     entry.packagingOk === "nee" ||
     entry.labelOk === "nee";
@@ -91,9 +102,9 @@ function goodsEntryToRegistration(
     id: entry.id,
     naam: `${entry.supplierName} - ${entry.productName}`,
     displayTemperatuur: "",
-    handTemperatuur: "",
-    temperature: "",
-    temperatuur: "",
+    handTemperatuur: entry.actualTemperature,
+    temperature: entry.actualTemperature,
+    temperatuur: entry.actualTemperature,
     deviceType: entry.temperatureType === "vries" ? "vriezer" : "koeling",
     status: hasDeviation ? "deviation" : "ok",
     actionTaken: "",
@@ -127,6 +138,34 @@ function temperatureLabel(value: GoodsTemperatureType) {
   return "N.v.t.";
 }
 
+function actualTemperatureLabel(entry: GoodsRegistrationEntry) {
+  if (entry.temperatureType === "nvt") return "N.v.t.";
+
+  return entry.actualTemperature
+    ? `${temperatureLabel(entry.temperatureType)} ${entry.actualTemperature} graden`
+    : temperatureLabel(entry.temperatureType);
+}
+
+function isTemperatureDeviation(entry: GoodsRegistrationEntry) {
+  if (entry.temperatureType === "nvt") return false;
+
+  const temperature = parseTemperatureValue(entry.actualTemperature);
+
+  if (temperature === undefined) return false;
+
+  return entry.temperatureType === "koel" ? temperature > 4 : temperature > -18;
+}
+
+function temperatureStatusClass(entry: GoodsRegistrationEntry) {
+  if (entry.temperatureType === "nvt" || !entry.actualTemperature.trim()) {
+    return "border-[#e7e0d8] bg-[#f8f6f3] text-[#2d2a26]/55";
+  }
+
+  return isTemperatureDeviation(entry)
+    ? "border-[#efb4aa] bg-[#fff0ed] text-[#a0382f]"
+    : "border-[#c6dec0] bg-[#edf7ea] text-[#3f6b36]";
+}
+
 function yesNoLabel(value: YesNo) {
   return value === "ja" ? "Ja" : "Nee";
 }
@@ -143,6 +182,7 @@ export default function GoederenregistratiePage() {
   const [productName, setProductName] = useState("");
   const [temperatureType, setTemperatureType] =
     useState<GoodsTemperatureType>("nvt");
+  const [actualTemperature, setActualTemperature] = useState("");
   const [thtOk, setThtOk] = useState<YesNo>("ja");
   const [packagingOk, setPackagingOk] = useState<YesNo>("ja");
   const [labelOk, setLabelOk] = useState<YesNo>("ja");
@@ -191,6 +231,14 @@ export default function GoederenregistratiePage() {
       return;
     }
 
+    if (
+      temperatureType !== "nvt" &&
+      parseTemperatureValue(actualTemperature) === undefined
+    ) {
+      setStatus("Vul de daadwerkelijke temperatuur in.");
+      return;
+    }
+
     setIsSaving(true);
     setStatus("Opslaan...");
 
@@ -205,6 +253,7 @@ export default function GoederenregistratiePage() {
       supplierName: cleanSupplier,
       productName: cleanProduct,
       temperatureType,
+      actualTemperature: temperatureType === "nvt" ? "" : actualTemperature.trim(),
       thtOk,
       packagingOk,
       labelOk,
@@ -232,6 +281,7 @@ export default function GoederenregistratiePage() {
     setSupplierName("");
     setProductName("");
     setTemperatureType("nvt");
+    setActualTemperature("");
     setThtOk("ja");
     setPackagingOk("ja");
     setLabelOk("ja");
@@ -249,7 +299,7 @@ export default function GoederenregistratiePage() {
         />
 
         <section className="border border-[#c3d3bc] bg-[#f6faf4] p-3 shadow-sm">
-          <div className="grid gap-2 md:grid-cols-[9rem_1fr_1fr_9rem]">
+          <div className="grid gap-2 md:grid-cols-[9rem_1fr_1fr_9rem_8rem]">
             <label className="grid gap-1 text-xs font-black uppercase tracking-[0.1em] text-[#30462f]/55">
               Dag
               <input
@@ -275,9 +325,16 @@ export default function GoederenregistratiePage() {
               Temperatuur
               <select
                 value={temperatureType}
-                onChange={(event) =>
-                  setTemperatureType(event.target.value as GoodsTemperatureType)
-                }
+                onChange={(event) => {
+                  const nextTemperatureType = event.target
+                    .value as GoodsTemperatureType;
+
+                  setTemperatureType(nextTemperatureType);
+
+                  if (nextTemperatureType === "nvt") {
+                    setActualTemperature("");
+                  }
+                }}
                 className="min-h-10 border border-[#c3d3bc] bg-white px-2 text-sm font-bold normal-case tracking-normal outline-none"
               >
                 <option value="koel">Koel</option>
@@ -285,6 +342,18 @@ export default function GoederenregistratiePage() {
                 <option value="nvt">N.v.t.</option>
               </select>
             </label>
+            {temperatureType !== "nvt" && (
+              <label className="grid gap-1 text-xs font-black uppercase tracking-[0.1em] text-[#30462f]/55">
+                Waarde
+                <input
+                  inputMode="decimal"
+                  value={actualTemperature}
+                  onChange={(event) => setActualTemperature(event.target.value)}
+                  placeholder="graden"
+                  className="min-h-10 border border-[#c3d3bc] bg-white px-2 text-sm font-bold normal-case tracking-normal outline-none"
+                />
+              </label>
+            )}
           </div>
 
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
@@ -358,7 +427,7 @@ export default function GoederenregistratiePage() {
               entries.map((entry) => (
                 <div
                   key={entry.id}
-                  className="grid gap-1 border border-[#e7e0d8] bg-[#faf8f5] px-3 py-2 text-sm md:grid-cols-[6rem_1fr_1fr_5rem_4rem_4rem_4rem]"
+                  className="grid gap-1 border border-[#e7e0d8] bg-[#faf8f5] px-3 py-2 text-sm md:grid-cols-[6rem_1fr_1fr_8rem_4rem_4rem_4rem]"
                 >
                   <span className="font-black text-[#2d2a26]/55">
                     {entry.date}
@@ -369,7 +438,13 @@ export default function GoederenregistratiePage() {
                   <span className="min-w-0 truncate font-bold">
                     {entry.productName}
                   </span>
-                  <span>{temperatureLabel(entry.temperatureType)}</span>
+                  <span
+                    className={`border px-2 py-1 text-xs font-black ${temperatureStatusClass(
+                      entry
+                    )}`}
+                  >
+                    {actualTemperatureLabel(entry)}
+                  </span>
                   <span
                     className={`border px-2 py-1 text-xs font-black ${yesNoStatusClass(
                       entry.thtOk
