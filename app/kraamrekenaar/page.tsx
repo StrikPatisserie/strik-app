@@ -634,19 +634,19 @@ export default function KraamrekenaarPage() {
       <div className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col gap-1.5 px-1.5 py-1.5 tracking-normal sm:gap-2 sm:px-3 sm:py-2">
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 border border-[#d8d0c5] bg-white p-1.5 shadow-sm">
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-extrabold uppercase tracking-normal text-[#24551d] sm:text-lg">
+            <h1 className="truncate text-[0.74rem] font-extrabold uppercase tracking-normal text-[#24551d] sm:text-lg">
               4Daagse rekentool
             </h1>
-            <p className="text-[0.58rem] font-normal uppercase tracking-normal text-[#d86a12] sm:text-xs">
+            <p className="text-[0.5rem] font-normal uppercase tracking-normal text-[#d86a12] sm:text-xs">
               {entries.length} stuks
             </p>
           </div>
 
-          <div className="grid min-w-[8.1rem] grid-cols-[auto_1fr] items-center gap-1 border border-[#ef7d0a] bg-[#fffaf1] px-2 py-1 text-[#24551d] sm:min-w-52 sm:px-3 sm:py-2">
-            <span className="text-[0.52rem] font-normal uppercase tracking-normal text-[#24551d]/65 sm:text-xs">
+          <div className="grid min-w-[7.2rem] grid-cols-[auto_1fr] items-center gap-1 border border-[#ef7d0a] bg-[#fffaf1] px-1.5 py-1 text-[#24551d] sm:min-w-52 sm:px-3 sm:py-2">
+            <span className="text-[0.48rem] font-normal uppercase tracking-normal text-[#24551d]/65 sm:text-xs">
               Totaal
             </span>
-            <strong className="text-right font-mono text-2xl font-black tracking-normal sm:text-4xl">
+            <strong className="text-right font-mono text-xl font-black tracking-normal sm:text-4xl">
               {formatCompactEuro(totalCents)}
             </strong>
           </div>
@@ -759,7 +759,7 @@ export default function KraamrekenaarPage() {
               type="button"
               onClick={undoLast}
               disabled={!entries.length}
-              className="min-h-9 border border-[#d8d0c5] bg-[#f7f4ed] px-1 text-[0.64rem] font-normal text-[#24551d] disabled:opacity-45 sm:min-h-11 sm:text-sm"
+              className="min-h-9 border border-[#c8382d] bg-[#c8382d] px-1 text-[0.64rem] font-extrabold text-white disabled:opacity-45 sm:min-h-11 sm:text-sm"
             >
               Ongedaan
             </button>
@@ -775,7 +775,7 @@ export default function KraamrekenaarPage() {
               type="button"
               onClick={clearOrder}
               disabled={!entries.length}
-              className="min-h-9 bg-[#24551d] px-1 text-sm font-black text-white disabled:opacity-45 sm:min-h-11 sm:text-base"
+              className="min-h-9 border border-[#20bf4b] bg-[#20bf4b] px-1 text-sm font-black text-white disabled:opacity-45 sm:min-h-11 sm:text-base"
             >
               Klaar
             </button>
