@@ -314,14 +314,14 @@ function productGroupClass(
   selected: boolean,
   editMode: boolean
 ) {
-  if (editMode) return "border-[#ff9b1a] bg-[#fff7ef]";
-  if (selected) return "border-white bg-[#ffffff] text-[#9f3b18]";
+  if (editMode) return "border-[#ef7d0a] bg-[#fff7ef] text-[#24551d]";
+  if (selected) return "border-[#24551d] bg-white text-[#24551d]";
 
-  if (group === "drinken") return "border-[#ff9b1a] bg-[#9f3b18]";
-  if (group === "hartig") return "border-[#ff9b1a] bg-[#853112]";
-  if (group === "koek") return "border-[#ff9b1a] bg-[#a8441e]";
+  if (group === "drinken") return "border-[#d86a12] bg-[#d86a12] text-white";
+  if (group === "hartig") return "border-[#24551d] bg-[#24551d] text-white";
+  if (group === "koek") return "border-[#3b6d2d] bg-[#3b6d2d] text-white";
 
-  return "border-[#ff9b1a] bg-[#973715]";
+  return "border-[#ef7d0a] bg-[#ef7d0a] text-white";
 }
 
 export default function KraamrekenaarPage() {
@@ -630,20 +630,20 @@ export default function KraamrekenaarPage() {
   }, [entries.length, lastActivityAt]);
 
   return (
-    <main className="min-h-dvh bg-[#9f3b18] text-white">
+    <main className="min-h-dvh bg-[#f7f4ed] text-[#1a1815]">
       <div className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col gap-1.5 px-1.5 py-1.5 tracking-normal sm:gap-2 sm:px-3 sm:py-2">
-        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 border border-[#ff9b1a] bg-[#8b3215] p-1.5 shadow-sm">
+        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 border border-[#d8d0c5] bg-white p-1.5 shadow-sm">
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-extrabold uppercase tracking-normal text-white sm:text-lg">
+            <h1 className="truncate text-sm font-extrabold uppercase tracking-normal text-[#24551d] sm:text-lg">
               4Daagse rekentool
             </h1>
-            <p className="text-[0.58rem] font-normal uppercase tracking-normal text-[#ffbe64] sm:text-xs">
+            <p className="text-[0.58rem] font-normal uppercase tracking-normal text-[#d86a12] sm:text-xs">
               {entries.length} stuks
             </p>
           </div>
 
-          <div className="grid min-w-[8.1rem] grid-cols-[auto_1fr] items-center gap-1 border border-white bg-white px-2 py-1 text-[#9f3b18] sm:min-w-52 sm:px-3 sm:py-2">
-            <span className="text-[0.52rem] font-normal uppercase tracking-normal text-[#9f3b18]/65 sm:text-xs">
+          <div className="grid min-w-[8.1rem] grid-cols-[auto_1fr] items-center gap-1 border border-[#ef7d0a] bg-[#fffaf1] px-2 py-1 text-[#24551d] sm:min-w-52 sm:px-3 sm:py-2">
+            <span className="text-[0.52rem] font-normal uppercase tracking-normal text-[#24551d]/65 sm:text-xs">
               Totaal
             </span>
             <strong className="text-right font-mono text-2xl font-black tracking-normal sm:text-4xl">
@@ -652,13 +652,13 @@ export default function KraamrekenaarPage() {
           </div>
         </header>
 
-        <section className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-1.5 py-1 shadow-sm">
+        <section className="min-h-8 border border-[#d8d0c5] bg-white px-1.5 py-1 shadow-sm">
           {orderLines.length ? (
             <div className="grid max-h-28 gap-1 overflow-y-auto sm:max-h-36 sm:grid-cols-2 lg:grid-cols-3">
               {orderLines.map(({ product, count }) => (
                 <div
                   key={product.id}
-                  className="grid min-h-7 grid-cols-[1.6rem_minmax(0,1fr)_1.35rem_1.35rem] items-center gap-1 border border-[#ff9b1a]/65 bg-[#9f3b18] px-1 text-[0.64rem] text-white sm:text-xs"
+                  className="grid min-h-7 grid-cols-[1.6rem_minmax(0,1fr)_1.35rem_1.35rem] items-center gap-1 border border-[#e4d7c7] bg-[#fffaf1] px-1 text-[0.64rem] text-[#24551d] sm:text-xs"
                 >
                   <span className="font-extrabold">{count}x</span>
                   <span className="min-w-0 truncate font-normal">
@@ -667,7 +667,7 @@ export default function KraamrekenaarPage() {
                   <button
                     type="button"
                     onClick={() => removeOne(product.id)}
-                    className="flex h-6 items-center justify-center bg-white text-sm font-black text-[#9f3b18]"
+                    className="flex h-6 items-center justify-center bg-[#24551d] text-sm font-black text-white"
                     aria-label={`${productLabel(product)} eentje minder`}
                   >
                     -
@@ -675,7 +675,7 @@ export default function KraamrekenaarPage() {
                   <button
                     type="button"
                     onClick={() => addProduct(product.id)}
-                    className="flex h-6 items-center justify-center bg-[#ff9b1a] text-sm font-black text-[#4a1c0c]"
+                    className="flex h-6 items-center justify-center bg-[#ef7d0a] text-sm font-black text-white"
                     aria-label={`${productLabel(product)} eentje meer`}
                   >
                     +
@@ -684,7 +684,7 @@ export default function KraamrekenaarPage() {
               ))}
             </div>
           ) : (
-            <p className="px-1 text-[0.68rem] font-normal text-white/70 sm:text-xs">
+            <p className="px-1 text-[0.68rem] font-normal text-[#6f6558] sm:text-xs">
               Bon leeg
             </p>
           )}
@@ -730,7 +730,7 @@ export default function KraamrekenaarPage() {
                     {isEditMode ? "sleep" : product.code}
                   </span>
                   {count > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center bg-white px-1 text-xs font-black text-[#9f3b18] sm:h-6 sm:min-w-6">
+                    <span className="flex h-5 min-w-5 items-center justify-center bg-white px-1 text-xs font-black text-[#24551d] sm:h-6 sm:min-w-6">
                       {count}
                     </span>
                   )}
@@ -753,13 +753,13 @@ export default function KraamrekenaarPage() {
           })}
         </section>
 
-        <section className="grid gap-1 border border-[#ff9b1a] bg-[#8b3215] p-1.5 shadow-sm">
+        <section className="grid gap-1 border border-[#d8d0c5] bg-white p-1.5 shadow-sm">
           <div className="grid grid-cols-[1fr_1fr_1.2fr_2rem] gap-1">
             <button
               type="button"
               onClick={undoLast}
               disabled={!entries.length}
-              className="min-h-9 border border-[#ff9b1a] bg-[#9f3b18] px-1 text-[0.64rem] font-normal text-white disabled:opacity-45 sm:min-h-11 sm:text-sm"
+              className="min-h-9 border border-[#d8d0c5] bg-[#f7f4ed] px-1 text-[0.64rem] font-normal text-[#24551d] disabled:opacity-45 sm:min-h-11 sm:text-sm"
             >
               Ongedaan
             </button>
@@ -767,7 +767,7 @@ export default function KraamrekenaarPage() {
               type="button"
               onClick={holdOrder}
               disabled={!canHoldOrder}
-              className="min-h-9 border border-[#ff9b1a] bg-[#ff9b1a] px-1 text-[0.64rem] font-extrabold text-[#4a1c0c] disabled:opacity-45 sm:min-h-11 sm:text-sm"
+              className="min-h-9 border border-[#ef7d0a] bg-[#ef7d0a] px-1 text-[0.64rem] font-extrabold text-white disabled:opacity-45 sm:min-h-11 sm:text-sm"
             >
               In wacht
             </button>
@@ -775,7 +775,7 @@ export default function KraamrekenaarPage() {
               type="button"
               onClick={clearOrder}
               disabled={!entries.length}
-              className="min-h-9 bg-white px-1 text-sm font-black text-[#9f3b18] disabled:opacity-45 sm:min-h-11 sm:text-base"
+              className="min-h-9 bg-[#24551d] px-1 text-sm font-black text-white disabled:opacity-45 sm:min-h-11 sm:text-base"
             >
               Klaar
             </button>
@@ -784,8 +784,8 @@ export default function KraamrekenaarPage() {
               onClick={isEditMode ? closeEditMode : openEditMode}
               className={`min-h-9 border px-1 text-base font-black sm:min-h-11 ${
                 isEditMode
-                  ? "border-white bg-white text-[#9f3b18]"
-                  : "border-[#ff9b1a] bg-[#9f3b18] text-white"
+                  ? "border-[#24551d] bg-[#24551d] text-white"
+                  : "border-[#ef7d0a] bg-[#fffaf1] text-[#d86a12]"
               }`}
               aria-label="Producten bewerken"
             >
@@ -805,8 +805,8 @@ export default function KraamrekenaarPage() {
                   onClick={() => activateHoldSlot(slot.id)}
                   className={`min-h-8 border px-1 text-[0.66rem] font-black sm:min-h-10 sm:text-sm ${
                     occupied
-                      ? "border-white bg-[#ff9b1a] text-[#4a1c0c]"
-                      : "border-[#ff9b1a]/65 bg-[#9f3b18] text-white/75"
+                      ? "border-[#24551d] bg-[#24551d] text-white"
+                      : "border-[#d8d0c5] bg-[#f7f4ed] text-[#6f6558]"
                   }`}
                 >
                   W{slot.id} {occupied ? formatCompactEuro(slotTotal) : "vrij"}
@@ -824,14 +824,14 @@ export default function KraamrekenaarPage() {
                 disabled={!totalCents}
                 className={`min-h-8 border px-1 text-[0.68rem] font-black disabled:opacity-45 sm:min-h-10 sm:text-sm ${
                   cashGivenCents === amount * 100
-                    ? "border-white bg-white text-[#9f3b18]"
-                    : "border-[#ff9b1a]/65 bg-[#9f3b18] text-white"
+                    ? "border-[#24551d] bg-[#24551d] text-white"
+                    : "border-[#d8d0c5] bg-[#f7f4ed] text-[#24551d]"
                 }`}
               >
                 €{amount}
               </button>
             ))}
-            <div className="grid min-h-8 content-center bg-[#ff9b1a] px-1 text-center text-[#4a1c0c] sm:min-h-10">
+            <div className="grid min-h-8 content-center bg-[#ef7d0a] px-1 text-center text-white sm:min-h-10">
               <span className="text-[0.5rem] font-normal uppercase leading-none tracking-normal sm:text-[0.62rem]">
                 {changeCents !== null && changeCents < 0 ? "Nog" : "Terug"}
               </span>
@@ -847,19 +847,19 @@ export default function KraamrekenaarPage() {
             <button
               type="button"
               onClick={clearOrder}
-              className="min-h-8 border-2 border-white bg-[#ff9b1a] px-2 text-xs font-black text-[#4a1c0c] sm:min-h-10 sm:text-sm"
+              className="min-h-8 border-2 border-[#ef7d0a] bg-[#fffaf1] px-2 text-xs font-black text-[#d86a12] sm:min-h-10 sm:text-sm"
             >
               Nieuwe klant
             </button>
           )}
 
           {isEditMode && (
-            <div className="grid gap-1 border border-[#ff9b1a] bg-[#9f3b18] p-1 text-white">
+            <div className="grid gap-1 border border-[#d8d0c5] bg-[#fffaf1] p-1 text-[#24551d]">
               <div className="grid grid-cols-[1fr_1fr_1fr] gap-1">
                 <button
                   type="button"
                   onClick={startNewProduct}
-                  className="min-h-8 bg-[#ff9b1a] px-2 text-[0.66rem] font-black text-[#4a1c0c] sm:text-sm"
+                  className="min-h-8 bg-[#ef7d0a] px-2 text-[0.66rem] font-black text-white sm:text-sm"
                 >
                   Nieuwe knop
                 </button>
@@ -867,7 +867,7 @@ export default function KraamrekenaarPage() {
                   type="button"
                   onClick={() => moveEditingProduct(-1)}
                   disabled={!editingProduct}
-                  className="min-h-8 border border-[#ff9b1a] px-2 text-[0.66rem] font-normal disabled:opacity-45 sm:text-sm"
+                  className="min-h-8 border border-[#24551d] px-2 text-[0.66rem] font-normal disabled:opacity-45 sm:text-sm"
                 >
                   Omhoog
                 </button>
@@ -875,7 +875,7 @@ export default function KraamrekenaarPage() {
                   type="button"
                   onClick={() => moveEditingProduct(1)}
                   disabled={!editingProduct}
-                  className="min-h-8 border border-[#ff9b1a] px-2 text-[0.66rem] font-normal disabled:opacity-45 sm:text-sm"
+                  className="min-h-8 border border-[#24551d] px-2 text-[0.66rem] font-normal disabled:opacity-45 sm:text-sm"
                 >
                   Omlaag
                 </button>
@@ -892,7 +892,7 @@ export default function KraamrekenaarPage() {
                       }))
                     }
                     placeholder="nr"
-                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none placeholder:text-white/45"
+                    className="min-h-8 border border-[#d8d0c5] bg-white px-2 text-xs text-[#24551d] outline-none placeholder:text-[#6f6558]/45"
                   />
                   <input
                     value={draft.name}
@@ -903,7 +903,7 @@ export default function KraamrekenaarPage() {
                       }))
                     }
                     placeholder="product"
-                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none placeholder:text-white/45"
+                    className="min-h-8 border border-[#d8d0c5] bg-white px-2 text-xs text-[#24551d] outline-none placeholder:text-[#6f6558]/45"
                   />
                   <input
                     value={draft.detail}
@@ -914,7 +914,7 @@ export default function KraamrekenaarPage() {
                       }))
                     }
                     placeholder="klein label"
-                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none placeholder:text-white/45"
+                    className="min-h-8 border border-[#d8d0c5] bg-white px-2 text-xs text-[#24551d] outline-none placeholder:text-[#6f6558]/45"
                   />
                   <input
                     inputMode="decimal"
@@ -926,7 +926,7 @@ export default function KraamrekenaarPage() {
                       }))
                     }
                     placeholder="prijs"
-                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none placeholder:text-white/45"
+                    className="min-h-8 border border-[#d8d0c5] bg-white px-2 text-xs text-[#24551d] outline-none placeholder:text-[#6f6558]/45"
                   />
                   <select
                     value={draft.group}
@@ -936,7 +936,7 @@ export default function KraamrekenaarPage() {
                         group: event.target.value as ProductGroup,
                       }))
                     }
-                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none"
+                    className="min-h-8 border border-[#d8d0c5] bg-white px-2 text-xs text-[#24551d] outline-none"
                   >
                     {Object.entries(groupLabels).map(([group, label]) => (
                       <option key={group} value={group}>
@@ -947,7 +947,7 @@ export default function KraamrekenaarPage() {
                   <button
                     type="button"
                     onClick={saveProduct}
-                    className="min-h-8 bg-white px-2 text-xs font-black text-[#9f3b18]"
+                    className="min-h-8 bg-[#24551d] px-2 text-xs font-black text-white"
                   >
                     Opslaan
                   </button>
@@ -955,14 +955,14 @@ export default function KraamrekenaarPage() {
                     <button
                       type="button"
                       onClick={deleteEditingProduct}
-                      className="min-h-8 border border-white px-2 text-xs font-normal"
+                      className="min-h-8 border border-[#ef7d0a] px-2 text-xs font-normal text-[#d86a12]"
                     >
                       Verwijder
                     </button>
                   )}
                 </div>
               ) : (
-                <p className="text-[0.66rem] font-normal text-white/75 sm:text-xs">
+                <p className="text-[0.66rem] font-normal text-[#6f6558] sm:text-xs">
                   Tik een product aan om te bewerken, of sleep knoppen naar een
                   andere plek.
                 </p>
@@ -971,7 +971,7 @@ export default function KraamrekenaarPage() {
               <button
                 type="button"
                 onClick={resetProducts}
-                className="justify-self-start text-[0.64rem] font-normal text-white/65 underline underline-offset-2"
+                className="justify-self-start text-[0.64rem] font-normal text-[#6f6558] underline underline-offset-2"
               >
                 Standaardlijst herstellen
               </button>
