@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 type StallProduct = {
@@ -169,19 +168,15 @@ const products: StallProduct[] = [
 
 const productById = new Map(products.map((product) => [product.id, product]));
 const cashButtons = [5, 10, 20, 50];
-const groupLabels: Record<StallProduct["group"], string> = {
-  drinken: "Drinken",
-  zoet: "Zoet",
-  hartig: "Hartig",
-  koek: "Koek",
-};
-const groupOrder: StallProduct["group"][] = ["drinken", "zoet", "hartig", "koek"];
-
 function formatEuro(cents: number) {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
     currency: "EUR",
   }).format(cents / 100);
+}
+
+function formatCompactEuro(cents: number) {
+  return formatEuro(cents).replace(/\s/g, "");
 }
 
 function getEntriesTotal(entries: string[]) {
@@ -209,6 +204,16 @@ function productLabel(product: StallProduct) {
   return product.detail ? `${product.name} ${product.detail}` : product.name;
 }
 
+function productGroupClass(group: StallProduct["group"], selected: boolean) {
+  if (selected) return "border-[#ef5737] bg-white";
+
+  if (group === "drinken") return "border-[#a9cfe2] bg-[#f2f9fc]";
+  if (group === "hartig") return "border-[#b7d0b1] bg-[#f3faee]";
+  if (group === "koek") return "border-[#e7bdd0] bg-[#fff4f8]";
+
+  return "border-[#f1d081] bg-[#fff8df]";
+}
+
 export default function KraamrekenaarPage() {
   const [entries, setEntries] = useState<string[]>([]);
   const [holdSlots, setHoldSlots] = useState<HoldSlot[]>([
@@ -231,14 +236,15 @@ export default function KraamrekenaarPage() {
 
     return counts;
   }, [entries]);
-  const groupedProducts = useMemo(
+  const receiptSummary = useMemo(
     () =>
-      groupOrder.map((group) => ({
-        group,
-        products: products.filter((product) => product.group === group),
-      })),
-    []
+      orderLines
+        .map(({ product, count }) => `${count}x ${productLabel(product)}`)
+        .join(" · "),
+    [orderLines]
   );
+  const canHoldOrder =
+    entries.length > 0 && holdSlots.some((slot) => slot.entries.length === 0);
   const changeCents =
     cashGivenCents !== null ? cashGivenCents - totalCents : null;
 
@@ -334,239 +340,186 @@ export default function KraamrekenaarPage() {
 
   return (
     <main className="min-h-dvh bg-[#f7f4ed] text-[#161412]">
-      <div className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col gap-3 px-3 py-3 tracking-normal sm:px-4">
-        <header className="grid gap-2 border border-[#d8d0c5] bg-white p-3 shadow-sm lg:grid-cols-[1fr_22rem]">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center bg-[#f0e3a0]">
-              <Image
-                src="/strik-logo.png"
-                alt=""
-                width={36}
-                height={36}
-                className="h-9 w-9 object-contain"
-                priority
-              />
-            </span>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-black tracking-normal text-[#161412] sm:text-3xl">
-                Kraamrekenaar
-              </h1>
-              <p className="text-xs font-black uppercase tracking-normal text-[#6f6558]">
-                Vierdaagse
-              </p>
-            </div>
+      <div className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col gap-1.5 px-1.5 py-1.5 tracking-normal sm:gap-2 sm:px-3 sm:py-2">
+        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 border border-[#d8d0c5] bg-white p-1.5 shadow-sm">
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-black tracking-normal text-[#161412] sm:text-xl">
+              Kraamrekenaar
+            </h1>
+            <p className="text-[0.6rem] font-black uppercase tracking-normal text-[#6f6558] sm:text-xs">
+              {entries.length} stuks
+            </p>
           </div>
 
-          <div className="grid grid-cols-[1fr_auto] items-center gap-2 bg-[#161412] px-3 py-2 text-white">
-            <span className="text-xs font-black uppercase tracking-normal text-white/60">
+          <div className="grid min-w-[8.2rem] grid-cols-[auto_1fr] items-center gap-1 bg-[#161412] px-2 py-1 text-white sm:min-w-52 sm:px-3 sm:py-2">
+            <span className="text-[0.55rem] font-black uppercase tracking-normal text-white/60 sm:text-xs">
               Totaal
             </span>
-            <strong className="font-mono text-4xl font-black tracking-normal sm:text-5xl">
-              {formatEuro(totalCents)}
+            <strong className="text-right font-mono text-2xl font-black tracking-normal sm:text-4xl">
+              {formatCompactEuro(totalCents)}
             </strong>
           </div>
         </header>
 
-        <section className="grid gap-3 lg:grid-cols-[1fr_24rem]">
-          <div className="grid gap-3">
-            {groupedProducts.map(({ group, products: groupProducts }) => (
-              <div key={group} className="grid gap-2">
-                <h2 className="text-sm font-black uppercase tracking-normal text-[#6f6558]">
-                  {groupLabels[group]}
-                </h2>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
-                  {groupProducts.map((product) => {
-                    const count = productCounts.get(product.id) || 0;
+        <section className="min-h-8 overflow-x-auto border border-[#d8d0c5] bg-white px-1.5 py-1 shadow-sm">
+          {orderLines.length ? (
+            <div className="flex min-w-max items-center gap-1">
+              <span className="max-w-56 truncate px-1 text-[0.62rem] font-black text-[#6f6558] sm:max-w-none sm:text-xs">
+                {receiptSummary}
+              </span>
+              {orderLines.map(({ product, count }) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  onClick={() => removeOne(product.id)}
+                  className="grid min-h-7 grid-cols-[auto_1.4rem] items-center border border-[#eee7df] bg-[#fbfaf7] pl-2 text-left text-[0.68rem] font-black sm:text-xs"
+                  aria-label={`${productLabel(product)} eentje minder`}
+                >
+                  <span className="max-w-24 truncate">
+                    {count}x {productLabel(product)}
+                  </span>
+                  <span className="flex h-full items-center justify-center bg-[#eee7df] text-sm">
+                    -
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="px-1 text-[0.68rem] font-black text-[#6f6558] sm:text-xs">
+              Bon leeg
+            </p>
+          )}
+        </section>
 
-                    return (
-                      <button
-                        key={product.id}
-                        type="button"
-                        onClick={() => addProduct(product.id)}
-                        className={`relative grid min-h-28 content-between border-2 bg-white p-2 text-left shadow-sm transition active:scale-[0.98] ${
-                          count
-                            ? "border-[#ef5737]"
-                            : "border-[#d8d0c5] hover:border-[#968a7d]"
-                        }`}
-                      >
-                        <span className="flex items-start justify-between gap-2">
-                          <span className="text-xs font-black text-[#8b8278]">
-                            {product.code}
-                          </span>
-                          {count > 0 && (
-                            <span className="flex h-8 min-w-8 items-center justify-center bg-[#ef5737] px-2 text-lg font-black text-white">
-                              {count}
-                            </span>
-                          )}
-                        </span>
-                        <span>
-                          <span className="block text-xl font-black uppercase leading-none tracking-normal text-[#161412] sm:text-2xl">
-                            {product.name}
-                          </span>
-                          {product.detail && (
-                            <span className="mt-1 block text-xs font-black uppercase leading-none tracking-normal text-[#161412]/70">
-                              {product.detail}
-                            </span>
-                          )}
-                        </span>
-                        <span className="text-2xl font-black tracking-normal text-[#161412]">
-                          {formatEuro(product.priceCents)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+        <section className="grid flex-1 grid-cols-3 content-start gap-1 sm:grid-cols-4 lg:grid-cols-7">
+          {products.map((product) => {
+            const count = productCounts.get(product.id) || 0;
+
+            return (
+              <button
+                key={product.id}
+                type="button"
+                onClick={() => addProduct(product.id)}
+                className={`relative grid min-h-[3.15rem] content-between border p-1 text-left shadow-sm transition active:scale-[0.98] sm:min-h-[4.25rem] sm:p-1.5 ${productGroupClass(
+                  product.group,
+                  count > 0
+                )}`}
+              >
+                <span className="flex min-w-0 items-start justify-between gap-1">
+                  <span className="text-[0.5rem] font-black leading-none text-[#8b8278] sm:text-[0.62rem]">
+                    {product.code}
+                  </span>
+                  {count > 0 && (
+                    <span className="flex h-5 min-w-5 items-center justify-center bg-[#ef5737] px-1 text-xs font-black text-white sm:h-6 sm:min-w-6">
+                      {count}
+                    </span>
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block break-words text-[0.68rem] font-black uppercase leading-[0.88] tracking-normal text-[#161412] sm:text-sm">
+                    {product.name}
+                  </span>
+                  {product.detail && (
+                    <span className="block truncate text-[0.5rem] font-black uppercase leading-none tracking-normal text-[#161412]/65 sm:text-[0.62rem]">
+                      {product.detail}
+                    </span>
+                  )}
+                </span>
+                <span className="text-base font-black leading-none tracking-normal text-[#161412] sm:text-xl">
+                  {formatCompactEuro(product.priceCents)}
+                </span>
+              </button>
+            );
+          })}
+        </section>
+
+        <section className="grid gap-1 border border-[#d8d0c5] bg-white p-1.5 shadow-sm">
+          <div className="grid grid-cols-[1fr_1fr_1.25fr] gap-1">
+            <button
+              type="button"
+              onClick={undoLast}
+              disabled={!entries.length}
+              className="min-h-9 bg-[#eee7df] px-1 text-[0.68rem] font-black disabled:opacity-45 sm:min-h-11 sm:text-sm"
+            >
+              Ongedaan
+            </button>
+            <button
+              type="button"
+              onClick={holdOrder}
+              disabled={!canHoldOrder}
+              className="min-h-9 bg-[#f0e3a0] px-1 text-[0.68rem] font-black disabled:opacity-45 sm:min-h-11 sm:text-sm"
+            >
+              In wacht
+            </button>
+            <button
+              type="button"
+              onClick={clearOrder}
+              disabled={!entries.length}
+              className="min-h-9 bg-[#ef5737] px-1 text-sm font-black text-white disabled:opacity-45 sm:min-h-11 sm:text-base"
+            >
+              Klaar
+            </button>
           </div>
 
-          <aside className="grid content-start gap-3">
-            <section className="border border-[#d8d0c5] bg-white p-3 shadow-sm">
-              <div className="flex items-end justify-between gap-2">
-                <h2 className="text-base font-black tracking-normal">
-                  Bonnetje
-                </h2>
-                <span className="text-sm font-black text-[#6f6558]">
-                  {entries.length} stuks
-                </span>
-              </div>
+          <div className="grid grid-cols-3 gap-1">
+            {holdSlots.map((slot) => {
+              const slotTotal = getEntriesTotal(slot.entries);
+              const occupied = slot.entries.length > 0;
 
-              <div className="mt-3 grid gap-1.5">
-                {orderLines.length ? (
-                  orderLines.map(({ product, count }) => (
-                    <div
-                      key={product.id}
-                      className="grid grid-cols-[2.3rem_1fr_auto] items-center gap-2 border border-[#eee7df] bg-[#fbfaf7] px-2 py-2"
-                    >
-                      <span className="text-xl font-black">{count}x</span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-black">
-                          {productLabel(product)}
-                        </span>
-                        <span className="block text-xs font-bold text-[#6f6558]">
-                          {formatEuro(product.priceCents)}
-                        </span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeOne(product.id)}
-                        className="h-10 w-10 bg-[#eee7df] text-xl font-black"
-                        aria-label={`${productLabel(product)} eentje minder`}
-                      >
-                        -
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="bg-[#fbfaf7] px-3 py-6 text-center text-sm font-black text-[#6f6558]">
-                    €0,00
-                  </p>
-                )}
-              </div>
-            </section>
+              return (
+                <button
+                  key={slot.id}
+                  type="button"
+                  onClick={() => activateHoldSlot(slot.id)}
+                  className={`min-h-8 border px-1 text-[0.66rem] font-black sm:min-h-10 sm:text-sm ${
+                    occupied
+                      ? "border-[#161412] bg-[#f0e3a0] text-[#161412]"
+                      : "border-[#d8d0c5] bg-[#fbfaf7] text-[#6f6558]"
+                  }`}
+                >
+                  W{slot.id} {occupied ? formatCompactEuro(slotTotal) : "vrij"}
+                </button>
+              );
+            })}
+          </div>
 
-            <section className="grid gap-2 border border-[#d8d0c5] bg-white p-3 shadow-sm">
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={undoLast}
-                  disabled={!entries.length}
-                  className="min-h-12 bg-[#eee7df] px-3 text-sm font-black disabled:opacity-45"
-                >
-                  Ongedaan
-                </button>
-                <button
-                  type="button"
-                  onClick={holdOrder}
-                  disabled={!entries.length}
-                  className="min-h-12 bg-[#f0e3a0] px-3 text-sm font-black disabled:opacity-45"
-                >
-                  In wacht
-                </button>
-              </div>
+          <div className="grid grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.35fr)] gap-1">
+            {cashButtons.map((amount) => (
               <button
+                key={amount}
                 type="button"
-                onClick={clearOrder}
-                disabled={!entries.length}
-                className="min-h-14 bg-[#ef5737] px-3 text-lg font-black text-white disabled:opacity-45"
+                onClick={() => chooseCash(amount)}
+                disabled={!totalCents}
+                className={`min-h-8 border px-1 text-[0.68rem] font-black disabled:opacity-45 sm:min-h-10 sm:text-sm ${
+                  cashGivenCents === amount * 100
+                    ? "border-[#161412] bg-[#161412] text-white"
+                    : "border-[#d8d0c5] bg-[#fbfaf7]"
+                }`}
               >
-                Klaar
+                €{amount}
               </button>
+            ))}
+            <div className="grid min-h-8 content-center bg-[#fbfaf7] px-1 text-center sm:min-h-10">
+              <span className="text-[0.5rem] font-black uppercase leading-none tracking-normal text-[#6f6558] sm:text-[0.62rem]">
+                {changeCents !== null && changeCents < 0 ? "Nog" : "Terug"}
+              </span>
+              <strong className="font-mono text-sm font-black leading-tight tracking-normal sm:text-lg">
+                {changeCents === null
+                  ? formatCompactEuro(0)
+                  : formatCompactEuro(Math.abs(changeCents))}
+              </strong>
+            </div>
+          </div>
 
-              {showIdlePrompt && (
-                <button
-                  type="button"
-                  onClick={clearOrder}
-                  className="min-h-12 border-2 border-[#ef5737] bg-white px-3 text-sm font-black text-[#ef5737]"
-                >
-                  Nieuwe klant
-                </button>
-              )}
-            </section>
-
-            <section className="border border-[#d8d0c5] bg-white p-3 shadow-sm">
-              <h2 className="text-base font-black tracking-normal">
-                Wisselgeld
-              </h2>
-              <div className="mt-2 grid grid-cols-4 gap-2">
-                {cashButtons.map((amount) => (
-                  <button
-                    key={amount}
-                    type="button"
-                    onClick={() => chooseCash(amount)}
-                    disabled={!totalCents}
-                    className={`min-h-12 border px-2 text-sm font-black disabled:opacity-45 ${
-                      cashGivenCents === amount * 100
-                        ? "border-[#161412] bg-[#161412] text-white"
-                        : "border-[#d8d0c5] bg-[#fbfaf7]"
-                    }`}
-                  >
-                    €{amount}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-2 bg-[#fbfaf7] px-3 py-3 text-center">
-                <span className="block text-xs font-black uppercase tracking-normal text-[#6f6558]">
-                  {changeCents !== null && changeCents < 0
-                    ? "Nog"
-                    : "Terug"}
-                </span>
-                <strong className="font-mono text-3xl font-black tracking-normal">
-                  {changeCents === null
-                    ? formatEuro(0)
-                    : formatEuro(Math.abs(changeCents))}
-                </strong>
-              </div>
-            </section>
-
-            <section className="border border-[#d8d0c5] bg-white p-3 shadow-sm">
-              <h2 className="text-base font-black tracking-normal">Wacht</h2>
-              <div className="mt-2 grid gap-2">
-                {holdSlots.map((slot) => {
-                  const slotTotal = getEntriesTotal(slot.entries);
-                  const occupied = slot.entries.length > 0;
-
-                  return (
-                    <button
-                      key={slot.id}
-                      type="button"
-                      onClick={() => activateHoldSlot(slot.id)}
-                      className={`grid min-h-12 grid-cols-[3rem_1fr] items-center border px-2 text-left ${
-                        occupied
-                          ? "border-[#161412] bg-[#f0e3a0]"
-                          : "border-[#d8d0c5] bg-[#fbfaf7] text-[#6f6558]"
-                      }`}
-                    >
-                      <span className="text-sm font-black">W{slot.id}</span>
-                      <span className="text-lg font-black">
-                        {occupied ? formatEuro(slotTotal) : "Vrij"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          </aside>
+          {showIdlePrompt && (
+            <button
+              type="button"
+              onClick={clearOrder}
+              className="min-h-8 border-2 border-[#ef5737] bg-white px-2 text-xs font-black text-[#ef5737] sm:min-h-10 sm:text-sm"
+            >
+              Nieuwe klant
+            </button>
+          )}
         </section>
       </div>
     </main>
