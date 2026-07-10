@@ -8,7 +8,7 @@ type StallProduct = {
   name: string;
   detail?: string;
   priceCents: number;
-  group: "drinken" | "zoet" | "hartig" | "koek";
+  group: ProductGroup;
 };
 
 type HoldSlot = {
@@ -16,9 +16,20 @@ type HoldSlot = {
   entries: string[];
 };
 
-const idlePromptDelayMs = 15000;
+type ProductGroup = "drinken" | "zoet" | "hartig" | "koek";
 
-const products: StallProduct[] = [
+type ProductDraft = {
+  code: string;
+  name: string;
+  detail: string;
+  price: string;
+  group: ProductGroup;
+};
+
+const idlePromptDelayMs = 15000;
+const editableProductsStorageKey = "strik-kraamrekenaar-products-v1";
+
+const defaultProducts: StallProduct[] = [
   { id: "water", code: "05", name: "Water", priceCents: 250, group: "drinken" },
   { id: "thee", code: "03", name: "Thee", priceCents: 250, group: "drinken" },
   {
@@ -26,6 +37,13 @@ const products: StallProduct[] = [
     code: "04",
     name: "Frisdrank",
     priceCents: 350,
+    group: "drinken",
+  },
+  {
+    id: "ijskoffie",
+    code: "22",
+    name: "IJskoffie",
+    priceCents: 450,
     group: "drinken",
   },
   {
@@ -166,8 +184,13 @@ const products: StallProduct[] = [
   },
 ];
 
-const productById = new Map(products.map((product) => [product.id, product]));
 const cashButtons = [5, 10, 20, 50];
+const groupLabels: Record<ProductGroup, string> = {
+  drinken: "Drank",
+  zoet: "Zoet",
+  hartig: "Hartig",
+  koek: "Koek",
+};
 function formatEuro(cents: number) {
   return new Intl.NumberFormat("nl-NL", {
     style: "currency",
@@ -179,20 +202,23 @@ function formatCompactEuro(cents: number) {
   return formatEuro(cents).replace(/\s/g, "");
 }
 
-function getEntriesTotal(entries: string[]) {
+function getEntriesTotal(
+  entries: string[],
+  productLookup: Map<string, StallProduct>
+) {
   return entries.reduce((total, productId) => {
-    return total + (productById.get(productId)?.priceCents || 0);
+    return total + (productLookup.get(productId)?.priceCents || 0);
   }, 0);
 }
 
-function countEntries(entries: string[]) {
+function countEntries(entries: string[], productList: StallProduct[]) {
   const counts = new Map<string, number>();
 
   for (const productId of entries) {
     counts.set(productId, (counts.get(productId) || 0) + 1);
   }
 
-  return products
+  return productList
     .map((product) => ({
       product,
       count: counts.get(product.id) || 0,
@@ -204,17 +230,102 @@ function productLabel(product: StallProduct) {
   return product.detail ? `${product.name} ${product.detail}` : product.name;
 }
 
-function productGroupClass(group: StallProduct["group"], selected: boolean) {
-  if (selected) return "border-[#ef5737] bg-white";
+function createProductId(name: string) {
+  const base =
+    name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "product";
 
-  if (group === "drinken") return "border-[#a9cfe2] bg-[#f2f9fc]";
-  if (group === "hartig") return "border-[#b7d0b1] bg-[#f3faee]";
-  if (group === "koek") return "border-[#e7bdd0] bg-[#fff4f8]";
+  return `${base}-${Date.now().toString(36)}`;
+}
 
-  return "border-[#f1d081] bg-[#fff8df]";
+function parsePriceToCents(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  const parsed = Number.parseFloat(normalized);
+
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+}
+
+function priceCentsToDraft(priceCents: number) {
+  return (priceCents / 100).toLocaleString("nl-NL", {
+    minimumFractionDigits: priceCents % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function productToDraft(product: StallProduct): ProductDraft {
+  return {
+    code: product.code,
+    name: product.name,
+    detail: product.detail || "",
+    price: priceCentsToDraft(product.priceCents),
+    group: product.group,
+  };
+}
+
+function createEmptyDraft(nextCode: string): ProductDraft {
+  return {
+    code: nextCode,
+    name: "",
+    detail: "",
+    price: "",
+    group: "zoet",
+  };
+}
+
+function isValidProductList(value: unknown): value is StallProduct[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (product) =>
+        product &&
+        typeof product === "object" &&
+        "id" in product &&
+        typeof product.id === "string" &&
+        "name" in product &&
+        typeof product.name === "string" &&
+        "priceCents" in product &&
+        typeof product.priceCents === "number" &&
+        "group" in product &&
+        (product.group === "drinken" ||
+          product.group === "zoet" ||
+          product.group === "hartig" ||
+          product.group === "koek")
+    )
+  );
+}
+
+function getNextProductCode(productList: StallProduct[]) {
+  const highestCode = productList.reduce((highest, product) => {
+    const parsed = Number.parseInt(product.code, 10);
+
+    return Number.isFinite(parsed) ? Math.max(highest, parsed) : highest;
+  }, 0);
+
+  return String(highestCode + 1).padStart(2, "0");
+}
+
+function productGroupClass(
+  group: ProductGroup,
+  selected: boolean,
+  editMode: boolean
+) {
+  if (editMode) return "border-[#ff9b1a] bg-[#fff7ef]";
+  if (selected) return "border-white bg-[#ffffff] text-[#9f3b18]";
+
+  if (group === "drinken") return "border-[#ff9b1a] bg-[#9f3b18]";
+  if (group === "hartig") return "border-[#ff9b1a] bg-[#853112]";
+  if (group === "koek") return "border-[#ff9b1a] bg-[#a8441e]";
+
+  return "border-[#ff9b1a] bg-[#973715]";
 }
 
 export default function KraamrekenaarPage() {
+  const [products, setProducts] = useState<StallProduct[]>(defaultProducts);
   const [entries, setEntries] = useState<string[]>([]);
   const [holdSlots, setHoldSlots] = useState<HoldSlot[]>([
     { id: 1, entries: [] },
@@ -224,9 +335,27 @@ export default function KraamrekenaarPage() {
   const [cashGivenCents, setCashGivenCents] = useState<number | null>(null);
   const [lastActivityAt, setLastActivityAt] = useState(Date.now());
   const [showIdlePrompt, setShowIdlePrompt] = useState(false);
+  const [isProductsLoaded, setIsProductsLoaded] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isProductEditorOpen, setIsProductEditorOpen] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ProductDraft>(() =>
+    createEmptyDraft(getNextProductCode(defaultProducts))
+  );
+  const [draggingProductId, setDraggingProductId] = useState<string | null>(null);
 
-  const orderLines = useMemo(() => countEntries(entries), [entries]);
-  const totalCents = useMemo(() => getEntriesTotal(entries), [entries]);
+  const productById = useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products]
+  );
+  const orderLines = useMemo(
+    () => countEntries(entries, products),
+    [entries, products]
+  );
+  const totalCents = useMemo(
+    () => getEntriesTotal(entries, productById),
+    [entries, productById]
+  );
   const productCounts = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -236,17 +365,13 @@ export default function KraamrekenaarPage() {
 
     return counts;
   }, [entries]);
-  const receiptSummary = useMemo(
-    () =>
-      orderLines
-        .map(({ product, count }) => `${count}x ${productLabel(product)}`)
-        .join(" · "),
-    [orderLines]
-  );
   const canHoldOrder =
     entries.length > 0 && holdSlots.some((slot) => slot.entries.length === 0);
   const changeCents =
     cashGivenCents !== null ? cashGivenCents - totalCents : null;
+  const editingProduct = editingProductId
+    ? products.find((product) => product.id === editingProductId)
+    : null;
 
   function markActivity() {
     setLastActivityAt(Date.now());
@@ -323,6 +448,172 @@ export default function KraamrekenaarPage() {
     setCashGivenCents(amountEuro * 100);
   }
 
+  function openEditMode() {
+    setIsEditMode(true);
+    setIsProductEditorOpen(false);
+  }
+
+  function closeEditMode() {
+    setIsEditMode(false);
+    setIsProductEditorOpen(false);
+    setEditingProductId(null);
+  }
+
+  function startNewProduct() {
+    setIsEditMode(true);
+    setIsProductEditorOpen(true);
+    setEditingProductId(null);
+    setDraft(createEmptyDraft(getNextProductCode(products)));
+  }
+
+  function selectProductForEdit(product: StallProduct) {
+    setIsEditMode(true);
+    setIsProductEditorOpen(true);
+    setEditingProductId(product.id);
+    setDraft(productToDraft(product));
+  }
+
+  function saveProduct() {
+    const cleanName = draft.name.trim();
+    const cleanDetail = draft.detail.trim();
+    const cleanCode = draft.code.trim() || getNextProductCode(products);
+    const priceCents = parsePriceToCents(draft.price);
+
+    if (!cleanName || priceCents <= 0) return;
+
+    if (editingProductId) {
+      setProducts((currentProducts) =>
+        currentProducts.map((product) =>
+          product.id === editingProductId
+            ? {
+                ...product,
+                code: cleanCode,
+                name: cleanName,
+                detail: cleanDetail || undefined,
+                priceCents,
+                group: draft.group,
+              }
+            : product
+        )
+      );
+    } else {
+      const product: StallProduct = {
+        id: createProductId(cleanName),
+        code: cleanCode,
+        name: cleanName,
+        detail: cleanDetail || undefined,
+        priceCents,
+        group: draft.group,
+      };
+
+      setProducts((currentProducts) => [...currentProducts, product]);
+      setEditingProductId(product.id);
+    }
+  }
+
+  function deleteEditingProduct() {
+    if (!editingProductId) return;
+
+    setProducts((currentProducts) =>
+      currentProducts.filter((product) => product.id !== editingProductId)
+    );
+    setEntries((currentEntries) =>
+      currentEntries.filter((productId) => productId !== editingProductId)
+    );
+    setHoldSlots((currentSlots) =>
+      currentSlots.map((slot) => ({
+        ...slot,
+        entries: slot.entries.filter((productId) => productId !== editingProductId),
+      }))
+    );
+    setEditingProductId(null);
+    setIsProductEditorOpen(false);
+  }
+
+  function resetProducts() {
+    setProducts(defaultProducts);
+    setEntries([]);
+    setHoldSlots([
+      { id: 1, entries: [] },
+      { id: 2, entries: [] },
+      { id: 3, entries: [] },
+    ]);
+    setCashGivenCents(null);
+    setEditingProductId(null);
+    setIsProductEditorOpen(false);
+  }
+
+  function moveProduct(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+
+    setProducts((currentProducts) => {
+      const sourceIndex = currentProducts.findIndex(
+        (product) => product.id === sourceId
+      );
+      const targetIndex = currentProducts.findIndex(
+        (product) => product.id === targetId
+      );
+
+      if (sourceIndex < 0 || targetIndex < 0) return currentProducts;
+
+      const nextProducts = [...currentProducts];
+      const [sourceProduct] = nextProducts.splice(sourceIndex, 1);
+      nextProducts.splice(targetIndex, 0, sourceProduct);
+
+      return nextProducts;
+    });
+  }
+
+  function moveEditingProduct(offset: number) {
+    if (!editingProductId) return;
+
+    setProducts((currentProducts) => {
+      const currentIndex = currentProducts.findIndex(
+        (product) => product.id === editingProductId
+      );
+      const nextIndex = currentIndex + offset;
+
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= currentProducts.length) {
+        return currentProducts;
+      }
+
+      const nextProducts = [...currentProducts];
+      const [product] = nextProducts.splice(currentIndex, 1);
+      nextProducts.splice(nextIndex, 0, product);
+
+      return nextProducts;
+    });
+  }
+
+  useEffect(() => {
+    try {
+      const storedProducts = window.localStorage.getItem(
+        editableProductsStorageKey
+      );
+
+      if (storedProducts) {
+        const parsedProducts = JSON.parse(storedProducts) as unknown;
+
+        if (isValidProductList(parsedProducts)) {
+          setProducts(parsedProducts);
+        }
+      }
+    } catch {
+      setProducts(defaultProducts);
+    } finally {
+      setIsProductsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isProductsLoaded) return;
+
+    window.localStorage.setItem(
+      editableProductsStorageKey,
+      JSON.stringify(products)
+    );
+  }, [isProductsLoaded, products]);
+
   useEffect(() => {
     if (!entries.length) {
       setShowIdlePrompt(false);
@@ -339,20 +630,20 @@ export default function KraamrekenaarPage() {
   }, [entries.length, lastActivityAt]);
 
   return (
-    <main className="min-h-dvh bg-[#f7f4ed] text-[#161412]">
+    <main className="min-h-dvh bg-[#9f3b18] text-white">
       <div className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col gap-1.5 px-1.5 py-1.5 tracking-normal sm:gap-2 sm:px-3 sm:py-2">
-        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 border border-[#d8d0c5] bg-white p-1.5 shadow-sm">
+        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 border border-[#ff9b1a] bg-[#8b3215] p-1.5 shadow-sm">
           <div className="min-w-0">
-            <h1 className="truncate text-base font-black tracking-normal text-[#161412] sm:text-xl">
-              Kraamrekenaar
+            <h1 className="truncate text-sm font-extrabold uppercase tracking-normal text-white sm:text-lg">
+              4Daagse rekentool
             </h1>
-            <p className="text-[0.6rem] font-black uppercase tracking-normal text-[#6f6558] sm:text-xs">
+            <p className="text-[0.58rem] font-normal uppercase tracking-normal text-[#ffbe64] sm:text-xs">
               {entries.length} stuks
             </p>
           </div>
 
-          <div className="grid min-w-[8.2rem] grid-cols-[auto_1fr] items-center gap-1 bg-[#161412] px-2 py-1 text-white sm:min-w-52 sm:px-3 sm:py-2">
-            <span className="text-[0.55rem] font-black uppercase tracking-normal text-white/60 sm:text-xs">
+          <div className="grid min-w-[8.1rem] grid-cols-[auto_1fr] items-center gap-1 border border-white bg-white px-2 py-1 text-[#9f3b18] sm:min-w-52 sm:px-3 sm:py-2">
+            <span className="text-[0.52rem] font-normal uppercase tracking-normal text-[#9f3b18]/65 sm:text-xs">
               Totaal
             </span>
             <strong className="text-right font-mono text-2xl font-black tracking-normal sm:text-4xl">
@@ -361,31 +652,39 @@ export default function KraamrekenaarPage() {
           </div>
         </header>
 
-        <section className="min-h-8 overflow-x-auto border border-[#d8d0c5] bg-white px-1.5 py-1 shadow-sm">
+        <section className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-1.5 py-1 shadow-sm">
           {orderLines.length ? (
-            <div className="flex min-w-max items-center gap-1">
-              <span className="max-w-56 truncate px-1 text-[0.62rem] font-black text-[#6f6558] sm:max-w-none sm:text-xs">
-                {receiptSummary}
-              </span>
+            <div className="grid max-h-28 gap-1 overflow-y-auto sm:max-h-36 sm:grid-cols-2 lg:grid-cols-3">
               {orderLines.map(({ product, count }) => (
-                <button
+                <div
                   key={product.id}
-                  type="button"
-                  onClick={() => removeOne(product.id)}
-                  className="grid min-h-7 grid-cols-[auto_1.4rem] items-center border border-[#eee7df] bg-[#fbfaf7] pl-2 text-left text-[0.68rem] font-black sm:text-xs"
-                  aria-label={`${productLabel(product)} eentje minder`}
+                  className="grid min-h-7 grid-cols-[1.6rem_minmax(0,1fr)_1.35rem_1.35rem] items-center gap-1 border border-[#ff9b1a]/65 bg-[#9f3b18] px-1 text-[0.64rem] text-white sm:text-xs"
                 >
-                  <span className="max-w-24 truncate">
-                    {count}x {productLabel(product)}
+                  <span className="font-extrabold">{count}x</span>
+                  <span className="min-w-0 truncate font-normal">
+                    {productLabel(product)}
                   </span>
-                  <span className="flex h-full items-center justify-center bg-[#eee7df] text-sm">
+                  <button
+                    type="button"
+                    onClick={() => removeOne(product.id)}
+                    className="flex h-6 items-center justify-center bg-white text-sm font-black text-[#9f3b18]"
+                    aria-label={`${productLabel(product)} eentje minder`}
+                  >
                     -
-                  </span>
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addProduct(product.id)}
+                    className="flex h-6 items-center justify-center bg-[#ff9b1a] text-sm font-black text-[#4a1c0c]"
+                    aria-label={`${productLabel(product)} eentje meer`}
+                  >
+                    +
+                  </button>
+                </div>
               ))}
             </div>
           ) : (
-            <p className="px-1 text-[0.68rem] font-black text-[#6f6558] sm:text-xs">
+            <p className="px-1 text-[0.68rem] font-normal text-white/70 sm:text-xs">
               Bon leeg
             </p>
           )}
@@ -399,33 +698,54 @@ export default function KraamrekenaarPage() {
               <button
                 key={product.id}
                 type="button"
-                onClick={() => addProduct(product.id)}
-                className={`relative grid min-h-[3.15rem] content-between border p-1 text-left shadow-sm transition active:scale-[0.98] sm:min-h-[4.25rem] sm:p-1.5 ${productGroupClass(
+                draggable={isEditMode}
+                onClick={() =>
+                  isEditMode ? selectProductForEdit(product) : addProduct(product.id)
+                }
+                onDragStart={(event) => {
+                  if (!isEditMode) return;
+
+                  setDraggingProductId(product.id);
+                  event.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(event) => {
+                  if (isEditMode) event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+
+                  if (draggingProductId) {
+                    moveProduct(draggingProductId, product.id);
+                    setDraggingProductId(null);
+                  }
+                }}
+                className={`relative grid min-h-[3rem] content-between border p-1 text-left shadow-sm transition active:scale-[0.98] sm:min-h-[4rem] sm:p-1.5 ${productGroupClass(
                   product.group,
-                  count > 0
+                  count > 0,
+                  isEditMode
                 )}`}
               >
                 <span className="flex min-w-0 items-start justify-between gap-1">
-                  <span className="text-[0.5rem] font-black leading-none text-[#8b8278] sm:text-[0.62rem]">
-                    {product.code}
+                  <span className="text-[0.48rem] font-normal leading-none text-current opacity-70 sm:text-[0.62rem]">
+                    {isEditMode ? "sleep" : product.code}
                   </span>
                   {count > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center bg-[#ef5737] px-1 text-xs font-black text-white sm:h-6 sm:min-w-6">
+                    <span className="flex h-5 min-w-5 items-center justify-center bg-white px-1 text-xs font-black text-[#9f3b18] sm:h-6 sm:min-w-6">
                       {count}
                     </span>
                   )}
                 </span>
                 <span className="min-w-0">
-                  <span className="block break-words text-[0.68rem] font-black uppercase leading-[0.88] tracking-normal text-[#161412] sm:text-sm">
+                  <span className="block break-words text-[0.64rem] font-extrabold uppercase leading-[0.9] tracking-normal text-current sm:text-sm">
                     {product.name}
                   </span>
                   {product.detail && (
-                    <span className="block truncate text-[0.5rem] font-black uppercase leading-none tracking-normal text-[#161412]/65 sm:text-[0.62rem]">
+                    <span className="block truncate text-[0.48rem] font-normal uppercase leading-none tracking-normal text-current opacity-80 sm:text-[0.62rem]">
                       {product.detail}
                     </span>
                   )}
                 </span>
-                <span className="text-base font-black leading-none tracking-normal text-[#161412] sm:text-xl">
+                <span className="text-sm font-extrabold leading-none tracking-normal text-current sm:text-lg">
                   {formatCompactEuro(product.priceCents)}
                 </span>
               </button>
@@ -433,13 +753,13 @@ export default function KraamrekenaarPage() {
           })}
         </section>
 
-        <section className="grid gap-1 border border-[#d8d0c5] bg-white p-1.5 shadow-sm">
-          <div className="grid grid-cols-[1fr_1fr_1.25fr] gap-1">
+        <section className="grid gap-1 border border-[#ff9b1a] bg-[#8b3215] p-1.5 shadow-sm">
+          <div className="grid grid-cols-[1fr_1fr_1.2fr_2rem] gap-1">
             <button
               type="button"
               onClick={undoLast}
               disabled={!entries.length}
-              className="min-h-9 bg-[#eee7df] px-1 text-[0.68rem] font-black disabled:opacity-45 sm:min-h-11 sm:text-sm"
+              className="min-h-9 border border-[#ff9b1a] bg-[#9f3b18] px-1 text-[0.64rem] font-normal text-white disabled:opacity-45 sm:min-h-11 sm:text-sm"
             >
               Ongedaan
             </button>
@@ -447,7 +767,7 @@ export default function KraamrekenaarPage() {
               type="button"
               onClick={holdOrder}
               disabled={!canHoldOrder}
-              className="min-h-9 bg-[#f0e3a0] px-1 text-[0.68rem] font-black disabled:opacity-45 sm:min-h-11 sm:text-sm"
+              className="min-h-9 border border-[#ff9b1a] bg-[#ff9b1a] px-1 text-[0.64rem] font-extrabold text-[#4a1c0c] disabled:opacity-45 sm:min-h-11 sm:text-sm"
             >
               In wacht
             </button>
@@ -455,15 +775,27 @@ export default function KraamrekenaarPage() {
               type="button"
               onClick={clearOrder}
               disabled={!entries.length}
-              className="min-h-9 bg-[#ef5737] px-1 text-sm font-black text-white disabled:opacity-45 sm:min-h-11 sm:text-base"
+              className="min-h-9 bg-white px-1 text-sm font-black text-[#9f3b18] disabled:opacity-45 sm:min-h-11 sm:text-base"
             >
               Klaar
+            </button>
+            <button
+              type="button"
+              onClick={isEditMode ? closeEditMode : openEditMode}
+              className={`min-h-9 border px-1 text-base font-black sm:min-h-11 ${
+                isEditMode
+                  ? "border-white bg-white text-[#9f3b18]"
+                  : "border-[#ff9b1a] bg-[#9f3b18] text-white"
+              }`}
+              aria-label="Producten bewerken"
+            >
+              ✎
             </button>
           </div>
 
           <div className="grid grid-cols-3 gap-1">
             {holdSlots.map((slot) => {
-              const slotTotal = getEntriesTotal(slot.entries);
+              const slotTotal = getEntriesTotal(slot.entries, productById);
               const occupied = slot.entries.length > 0;
 
               return (
@@ -473,8 +805,8 @@ export default function KraamrekenaarPage() {
                   onClick={() => activateHoldSlot(slot.id)}
                   className={`min-h-8 border px-1 text-[0.66rem] font-black sm:min-h-10 sm:text-sm ${
                     occupied
-                      ? "border-[#161412] bg-[#f0e3a0] text-[#161412]"
-                      : "border-[#d8d0c5] bg-[#fbfaf7] text-[#6f6558]"
+                      ? "border-white bg-[#ff9b1a] text-[#4a1c0c]"
+                      : "border-[#ff9b1a]/65 bg-[#9f3b18] text-white/75"
                   }`}
                 >
                   W{slot.id} {occupied ? formatCompactEuro(slotTotal) : "vrij"}
@@ -492,15 +824,15 @@ export default function KraamrekenaarPage() {
                 disabled={!totalCents}
                 className={`min-h-8 border px-1 text-[0.68rem] font-black disabled:opacity-45 sm:min-h-10 sm:text-sm ${
                   cashGivenCents === amount * 100
-                    ? "border-[#161412] bg-[#161412] text-white"
-                    : "border-[#d8d0c5] bg-[#fbfaf7]"
+                    ? "border-white bg-white text-[#9f3b18]"
+                    : "border-[#ff9b1a]/65 bg-[#9f3b18] text-white"
                 }`}
               >
                 €{amount}
               </button>
             ))}
-            <div className="grid min-h-8 content-center bg-[#fbfaf7] px-1 text-center sm:min-h-10">
-              <span className="text-[0.5rem] font-black uppercase leading-none tracking-normal text-[#6f6558] sm:text-[0.62rem]">
+            <div className="grid min-h-8 content-center bg-[#ff9b1a] px-1 text-center text-[#4a1c0c] sm:min-h-10">
+              <span className="text-[0.5rem] font-normal uppercase leading-none tracking-normal sm:text-[0.62rem]">
                 {changeCents !== null && changeCents < 0 ? "Nog" : "Terug"}
               </span>
               <strong className="font-mono text-sm font-black leading-tight tracking-normal sm:text-lg">
@@ -515,10 +847,135 @@ export default function KraamrekenaarPage() {
             <button
               type="button"
               onClick={clearOrder}
-              className="min-h-8 border-2 border-[#ef5737] bg-white px-2 text-xs font-black text-[#ef5737] sm:min-h-10 sm:text-sm"
+              className="min-h-8 border-2 border-white bg-[#ff9b1a] px-2 text-xs font-black text-[#4a1c0c] sm:min-h-10 sm:text-sm"
             >
               Nieuwe klant
             </button>
+          )}
+
+          {isEditMode && (
+            <div className="grid gap-1 border border-[#ff9b1a] bg-[#9f3b18] p-1 text-white">
+              <div className="grid grid-cols-[1fr_1fr_1fr] gap-1">
+                <button
+                  type="button"
+                  onClick={startNewProduct}
+                  className="min-h-8 bg-[#ff9b1a] px-2 text-[0.66rem] font-black text-[#4a1c0c] sm:text-sm"
+                >
+                  Nieuwe knop
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveEditingProduct(-1)}
+                  disabled={!editingProduct}
+                  className="min-h-8 border border-[#ff9b1a] px-2 text-[0.66rem] font-normal disabled:opacity-45 sm:text-sm"
+                >
+                  Omhoog
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveEditingProduct(1)}
+                  disabled={!editingProduct}
+                  className="min-h-8 border border-[#ff9b1a] px-2 text-[0.66rem] font-normal disabled:opacity-45 sm:text-sm"
+                >
+                  Omlaag
+                </button>
+              </div>
+
+              {isProductEditorOpen ? (
+                <div className="grid gap-1 sm:grid-cols-[4rem_1fr_1fr_5rem_7rem_auto_auto]">
+                  <input
+                    value={draft.code}
+                    onChange={(event) =>
+                      setDraft((currentDraft) => ({
+                        ...currentDraft,
+                        code: event.target.value,
+                      }))
+                    }
+                    placeholder="nr"
+                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none placeholder:text-white/45"
+                  />
+                  <input
+                    value={draft.name}
+                    onChange={(event) =>
+                      setDraft((currentDraft) => ({
+                        ...currentDraft,
+                        name: event.target.value,
+                      }))
+                    }
+                    placeholder="product"
+                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none placeholder:text-white/45"
+                  />
+                  <input
+                    value={draft.detail}
+                    onChange={(event) =>
+                      setDraft((currentDraft) => ({
+                        ...currentDraft,
+                        detail: event.target.value,
+                      }))
+                    }
+                    placeholder="klein label"
+                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none placeholder:text-white/45"
+                  />
+                  <input
+                    inputMode="decimal"
+                    value={draft.price}
+                    onChange={(event) =>
+                      setDraft((currentDraft) => ({
+                        ...currentDraft,
+                        price: event.target.value,
+                      }))
+                    }
+                    placeholder="prijs"
+                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none placeholder:text-white/45"
+                  />
+                  <select
+                    value={draft.group}
+                    onChange={(event) =>
+                      setDraft((currentDraft) => ({
+                        ...currentDraft,
+                        group: event.target.value as ProductGroup,
+                      }))
+                    }
+                    className="min-h-8 border border-[#ff9b1a] bg-[#8b3215] px-2 text-xs text-white outline-none"
+                  >
+                    {Object.entries(groupLabels).map(([group, label]) => (
+                      <option key={group} value={group}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={saveProduct}
+                    className="min-h-8 bg-white px-2 text-xs font-black text-[#9f3b18]"
+                  >
+                    Opslaan
+                  </button>
+                  {editingProduct && (
+                    <button
+                      type="button"
+                      onClick={deleteEditingProduct}
+                      className="min-h-8 border border-white px-2 text-xs font-normal"
+                    >
+                      Verwijder
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[0.66rem] font-normal text-white/75 sm:text-xs">
+                  Tik een product aan om te bewerken, of sleep knoppen naar een
+                  andere plek.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={resetProducts}
+                className="justify-self-start text-[0.64rem] font-normal text-white/65 underline underline-offset-2"
+              >
+                Standaardlijst herstellen
+              </button>
+            </div>
           )}
         </section>
       </div>
