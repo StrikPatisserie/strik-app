@@ -3,7 +3,9 @@ import Link from "next/link";
 import { strikIcons } from "./StrikUI";
 import StrikPageTitle from "./StrikPageTitle";
 
-const sections = [
+const SHOW_KRAAMREKENAAR = true;
+
+const baseSections = [
   {
     href: "/winkel",
     title: "Winkel",
@@ -30,6 +32,18 @@ const sections = [
   },
 ];
 
+const sections = SHOW_KRAAMREKENAAR
+  ? [
+      {
+        href: "/kraamrekenaar",
+        title: "Kraamrekenaar",
+        subtitle: "Vierdaagse snel optellen",
+        icon: strikIcons.overview,
+      },
+      ...baseSections,
+    ]
+  : baseSections;
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#faf8f5] px-4 py-5 text-[#1a1815] sm:px-6 lg:px-8">
@@ -46,7 +60,7 @@ export default function Home() {
           <StrikPageTitle title="Strik Team App" />
         </header>
 
-        <section className="mx-auto grid w-full max-w-[calc(100vw-3.5rem)] grid-cols-1 gap-2 sm:max-w-none sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+        <section className="mx-auto grid w-full max-w-[calc(100vw-3.5rem)] grid-cols-1 gap-2 sm:max-w-none sm:grid-cols-2 sm:gap-3 xl:grid-cols-5">
           {sections.map((section) => (
             <Link
               key={section.href}
