@@ -324,6 +324,20 @@ function productGroupClass(
   return "border-[#ef7d0a] bg-[#ef7d0a] text-white";
 }
 
+function productCodeBadgeClass(
+  group: ProductGroup,
+  selected: boolean,
+  editMode: boolean
+) {
+  if (editMode) return "border-[#ef7d0a] bg-white text-[#d86a12]";
+  if (selected) return "border-[#24551d] bg-[#24551d] text-white";
+  if (group === "drinken") return "border-white bg-white text-[#d86a12]";
+  if (group === "hartig") return "border-white bg-white text-[#24551d]";
+  if (group === "koek") return "border-white bg-white text-[#3b6d2d]";
+
+  return "border-white bg-white text-[#d86a12]";
+}
+
 export default function KraamrekenaarPage() {
   const [products, setProducts] = useState<StallProduct[]>(defaultProducts);
   const [entries, setEntries] = useState<string[]>([]);
@@ -634,19 +648,19 @@ export default function KraamrekenaarPage() {
       <div className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col gap-1.5 px-1.5 py-1.5 tracking-normal sm:gap-2 sm:px-3 sm:py-2">
         <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 border border-[#d8d0c5] bg-white p-1.5 shadow-sm">
           <div className="min-w-0">
-            <h1 className="truncate text-[0.74rem] font-extrabold uppercase tracking-normal text-[#24551d] sm:text-lg">
+            <h1 className="text-[0.56rem] font-extrabold leading-none tracking-normal text-[#24551d] sm:text-lg">
               4Daagse rekentool
             </h1>
-            <p className="text-[0.5rem] font-normal uppercase tracking-normal text-[#d86a12] sm:text-xs">
+            <p className="text-[0.46rem] font-normal uppercase tracking-normal text-[#d86a12] sm:text-xs">
               {entries.length} stuks
             </p>
           </div>
 
-          <div className="grid min-w-[7.2rem] grid-cols-[auto_1fr] items-center gap-1 border border-[#ef7d0a] bg-[#fffaf1] px-1.5 py-1 text-[#24551d] sm:min-w-52 sm:px-3 sm:py-2">
-            <span className="text-[0.48rem] font-normal uppercase tracking-normal text-[#24551d]/65 sm:text-xs">
+          <div className="grid min-w-[6.7rem] grid-cols-[auto_1fr] items-center gap-1 border border-[#ef7d0a] bg-[#fffaf1] px-1.5 py-1 text-[#24551d] sm:min-w-52 sm:px-3 sm:py-2">
+            <span className="text-[0.44rem] font-normal uppercase tracking-normal text-[#24551d]/65 sm:text-xs">
               Totaal
             </span>
-            <strong className="text-right font-mono text-xl font-black tracking-normal sm:text-4xl">
+            <strong className="text-right font-mono text-lg font-black tracking-normal sm:text-4xl">
               {formatCompactEuro(totalCents)}
             </strong>
           </div>
@@ -726,14 +740,25 @@ export default function KraamrekenaarPage() {
                 )}`}
               >
                 <span className="flex min-w-0 items-start justify-between gap-1">
-                  <span className="text-[0.48rem] font-normal leading-none text-current opacity-70 sm:text-[0.62rem]">
-                    {isEditMode ? "sleep" : product.code}
+                  <span className="truncate text-[0.44rem] font-normal uppercase leading-none text-current opacity-80 sm:text-[0.58rem]">
+                    {isEditMode ? "sleep" : groupLabels[product.group]}
                   </span>
-                  {count > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center bg-white px-1 text-xs font-black text-[#24551d] sm:h-6 sm:min-w-6">
-                      {count}
+                  <span className="flex shrink-0 items-start gap-0.5">
+                    {count > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center bg-white px-1 text-xs font-black text-[#24551d] sm:h-6 sm:min-w-6">
+                        {count}
+                      </span>
+                    )}
+                    <span
+                      className={`flex h-5 min-w-7 items-center justify-center border px-1 text-[0.66rem] font-black leading-none sm:h-6 sm:min-w-8 sm:text-xs ${productCodeBadgeClass(
+                        product.group,
+                        count > 0,
+                        isEditMode
+                      )}`}
+                    >
+                      {product.code}
                     </span>
-                  )}
+                  </span>
                 </span>
                 <span className="min-w-0">
                   <span className="block break-words text-[0.64rem] font-extrabold uppercase leading-[0.9] tracking-normal text-current sm:text-sm">
