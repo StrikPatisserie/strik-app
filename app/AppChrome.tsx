@@ -21,6 +21,8 @@ export default function AppChrome({
     pathname === "/schoonmaak" ||
     pathname.startsWith("/schoonmaak/");
   const isWorkArea = isWinkelWorkArea || isBakeryWorkArea;
+  const isVierdaagseWorkArea =
+    pathname === "/vierdaagse" || pathname.startsWith("/vierdaagse/");
 
   return (
     <>
@@ -31,7 +33,9 @@ export default function AppChrome({
 
           <main
             className={`flex-1 overflow-auto ${
-              isWorkArea ? "pb-32 md:pb-0" : "pb-24 md:pb-0"
+              isWorkArea || isVierdaagseWorkArea
+                ? "pb-32 md:pb-0"
+                : "pb-24 md:pb-0"
             }`}
           >
             {children}

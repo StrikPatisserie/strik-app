@@ -8,8 +8,12 @@ const parentRoutes: Record<string, string> = {
   "/bruidstaart-studio": "/bruidstaarten",
   "/bruidstaarten": "/winkel",
   "/info": "/winkel",
+  "/kraamrekenaar": "/vierdaagse",
   "/nieuws": "/winkel",
   "/strik-agenda": "/winkel",
+  "/vierdaagse/kassa-tool": "/vierdaagse",
+  "/vierdaagse/kassa": "/vierdaagse/kassa-tool",
+  "/vierdaagse/productie-bediening": "/vierdaagse/kassa-tool",
   "/winkel/schoonmaak-registratie": "/winkel",
   "/winkel/schoonmaak-registratie/overzicht": "/winkel/schoonmaak-registratie",
   "/schoonmaak": "/ijs",
@@ -17,7 +21,14 @@ const parentRoutes: Record<string, string> = {
   "/management/personeelsagenda": "/management",
 };
 
-const topLevelRoutes = new Set(["/", "/winkel", "/ijs", "/bakkerij", "/management"]);
+const topLevelRoutes = new Set([
+  "/",
+  "/winkel",
+  "/ijs",
+  "/bakkerij",
+  "/management",
+  "/vierdaagse",
+]);
 
 function getParentRoute(pathname: string) {
   if (topLevelRoutes.has(pathname)) return "";
