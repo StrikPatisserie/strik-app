@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   Ingredient,
   PackagingItem,
@@ -191,6 +191,25 @@ export default function RecipeDetail({
     ),
     reason: "",
   }));
+
+  useEffect(() => {
+    const quantity = defaultRecipeProductionQuantity(recipe);
+
+    setCardQuantity(quantity);
+    setNewProductionEntry((current) => ({
+      ...current,
+      quantity: formatInputNumber(quantity),
+    }));
+    setNewProductionRequest((current) => ({
+      ...current,
+      quantity: formatInputNumber(quantity),
+    }));
+  }, [
+    recipe.batchSize,
+    recipe.id,
+    recipe.standardBatchQuantity,
+    recipe.standardBatchUnit,
+  ]);
   const isSemiFinishedDraft = draft.type === "semiFinished";
   const availableIngredients = ingredients;
   const activePackagingOptions = packagingItems.filter(
@@ -273,6 +292,31 @@ export default function RecipeDetail({
 
   function updateDraft(changes: Partial<RecipeDraft>) {
     setDraft((current) => ({ ...current, ...changes }));
+  }
+
+  function updateStandardBatchQuantity(value: string) {
+    setDraft((current) => {
+      const currentBatchQuantity = parseDutchNumber(
+        current.standardBatchQuantity
+      );
+      const currentProductionBatchQuantity = parseDutchNumber(
+        current.desiredProductionBatchQuantity
+      );
+      const shouldSyncProductionBatch =
+        currentProductionBatchQuantity <= 0 ||
+        quantitiesAreEqual(
+          currentProductionBatchQuantity,
+          currentBatchQuantity
+        );
+
+      return {
+        ...current,
+        standardBatchQuantity: value,
+        desiredProductionBatchQuantity: shouldSyncProductionBatch
+          ? value
+          : current.desiredProductionBatchQuantity,
+      };
+    });
   }
 
   function startEditing(section: RecipeEditSection = "basis") {
@@ -395,6 +439,7 @@ export default function RecipeDetail({
 
     onSaveRecipe(updatedRecipe);
     setDraft(createRecipeDraft(updatedRecipe));
+    setCardQuantity(defaultRecipeProductionQuantity(updatedRecipe));
     setIsEditing(false);
     showFeedback("Recept opgeslagen.");
   }
@@ -1377,9 +1422,7 @@ export default function RecipeDetail({
                     <EditTextField
                       label="Batch"
                       value={draft.standardBatchQuantity}
-                      onChange={(value) =>
-                        updateDraft({ standardBatchQuantity: value })
-                      }
+                      onChange={updateStandardBatchQuantity}
                       inputMode="decimal"
                     />
                     <SelectField
@@ -3051,6 +3094,13 @@ function buildRecipeFromDraft(
     standardBatchUnit,
     draft.batchSize || recipe.batchSize
   );
+  const previousBatchQuantity = defaultRecipeProductionQuantity(recipe);
+  const draftProductionBatchQuantity = parseDutchNumber(
+    draft.desiredProductionBatchQuantity
+  );
+  const shouldSyncProductionBatch =
+    !draftProductionBatchQuantity ||
+    quantitiesAreEqual(draftProductionBatchQuantity, previousBatchQuantity);
   const latestProductionEntry = draft.productionLog.find(
     (entry) => entry.source !== "stock"
   );
@@ -3103,7 +3153,9 @@ function buildRecipeFromDraft(
       : Math.max(0, Math.round(parseDutchNumber(draft.desiredProductionFrequencyDays))),
     desiredProductionBatchQuantity: isSemiFinished
       ? 0
-      : parseDutchNumber(draft.desiredProductionBatchQuantity),
+      : shouldSyncProductionBatch
+        ? standardBatchQuantity || draftProductionBatchQuantity
+        : draftProductionBatchQuantity,
     lastProducedAt: latestProductionEntry?.date || "",
     lastProducedQuantity: latestProductionEntry?.quantity || 0,
     productionLog: draft.productionLog,
@@ -3289,6 +3341,14 @@ function getBatchInfo(recipe?: Recipe | null) {
     quantity: parseDutchNumber(match[1]),
     unit: unitFromText(match[2]),
   };
+}
+
+function defaultRecipeProductionQuantity(recipe: Recipe) {
+  return recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1;
+}
+
+function quantitiesAreEqual(first: number, second: number) {
+  return Math.abs(first - second) < 0.0001;
 }
 
 function unitFromText(value: string): RecipeUnit {
