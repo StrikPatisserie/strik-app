@@ -58,10 +58,21 @@ function averageMinutes(values: number[]) {
   return Math.round(values.reduce((total, value) => total + value, 0) / values.length);
 }
 
+function isOrderStillBeingMade(order: VierdaagseOrder) {
+  return (
+    (order.status === "nieuw" || order.status === "in_productie") &&
+    order.items.some((item) => item.status !== "klaar")
+  );
+}
+
 function orderTone(order: VierdaagseOrder, now: Date) {
   const minutes = minutesBetween(order.createdAt, now);
-  if (minutes > 12) return "border-[#f0b4a8] bg-[#fff7f5]";
-  if (minutes >= 8) return "border-[#f0d7a0] bg-[#fffaf0]";
+  if (isOrderStillBeingMade(order) && minutes >= 10) {
+    return "border-[#d8422f] bg-[#fff1ef] ring-2 ring-[#d8422f]/15";
+  }
+  if (isOrderStillBeingMade(order) && minutes >= 8) {
+    return "border-[#f0d7a0] bg-[#fffaf0]";
+  }
   return "border-[#d6e5d8] bg-white";
 }
 
@@ -133,11 +144,11 @@ function getOrderItemGroups(order: VierdaagseOrder) {
   return [
     {
       id: "service",
-      title: "food",
+      title: "gebak/hartig/overig",
       badge: "bediening",
       items: serviceItems,
       className: "border-[#d6e5d8] bg-white",
-      badgeClassName: "border border-[#d6e5d8] bg-white/70 text-[#6b645b]",
+      badgeClassName: "bg-transparent text-[#9a9188]",
     },
     {
       id: "coffee",
@@ -145,7 +156,7 @@ function getOrderItemGroups(order: VierdaagseOrder) {
       badge: "apart",
       items: coffeeItems,
       className: "border-[#f0c084] bg-[#fffaf4]",
-      badgeClassName: "border border-[#f0c084] bg-white/70 text-[#9d3c24]",
+      badgeClassName: "bg-transparent text-[#9a9188]",
     },
   ].filter((group) => group.items.length > 0);
 }
@@ -217,11 +228,11 @@ function OrderCard({
             className={`grid gap-1.5 rounded-lg border p-2 ${group.className}`}
           >
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[0.68rem] font-semibold italic lowercase tracking-normal text-[#7b7168]">
+              <h3 className="text-[0.56rem] font-normal italic lowercase leading-none tracking-normal text-[#9a9188]">
                 {group.title}
               </h3>
               <span
-                className={`rounded-md px-1.5 py-0.5 text-[0.58rem] font-bold lowercase ${group.badgeClassName}`}
+                className={`px-0.5 text-[0.52rem] font-normal italic lowercase leading-none ${group.badgeClassName}`}
               >
                 {group.badge} · {countOrderItems(group.items)}
               </span>
