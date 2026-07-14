@@ -8,6 +8,7 @@
  * - GET  /wp-json/strik/v1/vierdaagse-orders?key=...
  * - POST /wp-json/strik/v1/vierdaagse-orders?key=...
  * - PUT  /wp-json/strik/v1/vierdaagse-orders?key=...
+ * - DELETE /wp-json/strik/v1/vierdaagse-orders?key=...&id=...
  *
  * Hiermee worden Vierdaagse kassabonnen centraal opgeslagen, zodat meerdere
  * iPads dezelfde bonnen en statusvinkjes kunnen zien.
@@ -249,6 +250,36 @@ function strik_vierdaagse_save($request) {
 }
 }
 
+if (!function_exists('strik_vierdaagse_delete')) {
+function strik_vierdaagse_delete($request) {
+    $id = strik_vierdaagse_text($request->get_param('id'), 140);
+
+    if ($id === '') {
+        return new WP_Error('strik_vierdaagse_missing_id', 'Geen bon gekozen om te verwijderen.', array('status' => 400));
+    }
+
+    $orders = strik_vierdaagse_get_orders();
+    $next = array();
+    $deleted = false;
+
+    foreach ($orders as $order) {
+        if (isset($order['id']) && $order['id'] === $id) {
+            $deleted = true;
+            continue;
+        }
+
+        $next[] = $order;
+    }
+
+    update_option(STRIK_VIERDAAGSE_OPTION_NAME, $next, false);
+
+    return rest_ensure_response(array(
+        'deleted' => $deleted,
+        'id' => $id,
+    ));
+}
+}
+
 add_action('rest_api_init', function () {
     register_rest_route('strik/v1', '/vierdaagse-orders', array(
         array(
@@ -264,6 +295,11 @@ add_action('rest_api_init', function () {
         array(
             'methods' => WP_REST_Server::EDITABLE,
             'callback' => 'strik_vierdaagse_save',
+            'permission_callback' => 'strik_vierdaagse_permission',
+        ),
+        array(
+            'methods' => WP_REST_Server::DELETABLE,
+            'callback' => 'strik_vierdaagse_delete',
             'permission_callback' => 'strik_vierdaagse_permission',
         ),
     ));

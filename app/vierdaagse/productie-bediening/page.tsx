@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   cancelOrder,
+  deleteArchivedOrder,
   fetchVierdaagseOrdersFromWordPress,
   getAllOrders,
   loadDemoOrders,
@@ -134,6 +135,21 @@ function countOrderItems(items: VierdaagseOrder["items"]) {
   return items.reduce((total, item) => total + item.quantity, 0);
 }
 
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+      <path
+        d="M9 4h6M5 7h14M10 10v7M14 10v7M7 7l1 13h8l1-13"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
 function getOrderItemGroups(order: VierdaagseOrder) {
   const serviceItems = order.items.filter(
     (item) => item.category !== "koffie-thee"
@@ -166,12 +182,16 @@ function OrderCard({
   order,
   now,
   archive = false,
+  isDeleting = false,
   onRefresh,
+  onDelete,
 }: Readonly<{
   order: VierdaagseOrder;
   now: Date;
   archive?: boolean;
+  isDeleting?: boolean;
   onRefresh: () => void;
+  onDelete?: (order: VierdaagseOrder) => void;
 }>) {
   const elapsed = minutesBetween(order.createdAt, now);
   const allReady = order.items.every((item) => item.status === "klaar");
@@ -188,27 +208,27 @@ function OrderCard({
 
   return (
     <article
-      className={`grid gap-3 rounded-lg border p-3 shadow-sm ${orderTone(
+      className={`grid gap-2 rounded-lg border p-2 shadow-sm sm:gap-3 sm:p-3 ${orderTone(
         order,
         now
       )}`}
     >
-      <header className="flex items-start justify-between gap-3">
+      <header className="flex items-start justify-between gap-2 sm:gap-3">
         <div>
           <div className="flex flex-wrap items-baseline gap-2">
-            <h2 className="text-2xl font-black leading-none text-[#24551d]">
+            <h2 className="text-xl font-black leading-none text-[#24551d] sm:text-2xl">
               {order.tableNumber}
             </h2>
-            <span className="rounded-md bg-[#ecf4ed] px-2 py-1 text-xs font-black uppercase text-[#24551d]">
+            <span className="rounded-md bg-[#ecf4ed] px-1.5 py-0.5 text-[0.6rem] font-black uppercase text-[#24551d] sm:px-2 sm:py-1 sm:text-xs">
               {getLocationLabel(order.location)}
             </span>
           </div>
-          <p className="mt-1 text-xs font-bold text-[#6b645b]">
+          <p className="mt-1 text-[0.68rem] font-bold text-[#6b645b] sm:text-xs">
             {formatTime(order.createdAt)} · {elapsed} min geleden
           </p>
         </div>
         <span
-          className={`rounded-md px-2 py-1 text-xs font-black uppercase ${
+          className={`rounded-md px-1.5 py-0.5 text-[0.6rem] font-black uppercase sm:px-2 sm:py-1 sm:text-xs ${
             order.status === "klaar_voor_bediening"
               ? "bg-[#ef7d0a] text-white"
               : order.status === "geleverd"
@@ -226,7 +246,7 @@ function OrderCard({
         {itemGroups.map((group) => (
           <section
             key={group.id}
-            className={`grid gap-1.5 rounded-lg border p-2 ${group.className}`}
+            className={`grid gap-1 rounded-lg border p-1.5 sm:gap-1.5 sm:p-2 ${group.className}`}
           >
             <div className="flex items-center justify-between gap-2">
               <h3
@@ -246,16 +266,16 @@ function OrderCard({
             {group.items.map((item) => (
               <div
                 key={item.id}
-                className="grid grid-cols-[2.1rem_minmax(0,1fr)_3.2rem] items-center gap-2 rounded-md border border-[#e8e4de] bg-white px-2 py-2"
+                className="grid grid-cols-[1.6rem_minmax(0,1fr)_2.4rem] items-center gap-1.5 rounded-md border border-[#e8e4de] bg-white px-1.5 py-1.5 sm:grid-cols-[2.1rem_minmax(0,1fr)_3.2rem] sm:gap-2 sm:px-2 sm:py-2"
               >
-                <span className="text-sm font-black text-[#ef7d0a]">
+                <span className="text-xs font-black text-[#ef7d0a] sm:text-sm">
                   {item.quantity}x
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-black text-[#1a1815]">
+                  <span className="block truncate text-xs font-black text-[#1a1815] sm:text-sm">
                     {itemLabel(item)}
                   </span>
-                  <span className="block text-[0.64rem] font-bold uppercase text-[#8b8278]">
+                  <span className="block text-[0.55rem] font-bold uppercase text-[#8b8278] sm:text-[0.64rem]">
                     {categoryLabels[item.category as ProductCategoryId]}
                   </span>
                 </span>
@@ -263,7 +283,7 @@ function OrderCard({
                   type="button"
                   disabled={archive || order.status === "klaar_voor_bediening"}
                   onClick={() => setItemStatus(item.id, item.status !== "klaar")}
-                  className={`min-h-11 rounded-md text-lg font-black transition active:scale-[0.98] disabled:opacity-60 ${
+                  className={`min-h-9 rounded-md text-base font-black transition active:scale-[0.98] disabled:opacity-60 sm:min-h-11 sm:text-lg ${
                     item.status === "klaar"
                       ? "bg-[#24551d] text-white"
                       : "border border-[#d8d0c5] bg-[#faf8f5] text-[#8b8278]"
@@ -279,12 +299,16 @@ function OrderCard({
       </div>
 
       {order.note && (
-        <p className="rounded-md bg-[#fff8ef] px-3 py-2 text-sm font-bold text-[#6b3b16]">
+        <p className="rounded-md bg-[#fff8ef] px-2 py-1.5 text-xs font-bold text-[#6b3b16] sm:px-3 sm:py-2 sm:text-sm">
           {order.note}
         </p>
       )}
 
-      <footer className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+      <footer
+        className={
+          archive ? "grid gap-2" : "grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+        }
+      >
         {!archive && (
           <>
             <button
@@ -294,7 +318,7 @@ function OrderCard({
                 markOrderReady(order.id);
                 onRefresh();
               }}
-              className="min-h-11 rounded-md bg-[#ef7d0a] px-3 text-sm font-black text-white disabled:opacity-35 active:scale-[0.98]"
+              className="min-h-10 rounded-md bg-[#ef7d0a] px-2 text-xs font-black text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-11 sm:px-3 sm:text-sm"
             >
               Klaar voor bediening
             </button>
@@ -305,7 +329,7 @@ function OrderCard({
                 markOrderDelivered(order.id);
                 onRefresh();
               }}
-              className="min-h-11 rounded-md bg-[#24551d] px-3 text-sm font-black text-white disabled:opacity-35 active:scale-[0.98]"
+              className="min-h-10 rounded-md bg-[#24551d] px-2 text-xs font-black text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-11 sm:px-3 sm:text-sm"
             >
               Geleverd
             </button>
@@ -315,16 +339,28 @@ function OrderCard({
                 cancelOrder(order.id);
                 onRefresh();
               }}
-              className="min-h-11 rounded-md border border-[#f0b4a8] bg-white px-3 text-sm font-black text-[#9d2f20] active:scale-[0.98]"
+              className="min-h-10 rounded-md border border-[#f0b4a8] bg-white px-2 text-xs font-black text-[#9d2f20] active:scale-[0.98] sm:min-h-11 sm:px-3 sm:text-sm"
             >
               Annuleer
             </button>
           </>
         )}
         {archive && (
-          <div className="rounded-md bg-[#faf8f5] px-3 py-2 text-xs font-bold text-[#6b645b] sm:col-span-3">
-            Eindtijd {formatTime(getArchivedOrderEnd(order))} · doorlooptijd{" "}
-            {minutesBetween(order.createdAt, getArchivedOrderEnd(order))} min
+          <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+            <div className="rounded-md bg-[#faf8f5] px-2 py-1.5 text-[0.68rem] font-bold text-[#6b645b] sm:px-3 sm:py-2 sm:text-xs">
+              Eindtijd {formatTime(getArchivedOrderEnd(order))} · doorlooptijd{" "}
+              {minutesBetween(order.createdAt, getArchivedOrderEnd(order))} min
+            </div>
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={() => onDelete?.(order)}
+              className="flex min-h-9 items-center justify-center rounded-md border border-[#f0b4a8] bg-white px-3 text-[#9d2f20] transition active:scale-[0.98] disabled:opacity-45"
+              aria-label={`Bon ${order.tableNumber} definitief verwijderen`}
+              title="Definitief verwijderen"
+            >
+              <TrashIcon />
+            </button>
           </div>
         )}
       </footer>
@@ -337,6 +373,9 @@ export default function VierdaagseProductieBedieningPage() {
   const [now, setNow] = useState(() => new Date());
   const [activeTab, setActiveTab] = useState<BoardTab>("actief");
   const [filters, setFilters] = useState<ArchiveFilters>(initialFilters);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [boardMessage, setBoardMessage] = useState("");
+  const [boardError, setBoardError] = useState("");
 
   function refreshOrders() {
     setOrders(getAllOrders());
@@ -433,35 +472,74 @@ export default function VierdaagseProductieBedieningPage() {
     setFilters((currentFilters) => ({ ...currentFilters, [key]: value }));
   }
 
+  async function handleDeleteArchivedOrder(order: VierdaagseOrder) {
+    const confirmed = window.confirm(
+      `Bon ${order.tableNumber} definitief verwijderen uit het archief?`
+    );
+
+    if (!confirmed) return;
+
+    setDeletingOrderId(order.id);
+    setBoardMessage("");
+    setBoardError("");
+
+    const result = await deleteArchivedOrder(order.id);
+    refreshOrders();
+
+    if (result.ok) {
+      setBoardMessage(`Bon ${order.tableNumber} is verwijderd.`);
+    } else {
+      setBoardError(
+        result.message ||
+          "Verwijderen is niet gelukt. Controleer de WordPress-snippet."
+      );
+      void refreshOrdersFromWordPress();
+    }
+
+    setDeletingOrderId(null);
+  }
+
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-3 py-3 pb-24 text-[#1a1815] md:pb-6 lg:px-5">
-      <div className="mx-auto grid max-w-7xl gap-3">
-        <header className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d6e5d8] bg-white p-3 shadow-sm">
+    <main className="min-h-screen bg-[#faf8f5] px-2 py-2 pb-20 text-[#1a1815] md:pb-6 lg:px-5">
+      <div className="mx-auto grid max-w-7xl gap-2 sm:gap-3">
+        <header className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d6e5d8] bg-white p-2 shadow-sm sm:p-3">
           <div className="min-w-0">
-            <p className="text-[0.68rem] font-black uppercase tracking-normal text-[#ef7d0a]">
-              Vierdaagse kassa
+            <p className="text-[0.6rem] font-black uppercase tracking-normal text-[#ef7d0a] sm:text-[0.68rem]">
+              Proeverij tool
             </p>
-            <h1 className="text-xl font-black leading-tight text-[#24551d]">
-              Productie & bediening
+            <h1 className="text-lg font-black leading-tight text-[#24551d] sm:text-xl">
+              Keuken
             </h1>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href="/vierdaagse/kassa"
-              className="rounded-md bg-[#ef7d0a] px-3 py-2 text-sm font-black text-white transition active:scale-[0.98]"
+              className="rounded-md bg-[#ef7d0a] px-2 py-1.5 text-xs font-black text-white transition active:scale-[0.98] sm:px-3 sm:py-2 sm:text-sm"
             >
-              Nieuwe bestelling
+              Nieuwe bon
             </Link>
             <Link
               href="/vierdaagse/kassa-tool"
-              className="rounded-md border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-black text-[#24551d] transition active:scale-[0.98]"
+              className="rounded-md border border-[#d6e5d8] bg-white px-2 py-1.5 text-xs font-black text-[#24551d] transition active:scale-[0.98] sm:px-3 sm:py-2 sm:text-sm"
             >
               Terug
             </Link>
           </div>
         </header>
 
-        <nav className="grid grid-cols-3 gap-1.5 rounded-lg border border-[#e8e4de] bg-white p-1.5 shadow-sm">
+        {(boardMessage || boardError) && (
+          <div
+            className={`rounded-lg border px-2 py-1.5 text-xs font-bold sm:px-3 sm:py-2 sm:text-sm ${
+              boardError
+                ? "border-[#f0b4a8] bg-[#fff4f2] text-[#9d2f20]"
+                : "border-[#c8dfc3] bg-[#f2faef] text-[#24551d]"
+            }`}
+          >
+            {boardError || boardMessage}
+          </div>
+        )}
+
+        <nav className="grid grid-cols-3 gap-1 rounded-lg border border-[#e8e4de] bg-white p-1 shadow-sm sm:gap-1.5 sm:p-1.5">
           {[
             { id: "actief" as const, label: "Actief", count: activeOrders.length },
             {
@@ -479,37 +557,45 @@ export default function VierdaagseProductieBedieningPage() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`min-h-11 rounded-md px-2 text-sm font-black transition active:scale-[0.98] ${
+              className={`min-h-9 rounded-md px-1 text-xs font-black transition active:scale-[0.98] sm:min-h-11 sm:px-2 sm:text-sm ${
                 activeTab === tab.id
                   ? "bg-[#24551d] text-white"
                   : "bg-[#f6faf4] text-[#24551d]"
               }`}
             >
-              {tab.label} {tab.count}
+              {tab.id === "klaar" ? (
+                <>
+                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="sm:hidden">Klaar</span>
+                </>
+              ) : (
+                tab.label
+              )}{" "}
+              {tab.count}
             </button>
           ))}
         </nav>
 
         {activeTab === "archief" && (
-          <section className="grid gap-3 rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm">
+          <section className="grid gap-2 rounded-lg border border-[#e8e4de] bg-white p-2 shadow-sm sm:gap-3 sm:p-3">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
               <input
                 type="date"
                 value={filters.date}
                 onChange={(event) => updateFilter("date", event.target.value)}
-                className="min-h-11 rounded-md border border-[#d8d0c5] px-3 text-sm font-semibold"
+                className="min-h-9 rounded-md border border-[#d8d0c5] px-2 text-xs font-semibold sm:min-h-11 sm:px-3 sm:text-sm"
               />
               <input
                 inputMode="numeric"
                 placeholder="Jaartal"
                 value={filters.year}
                 onChange={(event) => updateFilter("year", event.target.value)}
-                className="min-h-11 rounded-md border border-[#d8d0c5] px-3 text-sm font-semibold"
+                className="min-h-9 rounded-md border border-[#d8d0c5] px-2 text-xs font-semibold sm:min-h-11 sm:px-3 sm:text-sm"
               />
               <select
                 value={filters.table}
                 onChange={(event) => updateFilter("table", event.target.value)}
-                className="min-h-11 rounded-md border border-[#d8d0c5] bg-white px-3 text-sm font-semibold"
+                className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold sm:min-h-11 sm:px-3 sm:text-sm"
               >
                 <option value="">Alle tafels</option>
                 {vierdaagseTables.map((table) => (
@@ -526,7 +612,7 @@ export default function VierdaagseProductieBedieningPage() {
                     event.target.value as ArchiveFilters["status"]
                   )
                 }
-                className="min-h-11 rounded-md border border-[#d8d0c5] bg-white px-3 text-sm font-semibold"
+                className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold sm:min-h-11 sm:px-3 sm:text-sm"
               >
                 <option value="">Alle statussen</option>
                 <option value="geleverd">Geleverd</option>
@@ -535,7 +621,7 @@ export default function VierdaagseProductieBedieningPage() {
               <select
                 value={filters.product}
                 onChange={(event) => updateFilter("product", event.target.value)}
-                className="min-h-11 rounded-md border border-[#d8d0c5] bg-white px-3 text-sm font-semibold"
+                className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold sm:min-h-11 sm:px-3 sm:text-sm"
               >
                 <option value="">Alle producten</option>
                 {vierdaagseProducts.map((product) => (
@@ -548,36 +634,36 @@ export default function VierdaagseProductieBedieningPage() {
                 placeholder="Zoeken"
                 value={filters.search}
                 onChange={(event) => updateFilter("search", event.target.value)}
-                className="min-h-11 rounded-md border border-[#d8d0c5] px-3 text-sm font-semibold"
+                className="min-h-9 rounded-md border border-[#d8d0c5] px-2 text-xs font-semibold sm:min-h-11 sm:px-3 sm:text-sm"
               />
             </div>
 
             <div className="grid gap-2 md:grid-cols-5">
-              <div className="rounded-md bg-[#f6faf4] p-3">
+              <div className="rounded-md bg-[#f6faf4] p-2 sm:p-3">
                 <p className="text-[0.64rem] font-black uppercase text-[#6b645b]">
                   Bestellingen
                 </p>
-                <p className="text-xl font-black text-[#24551d]">
+                <p className="text-lg font-black text-[#24551d] sm:text-xl">
                   {archiveStats.count}
                 </p>
               </div>
-              <div className="rounded-md bg-[#f6faf4] p-3">
+              <div className="rounded-md bg-[#f6faf4] p-2 sm:p-3">
                 <p className="text-[0.64rem] font-black uppercase text-[#6b645b]">
                   Gem. klaar
                 </p>
-                <p className="text-xl font-black text-[#24551d]">
+                <p className="text-lg font-black text-[#24551d] sm:text-xl">
                   {archiveStats.averageReady ?? "-"} min
                 </p>
               </div>
-              <div className="rounded-md bg-[#f6faf4] p-3">
+              <div className="rounded-md bg-[#f6faf4] p-2 sm:p-3">
                 <p className="text-[0.64rem] font-black uppercase text-[#6b645b]">
                   Gem. geleverd
                 </p>
-                <p className="text-xl font-black text-[#24551d]">
+                <p className="text-lg font-black text-[#24551d] sm:text-xl">
                   {archiveStats.averageDelivered ?? "-"} min
                 </p>
               </div>
-              <div className="rounded-md bg-[#f6faf4] p-3 md:col-span-1">
+              <div className="rounded-md bg-[#f6faf4] p-2 sm:p-3 md:col-span-1">
                 <p className="text-[0.64rem] font-black uppercase text-[#6b645b]">
                   Tafels
                 </p>
@@ -585,7 +671,7 @@ export default function VierdaagseProductieBedieningPage() {
                   {archiveStats.tables.map(([table, count]) => `${table} ${count}`).join(" · ") || "-"}
                 </p>
               </div>
-              <div className="rounded-md bg-[#f6faf4] p-3 md:col-span-1">
+              <div className="rounded-md bg-[#f6faf4] p-2 sm:p-3 md:col-span-1">
                 <p className="text-[0.64rem] font-black uppercase text-[#6b645b]">
                   Populair
                 </p>
@@ -600,8 +686,8 @@ export default function VierdaagseProductieBedieningPage() {
         )}
 
         {!orders.length && (
-          <section className="grid gap-3 rounded-lg border border-dashed border-[#d8d0c5] bg-white p-4 text-center shadow-sm">
-            <p className="text-sm font-bold text-[#6b645b]">
+          <section className="grid gap-2 rounded-lg border border-dashed border-[#d8d0c5] bg-white p-3 text-center shadow-sm sm:gap-3 sm:p-4">
+            <p className="text-xs font-bold text-[#6b645b] sm:text-sm">
               Er zijn nog geen Vierdaagse-bestellingen opgeslagen.
             </p>
             <button
@@ -610,7 +696,7 @@ export default function VierdaagseProductieBedieningPage() {
                 loadDemoOrders();
                 refreshOrders();
               }}
-              className="mx-auto min-h-11 rounded-md bg-[#ef7d0a] px-4 text-sm font-black text-white active:scale-[0.98]"
+              className="mx-auto min-h-10 rounded-md bg-[#ef7d0a] px-3 text-xs font-black text-white active:scale-[0.98] sm:min-h-11 sm:px-4 sm:text-sm"
             >
               Testdata laden
             </button>
@@ -618,19 +704,21 @@ export default function VierdaagseProductieBedieningPage() {
         )}
 
         {orders.length > 0 && !visibleOrders.length && (
-          <section className="rounded-lg border border-dashed border-[#d8d0c5] bg-white p-4 text-center text-sm font-bold text-[#6b645b] shadow-sm">
+          <section className="rounded-lg border border-dashed border-[#d8d0c5] bg-white p-3 text-center text-xs font-bold text-[#6b645b] shadow-sm sm:p-4 sm:text-sm">
             Geen bestellingen in deze weergave.
           </section>
         )}
 
-        <section className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+        <section className="grid gap-2 sm:gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {visibleOrders.map((order) => (
             <OrderCard
               key={order.id}
               order={order}
               now={now}
               archive={activeTab === "archief"}
+              isDeleting={deletingOrderId === order.id}
               onRefresh={refreshOrders}
+              onDelete={handleDeleteArchivedOrder}
             />
           ))}
         </section>

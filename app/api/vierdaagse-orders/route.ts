@@ -9,9 +9,12 @@ const VIERDAAGSE_ORDERS_API_KEY =
   process.env.WORDPRESS_STRIK_API_KEY ||
   "schoonmaak-ijs-strik";
 
-function getWordPressVierdaagseOrdersUrl() {
+function getWordPressVierdaagseOrdersUrl(orderId?: string) {
   const url = new URL(WORDPRESS_VIERDAAGSE_ORDERS_API_URL);
   url.searchParams.set("key", VIERDAAGSE_ORDERS_API_KEY);
+  if (orderId) {
+    url.searchParams.set("id", orderId);
+  }
 
   return url;
 }
@@ -156,4 +159,41 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   return saveVierdaagseOrder(request, "PUT");
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const orderId = searchParams.get("id")?.trim();
+
+  if (!orderId) {
+    return NextResponse.json(
+      { message: "Geen Vierdaagse bon gekozen om te verwijderen." },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const response = await fetch(getWordPressVierdaagseOrdersUrl(orderId), {
+      method: "DELETE",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    const data = await readWordPressResponse(response);
+
+    if (!response.ok) {
+      return createWordPressErrorResponse(response.status);
+    }
+
+    return NextResponse.json(data || { deleted: true, id: orderId }, {
+      status: response.status,
+    });
+  } catch {
+    return NextResponse.json(
+      {
+        message: "Kan geen verbinding maken met WordPress Vierdaagse-opslag.",
+      },
+      { status: 502 }
+    );
+  }
 }

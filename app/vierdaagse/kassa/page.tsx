@@ -234,24 +234,24 @@ export default function VierdaagseKassaPage() {
         : "Nog geen tafel";
 
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-3 py-3 pb-24 text-[#1a1815] md:pb-6 lg:px-5">
-      <div className="mx-auto grid max-w-7xl gap-3">
-        <header className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d6e5d8] bg-white p-3 shadow-sm">
+    <main className="min-h-screen bg-[#faf8f5] px-2 py-2 pb-20 text-[#1a1815] md:pb-6 lg:px-5">
+      <div className="mx-auto grid max-w-7xl gap-2 sm:gap-3">
+        <header className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d6e5d8] bg-white p-2 shadow-sm sm:p-3">
           <div className="min-w-0">
-            <p className="text-[0.68rem] font-black uppercase tracking-normal text-[#ef7d0a]">
-              Vierdaagse kassa
+            <p className="text-[0.6rem] font-black uppercase tracking-normal text-[#ef7d0a] sm:text-[0.68rem]">
+              Proeverij tool
             </p>
-            <h1 className="text-xl font-black leading-tight text-[#24551d]">
+            <h1 className="text-lg font-black leading-tight text-[#24551d] sm:text-xl">
               Nieuwe bestelling
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-md bg-[#ecf4ed] px-3 py-2 text-lg font-black text-[#24551d]">
+            <span className="rounded-md bg-[#ecf4ed] px-2 py-1.5 text-sm font-black text-[#24551d] sm:px-3 sm:py-2 sm:text-lg">
               {formatClock(clock)}
             </span>
             <Link
               href="/vierdaagse/kassa-tool"
-              className="rounded-md border border-[#ef7d0a] bg-white px-3 py-2 text-sm font-black text-[#9d3c24] transition active:scale-[0.98]"
+              className="rounded-md border border-[#ef7d0a] bg-white px-2 py-1.5 text-xs font-black text-[#9d3c24] transition active:scale-[0.98] sm:px-3 sm:py-2 sm:text-sm"
             >
               Terug
             </Link>
@@ -260,7 +260,7 @@ export default function VierdaagseKassaPage() {
 
         {(message || error) && (
           <div
-            className={`rounded-lg border px-3 py-2 text-sm font-bold ${
+            className={`rounded-lg border px-2 py-1.5 text-xs font-bold sm:px-3 sm:py-2 sm:text-sm ${
               error
                 ? "border-[#f0b4a8] bg-[#fff4f2] text-[#9d2f20]"
                 : "border-[#c8dfc3] bg-[#f2faef] text-[#24551d]"
@@ -270,16 +270,16 @@ export default function VierdaagseKassaPage() {
           </div>
         )}
 
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(21rem,0.75fr)]">
-          <div className="grid gap-3">
-            <section className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm">
-              <h2 className="mb-2 text-sm font-black uppercase tracking-normal text-[#24551d]">
+        <div className="grid gap-2 sm:gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(21rem,0.75fr)]">
+          <div className="grid gap-2 sm:gap-3">
+            <section className="rounded-lg border border-[#e8e4de] bg-white p-2 shadow-sm sm:p-3">
+              <h2 className="mb-1.5 text-xs font-black uppercase tracking-normal text-[#24551d] sm:mb-2 sm:text-sm">
                 Stap 1 · tafel
               </h2>
-              <div className="grid gap-3 md:grid-cols-[0.85fr_1.15fr]">
+              <div className="grid gap-2 md:grid-cols-[0.85fr_1.15fr] sm:gap-3">
                 {tableGroups.map((group) => (
-                  <div key={group.title} className="grid gap-2">
-                    <p className="text-xs font-black uppercase tracking-normal text-[#ef7d0a]">
+                  <div key={group.title} className="grid gap-1.5 sm:gap-2">
+                    <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#ef7d0a] sm:text-xs">
                       {group.title}
                     </p>
                     <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
@@ -294,7 +294,7 @@ export default function VierdaagseKassaPage() {
                               setDestinationMode("table");
                               setSelectedTable(table);
                             }}
-                            className={`min-h-11 rounded-md border text-base font-black transition active:scale-[0.98] ${
+                            className={`min-h-9 rounded-md border text-sm font-black transition active:scale-[0.98] sm:min-h-11 sm:text-base ${
                               selected && destinationMode === "table"
                                 ? "border-[#24551d] bg-[#24551d] text-white"
                                 : "border-[#d6e5d8] bg-[#f6faf4] text-[#24551d]"
@@ -309,14 +309,14 @@ export default function VierdaagseKassaPage() {
                 ))}
               </div>
 
-              <div className="mt-3 grid gap-2 rounded-lg border border-[#e8e4de] bg-[#faf8f5] p-2 sm:grid-cols-[auto_1fr] sm:items-center">
+              <div className="mt-2 grid gap-1.5 rounded-lg border border-[#e8e4de] bg-[#faf8f5] p-1.5 sm:mt-3 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-2 sm:p-2">
                 <button
                   type="button"
                   onClick={() => {
                     setDestinationMode("custom");
                     setSelectedTable(null);
                   }}
-                  className={`min-h-11 rounded-md border px-3 text-sm font-black transition active:scale-[0.98] ${
+                  className={`min-h-9 rounded-md border px-2 text-xs font-black transition active:scale-[0.98] sm:min-h-11 sm:px-3 sm:text-sm ${
                     destinationMode === "custom"
                       ? "border-[#ef7d0a] bg-[#ef7d0a] text-white"
                       : "border-[#d8d0c5] bg-white text-[#24551d]"
@@ -332,22 +332,22 @@ export default function VierdaagseKassaPage() {
                   }}
                   onChange={(event) => setCustomDestination(event.target.value)}
                   placeholder="Bijv. To go, naam klant, afhalen"
-                  className="min-h-11 rounded-md border border-[#d8d0c5] bg-white px-3 text-sm font-semibold outline-none focus:border-[#24551d]"
+                  className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold outline-none focus:border-[#24551d] sm:min-h-11 sm:px-3 sm:text-sm"
                 />
               </div>
             </section>
 
-            <section className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-black uppercase tracking-normal text-[#24551d]">
+            <section className="rounded-lg border border-[#e8e4de] bg-white p-2 shadow-sm sm:p-3">
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 sm:mb-2">
+                <h2 className="text-xs font-black uppercase tracking-normal text-[#24551d] sm:text-sm">
                   Stap 2 · producten
                 </h2>
-                <span className="text-xs font-bold text-[#6b645b]">
+                <span className="text-[0.65rem] font-bold text-[#6b645b] sm:text-xs">
                   {totalItems} producten
                 </span>
               </div>
 
-              <div className="mb-3 grid grid-cols-2 gap-1.5 md:grid-cols-5">
+              <div className="mb-2 grid grid-cols-2 gap-1 md:grid-cols-5 sm:mb-3 sm:gap-1.5">
                 {productCategories.map((category) => {
                   const active = category.id === activeCategory;
 
@@ -356,7 +356,7 @@ export default function VierdaagseKassaPage() {
                       key={category.id}
                       type="button"
                       onClick={() => setActiveCategory(category.id)}
-                      className={`min-h-11 rounded-md border px-2 text-sm font-black transition active:scale-[0.98] ${
+                      className={`min-h-9 rounded-md border px-1.5 text-xs font-black transition active:scale-[0.98] sm:min-h-11 sm:px-2 sm:text-sm ${
                         active
                           ? "border-[#ef7d0a] bg-[#ef7d0a] text-white"
                           : "border-[#e8e4de] bg-[#faf8f5] text-[#24551d]"
@@ -369,15 +369,15 @@ export default function VierdaagseKassaPage() {
               </div>
 
               {detailProduct && (
-                <div className="mb-3 rounded-lg border border-[#ef7d0a] bg-[#fff8ef] p-2">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-black text-[#24551d]">
+                <div className="mb-2 rounded-lg border border-[#ef7d0a] bg-[#fff8ef] p-1.5 sm:mb-3 sm:p-2">
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 sm:mb-2">
+                    <p className="text-xs font-black text-[#24551d] sm:text-sm">
                       {detailProduct.detailLabel || "Specificatie"}
                     </p>
                     <button
                       type="button"
                       onClick={() => setDetailProduct(null)}
-                      className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-3 text-xs font-black text-[#6b645b]"
+                      className="min-h-8 rounded-md border border-[#d8d0c5] bg-white px-2 text-[0.65rem] font-black text-[#6b645b] sm:min-h-9 sm:px-3 sm:text-xs"
                     >
                       Sluit
                     </button>
@@ -391,7 +391,7 @@ export default function VierdaagseKassaPage() {
                           addProduct(detailProduct, option);
                           setDetailProduct(null);
                         }}
-                        className="min-h-11 rounded-md bg-[#24551d] px-2 text-sm font-black text-white transition active:scale-[0.98]"
+                        className="min-h-9 rounded-md bg-[#24551d] px-2 text-xs font-black text-white transition active:scale-[0.98] sm:min-h-11 sm:text-sm"
                       >
                         {option}
                       </button>
@@ -402,7 +402,7 @@ export default function VierdaagseKassaPage() {
                       value={customDetail}
                       onChange={(event) => setCustomDetail(event.target.value)}
                       placeholder="Andere smaak of naam"
-                      className="min-h-11 rounded-md border border-[#d8d0c5] bg-white px-3 text-sm font-semibold outline-none focus:border-[#24551d]"
+                      className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold outline-none focus:border-[#24551d] sm:min-h-11 sm:px-3 sm:text-sm"
                     />
                     <button
                       type="button"
@@ -413,7 +413,7 @@ export default function VierdaagseKassaPage() {
                         setDetailProduct(null);
                         setCustomDetail("");
                       }}
-                      className="min-h-11 rounded-md bg-[#ef7d0a] px-4 text-sm font-black text-white disabled:opacity-45"
+                      className="min-h-9 rounded-md bg-[#ef7d0a] px-3 text-xs font-black text-white disabled:opacity-45 sm:min-h-11 sm:px-4 sm:text-sm"
                     >
                       Voeg toe
                     </button>
@@ -421,27 +421,27 @@ export default function VierdaagseKassaPage() {
                 </div>
               )}
 
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-1.5 sm:gap-2 lg:grid-cols-3">
                 {productsInCategory.map((product) => {
                   const count = getProductCount(product.id);
 
                   return (
                     <div
                       key={product.id}
-                      className="grid min-h-24 grid-cols-[minmax(0,1fr)_2.7rem] gap-2 rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-2"
+                      className="grid min-h-[4.5rem] grid-cols-[minmax(0,1fr)_2.15rem] gap-1.5 rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-1.5 sm:min-h-24 sm:grid-cols-[minmax(0,1fr)_2.7rem] sm:gap-2 sm:p-2"
                     >
                       <button
                         type="button"
                         onClick={() => handleProductAdd(product)}
                         className="min-w-0 text-left active:scale-[0.99]"
                       >
-                        <span className="mb-2 inline-flex h-7 min-w-8 items-center justify-center rounded-md bg-white px-2 text-xs font-black text-[#ef7d0a]">
+                        <span className="mb-1 inline-flex h-5 min-w-7 items-center justify-center rounded-md bg-white px-1.5 text-[0.62rem] font-black text-[#ef7d0a] sm:mb-2 sm:h-7 sm:min-w-8 sm:px-2 sm:text-xs">
                           {product.badge}
                         </span>
-                        <span className="block text-sm font-black leading-tight text-[#1a1815]">
+                        <span className="block text-xs font-black leading-tight text-[#1a1815] sm:text-sm">
                           {product.name}
                         </span>
-                        <span className="mt-1 block text-[0.68rem] font-bold uppercase text-[#6b645b]">
+                        <span className="mt-0.5 block text-[0.54rem] font-bold uppercase text-[#6b645b] sm:mt-1 sm:text-[0.68rem]">
                           {categoryLabels[product.category]}
                         </span>
                       </button>
@@ -449,19 +449,19 @@ export default function VierdaagseKassaPage() {
                         <button
                           type="button"
                           onClick={() => handleProductAdd(product)}
-                          className="flex min-h-10 items-center justify-center rounded-md bg-[#ef7d0a] text-xl font-black text-white active:scale-[0.98]"
+                          className="flex min-h-8 items-center justify-center rounded-md bg-[#ef7d0a] text-lg font-black text-white active:scale-[0.98] sm:min-h-10 sm:text-xl"
                           aria-label={`${product.name} toevoegen`}
                         >
                           +
                         </button>
-                        <span className="flex min-h-8 items-center justify-center rounded-md bg-white text-base font-black text-[#24551d]">
+                        <span className="flex min-h-6 items-center justify-center rounded-md bg-white text-sm font-black text-[#24551d] sm:min-h-8 sm:text-base">
                           {count}
                         </span>
                         <button
                           type="button"
                           onClick={() => removeOneProduct(product.id)}
                           disabled={count === 0}
-                          className="flex min-h-10 items-center justify-center rounded-md bg-[#24551d] text-xl font-black text-white disabled:opacity-35 active:scale-[0.98]"
+                          className="flex min-h-8 items-center justify-center rounded-md bg-[#24551d] text-lg font-black text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-10 sm:text-xl"
                           aria-label={`${product.name} verwijderen`}
                         >
                           -
@@ -474,16 +474,16 @@ export default function VierdaagseKassaPage() {
             </section>
           </div>
 
-          <aside className="rounded-lg border border-[#d6e5d8] bg-white p-3 shadow-sm xl:sticky xl:top-3 xl:self-start">
-            <h2 className="text-sm font-black uppercase tracking-normal text-[#24551d]">
+          <aside className="rounded-lg border border-[#d6e5d8] bg-white p-2 shadow-sm sm:p-3 xl:sticky xl:top-3 xl:self-start">
+            <h2 className="text-xs font-black uppercase tracking-normal text-[#24551d] sm:text-sm">
               Stap 3 · controle
             </h2>
-            <div className="mt-3 grid gap-3">
-              <div className="rounded-lg bg-[#f6faf4] p-3">
-                <p className="text-[0.68rem] font-black uppercase text-[#ef7d0a]">
+            <div className="mt-2 grid gap-2 sm:mt-3 sm:gap-3">
+              <div className="rounded-lg bg-[#f6faf4] p-2 sm:p-3">
+                <p className="text-[0.58rem] font-black uppercase text-[#ef7d0a] sm:text-[0.68rem]">
                   Tafel
                 </p>
-                <p className="text-2xl font-black text-[#24551d]">
+                <p className="text-lg font-black leading-tight text-[#24551d] sm:text-2xl">
                   {selectedDestinationLabel}
                 </p>
               </div>
@@ -493,38 +493,38 @@ export default function VierdaagseKassaPage() {
                   draftLines.map((line) => (
                     <div
                       key={line.key}
-                      className="grid grid-cols-[2.2rem_minmax(0,1fr)_2.4rem] items-center gap-2 rounded-md border border-[#e8e4de] bg-[#faf8f5] px-2 py-2"
+                      className="grid grid-cols-[1.7rem_minmax(0,1fr)_2rem] items-center gap-1.5 rounded-md border border-[#e8e4de] bg-[#faf8f5] px-1.5 py-1.5 sm:grid-cols-[2.2rem_minmax(0,1fr)_2.4rem] sm:gap-2 sm:px-2 sm:py-2"
                     >
-                      <span className="text-sm font-black text-[#ef7d0a]">
+                      <span className="text-xs font-black text-[#ef7d0a] sm:text-sm">
                         {line.quantity}x
                       </span>
-                      <span className="min-w-0 truncate text-sm font-bold text-[#1a1815]">
+                      <span className="min-w-0 truncate text-xs font-bold text-[#1a1815] sm:text-sm">
                         {lineLabel(line)}
                       </span>
                       <button
                         type="button"
                         onClick={() => removeDraftLine(line.key)}
-                        className="min-h-9 rounded-md bg-white text-sm font-black text-[#c8382d]"
+                        className="min-h-8 rounded-md bg-white text-[0.6rem] font-black text-[#c8382d] sm:min-h-9 sm:text-sm"
                         aria-label={`${lineLabel(line)} verwijderen`}
                       >
-                        weg
+                        x
                       </button>
                     </div>
                   ))
                 ) : (
-                  <p className="rounded-lg border border-dashed border-[#d8d0c5] px-3 py-4 text-sm font-semibold text-[#8b8278]">
+                  <p className="rounded-lg border border-dashed border-[#d8d0c5] px-2 py-3 text-xs font-semibold text-[#8b8278] sm:px-3 sm:py-4 sm:text-sm">
                     Nog geen producten.
                   </p>
                 )}
               </div>
 
-              <label className="grid gap-1 text-xs font-black uppercase text-[#6b645b]">
+              <label className="grid gap-1 text-[0.65rem] font-black uppercase text-[#6b645b] sm:text-xs">
                 Notitie
                 <textarea
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
                   rows={3}
-                  className="min-h-20 rounded-md border border-[#d8d0c5] bg-white px-3 py-2 text-sm font-semibold normal-case text-[#1a1815] outline-none focus:border-[#24551d]"
+                  className="min-h-16 rounded-md border border-[#d8d0c5] bg-white px-2 py-1.5 text-xs font-semibold normal-case text-[#1a1815] outline-none focus:border-[#24551d] sm:min-h-20 sm:px-3 sm:py-2 sm:text-sm"
                   placeholder="Bijvoorbeeld zonder cacao, eerst koffie..."
                 />
               </label>
@@ -533,7 +533,7 @@ export default function VierdaagseKassaPage() {
                 <button
                   type="button"
                   onClick={clearDraft}
-                  className="min-h-12 rounded-md border border-[#d8d0c5] bg-white px-3 text-sm font-black text-[#6b645b] active:scale-[0.98]"
+                  className="min-h-10 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-black text-[#6b645b] active:scale-[0.98] sm:min-h-12 sm:px-3 sm:text-sm"
                 >
                   Leegmaken
                 </button>
@@ -541,7 +541,7 @@ export default function VierdaagseKassaPage() {
                   type="button"
                   onClick={submitOrder}
                   disabled={isSubmitting}
-                  className="min-h-12 rounded-md bg-[#24551d] px-3 text-sm font-black text-white disabled:opacity-50 active:scale-[0.98]"
+                  className="min-h-10 rounded-md bg-[#24551d] px-2 text-xs font-black text-white disabled:opacity-50 active:scale-[0.98] sm:min-h-12 sm:px-3 sm:text-sm"
                 >
                   Bestelling versturen
                 </button>

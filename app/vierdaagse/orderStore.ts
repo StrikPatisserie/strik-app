@@ -111,6 +111,14 @@ function upsertOrderInStorage(order: VierdaagseOrder, notify = true) {
   writeOrdersToStorage(nextOrders, notify);
 }
 
+function removeOrderFromStorage(orderId: string, notify = true) {
+  const orders = readOrdersFromStorage();
+  writeOrdersToStorage(
+    orders.filter((order) => order.id !== orderId),
+    notify
+  );
+}
+
 function updateOrder(
   orderId: string,
   updater: (order: VierdaagseOrder) => VierdaagseOrder
@@ -198,6 +206,32 @@ async function saveOrderToWordPress(order: VierdaagseOrder) {
     ok: false as const,
     status: response.status,
     message: getApiMessage(data, "WordPress Vierdaagse-opslag is tijdelijk niet bereikbaar."),
+  };
+}
+
+async function deleteOrderFromWordPress(orderId: string) {
+  const response = await fetch(
+    `${vierdaagseOrdersApiUrl}?id=${encodeURIComponent(orderId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        Accept: "application/json",
+      },
+    }
+  );
+  const data = await readJson(response);
+
+  if (response.ok) {
+    return { ok: true as const, data };
+  }
+
+  return {
+    ok: false as const,
+    status: response.status,
+    message: getApiMessage(
+      data,
+      "WordPress Vierdaagse-opslag is tijdelijk niet bereikbaar."
+    ),
   };
 }
 
@@ -315,6 +349,19 @@ export function cancelOrder(orderId: string) {
   }));
 
   if (updatedOrder) void saveOrderToWordPress(updatedOrder);
+}
+
+export async function deleteArchivedOrder(orderId: string) {
+  removeOrderFromStorage(orderId);
+
+  try {
+    return await deleteOrderFromWordPress(orderId);
+  } catch {
+    return {
+      ok: false as const,
+      message: "Kan geen verbinding maken met WordPress Vierdaagse-opslag.",
+    };
+  }
 }
 
 export function loadDemoOrders() {
