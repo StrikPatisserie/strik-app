@@ -104,7 +104,7 @@ function strik_vierdaagse_sanitize_item($item, $index = 0) {
         'name' => $name,
         'category' => strik_vierdaagse_choice(
             isset($item['category']) ? $item['category'] : '',
-            array('koffie-thee', 'fris-koud', 'gebak', 'hartig', 'overig'),
+            array('koffie-thee', 'fris-koud', 'bakkerij', 'gebak', 'hartig', 'overig'),
             'overig'
         ),
         'quantity' => min($quantity, 99),

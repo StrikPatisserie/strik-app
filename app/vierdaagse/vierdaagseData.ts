@@ -12,6 +12,7 @@ export type VierdaagseOrderItemStatus = "niet_gestart" | "klaar";
 export type ProductCategoryId =
   | "koffie-thee"
   | "fris-koud"
+  | "bakkerij"
   | "gebak"
   | "hartig"
   | "overig";
@@ -30,6 +31,8 @@ export type VierdaagseProduct = {
   needsDetail?: boolean;
   detailLabel?: string;
   detailOptions?: string[];
+  modifierLabel?: string;
+  modifierOptions?: string[];
 };
 
 export type VierdaagseOrderItem = {
@@ -77,6 +80,7 @@ export const productCategories: Array<{
 }> = [
   { id: "koffie-thee", label: "Koffie & thee", shortLabel: "Koffie" },
   { id: "fris-koud", label: "Fris & koud", shortLabel: "Fris" },
+  { id: "bakkerij", label: "Bakkerij", shortLabel: "Bakkerij" },
   { id: "gebak", label: "Gebak", shortLabel: "Gebak" },
   { id: "hartig", label: "Hartig", shortLabel: "Hartig" },
   { id: "overig", label: "Overig", shortLabel: "Overig" },
@@ -99,72 +103,173 @@ export const vierdaagseTables: VierdaagseTable[] = [
   })),
 ];
 
+const coffeeModifierOptions = ["Decafé", "Extra shot espresso"];
+
+const milkCoffeeModifierOptions = [
+  "Amandelmelk",
+  "Decafé",
+  "Extra shot espresso",
+  "Extra slagroom",
+  "Havermelk",
+  "Sojamelk",
+];
+
+function coffeeProduct(
+  id: string,
+  name: string,
+  badge: string,
+  modifierOptions = coffeeModifierOptions
+): VierdaagseProduct {
+  return {
+    id,
+    name,
+    category: "koffie-thee",
+    badge,
+    modifierLabel: "Koffie opties",
+    modifierOptions,
+  };
+}
+
 export const vierdaagseProducts: VierdaagseProduct[] = [
-  { id: "espresso", name: "Espresso", category: "koffie-thee", badge: "ES" },
-  { id: "koffie", name: "Koffie", category: "koffie-thee", badge: "KO" },
+  coffeeProduct("cappuccino", "Cappuccino", "CA", milkCoffeeModifierOptions),
+  coffeeProduct("caramel-ijskoffie", "Caramel ijskoffie", "CI", [
+    "Extra slagroom",
+  ]),
+  {
+    id: "chocolade-melk",
+    name: "Chocolade melk",
+    category: "koffie-thee",
+    badge: "CM",
+  },
+  coffeeProduct("dubbele-espresso", "Dubbele espresso", "DE"),
+  coffeeProduct("espresso", "Espresso", "ES"),
+  coffeeProduct("flat-white", "Flat white", "FW", milkCoffeeModifierOptions),
+  { id: "gemberthee", name: "Gemberthee", category: "koffie-thee", badge: "GT" },
+  coffeeProduct("koffie", "Koffie", "KO"),
+  coffeeProduct("koffie-to-go", "Koffie to go", "TG"),
+  coffeeProduct(
+    "koffie-verkeerd",
+    "Koffie verkeerd",
+    "KV",
+    milkCoffeeModifierOptions
+  ),
+  coffeeProduct(
+    "latte-macchiato",
+    "Latte macchiato",
+    "LM",
+    milkCoffeeModifierOptions
+  ),
+  { id: "muntthee", name: "Muntthee", category: "koffie-thee", badge: "MT" },
   { id: "thee", name: "Thee", category: "koffie-thee", badge: "TH" },
-  { id: "cappuccino", name: "Cappuccino", category: "koffie-thee", badge: "CA" },
+  coffeeProduct("vanille-ijskoffie", "Vanille ijskoffie", "VI", [
+    "Extra slagroom",
+  ]),
+  { id: "coca-cola", name: "Coca cola", category: "fris-koud", badge: "CC" },
   {
-    id: "latte-macchiato",
-    name: "Latte macchiato",
-    category: "koffie-thee",
-    badge: "LM",
-  },
-  { id: "flat-white", name: "Flat white", category: "koffie-thee", badge: "FW" },
-  {
-    id: "verse-thee-munt",
-    name: "Verse thee munt",
-    category: "koffie-thee",
-    badge: "MT",
-  },
-  {
-    id: "verse-thee-gember",
-    name: "Verse thee gember",
-    category: "koffie-thee",
-    badge: "GM",
-  },
-  {
-    id: "ijskoffie-caramel",
-    name: "IJskoffie caramel",
+    id: "coca-cola-zero",
+    name: "Coca cola zero",
     category: "fris-koud",
-    badge: "IC",
+    badge: "CZ",
   },
+  { id: "fanta", name: "Fanta", category: "fris-koud", badge: "FA" },
   {
-    id: "ijskoffie-vanille",
-    name: "IJskoffie vanille",
+    id: "home-made-lemonade-red",
+    name: "Home made lemonade Red",
     category: "fris-koud",
-    badge: "IV",
+    badge: "LR",
   },
-  { id: "fris", name: "Fris", category: "fris-koud", badge: "FR" },
-  { id: "water", name: "Water", category: "fris-koud", badge: "WA" },
   {
-    id: "gebakje-vitrine",
-    name: "Gebakje uit de vitrine",
-    category: "gebak",
-    badge: "GV",
-    needsDetail: true,
-    detailLabel: "Smaak of naam",
-    detailOptions: [
-      "Citroen-meringue",
-      "Red velvet",
-      "Aardbei",
-      "Chocolade",
-      "Mango passie",
-    ],
+    id: "home-made-lemonade-yellow",
+    name: "Home made lemonade Yellow",
+    category: "fris-koud",
+    badge: "LY",
   },
-  { id: "brownie", name: "Brownie", category: "gebak", badge: "BR" },
-  { id: "blondie", name: "Blondie", category: "gebak", badge: "BL" },
-  { id: "appelflap", name: "Appelflap", category: "gebak", badge: "AF" },
-  { id: "appelkanjer", name: "Appelkanjer", category: "gebak", badge: "AK" },
+  { id: "iced-tea-green", name: "Iced tea green", category: "fris-koud", badge: "IG" },
+  { id: "iced-tea-peach", name: "Iced tea peach", category: "fris-koud", badge: "IP" },
+  { id: "spa-blauw", name: "Spa blauw", category: "fris-koud", badge: "SB" },
+  { id: "spa-rood", name: "Spa rood", category: "fris-koud", badge: "SR" },
   {
-    id: "aardbeiencroissant",
-    name: "Aardbeiencroissant",
-    category: "gebak",
+    id: "aardbei-croissant",
+    name: "Aardbei Croissant",
+    category: "bakkerij",
     badge: "AC",
   },
-  { id: "friandises", name: "Friandises", category: "gebak", badge: "FI" },
-  { id: "hartige-snack", name: "Hartige snack", category: "hartig", badge: "HS" },
-  { id: "warme-wafel", name: "Warme wafel", category: "overig", badge: "WW" },
+  { id: "appelkanjer", name: "Appelkanjer", category: "bakkerij", badge: "AK" },
+  { id: "appelflap", name: "Appelflap", category: "bakkerij", badge: "AF" },
+  { id: "blondie", name: "Blondie", category: "bakkerij", badge: "BL" },
+  { id: "brownie", name: "Brownie", category: "bakkerij", badge: "BR" },
+  { id: "croissant", name: "Croissant", category: "bakkerij", badge: "CR" },
+  {
+    id: "friandises-proeverij",
+    name: "Friandises 6st proeverij",
+    category: "bakkerij",
+    badge: "FI",
+  },
+  { id: "notenrondo", name: "Notenrondo", category: "bakkerij", badge: "NR" },
+  {
+    id: "wafel-aardbei-slagroom",
+    name: "Wafel aardbei slagroom",
+    category: "bakkerij",
+    badge: "WA",
+  },
+  {
+    id: "aardbei-tartelette",
+    name: "Aardbei tartelette",
+    category: "gebak",
+    badge: "AT",
+  },
+  { id: "appelpunt", name: "Appelpunt", category: "gebak", badge: "AP" },
+  { id: "bossche-bol", name: "Bossche Bol", category: "gebak", badge: "BB" },
+  {
+    id: "cheesecake-seizoen",
+    name: "Cheesecake seizoen",
+    category: "gebak",
+    badge: "CS",
+  },
+  {
+    id: "framboos-slagroom",
+    name: "Framboos slagroom",
+    category: "gebak",
+    badge: "FS",
+  },
+  {
+    id: "gateau-gebakje-groen",
+    name: "Gateau gebakje groen",
+    category: "gebak",
+    badge: "GG",
+  },
+  {
+    id: "gateau-gebakje-oranje",
+    name: "Gateau gebakje oranje",
+    category: "gebak",
+    badge: "GO",
+  },
+  { id: "hazelnootbol", name: "Hazelnootbol", category: "gebak", badge: "HB" },
+  { id: "passievol", name: "Passievol", category: "gebak", badge: "PV" },
+  { id: "pistache-slofje", name: "Pistache slofje", category: "gebak", badge: "PS" },
+  { id: "red-velvet-punt", name: "Red Velvet punt", category: "gebak", badge: "RV" },
+  { id: "steventje", name: "Steventje", category: "gebak", badge: "ST" },
+  { id: "tompouce", name: "Tompouce", category: "gebak", badge: "TO" },
+  {
+    id: "vierdaagse-parel",
+    name: "Vierdaagse Parel",
+    category: "gebak",
+    badge: "VP",
+  },
+  {
+    id: "ham-kaas-croissant",
+    name: "Ham-kaas croissant",
+    category: "hartig",
+    badge: "HK",
+  },
+  { id: "kaasbroodje", name: "Kaasbroodje", category: "hartig", badge: "KB" },
+  {
+    id: "saucijzenbroodje",
+    name: "Saucijzenbroodje",
+    category: "hartig",
+    badge: "SB",
+  },
+  { id: "worstenbroodje", name: "Worstenbroodje", category: "hartig", badge: "WB" },
 ];
 
 export function getTableLocation(tableNumber: string): VierdaagseLocation {

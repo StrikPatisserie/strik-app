@@ -25,6 +25,12 @@ type DraftLine = {
 
 type DestinationMode = "table" | "custom";
 
+type ProductDraft = {
+  name: string;
+  badge: string;
+  category: ProductCategoryId;
+};
+
 const tableGroups: Array<{ title: string; tables: VierdaagseTable[] }> = [
   {
     title: "Terras",
@@ -35,6 +41,16 @@ const tableGroups: Array<{ title: string; tables: VierdaagseTable[] }> = [
     tables: vierdaagseTables.filter((table) => table.location === "binnen"),
   },
 ];
+
+const productsStorageKey = "strik-vierdaagse-kassa-products-v1";
+
+function emptyProductDraft(category: ProductCategoryId): ProductDraft {
+  return {
+    name: "",
+    badge: "",
+    category,
+  };
+}
 
 function formatClock(date: Date) {
   return new Intl.DateTimeFormat("nl-NL", {
@@ -55,6 +71,104 @@ function getCustomDestination(value: string) {
   return value.trim() || "To go";
 }
 
+function isProductCategoryId(value: string): value is ProductCategoryId {
+  return productCategories.some((category) => category.id === value);
+}
+
+function slugifyProductName(value: string) {
+  return (
+    value
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "product"
+  );
+}
+
+function badgeFromProductName(value: string) {
+  const parts = value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const badge = parts
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return badge || "P";
+}
+
+function uniqueProductId(name: string, products: VierdaagseProduct[]) {
+  const baseId = slugifyProductName(name);
+  const usedIds = new Set(products.map((product) => product.id));
+  let nextId = baseId;
+  let index = 2;
+
+  while (usedIds.has(nextId)) {
+    nextId = `${baseId}-${index}`;
+    index += 1;
+  }
+
+  return nextId;
+}
+
+function normalizeProducts(value: unknown) {
+  if (!Array.isArray(value)) return null;
+
+  const products = value
+    .map((item): VierdaagseProduct | null => {
+      if (!item || typeof item !== "object") return null;
+      const product = item as Partial<VierdaagseProduct>;
+      const name = typeof product.name === "string" ? product.name.trim() : "";
+      const id = typeof product.id === "string" ? product.id.trim() : "";
+      const category =
+        typeof product.category === "string" &&
+        isProductCategoryId(product.category)
+          ? product.category
+          : "overig";
+
+      if (!name || !id) return null;
+
+      return {
+        id,
+        name,
+        category,
+        badge:
+          typeof product.badge === "string" && product.badge.trim()
+            ? product.badge.trim().slice(0, 4).toUpperCase()
+            : badgeFromProductName(name),
+        needsDetail: Boolean(product.needsDetail),
+        detailLabel:
+          typeof product.detailLabel === "string" ? product.detailLabel : "",
+        detailOptions: Array.isArray(product.detailOptions)
+          ? product.detailOptions.filter((option) => typeof option === "string")
+          : undefined,
+        modifierLabel:
+          typeof product.modifierLabel === "string" ? product.modifierLabel : "",
+        modifierOptions: Array.isArray(product.modifierOptions)
+          ? product.modifierOptions.filter((option) => typeof option === "string")
+          : undefined,
+      };
+    })
+    .filter((product): product is VierdaagseProduct => Boolean(product));
+
+  return products.length ? products : null;
+}
+
+function sortProducts(products: VierdaagseProduct[]) {
+  return [...products].sort((first, second) =>
+    first.name.localeCompare(second.name, "nl", { sensitivity: "base" })
+  );
+}
+
+function detailOptionsForProduct(product?: VierdaagseProduct) {
+  return product?.modifierOptions?.length
+    ? product.modifierOptions
+    : product?.detailOptions || [];
+}
+
 export default function VierdaagseKassaPage() {
   const [selectedTable, setSelectedTable] = useState<VierdaagseTable | null>(
     null
@@ -64,11 +178,24 @@ export default function VierdaagseKassaPage() {
   const [customDestination, setCustomDestination] = useState("To go");
   const [activeCategory, setActiveCategory] =
     useState<ProductCategoryId>("koffie-thee");
+  const [products, setProducts] =
+    useState<VierdaagseProduct[]>(vierdaagseProducts);
+  const [hasLoadedProducts, setHasLoadedProducts] = useState(false);
+  const [isEditingProducts, setIsEditingProducts] = useState(false);
+  const [isManualProductOpen, setIsManualProductOpen] = useState(false);
+  const [productDraft, setProductDraft] = useState<ProductDraft>(() =>
+    emptyProductDraft("koffie-thee")
+  );
+  const [manualProductDraft, setManualProductDraft] = useState<ProductDraft>(() =>
+    emptyProductDraft("overig")
+  );
   const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
   const [note, setNote] = useState("");
   const [detailProduct, setDetailProduct] =
     useState<VierdaagseProduct | null>(null);
   const [customDetail, setCustomDetail] = useState("");
+  const [lineOptionsKey, setLineOptionsKey] = useState("");
+  const [lineCustomDetail, setLineCustomDetail] = useState("");
   const [clock, setClock] = useState(() => new Date());
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -79,12 +206,44 @@ export default function VierdaagseKassaPage() {
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    try {
+      const rawProducts = window.localStorage.getItem(productsStorageKey);
+      const storedProducts = rawProducts
+        ? normalizeProducts(JSON.parse(rawProducts))
+        : null;
+
+      if (storedProducts) setProducts(storedProducts);
+    } catch {
+      setProducts(vierdaagseProducts);
+    } finally {
+      setHasLoadedProducts(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedProducts) return;
+    window.localStorage.setItem(productsStorageKey, JSON.stringify(products));
+  }, [hasLoadedProducts, products]);
+
+  useEffect(() => {
+    setProductDraft((current) => ({
+      ...current,
+      category: activeCategory,
+    }));
+  }, [activeCategory]);
+
   const productsInCategory = useMemo(
     () =>
-      vierdaagseProducts.filter(
-        (product) => product.category === activeCategory
+      sortProducts(
+        products.filter((product) => product.category === activeCategory)
       ),
-    [activeCategory]
+    [activeCategory, products]
+  );
+
+  const productsById = useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products]
   );
 
   const totalItems = useMemo(
@@ -96,6 +255,62 @@ export default function VierdaagseKassaPage() {
     return draftLines
       .filter((line) => line.productId === productId)
       .reduce((total, line) => total + line.quantity, 0);
+  }
+
+  function addProductButton(draft: ProductDraft) {
+    const name = draft.name.trim();
+    if (!name) {
+      setError("Vul eerst een productnaam in.");
+      return;
+    }
+
+    const product: VierdaagseProduct = {
+      id: uniqueProductId(name, products),
+      name,
+      category: draft.category,
+      badge: (draft.badge.trim() || badgeFromProductName(name))
+        .slice(0, 4)
+        .toUpperCase(),
+    };
+
+    setProducts((currentProducts) => sortProducts([...currentProducts, product]));
+    setProductDraft(emptyProductDraft(activeCategory));
+    setMessage(`${name} is toegevoegd als knop.`);
+    setError("");
+  }
+
+  function updateProductButton(
+    productId: string,
+    changes: Partial<VierdaagseProduct>
+  ) {
+    setProducts((currentProducts) =>
+      sortProducts(
+        currentProducts.map((product) =>
+          product.id === productId
+            ? {
+                ...product,
+                ...changes,
+                badge:
+                  typeof changes.badge === "string"
+                    ? changes.badge.slice(0, 4).toUpperCase()
+                    : product.badge,
+              }
+            : product
+        )
+      )
+    );
+  }
+
+  function deleteProductButton(productId: string) {
+    setProducts((currentProducts) =>
+      currentProducts.filter((product) => product.id !== productId)
+    );
+  }
+
+  function resetProductButtons() {
+    setProducts(vierdaagseProducts);
+    setMessage("Standaard knoppen zijn teruggezet.");
+    setError("");
   }
 
   function addProduct(product: VierdaagseProduct, detail = "") {
@@ -137,35 +352,72 @@ export default function VierdaagseKassaPage() {
     addProduct(product);
   }
 
-  function removeOneProduct(productId: string) {
-    setDraftLines((currentLines) => {
-      let lineIndex = -1;
+  function addManualProductToOrder() {
+    const name = manualProductDraft.name.trim();
 
-      for (let index = currentLines.length - 1; index >= 0; index -= 1) {
-        if (currentLines[index].productId === productId) {
-          lineIndex = index;
-          break;
-        }
-      }
+    if (!name) {
+      setError("Vul eerst een handmatig product in.");
+      return;
+    }
 
-      if (lineIndex === -1) return currentLines;
-
-      const line = currentLines[lineIndex];
-      if (line.quantity > 1) {
-        return currentLines.map((currentLine, index) =>
-          index === lineIndex
-            ? { ...currentLine, quantity: currentLine.quantity - 1 }
-            : currentLine
-        );
-      }
-
-      return currentLines.filter((_, index) => index !== lineIndex);
+    addProduct({
+      id: `handmatig-${manualProductDraft.category}-${slugifyProductName(name)}`,
+      name,
+      category: manualProductDraft.category,
+      badge: (manualProductDraft.badge.trim() || badgeFromProductName(name))
+        .slice(0, 4)
+        .toUpperCase(),
     });
+    setManualProductDraft(emptyProductDraft(manualProductDraft.category));
+    setError("");
   }
 
   function removeDraftLine(lineKey: string) {
     setDraftLines((currentLines) =>
       currentLines.filter((line) => line.key !== lineKey)
+    );
+  }
+
+  function updateDraftLineDetail(lineKey: string, detail: string) {
+    const cleanDetail = detail.trim();
+    setDraftLines((currentLines) =>
+      currentLines.map((line) =>
+        line.key === lineKey
+          ? {
+              ...line,
+              detail: cleanDetail || undefined,
+            }
+          : line
+      )
+    );
+  }
+
+  function toggleDraftLineOption(lineKey: string, option: string) {
+    const line = draftLines.find((currentLine) => currentLine.key === lineKey);
+    if (!line) return;
+
+    const parts = (line.detail || "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const hasOption = parts.some(
+      (part) => part.toLowerCase() === option.toLowerCase()
+    );
+    const nextParts = hasOption
+      ? parts.filter((part) => part.toLowerCase() !== option.toLowerCase())
+      : [...parts, option];
+    const detail = nextParts.join(", ");
+
+    setLineCustomDetail(detail);
+    setDraftLines((currentLines) =>
+      currentLines.map((currentLine) =>
+        currentLine.key === lineKey
+          ? {
+              ...currentLine,
+              detail: detail || undefined,
+            }
+          : currentLine
+      )
     );
   }
 
@@ -177,6 +429,8 @@ export default function VierdaagseKassaPage() {
     setNote("");
     setDetailProduct(null);
     setCustomDetail("");
+    setLineOptionsKey("");
+    setLineCustomDetail("");
     setError("");
   }
 
@@ -232,6 +486,11 @@ export default function VierdaagseKassaPage() {
       : destinationMode === "custom"
         ? `${getCustomDestination(customDestination)} · Geen tafel`
         : "Nog geen tafel";
+  const activeLine = draftLines.find((line) => line.key === lineOptionsKey);
+  const activeLineProduct = activeLine
+    ? productsById.get(activeLine.productId)
+    : undefined;
+  const activeLineOptions = detailOptionsForProduct(activeLineProduct);
 
   return (
     <main className="min-h-screen bg-[#faf8f5] px-2 py-2 pb-20 text-[#1a1815] md:pb-6 lg:px-5">
@@ -270,7 +529,7 @@ export default function VierdaagseKassaPage() {
           </div>
         )}
 
-        <div className="grid gap-2 sm:gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(21rem,0.75fr)]">
+        <div className="grid gap-2 sm:gap-3 md:grid-cols-[minmax(0,1fr)_17rem] xl:grid-cols-[minmax(0,1.55fr)_minmax(21rem,0.75fr)]">
           <div className="grid gap-2 sm:gap-3">
             <section className="rounded-lg border border-[#e8e4de] bg-white p-2 shadow-sm sm:p-3">
               <h2 className="mb-1.5 text-xs font-black uppercase tracking-normal text-[#24551d] sm:mb-2 sm:text-sm">
@@ -342,12 +601,32 @@ export default function VierdaagseKassaPage() {
                 <h2 className="text-xs font-black uppercase tracking-normal text-[#24551d] sm:text-sm">
                   Stap 2 · producten
                 </h2>
-                <span className="text-[0.65rem] font-bold text-[#6b645b] sm:text-xs">
-                  {totalItems} producten
-                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[0.65rem] font-bold text-[#6b645b] sm:text-xs">
+                    {totalItems} producten
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsManualProductOpen((current) => !current)}
+                    className="min-h-7 rounded-md border border-[#d8d0c5] bg-white px-2 text-[0.62rem] font-black text-[#24551d] active:scale-[0.98] sm:text-xs"
+                  >
+                    Handmatig
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingProducts((current) => !current)}
+                    className={`min-h-7 rounded-md border px-2 text-[0.62rem] font-black active:scale-[0.98] sm:text-xs ${
+                      isEditingProducts
+                        ? "border-[#ef7d0a] bg-[#ef7d0a] text-white"
+                        : "border-[#d8d0c5] bg-white text-[#24551d]"
+                    }`}
+                  >
+                    Bewerken
+                  </button>
+                </div>
               </div>
 
-              <div className="mb-2 grid grid-cols-2 gap-1 md:grid-cols-5 sm:mb-3 sm:gap-1.5">
+              <div className="mb-2 grid grid-cols-3 gap-1 md:grid-cols-6 sm:mb-3 sm:gap-1.5">
                 {productCategories.map((category) => {
                   const active = category.id === activeCategory;
 
@@ -367,6 +646,169 @@ export default function VierdaagseKassaPage() {
                   );
                 })}
               </div>
+
+              {isManualProductOpen && (
+                <div className="mb-2 grid gap-1.5 rounded-lg border border-[#e8e4de] bg-[#faf8f5] p-1.5 md:grid-cols-[minmax(0,1fr)_8rem_5rem_auto] md:items-end">
+                  <input
+                    value={manualProductDraft.name}
+                    onChange={(event) =>
+                      setManualProductDraft((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    placeholder="Handmatig product"
+                    className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold outline-none focus:border-[#24551d]"
+                  />
+                  <select
+                    value={manualProductDraft.category}
+                    onChange={(event) =>
+                      setManualProductDraft((current) => ({
+                        ...current,
+                        category: event.target.value as ProductCategoryId,
+                      }))
+                    }
+                    className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold"
+                  >
+                    {productCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.shortLabel}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={manualProductDraft.badge}
+                    onChange={(event) =>
+                      setManualProductDraft((current) => ({
+                        ...current,
+                        badge: event.target.value,
+                      }))
+                    }
+                    placeholder="Code"
+                    className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold uppercase outline-none focus:border-[#24551d]"
+                  />
+                  <button
+                    type="button"
+                    onClick={addManualProductToOrder}
+                    className="min-h-9 rounded-md bg-[#24551d] px-3 text-xs font-black text-white active:scale-[0.98]"
+                  >
+                    Op bon
+                  </button>
+                </div>
+              )}
+
+              {isEditingProducts && (
+                <div className="mb-2 grid gap-2 rounded-lg border border-[#ef7d0a] bg-[#fff8ef] p-2">
+                  <div className="grid gap-1.5 md:grid-cols-[minmax(0,1fr)_8rem_5rem_auto_auto] md:items-end">
+                    <input
+                      value={productDraft.name}
+                      onChange={(event) =>
+                        setProductDraft((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                      placeholder="Nieuwe knop"
+                      className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold outline-none focus:border-[#24551d]"
+                    />
+                    <select
+                      value={productDraft.category}
+                      onChange={(event) =>
+                        setProductDraft((current) => ({
+                          ...current,
+                          category: event.target.value as ProductCategoryId,
+                        }))
+                      }
+                      className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold"
+                    >
+                      {productCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.shortLabel}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={productDraft.badge}
+                      onChange={(event) =>
+                        setProductDraft((current) => ({
+                          ...current,
+                          badge: event.target.value,
+                        }))
+                      }
+                      placeholder="Code"
+                      className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold uppercase outline-none focus:border-[#24551d]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => addProductButton(productDraft)}
+                      className="min-h-9 rounded-md bg-[#ef7d0a] px-3 text-xs font-black text-white active:scale-[0.98]"
+                    >
+                      Voeg knop toe
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetProductButtons}
+                      className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-3 text-xs font-black text-[#9d3c24] active:scale-[0.98]"
+                    >
+                      Reset
+                    </button>
+                  </div>
+
+                  <div className="grid gap-1 md:grid-cols-2">
+                    {productsInCategory.map((product) => (
+                      <div
+                        key={product.id}
+                        className="grid grid-cols-[3.4rem_minmax(0,1fr)_7rem_2rem] items-center gap-1 rounded-md bg-white p-1"
+                      >
+                        <input
+                          value={product.badge}
+                          onChange={(event) =>
+                            updateProductButton(product.id, {
+                              badge: event.target.value,
+                            })
+                          }
+                          className="min-h-8 rounded-md border border-[#d8d0c5] px-1 text-center text-[0.62rem] font-black uppercase"
+                          aria-label={`${product.name} code`}
+                        />
+                        <input
+                          value={product.name}
+                          onChange={(event) =>
+                            updateProductButton(product.id, {
+                              name: event.target.value,
+                            })
+                          }
+                          className="min-h-8 min-w-0 rounded-md border border-[#d8d0c5] px-2 text-xs font-semibold"
+                          aria-label={`${product.name} naam`}
+                        />
+                        <select
+                          value={product.category}
+                          onChange={(event) =>
+                            updateProductButton(product.id, {
+                              category: event.target.value as ProductCategoryId,
+                            })
+                          }
+                          className="min-h-8 rounded-md border border-[#d8d0c5] bg-white px-1 text-[0.62rem] font-bold"
+                          aria-label={`${product.name} categorie`}
+                        >
+                          {productCategories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.shortLabel}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => deleteProductButton(product.id)}
+                          className="min-h-8 rounded-md border border-[#f0b4a8] text-xs font-black text-[#9d2f20] active:scale-[0.98]"
+                          aria-label={`${product.name} verwijderen`}
+                        >
+                          x
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {detailProduct && (
                 <div className="mb-2 rounded-lg border border-[#ef7d0a] bg-[#fff8ef] p-1.5 sm:mb-3 sm:p-2">
@@ -421,60 +863,36 @@ export default function VierdaagseKassaPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-1.5 sm:gap-2 lg:grid-cols-3">
+              <div className="grid grid-cols-3 gap-1 md:grid-cols-5 xl:grid-cols-6">
                 {productsInCategory.map((product) => {
                   const count = getProductCount(product.id);
 
                   return (
-                    <div
+                    <button
                       key={product.id}
-                      className="grid min-h-[4.5rem] grid-cols-[minmax(0,1fr)_2.15rem] gap-1.5 rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-1.5 sm:min-h-24 sm:grid-cols-[minmax(0,1fr)_2.7rem] sm:gap-2 sm:p-2"
+                      type="button"
+                      onClick={() => handleProductAdd(product)}
+                      className="relative grid min-h-[3.1rem] content-center rounded-md border border-[#d6e5d8] bg-[#f6faf4] px-1.5 py-1 text-left transition active:scale-[0.98]"
                     >
-                      <button
-                        type="button"
-                        onClick={() => handleProductAdd(product)}
-                        className="min-w-0 text-left active:scale-[0.99]"
-                      >
-                        <span className="mb-1 inline-flex h-5 min-w-7 items-center justify-center rounded-md bg-white px-1.5 text-[0.62rem] font-black text-[#ef7d0a] sm:mb-2 sm:h-7 sm:min-w-8 sm:px-2 sm:text-xs">
-                          {product.badge}
-                        </span>
-                        <span className="block text-xs font-black leading-tight text-[#1a1815] sm:text-sm">
-                          {product.name}
-                        </span>
-                        <span className="mt-0.5 block text-[0.54rem] font-bold uppercase text-[#6b645b] sm:mt-1 sm:text-[0.68rem]">
-                          {categoryLabels[product.category]}
-                        </span>
-                      </button>
-                      <div className="grid gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleProductAdd(product)}
-                          className="flex min-h-8 items-center justify-center rounded-md bg-[#ef7d0a] text-lg font-black text-white active:scale-[0.98] sm:min-h-10 sm:text-xl"
-                          aria-label={`${product.name} toevoegen`}
-                        >
-                          +
-                        </button>
-                        <span className="flex min-h-6 items-center justify-center rounded-md bg-white text-sm font-black text-[#24551d] sm:min-h-8 sm:text-base">
+                      <span className="mb-0.5 inline-flex h-4 min-w-6 items-center justify-center rounded bg-white px-1 text-[0.52rem] font-black text-[#ef7d0a]">
+                        {product.badge}
+                      </span>
+                      <span className="line-clamp-2 pr-4 text-[0.68rem] font-black leading-[0.9rem] text-[#1a1815]">
+                        {product.name}
+                      </span>
+                      {count > 0 && (
+                        <span className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#24551d] px-1 text-[0.62rem] font-black text-white">
                           {count}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => removeOneProduct(product.id)}
-                          disabled={count === 0}
-                          className="flex min-h-8 items-center justify-center rounded-md bg-[#24551d] text-lg font-black text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-10 sm:text-xl"
-                          aria-label={`${product.name} verwijderen`}
-                        >
-                          -
-                        </button>
-                      </div>
-                    </div>
+                      )}
+                    </button>
                   );
                 })}
               </div>
             </section>
           </div>
 
-          <aside className="rounded-lg border border-[#d6e5d8] bg-white p-2 shadow-sm sm:p-3 xl:sticky xl:top-3 xl:self-start">
+          <aside className="rounded-lg border border-[#d6e5d8] bg-white p-2 shadow-sm sm:p-3 md:sticky md:top-2 md:self-start xl:top-3">
             <h2 className="text-xs font-black uppercase tracking-normal text-[#24551d] sm:text-sm">
               Stap 3 · controle
             </h2>
@@ -490,33 +908,106 @@ export default function VierdaagseKassaPage() {
 
               <div className="grid gap-1.5">
                 {draftLines.length ? (
-                  draftLines.map((line) => (
-                    <div
-                      key={line.key}
-                      className="grid grid-cols-[1.7rem_minmax(0,1fr)_2rem] items-center gap-1.5 rounded-md border border-[#e8e4de] bg-[#faf8f5] px-1.5 py-1.5 sm:grid-cols-[2.2rem_minmax(0,1fr)_2.4rem] sm:gap-2 sm:px-2 sm:py-2"
-                    >
-                      <span className="text-xs font-black text-[#ef7d0a] sm:text-sm">
-                        {line.quantity}x
-                      </span>
-                      <span className="min-w-0 truncate text-xs font-bold text-[#1a1815] sm:text-sm">
-                        {lineLabel(line)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeDraftLine(line.key)}
-                        className="min-h-8 rounded-md bg-white text-[0.6rem] font-black text-[#c8382d] sm:min-h-9 sm:text-sm"
-                        aria-label={`${lineLabel(line)} verwijderen`}
+                  draftLines.map((line) => {
+                    const product = productsById.get(line.productId);
+                    const lineOptions = detailOptionsForProduct(product);
+
+                    return (
+                      <div
+                        key={line.key}
+                        className="grid gap-1 rounded-md border border-[#e8e4de] bg-[#faf8f5] p-1.5"
                       >
-                        x
-                      </button>
-                    </div>
-                  ))
+                        <div className="grid grid-cols-[1.5rem_minmax(0,1fr)_2.45rem_1.65rem] items-center gap-1.5">
+                          <span className="text-xs font-black text-[#ef7d0a] sm:text-sm">
+                            {line.quantity}x
+                          </span>
+                          <span className="min-w-0 truncate text-xs font-bold text-[#1a1815] sm:text-sm">
+                            {lineLabel(line)}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={!lineOptions.length}
+                            onClick={() => {
+                              setLineOptionsKey((current) =>
+                                current === line.key ? "" : line.key
+                              );
+                              setLineCustomDetail(line.detail || "");
+                            }}
+                            className="min-h-8 rounded-md bg-white text-[0.56rem] font-black text-[#24551d] disabled:opacity-25"
+                          >
+                            optie
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeDraftLine(line.key)}
+                            className="min-h-8 rounded-md bg-white text-[0.6rem] font-black text-[#c8382d] sm:text-sm"
+                            aria-label={`${lineLabel(line)} verwijderen`}
+                          >
+                            x
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
                 ) : (
                   <p className="rounded-lg border border-dashed border-[#d8d0c5] px-2 py-3 text-xs font-semibold text-[#8b8278] sm:px-3 sm:py-4 sm:text-sm">
                     Nog geen producten.
                   </p>
                 )}
               </div>
+
+              {activeLine && activeLineOptions.length > 0 && (
+                <div className="grid gap-1.5 rounded-lg border border-[#ef7d0a] bg-[#fff8ef] p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-xs font-black text-[#24551d]">
+                      Opties voor {activeLine.name}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLineOptionsKey("");
+                        setLineCustomDetail("");
+                      }}
+                      className="text-[0.62rem] font-black text-[#9d3c24]"
+                    >
+                      Sluit
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {activeLineOptions.map((option) => {
+                      const isActive = (activeLine.detail || "")
+                        .toLowerCase()
+                        .split(",")
+                        .map((part) => part.trim())
+                        .includes(option.toLowerCase());
+
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => toggleDraftLineOption(activeLine.key, option)}
+                          className={`min-h-8 rounded-md border px-1 text-[0.6rem] font-black active:scale-[0.98] ${
+                            isActive
+                              ? "border-[#24551d] bg-[#24551d] text-white"
+                              : "border-[#d8d0c5] bg-white text-[#24551d]"
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <input
+                    value={lineCustomDetail}
+                    onChange={(event) => {
+                      setLineCustomDetail(event.target.value);
+                      updateDraftLineDetail(activeLine.key, event.target.value);
+                    }}
+                    placeholder="Eigen optie of opmerking"
+                    className="min-h-8 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold outline-none focus:border-[#24551d]"
+                  />
+                </div>
+              )}
 
               <label className="grid gap-1 text-[0.65rem] font-black uppercase text-[#6b645b] sm:text-xs">
                 Notitie
