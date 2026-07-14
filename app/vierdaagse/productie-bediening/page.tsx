@@ -133,19 +133,19 @@ function getOrderItemGroups(order: VierdaagseOrder) {
   return [
     {
       id: "service",
-      title: "Gebak / hartig / overig",
-      badge: "Bediening",
+      title: "food",
+      badge: "bediening",
       items: serviceItems,
       className: "border-[#d6e5d8] bg-white",
-      badgeClassName: "bg-[#ecf4ed] text-[#24551d]",
+      badgeClassName: "border border-[#d6e5d8] bg-white/70 text-[#6b645b]",
     },
     {
       id: "coffee",
-      title: "Koffiecorner",
-      badge: "Apart maken",
+      title: "koffiecorner",
+      badge: "apart",
       items: coffeeItems,
-      className: "border-[#ef7d0a] bg-[#fff8ef]",
-      badgeClassName: "bg-[#ef7d0a] text-white",
+      className: "border-[#f0c084] bg-[#fffaf4]",
+      badgeClassName: "border border-[#f0c084] bg-white/70 text-[#9d3c24]",
     },
   ].filter((group) => group.items.length > 0);
 }
@@ -217,11 +217,11 @@ function OrderCard({
             className={`grid gap-1.5 rounded-lg border p-2 ${group.className}`}
           >
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-xs font-black uppercase tracking-normal text-[#24551d]">
+              <h3 className="text-[0.68rem] font-semibold italic lowercase tracking-normal text-[#7b7168]">
                 {group.title}
               </h3>
               <span
-                className={`rounded-md px-2 py-1 text-[0.62rem] font-black uppercase ${group.badgeClassName}`}
+                className={`rounded-md px-1.5 py-0.5 text-[0.58rem] font-bold lowercase ${group.badgeClassName}`}
               >
                 {group.badge} · {countOrderItems(group.items)}
               </span>
