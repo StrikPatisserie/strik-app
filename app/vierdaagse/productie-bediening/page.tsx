@@ -152,7 +152,7 @@ function getOrderItemGroups(order: VierdaagseOrder) {
     },
     {
       id: "coffee",
-      title: "koffiecorner",
+      title: "coffee corner",
       badge: "apart",
       items: coffeeItems,
       className: "border-[#f0c084] bg-[#fffaf4]",
@@ -228,11 +228,15 @@ function OrderCard({
             className={`grid gap-1.5 rounded-lg border p-2 ${group.className}`}
           >
             <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[0.56rem] font-normal italic lowercase leading-none tracking-normal text-[#9a9188]">
+              <h3
+                className="font-thin italic lowercase leading-none tracking-normal text-[#9a9188]"
+                style={{ fontSize: "0.48rem", fontWeight: 200 }}
+              >
                 {group.title}
               </h3>
               <span
-                className={`px-0.5 text-[0.52rem] font-normal italic lowercase leading-none ${group.badgeClassName}`}
+                className={`px-0.5 font-thin italic lowercase leading-none ${group.badgeClassName}`}
+                style={{ fontSize: "0.46rem", fontWeight: 200 }}
               >
                 {group.badge} · {countOrderItems(group.items)}
               </span>
