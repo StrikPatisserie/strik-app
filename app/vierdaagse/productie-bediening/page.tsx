@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   cancelOrder,
+  fetchVierdaagseOrdersFromWordPress,
   getAllOrders,
   loadDemoOrders,
   markOrderDelivered,
@@ -341,10 +342,19 @@ export default function VierdaagseProductieBedieningPage() {
     setOrders(getAllOrders());
   }
 
+  async function refreshOrdersFromWordPress() {
+    const result = await fetchVierdaagseOrdersFromWordPress();
+    setOrders(result.data);
+  }
+
   useEffect(() => {
     refreshOrders();
+    void refreshOrdersFromWordPress();
     const unsubscribe = subscribeVierdaagseOrders(refreshOrders);
-    const interval = window.setInterval(() => setNow(new Date()), 30000);
+    const interval = window.setInterval(() => {
+      setNow(new Date());
+      void refreshOrdersFromWordPress();
+    }, 5000);
 
     return () => {
       unsubscribe();

@@ -180,7 +180,7 @@ export default function VierdaagseKassaPage() {
     setError("");
   }
 
-  function submitOrder() {
+  async function submitOrder() {
     if (isSubmitting) return;
 
     if (destinationMode === "table" && !selectedTable) {
@@ -210,7 +210,7 @@ export default function VierdaagseKassaPage() {
         destinationMode === "table" && selectedTable
           ? selectedTable.location
           : "geen_tafel";
-      const order = createOrder({
+      const order = await createOrder({
         tableNumber,
         location,
         items: draftLines.map(({ key: _key, ...line }) => line),

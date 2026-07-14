@@ -12,6 +12,7 @@ import {
 
 const ordersStorageKey = "strik-vierdaagse-orders-v1";
 const ordersChangedEvent = "strik-vierdaagse-orders-changed";
+const vierdaagseOrdersApiUrl = "/api/vierdaagse-orders";
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -88,14 +89,26 @@ function readOrdersFromStorage() {
   }
 }
 
-function writeOrdersToStorage(orders: VierdaagseOrder[]) {
+function writeOrdersToStorage(orders: VierdaagseOrder[], notify = true) {
   if (!isBrowser()) return;
 
   window.localStorage.setItem(
     ordersStorageKey,
     JSON.stringify(sortOrders(orders))
   );
-  notifyOrderSubscribers();
+  if (notify) notifyOrderSubscribers();
+}
+
+function upsertOrderInStorage(order: VierdaagseOrder, notify = true) {
+  const orders = readOrdersFromStorage();
+  const exists = orders.some((existingOrder) => existingOrder.id === order.id);
+  const nextOrders = exists
+    ? orders.map((existingOrder) =>
+        existingOrder.id === order.id ? order : existingOrder
+      )
+    : [order, ...orders];
+
+  writeOrdersToStorage(nextOrders, notify);
 }
 
 function updateOrder(
@@ -103,10 +116,16 @@ function updateOrder(
   updater: (order: VierdaagseOrder) => VierdaagseOrder
 ) {
   const orders = readOrdersFromStorage();
-  const nextOrders = orders.map((order) =>
-    order.id === orderId ? updater(order) : order
-  );
+  let updatedOrder: VierdaagseOrder | null = null;
+  const nextOrders = orders.map((order) => {
+    if (order.id !== orderId) return order;
+
+    updatedOrder = updater(order);
+    return updatedOrder;
+  });
   writeOrdersToStorage(nextOrders);
+
+  return updatedOrder;
 }
 
 export function subscribeVierdaagseOrders(callback: () => void) {
@@ -141,7 +160,80 @@ export function getArchivedOrders() {
   );
 }
 
-export function createOrder(draft: VierdaagseOrderDraft) {
+async function readJson(response: Response) {
+  return (await response.json().catch(() => null)) as unknown;
+}
+
+function getApiMessage(data: unknown, fallback: string) {
+  if (
+    data &&
+    typeof data === "object" &&
+    "message" in data &&
+    typeof data.message === "string" &&
+    data.message.trim()
+  ) {
+    return data.message;
+  }
+
+  return fallback;
+}
+
+async function saveOrderToWordPress(order: VierdaagseOrder) {
+  const response = await fetch(vierdaagseOrdersApiUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ order }),
+  });
+  const data = await readJson(response);
+
+  if (response.ok && isVierdaagseOrder(data)) {
+    upsertOrderInStorage(data, false);
+    return { ok: true as const, data };
+  }
+
+  return {
+    ok: false as const,
+    status: response.status,
+    message: getApiMessage(data, "WordPress Vierdaagse-opslag is tijdelijk niet bereikbaar."),
+  };
+}
+
+export async function fetchVierdaagseOrdersFromWordPress() {
+  try {
+    const response = await fetch(vierdaagseOrdersApiUrl, {
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    const data = await readJson(response);
+
+    if (response.ok && Array.isArray(data)) {
+      const orders = sortOrders(data.filter(isVierdaagseOrder));
+      writeOrdersToStorage(orders);
+
+      return { ok: true as const, data: orders };
+    }
+
+    return {
+      ok: false as const,
+      data: readOrdersFromStorage(),
+      status: response.status,
+      message: getApiMessage(data, "WordPress Vierdaagse-opslag is tijdelijk niet bereikbaar."),
+    };
+  } catch {
+    return {
+      ok: false as const,
+      data: readOrdersFromStorage(),
+      message: "Kan geen verbinding maken met WordPress Vierdaagse-opslag.",
+    };
+  }
+}
+
+export async function createOrder(draft: VierdaagseOrderDraft) {
   const now = new Date();
   const order: VierdaagseOrder = {
     id: createOrderId(now),
@@ -160,7 +252,9 @@ export function createOrder(draft: VierdaagseOrderDraft) {
     })),
   };
 
-  writeOrdersToStorage([order, ...readOrdersFromStorage()]);
+  upsertOrderInStorage(order);
+  await saveOrderToWordPress(order);
+
   return order;
 }
 
@@ -169,7 +263,7 @@ export function updateOrderItemStatus(
   itemId: string,
   status: VierdaagseOrderItemStatus
 ) {
-  updateOrder(orderId, (order) => {
+  const updatedOrder = updateOrder(orderId, (order) => {
     const nextItems = order.items.map((item) =>
       item.id === itemId ? { ...item, status } : item
     );
@@ -182,41 +276,52 @@ export function updateOrderItemStatus(
       items: nextItems,
     };
   });
+
+  if (updatedOrder) void saveOrderToWordPress(updatedOrder);
 }
 
 export function markOrderReady(orderId: string) {
   const now = new Date().toISOString();
 
-  updateOrder(orderId, (order) => ({
+  const updatedOrder = updateOrder(orderId, (order) => ({
     ...order,
     status: "klaar_voor_bediening",
     readyAt: order.readyAt || now,
   }));
+
+  if (updatedOrder) void saveOrderToWordPress(updatedOrder);
 }
 
 export function markOrderDelivered(orderId: string) {
   const now = new Date().toISOString();
 
-  updateOrder(orderId, (order) => ({
+  const updatedOrder = updateOrder(orderId, (order) => ({
     ...order,
     status: "geleverd",
     deliveredAt: now,
     readyAt: order.readyAt || now,
   }));
+
+  if (updatedOrder) void saveOrderToWordPress(updatedOrder);
 }
 
 export function cancelOrder(orderId: string) {
   const now = new Date().toISOString();
 
-  updateOrder(orderId, (order) => ({
+  const updatedOrder = updateOrder(orderId, (order) => ({
     ...order,
     status: "geannuleerd",
     cancelledAt: now,
   }));
+
+  if (updatedOrder) void saveOrderToWordPress(updatedOrder);
 }
 
 export function loadDemoOrders() {
   const currentOrders = readOrdersFromStorage();
   const demoOrders = createDemoOrders();
   writeOrdersToStorage([...demoOrders, ...currentOrders]);
+  demoOrders.forEach((order) => {
+    void saveOrderToWordPress(order);
+  });
 }
