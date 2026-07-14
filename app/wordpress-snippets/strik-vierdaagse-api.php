@@ -9,9 +9,11 @@
  * - POST /wp-json/strik/v1/vierdaagse-orders?key=...
  * - PUT  /wp-json/strik/v1/vierdaagse-orders?key=...
  * - DELETE /wp-json/strik/v1/vierdaagse-orders?key=...&id=...
+ * - GET  /wp-json/strik/v1/vierdaagse-products?key=...
+ * - POST /wp-json/strik/v1/vierdaagse-products?key=...
  *
  * Hiermee worden Vierdaagse kassabonnen centraal opgeslagen, zodat meerdere
- * iPads dezelfde bonnen en statusvinkjes kunnen zien.
+ * iPads dezelfde bonnen, statusvinkjes en productknoppen kunnen zien.
  */
 
 if (!defined('STRIK_VIERDAAGSE_API_KEY')) {
@@ -22,8 +24,16 @@ if (!defined('STRIK_VIERDAAGSE_OPTION_NAME')) {
     define('STRIK_VIERDAAGSE_OPTION_NAME', 'strik_vierdaagse_orders');
 }
 
+if (!defined('STRIK_VIERDAAGSE_PRODUCTS_OPTION_NAME')) {
+    define('STRIK_VIERDAAGSE_PRODUCTS_OPTION_NAME', 'strik_vierdaagse_products');
+}
+
 if (!defined('STRIK_VIERDAAGSE_MAX_ORDERS')) {
     define('STRIK_VIERDAAGSE_MAX_ORDERS', 2500);
+}
+
+if (!defined('STRIK_VIERDAAGSE_MAX_PRODUCTS')) {
+    define('STRIK_VIERDAAGSE_MAX_PRODUCTS', 500);
 }
 
 if (!defined('STRIK_VIERDAAGSE_MAX_JSON_BYTES')) {
@@ -115,6 +125,105 @@ function strik_vierdaagse_sanitize_item($item, $index = 0) {
         ),
         'detail' => isset($item['detail']) ? strik_vierdaagse_text($item['detail'], 180) : '',
     );
+}
+}
+
+if (!function_exists('strik_vierdaagse_sanitize_text_list')) {
+function strik_vierdaagse_sanitize_text_list($items, $max_items = 24, $max_length = 120) {
+    if (!is_array($items)) {
+        return array();
+    }
+
+    $clean = array();
+    foreach (array_slice($items, 0, $max_items) as $item) {
+        $value = strik_vierdaagse_text($item, $max_length);
+        if ($value !== '') {
+            $clean[] = $value;
+        }
+    }
+
+    return $clean;
+}
+}
+
+if (!function_exists('strik_vierdaagse_sanitize_product')) {
+function strik_vierdaagse_sanitize_product($product, $index = 0) {
+    if (!is_array($product)) return null;
+
+    $name = isset($product['name']) ? strik_vierdaagse_text($product['name'], 180) : '';
+    $id = isset($product['id']) ? strik_vierdaagse_text($product['id'], 140) : '';
+
+    if ($id === '' || $name === '') {
+        return null;
+    }
+
+    $badge = isset($product['badge']) ? strtoupper(strik_vierdaagse_text($product['badge'], 8)) : '';
+    if ($badge === '') {
+        $badge = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $name), 0, 4));
+    }
+    if ($badge === '') {
+        $badge = 'P' . absint($index + 1);
+    }
+
+    $clean = array(
+        'id' => $id,
+        'name' => $name,
+        'category' => strik_vierdaagse_choice(
+            isset($product['category']) ? $product['category'] : '',
+            array('koffie-thee', 'fris-koud', 'bakkerij', 'gebak', 'hartig', 'overig'),
+            'overig'
+        ),
+        'badge' => substr($badge, 0, 4),
+    );
+
+    if (!empty($product['needsDetail'])) {
+        $clean['needsDetail'] = true;
+    }
+
+    if (isset($product['detailLabel'])) {
+        $clean['detailLabel'] = strik_vierdaagse_text($product['detailLabel'], 160);
+    }
+
+    if (isset($product['detailOptions'])) {
+        $clean['detailOptions'] = strik_vierdaagse_sanitize_text_list($product['detailOptions']);
+    }
+
+    if (isset($product['modifierLabel'])) {
+        $clean['modifierLabel'] = strik_vierdaagse_text($product['modifierLabel'], 160);
+    }
+
+    if (isset($product['modifierOptions'])) {
+        $clean['modifierOptions'] = strik_vierdaagse_sanitize_text_list($product['modifierOptions']);
+    }
+
+    return $clean;
+}
+}
+
+if (!function_exists('strik_vierdaagse_sanitize_products')) {
+function strik_vierdaagse_sanitize_products($products) {
+    if (!is_array($products)) {
+        return array();
+    }
+
+    $clean = array();
+    $used_ids = array();
+
+    foreach (array_slice($products, 0, STRIK_VIERDAAGSE_MAX_PRODUCTS) as $index => $product) {
+        $clean_product = strik_vierdaagse_sanitize_product($product, $index);
+        if ($clean_product === null || isset($used_ids[$clean_product['id']])) {
+            continue;
+        }
+
+        $used_ids[$clean_product['id']] = true;
+        $clean[] = $clean_product;
+    }
+
+    usort($clean, function ($a, $b) {
+        return strcasecmp($a['name'], $b['name']);
+    });
+
+    return $clean;
 }
 }
 
@@ -280,6 +389,43 @@ function strik_vierdaagse_delete($request) {
 }
 }
 
+if (!function_exists('strik_vierdaagse_get_products')) {
+function strik_vierdaagse_get_products($request) {
+    $products = get_option(STRIK_VIERDAAGSE_PRODUCTS_OPTION_NAME, array());
+
+    return rest_ensure_response(strik_vierdaagse_sanitize_products($products));
+}
+}
+
+if (!function_exists('strik_vierdaagse_save_products')) {
+function strik_vierdaagse_save_products($request) {
+    $params = $request->get_json_params();
+
+    if (!is_array($params)) {
+        return new WP_Error('strik_vierdaagse_products_invalid_json', 'Geen geldige productlijst ontvangen.', array('status' => 400));
+    }
+
+    $raw_products = isset($params['products']) && is_array($params['products'])
+        ? $params['products']
+        : $params;
+    $products = strik_vierdaagse_sanitize_products($raw_products);
+
+    if (count($products) < 1) {
+        return new WP_Error('strik_vierdaagse_products_empty', 'Productlijst is leeg.', array('status' => 400));
+    }
+
+    $encoded = wp_json_encode($products);
+
+    if (is_string($encoded) && strlen($encoded) > STRIK_VIERDAAGSE_MAX_JSON_BYTES) {
+        return new WP_Error('strik_vierdaagse_products_storage_full', 'Vierdaagse productopslag is te groot.', array('status' => 413));
+    }
+
+    update_option(STRIK_VIERDAAGSE_PRODUCTS_OPTION_NAME, $products, false);
+
+    return rest_ensure_response($products);
+}
+}
+
 add_action('rest_api_init', function () {
     register_rest_route('strik/v1', '/vierdaagse-orders', array(
         array(
@@ -300,6 +446,24 @@ add_action('rest_api_init', function () {
         array(
             'methods' => WP_REST_Server::DELETABLE,
             'callback' => 'strik_vierdaagse_delete',
+            'permission_callback' => 'strik_vierdaagse_permission',
+        ),
+    ));
+
+    register_rest_route('strik/v1', '/vierdaagse-products', array(
+        array(
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'strik_vierdaagse_get_products',
+            'permission_callback' => 'strik_vierdaagse_permission',
+        ),
+        array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => 'strik_vierdaagse_save_products',
+            'permission_callback' => 'strik_vierdaagse_permission',
+        ),
+        array(
+            'methods' => WP_REST_Server::EDITABLE,
+            'callback' => 'strik_vierdaagse_save_products',
             'permission_callback' => 'strik_vierdaagse_permission',
         ),
     ));

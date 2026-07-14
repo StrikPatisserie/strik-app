@@ -90,6 +90,75 @@ export const categoryLabels = Object.fromEntries(
   productCategories.map((category) => [category.id, category.label])
 ) as Record<ProductCategoryId, string>;
 
+export function isProductCategoryId(value: unknown): value is ProductCategoryId {
+  return (
+    typeof value === "string" &&
+    productCategories.some((category) => category.id === value)
+  );
+}
+
+export function sortVierdaagseProducts(products: VierdaagseProduct[]) {
+  return [...products].sort((first, second) =>
+    first.name.localeCompare(second.name, "nl", { sensitivity: "base" })
+  );
+}
+
+export function normalizeVierdaagseProducts(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return sortVierdaagseProducts(
+    value
+      .map((item): VierdaagseProduct | null => {
+        if (!item || typeof item !== "object") return null;
+
+        const product = item as Partial<VierdaagseProduct>;
+        const id = typeof product.id === "string" ? product.id.trim() : "";
+        const name =
+          typeof product.name === "string" ? product.name.trim() : "";
+        const category = isProductCategoryId(product.category)
+          ? product.category
+          : "overig";
+
+        if (!id || !name) return null;
+
+        return {
+          id,
+          name,
+          category,
+          badge:
+            typeof product.badge === "string" && product.badge.trim()
+              ? product.badge.trim().slice(0, 4).toUpperCase()
+              : name
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((part) => part[0])
+                  .join("")
+                  .toUpperCase() || "P",
+          needsDetail: Boolean(product.needsDetail),
+          detailLabel:
+            typeof product.detailLabel === "string"
+              ? product.detailLabel
+              : "",
+          detailOptions: Array.isArray(product.detailOptions)
+            ? product.detailOptions.filter(
+                (option) => typeof option === "string" && option.trim()
+              )
+            : undefined,
+          modifierLabel:
+            typeof product.modifierLabel === "string"
+              ? product.modifierLabel
+              : "",
+          modifierOptions: Array.isArray(product.modifierOptions)
+            ? product.modifierOptions.filter(
+                (option) => typeof option === "string" && option.trim()
+              )
+            : undefined,
+        };
+      })
+      .filter((product): product is VierdaagseProduct => Boolean(product))
+  );
+}
+
 export const vierdaagseTables: VierdaagseTable[] = [
   ...Array.from({ length: 8 }, (_, index) => ({
     id: `T${index + 1}`,

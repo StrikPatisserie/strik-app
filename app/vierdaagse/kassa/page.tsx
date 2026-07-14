@@ -1,8 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createOrder } from "../orderStore";
+import {
+  fetchVierdaagseProductsFromWordPress,
+  getStoredVierdaagseProducts,
+  saveVierdaagseProductsToWordPress,
+} from "../productStore";
 import {
   ProductCategoryId,
   VierdaagseProduct,
@@ -10,6 +15,7 @@ import {
   categoryLabels,
   getLocationLabel,
   productCategories,
+  sortVierdaagseProducts,
   vierdaagseProducts,
   vierdaagseTables,
 } from "../vierdaagseData";
@@ -42,8 +48,6 @@ const tableGroups: Array<{ title: string; tables: VierdaagseTable[] }> = [
   },
 ];
 
-const productsStorageKey = "strik-vierdaagse-kassa-products-v1";
-
 function emptyProductDraft(category: ProductCategoryId): ProductDraft {
   return {
     name: "",
@@ -69,10 +73,6 @@ function createDraftKey(productId: string, detail = "") {
 
 function getCustomDestination(value: string) {
   return value.trim() || "To go";
-}
-
-function isProductCategoryId(value: string): value is ProductCategoryId {
-  return productCategories.some((category) => category.id === value);
 }
 
 function slugifyProductName(value: string) {
@@ -114,55 +114,6 @@ function uniqueProductId(name: string, products: VierdaagseProduct[]) {
   return nextId;
 }
 
-function normalizeProducts(value: unknown) {
-  if (!Array.isArray(value)) return null;
-
-  const products = value
-    .map((item): VierdaagseProduct | null => {
-      if (!item || typeof item !== "object") return null;
-      const product = item as Partial<VierdaagseProduct>;
-      const name = typeof product.name === "string" ? product.name.trim() : "";
-      const id = typeof product.id === "string" ? product.id.trim() : "";
-      const category =
-        typeof product.category === "string" &&
-        isProductCategoryId(product.category)
-          ? product.category
-          : "overig";
-
-      if (!name || !id) return null;
-
-      return {
-        id,
-        name,
-        category,
-        badge:
-          typeof product.badge === "string" && product.badge.trim()
-            ? product.badge.trim().slice(0, 4).toUpperCase()
-            : badgeFromProductName(name),
-        needsDetail: Boolean(product.needsDetail),
-        detailLabel:
-          typeof product.detailLabel === "string" ? product.detailLabel : "",
-        detailOptions: Array.isArray(product.detailOptions)
-          ? product.detailOptions.filter((option) => typeof option === "string")
-          : undefined,
-        modifierLabel:
-          typeof product.modifierLabel === "string" ? product.modifierLabel : "",
-        modifierOptions: Array.isArray(product.modifierOptions)
-          ? product.modifierOptions.filter((option) => typeof option === "string")
-          : undefined,
-      };
-    })
-    .filter((product): product is VierdaagseProduct => Boolean(product));
-
-  return products.length ? products : null;
-}
-
-function sortProducts(products: VierdaagseProduct[]) {
-  return [...products].sort((first, second) =>
-    first.name.localeCompare(second.name, "nl", { sensitivity: "base" })
-  );
-}
-
 function detailOptionsForProduct(product?: VierdaagseProduct) {
   return product?.modifierOptions?.length
     ? product.modifierOptions
@@ -181,6 +132,7 @@ export default function VierdaagseKassaPage() {
   const [products, setProducts] =
     useState<VierdaagseProduct[]>(vierdaagseProducts);
   const [hasLoadedProducts, setHasLoadedProducts] = useState(false);
+  const [hasProductChanges, setHasProductChanges] = useState(false);
   const [isEditingProducts, setIsEditingProducts] = useState(false);
   const [isManualProductOpen, setIsManualProductOpen] = useState(false);
   const [productDraft, setProductDraft] = useState<ProductDraft>(() =>
@@ -200,6 +152,7 @@ export default function VierdaagseKassaPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const productsJsonRef = useRef(JSON.stringify(products));
 
   useEffect(() => {
     const interval = window.setInterval(() => setClock(new Date()), 15000);
@@ -207,24 +160,47 @@ export default function VierdaagseKassaPage() {
   }, []);
 
   useEffect(() => {
-    try {
-      const rawProducts = window.localStorage.getItem(productsStorageKey);
-      const storedProducts = rawProducts
-        ? normalizeProducts(JSON.parse(rawProducts))
-        : null;
+    let isMounted = true;
+    setProducts(getStoredVierdaagseProducts());
 
-      if (storedProducts) setProducts(storedProducts);
-    } catch {
-      setProducts(vierdaagseProducts);
-    } finally {
+    fetchVierdaagseProductsFromWordPress().then((result) => {
+      if (!isMounted) return;
+
+      if (result.data.length) {
+        setProducts(result.data);
+      }
       setHasLoadedProducts(true);
-    }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (!hasLoadedProducts) return;
-    window.localStorage.setItem(productsStorageKey, JSON.stringify(products));
-  }, [hasLoadedProducts, products]);
+    productsJsonRef.current = JSON.stringify(products);
+  }, [products]);
+
+  useEffect(() => {
+    if (!hasLoadedProducts || !hasProductChanges) return;
+
+    const productsToSave = products;
+    const productsJson = JSON.stringify(productsToSave);
+    const timeout = window.setTimeout(() => {
+      saveVierdaagseProductsToWordPress(productsToSave).then((result) => {
+        if (productsJson !== productsJsonRef.current) return;
+
+        if (result.ok) {
+          setHasProductChanges(false);
+          return;
+        }
+
+        setError("Knoppen zijn lokaal opgeslagen; WordPress is nog niet bijgewerkt.");
+      });
+    }, 650);
+
+    return () => window.clearTimeout(timeout);
+  }, [hasLoadedProducts, hasProductChanges, products]);
 
   useEffect(() => {
     setProductDraft((current) => ({
@@ -235,7 +211,7 @@ export default function VierdaagseKassaPage() {
 
   const productsInCategory = useMemo(
     () =>
-      sortProducts(
+      sortVierdaagseProducts(
         products.filter((product) => product.category === activeCategory)
       ),
     [activeCategory, products]
@@ -273,7 +249,10 @@ export default function VierdaagseKassaPage() {
         .toUpperCase(),
     };
 
-    setProducts((currentProducts) => sortProducts([...currentProducts, product]));
+    setProducts((currentProducts) =>
+      sortVierdaagseProducts([...currentProducts, product])
+    );
+    setHasProductChanges(true);
     setProductDraft(emptyProductDraft(activeCategory));
     setMessage(`${name} is toegevoegd als knop.`);
     setError("");
@@ -284,7 +263,7 @@ export default function VierdaagseKassaPage() {
     changes: Partial<VierdaagseProduct>
   ) {
     setProducts((currentProducts) =>
-      sortProducts(
+      sortVierdaagseProducts(
         currentProducts.map((product) =>
           product.id === productId
             ? {
@@ -299,16 +278,19 @@ export default function VierdaagseKassaPage() {
         )
       )
     );
+    setHasProductChanges(true);
   }
 
   function deleteProductButton(productId: string) {
     setProducts((currentProducts) =>
       currentProducts.filter((product) => product.id !== productId)
     );
+    setHasProductChanges(true);
   }
 
   function resetProductButtons() {
-    setProducts(vierdaagseProducts);
+    setProducts(sortVierdaagseProducts(vierdaagseProducts));
+    setHasProductChanges(true);
     setMessage("Standaard knoppen zijn teruggezet.");
     setError("");
   }
