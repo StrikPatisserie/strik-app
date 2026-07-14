@@ -1,4 +1,4 @@
-export type VierdaagseLocation = "terras" | "binnen";
+export type VierdaagseLocation = "terras" | "binnen" | "geen_tafel";
 
 export type VierdaagseOrderStatus =
   | "nieuw"
@@ -168,10 +168,16 @@ export const vierdaagseProducts: VierdaagseProduct[] = [
 ];
 
 export function getTableLocation(tableNumber: string): VierdaagseLocation {
+  if (!tableNumber.startsWith("T") && !tableNumber.startsWith("B")) {
+    return "geen_tafel";
+  }
+
   return tableNumber.startsWith("T") ? "terras" : "binnen";
 }
 
 export function getLocationLabel(location: VierdaagseLocation) {
+  if (location === "geen_tafel") return "Geen tafel";
+
   return location === "terras" ? "Terras" : "Binnen";
 }
 

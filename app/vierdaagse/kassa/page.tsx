@@ -23,6 +23,8 @@ type DraftLine = {
   detail?: string;
 };
 
+type DestinationMode = "table" | "custom";
+
 const tableGroups: Array<{ title: string; tables: VierdaagseTable[] }> = [
   {
     title: "Terras",
@@ -49,10 +51,17 @@ function createDraftKey(productId: string, detail = "") {
   return `${productId}::${detail.trim().toLowerCase()}`;
 }
 
+function getCustomDestination(value: string) {
+  return value.trim() || "To go";
+}
+
 export default function VierdaagseKassaPage() {
   const [selectedTable, setSelectedTable] = useState<VierdaagseTable | null>(
     null
   );
+  const [destinationMode, setDestinationMode] =
+    useState<DestinationMode>("table");
+  const [customDestination, setCustomDestination] = useState("To go");
   const [activeCategory, setActiveCategory] =
     useState<ProductCategoryId>("koffie-thee");
   const [draftLines, setDraftLines] = useState<DraftLine[]>([]);
@@ -162,6 +171,8 @@ export default function VierdaagseKassaPage() {
 
   function clearDraft() {
     setSelectedTable(null);
+    setDestinationMode("table");
+    setCustomDestination("To go");
     setDraftLines([]);
     setNote("");
     setDetailProduct(null);
@@ -172,8 +183,13 @@ export default function VierdaagseKassaPage() {
   function submitOrder() {
     if (isSubmitting) return;
 
-    if (!selectedTable) {
-      setError("Kies eerst een tafel.");
+    if (destinationMode === "table" && !selectedTable) {
+      setError("Kies eerst een tafel of gebruik Geen tafel / To go.");
+      return;
+    }
+
+    if (destinationMode === "custom" && !customDestination.trim()) {
+      setError("Vul een omschrijving in, bijvoorbeeld To go.");
       return;
     }
 
@@ -186,9 +202,17 @@ export default function VierdaagseKassaPage() {
     setError("");
 
     try {
+      const tableNumber =
+        destinationMode === "table" && selectedTable
+          ? selectedTable.label
+          : getCustomDestination(customDestination);
+      const location =
+        destinationMode === "table" && selectedTable
+          ? selectedTable.location
+          : "geen_tafel";
       const order = createOrder({
-        tableNumber: selectedTable.label,
-        location: selectedTable.location,
+        tableNumber,
+        location,
         items: draftLines.map(({ key: _key, ...line }) => line),
         note,
       });
@@ -201,6 +225,13 @@ export default function VierdaagseKassaPage() {
       window.setTimeout(() => setIsSubmitting(false), 900);
     }
   }
+
+  const selectedDestinationLabel =
+    destinationMode === "table" && selectedTable
+      ? `${selectedTable.label} · ${getLocationLabel(selectedTable.location)}`
+      : destinationMode === "custom"
+        ? `${getCustomDestination(customDestination)} · Geen tafel`
+        : "Nog geen tafel";
 
   return (
     <main className="min-h-screen bg-[#faf8f5] px-3 py-3 pb-24 text-[#1a1815] md:pb-6 lg:px-5">
@@ -259,9 +290,12 @@ export default function VierdaagseKassaPage() {
                           <button
                             key={table.id}
                             type="button"
-                            onClick={() => setSelectedTable(table)}
+                            onClick={() => {
+                              setDestinationMode("table");
+                              setSelectedTable(table);
+                            }}
                             className={`min-h-11 rounded-md border text-base font-black transition active:scale-[0.98] ${
-                              selected
+                              selected && destinationMode === "table"
                                 ? "border-[#24551d] bg-[#24551d] text-white"
                                 : "border-[#d6e5d8] bg-[#f6faf4] text-[#24551d]"
                             }`}
@@ -273,6 +307,33 @@ export default function VierdaagseKassaPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="mt-3 grid gap-2 rounded-lg border border-[#e8e4de] bg-[#faf8f5] p-2 sm:grid-cols-[auto_1fr] sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDestinationMode("custom");
+                    setSelectedTable(null);
+                  }}
+                  className={`min-h-11 rounded-md border px-3 text-sm font-black transition active:scale-[0.98] ${
+                    destinationMode === "custom"
+                      ? "border-[#ef7d0a] bg-[#ef7d0a] text-white"
+                      : "border-[#d8d0c5] bg-white text-[#24551d]"
+                  }`}
+                >
+                  Geen tafel / To go
+                </button>
+                <input
+                  value={customDestination}
+                  onFocus={() => {
+                    setDestinationMode("custom");
+                    setSelectedTable(null);
+                  }}
+                  onChange={(event) => setCustomDestination(event.target.value)}
+                  placeholder="Bijv. To go, naam klant, afhalen"
+                  className="min-h-11 rounded-md border border-[#d8d0c5] bg-white px-3 text-sm font-semibold outline-none focus:border-[#24551d]"
+                />
               </div>
             </section>
 
@@ -423,11 +484,7 @@ export default function VierdaagseKassaPage() {
                   Tafel
                 </p>
                 <p className="text-2xl font-black text-[#24551d]">
-                  {selectedTable
-                    ? `${selectedTable.label} · ${getLocationLabel(
-                        selectedTable.location
-                      )}`
-                    : "Nog geen tafel"}
+                  {selectedDestinationLabel}
                 </p>
               </div>
 

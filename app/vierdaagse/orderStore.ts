@@ -46,7 +46,9 @@ function isVierdaagseOrder(value: unknown): value is VierdaagseOrder {
     typeof order.date === "string" &&
     typeof order.year === "number" &&
     typeof order.tableNumber === "string" &&
-    (order.location === "terras" || order.location === "binnen") &&
+    (order.location === "terras" ||
+      order.location === "binnen" ||
+      order.location === "geen_tafel") &&
     typeof order.note === "string" &&
     isOrderStatus(order.status) &&
     Array.isArray(order.items) &&

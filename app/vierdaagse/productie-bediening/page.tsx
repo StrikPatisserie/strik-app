@@ -118,6 +118,38 @@ function getArchivedOrderEnd(order: VierdaagseOrder) {
   return order.deliveredAt || order.cancelledAt || order.readyAt || order.createdAt;
 }
 
+function countOrderItems(items: VierdaagseOrder["items"]) {
+  return items.reduce((total, item) => total + item.quantity, 0);
+}
+
+function getOrderItemGroups(order: VierdaagseOrder) {
+  const serviceItems = order.items.filter(
+    (item) => item.category !== "koffie-thee"
+  );
+  const coffeeItems = order.items.filter(
+    (item) => item.category === "koffie-thee"
+  );
+
+  return [
+    {
+      id: "service",
+      title: "Gebak / hartig / overig",
+      badge: "Bediening",
+      items: serviceItems,
+      className: "border-[#d6e5d8] bg-white",
+      badgeClassName: "bg-[#ecf4ed] text-[#24551d]",
+    },
+    {
+      id: "coffee",
+      title: "Koffiecorner",
+      badge: "Apart maken",
+      items: coffeeItems,
+      className: "border-[#ef7d0a] bg-[#fff8ef]",
+      badgeClassName: "bg-[#ef7d0a] text-white",
+    },
+  ].filter((group) => group.items.length > 0);
+}
+
 function OrderCard({
   order,
   now,
@@ -135,6 +167,7 @@ function OrderCard({
     allReady &&
     (order.status === "nieuw" || order.status === "in_productie");
   const canDeliver = order.status === "klaar_voor_bediening";
+  const itemGroups = getOrderItemGroups(order);
 
   function setItemStatus(itemId: string, ready: boolean) {
     updateOrderItemStatus(order.id, itemId, ready ? "klaar" : "niet_gestart");
@@ -177,37 +210,55 @@ function OrderCard({
         </span>
       </header>
 
-      <div className="grid gap-1.5">
-        {order.items.map((item) => (
-          <div
-            key={item.id}
-            className="grid grid-cols-[2.1rem_minmax(0,1fr)_3.2rem] items-center gap-2 rounded-md border border-[#e8e4de] bg-white px-2 py-2"
+      <div className="grid gap-2">
+        {itemGroups.map((group) => (
+          <section
+            key={group.id}
+            className={`grid gap-1.5 rounded-lg border p-2 ${group.className}`}
           >
-            <span className="text-sm font-black text-[#ef7d0a]">
-              {item.quantity}x
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-black text-[#1a1815]">
-                {itemLabel(item)}
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xs font-black uppercase tracking-normal text-[#24551d]">
+                {group.title}
+              </h3>
+              <span
+                className={`rounded-md px-2 py-1 text-[0.62rem] font-black uppercase ${group.badgeClassName}`}
+              >
+                {group.badge} · {countOrderItems(group.items)}
               </span>
-              <span className="block text-[0.64rem] font-bold uppercase text-[#8b8278]">
-                {categoryLabels[item.category as ProductCategoryId]}
-              </span>
-            </span>
-            <button
-              type="button"
-              disabled={archive || order.status === "klaar_voor_bediening"}
-              onClick={() => setItemStatus(item.id, item.status !== "klaar")}
-              className={`min-h-11 rounded-md text-lg font-black transition active:scale-[0.98] disabled:opacity-60 ${
-                item.status === "klaar"
-                  ? "bg-[#24551d] text-white"
-                  : "border border-[#d8d0c5] bg-[#faf8f5] text-[#8b8278]"
-              }`}
-              aria-label={`${itemLabel(item)} klaar melden`}
-            >
-              ✓
-            </button>
-          </div>
+            </div>
+
+            {group.items.map((item) => (
+              <div
+                key={item.id}
+                className="grid grid-cols-[2.1rem_minmax(0,1fr)_3.2rem] items-center gap-2 rounded-md border border-[#e8e4de] bg-white px-2 py-2"
+              >
+                <span className="text-sm font-black text-[#ef7d0a]">
+                  {item.quantity}x
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-black text-[#1a1815]">
+                    {itemLabel(item)}
+                  </span>
+                  <span className="block text-[0.64rem] font-bold uppercase text-[#8b8278]">
+                    {categoryLabels[item.category as ProductCategoryId]}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  disabled={archive || order.status === "klaar_voor_bediening"}
+                  onClick={() => setItemStatus(item.id, item.status !== "klaar")}
+                  className={`min-h-11 rounded-md text-lg font-black transition active:scale-[0.98] disabled:opacity-60 ${
+                    item.status === "klaar"
+                      ? "bg-[#24551d] text-white"
+                      : "border border-[#d8d0c5] bg-[#faf8f5] text-[#8b8278]"
+                  }`}
+                  aria-label={`${itemLabel(item)} klaar melden`}
+                >
+                  ✓
+                </button>
+              </div>
+            ))}
+          </section>
         ))}
       </div>
 
@@ -390,7 +441,7 @@ export default function VierdaagseProductieBedieningPage() {
             { id: "actief" as const, label: "Actief", count: activeOrders.length },
             {
               id: "klaar" as const,
-              label: "Klaar",
+              label: "Klaar voor bediening",
               count: readyOrders.length,
             },
             {
