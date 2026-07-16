@@ -5,6 +5,8 @@ import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { strikIcons } from "../../StrikUI";
+import { canAccessWeddingCakes, filterAllowedItems } from "../../lib/auth/access";
+import type { UserProfile } from "../../lib/supabase/types";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList, { IngredientDetail } from "./IngredientsList";
@@ -104,6 +106,7 @@ type RecepturenAppProps = {
   hideTopNav?: boolean;
   initialBeheerView?: BeheerView;
   showProductionLinks?: boolean;
+  profile?: UserProfile | null;
 };
 
 function mainTabForPath(pathname: string): MainTabId {
@@ -553,6 +556,7 @@ export default function RecepturenApp({
   hideTopNav = false,
   initialBeheerView = "menu",
   showProductionLinks = false,
+  profile = null,
 }: Readonly<RecepturenAppProps> = {}) {
   const pathname = usePathname();
   const [mainTab, setMainTab] = useState<MainTabId>(() =>
@@ -2142,6 +2146,7 @@ export default function RecepturenApp({
               onSaveNote={saveBakeryNote}
               onDeleteNote={deleteBakeryNote}
               showProductionLinks={showProductionLinks}
+              profile={profile}
             />
           )}
 
@@ -2299,6 +2304,7 @@ function BakkerijStartScreen({
   onSaveNote,
   onDeleteNote,
   showProductionLinks,
+  profile,
 }: Readonly<{
   home: BakeryHomeData;
   selectedWeek: string;
@@ -2309,6 +2315,7 @@ function BakkerijStartScreen({
   onSaveNote: (noteId: string, text: string) => void;
   onDeleteNote: (noteId: string) => void;
   showProductionLinks?: boolean;
+  profile?: UserProfile | null;
 }>) {
   const offer = offerForWeek(home, selectedWeek);
   const visibleNotes = home.notes.slice(0, 3);
@@ -2433,8 +2440,8 @@ function BakkerijStartScreen({
         </section>
       </div>
 
-      <BakkerijWeddingCakeAgenda />
-      {showProductionLinks && <ProductionOverviewLinks />}
+      {canAccessWeddingCakes(profile) && <BakkerijWeddingCakeAgenda />}
+      {showProductionLinks && <ProductionOverviewLinks profile={profile} />}
     </section>
   );
 }
@@ -2463,10 +2470,16 @@ const productionOverviewLinks = [
   },
 ];
 
-function ProductionOverviewLinks() {
+function ProductionOverviewLinks({
+  profile,
+}: Readonly<{ profile?: UserProfile | null }>) {
+  const visibleLinks = filterAllowedItems(productionOverviewLinks, profile);
+
+  if (visibleLinks.length === 0) return null;
+
   return (
     <section className="mt-3 grid gap-2 sm:mt-5">
-      {productionOverviewLinks.map((item) => (
+      {visibleLinks.map((item) => (
         <Link
           key={item.href}
           href={item.href}
@@ -3103,7 +3116,11 @@ function BakeryHomeManager({
   const selectedOffer = offerForWeek(home, selectedWeek);
 
   useEffect(() => {
-    setLabel(selectedOffer?.label || "");
+    const timer = window.setTimeout(() => {
+      setLabel(selectedOffer?.label || "");
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [selectedOffer?.label, selectedWeek]);
 
   return (
@@ -3159,7 +3176,7 @@ function BakeryHomeManager({
           </label>
 
           <p className="text-xs font-bold leading-relaxed text-[#707070]">
-            Foto's worden als WordPress media opgeslagen; de app bewaart alleen de link bij de juiste week.
+            Foto&apos;s worden als WordPress media opgeslagen; de app bewaart alleen de link bij de juiste week.
           </p>
           {(uploadStatus || status) && (
             <p className="text-xs font-bold text-[#707070]">

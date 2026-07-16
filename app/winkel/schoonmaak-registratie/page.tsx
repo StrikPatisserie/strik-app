@@ -25,12 +25,12 @@ import {
   type TemperaturePayload,
   type TemperatureRecord,
   type TemperatureRegistration,
-  type WinkelId,
 } from "./temperatureRegistrationShared";
 import {
   fetchTemperatureRegistrations,
   saveTemperatureRegistration,
 } from "./temperatureRegistrationApi";
+import { useAllowedWinkelOptions } from "./useAllowedWinkelOptions";
 
 type TemperatureDraft = TemperaturePayload & {
   verzondenSignatuur?: string;
@@ -559,8 +559,9 @@ export function TemperatureRegistrationPage({
     `/winkel/schoonmaak-registratie/overzicht?winkel=${locationId}`,
   loadCleaningFallback = true,
 }: Readonly<TemperatureRegistrationPageProps> = {}) {
+  const allowedLocationOptions = useAllowedWinkelOptions(locationOptions);
   const initialLocationId =
-    defaultLocationId || locationOptions[0]?.id || "ziekerstraat";
+    defaultLocationId || allowedLocationOptions[0]?.id || "ziekerstraat";
   const [winkelId, setWinkelId] = useState(initialLocationId);
   const [datum, setDatum] = useState(getVandaag);
   const [form, setForm] = useState<FormState>({
@@ -580,7 +581,7 @@ export function TemperatureRegistrationPage({
   const verzondenSignatuurRef = useRef("");
   const extraRowIdRef = useRef(0);
   const [addFeedback, setAddFeedback] = useState("");
-  const selectedWinkel = getSelectedLocation(winkelId, locationOptions);
+  const selectedWinkel = getSelectedLocation(winkelId, allowedLocationOptions);
   const currentOverviewHref =
     typeof overviewHref === "function" ? overviewHref(winkelId) : overviewHref;
   const missingRegistrationCount = form.temperatuurRegistraties.filter(
@@ -601,6 +602,27 @@ export function TemperatureRegistrationPage({
       : problemRegistrationCount > 0
         ? `${problemRegistrationCount} afwijking`
         : "Alles OK";
+
+  useEffect(() => {
+    if (!allowedLocationOptions.length) return;
+    if (allowedLocationOptions.some((location) => location.id === winkelId)) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const nextLocationId = defaultLocationId || allowedLocationOptions[0].id;
+      setWinkelId(nextLocationId);
+      setForm((currentForm) => ({
+        ...currentForm,
+        temperatuurRegistraties: createDefaultTemperatureRows(
+          nextLocationId,
+          rowsByLocation
+        ),
+      }));
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [allowedLocationOptions, defaultLocationId, rowsByLocation, winkelId]);
 
   function createPayload(nextForm = form): TemperaturePayload {
     return {
@@ -962,20 +984,20 @@ export function TemperatureRegistrationPage({
         <section className="max-w-4xl rounded-[0.95rem] border border-[#c3d3bc] bg-[#dfead9] p-2.5 shadow-sm sm:p-3">
           <div className="grid gap-2 lg:grid-cols-[1fr_10.5rem_11rem]">
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-            {locationOptions.map((winkel) => (
-              <button
-                key={winkel.id}
-                type="button"
-                onClick={() => setWinkelId(winkel.id)}
-                className={`rounded-lg border px-2 py-1.5 text-[0.68rem] font-black transition active:scale-[0.98] sm:text-xs ${
-                  winkelId === winkel.id
-                    ? "border-[#4a7658] bg-white text-[#30462f] shadow-sm"
-                    : "border-[#c3d3bc] bg-[#f6faf4] text-[#30462f]/70 hover:border-[#8fab86]"
-                }`}
-              >
-                {winkel.label}
-              </button>
-            ))}
+              {allowedLocationOptions.map((winkel) => (
+                <button
+                  key={winkel.id}
+                  type="button"
+                  onClick={() => setWinkelId(winkel.id)}
+                  className={`rounded-lg border px-2 py-1.5 text-[0.68rem] font-black transition active:scale-[0.98] sm:text-xs ${
+                    winkelId === winkel.id
+                      ? "border-[#4a7658] bg-white text-[#30462f] shadow-sm"
+                      : "border-[#c3d3bc] bg-[#f6faf4] text-[#30462f]/70 hover:border-[#8fab86]"
+                  }`}
+                >
+                  {winkel.label}
+                </button>
+              ))}
             </div>
 
             <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#30462f]/55">

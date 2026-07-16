@@ -15,6 +15,10 @@ import {
   USER_STORES,
   type UserProfile,
 } from "../../lib/supabase/types";
+import {
+  BAKERY_DEPARTMENT_PERMISSION_OPTIONS,
+  WINKEL_STORE_PERMISSION_OPTIONS,
+} from "../../lib/auth/access";
 
 const initialState: UserAdminActionState = {};
 
@@ -76,28 +80,60 @@ function StoreSelect({ defaultValue }: Readonly<{ defaultValue?: string | null }
 }
 
 function PermissionGrid({
+  title,
+  description,
+  options,
   permissions,
-}: Readonly<{ permissions?: Record<string, boolean> }>) {
+}: Readonly<{
+  title: string;
+  description?: string;
+  options: { id: string; label: string }[];
+  permissions?: Record<string, boolean>;
+}>) {
   return (
-    <div className="grid gap-1.5 sm:grid-cols-2">
-      {PERMISSION_OPTIONS.map((permission) => (
-        <label
-          key={permission.id}
-          className="flex items-center gap-2 rounded-md border border-[#ebe5dc] bg-white px-2 py-1.5 text-xs font-bold text-[#4f4942]"
-        >
-          <input
-            type="checkbox"
-            name="permissions"
-            value={permission.id}
-            defaultChecked={Boolean(permissions?.[permission.id])}
-            className="h-4 w-4 accent-[#1f4f35]"
-          />
-          {permission.label}
-        </label>
-      ))}
+    <div className="rounded-md border border-[#ebe5dc] bg-[#faf8f5] p-2">
+      <p className="text-[0.68rem] font-black uppercase text-[#7b7268]">
+        {title}
+      </p>
+      {description && (
+        <p className="mb-2 mt-0.5 text-[0.68rem] font-bold text-[#8b8278]">
+          {description}
+        </p>
+      )}
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        {options.map((permission) => (
+          <label
+            key={permission.id}
+            className="flex items-center gap-2 rounded-md border border-[#ebe5dc] bg-white px-2 py-1.5 text-xs font-bold text-[#4f4942]"
+          >
+            <input
+              type="checkbox"
+              name="permissions"
+              value={permission.id}
+              defaultChecked={Boolean(permissions?.[permission.id])}
+              className="h-4 w-4 accent-[#1f4f35]"
+            />
+            {permission.label}
+          </label>
+        ))}
+      </div>
     </div>
   );
 }
+
+const basePermissionOptions = PERMISSION_OPTIONS.filter(
+  (permission) =>
+    !permission.id.startsWith("stores.") &&
+    !BAKERY_DEPARTMENT_PERMISSION_OPTIONS.some(
+      (option) => option.id === permission.id
+    ) &&
+    permission.id !== "bakkerij.data" &&
+    permission.id !== "bruidstaarten.view"
+);
+
+const extraFunctionOptions = PERMISSION_OPTIONS.filter((permission) =>
+  ["bruidstaarten.view", "bakkerij.data"].includes(permission.id)
+);
 
 function UserFields({ profile }: Readonly<{ profile?: UserProfile }>) {
   return (
@@ -146,7 +182,30 @@ function UserFields({ profile }: Readonly<{ profile?: UserProfile }>) {
         <p className="mb-1 text-[0.68rem] font-black uppercase text-[#7b7268]">
           Rechten
         </p>
-        <PermissionGrid permissions={profile?.permissions} />
+        <div className="grid gap-2">
+          <PermissionGrid
+            title="Algemeen"
+            options={basePermissionOptions}
+            permissions={profile?.permissions}
+          />
+          <PermissionGrid
+            title="Winkels zichtbaar"
+            description="Geen vinkjes betekent: winkel-account ziet standaard alle winkels. Zet je hier vinkjes, dan ziet diegene alleen die winkels."
+            options={WINKEL_STORE_PERMISSION_OPTIONS}
+            permissions={profile?.permissions}
+          />
+          <PermissionGrid
+            title="Bakkerij afdelingen"
+            description="Geen vinkjes betekent: bakkerij-account ziet beide afdelingen. Zet je hier vinkjes, dan ziet diegene alleen die afdelingen."
+            options={BAKERY_DEPARTMENT_PERMISSION_OPTIONS}
+            permissions={profile?.permissions}
+          />
+          <PermissionGrid
+            title="Extra functies"
+            options={extraFunctionOptions}
+            permissions={profile?.permissions}
+          />
+        </div>
       </div>
     </>
   );

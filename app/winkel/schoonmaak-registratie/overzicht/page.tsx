@@ -30,6 +30,7 @@ import {
   type WinkelId,
 } from "../temperatureRegistrationShared";
 import { fetchTemperatureRegistrations } from "../temperatureRegistrationApi";
+import { useAllowedWinkelOptions } from "../useAllowedWinkelOptions";
 
 type LocationFilter = WinkelId | "all";
 
@@ -153,12 +154,14 @@ function buildRows(
   locationFilter: LocationFilter,
   month: number,
   year: number,
-  includeMissingRows: boolean
+  includeMissingRows: boolean,
+  allowedWinkelOptions: readonly (typeof winkelOptions)[number][]
 ) {
   const selectedLocationIds =
     locationFilter === "all"
-      ? winkelOptions.map((winkel) => winkel.id)
+      ? allowedWinkelOptions.map((winkel) => winkel.id)
       : [locationFilter];
+  const selectedLocationIdSet = new Set(selectedLocationIds);
   const rows: OverviewRow[] = [];
 
   records.forEach((record, recordIndex) => {
@@ -172,10 +175,11 @@ function buildRows(
 
     const locationId = getRecordLocationId(record);
     const locationMatches =
-      locationFilter === "all" ||
-      locationId === locationFilter ||
-      normalizeDeviceName(record.winkel || "") ===
-        normalizeDeviceName(getWinkelLabel(locationFilter));
+      locationFilter === "all"
+        ? Boolean(locationId && selectedLocationIdSet.has(locationId))
+        : locationId === locationFilter ||
+          normalizeDeviceName(record.winkel || "") ===
+            normalizeDeviceName(getWinkelLabel(locationFilter));
     if (!locationMatches) return;
 
     const createdAt = record.updatedAt || record.createdAt || "";
@@ -240,7 +244,9 @@ function buildRows(
 
     const locationId = getCleaningItemLocationId(item);
     const locationMatches =
-      locationFilter === "all" || locationId === locationFilter;
+      locationFilter === "all"
+        ? Boolean(locationId && selectedLocationIdSet.has(locationId))
+        : locationId === locationFilter;
     if (!locationMatches) return;
 
     stripInternalTemperatureRegistrations(
@@ -341,6 +347,7 @@ function buildRows(
 
 export default function TemperatuurRegistratieOverzichtPage() {
   const today = getTodayParts();
+  const allowedWinkelOptions = useAllowedWinkelOptions(winkelOptions);
   const [records, setRecords] = useState<TemperatureRecord[]>([]);
   const [cleaningItems, setCleaningItems] = useState<CleaningItem[]>([]);
   const [locationFilter, setLocationFilter] =
@@ -364,13 +371,44 @@ export default function TemperatuurRegistratieOverzichtPage() {
       const params = new URLSearchParams(window.location.search);
       const winkel = params.get("winkel") || "";
 
-      if (isWinkelId(winkel)) {
+      if (
+        isWinkelId(winkel) &&
+        allowedWinkelOptions.some((option) => option.id === winkel)
+      ) {
         setLocationFilter(winkel);
       }
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [allowedWinkelOptions]);
+
+  useEffect(() => {
+    if (!allowedWinkelOptions.length) return;
+
+    if (locationFilter === "all") {
+      if (allowedWinkelOptions.length === 1) {
+        const timer = window.setTimeout(() => {
+          setLocationFilter(allowedWinkelOptions[0].id);
+          setDeviceFilter("all");
+        }, 0);
+
+        return () => window.clearTimeout(timer);
+      }
+
+      return;
+    }
+
+    if (allowedWinkelOptions.some((option) => option.id === locationFilter)) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setLocationFilter(allowedWinkelOptions[0].id);
+      setDeviceFilter("all");
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [allowedWinkelOptions, locationFilter]);
 
   useEffect(() => {
     let ignoreResult = false;
@@ -428,7 +466,8 @@ export default function TemperatuurRegistratieOverzichtPage() {
         locationFilter,
         month,
         year,
-        includeMissingRows
+        includeMissingRows,
+        allowedWinkelOptions
       ).filter((row) => {
         if (
           deviceFilter !== "all" &&
@@ -461,6 +500,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
       deviceFilter,
       deviceTypeFilter,
       onlyProblems,
+      allowedWinkelOptions,
     ]
   );
 
@@ -468,7 +508,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
     const names = new Set<string>();
 
     if (locationFilter === "all") {
-      winkelOptions.forEach((winkel) => {
+      allowedWinkelOptions.forEach((winkel) => {
         temperatureRowsByWinkel[winkel.id].forEach((device) =>
           names.add(getTemperatureDeviceName(device))
         );
@@ -484,7 +524,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
     return Array.from(names).sort((first, second) =>
       first.localeCompare(second)
     );
-  }, [locationFilter, rows]);
+  }, [allowedWinkelOptions, locationFilter, rows]);
 
   const periodLabel = `${
     monthOptions.find((option) => option.value === month)?.label || ""
@@ -709,8 +749,10 @@ export default function TemperatuurRegistratieOverzichtPage() {
                 }}
                 className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
               >
-                <option value="all">Alle winkels</option>
-                {winkelOptions.map((winkel) => (
+                {allowedWinkelOptions.length > 1 && (
+                  <option value="all">Alle winkels</option>
+                )}
+                {allowedWinkelOptions.map((winkel) => (
                   <option key={winkel.id} value={winkel.id}>
                     {winkel.label}
                   </option>

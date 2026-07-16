@@ -1,8 +1,37 @@
 import type { UserProfile } from "../supabase/types";
 
-export type SignupDepartment = "winkel" | "ijs" | "bakkerij";
+export type SignupDepartment =
+  | "winkel"
+  | "ijs"
+  | "bakkerij-patisserie"
+  | "bakkerij-ijs-chocolade";
+
+export const WINKEL_STORE_IDS = [
+  "ziekerstraat",
+  "heyendaal",
+  "daalseweg",
+  "lent",
+] as const;
+
+export const WINKEL_STORE_PERMISSION_OPTIONS = [
+  { id: "stores.ziekerstraat", label: "Winkel Ziekerstraat" },
+  { id: "stores.heyendaal", label: "Winkel Heyendaal" },
+  { id: "stores.daalseweg", label: "Winkel Daalseweg" },
+  { id: "stores.lent", label: "Winkel Lent" },
+];
+
+export const BAKERY_DEPARTMENT_PERMISSION_OPTIONS = [
+  { id: "bakkerij.patisserie", label: "Bakkerij Patisserie" },
+  { id: "bakkerij.ijs_chocolade", label: "Bakkerij IJs & chocolade" },
+];
 
 const FULL_ACCESS_ROLES = new Set(["admin", "manager", "management"]);
+const BAKERY_DEPARTMENT_PERMISSION_IDS = BAKERY_DEPARTMENT_PERMISSION_OPTIONS.map(
+  (permission) => permission.id
+);
+const WINKEL_STORE_PERMISSION_IDS = WINKEL_STORE_PERMISSION_OPTIONS.map(
+  (permission) => permission.id
+);
 
 export const SIGNUP_DEPARTMENTS: {
   id: SignupDepartment;
@@ -10,6 +39,7 @@ export const SIGNUP_DEPARTMENTS: {
   description: string;
   role: string;
   store: string;
+  permissions?: Record<string, boolean>;
 }[] = [
   {
     id: "winkel",
@@ -26,11 +56,20 @@ export const SIGNUP_DEPARTMENTS: {
     store: "ijs",
   },
   {
-    id: "bakkerij",
-    label: "Bakkerij",
-    description: "Productie, recepten, planning, HACCP en schoonmaak.",
+    id: "bakkerij-patisserie",
+    label: "Bakkerij - patisserie",
+    description: "Patisserie, recepten, planning, HACCP en schoonmaak.",
     role: "bakkerij",
     store: "bakkerij",
+    permissions: { "bakkerij.patisserie": true },
+  },
+  {
+    id: "bakkerij-ijs-chocolade",
+    label: "Bakkerij - ijs & chocolade",
+    description: "IJs & chocolade, recepten, bestellen en HACCP.",
+    role: "bakkerij",
+    store: "ijs-chocolade",
+    permissions: { "bakkerij.ijs_chocolade": true },
   },
 ];
 
@@ -42,6 +81,23 @@ function normalizeRole(role: string | null | undefined) {
 
 function hasPermission(profile: UserProfile | null | undefined, permission: string) {
   return Boolean(profile?.permissions?.[permission]);
+}
+
+function hasAnyPermission(
+  profile: UserProfile | null | undefined,
+  permissions: string[]
+) {
+  return permissions.some((permission) => hasPermission(profile, permission));
+}
+
+function normalizeStore(store: string | null | undefined) {
+  return String(store || "")
+    .trim()
+    .toLowerCase();
+}
+
+function isWinkelStoreId(value: string | null | undefined) {
+  return WINKEL_STORE_IDS.includes(value as (typeof WINKEL_STORE_IDS)[number]);
 }
 
 export function getSignupDepartment(value: string | null | undefined) {
@@ -74,6 +130,58 @@ export function getDefaultPathForProfile(profile: UserProfile | null | undefined
   return getDefaultPathForRole(profile?.role);
 }
 
+export function hasExplicitWinkelStoreSelection(
+  profile: UserProfile | null | undefined
+) {
+  return Boolean(
+    isWinkelStoreId(normalizeStore(profile?.store)) ||
+      hasAnyPermission(profile, WINKEL_STORE_PERMISSION_IDS)
+  );
+}
+
+export function canAccessWinkelStore(
+  profile: UserProfile | null | undefined,
+  storeId: string
+) {
+  if (hasFullAccess(profile)) return true;
+  if (!profile?.active) return false;
+
+  const role = normalizeRole(profile.role);
+  if (role !== "winkel" && !hasPermission(profile, "winkel.view")) return false;
+
+  const normalizedStore = normalizeStore(profile.store);
+  if (isWinkelStoreId(normalizedStore)) return normalizedStore === storeId;
+
+  if (!hasAnyPermission(profile, WINKEL_STORE_PERMISSION_IDS)) return true;
+
+  return hasPermission(profile, `stores.${storeId}`);
+}
+
+export function getAllowedWinkelStoreIds(profile: UserProfile | null | undefined) {
+  return WINKEL_STORE_IDS.filter((storeId) => canAccessWinkelStore(profile, storeId));
+}
+
+export function filterAllowedWinkelOptions<T extends { id: string }>(
+  options: readonly T[],
+  profile: UserProfile | null | undefined
+) {
+  if (hasFullAccess(profile)) return [...options];
+
+  const allowedStoreIds = new Set<string>(getAllowedWinkelStoreIds(profile));
+
+  return options.filter((option) => allowedStoreIds.has(option.id));
+}
+
+function isWeddingCakePath(pathname: string) {
+  return (
+    pathname === "/bruidstaarten" ||
+    pathname.startsWith("/bruidstaarten/") ||
+    pathname === "/bruidstaart-studio" ||
+    pathname.startsWith("/bruidstaart-studio/") ||
+    pathname === "/agenda"
+  );
+}
+
 function isWinkelPath(pathname: string) {
   return (
     pathname === "/winkel" ||
@@ -83,12 +191,7 @@ function isWinkelPath(pathname: string) {
     pathname === "/strik-agenda" ||
     pathname.startsWith("/strik-agenda/") ||
     pathname === "/info" ||
-    pathname.startsWith("/info/") ||
-    pathname === "/bruidstaarten" ||
-    pathname.startsWith("/bruidstaarten/") ||
-    pathname === "/bruidstaart-studio" ||
-    pathname.startsWith("/bruidstaart-studio/") ||
-    pathname === "/agenda"
+    pathname.startsWith("/info/")
   );
 }
 
@@ -108,6 +211,75 @@ function isBakkerijDataPath(pathname: string) {
   return pathname === "/bakkerij/management" || pathname.startsWith("/bakkerij/management/");
 }
 
+function isBakkerijIjsChocoladePath(pathname: string) {
+  return (
+    pathname === "/bakkerij/ijs-chocolade" ||
+    pathname.startsWith("/bakkerij/ijs-chocolade/")
+  );
+}
+
+function isBakkerijPatisseriePath(pathname: string) {
+  return (
+    pathname === "/bakkerij/bakkerij" ||
+    pathname.startsWith("/bakkerij/bakkerij/") ||
+    pathname === "/bakkerij/recepten" ||
+    pathname.startsWith("/bakkerij/recepten/") ||
+    pathname === "/bakkerij/recepturen" ||
+    pathname.startsWith("/bakkerij/recepturen/") ||
+    pathname === "/bakkerij/productieplanning" ||
+    pathname.startsWith("/bakkerij/productieplanning/") ||
+    pathname === "/bakkerij/haccp" ||
+    pathname.startsWith("/bakkerij/haccp/") ||
+    pathname === "/bakkerij/schoonmaak" ||
+    pathname.startsWith("/bakkerij/schoonmaak/")
+  );
+}
+
+function hasBakeryDepartmentSelection(profile: UserProfile | null | undefined) {
+  return hasAnyPermission(profile, BAKERY_DEPARTMENT_PERMISSION_IDS);
+}
+
+export function canAccessBakkerijPatisserie(
+  profile: UserProfile | null | undefined
+) {
+  if (hasFullAccess(profile)) return true;
+  if (!profile?.active) return false;
+  if (normalizeRole(profile.role) !== "bakkerij" && !hasPermission(profile, "bakkerij.view")) {
+    return false;
+  }
+
+  return (
+    !hasBakeryDepartmentSelection(profile) ||
+    hasPermission(profile, "bakkerij.patisserie")
+  );
+}
+
+export function canAccessBakkerijIjsChocolade(
+  profile: UserProfile | null | undefined
+) {
+  if (hasFullAccess(profile)) return true;
+  if (!profile?.active) return false;
+  if (normalizeRole(profile.role) !== "bakkerij" && !hasPermission(profile, "bakkerij.view")) {
+    return false;
+  }
+
+  return (
+    !hasBakeryDepartmentSelection(profile) ||
+    hasPermission(profile, "bakkerij.ijs_chocolade")
+  );
+}
+
+export function canAccessWeddingCakes(profile: UserProfile | null | undefined) {
+  if (hasFullAccess(profile)) return true;
+  if (!profile?.active) return false;
+
+  return (
+    hasPermission(profile, "bruidstaarten.view") ||
+    normalizeStore(profile.store) === "ziekerstraat" ||
+    hasPermission(profile, "stores.ziekerstraat")
+  );
+}
+
 export function canAccessPath(
   profile: UserProfile | null | undefined,
   pathname: string
@@ -118,6 +290,10 @@ export function canAccessPath(
 
   const role = normalizeRole(profile.role);
 
+  if (isWeddingCakePath(pathname)) {
+    return canAccessWeddingCakes(profile);
+  }
+
   if (isWinkelPath(pathname)) {
     return role === "winkel" || hasPermission(profile, "winkel.view");
   }
@@ -127,9 +303,23 @@ export function canAccessPath(
   }
 
   if (isBakkerijPath(pathname)) {
+    if (isBakkerijDataPath(pathname)) {
+      return hasPermission(profile, "bakkerij.data");
+    }
+
+    if (isBakkerijIjsChocoladePath(pathname)) {
+      return canAccessBakkerijIjsChocolade(profile);
+    }
+
+    if (isBakkerijPatisseriePath(pathname)) {
+      return canAccessBakkerijPatisserie(profile);
+    }
+
     return (
-      (role === "bakkerij" || hasPermission(profile, "bakkerij.view")) &&
-      (!isBakkerijDataPath(pathname) || hasPermission(profile, "bakkerij.data"))
+      role === "bakkerij" ||
+      hasPermission(profile, "bakkerij.view") ||
+      canAccessBakkerijPatisserie(profile) ||
+      canAccessBakkerijIjsChocolade(profile)
     );
   }
 

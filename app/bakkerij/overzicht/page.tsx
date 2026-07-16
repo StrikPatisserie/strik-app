@@ -1,6 +1,9 @@
 import RecepturenApp from "../recepturen/RecepturenApp";
+import { getCurrentProfile } from "../../lib/auth/session";
 
-export default function BakkerijOverzichtPage() {
+export default async function BakkerijOverzichtPage() {
+  const profile = await getCurrentProfile();
+
   return (
     <RecepturenApp
       scope="all"
@@ -8,6 +11,7 @@ export default function BakkerijOverzichtPage() {
       lockedTab="start"
       hideTopNav
       showProductionLinks
+      profile={profile}
     />
   );
 }

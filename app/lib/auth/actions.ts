@@ -143,7 +143,7 @@ export async function signupAction(
           full_name: fullName,
           role: department.role,
           store: department.store,
-          permissions: {},
+          permissions: department.permissions || {},
           active: true,
         },
       },
