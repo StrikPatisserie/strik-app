@@ -1,9 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "../../lib/supabase/server";
 import { createAdminClient } from "../../lib/supabase/admin";
 import { getSiteUrl } from "../../lib/supabase/config";
+import {
+  getPasswordUpdateUrl,
+  sendPasswordResetEmail,
+} from "../../lib/supabase/passwordReset";
 import { requireAdminProfile } from "../../lib/auth/session";
 import type { UserPermissions } from "../../lib/supabase/types";
 
@@ -44,7 +47,7 @@ function getProfilePayload(formData: FormData) {
 }
 
 function getInviteRedirectUrl() {
-  return `${getSiteUrl()}/auth/callback?next=/update-password`;
+  return getPasswordUpdateUrl(getSiteUrl());
 }
 
 async function upsertProfile(
@@ -236,10 +239,7 @@ export async function sendUserPasswordResetAction(formData: FormData) {
     throw new Error("E-mail is verplicht.");
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: getInviteRedirectUrl(),
-  });
+  const { error } = await sendPasswordResetEmail(email, getInviteRedirectUrl());
 
   if (error) throw new Error(error.message);
 

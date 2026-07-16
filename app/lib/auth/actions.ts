@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "../supabase/server";
 import { getSiteUrl } from "../supabase/config";
+import {
+  getPasswordUpdateUrl,
+  sendPasswordResetEmail,
+} from "../supabase/passwordReset";
 import { getDefaultPathForRole, getSignupDepartment } from "./access";
 
 export type AuthActionState = {
@@ -91,10 +95,10 @@ export async function requestPasswordResetAction(
   }
 
   try {
-    const supabase = await createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${getSiteUrl()}/auth/callback?next=/update-password`,
-    });
+    const { error } = await sendPasswordResetEmail(
+      email,
+      getPasswordUpdateUrl(getSiteUrl())
+    );
 
     if (error) {
       return { message: "De resetmail kon niet worden verstuurd." };
@@ -190,10 +194,23 @@ export async function updatePasswordAction(
 
   try {
     const supabase = await createClient();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !userData.user) {
+      return {
+        message:
+          "Deze resetlink is verlopen of niet goed geopend. Vraag een nieuwe resetmail aan.",
+      };
+    }
+
     const { error } = await supabase.auth.updateUser({ password });
 
     if (error) {
-      return { message: "Het nieuwe wachtwoord kon niet worden opgeslagen." };
+      return {
+        message:
+          error.message ||
+          "Het nieuwe wachtwoord kon niet worden opgeslagen.",
+      };
     }
   } catch (error) {
     return {
