@@ -2316,7 +2316,7 @@ export const ingredients: Ingredient[] = [
     "id": "su013",
     "name": "Kristalsuiker extra fijn",
     "supplier": "Hefe",
-    "supplierArticleNumber": "5309",
+    "supplierArticleNumber": "5305",
     "packageSize": "1 kg",
     "recipeUnit": "gram",
     "lastPrice": 0.65,
@@ -2328,6 +2328,7 @@ export const ingredients: Ingredient[] = [
     "lastInvoice": "Hoofdbestand Recepturen Strik 2026",
     "aliases": [
       "Kristalsuiker extra fijn",
+      "5305",
       "SU013"
     ]
   },

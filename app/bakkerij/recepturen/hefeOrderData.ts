@@ -26,7 +26,7 @@ const rawHefeOrderRows: HefeOrderRow[] = [
   ["TK-RF Zitronensaft 500g", "KT 12 PG", "2088", 2.05, ""],
   ["TK-Boiron Passionsfru.Püree", "PG 1 KG", "2155", 10.4, ""],
   ["H-Milch 3,5% Prago 10L Box", "PG 10 LI", "437", 0.79, ""],
-  ["Weibsucker fein SZ", "25kg", "5309", 0.65, ""],
+  ["Kristalsuiker extra fijn", "1 kg", "5305", 0.65, ""],
   ["Cremodan Super", "EI 5 KG", "9976", 0, ""],
   ["Cremodan SE 30", "EI 5 KG", "9978", 28.78, ""],
   ["Cremodan ES", "EI 5 KG", "9980", 0, ""],

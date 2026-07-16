@@ -27,6 +27,17 @@ type CustomOrderLine = {
   packageSize: string;
   quantity: number;
 };
+type EditableHefeOrderItem = HefeOrderItem & {
+  ingredientId?: string;
+  status?: Ingredient["status"];
+};
+type HefeEditForm = {
+  name: string;
+  articleNumber: string;
+  packageSize: string;
+  lastPrice: string;
+  note: string;
+};
 
 const HEFE_SUPPLIER = "Hefe van Haag";
 const HEFE_ORDER_RECIPIENT = "verkoop@hefe-van-haag.nl";
@@ -88,50 +99,109 @@ function isHefeIngredient(ingredient: Ingredient) {
   return normalizeKey(ingredient.supplier).includes("hefe");
 }
 
-function ingredientToHefeOrderItem(ingredient: Ingredient): HefeOrderItem {
+function isKristalsuikerExtraFijn(name: string) {
+  return normalizeKey(name).replace(/[^a-z0-9]+/g, "") === "kristalsuikerextrafijn";
+}
+
+function normalizeHefeOrderItem(item: EditableHefeOrderItem): EditableHefeOrderItem {
+  if (!isKristalsuikerExtraFijn(item.name)) return item;
+
   return {
+    ...item,
+    articleNumber: "5305",
+  };
+}
+
+function ingredientToHefeOrderItem(ingredient: Ingredient): EditableHefeOrderItem {
+  return normalizeHefeOrderItem({
     id: ingredient.id || `hefe-${slugify(ingredient.name)}`,
+    ingredientId: ingredient.id,
     name: ingredient.name,
     packageSize: ingredient.packageSize || "-",
     articleNumber: ingredient.supplierArticleNumber || "",
     recipeUnit: ingredient.recipeUnit,
     lastPrice: Number(ingredient.lastPrice) || 0,
     pricePerBaseUnit: Number(ingredient.pricePerBaseUnit) || 0,
-    note: ingredient.lastInvoice === "Hefe bestellijst handmatig"
-      ? "handmatig toegevoegd"
-      : "",
-  };
+    status: ingredient.status,
+    note:
+      ingredient.lastInvoice === "Hefe bestellijst handmatig"
+        ? "handmatig toegevoegd"
+        : ingredient.lastInvoice.startsWith("Hefe bestellijst bewerkt:")
+          ? ingredient.lastInvoice.replace("Hefe bestellijst bewerkt:", "").trim()
+          : "",
+  });
 }
 
-function mergeHefeOrderItems(baseItems: HefeOrderItem[], storedItems: HefeOrderItem[]) {
-  const merged = [...baseItems];
+function matchesHefeOrderItem(
+  candidate: EditableHefeOrderItem,
+  item: EditableHefeOrderItem
+) {
+  const articleKey = normalizeKey(item.articleNumber);
+  const nameKey = normalizeKey(item.name);
+  const candidateArticle = normalizeKey(candidate.articleNumber);
+  const candidateName = normalizeKey(candidate.name);
+
+  return (
+    (articleKey !== "" && candidateArticle === articleKey) ||
+    candidateName === nameKey ||
+    (isKristalsuikerExtraFijn(candidate.name) && isKristalsuikerExtraFijn(item.name))
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5z" />
+    </svg>
+  );
+}
+
+function mergeHefeOrderItems(
+  baseItems: EditableHefeOrderItem[],
+  storedItems: EditableHefeOrderItem[]
+) {
+  const merged = baseItems.map(normalizeHefeOrderItem);
 
   storedItems.forEach((item) => {
-    const articleKey = normalizeKey(item.articleNumber);
-    const nameKey = normalizeKey(item.name);
-    const existingIndex = merged.findIndex((candidate) => {
-      const candidateArticle = normalizeKey(candidate.articleNumber);
-      const candidateName = normalizeKey(candidate.name);
+    const cleanItem = normalizeHefeOrderItem(item);
+    const existingIndex = merged.findIndex((candidate) =>
+      matchesHefeOrderItem(candidate, cleanItem)
+    );
 
-      return (
-        (articleKey !== "" && candidateArticle === articleKey) ||
-        candidateName === nameKey
-      );
-    });
+    if (cleanItem.status === "inactive") {
+      if (existingIndex >= 0) merged.splice(existingIndex, 1);
+      return;
+    }
 
     if (existingIndex >= 0) {
       merged[existingIndex] = {
         ...merged[existingIndex],
-        ...item,
+        ...cleanItem,
         id: merged[existingIndex].id,
       };
       return;
     }
 
-    merged.push(item);
+    merged.push(cleanItem);
   });
 
   return merged;
+}
+
+function storedHefeItemsFromData(data: RecepturenData) {
+  return data.ingredients
+    .filter(isHefeIngredient)
+    .map(ingredientToHefeOrderItem);
 }
 
 function createIngredientFromCustomLine(
@@ -164,6 +234,48 @@ function createIngredientFromCustomLine(
   };
 }
 
+function createIngredientFromHefeItem(
+  item: EditableHefeOrderItem,
+  form: HefeEditForm,
+  status: Ingredient["status"] = "active"
+): Ingredient {
+  const name = form.name.trim();
+  const articleNumber = form.articleNumber.trim();
+  const packageSize = form.packageSize.trim() || "-";
+  const recipeUnit = recipeUnitForOrder(name, packageSize);
+  const lastPrice = parsePrice(form.lastPrice);
+  const aliases = [
+    name,
+    articleNumber,
+    articleNumber ? `Hefe ${articleNumber}` : "",
+    item.name,
+    item.articleNumber,
+    item.articleNumber ? `Hefe ${item.articleNumber}` : "",
+  ].filter(Boolean);
+
+  return {
+    id: item.ingredientId || item.id || `hefe-${slugify(articleNumber || name)}`,
+    name,
+    supplier: HEFE_SUPPLIER,
+    supplierArticleNumber: articleNumber,
+    packageSize,
+    recipeUnit,
+    lastPrice,
+    previousPrice: item.lastPrice || lastPrice,
+    pricePerBaseUnit: Number((lastPrice / baseUnitFactor(recipeUnit)).toFixed(6)),
+    allergens: [],
+    lastUpdated: new Date().toISOString().slice(0, 10),
+    status,
+    lastInvoice:
+      status === "inactive"
+        ? "Hefe bestellijst verwijderd"
+        : form.note.trim()
+          ? `Hefe bestellijst bewerkt: ${form.note.trim()}`
+          : "Hefe bestellijst bewerkt",
+    aliases: Array.from(new Set(aliases)),
+  };
+}
+
 function mergeIngredientIntoData(data: RecepturenData, ingredient: Ingredient) {
   const articleKey = normalizeKey(ingredient.supplierArticleNumber);
   const nameKey = normalizeKey(ingredient.name);
@@ -192,7 +304,7 @@ function mergeIngredientIntoData(data: RecepturenData, ingredient: Ingredient) {
       previousPrice: existing.lastPrice || ingredient.previousPrice,
       pricePerBaseUnit: ingredient.pricePerBaseUnit,
       lastUpdated: ingredient.lastUpdated,
-      status: "active",
+      status: ingredient.status,
       lastInvoice: ingredient.lastInvoice,
       aliases: Array.from(
         new Set([...(existing.aliases || []), ...ingredient.aliases])
@@ -284,6 +396,17 @@ export default function HefeBestellenPage() {
   const [copyStatus, setCopyStatus] = useState("");
   const [orderHistory, setOrderHistory] = useState<HefeOrderHistoryEntry[]>([]);
   const [historyStatus, setHistoryStatus] = useState("");
+  const [editingItem, setEditingItem] = useState<EditableHefeOrderItem | null>(
+    null
+  );
+  const [editForm, setEditForm] = useState<HefeEditForm>({
+    name: "",
+    articleNumber: "",
+    packageSize: "",
+    lastPrice: "",
+    note: "",
+  });
+  const [editStatus, setEditStatus] = useState("");
 
   const allHefeOrderItems = useMemo(
     () => mergeHefeOrderItems(hefeOrderItems, storedHefeItems),
@@ -325,9 +448,7 @@ export default function HefeBestellenPage() {
       if (!isMounted || !result.ok) return;
 
       setStoredHefeItems(
-        result.data.ingredients
-          .filter(isHefeIngredient)
-          .map(ingredientToHefeOrderItem)
+        storedHefeItemsFromData(result.data)
       );
       setOrderHistory(result.data.hefeOrderHistory || []);
     }
@@ -344,6 +465,103 @@ export default function HefeBestellenPage() {
       ...current,
       [itemId]: Math.max(0, nextQuantity),
     }));
+  }
+
+  function startEditingItem(item: EditableHefeOrderItem) {
+    setEditingItem(item);
+    setEditForm({
+      name: item.name,
+      articleNumber: item.articleNumber,
+      packageSize: item.packageSize,
+      lastPrice: item.lastPrice ? String(item.lastPrice).replace(".", ",") : "",
+      note: item.note || "",
+    });
+    setEditStatus("");
+  }
+
+  function updateEditForm(field: keyof HefeEditForm, value: string) {
+    setEditForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function clearEditingItem() {
+    setEditingItem(null);
+    setEditStatus("");
+  }
+
+  async function persistEditedHefeIngredient(
+    ingredient: Ingredient,
+    successMessage: string
+  ) {
+    setEditStatus("Opslaan...");
+    const loadResult = await fetchRecepturenData();
+
+    if (!loadResult.ok) {
+      setEditStatus(loadResult.message);
+      return false;
+    }
+
+    const saveResult = await saveRecepturenData(
+      mergeIngredientIntoData(loadResult.data, ingredient)
+    );
+
+    if (!saveResult.ok) {
+      setEditStatus(saveResult.message);
+      return false;
+    }
+
+    setStoredHefeItems(storedHefeItemsFromData(saveResult.data));
+    setEditStatus(successMessage);
+    return true;
+  }
+
+  async function saveEditedItem() {
+    if (!editingItem || !editForm.name.trim()) return;
+
+    const ingredient = createIngredientFromHefeItem(editingItem, editForm);
+    const saved = await persistEditedHefeIngredient(
+      ingredient,
+      "Artikel opgeslagen."
+    );
+
+    if (saved) {
+      setEditingItem(null);
+    }
+  }
+
+  async function deleteEditedItem() {
+    if (!editingItem) return;
+    if (!window.confirm(`${editingItem.name} verwijderen uit de Hefe-lijst?`)) {
+      return;
+    }
+
+    const ingredient = createIngredientFromHefeItem(
+      editingItem,
+      {
+        name: editingItem.name,
+        articleNumber: editingItem.articleNumber,
+        packageSize: editingItem.packageSize,
+        lastPrice: editingItem.lastPrice ? String(editingItem.lastPrice) : "",
+        note: editingItem.note || "",
+      },
+      "inactive"
+    );
+    const deletedItemId = editingItem.id;
+    const saved = await persistEditedHefeIngredient(
+      ingredient,
+      "Artikel verwijderd."
+    );
+
+    if (saved) {
+      setQuantities((current) => {
+        const next = { ...current };
+        delete next[deletedItemId];
+        return next;
+      });
+      setEditingItem(null);
+    }
   }
 
   async function addCustomLine() {
@@ -376,9 +594,7 @@ export default function HefeBestellenPage() {
         );
 
         if (saveResult.ok) {
-          setStoredHefeItems((current) =>
-            mergeHefeOrderItems(current, [ingredientToHefeOrderItem(ingredient)])
-          );
+          setStoredHefeItems(storedHefeItemsFromData(saveResult.data));
           setSaveStatus("Opgeslagen als Hefe-grondstof.");
         } else {
           setSaveStatus(saveResult.message);
@@ -653,22 +869,24 @@ export default function HefeBestellenPage() {
       )}
 
       <section className="overflow-hidden border border-[#cbdcc5] bg-white shadow-sm">
-        <div className="grid grid-cols-[4.5rem_1fr_7rem_9rem_8rem] border-b border-[#dbe8d7] bg-[#f3f1ec] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45 max-lg:hidden">
+        <div className="grid grid-cols-[4.5rem_1fr_7rem_9rem_8rem_3rem] border-b border-[#dbe8d7] bg-[#f3f1ec] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45 max-lg:hidden">
           <span>Aantal</span>
           <span>Product</span>
           <span>Art.nr</span>
           <span>Verpakking</span>
           <span>Prijs</span>
+          <span></span>
         </div>
 
         <div className="max-h-[calc(100dvh-20rem)] overflow-y-auto">
           {filteredItems.map((item) => {
             const quantity = selectedQuantity(quantities, item.id);
+            const isEditing = editingItem?.id === item.id;
 
             return (
               <div
                 key={item.id}
-                className="grid gap-2 border-b border-[#e5efe1] px-3 py-2 lg:grid-cols-[4.5rem_1fr_7rem_9rem_8rem] lg:items-center"
+                className="grid gap-2 border-b border-[#e5efe1] px-3 py-2 lg:grid-cols-[4.5rem_1fr_7rem_9rem_8rem_3rem] lg:items-center"
               >
                 <div className="flex items-center gap-1">
                   <button
@@ -721,6 +939,83 @@ export default function HefeBestellenPage() {
                 <p className="hidden text-sm font-black text-[#2d2a26]/65 lg:block">
                   {item.lastPrice ? formatEuro(item.lastPrice) : "-"}
                 </p>
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => startEditingItem(item)}
+                    className="grid h-9 w-9 place-items-center border border-[#d6e5d8] bg-white text-[#4f744d] hover:bg-[#f6faf4]"
+                    aria-label={`${item.name} bewerken`}
+                    title="Bewerk artikel"
+                  >
+                    <PencilIcon />
+                  </button>
+                </div>
+
+                {isEditing && (
+                  <div className="grid gap-2 border-t border-[#dbe8d7] bg-[#fbfaf7] pt-2 lg:col-span-6 lg:grid-cols-[minmax(0,1fr)_8rem_8rem_7rem_minmax(0,1fr)_auto_auto_auto] lg:items-center">
+                    <input
+                      value={editForm.name}
+                      onChange={(event) => updateEditForm("name", event.target.value)}
+                      className="min-h-10 border border-[#d7ccb7] bg-white px-3 text-sm font-bold outline-none focus:border-[#8aa37d]"
+                      aria-label="Productnaam"
+                    />
+                    <input
+                      value={editForm.articleNumber}
+                      onChange={(event) =>
+                        updateEditForm("articleNumber", event.target.value)
+                      }
+                      className="min-h-10 border border-[#d7ccb7] bg-white px-3 text-sm font-bold outline-none focus:border-[#8aa37d]"
+                      aria-label="Artikelnummer"
+                    />
+                    <input
+                      value={editForm.packageSize}
+                      onChange={(event) =>
+                        updateEditForm("packageSize", event.target.value)
+                      }
+                      className="min-h-10 border border-[#d7ccb7] bg-white px-3 text-sm font-bold outline-none focus:border-[#8aa37d]"
+                      aria-label="Verpakking"
+                    />
+                    <input
+                      value={editForm.lastPrice}
+                      onChange={(event) => updateEditForm("lastPrice", event.target.value)}
+                      inputMode="decimal"
+                      className="min-h-10 border border-[#d7ccb7] bg-white px-3 text-sm font-bold outline-none focus:border-[#8aa37d]"
+                      aria-label="Prijs"
+                    />
+                    <input
+                      value={editForm.note}
+                      onChange={(event) => updateEditForm("note", event.target.value)}
+                      className="min-h-10 border border-[#d7ccb7] bg-white px-3 text-sm font-bold outline-none focus:border-[#8aa37d]"
+                      aria-label="Notitie"
+                    />
+                    <button
+                      type="button"
+                      onClick={saveEditedItem}
+                      className="min-h-10 border border-[#a8bf9e] bg-[#c3d3bc] px-3 text-xs font-black"
+                    >
+                      Opslaan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deleteEditedItem}
+                      className="min-h-10 border border-[#e4b5aa] bg-[#fff4f0] px-3 text-xs font-black text-[#b44a3a]"
+                    >
+                      Verwijder
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearEditingItem}
+                      className="min-h-10 border border-[#e7e0d8] bg-white px-3 text-xs font-black"
+                    >
+                      Sluit
+                    </button>
+                    {editStatus && (
+                      <p className="text-xs font-black text-[#4f744d] lg:col-span-8">
+                        {editStatus}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
