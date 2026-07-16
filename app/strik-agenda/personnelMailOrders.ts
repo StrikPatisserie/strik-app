@@ -66,6 +66,9 @@ const WORDPRESS_PERSONNEL_MAIL_ORDERS_API_KEY =
 const CUPCAKE_RECIPIENTS = splitRecipients(
   process.env.CUPCAKE_JUBILEE_RECIPIENTS || "info@strik-patisserie.nl"
 );
+const BIRTHDAY_CAKE_RECIPIENTS = splitRecipients(
+  process.env.BIRTHDAY_CAKE_RECIPIENTS || "info@strik-patisserie.nl"
+);
 const MANAGEMENT_RECIPIENTS = splitRecipients(
   process.env.PERSONNEL_CELEBRATION_RECIPIENTS ||
     "roos@strik-patisserie.nl,feline@strik-patisserie.nl,eva@strik-patisserie.nl"
@@ -461,7 +464,7 @@ async function toBirthdayOrderFromPersonnelEvent(
     eventDateLabel: formatDateLabel(event.occurrenceDate),
     daysUntil: event.daysUntil,
     source: "tamigo",
-    recipients: MANAGEMENT_RECIPIENTS,
+    recipients: BIRTHDAY_CAKE_RECIPIENTS,
     subject: `Verjaardagstaartje - ${event.employeeName}`,
     body: "",
     ...deliveryFields,
@@ -601,7 +604,7 @@ async function toBirthdayOrderFromDriveEvent(
     eventDateLabel: formatDateLabel(eventDate.date),
     daysUntil: eventDate.daysUntil,
     source: "drive",
-    recipients: MANAGEMENT_RECIPIENTS,
+    recipients: BIRTHDAY_CAKE_RECIPIENTS,
     subject: `Verjaardagstaartje - ${employeeName}`,
     body: "",
     ...deliveryFields,
@@ -706,6 +709,7 @@ export function getPersonnelMailOrderSettings() {
     birthdayLookaheadDays: BIRTHDAY_LOOKAHEAD_DAYS,
     workShiftLookbackDays: WORK_SHIFT_LOOKBACK_DAYS,
     cupcakeRecipients: CUPCAKE_RECIPIENTS,
+    birthdayCakeRecipients: BIRTHDAY_CAKE_RECIPIENTS,
     managementRecipients: MANAGEMENT_RECIPIENTS,
   };
 }
