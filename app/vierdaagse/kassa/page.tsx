@@ -491,10 +491,20 @@ export default function VierdaagseKassaPage() {
               {formatClock(clock)}
             </span>
             <Link
-              href="/vierdaagse/kassa-tool"
-              className="rounded-md border border-[#ef7d0a] bg-white px-2 py-1.5 text-xs font-black text-[#9d3c24] transition active:scale-[0.98] sm:px-3 sm:py-2 sm:text-sm"
+              href="/vierdaagse/productie-bediening"
+              className="grid h-14 w-14 place-items-center rounded-md bg-[#ef7d0a] p-1 text-center text-white shadow-sm transition active:scale-[0.98]"
+              aria-label="Naar keuken"
             >
-              Terug
+              <span className="grid justify-items-center gap-0.5">
+                <img
+                  src="/app%20strik_keuken.svg"
+                  alt=""
+                  className="h-6 w-6 object-contain brightness-0 invert"
+                />
+                <span className="text-[0.52rem] font-black uppercase leading-none">
+                  Keuken
+                </span>
+              </span>
             </Link>
           </div>
         </header>

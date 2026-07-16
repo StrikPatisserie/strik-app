@@ -514,15 +514,19 @@ export default function VierdaagseProductieBedieningPage() {
           <div className="flex items-center gap-2">
             <Link
               href="/vierdaagse/kassa"
-              className="rounded-md bg-[#ef7d0a] px-2 py-1.5 text-xs font-black text-white transition active:scale-[0.98] sm:px-3 sm:py-2 sm:text-sm"
+              className="grid h-14 w-14 place-items-center rounded-md bg-[#24551d] p-1 text-center text-white shadow-sm transition active:scale-[0.98]"
+              aria-label="Naar kassa"
             >
-              Nieuwe bon
-            </Link>
-            <Link
-              href="/vierdaagse/kassa-tool"
-              className="rounded-md border border-[#d6e5d8] bg-white px-2 py-1.5 text-xs font-black text-[#24551d] transition active:scale-[0.98] sm:px-3 sm:py-2 sm:text-sm"
-            >
-              Terug
+              <span className="grid justify-items-center gap-0.5">
+                <img
+                  src="/app%20strik_kassa.svg"
+                  alt=""
+                  className="h-6 w-6 object-contain brightness-0 invert"
+                />
+                <span className="text-[0.52rem] font-black uppercase leading-none">
+                  Kassa
+                </span>
+              </span>
             </Link>
           </div>
         </header>
