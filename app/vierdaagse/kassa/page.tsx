@@ -854,12 +854,9 @@ export default function VierdaagseKassaPage() {
                       key={product.id}
                       type="button"
                       onClick={() => handleProductAdd(product)}
-                      className="relative grid min-h-[3.1rem] content-center rounded-md border border-[#d6e5d8] bg-[#f6faf4] px-1.5 py-1 text-left transition active:scale-[0.98]"
+                      className="relative flex min-h-[3.1rem] items-center rounded-md border border-[#d6e5d8] bg-[#f6faf4] px-2 py-1 text-left transition active:scale-[0.98]"
                     >
-                      <span className="mb-0.5 inline-flex h-4 min-w-6 items-center justify-center rounded bg-white px-1 text-[0.52rem] font-black text-[#ef7d0a]">
-                        {product.badge}
-                      </span>
-                      <span className="line-clamp-2 pr-4 text-[0.68rem] font-black leading-[0.9rem] text-[#1a1815]">
+                      <span className="line-clamp-2 pr-5 text-[0.72rem] font-black leading-[0.92rem] text-[#1a1815]">
                         {product.name}
                       </span>
                       {count > 0 && (
