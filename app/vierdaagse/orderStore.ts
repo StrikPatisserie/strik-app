@@ -314,11 +314,18 @@ export function updateOrderItemStatus(
   if (updatedOrder) void saveOrderToWordPress(updatedOrder);
 }
 
-export function markOrderItemsReady(orderId: string) {
+export function setOrderItemsReady(orderId: string, ready: boolean) {
+  const itemStatus: VierdaagseOrderItemStatus = ready ? "klaar" : "niet_gestart";
+
   const updatedOrder = updateOrder(orderId, (order) => ({
     ...order,
-    status: order.status === "nieuw" ? "in_productie" : order.status,
-    items: order.items.map((item) => ({ ...item, status: "klaar" as const })),
+    status:
+      order.status === "nieuw" || order.status === "in_productie"
+        ? ready
+          ? "in_productie"
+          : "nieuw"
+        : order.status,
+    items: order.items.map((item) => ({ ...item, status: itemStatus })),
   }));
 
   if (updatedOrder) void saveOrderToWordPress(updatedOrder);

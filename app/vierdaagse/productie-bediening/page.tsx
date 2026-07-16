@@ -8,9 +8,9 @@ import {
   fetchVierdaagseOrdersFromWordPress,
   getAllOrders,
   loadDemoOrders,
-  markOrderItemsReady,
   markOrderDelivered,
   markOrderReady,
+  setOrderItemsReady,
   subscribeVierdaagseOrders,
   updateOrderItemStatus,
 } from "../orderStore";
@@ -259,10 +259,8 @@ function OrderCard({
           {showBulkReadyCheck && (
             <button
               type="button"
-              disabled={allReady}
               onClick={() => {
-                if (allReady) return;
-                markOrderItemsReady(order.id);
+                setOrderItemsReady(order.id, !allReady);
                 onRefresh();
               }}
               className={`grid h-6 w-6 place-items-center rounded-md border text-xs font-black leading-none transition active:scale-[0.96] ${
@@ -272,10 +270,10 @@ function OrderCard({
               }`}
               aria-label={
                 allReady
-                  ? `Hele bon ${order.tableNumber} is afgevinkt`
+                  ? `Hele bon ${order.tableNumber} uitvinken`
                   : `Hele bon ${order.tableNumber} afvinken`
               }
-              title={allReady ? "Hele bon afgevinkt" : "Hele bon afvinken"}
+              title={allReady ? "Hele bon uitvinken" : "Hele bon afvinken"}
             >
               {allReady ? "✓" : ""}
             </button>
