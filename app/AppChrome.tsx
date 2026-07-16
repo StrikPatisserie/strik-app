@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import BottomNav from "./BottomNav";
+import LogoutButton from "./LogoutButton";
 import NotificationMonitor from "./NotificationMonitor";
 import WinkelSidebar from "./WinkelSidebar";
 
@@ -9,6 +10,11 @@ export default function AppChrome({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
+  const isAuthArea =
+    pathname === "/login" ||
+    pathname === "/reset-password" ||
+    pathname === "/update-password" ||
+    pathname.startsWith("/auth/");
   const isBakeryWorkArea =
     pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
   const isWinkelWorkArea =
@@ -24,9 +30,14 @@ export default function AppChrome({
   const isVierdaagseWorkArea =
     pathname === "/vierdaagse" || pathname.startsWith("/vierdaagse/");
 
+  if (isAuthArea) {
+    return <>{children}</>;
+  }
+
   return (
     <>
       <NotificationMonitor />
+      <LogoutButton />
       <div className="min-h-dvh bg-[#faf8f5]">
         <div className="flex min-h-dvh flex-row">
           <WinkelSidebar />

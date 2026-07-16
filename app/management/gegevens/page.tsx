@@ -31,6 +31,14 @@ const gegevensItems = [
     icon: strikIcons.management,
     tone: "honey" as const,
   },
+  {
+    href: "/settings/users",
+    label: "Settings",
+    title: "Gebruikers",
+    description: "Accounts, rollen, winkels en rechten beheren.",
+    icon: strikIcons.management,
+    tone: "medium" as const,
+  },
 ];
 
 export default function ManagementGegevensPage() {
