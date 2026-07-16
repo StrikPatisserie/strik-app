@@ -182,6 +182,10 @@ export default function LoginPanel({
               required
               className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
             />
+            <span className="mt-1 block text-xs font-semibold text-[#7b7268]">
+              Minimaal 8 tekens. Werkt het niet? Gebruik een hoofdletter,
+              cijfer en teken.
+            </span>
           </label>
           <div>
             <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">

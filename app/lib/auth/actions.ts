@@ -32,6 +32,40 @@ function getRedirectTarget(value: FormDataEntryValue | null) {
   return next;
 }
 
+function getAuthErrorMessage(error: unknown, fallback: string) {
+  if (!(error instanceof Error)) return fallback;
+
+  const message = error.message || fallback;
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    normalizedMessage.includes("already registered") ||
+    normalizedMessage.includes("already exists") ||
+    normalizedMessage.includes("user already")
+  ) {
+    return "Dit e-mailadres heeft al een account. Log in of gebruik wachtwoord vergeten.";
+  }
+
+  if (
+    normalizedMessage.includes("weak_password") ||
+    normalizedMessage.includes("weak password") ||
+    normalizedMessage.includes("password should") ||
+    normalizedMessage.includes("password must") ||
+    normalizedMessage.includes("password")
+  ) {
+    return "Dit wachtwoord voldoet niet aan de regels. Gebruik minimaal 8 tekens, liefst met een hoofdletter, cijfer en teken.";
+  }
+
+  if (
+    normalizedMessage.includes("signup") &&
+    normalizedMessage.includes("disabled")
+  ) {
+    return "Aanmelden staat nog uit in Supabase. Zet Sign ups aan bij Authentication.";
+  }
+
+  return `Aanmelden lukt niet: ${message}`;
+}
+
 export async function loginAction(
   _state: AuthActionState,
   formData: FormData
@@ -154,7 +188,12 @@ export async function signupAction(
     });
 
     if (error) {
-      return { message: "Aanmelden lukt niet. Probeer het nog een keer." };
+      return {
+        message: getAuthErrorMessage(
+          error,
+          "Aanmelden lukt niet. Probeer het nog een keer."
+        ),
+      };
     }
 
     if (!data.session) {
