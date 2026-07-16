@@ -314,6 +314,16 @@ export function updateOrderItemStatus(
   if (updatedOrder) void saveOrderToWordPress(updatedOrder);
 }
 
+export function markOrderItemsReady(orderId: string) {
+  const updatedOrder = updateOrder(orderId, (order) => ({
+    ...order,
+    status: order.status === "nieuw" ? "in_productie" : order.status,
+    items: order.items.map((item) => ({ ...item, status: "klaar" as const })),
+  }));
+
+  if (updatedOrder) void saveOrderToWordPress(updatedOrder);
+}
+
 export function markOrderReady(orderId: string) {
   const now = new Date().toISOString();
 

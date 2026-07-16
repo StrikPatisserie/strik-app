@@ -8,6 +8,7 @@ import {
   fetchVierdaagseOrdersFromWordPress,
   getAllOrders,
   loadDemoOrders,
+  markOrderItemsReady,
   markOrderDelivered,
   markOrderReady,
   subscribeVierdaagseOrders,
@@ -210,6 +211,10 @@ function OrderCard({
     allReady &&
     (order.status === "nieuw" || order.status === "in_productie");
   const canDeliver = order.status === "klaar_voor_bediening";
+  const canMarkAllItemsReady =
+    !archive &&
+    !allReady &&
+    (order.status === "nieuw" || order.status === "in_productie");
   const kitchenItems = sortedKitchenItems(order.items);
 
   function setItemStatus(itemId: string, ready: boolean) {
@@ -239,19 +244,35 @@ function OrderCard({
             {countOrderItems(order.items)} st
           </p>
         </div>
-        <span
-          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[0.56rem] font-black uppercase leading-none sm:text-[0.62rem] ${
-            order.status === "klaar_voor_bediening"
-              ? "bg-[#ef7d0a] text-white"
-              : order.status === "geleverd"
-                ? "bg-[#24551d] text-white"
-                : order.status === "geannuleerd"
-                  ? "bg-[#f7d7d2] text-[#9d2f20]"
-                  : "bg-white text-[#9d3c24]"
-          }`}
-        >
-          {statusLabel(order.status)}
-        </span>
+        <div className="grid shrink-0 justify-items-end gap-1">
+          <span
+            className={`rounded-md px-1.5 py-0.5 text-[0.56rem] font-black uppercase leading-none sm:text-[0.62rem] ${
+              order.status === "klaar_voor_bediening"
+                ? "bg-[#ef7d0a] text-white"
+                : order.status === "geleverd"
+                  ? "bg-[#24551d] text-white"
+                  : order.status === "geannuleerd"
+                    ? "bg-[#f7d7d2] text-[#9d2f20]"
+                    : "bg-white text-[#9d3c24]"
+            }`}
+          >
+            {statusLabel(order.status)}
+          </span>
+          {canMarkAllItemsReady && (
+            <button
+              type="button"
+              onClick={() => {
+                markOrderItemsReady(order.id);
+                onRefresh();
+              }}
+              className="grid h-6 w-6 place-items-center rounded-md border border-[#24551d] bg-[#f2faef] text-xs font-black leading-none text-[#24551d] transition active:scale-[0.96]"
+              aria-label={`Hele bon ${order.tableNumber} afvinken`}
+              title="Hele bon afvinken"
+            >
+              ✓
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="grid gap-1">
