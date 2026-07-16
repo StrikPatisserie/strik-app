@@ -5,8 +5,8 @@ import { StrikShell, strikIcons } from "../StrikUI";
 import {
   TeamAgendaEvent,
   TeamAgendaEventType,
-  getAudienceLabel,
   getEventTypeLabel,
+  getEventSourceLabel,
   getTeamAgendaUrl,
   normalizeTeamAgenda,
 } from "./teamAgendaApi";
@@ -104,6 +104,16 @@ function expandUpcomingEvents(events: TeamAgendaEvent[]) {
     .sort((a, b) => a.displayDate.getTime() - b.displayDate.getTime());
 }
 
+function groupByDate(events: DisplayEvent[]) {
+  return events.reduce<Record<string, DisplayEvent[]>>((acc, event) => {
+    const key = formatDateKey(event.displayDate);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(event);
+
+    return acc;
+  }, {});
+}
+
 async function fetchWordPressAgendaEvents() {
   const res = await fetch(getTeamAgendaUrl(), { cache: "no-store" });
   const data = (await res.json().catch(() => null)) as unknown;
@@ -125,6 +135,19 @@ async function fetchTamigoBirthdayEvents() {
 
   if (!res.ok) {
     throw new Error("Tamigo verjaardagen zijn nog niet beschikbaar.");
+  }
+
+  return normalizeTeamAgenda(data).events;
+}
+
+async function fetchDrivePersonnelEvents() {
+  const res = await fetch("/api/personnel-sheet-agenda", {
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => null)) as unknown;
+
+  if (!res.ok) {
+    throw new Error("Drive personeelslijst is nog niet beschikbaar.");
   }
 
   return normalizeTeamAgenda(data).events;
@@ -155,9 +178,7 @@ function EventCard({ event }: { event: DisplayEvent }) {
               {getEventTypeLabel(event.type)}
             </span>
             <span className="rounded-full bg-[#f8f6f3] px-2 py-0.5 text-[0.58rem] font-black text-[#2d2a26]/55 sm:text-[0.68rem]">
-              {event.source === "tamigo"
-                ? "Team"
-                : getAudienceLabel(event.audience)}
+              {getEventSourceLabel(event)}
             </span>
           </div>
 
@@ -198,9 +219,10 @@ export default function StrikAgendaPage() {
       setStatus("Agenda laden...");
 
       try {
-        const [wordpressResult, tamigoResult] = await Promise.allSettled([
+        const [wordpressResult, tamigoResult, driveResult] = await Promise.allSettled([
           fetchWordPressAgendaEvents(),
           fetchTamigoBirthdayEvents(),
+          fetchDrivePersonnelEvents(),
         ]);
 
         if (ignoreResult) return;
@@ -209,28 +231,31 @@ export default function StrikAgendaPage() {
           wordpressResult.status === "fulfilled" ? wordpressResult.value : [];
         const tamigoEvents =
           tamigoResult.status === "fulfilled" ? tamigoResult.value : [];
+        const driveEvents =
+          driveResult.status === "fulfilled" ? driveResult.value : [];
 
-        setEvents([...wordpressEvents, ...tamigoEvents]);
+        setEvents([...wordpressEvents, ...tamigoEvents, ...driveEvents]);
 
-        if (
-          wordpressResult.status === "rejected" &&
-          tamigoResult.status === "rejected"
-        ) {
+        const statusMessages: string[] = [];
+
+        if (wordpressResult.status === "rejected") {
+          statusMessages.push("Handmatige agenda-items zijn nog niet beschikbaar.");
+        }
+
+        if (tamigoResult.status === "rejected") {
+          statusMessages.push("Tamigo verjaardagen zijn nog niet beschikbaar.");
+        }
+
+        if (driveResult.status === "rejected") {
+          statusMessages.push("Drive personeelslijst is nog niet beschikbaar.");
+        }
+
+        if (statusMessages.length === 3) {
           setStatus("Kan de Strik agenda niet laden.");
           return;
         }
 
-        if (wordpressResult.status === "rejected") {
-          setStatus("Handmatige agenda-items zijn nog niet beschikbaar.");
-          return;
-        }
-
-        if (tamigoResult.status === "rejected") {
-          setStatus("Tamigo verjaardagen zijn nog niet beschikbaar.");
-          return;
-        }
-
-        setStatus("");
+        setStatus(statusMessages.join(" "));
       } catch {
         if (!ignoreResult) {
           setEvents([]);

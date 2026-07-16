@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   TeamAgendaEvent,
-  getAudienceLabel,
   getEventTypeLabel,
+  getEventSourceLabel,
   getTeamAgendaUrl,
   normalizeTeamAgenda,
 } from "./strik-agenda/teamAgendaApi";
@@ -105,9 +105,10 @@ export default function CompactAgendaPanel() {
 
     async function loadAgenda() {
       try {
-        const [wordpressResult, tamigoResult] = await Promise.allSettled([
+        const [wordpressResult, tamigoResult, driveResult] = await Promise.allSettled([
           fetch(getTeamAgendaUrl(), { cache: "no-store" }),
           fetch("/api/tamigo-employees?view=shop", { cache: "no-store" }),
+          fetch("/api/personnel-sheet-agenda", { cache: "no-store" }),
         ]);
 
         if (ignoreResult) return;
@@ -125,6 +126,12 @@ export default function CompactAgendaPanel() {
         if (tamigoResult.status === "fulfilled" && tamigoResult.value.ok) {
           loadedEvents.push(
             ...normalizeTeamAgenda(await tamigoResult.value.json()).events
+          );
+        }
+
+        if (driveResult.status === "fulfilled" && driveResult.value.ok) {
+          loadedEvents.push(
+            ...normalizeTeamAgenda(await driveResult.value.json()).events
           );
         }
 
@@ -192,9 +199,7 @@ export default function CompactAgendaPanel() {
                 </p>
                 <p className="mt-0.5 text-[0.55rem] font-normal leading-tight text-[#8d877f] sm:mt-1 sm:text-[0.68rem]">
                   {getEventTypeLabel(event.type)} -{" "}
-                  {event.source === "tamigo"
-                    ? "Team"
-                    : getAudienceLabel(event.audience)}
+                  {getEventSourceLabel(event)}
                 </p>
               </Link>
             ))}

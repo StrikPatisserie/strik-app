@@ -7,9 +7,10 @@ import {
   TeamAgendaEvent,
   TeamAgendaEventType,
   createTeamAgendaId,
-  getAudienceLabel,
+  getAutomaticEventSourceLabel,
   getEmptyTeamAgenda,
   getEventTypeLabel,
+  getEventSourceLabel,
   getTeamAgendaUrl,
   normalizeTeamAgenda,
   teamAgendaAudiences,
@@ -184,9 +185,29 @@ async function fetchTamigoAgendaEvents() {
   );
 }
 
+async function fetchDriveAgendaEvents() {
+  const res = await fetch("/api/personnel-sheet-agenda", {
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => null)) as
+    | TamigoEmployeeAgendaResponse
+    | null;
+
+  if (!res.ok) {
+    throw new Error(
+      data?.message || "Drive personeelslijst is tijdelijk niet beschikbaar."
+    );
+  }
+
+  return normalizeTeamAgenda({ events: data?.events || [] }).events.filter(
+    (event) => event.source === "sheet"
+  );
+}
+
 export default function TeamAgendaManager() {
   const [agenda, setAgenda] = useState<TeamAgendaData>(getEmptyTeamAgenda);
   const [tamigoEvents, setTamigoEvents] = useState<TeamAgendaEvent[]>([]);
+  const [driveEvents, setDriveEvents] = useState<TeamAgendaEvent[]>([]);
   const [draft, setDraft] = useState<EventDraft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -197,8 +218,8 @@ export default function TeamAgendaManager() {
   const [manualAgendaAvailable, setManualAgendaAvailable] = useState(true);
 
   const combinedEvents = useMemo(
-    () => sortEvents([...agenda.events, ...tamigoEvents]),
-    [agenda.events, tamigoEvents]
+    () => sortEvents([...agenda.events, ...tamigoEvents, ...driveEvents]),
+    [agenda.events, driveEvents, tamigoEvents]
   );
   const visibleEvents = useMemo(() => {
     if (filter === "manual") return sortEvents(agenda.events);
@@ -217,21 +238,22 @@ export default function TeamAgendaManager() {
   }, [agenda.events, combinedEvents, filter]);
   const upcomingTamigoCount = useMemo(
     () =>
-      tamigoEvents.filter((event) => {
+      [...tamigoEvents, ...driveEvents].filter((event) => {
         const daysUntil = getDaysUntilEvent(event);
 
         return daysUntil >= 0 && daysUntil <= 7;
       }).length,
-    [tamigoEvents]
+    [driveEvents, tamigoEvents]
   );
 
   const loadAgenda = useCallback(async () => {
     setLoading(true);
     setStatus("Agenda laden...");
 
-    const [manualResult, tamigoResult] = await Promise.allSettled([
+    const [manualResult, tamigoResult, driveResult] = await Promise.allSettled([
       fetchManualAgenda(),
       fetchTamigoAgendaEvents(),
+      fetchDriveAgendaEvents(),
     ]);
     const statusMessages: string[] = [];
 
@@ -252,6 +274,15 @@ export default function TeamAgendaManager() {
       setTamigoEvents([]);
       statusMessages.push(
         "Tamigo-verjaardagen en jubilea zijn tijdelijk niet beschikbaar."
+      );
+    }
+
+    if (driveResult.status === "fulfilled") {
+      setDriveEvents(driveResult.value);
+    } else {
+      setDriveEvents([]);
+      statusMessages.push(
+        "Drive-personeelslijst is tijdelijk niet beschikbaar."
       );
     }
 
@@ -409,7 +440,11 @@ export default function TeamAgendaManager() {
           </div>
           <div className="rounded-2xl bg-[#f8e1ea] p-3">
             <p className="text-2xl font-bold">
-              {tamigoEvents.filter((event) => event.type === "birthday").length}
+              {
+                [...tamigoEvents, ...driveEvents].filter(
+                  (event) => event.type === "birthday"
+                ).length
+              }
             </p>
             <p className="text-xs font-semibold text-[#2d2a26]/55">
               Verjaardagen
@@ -418,8 +453,9 @@ export default function TeamAgendaManager() {
           <div className="rounded-2xl bg-[#eef3ea] p-3">
             <p className="text-2xl font-bold">
               {
-                tamigoEvents.filter((event) => event.type === "anniversary")
-                  .length
+                [...tamigoEvents, ...driveEvents].filter(
+                  (event) => event.type === "anniversary"
+                ).length
               }
             </p>
             <p className="text-xs font-semibold text-[#2d2a26]/55">
@@ -605,7 +641,7 @@ export default function TeamAgendaManager() {
                       {getEventTypeLabel(event.type)}
                     </span>
                     <span className="rounded-full bg-[#f8f6f3] px-2.5 py-0.5 text-xs font-bold text-[#2d2a26]/55">
-                      {getAudienceLabel(event.audience)}
+                      {getEventSourceLabel(event)}
                     </span>
                     {event.recurringYearly && (
                       <span className="rounded-full bg-[#f1d28f]/60 px-2.5 py-0.5 text-xs font-bold text-[#4a3711]">
@@ -647,7 +683,7 @@ export default function TeamAgendaManager() {
                 </div>
               ) : (
                 <p className="mt-3 rounded-full bg-[#f8f6f3] px-4 py-2.5 text-center text-xs font-bold uppercase tracking-[0.08em] text-[#2d2a26]/45">
-                  Automatisch via Tamigo
+                  {getAutomaticEventSourceLabel(event.source)}
                 </p>
               )}
             </article>

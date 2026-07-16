@@ -25,7 +25,7 @@ export const teamAgendaAudiences = [
 export type TeamAgendaAudience =
   (typeof teamAgendaAudiences)[number]["value"];
 
-export type TeamAgendaEventSource = "manual" | "tamigo";
+export type TeamAgendaEventSource = "manual" | "tamigo" | "sheet";
 
 export type TeamAgendaEvent = {
   id: string;
@@ -103,7 +103,13 @@ function normalizeAudience(value: unknown): TeamAgendaAudience {
 }
 
 function normalizeSource(value: unknown): TeamAgendaEventSource {
-  return textFrom(value) === "tamigo" ? "tamigo" : "manual";
+  const source = textFrom(value);
+  if (source === "tamigo") return "tamigo";
+  if (source === "sheet" || source === "drive" || source === "google-sheet") {
+    return "sheet";
+  }
+
+  return "manual";
 }
 
 function normalizeEvent(value: unknown): TeamAgendaEvent | null {
@@ -142,4 +148,18 @@ export function normalizeTeamAgenda(value: unknown): TeamAgendaData {
     events,
     updatedAt: textFrom(value.updatedAt) || undefined,
   };
+}
+
+export function getEventSourceLabel(event: Pick<TeamAgendaEvent, "source" | "audience">) {
+  if (event.source === "tamigo") return "Tamigo";
+  if (event.source === "sheet") return "Drive";
+
+  return getAudienceLabel(event.audience);
+}
+
+export function getAutomaticEventSourceLabel(source: TeamAgendaEventSource) {
+  if (source === "sheet") return "Automatisch via Drive";
+  if (source === "tamigo") return "Automatisch via Tamigo";
+
+  return "Handmatig";
 }
