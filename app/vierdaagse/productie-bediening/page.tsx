@@ -88,6 +88,19 @@ function itemLabel(item: VierdaagseOrder["items"][number]) {
   return item.detail ? `${item.name} - ${item.detail}` : item.name;
 }
 
+function KitchenItemLabel({
+  item,
+}: Readonly<{ item: VierdaagseOrder["items"][number] }>) {
+  if (!item.detail) return <>{item.name}</>;
+
+  return (
+    <>
+      <span>{item.name}</span>
+      <span className="font-black text-[#d8422f]"> - {item.detail}</span>
+    </>
+  );
+}
+
 function countBy<T extends string>(values: T[]) {
   return values.reduce<Record<string, number>>((counts, value) => {
     counts[value] = (counts[value] || 0) + 1;
@@ -261,7 +274,7 @@ function OrderCard({
               {item.quantity}x
             </span>
             <span className="min-w-0 break-words text-[0.72rem] font-bold leading-tight text-[#1a1815] sm:text-xs">
-              {itemLabel(item)}
+              <KitchenItemLabel item={item} />
             </span>
             {!archive && (
               <button
