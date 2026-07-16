@@ -211,10 +211,8 @@ function OrderCard({
     allReady &&
     (order.status === "nieuw" || order.status === "in_productie");
   const canDeliver = order.status === "klaar_voor_bediening";
-  const canMarkAllItemsReady =
-    !archive &&
-    !allReady &&
-    (order.status === "nieuw" || order.status === "in_productie");
+  const showBulkReadyCheck =
+    !archive && (order.status === "nieuw" || order.status === "in_productie");
   const kitchenItems = sortedKitchenItems(order.items);
 
   function setItemStatus(itemId: string, ready: boolean) {
@@ -258,18 +256,28 @@ function OrderCard({
           >
             {statusLabel(order.status)}
           </span>
-          {canMarkAllItemsReady && (
+          {showBulkReadyCheck && (
             <button
               type="button"
+              disabled={allReady}
               onClick={() => {
+                if (allReady) return;
                 markOrderItemsReady(order.id);
                 onRefresh();
               }}
-              className="grid h-6 w-6 place-items-center rounded-md border border-[#24551d] bg-[#f2faef] text-xs font-black leading-none text-[#24551d] transition active:scale-[0.96]"
-              aria-label={`Hele bon ${order.tableNumber} afvinken`}
-              title="Hele bon afvinken"
+              className={`grid h-6 w-6 place-items-center rounded-md border text-xs font-black leading-none transition active:scale-[0.96] ${
+                allReady
+                  ? "border-[#24551d] bg-[#24551d] text-white"
+                  : "border-[#24551d] bg-white text-[#24551d]"
+              }`}
+              aria-label={
+                allReady
+                  ? `Hele bon ${order.tableNumber} is afgevinkt`
+                  : `Hele bon ${order.tableNumber} afvinken`
+              }
+              title={allReady ? "Hele bon afgevinkt" : "Hele bon afvinken"}
             >
-              ✓
+              {allReady ? "✓" : ""}
             </button>
           )}
         </div>
@@ -309,7 +317,7 @@ function OrderCard({
                 }`}
                 aria-label={`${itemLabel(item)} klaar melden`}
               >
-                ✓
+                {item.status === "klaar" ? "✓" : ""}
               </button>
             )}
           </div>
