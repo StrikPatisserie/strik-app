@@ -1,4 +1,8 @@
 import type { TeamAgendaEvent } from "./strik-agenda/teamAgendaApi";
+import {
+  formatJubileeYears,
+  isImportantJubileeYear,
+} from "./strik-agenda/personnelJubilees";
 
 const TAMIGO_API_BASE_URL =
   process.env.TAMIGO_API_BASE_URL || "https://api.tamigo.com";
@@ -116,6 +120,8 @@ export type PersonnelAgendaEvent = {
   month: number;
   day: number;
   years?: number;
+  startDate?: string;
+  recurringYearly?: boolean;
   source: "tamigo";
 };
 
@@ -1558,6 +1564,71 @@ function createPersonnelEvent(
     month,
     day,
     years,
+    startDate: type === "anniversary" ? formatDate(
+      sourceDate.getFullYear(),
+      sourceDate.getMonth() + 1,
+      sourceDate.getDate()
+    ) : undefined,
+    recurringYearly: true,
+    source: "tamigo",
+  };
+}
+
+function addYearsAndMonths(date: Date, years: number, months: number) {
+  const targetYear = date.getFullYear() + years;
+  const targetMonthIndex = date.getMonth() + months;
+  const lastDayInTargetMonth = new Date(
+    targetYear,
+    targetMonthIndex + 1,
+    0
+  ).getDate();
+  const day = Math.min(date.getDate(), lastDayInTargetMonth);
+  const result = new Date(targetYear, targetMonthIndex, day);
+  result.setHours(0, 0, 0, 0);
+
+  return result;
+}
+
+function createHalfYearPersonnelEvent(
+  employee: TamigoDetailedEmployee,
+  startDate: Date,
+  today: Date
+): PersonnelAgendaEvent | null {
+  const employeeName = employee.Name?.trim();
+  if (!employeeName) return null;
+
+  const occurrence = addYearsAndMonths(startDate, 12, 6);
+  if (occurrence < today) return null;
+
+  const horizon = new Date(today);
+  horizon.setDate(horizon.getDate() + 370);
+  if (occurrence > horizon) return null;
+
+  const identity = getEmployeeIdentity(employee);
+  const baseId = createSafeId(`${identity}-anniversary-12-half`);
+  const occurrenceDate = formatDate(
+    occurrence.getFullYear(),
+    occurrence.getMonth() + 1,
+    occurrence.getDate()
+  );
+
+  return {
+    id: `tamigo-anniversary-half-${baseId}`,
+    type: "anniversary",
+    employeeName,
+    title: `${employeeName} 12,5 jaar bij Strik`,
+    date: occurrenceDate,
+    occurrenceDate,
+    daysUntil: getDaysUntil(occurrence, today),
+    month: occurrence.getMonth() + 1,
+    day: occurrence.getDate(),
+    years: 12.5,
+    startDate: formatDate(
+      startDate.getFullYear(),
+      startDate.getMonth() + 1,
+      startDate.getDate()
+    ),
+    recurringYearly: false,
     source: "tamigo",
   };
 }
@@ -1588,8 +1659,15 @@ export async function getPersonnelAgenda(): Promise<PersonnelAgenda> {
       startDate,
       today
     );
+    const halfYearEvent = createHalfYearPersonnelEvent(
+      employee,
+      startDate,
+      today
+    );
 
-    return event ? [event] : [];
+    return [event, halfYearEvent].filter(
+      (item): item is PersonnelAgendaEvent => item !== null
+    );
   });
 
   return {
@@ -1607,6 +1685,10 @@ export async function getUpcomingEmployeeEventCount(days = 7) {
   return [...agenda.birthdays, ...agenda.anniversaries].filter(
     (event) => event.daysUntil <= maxDays
   ).length;
+}
+
+export function isImportantPersonnelJubilee(event: PersonnelAgendaEvent) {
+  return event.type === "anniversary" && isImportantJubileeYear(event.years);
 }
 
 function sortPersonnelEvents(events: PersonnelAgendaEvent[]) {
@@ -1848,12 +1930,16 @@ export function toTeamAgendaEvents(events: PersonnelAgendaEvent[]) {
       audience: "alle",
       description:
         event.type === "anniversary" && event.years
-          ? `${event.years} jaar bij Strik`
+          ? `${formatJubileeYears(event.years)} jaar bij Strik`
           : "",
-      recurringYearly: true,
+      recurringYearly: event.recurringYearly !== false,
       source: "tamigo",
       createdAt: now,
       updatedAt: now,
+      employeeName: event.employeeName,
+      startDate: event.startDate,
+      occurrenceDate: event.occurrenceDate,
+      anniversaryYears: event.years,
     })
   );
 }

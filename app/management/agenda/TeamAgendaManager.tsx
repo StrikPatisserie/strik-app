@@ -7,10 +7,8 @@ import {
   TeamAgendaEvent,
   TeamAgendaEventType,
   createTeamAgendaId,
-  getAutomaticEventSourceLabel,
   getEmptyTeamAgenda,
   getEventTypeLabel,
-  getEventSourceLabel,
   getTeamAgendaUrl,
   normalizeTeamAgenda,
   teamAgendaAudiences,
@@ -121,14 +119,13 @@ function getDaysUntilEvent(event: TeamAgendaEvent) {
 
 function formatEventDate(event: TeamAgendaEvent) {
   const date = getEventDisplayDate(event);
-  const suffix = event.recurringYearly ? " jaarlijks" : "";
 
-  return `${date.toLocaleDateString("nl-NL", {
+  return date.toLocaleDateString("nl-NL", {
     weekday: "short",
     day: "numeric",
     month: "short",
     year: "numeric",
-  })}${suffix}`;
+  });
 }
 
 function formatUpdatedAt(value?: string) {
@@ -632,60 +629,46 @@ export default function TeamAgendaManager() {
           visibleEvents.map((event) => (
             <article
               key={event.id}
-              className="rounded-[1.5rem] border border-[#e7e0d8] bg-white p-3 shadow-sm"
+              className={`rounded-lg border px-3 py-2 shadow-sm ${
+                event.type === "anniversary"
+                  ? "border-[#c3d3bc] bg-[#f6faf4]"
+                  : "border-[#e7e0d8] bg-white"
+              }`}
             >
-              <div className="flex items-start justify-between gap-2">
+              <div className="grid grid-cols-[5.8rem_1fr] items-center gap-2 sm:grid-cols-[7rem_1fr_auto]">
+                <p className="text-[0.7rem] font-black capitalize leading-tight text-[#2d2a26]/55 sm:text-xs">
+                  {formatEventDate(event)}
+                </p>
                 <div className="min-w-0">
-                  <div className="mb-1.5 flex flex-wrap gap-1.5">
-                    <span className="rounded-full bg-[#eef3ea] px-2.5 py-0.5 text-xs font-bold text-[#2d3f29]">
-                      {getEventTypeLabel(event.type)}
-                    </span>
-                    <span className="rounded-full bg-[#f8f6f3] px-2.5 py-0.5 text-xs font-bold text-[#2d2a26]/55">
-                      {getEventSourceLabel(event)}
-                    </span>
-                    {event.recurringYearly && (
-                      <span className="rounded-full bg-[#f1d28f]/60 px-2.5 py-0.5 text-xs font-bold text-[#4a3711]">
-                        Jaarlijks
-                      </span>
-                    )}
-                  </div>
-
-                  <h3 className="text-lg font-bold leading-tight">
+                  <h3 className="truncate text-sm font-black leading-tight text-[#1a1815] sm:text-base">
                     {event.title}
                   </h3>
-                  <p className="mt-1 text-sm font-semibold capitalize text-[#2d2a26]/55">
-                    {formatEventDate(event)}
-                  </p>
-                  {event.description && (
-                    <p className="mt-2 rounded-2xl bg-[#f8f6f3] p-2.5 text-sm leading-relaxed text-gray-600">
-                      {event.description}
+                  {event.type !== "anniversary" && (
+                    <p className="mt-0.5 text-[0.68rem] font-bold text-[#2d2a26]/45">
+                      {getEventTypeLabel(event.type)}
                     </p>
                   )}
                 </div>
-              </div>
 
-              {event.source === "manual" ? (
-                <div className="mt-3 flex gap-2">
+                {event.source === "manual" && (
+                  <div className="col-span-2 mt-1 flex gap-1.5 sm:col-span-1 sm:mt-0">
                   <button
                     type="button"
                     onClick={() => editEvent(event)}
-                    className="flex-1 rounded-full bg-[#eef3ea] px-4 py-2.5 text-sm font-bold"
+                    className="flex-1 rounded-md bg-white px-2.5 py-1.5 text-xs font-black text-[#24551d] sm:flex-none"
                   >
                     Wijzig
                   </button>
                   <button
                     type="button"
                     onClick={() => deleteEvent(event.id)}
-                    className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-bold text-[#d75a48]"
+                    className="rounded-md bg-white px-2.5 py-1.5 text-xs font-black text-[#d75a48]"
                   >
                     Verwijder
                   </button>
                 </div>
-              ) : (
-                <p className="mt-3 rounded-full bg-[#f8f6f3] px-4 py-2.5 text-center text-xs font-bold uppercase tracking-[0.08em] text-[#2d2a26]/45">
-                  {getAutomaticEventSourceLabel(event.source)}
-                </p>
-              )}
+                )}
+              </div>
             </article>
           ))
         )}

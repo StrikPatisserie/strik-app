@@ -38,6 +38,10 @@ export type TeamAgendaEvent = {
   source: TeamAgendaEventSource;
   createdAt: string;
   updatedAt?: string;
+  employeeName?: string;
+  startDate?: string;
+  occurrenceDate?: string;
+  anniversaryYears?: number;
 };
 
 export type TeamAgendaData = {
@@ -88,6 +92,13 @@ function boolFrom(value: unknown) {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
+function numberFrom(value: unknown) {
+  const numberValue =
+    typeof value === "string" ? Number(value.replace(",", ".")) : Number(value);
+
+  return Number.isFinite(numberValue) ? numberValue : undefined;
+}
+
 function normalizeType(value: unknown): TeamAgendaEventType {
   const type = textFrom(value);
   return teamAgendaEventTypes.some((item) => item.value === type)
@@ -131,6 +142,10 @@ function normalizeEvent(value: unknown): TeamAgendaEvent | null {
     source: normalizeSource(value.source),
     createdAt: textFrom(value.createdAt) || new Date().toISOString(),
     updatedAt: textFrom(value.updatedAt) || undefined,
+    employeeName: textFrom(value.employeeName).trim() || undefined,
+    startDate: textFrom(value.startDate).trim() || undefined,
+    occurrenceDate: textFrom(value.occurrenceDate).trim() || undefined,
+    anniversaryYears: numberFrom(value.anniversaryYears),
   };
 }
 

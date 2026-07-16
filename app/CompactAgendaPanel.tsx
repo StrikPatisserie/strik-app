@@ -108,7 +108,7 @@ export default function CompactAgendaPanel() {
         const [wordpressResult, tamigoResult, driveResult] = await Promise.allSettled([
           fetch(getTeamAgendaUrl(), { cache: "no-store" }),
           fetch("/api/tamigo-employees?view=shop", { cache: "no-store" }),
-          fetch("/api/personnel-sheet-agenda", { cache: "no-store" }),
+          fetch("/api/personnel-sheet-agenda?view=shop", { cache: "no-store" }),
         ]);
 
         if (ignoreResult) return;

@@ -134,14 +134,14 @@ async function fetchTamigoBirthdayEvents() {
   const data = (await res.json().catch(() => null)) as unknown;
 
   if (!res.ok) {
-    throw new Error("Tamigo verjaardagen zijn nog niet beschikbaar.");
+    throw new Error("Tamigo agenda is nog niet beschikbaar.");
   }
 
   return normalizeTeamAgenda(data).events;
 }
 
 async function fetchDrivePersonnelEvents() {
-  const res = await fetch("/api/personnel-sheet-agenda", {
+  const res = await fetch("/api/personnel-sheet-agenda?view=shop", {
     cache: "no-store",
   });
   const data = (await res.json().catch(() => null)) as unknown;
@@ -243,7 +243,7 @@ export default function StrikAgendaPage() {
         }
 
         if (tamigoResult.status === "rejected") {
-          statusMessages.push("Tamigo verjaardagen zijn nog niet beschikbaar.");
+          statusMessages.push("Tamigo agenda is nog niet beschikbaar.");
         }
 
         if (driveResult.status === "rejected") {

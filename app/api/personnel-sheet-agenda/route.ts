@@ -1,4 +1,8 @@
 import type { TeamAgendaEvent } from "../../strik-agenda/teamAgendaApi";
+import {
+  formatJubileeYears,
+  isStoreAgendaJubileeEvent,
+} from "../../strik-agenda/personnelJubilees";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -132,6 +136,10 @@ function formatDate(year: number, month: number, day: number) {
   )}`;
 }
 
+function formatDateFromDate(date: Date) {
+  return formatDate(date.getFullYear(), date.getMonth() + 1, date.getDate());
+}
+
 function formatDateNl(date: Date) {
   return date.toLocaleDateString("nl-NL", {
     day: "numeric",
@@ -147,6 +155,28 @@ function nextOccurrence(month: number, day: number, today: Date) {
   }
 
   return occurrence;
+}
+
+function addYearsAndMonths(date: Date, years: number, months: number) {
+  const targetYear = date.getFullYear() + years;
+  const targetMonthIndex = date.getMonth() + months;
+  const lastDayInTargetMonth = new Date(
+    targetYear,
+    targetMonthIndex + 1,
+    0
+  ).getDate();
+  const day = Math.min(date.getDate(), lastDayInTargetMonth);
+  const result = new Date(targetYear, targetMonthIndex, day);
+  result.setHours(0, 0, 0, 0);
+
+  return result;
+}
+
+function isWithinHorizon(date: Date, today: Date) {
+  const horizon = new Date(today);
+  horizon.setDate(horizon.getDate() + 370);
+
+  return date >= today && date <= horizon;
 }
 
 function slug(value: string) {
@@ -269,13 +299,41 @@ function toEvents(rows: PersonnelRow[]) {
           audience: "alle",
           description: [
             `In dienst sinds ${formatDateNl(row.startDate)}`,
-            `${years} jaar bij Strik`,
+            `${formatJubileeYears(years)} jaar bij Strik`,
             ...baseDescriptionParts,
           ].join(" · "),
           recurringYearly: true,
           source: "sheet",
           createdAt: now,
           updatedAt: now,
+          employeeName: row.name,
+          startDate: formatDateFromDate(row.startDate),
+          occurrenceDate: formatDateFromDate(occurrence),
+          anniversaryYears: years,
+        });
+      }
+
+      const halfYearOccurrence = addYearsAndMonths(row.startDate, 12, 6);
+      if (isWithinHorizon(halfYearOccurrence, today)) {
+        events.push({
+          id: `sheet-anniversary-half-${slug(row.name)}`,
+          title: `${row.name} 12,5 jaar bij Strik`,
+          date: formatDateFromDate(halfYearOccurrence),
+          type: "anniversary",
+          audience: "alle",
+          description: [
+            `In dienst sinds ${formatDateNl(row.startDate)}`,
+            "12,5 jaar bij Strik",
+            ...baseDescriptionParts,
+          ].join(" · "),
+          recurringYearly: false,
+          source: "sheet",
+          createdAt: now,
+          updatedAt: now,
+          employeeName: row.name,
+          startDate: formatDateFromDate(row.startDate),
+          occurrenceDate: formatDateFromDate(halfYearOccurrence),
+          anniversaryYears: 12.5,
         });
       }
     }
@@ -284,7 +342,13 @@ function toEvents(rows: PersonnelRow[]) {
   });
 }
 
-export async function GET() {
+function getView(request: Request) {
+  return new URL(request.url).searchParams.get("view") === "shop"
+    ? "shop"
+    : "management";
+}
+
+export async function GET(request: Request) {
   try {
     const response = await fetch(getCsvUrl(), { cache: "no-store" });
 
@@ -298,11 +362,18 @@ export async function GET() {
     const csv = await response.text();
     const rows = parsePersonnelRows(csv);
     const events = toEvents(rows);
+    const visibleEvents =
+      getView(request) === "shop"
+        ? events.filter(
+            (event) =>
+              event.type !== "anniversary" || isStoreAgendaJubileeEvent(event)
+          )
+        : events;
 
     return Response.json({
       source: "google-sheet",
       rowCount: rows.length,
-      events,
+      events: visibleEvents,
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {

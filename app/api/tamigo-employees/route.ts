@@ -2,6 +2,7 @@ import {
   getPersonnelAgenda,
   getTamigoStatusCode,
   getUpcomingEmployeeEventCount,
+  isImportantPersonnelJubilee,
   testTamigoEmployeeConnection,
   toTeamAgendaEvents,
 } from "../../tamigoApi";
@@ -52,10 +53,13 @@ export async function GET(request: Request) {
 
     const view = getView(request);
     const agenda = await getPersonnelAgenda();
+    const shopAnniversaries = agenda.anniversaries.filter(
+      isImportantPersonnelJubilee
+    );
     const events =
       view === "management"
         ? [...agenda.birthdays, ...agenda.anniversaries]
-        : agenda.birthdays;
+        : [...agenda.birthdays, ...shopAnniversaries];
     const upcomingWithinWeek = events.filter((event) => event.daysUntil <= 7);
 
     return Response.json({
