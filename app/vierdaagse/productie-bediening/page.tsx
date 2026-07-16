@@ -14,10 +14,8 @@ import {
   updateOrderItemStatus,
 } from "../orderStore";
 import {
-  ProductCategoryId,
   VierdaagseOrder,
   VierdaagseOrderStatus,
-  categoryLabels,
   getLocationLabel,
   vierdaagseProducts,
   vierdaagseTables,
@@ -70,12 +68,12 @@ function isOrderStillBeingMade(order: VierdaagseOrder) {
 function orderTone(order: VierdaagseOrder, now: Date) {
   const minutes = minutesBetween(order.createdAt, now);
   if (isOrderStillBeingMade(order) && minutes >= 10) {
-    return "border-[#d8422f] bg-[#fff1ef] ring-2 ring-[#d8422f]/15";
+    return "border-[#d8422f] bg-[#fff4f1] ring-2 ring-[#d8422f]/15";
   }
   if (isOrderStillBeingMade(order) && minutes >= 8) {
-    return "border-[#f0d7a0] bg-[#fffaf0]";
+    return "border-[#ef7d0a] bg-[#fffaf0]";
   }
-  return "border-[#d6e5d8] bg-white";
+  return "border-[#24551d] bg-white";
 }
 
 function statusLabel(status: VierdaagseOrderStatus) {
@@ -135,6 +133,34 @@ function countOrderItems(items: VierdaagseOrder["items"]) {
   return items.reduce((total, item) => total + item.quantity, 0);
 }
 
+function isDrinkItem(item: VierdaagseOrder["items"][number]) {
+  return item.category === "koffie-thee" || item.category === "fris-koud";
+}
+
+function sortedKitchenItems(items: VierdaagseOrder["items"]) {
+  const rank = (item: VierdaagseOrder["items"][number]) => {
+    if (item.category === "koffie-thee") return 2;
+    if (item.category === "fris-koud") return 1;
+    return 0;
+  };
+
+  return [...items].sort((first, second) => rank(first) - rank(second));
+}
+
+function itemRowTone(item: VierdaagseOrder["items"][number]) {
+  if (item.category === "koffie-thee") {
+    return "border-[#efb164] bg-[#fff6eb]";
+  }
+  if (item.category === "fris-koud") {
+    return "border-[#b8d6c0] bg-[#f2faef]";
+  }
+  return "border-[#e5ded5] bg-white";
+}
+
+function itemQuantityTone(item: VierdaagseOrder["items"][number]) {
+  return isDrinkItem(item) ? "text-[#ef7d0a]" : "text-[#24551d]";
+}
+
 function TrashIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
@@ -148,34 +174,6 @@ function TrashIcon() {
       />
     </svg>
   );
-}
-
-function getOrderItemGroups(order: VierdaagseOrder) {
-  const serviceItems = order.items.filter(
-    (item) => item.category !== "koffie-thee"
-  );
-  const coffeeItems = order.items.filter(
-    (item) => item.category === "koffie-thee"
-  );
-
-  return [
-    {
-      id: "service",
-      title: "gebak/hartig/overig",
-      badge: "bediening",
-      items: serviceItems,
-      className: "border-[#d6e5d8] bg-white",
-      badgeClassName: "bg-transparent text-[#9a9188]",
-    },
-    {
-      id: "coffee",
-      title: "coffee corner",
-      badge: "apart",
-      items: coffeeItems,
-      className: "border-[#f0c084] bg-[#fffaf4]",
-      badgeClassName: "bg-transparent text-[#9a9188]",
-    },
-  ].filter((group) => group.items.length > 0);
 }
 
 function OrderCard({
@@ -199,7 +197,7 @@ function OrderCard({
     allReady &&
     (order.status === "nieuw" || order.status === "in_productie");
   const canDeliver = order.status === "klaar_voor_bediening";
-  const itemGroups = getOrderItemGroups(order);
+  const kitchenItems = sortedKitchenItems(order.items);
 
   function setItemStatus(itemId: string, ready: boolean) {
     updateOrderItemStatus(order.id, itemId, ready ? "klaar" : "niet_gestart");
@@ -208,27 +206,28 @@ function OrderCard({
 
   return (
     <article
-      className={`grid gap-2 rounded-lg border p-2 shadow-sm sm:gap-3 sm:p-3 ${orderTone(
+      className={`grid gap-1.5 rounded-lg border-2 p-1.5 shadow-sm sm:gap-2 sm:p-2 ${orderTone(
         order,
         now
       )}`}
     >
-      <header className="flex items-start justify-between gap-2 sm:gap-3">
-        <div>
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h2 className="text-xl font-black leading-none text-[#24551d] sm:text-2xl">
+      <header className="flex items-start justify-between gap-2 border-b border-[#d6e5d8] pb-1">
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-1.5">
+            <h2 className="truncate text-lg font-black leading-none text-[#24551d] sm:text-xl">
               {order.tableNumber}
             </h2>
-            <span className="rounded-md bg-[#ecf4ed] px-1.5 py-0.5 text-[0.6rem] font-black uppercase text-[#24551d] sm:px-2 sm:py-1 sm:text-xs">
-              {getLocationLabel(order.location)}
+            <span className="text-[0.64rem] font-semibold lowercase leading-none text-[#6b645b] sm:text-[0.7rem]">
+              ({getLocationLabel(order.location)})
             </span>
           </div>
-          <p className="mt-1 text-[0.68rem] font-bold text-[#6b645b] sm:text-xs">
-            {formatTime(order.createdAt)} · {elapsed} min geleden
+          <p className="mt-0.5 text-[0.64rem] font-semibold leading-tight text-[#6b645b] sm:text-[0.72rem]">
+            {formatTime(order.createdAt)} · {elapsed} min geleden ·{" "}
+            {countOrderItems(order.items)} st
           </p>
         </div>
         <span
-          className={`rounded-md px-1.5 py-0.5 text-[0.6rem] font-black uppercase sm:px-2 sm:py-1 sm:text-xs ${
+          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[0.56rem] font-black uppercase leading-none sm:text-[0.62rem] ${
             order.status === "klaar_voor_bediening"
               ? "bg-[#ef7d0a] text-white"
               : order.status === "geleverd"
@@ -242,71 +241,56 @@ function OrderCard({
         </span>
       </header>
 
-      <div className="grid gap-2">
-        {itemGroups.map((group) => (
-          <section
-            key={group.id}
-            className={`grid gap-1 rounded-lg border p-1.5 sm:gap-1.5 sm:p-2 ${group.className}`}
+      <div className="grid gap-1">
+        {kitchenItems.map((item) => (
+          <div
+            key={item.id}
+            className={`grid ${
+              archive
+                ? "grid-cols-[1.7rem_minmax(0,1fr)]"
+                : "grid-cols-[1.7rem_minmax(0,1fr)_2rem]"
+            } items-center gap-1 rounded-md border px-1.5 py-1 ${itemRowTone(
+              item
+            )}`}
           >
-            <div className="flex items-center justify-between gap-2">
-              <h3
-                className="font-thin italic lowercase leading-none tracking-normal text-[#9a9188]"
-                style={{ fontSize: "0.48rem", fontWeight: 200 }}
+            <span
+              className={`text-[0.68rem] font-black leading-none sm:text-xs ${itemQuantityTone(
+                item
+              )}`}
+            >
+              {item.quantity}x
+            </span>
+            <span className="min-w-0 break-words text-[0.72rem] font-bold leading-tight text-[#1a1815] sm:text-xs">
+              {itemLabel(item)}
+            </span>
+            {!archive && (
+              <button
+                type="button"
+                disabled={order.status === "klaar_voor_bediening"}
+                onClick={() => setItemStatus(item.id, item.status !== "klaar")}
+                className={`grid h-7 w-7 place-items-center rounded-md text-sm font-black leading-none transition active:scale-[0.98] disabled:opacity-60 ${
+                  item.status === "klaar"
+                    ? "bg-[#24551d] text-white"
+                    : "border border-[#d8d0c5] bg-white text-[#8b8278]"
+                }`}
+                aria-label={`${itemLabel(item)} klaar melden`}
               >
-                {group.title}
-              </h3>
-              <span
-                className={`px-0.5 font-thin italic lowercase leading-none ${group.badgeClassName}`}
-                style={{ fontSize: "0.46rem", fontWeight: 200 }}
-              >
-                {group.badge} · {countOrderItems(group.items)}
-              </span>
-            </div>
-
-            {group.items.map((item) => (
-              <div
-                key={item.id}
-                className="grid grid-cols-[1.6rem_minmax(0,1fr)_2.4rem] items-center gap-1.5 rounded-md border border-[#e8e4de] bg-white px-1.5 py-1.5 sm:grid-cols-[2.1rem_minmax(0,1fr)_3.2rem] sm:gap-2 sm:px-2 sm:py-2"
-              >
-                <span className="text-xs font-black text-[#ef7d0a] sm:text-sm">
-                  {item.quantity}x
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-xs font-black text-[#1a1815] sm:text-sm">
-                    {itemLabel(item)}
-                  </span>
-                  <span className="block text-[0.55rem] font-bold uppercase text-[#8b8278] sm:text-[0.64rem]">
-                    {categoryLabels[item.category as ProductCategoryId]}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  disabled={archive || order.status === "klaar_voor_bediening"}
-                  onClick={() => setItemStatus(item.id, item.status !== "klaar")}
-                  className={`min-h-9 rounded-md text-base font-black transition active:scale-[0.98] disabled:opacity-60 sm:min-h-11 sm:text-lg ${
-                    item.status === "klaar"
-                      ? "bg-[#24551d] text-white"
-                      : "border border-[#d8d0c5] bg-[#faf8f5] text-[#8b8278]"
-                  }`}
-                  aria-label={`${itemLabel(item)} klaar melden`}
-                >
-                  ✓
-                </button>
-              </div>
-            ))}
-          </section>
+                ✓
+              </button>
+            )}
+          </div>
         ))}
       </div>
 
       {order.note && (
-        <p className="rounded-md bg-[#fff8ef] px-2 py-1.5 text-xs font-bold text-[#6b3b16] sm:px-3 sm:py-2 sm:text-sm">
+        <p className="rounded-md bg-[#fff8ef] px-1.5 py-1 text-[0.68rem] font-bold leading-tight text-[#6b3b16] sm:text-xs">
           {order.note}
         </p>
       )}
 
       <footer
         className={
-          archive ? "grid gap-2" : "grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+          archive ? "grid gap-1" : "grid gap-1 sm:grid-cols-[1fr_1fr_auto]"
         }
       >
         {!archive && (
@@ -318,7 +302,7 @@ function OrderCard({
                 markOrderReady(order.id);
                 onRefresh();
               }}
-              className="min-h-10 rounded-md bg-[#ef7d0a] px-2 text-xs font-black text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-11 sm:px-3 sm:text-sm"
+              className="min-h-8 rounded-md bg-[#ef7d0a] px-2 text-[0.68rem] font-black leading-tight text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-9 sm:text-xs"
             >
               Klaar voor bediening
             </button>
@@ -329,7 +313,7 @@ function OrderCard({
                 markOrderDelivered(order.id);
                 onRefresh();
               }}
-              className="min-h-10 rounded-md bg-[#24551d] px-2 text-xs font-black text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-11 sm:px-3 sm:text-sm"
+              className="min-h-8 rounded-md bg-[#24551d] px-2 text-[0.68rem] font-black text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-9 sm:text-xs"
             >
               Geleverd
             </button>
@@ -339,7 +323,7 @@ function OrderCard({
                 cancelOrder(order.id);
                 onRefresh();
               }}
-              className="min-h-10 rounded-md border border-[#f0b4a8] bg-white px-2 text-xs font-black text-[#9d2f20] active:scale-[0.98] sm:min-h-11 sm:px-3 sm:text-sm"
+              className="min-h-8 rounded-md border border-[#f0b4a8] bg-white px-2 text-[0.68rem] font-black text-[#9d2f20] active:scale-[0.98] sm:min-h-9 sm:text-xs"
             >
               Annuleer
             </button>
@@ -347,7 +331,7 @@ function OrderCard({
         )}
         {archive && (
           <div className="grid grid-cols-[1fr_auto] items-center gap-2">
-            <div className="rounded-md bg-[#faf8f5] px-2 py-1.5 text-[0.68rem] font-bold text-[#6b645b] sm:px-3 sm:py-2 sm:text-xs">
+            <div className="rounded-md bg-[#faf8f5] px-2 py-1 text-[0.64rem] font-bold text-[#6b645b] sm:text-[0.7rem]">
               Eindtijd {formatTime(getArchivedOrderEnd(order))} · doorlooptijd{" "}
               {minutesBetween(order.createdAt, getArchivedOrderEnd(order))} min
             </div>
@@ -355,7 +339,7 @@ function OrderCard({
               type="button"
               disabled={isDeleting}
               onClick={() => onDelete?.(order)}
-              className="flex min-h-9 items-center justify-center rounded-md border border-[#f0b4a8] bg-white px-3 text-[#9d2f20] transition active:scale-[0.98] disabled:opacity-45"
+              className="flex min-h-8 items-center justify-center rounded-md border border-[#f0b4a8] bg-white px-2 text-[#9d2f20] transition active:scale-[0.98] disabled:opacity-45"
               aria-label={`Bon ${order.tableNumber} definitief verwijderen`}
               title="Definitief verwijderen"
             >
@@ -713,7 +697,7 @@ export default function VierdaagseProductieBedieningPage() {
           </section>
         )}
 
-        <section className="grid gap-2 sm:gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+        <section className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {visibleOrders.map((order) => (
             <OrderCard
               key={order.id}
