@@ -11,6 +11,7 @@ export type UserPermissions = Record<string, boolean>;
 export type UserRole =
   | "admin"
   | "manager"
+  | "management"
   | "winkel"
   | "bakkerij"
   | "ijs"
@@ -30,15 +31,17 @@ export type UserProfile = {
 
 export const USER_ROLES: { id: UserRole; label: string }[] = [
   { id: "admin", label: "Admin" },
-  { id: "manager", label: "Manager" },
+  { id: "manager", label: "Management" },
   { id: "winkel", label: "Winkel" },
+  { id: "ijs", label: "IJssalon" },
   { id: "bakkerij", label: "Bakkerij" },
-  { id: "ijs", label: "IJs" },
   { id: "medewerker", label: "Medewerker" },
 ];
 
 export const USER_STORES = [
   { id: "", label: "Alle winkels" },
+  { id: "winkel", label: "Winkel algemeen" },
+  { id: "ijs", label: "IJssalon algemeen" },
   { id: "lent", label: "Lent" },
   { id: "heyendaal", label: "Heyendaal" },
   { id: "daalseweg", label: "Daalseweg" },
@@ -48,6 +51,7 @@ export const USER_STORES = [
 ];
 
 export const PERMISSION_OPTIONS = [
+  { id: "app.all", label: "Alles bekijken en beheren" },
   { id: "management.view", label: "Management bekijken" },
   { id: "management.users", label: "Gebruikers beheren" },
   { id: "management.revenue", label: "Omzet beheren" },
@@ -55,7 +59,9 @@ export const PERMISSION_OPTIONS = [
   { id: "management.agenda", label: "Agenda beheren" },
   { id: "management.notes", label: "Notities beheren" },
   { id: "winkel.view", label: "Winkel bekijken" },
+  { id: "ijs.view", label: "IJssalon bekijken" },
   { id: "bakkerij.view", label: "Productie bekijken" },
+  { id: "bakkerij.data", label: "Bakkerij data bekijken" },
   { id: "recepturen.manage", label: "Recepturen beheren" },
   { id: "schoonmaak.manage", label: "Schoonmaak beheren" },
 ];

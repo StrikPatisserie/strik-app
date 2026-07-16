@@ -4,8 +4,10 @@ import { useActionState, useState } from "react";
 import {
   loginAction,
   requestPasswordResetAction,
+  signupAction,
   type AuthActionState,
 } from "../lib/auth/actions";
+import { SIGNUP_DEPARTMENTS } from "../lib/auth/access";
 
 const initialState: AuthActionState = {};
 
@@ -31,22 +33,27 @@ export default function LoginPanel({
 }: Readonly<{
   next: string;
   status?: string;
-  initialMode?: "login" | "reset";
+  initialMode?: "login" | "signup" | "reset";
 }>) {
-  const [mode, setMode] = useState<"login" | "reset">(initialMode);
+  const [mode, setMode] = useState<"login" | "signup" | "reset">(initialMode);
   const [loginState, loginFormAction, loginPending] = useActionState(
     loginAction,
+    initialState
+  );
+  const [signupState, signupFormAction, signupPending] = useActionState(
+    signupAction,
     initialState
   );
   const [resetState, resetFormAction, resetPending] = useActionState(
     requestPasswordResetAction,
     initialState
   );
-  const activeState = mode === "login" ? loginState : resetState;
+  const activeState =
+    mode === "login" ? loginState : mode === "signup" ? signupState : resetState;
 
   return (
     <section className="w-full max-w-md border border-[#e4ded5] bg-white/92 p-4 shadow-sm sm:p-5">
-      <div className="mb-4 grid grid-cols-2 gap-2 rounded-md bg-[#f4f0ea] p-1">
+      <div className="mb-4 grid grid-cols-3 gap-2 rounded-md bg-[#f4f0ea] p-1">
         <button
           type="button"
           onClick={() => setMode("login")}
@@ -57,6 +64,17 @@ export default function LoginPanel({
           }`}
         >
           Inloggen
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("signup")}
+          className={`h-10 rounded text-sm font-black ${
+            mode === "signup"
+              ? "bg-white text-[#1f4f35] shadow-sm"
+              : "text-[#7b7268]"
+          }`}
+        >
+          Aanmelden
         </button>
         <button
           type="button"
@@ -126,6 +144,76 @@ export default function LoginPanel({
             Ingelogd blijven
           </label>
           <SubmitButton pending={loginPending}>Open Strik Team App</SubmitButton>
+        </form>
+      ) : mode === "signup" ? (
+        <form action={signupFormAction} className="space-y-3">
+          <label className="block">
+            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+              Naam
+            </span>
+            <input
+              name="full_name"
+              autoComplete="name"
+              required
+              className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+              E-mail
+            </span>
+            <input
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+              Wachtwoord
+            </span>
+            <input
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              required
+              className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
+            />
+          </label>
+          <div>
+            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+              Afdeling
+            </span>
+            <div className="grid gap-2">
+              {SIGNUP_DEPARTMENTS.map((department) => (
+                <label
+                  key={department.id}
+                  className="flex cursor-pointer items-start gap-2 rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 py-2 text-sm font-bold text-[#4f4942]"
+                >
+                  <input
+                    name="department"
+                    type="radio"
+                    value={department.id}
+                    required
+                    defaultChecked={department.id === "winkel"}
+                    className="mt-1 h-4 w-4 accent-[#1f4f35]"
+                  />
+                  <span>
+                    <span className="block font-black text-[#1a1815]">
+                      {department.label}
+                    </span>
+                    <span className="block text-xs font-semibold text-[#7b7268]">
+                      {department.description}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <SubmitButton pending={signupPending}>Account aanmaken</SubmitButton>
         </form>
       ) : (
         <form action={resetFormAction} className="space-y-3">

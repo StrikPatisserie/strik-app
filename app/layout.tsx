@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import AppChrome from "./AppChrome";
+import { getCurrentProfile } from "./lib/auth/session";
 
 export const metadata: Metadata = {
   title: "Strik Team app",
@@ -22,15 +23,17 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const profile = await getCurrentProfile();
+
   return (
     <html lang="nl" className="bg-[#faf8f5]">
       <body className="min-h-dvh bg-[#faf8f5] text-[#1a1815]">
-        <AppChrome>{children}</AppChrome>
+        <AppChrome profile={profile}>{children}</AppChrome>
       </body>
     </html>
   );

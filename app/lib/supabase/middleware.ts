@@ -1,13 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./types";
+import type { UserProfile } from "./types";
 import { getSupabasePublicConfig } from "./config";
+import { canAccessPath, getDefaultPathForProfile } from "../auth/access";
 
 const PUBLIC_PATHS = new Set([
   "/login",
   "/reset-password",
   "/update-password",
   "/auth/callback",
+  "/auth/signout",
 ]);
 
 function isPublicPath(pathname: string) {
@@ -83,13 +86,23 @@ export async function updateSession(request: NextRequest) {
     const userId = claims.sub;
     const { data: profile } = await supabase
       .from("profiles")
-      .select("active")
+      .select("id,full_name,email,role,store,permissions,active,avatar_url,created_at")
       .eq("id", userId)
       .maybeSingle();
 
     if (profile && !profile.active) {
       await supabase.auth.signOut();
       return redirectToLogin(request, "inactive");
+    }
+
+    const currentProfile = profile as UserProfile | null;
+    if (!canAccessPath(currentProfile, pathname)) {
+      const fallbackPath = getDefaultPathForProfile(currentProfile);
+      const fallbackUrl = new URL(fallbackPath, request.url);
+
+      if (fallbackUrl.pathname !== pathname) {
+        return NextResponse.redirect(fallbackUrl);
+      }
     }
   }
 

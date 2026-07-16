@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import NewsUnreadBadge from "./NewsUnreadBadge";
 import { strikIcons } from "./StrikUI";
+import { filterAllowedItems } from "./lib/auth/access";
+import type { UserProfile } from "./lib/supabase/types";
 
 type NavItem = {
   href: string;
@@ -95,12 +97,18 @@ function isBakkerijWorkArea(pathname: string) {
   return pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
 }
 
-export default function WinkelSidebar() {
+export default function WinkelSidebar({
+  profile,
+}: Readonly<{ profile: UserProfile | null }>) {
   const pathname = usePathname();
   const showWinkelSubNav = isWinkelWorkArea(pathname);
   const showBakkerijSubNav = isBakkerijWorkArea(pathname);
-  const subNavItems: NavItem[] = showBakkerijSubNav ? bakkerijNavItems : winkelNavItems;
-  const showSubNav = showWinkelSubNav || showBakkerijSubNav;
+  const mainItems = filterAllowedItems(mainNavItems, profile);
+  const subNavItems: NavItem[] = filterAllowedItems(
+    showBakkerijSubNav ? bakkerijNavItems : winkelNavItems,
+    profile
+  );
+  const showSubNav = (showWinkelSubNav || showBakkerijSubNav) && subNavItems.length > 0;
 
   return (
     <>
@@ -112,7 +120,7 @@ export default function WinkelSidebar() {
         >
           <img src="/strik-logo.png" alt="Strik" className="h-9 w-9 object-contain" />
         </Link>
-        {mainNavItems.map((item) => {
+        {mainItems.map((item) => {
           const active =
             item.href === "/winkel"
               ? showWinkelSubNav

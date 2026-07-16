@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "../supabase/server";
 import { getSiteUrl } from "../supabase/config";
+import { getDefaultPathForRole, getSignupDepartment } from "./access";
 
 export type AuthActionState = {
   ok?: boolean;
@@ -112,6 +113,64 @@ export async function requestPasswordResetAction(
     message:
       "Als dit e-mailadres bekend is, staat er zo een resetlink in de mailbox.",
   };
+}
+
+export async function signupAction(
+  _state: AuthActionState,
+  formData: FormData
+): Promise<AuthActionState> {
+  const fullName = cleanText(formData.get("full_name"));
+  const email = cleanEmail(formData.get("email"));
+  const password = cleanText(formData.get("password"));
+  const department = getSignupDepartment(cleanText(formData.get("department")));
+
+  if (!fullName || !email || !password || !department) {
+    return { message: "Vul je naam, e-mail, wachtwoord en afdeling in." };
+  }
+
+  if (password.length < 8) {
+    return { message: "Gebruik minimaal 8 tekens voor je wachtwoord." };
+  }
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${getSiteUrl()}/auth/callback?next=${getDefaultPathForRole(department.role)}`,
+        data: {
+          full_name: fullName,
+          role: department.role,
+          store: department.store,
+          permissions: {},
+          active: true,
+        },
+      },
+    });
+
+    if (error) {
+      return { message: "Aanmelden lukt niet. Probeer het nog een keer." };
+    }
+
+    if (!data.session) {
+      return {
+        ok: true,
+        message:
+          "Je account is aangemaakt. Controleer eventueel je mailbox en log daarna in.",
+      };
+    }
+  } catch (error) {
+    return {
+      message:
+        error instanceof Error
+          ? error.message
+          : "Aanmelden lukt nu niet. Controleer de Supabase instellingen.",
+    };
+  }
+
+  revalidatePath("/", "layout");
+  redirect(getDefaultPathForRole(department.role));
 }
 
 export async function updatePasswordAction(

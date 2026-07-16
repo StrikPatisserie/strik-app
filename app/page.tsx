@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { strikIcons } from "./StrikUI";
 import StrikPageTitle from "./StrikPageTitle";
+import { filterAllowedItems } from "./lib/auth/access";
+import { getCurrentProfile } from "./lib/auth/session";
 
 const baseSections = [
   {
@@ -37,7 +39,10 @@ const baseSections = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const profile = await getCurrentProfile();
+  const visibleSections = filterAllowedItems(baseSections, profile);
+
   return (
     <main className="min-h-screen bg-[#faf8f5] px-4 py-5 text-[#1a1815] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-4 sm:space-y-5">
@@ -57,7 +62,7 @@ export default function Home() {
         </header>
 
         <section className="mx-auto grid w-full max-w-[calc(100vw-3.5rem)] grid-cols-1 gap-2 sm:max-w-none sm:grid-cols-2 sm:gap-3 xl:grid-cols-5">
-          {baseSections.map((section) => (
+          {visibleSections.map((section) => (
             <Link
               key={section.href}
               href={section.href}

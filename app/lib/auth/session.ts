@@ -4,12 +4,13 @@ import { redirect } from "next/navigation";
 import { createClient } from "../supabase/server";
 import { createAdminClient } from "../supabase/admin";
 import type { UserPermissions, UserProfile } from "../supabase/types";
+import { hasFullAccess } from "./access";
 
 const PROFILE_SELECT =
   "id,full_name,email,role,store,permissions,active,avatar_url,created_at";
 
 export function isAdminProfile(profile: UserProfile | null | undefined) {
-  return Boolean(profile?.active && profile.role === "admin");
+  return hasFullAccess(profile);
 }
 
 export async function getCurrentProfile() {

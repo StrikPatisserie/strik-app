@@ -13,8 +13,8 @@ export default function LogoutButton() {
 
     try {
       const supabase = createClient();
-      await supabase.auth.signOut();
       await fetch("/auth/signout", { method: "POST" });
+      await supabase.auth.signOut();
     } finally {
       router.replace("/login");
       router.refresh();

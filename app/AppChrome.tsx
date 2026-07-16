@@ -5,10 +5,12 @@ import BottomNav from "./BottomNav";
 import LogoutButton from "./LogoutButton";
 import NotificationMonitor from "./NotificationMonitor";
 import WinkelSidebar from "./WinkelSidebar";
+import type { UserProfile } from "./lib/supabase/types";
 
 export default function AppChrome({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+  profile,
+}: Readonly<{ children: React.ReactNode; profile: UserProfile | null }>) {
   const pathname = usePathname();
   const isAuthArea =
     pathname === "/login" ||
@@ -40,7 +42,7 @@ export default function AppChrome({
       <LogoutButton />
       <div className="min-h-dvh bg-[#faf8f5]">
         <div className="flex min-h-dvh flex-row">
-          <WinkelSidebar />
+          <WinkelSidebar profile={profile} />
 
           <main
             className={`flex-1 overflow-auto ${
@@ -53,7 +55,7 @@ export default function AppChrome({
           </main>
         </div>
       </div>
-      <BottomNav />
+      <BottomNav profile={profile} />
     </>
   );
 }

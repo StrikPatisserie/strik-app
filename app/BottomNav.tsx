@@ -4,6 +4,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { strikIcons } from "./StrikUI";
+import { filterAllowedItems } from "./lib/auth/access";
+import type { UserProfile } from "./lib/supabase/types";
 
 const items = [
   { href: "/", label: "Home", icon: "/strik-logo.png" },
@@ -13,13 +15,16 @@ const items = [
   { href: "/management", label: "Management", icon: strikIcons.management },
 ];
 
-export default function BottomNav() {
+export default function BottomNav({
+  profile,
+}: Readonly<{ profile: UserProfile | null }>) {
   const pathname = usePathname();
+  const visibleItems = filterAllowedItems(items, profile);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#e8e4de] bg-white/95 px-4 py-3 backdrop-blur-md md:hidden">
       <div className="mx-auto flex max-w-lg items-center justify-between gap-2">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const active =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
 

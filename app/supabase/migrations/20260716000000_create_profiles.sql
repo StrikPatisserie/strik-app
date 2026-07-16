@@ -29,7 +29,7 @@ as $$
     select 1
     from public.profiles
     where id = (select auth.uid())
-      and role = 'admin'
+      and role in ('admin', 'manager', 'management')
       and active = true
   );
 $$;
