@@ -23,6 +23,7 @@ const checks: WordPressCheck[] = [
   { id: "recepturen", label: "Recepturen", path: "/recepturen" },
   { id: "wedding-cakes", label: "Bruidstaarten", path: "/wedding-cakes" },
   { id: "team-agenda", label: "Strik Agenda", path: "/team-agenda" },
+  { id: "cupcake-orders", label: "Cupcake orders", path: "/cupcake-orders" },
   { id: "revenue", label: "Omzet", path: "/revenue" },
   { id: "notes", label: "Notities", path: "/notes", params: { winkel: "lent" } },
   { id: "news", label: "Nieuws", path: "/news" },

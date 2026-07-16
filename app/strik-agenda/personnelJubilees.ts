@@ -49,6 +49,15 @@ export function isImportantJubileeYear(years: number | undefined) {
     : false;
 }
 
+export function isCupcakeJubileeYear(years: number | undefined) {
+  return (
+    typeof years === "number" &&
+    Number.isInteger(years) &&
+    years >= 1 &&
+    !isImportantJubileeYear(years)
+  );
+}
+
 function parseDate(value: string | undefined) {
   if (!value) return null;
 
@@ -111,7 +120,7 @@ export function getPersonnelEventOccurrenceDate(
   return occurrence;
 }
 
-function getAnniversaryYears(event: TeamAgendaEvent) {
+export function getAnniversaryYears(event: TeamAgendaEvent) {
   if (typeof event.anniversaryYears === "number") {
     return event.anniversaryYears;
   }

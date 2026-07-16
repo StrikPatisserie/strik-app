@@ -112,6 +112,7 @@ export type PersonnelEventType = "birthday" | "anniversary";
 export type PersonnelAgendaEvent = {
   id: string;
   type: PersonnelEventType;
+  employeeId?: string;
   employeeName: string;
   title: string;
   date: string;
@@ -123,6 +124,16 @@ export type PersonnelAgendaEvent = {
   startDate?: string;
   recurringYearly?: boolean;
   source: "tamigo";
+};
+
+export type PersonnelCupcakeDeliveryShift = {
+  shop: ShopName;
+  departmentName: string;
+  date: string;
+  dateLabel: string;
+  startTime: string;
+  endTime: string;
+  timeLabel: string;
 };
 
 export type PersonnelAgenda = {
@@ -1006,6 +1017,97 @@ async function fetchLeaveForDepartment(
   return getArrayRecords(data).map(toTamigoLeavePerDay);
 }
 
+function normalizeEmployeeMatchValue(value: string | undefined) {
+  return textFrom(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function isShiftForEmployee(
+  shift: TamigoShift,
+  employeeId: string | undefined,
+  employeeName: string
+) {
+  if (employeeId && textFrom(shift.EmployeeId) === employeeId) return true;
+
+  return (
+    normalizeEmployeeMatchValue(shift.EmployeeName) ===
+    normalizeEmployeeMatchValue(employeeName)
+  );
+}
+
+function toCupcakeDeliveryShift(
+  department: ShopDepartment,
+  shift: TamigoShift
+): PersonnelCupcakeDeliveryShift | null {
+  const shiftTime = createShiftTime(shift);
+  const date = getShiftDate(shift);
+  if (!shiftTime || !date) return null;
+
+  const iceShop =
+    department.departmentId === ICE_LOKET_DEPARTMENT.departmentId
+      ? getIceShiftShop(shift)
+      : null;
+  const shop = iceShop || department.shop;
+
+  return {
+    shop,
+    departmentName: department.departmentName,
+    date,
+    dateLabel: formatDateLabel(date, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    }),
+    startTime: shiftTime.startTime,
+    endTime: shiftTime.endTime,
+    timeLabel: shiftTime.timeLabel,
+  };
+}
+
+export async function getLastEmployeeShiftOnOrBeforeDate(
+  employeeId: string | undefined,
+  employeeName: string,
+  targetDate: string,
+  lookbackDays = 21
+): Promise<PersonnelCupcakeDeliveryShift | null> {
+  const from = addDaysToDateString(targetDate, -Math.max(1, lookbackDays));
+  const to = addDaysToDateString(targetDate, 1);
+  const departments = [...SHOP_DEPARTMENTS, ICE_LOKET_DEPARTMENT];
+  const departmentShifts = await Promise.all(
+    departments.map(async (department) => ({
+      department,
+      shifts: await fetchShiftsForDepartment(department, from, to),
+    }))
+  );
+
+  return departmentShifts
+    .flatMap(({ department, shifts }) =>
+      shifts.flatMap((shift): PersonnelCupcakeDeliveryShift[] => {
+        const date = getShiftDate(shift);
+        if (
+          !date ||
+          date > targetDate ||
+          isAbsenceShift(shift) ||
+          !isShiftForEmployee(shift, employeeId, employeeName)
+        ) {
+          return [];
+        }
+
+        const deliveryShift = toCupcakeDeliveryShift(department, shift);
+        return deliveryShift ? [deliveryShift] : [];
+      })
+    )
+    .sort((first, second) => {
+      const dateDiff = second.date.localeCompare(first.date);
+      if (dateDiff !== 0) return dateDiff;
+
+      return second.startTime.localeCompare(first.startTime);
+    })[0] || null;
+}
+
 function toTodayStaffPersonKey(shift: TamigoShift) {
   return textFrom(shift.EmployeeId) || textFrom(shift.EmployeeName);
 }
@@ -1553,6 +1655,7 @@ function createPersonnelEvent(
   return {
     id: `tamigo-${type}-${baseId}`,
     type,
+    employeeId: employee.EmployeeId,
     employeeName,
     title:
       type === "birthday"
@@ -1615,6 +1718,7 @@ function createHalfYearPersonnelEvent(
   return {
     id: `tamigo-anniversary-half-${baseId}`,
     type: "anniversary",
+    employeeId: employee.EmployeeId,
     employeeName,
     title: `${employeeName} 12,5 jaar bij Strik`,
     date: occurrenceDate,
@@ -1936,6 +2040,7 @@ export function toTeamAgendaEvents(events: PersonnelAgendaEvent[]) {
       source: "tamigo",
       createdAt: now,
       updatedAt: now,
+      employeeId: event.employeeId,
       employeeName: event.employeeName,
       startDate: event.startDate,
       occurrenceDate: event.occurrenceDate,

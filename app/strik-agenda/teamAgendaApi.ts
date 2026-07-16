@@ -38,6 +38,7 @@ export type TeamAgendaEvent = {
   source: TeamAgendaEventSource;
   createdAt: string;
   updatedAt?: string;
+  employeeId?: string;
   employeeName?: string;
   startDate?: string;
   occurrenceDate?: string;
@@ -142,6 +143,7 @@ function normalizeEvent(value: unknown): TeamAgendaEvent | null {
     source: normalizeSource(value.source),
     createdAt: textFrom(value.createdAt) || new Date().toISOString(),
     updatedAt: textFrom(value.updatedAt) || undefined,
+    employeeId: textFrom(value.employeeId).trim() || undefined,
     employeeName: textFrom(value.employeeName).trim() || undefined,
     startDate: textFrom(value.startDate).trim() || undefined,
     occurrenceDate: textFrom(value.occurrenceDate).trim() || undefined,

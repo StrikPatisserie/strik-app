@@ -57,10 +57,10 @@ function getAlertKey(alerts: PersonnelJubileeAlert[]) {
 }
 
 function alertTone(alert: PersonnelJubileeAlert) {
-  if (alert.level === "major") return "border-[#ef5737] bg-[#fff4ef]";
-  if (alert.level === "medium") return "border-[#f1d28f] bg-[#fff9e8]";
+  if (alert.level === "major") return "border-white/35 bg-white text-[#8f2f1d]";
+  if (alert.level === "medium") return "border-white/30 bg-white/90 text-[#5f4810]";
 
-  return "border-[#c3d3bc] bg-[#f6faf4]";
+  return "border-white/30 bg-white/90 text-[#24551d]";
 }
 
 export default function JubileeReminderPanel() {
@@ -125,11 +125,11 @@ export default function JubileeReminderPanel() {
 
   if (displayMode === "compact") {
     return (
-      <section className="rounded-lg border border-[#ef5737]/35 bg-[#fff4ef] px-3 py-2 shadow-sm">
+      <section className="rounded-lg border border-[#ef5737] bg-[#ef5737] px-3 py-2 text-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link
             href="/management/agenda"
-            className="min-w-0 flex-1 text-sm font-black leading-tight text-[#1a1815]"
+            className="min-w-0 flex-1 text-xs font-black uppercase leading-tight"
           >
             {alerts.length} jubileum-melding{alerts.length === 1 ? "" : "en"}{" "}
             open
@@ -137,7 +137,7 @@ export default function JubileeReminderPanel() {
           <button
             type="button"
             onClick={acknowledge}
-            className="rounded-md bg-[#24551d] px-3 py-1.5 text-xs font-black text-white active:scale-[0.98]"
+            className="rounded-md bg-white px-3 py-1.5 text-xs font-black text-[#24551d] active:scale-[0.98]"
           >
             Genoteerd
           </button>
@@ -147,16 +147,16 @@ export default function JubileeReminderPanel() {
   }
 
   return (
-    <section className="rounded-xl border border-[#ef5737]/40 bg-white p-3 shadow-sm">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <section className="rounded-lg border border-[#ef5737] bg-[#ef5737] p-3 text-white shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[0.68rem] font-black uppercase text-[#ef5737]">
+          <p className="text-[0.62rem] font-black uppercase leading-tight text-white/78">
             Jubileum voorbereiden
           </p>
-          <h2 className="mt-0.5 text-base font-black leading-tight text-[#1a1815] sm:text-lg">
+          <h2 className="mt-0.5 text-sm font-black leading-tight sm:text-base">
             {primaryAlert.event.title}
           </h2>
-          <p className="mt-1 text-xs font-bold text-[#6b645b] sm:text-sm">
+          <p className="mt-0.5 text-[0.72rem] font-bold leading-tight text-white/82 sm:text-xs">
             {formatAlertDate(primaryAlert.occurrenceDate)} ·{" "}
             {formatDaysUntil(primaryAlert.daysUntil)}
           </p>
@@ -164,21 +164,21 @@ export default function JubileeReminderPanel() {
         <div className="flex shrink-0 gap-2">
           <Link
             href="/management/agenda"
-            className="rounded-md bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#1a1815]"
+            className="rounded-md bg-white/18 px-3 py-2 text-xs font-black text-white"
           >
             Agenda
           </Link>
           <button
             type="button"
             onClick={acknowledge}
-            className="rounded-md bg-[#24551d] px-3 py-2 text-xs font-black text-white active:scale-[0.98]"
+            className="rounded-md bg-white px-3 py-2 text-xs font-black text-[#24551d] active:scale-[0.98]"
           >
             Genoteerd
           </button>
         </div>
       </div>
 
-      <div className="mt-3 grid gap-1.5">
+      <div className="mt-2 grid gap-1.5">
         {alerts.map((alert) => (
           <div
             key={alert.id}
@@ -186,13 +186,13 @@ export default function JubileeReminderPanel() {
               alert
             )}`}
           >
-            <span className="text-[0.68rem] font-black capitalize text-[#1a1815]/70">
+            <span className="text-[0.66rem] font-black capitalize">
               {formatAlertDate(alert.occurrenceDate)}
             </span>
-            <span className="min-w-0 truncate text-xs font-black text-[#1a1815] sm:text-sm">
+            <span className="min-w-0 truncate text-xs font-black">
               {alert.event.title}
             </span>
-            <span className="text-[0.68rem] font-black text-[#ef5737]">
+            <span className="text-[0.66rem] font-black">
               {formatDaysUntil(alert.daysUntil)}
             </span>
           </div>

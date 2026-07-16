@@ -4,6 +4,7 @@ import {
   StrikShell,
   strikIcons,
 } from "../StrikUI";
+import CupcakeAutoOrderPanel from "./CupcakeAutoOrderPanel";
 import JubileeReminderPanel from "./JubileeReminderPanel";
 import WordPressStatusPanel from "./WordPressStatusPanel";
 
@@ -65,6 +66,7 @@ export default function ManagementPage() {
 
       <div className="space-y-4">
         <JubileeReminderPanel />
+        <CupcakeAutoOrderPanel />
         <WordPressStatusPanel />
         {topItems.map((item) => (
           <StrikActionCard key={item.href} {...item} />
