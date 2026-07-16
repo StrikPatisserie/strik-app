@@ -24,29 +24,25 @@ export default function VierdaagseKassaToolPage() {
         kicker="Vierdaagse"
       />
 
-      <section className="mx-auto grid max-w-3xl grid-cols-2 gap-6 pt-6 sm:gap-10 sm:pt-10">
+      <section className="mt-8 grid w-full max-w-[34rem] grid-cols-2 gap-1 overflow-hidden rounded-2xl bg-white p-1 shadow-sm sm:mt-10">
         {modeCards.map((card) => (
           <Link
             key={card.href}
             href={card.href}
-            className="group grid justify-items-center gap-3 text-center transition active:scale-[0.98] sm:gap-4"
+            className={`group grid aspect-square place-items-center px-3 py-4 text-center transition active:scale-[0.98] ${
+              card.tone === "green" ? "bg-[#24551d]" : "bg-[#ef7d0a]"
+            }`}
             aria-label={`${card.title} openen`}
           >
-            <span
-              className={`flex aspect-square w-full max-w-[10.5rem] items-center justify-center rounded-full text-white shadow-lg ring-4 ring-white transition group-hover:scale-[1.03] group-hover:shadow-xl sm:max-w-[14rem] ${
-                card.tone === "green"
-                  ? "bg-[#24551d] shadow-[#24551d]/20"
-                  : "bg-[#ef7d0a] shadow-[#ef7d0a]/20"
-              }`}
-            >
+            <span className="grid justify-items-center gap-3 text-white transition group-hover:scale-[1.03]">
               <img
                 src={card.icon}
                 alt=""
-                className="h-[58%] w-[58%] object-contain brightness-0 invert"
+                className="h-16 w-16 object-contain brightness-0 invert sm:h-20 sm:w-20"
               />
-            </span>
-            <span className="text-sm font-black uppercase tracking-normal text-[#1a1815] sm:text-base">
-              {card.title}
+              <span className="max-w-36 text-sm font-black uppercase leading-tight tracking-normal sm:text-base">
+                {card.title}
+              </span>
             </span>
           </Link>
         ))}
