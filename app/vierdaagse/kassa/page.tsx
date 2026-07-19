@@ -120,6 +120,63 @@ function detailOptionsForProduct(product?: VierdaagseProduct) {
     : product?.detailOptions || [];
 }
 
+function moveOneDraftLineToDetail(
+  lines: DraftLine[],
+  lineKey: string,
+  detail: string
+) {
+  const cleanDetail = detail.trim();
+  const sourceIndex = lines.findIndex((line) => line.key === lineKey);
+  if (sourceIndex < 0) return lines;
+
+  const sourceLine = lines[sourceIndex];
+  const nextKey = createDraftKey(sourceLine.productId, cleanDetail);
+  if (nextKey === sourceLine.key) {
+    return lines.map((line, index) =>
+      index === sourceIndex
+        ? { ...line, detail: cleanDetail || undefined }
+        : line
+    );
+  }
+
+  const nextLine: DraftLine = {
+    ...sourceLine,
+    key: nextKey,
+    quantity: 1,
+    detail: cleanDetail || undefined,
+  };
+  const targetIndex = lines.findIndex((line) => line.key === nextKey);
+
+  if (sourceLine.quantity <= 1) {
+    if (targetIndex >= 0) {
+      return lines.reduce<DraftLine[]>((nextLines, line, index) => {
+        if (index === sourceIndex) return nextLines;
+        nextLines.push(
+          index === targetIndex ? { ...line, quantity: line.quantity + 1 } : line
+        );
+        return nextLines;
+      }, []);
+    }
+
+    return lines.map((line, index) => (index === sourceIndex ? nextLine : line));
+  }
+
+  const nextLines: DraftLine[] = [];
+  lines.forEach((line, index) => {
+    if (index === sourceIndex) {
+      nextLines.push({ ...line, quantity: line.quantity - 1 });
+      if (targetIndex < 0) nextLines.push(nextLine);
+      return;
+    }
+
+    nextLines.push(
+      index === targetIndex ? { ...line, quantity: line.quantity + 1 } : line
+    );
+  });
+
+  return nextLines;
+}
+
 export default function VierdaagseKassaPage() {
   const [selectedTable, setSelectedTable] = useState<VierdaagseTable | null>(
     null
@@ -362,15 +419,13 @@ export default function VierdaagseKassaPage() {
 
   function updateDraftLineDetail(lineKey: string, detail: string) {
     const cleanDetail = detail.trim();
+    const line = draftLines.find((currentLine) => currentLine.key === lineKey);
+    if (!line) return;
+
+    const nextKey = createDraftKey(line.productId, cleanDetail);
+    setLineOptionsKey(nextKey);
     setDraftLines((currentLines) =>
-      currentLines.map((line) =>
-        line.key === lineKey
-          ? {
-              ...line,
-              detail: cleanDetail || undefined,
-            }
-          : line
-      )
+      moveOneDraftLineToDetail(currentLines, lineKey, cleanDetail)
     );
   }
 
@@ -389,17 +444,12 @@ export default function VierdaagseKassaPage() {
       ? parts.filter((part) => part.toLowerCase() !== option.toLowerCase())
       : [...parts, option];
     const detail = nextParts.join(", ");
+    const nextKey = createDraftKey(line.productId, detail);
 
     setLineCustomDetail(detail);
+    setLineOptionsKey(nextKey);
     setDraftLines((currentLines) =>
-      currentLines.map((currentLine) =>
-        currentLine.key === lineKey
-          ? {
-              ...currentLine,
-              detail: detail || undefined,
-            }
-          : currentLine
-      )
+      moveOneDraftLineToDetail(currentLines, lineKey, detail)
     );
   }
 
@@ -949,7 +999,8 @@ export default function VierdaagseKassaPage() {
                 <div className="grid gap-1.5 rounded-lg border border-[#ef7d0a] bg-[#fff8ef] p-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-xs font-black text-[#24551d]">
-                      Opties voor {activeLine.name}
+                      Opties voor {activeLine.quantity > 1 ? "1x " : ""}
+                      {activeLine.name}
                     </p>
                     <button
                       type="button"
