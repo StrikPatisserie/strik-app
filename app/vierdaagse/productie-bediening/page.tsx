@@ -330,14 +330,35 @@ function OrderCard({
               ({getLocationLabel(order.location)})
             </span>
           </div>
-          <p
-            className={`text-[0.62rem] font-semibold leading-tight sm:text-[0.68rem] ${
-              readyForService ? "text-white/75" : "text-[#6b645b]"
-            }`}
-          >
-            {formatTime(order.createdAt)} · {elapsed} min geleden ·{" "}
-            {countOrderItems(order.items)} st
-          </p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+            <span
+              className={`text-[0.62rem] font-semibold leading-none sm:text-[0.68rem] ${
+                readyForService ? "text-white/75" : "text-[#6b645b]"
+              }`}
+            >
+              {formatTime(order.createdAt)}
+            </span>
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-[0.78rem] font-black leading-none sm:text-[0.88rem] ${
+                readyForService
+                  ? "bg-white text-[#24551d]"
+                  : elapsed >= 10
+                    ? "bg-[#d8422f] text-white"
+                    : elapsed >= 8
+                      ? "bg-[#ef7d0a] text-white"
+                      : "bg-[#24551d] text-white"
+              }`}
+            >
+              {elapsed} min
+            </span>
+            <span
+              className={`text-[0.62rem] font-semibold leading-none sm:text-[0.68rem] ${
+                readyForService ? "text-white/75" : "text-[#6b645b]"
+              }`}
+            >
+              geleden · {countOrderItems(order.items)} st
+            </span>
+          </div>
         </div>
         <div className="grid shrink-0 justify-items-end gap-1">
           <span
