@@ -13,7 +13,21 @@ const items = [
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
   { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
+  { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
 ];
+
+function isActivePath(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  if (href === "/vierdaagse") {
+    return (
+      pathname === "/vierdaagse" ||
+      pathname.startsWith("/vierdaagse/") ||
+      pathname === "/kraamrekenaar"
+    );
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export default function BottomNav({
   profile,
@@ -25,8 +39,7 @@ export default function BottomNav({
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#e8e4de] bg-white/95 px-4 py-3 backdrop-blur-md md:hidden">
       <div className="mx-auto flex max-w-lg items-center justify-between gap-2">
         {visibleItems.map((item) => {
-          const active =
-            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const active = isActivePath(pathname, item.href);
 
           return (
             <Link

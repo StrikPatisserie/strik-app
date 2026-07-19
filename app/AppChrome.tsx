@@ -30,7 +30,9 @@ export default function AppChrome({
     pathname.startsWith("/schoonmaak/");
   const isWorkArea = isWinkelWorkArea || isBakeryWorkArea;
   const isVierdaagseWorkArea =
-    pathname === "/vierdaagse" || pathname.startsWith("/vierdaagse/");
+    pathname === "/vierdaagse" ||
+    pathname.startsWith("/vierdaagse/") ||
+    pathname === "/kraamrekenaar";
 
   if (isAuthArea) {
     return <>{children}</>;

@@ -39,6 +39,8 @@ const baseSections = [
   },
 ];
 
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const profile = await getCurrentProfile();
   const visibleSections = filterAllowedItems(baseSections, profile);

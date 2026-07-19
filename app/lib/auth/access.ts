@@ -25,11 +25,21 @@ export const BAKERY_DEPARTMENT_PERMISSION_OPTIONS = [
   { id: "bakkerij.ijs_chocolade", label: "Bakkerij IJs & chocolade" },
 ];
 
+export const VIERDAAGSE_PERMISSION_OPTIONS = [
+  { id: "vierdaagse.view", label: "Vierdaagse alles" },
+  { id: "vierdaagse.kraam", label: "Vierdaagse rekentool kraam" },
+  { id: "vierdaagse.kassa", label: "Vierdaagse kassa" },
+  { id: "vierdaagse.productie", label: "Vierdaagse keuken / bediening" },
+];
+
 const FULL_ACCESS_ROLES = new Set(["admin", "manager", "management"]);
 const BAKERY_DEPARTMENT_PERMISSION_IDS = BAKERY_DEPARTMENT_PERMISSION_OPTIONS.map(
   (permission) => permission.id
 );
 const WINKEL_STORE_PERMISSION_IDS = WINKEL_STORE_PERMISSION_OPTIONS.map(
+  (permission) => permission.id
+);
+const VIERDAAGSE_PERMISSION_IDS = VIERDAAGSE_PERMISSION_OPTIONS.map(
   (permission) => permission.id
 );
 
@@ -207,6 +217,14 @@ function isBakkerijPath(pathname: string) {
   return pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
 }
 
+function isVierdaagsePath(pathname: string) {
+  return (
+    pathname === "/vierdaagse" ||
+    pathname.startsWith("/vierdaagse/") ||
+    pathname === "/kraamrekenaar"
+  );
+}
+
 function isBakkerijDataPath(pathname: string) {
   return pathname === "/bakkerij/management" || pathname.startsWith("/bakkerij/management/");
 }
@@ -280,6 +298,45 @@ export function canAccessWeddingCakes(profile: UserProfile | null | undefined) {
   );
 }
 
+function hasAnyVierdaagseAccess(profile: UserProfile | null | undefined) {
+  return hasAnyPermission(profile, VIERDAAGSE_PERMISSION_IDS);
+}
+
+export function canAccessVierdaagsePath(
+  profile: UserProfile | null | undefined,
+  pathname: string
+) {
+  if (hasFullAccess(profile)) return true;
+  if (!profile?.active) return false;
+
+  if (hasPermission(profile, "vierdaagse.view")) return true;
+
+  if (pathname === "/vierdaagse") {
+    return hasAnyVierdaagseAccess(profile);
+  }
+
+  if (pathname === "/kraamrekenaar") {
+    return hasPermission(profile, "vierdaagse.kraam");
+  }
+
+  if (pathname === "/vierdaagse/kassa-tool") {
+    return (
+      hasPermission(profile, "vierdaagse.kassa") ||
+      hasPermission(profile, "vierdaagse.productie")
+    );
+  }
+
+  if (pathname === "/vierdaagse/kassa") {
+    return hasPermission(profile, "vierdaagse.kassa");
+  }
+
+  if (pathname === "/vierdaagse/productie-bediening") {
+    return hasPermission(profile, "vierdaagse.productie");
+  }
+
+  return false;
+}
+
 export function canAccessPath(
   profile: UserProfile | null | undefined,
   pathname: string
@@ -300,6 +357,10 @@ export function canAccessPath(
 
   if (isIjsPath(pathname)) {
     return role === "ijs" || role === "ijssalon" || hasPermission(profile, "ijs.view");
+  }
+
+  if (isVierdaagsePath(pathname)) {
+    return canAccessVierdaagsePath(profile, pathname);
   }
 
   if (isBakkerijPath(pathname)) {
@@ -327,7 +388,7 @@ export function canAccessPath(
 }
 
 export function filterAllowedItems<T extends { href: string }>(
-  items: T[],
+  items: readonly T[],
   profile: UserProfile | null | undefined
 ) {
   return items.filter((item) => canAccessPath(profile, item.href));

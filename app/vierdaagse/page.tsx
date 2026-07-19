@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { StrikPageHeader, StrikShell } from "../StrikUI";
+import { filterAllowedItems } from "../lib/auth/access";
+import { getCurrentProfile } from "../lib/auth/session";
 
 const vierdaagseCards = [
   {
@@ -16,7 +18,12 @@ const vierdaagseCards = [
   },
 ] as const;
 
-export default function VierdaagsePage() {
+export const dynamic = "force-dynamic";
+
+export default async function VierdaagsePage() {
+  const profile = await getCurrentProfile();
+  const visibleCards = filterAllowedItems(vierdaagseCards, profile);
+
   return (
     <StrikShell wide>
       <StrikPageHeader
@@ -26,7 +33,7 @@ export default function VierdaagsePage() {
       />
 
       <section className="mt-8 grid w-full max-w-[34rem] grid-cols-2 gap-1 overflow-hidden rounded-2xl bg-white p-1 shadow-sm sm:mt-10">
-        {vierdaagseCards.map((card) => (
+        {visibleCards.map((card) => (
           <Link
             key={card.href}
             href={card.href}

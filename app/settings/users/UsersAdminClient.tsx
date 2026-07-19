@@ -17,6 +17,7 @@ import {
 } from "../../lib/supabase/types";
 import {
   BAKERY_DEPARTMENT_PERMISSION_OPTIONS,
+  VIERDAAGSE_PERMISSION_OPTIONS,
   WINKEL_STORE_PERMISSION_OPTIONS,
 } from "../../lib/auth/access";
 
@@ -127,6 +128,9 @@ const basePermissionOptions = PERMISSION_OPTIONS.filter(
     !BAKERY_DEPARTMENT_PERMISSION_OPTIONS.some(
       (option) => option.id === permission.id
     ) &&
+    !VIERDAAGSE_PERMISSION_OPTIONS.some(
+      (option) => option.id === permission.id
+    ) &&
     permission.id !== "bakkerij.data" &&
     permission.id !== "bruidstaarten.view"
 );
@@ -192,6 +196,12 @@ function UserFields({ profile }: Readonly<{ profile?: UserProfile }>) {
             title="Winkels zichtbaar"
             description="Geen vinkjes betekent: winkel-account ziet standaard alle winkels. Zet je hier vinkjes, dan ziet diegene alleen die winkels."
             options={WINKEL_STORE_PERMISSION_OPTIONS}
+            permissions={profile?.permissions}
+          />
+          <PermissionGrid
+            title="Vierdaagse"
+            description="Vierdaagse alles geeft toegang tot alle Vierdaagse kopjes. Anders kun je de kraam, kassa en keuken/bediening los aanvinken."
+            options={VIERDAAGSE_PERMISSION_OPTIONS}
             permissions={profile?.permissions}
           />
           <PermissionGrid

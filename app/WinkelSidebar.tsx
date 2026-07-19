@@ -21,6 +21,7 @@ const mainNavItems = [
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
   { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
+  { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
 ];
 
 const winkelNavItems = [
@@ -97,12 +98,21 @@ function isBakkerijWorkArea(pathname: string) {
   return pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
 }
 
+function isVierdaagseWorkArea(pathname: string) {
+  return (
+    pathname === "/vierdaagse" ||
+    pathname.startsWith("/vierdaagse/") ||
+    pathname === "/kraamrekenaar"
+  );
+}
+
 export default function WinkelSidebar({
   profile,
 }: Readonly<{ profile: UserProfile | null }>) {
   const pathname = usePathname();
   const showWinkelSubNav = isWinkelWorkArea(pathname);
   const showBakkerijSubNav = isBakkerijWorkArea(pathname);
+  const showVierdaagseNav = isVierdaagseWorkArea(pathname);
   const mainItems = filterAllowedItems(mainNavItems, profile);
   const subNavItems: NavItem[] = filterAllowedItems(
     showBakkerijSubNav ? bakkerijNavItems : winkelNavItems,
@@ -121,12 +131,10 @@ export default function WinkelSidebar({
           <img src="/strik-logo.png" alt="Strik" className="h-9 w-9 object-contain" />
         </Link>
         {mainItems.map((item) => {
-          const active =
-            item.href === "/winkel"
-              ? showWinkelSubNav
-              : item.href === "/bakkerij"
-                ? showBakkerijSubNav
-              : isActivePath(pathname, item.href);
+          let active = isActivePath(pathname, item.href);
+          if (item.href === "/winkel") active = showWinkelSubNav;
+          if (item.href === "/bakkerij") active = showBakkerijSubNav;
+          if (item.href === "/vierdaagse") active = showVierdaagseNav;
 
           return (
             <Link
