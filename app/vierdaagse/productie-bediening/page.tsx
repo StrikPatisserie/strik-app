@@ -176,6 +176,22 @@ function countOrderItems(items: VierdaagseOrder["items"]) {
   return items.reduce((total, item) => total + item.quantity, 0);
 }
 
+function sortActiveKitchenOrders(orders: VierdaagseOrder[]) {
+  return [...orders].sort((firstOrder, secondOrder) => {
+    const firstNeedsMaking = isOrderStillBeingMade(firstOrder) ? 0 : 1;
+    const secondNeedsMaking = isOrderStillBeingMade(secondOrder) ? 0 : 1;
+
+    if (firstNeedsMaking !== secondNeedsMaking) {
+      return firstNeedsMaking - secondNeedsMaking;
+    }
+
+    return (
+      new Date(firstOrder.createdAt).getTime() -
+      new Date(secondOrder.createdAt).getTime()
+    );
+  });
+}
+
 function isDrinkItem(item: VierdaagseOrder["items"][number]) {
   return item.category === "koffie-thee" || item.category === "fris-koud";
 }
@@ -273,13 +289,13 @@ function OrderCard({
 
   return (
     <article
-      className={`grid gap-1.5 rounded-lg border-2 p-1.5 shadow-sm sm:gap-2 sm:p-2 ${orderTone(
+      className={`grid gap-1 rounded-md border-2 p-1 shadow-sm sm:gap-1.5 sm:p-1.5 ${orderTone(
         order,
         now
       )}`}
     >
       {readyForService && (
-        <div className="flex items-center justify-between gap-2 rounded-md bg-white/10 px-2 py-1 text-white">
+        <div className="flex items-center justify-between gap-2 rounded-md bg-white/10 px-1.5 py-0.5 text-white">
           <p className="text-[0.78rem] font-black uppercase leading-none sm:text-sm">
             Klaar voor levering
           </p>
@@ -287,7 +303,7 @@ function OrderCard({
         </div>
       )}
       <header
-        className={`flex items-start justify-between gap-2 border-b pb-1 ${
+        className={`flex items-start justify-between gap-1.5 border-b pb-0.5 ${
           readyForService ? "border-white/20" : "border-[#d6e5d8]"
         }`}
       >
@@ -309,7 +325,7 @@ function OrderCard({
             </span>
           </div>
           <p
-            className={`mt-0.5 text-[0.64rem] font-semibold leading-tight sm:text-[0.72rem] ${
+            className={`text-[0.62rem] font-semibold leading-tight sm:text-[0.68rem] ${
               readyForService ? "text-white/75" : "text-[#6b645b]"
             }`}
           >
@@ -366,15 +382,15 @@ function OrderCard({
             key={item.id}
             className={`grid ${
               archive
-                ? "grid-cols-[1.7rem_minmax(0,1fr)]"
-                : "grid-cols-[1.7rem_minmax(0,1fr)_2rem]"
-            } items-center gap-1 rounded-md border px-1.5 py-1 ${itemRowTone(
+                ? "grid-cols-[2.5rem_minmax(0,1fr)]"
+                : "grid-cols-[2.5rem_minmax(0,1fr)_1.8rem]"
+            } items-center gap-0.5 rounded-md border px-1 py-0.5 ${itemRowTone(
               item,
               readyForService
             )}`}
           >
             <span
-              className={`text-[0.68rem] font-black leading-none sm:text-xs ${itemQuantityTone(
+              className={`text-base font-black leading-none sm:text-lg ${itemQuantityTone(
                 item,
                 readyForService
               )}`}
@@ -382,7 +398,7 @@ function OrderCard({
               {item.quantity}x
             </span>
             <span
-              className={`min-w-0 break-words text-[0.72rem] font-bold leading-tight sm:text-xs ${
+              className={`min-w-0 break-words text-xs font-bold leading-tight sm:text-sm ${
                 readyForService ? "text-white" : "text-[#1a1815]"
               }`}
             >
@@ -392,7 +408,7 @@ function OrderCard({
               <button
                 type="button"
                 onClick={() => setItemStatus(item.id, item.status !== "klaar")}
-                className={`grid h-7 w-7 place-items-center rounded-md text-sm font-black leading-none transition active:scale-[0.98] ${
+                className={`grid h-6 w-6 place-items-center rounded-md text-sm font-black leading-none transition active:scale-[0.98] ${
                   item.status === "klaar"
                     ? readyForService
                       ? "bg-white text-[#24551d]"
@@ -436,7 +452,7 @@ function OrderCard({
                 markOrderDelivered(order.id);
                 onRefresh();
               }}
-              className="min-h-8 rounded-md bg-[#ef7d0a] px-2 text-[0.68rem] font-black text-white shadow-sm disabled:opacity-35 active:scale-[0.98] sm:min-h-9 sm:text-xs"
+              className="min-h-7 rounded-md bg-[#ef7d0a] px-2 text-[0.68rem] font-black text-white shadow-sm disabled:opacity-35 active:scale-[0.98] sm:min-h-8 sm:text-xs"
             >
               Geleverd
             </button>
@@ -446,7 +462,7 @@ function OrderCard({
                 cancelOrder(order.id);
                 onRefresh();
               }}
-              className="min-h-8 rounded-md border border-[#f0b4a8] bg-white px-2 text-[0.68rem] font-black text-[#9d2f20] active:scale-[0.98] sm:min-h-9 sm:text-xs"
+              className="min-h-7 rounded-md border border-[#f0b4a8] bg-white px-2 text-[0.68rem] font-black text-[#9d2f20] active:scale-[0.98] sm:min-h-8 sm:text-xs"
             >
               Annuleer
             </button>
@@ -510,11 +526,13 @@ export default function VierdaagseProductieBedieningPage() {
 
   const activeOrders = useMemo(
     () =>
-      orders.filter(
-        (order) =>
-          order.status === "nieuw" ||
-          order.status === "in_productie" ||
-          order.status === "klaar_voor_bediening"
+      sortActiveKitchenOrders(
+        orders.filter(
+          (order) =>
+            order.status === "nieuw" ||
+            order.status === "in_productie" ||
+            order.status === "klaar_voor_bediening"
+        )
       ),
     [orders]
   );
@@ -801,7 +819,7 @@ export default function VierdaagseProductieBedieningPage() {
           </section>
         )}
 
-        <section className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <section className="grid gap-1.5 md:grid-cols-3 xl:grid-cols-4">
           {visibleOrders.map((order) => (
             <OrderCard
               key={order.id}

@@ -270,6 +270,35 @@ function warmOptionProduct(
   });
 }
 
+const glaasjeWaterProduct: VierdaagseProduct = {
+  id: "glaasje-water",
+  name: "Glaasje water",
+  category: "fris-koud",
+  badge: "GW",
+};
+
+export const requiredVierdaagseProducts: VierdaagseProduct[] = [
+  glaasjeWaterProduct,
+];
+
+export function ensureRequiredVierdaagseProducts(
+  products: VierdaagseProduct[]
+) {
+  const usedIds = new Set(products.map((product) => product.id));
+  const usedNames = new Set(
+    products.map((product) => product.name.trim().toLowerCase())
+  );
+  const additions = requiredVierdaagseProducts.filter(
+    (product) =>
+      !usedIds.has(product.id) &&
+      !usedNames.has(product.name.trim().toLowerCase())
+  );
+
+  return additions.length
+    ? sortVierdaagseProducts([...products, ...additions])
+    : sortVierdaagseProducts(products);
+}
+
 export const vierdaagseProducts: VierdaagseProduct[] = [
   coffeeProduct("cappuccino", "Cappuccino", "CA", milkCoffeeModifierOptions),
   coffeeProduct("caramel-ijskoffie", "Caramel ijskoffie", "CI", [
@@ -312,6 +341,7 @@ export const vierdaagseProducts: VierdaagseProduct[] = [
     badge: "CZ",
   },
   { id: "fanta", name: "Fanta", category: "fris-koud", badge: "FA" },
+  glaasjeWaterProduct,
   {
     id: "home-made-lemonade-red",
     name: "Home made lemonade Red",

@@ -2,8 +2,8 @@
 
 import {
   VierdaagseProduct,
+  ensureRequiredVierdaagseProducts,
   normalizeVierdaagseProducts,
-  sortVierdaagseProducts,
   vierdaagseProducts,
 } from "./vierdaagseData";
 
@@ -15,16 +15,20 @@ function isBrowser() {
 }
 
 function readProductsFromStorage() {
-  if (!isBrowser()) return vierdaagseProducts;
+  if (!isBrowser()) return ensureRequiredVierdaagseProducts(vierdaagseProducts);
 
   try {
     const raw = window.localStorage.getItem(productsStorageKey);
-    if (!raw) return sortVierdaagseProducts(vierdaagseProducts);
+    if (!raw) return ensureRequiredVierdaagseProducts(vierdaagseProducts);
 
-    const products = normalizeVierdaagseProducts(JSON.parse(raw));
-    return products.length ? products : sortVierdaagseProducts(vierdaagseProducts);
+    const products = ensureRequiredVierdaagseProducts(
+      normalizeVierdaagseProducts(JSON.parse(raw))
+    );
+    return products.length
+      ? products
+      : ensureRequiredVierdaagseProducts(vierdaagseProducts);
   } catch {
-    return sortVierdaagseProducts(vierdaagseProducts);
+    return ensureRequiredVierdaagseProducts(vierdaagseProducts);
   }
 }
 
@@ -33,7 +37,7 @@ function writeProductsToStorage(products: VierdaagseProduct[]) {
 
   window.localStorage.setItem(
     productsStorageKey,
-    JSON.stringify(sortVierdaagseProducts(products))
+    JSON.stringify(ensureRequiredVierdaagseProducts(products))
   );
 }
 
@@ -70,10 +74,14 @@ export async function fetchVierdaagseProductsFromWordPress() {
     const data = await readJson(response);
 
     if (response.ok && Array.isArray(data)) {
-      const products = normalizeVierdaagseProducts(data);
+      const cleanProducts = normalizeVierdaagseProducts(data);
+      const products = ensureRequiredVierdaagseProducts(cleanProducts);
 
       if (products.length) {
         writeProductsToStorage(products);
+        if (products.length !== cleanProducts.length) {
+          void saveVierdaagseProductsToWordPress(products);
+        }
         return { ok: true as const, data: products };
       }
 
@@ -101,7 +109,9 @@ export async function fetchVierdaagseProductsFromWordPress() {
 export async function saveVierdaagseProductsToWordPress(
   products: VierdaagseProduct[]
 ) {
-  const cleanProducts = normalizeVierdaagseProducts(products);
+  const cleanProducts = ensureRequiredVierdaagseProducts(
+    normalizeVierdaagseProducts(products)
+  );
   writeProductsToStorage(cleanProducts);
 
   try {
