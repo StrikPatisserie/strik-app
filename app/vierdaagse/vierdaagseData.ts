@@ -103,6 +103,63 @@ export function sortVierdaagseProducts(products: VierdaagseProduct[]) {
   );
 }
 
+const warmOption = "Warm";
+
+const warmOptionProductIds = new Set([
+  "appelkanjer",
+  "appelflap",
+  "wafel-aardbei-slagroom",
+  "ham-kaas-croissant",
+  "kaasbroodje",
+  "saucijzenbroodje",
+  "worstenbroodje",
+]);
+
+const warmOptionProductNamePatterns = [
+  "appelkanjer",
+  "appelflap",
+  "wafel",
+  "ham-kaas",
+  "ham kaas",
+  "kaasbrood",
+  "saucijzen",
+  "saucijs",
+  "worstenbrood",
+  "worst",
+];
+
+function hasWarmOptionProductName(name: string) {
+  const normalizedName = name.toLowerCase();
+
+  return warmOptionProductNamePatterns.some((pattern) =>
+    normalizedName.includes(pattern)
+  );
+}
+
+function isWarmOptionProduct(product: Pick<VierdaagseProduct, "id" | "name">) {
+  return (
+    warmOptionProductIds.has(product.id) ||
+    hasWarmOptionProductName(product.name)
+  );
+}
+
+function withWarmOption(product: VierdaagseProduct): VierdaagseProduct {
+  if (!isWarmOptionProduct(product)) return product;
+
+  const modifierOptions = product.modifierOptions || [];
+  const hasWarmOption = modifierOptions.some(
+    (option) => option.trim().toLowerCase() === warmOption.toLowerCase()
+  );
+
+  return {
+    ...product,
+    modifierLabel: product.modifierLabel || "Opties",
+    modifierOptions: hasWarmOption
+      ? modifierOptions
+      : [...modifierOptions, warmOption],
+  };
+}
+
 export function normalizeVierdaagseProducts(value: unknown) {
   if (!Array.isArray(value)) return [];
 
@@ -121,7 +178,7 @@ export function normalizeVierdaagseProducts(value: unknown) {
 
         if (!id || !name) return null;
 
-        return {
+        return withWarmOption({
           id,
           name,
           category,
@@ -153,7 +210,7 @@ export function normalizeVierdaagseProducts(value: unknown) {
                 (option) => typeof option === "string" && option.trim()
               )
             : undefined,
-        };
+        });
       })
       .filter((product): product is VierdaagseProduct => Boolean(product))
   );
@@ -197,6 +254,20 @@ function coffeeProduct(
     modifierLabel: "Koffie opties",
     modifierOptions,
   };
+}
+
+function warmOptionProduct(
+  id: string,
+  name: string,
+  category: ProductCategoryId,
+  badge: string
+): VierdaagseProduct {
+  return withWarmOption({
+    id,
+    name,
+    category,
+    badge,
+  });
 }
 
 export const vierdaagseProducts: VierdaagseProduct[] = [
@@ -263,8 +334,8 @@ export const vierdaagseProducts: VierdaagseProduct[] = [
     category: "bakkerij",
     badge: "AC",
   },
-  { id: "appelkanjer", name: "Appelkanjer", category: "bakkerij", badge: "AK" },
-  { id: "appelflap", name: "Appelflap", category: "bakkerij", badge: "AF" },
+  warmOptionProduct("appelkanjer", "Appelkanjer", "bakkerij", "AK"),
+  warmOptionProduct("appelflap", "Appelflap", "bakkerij", "AF"),
   { id: "blondie", name: "Blondie", category: "bakkerij", badge: "BL" },
   { id: "brownie", name: "Brownie", category: "bakkerij", badge: "BR" },
   { id: "croissant", name: "Croissant", category: "bakkerij", badge: "CR" },
@@ -275,12 +346,12 @@ export const vierdaagseProducts: VierdaagseProduct[] = [
     badge: "FI",
   },
   { id: "notenrondo", name: "Notenrondo", category: "bakkerij", badge: "NR" },
-  {
-    id: "wafel-aardbei-slagroom",
-    name: "Wafel aardbei slagroom",
-    category: "bakkerij",
-    badge: "WA",
-  },
+  warmOptionProduct(
+    "wafel-aardbei-slagroom",
+    "Wafel aardbei slagroom",
+    "bakkerij",
+    "WA"
+  ),
   {
     id: "aardbei-tartelette",
     name: "Aardbei tartelette",
@@ -325,20 +396,10 @@ export const vierdaagseProducts: VierdaagseProduct[] = [
     category: "gebak",
     badge: "VP",
   },
-  {
-    id: "ham-kaas-croissant",
-    name: "Ham-kaas croissant",
-    category: "hartig",
-    badge: "HK",
-  },
-  { id: "kaasbroodje", name: "Kaasbroodje", category: "hartig", badge: "KB" },
-  {
-    id: "saucijzenbroodje",
-    name: "Saucijzenbroodje",
-    category: "hartig",
-    badge: "SB",
-  },
-  { id: "worstenbroodje", name: "Worstenbroodje", category: "hartig", badge: "WB" },
+  warmOptionProduct("ham-kaas-croissant", "Ham-kaas croissant", "hartig", "HK"),
+  warmOptionProduct("kaasbroodje", "Kaasbroodje", "hartig", "KB"),
+  warmOptionProduct("saucijzenbroodje", "Saucijzenbroodje", "hartig", "SB"),
+  warmOptionProduct("worstenbroodje", "Worstenbroodje", "hartig", "WB"),
 ];
 
 export function getTableLocation(tableNumber: string): VierdaagseLocation {
