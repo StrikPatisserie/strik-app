@@ -176,18 +176,24 @@ function countOrderItems(items: VierdaagseOrder["items"]) {
   return items.reduce((total, item) => total + item.quantity, 0);
 }
 
+function getOrderCreatedAtMs(order: VierdaagseOrder) {
+  const createdAtMs = new Date(order.createdAt).getTime();
+  if (Number.isFinite(createdAtMs)) return createdAtMs;
+
+  const orderIdTime = order.id.match(/^VD-\d{4}-([A-Z0-9]+)-/);
+  if (orderIdTime) {
+    const parsedOrderIdTime = Number.parseInt(orderIdTime[1], 36);
+    if (Number.isFinite(parsedOrderIdTime)) return parsedOrderIdTime;
+  }
+
+  const orderDateMs = new Date(order.date).getTime();
+  return Number.isFinite(orderDateMs) ? orderDateMs : 0;
+}
+
 function sortActiveKitchenOrders(orders: VierdaagseOrder[]) {
   return [...orders].sort((firstOrder, secondOrder) => {
-    const firstNeedsMaking = isOrderStillBeingMade(firstOrder) ? 0 : 1;
-    const secondNeedsMaking = isOrderStillBeingMade(secondOrder) ? 0 : 1;
-
-    if (firstNeedsMaking !== secondNeedsMaking) {
-      return firstNeedsMaking - secondNeedsMaking;
-    }
-
     return (
-      new Date(firstOrder.createdAt).getTime() -
-      new Date(secondOrder.createdAt).getTime()
+      getOrderCreatedAtMs(firstOrder) - getOrderCreatedAtMs(secondOrder)
     );
   });
 }
