@@ -19,6 +19,7 @@ import {
   vierdaagseProducts,
   vierdaagseTables,
 } from "../vierdaagseData";
+import TableMapDialog from "../TableMapDialog";
 
 type DraftLine = {
   key: string;
@@ -205,6 +206,7 @@ export default function VierdaagseKassaPage() {
   const [customDetail, setCustomDetail] = useState("");
   const [lineOptionsKey, setLineOptionsKey] = useState("");
   const [lineCustomDetail, setLineCustomDetail] = useState("");
+  const [mapTableNumber, setMapTableNumber] = useState<string | null>(null);
   const [clock, setClock] = useState(() => new Date());
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -588,21 +590,34 @@ export default function VierdaagseKassaPage() {
                         const selected = selectedTable?.id === table.id;
 
                         return (
-                          <button
-                            key={table.id}
-                            type="button"
-                            onClick={() => {
-                              setDestinationMode("table");
-                              setSelectedTable(table);
-                            }}
-                            className={`min-h-9 rounded-md border text-sm font-black transition active:scale-[0.98] sm:min-h-11 sm:text-base ${
-                              selected && destinationMode === "table"
-                                ? "border-[#24551d] bg-[#24551d] text-white"
-                                : "border-[#d6e5d8] bg-[#f6faf4] text-[#24551d]"
-                            }`}
-                          >
-                            {table.label}
-                          </button>
+                          <div key={table.id} className="relative">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDestinationMode("table");
+                                setSelectedTable(table);
+                              }}
+                              className={`min-h-9 w-full rounded-md border pr-6 text-sm font-black transition active:scale-[0.98] sm:min-h-11 sm:text-base ${
+                                selected && destinationMode === "table"
+                                  ? "border-[#24551d] bg-[#24551d] text-white"
+                                  : "border-[#d6e5d8] bg-[#f6faf4] text-[#24551d]"
+                              }`}
+                            >
+                              {table.label}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMapTableNumber(table.label)}
+                              className={`absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full border text-[0.62rem] font-black leading-none active:scale-[0.96] ${
+                                selected && destinationMode === "table"
+                                  ? "border-white/55 bg-white text-[#24551d]"
+                                  : "border-[#24551d]/25 bg-white text-[#24551d]"
+                              }`}
+                              aria-label={`Plattegrond voor ${table.label}`}
+                            >
+                              i
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -1081,6 +1096,11 @@ export default function VierdaagseKassaPage() {
           </aside>
         </div>
       </div>
+      <TableMapDialog
+        open={mapTableNumber !== null}
+        highlightedTable={mapTableNumber || undefined}
+        onClose={() => setMapTableNumber(null)}
+      />
     </main>
   );
 }

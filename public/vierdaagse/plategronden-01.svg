@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Laag_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 885.35 305.9">
+  <!-- Generator: Adobe Illustrator 30.0.0, SVG Export Plug-In . SVG Version: 2.1.1 Build 123)  -->
+  <defs>
+    <style>
+      .st0 {
+        font-size: 54.91px;
+      }
+
+      .st0, .st1, .st2, .st3, .st4, .st5, .st6 {
+        fill: #1d1d1b;
+      }
+
+      .st0, .st1, .st2, .st3, .st4, .st5, .st7 {
+        font-family: MyriadPro-Regular, 'Myriad Pro';
+      }
+
+      .st1 {
+        font-size: 25.32px;
+      }
+
+      .st2 {
+        font-size: 26.14px;
+      }
+
+      .st3 {
+        font-size: 32.98px;
+      }
+
+      .st4 {
+        font-size: 32.14px;
+      }
+
+      .st5, .st7 {
+        font-size: 38.96px;
+      }
+
+      .st8 {
+        stroke-width: 2.58px;
+      }
+
+      .st8, .st9, .st7, .st10, .st11 {
+        fill: #fff;
+      }
+
+      .st8, .st9, .st10, .st11, .st12 {
+        stroke: #1d1d1b;
+        stroke-miterlimit: 10;
+      }
+
+      .st9 {
+        stroke-width: 2.86px;
+      }
+
+      .st10 {
+        stroke-width: 2.03px;
+      }
+
+      .st11 {
+        stroke-width: 2.33px;
+      }
+
+      .st12 {
+        fill: none;
+        stroke-width: 2px;
+      }
+    </style>
+  </defs>
+  <rect class="st9" x="76.3" y="85.81" width="776.22" height="189.63"/>
+  <circle class="st10" cx="793.18" cy="234.46" r="23.91"/>
+  <circle class="st11" cx="286.21" cy="131.98" r="27.37"/>
+  <circle class="st11" cx="205.13" cy="131.98" r="27.37"/>
+  <circle class="st11" cx="124.05" cy="131.98" r="27.37"/>
+  <rect class="st11" x="726.83" y="85.81" width="57.97" height="57.97"/>
+  <rect class="st11" x="639.28" y="85.81" width="57.97" height="57.97"/>
+  <rect class="st11" x="551.73" y="85.81" width="57.97" height="57.97"/>
+  <rect class="st11" x="496.72" y="217.71" width="57.97" height="57.97"/>
+  <rect class="st11" x="594.19" y="217.71" width="57.97" height="57.97"/>
+  <rect class="st11" x="464.18" y="85.81" width="57.97" height="57.97"/>
+  <rect class="st6" x="29.98" y="84.34" width="46.32" height="192.57"/>
+  <text class="st7" transform="translate(69.71 211.35) rotate(-90)"><tspan x="0" y="0">WC</tspan></text>
+  <text class="st5" transform="translate(735.83 126.23)"><tspan x="0" y="0">B9</tspan></text>
+  <text class="st3" transform="translate(642.79 126.64)"><tspan x="0" y="0">B10</tspan></text>
+  <text class="st3" transform="translate(554.69 126.64)"><tspan x="0" y="0">B12</tspan></text>
+  <text class="st3" transform="translate(466.91 127)"><tspan x="0" y="0">B14</tspan></text>
+  <text class="st0" transform="translate(343.85 63.7)"><tspan x="0" y="0">BINNEN</tspan></text>
+  <text class="st2" transform="translate(264.2 143.05)"><tspan x="0" y="0">B17</tspan></text>
+  <text class="st2" transform="translate(183.33 143.05)"><tspan x="0" y="0">B18</tspan></text>
+  <text class="st2" transform="translate(106.17 143.05)"><tspan x="0" y="0">B19</tspan></text>
+  <circle class="st11" cx="361.33" cy="131.98" r="27.37"/>
+  <text class="st2" transform="translate(339.33 143.05)"><tspan x="0" y="0">B16</tspan></text>
+  <text class="st3" transform="translate(498.72 258.74)"><tspan x="0" y="0">B15</tspan></text>
+  <text class="st1" transform="translate(773.27 243.45)"><tspan x="0" y="0">B11</tspan></text>
+  <circle class="st8" cx="844.74" cy="151.97" r="30.36"/>
+  <text class="st4" transform="translate(819.46 163.38)"><tspan x="0" y="0">B20</tspan></text>
+  <text class="st3" transform="translate(600.08 258.37)"><tspan x="0" y="0">B13</tspan></text>
+  <g>
+    <line class="st12" x1="775.57" y1="179.35" x2="811.49" y2="179.35"/>
+    <path class="st6" d="M823.56,179.35c-5.68,2.11-12.73,5.7-17.09,9.51l3.44-9.51-3.44-9.51c4.37,3.81,11.42,7.4,17.09,9.51Z"/>
+  </g>
+</svg>

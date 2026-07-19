@@ -20,6 +20,7 @@ import {
   vierdaagseProducts,
   vierdaagseTables,
 } from "../vierdaagseData";
+import TableMapDialog from "../TableMapDialog";
 
 type BoardTab = "actief" | "archief";
 
@@ -273,6 +274,7 @@ function OrderCard({
   isDeleting = false,
   onRefresh,
   onDelete,
+  onShowTableMap,
 }: Readonly<{
   order: VierdaagseOrder;
   now: Date;
@@ -280,6 +282,7 @@ function OrderCard({
   isDeleting?: boolean;
   onRefresh: () => void;
   onDelete?: (order: VierdaagseOrder) => void;
+  onShowTableMap: (tableNumber: string) => void;
 }>) {
   const elapsed = minutesBetween(order.createdAt, now);
   const allReady = order.items.every((item) => item.status === "klaar");
@@ -322,6 +325,18 @@ function OrderCard({
             >
               {order.tableNumber}
             </h2>
+            <button
+              type="button"
+              onClick={() => onShowTableMap(order.tableNumber)}
+              className={`grid h-5 w-5 place-items-center rounded-full border text-[0.62rem] font-black leading-none active:scale-[0.96] ${
+                readyForService
+                  ? "border-white/55 bg-white text-[#24551d]"
+                  : "border-[#24551d]/25 bg-white text-[#24551d]"
+              }`}
+              aria-label={`Plattegrond voor ${order.tableNumber}`}
+            >
+              i
+            </button>
             <span
               className={`text-[0.64rem] font-semibold lowercase leading-none sm:text-[0.7rem] ${
                 readyForService ? "text-white/75" : "text-[#6b645b]"
@@ -526,6 +541,7 @@ export default function VierdaagseProductieBedieningPage() {
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [boardMessage, setBoardMessage] = useState("");
   const [boardError, setBoardError] = useState("");
+  const [mapTableNumber, setMapTableNumber] = useState<string | null>(null);
 
   function refreshOrders() {
     setOrders(getAllOrders());
@@ -856,10 +872,16 @@ export default function VierdaagseProductieBedieningPage() {
               isDeleting={deletingOrderId === order.id}
               onRefresh={refreshOrders}
               onDelete={handleDeleteArchivedOrder}
+              onShowTableMap={setMapTableNumber}
             />
           ))}
         </section>
       </div>
+      <TableMapDialog
+        open={mapTableNumber !== null}
+        highlightedTable={mapTableNumber || undefined}
+        onClose={() => setMapTableNumber(null)}
+      />
     </main>
   );
 }
