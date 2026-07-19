@@ -4,6 +4,7 @@ import {
   VierdaagseProduct,
   ensureRequiredVierdaagseProducts,
   normalizeVierdaagseProducts,
+  requiredVierdaagseProducts,
   vierdaagseProducts,
 } from "./vierdaagseData";
 
@@ -14,21 +15,41 @@ function isBrowser() {
   return typeof window !== "undefined";
 }
 
+function getDefaultProducts() {
+  return ensureRequiredVierdaagseProducts(vierdaagseProducts);
+}
+
+function isUsableProductList(products: VierdaagseProduct[]) {
+  if (products.length < 1) return false;
+
+  const requiredIds = new Set(
+    requiredVierdaagseProducts.map((product) => product.id)
+  );
+  const hasRegularProduct = products.some(
+    (product) => !requiredIds.has(product.id)
+  );
+
+  return hasRegularProduct;
+}
+
+function repairProductList(products: VierdaagseProduct[]) {
+  const withRequiredProducts = ensureRequiredVierdaagseProducts(products);
+
+  return isUsableProductList(withRequiredProducts)
+    ? withRequiredProducts
+    : getDefaultProducts();
+}
+
 function readProductsFromStorage() {
-  if (!isBrowser()) return ensureRequiredVierdaagseProducts(vierdaagseProducts);
+  if (!isBrowser()) return getDefaultProducts();
 
   try {
     const raw = window.localStorage.getItem(productsStorageKey);
-    if (!raw) return ensureRequiredVierdaagseProducts(vierdaagseProducts);
+    if (!raw) return getDefaultProducts();
 
-    const products = ensureRequiredVierdaagseProducts(
-      normalizeVierdaagseProducts(JSON.parse(raw))
-    );
-    return products.length
-      ? products
-      : ensureRequiredVierdaagseProducts(vierdaagseProducts);
+    return repairProductList(normalizeVierdaagseProducts(JSON.parse(raw)));
   } catch {
-    return ensureRequiredVierdaagseProducts(vierdaagseProducts);
+    return getDefaultProducts();
   }
 }
 
@@ -37,7 +58,7 @@ function writeProductsToStorage(products: VierdaagseProduct[]) {
 
   window.localStorage.setItem(
     productsStorageKey,
-    JSON.stringify(ensureRequiredVierdaagseProducts(products))
+    JSON.stringify(repairProductList(products))
   );
 }
 
@@ -75,11 +96,11 @@ export async function fetchVierdaagseProductsFromWordPress() {
 
     if (response.ok && Array.isArray(data)) {
       const cleanProducts = normalizeVierdaagseProducts(data);
-      const products = ensureRequiredVierdaagseProducts(cleanProducts);
+      const products = repairProductList(cleanProducts);
 
       if (products.length) {
         writeProductsToStorage(products);
-        if (products.length !== cleanProducts.length) {
+        if (JSON.stringify(products) !== JSON.stringify(cleanProducts)) {
           void saveVierdaagseProductsToWordPress(products);
         }
         return { ok: true as const, data: products };
@@ -109,9 +130,7 @@ export async function fetchVierdaagseProductsFromWordPress() {
 export async function saveVierdaagseProductsToWordPress(
   products: VierdaagseProduct[]
 ) {
-  const cleanProducts = ensureRequiredVierdaagseProducts(
-    normalizeVierdaagseProducts(products)
-  );
+  const cleanProducts = repairProductList(normalizeVierdaagseProducts(products));
   writeProductsToStorage(cleanProducts);
 
   try {
@@ -126,7 +145,7 @@ export async function saveVierdaagseProductsToWordPress(
     const data = await readJson(response);
 
     if (response.ok && Array.isArray(data)) {
-      const savedProducts = normalizeVierdaagseProducts(data);
+      const savedProducts = repairProductList(normalizeVierdaagseProducts(data));
       if (savedProducts.length) writeProductsToStorage(savedProducts);
 
       return { ok: true as const, data: savedProducts };
