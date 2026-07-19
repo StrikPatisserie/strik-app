@@ -84,7 +84,7 @@ function isReadyForService(order: VierdaagseOrder) {
 function orderTone(order: VierdaagseOrder, now: Date) {
   const minutes = minutesBetween(order.createdAt, now);
   if (isReadyForService(order)) {
-    return "border-[#24551d] bg-[#f2faef] ring-2 ring-[#24551d]/10";
+    return "border-[#163f1a] bg-[#24551d] text-white ring-2 ring-[#163f1a]/15";
   }
   if (isOrderStillBeingMade(order) && minutes >= 10) {
     return "border-[#d8422f] bg-[#fff4f1] ring-2 ring-[#d8422f]/15";
@@ -109,13 +109,24 @@ function itemLabel(item: VierdaagseOrder["items"][number]) {
 
 function KitchenItemLabel({
   item,
-}: Readonly<{ item: VierdaagseOrder["items"][number] }>) {
+  readyForService = false,
+}: Readonly<{
+  item: VierdaagseOrder["items"][number];
+  readyForService?: boolean;
+}>) {
   if (!item.detail) return <>{item.name}</>;
 
   return (
     <>
       <span>{item.name}</span>
-      <span className="font-black text-[#d8422f]"> - {item.detail}</span>
+      <span
+        className={`font-black ${
+          readyForService ? "text-white" : "text-[#d8422f]"
+        }`}
+      >
+        {" "}
+        - {item.detail}
+      </span>
     </>
   );
 }
@@ -179,7 +190,13 @@ function sortedKitchenItems(items: VierdaagseOrder["items"]) {
   return [...items].sort((first, second) => rank(first) - rank(second));
 }
 
-function itemRowTone(item: VierdaagseOrder["items"][number]) {
+function itemRowTone(
+  item: VierdaagseOrder["items"][number],
+  readyForService = false
+) {
+  if (readyForService) {
+    return "border-white/15 bg-white/10";
+  }
   if (item.category === "koffie-thee") {
     return "border-[#efb164] bg-[#fff6eb]";
   }
@@ -189,8 +206,27 @@ function itemRowTone(item: VierdaagseOrder["items"][number]) {
   return "border-[#e5ded5] bg-white";
 }
 
-function itemQuantityTone(item: VierdaagseOrder["items"][number]) {
+function itemQuantityTone(
+  item: VierdaagseOrder["items"][number],
+  readyForService = false
+) {
+  if (readyForService) return "text-white";
   return isDrinkItem(item) ? "text-[#ef7d0a]" : "text-[#24551d]";
+}
+
+function ReadyCurlIcon() {
+  return (
+    <svg viewBox="0 0 34 24" aria-hidden="true" className="h-6 w-8">
+      <path
+        d="M4 15c6 8 19 5 18-3-.7-6.3-10.4-5.6-9.1.5.9 4.2 9.1 4.5 16.6-5.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="3"
+      />
+    </svg>
+  );
 }
 
 function TrashIcon() {
@@ -243,21 +279,40 @@ function OrderCard({
       )}`}
     >
       {readyForService && (
-        <p className="text-[0.76rem] font-black uppercase leading-none text-[#24551d] sm:text-sm">
-          Klaar voor bediening
-        </p>
+        <div className="flex items-center justify-between gap-2 rounded-md bg-white/10 px-2 py-1 text-white">
+          <p className="text-[0.78rem] font-black uppercase leading-none sm:text-sm">
+            Klaar voor levering
+          </p>
+          <ReadyCurlIcon />
+        </div>
       )}
-      <header className="flex items-start justify-between gap-2 border-b border-[#d6e5d8] pb-1">
+      <header
+        className={`flex items-start justify-between gap-2 border-b pb-1 ${
+          readyForService ? "border-white/20" : "border-[#d6e5d8]"
+        }`}
+      >
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-1.5">
-            <h2 className="truncate text-lg font-black leading-none text-[#24551d] sm:text-xl">
+            <h2
+              className={`truncate text-lg font-black leading-none sm:text-xl ${
+                readyForService ? "text-white" : "text-[#24551d]"
+              }`}
+            >
               {order.tableNumber}
             </h2>
-            <span className="text-[0.64rem] font-semibold lowercase leading-none text-[#6b645b] sm:text-[0.7rem]">
+            <span
+              className={`text-[0.64rem] font-semibold lowercase leading-none sm:text-[0.7rem] ${
+                readyForService ? "text-white/75" : "text-[#6b645b]"
+              }`}
+            >
               ({getLocationLabel(order.location)})
             </span>
           </div>
-          <p className="mt-0.5 text-[0.64rem] font-semibold leading-tight text-[#6b645b] sm:text-[0.72rem]">
+          <p
+            className={`mt-0.5 text-[0.64rem] font-semibold leading-tight sm:text-[0.72rem] ${
+              readyForService ? "text-white/75" : "text-[#6b645b]"
+            }`}
+          >
             {formatTime(order.createdAt)} · {elapsed} min geleden ·{" "}
             {countOrderItems(order.items)} st
           </p>
@@ -266,7 +321,7 @@ function OrderCard({
           <span
             className={`rounded-md px-1.5 py-0.5 text-[0.56rem] font-black uppercase leading-none sm:text-[0.62rem] ${
               readyForService
-                ? "bg-[#24551d] text-white"
+                ? "bg-white text-[#24551d]"
                 : order.status === "geleverd"
                   ? "bg-[#24551d] text-white"
                   : order.status === "geannuleerd"
@@ -285,8 +340,12 @@ function OrderCard({
               }}
               className={`grid h-6 w-6 place-items-center rounded-md border text-xs font-black leading-none transition active:scale-[0.96] ${
                 allReady
-                  ? "border-[#24551d] bg-[#24551d] text-white"
-                  : "border-[#24551d] bg-white text-[#24551d]"
+                  ? readyForService
+                    ? "border-white bg-white text-[#24551d]"
+                    : "border-[#24551d] bg-[#24551d] text-white"
+                  : readyForService
+                    ? "border-white/70 bg-transparent text-white"
+                    : "border-[#24551d] bg-white text-[#24551d]"
               }`}
               aria-label={
                 allReady
@@ -310,18 +369,24 @@ function OrderCard({
                 ? "grid-cols-[1.7rem_minmax(0,1fr)]"
                 : "grid-cols-[1.7rem_minmax(0,1fr)_2rem]"
             } items-center gap-1 rounded-md border px-1.5 py-1 ${itemRowTone(
-              item
+              item,
+              readyForService
             )}`}
           >
             <span
               className={`text-[0.68rem] font-black leading-none sm:text-xs ${itemQuantityTone(
-                item
+                item,
+                readyForService
               )}`}
             >
               {item.quantity}x
             </span>
-            <span className="min-w-0 break-words text-[0.72rem] font-bold leading-tight text-[#1a1815] sm:text-xs">
-              <KitchenItemLabel item={item} />
+            <span
+              className={`min-w-0 break-words text-[0.72rem] font-bold leading-tight sm:text-xs ${
+                readyForService ? "text-white" : "text-[#1a1815]"
+              }`}
+            >
+              <KitchenItemLabel item={item} readyForService={readyForService} />
             </span>
             {!archive && (
               <button
@@ -329,8 +394,12 @@ function OrderCard({
                 onClick={() => setItemStatus(item.id, item.status !== "klaar")}
                 className={`grid h-7 w-7 place-items-center rounded-md text-sm font-black leading-none transition active:scale-[0.98] ${
                   item.status === "klaar"
-                    ? "bg-[#24551d] text-white"
-                    : "border border-[#d8d0c5] bg-white text-[#8b8278]"
+                    ? readyForService
+                      ? "bg-white text-[#24551d]"
+                      : "bg-[#24551d] text-white"
+                    : readyForService
+                      ? "border border-white/70 bg-transparent text-white"
+                      : "border border-[#d8d0c5] bg-white text-[#8b8278]"
                 }`}
                 aria-label={`${itemLabel(item)} klaar melden`}
               >
@@ -342,7 +411,13 @@ function OrderCard({
       </div>
 
       {order.note && (
-        <p className="rounded-md bg-[#fff8ef] px-1.5 py-1 text-[0.68rem] font-bold leading-tight text-[#6b3b16] sm:text-xs">
+        <p
+          className={`rounded-md px-1.5 py-1 text-[0.68rem] font-bold leading-tight sm:text-xs ${
+            readyForService
+              ? "bg-white/10 text-white"
+              : "bg-[#fff8ef] text-[#6b3b16]"
+          }`}
+        >
           {order.note}
         </p>
       )}
@@ -361,7 +436,7 @@ function OrderCard({
                 markOrderDelivered(order.id);
                 onRefresh();
               }}
-              className="min-h-8 rounded-md bg-[#24551d] px-2 text-[0.68rem] font-black text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-9 sm:text-xs"
+              className="min-h-8 rounded-md bg-[#ef7d0a] px-2 text-[0.68rem] font-black text-white shadow-sm disabled:opacity-35 active:scale-[0.98] sm:min-h-9 sm:text-xs"
             >
               Geleverd
             </button>
