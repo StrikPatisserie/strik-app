@@ -4,12 +4,12 @@ import {
   VierdaagseProduct,
   ensureRequiredVierdaagseProducts,
   normalizeVierdaagseProducts,
-  requiredVierdaagseProducts,
   vierdaagseProducts,
 } from "./vierdaagseData";
 
 const productsStorageKey = "strik-vierdaagse-kassa-products-v1";
 const vierdaagseProductsApiUrl = "/api/vierdaagse-products";
+const minimumUsableProductCount = 20;
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -20,16 +20,23 @@ function getDefaultProducts() {
 }
 
 function isUsableProductList(products: VierdaagseProduct[]) {
-  if (products.length < 1) return false;
+  return products.length >= minimumUsableProductCount;
+}
 
-  const requiredIds = new Set(
-    requiredVierdaagseProducts.map((product) => product.id)
+function mergeProducts(
+  baseProducts: VierdaagseProduct[],
+  extraProducts: VierdaagseProduct[]
+) {
+  const usedIds = new Set(baseProducts.map((product) => product.id));
+  const usedNames = new Set(
+    baseProducts.map((product) => product.name.trim().toLowerCase())
   );
-  const hasRegularProduct = products.some(
-    (product) => !requiredIds.has(product.id)
-  );
+  const extras = extraProducts.filter((product) => {
+    const name = product.name.trim().toLowerCase();
+    return !usedIds.has(product.id) && !usedNames.has(name);
+  });
 
-  return hasRegularProduct;
+  return ensureRequiredVierdaagseProducts([...baseProducts, ...extras]);
 }
 
 function repairProductList(products: VierdaagseProduct[]) {
@@ -37,7 +44,7 @@ function repairProductList(products: VierdaagseProduct[]) {
 
   return isUsableProductList(withRequiredProducts)
     ? withRequiredProducts
-    : getDefaultProducts();
+    : mergeProducts(getDefaultProducts(), withRequiredProducts);
 }
 
 function readProductsFromStorage() {
