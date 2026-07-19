@@ -136,6 +136,32 @@ function updateOrder(
   return updatedOrder;
 }
 
+function getOrderProgressUpdate(
+  order: VierdaagseOrder,
+  items: VierdaagseOrder["items"],
+  readyAt: string
+): Pick<VierdaagseOrder, "status" | "readyAt"> {
+  if (order.status === "geleverd" || order.status === "geannuleerd") {
+    return {
+      status: order.status,
+      readyAt: order.readyAt,
+    };
+  }
+
+  const allReady =
+    items.length > 0 && items.every((item) => item.status === "klaar");
+  const hasStarted = items.some((item) => item.status === "klaar");
+
+  return {
+    status: allReady
+      ? "klaar_voor_bediening"
+      : hasStarted
+        ? "in_productie"
+        : "nieuw",
+    readyAt: allReady ? order.readyAt || readyAt : undefined,
+  };
+}
+
 export function subscribeVierdaagseOrders(callback: () => void) {
   if (!isBrowser()) return () => {};
 
@@ -297,16 +323,16 @@ export function updateOrderItemStatus(
   itemId: string,
   status: VierdaagseOrderItemStatus
 ) {
+  const now = new Date().toISOString();
   const updatedOrder = updateOrder(orderId, (order) => {
     const nextItems = order.items.map((item) =>
       item.id === itemId ? { ...item, status } : item
     );
-    const hasStarted = nextItems.some((item) => item.status === "klaar");
+    const progressUpdate = getOrderProgressUpdate(order, nextItems, now);
 
     return {
       ...order,
-      status:
-        order.status === "nieuw" && hasStarted ? "in_productie" : order.status,
+      ...progressUpdate,
       items: nextItems,
     };
   });
@@ -316,17 +342,18 @@ export function updateOrderItemStatus(
 
 export function setOrderItemsReady(orderId: string, ready: boolean) {
   const itemStatus: VierdaagseOrderItemStatus = ready ? "klaar" : "niet_gestart";
+  const now = new Date().toISOString();
 
-  const updatedOrder = updateOrder(orderId, (order) => ({
-    ...order,
-    status:
-      order.status === "nieuw" || order.status === "in_productie"
-        ? ready
-          ? "in_productie"
-          : "nieuw"
-        : order.status,
-    items: order.items.map((item) => ({ ...item, status: itemStatus })),
-  }));
+  const updatedOrder = updateOrder(orderId, (order) => {
+    const nextItems = order.items.map((item) => ({ ...item, status: itemStatus }));
+    const progressUpdate = getOrderProgressUpdate(order, nextItems, now);
+
+    return {
+      ...order,
+      ...progressUpdate,
+      items: nextItems,
+    };
+  });
 
   if (updatedOrder) void saveOrderToWordPress(updatedOrder);
 }

@@ -9,7 +9,6 @@ import {
   getAllOrders,
   loadDemoOrders,
   markOrderDelivered,
-  markOrderReady,
   setOrderItemsReady,
   subscribeVierdaagseOrders,
   updateOrderItemStatus,
@@ -22,7 +21,7 @@ import {
   vierdaagseTables,
 } from "../vierdaagseData";
 
-type BoardTab = "actief" | "klaar" | "archief";
+type BoardTab = "actief" | "archief";
 
 type ArchiveFilters = {
   date: string;
@@ -61,13 +60,32 @@ function averageMinutes(values: number[]) {
 
 function isOrderStillBeingMade(order: VierdaagseOrder) {
   return (
-    (order.status === "nieuw" || order.status === "in_productie") &&
+    isLiveOrder(order) &&
     order.items.some((item) => item.status !== "klaar")
+  );
+}
+
+function isLiveOrder(order: VierdaagseOrder) {
+  return (
+    order.status === "nieuw" ||
+    order.status === "in_productie" ||
+    order.status === "klaar_voor_bediening"
+  );
+}
+
+function isReadyForService(order: VierdaagseOrder) {
+  return (
+    isLiveOrder(order) &&
+    order.items.length > 0 &&
+    order.items.every((item) => item.status === "klaar")
   );
 }
 
 function orderTone(order: VierdaagseOrder, now: Date) {
   const minutes = minutesBetween(order.createdAt, now);
+  if (isReadyForService(order)) {
+    return "border-[#24551d] bg-[#f2faef] ring-2 ring-[#24551d]/10";
+  }
   if (isOrderStillBeingMade(order) && minutes >= 10) {
     return "border-[#d8422f] bg-[#fff4f1] ring-2 ring-[#d8422f]/15";
   }
@@ -207,12 +225,9 @@ function OrderCard({
 }>) {
   const elapsed = minutesBetween(order.createdAt, now);
   const allReady = order.items.every((item) => item.status === "klaar");
-  const canMarkReady =
-    allReady &&
-    (order.status === "nieuw" || order.status === "in_productie");
-  const canDeliver = order.status === "klaar_voor_bediening";
-  const showBulkReadyCheck =
-    !archive && (order.status === "nieuw" || order.status === "in_productie");
+  const readyForService = isReadyForService(order);
+  const canDeliver = readyForService;
+  const showBulkReadyCheck = !archive && isLiveOrder(order);
   const kitchenItems = sortedKitchenItems(order.items);
 
   function setItemStatus(itemId: string, ready: boolean) {
@@ -227,6 +242,11 @@ function OrderCard({
         now
       )}`}
     >
+      {readyForService && (
+        <p className="text-[0.76rem] font-black uppercase leading-none text-[#24551d] sm:text-sm">
+          Klaar voor bediening
+        </p>
+      )}
       <header className="flex items-start justify-between gap-2 border-b border-[#d6e5d8] pb-1">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-1.5">
@@ -245,8 +265,8 @@ function OrderCard({
         <div className="grid shrink-0 justify-items-end gap-1">
           <span
             className={`rounded-md px-1.5 py-0.5 text-[0.56rem] font-black uppercase leading-none sm:text-[0.62rem] ${
-              order.status === "klaar_voor_bediening"
-                ? "bg-[#ef7d0a] text-white"
+              readyForService
+                ? "bg-[#24551d] text-white"
                 : order.status === "geleverd"
                   ? "bg-[#24551d] text-white"
                   : order.status === "geannuleerd"
@@ -254,7 +274,7 @@ function OrderCard({
                     : "bg-white text-[#9d3c24]"
             }`}
           >
-            {statusLabel(order.status)}
+            {readyForService ? "Klaar" : statusLabel(order.status)}
           </span>
           {showBulkReadyCheck && (
             <button
@@ -306,9 +326,8 @@ function OrderCard({
             {!archive && (
               <button
                 type="button"
-                disabled={order.status === "klaar_voor_bediening"}
                 onClick={() => setItemStatus(item.id, item.status !== "klaar")}
-                className={`grid h-7 w-7 place-items-center rounded-md text-sm font-black leading-none transition active:scale-[0.98] disabled:opacity-60 ${
+                className={`grid h-7 w-7 place-items-center rounded-md text-sm font-black leading-none transition active:scale-[0.98] ${
                   item.status === "klaar"
                     ? "bg-[#24551d] text-white"
                     : "border border-[#d8d0c5] bg-white text-[#8b8278]"
@@ -330,22 +349,11 @@ function OrderCard({
 
       <footer
         className={
-          archive ? "grid gap-1" : "grid gap-1 sm:grid-cols-[1fr_1fr_auto]"
+          archive ? "grid gap-1" : "grid gap-1 sm:grid-cols-[1fr_auto]"
         }
       >
         {!archive && (
           <>
-            <button
-              type="button"
-              disabled={!canMarkReady}
-              onClick={() => {
-                markOrderReady(order.id);
-                onRefresh();
-              }}
-              className="min-h-8 rounded-md bg-[#ef7d0a] px-2 text-[0.68rem] font-black leading-tight text-white disabled:opacity-35 active:scale-[0.98] sm:min-h-9 sm:text-xs"
-            >
-              Klaar voor bediening
-            </button>
             <button
               type="button"
               disabled={!canDeliver}
@@ -428,13 +436,11 @@ export default function VierdaagseProductieBedieningPage() {
   const activeOrders = useMemo(
     () =>
       orders.filter(
-        (order) => order.status === "nieuw" || order.status === "in_productie"
+        (order) =>
+          order.status === "nieuw" ||
+          order.status === "in_productie" ||
+          order.status === "klaar_voor_bediening"
       ),
-    [orders]
-  );
-
-  const readyOrders = useMemo(
-    () => orders.filter((order) => order.status === "klaar_voor_bediening"),
     [orders]
   );
 
@@ -453,11 +459,7 @@ export default function VierdaagseProductieBedieningPage() {
   );
 
   const visibleOrders =
-    activeTab === "actief"
-      ? activeOrders
-      : activeTab === "klaar"
-        ? readyOrders
-        : filteredArchive;
+    activeTab === "actief" ? activeOrders : filteredArchive;
 
   const archiveStats = useMemo(() => {
     const readyDurations = filteredArchive
@@ -567,14 +569,9 @@ export default function VierdaagseProductieBedieningPage() {
           </div>
         )}
 
-        <nav className="grid grid-cols-3 gap-1 rounded-lg border border-[#e8e4de] bg-white p-1 shadow-sm sm:gap-1.5 sm:p-1.5">
+        <nav className="grid grid-cols-2 gap-1 rounded-lg border border-[#e8e4de] bg-white p-1 shadow-sm sm:gap-1.5 sm:p-1.5">
           {[
-            { id: "actief" as const, label: "Actief", count: activeOrders.length },
-            {
-              id: "klaar" as const,
-              label: "Klaar voor bediening",
-              count: readyOrders.length,
-            },
+            { id: "actief" as const, label: "Actieve bonnen", count: activeOrders.length },
             {
               id: "archief" as const,
               label: "Archief",
@@ -591,15 +588,7 @@ export default function VierdaagseProductieBedieningPage() {
                   : "bg-[#f6faf4] text-[#24551d]"
               }`}
             >
-              {tab.id === "klaar" ? (
-                <>
-                  <span className="hidden sm:inline">{tab.label}</span>
-                  <span className="sm:hidden">Klaar</span>
-                </>
-              ) : (
-                tab.label
-              )}{" "}
-              {tab.count}
+              {tab.label} {tab.count}
             </button>
           ))}
         </nav>
