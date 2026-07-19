@@ -285,6 +285,16 @@ function OrderCard({
   onShowTableMap: (tableNumber: string) => void;
 }>) {
   const elapsed = minutesBetween(order.createdAt, now);
+  const displayMinutes = archive
+    ? minutesBetween(order.createdAt, getArchivedOrderEnd(order))
+    : elapsed;
+  const displayTimeContext = archive
+    ? order.status === "geleverd"
+      ? "geleverd"
+      : order.status === "geannuleerd"
+        ? "geannuleerd"
+        : "afgerond"
+    : "geleden";
   const allReady = order.items.every((item) => item.status === "klaar");
   const readyForService = isReadyForService(order);
   const canDeliver = readyForService;
@@ -355,7 +365,11 @@ function OrderCard({
             </span>
             <span
               className={`rounded-md px-1.5 py-0.5 text-[0.78rem] font-black leading-none sm:text-[0.88rem] ${
-                readyForService
+                archive
+                  ? order.status === "geannuleerd"
+                    ? "bg-[#f7d7d2] text-[#9d2f20]"
+                    : "bg-[#24551d] text-white"
+                  : readyForService
                   ? "bg-white text-[#24551d]"
                   : elapsed >= 10
                     ? "bg-[#d8422f] text-white"
@@ -364,14 +378,14 @@ function OrderCard({
                       : "bg-[#24551d] text-white"
               }`}
             >
-              {elapsed} min
+              {displayMinutes} min
             </span>
             <span
               className={`text-[0.62rem] font-semibold leading-none sm:text-[0.68rem] ${
                 readyForService ? "text-white/75" : "text-[#6b645b]"
               }`}
             >
-              geleden · {countOrderItems(order.items)} st
+              {displayTimeContext} · {countOrderItems(order.items)} st
             </span>
           </div>
         </div>
