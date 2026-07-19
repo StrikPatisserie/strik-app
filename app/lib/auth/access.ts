@@ -343,6 +343,7 @@ export function canAccessPath(
 ) {
   if (!profile?.active) return false;
   if (pathname === "/") return true;
+  if (pathname === "/profiel" || pathname.startsWith("/profiel/")) return true;
   if (hasFullAccess(profile)) return true;
 
   const role = normalizeRole(profile.role);

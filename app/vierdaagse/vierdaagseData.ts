@@ -160,7 +160,7 @@ export function normalizeVierdaagseProducts(value: unknown) {
 }
 
 export const vierdaagseTables: VierdaagseTable[] = [
-  ...Array.from({ length: 8 }, (_, index) => ({
+  ...Array.from({ length: 12 }, (_, index) => ({
     id: `T${index + 1}`,
     label: `T${index + 1}`,
     location: "terras" as const,
