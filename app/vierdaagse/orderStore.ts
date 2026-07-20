@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  VierdaagseLocation,
   VierdaagseOrder,
   VierdaagseOrderDraft,
+  VierdaagseOrderItem,
   VierdaagseOrderItemStatus,
   VierdaagseOrderStatus,
   createDemoOrders,
@@ -122,7 +124,7 @@ function removeOrderFromStorage(orderId: string, notify = true) {
 function updateOrder(
   orderId: string,
   updater: (order: VierdaagseOrder) => VierdaagseOrder
-) {
+): VierdaagseOrder | null {
   const orders = readOrdersFromStorage();
   let updatedOrder: VierdaagseOrder | null = null;
   const nextOrders = orders.map((order) => {
@@ -356,6 +358,40 @@ export function setOrderItemsReady(orderId: string, ready: boolean) {
   });
 
   if (updatedOrder) void saveOrderToWordPress(updatedOrder);
+}
+
+export function updateVierdaagseOrderDetails(
+  orderId: string,
+  changes: {
+    tableNumber: string;
+    location: VierdaagseLocation;
+    note: string;
+    items: VierdaagseOrderItem[];
+  }
+) {
+  const now = new Date().toISOString();
+  const updatedOrder = updateOrder(orderId, (order) => {
+    const nextItems = changes.items.map((item) => ({
+      ...item,
+      id: item.id || createItemId(item.productId, item.detail),
+      quantity: Math.max(1, Math.min(99, Math.round(item.quantity))),
+      status: item.status || "niet_gestart",
+    }));
+    const progressUpdate = getOrderProgressUpdate(order, nextItems, now);
+
+    return {
+      ...order,
+      ...progressUpdate,
+      tableNumber: changes.tableNumber.trim() || order.tableNumber,
+      location: changes.location,
+      note: changes.note.trim(),
+      items: nextItems,
+    };
+  });
+
+  if (updatedOrder) void saveOrderToWordPress(updatedOrder);
+
+  return updatedOrder;
 }
 
 export function markOrderReady(orderId: string) {

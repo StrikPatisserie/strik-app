@@ -12,11 +12,21 @@ import {
   setOrderItemsReady,
   subscribeVierdaagseOrders,
   updateOrderItemStatus,
+  updateVierdaagseOrderDetails,
 } from "../orderStore";
 import {
+  fetchVierdaagseProductsFromWordPress,
+  getStoredVierdaagseProducts,
+} from "../productStore";
+import {
+  ProductCategoryId,
+  VierdaagseLocation,
   VierdaagseOrder,
+  VierdaagseOrderItem,
+  VierdaagseProduct,
   VierdaagseOrderStatus,
   getLocationLabel,
+  sortVierdaagseProducts,
   vierdaagseProducts,
   vierdaagseTables,
 } from "../vierdaagseData";
@@ -33,6 +43,23 @@ type ArchiveFilters = {
   search: string;
 };
 
+type EditOrderLine = {
+  id: string;
+  productId: string;
+  name: string;
+  category: ProductCategoryId;
+  quantity: number;
+  status: VierdaagseOrderItem["status"];
+  detail: string;
+};
+
+type EditOrderDraft = {
+  tableNumber: string;
+  location: VierdaagseLocation;
+  note: string;
+  items: EditOrderLine[];
+};
+
 const initialFilters: ArchiveFilters = {
   date: "",
   year: "",
@@ -41,6 +68,66 @@ const initialFilters: ArchiveFilters = {
   product: "",
   search: "",
 };
+
+function productBadgeFromName(value: string) {
+  return (
+    value
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase() || "P"
+  );
+}
+
+function getProductsForOrders(
+  products: VierdaagseProduct[],
+  orders: VierdaagseOrder[]
+) {
+  const productsById = new Map(products.map((product) => [product.id, product]));
+
+  orders.forEach((order) => {
+    order.items.forEach((item) => {
+      if (productsById.has(item.productId)) return;
+
+      productsById.set(item.productId, {
+        id: item.productId,
+        name: item.name,
+        category: item.category,
+        badge: productBadgeFromName(item.name),
+      });
+    });
+  });
+
+  return sortVierdaagseProducts([...productsById.values()]);
+}
+
+function createEditDraft(order: VierdaagseOrder): EditOrderDraft {
+  return {
+    tableNumber: order.tableNumber,
+    location: order.location,
+    note: order.note,
+    items: order.items.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity,
+      status: item.status,
+      detail: item.detail || "",
+    })),
+  };
+}
+
+function normalizeEditLine(line: EditOrderLine): VierdaagseOrderItem {
+  return {
+    ...line,
+    quantity: Math.max(1, Math.min(99, Math.round(line.quantity) || 1)),
+    detail: line.detail.trim() || undefined,
+  };
+}
 
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("nl-NL", {
@@ -267,6 +354,271 @@ function TrashIcon() {
   );
 }
 
+function OrderEditDialog({
+  order,
+  products,
+  onClose,
+  onSave,
+}: Readonly<{
+  order: VierdaagseOrder;
+  products: VierdaagseProduct[];
+  onClose: () => void;
+  onSave: (draft: EditOrderDraft) => void;
+}>) {
+  const [draft, setDraft] = useState(() => createEditDraft(order));
+  const productsById = useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products]
+  );
+  const selectedTable = vierdaagseTables.find(
+    (table) => table.label === draft.tableNumber
+  );
+  const tableValue = selectedTable ? selectedTable.label : "custom";
+
+  useEffect(() => {
+    setDraft(createEditDraft(order));
+  }, [order]);
+
+  function updateLine(lineId: string, changes: Partial<EditOrderLine>) {
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      items: currentDraft.items.map((item) =>
+        item.id === lineId ? { ...item, ...changes } : item
+      ),
+    }));
+  }
+
+  function changeLineProduct(lineId: string, productId: string) {
+    const product = productsById.get(productId);
+    if (!product) return;
+
+    updateLine(lineId, {
+      productId: product.id,
+      name: product.name,
+      category: product.category,
+      status: "niet_gestart",
+    });
+  }
+
+  function addProductLine() {
+    const product = products[0];
+    if (!product) return;
+
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      items: [
+        ...currentDraft.items,
+        {
+          id: `edit-${Date.now()}-${currentDraft.items.length}`,
+          productId: product.id,
+          name: product.name,
+          category: product.category,
+          quantity: 1,
+          status: "niet_gestart",
+          detail: "",
+        },
+      ],
+    }));
+  }
+
+  function removeLine(lineId: string) {
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      items: currentDraft.items.filter((item) => item.id !== lineId),
+    }));
+  }
+
+  function saveDraft() {
+    if (!draft.tableNumber.trim() || draft.items.length < 1) return;
+    onSave({
+      ...draft,
+      tableNumber: draft.tableNumber.trim(),
+      items: draft.items.map((item) => ({
+        ...item,
+        quantity: Math.max(1, Math.min(99, Math.round(item.quantity) || 1)),
+        detail: item.detail.trim(),
+      })),
+    });
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-[#1a1815]/55 p-2 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Bon ${order.tableNumber} wijzigen`}
+    >
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="Bewerken sluiten"
+        onClick={onClose}
+      />
+      <section className="relative z-10 grid max-h-[92vh] w-full max-w-3xl gap-2 overflow-y-auto rounded-lg border border-[#d6e5d8] bg-[#faf8f5] p-2 shadow-2xl sm:gap-3 sm:p-3">
+        <header className="flex items-start justify-between gap-2 rounded-md bg-white p-2">
+          <div className="min-w-0">
+            <p className="text-[0.62rem] font-black uppercase text-[#ef7d0a] sm:text-xs">
+              Bon wijzigen
+            </p>
+            <h2 className="text-base font-black leading-tight text-[#24551d] sm:text-xl">
+              {order.tableNumber}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#24551d] text-sm font-black text-white active:scale-[0.96]"
+            aria-label="Bewerken sluiten"
+          >
+            X
+          </button>
+        </header>
+
+        <div className="grid gap-2 rounded-md bg-white p-2 sm:grid-cols-[1fr_1fr]">
+          <label className="grid gap-1 text-[0.65rem] font-black uppercase text-[#6b645b]">
+            Tafel
+            <select
+              value={tableValue}
+              onChange={(event) => {
+                const table = vierdaagseTables.find(
+                  (option) => option.label === event.target.value
+                );
+                setDraft((currentDraft) => ({
+                  ...currentDraft,
+                  tableNumber: table ? table.label : currentDraft.tableNumber,
+                  location: table ? table.location : currentDraft.location,
+                }));
+              }}
+              className="min-h-10 rounded-md border border-[#d8d0c5] bg-white px-2 text-sm font-bold normal-case text-[#1a1815] outline-none focus:border-[#24551d]"
+            >
+              {vierdaagseTables.map((table) => (
+                <option key={table.id} value={table.label}>
+                  {table.label} - {getLocationLabel(table.location)}
+                </option>
+              ))}
+              <option value="custom">Anders / to go</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-[0.65rem] font-black uppercase text-[#6b645b]">
+            Tafeltekst
+            <input
+              value={draft.tableNumber}
+              onChange={(event) =>
+                setDraft((currentDraft) => ({
+                  ...currentDraft,
+                  tableNumber: event.target.value,
+                }))
+              }
+              className="min-h-10 rounded-md border border-[#d8d0c5] bg-white px-2 text-sm font-bold normal-case text-[#1a1815] outline-none focus:border-[#24551d]"
+            />
+          </label>
+          <label className="grid gap-1 text-[0.65rem] font-black uppercase text-[#6b645b] sm:col-span-2">
+            Notitie
+            <input
+              value={draft.note}
+              onChange={(event) =>
+                setDraft((currentDraft) => ({
+                  ...currentDraft,
+                  note: event.target.value,
+                }))
+              }
+              className="min-h-10 rounded-md border border-[#d8d0c5] bg-white px-2 text-sm font-semibold normal-case text-[#1a1815] outline-none focus:border-[#24551d]"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-1.5">
+          {draft.items.map((item) => (
+            <div
+              key={item.id}
+              className="grid gap-1 rounded-md border border-[#e8e4de] bg-white p-1.5 sm:grid-cols-[4.8rem_minmax(0,1fr)_minmax(0,1fr)_2.4rem] sm:items-end"
+            >
+              <label className="grid gap-1 text-[0.62rem] font-black uppercase text-[#6b645b]">
+                Aantal
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={item.quantity}
+                  onChange={(event) =>
+                    updateLine(item.id, {
+                      quantity: Number(event.target.value) || 1,
+                      status: "niet_gestart",
+                    })
+                  }
+                  className="min-h-10 rounded-md border border-[#d8d0c5] px-2 text-sm font-black text-[#ef7d0a] outline-none focus:border-[#24551d]"
+                />
+              </label>
+              <label className="grid gap-1 text-[0.62rem] font-black uppercase text-[#6b645b]">
+                Product
+                <select
+                  value={item.productId}
+                  onChange={(event) =>
+                    changeLineProduct(item.id, event.target.value)
+                  }
+                  className="min-h-10 rounded-md border border-[#d8d0c5] bg-white px-2 text-sm font-bold normal-case text-[#1a1815] outline-none focus:border-[#24551d]"
+                >
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-[0.62rem] font-black uppercase text-[#6b645b]">
+                Optie
+                <input
+                  value={item.detail}
+                  onChange={(event) =>
+                    updateLine(item.id, {
+                      detail: event.target.value,
+                      status: "niet_gestart",
+                    })
+                  }
+                  placeholder="Bijv. havermelk"
+                  className="min-h-10 rounded-md border border-[#d8d0c5] px-2 text-sm font-semibold normal-case text-[#1a1815] outline-none focus:border-[#24551d]"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={draft.items.length <= 1}
+                onClick={() => removeLine(item.id)}
+                className="min-h-10 rounded-md border border-[#f0b4a8] bg-white px-2 text-xs font-black text-[#9d2f20] disabled:opacity-30 active:scale-[0.98]"
+              >
+                Weg
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <button
+            type="button"
+            onClick={addProductLine}
+            className="min-h-10 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-black text-[#24551d] active:scale-[0.98]"
+          >
+            Product erbij
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-10 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-black text-[#6b645b] active:scale-[0.98]"
+          >
+            Annuleer
+          </button>
+          <button
+            type="button"
+            onClick={saveDraft}
+            className="min-h-10 rounded-md bg-[#24551d] px-2 text-xs font-black text-white active:scale-[0.98]"
+          >
+            Opslaan
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function OrderCard({
   order,
   now,
@@ -275,6 +627,7 @@ function OrderCard({
   onRefresh,
   onDelete,
   onShowTableMap,
+  onEdit,
 }: Readonly<{
   order: VierdaagseOrder;
   now: Date;
@@ -283,6 +636,7 @@ function OrderCard({
   onRefresh: () => void;
   onDelete?: (order: VierdaagseOrder) => void;
   onShowTableMap: (tableNumber: string) => void;
+  onEdit: (order: VierdaagseOrder) => void;
 }>) {
   const elapsed = minutesBetween(order.createdAt, now);
   const displayMinutes = archive
@@ -410,7 +764,7 @@ function OrderCard({
                 setOrderItemsReady(order.id, !allReady);
                 onRefresh();
               }}
-              className={`grid h-6 w-6 place-items-center rounded-md border text-xs font-black leading-none transition active:scale-[0.96] ${
+              className={`-m-1 grid h-8 w-8 place-items-center rounded-md border text-base font-black leading-none transition active:scale-[0.96] ${
                 allReady
                   ? readyForService
                     ? "border-white bg-white text-[#24551d]"
@@ -464,7 +818,7 @@ function OrderCard({
               <button
                 type="button"
                 onClick={() => setItemStatus(item.id, item.status !== "klaar")}
-                className={`grid h-6 w-6 place-items-center rounded-md text-sm font-black leading-none transition active:scale-[0.98] ${
+                className={`-m-1 grid h-8 w-8 place-items-center rounded-md text-lg font-black leading-none transition active:scale-[0.98] ${
                   item.status === "klaar"
                     ? readyForService
                       ? "bg-white text-[#24551d]"
@@ -496,7 +850,7 @@ function OrderCard({
 
       <footer
         className={
-          archive ? "grid gap-1" : "grid gap-1 sm:grid-cols-[1fr_auto]"
+          archive ? "grid gap-1" : "grid gap-1 sm:grid-cols-[1fr_auto_auto]"
         }
       >
         {!archive && (
@@ -511,6 +865,13 @@ function OrderCard({
               className="min-h-7 rounded-md bg-[#ef7d0a] px-2 text-[0.68rem] font-black text-white shadow-sm disabled:opacity-35 active:scale-[0.98] sm:min-h-8 sm:text-xs"
             >
               Geleverd
+            </button>
+            <button
+              type="button"
+              onClick={() => onEdit(order)}
+              className="min-h-7 rounded-md border border-[#d8d0c5] bg-white px-2 text-[0.68rem] font-black text-[#24551d] active:scale-[0.98] sm:min-h-8 sm:text-xs"
+            >
+              Wijzig
             </button>
             <button
               type="button"
@@ -556,6 +917,8 @@ export default function VierdaagseProductieBedieningPage() {
   const [boardMessage, setBoardMessage] = useState("");
   const [boardError, setBoardError] = useState("");
   const [mapTableNumber, setMapTableNumber] = useState<string | null>(null);
+  const [editingOrder, setEditingOrder] = useState<VierdaagseOrder | null>(null);
+  const [products, setProducts] = useState<VierdaagseProduct[]>(vierdaagseProducts);
 
   function refreshOrders() {
     setOrders(getAllOrders());
@@ -569,6 +932,10 @@ export default function VierdaagseProductieBedieningPage() {
   useEffect(() => {
     refreshOrders();
     void refreshOrdersFromWordPress();
+    setProducts(getStoredVierdaagseProducts());
+    void fetchVierdaagseProductsFromWordPress().then((result) => {
+      setProducts(result.data);
+    });
     const unsubscribe = subscribeVierdaagseOrders(refreshOrders);
     const interval = window.setInterval(() => {
       setNow(new Date());
@@ -580,6 +947,11 @@ export default function VierdaagseProductieBedieningPage() {
       window.clearInterval(interval);
     };
   }, []);
+
+  const availableProducts = useMemo(
+    () => getProductsForOrders(products, orders),
+    [orders, products]
+  );
 
   const activeOrders = useMemo(
     () =>
@@ -673,6 +1045,31 @@ export default function VierdaagseProductieBedieningPage() {
     }
 
     setDeletingOrderId(null);
+  }
+
+  function handleSaveEditedOrder(draft: EditOrderDraft) {
+    if (!editingOrder) return;
+
+    const table = vierdaagseTables.find(
+      (option) => option.label === draft.tableNumber
+    );
+    const updatedOrder = updateVierdaagseOrderDetails(editingOrder.id, {
+      tableNumber: draft.tableNumber,
+      location: table ? table.location : "geen_tafel",
+      note: draft.note,
+      items: draft.items.map(normalizeEditLine),
+    });
+
+    refreshOrders();
+    setEditingOrder(null);
+
+    if (updatedOrder) {
+      setBoardError("");
+      setBoardMessage(`Bon ${updatedOrder.tableNumber} is bijgewerkt.`);
+    } else {
+      setBoardMessage("");
+      setBoardError("Bon bijwerken is niet gelukt.");
+    }
   }
 
   return (
@@ -791,7 +1188,7 @@ export default function VierdaagseProductieBedieningPage() {
                 className="min-h-9 rounded-md border border-[#d8d0c5] bg-white px-2 text-xs font-semibold sm:min-h-11 sm:px-3 sm:text-sm"
               >
                 <option value="">Alle producten</option>
-                {vierdaagseProducts.map((product) => (
+                {availableProducts.map((product) => (
                   <option key={product.id} value={product.id}>
                     {product.name}
                   </option>
@@ -887,10 +1284,19 @@ export default function VierdaagseProductieBedieningPage() {
               onRefresh={refreshOrders}
               onDelete={handleDeleteArchivedOrder}
               onShowTableMap={setMapTableNumber}
+              onEdit={setEditingOrder}
             />
           ))}
         </section>
       </div>
+      {editingOrder && (
+        <OrderEditDialog
+          order={editingOrder}
+          products={availableProducts}
+          onClose={() => setEditingOrder(null)}
+          onSave={handleSaveEditedOrder}
+        />
+      )}
       <TableMapDialog
         open={mapTableNumber !== null}
         highlightedTable={mapTableNumber || undefined}
