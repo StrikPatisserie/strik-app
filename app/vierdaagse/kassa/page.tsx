@@ -121,6 +121,25 @@ function detailOptionsForProduct(product?: VierdaagseProduct) {
     : product?.detailOptions || [];
 }
 
+function productButtonNameClass(name: string) {
+  const length = name.trim().length;
+  const baseClass = "pr-5 font-black text-[#1a1815] break-words";
+
+  if (length >= 24) {
+    return `${baseClass} line-clamp-3 text-[0.5rem] leading-[0.6rem] sm:text-[0.56rem] sm:leading-[0.66rem]`;
+  }
+
+  if (length >= 16) {
+    return `${baseClass} line-clamp-3 text-[0.56rem] leading-[0.66rem] sm:text-[0.62rem] sm:leading-[0.72rem]`;
+  }
+
+  if (length >= 11) {
+    return `${baseClass} line-clamp-2 text-[0.64rem] leading-[0.76rem] sm:text-[0.68rem] sm:leading-[0.8rem]`;
+  }
+
+  return `${baseClass} line-clamp-2 text-[0.72rem] leading-[0.92rem]`;
+}
+
 function moveOneDraftLineToDetail(
   lines: DraftLine[],
   lineKey: string,
@@ -931,7 +950,7 @@ export default function VierdaagseKassaPage() {
                       onClick={() => handleProductAdd(product)}
                       className="relative flex min-h-[3.1rem] items-center rounded-md border border-[#d6e5d8] bg-[#f6faf4] px-2 py-1 text-left transition active:scale-[0.98]"
                     >
-                      <span className="line-clamp-2 pr-5 text-[0.72rem] font-black leading-[0.92rem] text-[#1a1815]">
+                      <span className={productButtonNameClass(product.name)}>
                         {product.name}
                       </span>
                       {count > 0 && (
