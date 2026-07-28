@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 
 type CupcakeOrder = {
   id: string;
+  mailType?: "cupcake-jubilee" | "major-jubilee" | "birthday-cake";
   employeeName: string;
-  yearsLabel: string;
+  yearsLabel?: string;
+  eventDateLabel?: string;
   deliveryShop: string;
   deliveryDateLabel: string;
 };
@@ -19,13 +21,24 @@ type CupcakeOrderResponse = {
   wordpressStatus?: number;
 };
 
+function mailTypeLabel(order: CupcakeOrder) {
+  if (order.mailType === "birthday-cake") return "verjaardagstaart";
+  if (order.mailType === "major-jubilee") return "jubileum-reminder";
+
+  return "cupcake";
+}
+
 function orderLine(order: CupcakeOrder) {
-  return `${order.employeeName} · ${order.yearsLabel} jaar · ${
+  const eventLabel = order.yearsLabel
+    ? `${order.yearsLabel} jaar`
+    : order.eventDateLabel || "verjaardag";
+
+  return `${mailTypeLabel(order)} · ${order.employeeName} · ${eventLabel} · ${
     order.deliveryShop || "Onbekend"
   }`;
 }
 
-export default function CupcakeAutoOrderPanel() {
+export default function PersonnelAutoMailPanel() {
   const requestedRef = useRef(false);
   const [data, setData] = useState<CupcakeOrderResponse | null>(null);
   const [error, setError] = useState("");
@@ -36,7 +49,7 @@ export default function CupcakeAutoOrderPanel() {
 
     async function sendCupcakeOrders() {
       try {
-        const response = await fetch("/api/cupcake-jubilee-orders", {
+        const response = await fetch("/api/personnel-mail-orders", {
           method: "POST",
           cache: "no-store",
         });
@@ -46,7 +59,8 @@ export default function CupcakeAutoOrderPanel() {
 
         if (!response.ok) {
           setError(
-            responseData?.message || "Cupcake-bestelling versturen lukt nog niet."
+            responseData?.message ||
+              "Personeelsmails versturen lukt nog niet."
           );
           setData(responseData);
           return;
@@ -54,7 +68,7 @@ export default function CupcakeAutoOrderPanel() {
 
         setData(responseData);
       } catch {
-        setError("Cupcake-bestelling controleren lukt nog niet.");
+        setError("Personeelsmails controleren lukt nog niet.");
       }
     }
 
@@ -74,10 +88,10 @@ export default function CupcakeAutoOrderPanel() {
     ? "border-[#24551d] bg-[#eef6eb] text-[#1f4819]"
     : "border-[#f1d28f] bg-[#fff9e8] text-[#5f4810]";
   const title = error
-    ? "Cupcake mail niet verstuurd"
+    ? "Personeelsmail niet verstuurd"
     : sent.length
-    ? `${sent.length} cupcake-mail${sent.length === 1 ? "" : "s"} verstuurd`
-    : `${skipped.length} cupcake-mail${
+    ? `${sent.length} personeelsmail${sent.length === 1 ? "" : "s"} verstuurd`
+    : `${skipped.length} personeelsmail${
         skipped.length === 1 ? "" : "s"
       } al verstuurd`;
   const visibleOrders = [...sent, ...skipped, ...failed].slice(0, 3);

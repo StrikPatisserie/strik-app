@@ -9,6 +9,7 @@ import {
 import {
   PersonnelJubileeAlert,
   formatJubileeYears,
+  getPersonnelEventOccurrenceDate,
   getUpcomingPersonnelJubileeAlerts,
 } from "../strik-agenda/personnelJubilees";
 
@@ -16,8 +17,25 @@ type AgendaEventsResponse = {
   events?: unknown[];
 };
 
-const seenStorageKey = "strik-management-jubilee-alerts-seen";
-const acknowledgedStorageKey = "strik-management-jubilee-alerts-acknowledged";
+type BirthdayAlert = {
+  kind: "birthday";
+  id: string;
+  event: TeamAgendaEvent;
+  employeeName: string;
+  firstName: string;
+  daysUntil: number;
+  occurrenceDate: Date;
+  label: "verjaardag";
+};
+
+type CelebrationAlert =
+  | (PersonnelJubileeAlert & { kind: "jubilee" })
+  | BirthdayAlert;
+
+const birthdayLookaheadDays = 5;
+const seenStorageKey = "strik-management-celebration-alerts-seen";
+const acknowledgedStorageKey =
+  "strik-management-celebration-alerts-acknowledged";
 
 async function fetchEvents(url: string) {
   const res = await fetch(url, { cache: "no-store" });
@@ -45,18 +63,113 @@ function formatDaysUntil(daysUntil: number) {
   return `over ${daysUntil} dagen`;
 }
 
-function getAlertKey(alerts: PersonnelJubileeAlert[]) {
+function getFirstName(employeeName: string) {
+  return employeeName.trim().split(/\s+/)[0] || employeeName;
+}
+
+function daysUntil(date: Date, today: Date) {
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+
+  return Math.round((date.getTime() - today.getTime()) / millisecondsPerDay);
+}
+
+function getBirthdayEmployeeName(event: TeamAgendaEvent) {
+  if (event.employeeName) return event.employeeName;
+
+  return event.title.replace(/\s+is jarig$/i, "").trim() || event.title;
+}
+
+function getUpcomingBirthdayAlerts(
+  events: TeamAgendaEvent[],
+  today = new Date()
+): BirthdayAlert[] {
+  const baseToday = new Date(today);
+  baseToday.setHours(0, 0, 0, 0);
+
+  return events.flatMap((event): BirthdayAlert[] => {
+    if (event.type !== "birthday") return [];
+
+    const occurrenceDate = getPersonnelEventOccurrenceDate(event, baseToday);
+    if (!occurrenceDate) return [];
+
+    const eventDaysUntil = daysUntil(occurrenceDate, baseToday);
+    if (eventDaysUntil < 0 || eventDaysUntil > birthdayLookaheadDays) return [];
+
+    const employeeName = getBirthdayEmployeeName(event);
+
+    return [
+      {
+        kind: "birthday",
+        id: `${event.id}-${eventDaysUntil}-birthday`,
+        event,
+        employeeName,
+        firstName: getFirstName(employeeName),
+        daysUntil: eventDaysUntil,
+        occurrenceDate,
+        label: "verjaardag",
+      },
+    ];
+  });
+}
+
+function getUpcomingCelebrationAlerts(
+  events: TeamAgendaEvent[],
+  today = new Date()
+): CelebrationAlert[] {
+  const birthdays = getUpcomingBirthdayAlerts(events, today);
+  const jubilees = getUpcomingPersonnelJubileeAlerts(events, today).map(
+    (alert): CelebrationAlert => ({
+      ...alert,
+      kind: "jubilee",
+    })
+  );
+
+  return [...birthdays, ...jubilees].sort((first, second) => {
+    const dayDiff = first.daysUntil - second.daysUntil;
+    if (dayDiff !== 0) return dayDiff;
+
+    if (first.kind !== second.kind) {
+      return first.kind === "birthday" ? -1 : 1;
+    }
+
+    if (first.kind === "jubilee" && second.kind === "jubilee") {
+      return second.years - first.years;
+    }
+
+    return getAlertTitle(first).localeCompare(getAlertTitle(second));
+  });
+}
+
+function getAlertKey(alerts: CelebrationAlert[]) {
   return alerts
-    .map(
-      (alert) =>
-        `${alert.event.id}:${alert.occurrenceDate.toISOString()}:${formatJubileeYears(
-          alert.years
-        )}`
-    )
+    .map((alert) => {
+      if (alert.kind === "birthday") {
+        return `${alert.kind}:${alert.event.id}:${alert.occurrenceDate.toISOString()}`;
+      }
+
+      return `${alert.kind}:${alert.event.id}:${alert.occurrenceDate.toISOString()}:${formatJubileeYears(
+        alert.years
+      )}`;
+    })
     .join("|");
 }
 
-function alertTone(alert: PersonnelJubileeAlert) {
+function getAlertTitle(alert: CelebrationAlert) {
+  if (alert.kind === "birthday") return `${alert.employeeName} is jarig`;
+
+  return alert.event.title;
+}
+
+function getAlertDetail(alert: CelebrationAlert) {
+  if (alert.kind === "birthday") {
+    return `Taartje: Gefeliciteerd ${alert.firstName}`;
+  }
+
+  return `${formatJubileeYears(alert.years)} jaar in dienst`;
+}
+
+function alertTone(alert: CelebrationAlert) {
+  if (alert.kind === "birthday") return "border-white/35 bg-white text-[#8f2f1d]";
   if (alert.level === "major") return "border-white/35 bg-white text-[#8f2f1d]";
   if (alert.level === "medium") return "border-white/30 bg-white/90 text-[#5f4810]";
 
@@ -94,7 +207,7 @@ export default function JubileeReminderPanel() {
     };
   }, []);
 
-  const alerts = useMemo(() => getUpcomingPersonnelJubileeAlerts(events), [
+  const alerts = useMemo(() => getUpcomingCelebrationAlerts(events), [
     events,
   ]);
   const alertKey = useMemo(() => getAlertKey(alerts), [alerts]);
@@ -131,7 +244,7 @@ export default function JubileeReminderPanel() {
             href="/management/agenda"
             className="min-w-0 flex-1 text-xs font-black uppercase leading-tight"
           >
-            {alerts.length} jubileum-melding{alerts.length === 1 ? "" : "en"}{" "}
+            {alerts.length} personeelsmelding{alerts.length === 1 ? "" : "en"}{" "}
             open
           </Link>
           <button
@@ -151,14 +264,17 @@ export default function JubileeReminderPanel() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-[0.62rem] font-black uppercase leading-tight text-white/78">
-            Jubileum voorbereiden
+            {primaryAlert.kind === "birthday"
+              ? "Verjaardag voorbereiden"
+              : "Jubileum voorbereiden"}
           </p>
           <h2 className="mt-0.5 text-sm font-black leading-tight sm:text-base">
-            {primaryAlert.event.title}
+            {getAlertTitle(primaryAlert)}
           </h2>
           <p className="mt-0.5 text-[0.72rem] font-bold leading-tight text-white/82 sm:text-xs">
             {formatAlertDate(primaryAlert.occurrenceDate)} ·{" "}
-            {formatDaysUntil(primaryAlert.daysUntil)}
+            {formatDaysUntil(primaryAlert.daysUntil)} ·{" "}
+            {getAlertDetail(primaryAlert)}
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -190,7 +306,7 @@ export default function JubileeReminderPanel() {
               {formatAlertDate(alert.occurrenceDate)}
             </span>
             <span className="min-w-0 truncate text-xs font-black">
-              {alert.event.title}
+              {getAlertTitle(alert)} · {getAlertDetail(alert)}
             </span>
             <span className="text-[0.66rem] font-black">
               {formatDaysUntil(alert.daysUntil)}
