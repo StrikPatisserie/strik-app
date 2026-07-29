@@ -91,6 +91,61 @@ function isRecepturenData(data: unknown) {
   );
 }
 
+function listCount(data: unknown, key: "recipes" | "ingredients" | "packagingItems") {
+  if (!data || typeof data !== "object") return 0;
+
+  const value = (data as Record<string, unknown>)[key];
+
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function isDangerousShrink(incoming: unknown, current: unknown) {
+  const incomingRecipes = listCount(incoming, "recipes");
+  const currentRecipes = listCount(current, "recipes");
+  const incomingIngredients = listCount(incoming, "ingredients");
+  const currentIngredients = listCount(current, "ingredients");
+
+  return (
+    (currentRecipes >= 50 &&
+      incomingRecipes <= currentRecipes - 10 &&
+      incomingRecipes < currentRecipes * 0.85) ||
+    (currentIngredients >= 100 &&
+      incomingIngredients <= currentIngredients - 25 &&
+      incomingIngredients < currentIngredients * 0.85)
+  );
+}
+
+async function createShrinkProtectionResponse(incomingData: unknown) {
+  const response = await fetchWordPressRecepturen();
+  const currentData = await readWordPressResponse(response);
+
+  if (!response.ok || !isRecepturenData(currentData)) {
+    return null;
+  }
+
+  if (!isDangerousShrink(incomingData, currentData)) {
+    return null;
+  }
+
+  return NextResponse.json(
+    {
+      message:
+        "Opslaan geblokkeerd: deze tab heeft minder recepturen dan de live opslag. Ververs de pagina om de nieuwste recepturen te laden.",
+      liveCounts: {
+        recipes: listCount(currentData, "recipes"),
+        ingredients: listCount(currentData, "ingredients"),
+        packagingItems: listCount(currentData, "packagingItems"),
+      },
+      incomingCounts: {
+        recipes: listCount(incomingData, "recipes"),
+        ingredients: listCount(incomingData, "ingredients"),
+        packagingItems: listCount(incomingData, "packagingItems"),
+      },
+    },
+    { status: 409 }
+  );
+}
+
 export async function GET() {
   try {
     const response = await fetchWordPressRecepturen();
@@ -122,9 +177,11 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   let body = "";
+  let incomingData: unknown = null;
 
   try {
     body = await request.text();
+    incomingData = JSON.parse(body) as unknown;
   } catch {
     return NextResponse.json(
       { message: "Recepturendata kon niet gelezen worden." },
@@ -133,6 +190,15 @@ export async function PUT(request: Request) {
   }
 
   try {
+    if (new URL(request.url).searchParams.get("force") !== "1") {
+      const shrinkProtectionResponse =
+        await createShrinkProtectionResponse(incomingData);
+
+      if (shrinkProtectionResponse) {
+        return shrinkProtectionResponse;
+      }
+    }
+
     const response = await fetch(getWordPressRecepturenUrl(), {
       method: "PUT",
       headers: {

@@ -367,6 +367,7 @@ export async function saveRecepturenData(
   try {
     const appResult = await saveRecepturenDataTo(APP_RECEPTUREN_API_URL, data);
     if (appResult.ok) return appResult;
+    if (appResult.status && appResult.status < 500) return appResult;
   } catch {
     // Probeer WordPress direct als de app-route tijdelijk hapert.
   }
