@@ -3,6 +3,7 @@ import Link from "next/link";
 import { strikIcons } from "./StrikUI";
 import StrikPageTitle from "./StrikPageTitle";
 import { filterVisibleMainNavigationItems } from "./featureVisibility";
+import { getFeatureVisibilitySettings } from "./lib/appSettings";
 import { filterAllowedItems } from "./lib/auth/access";
 import { getCurrentProfile } from "./lib/auth/session";
 
@@ -43,9 +44,12 @@ const baseSections = [
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const profile = await getCurrentProfile();
+  const [profile, featureVisibility] = await Promise.all([
+    getCurrentProfile(),
+    getFeatureVisibilitySettings(),
+  ]);
   const visibleSections = filterAllowedItems(
-    filterVisibleMainNavigationItems(baseSections),
+    filterVisibleMainNavigationItems(baseSections, featureVisibility),
     profile
   );
 

@@ -4,7 +4,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { strikIcons } from "./StrikUI";
-import { filterVisibleMainNavigationItems } from "./featureVisibility";
+import {
+  filterVisibleMainNavigationItems,
+  type FeatureVisibilitySettings,
+} from "./featureVisibility";
 import { filterAllowedItems } from "./lib/auth/access";
 import type { UserProfile } from "./lib/supabase/types";
 
@@ -31,11 +34,15 @@ function isActivePath(pathname: string, href: string) {
 }
 
 export default function BottomNav({
+  featureVisibility,
   profile,
-}: Readonly<{ profile: UserProfile | null }>) {
+}: Readonly<{
+  featureVisibility: FeatureVisibilitySettings;
+  profile: UserProfile | null;
+}>) {
   const pathname = usePathname();
   const visibleItems = filterAllowedItems(
-    filterVisibleMainNavigationItems(items),
+    filterVisibleMainNavigationItems(items, featureVisibility),
     profile
   );
 

@@ -29,6 +29,13 @@ export type UserProfile = {
   created_at: string;
 };
 
+export type AppSetting = {
+  key: string;
+  value: Json;
+  updated_at: string;
+  updated_by: string | null;
+};
+
 export const USER_ROLES: { id: UserRole; label: string }[] = [
   { id: "admin", label: "Admin" },
   { id: "manager", label: "Management" },
@@ -106,6 +113,28 @@ export type Database = {
           {
             foreignKeyName: "profiles_id_fkey";
             columns: ["id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      app_settings: {
+        Row: AppSetting;
+        Insert: {
+          key: string;
+          value?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          value?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "app_settings_updated_by_fkey";
+            columns: ["updated_by"];
             referencedRelation: "users";
             referencedColumns: ["id"];
           }

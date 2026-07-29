@@ -5,12 +5,18 @@ import BottomNav from "./BottomNav";
 import LogoutButton from "./LogoutButton";
 import NotificationMonitor from "./NotificationMonitor";
 import WinkelSidebar from "./WinkelSidebar";
+import type { FeatureVisibilitySettings } from "./featureVisibility";
 import type { UserProfile } from "./lib/supabase/types";
 
 export default function AppChrome({
   children,
+  featureVisibility,
   profile,
-}: Readonly<{ children: React.ReactNode; profile: UserProfile | null }>) {
+}: Readonly<{
+  children: React.ReactNode;
+  featureVisibility: FeatureVisibilitySettings;
+  profile: UserProfile | null;
+}>) {
   const pathname = usePathname();
   const isAuthArea =
     pathname === "/login" ||
@@ -44,7 +50,10 @@ export default function AppChrome({
       <LogoutButton profile={profile} />
       <div className="min-h-dvh bg-[#faf8f5]">
         <div className="flex min-h-dvh flex-row">
-          <WinkelSidebar profile={profile} />
+          <WinkelSidebar
+            profile={profile}
+            featureVisibility={featureVisibility}
+          />
 
           <main
             className={`flex-1 overflow-auto ${
@@ -57,7 +66,7 @@ export default function AppChrome({
           </main>
         </div>
       </div>
-      <BottomNav profile={profile} />
+      <BottomNav profile={profile} featureVisibility={featureVisibility} />
     </>
   );
 }

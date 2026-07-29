@@ -5,7 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import NewsUnreadBadge from "./NewsUnreadBadge";
 import { strikIcons } from "./StrikUI";
-import { filterVisibleMainNavigationItems } from "./featureVisibility";
+import {
+  filterVisibleMainNavigationItems,
+  type FeatureVisibilitySettings,
+} from "./featureVisibility";
 import { filterAllowedItems } from "./lib/auth/access";
 import type { UserProfile } from "./lib/supabase/types";
 
@@ -108,14 +111,18 @@ function isVierdaagseWorkArea(pathname: string) {
 }
 
 export default function WinkelSidebar({
+  featureVisibility,
   profile,
-}: Readonly<{ profile: UserProfile | null }>) {
+}: Readonly<{
+  featureVisibility: FeatureVisibilitySettings;
+  profile: UserProfile | null;
+}>) {
   const pathname = usePathname();
   const showWinkelSubNav = isWinkelWorkArea(pathname);
   const showBakkerijSubNav = isBakkerijWorkArea(pathname);
   const showVierdaagseNav = isVierdaagseWorkArea(pathname);
   const mainItems = filterAllowedItems(
-    filterVisibleMainNavigationItems(mainNavItems),
+    filterVisibleMainNavigationItems(mainNavItems, featureVisibility),
     profile
   );
   const subNavItems: NavItem[] = filterAllowedItems(

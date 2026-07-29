@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import AppChrome from "./AppChrome";
 import { getCurrentProfile } from "./lib/auth/session";
+import { getFeatureVisibilitySettings } from "./lib/appSettings";
 
 export const metadata: Metadata = {
   title: "Strik Team app",
@@ -28,12 +29,17 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const profile = await getCurrentProfile();
+  const [profile, featureVisibility] = await Promise.all([
+    getCurrentProfile(),
+    getFeatureVisibilitySettings(),
+  ]);
 
   return (
     <html lang="nl" className="bg-[#faf8f5]">
       <body className="min-h-dvh bg-[#faf8f5] text-[#1a1815]">
-        <AppChrome profile={profile}>{children}</AppChrome>
+        <AppChrome profile={profile} featureVisibility={featureVisibility}>
+          {children}
+        </AppChrome>
       </body>
     </html>
   );

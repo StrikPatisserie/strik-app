@@ -53,12 +53,20 @@ const bottomItems = [
     tone: "muted" as const,
   },
   {
+    href: "/settings/app",
+    label: "Settings",
+    title: "App instellingen",
+    description: "Zet seizoensmenu's zoals Vierdaagse aan of uit.",
+    icon: strikIcons.management,
+    tone: "green" as const,
+  },
+  {
     href: "/settings/users",
     label: "Settings",
     title: "Gebruikers",
     description: "Accounts, rollen, winkels en rechten beheren.",
     icon: strikIcons.management,
-    tone: "green" as const,
+    tone: "muted" as const,
   },
 ];
 
