@@ -5,9 +5,7 @@ import {
   strikIcons,
 } from "../StrikUI";
 import Link from "next/link";
-import PersonnelAutoMailPanel from "./CupcakeAutoOrderPanel";
-import JubileeReminderPanel from "./JubileeReminderPanel";
-import WordPressStatusPanel from "./WordPressStatusPanel";
+import ManagementStatusSection from "./ManagementStatusSection";
 
 type ManagementMenuItem = {
   href: string;
@@ -139,20 +137,7 @@ export default function ManagementPage() {
         ))}
       </div>
 
-      <details className="group mt-5">
-        <summary className="flex cursor-pointer list-none items-center justify-between border-y border-[#e7e0d8] py-3 text-sm font-black text-[#2d2a26]/70 [&::-webkit-details-marker]:hidden">
-          Meldingen & status
-          <span className="text-xl leading-none transition group-open:rotate-90">
-            &gt;
-          </span>
-        </summary>
-
-        <div className="mt-3 grid gap-3">
-          <JubileeReminderPanel />
-          <PersonnelAutoMailPanel />
-          <WordPressStatusPanel />
-        </div>
-      </details>
+      <ManagementStatusSection />
     </StrikShell>
   );
 }

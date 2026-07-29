@@ -32,6 +32,15 @@ type CelebrationAlert =
   | (PersonnelJubileeAlert & { kind: "jubilee" })
   | BirthdayAlert;
 
+export type JubileeReminderStatus = {
+  loading: boolean;
+  openAlertCount: number;
+};
+
+type JubileeReminderPanelProps = {
+  onStatusChange?: (status: JubileeReminderStatus) => void;
+};
+
 const birthdayLookaheadDays = 5;
 const seenStorageKey = "strik-management-celebration-alerts-seen";
 const acknowledgedStorageKey =
@@ -176,13 +185,16 @@ function alertTone(alert: CelebrationAlert) {
   return "border-white/30 bg-white/90 text-[#24551d]";
 }
 
-export default function JubileeReminderPanel() {
+export default function JubileeReminderPanel({
+  onStatusChange,
+}: Readonly<JubileeReminderPanelProps> = {}) {
   const [events, setEvents] = useState<TeamAgendaEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [displayMode, setDisplayMode] = useState<"large" | "compact">(
     "compact"
   );
   const [acknowledgedKey, setAcknowledgedKey] = useState("");
+  const [checkedAlertKey, setCheckedAlertKey] = useState("");
 
   useEffect(() => {
     let ignoreResult = false;
@@ -216,6 +228,8 @@ export default function JubileeReminderPanel() {
     if (!alertKey) return;
 
     const seenKey = window.localStorage.getItem(seenStorageKey);
+    // Local storage is the acknowledgement source for these browser-only reminders.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAcknowledgedKey(
       window.localStorage.getItem(acknowledgedStorageKey) || ""
     );
@@ -223,9 +237,31 @@ export default function JubileeReminderPanel() {
     if (seenKey !== alertKey) {
       window.localStorage.setItem(seenStorageKey, alertKey);
     }
+    setCheckedAlertKey(alertKey);
   }, [alertKey]);
 
-  if (loading || alerts.length === 0 || acknowledgedKey === alertKey) {
+  const hasCheckedCurrentAlertKey = !alertKey || checkedAlertKey === alertKey;
+  const openAlertCount =
+    !loading &&
+    hasCheckedCurrentAlertKey &&
+    alerts.length > 0 &&
+    acknowledgedKey !== alertKey
+      ? alerts.length
+      : 0;
+
+  useEffect(() => {
+    onStatusChange?.({
+      loading,
+      openAlertCount,
+    });
+  }, [loading, onStatusChange, openAlertCount]);
+
+  if (
+    loading ||
+    alerts.length === 0 ||
+    !hasCheckedCurrentAlertKey ||
+    acknowledgedKey === alertKey
+  ) {
     return null;
   }
 
