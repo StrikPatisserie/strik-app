@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { strikIcons } from "./StrikUI";
+import { filterVisibleMainNavigationItems } from "./featureVisibility";
 import { filterAllowedItems } from "./lib/auth/access";
 import type { UserProfile } from "./lib/supabase/types";
 
@@ -33,7 +34,10 @@ export default function BottomNav({
   profile,
 }: Readonly<{ profile: UserProfile | null }>) {
   const pathname = usePathname();
-  const visibleItems = filterAllowedItems(items, profile);
+  const visibleItems = filterAllowedItems(
+    filterVisibleMainNavigationItems(items),
+    profile
+  );
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#e8e4de] bg-white/95 px-4 py-3 backdrop-blur-md md:hidden">

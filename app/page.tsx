@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { strikIcons } from "./StrikUI";
 import StrikPageTitle from "./StrikPageTitle";
+import { filterVisibleMainNavigationItems } from "./featureVisibility";
 import { filterAllowedItems } from "./lib/auth/access";
 import { getCurrentProfile } from "./lib/auth/session";
 
@@ -43,7 +44,10 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const profile = await getCurrentProfile();
-  const visibleSections = filterAllowedItems(baseSections, profile);
+  const visibleSections = filterAllowedItems(
+    filterVisibleMainNavigationItems(baseSections),
+    profile
+  );
 
   return (
     <main className="min-h-screen bg-[#faf8f5] px-4 py-5 text-[#1a1815] sm:px-6 lg:px-8">

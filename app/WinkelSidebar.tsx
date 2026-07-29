@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import NewsUnreadBadge from "./NewsUnreadBadge";
 import { strikIcons } from "./StrikUI";
+import { filterVisibleMainNavigationItems } from "./featureVisibility";
 import { filterAllowedItems } from "./lib/auth/access";
 import type { UserProfile } from "./lib/supabase/types";
 
@@ -113,7 +114,10 @@ export default function WinkelSidebar({
   const showWinkelSubNav = isWinkelWorkArea(pathname);
   const showBakkerijSubNav = isBakkerijWorkArea(pathname);
   const showVierdaagseNav = isVierdaagseWorkArea(pathname);
-  const mainItems = filterAllowedItems(mainNavItems, profile);
+  const mainItems = filterAllowedItems(
+    filterVisibleMainNavigationItems(mainNavItems),
+    profile
+  );
   const subNavItems: NavItem[] = filterAllowedItems(
     showBakkerijSubNav ? bakkerijNavItems : winkelNavItems,
     profile
