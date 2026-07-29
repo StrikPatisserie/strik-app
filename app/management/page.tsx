@@ -1,96 +1,158 @@
+/* eslint-disable @next/next/no-img-element */
 import {
-  StrikActionCard,
   StrikPageHeader,
   StrikShell,
   strikIcons,
 } from "../StrikUI";
+import Link from "next/link";
 import PersonnelAutoMailPanel from "./CupcakeAutoOrderPanel";
 import JubileeReminderPanel from "./JubileeReminderPanel";
 import WordPressStatusPanel from "./WordPressStatusPanel";
 
-const topItems = [
+type ManagementMenuItem = {
+  href: string;
+  label: string;
+  title: string;
+  description: string;
+  icon: string;
+};
+
+const managementGroups: {
+  title: string;
+  items: ManagementMenuItem[];
+}[] = [
   {
-    href: "/management/dashboard",
-    label: "Analyse",
-    title: "Dashboard",
-    description: "Vergelijk omzet, uren, productiviteit en loonkosten.",
-    icon: strikIcons.management,
-    tone: "medium" as const,
+    title: "Overzicht",
+    items: [
+      {
+        href: "/management/dashboard",
+        label: "Analyse",
+        title: "Dashboard",
+        description: "Omzet, uren, productiviteit en loonkosten.",
+        icon: strikIcons.management,
+      },
+      {
+        href: "/management/gegevens",
+        label: "Brondata",
+        title: "Gegevens",
+        description: "Agenda, aanbiedingen, nieuws en omzet.",
+        icon: strikIcons.info,
+      },
+      {
+        href: "/management/rooster",
+        label: "Tamigo",
+        title: "Rooster",
+        description: "Werkrooster en loonkosten.",
+        icon: strikIcons.strikAgenda,
+      },
+    ],
   },
   {
-    href: "/management/gegevens",
-    label: "Brondata",
-    title: "Gegevens",
-    description: "Agenda, aanbieding, nieuws en weekomzetten beheren.",
-    icon: strikIcons.info,
-    tone: "green" as const,
+    title: "Beheer",
+    items: [
+      {
+        href: "/settings/app",
+        label: "App",
+        title: "App instellingen",
+        description: "Seizoensmenu's aan of uit zetten.",
+        icon: strikIcons.management,
+      },
+      {
+        href: "/settings/users",
+        label: "Accounts",
+        title: "Gebruikers",
+        description: "Rollen, winkels en rechten beheren.",
+        icon: strikIcons.management,
+      },
+      {
+        href: "/management/notities",
+        label: "Winkels",
+        title: "Notities",
+        description: "Notities en to-do's per ijssalon.",
+        icon: strikIcons.notities,
+      },
+      {
+        href: "/schoonmaak/overzicht",
+        label: "IJssalons",
+        title: "Schoonmaak",
+        description: "Registraties per datum en locatie.",
+        icon: strikIcons.cleaningManagement,
+      },
+    ],
   },
 ];
 
-const bottomItems = [
-  {
-    href: "/management/rooster",
-    label: "Tamigo",
-    title: "Rooster",
-    description: "Werkrooster en loonkosten in één overzicht.",
-    icon: strikIcons.strikAgenda,
-    tone: "medium" as const,
-  },
-  {
-    href: "/schoonmaak/overzicht",
-    label: "IJssalons",
-    title: "Schoonmaak overzicht",
-    description: "Bekijk registraties per datum en ijssalon.",
-    icon: strikIcons.cleaningManagement,
-    tone: "medium" as const,
-  },
-  {
-    href: "/management/notities",
-    label: "Winkels",
-    title: "Notities",
-    description: "Beheer notities en to-do's per ijssalon.",
-    icon: strikIcons.notities,
-    tone: "muted" as const,
-  },
-  {
-    href: "/settings/app",
-    label: "Settings",
-    title: "App instellingen",
-    description: "Zet seizoensmenu's zoals Vierdaagse aan of uit.",
-    icon: strikIcons.management,
-    tone: "green" as const,
-  },
-  {
-    href: "/settings/users",
-    label: "Settings",
-    title: "Gebruikers",
-    description: "Accounts, rollen, winkels en rechten beheren.",
-    icon: strikIcons.management,
-    tone: "muted" as const,
-  },
-];
+function ManagementMenuLink({ item }: Readonly<{ item: ManagementMenuItem }>) {
+  return (
+    <Link
+      href={item.href}
+      className="group grid min-h-[4.5rem] grid-cols-[2.5rem_1fr_1.75rem] items-center gap-3 rounded-lg border border-[#e5ded5] bg-white/92 px-3 py-2 shadow-sm transition hover:border-[#cbdcc5] hover:bg-white active:scale-[0.99]"
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[#ecf4ed]">
+        <img src={item.icon} alt="" className="h-6 w-6 object-contain" />
+      </span>
+
+      <span className="min-w-0">
+        <span className="block text-[0.62rem] font-black uppercase leading-tight tracking-normal text-[#8b8278]">
+          {item.label}
+        </span>
+        <span className="mt-0.5 block truncate text-sm font-black leading-tight text-[#1a1815] sm:text-base">
+          {item.title}
+        </span>
+        <span className="mt-0.5 block text-xs font-bold leading-snug text-[#6b645b]">
+          {item.description}
+        </span>
+      </span>
+
+      <span
+        className="flex h-7 w-7 items-center justify-center rounded-md bg-[#f4f0ea] text-base font-black text-[#8b8278] transition group-hover:bg-[#ecf4ed] group-hover:text-[#1f4f35]"
+        aria-hidden="true"
+      >
+        &gt;
+      </span>
+    </Link>
+  );
+}
 
 export default function ManagementPage() {
   return (
-    <StrikShell>
+    <StrikShell wide>
       <StrikPageHeader
         title="Management"
-        description="Overzichten en interne berichten."
+        description="Overzichten, brondata en beheer."
         icon={strikIcons.management}
         tone="light"
       />
 
-      <div className="space-y-4">
-        <JubileeReminderPanel />
-        <PersonnelAutoMailPanel />
-        <WordPressStatusPanel />
-        {topItems.map((item) => (
-          <StrikActionCard key={item.href} {...item} />
-        ))}
-        {bottomItems.map((item) => (
-          <StrikActionCard key={item.href} {...item} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        {managementGroups.map((group) => (
+          <section key={group.title} className="space-y-2">
+            <h2 className="text-[0.72rem] font-black uppercase leading-tight tracking-normal text-[#7b7268]">
+              {group.title}
+            </h2>
+            <div className="grid gap-2">
+              {group.items.map((item) => (
+                <ManagementMenuLink key={item.href} item={item} />
+              ))}
+            </div>
+          </section>
         ))}
       </div>
+
+      <details className="group mt-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between border-y border-[#e7e0d8] py-3 text-sm font-black text-[#2d2a26]/70 [&::-webkit-details-marker]:hidden">
+          Meldingen & status
+          <span className="text-xl leading-none transition group-open:rotate-90">
+            &gt;
+          </span>
+        </summary>
+
+        <div className="mt-3 grid gap-3">
+          <JubileeReminderPanel />
+          <PersonnelAutoMailPanel />
+          <WordPressStatusPanel />
+        </div>
+      </details>
     </StrikShell>
   );
 }
