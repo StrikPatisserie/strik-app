@@ -7,11 +7,16 @@
  * De app gebruikt:
  * - GET /wp-json/strik/v1/recepturen?key=...
  * - PUT/POST /wp-json/strik/v1/recepturen?key=...
+ * - GET /wp-json/strik/v1/recepturen-revisions?key=...
+ * - GET /wp-json/strik/v1/recepturen-revisions/{id}?key=...
+ * - POST /wp-json/strik/v1/recepturen-revisions/{id}/restore?key=...
  * - POST /wp-json/strik/v1/recepturen-home-photo?key=...
  *
  * Hiermee worden recepturen, ingredienten en Beko factuurimports in WordPress
  * opgeslagen zodat koppelingen, prijsupdates en voorpagina-aanbiedingen niet
- * alleen lokaal/mockdata zijn.
+ * alleen lokaal/mockdata zijn. Bij elke save wordt eerst een private revisie
+ * van de bestaande ruwe data opgeslagen, zodat oude recepturen teruggezet
+ * kunnen worden als een verouderde browser-tab per ongeluk data overschrijft.
  */
 
 if (!defined('STRIK_RECEPTUREN_API_KEY')) {
@@ -24,6 +29,14 @@ if (!defined('STRIK_RECEPTUREN_OPTION_NAME')) {
 
 if (!defined('STRIK_RECEPTUREN_MAX_JSON_BYTES')) {
     define('STRIK_RECEPTUREN_MAX_JSON_BYTES', 4500000);
+}
+
+if (!defined('STRIK_RECEPTUREN_REVISION_POST_TYPE')) {
+    define('STRIK_RECEPTUREN_REVISION_POST_TYPE', 'strik_recipe_revision');
+}
+
+if (!defined('STRIK_RECEPTUREN_MAX_REVISIONS')) {
+    define('STRIK_RECEPTUREN_MAX_REVISIONS', 80);
 }
 
 if (!defined('STRIK_RECEPTUREN_PHOTO_PREVIEW_MAX_BYTES')) {
@@ -41,6 +54,20 @@ function strik_recepturen_v1_permission($request) {
         : new WP_Error('strik_recepturen_forbidden', 'Geen toegang tot recepturen.', array('status' => 403));
 }
 }
+
+add_action('init', function () {
+    register_post_type(STRIK_RECEPTUREN_REVISION_POST_TYPE, array(
+        'labels' => array(
+            'name' => 'Strik recepturen revisies',
+            'singular_name' => 'Strik recepturen revisie',
+        ),
+        'public' => false,
+        'show_ui' => true,
+        'show_in_menu' => 'tools.php',
+        'supports' => array('title', 'editor'),
+        'capability_type' => 'post',
+    ));
+});
 
 if (!function_exists('strik_recepturen_v1_defaults')) {
 function strik_recepturen_v1_defaults() {
@@ -359,6 +386,110 @@ function strik_recepturen_v1_get_data() {
 }
 }
 
+if (!function_exists('strik_recepturen_v1_count_list')) {
+function strik_recepturen_v1_count_list($data, $key) {
+    return isset($data[$key]) && is_array($data[$key]) ? count($data[$key]) : 0;
+}
+}
+
+if (!function_exists('strik_recepturen_v1_has_recovery_data')) {
+function strik_recepturen_v1_has_recovery_data($data) {
+    if (!is_array($data)) return false;
+
+    return strik_recepturen_v1_count_list($data, 'recipes') > 0
+        || strik_recepturen_v1_count_list($data, 'ingredients') > 0
+        || strik_recepturen_v1_count_list($data, 'packagingItems') > 0
+        || strik_recepturen_v1_count_list($data, 'invoiceImports') > 0
+        || strik_recepturen_v1_count_list($data, 'manualProductionPlanningItems') > 0;
+}
+}
+
+if (!function_exists('strik_recepturen_v1_revision_summary')) {
+function strik_recepturen_v1_revision_summary($post) {
+    return array(
+        'id' => absint($post->ID),
+        'createdAt' => get_post_time(DATE_ATOM, true, $post),
+        'title' => get_the_title($post),
+        'reason' => sanitize_text_field((string) get_post_meta($post->ID, '_strik_recepturen_revision_reason', true)),
+        'recipes' => absint(get_post_meta($post->ID, '_strik_recepturen_revision_recipes', true)),
+        'ingredients' => absint(get_post_meta($post->ID, '_strik_recepturen_revision_ingredients', true)),
+        'packagingItems' => absint(get_post_meta($post->ID, '_strik_recepturen_revision_packaging_items', true)),
+        'invoiceImports' => absint(get_post_meta($post->ID, '_strik_recepturen_revision_invoice_imports', true)),
+        'bytes' => absint(get_post_meta($post->ID, '_strik_recepturen_revision_bytes', true)),
+    );
+}
+}
+
+if (!function_exists('strik_recepturen_v1_prune_revisions')) {
+function strik_recepturen_v1_prune_revisions() {
+    $old_revision_ids = get_posts(array(
+        'post_type' => STRIK_RECEPTUREN_REVISION_POST_TYPE,
+        'post_status' => 'private',
+        'fields' => 'ids',
+        'posts_per_page' => 200,
+        'offset' => STRIK_RECEPTUREN_MAX_REVISIONS,
+        'orderby' => 'date',
+        'order' => 'DESC',
+        'no_found_rows' => true,
+    ));
+
+    foreach ($old_revision_ids as $revision_id) {
+        wp_delete_post(absint($revision_id), true);
+    }
+}
+}
+
+if (!function_exists('strik_recepturen_v1_create_revision')) {
+function strik_recepturen_v1_create_revision($data, $reason = 'before_save') {
+    if (!is_array($data) || !strik_recepturen_v1_has_recovery_data($data)) {
+        return 0;
+    }
+
+    $snapshot = strik_recepturen_v1_normalize_data($data);
+    $json = wp_json_encode($snapshot);
+    if (!is_string($json) || strlen($json) < 2 || strlen($json) > STRIK_RECEPTUREN_MAX_JSON_BYTES) {
+        return 0;
+    }
+
+    $created_at = wp_date(DATE_ATOM);
+    $recipe_count = strik_recepturen_v1_count_list($snapshot, 'recipes');
+    $ingredient_count = strik_recepturen_v1_count_list($snapshot, 'ingredients');
+    $title = sprintf(
+        'Recepturen backup %s - %d recepten',
+        wp_date('Y-m-d H:i:s'),
+        $recipe_count
+    );
+
+    $revision_id = wp_insert_post(array(
+        'post_type' => STRIK_RECEPTUREN_REVISION_POST_TYPE,
+        'post_status' => 'private',
+        'post_title' => $title,
+        'post_content' => $json,
+        'post_excerpt' => sprintf(
+            '%d recepten, %d grondstoffen, opgeslagen voor herstel.',
+            $recipe_count,
+            $ingredient_count
+        ),
+    ), true);
+
+    if (is_wp_error($revision_id) || !$revision_id) {
+        return 0;
+    }
+
+    update_post_meta($revision_id, '_strik_recepturen_revision_created_at', $created_at);
+    update_post_meta($revision_id, '_strik_recepturen_revision_reason', sanitize_text_field((string) $reason));
+    update_post_meta($revision_id, '_strik_recepturen_revision_recipes', $recipe_count);
+    update_post_meta($revision_id, '_strik_recepturen_revision_ingredients', $ingredient_count);
+    update_post_meta($revision_id, '_strik_recepturen_revision_packaging_items', strik_recepturen_v1_count_list($snapshot, 'packagingItems'));
+    update_post_meta($revision_id, '_strik_recepturen_revision_invoice_imports', strik_recepturen_v1_count_list($snapshot, 'invoiceImports'));
+    update_post_meta($revision_id, '_strik_recepturen_revision_bytes', strlen($json));
+
+    strik_recepturen_v1_prune_revisions();
+
+    return absint($revision_id);
+}
+}
+
 if (!function_exists('strik_recepturen_v1_get')) {
 function strik_recepturen_v1_get() {
     return rest_ensure_response(strik_recepturen_v1_get_data());
@@ -385,12 +516,108 @@ function strik_recepturen_v1_save($request) {
         );
     }
 
+    $previous = get_option(STRIK_RECEPTUREN_OPTION_NAME, array());
+    $revision_id = strik_recepturen_v1_create_revision($previous, 'before_save');
     $clean = strik_recepturen_v1_normalize_data(strik_recepturen_v1_sanitize_deep($params));
     $clean['updatedAt'] = wp_date(DATE_ATOM);
 
     update_option(STRIK_RECEPTUREN_OPTION_NAME, $clean, false);
+    $clean['revisionId'] = $revision_id;
 
     return rest_ensure_response($clean);
+}
+}
+
+if (!function_exists('strik_recepturen_v1_revisions_get')) {
+function strik_recepturen_v1_revisions_get() {
+    $posts = get_posts(array(
+        'post_type' => STRIK_RECEPTUREN_REVISION_POST_TYPE,
+        'post_status' => 'private',
+        'posts_per_page' => STRIK_RECEPTUREN_MAX_REVISIONS,
+        'orderby' => 'date',
+        'order' => 'DESC',
+        'no_found_rows' => true,
+    ));
+
+    return rest_ensure_response(array(
+        'revisions' => array_map('strik_recepturen_v1_revision_summary', $posts),
+    ));
+}
+}
+
+if (!function_exists('strik_recepturen_v1_get_revision_post')) {
+function strik_recepturen_v1_get_revision_post($revision_id) {
+    $post = get_post(absint($revision_id));
+    if (!$post || $post->post_type !== STRIK_RECEPTUREN_REVISION_POST_TYPE || $post->post_status !== 'private') {
+        return null;
+    }
+
+    return $post;
+}
+}
+
+if (!function_exists('strik_recepturen_v1_revision_get')) {
+function strik_recepturen_v1_revision_get($request) {
+    $post = strik_recepturen_v1_get_revision_post($request->get_param('revisionId'));
+    if (!$post) {
+        return new WP_Error(
+            'strik_recepturen_revision_not_found',
+            'Recepturenrevisie niet gevonden.',
+            array('status' => 404)
+        );
+    }
+
+    $data = json_decode($post->post_content, true);
+    if (!is_array($data)) {
+        return new WP_Error(
+            'strik_recepturen_revision_invalid',
+            'Recepturenrevisie bevat geen geldige data.',
+            array('status' => 500)
+        );
+    }
+
+    return rest_ensure_response(array(
+        'revision' => strik_recepturen_v1_revision_summary($post),
+        'data' => strik_recepturen_v1_normalize_data($data),
+    ));
+}
+}
+
+if (!function_exists('strik_recepturen_v1_revision_restore')) {
+function strik_recepturen_v1_revision_restore($request) {
+    $post = strik_recepturen_v1_get_revision_post($request->get_param('revisionId'));
+    if (!$post) {
+        return new WP_Error(
+            'strik_recepturen_revision_not_found',
+            'Recepturenrevisie niet gevonden.',
+            array('status' => 404)
+        );
+    }
+
+    $data = json_decode($post->post_content, true);
+    if (!is_array($data)) {
+        return new WP_Error(
+            'strik_recepturen_revision_invalid',
+            'Recepturenrevisie bevat geen geldige data.',
+            array('status' => 500)
+        );
+    }
+
+    strik_recepturen_v1_create_revision(
+        get_option(STRIK_RECEPTUREN_OPTION_NAME, array()),
+        'before_restore'
+    );
+
+    $clean = strik_recepturen_v1_normalize_data(strik_recepturen_v1_sanitize_deep($data));
+    $clean['updatedAt'] = wp_date(DATE_ATOM);
+
+    update_option(STRIK_RECEPTUREN_OPTION_NAME, $clean, false);
+
+    return rest_ensure_response(array(
+        'restored' => true,
+        'revision' => strik_recepturen_v1_revision_summary($post),
+        'data' => $clean,
+    ));
 }
 }
 
@@ -531,6 +758,30 @@ add_action('rest_api_init', function () {
         array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => 'strik_recepturen_v1_home_photo_upload',
+            'permission_callback' => 'strik_recepturen_v1_permission',
+        ),
+    ));
+
+    register_rest_route('strik/v1', '/recepturen-revisions', array(
+        array(
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'strik_recepturen_v1_revisions_get',
+            'permission_callback' => 'strik_recepturen_v1_permission',
+        ),
+    ));
+
+    register_rest_route('strik/v1', '/recepturen-revisions/(?P<revisionId>\d+)', array(
+        array(
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'strik_recepturen_v1_revision_get',
+            'permission_callback' => 'strik_recepturen_v1_permission',
+        ),
+    ));
+
+    register_rest_route('strik/v1', '/recepturen-revisions/(?P<revisionId>\d+)/restore', array(
+        array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => 'strik_recepturen_v1_revision_restore',
             'permission_callback' => 'strik_recepturen_v1_permission',
         ),
     ));
