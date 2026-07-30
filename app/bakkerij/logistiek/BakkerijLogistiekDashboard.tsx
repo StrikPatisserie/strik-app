@@ -604,13 +604,33 @@ function isPetitFourLine(line: ReceiptLine) {
   return /\bpetit\s*-?\s*fours?\b/.test(description);
 }
 
-function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
-  const description = normalizedLineDescription(line.description);
-
-  return (
-    /\bmarsepein(?:taart|\s+taart)?\b/.test(description) ||
-    /\bslagroom(?:taart|\s+taart)?\b/.test(description)
+function lineSearchDescription(line: ReceiptLine) {
+  return normalizedLineDescription(
+    [line.description, line.note || ""].filter(Boolean).join(" ")
   );
+}
+
+function hasLargeCakeSize(text: string) {
+  const rangeMatch = text.match(
+    /\b(\d{1,2})\s*(?:-|\/|tot|a|t\/m)\s*(\d{1,2})\s*(?:p|pers|personen|persoons)\b/
+  );
+  if (rangeMatch) {
+    return Number(rangeMatch[1]) >= 10;
+  }
+
+  const sizeMatch = text.match(/\b(\d{1,2})\s*(?:p|pers|personen|persoons)\b/);
+  if (!sizeMatch) return false;
+
+  return Number(sizeMatch[1]) >= 10;
+}
+
+function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
+  const description = lineSearchDescription(line);
+  const isCake =
+    /\bmarsepein(?:taart|\s+taart)\b/.test(description) ||
+    /\bslagroom(?:taart|\s+taart)\b/.test(description);
+
+  return isCake && hasLargeCakeSize(description);
 }
 
 function buildBakeryProductionTotals(
