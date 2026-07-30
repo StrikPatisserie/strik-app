@@ -8,6 +8,7 @@ import type {
   LogisticsFulfillment,
   LogisticsReceipt,
   LogisticsReceiptLine,
+  LogisticsReceiptOverride,
   LogisticsWebshopImage,
 } from "./logisticsTypes";
 
@@ -83,7 +84,17 @@ type DayLoadProfile = {
 
 type ReceiptLine = LogisticsReceiptLine;
 type ReceiptSummary = LogisticsReceipt;
+type ReceiptOverrideSummary = LogisticsReceiptOverride;
 type WebshopImageSummary = LogisticsWebshopImage;
+
+type ReceiptOverrideDraft = {
+  time: string;
+  fulfillment: LogisticsFulfillment | "";
+  deliveryAddress: string;
+  alternativeAddress: string;
+  pickupLocation: string;
+  routeNote: string;
+};
 
 type ReceiptSeed = Omit<
   ReceiptSummary,
@@ -215,6 +226,83 @@ function saveStoredFeedback(feedback: Record<string, string>) {
   } catch {
     return;
   }
+}
+
+function receiptOverrideId(date: string, receipt: ReceiptSummary) {
+  return `${date}:${receipt.receiptNumber || receipt.id}`;
+}
+
+function emptyReceiptOverrideDraft(): ReceiptOverrideDraft {
+  return {
+    time: "",
+    fulfillment: "",
+    deliveryAddress: "",
+    alternativeAddress: "",
+    pickupLocation: "",
+    routeNote: "",
+  };
+}
+
+function draftForReceiptOverride(
+  override: ReceiptOverrideSummary | null | undefined
+): ReceiptOverrideDraft {
+  if (!override) return emptyReceiptOverrideDraft();
+
+  return {
+    time: override.time,
+    fulfillment: override.fulfillment,
+    deliveryAddress: override.deliveryAddress,
+    alternativeAddress: override.alternativeAddress,
+    pickupLocation: override.pickupLocation,
+    routeNote: override.routeNote,
+  };
+}
+
+function overrideHasValue(override: ReceiptOverrideDraft) {
+  return Boolean(
+    override.time ||
+      override.fulfillment ||
+      override.deliveryAddress ||
+      override.alternativeAddress ||
+      override.pickupLocation ||
+      override.routeNote
+  );
+}
+
+function applyReceiptOverrides(
+  receipts: ReceiptSummary[],
+  overrides: ReceiptOverrideSummary[],
+  date: string
+): ReceiptSummary[] {
+  const byId = new Map(overrides.map((override) => [override.id, override]));
+
+  return receipts.map((receipt) => {
+    const override = byId.get(receiptOverrideId(date, receipt));
+    if (!override) return receipt;
+
+    const nextTags = receipt.tags.includes("aangepast")
+      ? receipt.tags
+      : [...receipt.tags, "aangepast"];
+    const nextInternalNote = override.routeNote
+      ? `Regie: ${override.routeNote}`
+      : receipt.internalNote;
+
+    return {
+      ...receipt,
+      time: override.time || receipt.time,
+      fulfillment: override.fulfillment || receipt.fulfillment,
+      deliveryAddress: override.deliveryAddress || receipt.deliveryAddress,
+      alternativeAddress:
+        override.alternativeAddress || receipt.alternativeAddress,
+      pickupLocation: override.pickupLocation || receipt.pickupLocation,
+      tags: nextTags,
+      note: override.routeNote || receipt.note,
+      customerNote: override.routeNote
+        ? `${receipt.customerNote} Regie: ${override.routeNote}`.trim()
+        : receipt.customerNote,
+      internalNote: nextInternalNote,
+    };
+  });
 }
 
 function buildDayPlan(
@@ -1342,10 +1430,14 @@ export default function BakkerijLogistiekDashboard() {
   const [fileSnapshot, setFileSnapshot] = useState<FileSnapshot | null>(null);
   const [importedBatch, setImportedBatch] = useState<LogisticsBatch | null>(null);
   const [webshopImages, setWebshopImages] = useState<WebshopImageSummary[]>([]);
+  const [receiptOverrides, setReceiptOverrides] = useState<
+    ReceiptOverrideSummary[]
+  >([]);
   const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
   const [batchReloadCounter, setBatchReloadCounter] = useState(0);
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState("");
+  const [overrideMessage, setOverrideMessage] = useState("");
   const [feedbackByDate, setFeedbackByDate] =
     useState<Record<string, string>>(readStoredFeedback);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1357,9 +1449,18 @@ export default function BakkerijLogistiekDashboard() {
     () => buildDayPlan(dateState, fileSnapshot, activeImportedBatch),
     [dateState, fileSnapshot, activeImportedBatch]
   );
-  const receiptSummaries = useMemo(
+  const baseReceiptSummaries = useMemo(
     () => buildReceiptSummaries(selectedPlan, activeImportedBatch),
     [selectedPlan, activeImportedBatch]
+  );
+  const receiptSummaries = useMemo(
+    () =>
+      applyReceiptOverrides(
+        baseReceiptSummaries,
+        receiptOverrides,
+        selectedPlan.date
+      ),
+    [baseReceiptSummaries, receiptOverrides, selectedPlan.date]
   );
   const loadProfile = useMemo(
     () => buildDayLoadProfile(selectedPlan, receiptSummaries),
@@ -1416,6 +1517,7 @@ export default function BakkerijLogistiekDashboard() {
         const data = (await response.json()) as {
           batch?: LogisticsBatch | null;
           webshopImages?: WebshopImageSummary[];
+          receiptOverrides?: ReceiptOverrideSummary[];
           message?: string;
         };
 
@@ -1424,6 +1526,7 @@ export default function BakkerijLogistiekDashboard() {
         if (!response.ok) {
           setBatchLoadState("error");
           setWebshopImages([]);
+          setReceiptOverrides([]);
           if (manualRefresh) {
             setImportMessage(data.message || "Opnieuw ophalen is niet gelukt.");
           }
@@ -1432,6 +1535,7 @@ export default function BakkerijLogistiekDashboard() {
 
         setImportedBatch(data.batch || null);
         setWebshopImages(data.webshopImages || []);
+        setReceiptOverrides(data.receiptOverrides || []);
         setBatchLoadState("ready");
         if (manualRefresh) {
           setImportMessage(
@@ -1443,6 +1547,7 @@ export default function BakkerijLogistiekDashboard() {
       } catch {
         if (!ignoreResult) {
           setBatchLoadState("error");
+          setReceiptOverrides([]);
           if (manualRefresh) setImportMessage("Opnieuw ophalen is niet gelukt.");
         }
       } finally {
@@ -1461,6 +1566,7 @@ export default function BakkerijLogistiekDashboard() {
     setDateState((current) => ({ ...current, selectedDate: date }));
     setFileSnapshot(null);
     setImportMessage("");
+    setOverrideMessage("");
   }
 
   function refreshBatch() {
@@ -1511,6 +1617,54 @@ export default function BakkerijLogistiekDashboard() {
       );
     } finally {
       setIsImporting(false);
+    }
+  }
+
+  async function saveReceiptOverride(
+    receipt: ReceiptSummary,
+    draft: ReceiptOverrideDraft
+  ) {
+    setOverrideMessage("bonaanpassing opslaan...");
+
+    try {
+      const response = await fetch("/api/bakkerij-logistiek/receipt-overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedPlan.date,
+          receiptId: receipt.id,
+          receiptNumber: receipt.receiptNumber,
+          ...draft,
+        }),
+      });
+      const data = (await response.json()) as {
+        deleted?: boolean;
+        message?: string;
+        override?: ReceiptOverrideSummary;
+      };
+
+      if (!response.ok || !data.override) {
+        throw new Error(data.message || "Bonaanpassing opslaan is niet gelukt.");
+      }
+
+      setReceiptOverrides((current) => {
+        const withoutCurrent = current.filter(
+          (item) => item.id !== data.override!.id
+        );
+
+        return data.deleted
+          ? withoutCurrent
+          : [data.override!, ...withoutCurrent];
+      });
+      setOverrideMessage(
+        data.deleted ? "Bonaanpassing gewist." : "Bonaanpassing opgeslagen."
+      );
+    } catch (error) {
+      setOverrideMessage(
+        error instanceof Error
+          ? error.message
+          : "Bonaanpassing opslaan is niet gelukt."
+      );
     }
   }
 
@@ -1669,6 +1823,9 @@ export default function BakkerijLogistiekDashboard() {
         {activeTab === "bonnen" && (
           <OrdersPanel
             receiptSummaries={receiptSummaries}
+            receiptOverrides={receiptOverrides}
+            onSaveReceiptOverride={saveReceiptOverride}
+            overrideMessage={overrideMessage}
             selectedPlan={selectedPlan}
             webshopImages={webshopImages}
           />
@@ -1755,10 +1912,19 @@ function RoutesPanel({
 }
 
 function OrdersPanel({
+  onSaveReceiptOverride,
+  overrideMessage,
+  receiptOverrides,
   receiptSummaries,
   selectedPlan,
   webshopImages,
 }: Readonly<{
+  onSaveReceiptOverride: (
+    receipt: ReceiptSummary,
+    draft: ReceiptOverrideDraft
+  ) => Promise<void>;
+  overrideMessage: string;
+  receiptOverrides: ReceiptOverrideSummary[];
   receiptSummaries: ReceiptSummary[];
   selectedPlan: DayPlan;
   webshopImages: WebshopImageSummary[];
@@ -1777,6 +1943,12 @@ function OrdersPanel({
     filteredReceipts[0] ||
     null;
   const activeReceiptId = selectedReceipt?.id || "";
+  const selectedOverride = selectedReceipt
+    ? receiptOverrides.find(
+        (override) =>
+          override.id === receiptOverrideId(selectedPlan.date, selectedReceipt)
+      ) || null
+    : null;
   const selectedImageMatches = selectedReceipt
     ? imageMatchesForReceipt(selectedReceipt, webshopImages)
     : [];
@@ -1865,6 +2037,9 @@ function OrdersPanel({
 
       <ReceiptDetail
         imageMatches={selectedImageMatches}
+        onSaveReceiptOverride={onSaveReceiptOverride}
+        override={selectedOverride}
+        overrideMessage={overrideMessage}
         receipt={selectedReceipt}
         selectedPlan={selectedPlan}
       />
@@ -2056,12 +2231,200 @@ function WebshopImageBlock({
   );
 }
 
+function ReceiptOverrideEditor({
+  message,
+  onSave,
+  override,
+  receipt,
+}: Readonly<{
+  message: string;
+  onSave: (
+    receipt: ReceiptSummary,
+    draft: ReceiptOverrideDraft
+  ) => Promise<void>;
+  override: ReceiptOverrideSummary | null;
+  receipt: ReceiptSummary;
+}>) {
+  const [draft, setDraft] = useState(() => draftForReceiptOverride(override));
+  const [saving, setSaving] = useState(false);
+  const hasSavedOverride = overrideHasValue(draftForReceiptOverride(override));
+
+  async function saveDraft(nextDraft = draft) {
+    setSaving(true);
+    try {
+      await onSave(receipt, nextDraft);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clearDraft() {
+    const emptyDraft = emptyReceiptOverrideDraft();
+    setDraft(emptyDraft);
+    await saveDraft(emptyDraft);
+  }
+
+  return (
+    <div className="border-b border-dashed border-[#cfc6bc] bg-white/70 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-xs font-black uppercase tracking-normal text-[#1a1815]">
+            Aanpassen
+          </h3>
+          {hasSavedOverride && (
+            <span className="border border-[#d6e5d8] bg-[#f6faf4] px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#315641]">
+              opgeslagen
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => saveDraft()}
+            className="min-h-8 border border-[#1a1815] bg-[#1a1815] px-2 text-[0.68rem] font-black tracking-normal text-white transition hover:bg-[#3a332c] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            OK
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={clearDraft}
+            className="min-h-8 border border-[#e8e4de] bg-white px-2 text-[0.68rem] font-black tracking-normal text-[#6b645b] transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Wis
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+        <label className="grid gap-1">
+          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Tijd
+          </span>
+          <input
+            value={draft.time}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, time: event.target.value }))
+            }
+            placeholder={receipt.time}
+            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+          />
+        </label>
+        <label className="grid gap-1">
+          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Soort
+          </span>
+          <select
+            value={draft.fulfillment}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                fulfillment: event.target.value as LogisticsFulfillment | "",
+              }))
+            }
+            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+          >
+            <option value="">bon</option>
+            <option value="bezorgen">bezorgen</option>
+            <option value="afhalen">afhalen</option>
+            <option value="onbekend">check</option>
+          </select>
+        </label>
+        <label className="grid gap-1">
+          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Adres
+          </span>
+          <input
+            value={draft.deliveryAddress}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                deliveryAddress: event.target.value,
+              }))
+            }
+            placeholder={receipt.deliveryAddress}
+            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+          />
+        </label>
+        <label className="grid gap-1">
+          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Alternatief
+          </span>
+          <input
+            value={draft.alternativeAddress}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                alternativeAddress: event.target.value,
+              }))
+            }
+            placeholder={receipt.alternativeAddress || "geen alternatief"}
+            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+          />
+        </label>
+        <label className="grid gap-1">
+          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Afhaal
+          </span>
+          <select
+            value={draft.pickupLocation}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                pickupLocation: event.target.value,
+              }))
+            }
+            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+          >
+            <option value="">winkel</option>
+            <option value="Heyendaalseweg">HEY</option>
+            <option value="Daalseweg">DAAL</option>
+            <option value="Ziekerstraat">ZIEK</option>
+            <option value="Lent">LENT</option>
+          </select>
+        </label>
+        <label className="grid gap-1">
+          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Notitie
+          </span>
+          <input
+            value={draft.routeNote}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                routeNote: event.target.value,
+              }))
+            }
+            placeholder="let op ophalen in die winkel"
+            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+          />
+        </label>
+      </div>
+      {message && (
+        <p className="mt-2 truncate text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
+          {message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ReceiptDetail({
   imageMatches,
+  onSaveReceiptOverride,
+  override,
+  overrideMessage,
   receipt,
   selectedPlan,
 }: Readonly<{
   imageMatches: WebshopImageSummary[];
+  onSaveReceiptOverride: (
+    receipt: ReceiptSummary,
+    draft: ReceiptOverrideDraft
+  ) => Promise<void>;
+  override: ReceiptOverrideSummary | null;
+  overrideMessage: string;
   receipt: ReceiptSummary | null;
   selectedPlan: DayPlan;
 }>) {
@@ -2131,6 +2494,13 @@ function ReceiptDetail({
       </dl>
 
       <ReceiptAddressBlock receipt={receipt} />
+      <ReceiptOverrideEditor
+        key={`${receipt.id}-${override?.updatedAt || "nieuw"}`}
+        message={overrideMessage}
+        onSave={onSaveReceiptOverride}
+        override={override}
+        receipt={receipt}
+      />
       <WebshopImageBlock images={imageMatches} />
 
       <div className="p-3">

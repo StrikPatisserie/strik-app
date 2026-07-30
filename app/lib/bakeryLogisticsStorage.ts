@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   LogisticsBatch,
+  LogisticsReceiptOverride,
   LogisticsWebshopImage,
 } from "@/app/bakkerij/logistiek/logisticsTypes";
 import { createAdminClient } from "./supabase/admin";
@@ -9,8 +10,11 @@ import type { Json } from "./supabase/types";
 
 const LOGISTICS_BATCHES_SETTING_KEY = "bakery_logistics_batches";
 const LOGISTICS_WEBSHOP_IMAGES_SETTING_KEY = "bakery_logistics_webshop_images";
+const LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY =
+  "bakery_logistics_receipt_overrides";
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
+const MAX_STORED_RECEIPT_OVERRIDES = 3000;
 
 type LogisticsState = {
   batches: LogisticsBatch[];
@@ -20,12 +24,20 @@ type LogisticsWebshopImagesState = {
   images: LogisticsWebshopImage[];
 };
 
+type LogisticsReceiptOverridesState = {
+  overrides: LogisticsReceiptOverride[];
+};
+
 function emptyLogisticsState(): LogisticsState {
   return { batches: [] };
 }
 
 function emptyLogisticsWebshopImagesState(): LogisticsWebshopImagesState {
   return { images: [] };
+}
+
+function emptyLogisticsReceiptOverridesState(): LogisticsReceiptOverridesState {
+  return { overrides: [] };
 }
 
 function isLogisticsBatch(value: unknown): value is LogisticsBatch {
@@ -45,6 +57,18 @@ function isLogisticsWebshopImage(value: unknown): value is LogisticsWebshopImage
       typeof (value as LogisticsWebshopImage).id === "string" &&
       typeof (value as LogisticsWebshopImage).deliveryDate === "string" &&
       typeof (value as LogisticsWebshopImage).photoUrl === "string"
+  );
+}
+
+function isLogisticsReceiptOverride(
+  value: unknown
+): value is LogisticsReceiptOverride {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as LogisticsReceiptOverride).id === "string" &&
+      typeof (value as LogisticsReceiptOverride).date === "string" &&
+      typeof (value as LogisticsReceiptOverride).receiptId === "string"
   );
 }
 
@@ -74,7 +98,27 @@ function normalizeLogisticsWebshopImagesState(
   };
 }
 
-function toJson(value: LogisticsState | LogisticsWebshopImagesState): Json {
+function normalizeLogisticsReceiptOverridesState(
+  value: unknown
+): LogisticsReceiptOverridesState {
+  if (!value || typeof value !== "object") {
+    return emptyLogisticsReceiptOverridesState();
+  }
+
+  const overrides = (value as { overrides?: unknown }).overrides;
+  if (!Array.isArray(overrides)) return emptyLogisticsReceiptOverridesState();
+
+  return {
+    overrides: overrides.filter(isLogisticsReceiptOverride),
+  };
+}
+
+function toJson(
+  value:
+    | LogisticsState
+    | LogisticsWebshopImagesState
+    | LogisticsReceiptOverridesState
+): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
 }
 
@@ -93,6 +137,15 @@ function sortWebshopImages(images: LogisticsWebshopImage[]) {
     if (dateCompare !== 0) return dateCompare;
 
     return second.importedAt.localeCompare(first.importedAt);
+  });
+}
+
+function sortReceiptOverrides(overrides: LogisticsReceiptOverride[]) {
+  return [...overrides].sort((first, second) => {
+    const dateCompare = second.date.localeCompare(first.date);
+    if (dateCompare !== 0) return dateCompare;
+
+    return second.updatedAt.localeCompare(first.updatedAt);
   });
 }
 
@@ -122,6 +175,19 @@ export async function readLogisticsWebshopImagesState() {
   return normalizeLogisticsWebshopImagesState(data.value);
 }
 
+export async function readLogisticsReceiptOverridesState() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY)
+    .maybeSingle();
+
+  if (error || !data) return emptyLogisticsReceiptOverridesState();
+
+  return normalizeLogisticsReceiptOverridesState(data.value);
+}
+
 export async function getLogisticsBatchForDate(date: string) {
   const state = await readLogisticsState();
 
@@ -135,6 +201,14 @@ export async function getLogisticsWebshopImagesForDate(date: string) {
 
   return sortWebshopImages(state.images).filter(
     (image) => image.deliveryDate === date
+  );
+}
+
+export async function getLogisticsReceiptOverridesForDate(date: string) {
+  const state = await readLogisticsReceiptOverridesState();
+
+  return sortReceiptOverrides(state.overrides).filter(
+    (override) => override.date === date
   );
 }
 
@@ -184,4 +258,47 @@ export async function upsertLogisticsWebshopImage(image: LogisticsWebshopImage) 
   if (error) throw new Error(error.message);
 
   return image;
+}
+
+export async function upsertLogisticsReceiptOverride(
+  override: LogisticsReceiptOverride
+) {
+  const state = await readLogisticsReceiptOverridesState();
+  const overrides = sortReceiptOverrides([
+    override,
+    ...state.overrides.filter((item) => item.id !== override.id),
+  ]).slice(0, MAX_STORED_RECEIPT_OVERRIDES);
+
+  const nextState = { overrides };
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY,
+      value: toJson(nextState),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
+
+  return override;
+}
+
+export async function deleteLogisticsReceiptOverride(overrideId: string) {
+  const state = await readLogisticsReceiptOverridesState();
+  const overrides = state.overrides.filter((item) => item.id !== overrideId);
+
+  const nextState = { overrides };
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY,
+      value: toJson(nextState),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
 }

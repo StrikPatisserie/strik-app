@@ -35,6 +35,20 @@ export type LogisticsReceipt = {
   lines: LogisticsReceiptLine[];
 };
 
+export type LogisticsReceiptOverride = {
+  id: string;
+  date: string;
+  receiptId: string;
+  receiptNumber: string;
+  time: string;
+  fulfillment: LogisticsFulfillment | "";
+  deliveryAddress: string;
+  alternativeAddress: string;
+  pickupLocation: string;
+  routeNote: string;
+  updatedAt: string;
+};
+
 export type LogisticsBatch = {
   id: string;
   date: string;
