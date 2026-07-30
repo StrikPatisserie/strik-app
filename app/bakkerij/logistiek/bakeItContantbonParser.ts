@@ -522,6 +522,32 @@ function quantityValue(quantity: string) {
   return parsed ?? 0;
 }
 
+function normalizedLineDescription(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isIceTubLineDescription(description: string) {
+  const text = normalizedLineDescription(description);
+
+  if (/\bijstaart\b|\bijs\s+taart\b|\bijsgebak\b/.test(text)) return false;
+
+  return (
+    /\bijssalon\b/.test(text) ||
+    /\bschepijs\b/.test(text) ||
+    /\broomijs\b/.test(text) ||
+    /\bijs\s*(?:bak|bakken|5\s*l|5l|liter|ltr|smaak|smaken)\b/.test(text)
+  );
+}
+
+function draftHasIceTubOrder(draft: ReceiptDraft) {
+  return draft.lines.some((line) => isIceTubLineDescription(line.description));
+}
+
 function inferTags(draft: ReceiptDraft) {
   const haystack = [
     draft.customer,
@@ -538,7 +564,9 @@ function inferTags(draft: ReceiptDraft) {
     tags.add("winkel");
     tags.add("intern");
   }
-  if (/ijs|ijssalon|ijstaart/.test(haystack)) tags.add("ijs");
+  if (draftHasIceTubOrder(draft) || /\bijssalon\b|\bijsbon\b|\bijs\s*bestelling\b/.test(haystack)) {
+    tags.add("ijs");
+  }
   if (/radboud|umc|kliniek|ziekenhuis|amalia|afdeling/.test(haystack)) {
     tags.add("zorg");
   }
@@ -615,7 +643,7 @@ function isExternalValueReceipt(receipt: LogisticsReceipt) {
 function calculateIceTubs(receipts: LogisticsReceipt[]) {
   return receipts.reduce((total, receipt) => {
     const receiptIceTubs = receipt.lines.reduce((lineTotal, line) => {
-      if (!/ijs|ijstaart/i.test(line.description)) return lineTotal;
+      if (!isIceTubLineDescription(line.description)) return lineTotal;
       return lineTotal + quantityValue(line.quantity);
     }, 0);
 

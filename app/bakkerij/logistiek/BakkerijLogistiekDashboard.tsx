@@ -53,6 +53,18 @@ type DayPlan = {
   isFuture: boolean;
 };
 
+type DayStat = {
+  label: string;
+  value?: string;
+  lines?: string[];
+};
+
+type BakeryProductionTotals = {
+  assortedPastry: number;
+  petitFours: number;
+  marzipanAndCreamCakes: number;
+};
+
 type RouteRound = {
   id: string;
   title: string;
@@ -167,6 +179,10 @@ function formatDateLabel(value: string) {
 
 function formatCurrency(value: number) {
   return `EUR ${Math.round(value).toLocaleString("nl-NL")}`;
+}
+
+function formatCompactNumber(value: number) {
+  return Math.round(value).toLocaleString("nl-NL");
 }
 
 function formatMoney(value: number) {
@@ -302,20 +318,15 @@ function buildDayPlan(
           : "historie";
 
   const isFuture = selectedDate > today;
-  const iceTubs = importedBatch
-    ? importedBatch.iceTubs
-    : isTomorrow
-      ? 18
-      : isToday
-        ? 34
-        : 0;
+  const importedIceTubs = importedBatch
+    ? calculateIceTubTotal(importedBatch.receipts)
+    : null;
+  const iceTubs = importedIceTubs !== null
+    ? importedIceTubs
+    : 0;
   const orderValue = importedBatch
     ? importedBatch.orderValue
-    : isTomorrow
-      ? 2400
-      : isToday
-        ? 3180
-        : 0;
+    : 0;
   const orderPressure = importedBatch
     ? importedBatch.orderPressure
     : orderValue >= 3500
@@ -330,22 +341,12 @@ function buildDayPlan(
     status,
     sourceLabel: sourceLabelFor(status),
     batchLabel: batchLabelFor(status),
-    orderCount: importedBatch
-      ? importedBatch.orderCount
-      : isTomorrow
-        ? 18
-        : isToday
-          ? 25
-          : 0,
+    orderCount: importedBatch ? importedBatch.orderCount : 0,
     orderValue,
     orderPressure,
     iceTubs,
     tempexBoxes: Math.ceil(iceTubs / 3),
-    criticalWindows: importedBatch
-      ? importedBatch.criticalWindows
-      : isTomorrow
-        ? 4
-        : 6,
+    criticalWindows: importedBatch ? importedBatch.criticalWindows : 0,
     criticalDetail: importedBatch
       ? importedBatch.status === "prognose"
         ? "voorbereiden"
@@ -373,7 +374,11 @@ function batchLabelFor(status: BatchStatus) {
   return "Nog niet";
 }
 
-function buildStats(plan: DayPlan, loadProfile: DayLoadProfile) {
+function buildStats(
+  plan: DayPlan,
+  loadProfile: DayLoadProfile,
+  productionTotals: BakeryProductionTotals
+): DayStat[] {
   return [
     {
       label: "Bonwaarde",
@@ -383,6 +388,16 @@ function buildStats(plan: DayPlan, loadProfile: DayLoadProfile) {
     {
       label: "IJs/tempex",
       value: `${plan.iceTubs} / ${plan.tempexBoxes}`,
+    },
+    {
+      label: "Banket",
+      lines: [
+        `Ges. gebak ${formatCompactNumber(productionTotals.assortedPastry)}`,
+        `Petit fours ${formatCompactNumber(productionTotals.petitFours)}`,
+        `M/slagroom ${formatCompactNumber(
+          productionTotals.marzipanAndCreamCakes
+        )}`,
+      ],
     },
     {
       label: "Drukte",
@@ -568,12 +583,97 @@ function numericQuantity(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizedLineDescription(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isAssortedPastryLine(line: ReceiptLine) {
+  const description = normalizedLineDescription(line.description);
+
+  return /\bgesorteerd\b.*\bgebak\b/.test(description);
+}
+
+function isPetitFourLine(line: ReceiptLine) {
+  const description = normalizedLineDescription(line.description);
+
+  return /\bpetit\s*-?\s*fours?\b/.test(description);
+}
+
+function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
+  const description = normalizedLineDescription(line.description);
+
+  return (
+    /\bmarsepein(?:taart|\s+taart)?\b/.test(description) ||
+    /\bslagroom(?:taart|\s+taart)?\b/.test(description)
+  );
+}
+
+function buildBakeryProductionTotals(
+  receipts: ReceiptSummary[]
+): BakeryProductionTotals {
+  return receipts.reduce(
+    (totals, receipt) => {
+      receipt.lines.forEach((line) => {
+        const quantity = numericQuantity(line.quantity);
+
+        if (isAssortedPastryLine(line)) {
+          totals.assortedPastry += quantity;
+        }
+        if (isPetitFourLine(line)) {
+          totals.petitFours += quantity;
+        }
+        if (isMarzipanOrCreamCakeLine(line)) {
+          totals.marzipanAndCreamCakes += quantity;
+        }
+      });
+
+      return totals;
+    },
+    {
+      assortedPastry: 0,
+      petitFours: 0,
+      marzipanAndCreamCakes: 0,
+    }
+  );
+}
+
+function isIceTubLineDescription(description: string) {
+  const text = normalizedLineDescription(description);
+
+  if (/\bijstaart\b|\bijs\s+taart\b|\bijsgebak\b/.test(text)) return false;
+
+  return (
+    /\bijssalon\b/.test(text) ||
+    /\bschepijs\b/.test(text) ||
+    /\broomijs\b/.test(text) ||
+    /\bijs\s*(?:bak|bakken|5\s*l|5l|liter|ltr|smaak|smaken)\b/.test(text)
+  );
+}
+
+function calculateIceTubTotal(receipts: ReceiptSummary[]) {
+  return receipts.reduce(
+    (total, receipt) => total + iceTubCountForReceipt(receipt),
+    0
+  );
+}
+
 function isInternalReceiptSummary(receipt: ReceiptSummary) {
   return receipt.tags.includes("intern") || receipt.tags.includes("winkel");
 }
 
 function isIceReceiptSummary(receipt: ReceiptSummary) {
-  return receipt.tags.includes("ijs") || /ijs|ijstaart/i.test(receiptSearchText(receipt));
+  if (iceTubCountForReceipt(receipt) > 0) return true;
+
+  const text = receiptSearchText(receipt);
+  return (
+    receipt.tags.includes("ijs") &&
+    /\bijssalon\b|\bijsbon\b|\bijs\s*bestelling\b|\bijs\s+5\s*l\b/i.test(text)
+  );
 }
 
 function isShopReceipt(receipt: ReceiptSummary) {
@@ -706,24 +806,36 @@ function routeStopForReceipt(receipt: ReceiptSummary, prefix = ""): RouteStop {
 
 function groupShopStops(
   receipts: ReceiptSummary[],
-  shopKeys: string[]
+  shopKeys: string[],
+  pairedIceReceipts: ReceiptSummary[]
 ): RouteStop[] {
   return shopKeys
     .map((shopKey) => {
       const shopReceipts = receipts.filter(
-        (receipt) => isShopReceipt(receipt) && shopKeyForReceipt(receipt) === shopKey
+        (receipt) =>
+          isShopReceipt(receipt) &&
+          !isIceReceiptSummary(receipt) &&
+          shopKeyForReceipt(receipt) === shopKey
       );
       const pickupReceipts = receipts.filter(
         (receipt) =>
           receiptFulfillment(receipt) === "afhalen" &&
           shopKeyForReceipt(receipt) === shopKey
       );
+      const iceReceipts = pairedIceReceipts.filter(
+        (receipt) => shopKeyForReceipt(receipt) === shopKey
+      );
+      const iceTubs = iceReceipts.reduce(
+        (total, receipt) => total + iceTubCountForReceipt(receipt),
+        0
+      );
 
-      if (!shopReceipts.length && !pickupReceipts.length) return null;
+      if (!shopReceipts.length && !pickupReceipts.length && !iceTubs) return null;
 
       const detailParts = [];
       if (shopReceipts.length) detailParts.push(`${shopReceipts.length} winkelbon`);
       if (pickupReceipts.length) detailParts.push(`${pickupReceipts.length} afhaal`);
+      if (iceTubs) detailParts.push(`${iceTubs} ijs / ${Math.ceil(iceTubs / 3)} tempex`);
 
       return {
         id: `shop-${shopKey}`,
@@ -790,7 +902,7 @@ function isOutsideRouteReceipt(receipt: ReceiptSummary) {
 
 function iceTubCountForReceipt(receipt: ReceiptSummary) {
   return receipt.lines.reduce((total, line) => {
-    if (!/ijs|ijstaart/i.test(line.description)) return total;
+    if (!isIceTubLineDescription(line.description)) return total;
 
     return total + numericQuantity(line.quantity);
   }, 0);
@@ -893,6 +1005,7 @@ type PlannedBus = {
   shopKeys: string[];
   early: ReceiptSummary[];
   first: ReceiptSummary[];
+  firstIce: ReceiptSummary[];
   second: ReceiptSummary[];
   ice: ReceiptSummary[];
   firstScore: number;
@@ -909,6 +1022,7 @@ function createPlannedBus(input: {
     ...input,
     early: [],
     first: [],
+    firstIce: [],
     second: [],
     ice: [],
     firstScore: 0,
@@ -969,7 +1083,7 @@ function shouldUseSecondRound(
 function addReceiptToBus(
   bus: PlannedBus,
   receipt: ReceiptSummary,
-  round: "early" | "first" | "second" | "ice"
+  round: "early" | "first" | "firstIce" | "second" | "ice"
 ) {
   const score = receiptLoadScore(receipt);
 
@@ -979,6 +1093,17 @@ function addReceiptToBus(
   } else {
     bus.firstScore += score;
   }
+}
+
+function shouldDeliverIceWithShopReceipt(
+  receipt: ReceiptSummary,
+  loadProfile: DayLoadProfile
+) {
+  const iceTubs = iceTubCountForReceipt(receipt);
+  if (!shopKeyForReceipt(receipt) || iceTubs <= 0) return false;
+  if (loadProfile.pressure === "hoog") return false;
+
+  return iceTubs <= (loadProfile.pressure === "middel" ? 6 : 9);
 }
 
 function iceStopForReceipt(receipt: ReceiptSummary): RouteStop {
@@ -1003,7 +1128,9 @@ function iceStopForReceipt(receipt: ReceiptSummary): RouteStop {
 
 function busLoadLine(bus: PlannedBus, round: "first" | "second") {
   const receipts =
-    round === "first" ? [...bus.early, ...bus.first] : [...bus.second, ...bus.ice];
+    round === "first"
+      ? [...bus.early, ...bus.first, ...bus.firstIce]
+      : [...bus.second, ...bus.ice];
   const largeCount = receipts.filter(isLargeReceipt).length;
   const iceTubs = receipts.reduce(
     (total, receipt) => total + iceTubCountForReceipt(receipt),
@@ -1078,17 +1205,24 @@ function buildRouteRounds(
       receipt,
       round: "second",
     });
+    const round = shouldDeliverIceWithShopReceipt(receipt, loadProfile)
+      ? "firstIce"
+      : "ice";
 
-    addReceiptToBus(buses[bus], receipt, "ice");
+    addReceiptToBus(buses[bus], receipt, round);
   });
 
   ([buses.A, buses.B] as PlannedBus[]).forEach((bus) => {
-    const shopStops = groupShopStops(receipts, bus.shopKeys);
+    const shopStops = groupShopStops(receipts, bus.shopKeys, bus.firstIce);
+    const looseFirstIceStops = sortDeliveryReceipts(
+      bus.firstIce.filter((receipt) => !shopKeyForReceipt(receipt))
+    ).map(iceStopForReceipt);
     const firstStops = [
       ...sortDeliveryReceipts(bus.early).map((receipt) =>
         routeStopForReceipt(receipt, `${bus.id}-early-`)
       ),
       ...shopStops,
+      ...looseFirstIceStops,
       ...sortDeliveryReceipts(bus.first).map((receipt) =>
         routeStopForReceipt(receipt, `${bus.id}-first-`)
       ),
@@ -1652,9 +1786,13 @@ export default function BakkerijLogistiekDashboard() {
     () => buildDayLoadProfile(selectedPlan, receiptSummaries),
     [selectedPlan, receiptSummaries]
   );
+  const productionTotals = useMemo(
+    () => buildBakeryProductionTotals(receiptSummaries),
+    [receiptSummaries]
+  );
   const stats = useMemo(
-    () => buildStats(selectedPlan, loadProfile),
-    [loadProfile, selectedPlan]
+    () => buildStats(selectedPlan, loadProfile, productionTotals),
+    [loadProfile, productionTotals, selectedPlan]
   );
   const routeRounds = useMemo(
     () => buildRouteRounds(selectedPlan, receiptSummaries, loadProfile),
@@ -2004,7 +2142,7 @@ export default function BakkerijLogistiekDashboard() {
         </div>
       </section>
 
-      <section className="mt-3 grid grid-cols-4 border border-[#e8e4de] bg-white shadow-sm">
+      <section className="mt-3 grid grid-cols-2 border border-[#e8e4de] bg-white shadow-sm sm:grid-cols-5">
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -2013,9 +2151,22 @@ export default function BakkerijLogistiekDashboard() {
             <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#6b645b]">
               {stat.label}
             </p>
-            <p className="mt-0.5 truncate text-sm font-black leading-tight tracking-normal text-[#1a1815] sm:text-base">
-              {stat.value}
-            </p>
+            {stat.lines ? (
+              <div className="mt-0.5 grid gap-px">
+                {stat.lines.map((line) => (
+                  <p
+                    key={`${stat.label}-${line}`}
+                    className="truncate text-[0.65rem] font-bold leading-tight tracking-normal text-[#1a1815]"
+                  >
+                    {line}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-0.5 truncate text-sm font-black leading-tight tracking-normal text-[#1a1815] sm:text-base">
+                {stat.value}
+              </p>
+            )}
           </div>
         ))}
       </section>
