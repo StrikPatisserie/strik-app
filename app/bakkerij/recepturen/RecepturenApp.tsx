@@ -2462,6 +2462,13 @@ const productionOverviewLinks = [
     tone: "border-[#eadb8b] bg-white hover:bg-[#fff8d8]",
   },
   {
+    href: "/bakkerij/logistiek",
+    label: "Logistiek",
+    icon: strikIcons.logistiek,
+    iconTone: "bg-[#efc7b8]",
+    tone: "border-[#efc7b8] bg-white hover:bg-[#fff3ed]",
+  },
+  {
     href: "/bakkerij/management",
     label: "Data",
     icon: strikIcons.data,

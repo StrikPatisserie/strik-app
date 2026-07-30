@@ -32,6 +32,13 @@ const bakerySections = [
     ],
   },
   {
+    label: "Logistiek",
+    title: "Logistiek",
+    icon: strikIcons.logistiek,
+    tone: "bg-[#fff3ed] border-[#efc7b8]",
+    links: [{ href: "/bakkerij/logistiek", label: "Ochtend dashboard" }],
+  },
+  {
     label: "Data",
     title: "Data",
     icon: strikIcons.data,
