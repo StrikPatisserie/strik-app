@@ -186,7 +186,7 @@ function buildDayPlan(dateState: DateState, fileSnapshot: FileSnapshot | null): 
 
   const isFuture = selectedDate > today;
   const iceTubs = isTomorrow ? 18 : 34;
-  const orderValue = isTomorrow ? 3750 : isToday ? 4860 : 0;
+  const orderValue = isTomorrow ? 2400 : isToday ? 3180 : 0;
 
   return {
     date: selectedDate,
@@ -196,7 +196,7 @@ function buildDayPlan(dateState: DateState, fileSnapshot: FileSnapshot | null): 
     batchLabel: batchLabelFor(status),
     orderCount: isTomorrow ? 18 : isToday ? 25 : 0,
     orderValue,
-    orderPressure: orderValue >= 4500 ? "hoog" : orderValue >= 3000 ? "middel" : "laag",
+    orderPressure: orderValue >= 3500 ? "hoog" : orderValue >= 2000 ? "middel" : "laag",
     iceTubs,
     tempexBoxes: Math.ceil(iceTubs / 3),
     criticalWindows: isTomorrow ? 4 : 6,
@@ -223,7 +223,11 @@ function batchLabelFor(status: BatchStatus) {
 
 function buildStats(plan: DayPlan) {
   return [
-    { label: "Orderwaarde", value: formatCurrency(plan.orderValue), detail: plan.orderPressure },
+    {
+      label: "Externe waarde",
+      value: formatCurrency(plan.orderValue),
+      detail: `${plan.orderPressure} · excl. winkel/ijs`,
+    },
     { label: "Pakbonnen", value: String(plan.orderCount), detail: plan.batchLabel },
     {
       label: "IJs / tempex",
@@ -244,7 +248,7 @@ function buildAttentionItems(plan: DayPlan) {
     {
       label: "Drukte",
       value: plan.orderPressure,
-      detail: "Orderwaarde telt mee als ochtenddruk.",
+      detail: "Exclusief winkel- en ijsbonnen.",
     },
     {
       label: "Tempex",
@@ -305,10 +309,10 @@ function buildRouteRounds(plan: DayPlan): RouteRound[] {
 function buildOrderClusters(plan: DayPlan): OrderCluster[] {
   return [
     {
-      title: "Orderwaarde",
+      title: "Externe waarde",
       count: formatCurrency(plan.orderValue),
       route: plan.orderPressure,
-      signal: "drukte-indicator naast aantal bonnen",
+      signal: "excl. winkel- en ijsbonnen",
     },
     {
       title: "Winkelvoorraad",

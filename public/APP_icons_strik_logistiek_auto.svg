@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Laag_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 600 600">
+  <g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="24">
+    <path d="M116 346c0-29 23-52 52-52h42l34-69c10-20 30-33 52-33h110c22 0 42 13 52 33l34 69h34c29 0 52 23 52 52v58h-55"/>
+    <path d="M132 404h55"/>
+    <path d="M248 404h206"/>
+    <path d="M243 294h218"/>
+    <path d="M285 222l-34 72"/>
+    <path d="M420 222l34 72"/>
+    <circle cx="218" cy="404" r="31"/>
+    <circle cx="485" cy="404" r="31"/>
+    <path d="M143 340h34"/>
+    <path d="M505 340h38"/>
+  </g>
+</svg>
