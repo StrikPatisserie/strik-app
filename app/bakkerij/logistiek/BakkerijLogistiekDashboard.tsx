@@ -71,7 +71,7 @@ type RouteStop = {
   badges: string[];
 };
 
-type RouteBucket = "oost" | "centrum" | "buiten" | "check";
+type BusId = "A" | "B";
 
 type DayLoadProfile = {
   pressure: string;
@@ -686,38 +686,14 @@ function isCriticalReceipt(receipt: ReceiptSummary) {
   );
 }
 
-function deliveryBucketFor(receipt: ReceiptSummary): RouteBucket {
-  const text = receiptSearchText(receipt);
-
-  if (
-    /thermen|berendonck|jonkerbos|crematorium|sanadome|wijchen|beuningen|goffert|cwz/.test(
-      text
-    )
-  ) {
-    return "buiten";
-  }
-  if (
-    /radboud|heyendaal|heyendaalseweg|han\b|kapittelweg|geert groote|maartenskliniek|brakkenstein|oost/.test(
-      text
-    )
-  ) {
-    return "oost";
-  }
-  if (/ziekerstraat|centrum|lent|waalkade|oosterhout|bemmel|elst|arnhem/.test(text)) {
-    return "centrum";
-  }
-  if (/daalseweg|berg en dal|beek|ubbergen|groesbeek|malden|molenhoek/.test(text)) {
-    return "oost";
-  }
-
-  return "check";
-}
-
 function receiptStopBadges(receipt: ReceiptSummary) {
   const badges: string[] = [];
   const fulfillment = receiptFulfillment(receipt);
+  const iceTubs = iceTubCountForReceipt(receipt);
 
   if (fulfillment === "afhalen") badges.push("afhaal");
+  if (isIceReceiptSummary(receipt)) badges.push("ijs");
+  if (iceTubs > 0) badges.push(`${iceTubs} ijs`);
   if (isLargeReceipt(receipt)) badges.push("groot");
   if (isCriticalReceipt(receipt)) badges.push("tijd");
   if (receipt.tags.includes("zorg")) badges.push("zorg");
@@ -769,26 +745,92 @@ function groupShopStops(
     .filter((stop): stop is RouteStop => Boolean(stop));
 }
 
+function busForShopKey(key: string): BusId | "" {
+  if (key === "heyendaalseweg" || key === "daalseweg") return "A";
+  if (key === "ziekerstraat" || key === "lent") return "B";
+
+  return "";
+}
+
+function preferredBusForReceipt(receipt: ReceiptSummary): BusId | "" {
+  const shopBus = busForShopKey(shopKeyForReceipt(receipt));
+  if (shopBus) return shopBus;
+
+  const text = receiptSearchText(receipt);
+  if (
+    /radboud|heyendaal|han\b|kapittelweg|geert groote|maartenskliniek|brakkenstein|berg en dal|beek|ubbergen|groesbeek|malden|molenhoek|oost/.test(
+      text
+    )
+  ) {
+    return "A";
+  }
+  if (
+    /ziekerstraat|centrum|lent|waalkade|oosterhout|bemmel|elst|arnhem|noord/.test(
+      text
+    )
+  ) {
+    return "B";
+  }
+
+  return "";
+}
+
+function outsideClusterKeyForReceipt(receipt: ReceiptSummary) {
+  const text = receiptSearchText(receipt);
+
+  if (/jonkerbos|sanadome|cwz|goffert|crematorium/.test(text)) {
+    return "jonkerbos";
+  }
+  if (/thermen|berendonck|wijchen|beuningen/.test(text)) {
+    return "west-buiten";
+  }
+  if (/berg en dal|beek|ubbergen|groesbeek|malden|molenhoek/.test(text)) {
+    return "oost-buiten";
+  }
+  if (/bemmel|elst|arnhem|oosterhout/.test(text)) {
+    return "noord-buiten";
+  }
+
+  return "";
+}
+
+function isOutsideRouteReceipt(receipt: ReceiptSummary) {
+  return outsideClusterKeyForReceipt(receipt) !== "";
+}
+
+function iceTubCountForReceipt(receipt: ReceiptSummary) {
+  return receipt.lines.reduce((total, line) => {
+    if (!/ijs|ijstaart/i.test(line.description)) return total;
+
+    return total + numericQuantity(line.quantity);
+  }, 0);
+}
+
+function receiptLoadScore(receipt: ReceiptSummary) {
+  return (
+    1 +
+    Number(isCriticalReceipt(receipt)) * 0.8 +
+    Number(isLargeReceipt(receipt)) * 2.4 +
+    Number(isOutsideRouteReceipt(receipt)) * 1.4 +
+    Math.min(4, receiptPastryUnits(receipt) / 45) +
+    Math.min(4, iceTubCountForReceipt(receipt) / 3)
+  );
+}
+
 function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
   return [...receipts].sort((first, second) => {
+    const earlyCompare =
+      Number(isEarlyException(second)) - Number(isEarlyException(first));
+    if (earlyCompare !== 0) return earlyCompare;
+
+    const timeCompare = firstTimeMinutes(first) - firstTimeMinutes(second);
+    if (timeCompare !== 0) return timeCompare;
+
     const largeCompare = Number(isLargeReceipt(second)) - Number(isLargeReceipt(first));
     if (largeCompare !== 0) return largeCompare;
 
-    const criticalCompare =
-      Number(isCriticalReceipt(second)) - Number(isCriticalReceipt(first));
-    if (criticalCompare !== 0) return criticalCompare;
-
-    return firstTimeMinutes(first) - firstTimeMinutes(second);
+    return receiptTargetLine(first).localeCompare(receiptTargetLine(second));
   });
-}
-
-function deliveryStopsForBucket(
-  receipts: ReceiptSummary[],
-  bucket: RouteBucket
-): RouteStop[] {
-  return sortDeliveryReceipts(
-    receipts.filter((receipt) => deliveryBucketFor(receipt) === bucket)
-  ).map((receipt) => routeStopForReceipt(receipt));
 }
 
 function buildDayLoadProfile(plan: DayPlan, receipts: ReceiptSummary[]): DayLoadProfile {
@@ -853,123 +895,276 @@ function buildRouteRound(input: {
   };
 }
 
+type PlannedBus = {
+  id: BusId;
+  title: string;
+  tone: string;
+  shopKeys: string[];
+  early: ReceiptSummary[];
+  first: ReceiptSummary[];
+  second: ReceiptSummary[];
+  ice: ReceiptSummary[];
+  firstScore: number;
+  secondScore: number;
+};
+
+function createPlannedBus(input: {
+  id: BusId;
+  title: string;
+  tone: string;
+  shopKeys: string[];
+}): PlannedBus {
+  return {
+    ...input,
+    early: [],
+    first: [],
+    second: [],
+    ice: [],
+    firstScore: 0,
+    secondScore: 0,
+  };
+}
+
+function chooseLightestBus(
+  buses: Record<BusId, PlannedBus>,
+  round: "first" | "second"
+): BusId {
+  const scoreKey = round === "first" ? "firstScore" : "secondScore";
+
+  return buses.A[scoreKey] <= buses.B[scoreKey] ? "A" : "B";
+}
+
+function chooseBusForReceipt(input: {
+  buses: Record<BusId, PlannedBus>;
+  clusterAssignments: Map<string, BusId>;
+  receipt: ReceiptSummary;
+  round: "first" | "second";
+}) {
+  const preferredBus = preferredBusForReceipt(input.receipt);
+  if (preferredBus) return preferredBus;
+
+  const clusterKey = outsideClusterKeyForReceipt(input.receipt);
+  const assignedClusterBus = clusterKey
+    ? input.clusterAssignments.get(clusterKey)
+    : null;
+  if (assignedClusterBus) return assignedClusterBus;
+
+  const bus = chooseLightestBus(input.buses, input.round);
+  if (clusterKey) input.clusterAssignments.set(clusterKey, bus);
+
+  return bus;
+}
+
+function shouldUseSecondRound(
+  receipt: ReceiptSummary,
+  bus: PlannedBus,
+  loadProfile: DayLoadProfile
+) {
+  if (isEarlyException(receipt)) return false;
+
+  const minutes = firstTimeMinutes(receipt);
+  if (minutes < 600) return false;
+
+  const maxFirstStops =
+    loadProfile.pressure === "hoog" ? 7 : loadProfile.pressure === "middel" ? 9 : 11;
+
+  return (
+    (isOutsideRouteReceipt(receipt) && loadProfile.pressure !== "laag") ||
+    (isLargeReceipt(receipt) && minutes >= 570) ||
+    (bus.early.length + bus.first.length >= maxFirstStops && minutes >= 570)
+  );
+}
+
+function addReceiptToBus(
+  bus: PlannedBus,
+  receipt: ReceiptSummary,
+  round: "early" | "first" | "second" | "ice"
+) {
+  const score = receiptLoadScore(receipt);
+
+  bus[round].push(receipt);
+  if (round === "second" || round === "ice") {
+    bus.secondScore += score;
+  } else {
+    bus.firstScore += score;
+  }
+}
+
+function iceStopForReceipt(receipt: ReceiptSummary): RouteStop {
+  const target = receiptTargetLine(receipt);
+  const time = receipt.time === "Geen tijd" ? "tijd check" : receipt.time;
+  const iceTubs = iceTubCountForReceipt(receipt);
+  const tempexBoxes = Math.ceil(iceTubs / 3);
+  const detailParts = [
+    time,
+    target,
+    iceTubs > 0 ? `${iceTubs} ijsbakken` : "ijsbon",
+    tempexBoxes > 0 ? `${tempexBoxes} tempex` : "",
+  ].filter(Boolean);
+
+  return {
+    id: `ice-${receipt.id}`,
+    label: receipt.customer,
+    detail: detailParts.join(" · "),
+    badges: receiptStopBadges(receipt),
+  };
+}
+
+function busLoadLine(bus: PlannedBus, round: "first" | "second") {
+  const receipts =
+    round === "first" ? [...bus.early, ...bus.first] : [...bus.second, ...bus.ice];
+  const largeCount = receipts.filter(isLargeReceipt).length;
+  const iceTubs = receipts.reduce(
+    (total, receipt) => total + iceTubCountForReceipt(receipt),
+    0
+  );
+  const detailParts = [
+    `${receipts.length} bonnen`,
+    largeCount ? `${largeCount} groot` : "",
+    iceTubs ? `${iceTubs} ijs / ${Math.ceil(iceTubs / 3)} tempex` : "",
+  ].filter(Boolean);
+
+  return detailParts.join(" · ");
+}
+
 function buildRouteRounds(
   plan: DayPlan,
   receipts: ReceiptSummary[],
   loadProfile: DayLoadProfile
 ): RouteRound[] {
-  const earlyStops = sortDeliveryReceipts(receipts.filter(isEarlyException)).map(
-    (receipt) => routeStopForReceipt(receipt, "early-")
-  );
-  const regularDeliveries = receipts.filter(
-    (receipt) => isRouteDelivery(receipt) && !isEarlyException(receipt)
-  );
-  const oostStops = [
-    ...groupShopStops(receipts, ["heyendaalseweg", "daalseweg"]),
-    ...deliveryStopsForBucket(regularDeliveries, "oost"),
-  ];
-  const centrumStops = [
-    ...groupShopStops(receipts, ["ziekerstraat", "lent"]),
-    ...deliveryStopsForBucket(regularDeliveries, "centrum"),
-  ];
-  const buitenStops = deliveryStopsForBucket(regularDeliveries, "buiten");
-  const checkStops = deliveryStopsForBucket(regularDeliveries, "check");
+  const buses: Record<BusId, PlannedBus> = {
+    A: createPlannedBus({
+      id: "A",
+      title: "Bus A",
+      tone: "border-[#d6e5d8] bg-[#f6faf4]",
+      shopKeys: ["heyendaalseweg", "daalseweg"],
+    }),
+    B: createPlannedBus({
+      id: "B",
+      title: "Bus B",
+      tone: "border-[#eadb8b] bg-[#fff8d8]",
+      shopKeys: ["ziekerstraat", "lent"],
+    }),
+  };
+  const clusterAssignments = new Map<string, BusId>();
+  const deliveryReceipts = sortDeliveryReceipts(receipts.filter(isRouteDelivery));
+  const iceReceipts = sortDeliveryReceipts(receipts.filter(isIceReceiptSummary));
   const rounds: RouteRound[] = [];
 
-  if (earlyStops.length) {
+  deliveryReceipts.forEach((receipt) => {
+    const firstChoiceBus = chooseBusForReceipt({
+      buses,
+      clusterAssignments,
+      receipt,
+      round: "first",
+    });
+    const round = shouldUseSecondRound(
+      receipt,
+      buses[firstChoiceBus],
+      loadProfile
+    )
+      ? "second"
+      : isEarlyException(receipt)
+        ? "early"
+        : "first";
+    const bus =
+      round === "second"
+        ? chooseBusForReceipt({
+            buses,
+            clusterAssignments,
+            receipt,
+            round: "second",
+          })
+        : firstChoiceBus;
+
+    addReceiptToBus(buses[bus], receipt, round);
+  });
+
+  iceReceipts.forEach((receipt) => {
+    const bus = chooseBusForReceipt({
+      buses,
+      clusterAssignments,
+      receipt,
+      round: "second",
+    });
+
+    addReceiptToBus(buses[bus], receipt, "ice");
+  });
+
+  ([buses.A, buses.B] as PlannedBus[]).forEach((bus) => {
+    const shopStops = groupShopStops(receipts, bus.shopKeys);
+    const firstStops = [
+      ...sortDeliveryReceipts(bus.early).map((receipt) =>
+        routeStopForReceipt(receipt, `${bus.id}-early-`)
+      ),
+      ...shopStops,
+      ...sortDeliveryReceipts(bus.first).map((receipt) =>
+        routeStopForReceipt(receipt, `${bus.id}-first-`)
+      ),
+    ];
+    const secondStops = [
+      ...sortDeliveryReceipts(bus.second).map((receipt) =>
+        routeStopForReceipt(receipt, `${bus.id}-second-`)
+      ),
+      ...sortDeliveryReceipts(bus.ice).map(iceStopForReceipt),
+    ];
+
+    if (firstStops.length) {
+      rounds.push(
+        buildRouteRound({
+          id: `bus-${bus.id}-1`,
+          title: `${bus.title} · ronde 1`,
+          vehicle: bus.title,
+          departure: plan.isFuture ? "advies 08:00" : "08:00",
+          tone: bus.tone,
+          stops: firstStops,
+          reason:
+            bus.id === "A"
+              ? "Start met HEY/DAAL, daarna tijdkritisch en oost/campus of passende buitenbonnen."
+              : "Start met ZIEK/LENT, daarna tijdkritisch en centrum/noord of passende buitenbonnen.",
+          load: busLoadLine(bus, "first"),
+          loadProfile,
+        })
+      );
+    }
+
+    if (secondStops.length) {
+      rounds.push(
+        buildRouteRound({
+          id: `bus-${bus.id}-2`,
+          title: `${bus.title} · ronde 2`,
+          vehicle: bus.title,
+          departure: plan.isFuture ? "beslissen" : "na ronde 1",
+          tone: "border-[#efc7b8] bg-[#fff3ed]",
+          stops: secondStops,
+          reason:
+            "Tweede ronde voor ijs, grotere of latere buitenbonnen zodra ronde 1 lucht moet houden.",
+          load: busLoadLine(bus, "second"),
+          loadProfile,
+        })
+      );
+    }
+  });
+
+  if (plan.iceTubs > 0 && iceReceipts.length === 0) {
+    const bus = chooseLightestBus(buses, "second");
     rounds.push(
       buildRouteRound({
-        id: "early",
-        title: "Vroeg eerst",
-        vehicle: "Voor winkels",
-        departure: plan.isFuture ? "check" : "voor 08:00",
-        tone: "border-[#efc7b8] bg-[#fff3ed]",
-        stops: earlyStops,
-        reason: "Alleen bonnen met expliciete vroege instructie komen voor de winkels.",
-        load: "Apart klaarzetten; niet laten mengen met de winkelkratten.",
-        loadProfile,
-      })
-    );
-  }
-
-  rounds.push(
-    buildRouteRound({
-      id: "oost",
-      title: "Oost / campus",
-      vehicle: "Bus A",
-      departure: plan.isFuture ? "advies 08:00" : "08:00",
-      tone: "border-[#d6e5d8] bg-[#f6faf4]",
-      stops: oostStops,
-      reason: "Heyendaalseweg en Daalseweg eerst, daarna Radboud/HAN/oost-cluster.",
-      load: `${loadProfile.largeReceipts} grote bonnen totaal; campus en zorgbonnen bovenop houden.`,
-      loadProfile,
-    })
-  );
-
-  rounds.push(
-    buildRouteRound({
-      id: "centrum",
-      title: "Centrum / noord",
-      vehicle: "Bus B",
-      departure: plan.isFuture ? "advies 08:00" : "08:00",
-      tone: "border-[#eadb8b] bg-[#fff8d8]",
-      stops: centrumStops,
-      reason: "Ziekerstraat en Lent eerst, daarna centrum/noord logisch afwerken.",
-      load: "Winkelvoorraad eerst bereikbaar; afhaalbonnen blijven bij de juiste winkel.",
-      loadProfile,
-    })
-  );
-
-  if (buitenStops.length) {
-    rounds.push(
-      buildRouteRound({
-        id: "buiten",
-        title: "Buiten / Jonkerbos",
-        vehicle: "Ronde 1 of 2",
-        departure: plan.isFuture ? "beslissen" : "na winkels",
-        tone: "border-[#efc7b8] bg-[#fff3ed]",
-        stops: buitenStops,
-        reason:
-          "Thermen/Berendonck/Jonkerbos/Sanadome staan apart, zodat ze niet verdwijnen in stadsroute.",
-        load: "Combineer met de bus die na de winkelstops het meeste lucht heeft.",
-        loadProfile,
-      })
-    );
-  }
-
-  if (checkStops.length) {
-    rounds.push(
-      buildRouteRound({
-        id: "check",
-        title: "Routecheck",
-        vehicle: "Handmatig",
-        departure: "controleren",
-        tone: "border-[#e8e4de] bg-[#faf8f5]",
-        stops: checkStops,
-        reason: "Deze bonnen hebben nog te weinig adres/gebied-signaal.",
-        load: "Adres controleren en daarna naar de dichtstbijzijnde route slepen.",
-        loadProfile,
-      })
-    );
-  }
-
-  if (plan.iceTubs > 0) {
-    rounds.push(
-      buildRouteRound({
-        id: "ijs",
-        title: "IJsronde",
-        vehicle: "Ronde 2",
-        departure: plan.isFuture ? "beslissen" : "09:45",
+        id: `bus-${bus}-ice-check`,
+        title: `Bus ${bus} · ijs check`,
+        vehicle: `Bus ${bus}`,
+        departure: plan.isFuture ? "beslissen" : "na ronde 1",
         tone: "border-[#efc7b8] bg-[#fff3ed]",
         stops: [
           {
-            id: "ijs-shops",
-            label: "Winkels ijs",
+            id: "ijs-check",
+            label: "IJsbonnen controleren",
             detail: `${plan.iceTubs} bakken ijs · ${plan.tempexBoxes} zwarte tempexbakken`,
             badges: ["ijs", `${plan.tempexBoxes} tempex`],
           },
         ],
-        reason: "IJs neemt volume en koeling; meestal niet in ronde 1 mengen.",
+        reason:
+          "Er is ijsvolume herkend, maar geen losse ijssalonbon; controleer de bronbonnen.",
         load: `${plan.iceTubs} ijsbakken per 3 in een zwarte tempexbak.`,
         loadProfile,
       })
@@ -1209,8 +1404,8 @@ function buildReceiptSummaries(
     {
       id: "CB-008",
       time: "09:45",
-      customer: "IJsronde winkels",
-      address: "4 winkels",
+      customer: "IJssalons",
+      address: "ijssalonbonnen controleren",
       route: "Ronde 2",
       tags: ["ijs", "intern", `${plan.tempexBoxes} tempex`],
       note: `${plan.iceTubs} bakken ijs, apart laden.`,
