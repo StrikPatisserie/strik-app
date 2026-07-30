@@ -133,8 +133,36 @@ function parseDutchDate(value: string) {
   return `${year}-${month}-${day.padStart(2, "0")}`;
 }
 
-function inferStatus(metadata: ParseMetadata): LogisticsBatchStatus {
-  if (metadata.status) return metadata.status;
+function getAmsterdamDateTimeParts(date: Date) {
+  const formatter = new Intl.DateTimeFormat("nl-NL", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    month: "2-digit",
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+  });
+  const parts = formatter.formatToParts(date);
+  const part = (type: string) =>
+    parts.find((item) => item.type === type)?.value || "";
+  const hour = Number(part("hour"));
+
+  return {
+    dateKey: `${part("year")}-${part("month")}-${part("day")}`,
+    hour: Number.isFinite(hour) ? hour : 0,
+  };
+}
+
+function inferStatus(
+  metadata: ParseMetadata,
+  batchDate: string
+): LogisticsBatchStatus {
+  if (
+    metadata.status &&
+    !["prognose", "definitief"].includes(metadata.status)
+  ) {
+    return metadata.status;
+  }
 
   const haystack = `${metadata.fileName} ${metadata.subject || ""}`.toLowerCase();
   if (haystack.includes("definit")) return "definitief";
@@ -142,10 +170,18 @@ function inferStatus(metadata: ParseMetadata): LogisticsBatchStatus {
     return "prognose";
   }
 
-  const receivedAt = metadata.receivedAt ? new Date(metadata.receivedAt) : new Date();
-  const hour = Number.isFinite(receivedAt.getTime()) ? receivedAt.getHours() : new Date().getHours();
+  if (metadata.status && metadata.source !== "gmail") return metadata.status;
 
-  return hour >= 18 ? "definitief" : "prognose";
+  const receivedAt = metadata.receivedAt ? new Date(metadata.receivedAt) : new Date();
+  const receivedParts = getAmsterdamDateTimeParts(
+    Number.isFinite(receivedAt.getTime()) ? receivedAt : new Date()
+  );
+
+  if (receivedParts.hour >= 22) return "definitief";
+  if (batchDate && batchDate < receivedParts.dateKey) return "definitief";
+  if (batchDate && batchDate > receivedParts.dateKey) return "prognose";
+
+  return "definitief";
 }
 
 function isFooterLine(line: string) {
@@ -484,7 +520,7 @@ export async function parseBakeItContantbonPdf(
   const parsedDate = Array.from(drafts.values()).find((draft) => draft.date)?.date || "";
   const batchDate =
     parsedDate || new Date(metadata.receivedAt || Date.now()).toISOString().slice(0, 10);
-  const status = inferStatus(metadata);
+  const status = inferStatus(metadata, batchDate);
   const receivedAt = metadata.receivedAt || new Date().toISOString();
   const orderValue = receipts
     .filter(isExternalValueReceipt)
