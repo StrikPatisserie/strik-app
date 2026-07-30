@@ -830,7 +830,6 @@ export default function BakkerijLogistiekDashboard() {
   const [feedbackByDate, setFeedbackByDate] =
     useState<Record<string, string>>(readStoredFeedback);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dateInputRef = useRef<HTMLInputElement>(null);
   const manualBatchRefreshRef = useRef(false);
   const activeImportedBatch =
     importedBatch?.date === dateState.selectedDate ? importedBatch : null;
@@ -933,19 +932,6 @@ export default function BakkerijLogistiekDashboard() {
     setImportMessage("bonnen opnieuw ophalen...");
     if (fileInputRef.current) fileInputRef.current.value = "";
     setBatchReloadCounter((current) => current + 1);
-  }
-
-  function openDatePicker() {
-    const input = dateInputRef.current;
-    if (!input) return;
-
-    if (typeof input.showPicker === "function") {
-      input.showPicker();
-      return;
-    }
-
-    input.focus();
-    input.click();
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -1051,25 +1037,23 @@ export default function BakkerijLogistiekDashboard() {
             >
               Morgen
             </button>
-            <input
-              ref={dateInputRef}
-              type="date"
-              value={selectedPlan.date}
-              className="sr-only"
-              onChange={(event) => selectDate(event.target.value)}
-            />
-            <button
-              type="button"
-              onClick={openDatePicker}
+            <label
               className={`min-h-10 border px-3 text-sm font-black tracking-normal transition ${
                 selectedPlan.date !== dateState.today &&
                 selectedPlan.date !== dateState.tomorrow
                   ? "border-[#1a1815] bg-[#1a1815] text-white"
                   : "border-[#e8e4de] bg-white text-[#1a1815] hover:bg-[#faf8f5]"
-              }`}
+              } relative flex cursor-pointer items-center`}
             >
               Datum
-            </button>
+              <input
+                type="date"
+                value={selectedPlan.date}
+                aria-label="Datum kiezen"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                onChange={(event) => selectDate(event.target.value)}
+              />
+            </label>
             <RefreshButton
               disabled={batchLoadState === "loading" || isImporting}
               loading={batchLoadState === "loading"}
