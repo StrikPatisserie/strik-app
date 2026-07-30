@@ -8,6 +8,7 @@ import type {
   LogisticsFulfillment,
   LogisticsReceipt,
   LogisticsReceiptLine,
+  LogisticsWebshopImage,
 } from "./logisticsTypes";
 
 type DashboardTab = "routes" | "bonnen" | "leren";
@@ -64,6 +65,7 @@ type RouteRound = {
 
 type ReceiptLine = LogisticsReceiptLine;
 type ReceiptSummary = LogisticsReceipt;
+type WebshopImageSummary = LogisticsWebshopImage;
 
 type ReceiptSeed = Omit<
   ReceiptSummary,
@@ -390,6 +392,69 @@ function fulfillmentLabel(receipt: ReceiptSummary) {
   if (fulfillment === "bezorgen") return "Bezorgen";
 
   return "Check";
+}
+
+function normalizeMatchText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function significantWords(value: string) {
+  return normalizeMatchText(value)
+    .split(" ")
+    .filter((word) => word.length >= 4 && !["strik", "patisserie"].includes(word));
+}
+
+function imageMatchesReceipt(
+  image: WebshopImageSummary,
+  receipt: ReceiptSummary
+) {
+  const haystack = normalizeMatchText(
+    [
+      receipt.id,
+      receipt.receiptNumber,
+      receipt.customer,
+      receipt.customerNote,
+      receipt.internalNote,
+      receipt.lines.map((line) => line.description).join(" "),
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  if (image.orderNumber && haystack.includes(normalizeMatchText(image.orderNumber))) {
+    return true;
+  }
+
+  const imageName = normalizeMatchText(image.customerName);
+  const receiptName = normalizeMatchText(receipt.customer);
+  if (imageName && receiptName && (imageName.includes(receiptName) || receiptName.includes(imageName))) {
+    return true;
+  }
+
+  const imageWords = significantWords(image.customerName);
+  if (imageWords.length === 0) return false;
+
+  return imageWords.some((word) => haystack.includes(word));
+}
+
+function imageMatchesForReceipt(
+  receipt: ReceiptSummary,
+  webshopImages: WebshopImageSummary[]
+) {
+  return webshopImages.filter((image) => imageMatchesReceipt(image, receipt));
+}
+
+function imageHasReceiptMatch(
+  image: WebshopImageSummary,
+  receipts: ReceiptSummary[]
+) {
+  return receipts.some((receipt) => imageMatchesReceipt(image, receipt));
 }
 
 function buildRouteRounds(plan: DayPlan): RouteRound[] {
@@ -890,6 +955,7 @@ export default function BakkerijLogistiekDashboard() {
   const [dateState, setDateState] = useState<DateState>(createDateState);
   const [fileSnapshot, setFileSnapshot] = useState<FileSnapshot | null>(null);
   const [importedBatch, setImportedBatch] = useState<LogisticsBatch | null>(null);
+  const [webshopImages, setWebshopImages] = useState<WebshopImageSummary[]>([]);
   const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
   const [batchReloadCounter, setBatchReloadCounter] = useState(0);
   const [isImporting, setIsImporting] = useState(false);
@@ -953,6 +1019,7 @@ export default function BakkerijLogistiekDashboard() {
         );
         const data = (await response.json()) as {
           batch?: LogisticsBatch | null;
+          webshopImages?: WebshopImageSummary[];
           message?: string;
         };
 
@@ -960,6 +1027,7 @@ export default function BakkerijLogistiekDashboard() {
 
         if (!response.ok) {
           setBatchLoadState("error");
+          setWebshopImages([]);
           if (manualRefresh) {
             setImportMessage(data.message || "Opnieuw ophalen is niet gelukt.");
           }
@@ -967,6 +1035,7 @@ export default function BakkerijLogistiekDashboard() {
         }
 
         setImportedBatch(data.batch || null);
+        setWebshopImages(data.webshopImages || []);
         setBatchLoadState("ready");
         if (manualRefresh) {
           setImportMessage(
@@ -1205,6 +1274,7 @@ export default function BakkerijLogistiekDashboard() {
           <OrdersPanel
             receiptSummaries={receiptSummaries}
             selectedPlan={selectedPlan}
+            webshopImages={webshopImages}
           />
         )}
         {activeTab === "leren" && (
@@ -1274,9 +1344,11 @@ function RoutesPanel({
 function OrdersPanel({
   receiptSummaries,
   selectedPlan,
+  webshopImages,
 }: Readonly<{
   receiptSummaries: ReceiptSummary[];
   selectedPlan: DayPlan;
+  webshopImages: WebshopImageSummary[];
 }>) {
   const [selectedReceiptId, setSelectedReceiptId] = useState("");
   const [activeFilter, setActiveFilter] = useState<OrdersFilter>("all");
@@ -1292,6 +1364,16 @@ function OrdersPanel({
     filteredReceipts[0] ||
     null;
   const activeReceiptId = selectedReceipt?.id || "";
+  const selectedImageMatches = selectedReceipt
+    ? imageMatchesForReceipt(selectedReceipt, webshopImages)
+    : [];
+  const unmatchedImages = useMemo(
+    () =>
+      webshopImages.filter(
+        (image) => !imageHasReceiptMatch(image, receiptSummaries)
+      ),
+    [receiptSummaries, webshopImages]
+  );
 
   return (
     <section className="grid gap-3 lg:grid-cols-[minmax(16rem,0.5fr)_minmax(0,1fr)]">
@@ -1301,7 +1383,7 @@ function OrdersPanel({
             Bonnen
           </h2>
           <span className="w-fit border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
-            {filteredReceipts.length}/{receiptSummaries.length}
+            {filteredReceipts.length}/{receiptSummaries.length} · foto {webshopImages.length}
           </span>
         </div>
         <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
@@ -1332,6 +1414,7 @@ function OrdersPanel({
               <ReceiptRow
                 key={receipt.id}
                 active={receipt.id === activeReceiptId}
+                imageCount={imageMatchesForReceipt(receipt, webshopImages).length}
                 index={index}
                 onSelect={() => setSelectedReceiptId(receipt.id)}
                 receipt={receipt}
@@ -1342,22 +1425,49 @@ function OrdersPanel({
                 Geen bonnen voor deze dag.
               </div>
             )}
+            {unmatchedImages.length > 0 && (
+              <div className="mt-1 border border-[#eadb8b] bg-[#fff8d8] p-2">
+                <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#6f5212]">
+                  Foto check {unmatchedImages.length}
+                </p>
+                <div className="mt-1 grid gap-1">
+                  {unmatchedImages.map((image) => (
+                    <a
+                      key={image.id}
+                      href={image.photoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="truncate text-[0.68rem] font-normal tracking-normal text-[#1a1815] underline-offset-2 hover:underline"
+                    >
+                      {image.customerName || "Klant onbekend"} ·{" "}
+                      {image.orderNumber || "geen bestelnummer"}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <ReceiptDetail receipt={selectedReceipt} selectedPlan={selectedPlan} />
+      <ReceiptDetail
+        imageMatches={selectedImageMatches}
+        receipt={selectedReceipt}
+        selectedPlan={selectedPlan}
+      />
     </section>
   );
 }
 
 function ReceiptRow({
   active,
+  imageCount,
   index,
   onSelect,
   receipt,
 }: Readonly<{
   active: boolean;
+  imageCount: number;
   index: number;
   onSelect: () => void;
   receipt: ReceiptSummary;
@@ -1408,6 +1518,11 @@ function ReceiptRow({
           <span className="border border-[#e8e4de] bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]">
             {fulfillment}
           </span>
+          {imageCount > 0 && (
+            <span className="border border-[#d6e5d8] bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#315641]">
+              foto {imageCount}
+            </span>
+          )}
           <span className="truncate text-[0.65rem] font-normal tracking-normal text-[#8b8278]">
             {receipt.lines.length} regels
           </span>
@@ -1473,10 +1588,70 @@ function ReceiptAddressBlock({ receipt }: Readonly<{ receipt: ReceiptSummary }>)
   );
 }
 
+function thumbnailStyleFor(image: WebshopImageSummary) {
+  return {
+    backgroundImage: `url("${image.photoUrl.replace(/"/g, "%22")}")`,
+  };
+}
+
+function WebshopImageBlock({
+  images,
+}: Readonly<{ images: WebshopImageSummary[] }>) {
+  if (images.length === 0) return null;
+
+  return (
+    <div className="border-b border-dashed border-[#cfc6bc] bg-[#f6faf4] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-normal text-[#315641]">
+          Marsepeinfoto
+        </p>
+        <span className="text-[0.68rem] font-black tracking-normal text-[#4a6d5a]">
+          {images.length}
+        </span>
+      </div>
+      <div className="mt-2 grid gap-1.5">
+        {images.map((image) => (
+          <a
+            key={image.id}
+            href={image.photoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 border border-[#d6e5d8] bg-white p-1.5 text-left transition hover:border-[#315641]"
+          >
+            <span
+              aria-hidden="true"
+              className="h-12 w-12 bg-[#faf8f5] bg-cover bg-center"
+              style={thumbnailStyleFor(image)}
+            />
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-black tracking-normal text-[#1a1815]">
+                {image.customerName || "Klant controleren"}
+              </span>
+              <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#6b645b]">
+                {image.orderNumber || "zonder bestelnummer"} · match {image.confidence}
+              </span>
+              {image.notes.length > 0 && (
+                <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#8b8278]">
+                  {image.notes.join(" ")}
+                </span>
+              )}
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ReceiptDetail({
+  imageMatches,
   receipt,
   selectedPlan,
-}: Readonly<{ receipt: ReceiptSummary | null; selectedPlan: DayPlan }>) {
+}: Readonly<{
+  imageMatches: WebshopImageSummary[];
+  receipt: ReceiptSummary | null;
+  selectedPlan: DayPlan;
+}>) {
   if (!receipt) {
     return (
       <div className="flex h-[30rem] items-center justify-center rounded-lg border border-[#e8e4de] bg-white p-4 text-sm font-bold tracking-normal text-[#6b645b] shadow-sm">
@@ -1543,6 +1718,7 @@ function ReceiptDetail({
       </dl>
 
       <ReceiptAddressBlock receipt={receipt} />
+      <WebshopImageBlock images={imageMatches} />
 
       <div className="p-3">
         <div className="flex items-center justify-between gap-3">

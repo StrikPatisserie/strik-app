@@ -55,3 +55,22 @@ export type LogisticsBatch = {
   receipts: LogisticsReceipt[];
   warnings: string[];
 };
+
+export type LogisticsWebshopImageConfidence = "hoog" | "middel" | "laag";
+
+export type LogisticsWebshopImage = {
+  id: string;
+  messageId: string;
+  orderNumber: string;
+  deliveryDate: string;
+  customerName: string;
+  photoUrl: string;
+  sourceUrl: string;
+  fileName: string;
+  subject: string;
+  from: string;
+  receivedAt: string;
+  importedAt: string;
+  confidence: LogisticsWebshopImageConfidence;
+  notes: string[];
+};
