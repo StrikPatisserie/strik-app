@@ -935,6 +935,19 @@ export default function BakkerijLogistiekDashboard() {
     setBatchReloadCounter((current) => current + 1);
   }
 
+  function openDatePicker() {
+    const input = dateInputRef.current;
+    if (!input) return;
+
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+
+    input.focus();
+    input.click();
+  }
+
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -999,12 +1012,8 @@ export default function BakkerijLogistiekDashboard() {
       />
 
       <section className="relative rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-        <span className="absolute right-2 top-2 -rotate-2 border border-[#1a1815] bg-[#1a1815] px-2 py-1 text-[0.62rem] font-black uppercase tracking-normal text-white">
-          {selectedPlan.sourceLabel}
-        </span>
-
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0 pr-20">
+          <div className="min-w-0">
             <p className="text-xs font-black uppercase tracking-normal text-[#6b645b]">
               {selectedPlan.title} · {formatDateLabel(selectedPlan.date)}
             </p>
@@ -1049,11 +1058,18 @@ export default function BakkerijLogistiekDashboard() {
               className="sr-only"
               onChange={(event) => selectDate(event.target.value)}
             />
-            <IconButton
-              icon={strikIcons.agenda}
-              label="Dag laden"
-              onClick={() => dateInputRef.current?.showPicker()}
-            />
+            <button
+              type="button"
+              onClick={openDatePicker}
+              className={`min-h-10 border px-3 text-sm font-black tracking-normal transition ${
+                selectedPlan.date !== dateState.today &&
+                selectedPlan.date !== dateState.tomorrow
+                  ? "border-[#1a1815] bg-[#1a1815] text-white"
+                  : "border-[#e8e4de] bg-white text-[#1a1815] hover:bg-[#faf8f5]"
+              }`}
+            >
+              Datum
+            </button>
             <RefreshButton
               disabled={batchLoadState === "loading" || isImporting}
               loading={batchLoadState === "loading"}
@@ -1065,13 +1081,6 @@ export default function BakkerijLogistiekDashboard() {
               accept=".pdf,.xls,.xlsx,.csv"
               className="sr-only"
               onChange={handleFileChange}
-            />
-            <IconButton
-              icon={strikIcons.data}
-              label={isImporting ? "Batch wordt ingelezen" : "Batch uploaden"}
-              onClick={() => fileInputRef.current?.click()}
-              tone="warm"
-              disabled={isImporting}
             />
             {fileSnapshot && (
               <button
@@ -1628,45 +1637,6 @@ function RouteSummaryRow({ route }: Readonly<{ route: RouteRound }>) {
         {route.stops.join(" -> ")}
       </p>
     </article>
-  );
-}
-
-function IconButton({
-  disabled = false,
-  icon,
-  label,
-  onClick,
-  tone = "neutral",
-}: Readonly<{
-  disabled?: boolean;
-  icon: string;
-  label: string;
-  onClick: () => void;
-  tone?: "neutral" | "warm";
-}>) {
-  const toneClass =
-    tone === "warm"
-      ? "border-[#efc7b8] bg-[#fff3ed] hover:bg-white"
-      : "border-[#e8e4de] bg-white hover:bg-[#faf8f5]";
-
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`flex h-10 w-10 items-center justify-center border shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${toneClass}`}
-    >
-      <span
-        aria-hidden="true"
-        className="block h-5 w-5 bg-[#1a1815]"
-        style={{
-          WebkitMask: `url("${icon}") center / contain no-repeat`,
-          mask: `url("${icon}") center / contain no-repeat`,
-        }}
-      />
-    </button>
   );
 }
 
