@@ -627,8 +627,8 @@ function hasLargeCakeSize(text: string) {
 function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
   const description = lineSearchDescription(line);
   const isCake =
-    /\bmarsepein(?:taart|\s+taart)\b/.test(description) ||
-    /\bslagroom(?:taart|\s+taart)\b/.test(description);
+    /\bmarsepein(?:taarten?|\s+taarten?)\b/.test(description) ||
+    /\bslagroom(?:taarten?|\s+taarten?)\b/.test(description);
 
   return isCake && hasLargeCakeSize(description);
 }
