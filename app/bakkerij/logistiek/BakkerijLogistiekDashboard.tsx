@@ -90,12 +90,12 @@ const ordersFilters: {
   location?: string;
   fulfillment?: LogisticsFulfillment;
 }[] = [
-  { id: "all", label: "Alles" },
-  { id: "delivery", label: "Bezorgen", fulfillment: "bezorgen" },
-  { id: "pickup-heyendaalseweg", label: "H'weg", location: "Heyendaalseweg" },
-  { id: "pickup-daalseweg", label: "D'weg", location: "Daalseweg" },
-  { id: "pickup-ziekerstraat", label: "Z'straat", location: "Ziekerstraat" },
-  { id: "pickup-lent", label: "Lent", location: "Lent" },
+  { id: "all", label: "ALL" },
+  { id: "delivery", label: "BEZ", fulfillment: "bezorgen" },
+  { id: "pickup-heyendaalseweg", label: "HEY", location: "Heyendaalseweg" },
+  { id: "pickup-daalseweg", label: "DAAL", location: "Daalseweg" },
+  { id: "pickup-ziekerstraat", label: "ZIEK", location: "Ziekerstraat" },
+  { id: "pickup-lent", label: "LENT", location: "Lent" },
 ];
 
 function toInputDate(date: Date) {
@@ -417,9 +417,9 @@ function buildRouteRounds(plan: DayPlan): RouteRound[] {
       departure: plan.isFuture ? "advies" : "07:40",
       badge: "lucht houden",
       tone: "border-[#eadb8b] bg-[#fff8d8]",
-      stops: ["Sanadome", "Winkel Ziekerstraat", "Winkel Lent"],
-      reason: "Grote order eerst uit de bus, daarna winkels vrijmaken.",
-      load: "Grote gebaksbon vooraan; winkelbakken compact achterin.",
+      stops: ["Winkel Ziekerstraat", "Winkel Lent", "Sanadome"],
+      reason: "Winkels eerst lossen; alleen extreem vroege klantbonnen gaan ervoor.",
+      load: "Winkelbakken direct bereikbaar; grote gebaksbon erachter compact houden.",
     },
     {
       id: "ijs",
@@ -478,7 +478,7 @@ function buildReceiptLines(receipt: ReceiptSeed, plan: DayPlan): ReceiptLine[] {
       {
         quantity: "1",
         description: "Presentatiedozen",
-        note: "Grote order vooraan in Bus B.",
+        note: "Achter winkelbakken houden, tenzij bon expliciet vroeg meldt.",
       },
     ];
   }
@@ -627,7 +627,7 @@ function buildReceiptSummaries(
       route: "Bus B",
       tags: ["groot", "gebak"],
       value: 420,
-      note: "Grote gebaksorder vooraan in bus.",
+      note: "Grote gebaksorder na winkelstops, tenzij expliciet vroeg.",
     },
     {
       id: "CB-004",
@@ -683,7 +683,7 @@ function buildReceiptSummaries(
       address: "interne levering",
       route: "Bus B",
       tags: ["winkel", "intern"],
-      note: "Na Sanadome lossen.",
+      note: "Eerste vaste centrum/winkelstop.",
     },
     {
       id: "CB-010",
@@ -1315,7 +1315,7 @@ function OrdersPanel({
                 type="button"
                 aria-pressed={active}
                 onClick={() => setActiveFilter(filter.id)}
-                className={`shrink-0 border px-2 py-1 text-[0.68rem] font-black tracking-normal transition ${
+                className={`shrink-0 border px-1.5 py-0.5 text-[0.62rem] font-normal tracking-normal transition ${
                   active
                     ? "border-[#1a1815] bg-[#1a1815] text-white"
                     : "border-[#e8e4de] bg-white text-[#6b645b] hover:bg-[#faf8f5]"
@@ -1598,14 +1598,6 @@ function ReceiptDetail({
           </p>
           <p className="mt-0.5 text-xs font-normal leading-snug tracking-normal text-[#1a1815]">
             {receipt.customerNote}
-          </p>
-        </div>
-        <div className="border-t border-[#efe7dd] pt-2">
-          <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
-            Ochtendregie
-          </p>
-          <p className="mt-0.5 text-xs font-normal leading-snug tracking-normal text-[#1a1815]">
-            {receipt.internalNote}
           </p>
         </div>
       </div>
