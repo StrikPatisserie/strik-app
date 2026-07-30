@@ -47,11 +47,10 @@ type RouteRound = {
   load: string;
 };
 
-type OrderCluster = {
-  title: string;
-  count: string;
-  route: string;
-  signal: string;
+type ReceiptLine = {
+  quantity: string;
+  description: string;
+  note?: string;
 };
 
 type ReceiptSummary = {
@@ -59,10 +58,25 @@ type ReceiptSummary = {
   time: string;
   customer: string;
   address: string;
+  deliveryAddress: string;
+  alternativeAddress?: string;
   route: string;
   tags: string[];
   value?: number;
   note: string;
+  customerNote: string;
+  internalNote: string;
+  lines: ReceiptLine[];
+};
+
+type ReceiptSeed = Omit<
+  ReceiptSummary,
+  "deliveryAddress" | "customerNote" | "internalNote" | "lines"
+> & {
+  deliveryAddress?: string;
+  alternativeAddress?: string;
+  customerNote?: string;
+  internalNote?: string;
 };
 
 const feedbackStorageKey = "strik-logistiek-dagfeedback-v1";
@@ -316,43 +330,159 @@ function buildRouteRounds(plan: DayPlan): RouteRound[] {
   ];
 }
 
-function buildOrderClusters(plan: DayPlan): OrderCluster[] {
+function buildReceiptLines(receipt: ReceiptSeed, plan: DayPlan): ReceiptLine[] {
+  if (receipt.tags.includes("ijs")) {
+    return [
+      {
+        quantity: String(plan.iceTubs),
+        description: "IJs 5L bak",
+        note: `${plan.tempexBoxes} zwarte tempexbakken klaarzetten.`,
+      },
+      {
+        quantity: "1",
+        description: "Koelcontrole",
+        note: "IJs apart laden en ronde 2 beoordelen.",
+      },
+    ];
+  }
+
+  if (receipt.tags.includes("winkel")) {
+    return [
+      {
+        quantity: "1",
+        description: "Winkelvoorraad volgens interne paklijst",
+        note: "Brood en gebak per winkel bij elkaar houden.",
+      },
+      {
+        quantity: "1",
+        description: "Retour fust controleren",
+        note: "Lege kratten direct scheiden bij terugkomst.",
+      },
+    ];
+  }
+
+  if (receipt.customer === "Sanadome") {
+    return [
+      { quantity: "120", description: "Gesorteerd gebak" },
+      { quantity: "30", description: "Petit fours" },
+      {
+        quantity: "1",
+        description: "Presentatiedozen",
+        note: "Grote order vooraan in Bus B.",
+      },
+    ];
+  }
+
+  if (receipt.customer === "Bruidsproeverij") {
+    return [
+      { quantity: "1", description: "Proeverijbox" },
+      { quantity: "1", description: "Presentatiemap" },
+      {
+        quantity: "1",
+        description: "Koel/fragiel",
+        note: "Niet onder winkelkratten plaatsen.",
+      },
+    ];
+  }
+
+  if (receipt.tags.includes("zorg")) {
+    return [
+      { quantity: "8", description: "Taart/gebak assorti" },
+      { quantity: "60", description: "Petit fours" },
+      {
+        quantity: "1",
+        description: "Afdelingcheck",
+        note: "Naam en afdeling op bon controleren.",
+      },
+    ];
+  }
+
+  if (receipt.tags.includes("campus")) {
+    return [
+      { quantity: "10", description: "Luxe gebak assorti" },
+      { quantity: "2", description: "Doos petit fours" },
+      {
+        quantity: "1",
+        description: "Campuslevering",
+        note: "Samen plannen met Heyendaal/Radboud.",
+      },
+    ];
+  }
+
+  if (receipt.tags.includes("groot")) {
+    return [
+      { quantity: "200", description: "Gesorteerd gebak" },
+      {
+        quantity: "1",
+        description: "Transportkrat breekbaar",
+        note: "Volume checken voor tweede ronde.",
+      },
+    ];
+  }
+
+  if (receipt.tags.includes("check")) {
+    return [
+      { quantity: "1", description: "Contantbon assortiment" },
+      {
+        quantity: "1",
+        description: "Adres en tijd controleren",
+        note: "Pas route vastzetten na controle.",
+      },
+    ];
+  }
+
+  const assortedQuantity = receipt.value && receipt.value >= 150 ? "18" : "8";
+
   return [
+    { quantity: assortedQuantity, description: "Gesorteerd gebak" },
     {
-      title: "Externe waarde",
-      count: formatCurrency(plan.orderValue),
-      route: plan.orderPressure,
-      signal: "excl. winkel- en ijsbonnen",
-    },
-    {
-      title: "Winkelvoorraad",
-      count: "4 winkels",
-      route: "Bus A / Bus B",
-      signal: "route mag dagelijks wisselen voor efficientie",
-    },
-    {
-      title: "Tijdkritisch",
-      count: `${plan.criticalWindows} bonnen`,
-      route: "vooraan",
-      signal: "bezorgtijd wint van vaste winkelvolgorde",
-    },
-    {
-      title: "Grote gebaksorders",
-      count: "druksignaal",
-      route: "eerst lossen",
-      signal: "kan vertrek vertragen ondanks rustige dag",
-    },
-    {
-      title: "IJs",
-      count: `${plan.iceTubs} bakken`,
-      route: `${plan.tempexBoxes} tempex`,
-      signal: "3 ijsbakken per zwarte tempexbak",
+      quantity: "1",
+      description: "Bezorging contantbon",
+      note: `Tijdvak ${receipt.time}.`,
     },
   ];
 }
 
+function buildReceiptCustomerNote(receipt: ReceiptSeed) {
+  if (receipt.customerNote) return receipt.customerNote;
+  if (receipt.tags.includes("zorg")) {
+    return "Afgeven bij receptie of afdeling, naam op bon controleren.";
+  }
+  if (receipt.tags.includes("winkel")) {
+    return "Interne levering voor winkel, buiten externe dagwaarde.";
+  }
+  if (receipt.tags.includes("ijs")) {
+    return "Tempex dicht laten tot lossen, ijs niet tussen gebak zetten.";
+  }
+  if (receipt.tags.includes("check")) {
+    return "Adres, alternatief afleveradres en bezorgtijd controleren voor vertrek.";
+  }
+
+  return "Geen aparte klantopmerking.";
+}
+
+function buildReceiptAlternativeAddress(receipt: ReceiptSeed) {
+  if (receipt.alternativeAddress) return receipt.alternativeAddress;
+  if (receipt.route === "Check") return "Alternatief adres in Orbak controleren";
+  if (receipt.customer === "Radboud") return "Campus hoofdingang / receptie";
+  if (receipt.customer === "Sint Maartenskliniek") return "Hoofdreceptie bij dichte afdeling";
+
+  return undefined;
+}
+
+function hydrateReceipt(receipt: ReceiptSeed, plan: DayPlan): ReceiptSummary {
+  return {
+    ...receipt,
+    deliveryAddress: receipt.deliveryAddress || receipt.address,
+    alternativeAddress: buildReceiptAlternativeAddress(receipt),
+    customerNote: buildReceiptCustomerNote(receipt),
+    internalNote: receipt.internalNote || receipt.note,
+    lines: buildReceiptLines(receipt, plan),
+  };
+}
+
 function buildReceiptSummaries(plan: DayPlan): ReceiptSummary[] {
-  const sharedReceipts: ReceiptSummary[] = [
+  const sharedReceipts: ReceiptSeed[] = [
     {
       id: "CB-001",
       time: "08:00",
@@ -600,7 +730,9 @@ function buildReceiptSummaries(plan: DayPlan): ReceiptSummary[] {
     },
   ];
 
-  const visibleReceipts = sharedReceipts.slice(0, plan.orderCount);
+  const visibleReceipts = sharedReceipts
+    .slice(0, plan.orderCount)
+    .map((receipt) => hydrateReceipt(receipt, plan));
 
   if (plan.isFuture) {
     return visibleReceipts.map((receipt, index) => ({
@@ -609,6 +741,12 @@ function buildReceiptSummaries(plan: DayPlan): ReceiptSummary[] {
       note: receipt.tags.includes("intern")
         ? receipt.note
         : "Prognosebon, definitieve aantallen na 22:00.",
+      internalNote: receipt.tags.includes("intern")
+        ? receipt.internalNote
+        : "Prognosebon, definitieve aantallen na 22:00.",
+      customerNote: receipt.tags.includes("intern")
+        ? receipt.customerNote
+        : "Nog prognose: controleer na de definitieve batch.",
     }));
   }
 
@@ -647,7 +785,6 @@ export default function BakkerijLogistiekDashboard() {
   const stats = useMemo(() => buildStats(selectedPlan), [selectedPlan]);
   const attentionItems = useMemo(() => buildAttentionItems(selectedPlan), [selectedPlan]);
   const routeRounds = useMemo(() => buildRouteRounds(selectedPlan), [selectedPlan]);
-  const orderClusters = useMemo(() => buildOrderClusters(selectedPlan), [selectedPlan]);
   const receiptSummaries = useMemo(() => buildReceiptSummaries(selectedPlan), [selectedPlan]);
   const feedback = feedbackByDate[selectedPlan.date] || "";
   const learningSignals = useMemo(() => learningSignalsFor(feedback), [feedback]);
@@ -849,7 +986,6 @@ export default function BakkerijLogistiekDashboard() {
         {activeTab === "routes" && <RoutesPanel routeRounds={routeRounds} />}
         {activeTab === "bonnen" && (
           <OrdersPanel
-            orderClusters={orderClusters}
             receiptSummaries={receiptSummaries}
             selectedPlan={selectedPlan}
           />
@@ -975,16 +1111,21 @@ function RoutesPanel({
 }
 
 function OrdersPanel({
-  orderClusters,
   receiptSummaries,
   selectedPlan,
 }: Readonly<{
-  orderClusters: OrderCluster[];
   receiptSummaries: ReceiptSummary[];
   selectedPlan: DayPlan;
 }>) {
+  const [selectedReceiptId, setSelectedReceiptId] = useState("");
+  const selectedReceipt =
+    receiptSummaries.find((receipt) => receipt.id === selectedReceiptId) ||
+    receiptSummaries[0] ||
+    null;
+  const activeReceiptId = selectedReceipt?.id || "";
+
   return (
-    <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.52fr)]">
+    <section className="grid gap-3 lg:grid-cols-[minmax(17rem,0.58fr)_minmax(0,1fr)]">
       <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
@@ -994,57 +1135,53 @@ function OrdersPanel({
             {selectedPlan.title} · {receiptSummaries.length}
           </span>
         </div>
-        <div className="mt-3 h-[28rem] overflow-y-auto pr-1">
+        <div className="mt-3 h-[30rem] overflow-y-auto pr-1">
           <div className="grid gap-1.5">
             {receiptSummaries.map((receipt, index) => (
               <ReceiptRow
                 key={receipt.id}
+                active={receipt.id === activeReceiptId}
                 index={index}
+                onSelect={() => setSelectedReceiptId(receipt.id)}
                 receipt={receipt}
               />
             ))}
+            {receiptSummaries.length === 0 && (
+              <div className="border border-[#efe7dd] bg-[#faf8f5] p-3 text-sm font-bold tracking-normal text-[#6b645b]">
+                Geen bonnen voor deze dag.
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-        <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
-          Clusters
-        </h2>
-        <div className="mt-3 grid gap-2">
-          {orderClusters.map((cluster) => (
-            <div
-              key={cluster.title}
-              className="border-t border-[#efe7dd] pt-2 first:border-t-0 first:pt-0"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm font-black tracking-normal text-[#1a1815]">
-                  {cluster.title}
-                </span>
-                <span className="shrink-0 text-sm font-black tracking-normal text-[#6b645b]">
-                  {cluster.count}
-                </span>
-              </div>
-              <p className="mt-0.5 text-xs font-bold leading-snug tracking-normal text-[#4a4540]">
-                {cluster.route}
-              </p>
-              <p className="mt-0.5 text-xs leading-snug tracking-normal text-[#8b8278]">
-                {cluster.signal}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
+      <ReceiptDetail receipt={selectedReceipt} selectedPlan={selectedPlan} />
     </section>
   );
 }
 
 function ReceiptRow({
+  active,
   index,
+  onSelect,
   receipt,
-}: Readonly<{ index: number; receipt: ReceiptSummary }>) {
+}: Readonly<{
+  active: boolean;
+  index: number;
+  onSelect: () => void;
+  receipt: ReceiptSummary;
+}>) {
   return (
-    <article className="grid grid-cols-[2.3rem_minmax(0,1fr)] gap-2 border border-[#efe7dd] bg-[#faf8f5] p-2">
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      className={`grid w-full grid-cols-[2.3rem_minmax(0,1fr)] gap-2 border p-2 text-left transition ${
+        active
+          ? "border-[#1a1815] bg-[#fff3ed]"
+          : "border-[#efe7dd] bg-[#faf8f5] hover:border-[#efc7b8] hover:bg-white"
+      }`}
+    >
       <span className="flex h-8 w-8 items-center justify-center bg-[#1a1815] text-xs font-black tabular-nums tracking-normal text-white">
         {index + 1}
       </span>
@@ -1086,6 +1223,149 @@ function ReceiptRow({
         <p className="mt-1 text-xs leading-snug tracking-normal text-[#4a4540]">
           {receipt.note}
         </p>
+      </div>
+    </button>
+  );
+}
+
+function ReceiptDetail({
+  receipt,
+  selectedPlan,
+}: Readonly<{ receipt: ReceiptSummary | null; selectedPlan: DayPlan }>) {
+  if (!receipt) {
+    return (
+      <div className="flex h-[30rem] items-center justify-center rounded-lg border border-[#e8e4de] bg-white p-4 text-sm font-bold tracking-normal text-[#6b645b] shadow-sm">
+        Geen contantbon geselecteerd.
+      </div>
+    );
+  }
+
+  return (
+    <article className="h-[30rem] overflow-y-auto rounded-lg border border-[#1a1815] bg-[#fffdf8] shadow-sm">
+      <div className="border-b border-dashed border-[#cfc6bc] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-normal text-[#6b645b]">
+              Contantbon · {receipt.id}
+            </p>
+            <h2 className="mt-1 truncate text-2xl font-black tracking-normal text-[#1a1815]">
+              {receipt.customer}
+            </h2>
+          </div>
+          <span className="shrink-0 border border-[#e8e4de] bg-white px-2 py-1 text-xs font-black tracking-normal text-[#6b645b]">
+            {selectedPlan.title}
+          </span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1">
+          {receipt.tags.map((tag) => (
+            <span
+              key={tag}
+              className="border border-[#e8e4de] bg-white px-1.5 py-0.5 text-[0.65rem] font-black tracking-normal text-[#6b645b]"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <dl className="grid gap-2 border-b border-dashed border-[#cfc6bc] p-4 sm:grid-cols-2">
+        <div>
+          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Bezorgtijd
+          </dt>
+          <dd className="mt-0.5 text-sm font-black tracking-normal text-[#1a1815]">
+            {receipt.time}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Route
+          </dt>
+          <dd className="mt-0.5 text-sm font-black tracking-normal text-[#1a1815]">
+            {receipt.route}
+          </dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Afleveradres
+          </dt>
+          <dd className="mt-0.5 text-sm font-black tracking-normal text-[#1a1815]">
+            {receipt.deliveryAddress}
+          </dd>
+        </div>
+        {receipt.alternativeAddress && (
+          <div className="sm:col-span-2">
+            <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+              Alternatief
+            </dt>
+            <dd className="mt-0.5 text-sm font-black tracking-normal text-[#1a1815]">
+              {receipt.alternativeAddress}
+            </dd>
+          </div>
+        )}
+      </dl>
+
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-black uppercase tracking-normal text-[#1a1815]">
+            Regels
+          </h3>
+          <span className="text-xs font-black tracking-normal text-[#6b645b]">
+            {receipt.lines.length}
+          </span>
+        </div>
+        <div className="mt-2 grid gap-1.5">
+          {receipt.lines.map((line, index) => (
+            <div
+              key={`${receipt.id}-line-${index}`}
+              className="grid grid-cols-[3.3rem_minmax(0,1fr)] gap-2 border-t border-[#efe7dd] pt-1.5 first:border-t-0 first:pt-0"
+            >
+              <span className="font-mono text-sm font-black tabular-nums tracking-normal text-[#1a1815]">
+                {line.quantity}
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-black tracking-normal text-[#1a1815]">
+                  {line.description}
+                </p>
+                {line.note && (
+                  <p className="mt-0.5 text-xs leading-snug tracking-normal text-[#6b645b]">
+                    {line.note}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-y border-dashed border-[#cfc6bc] bg-white/70 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-black uppercase tracking-normal text-[#1a1815]">
+            Bonwaarde
+          </span>
+          <span className="text-lg font-black tracking-normal text-[#1a1815]">
+            {receipt.value ? formatCurrency(receipt.value) : "intern"}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-2 p-4">
+        <div>
+          <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Opmerking bon
+          </p>
+          <p className="mt-0.5 text-sm font-bold leading-snug tracking-normal text-[#1a1815]">
+            {receipt.customerNote}
+          </p>
+        </div>
+        <div className="border-t border-[#efe7dd] pt-2">
+          <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Ochtendregie
+          </p>
+          <p className="mt-0.5 text-sm font-bold leading-snug tracking-normal text-[#1a1815]">
+            {receipt.internalNote}
+          </p>
+        </div>
       </div>
     </article>
   );
