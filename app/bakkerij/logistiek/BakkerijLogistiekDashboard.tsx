@@ -3,12 +3,36 @@
 import { useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 
-type DashboardTab = "vandaag" | "routes" | "bonnen" | "import";
+type DashboardTab = "vandaag" | "routes" | "bonnen" | "leren";
+type BatchStatus = "wacht" | "prognose" | "definitief" | "handmatig" | "historie";
 
 type FileSnapshot = {
   name: string;
   size: number;
   uploadedAt: string;
+};
+
+type DateState = {
+  today: string;
+  tomorrow: string;
+  selectedDate: string;
+  hour: number;
+};
+
+type DayPlan = {
+  date: string;
+  title: string;
+  status: BatchStatus;
+  sourceLabel: string;
+  batchLabel: string;
+  orderCount: number;
+  orderValue: number;
+  orderPressure: string;
+  iceTubs: number;
+  tempexBoxes: number;
+  criticalWindows: number;
+  criticalDetail: string;
+  isFuture: boolean;
 };
 
 type RouteRound = {
@@ -23,167 +47,89 @@ type RouteRound = {
   load: string;
 };
 
+type OrderCluster = {
+  title: string;
+  count: string;
+  route: string;
+  signal: string;
+};
+
+const feedbackStorageKey = "strik-logistiek-dagfeedback-v1";
+
 const tabs: { id: DashboardTab; label: string }[] = [
-  { id: "vandaag", label: "Vandaag" },
+  { id: "vandaag", label: "Plan" },
   { id: "routes", label: "Routes" },
   { id: "bonnen", label: "Bonnen" },
-  { id: "import", label: "Import" },
-];
-
-const summaryStats = [
-  { label: "Pakbonnen", value: "25", detail: "ochtendbatch" },
-  { label: "Routeadvies", value: "2 + ijs", detail: "eerste ronde strak" },
-  { label: "IJsdruk", value: "34", detail: "5L bakken apart" },
-  { label: "Tijdkritisch", value: "6", detail: "voor 10:00" },
-];
-
-const routeRounds: RouteRound[] = [
-  {
-    id: "bus-a",
-    title: "Oost spoed",
-    vehicle: "Bus A",
-    departure: "07:40",
-    badge: "eerst weg",
-    tone: "border-[#d6e5d8] bg-[#f6faf4]",
-    stops: [
-      "Winkel Heyendaalseweg",
-      "Winkel Daalseweg",
-      "Sint Maartenskliniek",
-      "Radboud",
-    ],
-    reason: "Afhaal 08:00 en twee zorg/Radboud vensters rond 09:00.",
-    load: "Heyendaal + Daalseweg winkelvoorraad, daarna kwetsbare tijdsbonnen.",
-  },
-  {
-    id: "bus-b",
-    title: "Centrum noord",
-    vehicle: "Bus B",
-    departure: "07:40",
-    badge: "lucht houden",
-    tone: "border-[#eadb8b] bg-[#fff8d8]",
-    stops: ["Sanadome", "Winkel Ziekerstraat", "Winkel Lent"],
-    reason: "Grote Sanadome-bon eerst uit de bus, daarna winkels vrijmaken.",
-    load: "Sanadome vooraan, Ziekerstraat/Lent winkelvoorraad gegroepeerd.",
-  },
-  {
-    id: "ijs",
-    title: "IJsronde",
-    vehicle: "Ronde 2",
-    departure: "09:45",
-    badge: "apart laden",
-    tone: "border-[#efc7b8] bg-[#fff3ed]",
-    stops: [
-      "Heyendaalseweg ijs",
-      "Daalseweg ijs",
-      "Ziekerstraat ijs",
-      "Lent ijs",
-    ],
-    reason: "Veel 5L bakken nemen volume en koeling; minder druk in ronde 1.",
-    load: "Alle ijsbonnen samen, kort tellen per winkel voordat de bus dichtgaat.",
-  },
+  { id: "leren", label: "Leren" },
 ];
 
 const morningSteps = [
   {
     time: "06:30",
-    title: "Pakzones klaarzetten",
-    detail: "Maak vakken voor Bus A, Bus B, IJsronde en Check.",
+    title: "Pakzones",
+    detail: "Bus A, Bus B, IJsronde en Check.",
   },
   {
     time: "07:10",
-    title: "Grote bonnen markeren",
-    detail: "Petit fours, gesorteerd gebak en ijs tellen als ruimte/druk-signaal.",
+    title: "Grote bonnen",
+    detail: "Petit fours, gesorteerd gebak en ijs tellen als druksignaal.",
   },
   {
     time: "07:25",
-    title: "Bus A en B laden",
-    detail: "Tijdkritisch vooraan; winkels achterin per route bij elkaar houden.",
+    title: "Laden",
+    detail: "Tijdkritisch vooraan, winkels per route bij elkaar.",
   },
   {
     time: "08:00",
-    title: "Eerste ronde vertrokken",
-    detail: "Bij vertraging eerst bellen met de vroegste tijdsbonnen.",
+    title: "Vertrekcheck",
+    detail: "Bij vertraging eerst vroegste tijdsbonnen bellen.",
   },
   {
     time: "09:45",
-    title: "IJsronde beslissen",
-    detail: "Als ijsvolume hoog blijft: aparte ronde, niet bij gebak drukken.",
+    title: "IJsronde",
+    detail: "Hoog ijsvolume apart houden van gebak.",
   },
 ];
 
-const attentionItems = [
-  {
-    label: "Ruimtedruk",
-    value: "hoog",
-    detail: "IJs en grote aantallen gebak veroorzaken krapte, niet het aantal bonnen.",
-  },
-  {
-    label: "Eerste keuze",
-    value: "tijdvensters",
-    detail: "Alles met 08:00-09:30 krijgt voorrang boven winkelroutine.",
-  },
-  {
-    label: "Controle",
-    value: "4 bonnen",
-    detail: "Zet onbekende adressen of alternatieve afleveradressen in Check.",
-  },
-];
+function toInputDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
-const orderClusters = [
-  {
-    title: "Winkelvoorraad",
-    count: "4 winkels",
-    route: "verdeeld over Bus A en B",
-    signal: "vaste route, maar mag dagelijks wisselen voor efficientie",
-  },
-  {
-    title: "Tijdkritisch bezorgen",
-    count: "6 bonnen",
-    route: "vooraan in planning",
-    signal: "bezorgtijd wint van vaste winkelvolgorde",
-  },
-  {
-    title: "Grote aantallen gebak",
-    count: "Sanadome + zorg",
-    route: "eerst lossen waar mogelijk",
-    signal: "volume geeft druk in productie en busindeling",
-  },
-  {
-    title: "IJs",
-    count: "34 bakken",
-    route: "ronde 2",
-    signal: "koeling en ruimte apart beoordelen",
-  },
-  {
-    title: "Check",
-    count: "4 aandachtspunten",
-    route: "regisseur",
-    signal: "alternatief adres, onduidelijke tijd of losse notitie",
-  },
-];
+  return `${year}-${month}-${day}`;
+}
 
-const importSources = [
-  {
-    title: "Handmatige upload",
-    status: "actief",
-    detail: "PDF, Excel of CSV komt hier binnen als ochtendbatch.",
-  },
-  {
-    title: "Automatisch uit mail",
-    status: "later",
-    detail: "Dagelijkse bonnen kunnen straks uit een vast mailadres komen.",
-  },
-  {
-    title: "Routevoorstel",
-    status: "concept",
-    detail: "Combineert winkels, bezorgtijden, volume en ijsdruk.",
-  },
-  {
-    title: "PDF stappenplan",
-    status: "later",
-    detail: "Dagplan exporteren voor chauffeurs en productie.",
-  },
-];
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function createDateState(): DateState {
+  const now = new Date();
+  const today = toInputDate(now);
+
+  return {
+    today,
+    tomorrow: toInputDate(addDays(now, 1)),
+    selectedDate: today,
+    hour: now.getHours(),
+  };
+}
+
+function formatDateLabel(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    day: "2-digit",
+    month: "2-digit",
+  }).format(new Date(year, month - 1, day));
+}
+
+function formatCurrency(value: number) {
+  return `EUR ${Math.round(value).toLocaleString("nl-NL")}`;
+}
 
 function formatBytes(bytes: number) {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
@@ -198,24 +144,245 @@ function getUploadTime() {
   }).format(new Date());
 }
 
+function tomorrowStatus(hour: number): BatchStatus {
+  if (hour >= 22) return "definitief";
+  if (hour >= 10) return "prognose";
+  return "wacht";
+}
+
+function readStoredFeedback() {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(feedbackStorageKey);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredFeedback(feedback: Record<string, string>) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(feedbackStorageKey, JSON.stringify(feedback));
+  } catch {
+    return;
+  }
+}
+
+function buildDayPlan(dateState: DateState, fileSnapshot: FileSnapshot | null): DayPlan {
+  const { selectedDate, today, tomorrow, hour } = dateState;
+  const isToday = selectedDate === today;
+  const isTomorrow = selectedDate === tomorrow;
+  const status = fileSnapshot
+    ? "handmatig"
+    : isToday
+      ? "definitief"
+      : isTomorrow
+        ? tomorrowStatus(hour)
+        : "historie";
+
+  const isFuture = selectedDate > today;
+  const iceTubs = isTomorrow ? 18 : 34;
+  const orderValue = isTomorrow ? 3750 : isToday ? 4860 : 0;
+
+  return {
+    date: selectedDate,
+    title: isToday ? "Vandaag" : isTomorrow ? "Morgen" : formatDateLabel(selectedDate),
+    status,
+    sourceLabel: sourceLabelFor(status),
+    batchLabel: batchLabelFor(status),
+    orderCount: isTomorrow ? 18 : isToday ? 25 : 0,
+    orderValue,
+    orderPressure: orderValue >= 4500 ? "hoog" : orderValue >= 3000 ? "middel" : "laag",
+    iceTubs,
+    tempexBoxes: Math.ceil(iceTubs / 3),
+    criticalWindows: isTomorrow ? 4 : 6,
+    criticalDetail: isTomorrow ? "voorbereiden" : "voor 10:00",
+    isFuture,
+  };
+}
+
+function sourceLabelFor(status: BatchStatus) {
+  if (status === "prognose") return "prognose ingelezen";
+  if (status === "definitief") return "bonnen ingelezen";
+  if (status === "handmatig") return "handmatig geladen";
+  if (status === "historie") return "dagarchief";
+  return "wacht op 10:00";
+}
+
+function batchLabelFor(status: BatchStatus) {
+  if (status === "prognose") return "Orbak 10:00";
+  if (status === "definitief") return "Orbak 22:00";
+  if (status === "handmatig") return "Upload";
+  if (status === "historie") return "Archief";
+  return "Nog niet";
+}
+
+function buildStats(plan: DayPlan) {
+  return [
+    { label: "Orderwaarde", value: formatCurrency(plan.orderValue), detail: plan.orderPressure },
+    { label: "Pakbonnen", value: String(plan.orderCount), detail: plan.batchLabel },
+    {
+      label: "IJs / tempex",
+      value: `${plan.iceTubs} / ${plan.tempexBoxes}`,
+      detail: "3 bakken per tempex",
+    },
+    { label: "Tijdkritisch", value: String(plan.criticalWindows), detail: plan.criticalDetail },
+  ];
+}
+
+function buildAttentionItems(plan: DayPlan) {
+  return [
+    {
+      label: "Status",
+      value: plan.status,
+      detail: plan.sourceLabel,
+    },
+    {
+      label: "Drukte",
+      value: plan.orderPressure,
+      detail: "Orderwaarde telt mee als ochtenddruk.",
+    },
+    {
+      label: "Tempex",
+      value: `${plan.tempexBoxes}`,
+      detail: `${plan.iceTubs} ijsbakken, 3 per zwarte bak.`,
+    },
+  ];
+}
+
+function buildRouteRounds(plan: DayPlan): RouteRound[] {
+  return [
+    {
+      id: "bus-a",
+      title: "Oost spoed",
+      vehicle: "Bus A",
+      departure: plan.isFuture ? "advies" : "07:40",
+      badge: "eerst weg",
+      tone: "border-[#d6e5d8] bg-[#f6faf4]",
+      stops: [
+        "Winkel Heyendaalseweg",
+        "Winkel Daalseweg",
+        "Sint Maartenskliniek",
+        "Radboud",
+      ],
+      reason: "Afhaal 08:00 en zorg/Radboud vensters rond 09:00.",
+      load: "Tijdkritisch vooraan; winkelvoorraad per stop bij elkaar.",
+    },
+    {
+      id: "bus-b",
+      title: "Centrum noord",
+      vehicle: "Bus B",
+      departure: plan.isFuture ? "advies" : "07:40",
+      badge: "lucht houden",
+      tone: "border-[#eadb8b] bg-[#fff8d8]",
+      stops: ["Sanadome", "Winkel Ziekerstraat", "Winkel Lent"],
+      reason: "Grote order eerst uit de bus, daarna winkels vrijmaken.",
+      load: "Grote gebaksbon vooraan; winkelbakken compact achterin.",
+    },
+    {
+      id: "ijs",
+      title: "IJsronde",
+      vehicle: "Ronde 2",
+      departure: plan.isFuture ? "beslissen" : "09:45",
+      badge: `${plan.tempexBoxes} tempex`,
+      tone: "border-[#efc7b8] bg-[#fff3ed]",
+      stops: [
+        "Heyendaalseweg ijs",
+        "Daalseweg ijs",
+        "Ziekerstraat ijs",
+        "Lent ijs",
+      ],
+      reason: "IJs neemt volume en koeling; apart beoordelen.",
+      load: `${plan.iceTubs} bakken ijs = ${plan.tempexBoxes} zwarte tempexbakken.`,
+    },
+  ];
+}
+
+function buildOrderClusters(plan: DayPlan): OrderCluster[] {
+  return [
+    {
+      title: "Orderwaarde",
+      count: formatCurrency(plan.orderValue),
+      route: plan.orderPressure,
+      signal: "drukte-indicator naast aantal bonnen",
+    },
+    {
+      title: "Winkelvoorraad",
+      count: "4 winkels",
+      route: "Bus A / Bus B",
+      signal: "route mag dagelijks wisselen voor efficientie",
+    },
+    {
+      title: "Tijdkritisch",
+      count: `${plan.criticalWindows} bonnen`,
+      route: "vooraan",
+      signal: "bezorgtijd wint van vaste winkelvolgorde",
+    },
+    {
+      title: "Grote gebaksorders",
+      count: "druksignaal",
+      route: "eerst lossen",
+      signal: "kan vertrek vertragen ondanks rustige dag",
+    },
+    {
+      title: "IJs",
+      count: `${plan.iceTubs} bakken`,
+      route: `${plan.tempexBoxes} tempex`,
+      signal: "3 ijsbakken per zwarte tempexbak",
+    },
+  ];
+}
+
+function learningSignalsFor(feedback: string) {
+  const text = feedback.toLowerCase();
+  const signals: string[] = [];
+
+  if (text.includes("rustig")) signals.push("rustig label bewaren");
+  if (text.includes("druk")) signals.push("drukte hoger wegen");
+  if (text.includes("grote") || text.includes("200")) signals.push("grote order = laadtijd");
+  if (text.includes("gebak") || text.includes("petit")) signals.push("gebakspiek herkennen");
+  if (text.includes("ijs")) signals.push("ijsvolume apart plannen");
+  if (text.includes("08:10") || text.includes("laat") || text.includes("vertraging")) {
+    signals.push("vertrekbuffer verhogen");
+  }
+
+  return signals.length ? signals : ["nog geen signaal"];
+}
+
 export default function BakkerijLogistiekDashboard() {
   const [activeTab, setActiveTab] = useState<DashboardTab>("vandaag");
+  const [dateState, setDateState] = useState<DateState>(createDateState);
   const [fileSnapshot, setFileSnapshot] = useState<FileSnapshot | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [feedbackByDate, setFeedbackByDate] =
+    useState<Record<string, string>>(readStoredFeedback);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+
+  const selectedPlan = useMemo(
+    () => buildDayPlan(dateState, fileSnapshot),
+    [dateState, fileSnapshot]
+  );
+  const stats = useMemo(() => buildStats(selectedPlan), [selectedPlan]);
+  const attentionItems = useMemo(() => buildAttentionItems(selectedPlan), [selectedPlan]);
+  const routeRounds = useMemo(() => buildRouteRounds(selectedPlan), [selectedPlan]);
+  const orderClusters = useMemo(() => buildOrderClusters(selectedPlan), [selectedPlan]);
+  const feedback = feedbackByDate[selectedPlan.date] || "";
+  const learningSignals = useMemo(() => learningSignalsFor(feedback), [feedback]);
 
   const uploadStatus = useMemo(() => {
-    if (!fileSnapshot) {
-      return {
-        title: "Nog geen batch geladen",
-        detail: "Laatste voorbeeldplan: ochtendregisseur 30-07.",
-      };
-    }
+    if (!fileSnapshot) return selectedPlan.sourceLabel;
 
-    return {
-      title: fileSnapshot.name,
-      detail: `${formatBytes(fileSnapshot.size)} geladen om ${fileSnapshot.uploadedAt}`,
-    };
-  }, [fileSnapshot]);
+    return `${fileSnapshot.name} · ${formatBytes(fileSnapshot.size)} · ${fileSnapshot.uploadedAt}`;
+  }, [fileSnapshot, selectedPlan.sourceLabel]);
+
+  function selectDate(date: string) {
+    setDateState((current) => ({ ...current, selectedDate: date }));
+    setFileSnapshot(null);
+  }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -228,6 +395,17 @@ export default function BakkerijLogistiekDashboard() {
     });
   }
 
+  function updateFeedback(value: string) {
+    setFeedbackByDate((current) => ({
+      ...current,
+      [selectedPlan.date]: value,
+    }));
+  }
+
+  function saveFeedback() {
+    saveStoredFeedback(feedbackByDate);
+  }
+
   return (
     <StrikShell wide>
       <StrikPageHeader
@@ -237,83 +415,92 @@ export default function BakkerijLogistiekDashboard() {
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />
 
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
-        <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-normal text-[#6b645b]">
-                Contantbonnen / pakbonnen
-              </p>
-              <h2 className="mt-1 truncate text-xl font-black tracking-normal text-[#1a1815] sm:text-2xl">
-                {uploadStatus.title}
-              </h2>
-              <p className="mt-1 text-sm leading-snug tracking-normal text-[#6b645b]">
-                {uploadStatus.detail}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".pdf,.xls,.xlsx,.csv"
-                className="sr-only"
-                onChange={handleFileChange}
-              />
+      <section className="relative rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
+        <span className="absolute right-2 top-2 -rotate-2 border border-[#1a1815] bg-[#1a1815] px-2 py-1 text-[0.62rem] font-black uppercase tracking-normal text-white">
+          {selectedPlan.sourceLabel}
+        </span>
+
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0 pr-20">
+            <p className="text-xs font-black uppercase tracking-normal text-[#6b645b]">
+              {selectedPlan.title} · {formatDateLabel(selectedPlan.date)}
+            </p>
+            <h2 className="mt-1 text-2xl font-black tracking-normal text-[#1a1815] sm:text-3xl">
+              {selectedPlan.status}
+            </h2>
+            <p className="mt-1 truncate text-sm font-bold tracking-normal text-[#6b645b]">
+              {uploadStatus}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => selectDate(dateState.today)}
+              className={`min-h-10 border px-3 text-sm font-black tracking-normal transition ${
+                selectedPlan.date === dateState.today
+                  ? "border-[#1a1815] bg-[#1a1815] text-white"
+                  : "border-[#e8e4de] bg-white text-[#1a1815] hover:bg-[#faf8f5]"
+              }`}
+            >
+              Vandaag
+            </button>
+            <button
+              type="button"
+              onClick={() => selectDate(dateState.tomorrow)}
+              className={`min-h-10 border px-3 text-sm font-black tracking-normal transition ${
+                selectedPlan.date === dateState.tomorrow
+                  ? "border-[#1a1815] bg-[#1a1815] text-white"
+                  : "border-[#e8e4de] bg-white text-[#1a1815] hover:bg-[#faf8f5]"
+              }`}
+            >
+              Morgen
+            </button>
+            <input
+              ref={dateInputRef}
+              type="date"
+              value={selectedPlan.date}
+              className="sr-only"
+              onChange={(event) => selectDate(event.target.value)}
+            />
+            <IconButton
+              icon={strikIcons.agenda}
+              label="Dag laden"
+              onClick={() => dateInputRef.current?.showPicker()}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.xls,.xlsx,.csv"
+              className="sr-only"
+              onChange={handleFileChange}
+            />
+            <IconButton
+              icon={strikIcons.data}
+              label="Batch uploaden"
+              onClick={() => fileInputRef.current?.click()}
+              tone="warm"
+            />
+            {fileSnapshot && (
               <button
                 type="button"
-                onClick={() => inputRef.current?.click()}
-                className="min-h-11 border border-[#efc7b8] bg-[#fff3ed] px-3 text-sm font-black tracking-normal text-[#1a1815] shadow-sm transition hover:bg-white"
+                aria-label="Batch wissen"
+                title="Batch wissen"
+                onClick={() => {
+                  setFileSnapshot(null);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                className="flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-sm font-black text-[#6b645b] shadow-sm transition hover:bg-[#faf8f5]"
               >
-                Upload batch
+                X
               </button>
-              {fileSnapshot && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFileSnapshot(null);
-                    if (inputRef.current) inputRef.current.value = "";
-                  }}
-                  className="min-h-11 border border-[#e8e4de] bg-white px-3 text-sm font-black tracking-normal text-[#6b645b] shadow-sm transition hover:bg-[#faf8f5]"
-                >
-                  Wissen
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-3 shadow-sm sm:p-4">
-          <p className="text-xs font-black uppercase tracking-normal text-[#4a6d5a]">
-            Ochtend signaal
-          </p>
-          <h2 className="mt-1 text-xl font-black tracking-normal text-[#1a1815]">
-            Drukke ochtend, niet per se te veel stops
-          </h2>
-          <div className="mt-3 grid gap-2">
-            {attentionItems.map((item) => (
-              <div
-                key={item.label}
-                className="border-t border-[#d6e5d8] pt-2 first:border-t-0 first:pt-0"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-sm font-black tracking-normal text-[#1a1815]">
-                    {item.label}
-                  </span>
-                  <span className="shrink-0 text-sm font-black tracking-normal text-[#4a6d5a]">
-                    {item.value}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs leading-snug tracking-normal text-[#6b645b]">
-                  {item.detail}
-                </p>
-              </div>
-            ))}
+            )}
           </div>
         </div>
       </section>
 
       <section className="mt-3 grid gap-2 sm:grid-cols-4">
-        {summaryStats.map((stat) => (
+        {stats.map((stat) => (
           <div
             key={stat.label}
             className="min-h-20 rounded-lg border border-[#efe7dd] bg-white p-3 shadow-sm"
@@ -329,6 +516,29 @@ export default function BakkerijLogistiekDashboard() {
             </p>
           </div>
         ))}
+      </section>
+
+      <section className="mt-3 rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-3 shadow-sm sm:p-4">
+        <div className="grid gap-2 md:grid-cols-3">
+          {attentionItems.map((item) => (
+            <div
+              key={item.label}
+              className="border-t border-[#d6e5d8] pt-2 first:border-t-0 first:pt-0 md:border-l md:border-t-0 md:pl-3 md:pt-0 md:first:border-l-0 md:first:pl-0"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs font-black uppercase tracking-normal text-[#4a6d5a]">
+                  {item.label}
+                </span>
+                <span className="shrink-0 text-sm font-black tracking-normal text-[#1a1815]">
+                  {item.value}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs leading-snug tracking-normal text-[#6b645b]">
+                {item.detail}
+              </p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <div className="mt-3 grid grid-cols-4 border border-[#e8e4de] bg-white p-1 shadow-sm">
@@ -354,16 +564,31 @@ export default function BakkerijLogistiekDashboard() {
       </div>
 
       <div className="mt-3">
-        {activeTab === "vandaag" && <TodayPanel />}
-        {activeTab === "routes" && <RoutesPanel />}
-        {activeTab === "bonnen" && <OrdersPanel />}
-        {activeTab === "import" && <ImportPanel />}
+        {activeTab === "vandaag" && (
+          <TodayPanel routeRounds={routeRounds} selectedPlan={selectedPlan} />
+        )}
+        {activeTab === "routes" && <RoutesPanel routeRounds={routeRounds} />}
+        {activeTab === "bonnen" && (
+          <OrdersPanel orderClusters={orderClusters} selectedPlan={selectedPlan} />
+        )}
+        {activeTab === "leren" && (
+          <LearningPanel
+            feedback={feedback}
+            learningSignals={learningSignals}
+            onFeedbackChange={updateFeedback}
+            onSave={saveFeedback}
+            selectedPlan={selectedPlan}
+          />
+        )}
       </div>
     </StrikShell>
   );
 }
 
-function TodayPanel() {
+function TodayPanel({
+  routeRounds,
+  selectedPlan,
+}: Readonly<{ routeRounds: RouteRound[]; selectedPlan: DayPlan }>) {
   return (
     <section className="grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
       <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
@@ -372,7 +597,7 @@ function TodayPanel() {
             Stappenplan
           </h2>
           <span className="border border-[#efc7b8] bg-[#fff3ed] px-2 py-1 text-xs font-black tracking-normal text-[#1a1815]">
-            ochtend
+            {selectedPlan.batchLabel}
           </span>
         </div>
         <div className="mt-3 grid gap-2">
@@ -416,7 +641,9 @@ function TodayPanel() {
   );
 }
 
-function RoutesPanel() {
+function RoutesPanel({
+  routeRounds,
+}: Readonly<{ routeRounds: RouteRound[] }>) {
   return (
     <section className="grid gap-3 lg:grid-cols-3">
       {routeRounds.map((route) => (
@@ -427,7 +654,7 @@ function RoutesPanel() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-normal text-[#6b645b]">
-                {route.vehicle} · vertrek {route.departure}
+                {route.vehicle} · {route.departure}
               </p>
               <h2 className="mt-1 text-xl font-black tracking-normal text-[#1a1815]">
                 {route.title}
@@ -464,20 +691,18 @@ function RoutesPanel() {
   );
 }
 
-function OrdersPanel() {
+function OrdersPanel({
+  orderClusters,
+  selectedPlan,
+}: Readonly<{ orderClusters: OrderCluster[]; selectedPlan: DayPlan }>) {
   return (
     <section className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
-            Bonnen compact
-          </h2>
-          <p className="text-sm leading-snug tracking-normal text-[#6b645b]">
-            Groepering voor de ochtendregisseur; straks gevoed vanuit upload of mail.
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
+          Bonnen compact
+        </h2>
         <span className="w-fit border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-xs font-black tracking-normal text-[#6b645b]">
-          voorbeeld 30-07
+          {selectedPlan.title}
         </span>
       </div>
       <div className="mt-3 overflow-x-auto">
@@ -517,27 +742,59 @@ function OrdersPanel() {
   );
 }
 
-function ImportPanel() {
+function LearningPanel({
+  feedback,
+  learningSignals,
+  onFeedbackChange,
+  onSave,
+  selectedPlan,
+}: Readonly<{
+  feedback: string;
+  learningSignals: string[];
+  onFeedbackChange: (value: string) => void;
+  onSave: () => void;
+  selectedPlan: DayPlan;
+}>) {
   return (
-    <section className="grid gap-3 md:grid-cols-2">
-      {importSources.map((source) => (
-        <article
-          key={source.title}
-          className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
-              {source.title}
-            </h2>
-            <span className="shrink-0 border border-[#d6e5d8] bg-[#f6faf4] px-2 py-1 text-xs font-black tracking-normal text-[#4a6d5a]">
-              {source.status}
+    <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
+      <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
+            Dagfeedback
+          </h2>
+          <button
+            type="button"
+            aria-label="Feedback opslaan"
+            title="Feedback opslaan"
+            onClick={onSave}
+            className="flex h-10 w-10 items-center justify-center border border-[#d6e5d8] bg-[#f6faf4] text-sm font-black text-[#1a1815] shadow-sm transition hover:bg-white"
+          >
+            OK
+          </button>
+        </div>
+        <textarea
+          value={feedback}
+          onChange={(event) => onFeedbackChange(event.target.value)}
+          placeholder="Vandaag was rustig, maar de grote gebaksorder duurde lang..."
+          className="mt-3 min-h-36 w-full resize-y border border-[#e8e4de] bg-[#faf8f5] p-3 text-sm font-bold leading-snug tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+        />
+      </div>
+
+      <div className="rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-3 shadow-sm sm:p-4">
+        <p className="text-xs font-black uppercase tracking-normal text-[#4a6d5a]">
+          Leersignalen · {selectedPlan.title}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {learningSignals.map((signal) => (
+            <span
+              key={signal}
+              className="border border-[#d6e5d8] bg-white px-2 py-1 text-xs font-black tracking-normal text-[#1a1815]"
+            >
+              {signal}
             </span>
-          </div>
-          <p className="mt-2 text-sm leading-snug tracking-normal text-[#6b645b]">
-            {source.detail}
-          </p>
-        </article>
-      ))}
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -562,5 +819,41 @@ function RouteSummaryRow({ route }: Readonly<{ route: RouteRound }>) {
         {route.stops.join(" -> ")}
       </p>
     </article>
+  );
+}
+
+function IconButton({
+  icon,
+  label,
+  onClick,
+  tone = "neutral",
+}: Readonly<{
+  icon: string;
+  label: string;
+  onClick: () => void;
+  tone?: "neutral" | "warm";
+}>) {
+  const toneClass =
+    tone === "warm"
+      ? "border-[#efc7b8] bg-[#fff3ed] hover:bg-white"
+      : "border-[#e8e4de] bg-white hover:bg-[#faf8f5]";
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={`flex h-10 w-10 items-center justify-center border shadow-sm transition ${toneClass}`}
+    >
+      <span
+        aria-hidden="true"
+        className="block h-5 w-5 bg-[#1a1815]"
+        style={{
+          WebkitMask: `url("${icon}") center / contain no-repeat`,
+          mask: `url("${icon}") center / contain no-repeat`,
+        }}
+      />
+    </button>
   );
 }

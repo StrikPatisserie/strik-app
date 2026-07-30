@@ -51,6 +51,7 @@ const bakkerijNavItems = [
     label: "IJs & chocolade",
     icon: strikIcons.ijsChocolade,
   },
+  { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
   { href: "/bakkerij/management", label: "Data", icon: strikIcons.data },
 ];
 
