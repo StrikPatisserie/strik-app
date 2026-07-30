@@ -1,10 +1,17 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
+import type {
+  LogisticsBatch,
+  LogisticsBatchStatus,
+  LogisticsReceipt,
+  LogisticsReceiptLine,
+} from "./logisticsTypes";
 
 type DashboardTab = "vandaag" | "routes" | "bonnen" | "leren";
-type BatchStatus = "wacht" | "prognose" | "definitief" | "handmatig" | "historie";
+type BatchStatus = LogisticsBatchStatus;
+type BatchLoadState = "idle" | "loading" | "ready" | "error";
 
 type FileSnapshot = {
   name: string;
@@ -47,32 +54,14 @@ type RouteRound = {
   load: string;
 };
 
-type ReceiptLine = {
-  quantity: string;
-  description: string;
-  note?: string;
-};
-
-type ReceiptSummary = {
-  id: string;
-  time: string;
-  customer: string;
-  address: string;
-  deliveryAddress: string;
-  alternativeAddress?: string;
-  route: string;
-  tags: string[];
-  value?: number;
-  note: string;
-  customerNote: string;
-  internalNote: string;
-  lines: ReceiptLine[];
-};
+type ReceiptLine = LogisticsReceiptLine;
+type ReceiptSummary = LogisticsReceipt;
 
 type ReceiptSeed = Omit<
   ReceiptSummary,
-  "deliveryAddress" | "customerNote" | "internalNote" | "lines"
+  "receiptNumber" | "deliveryAddress" | "customerNote" | "internalNote" | "lines"
 > & {
+  receiptNumber?: string;
   deliveryAddress?: string;
   alternativeAddress?: string;
   customerNote?: string;
@@ -156,10 +145,29 @@ function formatCurrency(value: number) {
   return `EUR ${Math.round(value).toLocaleString("nl-NL")}`;
 }
 
+function formatMoney(value: number) {
+  return `EUR ${value.toLocaleString("nl-NL", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 3,
+  })}`;
+}
+
 function formatBytes(bytes: number) {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
   if (bytes >= 1_000) return `${Math.round(bytes / 1_000)} KB`;
   return `${bytes} B`;
+}
+
+function formatDateTimeLabel(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function getUploadTime() {
@@ -196,21 +204,40 @@ function saveStoredFeedback(feedback: Record<string, string>) {
   }
 }
 
-function buildDayPlan(dateState: DateState, fileSnapshot: FileSnapshot | null): DayPlan {
+function buildDayPlan(
+  dateState: DateState,
+  fileSnapshot: FileSnapshot | null,
+  importedBatch: LogisticsBatch | null
+): DayPlan {
   const { selectedDate, today, tomorrow, hour } = dateState;
   const isToday = selectedDate === today;
   const isTomorrow = selectedDate === tomorrow;
   const status = fileSnapshot
     ? "handmatig"
-    : isToday
-      ? "definitief"
-      : isTomorrow
-        ? tomorrowStatus(hour)
-        : "historie";
+    : importedBatch
+      ? importedBatch.status
+      : isToday
+        ? "definitief"
+        : isTomorrow
+          ? tomorrowStatus(hour)
+          : "historie";
 
   const isFuture = selectedDate > today;
-  const iceTubs = isTomorrow ? 18 : 34;
-  const orderValue = isTomorrow ? 2400 : isToday ? 3180 : 0;
+  const iceTubs = importedBatch ? importedBatch.iceTubs : isTomorrow ? 18 : 34;
+  const orderValue = importedBatch
+    ? importedBatch.orderValue
+    : isTomorrow
+      ? 2400
+      : isToday
+        ? 3180
+        : 0;
+  const orderPressure = importedBatch
+    ? importedBatch.orderPressure
+    : orderValue >= 3500
+      ? "hoog"
+      : orderValue >= 2000
+        ? "middel"
+        : "laag";
 
   return {
     date: selectedDate,
@@ -218,13 +245,29 @@ function buildDayPlan(dateState: DateState, fileSnapshot: FileSnapshot | null): 
     status,
     sourceLabel: sourceLabelFor(status),
     batchLabel: batchLabelFor(status),
-    orderCount: isTomorrow ? 18 : isToday ? 25 : 0,
+    orderCount: importedBatch
+      ? importedBatch.orderCount
+      : isTomorrow
+        ? 18
+        : isToday
+          ? 25
+          : 0,
     orderValue,
-    orderPressure: orderValue >= 3500 ? "hoog" : orderValue >= 2000 ? "middel" : "laag",
+    orderPressure,
     iceTubs,
     tempexBoxes: Math.ceil(iceTubs / 3),
-    criticalWindows: isTomorrow ? 4 : 6,
-    criticalDetail: isTomorrow ? "voorbereiden" : "voor 10:00",
+    criticalWindows: importedBatch
+      ? importedBatch.criticalWindows
+      : isTomorrow
+        ? 4
+        : 6,
+    criticalDetail: importedBatch
+      ? importedBatch.status === "prognose"
+        ? "voorbereiden"
+        : "uit batch"
+      : isTomorrow
+        ? "voorbereiden"
+        : "voor 10:00",
     isFuture,
   };
 }
@@ -473,6 +516,7 @@ function buildReceiptAlternativeAddress(receipt: ReceiptSeed) {
 function hydrateReceipt(receipt: ReceiptSeed, plan: DayPlan): ReceiptSummary {
   return {
     ...receipt,
+    receiptNumber: receipt.receiptNumber || receipt.id,
     deliveryAddress: receipt.deliveryAddress || receipt.address,
     alternativeAddress: buildReceiptAlternativeAddress(receipt),
     customerNote: buildReceiptCustomerNote(receipt),
@@ -481,7 +525,12 @@ function hydrateReceipt(receipt: ReceiptSeed, plan: DayPlan): ReceiptSummary {
   };
 }
 
-function buildReceiptSummaries(plan: DayPlan): ReceiptSummary[] {
+function buildReceiptSummaries(
+  plan: DayPlan,
+  importedBatch: LogisticsBatch | null
+): ReceiptSummary[] {
+  if (importedBatch?.receipts.length) return importedBatch.receipts;
+
   const sharedReceipts: ReceiptSeed[] = [
     {
       id: "CB-001",
@@ -773,42 +822,134 @@ export default function BakkerijLogistiekDashboard() {
   const [activeTab, setActiveTab] = useState<DashboardTab>("vandaag");
   const [dateState, setDateState] = useState<DateState>(createDateState);
   const [fileSnapshot, setFileSnapshot] = useState<FileSnapshot | null>(null);
+  const [importedBatch, setImportedBatch] = useState<LogisticsBatch | null>(null);
+  const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
   const [feedbackByDate, setFeedbackByDate] =
     useState<Record<string, string>>(readStoredFeedback);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const activeImportedBatch =
+    importedBatch?.date === dateState.selectedDate ? importedBatch : null;
 
   const selectedPlan = useMemo(
-    () => buildDayPlan(dateState, fileSnapshot),
-    [dateState, fileSnapshot]
+    () => buildDayPlan(dateState, fileSnapshot, activeImportedBatch),
+    [dateState, fileSnapshot, activeImportedBatch]
   );
   const stats = useMemo(() => buildStats(selectedPlan), [selectedPlan]);
   const attentionItems = useMemo(() => buildAttentionItems(selectedPlan), [selectedPlan]);
   const routeRounds = useMemo(() => buildRouteRounds(selectedPlan), [selectedPlan]);
-  const receiptSummaries = useMemo(() => buildReceiptSummaries(selectedPlan), [selectedPlan]);
+  const receiptSummaries = useMemo(
+    () => buildReceiptSummaries(selectedPlan, activeImportedBatch),
+    [selectedPlan, activeImportedBatch]
+  );
   const feedback = feedbackByDate[selectedPlan.date] || "";
   const learningSignals = useMemo(() => learningSignalsFor(feedback), [feedback]);
 
   const uploadStatus = useMemo(() => {
+    if (isImporting) return "batch wordt ingelezen...";
     if (!fileSnapshot) return selectedPlan.sourceLabel;
 
     return `${fileSnapshot.name} · ${formatBytes(fileSnapshot.size)} · ${fileSnapshot.uploadedAt}`;
-  }, [fileSnapshot, selectedPlan.sourceLabel]);
+  }, [fileSnapshot, isImporting, selectedPlan.sourceLabel]);
+
+  const batchStatusLine = useMemo(() => {
+    if (importMessage) return importMessage;
+    if (activeImportedBatch) {
+      return `${activeImportedBatch.fileName} · ${activeImportedBatch.orderCount} bonnen · ${formatDateTimeLabel(activeImportedBatch.importedAt)}`;
+    }
+    if (batchLoadState === "loading") return "mailbatch controleren...";
+    if (batchLoadState === "error") return "mailbatch kon niet worden opgehaald";
+
+    return "nog geen echte batch voor deze dag";
+  }, [activeImportedBatch, batchLoadState, importMessage]);
+
+  useEffect(() => {
+    let ignoreResult = false;
+
+    async function loadBatch() {
+      setBatchLoadState("loading");
+      setImportMessage("");
+
+      try {
+        const response = await fetch(
+          `/api/bakkerij-logistiek?date=${encodeURIComponent(dateState.selectedDate)}`,
+          { cache: "no-store" }
+        );
+        const data = (await response.json()) as {
+          batch?: LogisticsBatch | null;
+          message?: string;
+        };
+
+        if (ignoreResult) return;
+
+        if (!response.ok) {
+          setBatchLoadState("error");
+          return;
+        }
+
+        setImportedBatch(data.batch || null);
+        setBatchLoadState("ready");
+      } catch {
+        if (!ignoreResult) setBatchLoadState("error");
+      }
+    }
+
+    loadBatch();
+
+    return () => {
+      ignoreResult = true;
+    };
+  }, [dateState.selectedDate]);
 
   function selectDate(date: string) {
     setDateState((current) => ({ ...current, selectedDate: date }));
     setFileSnapshot(null);
+    setImportMessage("");
   }
 
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setFileSnapshot({
-      name: file.name,
-      size: file.size,
-      uploadedAt: getUploadTime(),
-    });
+    setIsImporting(true);
+    setImportMessage("PDF wordt gelezen...");
+
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      formData.set("source", "manual");
+      formData.set("status", "handmatig");
+
+      const response = await fetch("/api/bakkerij-logistiek/import", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json()) as {
+        batch?: LogisticsBatch;
+        message?: string;
+      };
+
+      if (!response.ok || !data.batch) {
+        throw new Error(data.message || "Batch inlezen is niet gelukt.");
+      }
+
+      setImportedBatch(data.batch);
+      setDateState((current) => ({ ...current, selectedDate: data.batch!.date }));
+      setFileSnapshot({
+        name: file.name,
+        size: file.size,
+        uploadedAt: getUploadTime(),
+      });
+      setImportMessage(`${data.batch.orderCount} bonnen ingelezen.`);
+    } catch (error) {
+      setImportMessage(
+        error instanceof Error ? error.message : "Batch inlezen is niet gelukt."
+      );
+    } finally {
+      setIsImporting(false);
+    }
   }
 
   function updateFeedback(value: string) {
@@ -846,6 +987,9 @@ export default function BakkerijLogistiekDashboard() {
             </h2>
             <p className="mt-1 truncate text-sm font-bold tracking-normal text-[#6b645b]">
               {uploadStatus}
+            </p>
+            <p className="mt-1 truncate text-xs font-bold tracking-normal text-[#8b8278]">
+              {batchStatusLine}
             </p>
           </div>
 
@@ -893,9 +1037,10 @@ export default function BakkerijLogistiekDashboard() {
             />
             <IconButton
               icon={strikIcons.data}
-              label="Batch uploaden"
+              label={isImporting ? "Batch wordt ingelezen" : "Batch uploaden"}
               onClick={() => fileInputRef.current?.click()}
               tone="warm"
+              disabled={isImporting}
             />
             {fileSnapshot && (
               <button
@@ -904,6 +1049,7 @@ export default function BakkerijLogistiekDashboard() {
                 title="Batch wissen"
                 onClick={() => {
                   setFileSnapshot(null);
+                  setImportMessage("");
                   if (fileInputRef.current) fileInputRef.current.value = "";
                 }}
                 className="flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-sm font-black text-[#6b645b] shadow-sm transition hover:bg-[#faf8f5]"
@@ -1318,7 +1464,7 @@ function ReceiptDetail({
           {receipt.lines.map((line, index) => (
             <div
               key={`${receipt.id}-line-${index}`}
-              className="grid grid-cols-[3.3rem_minmax(0,1fr)] gap-2 border-t border-[#efe7dd] pt-1.5 first:border-t-0 first:pt-0"
+              className="grid grid-cols-[3.3rem_minmax(0,1fr)_4.9rem] gap-2 border-t border-[#efe7dd] pt-1.5 first:border-t-0 first:pt-0"
             >
               <span className="font-mono text-sm font-black tabular-nums tracking-normal text-[#1a1815]">
                 {line.quantity}
@@ -1333,6 +1479,9 @@ function ReceiptDetail({
                   </p>
                 )}
               </div>
+              <span className="text-right text-xs font-black tabular-nums tracking-normal text-[#6b645b]">
+                {line.unitPrice !== undefined ? formatMoney(line.unitPrice) : ""}
+              </span>
             </div>
           ))}
         </div>
@@ -1344,7 +1493,7 @@ function ReceiptDetail({
             Bonwaarde
           </span>
           <span className="text-lg font-black tracking-normal text-[#1a1815]">
-            {receipt.value ? formatCurrency(receipt.value) : "intern"}
+            {receipt.value ? formatMoney(receipt.value) : "intern"}
           </span>
         </div>
       </div>
@@ -1452,11 +1601,13 @@ function RouteSummaryRow({ route }: Readonly<{ route: RouteRound }>) {
 }
 
 function IconButton({
+  disabled = false,
   icon,
   label,
   onClick,
   tone = "neutral",
 }: Readonly<{
+  disabled?: boolean;
   icon: string;
   label: string;
   onClick: () => void;
@@ -1472,8 +1623,9 @@ function IconButton({
       type="button"
       aria-label={label}
       title={label}
+      disabled={disabled}
       onClick={onClick}
-      className={`flex h-10 w-10 items-center justify-center border shadow-sm transition ${toneClass}`}
+      className={`flex h-10 w-10 items-center justify-center border shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${toneClass}`}
     >
       <span
         aria-hidden="true"
