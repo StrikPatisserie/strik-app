@@ -10,7 +10,7 @@ import type {
   LogisticsReceiptLine,
 } from "./logisticsTypes";
 
-type DashboardTab = "vandaag" | "routes" | "bonnen" | "leren";
+type DashboardTab = "routes" | "bonnen" | "leren";
 type BatchStatus = LogisticsBatchStatus;
 type BatchLoadState = "idle" | "loading" | "ready" | "error";
 type OrdersFilter =
@@ -79,7 +79,6 @@ type ReceiptSeed = Omit<
 const feedbackStorageKey = "strik-logistiek-dagfeedback-v1";
 
 const tabs: { id: DashboardTab; label: string }[] = [
-  { id: "vandaag", label: "Plan" },
   { id: "routes", label: "Routes" },
   { id: "bonnen", label: "Bonnen" },
   { id: "leren", label: "Leren" },
@@ -97,34 +96,6 @@ const ordersFilters: {
   { id: "pickup-daalseweg", label: "D'weg", location: "Daalseweg" },
   { id: "pickup-ziekerstraat", label: "Z'straat", location: "Ziekerstraat" },
   { id: "pickup-lent", label: "Lent", location: "Lent" },
-];
-
-const morningSteps = [
-  {
-    time: "06:30",
-    title: "Pakzones",
-    detail: "Bus A, Bus B, IJsronde en Check.",
-  },
-  {
-    time: "07:10",
-    title: "Grote bonnen",
-    detail: "Petit fours, gesorteerd gebak en ijs tellen als druksignaal.",
-  },
-  {
-    time: "07:25",
-    title: "Laden",
-    detail: "Tijdkritisch vooraan, winkels per route bij elkaar.",
-  },
-  {
-    time: "08:00",
-    title: "Vertrekcheck",
-    detail: "Bij vertraging eerst vroegste tijdsbonnen bellen.",
-  },
-  {
-    time: "09:45",
-    title: "IJsronde",
-    detail: "Hoog ijsvolume apart houden van gebak.",
-  },
 ];
 
 function toInputDate(date: Date) {
@@ -313,36 +284,17 @@ function batchLabelFor(status: BatchStatus) {
 function buildStats(plan: DayPlan) {
   return [
     {
-      label: "Externe waarde",
+      label: "Bonwaarde",
       value: formatCurrency(plan.orderValue),
-      detail: `${plan.orderPressure} · excl. winkel/ijs`,
     },
-    { label: "Pakbonnen", value: String(plan.orderCount), detail: plan.batchLabel },
+    { label: "Pakbonnen", value: String(plan.orderCount) },
     {
-      label: "IJs / tempex",
+      label: "IJs/tempex",
       value: `${plan.iceTubs} / ${plan.tempexBoxes}`,
-      detail: "3 bakken per tempex",
-    },
-    { label: "Tijdkritisch", value: String(plan.criticalWindows), detail: plan.criticalDetail },
-  ];
-}
-
-function buildAttentionItems(plan: DayPlan) {
-  return [
-    {
-      label: "Status",
-      value: plan.status,
-      detail: plan.sourceLabel,
     },
     {
       label: "Drukte",
       value: plan.orderPressure,
-      detail: "Exclusief winkel- en ijsbonnen.",
-    },
-    {
-      label: "Tempex",
-      value: `${plan.tempexBoxes}`,
-      detail: `${plan.iceTubs} ijsbakken, 3 per zwarte bak.`,
     },
   ];
 }
@@ -934,7 +886,7 @@ function learningSignalsFor(feedback: string) {
 }
 
 export default function BakkerijLogistiekDashboard() {
-  const [activeTab, setActiveTab] = useState<DashboardTab>("vandaag");
+  const [activeTab, setActiveTab] = useState<DashboardTab>("routes");
   const [dateState, setDateState] = useState<DateState>(createDateState);
   const [fileSnapshot, setFileSnapshot] = useState<FileSnapshot | null>(null);
   const [importedBatch, setImportedBatch] = useState<LogisticsBatch | null>(null);
@@ -954,7 +906,6 @@ export default function BakkerijLogistiekDashboard() {
     [dateState, fileSnapshot, activeImportedBatch]
   );
   const stats = useMemo(() => buildStats(selectedPlan), [selectedPlan]);
-  const attentionItems = useMemo(() => buildAttentionItems(selectedPlan), [selectedPlan]);
   const routeRounds = useMemo(() => buildRouteRounds(selectedPlan), [selectedPlan]);
   const receiptSummaries = useMemo(
     () => buildReceiptSummaries(selectedPlan, activeImportedBatch),
@@ -1210,49 +1161,23 @@ export default function BakkerijLogistiekDashboard() {
         </div>
       </section>
 
-      <section className="mt-3 grid gap-2 sm:grid-cols-4">
+      <section className="mt-3 grid grid-cols-4 border border-[#e8e4de] bg-white shadow-sm">
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="min-h-20 rounded-lg border border-[#efe7dd] bg-white p-3 shadow-sm"
+            className="min-h-12 border-l border-[#efe7dd] px-2 py-2 first:border-l-0 sm:px-3"
           >
-            <p className="text-xs font-black uppercase tracking-normal text-[#6b645b]">
+            <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#6b645b]">
               {stat.label}
             </p>
-            <p className="mt-1 text-2xl font-black leading-none tracking-normal text-[#1a1815]">
+            <p className="mt-0.5 truncate text-sm font-black leading-tight tracking-normal text-[#1a1815] sm:text-base">
               {stat.value}
-            </p>
-            <p className="mt-1 text-xs font-bold tracking-normal text-[#8b8278]">
-              {stat.detail}
             </p>
           </div>
         ))}
       </section>
 
-      <section className="mt-3 rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-3 shadow-sm sm:p-4">
-        <div className="grid gap-2 md:grid-cols-3">
-          {attentionItems.map((item) => (
-            <div
-              key={item.label}
-              className="border-t border-[#d6e5d8] pt-2 first:border-t-0 first:pt-0 md:border-l md:border-t-0 md:pl-3 md:pt-0 md:first:border-l-0 md:first:pl-0"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-xs font-black uppercase tracking-normal text-[#4a6d5a]">
-                  {item.label}
-                </span>
-                <span className="shrink-0 text-sm font-black tracking-normal text-[#1a1815]">
-                  {item.value}
-                </span>
-              </div>
-              <p className="mt-0.5 text-xs leading-snug tracking-normal text-[#6b645b]">
-                {item.detail}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <div className="mt-3 grid grid-cols-4 border border-[#e8e4de] bg-white p-1 shadow-sm">
+      <div className="mt-3 grid grid-cols-3 border border-[#e8e4de] bg-white p-1 shadow-sm">
         {tabs.map((tab) => {
           const active = activeTab === tab.id;
 
@@ -1275,9 +1200,6 @@ export default function BakkerijLogistiekDashboard() {
       </div>
 
       <div className="mt-3">
-        {activeTab === "vandaag" && (
-          <TodayPanel routeRounds={routeRounds} selectedPlan={selectedPlan} />
-        )}
         {activeTab === "routes" && <RoutesPanel routeRounds={routeRounds} />}
         {activeTab === "bonnen" && (
           <OrdersPanel
@@ -1296,62 +1218,6 @@ export default function BakkerijLogistiekDashboard() {
         )}
       </div>
     </StrikShell>
-  );
-}
-
-function TodayPanel({
-  routeRounds,
-  selectedPlan,
-}: Readonly<{ routeRounds: RouteRound[]; selectedPlan: DayPlan }>) {
-  return (
-    <section className="grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-      <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
-            Stappenplan
-          </h2>
-          <span className="border border-[#efc7b8] bg-[#fff3ed] px-2 py-1 text-xs font-black tracking-normal text-[#1a1815]">
-            {selectedPlan.batchLabel}
-          </span>
-        </div>
-        <div className="mt-3 grid gap-2">
-          {morningSteps.map((step) => (
-            <div
-              key={`${step.time}-${step.title}`}
-              className="grid grid-cols-[3.4rem_minmax(0,1fr)] gap-3 border-t border-[#efe7dd] pt-2 first:border-t-0 first:pt-0"
-            >
-              <span className="text-sm font-black tabular-nums tracking-normal text-[#ef5737]">
-                {step.time}
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-black tracking-normal text-[#1a1815]">
-                  {step.title}
-                </p>
-                <p className="mt-0.5 text-xs leading-snug tracking-normal text-[#6b645b]">
-                  {step.detail}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
-            Routekeuze
-          </h2>
-          <span className="border border-[#d6e5d8] bg-[#f6faf4] px-2 py-1 text-xs font-black tracking-normal text-[#4a6d5a]">
-            voorstel
-          </span>
-        </div>
-        <div className="mt-3 grid gap-2">
-          {routeRounds.map((route) => (
-            <RouteSummaryRow key={route.id} route={route} />
-          ))}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -1801,29 +1667,6 @@ function LearningPanel({
         </div>
       </div>
     </section>
-  );
-}
-
-function RouteSummaryRow({ route }: Readonly<{ route: RouteRound }>) {
-  return (
-    <article className="border-t border-[#efe7dd] pt-2 first:border-t-0 first:pt-0">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-normal text-[#6b645b]">
-            {route.vehicle} · {route.departure}
-          </p>
-          <h3 className="truncate text-base font-black tracking-normal text-[#1a1815]">
-            {route.title}
-          </h3>
-        </div>
-        <span className="shrink-0 text-xs font-black tracking-normal text-[#6b645b]">
-          {route.stops.length} stops
-        </span>
-      </div>
-      <p className="mt-2 truncate text-sm font-bold tracking-normal text-[#4a4540]">
-        {route.stops.join(" -> ")}
-      </p>
-    </article>
   );
 }
 
