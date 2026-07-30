@@ -824,12 +824,14 @@ export default function BakkerijLogistiekDashboard() {
   const [fileSnapshot, setFileSnapshot] = useState<FileSnapshot | null>(null);
   const [importedBatch, setImportedBatch] = useState<LogisticsBatch | null>(null);
   const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
+  const [batchReloadCounter, setBatchReloadCounter] = useState(0);
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [feedbackByDate, setFeedbackByDate] =
     useState<Record<string, string>>(readStoredFeedback);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const manualBatchRefreshRef = useRef(false);
   const activeImportedBatch =
     importedBatch?.date === dateState.selectedDate ? importedBatch : null;
 
@@ -867,10 +869,11 @@ export default function BakkerijLogistiekDashboard() {
 
   useEffect(() => {
     let ignoreResult = false;
+    const manualRefresh = manualBatchRefreshRef.current;
 
     async function loadBatch() {
       setBatchLoadState("loading");
-      setImportMessage("");
+      setImportMessage(manualRefresh ? "bonnen opnieuw ophalen..." : "");
 
       try {
         const response = await fetch(
@@ -886,13 +889,28 @@ export default function BakkerijLogistiekDashboard() {
 
         if (!response.ok) {
           setBatchLoadState("error");
+          if (manualRefresh) {
+            setImportMessage(data.message || "Opnieuw ophalen is niet gelukt.");
+          }
           return;
         }
 
         setImportedBatch(data.batch || null);
         setBatchLoadState("ready");
+        if (manualRefresh) {
+          setImportMessage(
+            data.batch
+              ? `Bijgewerkt om ${getUploadTime()}.`
+              : `Geen mailbatch gevonden voor ${formatDateLabel(dateState.selectedDate)}.`
+          );
+        }
       } catch {
-        if (!ignoreResult) setBatchLoadState("error");
+        if (!ignoreResult) {
+          setBatchLoadState("error");
+          if (manualRefresh) setImportMessage("Opnieuw ophalen is niet gelukt.");
+        }
+      } finally {
+        if (manualRefresh) manualBatchRefreshRef.current = false;
       }
     }
 
@@ -901,12 +919,20 @@ export default function BakkerijLogistiekDashboard() {
     return () => {
       ignoreResult = true;
     };
-  }, [dateState.selectedDate]);
+  }, [dateState.selectedDate, batchReloadCounter]);
 
   function selectDate(date: string) {
     setDateState((current) => ({ ...current, selectedDate: date }));
     setFileSnapshot(null);
     setImportMessage("");
+  }
+
+  function refreshBatch() {
+    manualBatchRefreshRef.current = true;
+    setFileSnapshot(null);
+    setImportMessage("bonnen opnieuw ophalen...");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setBatchReloadCounter((current) => current + 1);
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -1027,6 +1053,11 @@ export default function BakkerijLogistiekDashboard() {
               icon={strikIcons.agenda}
               label="Dag laden"
               onClick={() => dateInputRef.current?.showPicker()}
+            />
+            <RefreshButton
+              disabled={batchLoadState === "loading" || isImporting}
+              loading={batchLoadState === "loading"}
+              onClick={refreshBatch}
             />
             <input
               ref={fileInputRef}
@@ -1636,5 +1667,47 @@ function IconButton({
         }}
       />
     </button>
+  );
+}
+
+function RefreshButton({
+  disabled,
+  loading,
+  onClick,
+}: Readonly<{
+  disabled: boolean;
+  loading: boolean;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      aria-label="Bonnen opnieuw ophalen"
+      title="Bonnen opnieuw ophalen"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <RefreshIcon spinning={loading} />
+    </button>
+  );
+}
+
+function RefreshIcon({ spinning }: Readonly<{ spinning: boolean }>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`h-5 w-5 ${spinning ? "animate-spin" : ""}`}
+      aria-hidden="true"
+    >
+      <path
+        d="M20 6v5h-5M4 18v-5h5M18.3 10A7 7 0 0 0 6.7 7M5.7 14A7 7 0 0 0 17.3 17"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
   );
 }
