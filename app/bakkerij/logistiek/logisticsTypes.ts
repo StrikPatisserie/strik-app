@@ -7,6 +7,8 @@ export type LogisticsBatchStatus =
 
 export type LogisticsBatchSource = "gmail" | "manual";
 
+export type LogisticsFulfillment = "bezorgen" | "afhalen" | "onbekend";
+
 export type LogisticsReceiptLine = {
   quantity: string;
   description: string;
@@ -22,6 +24,8 @@ export type LogisticsReceipt = {
   address: string;
   deliveryAddress: string;
   alternativeAddress?: string;
+  fulfillment?: LogisticsFulfillment;
+  pickupLocation?: string;
   route: string;
   tags: string[];
   value?: number;

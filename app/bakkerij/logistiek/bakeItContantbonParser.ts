@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { PDFParse } from "pdf-parse";
 import type {
   LogisticsBatch,
+  LogisticsFulfillment,
   LogisticsBatchSource,
   LogisticsBatchStatus,
   LogisticsReceipt,
@@ -29,7 +30,9 @@ type ParsedPage = {
   lines: LogisticsReceiptLine[];
   remarks: string[];
   deliveryBlock: string[];
-  fulfillment: string;
+  alternativeAddressLines: string[];
+  fulfillment: LogisticsFulfillment;
+  pickupLocation: string;
   total?: number;
 };
 
@@ -53,6 +56,12 @@ const dutchMonths: Record<string, string> = {
 };
 
 const storeNames = ["heyendaalseweg", "daalseweg", "ziekerstraat", "lent"];
+const pickupLocations = [
+  { label: "Heyendaalseweg", key: "heyendaalseweg" },
+  { label: "Daalseweg", key: "daalseweg" },
+  { label: "Ziekerstraat", key: "ziekerstraat" },
+  { label: "Lent", key: "lent" },
+] as const;
 const internalLinePatterns = [
   /kostenpl/i,
   /inkoopnr/i,
@@ -255,6 +264,124 @@ function lineIsInternalNoteLine(line: string) {
   return internalLinePatterns.some((pattern) => pattern.test(line));
 }
 
+function pickupLocationFromLine(line: string) {
+  const clean = line.trim().toLowerCase();
+  const location = pickupLocations.find((item) => clean === item.key);
+
+  return location?.label || "";
+}
+
+function isFulfillmentLine(line: string) {
+  return /^(bezorgen|bezorging)$/i.test(line) || /^wordt gehaald\b/i.test(line);
+}
+
+function inferFulfillment(bodyLines: string[]): LogisticsFulfillment {
+  if (bodyLines.some((line) => /^wordt gehaald\b/i.test(line))) return "afhalen";
+  if (bodyLines.some((line) => /^bezorgen\b|^bezorging\b/i.test(line))) {
+    return "bezorgen";
+  }
+
+  return "onbekend";
+}
+
+function inferPickupLocation(bodyLines: string[]) {
+  for (let index = 0; index < bodyLines.length; index += 1) {
+    if (!/^wordt gehaald\b/i.test(bodyLines[index])) continue;
+
+    for (let offset = 1; offset <= 4; offset += 1) {
+      const location = pickupLocationFromLine(bodyLines[index - offset] || "");
+      if (location) return location;
+    }
+  }
+
+  const pickupLine = bodyLines.find((line, index) => {
+    if (!pickupLocationFromLine(line)) return false;
+
+    return bodyLines.slice(index, index + 5).some((item) => /^wordt gehaald\b/i.test(item));
+  });
+
+  return pickupLine ? pickupLocationFromLine(pickupLine) : "";
+}
+
+function cleanAlternativeAddressLine(line: string) {
+  return line
+    .replace(/^bezorgen\s+bij\s+/i, "")
+    .replace(/^alternatief\s+afleveradres\s*:?\s*/i, "")
+    .replace(/^afwijkend\s+afleveradres\s*:?\s*/i, "")
+    .replace(/,?\s+graag$/i, "")
+    .trim();
+}
+
+function isAlternativeAddressStart(line: string) {
+  return /^(bezorgen bij|alternatief afleveradres|afwijkend afleveradres)\b/i.test(
+    line
+  );
+}
+
+function isStandaloneAlternativeAddressLine(line: string) {
+  return /^(afdeling\b|hoofdingang\b|receptie\b|ingang\b|route\s+\d+\b)/i.test(
+    line
+  );
+}
+
+function isInstructionLine(line: string) {
+  return (
+    /^(bellen|graag|wij willen|via mail|de factuur|kostenplaats|naam aanvrager|factuurgegevens|t\.?b\.?v\.?|voor het ophalen)\b/i.test(
+      line
+    ) || /^0\d[\d\s-]{7,}$/.test(line)
+  );
+}
+
+function splitAlternativeAddressFromRemarks(
+  remarks: string[],
+  fulfillment: LogisticsFulfillment
+) {
+  if (fulfillment !== "bezorgen") {
+    return {
+      alternativeAddressLines: [] as string[],
+      remarks,
+    };
+  }
+
+  const alternativeAddressLines: string[] = [];
+  const remainingRemarks: string[] = [];
+  let consumeAddressContinuation = false;
+
+  for (const remark of remarks) {
+    if (pickupLocationFromLine(remark) || isFulfillmentLine(remark)) {
+      continue;
+    }
+
+    if (isAlternativeAddressStart(remark)) {
+      uniquePush(alternativeAddressLines, cleanAlternativeAddressLine(remark));
+      consumeAddressContinuation = true;
+      continue;
+    }
+
+    if (isStandaloneAlternativeAddressLine(remark)) {
+      uniquePush(alternativeAddressLines, cleanAlternativeAddressLine(remark));
+      consumeAddressContinuation = false;
+      continue;
+    }
+
+    if (consumeAddressContinuation) {
+      if (isInstructionLine(remark)) {
+        consumeAddressContinuation = false;
+      } else {
+        uniquePush(alternativeAddressLines, cleanAlternativeAddressLine(remark));
+        continue;
+      }
+    }
+
+    uniquePush(remainingRemarks, remark);
+  }
+
+  return {
+    alternativeAddressLines,
+    remarks: remainingRemarks,
+  };
+}
+
 function parseProductLine(line: string): LogisticsReceiptLine | null {
   const match = line.match(/^(.+?)\s+€\s*([\d.,]+)(?:\s+(.+?))?\s+([\d.,]+)$/);
   if (!match) return null;
@@ -306,11 +433,8 @@ function parsePage(pageText: string): ParsedPage | null {
   const productHeaderIndex = lines.findIndex((line) => /^artikelomschrijving\b/i.test(line));
   const bodyLines = productHeaderIndex >= 0 ? lines.slice(productHeaderIndex + 1) : [];
   const deliveryBlock = findDeliveryBlock(bodyLines);
-  const fulfillment = bodyLines.some((line) => /wordt gehaald/i.test(line))
-    ? "Wordt gehaald"
-    : bodyLines.some((line) => /bezorgen/i.test(line))
-      ? "Bezorgen"
-      : "";
+  const fulfillment = inferFulfillment(bodyLines);
+  const pickupLocation = inferPickupLocation(bodyLines);
   const parsedLines: LogisticsReceiptLine[] = [];
   const remarks: string[] = [];
   let currentLine: LogisticsReceiptLine | null = null;
@@ -322,15 +446,11 @@ function parsePage(pageText: string): ParsedPage | null {
     if (deliveryBlock.includes(line)) continue;
     if (/^btw\b/i.test(line) || /^factuurkorting\b/i.test(line)) continue;
     if (/^totaalprijs\b/i.test(line)) continue;
+    if (pickupLocationFromLine(line) || isFulfillmentLine(line)) continue;
 
     const standaloneTotal = line.match(/^€\s*([\d.,]+)$/);
     if (standaloneTotal) {
       total = parseDutchNumber(standaloneTotal[1]) ?? total;
-      continue;
-    }
-
-    if (/^(bezorgen|wordt gehaald|bezorgen bij|bezorging)$/i.test(line)) {
-      uniquePush(remarks, line);
       continue;
     }
 
@@ -354,6 +474,10 @@ function parsePage(pageText: string): ParsedPage | null {
   }
 
   const key = `${receiptNumber || customer}-${customer}`.toLowerCase();
+  const alternativeAddressResult = splitAlternativeAddressFromRemarks(
+    remarks,
+    fulfillment
+  );
 
   return {
     key,
@@ -363,9 +487,11 @@ function parsePage(pageText: string): ParsedPage | null {
     deliveryCode,
     topAddress,
     lines: parsedLines,
-    remarks,
+    remarks: alternativeAddressResult.remarks,
     deliveryBlock,
+    alternativeAddressLines: alternativeAddressResult.alternativeAddressLines,
     fulfillment,
+    pickupLocation,
     total,
   };
 }
@@ -374,9 +500,19 @@ function mergePageIntoDraft(draft: ReceiptDraft, page: ParsedPage) {
   for (const line of page.lines) uniqueLinePush(draft.lines, line);
   for (const remark of page.remarks) uniquePush(draft.remarks, remark);
   for (const deliveryLine of page.deliveryBlock) uniquePush(draft.deliveryBlock, deliveryLine);
+  for (const addressLine of page.alternativeAddressLines) {
+    uniquePush(draft.alternativeAddressLines, addressLine);
+  }
 
   if (page.total !== undefined) draft.total = page.total;
-  if (!draft.fulfillment && page.fulfillment) draft.fulfillment = page.fulfillment;
+  if (page.fulfillment === "afhalen") {
+    draft.fulfillment = "afhalen";
+  } else if (draft.fulfillment === "onbekend" && page.fulfillment !== "onbekend") {
+    draft.fulfillment = page.fulfillment;
+  }
+  if (!draft.pickupLocation && page.pickupLocation) {
+    draft.pickupLocation = page.pickupLocation;
+  }
 
   draft.pageCount += 1;
 }
@@ -415,19 +551,32 @@ function inferTags(draft: ReceiptDraft) {
   ) {
     tags.add("groot");
   }
-  if (draft.fulfillment === "Wordt gehaald") tags.add("afhalen");
-  if (draft.fulfillment === "Bezorgen") tags.add("bezorgen");
+  if (draft.fulfillment === "afhalen") tags.add("afhalen");
+  if (draft.fulfillment === "bezorgen") tags.add("bezorgen");
   if (draft.deliveryCode && draft.deliveryCode !== "000") tags.add(`levering ${draft.deliveryCode}`);
 
   return Array.from(tags);
 }
 
 function createReceipt(draft: ReceiptDraft, index: number): LogisticsReceipt {
-  const deliveryAddress = draft.deliveryBlock.length
+  const originalAddress = draft.topAddress || "Adres controleren";
+  const deliveryBlockAddress = draft.deliveryBlock.length
     ? draft.deliveryBlock.join(", ")
-    : draft.topAddress || "Adres controleren";
+    : "";
+  const remarkAlternativeAddress = draft.alternativeAddressLines.length
+    ? draft.alternativeAddressLines.join(", ")
+    : "";
+  const alternativeAddress = remarkAlternativeAddress || deliveryBlockAddress || undefined;
+  const deliveryAddress =
+    draft.fulfillment === "afhalen" && draft.pickupLocation
+      ? draft.pickupLocation
+      : alternativeAddress || originalAddress;
   const tags = inferTags(draft);
-  const route = inferRoute(draft.customer, draft.topAddress, deliveryAddress);
+  const route = inferRoute(
+    draft.customer,
+    originalAddress,
+    draft.fulfillment === "afhalen" ? draft.pickupLocation || deliveryAddress : deliveryAddress
+  );
   const warning = tags.includes("groot")
     ? "Grote bon: vroeg klaarzetten en volume checken."
     : tags.includes("zorg")
@@ -441,9 +590,11 @@ function createReceipt(draft: ReceiptDraft, index: number): LogisticsReceipt {
     receiptNumber: draft.receiptNumber,
     time: inferTime([...draft.remarks, ...draft.deliveryBlock]),
     customer: draft.customer,
-    address: draft.topAddress || deliveryAddress,
+    address: originalAddress,
     deliveryAddress,
-    alternativeAddress: draft.deliveryBlock.length ? draft.topAddress : undefined,
+    alternativeAddress,
+    fulfillment: draft.fulfillment,
+    pickupLocation: draft.pickupLocation || undefined,
     route,
     tags,
     value: draft.total,
