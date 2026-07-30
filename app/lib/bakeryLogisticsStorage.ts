@@ -2,6 +2,7 @@ import "server-only";
 
 import type {
   LogisticsBatch,
+  LogisticsDayFeedback,
   LogisticsReceiptOverride,
   LogisticsWebshopImage,
 } from "@/app/bakkerij/logistiek/logisticsTypes";
@@ -12,9 +13,11 @@ const LOGISTICS_BATCHES_SETTING_KEY = "bakery_logistics_batches";
 const LOGISTICS_WEBSHOP_IMAGES_SETTING_KEY = "bakery_logistics_webshop_images";
 const LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY =
   "bakery_logistics_receipt_overrides";
+const LOGISTICS_DAY_FEEDBACK_SETTING_KEY = "bakery_logistics_day_feedback";
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
 const MAX_STORED_RECEIPT_OVERRIDES = 3000;
+const MAX_STORED_DAY_FEEDBACK = 1200;
 
 type LogisticsState = {
   batches: LogisticsBatch[];
@@ -28,6 +31,10 @@ type LogisticsReceiptOverridesState = {
   overrides: LogisticsReceiptOverride[];
 };
 
+type LogisticsDayFeedbackState = {
+  feedback: LogisticsDayFeedback[];
+};
+
 function emptyLogisticsState(): LogisticsState {
   return { batches: [] };
 }
@@ -38,6 +45,10 @@ function emptyLogisticsWebshopImagesState(): LogisticsWebshopImagesState {
 
 function emptyLogisticsReceiptOverridesState(): LogisticsReceiptOverridesState {
   return { overrides: [] };
+}
+
+function emptyLogisticsDayFeedbackState(): LogisticsDayFeedbackState {
+  return { feedback: [] };
 }
 
 function isLogisticsBatch(value: unknown): value is LogisticsBatch {
@@ -69,6 +80,17 @@ function isLogisticsReceiptOverride(
       typeof (value as LogisticsReceiptOverride).id === "string" &&
       typeof (value as LogisticsReceiptOverride).date === "string" &&
       typeof (value as LogisticsReceiptOverride).receiptId === "string"
+  );
+}
+
+function isLogisticsDayFeedback(value: unknown): value is LogisticsDayFeedback {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as LogisticsDayFeedback).id === "string" &&
+      typeof (value as LogisticsDayFeedback).date === "string" &&
+      typeof (value as LogisticsDayFeedback).text === "string" &&
+      Array.isArray((value as LogisticsDayFeedback).signals)
   );
 }
 
@@ -113,11 +135,27 @@ function normalizeLogisticsReceiptOverridesState(
   };
 }
 
+function normalizeLogisticsDayFeedbackState(
+  value: unknown
+): LogisticsDayFeedbackState {
+  if (!value || typeof value !== "object") {
+    return emptyLogisticsDayFeedbackState();
+  }
+
+  const feedback = (value as { feedback?: unknown }).feedback;
+  if (!Array.isArray(feedback)) return emptyLogisticsDayFeedbackState();
+
+  return {
+    feedback: feedback.filter(isLogisticsDayFeedback),
+  };
+}
+
 function toJson(
   value:
     | LogisticsState
     | LogisticsWebshopImagesState
     | LogisticsReceiptOverridesState
+    | LogisticsDayFeedbackState
 ): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
 }
@@ -142,6 +180,15 @@ function sortWebshopImages(images: LogisticsWebshopImage[]) {
 
 function sortReceiptOverrides(overrides: LogisticsReceiptOverride[]) {
   return [...overrides].sort((first, second) => {
+    const dateCompare = second.date.localeCompare(first.date);
+    if (dateCompare !== 0) return dateCompare;
+
+    return second.updatedAt.localeCompare(first.updatedAt);
+  });
+}
+
+function sortDayFeedback(feedback: LogisticsDayFeedback[]) {
+  return [...feedback].sort((first, second) => {
     const dateCompare = second.date.localeCompare(first.date);
     if (dateCompare !== 0) return dateCompare;
 
@@ -188,6 +235,19 @@ export async function readLogisticsReceiptOverridesState() {
   return normalizeLogisticsReceiptOverridesState(data.value);
 }
 
+export async function readLogisticsDayFeedbackState() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", LOGISTICS_DAY_FEEDBACK_SETTING_KEY)
+    .maybeSingle();
+
+  if (error || !data) return emptyLogisticsDayFeedbackState();
+
+  return normalizeLogisticsDayFeedbackState(data.value);
+}
+
 export async function getLogisticsBatchForDate(date: string) {
   const state = await readLogisticsState();
 
@@ -209,6 +269,15 @@ export async function getLogisticsReceiptOverridesForDate(date: string) {
 
   return sortReceiptOverrides(state.overrides).filter(
     (override) => override.date === date
+  );
+}
+
+export async function getLogisticsDayFeedbackForDate(date: string) {
+  const state = await readLogisticsDayFeedbackState();
+
+  return (
+    sortDayFeedback(state.feedback).find((feedback) => feedback.date === date) ||
+    null
   );
 }
 
@@ -301,4 +370,29 @@ export async function deleteLogisticsReceiptOverride(overrideId: string) {
   );
 
   if (error) throw new Error(error.message);
+}
+
+export async function upsertLogisticsDayFeedback(
+  feedback: LogisticsDayFeedback
+) {
+  const state = await readLogisticsDayFeedbackState();
+  const nextFeedback = sortDayFeedback([
+    feedback,
+    ...state.feedback.filter((item) => item.id !== feedback.id),
+  ]).slice(0, MAX_STORED_DAY_FEEDBACK);
+
+  const nextState = { feedback: nextFeedback };
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_DAY_FEEDBACK_SETTING_KEY,
+      value: toJson(nextState),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
+
+  return feedback;
 }

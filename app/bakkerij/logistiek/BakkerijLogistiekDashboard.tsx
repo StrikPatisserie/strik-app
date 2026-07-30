@@ -5,6 +5,7 @@ import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import type {
   LogisticsBatch,
   LogisticsBatchStatus,
+  LogisticsDayFeedback,
   LogisticsFulfillment,
   LogisticsReceipt,
   LogisticsReceiptLine,
@@ -84,6 +85,7 @@ type DayLoadProfile = {
 
 type ReceiptLine = LogisticsReceiptLine;
 type ReceiptSummary = LogisticsReceipt;
+type DayFeedbackSummary = LogisticsDayFeedback;
 type ReceiptOverrideSummary = LogisticsReceiptOverride;
 type WebshopImageSummary = LogisticsWebshopImage;
 
@@ -106,8 +108,6 @@ type ReceiptSeed = Omit<
   customerNote?: string;
   internalNote?: string;
 };
-
-const feedbackStorageKey = "strik-logistiek-dagfeedback-v1";
 
 const tabs: { id: DashboardTab; label: string }[] = [
   { id: "routes", label: "Routes" },
@@ -204,28 +204,6 @@ function getUploadTime() {
 function tomorrowStatus(hour: number): BatchStatus {
   if (hour >= 22) return "definitief";
   return "prognose";
-}
-
-function readStoredFeedback() {
-  if (typeof window === "undefined") return {};
-
-  try {
-    const raw = window.localStorage.getItem(feedbackStorageKey);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveStoredFeedback(feedback: Record<string, string>) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(feedbackStorageKey, JSON.stringify(feedback));
-  } catch {
-    return;
-  }
 }
 
 function receiptOverrideId(date: string, receipt: ReceiptSummary) {
@@ -637,11 +615,23 @@ function shopLabelForKey(key: string) {
   return "Winkel";
 }
 
-function firstTimeMinutes(receipt: ReceiptSummary) {
-  const match = receipt.time.match(/\b(\d{1,2}):(\d{2})\b/);
-  if (!match) return 9999;
+function routeDeadlineMinutes(receipt: ReceiptSummary) {
+  const matches = [...receipt.time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
+  const deadline = matches.at(-1);
+  if (!deadline) return 9999;
 
-  return Number(match[1]) * 60 + Number(match[2]);
+  return Number(deadline[1]) * 60 + Number(deadline[2]);
+}
+
+function routeTimeLabel(receipt: ReceiptSummary) {
+  const matches = [...receipt.time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
+  if (matches.length >= 2) {
+    const deadline = matches.at(-1);
+
+    return deadline ? `voor ${deadline[1].padStart(2, "0")}:${deadline[2]}` : receipt.time;
+  }
+
+  return receipt.time === "Geen tijd" ? "tijd check" : receipt.time;
 }
 
 function hasExplicitEarlyInstruction(receipt: ReceiptSummary) {
@@ -679,7 +669,7 @@ function isLargeReceipt(receipt: ReceiptSummary) {
 
 function isCriticalReceipt(receipt: ReceiptSummary) {
   return (
-    firstTimeMinutes(receipt) < 600 ||
+    routeDeadlineMinutes(receipt) < 600 ||
     receipt.tags.includes("zorg") ||
     receipt.tags.some((tag) => tag.startsWith("levering ")) ||
     hasExplicitEarlyInstruction(receipt)
@@ -704,7 +694,7 @@ function receiptStopBadges(receipt: ReceiptSummary) {
 
 function routeStopForReceipt(receipt: ReceiptSummary, prefix = ""): RouteStop {
   const target = receiptTargetLine(receipt);
-  const time = receipt.time === "Geen tijd" ? "tijd check" : receipt.time;
+  const time = routeTimeLabel(receipt);
 
   return {
     id: `${prefix}${receipt.id}`,
@@ -823,7 +813,8 @@ function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
       Number(isEarlyException(second)) - Number(isEarlyException(first));
     if (earlyCompare !== 0) return earlyCompare;
 
-    const timeCompare = firstTimeMinutes(first) - firstTimeMinutes(second);
+    const timeCompare =
+      routeDeadlineMinutes(first) - routeDeadlineMinutes(second);
     if (timeCompare !== 0) return timeCompare;
 
     const largeCompare = Number(isLargeReceipt(second)) - Number(isLargeReceipt(first));
@@ -962,7 +953,7 @@ function shouldUseSecondRound(
 ) {
   if (isEarlyException(receipt)) return false;
 
-  const minutes = firstTimeMinutes(receipt);
+  const minutes = routeDeadlineMinutes(receipt);
   if (minutes < 600) return false;
 
   const maxFirstStops =
@@ -992,7 +983,7 @@ function addReceiptToBus(
 
 function iceStopForReceipt(receipt: ReceiptSummary): RouteStop {
   const target = receiptTargetLine(receipt);
-  const time = receipt.time === "Geen tijd" ? "tijd check" : receipt.time;
+  const time = routeTimeLabel(receipt);
   const iceTubs = iceTubCountForReceipt(receipt);
   const tempexBoxes = Math.ceil(iceTubs / 3);
   const detailParts = [
@@ -1113,15 +1104,12 @@ function buildRouteRounds(
       rounds.push(
         buildRouteRound({
           id: `bus-${bus.id}-1`,
-          title: `${bus.title} · ronde 1`,
+          title: "Ronde 1",
           vehicle: bus.title,
           departure: plan.isFuture ? "advies 08:00" : "08:00",
           tone: bus.tone,
           stops: firstStops,
-          reason:
-            bus.id === "A"
-              ? "Start met HEY/DAAL, daarna tijdkritisch en oost/campus of passende buitenbonnen."
-              : "Start met ZIEK/LENT, daarna tijdkritisch en centrum/noord of passende buitenbonnen.",
+          reason: "Winkels eerst, daarna leveringen op tijd, volume en logische bundeling.",
           load: busLoadLine(bus, "first"),
           loadProfile,
         })
@@ -1132,13 +1120,13 @@ function buildRouteRounds(
       rounds.push(
         buildRouteRound({
           id: `bus-${bus.id}-2`,
-          title: `${bus.title} · ronde 2`,
+          title: "Ronde 2",
           vehicle: bus.title,
           departure: plan.isFuture ? "beslissen" : "na ronde 1",
           tone: "border-[#efc7b8] bg-[#fff3ed]",
           stops: secondStops,
           reason:
-            "Tweede ronde voor ijs, grotere of latere buitenbonnen zodra ronde 1 lucht moet houden.",
+            "Tweede ronde voor ijs, grote of latere bonnen zodra ronde 1 lucht moet houden.",
           load: busLoadLine(bus, "second"),
           loadProfile,
         })
@@ -1151,7 +1139,7 @@ function buildRouteRounds(
     rounds.push(
       buildRouteRound({
         id: `bus-${bus}-ice-check`,
-        title: `Bus ${bus} · ijs check`,
+        title: "IJs check",
         vehicle: `Bus ${bus}`,
         departure: plan.isFuture ? "beslissen" : "na ronde 1",
         tone: "border-[#efc7b8] bg-[#fff3ed]",
@@ -1633,8 +1621,11 @@ export default function BakkerijLogistiekDashboard() {
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [overrideMessage, setOverrideMessage] = useState("");
-  const [feedbackByDate, setFeedbackByDate] =
-    useState<Record<string, string>>(readStoredFeedback);
+  const [feedbackByDate, setFeedbackByDate] = useState<Record<string, string>>(
+    {}
+  );
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [isSavingFeedback, setIsSavingFeedback] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const manualBatchRefreshRef = useRef(false);
   const activeImportedBatch =
@@ -1711,6 +1702,7 @@ export default function BakkerijLogistiekDashboard() {
         );
         const data = (await response.json()) as {
           batch?: LogisticsBatch | null;
+          dayFeedback?: DayFeedbackSummary | null;
           webshopImages?: WebshopImageSummary[];
           receiptOverrides?: ReceiptOverrideSummary[];
           message?: string;
@@ -1731,6 +1723,10 @@ export default function BakkerijLogistiekDashboard() {
         setImportedBatch(data.batch || null);
         setWebshopImages(data.webshopImages || []);
         setReceiptOverrides(data.receiptOverrides || []);
+        setFeedbackByDate((current) => ({
+          ...current,
+          [dateState.selectedDate]: data.dayFeedback?.text || "",
+        }));
         setBatchLoadState("ready");
         if (manualRefresh) {
           setImportMessage(
@@ -1762,6 +1758,7 @@ export default function BakkerijLogistiekDashboard() {
     setFileSnapshot(null);
     setImportMessage("");
     setOverrideMessage("");
+    setFeedbackMessage("");
   }
 
   function refreshBatch() {
@@ -1870,8 +1867,40 @@ export default function BakkerijLogistiekDashboard() {
     }));
   }
 
-  function saveFeedback() {
-    saveStoredFeedback(feedbackByDate);
+  async function saveFeedback() {
+    setIsSavingFeedback(true);
+    setFeedbackMessage("feedback opslaan...");
+
+    try {
+      const response = await fetch("/api/bakkerij-logistiek/day-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedPlan.date,
+          text: feedback,
+        }),
+      });
+      const data = (await response.json()) as {
+        feedback?: DayFeedbackSummary;
+        message?: string;
+      };
+
+      if (!response.ok || !data.feedback) {
+        throw new Error(data.message || "Feedback opslaan is niet gelukt.");
+      }
+
+      setFeedbackByDate((current) => ({
+        ...current,
+        [data.feedback!.date]: data.feedback!.text,
+      }));
+      setFeedbackMessage("Feedback opgeslagen en verwerkt.");
+    } catch (error) {
+      setFeedbackMessage(
+        error instanceof Error ? error.message : "Feedback opslaan is niet gelukt."
+      );
+    } finally {
+      setIsSavingFeedback(false);
+    }
   }
 
   return (
@@ -2028,6 +2057,8 @@ export default function BakkerijLogistiekDashboard() {
         {activeTab === "leren" && (
           <LearningPanel
             feedback={feedback}
+            isSaving={isSavingFeedback}
+            message={feedbackMessage}
             learningSignals={learningSignals}
             onFeedbackChange={updateFeedback}
             onSave={saveFeedback}
@@ -2039,67 +2070,100 @@ export default function BakkerijLogistiekDashboard() {
   );
 }
 
+function routeGroupsFor(routeRounds: RouteRound[]) {
+  const groups = new Map<string, RouteRound[]>();
+
+  routeRounds.forEach((route) => {
+    const routes = groups.get(route.vehicle) || [];
+    routes.push(route);
+    groups.set(route.vehicle, routes);
+  });
+
+  return ["Bus A", "Bus B"]
+    .filter((vehicle) => groups.has(vehicle))
+    .map((vehicle) => ({
+      vehicle,
+      routes: groups.get(vehicle) || [],
+    }));
+}
+
 function RoutesPanel({
   routeRounds,
 }: Readonly<{ routeRounds: RouteRound[] }>) {
+  const routeGroups = routeGroupsFor(routeRounds);
+
   return (
-    <section className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-      {routeRounds.map((route) => (
+    <section className="grid gap-3 lg:grid-cols-2">
+      {routeGroups.map((group) => (
         <article
-          key={route.id}
-          className={`rounded-lg border p-3 shadow-sm sm:p-4 ${route.tone}`}
+          key={group.vehicle}
+          className="rounded-lg border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3"
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-normal text-[#6b645b]">
-                {route.vehicle} · {route.departure}
-              </p>
-              <h2 className="mt-1 text-xl font-black tracking-normal text-[#1a1815]">
-                {route.title}
-              </h2>
-            </div>
-            <span className="shrink-0 border border-white/80 bg-white px-2 py-1 text-xs font-black tracking-normal text-[#1a1815] shadow-sm">
-              {route.badge}
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-black tracking-normal text-[#1a1815]">
+              {group.vehicle}
+            </h2>
+            <span className="border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
+              {group.routes.length} ronde{group.routes.length === 1 ? "" : "s"}
             </span>
           </div>
-          <ol className="mt-3 grid gap-1.5">
-            {route.stops.map((stop, index) => (
-              <li
-                key={stop.id}
-                className="grid grid-cols-[1.7rem_minmax(0,1fr)] gap-2 border border-white/80 bg-white/85 px-2 py-1.5"
+          <div className="mt-2 grid gap-2">
+            {group.routes.map((route) => (
+              <section
+                key={route.id}
+                className={`border p-2 ${route.tone}`}
               >
-                <span className="flex h-6 w-6 items-center justify-center bg-[#1a1815] text-xs font-black tabular-nums tracking-normal text-white">
-                  {index + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-black tracking-normal text-[#1a1815]">
-                    {stop.label}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-black uppercase tracking-normal text-[#1a1815]">
+                      {route.title}
+                    </h3>
+                    <p className="mt-0.5 text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
+                      {route.departure} · {route.badge}
+                    </p>
+                  </div>
+                  <span className="shrink-0 border border-white/80 bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]">
+                    {route.load}
                   </span>
-                  <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#6b645b]">
-                    {stop.detail}
-                  </span>
-                  {stop.badges.length > 0 && (
-                    <span className="mt-1 flex flex-wrap gap-1">
-                      {stop.badges.map((badge) => (
-                        <span
-                          key={`${stop.id}-${badge}`}
-                          className="border border-[#e8e4de] bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]"
-                        >
-                          {badge}
+                </div>
+                <ol className="mt-2 grid gap-1">
+                  {route.stops.map((stop, index) => (
+                    <li
+                      key={stop.id}
+                      className="grid grid-cols-[1.45rem_minmax(0,1fr)] gap-1.5 border border-white/80 bg-white px-1.5 py-1"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center bg-[#1a1815] text-[0.62rem] font-black tabular-nums tracking-normal text-white">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs font-black tracking-normal text-[#1a1815]">
+                          {stop.label}
                         </span>
-                      ))}
-                    </span>
-                  )}
-                </span>
-              </li>
+                        <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#6b645b]">
+                          {stop.detail}
+                        </span>
+                        {stop.badges.length > 0 && (
+                          <span className="mt-1 flex flex-wrap gap-1">
+                            {stop.badges.map((badge) => (
+                              <span
+                                key={`${stop.id}-${badge}`}
+                                className="border border-[#e8e4de] bg-white px-1 py-0.5 text-[0.58rem] font-black tracking-normal text-[#6b645b]"
+                              >
+                                {badge}
+                              </span>
+                            ))}
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-2 text-[0.68rem] font-normal leading-snug tracking-normal text-[#4a4540]">
+                  {route.reason}
+                </p>
+              </section>
             ))}
-          </ol>
-          <p className="mt-3 text-xs leading-snug tracking-normal text-[#4a4540]">
-            <strong>Waarom:</strong> {route.reason}
-          </p>
-          <p className="mt-1 text-xs leading-snug tracking-normal text-[#4a4540]">
-            <strong>Laden:</strong> {route.load}
-          </p>
+          </div>
         </article>
       ))}
     </section>
@@ -2159,7 +2223,7 @@ function OrdersPanel({
     <section className="grid gap-3 lg:grid-cols-[minmax(16rem,0.5fr)_minmax(0,1fr)]">
       <div className="rounded-lg border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
+          <h2 className="text-base font-black tracking-normal text-[#1a1815]">
             Bonnen
           </h2>
           <span className="w-fit border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
@@ -2257,6 +2321,7 @@ function ReceiptRow({
 }>) {
   const fulfillment = fulfillmentLabel(receipt);
   const target = receiptTargetLine(receipt);
+  const time = routeTimeLabel(receipt);
 
   return (
     <button
@@ -2279,7 +2344,7 @@ function ReceiptRow({
               {receipt.customer}
             </p>
             <p className="truncate text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
-              {receipt.time} · {target}
+              {time} · {target}
             </p>
           </div>
           <div className="shrink-0 text-right">
@@ -2334,35 +2399,35 @@ function ReceiptAddressBlock({ receipt }: Readonly<{ receipt: ReceiptSummary }>)
     receipt.alternativeAddress !== focusValue;
 
   return (
-    <div className="grid gap-2 border-b border-dashed border-[#cfc6bc] p-3">
+    <div className="grid gap-2 border-b border-dashed border-[#d7d7d7] bg-white p-3">
       <div>
-        <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#8b8278]">
+        <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#555]">
           Origineel adres
         </p>
-        <p className="mt-0.5 text-xs font-normal leading-snug tracking-normal text-[#4a4540]">
+        <p className="mt-0.5 text-xs font-normal leading-snug tracking-normal text-[#111]">
           {receipt.address}
         </p>
       </div>
       <div
         className={`border px-2.5 py-2 ${
           fulfillment === "afhalen"
-            ? "border-[#eadb8b] bg-[#fff8d8]"
-            : "border-[#d6e5d8] bg-[#f6faf4]"
+            ? "border-[#111] bg-[#f4f4f4]"
+            : "border-[#d7d7d7] bg-[#f4f4f4]"
         }`}
       >
-        <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#6b645b]">
+        <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#555]">
           {focusLabel}
         </p>
-        <p className="mt-0.5 text-sm font-black leading-snug tracking-normal text-[#1a1815]">
+        <p className="mt-0.5 text-sm font-black leading-snug tracking-normal text-[#111]">
           {focusValue}
         </p>
       </div>
       {showAlternativeForPickup && (
         <div>
-          <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#8b8278]">
+          <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#555]">
             Afleveradres op bon
           </p>
-          <p className="mt-0.5 text-xs font-bold leading-snug tracking-normal text-[#1a1815]">
+          <p className="mt-0.5 text-xs font-bold leading-snug tracking-normal text-[#111]">
             {receipt.alternativeAddress}
           </p>
         </div>
@@ -2383,12 +2448,12 @@ function WebshopImageBlock({
   if (images.length === 0) return null;
 
   return (
-    <div className="border-b border-dashed border-[#cfc6bc] bg-[#f6faf4] p-3">
+    <div className="border-b border-dashed border-[#d7d7d7] bg-white p-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-black uppercase tracking-normal text-[#315641]">
+        <p className="text-xs font-black uppercase tracking-normal text-[#111]">
           Marsepeinfoto
         </p>
-        <span className="text-[0.68rem] font-black tracking-normal text-[#4a6d5a]">
+        <span className="text-[0.68rem] font-black tracking-normal text-[#555]">
           {images.length}
         </span>
       </div>
@@ -2399,7 +2464,7 @@ function WebshopImageBlock({
             href={image.photoUrl}
             target="_blank"
             rel="noreferrer"
-            className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 border border-[#d6e5d8] bg-white p-1.5 text-left transition hover:border-[#315641]"
+            className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 border border-[#d7d7d7] bg-white p-1.5 text-left transition hover:border-[#111]"
           >
             <span
               aria-hidden="true"
@@ -2407,14 +2472,14 @@ function WebshopImageBlock({
               style={thumbnailStyleFor(image)}
             />
             <span className="min-w-0">
-              <span className="block truncate text-xs font-black tracking-normal text-[#1a1815]">
+              <span className="block truncate text-xs font-black tracking-normal text-[#111]">
                 {image.customerName || "Klant controleren"}
               </span>
-              <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#6b645b]">
+              <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#555]">
                 {image.orderNumber || "zonder bestelnummer"} · match {image.confidence}
               </span>
               {image.notes.length > 0 && (
-                <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#8b8278]">
+                <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
                   {image.notes.join(" ")}
                 </span>
               )}
@@ -2441,6 +2506,7 @@ function ReceiptOverrideEditor({
   receipt: ReceiptSummary;
 }>) {
   const [draft, setDraft] = useState(() => draftForReceiptOverride(override));
+  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const hasSavedOverride = overrideHasValue(draftForReceiptOverride(override));
 
@@ -2460,146 +2526,157 @@ function ReceiptOverrideEditor({
   }
 
   return (
-    <div className="border-b border-dashed border-[#cfc6bc] bg-white/70 p-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h3 className="text-xs font-black uppercase tracking-normal text-[#1a1815]">
-            Aanpassen
-          </h3>
+    <div className="border-b border-dashed border-[#d7d7d7] bg-white p-2">
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label="Bon aanpassen"
+          title="Bon aanpassen"
+          onClick={() => setOpen((current) => !current)}
+          className="flex h-8 w-8 items-center justify-center border border-[#d7d7d7] bg-white text-[#111] transition hover:bg-[#f5f5f5]"
+        >
+          <PencilIcon />
+        </button>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {hasSavedOverride && (
-            <span className="border border-[#d6e5d8] bg-[#f6faf4] px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#315641]">
-              opgeslagen
+            <span className="border border-[#111] bg-white px-1.5 py-0.5 text-[0.6rem] font-black uppercase tracking-normal text-[#111]">
+              aangepast
+            </span>
+          )}
+          {message && (
+            <span className="truncate text-[0.64rem] font-normal tracking-normal text-[#555]">
+              {message}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => saveDraft()}
-            className="min-h-8 border border-[#1a1815] bg-[#1a1815] px-2 text-[0.68rem] font-black tracking-normal text-white transition hover:bg-[#3a332c] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            OK
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={clearDraft}
-            className="min-h-8 border border-[#e8e4de] bg-white px-2 text-[0.68rem] font-black tracking-normal text-[#6b645b] transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Wis
-          </button>
-        </div>
+        {open && (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => saveDraft()}
+              className="min-h-8 border border-[#111] bg-[#111] px-2 text-[0.68rem] font-black tracking-normal text-white transition hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              OK
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={clearDraft}
+              className="min-h-8 border border-[#d7d7d7] bg-white px-2 text-[0.68rem] font-black tracking-normal text-[#111] transition hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Wis
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-        <label className="grid gap-1">
-          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
-            Tijd
-          </span>
-          <input
-            value={draft.time}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, time: event.target.value }))
-            }
-            placeholder={receipt.time}
-            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
-          />
-        </label>
-        <label className="grid gap-1">
-          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
-            Soort
-          </span>
-          <select
-            value={draft.fulfillment}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                fulfillment: event.target.value as LogisticsFulfillment | "",
-              }))
-            }
-            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
-          >
-            <option value="">bon</option>
-            <option value="bezorgen">bezorgen</option>
-            <option value="afhalen">afhalen</option>
-            <option value="onbekend">check</option>
-          </select>
-        </label>
-        <label className="grid gap-1">
-          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
-            Adres
-          </span>
-          <input
-            value={draft.deliveryAddress}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                deliveryAddress: event.target.value,
-              }))
-            }
-            placeholder={receipt.deliveryAddress}
-            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
-          />
-        </label>
-        <label className="grid gap-1">
-          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
-            Alternatief
-          </span>
-          <input
-            value={draft.alternativeAddress}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                alternativeAddress: event.target.value,
-              }))
-            }
-            placeholder={receipt.alternativeAddress || "geen alternatief"}
-            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
-          />
-        </label>
-        <label className="grid gap-1">
-          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
-            Afhaal
-          </span>
-          <select
-            value={draft.pickupLocation}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                pickupLocation: event.target.value,
-              }))
-            }
-            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
-          >
-            <option value="">winkel</option>
-            <option value="Heyendaalseweg">HEY</option>
-            <option value="Daalseweg">DAAL</option>
-            <option value="Ziekerstraat">ZIEK</option>
-            <option value="Lent">LENT</option>
-          </select>
-        </label>
-        <label className="grid gap-1">
-          <span className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
-            Notitie
-          </span>
-          <input
-            value={draft.routeNote}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                routeNote: event.target.value,
-              }))
-            }
-            placeholder="let op ophalen in die winkel"
-            className="h-8 border border-[#e8e4de] bg-white px-2 text-xs font-bold tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
-          />
-        </label>
-      </div>
-      {message && (
-        <p className="mt-2 truncate text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
-          {message}
-        </p>
+      {open && (
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+          <label className="grid gap-1">
+            <span className="text-[0.58rem] font-black uppercase tracking-normal text-[#555]">
+              Tijd
+            </span>
+            <input
+              value={draft.time}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, time: event.target.value }))
+              }
+              placeholder={receipt.time}
+              className="h-8 border border-[#d7d7d7] bg-white px-2 text-xs font-bold tracking-normal text-[#111] outline-none focus:border-[#111]"
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-[0.58rem] font-black uppercase tracking-normal text-[#555]">
+              Soort
+            </span>
+            <select
+              value={draft.fulfillment}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  fulfillment: event.target.value as LogisticsFulfillment | "",
+                }))
+              }
+              className="h-8 border border-[#d7d7d7] bg-white px-2 text-xs font-bold tracking-normal text-[#111] outline-none focus:border-[#111]"
+            >
+              <option value="">bon</option>
+              <option value="bezorgen">bezorgen</option>
+              <option value="afhalen">afhalen</option>
+              <option value="onbekend">check</option>
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-[0.58rem] font-black uppercase tracking-normal text-[#555]">
+              Adres
+            </span>
+            <input
+              value={draft.deliveryAddress}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  deliveryAddress: event.target.value,
+                }))
+              }
+              placeholder={receipt.deliveryAddress}
+              className="h-8 border border-[#d7d7d7] bg-white px-2 text-xs font-bold tracking-normal text-[#111] outline-none focus:border-[#111]"
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-[0.58rem] font-black uppercase tracking-normal text-[#555]">
+              Alternatief
+            </span>
+            <input
+              value={draft.alternativeAddress}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  alternativeAddress: event.target.value,
+                }))
+              }
+              placeholder={receipt.alternativeAddress || "geen alternatief"}
+              className="h-8 border border-[#d7d7d7] bg-white px-2 text-xs font-bold tracking-normal text-[#111] outline-none focus:border-[#111]"
+            />
+          </label>
+          <label className="grid gap-1">
+            <span className="text-[0.58rem] font-black uppercase tracking-normal text-[#555]">
+              Afhaal
+            </span>
+            <select
+              value={draft.pickupLocation}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  pickupLocation: event.target.value,
+                }))
+              }
+              className="h-8 border border-[#d7d7d7] bg-white px-2 text-xs font-bold tracking-normal text-[#111] outline-none focus:border-[#111]"
+            >
+              <option value="">winkel</option>
+              <option value="Heyendaalseweg">HEY</option>
+              <option value="Daalseweg">DAAL</option>
+              <option value="Ziekerstraat">ZIEK</option>
+              <option value="Lent">LENT</option>
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-[0.58rem] font-black uppercase tracking-normal text-[#555]">
+              Notitie
+            </span>
+            <input
+              value={draft.routeNote}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  routeNote: event.target.value,
+                }))
+              }
+              placeholder="let op ophalen in die winkel"
+              className="h-8 border border-[#d7d7d7] bg-white px-2 text-xs font-bold tracking-normal text-[#111] outline-none focus:border-[#111]"
+            />
+          </label>
+        </div>
       )}
     </div>
   );
@@ -2634,18 +2711,18 @@ function ReceiptDetail({
   const fulfillment = fulfillmentLabel(receipt);
 
   return (
-    <article className="h-[30rem] overflow-y-auto rounded-lg border border-[#1a1815] bg-[#fffdf8] shadow-sm">
-      <div className="border-b border-dashed border-[#cfc6bc] p-3">
+    <article className="h-[30rem] overflow-y-auto rounded-lg border border-[#111] bg-white text-[#111] shadow-sm">
+      <div className="border-b border-dashed border-[#d7d7d7] bg-white p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#6b645b]">
+            <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
               Contantbon · {receipt.id}
             </p>
-            <h2 className="mt-1 truncate text-lg font-black tracking-normal text-[#1a1815]">
+            <h2 className="mt-1 truncate text-base font-black tracking-normal text-[#111]">
               {receipt.customer}
             </h2>
           </div>
-          <span className="shrink-0 border border-[#e8e4de] bg-white px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
+          <span className="shrink-0 border border-[#111] bg-white px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#111]">
             {fulfillment}
           </span>
         </div>
@@ -2653,7 +2730,7 @@ function ReceiptDetail({
           {receipt.tags.map((tag) => (
             <span
               key={tag}
-              className="border border-[#e8e4de] bg-white px-1.5 py-0.5 text-[0.65rem] font-black tracking-normal text-[#6b645b]"
+              className="border border-[#d7d7d7] bg-white px-1.5 py-0.5 text-[0.65rem] font-black tracking-normal text-[#555]"
             >
               {tag}
             </span>
@@ -2661,28 +2738,28 @@ function ReceiptDetail({
         </div>
       </div>
 
-      <dl className="grid gap-2 border-b border-dashed border-[#cfc6bc] p-3 sm:grid-cols-3">
+      <dl className="grid gap-2 border-b border-dashed border-[#d7d7d7] bg-white p-3 sm:grid-cols-3">
         <div>
-          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
             Tijd
           </dt>
-          <dd className="mt-0.5 text-xs font-black tracking-normal text-[#1a1815]">
+          <dd className="mt-0.5 text-xs font-black tracking-normal text-[#111]">
             {receipt.time}
           </dd>
         </div>
         <div>
-          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
             Route
           </dt>
-          <dd className="mt-0.5 text-xs font-black tracking-normal text-[#1a1815]">
+          <dd className="mt-0.5 text-xs font-black tracking-normal text-[#111]">
             {receipt.route}
           </dd>
         </div>
         <div>
-          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
             Dag
           </dt>
-          <dd className="mt-0.5 text-xs font-black tracking-normal text-[#1a1815]">
+          <dd className="mt-0.5 text-xs font-black tracking-normal text-[#111]">
             {selectedPlan.title}
           </dd>
         </div>
@@ -2698,12 +2775,12 @@ function ReceiptDetail({
       />
       <WebshopImageBlock images={imageMatches} />
 
-      <div className="p-3">
+      <div className="bg-white p-3">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-xs font-black uppercase tracking-normal text-[#1a1815]">
+          <h3 className="text-xs font-black uppercase tracking-normal text-[#111]">
             Regels
           </h3>
-          <span className="text-[0.68rem] font-black tracking-normal text-[#6b645b]">
+          <span className="text-[0.68rem] font-black tracking-normal text-[#555]">
             {receipt.lines.length}
           </span>
         </div>
@@ -2711,22 +2788,22 @@ function ReceiptDetail({
           {receipt.lines.map((line, index) => (
             <div
               key={`${receipt.id}-line-${index}`}
-              className="grid grid-cols-[2.8rem_minmax(0,1fr)_4.3rem] gap-2 border-t border-[#efe7dd] pt-1 first:border-t-0 first:pt-0"
+              className="grid grid-cols-[2.8rem_minmax(0,1fr)_4.3rem] gap-2 border-t border-[#e1e1e1] pt-1 first:border-t-0 first:pt-0"
             >
-              <span className="font-mono text-xs font-black tabular-nums tracking-normal text-[#1a1815]">
+              <span className="font-mono text-xs font-black tabular-nums tracking-normal text-[#111]">
                 {line.quantity}
               </span>
               <div className="min-w-0">
-                <p className="text-xs font-bold leading-snug tracking-normal text-[#1a1815]">
+                <p className="text-xs font-bold leading-snug tracking-normal text-[#111]">
                   {line.description}
                 </p>
                 {line.note && (
-                  <p className="mt-0.5 text-[0.68rem] font-normal leading-snug tracking-normal text-[#6b645b]">
+                  <p className="mt-0.5 text-[0.68rem] font-normal leading-snug tracking-normal text-[#555]">
                     {line.note}
                   </p>
                 )}
               </div>
-              <span className="text-right text-[0.68rem] font-normal tabular-nums tracking-normal text-[#6b645b]">
+              <span className="text-right text-[0.68rem] font-normal tabular-nums tracking-normal text-[#555]">
                 {line.unitPrice !== undefined ? formatMoney(line.unitPrice) : ""}
               </span>
             </div>
@@ -2734,23 +2811,23 @@ function ReceiptDetail({
         </div>
       </div>
 
-      <div className="border-y border-dashed border-[#cfc6bc] bg-white/70 p-3">
+      <div className="border-y border-dashed border-[#d7d7d7] bg-white p-3">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-black uppercase tracking-normal text-[#1a1815]">
+          <span className="text-xs font-black uppercase tracking-normal text-[#111]">
             Bonwaarde
           </span>
-          <span className="text-sm font-normal tracking-normal text-[#1a1815]">
+          <span className="text-sm font-normal tracking-normal text-[#111]">
             {receipt.value ? formatMoney(receipt.value) : "intern"}
           </span>
         </div>
       </div>
 
-      <div className="grid gap-2 p-3">
+      <div className="grid gap-2 bg-white p-3">
         <div>
-          <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#8b8278]">
+          <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
             Opmerking bon
           </p>
-          <p className="mt-0.5 text-xs font-normal leading-snug tracking-normal text-[#1a1815]">
+          <p className="mt-0.5 text-xs font-normal leading-snug tracking-normal text-[#111]">
             {receipt.customerNote}
           </p>
         </div>
@@ -2761,13 +2838,17 @@ function ReceiptDetail({
 
 function LearningPanel({
   feedback,
+  isSaving,
   learningSignals,
+  message,
   onFeedbackChange,
   onSave,
   selectedPlan,
 }: Readonly<{
   feedback: string;
+  isSaving: boolean;
   learningSignals: string[];
+  message: string;
   onFeedbackChange: (value: string) => void;
   onSave: () => void;
   selectedPlan: DayPlan;
@@ -2776,15 +2857,16 @@ function LearningPanel({
     <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
       <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
+          <h2 className="text-base font-black tracking-normal text-[#1a1815]">
             Dagfeedback
           </h2>
           <button
             type="button"
             aria-label="Feedback opslaan"
             title="Feedback opslaan"
+            disabled={isSaving}
             onClick={onSave}
-            className="flex h-10 w-10 items-center justify-center border border-[#d6e5d8] bg-[#f6faf4] text-sm font-black text-[#1a1815] shadow-sm transition hover:bg-white"
+            className="flex h-9 w-9 items-center justify-center border border-[#d6e5d8] bg-[#f6faf4] text-sm font-black text-[#1a1815] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
           >
             OK
           </button>
@@ -2795,6 +2877,11 @@ function LearningPanel({
           placeholder="Vandaag was rustig, maar de grote gebaksorder duurde lang..."
           className="mt-3 min-h-36 w-full resize-y border border-[#e8e4de] bg-[#faf8f5] p-3 text-sm font-bold leading-snug tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
         />
+        {message && (
+          <p className="mt-2 text-xs font-bold tracking-normal text-[#6b645b]">
+            {message}
+          </p>
+        )}
       </div>
 
       <div className="rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-3 shadow-sm sm:p-4">
@@ -2813,6 +2900,24 @@ function LearningPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.2"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5z" />
+    </svg>
   );
 }
 

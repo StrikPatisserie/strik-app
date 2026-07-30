@@ -49,6 +49,14 @@ export type LogisticsReceiptOverride = {
   updatedAt: string;
 };
 
+export type LogisticsDayFeedback = {
+  id: string;
+  date: string;
+  text: string;
+  signals: string[];
+  updatedAt: string;
+};
+
 export type LogisticsBatch = {
   id: string;
   date: string;

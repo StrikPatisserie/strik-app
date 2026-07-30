@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
 import {
   getLogisticsBatchForDate,
+  getLogisticsDayFeedbackForDate,
   getLogisticsReceiptOverridesForDate,
   getLogisticsWebshopImagesForDate,
 } from "@/app/lib/bakeryLogisticsStorage";
@@ -26,16 +27,19 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [batch, webshopImages, receiptOverrides] = await Promise.all([
-      getLogisticsBatchForDate(date),
-      getLogisticsWebshopImagesForDate(date),
-      getLogisticsReceiptOverridesForDate(date),
-    ]);
+    const [batch, webshopImages, receiptOverrides, dayFeedback] =
+      await Promise.all([
+        getLogisticsBatchForDate(date),
+        getLogisticsWebshopImagesForDate(date),
+        getLogisticsReceiptOverridesForDate(date),
+        getLogisticsDayFeedbackForDate(date),
+      ]);
 
     return NextResponse.json({
       batch,
       webshopImages,
       receiptOverrides,
+      dayFeedback,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
