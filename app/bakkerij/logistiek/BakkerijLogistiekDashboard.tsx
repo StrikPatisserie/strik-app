@@ -612,13 +612,13 @@ function lineSearchDescription(line: ReceiptLine) {
 
 function hasLargeCakeSize(text: string) {
   const rangeMatch = text.match(
-    /\b(\d{1,2})\s*(?:-|\/|tot|a|t\/m)\s*(\d{1,2})\s*(?:p|pers|personen|persoons)\b/
+    /\b(\d{1,2})\s*(?:-|\/|tot|a|t\/m)\s*(\d{1,2})\s*(?:p|pers\.?|personen|persoons)\b/
   );
   if (rangeMatch) {
     return Number(rangeMatch[1]) >= 10;
   }
 
-  const sizeMatch = text.match(/\b(\d{1,2})\s*(?:p|pers|personen|persoons)\b/);
+  const sizeMatch = text.match(/\b(\d{1,2})\s*(?:p|pers\.?|personen|persoons)\b/);
   if (!sizeMatch) return false;
 
   return Number(sizeMatch[1]) >= 10;
@@ -627,8 +627,8 @@ function hasLargeCakeSize(text: string) {
 function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
   const description = lineSearchDescription(line);
   const isCake =
-    /\bmarsepein(?:taarten?|\s+taarten?)\b/.test(description) ||
-    /\bslagroom(?:taarten?|\s+taarten?)\b/.test(description);
+    (/\bmarsepein/.test(description) && /taart(?:en)?\b/.test(description)) ||
+    (/\bslagroom/.test(description) && /taart(?:en)?\b/.test(description));
 
   return isCake && hasLargeCakeSize(description);
 }
