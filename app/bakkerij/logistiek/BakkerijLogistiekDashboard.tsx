@@ -54,6 +54,17 @@ type OrderCluster = {
   signal: string;
 };
 
+type ReceiptSummary = {
+  id: string;
+  time: string;
+  customer: string;
+  address: string;
+  route: string;
+  tags: string[];
+  value?: number;
+  note: string;
+};
+
 const feedbackStorageKey = "strik-logistiek-dagfeedback-v1";
 
 const tabs: { id: DashboardTab; label: string }[] = [
@@ -146,8 +157,7 @@ function getUploadTime() {
 
 function tomorrowStatus(hour: number): BatchStatus {
   if (hour >= 22) return "definitief";
-  if (hour >= 10) return "prognose";
-  return "wacht";
+  return "prognose";
 }
 
 function readStoredFeedback() {
@@ -341,6 +351,270 @@ function buildOrderClusters(plan: DayPlan): OrderCluster[] {
   ];
 }
 
+function buildReceiptSummaries(plan: DayPlan): ReceiptSummary[] {
+  const sharedReceipts: ReceiptSummary[] = [
+    {
+      id: "CB-001",
+      time: "08:00",
+      customer: "Hinke",
+      address: "Afhalen / winkel",
+      route: "Bus A",
+      tags: ["tijd", "check"],
+      value: 68,
+      note: "Vroegste bon, eerst klaarzetten.",
+    },
+    {
+      id: "CB-002",
+      time: "08:00-09:00",
+      customer: "Janssen",
+      address: "Nijmegen",
+      route: "Bus A",
+      tags: ["tijd"],
+      value: 94,
+      note: "Voor vertrekcontrole bellen bij vertraging.",
+    },
+    {
+      id: "CB-003",
+      time: "08:30",
+      customer: "Sanadome",
+      address: "Weg door Jonkerbos",
+      route: "Bus B",
+      tags: ["groot", "gebak"],
+      value: 420,
+      note: "Grote gebaksorder vooraan in bus.",
+    },
+    {
+      id: "CB-004",
+      time: "09:00-09:30",
+      customer: "Sint Maartenskliniek",
+      address: "Hengstdal",
+      route: "Bus A",
+      tags: ["zorg", "tijd"],
+      value: 310,
+      note: "Niet achter winkelvoorraad laten verdwijnen.",
+    },
+    {
+      id: "CB-005",
+      time: "09:00-10:00",
+      customer: "Radboud",
+      address: "Heyendaal",
+      route: "Bus A",
+      tags: ["tijd", "campus"],
+      value: 280,
+      note: "Combineren met Heyendaal/Daalseweg als dat tijd wint.",
+    },
+    {
+      id: "CB-006",
+      time: "09:30",
+      customer: "Winkel Heyendaalseweg",
+      address: "interne levering",
+      route: "Bus A",
+      tags: ["winkel", "intern"],
+      note: "Niet meetellen in externe waarde.",
+    },
+    {
+      id: "CB-007",
+      time: "09:40",
+      customer: "Winkel Daalseweg",
+      address: "interne levering",
+      route: "Bus A",
+      tags: ["winkel", "intern"],
+      note: "Niet meetellen in externe waarde.",
+    },
+    {
+      id: "CB-008",
+      time: "09:45",
+      customer: "IJsronde winkels",
+      address: "4 winkels",
+      route: "Ronde 2",
+      tags: ["ijs", "intern", `${plan.tempexBoxes} tempex`],
+      note: `${plan.iceTubs} bakken ijs, apart laden.`,
+    },
+    {
+      id: "CB-009",
+      time: "10:00",
+      customer: "Winkel Ziekerstraat",
+      address: "interne levering",
+      route: "Bus B",
+      tags: ["winkel", "intern"],
+      note: "Na Sanadome lossen.",
+    },
+    {
+      id: "CB-010",
+      time: "10:15",
+      customer: "Winkel Lent",
+      address: "interne levering",
+      route: "Bus B",
+      tags: ["winkel", "intern"],
+      note: "Laatste vaste winkelstop.",
+    },
+    {
+      id: "CB-011",
+      time: "10:30",
+      customer: "Van der Valk",
+      address: "Lent",
+      route: "Bus B",
+      tags: ["extern"],
+      value: 185,
+      note: "Na Lent logisch meenemen.",
+    },
+    {
+      id: "CB-012",
+      time: "10:45",
+      customer: "HAN",
+      address: "Kapittelweg",
+      route: "Bus A",
+      tags: ["campus"],
+      value: 156,
+      note: "Combineren met Radboud/Heyendaal.",
+    },
+    {
+      id: "CB-013",
+      time: "11:00",
+      customer: "Gemeente Nijmegen",
+      address: "Centrum",
+      route: "Bus B",
+      tags: ["extern"],
+      value: 225,
+      note: "Centrumrit niet voor Ziekerstraat blokkeren.",
+    },
+    {
+      id: "CB-014",
+      time: "11:15",
+      customer: "Tandartspraktijk",
+      address: "Daalseweg",
+      route: "Bus A",
+      tags: ["extern"],
+      value: 78,
+      note: "Kleine bon, kan met Daalseweg mee.",
+    },
+    {
+      id: "CB-015",
+      time: "11:30",
+      customer: "Bouwbedrijf",
+      address: "Nijmegen west",
+      route: "Check",
+      tags: ["check"],
+      value: 134,
+      note: "Adres checken voor routevastzetting.",
+    },
+    {
+      id: "CB-016",
+      time: "12:00",
+      customer: "Lunchkamer",
+      address: "Centrum",
+      route: "Bus B",
+      tags: ["extern"],
+      value: 96,
+      note: "Bij centrumblok houden.",
+    },
+    {
+      id: "CB-017",
+      time: "12:15",
+      customer: "Kantoororder",
+      address: "Heyendaal",
+      route: "Bus A",
+      tags: ["extern"],
+      value: 146,
+      note: "Past na campusblok.",
+    },
+    {
+      id: "CB-018",
+      time: "12:30",
+      customer: "Particulier",
+      address: "Lent",
+      route: "Bus B",
+      tags: ["extern"],
+      value: 42,
+      note: "Klein, niet apart voor rijden.",
+    },
+    {
+      id: "CB-019",
+      time: "13:00",
+      customer: "Bedrijfscatering",
+      address: "Nijmegen",
+      route: "Check",
+      tags: ["groot", "check"],
+      value: 380,
+      note: "Volume controleren voor tweede ronde.",
+    },
+    {
+      id: "CB-020",
+      time: "13:15",
+      customer: "Jarige klant",
+      address: "Daalseweg buurt",
+      route: "Bus A",
+      tags: ["extern"],
+      value: 64,
+      note: "Breekbaar gebak, bovenop houden.",
+    },
+    {
+      id: "CB-021",
+      time: "13:30",
+      customer: "School",
+      address: "Oost",
+      route: "Bus A",
+      tags: ["extern", "groot"],
+      value: 295,
+      note: "Grote aantallen geven productiedruk.",
+    },
+    {
+      id: "CB-022",
+      time: "14:00",
+      customer: "Receptieorder",
+      address: "Centrum",
+      route: "Bus B",
+      tags: ["extern"],
+      value: 115,
+      note: "Kan in centrumblok.",
+    },
+    {
+      id: "CB-023",
+      time: "14:30",
+      customer: "Ziekenhuis afdeling",
+      address: "Radboud",
+      route: "Bus A",
+      tags: ["zorg", "extern"],
+      value: 236,
+      note: "Niet vergeten bij ochtend-campus.",
+    },
+    {
+      id: "CB-024",
+      time: "15:00",
+      customer: "Bruidsproeverij",
+      address: "Ziekerstraat",
+      route: "Bus B",
+      tags: ["extern", "check"],
+      value: 210,
+      note: "Presentatie netjes apart houden.",
+    },
+    {
+      id: "CB-025",
+      time: "15:30",
+      customer: "Laatste losse bon",
+      address: "Nijmegen",
+      route: "Check",
+      tags: ["check"],
+      value: 61,
+      note: "Alleen meenemen als route logisch blijft.",
+    },
+  ];
+
+  const visibleReceipts = sharedReceipts.slice(0, plan.orderCount);
+
+  if (plan.isFuture) {
+    return visibleReceipts.map((receipt, index) => ({
+      ...receipt,
+      id: `P-${String(index + 1).padStart(3, "0")}`,
+      note: receipt.tags.includes("intern")
+        ? receipt.note
+        : "Prognosebon, definitieve aantallen na 22:00.",
+    }));
+  }
+
+  return visibleReceipts;
+}
+
 function learningSignalsFor(feedback: string) {
   const text = feedback.toLowerCase();
   const signals: string[] = [];
@@ -374,6 +648,7 @@ export default function BakkerijLogistiekDashboard() {
   const attentionItems = useMemo(() => buildAttentionItems(selectedPlan), [selectedPlan]);
   const routeRounds = useMemo(() => buildRouteRounds(selectedPlan), [selectedPlan]);
   const orderClusters = useMemo(() => buildOrderClusters(selectedPlan), [selectedPlan]);
+  const receiptSummaries = useMemo(() => buildReceiptSummaries(selectedPlan), [selectedPlan]);
   const feedback = feedbackByDate[selectedPlan.date] || "";
   const learningSignals = useMemo(() => learningSignalsFor(feedback), [feedback]);
 
@@ -573,7 +848,11 @@ export default function BakkerijLogistiekDashboard() {
         )}
         {activeTab === "routes" && <RoutesPanel routeRounds={routeRounds} />}
         {activeTab === "bonnen" && (
-          <OrdersPanel orderClusters={orderClusters} selectedPlan={selectedPlan} />
+          <OrdersPanel
+            orderClusters={orderClusters}
+            receiptSummaries={receiptSummaries}
+            selectedPlan={selectedPlan}
+          />
         )}
         {activeTab === "leren" && (
           <LearningPanel
@@ -697,52 +976,118 @@ function RoutesPanel({
 
 function OrdersPanel({
   orderClusters,
+  receiptSummaries,
   selectedPlan,
-}: Readonly<{ orderClusters: OrderCluster[]; selectedPlan: DayPlan }>) {
+}: Readonly<{
+  orderClusters: OrderCluster[];
+  receiptSummaries: ReceiptSummary[];
+  selectedPlan: DayPlan;
+}>) {
   return (
-    <section className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
-          Bonnen compact
-        </h2>
-        <span className="w-fit border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-xs font-black tracking-normal text-[#6b645b]">
-          {selectedPlan.title}
-        </span>
-      </div>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[46rem] border-collapse text-left">
-          <thead>
-            <tr className="border-b border-[#e8e4de] text-xs font-black uppercase tracking-normal text-[#6b645b]">
-              <th className="py-2 pr-3">Cluster</th>
-              <th className="px-3 py-2">Aantal</th>
-              <th className="px-3 py-2">Route</th>
-              <th className="py-2 pl-3">Signaal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orderClusters.map((cluster) => (
-              <tr
-                key={cluster.title}
-                className="border-b border-[#efe7dd] last:border-b-0"
-              >
-                <td className="py-2 pr-3 text-sm font-black tracking-normal text-[#1a1815]">
-                  {cluster.title}
-                </td>
-                <td className="px-3 py-2 text-sm font-bold tracking-normal text-[#4a4540]">
-                  {cluster.count}
-                </td>
-                <td className="px-3 py-2 text-sm tracking-normal text-[#4a4540]">
-                  {cluster.route}
-                </td>
-                <td className="py-2 pl-3 text-sm tracking-normal text-[#6b645b]">
-                  {cluster.signal}
-                </td>
-              </tr>
+    <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.52fr)]">
+      <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
+            Bonnen
+          </h2>
+          <span className="w-fit border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-xs font-black tracking-normal text-[#6b645b]">
+            {selectedPlan.title} · {receiptSummaries.length}
+          </span>
+        </div>
+        <div className="mt-3 h-[28rem] overflow-y-auto pr-1">
+          <div className="grid gap-1.5">
+            {receiptSummaries.map((receipt, index) => (
+              <ReceiptRow
+                key={receipt.id}
+                index={index}
+                receipt={receipt}
+              />
             ))}
-          </tbody>
-        </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
+        <h2 className="text-lg font-black tracking-normal text-[#1a1815]">
+          Clusters
+        </h2>
+        <div className="mt-3 grid gap-2">
+          {orderClusters.map((cluster) => (
+            <div
+              key={cluster.title}
+              className="border-t border-[#efe7dd] pt-2 first:border-t-0 first:pt-0"
+            >
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-black tracking-normal text-[#1a1815]">
+                  {cluster.title}
+                </span>
+                <span className="shrink-0 text-sm font-black tracking-normal text-[#6b645b]">
+                  {cluster.count}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs font-bold leading-snug tracking-normal text-[#4a4540]">
+                {cluster.route}
+              </p>
+              <p className="mt-0.5 text-xs leading-snug tracking-normal text-[#8b8278]">
+                {cluster.signal}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
+  );
+}
+
+function ReceiptRow({
+  index,
+  receipt,
+}: Readonly<{ index: number; receipt: ReceiptSummary }>) {
+  return (
+    <article className="grid grid-cols-[2.3rem_minmax(0,1fr)] gap-2 border border-[#efe7dd] bg-[#faf8f5] p-2">
+      <span className="flex h-8 w-8 items-center justify-center bg-[#1a1815] text-xs font-black tabular-nums tracking-normal text-white">
+        {index + 1}
+      </span>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-black tracking-normal text-[#1a1815]">
+              {receipt.customer}
+            </p>
+            <p className="truncate text-xs font-bold tracking-normal text-[#6b645b]">
+              {receipt.time} · {receipt.address}
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-xs font-black tracking-normal text-[#1a1815]">
+              {receipt.route}
+            </p>
+            {receipt.value ? (
+              <p className="text-xs font-bold tracking-normal text-[#6b645b]">
+                {formatCurrency(receipt.value)}
+              </p>
+            ) : (
+              <p className="text-xs font-bold tracking-normal text-[#8b8278]">
+                intern
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {receipt.tags.map((tag) => (
+            <span
+              key={tag}
+              className="border border-[#e8e4de] bg-white px-1.5 py-0.5 text-[0.65rem] font-black tracking-normal text-[#6b645b]"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+        <p className="mt-1 text-xs leading-snug tracking-normal text-[#4a4540]">
+          {receipt.note}
+        </p>
+      </div>
+    </article>
   );
 }
 
