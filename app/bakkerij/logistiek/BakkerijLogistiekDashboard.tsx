@@ -58,9 +58,27 @@ type RouteRound = {
   departure: string;
   badge: string;
   tone: string;
-  stops: string[];
+  stops: RouteStop[];
   reason: string;
   load: string;
+};
+
+type RouteStop = {
+  id: string;
+  label: string;
+  detail: string;
+  badges: string[];
+};
+
+type RouteBucket = "oost" | "centrum" | "buiten" | "check";
+
+type DayLoadProfile = {
+  pressure: string;
+  deliveryReceipts: number;
+  deliveryStops: number;
+  largeReceipts: number;
+  pastryUnits: number;
+  criticalReceipts: number;
 };
 
 type ReceiptLine = LogisticsReceiptLine;
@@ -218,7 +236,13 @@ function buildDayPlan(
           : "historie";
 
   const isFuture = selectedDate > today;
-  const iceTubs = importedBatch ? importedBatch.iceTubs : isTomorrow ? 18 : 34;
+  const iceTubs = importedBatch
+    ? importedBatch.iceTubs
+    : isTomorrow
+      ? 18
+      : isToday
+        ? 34
+        : 0;
   const orderValue = importedBatch
     ? importedBatch.orderValue
     : isTomorrow
@@ -283,7 +307,7 @@ function batchLabelFor(status: BatchStatus) {
   return "Nog niet";
 }
 
-function buildStats(plan: DayPlan) {
+function buildStats(plan: DayPlan, loadProfile: DayLoadProfile) {
   return [
     {
       label: "Bonwaarde",
@@ -296,7 +320,7 @@ function buildStats(plan: DayPlan) {
     },
     {
       label: "Drukte",
-      value: plan.orderPressure,
+      value: loadProfile.pressure,
     },
   ];
 }
@@ -457,52 +481,414 @@ function imageHasReceiptMatch(
   return receipts.some((receipt) => imageMatchesReceipt(image, receipt));
 }
 
-function buildRouteRounds(plan: DayPlan): RouteRound[] {
+function receiptSearchText(receipt: ReceiptSummary) {
   return [
-    {
-      id: "bus-a",
-      title: "Oost spoed",
-      vehicle: "Bus A",
-      departure: plan.isFuture ? "advies" : "07:40",
-      badge: "eerst weg",
-      tone: "border-[#d6e5d8] bg-[#f6faf4]",
-      stops: [
-        "Winkel Heyendaalseweg",
-        "Winkel Daalseweg",
-        "Sint Maartenskliniek",
-        "Radboud",
-      ],
-      reason: "Afhaal 08:00 en zorg/Radboud vensters rond 09:00.",
-      load: "Tijdkritisch vooraan; winkelvoorraad per stop bij elkaar.",
-    },
-    {
-      id: "bus-b",
-      title: "Centrum noord",
-      vehicle: "Bus B",
-      departure: plan.isFuture ? "advies" : "07:40",
-      badge: "lucht houden",
-      tone: "border-[#eadb8b] bg-[#fff8d8]",
-      stops: ["Winkel Ziekerstraat", "Winkel Lent", "Sanadome"],
-      reason: "Winkels eerst lossen; alleen extreem vroege klantbonnen gaan ervoor.",
-      load: "Winkelbakken direct bereikbaar; grote gebaksbon erachter compact houden.",
-    },
-    {
-      id: "ijs",
-      title: "IJsronde",
-      vehicle: "Ronde 2",
-      departure: plan.isFuture ? "beslissen" : "09:45",
-      badge: `${plan.tempexBoxes} tempex`,
-      tone: "border-[#efc7b8] bg-[#fff3ed]",
-      stops: [
-        "Heyendaalseweg ijs",
-        "Daalseweg ijs",
-        "Ziekerstraat ijs",
-        "Lent ijs",
-      ],
-      reason: "IJs neemt volume en koeling; apart beoordelen.",
-      load: `${plan.iceTubs} bakken ijs = ${plan.tempexBoxes} zwarte tempexbakken.`,
-    },
+    receipt.customer,
+    receipt.address,
+    receipt.deliveryAddress,
+    receipt.alternativeAddress || "",
+    receipt.customerNote,
+    receipt.internalNote,
+    receipt.note,
+    receipt.tags.join(" "),
+    receipt.lines.map((line) => `${line.quantity} ${line.description}`).join(" "),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function numericQuantity(value: string) {
+  const parsed = Number.parseFloat(value.replace(",", ".").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isInternalReceiptSummary(receipt: ReceiptSummary) {
+  return receipt.tags.includes("intern") || receipt.tags.includes("winkel");
+}
+
+function isIceReceiptSummary(receipt: ReceiptSummary) {
+  return receipt.tags.includes("ijs") || /ijs|ijstaart/i.test(receiptSearchText(receipt));
+}
+
+function isShopReceipt(receipt: ReceiptSummary) {
+  return receipt.tags.includes("winkel") || /^winkel\b/i.test(receipt.customer);
+}
+
+function shopKeyForText(value: string) {
+  const text = value.toLowerCase();
+  if (text.includes("heyendaalseweg") || text.includes("heyendaal")) {
+    return "heyendaalseweg";
+  }
+  if (text.includes("daalseweg")) return "daalseweg";
+  if (text.includes("ziekerstraat")) return "ziekerstraat";
+  if (text.includes("lent")) return "lent";
+
+  return "";
+}
+
+function shopKeyForReceipt(receipt: ReceiptSummary) {
+  return shopKeyForText(
+    [
+      receipt.customer,
+      receipt.address,
+      receipt.deliveryAddress,
+      receipt.alternativeAddress || "",
+      receipt.pickupLocation || "",
+      receipt.customerNote,
+      receipt.internalNote,
+    ].join(" ")
+  );
+}
+
+function shopLabelForKey(key: string) {
+  if (key === "heyendaalseweg") return "Winkel Heyendaalseweg";
+  if (key === "daalseweg") return "Winkel Daalseweg";
+  if (key === "ziekerstraat") return "Winkel Ziekerstraat";
+  if (key === "lent") return "Winkel Lent";
+
+  return "Winkel";
+}
+
+function firstTimeMinutes(receipt: ReceiptSummary) {
+  const match = receipt.time.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (!match) return 9999;
+
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function hasExplicitEarlyInstruction(receipt: ReceiptSummary) {
+  return /extra vroeg|voor winkelopening|voor opening|v[oó]or 8|v[oó]or 08|07:\d{2}/i.test(
+    receiptSearchText(receipt)
+  );
+}
+
+function isRouteDelivery(receipt: ReceiptSummary) {
+  if (isInternalReceiptSummary(receipt) || isIceReceiptSummary(receipt)) return false;
+  return receiptFulfillment(receipt) !== "afhalen";
+}
+
+function isEarlyException(receipt: ReceiptSummary) {
+  return isRouteDelivery(receipt) && hasExplicitEarlyInstruction(receipt);
+}
+
+function receiptPastryUnits(receipt: ReceiptSummary) {
+  return receipt.lines.reduce((total, line) => {
+    if (!/gebak|petit|taart|vlaai|tompouce|soes|cake/i.test(line.description)) {
+      return total;
+    }
+
+    return total + numericQuantity(line.quantity);
+  }, 0);
+}
+
+function isLargeReceipt(receipt: ReceiptSummary) {
+  return (
+    receipt.tags.includes("groot") ||
+    receiptPastryUnits(receipt) >= 30 ||
+    receipt.lines.some((line) => numericQuantity(line.quantity) >= 30)
+  );
+}
+
+function isCriticalReceipt(receipt: ReceiptSummary) {
+  return (
+    firstTimeMinutes(receipt) < 600 ||
+    receipt.tags.includes("zorg") ||
+    receipt.tags.some((tag) => tag.startsWith("levering ")) ||
+    hasExplicitEarlyInstruction(receipt)
+  );
+}
+
+function deliveryBucketFor(receipt: ReceiptSummary): RouteBucket {
+  const text = receiptSearchText(receipt);
+
+  if (
+    /thermen|berendonck|jonkerbos|crematorium|sanadome|wijchen|beuningen|goffert|cwz/.test(
+      text
+    )
+  ) {
+    return "buiten";
+  }
+  if (
+    /radboud|heyendaal|heyendaalseweg|han\b|kapittelweg|geert groote|maartenskliniek|brakkenstein|oost/.test(
+      text
+    )
+  ) {
+    return "oost";
+  }
+  if (/ziekerstraat|centrum|lent|waalkade|oosterhout|bemmel|elst|arnhem/.test(text)) {
+    return "centrum";
+  }
+  if (/daalseweg|berg en dal|beek|ubbergen|groesbeek|malden|molenhoek/.test(text)) {
+    return "oost";
+  }
+
+  return "check";
+}
+
+function receiptStopBadges(receipt: ReceiptSummary) {
+  const badges: string[] = [];
+  const fulfillment = receiptFulfillment(receipt);
+
+  if (fulfillment === "afhalen") badges.push("afhaal");
+  if (isLargeReceipt(receipt)) badges.push("groot");
+  if (isCriticalReceipt(receipt)) badges.push("tijd");
+  if (receipt.tags.includes("zorg")) badges.push("zorg");
+  if (receipt.value) badges.push(formatCurrency(receipt.value));
+
+  return badges.slice(0, 3);
+}
+
+function routeStopForReceipt(receipt: ReceiptSummary, prefix = ""): RouteStop {
+  const target = receiptTargetLine(receipt);
+  const time = receipt.time === "Geen tijd" ? "tijd check" : receipt.time;
+
+  return {
+    id: `${prefix}${receipt.id}`,
+    label: receipt.customer,
+    detail: `${time} · ${target}`,
+    badges: receiptStopBadges(receipt),
+  };
+}
+
+function groupShopStops(
+  receipts: ReceiptSummary[],
+  shopKeys: string[]
+): RouteStop[] {
+  return shopKeys
+    .map((shopKey) => {
+      const shopReceipts = receipts.filter(
+        (receipt) => isShopReceipt(receipt) && shopKeyForReceipt(receipt) === shopKey
+      );
+      const pickupReceipts = receipts.filter(
+        (receipt) =>
+          receiptFulfillment(receipt) === "afhalen" &&
+          shopKeyForReceipt(receipt) === shopKey
+      );
+
+      if (!shopReceipts.length && !pickupReceipts.length) return null;
+
+      const detailParts = [];
+      if (shopReceipts.length) detailParts.push(`${shopReceipts.length} winkelbon`);
+      if (pickupReceipts.length) detailParts.push(`${pickupReceipts.length} afhaal`);
+
+      return {
+        id: `shop-${shopKey}`,
+        label: shopLabelForKey(shopKey),
+        detail: detailParts.join(" · "),
+        badges: ["winkel"],
+      };
+    })
+    .filter((stop): stop is RouteStop => Boolean(stop));
+}
+
+function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
+  return [...receipts].sort((first, second) => {
+    const largeCompare = Number(isLargeReceipt(second)) - Number(isLargeReceipt(first));
+    if (largeCompare !== 0) return largeCompare;
+
+    const criticalCompare =
+      Number(isCriticalReceipt(second)) - Number(isCriticalReceipt(first));
+    if (criticalCompare !== 0) return criticalCompare;
+
+    return firstTimeMinutes(first) - firstTimeMinutes(second);
+  });
+}
+
+function deliveryStopsForBucket(
+  receipts: ReceiptSummary[],
+  bucket: RouteBucket
+): RouteStop[] {
+  return sortDeliveryReceipts(
+    receipts.filter((receipt) => deliveryBucketFor(receipt) === bucket)
+  ).map((receipt) => routeStopForReceipt(receipt));
+}
+
+function buildDayLoadProfile(plan: DayPlan, receipts: ReceiptSummary[]): DayLoadProfile {
+  const deliveryReceipts = receipts.filter(isRouteDelivery);
+  const deliveryStops = new Set(
+    deliveryReceipts.map((receipt) => normalizeMatchText(receiptTargetLine(receipt)))
+  ).size;
+  const largeReceipts = receipts.filter(isLargeReceipt).length;
+  const pastryUnits = receipts.reduce(
+    (total, receipt) => total + receiptPastryUnits(receipt),
+    0
+  );
+  const criticalReceipts = receipts.filter(isCriticalReceipt).length;
+  const score =
+    deliveryReceipts.length * 1.2 +
+    deliveryStops * 0.9 +
+    largeReceipts * 4 +
+    criticalReceipts * 1.4 +
+    Math.floor(pastryUnits / 45) +
+    Math.floor(plan.iceTubs / 9) +
+    Math.floor(plan.orderValue / 900);
+  const pressure = score >= 32 ? "hoog" : score >= 17 ? "middel" : "laag";
+
+  return {
+    pressure,
+    deliveryReceipts: deliveryReceipts.length,
+    deliveryStops,
+    largeReceipts,
+    pastryUnits,
+    criticalReceipts,
+  };
+}
+
+function routeBadgeFor(stopCount: number, loadProfile: DayLoadProfile) {
+  if (stopCount === 0) return "geen stops";
+  if (loadProfile.pressure === "hoog") return `${stopCount} stops · strak`;
+
+  return `${stopCount} stops`;
+}
+
+function buildRouteRound(input: {
+  id: string;
+  title: string;
+  vehicle: string;
+  departure: string;
+  tone: string;
+  stops: RouteStop[];
+  reason: string;
+  load: string;
+  loadProfile: DayLoadProfile;
+}): RouteRound {
+  return {
+    id: input.id,
+    title: input.title,
+    vehicle: input.vehicle,
+    departure: input.departure,
+    badge: routeBadgeFor(input.stops.length, input.loadProfile),
+    tone: input.tone,
+    stops: input.stops,
+    reason: input.reason,
+    load: input.load,
+  };
+}
+
+function buildRouteRounds(
+  plan: DayPlan,
+  receipts: ReceiptSummary[],
+  loadProfile: DayLoadProfile
+): RouteRound[] {
+  const earlyStops = sortDeliveryReceipts(receipts.filter(isEarlyException)).map(
+    (receipt) => routeStopForReceipt(receipt, "early-")
+  );
+  const regularDeliveries = receipts.filter(
+    (receipt) => isRouteDelivery(receipt) && !isEarlyException(receipt)
+  );
+  const oostStops = [
+    ...groupShopStops(receipts, ["heyendaalseweg", "daalseweg"]),
+    ...deliveryStopsForBucket(regularDeliveries, "oost"),
   ];
+  const centrumStops = [
+    ...groupShopStops(receipts, ["ziekerstraat", "lent"]),
+    ...deliveryStopsForBucket(regularDeliveries, "centrum"),
+  ];
+  const buitenStops = deliveryStopsForBucket(regularDeliveries, "buiten");
+  const checkStops = deliveryStopsForBucket(regularDeliveries, "check");
+  const rounds: RouteRound[] = [];
+
+  if (earlyStops.length) {
+    rounds.push(
+      buildRouteRound({
+        id: "early",
+        title: "Vroeg eerst",
+        vehicle: "Voor winkels",
+        departure: plan.isFuture ? "check" : "voor 08:00",
+        tone: "border-[#efc7b8] bg-[#fff3ed]",
+        stops: earlyStops,
+        reason: "Alleen bonnen met expliciete vroege instructie komen voor de winkels.",
+        load: "Apart klaarzetten; niet laten mengen met de winkelkratten.",
+        loadProfile,
+      })
+    );
+  }
+
+  rounds.push(
+    buildRouteRound({
+      id: "oost",
+      title: "Oost / campus",
+      vehicle: "Bus A",
+      departure: plan.isFuture ? "advies 08:00" : "08:00",
+      tone: "border-[#d6e5d8] bg-[#f6faf4]",
+      stops: oostStops,
+      reason: "Heyendaalseweg en Daalseweg eerst, daarna Radboud/HAN/oost-cluster.",
+      load: `${loadProfile.largeReceipts} grote bonnen totaal; campus en zorgbonnen bovenop houden.`,
+      loadProfile,
+    })
+  );
+
+  rounds.push(
+    buildRouteRound({
+      id: "centrum",
+      title: "Centrum / noord",
+      vehicle: "Bus B",
+      departure: plan.isFuture ? "advies 08:00" : "08:00",
+      tone: "border-[#eadb8b] bg-[#fff8d8]",
+      stops: centrumStops,
+      reason: "Ziekerstraat en Lent eerst, daarna centrum/noord logisch afwerken.",
+      load: "Winkelvoorraad eerst bereikbaar; afhaalbonnen blijven bij de juiste winkel.",
+      loadProfile,
+    })
+  );
+
+  if (buitenStops.length) {
+    rounds.push(
+      buildRouteRound({
+        id: "buiten",
+        title: "Buiten / Jonkerbos",
+        vehicle: "Ronde 1 of 2",
+        departure: plan.isFuture ? "beslissen" : "na winkels",
+        tone: "border-[#efc7b8] bg-[#fff3ed]",
+        stops: buitenStops,
+        reason:
+          "Thermen/Berendonck/Jonkerbos/Sanadome staan apart, zodat ze niet verdwijnen in stadsroute.",
+        load: "Combineer met de bus die na de winkelstops het meeste lucht heeft.",
+        loadProfile,
+      })
+    );
+  }
+
+  if (checkStops.length) {
+    rounds.push(
+      buildRouteRound({
+        id: "check",
+        title: "Routecheck",
+        vehicle: "Handmatig",
+        departure: "controleren",
+        tone: "border-[#e8e4de] bg-[#faf8f5]",
+        stops: checkStops,
+        reason: "Deze bonnen hebben nog te weinig adres/gebied-signaal.",
+        load: "Adres controleren en daarna naar de dichtstbijzijnde route slepen.",
+        loadProfile,
+      })
+    );
+  }
+
+  if (plan.iceTubs > 0) {
+    rounds.push(
+      buildRouteRound({
+        id: "ijs",
+        title: "IJsronde",
+        vehicle: "Ronde 2",
+        departure: plan.isFuture ? "beslissen" : "09:45",
+        tone: "border-[#efc7b8] bg-[#fff3ed]",
+        stops: [
+          {
+            id: "ijs-shops",
+            label: "Winkels ijs",
+            detail: `${plan.iceTubs} bakken ijs · ${plan.tempexBoxes} zwarte tempexbakken`,
+            badges: ["ijs", `${plan.tempexBoxes} tempex`],
+          },
+        ],
+        reason: "IJs neemt volume en koeling; meestal niet in ronde 1 mengen.",
+        load: `${plan.iceTubs} ijsbakken per 3 in een zwarte tempexbak.`,
+        loadProfile,
+      })
+    );
+  }
+
+  return rounds.filter((round) => round.stops.length > 0);
 }
 
 function buildReceiptLines(receipt: ReceiptSeed, plan: DayPlan): ReceiptLine[] {
@@ -971,11 +1357,21 @@ export default function BakkerijLogistiekDashboard() {
     () => buildDayPlan(dateState, fileSnapshot, activeImportedBatch),
     [dateState, fileSnapshot, activeImportedBatch]
   );
-  const stats = useMemo(() => buildStats(selectedPlan), [selectedPlan]);
-  const routeRounds = useMemo(() => buildRouteRounds(selectedPlan), [selectedPlan]);
   const receiptSummaries = useMemo(
     () => buildReceiptSummaries(selectedPlan, activeImportedBatch),
     [selectedPlan, activeImportedBatch]
+  );
+  const loadProfile = useMemo(
+    () => buildDayLoadProfile(selectedPlan, receiptSummaries),
+    [selectedPlan, receiptSummaries]
+  );
+  const stats = useMemo(
+    () => buildStats(selectedPlan, loadProfile),
+    [loadProfile, selectedPlan]
+  );
+  const routeRounds = useMemo(
+    () => buildRouteRounds(selectedPlan, receiptSummaries, loadProfile),
+    [loadProfile, receiptSummaries, selectedPlan]
   );
   const feedback = feedbackByDate[selectedPlan.date] || "";
   const learningSignals = useMemo(() => learningSignalsFor(feedback), [feedback]);
@@ -1295,7 +1691,7 @@ function RoutesPanel({
   routeRounds,
 }: Readonly<{ routeRounds: RouteRound[] }>) {
   return (
-    <section className="grid gap-3 lg:grid-cols-3">
+    <section className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
       {routeRounds.map((route) => (
         <article
           key={route.id}
@@ -1317,14 +1713,31 @@ function RoutesPanel({
           <ol className="mt-3 grid gap-1.5">
             {route.stops.map((stop, index) => (
               <li
-                key={stop}
-                className="grid grid-cols-[1.7rem_minmax(0,1fr)] items-center gap-2 border border-white/80 bg-white/85 px-2 py-1.5"
+                key={stop.id}
+                className="grid grid-cols-[1.7rem_minmax(0,1fr)] gap-2 border border-white/80 bg-white/85 px-2 py-1.5"
               >
                 <span className="flex h-6 w-6 items-center justify-center bg-[#1a1815] text-xs font-black tabular-nums tracking-normal text-white">
                   {index + 1}
                 </span>
-                <span className="truncate text-sm font-black tracking-normal text-[#1a1815]">
-                  {stop}
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-black tracking-normal text-[#1a1815]">
+                    {stop.label}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#6b645b]">
+                    {stop.detail}
+                  </span>
+                  {stop.badges.length > 0 && (
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {stop.badges.map((badge) => (
+                        <span
+                          key={`${stop.id}-${badge}`}
+                          className="border border-[#e8e4de] bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]"
+                        >
+                          {badge}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </span>
               </li>
             ))}
