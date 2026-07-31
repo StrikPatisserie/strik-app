@@ -666,10 +666,30 @@ function timeLooksLikePhotoTimestamp(receipt: ReceiptSummary, time: string) {
   return /\.(?:jpe?g|png|webp)\b/i.test(haystack) && haystack.includes(dotted);
 }
 
+function hasValidClockTimes(value: string) {
+  const matches = [...value.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
+  if (!matches.length) return false;
+
+  return matches.every((match) => {
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+
+    return (
+      Number.isInteger(hour) &&
+      Number.isInteger(minute) &&
+      hour >= 0 &&
+      hour <= 23 &&
+      minute >= 0 &&
+      minute <= 59
+    );
+  });
+}
+
 function receiptOperationalTime(receipt: ReceiptSummary) {
   const time = receipt.time.trim();
   if (!time || /^geen tijd$/i.test(time)) return "";
   if (timeLooksLikePhotoTimestamp(receipt, time)) return "";
+  if (!hasValidClockTimes(time)) return "";
 
   return time;
 }
@@ -972,11 +992,14 @@ function cleanProductOptionCandidate(value: string) {
 function isPriceOnlyReceiptDescription(value: string) {
   const description = normalizedLineDescription(value).replace(/^eur\s+/, "€ ");
 
-  return /^€?\s*[\d.,]*\s*€?$/.test(description) && /[€\d]/.test(description);
+  return /^€?\s*[\d.,:]*\s*€?$/.test(description) && /[€\d]/.test(description);
 }
 
 function parseReceiptMoneyText(value: string) {
-  const clean = value.replace(/[^\d,.-]/g, "").trim();
+  const clean = value
+    .replace(/(\d):(\d{2})(?!\d)/g, "$1,$2")
+    .replace(/[^\d,.-]/g, "")
+    .trim();
   if (!clean) return undefined;
 
   const normalized = clean.includes(",")
@@ -990,14 +1013,14 @@ function parseReceiptMoneyText(value: string) {
 function cleanReceiptLineDescription(value: string) {
   return cleanProductOptionCandidate(value)
     .replace(
-      /\s+€\s*[\d.,]+(?:\s+€\s*[\d.,]+|\s+\d+(?:[.,]\d+)?)*.*$/i,
+      /\s+€\s*[\d.,:]+(?:\s+€\s*[\d.,:]+|\s+\d+(?:[.,]\d+)?)*.*$/i,
       ""
     )
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
     .replace(/^€\s*$/g, "")
-    .replace(/\s+(?:€\s*)?[\d.,]+\s*$/g, "")
+    .replace(/\s+(?:€\s*)?[\d.,:]+\s*$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -1007,18 +1030,33 @@ function textOptionContinuationFromNote(value: string, quantity: string) {
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
-    .replace(/(?:€\s*)?[\d.,]+\s*€/g, " ")
-    .replace(/€\s*[\d.,]+/g, " ")
-    .replace(/&euro;\s*[\d.,]+/g, " ")
+    .replace(/(?:€\s*)?[\d.,:]+\s*€/g, " ")
+    .replace(/€\s*[\d.,:]+/g, " ")
+    .replace(/&euro;\s*[\d.,:]+/g, " ")
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
   const quantityText = quantity.replace(/[^\d]/g, "");
   const explicit = clean.match(/\b(\d{1,2}\s+jaar!?)\b/i);
   if (explicit) return explicit[1];
-  if (quantityText && /\bjaar!?/i.test(clean)) return `${quantityText} jaar!`;
+  if (quantityText && quantityText !== "1" && /\bjaar!?/i.test(clean)) {
+    return `${quantityText} jaar!`;
+  }
 
   return "";
+}
+
+function receiptTextContinuationSource(receipt: ReceiptSummary) {
+  return [
+    receipt.customerNote,
+    receipt.note,
+    receipt.internalNote,
+    ...receipt.lines.map((line) =>
+      [line.quantity, line.description, line.note || ""].filter(Boolean).join(" ")
+    ),
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function receiptLineIdentity(line: ReceiptLine) {
@@ -1077,10 +1115,10 @@ function pushUniqueReceiptLine(target: ReceiptLine[], line: ReceiptLine) {
 function recoveredReceiptLinesFromNote(value: string) {
   const lines: ReceiptLine[] = [];
   const patterns = [
-    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)[^€]{4,180})\s+€\s*([\d.,]+)/gi,
-    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:petit\s+four)[^€]{4,180})\s+€\s*([\d.,]+)/gi,
-    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?\s*[^€]{1,180})\s+€\s*([\d.,]+)/gi,
-    /(?:€\s*[\d.,]+\s+)+((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?\s*.+?)\s+(\d+(?:[.,]\d+)?)\b/gi,
+    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)[^€]{4,180})\s+€\s*([\d.,:]+)/gi,
+    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:petit\s+four)[^€]{4,180})\s+€\s*([\d.,:]+)/gi,
+    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?\s*[^€]{1,180})\s+€\s*([\d.,:]+)/gi,
+    /(?:€\s*[\d.,:]+\s+)+((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?\s*.+?)\s+(\d+(?:[.,]\d+)?)\b/gi,
   ];
 
   patterns.slice(0, 3).forEach((pattern) => {
@@ -1113,7 +1151,7 @@ function recoveredReceiptLinesFromNote(value: string) {
 function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
   const lines: ReceiptLine[] = [];
   let fallbackQuantity = "1";
-  const sourceNote = receipt.customerNote || "";
+  const sourceText = receiptTextContinuationSource(receipt);
 
   recoveredReceiptLinesFromNote(receipt.customerNote || "").forEach((line) =>
     pushUniqueReceiptLine(lines, line)
@@ -1157,7 +1195,7 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
         !/\bjaar\b/i.test(normalizedLine.description)
       ) {
         const continuation = textOptionContinuationFromNote(
-          sourceNote,
+          sourceText,
           normalizedLine.quantity
         );
 
@@ -4067,7 +4105,7 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
   lineDescriptions.forEach((description) => {
     clean = clean.replace(
       new RegExp(
-        `(?:\\d+(?:[.,]\\d+)?\\s+)?${escapeRegExp(description)}\\s*(?:€\\s*[\\d.,]+\\s*){0,2}(?:\\d+(?:[.,]\\d+)?\\s*)?`,
+        `(?:\\d+(?:[.,]\\d+)?\\s+)?${escapeRegExp(description)}\\s*(?:€\\s*[\\d.,:]+\\s*){0,2}(?:\\d+(?:[.,]\\d+)?\\s*)?`,
         "gi"
       ),
       " "
@@ -4076,22 +4114,22 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
 
   const cleaned = clean
     .replace(
-      /\b(?:\d+(?:[.,]\d+)?\s+)?(?:(?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)|petit\s+four)[^€]{4,180}\s+€\s*[\d.,]+(?:\s+\d+(?:[.,]\d+)?\s+€\s*[\d.,]+(?:\s+€\s*[\d.,]+)*)?/gi,
+      /\b(?:\d+(?:[.,]\d+)?\s+)?(?:(?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)|petit\s+four)[^€]{4,180}\s+€\s*[\d.,:]+(?:\s+\d+(?:[.,]\d+)?\s+€\s*[\d.,:]+(?:\s+€\s*[\d.,:]+)*)?/gi,
       ""
     )
     .replace(
-      /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:.*?(?=\s+(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:|\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,]+\s+met referentie)\b|$)/gi,
+      /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:.*?(?=\s+(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:|\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,:]+\s+met referentie)\b|$)/gi,
       ""
     )
-    .replace(/(?:€\s*)?[\d.,]+\s*€/g, "")
-    .replace(/\b(?:\d+(?:[.,]\d+)?\s+)?€\s*[\d.,]+\b/g, "")
+    .replace(/(?:€\s*)?[\d.,:]+\s*€/g, "")
+    .replace(/\b(?:\d+(?:[.,]\d+)?\s+)?€\s*[\d.,:]+\b/g, "")
     .replace(/€+/g, "")
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
     .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
-    .replace(/&euro;\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
-    .replace(/€\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
+    .replace(/&euro;\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
+    .replace(/€\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
     .replace(/[–-]+$/g, "")
     .replace(/\s+/g, " ")

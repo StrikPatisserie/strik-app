@@ -183,7 +183,10 @@ function uniqueLinePush(
 }
 
 function parseDutchNumber(value: string) {
-  const cleaned = value.replace(/[^\d,.-]/g, "").trim();
+  const cleaned = value
+    .replace(/(\d):(\d{2})(?!\d)/g, "$1,$2")
+    .replace(/[^\d,.-]/g, "")
+    .trim();
   if (!cleaned) return undefined;
 
   const normalized = cleaned.includes(",")
@@ -337,6 +340,19 @@ function inferRoute(customer: string, address: string, deliveryAddress: string) 
 function normalizeTimeText(value: string) {
   const [hour = "", minute = ""] = value.replace(".", ":").split(":");
 
+  const hourValue = Number(hour);
+  const minuteValue = Number(minute);
+  if (
+    !Number.isInteger(hourValue) ||
+    !Number.isInteger(minuteValue) ||
+    hourValue < 0 ||
+    hourValue > 23 ||
+    minuteValue < 0 ||
+    minuteValue > 59
+  ) {
+    return "";
+  }
+
   return `${hour.padStart(2, "0")}:${minute}`;
 }
 
@@ -347,7 +363,20 @@ function extractOperationalTime(line: string) {
     /\b(?:tussen|van)\s+(\d{1,2}[:.]\d{2})\s+(?:en|tot|-)\s+(\d{1,2}[:.]\d{2})\b/i
   );
   if (range) {
-    return `${normalizeTimeText(range[1])}-${normalizeTimeText(range[2])}`;
+    const start = normalizeTimeText(range[1]);
+    const end = normalizeTimeText(range[2]);
+
+    return start && end ? `${start}-${end}` : "";
+  }
+
+  const compactRange = line.match(
+    /\b(?:afhaaltijd|bezorgtijd|tijdvak|wordt gehaald|wordt bezorgd)\b.*?(\d{1,2}[:.]\d{2})\s*(?:en|tot|-)\s*(\d{1,2}[:.]\d{2})\b/i
+  );
+  if (compactRange) {
+    const start = normalizeTimeText(compactRange[1]);
+    const end = normalizeTimeText(compactRange[2]);
+
+    return start && end ? `${start}-${end}` : "";
   }
 
   const preferredTime = line.match(
@@ -355,8 +384,7 @@ function extractOperationalTime(line: string) {
   );
   if (preferredTime) return normalizeTimeText(preferredTime[1]);
 
-  const looseTime = line.match(/\b(\d{1,2}[:.]\d{2})\b/);
-  return looseTime ? normalizeTimeText(looseTime[1]) : "";
+  return "";
 }
 
 function inferTime(lines: string[]) {
@@ -391,15 +419,15 @@ function cleanProductOptionDescription(value: string) {
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
-    .replace(/\s+(?:€\s*)?[\d.,]+\s*$/g, "")
+    .replace(/\s+(?:€\s*)?[\d.,:]+\s*$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function isUsableProductDescription(value: string) {
   const clean = value.trim();
-  if (!clean || /^€/.test(clean) || /^[\d.,]+$/.test(clean)) return false;
-  if (/^\d+(?:[.,]\d+)?\s+€\s*[\d.,]+$/.test(clean)) return false;
+  if (!clean || /^€/.test(clean) || /^[\d.,:]+$/.test(clean)) return false;
+  if (/^\d+(?:[.,]\d+)?\s+€\s*[\d.,:]+$/.test(clean)) return false;
   if (/^totaalprijs\b|^btw\b|^factuurkorting\b/i.test(clean)) return false;
   if (/trial mode|click here for more information/i.test(clean)) return false;
   if (/^(?:niet\s+)?betaald\b|^gewenste betaling\b/i.test(clean)) return false;
@@ -512,7 +540,7 @@ function isAdministrativeRemarkLine(line: string) {
     /betaald via\s+\[/i.test(line) ||
     /\bmet referentie\s+\S+/i.test(line) ||
     /^&euro;/i.test(line) ||
-    /^€\s*[\d.,]+\s+met referentie\b/i.test(line)
+    /^€\s*[\d.,:]+\s+met referentie\b/i.test(line)
   );
 }
 
@@ -522,10 +550,10 @@ function cleanReceiptRemark(value: string) {
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
     .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
-    .replace(/&euro;\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
-    .replace(/€\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
-    .replace(/(?:€\s*)?[\d.,]+\s*€/g, " ")
-    .replace(/(?:^|\s)(?:€\s*[\d.,]+\s*){2,}(?=\s|$)/g, " ")
+    .replace(/&euro;\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
+    .replace(/€\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
+    .replace(/(?:€\s*)?[\d.,:]+\s*€/g, " ")
+    .replace(/(?:^|\s)(?:€\s*[\d.,:]+\s*){2,}(?=\s|$)/g, " ")
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
     .replace(/\bgewenste betaling\s*:?\s*betalen bij afhalen\b/gi, "")
     .replace(/\s+/g, " ")
@@ -539,8 +567,8 @@ function isReceiptPaymentBlockLine(line: string) {
     /^btw\b/i.test(line) ||
     /^factuurkorting\b/i.test(line) ||
     /^totaalprijs\s+excl\.?btw\b/i.test(line) ||
-    /^€\s*[\d.,]+\s+totaalprijs\b/i.test(line) ||
-    /^totaalprijs\s+€\s*[\d.,]+/i.test(line)
+    /^€\s*[\d.,:]+\s+totaalprijs\b/i.test(line) ||
+    /^totaalprijs\s+€\s*[\d.,:]+/i.test(line)
   );
 }
 
@@ -679,7 +707,7 @@ function parseProductLine(line: string): LogisticsReceiptLine | null {
     content = line.slice(0, trailingQuantity.index);
   }
 
-  const priceMatches = Array.from(content.matchAll(/€\s*([\d.,]+)/g));
+  const priceMatches = Array.from(content.matchAll(/€\s*([\d.,:]+)/g));
   if (priceMatches.length === 0) return null;
 
   const firstPriceIndex = priceMatches[0].index;
@@ -729,7 +757,7 @@ function parseProductOptionLine(
   line: string,
   fallbackQuantity = "1"
 ): LogisticsReceiptLine | null {
-  const priceMatches = Array.from(line.matchAll(/€\s*([\d.,]+)/g));
+  const priceMatches = Array.from(line.matchAll(/€\s*([\d.,:]+)/g));
   const withUnitPrice = (
     optionLine: LogisticsReceiptLine
   ): LogisticsReceiptLine => {
@@ -776,7 +804,7 @@ function parseProductOptionLine(
     return null;
   };
 
-  const withoutPrices = line.replace(/€\s*[\d.,]+/g, " ");
+  const withoutPrices = line.replace(/€\s*[\d.,:]+/g, " ");
   const firstPriceIndex = priceMatches[0]?.index;
   const candidates = [
     firstPriceIndex === undefined ? line : line.slice(0, firstPriceIndex),
@@ -802,7 +830,7 @@ function findNextProductOptionIndex(value: string, startIndex: number) {
 
 function paymentNoiseIndex(value: string, startIndex: number) {
   const next = value.slice(startIndex).search(
-    /\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,]+\s+met referentie)\b/i
+    /\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,:]+\s+met referentie)\b/i
   );
 
   return next < 0 ? -1 : startIndex + next;
@@ -877,7 +905,7 @@ function shouldAppendProductContinuation(line: string) {
     return false;
   }
 
-  return !/€\s*[\d.,]+/.test(line);
+  return !/€\s*[\d.,:]+/.test(line);
 }
 
 function lineWithoutRepeatedQuantity(line: string, quantity: string) {
@@ -898,7 +926,7 @@ function applyPricedContinuation(
   if (isAdministrativeRemarkLine(rawLine)) return false;
 
   const line = lineWithoutRepeatedQuantity(rawLine, currentLine.quantity);
-  const priceMatches = Array.from(line.matchAll(/€\s*([\d.,]+)/g));
+  const priceMatches = Array.from(line.matchAll(/€\s*([\d.,:]+)/g));
   if (priceMatches.length === 0) return false;
 
   const firstPriceIndex = priceMatches[0].index ?? 0;
@@ -990,15 +1018,15 @@ function parsePage(pageText: string): ParsedPage | null {
     if (isReceiptPaymentBlockLine(line)) {
       productSectionOpen = false;
       const totalMatch =
-        line.match(/^€\s*([\d.,]+)\s+totaalprijs\b/i) ||
-        line.match(/^totaalprijs\s+€\s*([\d.,]+)/i);
+        line.match(/^€\s*([\d.,:]+)\s+totaalprijs\b/i) ||
+        line.match(/^totaalprijs\s+€\s*([\d.,:]+)/i);
       if (totalMatch) total = parseDutchNumber(totalMatch[1]) ?? total;
       continue;
     }
 
     if (pickupLocationFromLine(line) || isFulfillmentLine(line)) continue;
 
-    const standaloneTotal = line.match(/^€\s*([\d.,]+)$/);
+    const standaloneTotal = line.match(/^€\s*([\d.,:]+)$/);
     if (standaloneTotal) {
       if (productSectionOpen && currentLine) {
         applyPricedContinuation(currentLine, line);
