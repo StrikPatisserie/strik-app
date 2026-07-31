@@ -101,6 +101,32 @@ type DayFeedbackSummary = LogisticsDayFeedback;
 type ReceiptOverrideSummary = LogisticsReceiptOverride;
 type WebshopImageSummary = LogisticsWebshopImage;
 
+type MarzipanPrintShape = "square" | "round";
+
+type PhotoProductPlan = {
+  product: string;
+  shape: MarzipanPrintShape;
+  sizeCm: number;
+  copies: number;
+  needsCheck: boolean;
+};
+
+type MarzipanPrintItem = {
+  id: string;
+  photoUrl: string;
+  customerName: string;
+  customerLastName: string;
+  product: string;
+  receiptNumber: string;
+  orderNumber: string;
+  shape: MarzipanPrintShape;
+  sizeCm: number;
+  copyNumber: number;
+  copyTotal: number;
+  confidence: string;
+  needsCheck: boolean;
+};
+
 type ReceiptOverrideDraft = {
   time: string;
   fulfillment: LogisticsFulfillment | "";
@@ -631,6 +657,414 @@ function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
     (/\bslagroom/.test(description) && /taart(?:en)?\b/.test(description));
 
   return isCake && hasLargeCakeSize(description);
+}
+
+function escapeHtml(value: string) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeAttribute(value: string) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function cleanProductLabel(value: string) {
+  return value.replace(/\s+/g, " ").trim() || "Product controleren";
+}
+
+function customerLastNameFor(value: string) {
+  const clean = value
+    .replace(/\b(fam\.?|familie|dhr\.?|mevr\.?|mevrouw|meneer)\b/gi, "")
+    .replace(/[|,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return "Klant";
+
+  const parts = clean.split(" ").filter(Boolean);
+  const last = parts.at(-1) || clean;
+  const before = parts.at(-2)?.toLowerCase() || "";
+  const beforeSecond = parts.at(-3)?.toLowerCase() || "";
+  const particles = ["de", "den", "der", "van", "vd", "ter", "ten", "te"];
+
+  if (
+    parts.length >= 3 &&
+    beforeSecond === "van" &&
+    ["de", "den", "der"].includes(before)
+  ) {
+    return parts.slice(-3).join(" ");
+  }
+  if (particles.includes(before)) return parts.slice(-2).join(" ");
+
+  return last;
+}
+
+function printCopiesForLine(line: ReceiptLine) {
+  const quantity = numericQuantity(line.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) return 1;
+
+  return Math.min(240, Math.max(1, Math.round(quantity)));
+}
+
+function isPhotoSignalLine(line: ReceiptLine) {
+  return /foto|photo|afbeeld|print|logo|plaatje|opdruk/i.test(
+    lineSearchDescription(line)
+  );
+}
+
+function photoProductPlansForReceipt(receipt: ReceiptSummary): PhotoProductPlan[] {
+  const plans: PhotoProductPlan[] = [];
+
+  receipt.lines.forEach((line) => {
+    const description = lineSearchDescription(line);
+    const product = cleanProductLabel(line.description);
+    const copies = printCopiesForLine(line);
+
+    if (
+      isPetitFourLine(line) ||
+      (isPhotoSignalLine(line) && /\bpetit\s*-?\s*fours?\b/.test(description))
+    ) {
+      plans.push({
+        product,
+        shape: "square",
+        sizeCm: 4,
+        copies,
+        needsCheck: false,
+      });
+      return;
+    }
+
+    if (
+      isMarzipanOrCreamCakeLine(line) ||
+      (isPhotoSignalLine(line) &&
+        /taart|marsepein|slagroom/.test(description) &&
+        hasLargeCakeSize(description))
+    ) {
+      plans.push({
+        product,
+        shape: "round",
+        sizeCm: 12,
+        copies,
+        needsCheck: false,
+      });
+    }
+  });
+
+  return plans;
+}
+
+function fallbackPhotoProductPlan(needsCheck = true): PhotoProductPlan {
+  return {
+    product: needsCheck ? "Foto controleren" : "Marsepeinfoto",
+    shape: "round",
+    sizeCm: 12,
+    copies: 1,
+    needsCheck,
+  };
+}
+
+function distributedCopyCount(
+  copies: number,
+  imageIndex: number,
+  imageCount: number
+) {
+  if (imageCount <= 1 || copies <= 1) return copies;
+
+  const base = Math.floor(copies / imageCount);
+  const remainder = copies % imageCount;
+
+  return Math.max(1, base + (imageIndex < remainder ? 1 : 0));
+}
+
+function pushMarzipanPrintCopies(input: {
+  items: MarzipanPrintItem[];
+  image: WebshopImageSummary;
+  plan: PhotoProductPlan;
+  receipt?: ReceiptSummary;
+  copyTotal: number;
+  planIndex: number;
+}) {
+  const customerName =
+    input.image.customerName || input.receipt?.customer || "Klant controleren";
+  const receiptNumber = input.receipt?.receiptNumber || input.receipt?.id || "";
+
+  for (let copy = 1; copy <= input.copyTotal; copy += 1) {
+    input.items.push({
+      id: [
+        receiptNumber || "zonder-bon",
+        input.image.id,
+        input.planIndex,
+        copy,
+      ].join("-"),
+      photoUrl: input.image.photoUrl,
+      customerName,
+      customerLastName: customerLastNameFor(customerName),
+      product: input.plan.product,
+      receiptNumber,
+      orderNumber: input.image.orderNumber,
+      shape: input.plan.shape,
+      sizeCm: input.plan.sizeCm,
+      copyNumber: copy,
+      copyTotal: input.copyTotal,
+      confidence: input.image.confidence,
+      needsCheck: input.plan.needsCheck,
+    });
+  }
+}
+
+function buildMarzipanPrintItems(
+  receipts: ReceiptSummary[],
+  webshopImages: WebshopImageSummary[]
+) {
+  const items: MarzipanPrintItem[] = [];
+
+  receipts.forEach((receipt) => {
+    const matchedImages = imageMatchesForReceipt(receipt, webshopImages);
+    if (matchedImages.length === 0) return;
+
+    const productPlans = photoProductPlansForReceipt(receipt);
+    if (matchedImages.length === 1 && productPlans.length > 1) {
+      productPlans.forEach((plan, planIndex) => {
+        pushMarzipanPrintCopies({
+          items,
+          image: matchedImages[0],
+          plan,
+          receipt,
+          copyTotal: plan.copies,
+          planIndex,
+        });
+      });
+      return;
+    }
+
+    matchedImages.forEach((image, imageIndex) => {
+      const plan =
+        productPlans[Math.min(imageIndex, productPlans.length - 1)] ||
+        fallbackPhotoProductPlan();
+      const copyTotal =
+        productPlans.length === 1
+          ? distributedCopyCount(plan.copies, imageIndex, matchedImages.length)
+          : plan.copies;
+
+      pushMarzipanPrintCopies({
+        items,
+        image,
+        plan,
+        receipt,
+        copyTotal,
+        planIndex: imageIndex,
+      });
+    });
+  });
+
+  webshopImages
+    .filter((image) => !imageHasReceiptMatch(image, receipts))
+    .forEach((image, imageIndex) => {
+      pushMarzipanPrintCopies({
+        items,
+        image,
+        plan: fallbackPhotoProductPlan(),
+        copyTotal: 1,
+        planIndex: imageIndex,
+      });
+    });
+
+  return items;
+}
+
+function marzipanPrintSizeLabel(item: MarzipanPrintItem) {
+  return item.shape === "square" ? "4 cm vierkant" : "12 cm rond";
+}
+
+function createMarzipanPhotoPrintHtml(input: {
+  items: MarzipanPrintItem[];
+  plan: DayPlan;
+}) {
+  const title = `Marsepeinfoto's ${formatDateLabel(input.plan.date)}`;
+  const itemHtml = input.items
+    .map((item) => {
+      const copyLabel =
+        item.copyTotal > 1 ? ` · ${item.copyNumber}/${item.copyTotal}` : "";
+      const sourceLabel = [
+        item.receiptNumber ? `bon ${item.receiptNumber}` : "",
+        item.orderNumber ? `order ${item.orderNumber}` : "",
+        item.needsCheck ? "check" : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      return `
+        <article class="print-item ${item.shape} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${item.sizeCm}cm">
+          <div class="photo-frame">
+            <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}">
+          </div>
+          <div class="label">
+            <strong>${escapeHtml(item.customerLastName)}</strong>
+            <span>${escapeHtml(item.product)}</span>
+            <small>${escapeHtml(marzipanPrintSizeLabel(item))}${escapeHtml(copyLabel)}</small>
+            ${sourceLabel ? `<small>${escapeHtml(sourceLabel)}</small>` : ""}
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  return `<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <title>${escapeHtml(title)}</title>
+    <style>
+      @page { margin: 8mm; size: A4 portrait; }
+      * { box-sizing: border-box; }
+      body {
+        background: #fff;
+        color: #000;
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 0;
+      }
+      .screen-actions {
+        align-items: center;
+        border-bottom: 1px solid #ddd;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+        padding: 10px 12px;
+      }
+      .screen-actions h1 {
+        font-size: 15px;
+        margin: 0;
+      }
+      .screen-actions button {
+        background: #111;
+        border: 0;
+        color: #fff;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 800;
+        padding: 8px 12px;
+      }
+      .sheet-header {
+        align-items: baseline;
+        border-bottom: 1px solid #111;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5mm;
+        padding-bottom: 2mm;
+      }
+      .sheet-header h1 {
+        font-size: 13px;
+        margin: 0;
+      }
+      .sheet-header p {
+        font-size: 9px;
+        font-weight: 700;
+        margin: 0;
+      }
+      .sheet {
+        align-items: flex-start;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5mm;
+      }
+      .print-item {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        width: var(--item-size);
+      }
+      .photo-frame {
+        background: #fff;
+        border: 0.25mm dashed #888;
+        height: var(--item-size);
+        overflow: hidden;
+        width: var(--item-size);
+      }
+      .round .photo-frame {
+        border-radius: 999px;
+      }
+      .photo-frame img {
+        display: block;
+        height: 100%;
+        object-fit: cover;
+        width: 100%;
+      }
+      .label {
+        font-size: 7.5px;
+        line-height: 1.18;
+        margin-top: 1.5mm;
+        overflow-wrap: anywhere;
+      }
+      .label strong,
+      .label span,
+      .label small {
+        display: block;
+      }
+      .label strong {
+        font-size: 8.5px;
+      }
+      .label span {
+        margin-top: 0.6mm;
+      }
+      .label small {
+        color: #444;
+        margin-top: 0.4mm;
+      }
+      .needs-check .photo-frame {
+        border-color: #111;
+        border-style: solid;
+      }
+      @media print {
+        .screen-actions { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen-actions">
+      <h1>${escapeHtml(title)} · ${input.items.length} printstukken</h1>
+      <button type="button" onclick="window.print()">Print</button>
+    </div>
+    <main>
+      <div class="sheet-header">
+        <h1>${escapeHtml(title)}</h1>
+        <p>${input.items.length} printstukken · petit four 4 cm vierkant · taart 12 cm rond</p>
+      </div>
+      <section class="sheet">
+        ${itemHtml}
+      </section>
+    </main>
+    <script>
+      const images = Array.from(document.images);
+      Promise.all(images.map((image) => (
+        image.complete
+          ? Promise.resolve()
+          : new Promise((resolve) => {
+              image.onload = resolve;
+              image.onerror = resolve;
+            })
+      ))).then(() => window.setTimeout(() => window.print(), 250));
+    </script>
+  </body>
+</html>`;
+}
+
+function printMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
+  if (items.length === 0) {
+    window.alert("Geen webshopfoto's gevonden voor deze dag.");
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=1100,height=800");
+  if (!printWindow) {
+    window.alert("Printvenster kon niet geopend worden.");
+    return;
+  }
+
+  printWindow.document.write(createMarzipanPhotoPrintHtml({ items, plan }));
+  printWindow.document.close();
+  printWindow.focus();
 }
 
 function buildBakeryProductionTotals(
@@ -1857,6 +2291,10 @@ export default function BakkerijLogistiekDashboard() {
     () => buildRouteRounds(selectedPlan, receiptSummaries, loadProfile),
     [loadProfile, receiptSummaries, selectedPlan]
   );
+  const marzipanPrintItems = useMemo(
+    () => buildMarzipanPrintItems(receiptSummaries, webshopImages),
+    [receiptSummaries, webshopImages]
+  );
   const feedback = feedbackByDate[selectedPlan.date] || "";
   const learningSignals = useMemo(() => learningSignalsFor(feedback), [feedback]);
   const headerTone = statusToneFor(selectedPlan.status);
@@ -2174,6 +2612,13 @@ export default function BakkerijLogistiekDashboard() {
               disabled={batchLoadState === "loading" || isImporting}
               loading={batchLoadState === "loading"}
               onClick={refreshBatch}
+            />
+            <MarzipanPhotoPrintButton
+              count={marzipanPrintItems.length}
+              disabled={marzipanPrintItems.length === 0}
+              onClick={() =>
+                printMarzipanPhotoSheet(selectedPlan, marzipanPrintItems)
+              }
             />
             <input
               ref={fileInputRef}
@@ -3151,6 +3596,54 @@ function RefreshButton({
     >
       <RefreshIcon spinning={loading} />
     </button>
+  );
+}
+
+function MarzipanPhotoPrintButton({
+  count,
+  disabled,
+  onClick,
+}: Readonly<{
+  count: number;
+  disabled: boolean;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      aria-label="Marsepeinfoto's printen"
+      title="Marsepeinfoto's printen"
+      disabled={disabled}
+      onClick={onClick}
+      className="relative flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <PhotoPrintIcon />
+      {count > 0 && (
+        <span className="absolute -right-1 -top-1 min-w-4 border border-[#1a1815] bg-[#1a1815] px-1 text-center text-[0.56rem] font-black leading-4 tracking-normal text-white">
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function PhotoPrintIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <path d="M6 9V4h12v5" />
+      <path d="M6 18H5a3 3 0 0 1-3-3v-3a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3h-1" />
+      <path d="M7 14h10v6H7z" />
+      <path d="M8.5 17.5 10 16l1.5 1.5 1-1 2 2" />
+    </svg>
   );
 }
 
