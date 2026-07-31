@@ -10,8 +10,8 @@ const BAKEIT_CONTANTBON_CONFIG = {
   MAX_THREADS: 30,
   MAX_PDF_ATTACHMENTS: 4,
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
-  IMPORT_WAVE_BUCKET_MS: 5 * 60 * 1000,
   MIN_MESSAGE_AGE_MS: 60 * 1000,
+  SPLIT_PART_WINDOW_MS: 30 * 60 * 1000,
   IMPORT_VERSION: 'split-mails-v1',
 };
 
@@ -25,6 +25,14 @@ function importBakeItContantbonnen() {
     BAKEIT_CONTANTBON_CONFIG.QUERY,
     0,
     BAKEIT_CONTANTBON_CONFIG.MAX_THREADS
+  );
+  const importRunId = Utilities.getUuid();
+  const waitingGroups = findBakeItWaitingGroups_(threads, props);
+  const importWaveIds = buildBakeItImportWaveIds_(
+    threads,
+    props,
+    waitingGroups,
+    importRunId
   );
 
   threads.forEach((thread) => {
@@ -40,8 +48,8 @@ function importBakeItContantbonnen() {
       }
 
       try {
-        const messageAgeMs = Date.now() - message.getDate().getTime();
-        if (messageAgeMs < BAKEIT_CONTANTBON_CONFIG.MIN_MESSAGE_AGE_MS) {
+        const groupKey = buildBakeItImportGroupKey_(message);
+        if (waitingGroups[groupKey]) {
           logBakeIt_(
             `Bericht is net binnen, wacht op eventuele deelmail: ${message.getSubject()}`
           );
@@ -57,7 +65,12 @@ function importBakeItContantbonnen() {
         }
 
         attachments.forEach((attachment) => {
-          sendBakeItPdfAttachment_(message, attachment);
+          sendBakeItPdfAttachment_(
+            message,
+            attachment,
+            importWaveIds[groupKey] ||
+              buildBakeItImportWaveId_(groupKey, importRunId)
+          );
         });
 
         props.setProperty(importId, new Date().toISOString());
@@ -106,7 +119,7 @@ function getOrCreateBakeItLabel_(name) {
   return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
 }
 
-function sendBakeItPdfAttachment_(message, attachment) {
+function sendBakeItPdfAttachment_(message, attachment, importWaveId) {
   const response = UrlFetchApp.fetch(BAKEIT_CONTANTBON_CONFIG.IMPORT_URL, {
     method: 'post',
     contentType: 'application/json',
@@ -122,7 +135,7 @@ function sendBakeItPdfAttachment_(message, attachment) {
       receivedAt: message.getDate().toISOString(),
       source: 'gmail',
       status: inferBakeItStatus_(message),
-      importWaveId: buildBakeItImportWaveId_(message),
+      importWaveId,
       fileName: attachment.fileName,
       contentType: attachment.contentType,
       attachmentBase64: attachment.attachmentBase64,
@@ -154,14 +167,91 @@ function inferBakeItStatus_(message) {
   return '';
 }
 
-function buildBakeItImportWaveId_(message) {
-  const bucket = Math.round(
-    message.getDate().getTime() / BAKEIT_CONTANTBON_CONFIG.IMPORT_WAVE_BUCKET_MS
-  );
+function findBakeItWaitingGroups_(threads, props) {
+  const waitingGroups = {};
+
+  threads.forEach((thread) => {
+    thread.getMessages().forEach((message) => {
+      const importId = `bakeit-contantbon:${BAKEIT_CONTANTBON_CONFIG.IMPORT_VERSION}:${message.getId()}`;
+      if (props.getProperty(importId)) return;
+
+      const messageAgeMs = Date.now() - message.getDate().getTime();
+      if (messageAgeMs < BAKEIT_CONTANTBON_CONFIG.MIN_MESSAGE_AGE_MS) {
+        waitingGroups[buildBakeItImportGroupKey_(message)] = true;
+      }
+    });
+  });
+
+  return waitingGroups;
+}
+
+function buildBakeItImportWaveIds_(
+  threads,
+  props,
+  waitingGroups,
+  importRunId
+) {
+  const groups = {};
+
+  threads.forEach((thread) => {
+    thread.getMessages().forEach((message) => {
+      const importId = `bakeit-contantbon:${BAKEIT_CONTANTBON_CONFIG.IMPORT_VERSION}:${message.getId()}`;
+      if (props.getProperty(importId)) return;
+
+      const groupKey = buildBakeItImportGroupKey_(message);
+      if (waitingGroups[groupKey]) return;
+
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push(message);
+    });
+  });
+
+  const waveIds = {};
+
+  Object.keys(groups).forEach((groupKey) => {
+    const messages = groups[groupKey].sort(
+      (first, second) => first.getDate().getTime() - second.getDate().getTime()
+    );
+    const firstPart = messages.find(
+      (message) => !isBakeItSecondPart_(message.getSubject())
+    );
+    const storedWave = readBakeItImportWaveState_(props, groupKey);
+    let importWaveId = '';
+
+    if (firstPart) {
+      importWaveId = buildBakeItImportWaveId_(groupKey, importRunId);
+      writeBakeItImportWaveState_(props, groupKey, {
+        importWaveId,
+        startedAt: firstPart.getDate().toISOString(),
+      });
+    } else if (
+      storedWave &&
+      isBakeItStoredWaveUsable_(storedWave, messages[0])
+    ) {
+      importWaveId = storedWave.importWaveId;
+    } else {
+      importWaveId = buildBakeItImportWaveId_(groupKey, importRunId);
+      writeBakeItImportWaveState_(props, groupKey, {
+        importWaveId,
+        startedAt: messages[0].getDate().toISOString(),
+      });
+    }
+
+    waveIds[groupKey] = importWaveId;
+  });
+
+  return waveIds;
+}
+
+function buildBakeItImportWaveId_(groupKey, importRunId) {
+  return `${groupKey}:${importRunId}`;
+}
+
+function buildBakeItImportGroupKey_(message) {
   const subject = normalizeBakeItSubjectForWave_(message.getSubject());
   const status = inferBakeItStatus_(message) || 'auto';
 
-  return `bakeit:${status}:${subject}:${bucket}`;
+  return `bakeit:${status}:${subject}`;
 }
 
 function normalizeBakeItSubjectForWave_(subject) {
@@ -171,6 +261,52 @@ function normalizeBakeItSubjectForWave_(subject) {
     .replace(/\s*\(\d+\)\s*$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function isBakeItSecondPart_(subject) {
+  return /\bemail\s+2\b/i.test(String(subject || ''));
+}
+
+function buildBakeItImportWaveStateKey_(groupKey) {
+  return `bakeit-contantbon-wave:${groupKey}`;
+}
+
+function readBakeItImportWaveState_(props, groupKey) {
+  try {
+    const raw = props.getProperty(buildBakeItImportWaveStateKey_(groupKey));
+    if (!raw) return null;
+
+    const data = JSON.parse(raw);
+    if (
+      data &&
+      typeof data.importWaveId === 'string' &&
+      typeof data.startedAt === 'string'
+    ) {
+      return data;
+    }
+  } catch (error) {
+    console.error(error);
+  }
+
+  return null;
+}
+
+function writeBakeItImportWaveState_(props, groupKey, state) {
+  props.setProperty(
+    buildBakeItImportWaveStateKey_(groupKey),
+    JSON.stringify(state)
+  );
+}
+
+function isBakeItStoredWaveUsable_(storedWave, message) {
+  const startedAt = new Date(storedWave.startedAt).getTime();
+  const receivedAt = message.getDate().getTime();
+
+  return (
+    isFinite(startedAt) &&
+    receivedAt >= startedAt &&
+    receivedAt - startedAt <= BAKEIT_CONTANTBON_CONFIG.SPLIT_PART_WINDOW_MS
+  );
 }
 
 function extractBakeItPdfAttachments_(message) {
