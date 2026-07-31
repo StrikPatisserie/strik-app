@@ -1026,48 +1026,104 @@ function createMarzipanPhotoPrintHtml(input: {
   plan: DayPlan;
 }) {
   const title = `Marsepeinfoto's ${formatDateLabel(input.plan.date)}`;
-  const seenLabelKeys = new Set<string>();
-  const itemHtml = input.items
-    .map((item) => {
-      const labelKey = [
-        item.receiptNumber,
-        item.orderNumber,
-        item.customerLastName,
-        item.product,
-        item.shape,
-        item.photoUrl,
-      ].join("|");
-      const showLabel = item.shape !== "square" || !seenLabelKeys.has(labelKey);
-      seenLabelKeys.add(labelKey);
-      const copyLabel =
-        item.copyTotal > 1 ? ` · ${item.copyTotal}x totaal` : "";
-      const sourceLabel = [
-        item.receiptNumber ? `bon ${item.receiptNumber}` : "",
-        item.orderNumber ? `order ${item.orderNumber}` : "",
-        item.needsCheck ? "check" : "",
+  const squareGroups: {
+    key: string;
+    labelItem: MarzipanPrintItem;
+    items: MarzipanPrintItem[];
+  }[] = [];
+  const squareGroupByKey = new Map<string, (typeof squareGroups)[number]>();
+  const roundItems: MarzipanPrintItem[] = [];
+
+  const labelKeyFor = (item: MarzipanPrintItem) =>
+    [
+      item.receiptNumber,
+      item.orderNumber,
+      item.customerLastName,
+      item.product,
+      item.shape,
+      item.photoUrl,
+    ].join("|");
+
+  input.items.forEach((item) => {
+    if (item.shape !== "square") {
+      roundItems.push(item);
+      return;
+    }
+
+    const labelKey = labelKeyFor(item);
+    const existingGroup = squareGroupByKey.get(labelKey);
+    if (existingGroup) {
+      existingGroup.items.push(item);
+      return;
+    }
+
+    const group = { key: labelKey, labelItem: item, items: [item] };
+    squareGroupByKey.set(labelKey, group);
+    squareGroups.push(group);
+  });
+
+  const sourceLabelFor = (item: MarzipanPrintItem) =>
+    [
+      item.receiptNumber ? `bon ${item.receiptNumber}` : "",
+      item.orderNumber ? `order ${item.orderNumber}` : "",
+      item.needsCheck ? "check" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+  const printItemHtmlFor = (item: MarzipanPrintItem, includeLabel = false) => {
+    const copyLabel = item.copyTotal > 1 ? ` · ${item.copyTotal}x totaal` : "";
+    const sourceLabel = sourceLabelFor(item);
+
+    return `
+      <article class="print-item ${item.shape} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${item.sizeCm}cm">
+        <div class="photo-frame">
+          <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}">
+        </div>
+        ${
+          includeLabel
+            ? `<div class="label">
+                <strong>${escapeHtml(item.customerLastName)}</strong>
+                <span>${escapeHtml(item.product)}</span>
+                <small>${escapeHtml(marzipanPrintSizeLabel(item))}${escapeHtml(copyLabel)}</small>
+                ${sourceLabel ? `<small>${escapeHtml(sourceLabel)}</small>` : ""}
+              </div>`
+            : ""
+        }
+      </article>
+    `;
+  };
+
+  const squareHtml = squareGroups
+    .map((group) => {
+      const detail = [
+        group.labelItem.product,
+        `${group.items.length}x`,
+        group.labelItem.needsCheck ? "check" : "",
       ]
         .filter(Boolean)
         .join(" · ");
 
       return `
-        <article class="print-item ${item.shape} ${showLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${item.sizeCm}cm">
-          <div class="photo-frame">
-            <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}">
+        <section class="square-group">
+          <div class="square-group-label">
+            <strong>${escapeHtml(group.labelItem.customerLastName)}</strong>
+            ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
           </div>
-          ${
-            showLabel
-              ? `<div class="label">
-                  <strong>${escapeHtml(item.customerLastName)}</strong>
-                  <span>${escapeHtml(item.product)}</span>
-                  <small>${escapeHtml(marzipanPrintSizeLabel(item))}${escapeHtml(copyLabel)}</small>
-                  ${sourceLabel ? `<small>${escapeHtml(sourceLabel)}</small>` : ""}
-                </div>`
-              : ""
-          }
-        </article>
+          <div class="square-grid">
+            ${group.items.map((item) => printItemHtmlFor(item)).join("")}
+          </div>
+        </section>
       `;
     })
     .join("");
+  const roundHtml =
+    roundItems.length > 0
+      ? `<section class="round-grid">
+          ${roundItems.map((item) => printItemHtmlFor(item, true)).join("")}
+        </section>`
+      : "";
+  const itemHtml = `${squareHtml}${roundHtml}`;
 
   return `<!doctype html>
 <html lang="nl">
@@ -1105,7 +1161,10 @@ function createMarzipanPhotoPrintHtml(input: {
         padding: 8px 12px;
       }
       main {
+        margin: 0 auto;
+        max-width: 210mm;
         padding: 8mm 10mm 60mm;
+        width: 100%;
       }
       .sheet-header {
         align-items: baseline;
@@ -1125,11 +1184,38 @@ function createMarzipanPhotoPrintHtml(input: {
         margin: 0;
       }
       .sheet {
+        display: block;
+      }
+      .square-group {
+        margin-bottom: 1.2mm;
+      }
+      .square-group-label {
+        align-items: baseline;
+        display: flex;
+        font-size: 6px;
+        gap: 1mm;
+        height: 2mm;
+        line-height: 1;
+        margin: 0 0 0.25mm;
+      }
+      .square-group-label strong {
+        font-size: 6.5px;
+      }
+      .square-group-label span {
+        color: #444;
+      }
+      .square-grid {
+        display: grid;
+        gap: 0.18mm;
+        grid-template-columns: repeat(auto-fill, 3.5cm);
+        justify-content: start;
+      }
+      .round-grid {
         align-items: flex-start;
-        column-gap: 1mm;
         display: flex;
         flex-wrap: wrap;
-        row-gap: 1mm;
+        gap: 5mm;
+        margin-top: 6mm;
       }
       .print-item {
         break-inside: avoid;
@@ -1149,7 +1235,7 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .square .photo-frame {
         border: 0;
-        padding: 0.35mm;
+        padding: 0.08mm;
       }
       .round .photo-frame {
         border-radius: 999px;
@@ -1184,30 +1270,16 @@ function createMarzipanPhotoPrintHtml(input: {
         color: #444;
         margin-top: 0.4mm;
       }
-      .square .label {
-        background: rgba(255, 255, 255, 0.9);
-        left: 0.45mm;
-        line-height: 1;
-        margin-top: 0;
-        max-width: calc(100% - 0.9mm);
-        padding: 0.25mm 0.4mm;
-        position: absolute;
-        top: 0.45mm;
-      }
-      .square .label strong {
-        font-size: 5.5px;
-      }
-      .square .label span,
-      .square .label small {
-        display: none;
-      }
       .needs-check .photo-frame {
         border-color: #111;
         border-style: solid;
       }
       @media print {
         .screen-actions { display: none; }
-        main { padding: 0; }
+        main {
+          max-width: none;
+          padding: 0;
+        }
       }
     </style>
   </head>
