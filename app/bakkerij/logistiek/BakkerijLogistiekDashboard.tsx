@@ -889,6 +889,128 @@ function isProductOptionLine(line: ReceiptLine) {
   );
 }
 
+function isPriceOnlyReceiptDescription(value: string) {
+  const description = normalizedLineDescription(value).replace(/^eur\s+/, "€ ");
+
+  return /^€?\s*[\d.,]+$/.test(description);
+}
+
+function parseReceiptMoneyText(value: string) {
+  const clean = value.replace(/[^\d,.-]/g, "").trim();
+  if (!clean) return undefined;
+
+  const normalized = clean.includes(",")
+    ? clean.replace(/\./g, "").replace(",", ".")
+    : clean;
+  const number = Number.parseFloat(normalized);
+
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function cleanReceiptLineDescription(value: string) {
+  return value
+    .replace(
+      /\s+€\s*[\d.,]+(?:\s+€\s*[\d.,]+|\s+\d+(?:[.,]\d+)?)*.*$/i,
+      ""
+    )
+    .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
+    .replace(/click here for more information/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function receiptLineIdentity(line: ReceiptLine) {
+  return `${line.quantity}|${normalizedLineDescription(line.description)}`;
+}
+
+function pushUniqueReceiptLine(target: ReceiptLine[], line: ReceiptLine) {
+  const identity = receiptLineIdentity(line);
+  const exists = target.some((item) => {
+    const itemIdentity = receiptLineIdentity(item);
+    const itemDescription = normalizedLineDescription(item.description);
+    const lineDescription = normalizedLineDescription(line.description);
+
+    return (
+      itemIdentity === identity ||
+      (item.quantity === line.quantity &&
+        (itemDescription.includes(lineDescription) ||
+          lineDescription.includes(itemDescription)))
+    );
+  });
+
+  if (!exists) target.push(line);
+}
+
+function recoveredReceiptLinesFromNote(value: string) {
+  const lines: ReceiptLine[] = [];
+  const patterns = [
+    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)[^€]{4,180})\s+€\s*([\d.,]+)/gi,
+    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:petit\s+four)[^€]{4,180})\s+€\s*([\d.,]+)/gi,
+    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|tekst|vulling)\s*:?\s*[^€]{1,180})\s+€\s*([\d.,]+)/gi,
+  ];
+
+  patterns.forEach((pattern) => {
+    for (const match of value.matchAll(pattern)) {
+      const description = cleanReceiptLineDescription(match[2] || "");
+      if (!description || isPriceOnlyReceiptDescription(description)) continue;
+
+      pushUniqueReceiptLine(lines, {
+        quantity: (match[1] || "1").replace(".", ","),
+        description,
+        ...(parseReceiptMoneyText(match[3] || "") !== undefined
+          ? { unitPrice: parseReceiptMoneyText(match[3] || "") }
+          : {}),
+      });
+    }
+  });
+
+  return lines;
+}
+
+function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
+  const lines: ReceiptLine[] = [];
+
+  recoveredReceiptLinesFromNote(receipt.customerNote || "").forEach((line) =>
+    pushUniqueReceiptLine(lines, line)
+  );
+
+  receipt.lines.forEach((line) => {
+    const description = cleanReceiptLineDescription(line.description);
+    const note = line.note ? cleanReceiptLineDescription(line.note) : "";
+
+    if (isPriceOnlyReceiptDescription(description)) {
+      if (note && isProductOptionLine({ quantity: line.quantity, description: note })) {
+        pushUniqueReceiptLine(lines, {
+          quantity: line.quantity,
+          description: note,
+          ...(line.unitPrice !== undefined ? { unitPrice: line.unitPrice } : {}),
+        });
+      }
+      return;
+    }
+
+    if (!description) return;
+
+    pushUniqueReceiptLine(lines, {
+      ...line,
+      description,
+      ...(note && note !== description ? { note } : { note: undefined }),
+    });
+  });
+
+  return lines;
+}
+
+function normalizeImportedReceipt(receipt: ReceiptSummary): ReceiptSummary {
+  const customerNote = cleanReceiptDisplayNote(receipt.customerNote || "");
+
+  return {
+    ...receipt,
+    customerNote: customerNote || "Geen aparte opmerking.",
+    lines: normalizeImportedReceiptLines(receipt),
+  };
+}
+
 function isAssortedPastryLine(line: ReceiptLine) {
   if (isProductOptionLine(line)) return false;
 
@@ -2423,7 +2545,9 @@ function buildReceiptSummaries(
   plan: DayPlan,
   importedBatch: LogisticsBatch | null
 ): ReceiptSummary[] {
-  if (importedBatch?.receipts.length) return importedBatch.receipts;
+  if (importedBatch?.receipts.length) {
+    return importedBatch.receipts.map(normalizeImportedReceipt);
+  }
 
   const sharedReceipts: ReceiptSeed[] = [
     {
@@ -3783,6 +3907,10 @@ function receiptLineTotal(line: ReceiptLine) {
 
 function cleanReceiptDisplayNote(value: string) {
   return value
+    .replace(
+      /\b(?:\d+(?:[.,]\d+)?\s+)?(?:(?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)|petit\s+four)[^€]{4,180}\s+€\s*[\d.,]+(?:\s+\d+(?:[.,]\d+)?\s+€\s*[\d.,]+(?:\s+€\s*[\d.,]+)*)?/gi,
+      ""
+    )
     .replace(
       /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling)\s*:.*?(?=\s+\d+(?:[.,]\d+)?\s+(?:betaald|niet betaald)\b|$)/gi,
       ""

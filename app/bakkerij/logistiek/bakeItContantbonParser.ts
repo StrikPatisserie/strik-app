@@ -357,6 +357,7 @@ function cleanProductDescription(value: string) {
 function isUsableProductDescription(value: string) {
   const clean = value.trim();
   if (!clean || /^€/.test(clean) || /^[\d.,]+$/.test(clean)) return false;
+  if (/^\d+(?:[.,]\d+)?\s+€\s*[\d.,]+$/.test(clean)) return false;
   if (/^totaalprijs\b|^btw\b|^factuurkorting\b/i.test(clean)) return false;
   if (/trial mode|click here for more information/i.test(clean)) return false;
   if (/^(?:niet\s+)?betaald\b|^gewenste betaling\b/i.test(clean)) return false;
@@ -411,6 +412,17 @@ function cleanReceiptRemark(value: string) {
     .replace(/\s+/g, " ")
     .replace(/\s+([?.!,])/g, "$1")
     .trim();
+}
+
+function isReceiptPaymentBlockLine(line: string) {
+  return (
+    isAdministrativeRemarkLine(line) ||
+    /^btw\b/i.test(line) ||
+    /^factuurkorting\b/i.test(line) ||
+    /^totaalprijs\s+excl\.?btw\b/i.test(line) ||
+    /^€\s*[\d.,]+\s+totaalprijs\b/i.test(line) ||
+    /^totaalprijs\s+€\s*[\d.,]+/i.test(line)
+  );
 }
 
 function pickupLocationFromLine(line: string) {
@@ -567,31 +579,69 @@ function parseProductLine(line: string): LogisticsReceiptLine | null {
   };
 }
 
+function parseProductStartLine(line: string): LogisticsReceiptLine | null {
+  const match = line.match(/^(\d+(?:[.,]\d+)?)\s+(?!€)(.+)$/);
+  if (!match) return null;
+
+  const [, quantityText, rawDescription] = match;
+  const description = cleanProductDescription(rawDescription);
+  if (!isUsableProductDescription(description)) return null;
+
+  const normalized = normalizedLineDescription(description);
+  const productLike =
+    /\b(?:taart|petit|four|gebak|slagroom|marsepein|creme|slof|vlaai|gateau|bombe|bol|tompouce|croissant|brood|cake|logo|foto)\b/.test(
+      normalized
+    ) ||
+    (description.length >= 12 && /^[A-ZÀ-Ý0-9]/.test(description));
+
+  if (!productLike) return null;
+
+  return {
+    quantity: quantityText.replace(".", ","),
+    description,
+  };
+}
+
 function parseProductOptionLine(
   line: string,
   fallbackQuantity = "1"
 ): LogisticsReceiptLine | null {
-  const prefixQuantity = line.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
+  const priceMatches = Array.from(line.matchAll(/€\s*([\d.,]+)/g));
+  const firstPriceIndex = priceMatches[0]?.index;
+  const descriptionLine =
+    firstPriceIndex === undefined ? line : line.slice(0, firstPriceIndex);
+  const withUnitPrice = (
+    optionLine: LogisticsReceiptLine
+  ): LogisticsReceiptLine => {
+    const unitPrice = pickUnitPrice(
+      priceMatches.map((match) => match[1]),
+      optionLine.quantity
+    );
+
+    return unitPrice === undefined ? optionLine : { ...optionLine, unitPrice };
+  };
+
+  const prefixQuantity = descriptionLine.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
   if (prefixQuantity && isProductOptionDescription(prefixQuantity[2])) {
-    return {
+    return withUnitPrice({
       quantity: prefixQuantity[1].replace(".", ","),
       description: cleanProductDescription(prefixQuantity[2]),
-    };
+    });
   }
 
-  const suffixQuantity = line.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/);
+  const suffixQuantity = descriptionLine.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/);
   if (suffixQuantity && isProductOptionDescription(suffixQuantity[1])) {
-    return {
+    return withUnitPrice({
       quantity: suffixQuantity[2].replace(".", ","),
       description: cleanProductDescription(suffixQuantity[1]),
-    };
+    });
   }
 
-  if (isProductOptionDescription(line)) {
-    return {
+  if (isProductOptionDescription(descriptionLine)) {
+    return withUnitPrice({
       quantity: fallbackQuantity || "1",
-      description: cleanProductDescription(line),
-    };
+      description: cleanProductDescription(descriptionLine),
+    });
   }
 
   return null;
@@ -685,6 +735,45 @@ function shouldAppendProductContinuation(line: string) {
   return !/€\s*[\d.,]+/.test(line);
 }
 
+function lineWithoutRepeatedQuantity(line: string, quantity: string) {
+  const normalizedQuantity = quantity.replace(".", ",");
+  const match = line.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
+
+  if (match && match[1].replace(".", ",") === normalizedQuantity) {
+    return match[2].trim();
+  }
+
+  return line;
+}
+
+function applyPricedContinuation(
+  currentLine: LogisticsReceiptLine,
+  rawLine: string
+) {
+  const line = lineWithoutRepeatedQuantity(rawLine, currentLine.quantity);
+  const priceMatches = Array.from(line.matchAll(/€\s*([\d.,]+)/g));
+  if (priceMatches.length === 0) return false;
+
+  const firstPriceIndex = priceMatches[0].index ?? 0;
+  const descriptionPart = cleanProductDescription(line.slice(0, firstPriceIndex));
+  if (descriptionPart && isUsableProductDescription(descriptionPart)) {
+    appendDescription(currentLine, descriptionPart);
+  }
+
+  const unitPrice = pickUnitPrice(
+    priceMatches.map((match) => match[1]),
+    currentLine.quantity
+  );
+  if (unitPrice !== undefined) {
+    currentLine.unitPrice =
+      currentLine.unitPrice === undefined
+        ? unitPrice
+        : Math.max(currentLine.unitPrice, unitPrice);
+  }
+
+  return true;
+}
+
 function findDeliveryBlock(bodyLines: string[]) {
   const startIndex = bodyLines.findIndex((line) => /^levering;?$/i.test(line));
   if (startIndex < 0) return [];
@@ -718,7 +807,9 @@ function parsePage(pageText: string): ParsedPage | null {
   const customer = lines[weekIndex + 1] || "Onbekende klant";
   const deliveryCodeMatch = (lines[weekIndex + 2] || "").match(/levering\s+(\d+)/i);
   const deliveryCode = deliveryCodeMatch?.[1] || "";
-  const productHeaderIndex = lines.findIndex((line) => /^artikelomschrijving\b/i.test(line));
+  const productHeaderIndex = lines.findIndex((line) =>
+    /\bartikelomschrijving\b/i.test(line)
+  );
   const bodyLines = productHeaderIndex >= 0 ? lines.slice(productHeaderIndex + 1) : [];
   const deliveryBlock = findDeliveryBlock(bodyLines);
   const fulfillment = inferFulfillment(bodyLines);
@@ -738,20 +829,30 @@ function parsePage(pageText: string): ParsedPage | null {
     if (isBoilerplateLine(line) || isFooterLine(line)) continue;
     if (/^levering;?$/i.test(line)) continue;
     if (deliveryBlock.includes(line)) continue;
-    if (/^btw\b/i.test(line) || /^factuurkorting\b/i.test(line)) {
-      productSectionOpen = false;
+
+    if (/^totaalprijs$/i.test(line) && parsedLines.length === 0) {
       continue;
     }
-    if (/^totaalprijs\b/i.test(line)) {
+
+    if (isReceiptPaymentBlockLine(line)) {
       productSectionOpen = false;
+      const totalMatch =
+        line.match(/^€\s*([\d.,]+)\s+totaalprijs\b/i) ||
+        line.match(/^totaalprijs\s+€\s*([\d.,]+)/i);
+      if (totalMatch) total = parseDutchNumber(totalMatch[1]) ?? total;
       continue;
     }
+
     if (pickupLocationFromLine(line) || isFulfillmentLine(line)) continue;
 
     const standaloneTotal = line.match(/^€\s*([\d.,]+)$/);
     if (standaloneTotal) {
-      productSectionOpen = false;
-      total = parseDutchNumber(standaloneTotal[1]) ?? total;
+      if (productSectionOpen && currentLine) {
+        applyPricedContinuation(currentLine, line);
+      } else {
+        productSectionOpen = false;
+        total = parseDutchNumber(standaloneTotal[1]) ?? total;
+      }
       continue;
     }
 
@@ -763,37 +864,48 @@ function parsePage(pageText: string): ParsedPage | null {
       continue;
     }
 
-    const productLine = parseProductLine(line);
-    if (productLine) {
-      currentLine = uniqueLinePush(parsedLines, productLine);
-      if (lineIsInternalNoteLine(productLine.description)) {
-        uniquePush(remarks, productLine.description);
+    if (productSectionOpen) {
+      const productLine = parseProductLine(line);
+      if (productLine) {
+        currentLine = uniqueLinePush(parsedLines, productLine);
+        if (lineIsInternalNoteLine(productLine.description)) {
+          uniquePush(remarks, productLine.description);
+        }
+        continue;
       }
-      continue;
-    }
 
-    const productOptionLine = parseProductOptionLine(
-      line,
-      currentLine?.quantity || "1"
-    );
-    if (productOptionLine) {
-      currentLine = uniqueLinePush(parsedLines, productOptionLine);
-      continue;
-    }
+      const productOptionLine = parseProductOptionLine(
+        line,
+        currentLine?.quantity || "1"
+      );
+      if (productOptionLine) {
+        currentLine = uniqueLinePush(parsedLines, productOptionLine);
+        continue;
+      }
 
-    if (
-      productSectionOpen &&
-      currentLine &&
-      !isAdministrativeRemarkLine(line) &&
-      (isLikelyPhotoFileLine(line) || productOptionNeedsContinuation(currentLine))
-    ) {
-      appendDescription(currentLine, line);
-      continue;
-    }
+      if (currentLine && applyPricedContinuation(currentLine, line)) {
+        continue;
+      }
 
-    if (productSectionOpen && currentLine && shouldAppendProductContinuation(line)) {
-      appendDescription(currentLine, line);
-      continue;
+      if (
+        currentLine &&
+        !isAdministrativeRemarkLine(line) &&
+        (isLikelyPhotoFileLine(line) || productOptionNeedsContinuation(currentLine))
+      ) {
+        appendDescription(currentLine, line);
+        continue;
+      }
+
+      const productStartLine = parseProductStartLine(line);
+      if (productStartLine) {
+        currentLine = uniqueLinePush(parsedLines, productStartLine);
+        continue;
+      }
+
+      if (currentLine && shouldAppendProductContinuation(line)) {
+        appendDescription(currentLine, line);
+        continue;
+      }
     }
 
     if (currentLine && lineIsInternalNoteLine(currentLine.description)) {
