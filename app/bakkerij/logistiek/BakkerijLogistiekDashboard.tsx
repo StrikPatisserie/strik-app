@@ -584,9 +584,12 @@ function imageMatchesReceipt(
       receipt.id,
       receipt.receiptNumber,
       receipt.customer,
+      receipt.note,
       receipt.customerNote,
       receipt.internalNote,
-      receipt.lines.map((line) => line.description).join(" "),
+      receipt.lines
+        .map((line) => `${line.description} ${line.note || ""}`)
+        .join(" "),
     ]
       .filter(Boolean)
       .join(" ")

@@ -9,7 +9,9 @@ const WEBSHOP_IMAGE_CONFIG = {
 
   QUERY: 'label:"Afbeeldingen Webshop" newer_than:30d',
   MAX_THREADS: 20,
-  IMPORT_VERSION: 'photo-filename-v2',
+  MAX_IMAGE_ATTACHMENTS: 4,
+  MAX_IMAGE_ATTACHMENT_BYTES: 1500000,
+  IMPORT_VERSION: 'inline-image-v3',
 };
 
 function importWebshopAfbeeldingen() {
@@ -39,6 +41,7 @@ function importWebshopAfbeeldingen() {
           ...extractWebshopHtmlLinks_(bodyHtml),
           ...extractWebshopPlainLinks_(bodyText),
         ]);
+        const imageAttachments = extractWebshopImageAttachments_(message);
 
         const response = UrlFetchApp.fetch(WEBSHOP_IMAGE_CONFIG.IMPORT_URL, {
           method: 'post',
@@ -56,6 +59,7 @@ function importWebshopAfbeeldingen() {
             bodyText,
             bodyHtml,
             links,
+            imageAttachments,
             sourceUrl: `https://mail.google.com/mail/u/0/#inbox/${message.getId()}`,
           }),
         });
@@ -84,7 +88,7 @@ function getOrCreateWebshopLabel_(name) {
 
 function extractWebshopHtmlLinks_(html) {
   const links = [];
-  const pattern = /href=["']([^"']+)["']/gi;
+  const pattern = /\b(?:href|src)=["']([^"']+)["']/gi;
   let match;
 
   while ((match = pattern.exec(html || ''))) {
@@ -96,6 +100,38 @@ function extractWebshopHtmlLinks_(html) {
 
 function extractWebshopPlainLinks_(text) {
   return (text || '').match(/https?:\/\/[^\s"'<>]+/gi) || [];
+}
+
+function extractWebshopImageAttachments_(message) {
+  const attachments = message.getAttachments({
+    includeInlineImages: true,
+    includeAttachments: true,
+  });
+  const images = [];
+
+  attachments.forEach((attachment) => {
+    if (images.length >= WEBSHOP_IMAGE_CONFIG.MAX_IMAGE_ATTACHMENTS) return;
+
+    const contentType = String(attachment.getContentType() || '').toLowerCase();
+    if (!/^image\/(jpeg|png|webp)$/.test(contentType)) return;
+
+    const bytes = attachment.getBytes();
+    if (
+      bytes.length <= 0 ||
+      bytes.length > WEBSHOP_IMAGE_CONFIG.MAX_IMAGE_ATTACHMENT_BYTES
+    ) {
+      return;
+    }
+
+    images.push({
+      fileName: attachment.getName() || 'webshop-foto.png',
+      contentType,
+      size: bytes.length,
+      dataBase64: Utilities.base64Encode(bytes),
+    });
+  });
+
+  return images;
 }
 
 function uniqueWebshopLinks_(links) {

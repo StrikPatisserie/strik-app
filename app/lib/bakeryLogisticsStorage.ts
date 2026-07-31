@@ -16,6 +16,7 @@ const LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY =
 const LOGISTICS_DAY_FEEDBACK_SETTING_KEY = "bakery_logistics_day_feedback";
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
+const MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES = 5_500_000;
 const MAX_STORED_RECEIPT_OVERRIDES = 3000;
 const MAX_STORED_DAY_FEEDBACK = 1200;
 
@@ -176,6 +177,20 @@ function sortWebshopImages(images: LogisticsWebshopImage[]) {
 
     return second.importedAt.localeCompare(first.importedAt);
   });
+}
+
+function limitWebshopImages(images: LogisticsWebshopImage[]) {
+  const limited = sortWebshopImages(images).slice(0, MAX_STORED_WEBSHOP_IMAGES);
+
+  while (
+    limited.length > 1 &&
+    JSON.stringify({ images: limited }).length >
+      MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES
+  ) {
+    limited.pop();
+  }
+
+  return limited;
 }
 
 function mergeStoredWebshopImage(
@@ -348,12 +363,12 @@ export async function upsertLogisticsWebshopImage(
         item.deliveryDate === image.deliveryDate
     );
   const nextImage = mergeStoredWebshopImage(image, existing, options);
-  const images = sortWebshopImages([
+  const images = limitWebshopImages([
     nextImage,
     ...state.images.filter(
       (item) => item.id !== image.id && item.id !== existing?.id
     ),
-  ]).slice(0, MAX_STORED_WEBSHOP_IMAGES);
+  ]);
 
   const nextState = { images };
   const supabase = createAdminClient();

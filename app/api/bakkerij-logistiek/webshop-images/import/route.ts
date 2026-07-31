@@ -25,7 +25,17 @@ type WebshopImageInput = {
   bodyText: string;
   bodyHtml: string;
   links: string[];
+  imageAttachments: WebshopImageAttachmentInput[];
 };
+
+type WebshopImageAttachmentInput = {
+  fileName: string;
+  contentType: string;
+  size: number;
+  dataUrl: string;
+};
+
+const MAX_INLINE_IMAGE_BYTES = 1_500_000;
 
 const dutchMonths: Record<string, string> = {
   januari: "01",
@@ -95,10 +105,43 @@ function cleanUrl(value: unknown) {
   return isHttpUrl(clean) ? clean.slice(0, 2000) : "";
 }
 
-function extractLinks(input: Pick<WebshopImageInput, "bodyHtml" | "bodyText" | "links">) {
-  const htmlLinks = Array.from(input.bodyHtml.matchAll(/href=["']([^"']+)["']/gi)).map(
-    (match) => cleanUrl(match[1])
+function cleanImageContentType(value: unknown) {
+  const clean = cleanText(value, 80).toLowerCase();
+  if (["image/jpeg", "image/png", "image/webp"].includes(clean)) return clean;
+
+  return "";
+}
+
+function cleanDataImageUrl(value: unknown, preferredContentType = "") {
+  const raw = String(value || "").trim();
+  const dataUrlMatch = raw.match(
+    /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i
   );
+  const contentType = cleanImageContentType(
+    dataUrlMatch?.[1] || preferredContentType
+  );
+  const base64 = (dataUrlMatch?.[2] || raw).replace(/\s+/g, "");
+
+  if (!contentType || !/^[A-Za-z0-9+/=]+$/.test(base64)) return "";
+
+  const buffer = Buffer.from(base64, "base64");
+  if (buffer.length <= 0 || buffer.length > MAX_INLINE_IMAGE_BYTES) return "";
+
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
+
+function cleanPhotoReference(value: unknown) {
+  return cleanUrl(value) || cleanDataImageUrl(value);
+}
+
+function isDataImageUrl(value: string) {
+  return /^data:image\/(?:jpeg|png|webp);base64,/i.test(value);
+}
+
+function extractLinks(input: Pick<WebshopImageInput, "bodyHtml" | "bodyText" | "links">) {
+  const htmlLinks = Array.from(
+    input.bodyHtml.matchAll(/\b(?:href|src)=["']([^"']+)["']/gi)
+  ).map((match) => cleanUrl(match[1]));
   const textLinks = Array.from(
     `${input.bodyText}\n${input.bodyHtml}`.matchAll(/https?:\/\/[^\s"'<>]+/gi)
   ).map((match) => cleanUrl(match[0]));
@@ -130,6 +173,8 @@ function photoUrlMatchesFileName(value: string, fileName: string) {
 }
 
 function scorePhotoUrl(value: string, fileName = "") {
+  if (isDataImageUrl(value)) return 100;
+
   const lower = value.toLowerCase();
   let score = 0;
 
@@ -148,7 +193,9 @@ function scorePhotoUrl(value: string, fileName = "") {
 }
 
 function pickPhotoUrl(input: WebshopImageInput, fileName = "") {
-  const directPhotoUrl = cleanUrl(input.photoUrl);
+  const directPhotoUrl = cleanPhotoReference(input.photoUrl);
+  if (isDataImageUrl(directPhotoUrl)) return directPhotoUrl;
+
   const links = unique([directPhotoUrl, ...extractLinks(input)])
     .map((url) => ({ url, score: scorePhotoUrl(url, fileName) }))
     .sort((first, second) => second.score - first.score);
@@ -205,6 +252,58 @@ function extractPhotoFileName(
   }
 
   return cleanPhotoFileName(photoUrl);
+}
+
+function cleanImageAttachment(value: unknown): WebshopImageAttachmentInput | null {
+  if (!value || typeof value !== "object") return null;
+
+  const item = value as Record<string, unknown>;
+  const contentType = cleanImageContentType(item.contentType);
+  const dataUrl = cleanDataImageUrl(item.dataBase64 || item.dataUrl, contentType);
+  if (!contentType || !dataUrl) return null;
+
+  return {
+    fileName: cleanPhotoFileName(item.fileName) || "webshop-foto.png",
+    contentType,
+    size: Buffer.from(dataUrl.split(",")[1] || "", "base64").length,
+    dataUrl,
+  };
+}
+
+function scoreImageAttachment(
+  attachment: WebshopImageAttachmentInput,
+  fileName: string
+) {
+  let score = attachment.size > 20_000 ? 5 : 0;
+
+  if (attachment.fileName) score += 4;
+  if (fileName && normalizedFileNameForMatch(attachment.fileName) === normalizedFileNameForMatch(fileName)) {
+    score += 60;
+  } else if (
+    fileName &&
+    normalizedFileNameForMatch(attachment.fileName).includes(normalizedFileNameForMatch(fileName))
+  ) {
+    score += 35;
+  }
+  if (/logo|foto|photo|image|afbeeld|upload|petit|taart/i.test(attachment.fileName)) {
+    score += 8;
+  }
+
+  return score;
+}
+
+function pickImageAttachment(
+  attachments: WebshopImageAttachmentInput[],
+  fileName: string
+) {
+  const scored = attachments
+    .map((attachment) => ({
+      attachment,
+      score: scoreImageAttachment(attachment, fileName),
+    }))
+    .sort((first, second) => second.score - first.score);
+
+  return scored.find((item) => item.score > 0)?.attachment || null;
 }
 
 function parseDateParts(day: string, month: string, year: string) {
@@ -277,6 +376,11 @@ function extractCustomerName(input: WebshopImageInput, text: string) {
   const direct = cleanText(input.customerName, 160);
   if (direct) return direct;
 
+  const salutationMatch = text.match(/\bBeste\s+([^,\n]{2,120})[,.\n]/i);
+  if (salutationMatch) {
+    return cleanText(salutationMatch[1], 160);
+  }
+
   const match = text.match(
     /\b(?:klantnaam|klant|naam|besteld door|factuuradres)\s*:?\s*([^\n]+)/i
   );
@@ -336,13 +440,21 @@ async function readJsonInput(request: Request): Promise<WebshopImageInput | Resp
     orderNumber: cleanText(body.orderNumber, 80),
     deliveryDate: cleanText(body.deliveryDate, 120),
     customerName: cleanText(body.customerName, 160),
-    photoUrl: cleanUrl(body.photoUrl),
+    photoUrl: cleanPhotoReference(body.photoUrl),
     sourceUrl: cleanUrl(body.sourceUrl),
     fileName: cleanText(body.fileName, 240),
     bodyText: cleanText(body.bodyText, 12000),
     bodyHtml: String(body.bodyHtml || "").slice(0, 60000),
     links: Array.isArray(body.links)
       ? body.links.map((link) => cleanUrl(link)).filter(Boolean)
+      : [],
+    imageAttachments: Array.isArray(body.imageAttachments)
+      ? body.imageAttachments
+          .map(cleanImageAttachment)
+          .filter((attachment): attachment is WebshopImageAttachmentInput =>
+            Boolean(attachment)
+          )
+          .slice(0, 4)
       : [],
   };
 }
@@ -362,8 +474,21 @@ export async function POST(request: Request) {
 
     const text = `${input.subject}\n${input.bodyText}\n${htmlToText(input.bodyHtml)}`;
     const initialPhotoUrl = pickPhotoUrl(input);
-    const fileName = extractPhotoFileName(input, text, initialPhotoUrl);
-    const photoUrl = pickPhotoUrl(input, fileName) || initialPhotoUrl;
+    const initialAttachment = pickImageAttachment(input.imageAttachments, "");
+    const fileName =
+      extractPhotoFileName(
+        input,
+        text,
+        initialPhotoUrl || initialAttachment?.fileName || ""
+      ) ||
+      initialAttachment?.fileName ||
+      "";
+    const matchedAttachment = pickImageAttachment(input.imageAttachments, fileName);
+    const photoUrl =
+      pickPhotoUrl(input, fileName) ||
+      matchedAttachment?.dataUrl ||
+      initialPhotoUrl ||
+      "";
     const deliveryDate = extractDeliveryDate(input, text);
     const orderNumber = extractOrderNumber(input, text);
     const customerName = extractCustomerName(input, text);
@@ -373,6 +498,9 @@ export async function POST(request: Request) {
     if (!deliveryDate) notes.push("Geen leverdatum gevonden.");
     if (!customerName) notes.push("Geen klantnaam gevonden.");
     if (!orderNumber) notes.push("Geen bestelnummer gevonden.");
+    if (matchedAttachment && photoUrl === matchedAttachment.dataUrl) {
+      notes.push("Foto uit mailbijlage gelezen.");
+    }
 
     if (!photoUrl || !deliveryDate) {
       return jsonError(
