@@ -3282,7 +3282,8 @@ function thumbnailStyleFor(image: WebshopImageSummary) {
 
 function WebshopImageBlock({
   images,
-}: Readonly<{ images: WebshopImageSummary[] }>) {
+  receipt,
+}: Readonly<{ images: WebshopImageSummary[]; receipt: ReceiptSummary }>) {
   if (images.length === 0) return null;
 
   return (
@@ -3296,45 +3297,58 @@ function WebshopImageBlock({
         </span>
       </div>
       <div className="mt-2 grid gap-1.5">
-        {images.map((image) => (
-          <a
-            key={image.id}
-            href={image.photoUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 border border-[#d7d7d7] bg-white p-1.5 text-left transition hover:border-[#111]"
-          >
-            <span
-              aria-hidden="true"
-              className="h-12 w-12 bg-[#faf8f5] bg-cover bg-center"
-              style={thumbnailStyleFor(image)}
-            />
-            <span className="min-w-0">
-              <span className="block truncate text-xs font-black tracking-normal text-[#111]">
-                {image.customerName || "Klant controleren"}
+        {images.map((image) => {
+          const displayCustomerName =
+            image.customerName ||
+            image.matchedReceiptCustomer ||
+            receipt.customer ||
+            "Klant controleren";
+          const notes = image.notes.filter(
+            (note) =>
+              displayCustomerName === "Klant controleren" ||
+              !/geen klantnaam gevonden/i.test(note)
+          );
+
+          return (
+            <a
+              key={image.id}
+              href={image.photoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 border border-[#d7d7d7] bg-white p-1.5 text-left transition hover:border-[#111]"
+            >
+              <span
+                aria-hidden="true"
+                className="h-12 w-12 bg-[#faf8f5] bg-cover bg-center"
+                style={thumbnailStyleFor(image)}
+              />
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-black tracking-normal text-[#111]">
+                  {displayCustomerName}
+                </span>
+                <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#555]">
+                  {image.orderNumber || "zonder bestelnummer"} · match{" "}
+                  {image.matchSource === "manual" ? "handmatig" : image.confidence}
+                </span>
+                {image.fileName && (
+                  <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                    {image.fileName}
+                  </span>
+                )}
+                {!image.customerName && displayCustomerName !== "Klant controleren" && (
+                  <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                    klant uit gekoppelde bon
+                  </span>
+                )}
+                {notes.length > 0 && (
+                  <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                    {notes.join(" ")}
+                  </span>
+                )}
               </span>
-              <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#555]">
-                {image.orderNumber || "zonder bestelnummer"} · match{" "}
-                {image.matchSource === "manual" ? "handmatig" : image.confidence}
-              </span>
-              {image.fileName && (
-                <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
-                  {image.fileName}
-                </span>
-              )}
-              {image.matchedReceiptCustomer && (
-                <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
-                  gekoppeld aan {image.matchedReceiptCustomer}
-                </span>
-              )}
-              {image.notes.length > 0 && (
-                <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
-                  {image.notes.join(" ")}
-                </span>
-              )}
-            </span>
-          </a>
-        ))}
+            </a>
+          );
+        })}
       </div>
     </div>
   );
@@ -3622,7 +3636,7 @@ function ReceiptDetail({
         override={override}
         receipt={receipt}
       />
-      <WebshopImageBlock images={imageMatches} />
+      <WebshopImageBlock images={imageMatches} receipt={receipt} />
 
       <div className="bg-white p-3">
         <div className="flex items-center justify-between gap-3">
