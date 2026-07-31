@@ -9,6 +9,7 @@ const WEBSHOP_IMAGE_CONFIG = {
 
   QUERY: 'label:"Afbeeldingen Webshop" newer_than:30d',
   MAX_THREADS: 20,
+  IMPORT_VERSION: 'photo-filename-v2',
 };
 
 function importWebshopAfbeeldingen() {
@@ -28,7 +29,7 @@ function importWebshopAfbeeldingen() {
     let failed = false;
 
     thread.getMessages().forEach((message) => {
-      const importId = `webshop-image:${message.getId()}`;
+      const importId = `webshop-image:${WEBSHOP_IMAGE_CONFIG.IMPORT_VERSION}:${message.getId()}`;
       if (props.getProperty(importId)) return;
 
       try {

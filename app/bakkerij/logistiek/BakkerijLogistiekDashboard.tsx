@@ -541,6 +541,32 @@ function significantWords(value: string) {
     .filter((word) => word.length >= 4 && !["strik", "patisserie"].includes(word));
 }
 
+function imageSignificantWords(image: WebshopImageSummary) {
+  const genericWords = new Set([
+    "afbeelding",
+    "bestand",
+    "bestelling",
+    "foto",
+    "image",
+    "logo",
+    "marsepein",
+    "photo",
+    "plaatje",
+    "petit",
+    "png",
+    "slagroom",
+    "taart",
+    "webshop",
+  ]);
+  const words = [
+    ...significantWords(image.customerName),
+    ...significantWords(image.fileName.replace(/\.[^.]+$/, "")),
+    ...significantWords(image.subject),
+  ];
+
+  return Array.from(new Set(words.filter((word) => !genericWords.has(word))));
+}
+
 function imageMatchesReceipt(
   image: WebshopImageSummary,
   receipt: ReceiptSummary
@@ -568,7 +594,7 @@ function imageMatchesReceipt(
     return true;
   }
 
-  const imageWords = significantWords(image.customerName);
+  const imageWords = imageSignificantWords(image);
   if (imageWords.length === 0) return false;
 
   return imageWords.some((word) => haystack.includes(word));
@@ -715,17 +741,22 @@ function isPhotoSignalLine(line: ReceiptLine) {
   );
 }
 
-function photoProductPlansForReceipt(receipt: ReceiptSummary): PhotoProductPlan[] {
+function photoProductPlansForReceipt(
+  receipt: ReceiptSummary,
+  options: { requirePhotoSignal?: boolean } = {}
+): PhotoProductPlan[] {
   const plans: PhotoProductPlan[] = [];
 
   receipt.lines.forEach((line) => {
     const description = lineSearchDescription(line);
+    const hasPhotoSignal = isPhotoSignalLine(line);
     const product = cleanProductLabel(line.description);
     const copies = printCopiesForLine(line);
 
     if (
-      isPetitFourLine(line) ||
-      (isPhotoSignalLine(line) && /\bpetit\s*-?\s*fours?\b/.test(description))
+      (!options.requirePhotoSignal || hasPhotoSignal) &&
+      (isPetitFourLine(line) ||
+        (hasPhotoSignal && /\bpetit\s*-?\s*fours?\b/.test(description)))
     ) {
       plans.push({
         product,
@@ -738,10 +769,11 @@ function photoProductPlansForReceipt(receipt: ReceiptSummary): PhotoProductPlan[
     }
 
     if (
-      isMarzipanOrCreamCakeLine(line) ||
-      (isPhotoSignalLine(line) &&
-        /taart|marsepein|slagroom/.test(description) &&
-        hasLargeCakeSize(description))
+      (!options.requirePhotoSignal || hasPhotoSignal) &&
+      (isMarzipanOrCreamCakeLine(line) ||
+        (hasPhotoSignal &&
+          /taart|marsepein|slagroom/.test(description) &&
+          hasLargeCakeSize(description)))
     ) {
       plans.push({
         product,
@@ -888,7 +920,7 @@ function buildMarzipanPrintItems(
   const photoReceiptsWithoutImage = receipts.filter(
     (receipt) =>
       !receiptIdsWithImages.has(receipt.id) &&
-      photoProductPlansForReceipt(receipt).length > 0
+      photoProductPlansForReceipt(receipt, { requirePhotoSignal: true }).length > 0
   );
 
   if (unclaimedImages.length > 0 && photoReceiptsWithoutImage.length === 1) {

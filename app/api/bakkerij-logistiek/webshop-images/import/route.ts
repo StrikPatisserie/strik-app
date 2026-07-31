@@ -135,6 +135,56 @@ function pickPhotoUrl(input: WebshopImageInput) {
   return likelyPhoto?.url || "";
 }
 
+function cleanPhotoFileName(value: unknown) {
+  let clean = decodeHtmlEntities(String(value || ""))
+    .split(/[?#]/)[0]
+    .replace(/^.*[\\/]/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  try {
+    clean = decodeURIComponent(clean);
+  } catch {
+    // Keep the original string if URL decoding is not possible.
+  }
+
+  const fileMatch = clean.match(/([^<>"|\\/\r\n]{1,180}\.(?:jpe?g|png|webp))/i);
+  if (!fileMatch) return "";
+
+  return fileMatch[1]
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
+function extractPhotoFileName(
+  input: WebshopImageInput,
+  text: string,
+  photoUrl: string
+) {
+  const direct = cleanPhotoFileName(input.fileName);
+  if (direct) return direct;
+
+  const uploadMatch = text.match(
+    /\b(?:foto|photo|afbeelding|bestand|file)\s*(?:geupload|geüpload|uploaded|upload)?\s*:?\s*([^\r\n]{0,220}\.(?:jpe?g|png|webp))/i
+  );
+  if (uploadMatch) {
+    const fileName = cleanPhotoFileName(uploadMatch[1]);
+    if (fileName) return fileName;
+  }
+
+  const anyFileMatch = text.match(
+    /([A-Za-z0-9][^<>"|\\/\r\n]{0,180}\.(?:jpe?g|png|webp))/i
+  );
+  if (anyFileMatch) {
+    const fileName = cleanPhotoFileName(anyFileMatch[1]);
+    if (fileName) return fileName;
+  }
+
+  return cleanPhotoFileName(photoUrl);
+}
+
 function parseDateParts(day: string, month: string, year: string) {
   const parsedYear = Number(year.length === 2 ? `20${year}` : year);
   const parsedMonth = Number(month);
@@ -290,6 +340,7 @@ export async function POST(request: Request) {
 
     const text = `${input.subject}\n${input.bodyText}\n${htmlToText(input.bodyHtml)}`;
     const photoUrl = pickPhotoUrl(input);
+    const fileName = extractPhotoFileName(input, text, photoUrl);
     const deliveryDate = extractDeliveryDate(input, text);
     const orderNumber = extractOrderNumber(input, text);
     const customerName = extractCustomerName(input, text);
@@ -321,7 +372,7 @@ export async function POST(request: Request) {
       customerName,
       photoUrl,
       sourceUrl: input.sourceUrl,
-      fileName: input.fileName,
+      fileName,
       subject: input.subject,
       from: input.from,
       receivedAt: input.receivedAt,
