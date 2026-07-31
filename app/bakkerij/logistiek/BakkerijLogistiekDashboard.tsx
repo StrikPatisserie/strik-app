@@ -772,7 +772,7 @@ function photoProductPlansForReceipt(
       plans.push({
         product,
         shape: "square",
-        sizeCm: 4,
+        sizeCm: 3.5,
         copies,
         needsCheck: false,
       });
@@ -976,7 +976,7 @@ function buildMarzipanPrintItems(
 }
 
 function marzipanPrintSizeLabel(item: MarzipanPrintItem) {
-  return item.shape === "square" ? "4 cm vierkant" : "12 cm rond";
+  return item.shape === "square" ? "3,5 cm vierkant" : "12 cm rond";
 }
 
 function createMarzipanPhotoPrintHtml(input: {
@@ -984,10 +984,21 @@ function createMarzipanPhotoPrintHtml(input: {
   plan: DayPlan;
 }) {
   const title = `Marsepeinfoto's ${formatDateLabel(input.plan.date)}`;
+  const seenLabelKeys = new Set<string>();
   const itemHtml = input.items
     .map((item) => {
+      const labelKey = [
+        item.receiptNumber,
+        item.orderNumber,
+        item.customerLastName,
+        item.product,
+        item.shape,
+        item.photoUrl,
+      ].join("|");
+      const showLabel = item.shape !== "square" || !seenLabelKeys.has(labelKey);
+      seenLabelKeys.add(labelKey);
       const copyLabel =
-        item.copyTotal > 1 ? ` · ${item.copyNumber}/${item.copyTotal}` : "";
+        item.copyTotal > 1 ? ` · ${item.copyTotal}x totaal` : "";
       const sourceLabel = [
         item.receiptNumber ? `bon ${item.receiptNumber}` : "",
         item.orderNumber ? `order ${item.orderNumber}` : "",
@@ -997,16 +1008,20 @@ function createMarzipanPhotoPrintHtml(input: {
         .join(" · ");
 
       return `
-        <article class="print-item ${item.shape} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${item.sizeCm}cm">
+        <article class="print-item ${item.shape} ${showLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${item.sizeCm}cm">
           <div class="photo-frame">
             <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}">
           </div>
-          <div class="label">
-            <strong>${escapeHtml(item.customerLastName)}</strong>
-            <span>${escapeHtml(item.product)}</span>
-            <small>${escapeHtml(marzipanPrintSizeLabel(item))}${escapeHtml(copyLabel)}</small>
-            ${sourceLabel ? `<small>${escapeHtml(sourceLabel)}</small>` : ""}
-          </div>
+          ${
+            showLabel
+              ? `<div class="label">
+                  <strong>${escapeHtml(item.customerLastName)}</strong>
+                  <span>${escapeHtml(item.product)}</span>
+                  <small>${escapeHtml(marzipanPrintSizeLabel(item))}${escapeHtml(copyLabel)}</small>
+                  ${sourceLabel ? `<small>${escapeHtml(sourceLabel)}</small>` : ""}
+                </div>`
+              : ""
+          }
         </article>
       `;
     })
@@ -1018,7 +1033,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <meta charset="utf-8">
     <title>${escapeHtml(title)}</title>
     <style>
-      @page { margin: 8mm 8mm 60mm 8mm; size: A4 portrait; }
+      @page { margin: 8mm 10mm 60mm 10mm; size: A4 portrait; }
       * { box-sizing: border-box; }
       body {
         background: #fff;
@@ -1047,6 +1062,9 @@ function createMarzipanPhotoPrintHtml(input: {
         font-weight: 800;
         padding: 8px 12px;
       }
+      main {
+        padding: 8mm 10mm 60mm;
+      }
       .sheet-header {
         align-items: baseline;
         border-bottom: 1px solid #111;
@@ -1068,12 +1086,15 @@ function createMarzipanPhotoPrintHtml(input: {
         align-items: flex-start;
         display: flex;
         flex-wrap: wrap;
-        gap: 5mm;
+        gap: 3mm;
       }
       .print-item {
         break-inside: avoid;
         page-break-inside: avoid;
         width: var(--item-size);
+      }
+      .square {
+        margin-bottom: 2mm;
       }
       .photo-frame {
         background: #fff;
@@ -1081,6 +1102,10 @@ function createMarzipanPhotoPrintHtml(input: {
         height: var(--item-size);
         overflow: hidden;
         width: var(--item-size);
+      }
+      .square .photo-frame {
+        border: 0;
+        padding: 1mm;
       }
       .round .photo-frame {
         border-radius: 999px;
@@ -1090,6 +1115,9 @@ function createMarzipanPhotoPrintHtml(input: {
         height: 100%;
         object-fit: cover;
         width: 100%;
+      }
+      .square .photo-frame img {
+        object-fit: contain;
       }
       .label {
         font-size: 7.5px;
@@ -1118,6 +1146,7 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       @media print {
         .screen-actions { display: none; }
+        main { padding: 0; }
       }
     </style>
   </head>
@@ -1129,7 +1158,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <main>
       <div class="sheet-header">
         <h1>${escapeHtml(title)}</h1>
-        <p>${input.items.length} printstukken · petit four 4 cm vierkant · taart 12 cm rond</p>
+        <p>${input.items.length} printstukken · petit four 3,5 cm vierkant · taart 12 cm rond</p>
       </div>
       <section class="sheet">
         ${itemHtml}
