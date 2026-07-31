@@ -696,6 +696,20 @@ function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
   return isCake && hasLargeCakeSize(description);
 }
 
+function isLikelyCakePhotoLine(line: ReceiptLine) {
+  const description = lineSearchDescription(line);
+
+  if (isMarzipanOrCreamCakeLine(line)) return true;
+  if (isPetitFourLine(line) || isAssortedPastryLine(line)) return false;
+  if (/\b(cupcake|cakepop|macaron|soes|slof|vlaai|gebak)\b/.test(description)) {
+    return false;
+  }
+
+  return /\b(foto\s*taart|fototaart|plaatjes\s*taart|plaatjestaart|marsepein|slagroom|taart(?:en)?|kindertaart)\b/.test(
+    description
+  );
+}
+
 function escapeHtml(value: string) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -799,6 +813,29 @@ function photoProductPlansForReceipt(
   return plans;
 }
 
+function inferredPhotoProductPlansForReceipt(
+  receipt: ReceiptSummary
+): PhotoProductPlan[] {
+  const plans: PhotoProductPlan[] = [];
+
+  receipt.lines.forEach((line) => {
+    if (!isLikelyCakePhotoLine(line)) return;
+
+    const description = lineSearchDescription(line);
+    const isCertainCakeLine = isMarzipanOrCreamCakeLine(line);
+
+    plans.push({
+      product: cleanProductLabel(line.description),
+      shape: "round",
+      sizeCm: 12,
+      copies: printCopiesForLine(line),
+      needsCheck: !isCertainCakeLine && !hasLargeCakeSize(description),
+    });
+  });
+
+  return plans.slice(0, 4);
+}
+
 function fallbackPhotoProductPlan(needsCheck = true): PhotoProductPlan {
   return {
     product: needsCheck ? "Foto controleren" : "Marsepeinfoto",
@@ -865,7 +902,12 @@ function addMarzipanPrintItemsForReceipt(input: {
   images: WebshopImageSummary[];
   inferredMatch?: boolean;
 }) {
-  const productPlans = photoProductPlansForReceipt(input.receipt);
+  const strictProductPlans = photoProductPlansForReceipt(input.receipt);
+  const productPlans =
+    strictProductPlans.length > 0
+      ? strictProductPlans
+      : inferredPhotoProductPlansForReceipt(input.receipt);
+
   if (input.images.length === 1 && productPlans.length > 1) {
     productPlans.forEach((plan, planIndex) => {
       pushMarzipanPrintCopies({
@@ -1084,17 +1126,19 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .sheet {
         align-items: flex-start;
+        column-gap: 1mm;
         display: flex;
         flex-wrap: wrap;
-        gap: 3mm;
+        row-gap: 1mm;
       }
       .print-item {
         break-inside: avoid;
         page-break-inside: avoid;
+        position: relative;
         width: var(--item-size);
       }
       .square {
-        margin-bottom: 2mm;
+        margin-bottom: 0;
       }
       .photo-frame {
         background: #fff;
@@ -1105,7 +1149,7 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .square .photo-frame {
         border: 0;
-        padding: 1mm;
+        padding: 0.35mm;
       }
       .round .photo-frame {
         border-radius: 999px;
@@ -1139,6 +1183,23 @@ function createMarzipanPhotoPrintHtml(input: {
       .label small {
         color: #444;
         margin-top: 0.4mm;
+      }
+      .square .label {
+        background: rgba(255, 255, 255, 0.9);
+        left: 0.45mm;
+        line-height: 1;
+        margin-top: 0;
+        max-width: calc(100% - 0.9mm);
+        padding: 0.25mm 0.4mm;
+        position: absolute;
+        top: 0.45mm;
+      }
+      .square .label strong {
+        font-size: 5.5px;
+      }
+      .square .label span,
+      .square .label small {
+        display: none;
       }
       .needs-check .photo-frame {
         border-color: #111;
