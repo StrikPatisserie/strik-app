@@ -109,14 +109,44 @@ function uniquePush(target: string[], value: string) {
   if (clean && !target.includes(clean)) target.push(clean);
 }
 
-function uniqueLinePush(target: LogisticsReceiptLine[], line: LogisticsReceiptLine) {
+function lineMatchesReceiptLine(
+  existing: LogisticsReceiptLine,
+  line: LogisticsReceiptLine
+) {
+  const existingPrice = existing.unitPrice || "";
+  const linePrice = line.unitPrice || "";
+  const existingNote = existing.note || "";
+  const lineNote = line.note || "";
+
+  if (
+    existing.quantity !== line.quantity ||
+    existingPrice !== linePrice ||
+    existingNote !== lineNote
+  ) {
+    return false;
+  }
+
+  return (
+    existing.description === line.description ||
+    existing.description.startsWith(`${line.description} `) ||
+    line.description.startsWith(`${existing.description} `)
+  );
+}
+
+function uniqueLinePush(
+  target: LogisticsReceiptLine[],
+  line: LogisticsReceiptLine
+) {
   const key = `${line.quantity}|${line.description}|${line.note || ""}|${line.unitPrice || ""}`;
-  const exists = target.some(
+  const existing = target.find(
     (item) =>
       `${item.quantity}|${item.description}|${item.note || ""}|${item.unitPrice || ""}` ===
-      key
+        key || lineMatchesReceiptLine(item, line)
   );
-  if (!exists) target.push(line);
+  if (existing) return existing;
+
+  target.push(line);
+  return line;
 }
 
 function parseDutchNumber(value: string) {
@@ -129,6 +159,18 @@ function parseDutchNumber(value: string) {
   const number = Number.parseFloat(normalized);
 
   return Number.isFinite(number) ? number : undefined;
+}
+
+function pickUnitPrice(priceTexts: string[], quantityText: string) {
+  const prices = priceTexts
+    .map(parseDutchNumber)
+    .filter((price): price is number => price !== undefined);
+  if (prices.length === 0) return undefined;
+
+  const quantity = parseDutchNumber(quantityText) || 1;
+  if (quantity <= 1) return Math.max(...prices);
+
+  return prices.at(-1);
 }
 
 function parseDutchDate(value: string) {
@@ -264,6 +306,45 @@ function lineIsInternalNoteLine(line: string) {
   return internalLinePatterns.some((pattern) => pattern.test(line));
 }
 
+function cleanProductDescription(value: string) {
+  return value
+    .replace(/\s+\d{2,6}(?:[.,]\d+)*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isProductOptionDescription(value: string) {
+  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|tekst\b|vulling\b)/i.test(
+    value.trim()
+  );
+}
+
+function isLikelyPhotoFileLine(value: string) {
+  return /\.(?:jpe?g|png|webp)\b/i.test(value.trim());
+}
+
+function appendDescription(line: LogisticsReceiptLine, value: string) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (!clean) return;
+  if (line.description.toLowerCase().includes(clean.toLowerCase())) return;
+
+  line.description = `${line.description} ${clean}`.replace(/\s+/g, " ").trim();
+}
+
+function productOptionNeedsContinuation(line: LogisticsReceiptLine) {
+  return isProductOptionDescription(line.description) && /:\s*$/.test(line.description);
+}
+
+function isAdministrativeRemarkLine(line: string) {
+  return (
+    /^betaald\b/i.test(line) ||
+    /^niet betaald\b/i.test(line) ||
+    /^gewenste betaling\b/i.test(line) ||
+    /^&euro;/i.test(line) ||
+    /^€\s*[\d.,]+\s+met referentie\b/i.test(line)
+  );
+}
+
 function pickupLocationFromLine(line: string) {
   const clean = line.trim().toLowerCase();
   const location = pickupLocations.find((item) => clean === item.key);
@@ -383,18 +464,56 @@ function splitAlternativeAddressFromRemarks(
 }
 
 function parseProductLine(line: string): LogisticsReceiptLine | null {
-  const match = line.match(/^(.+?)\s+€\s*([\d.,]+)(?:\s+(.+?))?\s+([\d.,]+)$/);
-  if (!match) return null;
+  const quantityMatch = line.match(/\s+(\d+(?:[.,]\d+)?)\s*$/);
+  const priceMatches = Array.from(line.matchAll(/€\s*([\d.,]+)/g));
+  if (!quantityMatch || priceMatches.length === 0) return null;
 
-  const [, description, unitPriceText, priceNote, quantityText] = match;
-  const unitPrice = parseDutchNumber(unitPriceText);
+  const firstPriceIndex = priceMatches[0].index;
+  if (firstPriceIndex === undefined || firstPriceIndex <= 0) return null;
+
+  const description = cleanProductDescription(line.slice(0, firstPriceIndex));
+  if (!description || /^totaalprijs\b|^btw\b/i.test(description)) return null;
+
+  const unitPrice = pickUnitPrice(
+    priceMatches.map((match) => match[1]),
+    quantityMatch[1]
+  );
 
   return {
-    quantity: quantityText.replace(".", ","),
-    description: description.trim(),
-    ...(priceNote ? { note: priceNote.trim() } : {}),
+    quantity: quantityMatch[1].replace(".", ","),
+    description,
     ...(unitPrice !== undefined ? { unitPrice } : {}),
   };
+}
+
+function parseProductOptionLine(
+  line: string,
+  fallbackQuantity = "1"
+): LogisticsReceiptLine | null {
+  const prefixQuantity = line.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
+  if (prefixQuantity && isProductOptionDescription(prefixQuantity[2])) {
+    return {
+      quantity: prefixQuantity[1].replace(".", ","),
+      description: cleanProductDescription(prefixQuantity[2]),
+    };
+  }
+
+  const suffixQuantity = line.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/);
+  if (suffixQuantity && isProductOptionDescription(suffixQuantity[1])) {
+    return {
+      quantity: suffixQuantity[2].replace(".", ","),
+      description: cleanProductDescription(suffixQuantity[1]),
+    };
+  }
+
+  if (isProductOptionDescription(line)) {
+    return {
+      quantity: fallbackQuantity || "1",
+      description: cleanProductDescription(line),
+    };
+  }
+
+  return null;
 }
 
 function findDeliveryBlock(bodyLines: string[]) {
@@ -454,13 +573,38 @@ function parsePage(pageText: string): ParsedPage | null {
       continue;
     }
 
+    if (
+      currentLine &&
+      /^\d+(?:[.,]\d+)?$/.test(line) &&
+      line.replace(".", ",") === currentLine.quantity
+    ) {
+      continue;
+    }
+
     const productLine = parseProductLine(line);
     if (productLine) {
-      uniqueLinePush(parsedLines, productLine);
-      currentLine = productLine;
+      currentLine = uniqueLinePush(parsedLines, productLine);
       if (lineIsInternalNoteLine(productLine.description)) {
         uniquePush(remarks, productLine.description);
       }
+      continue;
+    }
+
+    const productOptionLine = parseProductOptionLine(
+      line,
+      currentLine?.quantity || "1"
+    );
+    if (productOptionLine) {
+      currentLine = uniqueLinePush(parsedLines, productOptionLine);
+      continue;
+    }
+
+    if (
+      currentLine &&
+      !isAdministrativeRemarkLine(line) &&
+      (isLikelyPhotoFileLine(line) || productOptionNeedsContinuation(currentLine))
+    ) {
+      appendDescription(currentLine, line);
       continue;
     }
 

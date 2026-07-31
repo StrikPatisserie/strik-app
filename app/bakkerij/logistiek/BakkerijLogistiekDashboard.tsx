@@ -754,13 +754,25 @@ function normalizedLineDescription(value: string) {
     .trim();
 }
 
+function isProductOptionLine(line: ReceiptLine) {
+  const description = normalizedLineDescription(line.description);
+
+  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|tekst\b|vulling\b)/.test(
+    description
+  );
+}
+
 function isAssortedPastryLine(line: ReceiptLine) {
+  if (isProductOptionLine(line)) return false;
+
   const description = normalizedLineDescription(line.description);
 
   return /\bgesorteerd\b.*\bgebak\b/.test(description);
 }
 
 function isPetitFourLine(line: ReceiptLine) {
+  if (isProductOptionLine(line)) return false;
+
   const description = normalizedLineDescription(line.description);
 
   return /\bpetit\s*-?\s*fours?\b/.test(description);
@@ -787,6 +799,8 @@ function hasLargeCakeSize(text: string) {
 }
 
 function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
+  if (isProductOptionLine(line)) return false;
+
   const description = lineSearchDescription(line);
   const isCake =
     (/\bmarsepein/.test(description) && /taart(?:en)?\b/.test(description)) ||
@@ -796,6 +810,8 @@ function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
 }
 
 function isLikelyCakePhotoLine(line: ReceiptLine) {
+  if (isProductOptionLine(line)) return false;
+
   const description = lineSearchDescription(line);
 
   if (isMarzipanOrCreamCakeLine(line)) return true;
@@ -3846,9 +3862,13 @@ function ReceiptDetail({
   const visibleNotes = [
     receipt.customerNote,
     receipt.note,
-    receipt.internalNote,
     overrideMessage,
-  ].filter(Boolean);
+  ].filter(
+    (note) =>
+      note &&
+      !/^geen aparte opmerking\.?$/i.test(note) &&
+      !/^geen aparte logistieke waarschuwing\.?$/i.test(note)
+  );
 
   return (
     <article className="h-[30rem] overflow-y-auto rounded-sm border border-[#111] bg-[#f3f1ed] p-2 text-[#000] shadow-sm">
@@ -3919,11 +3939,14 @@ function ReceiptDetail({
             <tbody>
               {receipt.lines.map((line, index) => {
                 const total = receiptLineTotal(line);
+                const optionLine = isProductOptionLine(line);
 
                 return (
                   <tr
                     key={`${receipt.id}-line-${index}`}
-                    className="align-top font-bold"
+                    className={`align-top ${
+                      optionLine ? "font-normal italic" : "font-bold"
+                    }`}
                   >
                     <td className="py-0.5 pr-2 text-right tabular-nums">
                       {line.quantity}
