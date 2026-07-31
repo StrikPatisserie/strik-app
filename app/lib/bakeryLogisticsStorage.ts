@@ -209,6 +209,260 @@ function sortBatches(batches: LogisticsBatch[]) {
   });
 }
 
+function parseReceiptQuantity(quantity: string) {
+  const clean = String(quantity || "")
+    .replace(/[^\d,.-]/g, "")
+    .replace(",", ".");
+  const parsed = Number.parseFloat(clean);
+
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizedReceiptText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function receiptMergeKey(receipt: LogisticsBatch["receipts"][number]) {
+  const receiptNumber = receipt.receiptNumber || receipt.id;
+  if (receiptNumber && /^\d{2,}$/.test(receiptNumber)) {
+    return `bon:${receiptNumber}`;
+  }
+
+  return [
+    "fallback",
+    normalizedReceiptText(receipt.customer),
+    normalizedReceiptText(receipt.address),
+    normalizedReceiptText(receipt.deliveryAddress),
+    String(receipt.value || ""),
+  ].join(":");
+}
+
+function receiptQualityScore(receipt: LogisticsBatch["receipts"][number]) {
+  return [
+    receipt.receiptNumber ? 20 : 0,
+    receipt.lines.length * 8,
+    receipt.value ? 6 : 0,
+    receipt.time && receipt.time !== "Geen tijd" ? 5 : 0,
+    receipt.customer && receipt.customer !== "Onbekende klant" ? 4 : 0,
+    receipt.address && receipt.address !== "Adres controleren" ? 4 : 0,
+    receipt.customerNote && receipt.customerNote !== "Geen aparte opmerking."
+      ? 3
+      : 0,
+    receipt.tags.length,
+  ].reduce((total, value) => total + value, 0);
+}
+
+function mergeReceipt(
+  existing: LogisticsBatch["receipts"][number],
+  incoming: LogisticsBatch["receipts"][number]
+) {
+  const primary =
+    receiptQualityScore(incoming) >= receiptQualityScore(existing)
+      ? incoming
+      : existing;
+  const fallback = primary === incoming ? existing : incoming;
+
+  return {
+    ...fallback,
+    ...primary,
+    id: primary.id || fallback.id,
+    receiptNumber: primary.receiptNumber || fallback.receiptNumber,
+    time:
+      primary.time && primary.time !== "Geen tijd"
+        ? primary.time
+        : fallback.time,
+    customer:
+      primary.customer && primary.customer !== "Onbekende klant"
+        ? primary.customer
+        : fallback.customer,
+    address:
+      primary.address && primary.address !== "Adres controleren"
+        ? primary.address
+        : fallback.address,
+    deliveryAddress: primary.deliveryAddress || fallback.deliveryAddress,
+    alternativeAddress: primary.alternativeAddress || fallback.alternativeAddress,
+    pickupLocation: primary.pickupLocation || fallback.pickupLocation,
+    value: primary.value ?? fallback.value,
+    note: primary.note || fallback.note,
+    customerNote:
+      primary.customerNote && primary.customerNote !== "Geen aparte opmerking."
+        ? primary.customerNote
+        : fallback.customerNote,
+    internalNote: primary.internalNote || fallback.internalNote,
+    lines: primary.lines.length ? primary.lines : fallback.lines,
+    tags: Array.from(new Set([...fallback.tags, ...primary.tags])),
+  };
+}
+
+function mergeReceipts(
+  existingReceipts: LogisticsBatch["receipts"],
+  incomingReceipts: LogisticsBatch["receipts"]
+) {
+  const receiptByKey = new Map<string, LogisticsBatch["receipts"][number]>();
+  const orderedKeys: string[] = [];
+
+  for (const receipt of [...existingReceipts, ...incomingReceipts]) {
+    const key = receiptMergeKey(receipt);
+    const existing = receiptByKey.get(key);
+
+    if (existing) {
+      receiptByKey.set(key, mergeReceipt(existing, receipt));
+    } else {
+      orderedKeys.push(key);
+      receiptByKey.set(key, receipt);
+    }
+  }
+
+  return orderedKeys
+    .map((key) => receiptByKey.get(key))
+    .filter(Boolean) as LogisticsBatch["receipts"];
+}
+
+function isMergedFileLabel(value: string) {
+  return /^\d+\s+bestanden:/.test(value) || value.includes(" + ");
+}
+
+function splitMergedFileLabel(value: string) {
+  if (!value) return [];
+  if (!isMergedFileLabel(value)) return [value];
+
+  return value
+    .replace(/^\d+\s+bestanden:\s*/i, "")
+    .replace(/\s+\+\s+\.\.\.$/, "")
+    .split(/\s+\+\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function mergeFileLabels(labels: string[]) {
+  const uniqueLabels = Array.from(
+    new Set(labels.flatMap(splitMergedFileLabel).filter(Boolean))
+  );
+  if (uniqueLabels.length <= 1) return uniqueLabels[0] || "";
+
+  const joined = uniqueLabels.join(" + ");
+  if (joined.length <= 240) return joined;
+
+  return `${uniqueLabels.length} bestanden: ${uniqueLabels
+    .slice(0, 2)
+    .join(" + ")} + ...`;
+}
+
+function latestIso(...values: string[]) {
+  return values.filter(Boolean).sort().at(-1) || "";
+}
+
+function isExternalValueReceipt(
+  receipt: LogisticsBatch["receipts"][number]
+) {
+  return !receipt.tags.includes("intern") && !receipt.tags.includes("ijs");
+}
+
+function isIceTubLineDescription(description: string) {
+  const text = normalizedReceiptText(description);
+
+  if (/\bijstaart\b|\bijs\s+taart\b|\bijsgebak\b/.test(text)) return false;
+
+  return (
+    /\bijssalon\b/.test(text) ||
+    /\bschepijs\b/.test(text) ||
+    /\broomijs\b/.test(text) ||
+    /\bijs\s*(?:bak|bakken|5\s*l|5l|liter|ltr|smaak|smaken)\b/.test(text)
+  );
+}
+
+function calculateIceTubs(receipts: LogisticsBatch["receipts"]) {
+  return receipts.reduce((total, receipt) => {
+    const receiptIceTubs = receipt.lines.reduce((lineTotal, line) => {
+      if (!isIceTubLineDescription(line.description)) return lineTotal;
+      return lineTotal + parseReceiptQuantity(line.quantity);
+    }, 0);
+
+    return total + receiptIceTubs;
+  }, 0);
+}
+
+function orderPressureFor(orderValue: number, receiptCount: number) {
+  if (orderValue >= 3500 || receiptCount >= 35) return "hoog";
+  if (orderValue >= 2000 || receiptCount >= 18) return "middel";
+  return "laag";
+}
+
+function recalculateBatchTotals(batch: LogisticsBatch): LogisticsBatch {
+  const orderValue = batch.receipts
+    .filter(isExternalValueReceipt)
+    .reduce((total, receipt) => total + (receipt.value || 0), 0);
+  const iceTubs = calculateIceTubs(batch.receipts);
+  const criticalWindows = batch.receipts.filter(
+    (receipt) =>
+      receipt.time !== "Geen tijd" ||
+      receipt.tags.includes("zorg") ||
+      receipt.tags.some((tag) => tag.startsWith("levering "))
+  ).length;
+
+  return {
+    ...batch,
+    orderCount: batch.receipts.length,
+    orderValue,
+    orderPressure: orderPressureFor(orderValue, batch.receipts.length),
+    iceTubs,
+    tempexBoxes: Math.ceil(iceTubs / 3),
+    criticalWindows,
+  };
+}
+
+export function mergeLogisticsBatches(
+  existing: LogisticsBatch,
+  incoming: LogisticsBatch
+): LogisticsBatch {
+  if (existing.id === incoming.id) {
+    return recalculateBatchTotals(incoming);
+  }
+
+  const receipts = mergeReceipts(existing.receipts, incoming.receipts);
+  const existingFileNames = splitMergedFileLabel(existing.fileName);
+  const incomingFileNames = splitMergedFileLabel(incoming.fileName);
+  const hasNewFile = incomingFileNames.some(
+    (fileName) => fileName && !existingFileNames.includes(fileName)
+  );
+  const fileName = mergeFileLabels([existing.fileName, incoming.fileName]);
+  const subject = mergeFileLabels([existing.subject, incoming.subject]);
+  const warnings = Array.from(
+    new Set([...existing.warnings, ...incoming.warnings].filter(Boolean))
+  );
+
+  return recalculateBatchTotals({
+    ...incoming,
+    id: `${incoming.date}-${incoming.status}-merged`,
+    fileName,
+    subject,
+    from: incoming.from || existing.from,
+    receivedAt: latestIso(existing.receivedAt, incoming.receivedAt),
+    importedAt: latestIso(existing.importedAt, incoming.importedAt),
+    pageCount: hasNewFile
+      ? existing.pageCount + incoming.pageCount
+      : Math.max(existing.pageCount, incoming.pageCount),
+    receipts,
+    warnings,
+  });
+}
+
+function mergeCompatibleBatches(
+  existingBatches: LogisticsBatch[],
+  incomingBatch: LogisticsBatch
+) {
+  return existingBatches.reduce(
+    (mergedBatch, existingBatch) =>
+      mergeLogisticsBatches(existingBatch, mergedBatch),
+    incomingBatch
+  );
+}
+
 function sortWebshopImages(images: LogisticsWebshopImage[]) {
   return [...images].sort((first, second) => {
     const dateCompare = second.deliveryDate.localeCompare(first.deliveryDate);
@@ -396,8 +650,12 @@ export async function getLogisticsDayFeedbackForDate(date: string) {
 
 export async function upsertLogisticsBatch(batch: LogisticsBatch) {
   const state = await readLogisticsState();
+  const compatibleBatches = state.batches.filter(
+    (item) => item.date === batch.date && item.status === batch.status
+  );
+  const nextBatch = mergeCompatibleBatches(compatibleBatches, batch);
   const batches = sortBatches([
-    batch,
+    nextBatch,
     ...state.batches.filter(
       (item) => !(item.date === batch.date && item.status === batch.status)
     ),
@@ -416,7 +674,7 @@ export async function upsertLogisticsBatch(batch: LogisticsBatch) {
 
   if (error) throw new Error(error.message);
 
-  return batch;
+  return nextBatch;
 }
 
 export async function upsertLogisticsWebshopImage(
