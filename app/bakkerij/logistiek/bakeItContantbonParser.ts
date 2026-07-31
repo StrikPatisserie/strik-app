@@ -26,6 +26,7 @@ type ParsedPage = {
   date: string;
   customer: string;
   deliveryCode: string;
+  declaredPageTotal: number;
   topAddress: string;
   lines: LogisticsReceiptLine[];
   remarks: string[];
@@ -354,6 +355,10 @@ function cleanProductDescription(value: string) {
     .trim();
 }
 
+function cleanProductOptionDescription(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 function isUsableProductDescription(value: string) {
   const clean = value.trim();
   if (!clean || /^€/.test(clean) || /^[\d.,]+$/.test(clean)) return false;
@@ -366,9 +371,7 @@ function isUsableProductDescription(value: string) {
 }
 
 function isProductOptionDescription(value: string) {
-  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|tekst\b|vulling\b)/i.test(
-    value.trim()
-  );
+  return productOptionKeywordRegex().test(value.trim());
 }
 
 function isLikelyPhotoFileLine(value: string) {
@@ -385,6 +388,14 @@ function appendDescription(line: LogisticsReceiptLine, value: string) {
 
 function productOptionNeedsContinuation(line: LogisticsReceiptLine) {
   return isProductOptionDescription(line.description) && /:\s*$/.test(line.description);
+}
+
+function productOptionKeywordRegex() {
+  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|tekst\b|vulling\b|voorsnijden\b)/i;
+}
+
+function productOptionSearchRegex() {
+  return /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?/i;
 }
 
 function isAdministrativeRemarkLine(line: string) {
@@ -471,6 +482,8 @@ function inferPickupLocation(bodyLines: string[]) {
 function cleanAlternativeAddressLine(line: string) {
   return line
     .replace(/^bezorgen\s+bij\s+/i, "")
+    .replace(/^bezorgen\s+op\s+/i, "")
+    .replace(/^alternatief\s+bezorgadres\s*:?\s*/i, "")
     .replace(/^alternatief\s+afleveradres\s*:?\s*/i, "")
     .replace(/^afwijkend\s+afleveradres\s*:?\s*/i, "")
     .replace(/,?\s+graag$/i, "")
@@ -478,7 +491,7 @@ function cleanAlternativeAddressLine(line: string) {
 }
 
 function isAlternativeAddressStart(line: string) {
-  return /^(bezorgen bij|alternatief afleveradres|afwijkend afleveradres)\b/i.test(
+  return /^(bezorgen bij|bezorgen op|alternatief bezorgadres|alternatief afleveradres|afwijkend afleveradres)\b/i.test(
     line
   );
 }
@@ -607,9 +620,6 @@ function parseProductOptionLine(
   fallbackQuantity = "1"
 ): LogisticsReceiptLine | null {
   const priceMatches = Array.from(line.matchAll(/€\s*([\d.,]+)/g));
-  const firstPriceIndex = priceMatches[0]?.index;
-  const descriptionLine =
-    firstPriceIndex === undefined ? line : line.slice(0, firstPriceIndex);
   const withUnitPrice = (
     optionLine: LogisticsReceiptLine
   ): LogisticsReceiptLine => {
@@ -621,36 +631,56 @@ function parseProductOptionLine(
     return unitPrice === undefined ? optionLine : { ...optionLine, unitPrice };
   };
 
-  const prefixQuantity = descriptionLine.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
-  if (prefixQuantity && isProductOptionDescription(prefixQuantity[2])) {
-    return withUnitPrice({
-      quantity: prefixQuantity[1].replace(".", ","),
-      description: cleanProductDescription(prefixQuantity[2]),
-    });
-  }
+  const fromCandidate = (candidate: string) => {
+    const cleanCandidate = candidate.replace(/\s+/g, " ").trim();
+    if (!cleanCandidate) return null;
 
-  const suffixQuantity = descriptionLine.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/);
-  if (suffixQuantity && isProductOptionDescription(suffixQuantity[1])) {
-    return withUnitPrice({
-      quantity: suffixQuantity[2].replace(".", ","),
-      description: cleanProductDescription(suffixQuantity[1]),
-    });
-  }
+    const prefixQuantity = cleanCandidate.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
+    if (prefixQuantity && isProductOptionDescription(prefixQuantity[2])) {
+      return withUnitPrice({
+        quantity: prefixQuantity[1].replace(".", ","),
+        description: cleanProductOptionDescription(prefixQuantity[2]),
+      });
+    }
 
-  if (isProductOptionDescription(descriptionLine)) {
-    return withUnitPrice({
-      quantity: fallbackQuantity || "1",
-      description: cleanProductDescription(descriptionLine),
-    });
+    const suffixQuantity = cleanCandidate.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/);
+    if (suffixQuantity && isProductOptionDescription(suffixQuantity[1])) {
+      return withUnitPrice({
+        quantity: suffixQuantity[2].replace(".", ","),
+        description: cleanProductOptionDescription(suffixQuantity[1]),
+      });
+    }
+
+    if (isProductOptionDescription(cleanCandidate)) {
+      return withUnitPrice({
+        quantity: fallbackQuantity || "1",
+        description: cleanProductOptionDescription(cleanCandidate),
+      });
+    }
+
+    return null;
+  };
+
+  const withoutPrices = line.replace(/€\s*[\d.,]+/g, " ");
+  const firstPriceIndex = priceMatches[0]?.index;
+  const candidates = [
+    firstPriceIndex === undefined ? line : line.slice(0, firstPriceIndex),
+    withoutPrices,
+    priceMatches.length
+      ? line.slice((priceMatches.at(-1)?.index || 0) + priceMatches.at(-1)![0].length)
+      : "",
+  ];
+
+  for (const candidate of candidates) {
+    const optionLine = fromCandidate(candidate);
+    if (optionLine) return optionLine;
   }
 
   return null;
 }
 
 function findNextProductOptionIndex(value: string, startIndex: number) {
-  const next = value
-    .slice(startIndex)
-    .search(/\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling)\s*:?/i);
+  const next = value.slice(startIndex).search(productOptionSearchRegex());
 
   return next < 0 ? -1 : startIndex + next;
 }
@@ -807,6 +837,12 @@ function parsePage(pageText: string): ParsedPage | null {
   const customer = lines[weekIndex + 1] || "Onbekende klant";
   const deliveryCodeMatch = (lines[weekIndex + 2] || "").match(/levering\s+(\d+)/i);
   const deliveryCode = deliveryCodeMatch?.[1] || "";
+  const declaredPageTotal = lines.reduce((highest, line) => {
+    const match = line.match(/\bpagina\s+\d+\s+van\s+(\d+)\b/i);
+    const total = match ? Number(match[1]) : 0;
+
+    return Number.isFinite(total) && total > highest ? total : highest;
+  }, 0);
   const productHeaderIndex = lines.findIndex((line) =>
     /\bartikelomschrijving\b/i.test(line)
   );
@@ -862,6 +898,23 @@ function parsePage(pageText: string): ParsedPage | null {
       line.replace(".", ",") === currentLine.quantity
     ) {
       continue;
+    }
+
+    if (!productSectionOpen) {
+      const repeatedProductLine = parseProductLine(line);
+      if (repeatedProductLine) {
+        currentLine = uniqueLinePush(parsedLines, repeatedProductLine);
+        continue;
+      }
+
+      const repeatedOptionLine = parseProductOptionLine(
+        line,
+        currentLine?.quantity || "1"
+      );
+      if (repeatedOptionLine) {
+        currentLine = uniqueLinePush(parsedLines, repeatedOptionLine);
+        continue;
+      }
     }
 
     if (productSectionOpen) {
@@ -933,6 +986,7 @@ function parsePage(pageText: string): ParsedPage | null {
     date,
     customer,
     deliveryCode,
+    declaredPageTotal,
     topAddress,
     lines: parsedLines,
     remarks: alternativeAddressResult.remarks,
@@ -962,6 +1016,9 @@ function mergePageIntoDraft(draft: ReceiptDraft, page: ParsedPage) {
   }
   if (!draft.pickupLocation && page.pickupLocation) {
     draft.pickupLocation = page.pickupLocation;
+  }
+  if (page.declaredPageTotal > draft.declaredPageTotal) {
+    draft.declaredPageTotal = page.declaredPageTotal;
   }
 
   draft.pageCount += 1;
@@ -1170,6 +1227,13 @@ export async function parseBakeItContantbonPdf(
   }
   if (receipts.some((receipt) => receipt.lines.length === 0)) {
     warnings.push("Een of meer bonnen hebben geen herkende artikelregels.");
+  }
+  if (
+    Array.from(drafts.values()).some(
+      (draft) => draft.declaredPageTotal > 0 && draft.pageCount < draft.declaredPageTotal
+    )
+  ) {
+    warnings.push("Een of meer meerpagina-bonnen lijken niet compleet ingelezen.");
   }
 
   return {

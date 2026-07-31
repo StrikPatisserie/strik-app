@@ -884,7 +884,7 @@ function normalizedLineDescription(value: string) {
 function isProductOptionLine(line: ReceiptLine) {
   const description = normalizedLineDescription(line.description);
 
-  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|tekst\b|vulling\b)/.test(
+  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|tekst\b|vulling\b|voorsnijden\b)/.test(
     description
   );
 }
@@ -946,10 +946,11 @@ function recoveredReceiptLinesFromNote(value: string) {
   const patterns = [
     /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)[^€]{4,180})\s+€\s*([\d.,]+)/gi,
     /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:petit\s+four)[^€]{4,180})\s+€\s*([\d.,]+)/gi,
-    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|tekst|vulling)\s*:?\s*[^€]{1,180})\s+€\s*([\d.,]+)/gi,
+    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?\s*[^€]{1,180})\s+€\s*([\d.,]+)/gi,
+    /(?:€\s*[\d.,]+\s+)+((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?\s*.+?)\s+(\d+(?:[.,]\d+)?)\b/gi,
   ];
 
-  patterns.forEach((pattern) => {
+  patterns.slice(0, 3).forEach((pattern) => {
     for (const match of value.matchAll(pattern)) {
       const description = cleanReceiptLineDescription(match[2] || "");
       if (!description || isPriceOnlyReceiptDescription(description)) continue;
@@ -963,6 +964,15 @@ function recoveredReceiptLinesFromNote(value: string) {
       });
     }
   });
+  for (const match of value.matchAll(patterns[3])) {
+    const description = cleanReceiptLineDescription(match[1] || "");
+    if (!description || isPriceOnlyReceiptDescription(description)) continue;
+
+    pushUniqueReceiptLine(lines, {
+      quantity: (match[2] || "1").replace(".", ","),
+      description,
+    });
+  }
 
   return lines;
 }
@@ -1002,12 +1012,13 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
 }
 
 function normalizeImportedReceipt(receipt: ReceiptSummary): ReceiptSummary {
-  const customerNote = cleanReceiptDisplayNote(receipt.customerNote || "");
+  const lines = normalizeImportedReceiptLines(receipt);
+  const customerNote = cleanReceiptDisplayNote(receipt.customerNote || "", lines);
 
   return {
     ...receipt,
     customerNote: customerNote || "Geen aparte opmerking.",
-    lines: normalizeImportedReceiptLines(receipt),
+    lines,
   };
 }
 
@@ -3743,72 +3754,41 @@ function ReceiptAddressBlock({
   selectedPlan,
 }: Readonly<{ receipt: ReceiptSummary; selectedPlan: DayPlan }>) {
   const fulfillment = receiptFulfillment(receipt);
-  const pickupLocation = pickupLocationFor(receipt);
-  const tone = receiptToneFor(receipt);
-  const displayTime = receiptListTimeLabel(receipt);
-  const focusLabel =
-    fulfillment === "afhalen"
-      ? "Afhaalwinkel"
-      : receipt.alternativeAddress
-        ? "Alternatief afleveradres"
-        : "Afleveradres";
-  const focusValue =
-    fulfillment === "afhalen"
-      ? pickupLocation || receipt.deliveryAddress || "Afhaalplek controleren"
-      : receipt.alternativeAddress || receipt.deliveryAddress || receipt.address;
-  const showAlternativeForPickup =
-    fulfillment === "afhalen" &&
-    receipt.alternativeAddress &&
-    receipt.alternativeAddress !== focusValue;
+  const mainAddress =
+    fulfillment === "bezorgen"
+      ? receipt.alternativeAddress || receipt.deliveryAddress || receipt.address
+      : receipt.address;
+  const showOriginalAddress =
+    fulfillment === "bezorgen" &&
+    receipt.address &&
+    mainAddress &&
+    receipt.address !== mainAddress;
   const receiptNumber = receipt.receiptNumber || receipt.id;
 
   return (
-    <div className="bg-white px-3 py-4">
+    <div className="bg-white px-3 py-3">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="pl-5">
-          <p className="text-base font-black leading-tight tracking-normal text-[#000]">
+        <div className="pl-3">
+          <p className="text-sm font-black leading-tight tracking-normal text-[#000] sm:text-base">
             {receiptNumber} {receipt.customer}
           </p>
-          <p className="mt-1 whitespace-pre-line text-sm font-black leading-tight tracking-normal text-[#000]">
-            {receipt.address}
-          </p>
+          {mainAddress && (
+            <p className="mt-1 max-w-md whitespace-pre-line text-xs font-bold leading-snug tracking-normal text-[#111]">
+              {mainAddress}
+            </p>
+          )}
+          {showOriginalAddress && (
+            <p className="mt-1 max-w-md text-[0.62rem] font-normal leading-snug tracking-normal text-[#666]">
+              Origineel adres: {receipt.address}
+            </p>
+          )}
         </div>
         <div className="text-left sm:min-w-56 sm:text-right">
           <p className="text-sm font-black leading-tight tracking-normal text-[#000]">
             {formatReceiptDateLabel(selectedPlan.date)}
           </p>
-          <p className="mt-1 text-xs font-black uppercase tracking-normal text-[#000]">
-            {fulfillmentLabel(receipt)}
-          </p>
-          {displayTime && (
-            <p className="mt-0.5 text-xs font-bold tracking-normal text-[#000]">
-              {displayTime}
-            </p>
-          )}
         </div>
       </div>
-      <div
-        className={`mt-4 border border-l-4 px-2.5 py-2 ${receiptToneBadgeClasses(
-          tone
-        )}`}
-      >
-        <p className="text-[0.62rem] font-black uppercase tracking-normal opacity-80">
-          {focusLabel}
-        </p>
-        <p className="mt-0.5 text-sm font-black leading-snug tracking-normal">
-          {focusValue}
-        </p>
-      </div>
-      {showAlternativeForPickup && (
-        <div className="mt-2">
-          <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#555]">
-            Afleveradres op bon
-          </p>
-          <p className="mt-0.5 text-xs font-bold leading-snug tracking-normal text-[#111]">
-            {receipt.alternativeAddress}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -3905,16 +3885,37 @@ function receiptLineTotal(line: ReceiptLine) {
   return line.unitPrice * (quantity > 0 ? quantity : 1);
 }
 
-function cleanReceiptDisplayNote(value: string) {
-  return value
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
+  const lineDescriptions = lines
+    .map((line) => cleanReceiptLineDescription(line.description))
+    .filter((description) => description.length >= 4)
+    .sort((first, second) => second.length - first.length);
+  let clean = value;
+
+  lineDescriptions.forEach((description) => {
+    clean = clean.replace(
+      new RegExp(
+        `(?:\\d+(?:[.,]\\d+)?\\s+)?${escapeRegExp(description)}\\s*(?:€\\s*[\\d.,]+\\s*){0,2}(?:\\d+(?:[.,]\\d+)?\\s*)?`,
+        "gi"
+      ),
+      " "
+    );
+  });
+
+  return clean
     .replace(
       /\b(?:\d+(?:[.,]\d+)?\s+)?(?:(?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)|petit\s+four)[^€]{4,180}\s+€\s*[\d.,]+(?:\s+\d+(?:[.,]\d+)?\s+€\s*[\d.,]+(?:\s+€\s*[\d.,]+)*)?/gi,
       ""
     )
     .replace(
-      /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling)\s*:.*?(?=\s+\d+(?:[.,]\d+)?\s+(?:betaald|niet betaald)\b|$)/gi,
+      /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:.*?(?=\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,]+\s+met referentie)\b|$)/gi,
       ""
     )
+    .replace(/\b(?:\d+(?:[.,]\d+)?\s+)?€\s*[\d.,]+\b/g, "")
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
     .replace(/click here for more information/gi, "")
     .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
@@ -4116,6 +4117,70 @@ function ReceiptOverrideEditor({
   );
 }
 
+function fulfillmentSentenceFor(receipt: ReceiptSummary) {
+  const fulfillment = receiptFulfillment(receipt);
+  const time = receiptListTimeLabel(receipt);
+  const rangeMatch = time.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
+
+  if (fulfillment === "afhalen") {
+    if (rangeMatch) {
+      return `Wordt gehaald tussen ${rangeMatch[1]} en ${rangeMatch[2]}`;
+    }
+    if (time) return `Wordt gehaald om ${time}`;
+
+    return "Wordt gehaald";
+  }
+
+  if (fulfillment === "bezorgen") {
+    if (rangeMatch) {
+      return `Wordt bezorgd voor ${rangeMatch[2]}`;
+    }
+    if (time) return `Wordt bezorgd om ${time}`;
+
+    return "Wordt bezorgd";
+  }
+
+  return time ? `Tijd controleren: ${time}` : "Afhalen of bezorgen controleren";
+}
+
+function fulfillmentTargetFor(receipt: ReceiptSummary) {
+  if (receiptFulfillment(receipt) === "afhalen") {
+    return pickupLocationFor(receipt) || "Winkel controleren";
+  }
+
+  return receipt.alternativeAddress || receipt.deliveryAddress || receipt.address;
+}
+
+function ReceiptFulfillmentBlock({
+  receipt,
+}: Readonly<{ receipt: ReceiptSummary }>) {
+  const tone = receiptToneFor(receipt);
+  const target = fulfillmentTargetFor(receipt);
+  const panelTone =
+    tone === "lent"
+      ? "border-[#8fbc8c] bg-[#eef8ed]"
+      : tone === "heyendaalseweg"
+        ? "border-[#e5cf68] bg-[#fff7cf]"
+        : tone === "ziekerstraat"
+          ? "border-[#eeaaa3] bg-[#fff0ef]"
+          : tone === "daalseweg"
+            ? "border-[#8dbde9] bg-[#eef7ff]"
+            : "border-[#c8c3bb] bg-[#f2f1ee]";
+
+  return (
+    <div className={`mt-5 border border-l-4 px-3 py-3 text-center ${panelTone}`}>
+      <p className="text-lg font-black leading-tight tracking-normal text-[#111] sm:text-xl">
+        {fulfillmentSentenceFor(receipt)}
+      </p>
+      {target && (
+        <p className="mt-1 text-xl font-black uppercase leading-tight tracking-normal text-[#111] sm:text-2xl">
+          {target}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ReceiptDetail({
   imageMatches,
   onSaveReceiptOverride,
@@ -4142,14 +4207,12 @@ function ReceiptDetail({
     );
   }
 
-  const fulfillment = fulfillmentLabel(receipt);
   const receiptNumber = receipt.receiptNumber || receipt.id;
   const visibleNotes = [
     receipt.customerNote,
-    receipt.note,
     overrideMessage,
   ]
-    .map((note) => (note ? cleanReceiptDisplayNote(note) : ""))
+    .map((note) => (note ? cleanReceiptDisplayNote(note, receipt.lines) : ""))
     .filter(
       (note) =>
         note &&
@@ -4193,16 +4256,6 @@ function ReceiptDetail({
         </div>
 
         <ReceiptAddressBlock receipt={receipt} selectedPlan={selectedPlan} />
-
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-y border-[#d0d0d0] bg-white px-3 py-1.5">
-          <span className="border border-[#111] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-normal">
-            {fulfillment}
-          </span>
-          <span className="truncate text-[0.68rem] font-bold tracking-normal">
-            {selectedPlan.title}
-            {receipt.tags.length > 0 ? ` · ${receipt.tags.join(" · ")}` : ""}
-          </span>
-        </div>
 
         <ReceiptOverrideEditor
           key={`${receipt.id}-${override?.updatedAt || "nieuw"}`}
@@ -4273,17 +4326,18 @@ function ReceiptDetail({
           </div>
 
           {visibleNotes.length > 0 && (
-            <div className="mt-5 border-2 border-[#c9c9c9] bg-[#f4f4f4] px-2 py-2 text-center">
+            <div className="mt-4 border-t border-[#d0d0d0] px-2 py-2 text-center">
               {visibleNotes.map((note, index) => (
                 <p
                   key={`${receipt.id}-note-${index}`}
-                  className="text-sm font-bold leading-snug tracking-normal"
+                  className="text-xs font-normal italic leading-snug tracking-normal text-[#333]"
                 >
                   {note}
                 </p>
               ))}
             </div>
           )}
+          <ReceiptFulfillmentBlock receipt={receipt} />
           <WebshopImageBlock images={imageMatches} receipt={receipt} />
         </div>
       </div>
