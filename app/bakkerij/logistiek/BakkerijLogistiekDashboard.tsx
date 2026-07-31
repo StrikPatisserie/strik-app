@@ -1056,7 +1056,7 @@ function buildMarzipanPrintItems(
 }
 
 function marzipanPrintSizeLabel(item: MarzipanPrintItem) {
-  return item.shape === "square" ? "3,5 cm vierkant" : "12 cm rond";
+  return item.shape === "square" ? "ca. 3,8 cm vierkant" : "12 cm rond";
 }
 
 function createMarzipanPhotoPrintHtml(input: {
@@ -1134,19 +1134,10 @@ function createMarzipanPhotoPrintHtml(input: {
 
   const squareHtml = squareGroups
     .map((group) => {
-      const detail = [
-        group.labelItem.product,
-        `${group.items.length}x`,
-        group.labelItem.needsCheck ? "check" : "",
-      ]
-        .filter(Boolean)
-        .join(" · ");
-
       return `
         <section class="square-group">
           <div class="square-group-label">
             <strong>${escapeHtml(group.labelItem.customerLastName)}</strong>
-            ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
           </div>
           <div class="square-grid">
             ${group.items.map((item) => printItemHtmlFor(item)).join("")}
@@ -1225,16 +1216,16 @@ function createMarzipanPhotoPrintHtml(input: {
         display: block;
       }
       .square-group {
-        margin-bottom: 1.2mm;
+        margin-bottom: 1mm;
       }
       .square-group-label {
         align-items: baseline;
         display: flex;
         font-size: 6px;
         gap: 1mm;
-        height: 2mm;
+        height: 2.4mm;
         line-height: 1;
-        margin: 0 0 0.25mm;
+        margin: 0 0 0.4mm;
       }
       .square-group-label strong {
         font-size: 6.5px;
@@ -1244,9 +1235,10 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .square-grid {
         display: grid;
-        gap: 0.18mm;
-        grid-template-columns: repeat(auto-fill, 3.5cm);
+        gap: 0.35mm;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         justify-content: start;
+        width: 100%;
       }
       .round-grid {
         align-items: flex-start;
@@ -1263,6 +1255,7 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .square {
         margin-bottom: 0;
+        width: 100%;
       }
       .photo-frame {
         background: #fff;
@@ -1272,8 +1265,11 @@ function createMarzipanPhotoPrintHtml(input: {
         width: var(--item-size);
       }
       .square .photo-frame {
+        aspect-ratio: 1 / 1;
         border: 0;
-        padding: 0.08mm;
+        height: auto;
+        padding: 0;
+        width: 100%;
       }
       .round .photo-frame {
         border-radius: 999px;
@@ -1329,7 +1325,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <main>
       <div class="sheet-header">
         <h1>${escapeHtml(title)}</h1>
-        <p>${input.items.length} printstukken · petit four 3,5 cm vierkant · taart 12 cm rond</p>
+        <p>${input.items.length} printstukken · petit four ca. 3,8 cm vierkant · taart 12 cm rond</p>
       </div>
       <section class="sheet">
         ${itemHtml}
