@@ -1190,13 +1190,14 @@ function createMarzipanPhotoPrintHtml(input: {
       * { box-sizing: border-box; }
       :root {
         --petit-four-size: 37.8mm;
-        --petit-four-gap: 0.25mm;
       }
       body {
         background: #fff;
         color: #000;
         font-family: Arial, Helvetica, sans-serif;
         margin: 0;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
       }
       .screen-actions {
         align-items: center;
@@ -1265,10 +1266,10 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .square-grid {
         display: grid;
-        gap: var(--petit-four-gap);
+        gap: 0;
         grid-template-columns: repeat(5, var(--petit-four-size));
         justify-content: start;
-        width: fit-content;
+        width: 189mm;
       }
       .round-grid {
         align-items: flex-start;
@@ -1298,6 +1299,9 @@ function createMarzipanPhotoPrintHtml(input: {
         aspect-ratio: 1 / 1;
         background: #000;
         border: 0;
+        box-shadow:
+          inset -0.25mm 0 0 #fff,
+          inset 0 -0.25mm 0 #fff;
         height: var(--petit-four-size);
         padding: 0;
         width: var(--petit-four-size);
@@ -1344,6 +1348,17 @@ function createMarzipanPhotoPrintHtml(input: {
         main {
           max-width: none;
           padding: 0;
+          width: 190mm;
+        }
+        .square-grid {
+          gap: 0 !important;
+          grid-template-columns: repeat(5, 37.8mm) !important;
+          width: 189mm !important;
+        }
+        .square,
+        .square .photo-frame {
+          height: 37.8mm !important;
+          width: 37.8mm !important;
         }
       }
     </style>

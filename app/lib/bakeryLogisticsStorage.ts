@@ -17,6 +17,7 @@ const LOGISTICS_DAY_FEEDBACK_SETTING_KEY = "bakery_logistics_day_feedback";
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
 const MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES = 5_500_000;
+const WEBSHOP_IMAGE_RETENTION_DAYS = 14;
 const MAX_STORED_RECEIPT_OVERRIDES = 3000;
 const MAX_STORED_DAY_FEEDBACK = 1200;
 
@@ -72,6 +73,44 @@ function isLogisticsWebshopImage(value: unknown): value is LogisticsWebshopImage
   );
 }
 
+function dateStamp(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+
+  return Date.UTC(year, month - 1, day);
+}
+
+function todayAmsterdamIsoDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const partByType = new Map(parts.map((part) => [part.type, part.value]));
+  const year = partByType.get("year");
+  const month = partByType.get("month");
+  const day = partByType.get("day");
+
+  return year && month && day ? `${year}-${month}-${day}` : "";
+}
+
+function isWebshopImageWithinRetention(image: LogisticsWebshopImage) {
+  const todayStamp = dateStamp(todayAmsterdamIsoDate());
+  const deliveryStamp = dateStamp(image.deliveryDate);
+
+  if (todayStamp === null || deliveryStamp === null) return true;
+
+  const cutoffStamp =
+    todayStamp - WEBSHOP_IMAGE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+  return deliveryStamp >= cutoffStamp;
+}
+
+function pruneExpiredWebshopImages(images: LogisticsWebshopImage[]) {
+  return images.filter(isWebshopImageWithinRetention);
+}
+
 function isLogisticsReceiptOverride(
   value: unknown
 ): value is LogisticsReceiptOverride {
@@ -117,7 +156,7 @@ function normalizeLogisticsWebshopImagesState(
   if (!Array.isArray(images)) return emptyLogisticsWebshopImagesState();
 
   return {
-    images: images.filter(isLogisticsWebshopImage),
+    images: pruneExpiredWebshopImages(images.filter(isLogisticsWebshopImage)),
   };
 }
 
@@ -180,7 +219,10 @@ function sortWebshopImages(images: LogisticsWebshopImage[]) {
 }
 
 function limitWebshopImages(images: LogisticsWebshopImage[]) {
-  const limited = sortWebshopImages(images).slice(0, MAX_STORED_WEBSHOP_IMAGES);
+  const limited = sortWebshopImages(pruneExpiredWebshopImages(images)).slice(
+    0,
+    MAX_STORED_WEBSHOP_IMAGES
+  );
 
   while (
     limited.length > 1 &&
@@ -247,6 +289,22 @@ export async function readLogisticsState() {
   return normalizeLogisticsState(data.value);
 }
 
+async function writeLogisticsWebshopImagesState(
+  state: LogisticsWebshopImagesState
+) {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_WEBSHOP_IMAGES_SETTING_KEY,
+      value: toJson(state),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
+}
+
 export async function readLogisticsWebshopImagesState() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
@@ -257,7 +315,24 @@ export async function readLogisticsWebshopImagesState() {
 
   if (error || !data) return emptyLogisticsWebshopImagesState();
 
-  return normalizeLogisticsWebshopImagesState(data.value);
+  const rawImages =
+    data.value &&
+    typeof data.value === "object" &&
+    Array.isArray((data.value as { images?: unknown }).images)
+      ? (data.value as { images: unknown[] }).images
+      : [];
+  const validStoredImageCount = rawImages.filter(isLogisticsWebshopImage).length;
+  const normalized = normalizeLogisticsWebshopImagesState(data.value);
+
+  if (validStoredImageCount !== normalized.images.length) {
+    try {
+      await writeLogisticsWebshopImagesState(normalized);
+    } catch {
+      // Opruimen mag het dashboard niet blokkeren.
+    }
+  }
+
+  return normalized;
 }
 
 export async function readLogisticsReceiptOverridesState() {
@@ -371,17 +446,7 @@ export async function upsertLogisticsWebshopImage(
   ]);
 
   const nextState = { images };
-  const supabase = createAdminClient();
-  const { error } = await supabase.from("app_settings").upsert(
-    {
-      key: LOGISTICS_WEBSHOP_IMAGES_SETTING_KEY,
-      value: toJson(nextState),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "key" }
-  );
-
-  if (error) throw new Error(error.message);
+  await writeLogisticsWebshopImagesState(nextState);
 
   return nextImage;
 }
