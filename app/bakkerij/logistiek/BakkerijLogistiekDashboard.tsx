@@ -203,6 +203,32 @@ function formatDateLabel(value: string) {
   }).format(new Date(year, month - 1, day));
 }
 
+function isoWeekNumber(date: Date) {
+  const target = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+  );
+  const dayNumber = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+
+  return Math.ceil(((target.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+function formatReceiptDateLabel(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+
+  const date = new Date(year, month - 1, day);
+  const dateLabel = new Intl.DateTimeFormat("nl-NL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+
+  return `Week ${isoWeekNumber(date)} ${dateLabel}`;
+}
+
 function formatCurrency(value: number) {
   return `EUR ${Math.round(value).toLocaleString("nl-NL")}`;
 }
@@ -211,10 +237,10 @@ function formatCompactNumber(value: number) {
   return Math.round(value).toLocaleString("nl-NL");
 }
 
-function formatMoney(value: number) {
-  return `EUR ${value.toLocaleString("nl-NL", {
+function formatReceiptMoney(value: number) {
+  return `€ ${value.toLocaleString("nl-NL", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 3,
+    maximumFractionDigits: 2,
   })}`;
 }
 
@@ -3411,7 +3437,10 @@ function ReceiptRow({
   );
 }
 
-function ReceiptAddressBlock({ receipt }: Readonly<{ receipt: ReceiptSummary }>) {
+function ReceiptAddressBlock({
+  receipt,
+  selectedPlan,
+}: Readonly<{ receipt: ReceiptSummary; selectedPlan: DayPlan }>) {
   const fulfillment = receiptFulfillment(receipt);
   const pickupLocation = pickupLocationFor(receipt);
   const focusLabel =
@@ -3428,19 +3457,35 @@ function ReceiptAddressBlock({ receipt }: Readonly<{ receipt: ReceiptSummary }>)
     fulfillment === "afhalen" &&
     receipt.alternativeAddress &&
     receipt.alternativeAddress !== focusValue;
+  const receiptNumber = receipt.receiptNumber || receipt.id;
 
   return (
-    <div className="grid gap-2 border-b border-dashed border-[#d7d7d7] bg-white p-3">
-      <div>
-        <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#555]">
-          Origineel adres
-        </p>
-        <p className="mt-0.5 text-xs font-normal leading-snug tracking-normal text-[#111]">
-          {receipt.address}
-        </p>
+    <div className="bg-white px-3 py-4">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="pl-5">
+          <p className="text-base font-black leading-tight tracking-normal text-[#000]">
+            {receiptNumber} {receipt.customer}
+          </p>
+          <p className="mt-1 whitespace-pre-line text-sm font-black leading-tight tracking-normal text-[#000]">
+            {receipt.address}
+          </p>
+        </div>
+        <div className="text-left sm:min-w-56 sm:text-right">
+          <p className="text-sm font-black leading-tight tracking-normal text-[#000]">
+            {formatReceiptDateLabel(selectedPlan.date)}
+          </p>
+          <p className="mt-1 text-xs font-black uppercase tracking-normal text-[#000]">
+            {fulfillmentLabel(receipt)}
+          </p>
+          {receipt.time && (
+            <p className="mt-0.5 text-xs font-bold tracking-normal text-[#000]">
+              {receipt.time}
+            </p>
+          )}
+        </div>
       </div>
       <div
-        className={`border px-2.5 py-2 ${
+        className={`mt-4 border px-2.5 py-2 ${
           fulfillment === "afhalen"
             ? "border-[#111] bg-[#f4f4f4]"
             : "border-[#d7d7d7] bg-[#f4f4f4]"
@@ -3454,7 +3499,7 @@ function ReceiptAddressBlock({ receipt }: Readonly<{ receipt: ReceiptSummary }>)
         </p>
       </div>
       {showAlternativeForPickup && (
-        <div>
+        <div className="mt-2">
           <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#555]">
             Afleveradres op bon
           </p>
@@ -3550,6 +3595,13 @@ function WebshopImageBlock({
       </div>
     </div>
   );
+}
+
+function receiptLineTotal(line: ReceiptLine) {
+  if (line.unitPrice === undefined) return undefined;
+
+  const quantity = numericQuantity(line.quantity);
+  return line.unitPrice * (quantity > 0 ? quantity : 1);
 }
 
 function ReceiptOverrideEditor({
@@ -3770,127 +3822,139 @@ function ReceiptDetail({
   }
 
   const fulfillment = fulfillmentLabel(receipt);
+  const receiptNumber = receipt.receiptNumber || receipt.id;
+  const visibleNotes = [
+    receipt.customerNote,
+    receipt.note,
+    receipt.internalNote,
+    overrideMessage,
+  ].filter(Boolean);
 
   return (
-    <article className="h-[30rem] overflow-y-auto rounded-lg border border-[#111] bg-white text-[#111] shadow-sm">
-      <div className="border-b border-dashed border-[#d7d7d7] bg-white p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
-              Contantbon · {receipt.id}
-            </p>
-            <h2 className="mt-1 truncate text-base font-black tracking-normal text-[#111]">
-              {receipt.customer}
-            </h2>
+    <article className="h-[30rem] overflow-y-auto rounded-sm border border-[#111] bg-[#f3f1ed] p-2 text-[#000] shadow-sm">
+      <div className="min-h-full bg-white px-2 py-2 font-sans text-[#000] sm:px-3">
+        <div className="border-2 border-[#111] border-b-8 bg-white px-3 py-2">
+          <div className="grid items-start gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <div className="text-left">
+              <p className="text-sm font-black leading-tight tracking-normal">
+                Strik Patisserie BV
+              </p>
+              <p className="mt-1 text-xs font-black leading-tight tracking-normal">
+                Ambachtsweg 4
+              </p>
+              <p className="text-xs font-black leading-tight tracking-normal">
+                6581 AX&nbsp;&nbsp; MALDEN
+              </p>
+            </div>
+            <div className="text-center">
+              <h2 className="text-2xl font-black leading-none tracking-normal sm:text-3xl">
+                Contantbon
+              </h2>
+              <p className="mt-1 text-[0.62rem] font-black uppercase tracking-normal">
+                {receiptNumber}
+              </p>
+            </div>
+            <div className="text-left sm:text-right">
+              <p className="text-sm font-black leading-tight tracking-normal">
+                info@strik-patisserie.nl
+              </p>
+              <p className="mt-4 text-xs font-black leading-tight tracking-normal">
+                NL36RABO0167935798
+              </p>
+            </div>
           </div>
-          <span className="shrink-0 border border-[#111] bg-white px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#111]">
+        </div>
+
+        <ReceiptAddressBlock receipt={receipt} selectedPlan={selectedPlan} />
+
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-y border-[#d0d0d0] bg-white px-3 py-1.5">
+          <span className="border border-[#111] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-normal">
             {fulfillment}
           </span>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-1">
-          {receipt.tags.map((tag) => (
-            <span
-              key={tag}
-              className="border border-[#d7d7d7] bg-white px-1.5 py-0.5 text-[0.65rem] font-black tracking-normal text-[#555]"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <dl className="grid gap-2 border-b border-dashed border-[#d7d7d7] bg-white p-3 sm:grid-cols-3">
-        <div>
-          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
-            Tijd
-          </dt>
-          <dd className="mt-0.5 text-xs font-black tracking-normal text-[#111]">
-            {receipt.time}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
-            Route
-          </dt>
-          <dd className="mt-0.5 text-xs font-black tracking-normal text-[#111]">
-            {receipt.route}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
-            Dag
-          </dt>
-          <dd className="mt-0.5 text-xs font-black tracking-normal text-[#111]">
-            {selectedPlan.title}
-          </dd>
-        </div>
-      </dl>
-
-      <ReceiptAddressBlock receipt={receipt} />
-      <ReceiptOverrideEditor
-        key={`${receipt.id}-${override?.updatedAt || "nieuw"}`}
-        message={overrideMessage}
-        onSave={onSaveReceiptOverride}
-        override={override}
-        receipt={receipt}
-      />
-      <WebshopImageBlock images={imageMatches} receipt={receipt} />
-
-      <div className="bg-white p-3">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-xs font-black uppercase tracking-normal text-[#111]">
-            Regels
-          </h3>
-          <span className="text-[0.68rem] font-black tracking-normal text-[#555]">
-            {receipt.lines.length}
+          <span className="truncate text-[0.68rem] font-bold tracking-normal">
+            route {receipt.route} · {selectedPlan.title}
+            {receipt.tags.length > 0 ? ` · ${receipt.tags.join(" · ")}` : ""}
           </span>
         </div>
-        <div className="mt-2 grid gap-1">
-          {receipt.lines.map((line, index) => (
-            <div
-              key={`${receipt.id}-line-${index}`}
-              className="grid grid-cols-[2.8rem_minmax(0,1fr)_4.3rem] gap-2 border-t border-[#e1e1e1] pt-1 first:border-t-0 first:pt-0"
-            >
-              <span className="font-mono text-xs font-black tabular-nums tracking-normal text-[#111]">
-                {line.quantity}
+
+        <ReceiptOverrideEditor
+          key={`${receipt.id}-${override?.updatedAt || "nieuw"}`}
+          message={overrideMessage}
+          onSave={onSaveReceiptOverride}
+          override={override}
+          receipt={receipt}
+        />
+        <WebshopImageBlock images={imageMatches} receipt={receipt} />
+
+        <div className="bg-white px-3 pb-3 pt-6">
+          <table className="w-full border-collapse text-[0.72rem] tracking-normal text-[#000]">
+            <thead>
+              <tr className="border-b-2 border-[#c9c9c9] text-left font-normal">
+                <th className="w-14 pb-1 font-normal">Aantal</th>
+                <th className="pb-1 font-normal">Artikelomschrijving</th>
+                <th className="w-20 pb-1 text-right font-normal">Prijs incl.</th>
+                <th className="w-24 pb-1 text-right font-normal">Totaal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.lines.map((line, index) => {
+                const total = receiptLineTotal(line);
+
+                return (
+                  <tr
+                    key={`${receipt.id}-line-${index}`}
+                    className="align-top font-bold"
+                  >
+                    <td className="py-0.5 pr-2 text-right tabular-nums">
+                      {line.quantity}
+                    </td>
+                    <td className="py-0.5 pr-2">
+                      <span>{line.description}</span>
+                      {line.note && (
+                        <span className="mt-0.5 block text-[0.64rem] font-normal leading-tight text-[#333]">
+                          {line.note}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-0.5 text-right font-normal tabular-nums">
+                      {line.unitPrice !== undefined
+                        ? formatReceiptMoney(line.unitPrice)
+                        : ""}
+                    </td>
+                    <td className="py-0.5 text-right font-normal tabular-nums">
+                      {total !== undefined ? formatReceiptMoney(total) : ""}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className="mt-2 border-t-2 border-[#c9c9c9] pt-2">
+            <div className="ml-auto grid w-full max-w-xs grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 text-sm tracking-normal">
+              <span className="font-bold">Totaalprijs</span>
+              <span className="text-right font-normal tabular-nums">
+                {receipt.value ? formatReceiptMoney(receipt.value) : "intern"}
               </span>
-              <div className="min-w-0">
-                <p className="text-xs font-bold leading-snug tracking-normal text-[#111]">
-                  {line.description}
-                </p>
-                {line.note && (
-                  <p className="mt-0.5 text-[0.68rem] font-normal leading-snug tracking-normal text-[#555]">
-                    {line.note}
-                  </p>
-                )}
-              </div>
-              <span className="text-right text-[0.68rem] font-normal tabular-nums tracking-normal text-[#555]">
-                {line.unitPrice !== undefined ? formatMoney(line.unitPrice) : ""}
+              <span className="font-black">Bon</span>
+              <span className="text-right font-black tabular-nums">
+                {receiptNumber}
               </span>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
 
-      <div className="border-y border-dashed border-[#d7d7d7] bg-white p-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-black uppercase tracking-normal text-[#111]">
-            Bonwaarde
-          </span>
-          <span className="text-sm font-normal tracking-normal text-[#111]">
-            {receipt.value ? formatMoney(receipt.value) : "intern"}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid gap-2 bg-white p-3">
-        <div>
-          <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#555]">
-            Opmerking bon
-          </p>
-          <p className="mt-0.5 text-xs font-normal leading-snug tracking-normal text-[#111]">
-            {receipt.customerNote}
-          </p>
+          {visibleNotes.length > 0 && (
+            <div className="mt-5 border-2 border-[#c9c9c9] px-2 py-2 text-center">
+              {visibleNotes.map((note, index) => (
+                <p
+                  key={`${receipt.id}-note-${index}`}
+                  className="text-sm font-black uppercase leading-tight tracking-normal"
+                >
+                  {note}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </article>
