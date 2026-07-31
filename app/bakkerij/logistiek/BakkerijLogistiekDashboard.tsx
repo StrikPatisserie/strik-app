@@ -4157,7 +4157,10 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     .replace(/\s+/g, " ")
     .trim();
 
-  return /^(?:\d+\s*)?jaar!?\s*[–—-]?$/i.test(cleaned) ? "" : cleaned;
+  if (/^(?:\d+\s*)?jaar!?\s*[–—-]?$/i.test(cleaned)) return "";
+  if (/^\d+(?:[.,]\d+)?\s*[–—-]?$/i.test(cleaned)) return "";
+
+  return cleaned;
 }
 
 function ReceiptOverrideEditor({
