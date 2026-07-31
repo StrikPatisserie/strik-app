@@ -139,6 +139,37 @@ function uniqueLinePush(
   target: LogisticsReceiptLine[],
   line: LogisticsReceiptLine
 ) {
+  if (isProductOptionDescription(line.description)) {
+    const optionKey = normalizedProductOptionDescription(line.description);
+    const existingOption = target.find(
+      (item) =>
+        isProductOptionDescription(item.description) &&
+        normalizedProductOptionDescription(item.description) === optionKey
+    );
+
+    if (existingOption) {
+      const existingScore = productOptionQuantityScore(existingOption.quantity);
+      const lineScore = productOptionQuantityScore(line.quantity);
+
+      if (lineScore > existingScore) {
+        existingOption.quantity = line.quantity;
+      }
+      if (
+        line.description.length > existingOption.description.length &&
+        !existingOption.description
+          .toLowerCase()
+          .includes(line.description.toLowerCase())
+      ) {
+        existingOption.description = line.description;
+      }
+      if (existingOption.unitPrice === undefined && line.unitPrice !== undefined) {
+        existingOption.unitPrice = line.unitPrice;
+      }
+
+      return existingOption;
+    }
+  }
+
   const key = `${line.quantity}|${line.description}|${line.note || ""}|${line.unitPrice || ""}`;
   const existing = target.find(
     (item) =>
@@ -356,7 +387,13 @@ function cleanProductDescription(value: string) {
 }
 
 function cleanProductOptionDescription(value: string) {
-  return value.replace(/\s+/g, " ").trim();
+  return cleanProductOptionCandidate(value)
+    .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
+    .replace(/\btrial mode\b\s*[–-]?/gi, "")
+    .replace(/click here for more information/gi, "")
+    .replace(/\s+(?:€\s*)?[\d.,]+\s*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isUsableProductDescription(value: string) {
@@ -398,6 +435,74 @@ function productOptionSearchRegex() {
   return /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?/i;
 }
 
+function productOptionKind(value: string) {
+  const text = normalizedLineDescription(value);
+
+  if (/^kleur\b/.test(text)) return "kleur";
+  if (/^(?:foto\s*\/\s*logo|foto|logo)\b/.test(text)) return "foto";
+  if (/^tekst\b/.test(text)) return "tekst";
+  if (/^vulling\b/.test(text)) return "vulling";
+  if (/^voorsnijden\b/.test(text)) return "voorsnijden";
+
+  return "overig";
+}
+
+function normalizedProductOptionDescription(value: string) {
+  return normalizedLineDescription(value)
+    .replace(/^ja,\s*/, "")
+    .replace(/\s+\d+(?:[.,]\d+)?$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function productOptionQuantityScore(quantity: string) {
+  const value = quantityValue(quantity);
+
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (/[,.]\d/.test(quantity) && value > 1) return 0;
+  if (value >= 1 && value <= 300) return 2;
+
+  return 1;
+}
+
+function optionQuantityForKind(
+  kind: string,
+  quantityText: string,
+  fallbackQuantity: string
+) {
+  const fallback = fallbackQuantity || "1";
+
+  if (kind === "tekst" || kind === "vulling" || kind === "voorsnijden") {
+    return fallback;
+  }
+  if (/[,.]\d/.test(quantityText) && (parseDutchNumber(quantityText) || 0) > 1) {
+    return fallback;
+  }
+
+  return quantityText.replace(".", ",");
+}
+
+function cleanProductOptionCandidate(candidate: string) {
+  let cleanCandidate = candidate.replace(/\s+/g, " ").trim();
+  if (!cleanCandidate) return "";
+
+  const optionIndex = cleanCandidate.search(productOptionSearchRegex());
+  if (optionIndex > 0) {
+    const prefix = cleanCandidate.slice(0, optionIndex).trim();
+    const suffix = cleanCandidate.slice(optionIndex).trim();
+    const prefixLooksLikePriceNoise =
+      /^(?:€?\s*\d+[.,]\d{2,3}\s*)+$/.test(prefix);
+    const prefixLooksLikeShortNoise =
+      /^\d{1,2}$/.test(prefix) && /\s+\d+(?:[.,]\d+)?\s*$/.test(suffix);
+
+    if (prefixLooksLikePriceNoise || prefixLooksLikeShortNoise) {
+      cleanCandidate = suffix;
+    }
+  }
+
+  return cleanCandidate;
+}
+
 function isAdministrativeRemarkLine(line: string) {
   return (
     /^betaald\b/i.test(line) ||
@@ -414,10 +519,12 @@ function isAdministrativeRemarkLine(line: string) {
 function cleanReceiptRemark(value: string) {
   return value
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
+    .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
     .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
     .replace(/&euro;\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
     .replace(/€\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
+    .replace(/(?:^|\s)(?:€\s*[\d.,]+\s*){2,}(?=\s|$)/g, " ")
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
     .replace(/\bgewenste betaling\s*:?\s*betalen bij afhalen\b/gi, "")
     .replace(/\s+/g, " ")
@@ -579,6 +686,7 @@ function parseProductLine(line: string): LogisticsReceiptLine | null {
 
   const description = cleanProductDescription(content.slice(0, firstPriceIndex));
   if (!isUsableProductDescription(description)) return null;
+  if (isProductOptionDescription(description)) return null;
 
   const unitPrice = pickUnitPrice(
     priceMatches.map((match) => match[1]),
@@ -599,6 +707,7 @@ function parseProductStartLine(line: string): LogisticsReceiptLine | null {
   const [, quantityText, rawDescription] = match;
   const description = cleanProductDescription(rawDescription);
   if (!isUsableProductDescription(description)) return null;
+  if (isProductOptionDescription(description)) return null;
 
   const normalized = normalizedLineDescription(description);
   const productLike =
@@ -632,22 +741,27 @@ function parseProductOptionLine(
   };
 
   const fromCandidate = (candidate: string) => {
-    const cleanCandidate = candidate.replace(/\s+/g, " ").trim();
+    const cleanCandidate = cleanProductOptionCandidate(candidate);
     if (!cleanCandidate) return null;
 
     const prefixQuantity = cleanCandidate.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
     if (prefixQuantity && isProductOptionDescription(prefixQuantity[2])) {
+      const description = cleanProductOptionDescription(prefixQuantity[2]);
+      const kind = productOptionKind(description);
+
       return withUnitPrice({
-        quantity: prefixQuantity[1].replace(".", ","),
-        description: cleanProductOptionDescription(prefixQuantity[2]),
+        quantity: optionQuantityForKind(kind, prefixQuantity[1], fallbackQuantity),
+        description,
       });
     }
 
     const suffixQuantity = cleanCandidate.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/);
     if (suffixQuantity && isProductOptionDescription(suffixQuantity[1])) {
+      const description = cleanProductOptionDescription(suffixQuantity[1]);
+
       return withUnitPrice({
         quantity: suffixQuantity[2].replace(".", ","),
-        description: cleanProductOptionDescription(suffixQuantity[1]),
+        description,
       });
     }
 
@@ -780,6 +894,8 @@ function applyPricedContinuation(
   currentLine: LogisticsReceiptLine,
   rawLine: string
 ) {
+  if (isAdministrativeRemarkLine(rawLine)) return false;
+
   const line = lineWithoutRepeatedQuantity(rawLine, currentLine.quantity);
   const priceMatches = Array.from(line.matchAll(/€\s*([\d.,]+)/g));
   if (priceMatches.length === 0) return false;

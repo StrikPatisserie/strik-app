@@ -453,7 +453,7 @@ function buildStats(
       lines: [
         `Ges. gebak ${formatCompactNumber(productionTotals.assortedPastry)}`,
         `Petit fours ${formatCompactNumber(productionTotals.petitFours)}`,
-        `M/slagroom ${formatCompactNumber(
+        `Feesttaart ${formatCompactNumber(
           productionTotals.marzipanAndCreamCakes
         )}`,
       ],
@@ -648,7 +648,20 @@ function timeLooksLikePhotoTimestamp(receipt: ReceiptSummary, time: string) {
   if (!/^\d{1,2}:\d{2}$/.test(time)) return false;
 
   const dotted = time.replace(":", ".");
-  const haystack = receiptPhotoMatchText(receipt).toLowerCase();
+  const haystack = [
+    receipt.id,
+    receipt.receiptNumber,
+    receipt.customer,
+    receipt.note,
+    receipt.customerNote,
+    receipt.internalNote,
+    receipt.lines
+      .map((line) => `${line.description} ${line.note || ""}`)
+      .join(" "),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 
   return /\.(?:jpe?g|png|webp)\b/i.test(haystack) && haystack.includes(dotted);
 }
@@ -889,6 +902,73 @@ function isProductOptionLine(line: ReceiptLine) {
   );
 }
 
+function productOptionKind(value: string) {
+  const description = normalizedLineDescription(value);
+
+  if (/^kleur\b/.test(description)) return "kleur";
+  if (/^(?:foto\s*\/\s*logo|foto|logo)\b/.test(description)) return "foto";
+  if (/^tekst\b/.test(description)) return "tekst";
+  if (/^vulling\b/.test(description)) return "vulling";
+  if (/^voorsnijden\b/.test(description)) return "voorsnijden";
+
+  return "overig";
+}
+
+function normalizedProductOptionDescription(value: string) {
+  return normalizedLineDescription(value)
+    .replace(/^ja,\s*/, "")
+    .replace(/\s+\d+(?:[.,]\d+)?$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function productOptionQuantityScore(quantity: string) {
+  const value = numericQuantity(quantity);
+
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  if (/[,.]\d/.test(quantity) && value > 1) return 0;
+  if (value >= 1 && value <= 300) return 2;
+
+  return 1;
+}
+
+function normalizeProductOptionQuantity(line: ReceiptLine, fallbackQuantity: string) {
+  const kind = productOptionKind(line.description);
+
+  if (kind === "tekst" || kind === "vulling" || kind === "voorsnijden") {
+    return fallbackQuantity || "1";
+  }
+  if (/[,.]\d/.test(line.quantity) && numericQuantity(line.quantity) > 1) {
+    return fallbackQuantity || "1";
+  }
+
+  return line.quantity;
+}
+
+function cleanProductOptionCandidate(value: string) {
+  let clean = value.replace(/\s+/g, " ").trim();
+  if (!clean) return "";
+
+  const optionIndex = clean.search(
+    /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?/i
+  );
+
+  if (optionIndex > 0) {
+    const prefix = clean.slice(0, optionIndex).trim();
+    const suffix = clean.slice(optionIndex).trim();
+    const prefixLooksLikePriceNoise =
+      /^(?:€?\s*\d+[.,]\d{2,3}\s*)+$/.test(prefix);
+    const prefixLooksLikeShortNoise =
+      /^\d{1,2}$/.test(prefix) && /\s+\d+(?:[.,]\d+)?\s*$/.test(suffix);
+
+    if (prefixLooksLikePriceNoise || prefixLooksLikeShortNoise) {
+      clean = suffix;
+    }
+  }
+
+  return clean;
+}
+
 function isPriceOnlyReceiptDescription(value: string) {
   const description = normalizedLineDescription(value).replace(/^eur\s+/, "€ ");
 
@@ -908,13 +988,15 @@ function parseReceiptMoneyText(value: string) {
 }
 
 function cleanReceiptLineDescription(value: string) {
-  return value
+  return cleanProductOptionCandidate(value)
     .replace(
       /\s+€\s*[\d.,]+(?:\s+€\s*[\d.,]+|\s+\d+(?:[.,]\d+)?)*.*$/i,
       ""
     )
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
+    .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
+    .replace(/\s+(?:€\s*)?[\d.,]+\s*$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -924,6 +1006,37 @@ function receiptLineIdentity(line: ReceiptLine) {
 }
 
 function pushUniqueReceiptLine(target: ReceiptLine[], line: ReceiptLine) {
+  if (isProductOptionLine(line)) {
+    const optionKey = normalizedProductOptionDescription(line.description);
+    const existingOption = target.find(
+      (item) =>
+        isProductOptionLine(item) &&
+        normalizedProductOptionDescription(item.description) === optionKey
+    );
+
+    if (existingOption) {
+      const existingScore = productOptionQuantityScore(existingOption.quantity);
+      const lineScore = productOptionQuantityScore(line.quantity);
+
+      if (lineScore > existingScore) {
+        existingOption.quantity = line.quantity;
+      }
+      if (
+        line.description.length > existingOption.description.length &&
+        !existingOption.description
+          .toLowerCase()
+          .includes(line.description.toLowerCase())
+      ) {
+        existingOption.description = line.description;
+      }
+      if (existingOption.unitPrice === undefined && line.unitPrice !== undefined) {
+        existingOption.unitPrice = line.unitPrice;
+      }
+
+      return;
+    }
+  }
+
   const identity = receiptLineIdentity(line);
   const exists = target.some((item) => {
     const itemIdentity = receiptLineIdentity(item);
@@ -979,6 +1092,8 @@ function recoveredReceiptLinesFromNote(value: string) {
 
 function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
   const lines: ReceiptLine[] = [];
+  let fallbackQuantity = "1";
+  const sourceNote = receipt.customerNote || "";
 
   recoveredReceiptLinesFromNote(receipt.customerNote || "").forEach((line) =>
     pushUniqueReceiptLine(lines, line)
@@ -1001,11 +1116,31 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
 
     if (!description) return;
 
-    pushUniqueReceiptLine(lines, {
+    const normalizedLine: ReceiptLine = {
       ...line,
       description,
       ...(note && note !== description ? { note } : { note: undefined }),
-    });
+    };
+
+    if (isProductOptionLine(normalizedLine)) {
+      const kind = productOptionKind(normalizedLine.description);
+      if (
+        kind === "tekst" &&
+        /^\d{1,2}$/.test(normalizedLine.quantity) &&
+        /\bjaar!?/i.test(sourceNote) &&
+        !/\bjaar\b/i.test(normalizedLine.description)
+      ) {
+        normalizedLine.description = `${normalizedLine.description} ${normalizedLine.quantity} jaar!`;
+      }
+      normalizedLine.quantity = normalizeProductOptionQuantity(
+        normalizedLine,
+        fallbackQuantity
+      );
+    } else {
+      fallbackQuantity = normalizedLine.quantity || fallbackQuantity;
+    }
+
+    pushUniqueReceiptLine(lines, normalizedLine);
   });
 
   return lines;
@@ -3906,17 +4041,18 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     );
   });
 
-  return clean
+  const cleaned = clean
     .replace(
       /\b(?:\d+(?:[.,]\d+)?\s+)?(?:(?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)|petit\s+four)[^€]{4,180}\s+€\s*[\d.,]+(?:\s+\d+(?:[.,]\d+)?\s+€\s*[\d.,]+(?:\s+€\s*[\d.,]+)*)?/gi,
       ""
     )
     .replace(
-      /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:.*?(?=\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,]+\s+met referentie)\b|$)/gi,
+      /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:.*?(?=\s+(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:|\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,]+\s+met referentie)\b|$)/gi,
       ""
     )
     .replace(/\b(?:\d+(?:[.,]\d+)?\s+)?€\s*[\d.,]+\b/g, "")
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
+    .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
     .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
     .replace(/&euro;\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
@@ -3924,6 +4060,8 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
     .replace(/\s+/g, " ")
     .trim();
+
+  return /^(?:\d+\s*)?jaar!?$/i.test(cleaned) ? "" : cleaned;
 }
 
 function ReceiptOverrideEditor({
@@ -4241,7 +4379,7 @@ function ReceiptDetail({
                 Contantbon
               </h2>
               <p className="mt-1 text-[0.62rem] font-black uppercase tracking-normal">
-                {receiptNumber}
+                bon {receiptNumber}
               </p>
             </div>
             <div className="text-left sm:text-right">
@@ -4317,10 +4455,6 @@ function ReceiptDetail({
               <span className="font-bold">Totaalprijs</span>
               <span className="text-right font-normal tabular-nums">
                 {receipt.value ? formatReceiptMoney(receipt.value) : "intern"}
-              </span>
-              <span className="font-black">Bon</span>
-              <span className="text-right font-black tabular-nums">
-                {receiptNumber}
               </span>
             </div>
           </div>
