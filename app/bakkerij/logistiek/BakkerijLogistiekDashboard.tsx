@@ -571,6 +571,14 @@ function imageMatchesReceipt(
   image: WebshopImageSummary,
   receipt: ReceiptSummary
 ) {
+  if (image.matchedReceiptId || image.matchedReceiptNumber) {
+    return Boolean(
+      (image.matchedReceiptId && image.matchedReceiptId === receipt.id) ||
+        (image.matchedReceiptNumber &&
+          image.matchedReceiptNumber === receipt.receiptNumber)
+    );
+  }
+
   const haystack = normalizeMatchText(
     [
       receipt.id,
@@ -2337,6 +2345,7 @@ export default function BakkerijLogistiekDashboard() {
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [overrideMessage, setOverrideMessage] = useState("");
+  const [photoLinkMessage, setPhotoLinkMessage] = useState("");
   const [feedbackByDate, setFeedbackByDate] = useState<Record<string, string>>(
     {}
   );
@@ -2482,6 +2491,7 @@ export default function BakkerijLogistiekDashboard() {
     setFileSnapshot(null);
     setImportMessage("");
     setOverrideMessage("");
+    setPhotoLinkMessage("");
     setFeedbackMessage("");
   }
 
@@ -2580,6 +2590,43 @@ export default function BakkerijLogistiekDashboard() {
         error instanceof Error
           ? error.message
           : "Bonaanpassing opslaan is niet gelukt."
+      );
+    }
+  }
+
+  async function linkWebshopImageToReceipt(
+    image: WebshopImageSummary,
+    receipt: ReceiptSummary
+  ) {
+    setPhotoLinkMessage("foto koppelen...");
+
+    try {
+      const response = await fetch("/api/bakkerij-logistiek/webshop-images/link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageId: image.id,
+          receiptId: receipt.id,
+          receiptNumber: receipt.receiptNumber,
+          receiptCustomer: receipt.customer,
+        }),
+      });
+      const data = (await response.json()) as {
+        image?: WebshopImageSummary;
+        message?: string;
+      };
+
+      if (!response.ok || !data.image) {
+        throw new Error(data.message || "Foto koppelen is niet gelukt.");
+      }
+
+      setWebshopImages((current) =>
+        current.map((item) => (item.id === data.image!.id ? data.image! : item))
+      );
+      setPhotoLinkMessage(`Foto gekoppeld aan ${receipt.customer}.`);
+    } catch (error) {
+      setPhotoLinkMessage(
+        error instanceof Error ? error.message : "Foto koppelen is niet gelukt."
       );
     }
   }
@@ -2793,7 +2840,9 @@ export default function BakkerijLogistiekDashboard() {
             receiptSummaries={receiptSummaries}
             receiptOverrides={receiptOverrides}
             onSaveReceiptOverride={saveReceiptOverride}
+            onLinkWebshopImageToReceipt={linkWebshopImageToReceipt}
             overrideMessage={overrideMessage}
+            photoLinkMessage={photoLinkMessage}
             selectedPlan={selectedPlan}
             webshopImages={webshopImages}
           />
@@ -2915,18 +2964,25 @@ function RoutesPanel({
 }
 
 function OrdersPanel({
+  onLinkWebshopImageToReceipt,
   onSaveReceiptOverride,
   overrideMessage,
+  photoLinkMessage,
   receiptOverrides,
   receiptSummaries,
   selectedPlan,
   webshopImages,
 }: Readonly<{
+  onLinkWebshopImageToReceipt: (
+    image: WebshopImageSummary,
+    receipt: ReceiptSummary
+  ) => Promise<void>;
   onSaveReceiptOverride: (
     receipt: ReceiptSummary,
     draft: ReceiptOverrideDraft
   ) => Promise<void>;
   overrideMessage: string;
+  photoLinkMessage: string;
   receiptOverrides: ReceiptOverrideSummary[];
   receiptSummaries: ReceiptSummary[];
   selectedPlan: DayPlan;
@@ -3018,18 +3074,56 @@ function OrdersPanel({
                 <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#6f5212]">
                   Foto check {unmatchedImages.length}
                 </p>
+                {photoLinkMessage && (
+                  <p className="mt-1 truncate text-[0.64rem] font-bold tracking-normal text-[#6f5212]">
+                    {photoLinkMessage}
+                  </p>
+                )}
                 <div className="mt-1 grid gap-1">
                   {unmatchedImages.map((image) => (
-                    <a
+                    <div
                       key={image.id}
-                      href={image.photoUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="truncate text-[0.68rem] font-normal tracking-normal text-[#1a1815] underline-offset-2 hover:underline"
+                      className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-1.5 border border-[#eadb8b] bg-white/75 p-1"
                     >
-                      {image.customerName || "Klant onbekend"} ·{" "}
-                      {image.orderNumber || "geen bestelnummer"}
-                    </a>
+                      <a
+                        href={image.photoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label="Webshopfoto openen"
+                        className="block h-8 w-8 bg-[#faf8f5] bg-cover bg-center"
+                        style={thumbnailStyleFor(image)}
+                      />
+                      <a
+                        href={image.photoUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="min-w-0 text-[0.64rem] font-normal leading-tight tracking-normal text-[#1a1815] underline-offset-2 hover:underline"
+                      >
+                        <span className="block truncate font-bold">
+                          {image.fileName ||
+                            image.customerName ||
+                            "Klant onbekend"}
+                        </span>
+                        <span className="block truncate text-[#6f5212]">
+                          {image.orderNumber || "geen bestelnummer"} ·{" "}
+                          {image.customerName || "naam check"}
+                        </span>
+                      </a>
+                      {selectedReceipt && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void onLinkWebshopImageToReceipt(
+                              image,
+                              selectedReceipt
+                            )
+                          }
+                          className="min-h-7 border border-[#1a1815] bg-[#1a1815] px-1.5 text-[0.6rem] font-black uppercase tracking-normal text-white transition hover:bg-[#3b352f]"
+                        >
+                          Koppel
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -3220,8 +3314,19 @@ function WebshopImageBlock({
                 {image.customerName || "Klant controleren"}
               </span>
               <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#555]">
-                {image.orderNumber || "zonder bestelnummer"} · match {image.confidence}
+                {image.orderNumber || "zonder bestelnummer"} · match{" "}
+                {image.matchSource === "manual" ? "handmatig" : image.confidence}
               </span>
+              {image.fileName && (
+                <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                  {image.fileName}
+                </span>
+              )}
+              {image.matchedReceiptCustomer && (
+                <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                  gekoppeld aan {image.matchedReceiptCustomer}
+                </span>
+              )}
               {image.notes.length > 0 && (
                 <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
                   {image.notes.join(" ")}

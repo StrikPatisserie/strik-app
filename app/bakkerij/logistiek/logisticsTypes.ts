@@ -89,6 +89,11 @@ export type LogisticsWebshopImage = {
   photoUrl: string;
   sourceUrl: string;
   fileName: string;
+  matchedReceiptId?: string;
+  matchedReceiptNumber?: string;
+  matchedReceiptCustomer?: string;
+  matchedAt?: string;
+  matchSource?: "manual" | "auto";
   subject: string;
   from: string;
   receivedAt: string;

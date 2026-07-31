@@ -178,6 +178,29 @@ function sortWebshopImages(images: LogisticsWebshopImage[]) {
   });
 }
 
+function mergeStoredWebshopImage(
+  image: LogisticsWebshopImage,
+  existing: LogisticsWebshopImage | undefined,
+  options: { preserveManualMatch?: boolean }
+): LogisticsWebshopImage {
+  if (
+    !existing ||
+    !options.preserveManualMatch ||
+    (!existing.matchedReceiptId && !existing.matchedReceiptNumber)
+  ) {
+    return image;
+  }
+
+  return {
+    ...image,
+    matchedReceiptId: existing.matchedReceiptId,
+    matchedReceiptNumber: existing.matchedReceiptNumber,
+    matchedReceiptCustomer: existing.matchedReceiptCustomer,
+    matchedAt: existing.matchedAt,
+    matchSource: existing.matchSource,
+  };
+}
+
 function sortReceiptOverrides(overrides: LogisticsReceiptOverride[]) {
   return [...overrides].sort((first, second) => {
     const dateCompare = second.date.localeCompare(first.date);
@@ -306,11 +329,30 @@ export async function upsertLogisticsBatch(batch: LogisticsBatch) {
   return batch;
 }
 
-export async function upsertLogisticsWebshopImage(image: LogisticsWebshopImage) {
+export async function upsertLogisticsWebshopImage(
+  image: LogisticsWebshopImage,
+  options: { preserveManualMatch?: boolean } = {}
+) {
   const state = await readLogisticsWebshopImagesState();
+  const existing =
+    state.images.find((item) => item.id === image.id) ||
+    state.images.find(
+      (item) =>
+        item.messageId === image.messageId &&
+        item.photoUrl === image.photoUrl &&
+        item.deliveryDate === image.deliveryDate
+    ) ||
+    state.images.find(
+      (item) =>
+        item.messageId === image.messageId &&
+        item.deliveryDate === image.deliveryDate
+    );
+  const nextImage = mergeStoredWebshopImage(image, existing, options);
   const images = sortWebshopImages([
-    image,
-    ...state.images.filter((item) => item.id !== image.id),
+    nextImage,
+    ...state.images.filter(
+      (item) => item.id !== image.id && item.id !== existing?.id
+    ),
   ]).slice(0, MAX_STORED_WEBSHOP_IMAGES);
 
   const nextState = { images };
@@ -326,7 +368,7 @@ export async function upsertLogisticsWebshopImage(image: LogisticsWebshopImage) 
 
   if (error) throw new Error(error.message);
 
-  return image;
+  return nextImage;
 }
 
 export async function upsertLogisticsReceiptOverride(

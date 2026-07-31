@@ -106,11 +106,35 @@ function extractLinks(input: Pick<WebshopImageInput, "bodyHtml" | "bodyText" | "
   return unique([...input.links.map(cleanUrl), ...htmlLinks, ...textLinks]);
 }
 
-function scorePhotoUrl(value: string) {
+function normalizedFileNameForMatch(value: string) {
+  return cleanPhotoFileName(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, "");
+}
+
+function photoUrlMatchesFileName(value: string, fileName: string) {
+  const expected = normalizedFileNameForMatch(fileName);
+  if (!expected) return false;
+
+  let decoded = value;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    // Keep the original URL when decoding is not possible.
+  }
+
+  return (
+    normalizedFileNameForMatch(value) === expected ||
+    decoded.toLowerCase().replace(/[^a-z0-9.]+/g, "").includes(expected)
+  );
+}
+
+function scorePhotoUrl(value: string, fileName = "") {
   const lower = value.toLowerCase();
   let score = 0;
 
   if (/\.(jpe?g|png|webp)(\?|#|$)/i.test(value)) score += 8;
+  if (fileName && photoUrlMatchesFileName(value, fileName)) score += 30;
   if (/foto|photo|image|afbeeld|upload|media|download|bestand|file/i.test(value)) {
     score += 5;
   }
@@ -123,16 +147,14 @@ function scorePhotoUrl(value: string) {
   return score;
 }
 
-function pickPhotoUrl(input: WebshopImageInput) {
+function pickPhotoUrl(input: WebshopImageInput, fileName = "") {
   const directPhotoUrl = cleanUrl(input.photoUrl);
-  if (directPhotoUrl) return directPhotoUrl;
-
-  const links = extractLinks(input)
-    .map((url) => ({ url, score: scorePhotoUrl(url) }))
+  const links = unique([directPhotoUrl, ...extractLinks(input)])
+    .map((url) => ({ url, score: scorePhotoUrl(url, fileName) }))
     .sort((first, second) => second.score - first.score);
   const likelyPhoto = links.find((item) => item.score > 0);
 
-  return likelyPhoto?.url || "";
+  return likelyPhoto?.url || directPhotoUrl || "";
 }
 
 function cleanPhotoFileName(value: unknown) {
@@ -339,8 +361,9 @@ export async function POST(request: Request) {
     }
 
     const text = `${input.subject}\n${input.bodyText}\n${htmlToText(input.bodyHtml)}`;
-    const photoUrl = pickPhotoUrl(input);
-    const fileName = extractPhotoFileName(input, text, photoUrl);
+    const initialPhotoUrl = pickPhotoUrl(input);
+    const fileName = extractPhotoFileName(input, text, initialPhotoUrl);
+    const photoUrl = pickPhotoUrl(input, fileName) || initialPhotoUrl;
     const deliveryDate = extractDeliveryDate(input, text);
     const orderNumber = extractOrderNumber(input, text);
     const customerName = extractCustomerName(input, text);
@@ -387,7 +410,7 @@ export async function POST(request: Request) {
     };
 
     if (new URL(request.url).searchParams.get("dryRun") !== "1") {
-      await upsertLogisticsWebshopImage(image);
+      await upsertLogisticsWebshopImage(image, { preserveManualMatch: true });
     }
 
     return NextResponse.json({
