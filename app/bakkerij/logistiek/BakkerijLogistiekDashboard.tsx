@@ -4157,10 +4157,24 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     .replace(/\s+/g, " ")
     .trim();
 
-  if (/^(?:\d+\s*)?jaar!?\s*[–—-]?$/i.test(cleaned)) return "";
-  if (/^\d+(?:[.,]\d+)?\s*[–—-]?$/i.test(cleaned)) return "";
+  if (isReceiptNoteRemainder(cleaned)) return "";
 
   return cleaned;
+}
+
+function isReceiptNoteRemainder(value: string) {
+  const normalized = value
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return (
+    /^(?:\d+\s*)?jaar!?\s*-?$/i.test(normalized) ||
+    /^\d+(?:[.,]\d+)?\s*-?$/.test(normalized) ||
+    /^-+$/.test(normalized)
+  );
 }
 
 function ReceiptOverrideEditor({
