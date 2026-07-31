@@ -10,6 +10,8 @@ const BAKEIT_CONTANTBON_CONFIG = {
   MAX_THREADS: 30,
   MAX_PDF_ATTACHMENTS: 4,
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
+  IMPORT_WAVE_BUCKET_MS: 5 * 60 * 1000,
+  MIN_MESSAGE_AGE_MS: 60 * 1000,
   IMPORT_VERSION: 'split-mails-v1',
 };
 
@@ -38,9 +40,17 @@ function importBakeItContantbonnen() {
       }
 
       try {
+        const messageAgeMs = Date.now() - message.getDate().getTime();
+        if (messageAgeMs < BAKEIT_CONTANTBON_CONFIG.MIN_MESSAGE_AGE_MS) {
+          logBakeIt_(
+            `Bericht is net binnen, wacht op eventuele deelmail: ${message.getSubject()}`
+          );
+          return;
+        }
+
         const attachments = extractBakeItPdfAttachments_(message);
         if (!attachments.length) {
-          console.log(
+          logBakeIt_(
             `Geen PDF-bijlagen gevonden, bericht overgeslagen: ${message.getSubject()}`
           );
           return;
@@ -51,7 +61,7 @@ function importBakeItContantbonnen() {
         });
 
         props.setProperty(importId, new Date().toISOString());
-        console.log(
+        logBakeIt_(
           `Bake-it contantbonnen ingelezen: ${attachments.length} PDF(s) uit ${message.getSubject()}`
         );
         hasImported = true;
@@ -112,6 +122,7 @@ function sendBakeItPdfAttachment_(message, attachment) {
       receivedAt: message.getDate().toISOString(),
       source: 'gmail',
       status: inferBakeItStatus_(message),
+      importWaveId: buildBakeItImportWaveId_(message),
       fileName: attachment.fileName,
       contentType: attachment.contentType,
       attachmentBase64: attachment.attachmentBase64,
@@ -121,9 +132,12 @@ function sendBakeItPdfAttachment_(message, attachment) {
   });
 
   const status = response.getResponseCode();
+  const responseText = response.getContentText();
   if (status < 200 || status >= 300) {
-    throw new Error(response.getContentText());
+    throw new Error(responseText);
   }
+
+  logBakeItImportResult_(attachment.fileName, responseText);
 }
 
 function inferBakeItStatus_(message) {
@@ -138,6 +152,25 @@ function inferBakeItStatus_(message) {
   if (haystack.indexOf('prognose') >= 0) return 'prognose';
 
   return '';
+}
+
+function buildBakeItImportWaveId_(message) {
+  const bucket = Math.round(
+    message.getDate().getTime() / BAKEIT_CONTANTBON_CONFIG.IMPORT_WAVE_BUCKET_MS
+  );
+  const subject = normalizeBakeItSubjectForWave_(message.getSubject());
+  const status = inferBakeItStatus_(message) || 'auto';
+
+  return `bakeit:${status}:${subject}:${bucket}`;
+}
+
+function normalizeBakeItSubjectForWave_(subject) {
+  return String(subject || '')
+    .toLowerCase()
+    .replace(/\bemail\s+2\b/g, 'email')
+    .replace(/\s*\(\d+\)\s*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function extractBakeItPdfAttachments_(message) {
@@ -186,4 +219,56 @@ function looksLikePdfBytes_(bytes) {
     bytes[2] === 68 &&
     bytes[3] === 70
   );
+}
+
+function logBakeItImportResult_(fileName, responseText) {
+  try {
+    const data = JSON.parse(responseText || '{}');
+    const batches = data.batches || (data.batch ? [data.batch] : []);
+    const summary = batches
+      .map((batch) => {
+        return [
+          batch.date || '?',
+          batch.status || '?',
+          `${batch.orderCount || 0} bonnen`,
+          batch.fileName || fileName,
+        ].join(' · ');
+      })
+      .join(' | ');
+
+    logBakeIt_(`Import OK ${fileName}: ${summary || 'geen batchinfo'}`);
+  } catch (error) {
+    logBakeIt_(
+      `Import OK ${fileName}: ${String(responseText || '').slice(0, 500)}`
+    );
+  }
+}
+
+function debugBakeItBatchMorgen() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const date = Utilities.formatDate(tomorrow, 'Europe/Amsterdam', 'yyyy-MM-dd');
+
+  debugBakeItBatchDatum_(date);
+}
+
+function debugBakeItBatchDatum_(date) {
+  const response = UrlFetchApp.fetch(
+    `https://strik-app.vercel.app/api/bakkerij-logistiek?date=${date}&debug=1`,
+    {
+      method: 'get',
+      muteHttpExceptions: true,
+      headers: {
+        'x-strik-logistics-key': BAKEIT_CONTANTBON_CONFIG.IMPORT_KEY,
+      },
+    }
+  );
+
+  logBakeIt_(`Debug ${date}: status ${response.getResponseCode()}`);
+  logBakeIt_(response.getContentText());
+}
+
+function logBakeIt_(message) {
+  console.log(message);
+  Logger.log(message);
 }

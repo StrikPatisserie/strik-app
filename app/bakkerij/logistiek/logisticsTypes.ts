@@ -67,6 +67,7 @@ export type LogisticsBatch = {
   from: string;
   receivedAt: string;
   importedAt: string;
+  importWaveId?: string;
   pageCount: number;
   orderCount: number;
   orderValue: number;

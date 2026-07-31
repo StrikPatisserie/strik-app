@@ -48,6 +48,7 @@ export async function GET(request: Request) {
           subject: item.subject,
           receivedAt: item.receivedAt,
           importedAt: item.importedAt,
+          importWaveId: item.importWaveId,
           pageCount: item.pageCount,
           orderCount: item.orderCount,
           receiptNumbers: item.receipts
@@ -64,6 +65,7 @@ export async function GET(request: Request) {
               subject: batch.subject,
               receivedAt: batch.receivedAt,
               importedAt: batch.importedAt,
+              importWaveId: batch.importWaveId,
               pageCount: batch.pageCount,
               orderCount: batch.orderCount,
             }

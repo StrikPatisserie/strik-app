@@ -29,6 +29,7 @@ type ImportInput = {
   receivedAt: string;
   source: LogisticsBatchSource;
   status?: LogisticsBatchStatus;
+  importWaveId?: string;
   key: string;
 };
 
@@ -164,6 +165,7 @@ async function readMultipartInput(request: Request): Promise<ImportInput | Respo
     receivedAt: cleanText(formData.get("receivedAt")) || new Date().toISOString(),
     source: cleanSource(formData.get("source")),
     status: cleanStatus(formData.get("status")),
+    importWaveId: cleanText(formData.get("importWaveId"), 180) || undefined,
     key: cleanText(formData.get("key"), 200),
   };
 }
@@ -200,6 +202,7 @@ async function readJsonInput(request: Request): Promise<ImportInput | Response> 
     receivedAt: cleanText(body.receivedAt) || new Date().toISOString(),
     source: cleanSource(body.source),
     status: cleanStatus(body.status),
+    importWaveId: cleanText(body.importWaveId, 180) || undefined,
     key: cleanText(body.key, 200),
   };
 }
@@ -234,16 +237,19 @@ export async function POST(request: Request) {
 
     const batches: LogisticsBatch[] = [];
     for (const file of input.files) {
-      batches.push(
-        await parseBakeItContantbonPdf(file.buffer, {
-          fileName: file.fileName,
-          subject: input.subject,
-          from: input.from,
-          receivedAt: input.receivedAt,
-          source: input.source,
-          status: input.status,
-        })
-      );
+      const batch = await parseBakeItContantbonPdf(file.buffer, {
+        fileName: file.fileName,
+        subject: input.subject,
+        from: input.from,
+        receivedAt: input.receivedAt,
+        source: input.source,
+        status: input.status,
+      });
+
+      batches.push({
+        ...batch,
+        importWaveId: input.importWaveId,
+      });
     }
 
     const groupedBatches = batches.reduce<LogisticsBatch[]>((groups, batch) => {

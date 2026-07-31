@@ -444,6 +444,7 @@ export function mergeLogisticsBatches(
     from: incoming.from || existing.from,
     receivedAt: latestIso(existing.receivedAt, incoming.receivedAt),
     importedAt: latestIso(existing.importedAt, incoming.importedAt),
+    importWaveId: incoming.importWaveId || existing.importWaveId,
     pageCount: hasNewFile
       ? existing.pageCount + incoming.pageCount
       : Math.max(existing.pageCount, incoming.pageCount),
@@ -653,7 +654,12 @@ export async function upsertLogisticsBatch(batch: LogisticsBatch) {
   const compatibleBatches = state.batches.filter(
     (item) => item.date === batch.date && item.status === batch.status
   );
-  const nextBatch = mergeCompatibleBatches(compatibleBatches, batch);
+  const mergeCandidates = batch.importWaveId
+    ? compatibleBatches.filter(
+        (item) => item.importWaveId === batch.importWaveId
+      )
+    : compatibleBatches;
+  const nextBatch = mergeCompatibleBatches(mergeCandidates, batch);
   const batches = sortBatches([
     nextBatch,
     ...state.batches.filter(
