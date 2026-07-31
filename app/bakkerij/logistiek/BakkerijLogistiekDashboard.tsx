@@ -3781,6 +3781,22 @@ function receiptLineTotal(line: ReceiptLine) {
   return line.unitPrice * (quantity > 0 ? quantity : 1);
 }
 
+function cleanReceiptDisplayNote(value: string) {
+  return value
+    .replace(
+      /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling)\s*:.*?(?=\s+\d+(?:[.,]\d+)?\s+(?:betaald|niet betaald)\b|$)/gi,
+      ""
+    )
+    .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
+    .replace(/click here for more information/gi, "")
+    .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
+    .replace(/&euro;\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
+    .replace(/€\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
+    .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function ReceiptOverrideEditor({
   message,
   onSave,
@@ -4004,12 +4020,14 @@ function ReceiptDetail({
     receipt.customerNote,
     receipt.note,
     overrideMessage,
-  ].filter(
-    (note) =>
-      note &&
-      !/^geen aparte opmerking\.?$/i.test(note) &&
-      !/^geen aparte logistieke waarschuwing\.?$/i.test(note)
-  );
+  ]
+    .map((note) => (note ? cleanReceiptDisplayNote(note) : ""))
+    .filter(
+      (note) =>
+        note &&
+        !/^geen aparte opmerking\.?$/i.test(note) &&
+        !/^geen aparte logistieke waarschuwing\.?$/i.test(note)
+    );
 
   return (
     <article className="h-[30rem] overflow-y-auto rounded-sm border border-[#111] bg-[#f3f1ed] p-2 text-[#000] shadow-sm">
@@ -4065,7 +4083,6 @@ function ReceiptDetail({
           override={override}
           receipt={receipt}
         />
-        <WebshopImageBlock images={imageMatches} receipt={receipt} />
 
         <div className="bg-white px-3 pb-3 pt-6">
           <table className="w-full border-collapse text-[0.72rem] tracking-normal text-[#000]">
@@ -4128,17 +4145,18 @@ function ReceiptDetail({
           </div>
 
           {visibleNotes.length > 0 && (
-            <div className="mt-5 border-2 border-[#c9c9c9] px-2 py-2 text-center">
+            <div className="mt-5 border-2 border-[#c9c9c9] bg-[#f4f4f4] px-2 py-2 text-center">
               {visibleNotes.map((note, index) => (
                 <p
                   key={`${receipt.id}-note-${index}`}
-                  className="text-sm font-black uppercase leading-tight tracking-normal"
+                  className="text-sm font-bold leading-snug tracking-normal"
                 >
                   {note}
                 </p>
               ))}
             </div>
           )}
+          <WebshopImageBlock images={imageMatches} receipt={receipt} />
         </div>
       </div>
     </article>

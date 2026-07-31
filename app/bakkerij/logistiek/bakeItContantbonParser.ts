@@ -171,7 +171,15 @@ function pickUnitPrice(priceTexts: string[], quantityText: string) {
   const quantity = parseDutchNumber(quantityText) || 1;
   if (quantity <= 1) return Math.max(...prices);
 
-  return prices.at(-1);
+  const unitCandidates = prices.filter(
+    (price) =>
+      !prices.some(
+        (otherPrice) =>
+          otherPrice !== price && Math.abs(price - otherPrice * quantity) < 0.08
+      )
+  );
+
+  return unitCandidates.at(-1) ?? prices.at(-1);
 }
 
 function parseDutchDate(value: string) {
@@ -346,6 +354,16 @@ function cleanProductDescription(value: string) {
     .trim();
 }
 
+function isUsableProductDescription(value: string) {
+  const clean = value.trim();
+  if (!clean || /^€/.test(clean) || /^[\d.,]+$/.test(clean)) return false;
+  if (/^totaalprijs\b|^btw\b|^factuurkorting\b/i.test(clean)) return false;
+  if (/trial mode|click here for more information/i.test(clean)) return false;
+  if (/^(?:niet\s+)?betaald\b|^gewenste betaling\b/i.test(clean)) return false;
+
+  return true;
+}
+
 function isProductOptionDescription(value: string) {
   return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|tekst\b|vulling\b)/i.test(
     value.trim()
@@ -373,9 +391,26 @@ function isAdministrativeRemarkLine(line: string) {
     /^betaald\b/i.test(line) ||
     /^niet betaald\b/i.test(line) ||
     /^gewenste betaling\b/i.test(line) ||
+    /trial mode|click here for more information/i.test(line) ||
+    /betaald via\s+\[/i.test(line) ||
+    /\bmet referentie\s+\S+/i.test(line) ||
     /^&euro;/i.test(line) ||
     /^€\s*[\d.,]+\s+met referentie\b/i.test(line)
   );
+}
+
+function cleanReceiptRemark(value: string) {
+  return value
+    .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
+    .replace(/click here for more information/gi, "")
+    .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
+    .replace(/&euro;\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
+    .replace(/€\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
+    .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
+    .replace(/\bgewenste betaling\s*:?\s*betalen bij afhalen\b/gi, "")
+    .replace(/\s+/g, " ")
+    .replace(/\s+([?.!,])/g, "$1")
+    .trim();
 }
 
 function pickupLocationFromLine(line: string) {
@@ -501,23 +536,32 @@ function splitAlternativeAddressFromRemarks(
 }
 
 function parseProductLine(line: string): LogisticsReceiptLine | null {
-  const quantityMatch = line.match(/\s+(\d+(?:[.,]\d+)?)\s*$/);
-  const priceMatches = Array.from(line.matchAll(/€\s*([\d.,]+)/g));
-  if (!quantityMatch || priceMatches.length === 0) return null;
+  const leadingQuantity = line.match(/^(\d+(?:[.,]\d+)?)\s+(?!€)(.+)$/);
+  const trailingQuantity = line.match(/\s+(\d+(?:[.,]\d+)?)\s*$/);
+  const quantityText = leadingQuantity?.[1] || trailingQuantity?.[1];
+  if (!quantityText) return null;
+
+  let content = leadingQuantity ? leadingQuantity[2] : line;
+  if (!leadingQuantity && trailingQuantity?.index !== undefined) {
+    content = line.slice(0, trailingQuantity.index);
+  }
+
+  const priceMatches = Array.from(content.matchAll(/€\s*([\d.,]+)/g));
+  if (priceMatches.length === 0) return null;
 
   const firstPriceIndex = priceMatches[0].index;
   if (firstPriceIndex === undefined || firstPriceIndex <= 0) return null;
 
-  const description = cleanProductDescription(line.slice(0, firstPriceIndex));
-  if (!description || /^totaalprijs\b|^btw\b/i.test(description)) return null;
+  const description = cleanProductDescription(content.slice(0, firstPriceIndex));
+  if (!isUsableProductDescription(description)) return null;
 
   const unitPrice = pickUnitPrice(
     priceMatches.map((match) => match[1]),
-    quantityMatch[1]
+    quantityText
   );
 
   return {
-    quantity: quantityMatch[1].replace(".", ","),
+    quantity: quantityText.replace(".", ","),
     description,
     ...(unitPrice !== undefined ? { unitPrice } : {}),
   };
@@ -551,6 +595,94 @@ function parseProductOptionLine(
   }
 
   return null;
+}
+
+function findNextProductOptionIndex(value: string, startIndex: number) {
+  const next = value
+    .slice(startIndex)
+    .search(/\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling)\s*:?/i);
+
+  return next < 0 ? -1 : startIndex + next;
+}
+
+function paymentNoiseIndex(value: string, startIndex: number) {
+  const next = value.slice(startIndex).search(
+    /\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,]+\s+met referentie)\b/i
+  );
+
+  return next < 0 ? -1 : startIndex + next;
+}
+
+function recoverProductDetailsFromRemark(
+  remark: string,
+  fallbackQuantity: string
+) {
+  const recoveredLines: LogisticsReceiptLine[] = [];
+  const ranges: Array<[number, number]> = [];
+  let searchIndex = findNextProductOptionIndex(remark, 0);
+
+  while (searchIndex >= 0) {
+    const nextOptionIndex = findNextProductOptionIndex(remark, searchIndex + 1);
+    const noiseIndex = paymentNoiseIndex(remark, searchIndex + 1);
+    const endCandidates = [nextOptionIndex, noiseIndex]
+      .filter((index) => index >= 0)
+      .sort((first, second) => first - second);
+    const endIndex = endCandidates[0] ?? remark.length;
+    const chunk = remark.slice(searchIndex, endIndex).trim();
+    const optionLine = parseProductOptionLine(chunk, fallbackQuantity);
+
+    if (
+      optionLine &&
+      isUsableProductDescription(optionLine.description) &&
+      !productOptionNeedsContinuation(optionLine)
+    ) {
+      recoveredLines.push(optionLine);
+      ranges.push([searchIndex, endIndex]);
+    }
+
+    searchIndex = nextOptionIndex >= 0 ? nextOptionIndex : -1;
+  }
+
+  let remaining = remark;
+  [...ranges]
+    .reverse()
+    .forEach(([start, end]) => {
+      remaining = `${remaining.slice(0, start)} ${remaining.slice(end)}`;
+    });
+
+  return {
+    lines: recoveredLines,
+    remark: cleanReceiptRemark(remaining),
+  };
+}
+
+function normalizeRemarksAndRecoverLines(
+  remarks: string[],
+  parsedLines: LogisticsReceiptLine[]
+) {
+  const cleanRemarks: string[] = [];
+  const fallbackQuantity =
+    [...parsedLines].reverse().find((line) => !isProductOptionDescription(line.description))
+      ?.quantity || "1";
+
+  for (const remark of remarks) {
+    const result = recoverProductDetailsFromRemark(remark, fallbackQuantity);
+    for (const line of result.lines) uniqueLinePush(parsedLines, line);
+    if (result.remark) uniquePush(cleanRemarks, result.remark);
+  }
+
+  return cleanRemarks;
+}
+
+function shouldAppendProductContinuation(line: string) {
+  if (!isUsableProductDescription(line)) return false;
+  if (isAdministrativeRemarkLine(line)) return false;
+  if (isFulfillmentLine(line) || pickupLocationFromLine(line)) return false;
+  if (/\b(?:betaald|niet betaald|gewenste betaling|referentie)\b/i.test(line)) {
+    return false;
+  }
+
+  return !/€\s*[\d.,]+/.test(line);
 }
 
 function findDeliveryBlock(bodyLines: string[]) {
@@ -599,18 +731,26 @@ function parsePage(pageText: string): ParsedPage | null {
   const parsedLines: LogisticsReceiptLine[] = [];
   const remarks: string[] = [];
   let currentLine: LogisticsReceiptLine | null = null;
+  let productSectionOpen = true;
   let total: number | undefined;
 
   for (const line of bodyLines) {
     if (isBoilerplateLine(line) || isFooterLine(line)) continue;
     if (/^levering;?$/i.test(line)) continue;
     if (deliveryBlock.includes(line)) continue;
-    if (/^btw\b/i.test(line) || /^factuurkorting\b/i.test(line)) continue;
-    if (/^totaalprijs\b/i.test(line)) continue;
+    if (/^btw\b/i.test(line) || /^factuurkorting\b/i.test(line)) {
+      productSectionOpen = false;
+      continue;
+    }
+    if (/^totaalprijs\b/i.test(line)) {
+      productSectionOpen = false;
+      continue;
+    }
     if (pickupLocationFromLine(line) || isFulfillmentLine(line)) continue;
 
     const standaloneTotal = line.match(/^€\s*([\d.,]+)$/);
     if (standaloneTotal) {
+      productSectionOpen = false;
       total = parseDutchNumber(standaloneTotal[1]) ?? total;
       continue;
     }
@@ -642,10 +782,16 @@ function parsePage(pageText: string): ParsedPage | null {
     }
 
     if (
+      productSectionOpen &&
       currentLine &&
       !isAdministrativeRemarkLine(line) &&
       (isLikelyPhotoFileLine(line) || productOptionNeedsContinuation(currentLine))
     ) {
+      appendDescription(currentLine, line);
+      continue;
+    }
+
+    if (productSectionOpen && currentLine && shouldAppendProductContinuation(line)) {
       appendDescription(currentLine, line);
       continue;
     }
@@ -656,12 +802,16 @@ function parsePage(pageText: string): ParsedPage | null {
       continue;
     }
 
-    uniquePush(remarks, line);
+    const cleanRemark = cleanReceiptRemark(line);
+    if (cleanRemark && !isAdministrativeRemarkLine(cleanRemark)) {
+      uniquePush(remarks, cleanRemark);
+    }
   }
 
   const key = `${receiptNumber || customer}-${customer}`.toLowerCase();
+  const normalizedRemarks = normalizeRemarksAndRecoverLines(remarks, parsedLines);
   const alternativeAddressResult = splitAlternativeAddressFromRemarks(
-    remarks,
+    normalizedRemarks,
     fulfillment
   );
 
@@ -775,6 +925,9 @@ function inferTags(draft: ReceiptDraft) {
 }
 
 function createReceipt(draft: ReceiptDraft, index: number): LogisticsReceipt {
+  const cleanRemarks = draft.remarks
+    .map(cleanReceiptRemark)
+    .filter((remark) => remark && !isAdministrativeRemarkLine(remark));
   const originalAddress = draft.topAddress || "Adres controleren";
   const deliveryBlockAddress = draft.deliveryBlock.length
     ? draft.deliveryBlock.join(", ")
@@ -815,7 +968,7 @@ function createReceipt(draft: ReceiptDraft, index: number): LogisticsReceipt {
     tags,
     value: draft.total,
     note: warning,
-    customerNote: draft.remarks.length ? draft.remarks.join(" ") : "Geen aparte opmerking.",
+    customerNote: cleanRemarks.length ? cleanRemarks.join(" ") : "Geen aparte opmerking.",
     internalNote:
       draft.fulfillment || tags.length
         ? [draft.fulfillment, ...tags].filter(Boolean).join(" · ")
