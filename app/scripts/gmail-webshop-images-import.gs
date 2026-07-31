@@ -11,7 +11,7 @@ const WEBSHOP_IMAGE_CONFIG = {
   MAX_THREADS: 20,
   MAX_IMAGE_ATTACHMENTS: 4,
   MAX_IMAGE_ATTACHMENT_BYTES: 1500000,
-  IMPORT_VERSION: 'inline-image-v3',
+  IMPORT_VERSION: 'strict-match-v4',
 };
 
 function importWebshopAfbeeldingen() {

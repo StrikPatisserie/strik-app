@@ -538,48 +538,47 @@ function normalizeMatchText(value: string) {
 function significantWords(value: string) {
   return normalizeMatchText(value)
     .split(" ")
-    .filter((word) => word.length >= 4 && !["strik", "patisserie"].includes(word));
+    .filter(
+      (word) =>
+        word.length >= 4 &&
+        !/^\d+$/.test(word) &&
+        !["strik", "patisserie"].includes(word)
+    );
 }
 
-function imageSignificantWords(image: WebshopImageSummary) {
+function hasNormalizedWord(text: string, word: string) {
+  const escapedWord = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  return new RegExp(`(?:^| )${escapedWord}(?: |$)`).test(text);
+}
+
+function imageProductWords(image: WebshopImageSummary) {
   const genericWords = new Set([
     "afbeelding",
     "bestand",
     "bestelling",
     "foto",
     "image",
-    "logo",
-    "marsepein",
     "photo",
     "plaatje",
-    "petit",
     "png",
-    "slagroom",
-    "taart",
+    "jpeg",
+    "jpg",
+    "webp",
+    "whatsapp",
     "webshop",
   ]);
   const words = [
-    ...significantWords(image.customerName),
     ...significantWords(image.fileName.replace(/\.[^.]+$/, "")),
+    ...significantWords(image.productSummary || ""),
     ...significantWords(image.subject),
   ];
 
   return Array.from(new Set(words.filter((word) => !genericWords.has(word))));
 }
 
-function imageMatchesReceipt(
-  image: WebshopImageSummary,
-  receipt: ReceiptSummary
-) {
-  if (image.matchedReceiptId || image.matchedReceiptNumber) {
-    return Boolean(
-      (image.matchedReceiptId && image.matchedReceiptId === receipt.id) ||
-        (image.matchedReceiptNumber &&
-          image.matchedReceiptNumber === receipt.receiptNumber)
-    );
-  }
-
-  const haystack = normalizeMatchText(
+function receiptPhotoMatchText(receipt: ReceiptSummary) {
+  return normalizeMatchText(
     [
       receipt.id,
       receipt.receiptNumber,
@@ -594,21 +593,95 @@ function imageMatchesReceipt(
       .filter(Boolean)
       .join(" ")
   );
+}
 
-  if (image.orderNumber && haystack.includes(normalizeMatchText(image.orderNumber))) {
-    return true;
-  }
+function receiptProductMatchText(receipt: ReceiptSummary) {
+  return normalizeMatchText(
+    receipt.lines
+      .map((line) => `${line.quantity} ${line.description} ${line.note || ""}`)
+      .join(" ")
+  );
+}
+
+function imageFileBaseMatchText(image: WebshopImageSummary) {
+  return normalizeMatchText(image.fileName.replace(/\.[^.]+$/, ""));
+}
+
+function isStoreReceiptCustomer(receipt: ReceiptSummary) {
+  return ["daalseweg", "heyendaalseweg", "lent", "ziekerstraat"].includes(
+    normalizeMatchText(receipt.customer)
+  );
+}
+
+function customerMatchesReceipt(
+  image: WebshopImageSummary,
+  receipt: ReceiptSummary,
+  haystack: string
+) {
+  if (isStoreReceiptCustomer(receipt)) return false;
 
   const imageName = normalizeMatchText(image.customerName);
   const receiptName = normalizeMatchText(receipt.customer);
-  if (imageName && receiptName && (imageName.includes(receiptName) || receiptName.includes(imageName))) {
+  const imageLastName = normalizeMatchText(customerLastNameFor(image.customerName));
+  const receiptLastName = normalizeMatchText(customerLastNameFor(receipt.customer));
+
+  if (!imageName || !receiptName) return false;
+
+  if (imageLastName.length >= 4 && hasNormalizedWord(haystack, imageLastName)) {
     return true;
   }
 
-  const imageWords = imageSignificantWords(image);
-  if (imageWords.length === 0) return false;
+  if (
+    receiptLastName.length >= 4 &&
+    hasNormalizedWord(imageName, receiptLastName)
+  ) {
+    return true;
+  }
 
-  return imageWords.some((word) => haystack.includes(word));
+  const imageNameWords = significantWords(image.customerName);
+  return (
+    imageNameWords.length > 0 &&
+    imageNameWords.every((word) => hasNormalizedWord(receiptName, word))
+  );
+}
+
+function imageMatchesReceipt(
+  image: WebshopImageSummary,
+  receipt: ReceiptSummary
+) {
+  if (image.matchedReceiptId || image.matchedReceiptNumber) {
+    return Boolean(
+      (image.matchedReceiptId && image.matchedReceiptId === receipt.id) ||
+        (image.matchedReceiptNumber &&
+          image.matchedReceiptNumber === receipt.receiptNumber)
+    );
+  }
+
+  const haystack = receiptPhotoMatchText(receipt);
+  const orderNumber = normalizeMatchText(image.orderNumber);
+  if (orderNumber && hasNormalizedWord(haystack, orderNumber)) {
+    return true;
+  }
+
+  const fileBase = imageFileBaseMatchText(image);
+  if (fileBase.length >= 10 && haystack.includes(fileBase)) {
+    return true;
+  }
+
+  const hasCustomerMatch = customerMatchesReceipt(image, receipt, haystack);
+  if (!hasCustomerMatch) return false;
+
+  const receiptProductText = receiptProductMatchText(receipt);
+  const productWords = imageProductWords(image);
+  const productOverlap = productWords.filter((word) =>
+    hasNormalizedWord(receiptProductText, word)
+  ).length;
+
+  return (
+    productWords.length === 0 ||
+    productOverlap > 0 ||
+    image.confidence === "hoog"
+  );
 }
 
 function imageMatchesForReceipt(
@@ -950,7 +1023,6 @@ function buildMarzipanPrintItems(
 ) {
   const items: MarzipanPrintItem[] = [];
   const claimedImageIds = new Set<string>();
-  const receiptIdsWithImages = new Set<string>();
 
   receipts.forEach((receipt) => {
     const matchedImages = imageMatchesForReceipt(receipt, webshopImages).filter(
@@ -963,56 +1035,22 @@ function buildMarzipanPrintItems(
       receipt,
       images: matchedImages,
     });
-    receiptIdsWithImages.add(receipt.id);
     matchedImages.forEach((image) => claimedImageIds.add(image.id));
   });
 
   const unclaimedImages = webshopImages.filter(
     (image) => !claimedImageIds.has(image.id)
   );
-  const photoReceiptsWithoutImage = receipts.filter(
-    (receipt) =>
-      !receiptIdsWithImages.has(receipt.id) &&
-      photoProductPlansForReceipt(receipt, { requirePhotoSignal: true }).length > 0
-  );
 
-  if (unclaimedImages.length > 0 && photoReceiptsWithoutImage.length === 1) {
-    addMarzipanPrintItemsForReceipt({
+  unclaimedImages.forEach((image, imageIndex) => {
+    pushMarzipanPrintCopies({
       items,
-      receipt: photoReceiptsWithoutImage[0],
-      images: unclaimedImages,
-      inferredMatch: true,
+      image,
+      plan: fallbackPhotoProductPlan(),
+      copyTotal: 1,
+      planIndex: imageIndex,
     });
-    unclaimedImages.forEach((image) => claimedImageIds.add(image.id));
-  } else if (
-    unclaimedImages.length > 1 &&
-    unclaimedImages.length === photoReceiptsWithoutImage.length
-  ) {
-    unclaimedImages.forEach((image, index) => {
-      const receipt = photoReceiptsWithoutImage[index];
-      if (!receipt) return;
-
-      addMarzipanPrintItemsForReceipt({
-        items,
-        receipt,
-        images: [image],
-        inferredMatch: true,
-      });
-      claimedImageIds.add(image.id);
-    });
-  }
-
-  webshopImages
-    .filter((image) => !claimedImageIds.has(image.id))
-    .forEach((image, imageIndex) => {
-      pushMarzipanPrintCopies({
-        items,
-        image,
-        plan: fallbackPhotoProductPlan(),
-        copyTotal: 1,
-        planIndex: imageIndex,
-      });
-    });
+  });
 
   return items;
 }
@@ -3273,6 +3311,11 @@ function OrdersPanel({
                           {image.orderNumber || "geen bestelnummer"} ·{" "}
                           {image.customerName || "naam check"}
                         </span>
+                        {image.productSummary && (
+                          <span className="block truncate text-[#555]">
+                            {image.productSummary}
+                          </span>
+                        )}
                       </a>
                       {selectedReceipt && (
                         <button
@@ -3495,6 +3538,11 @@ function WebshopImageBlock({
                   {image.orderNumber || "zonder bestelnummer"} · match{" "}
                   {image.matchSource === "manual" ? "handmatig" : image.confidence}
                 </span>
+                {image.productSummary && (
+                  <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                    {image.productSummary}
+                  </span>
+                )}
                 {image.fileName && (
                   <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
                     {image.fileName}

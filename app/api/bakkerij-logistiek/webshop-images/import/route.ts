@@ -22,6 +22,7 @@ type WebshopImageInput = {
   photoUrl: string;
   sourceUrl: string;
   fileName: string;
+  productSummary: string;
   bodyText: string;
   bodyHtml: string;
   links: string[];
@@ -391,6 +392,59 @@ function extractCustomerName(input: WebshopImageInput, text: string) {
     .trim();
 }
 
+function extractProductSummary(input: WebshopImageInput, text: string) {
+  const direct = cleanText(input.productSummary, 500);
+  if (direct) return direct;
+
+  const lines = text
+    .split(/\n/)
+    .map((line) => cleanText(line, 300))
+    .filter(Boolean);
+  const products: string[] = [];
+  let insideProductTable = false;
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+
+    if (/^product\b/.test(lower) && /\b(aantal|totaal)\b/.test(lower)) {
+      insideProductTable = true;
+      continue;
+    }
+
+    if (
+      insideProductTable &&
+      /^(subtotaal|totaal|btw|aanvullende|notities|leveringswijze|betaling|bank|kvk)\b/.test(
+        lower
+      )
+    ) {
+      break;
+    }
+
+    if (!insideProductTable && !/foto|logo|petit|taart|marsepein|slagroom/i.test(line)) {
+      continue;
+    }
+
+    if (/^[•*-]/.test(line)) continue;
+
+    const productMatch =
+      line.match(/^(.{3,140}?)\s+(\d{1,4})\s*(?:€|eur)\s*[\d,.]+/i) ||
+      line.match(/^(.{3,140}?)\s+(\d{1,4})\s*$/);
+
+    if (!productMatch) continue;
+
+    const label = cleanText(productMatch[1], 140)
+      .replace(/\b(product|aantal|totaal)\b/gi, "")
+      .trim();
+    const quantity = cleanText(productMatch[2], 20);
+
+    if (label.length >= 3 && quantity) {
+      products.push(`${label} ${quantity}x`);
+    }
+  }
+
+  return unique(products).slice(0, 6).join(" | ").slice(0, 500);
+}
+
 function confidenceFor(input: {
   orderNumber: string;
   deliveryDate: string;
@@ -443,6 +497,7 @@ async function readJsonInput(request: Request): Promise<WebshopImageInput | Resp
     photoUrl: cleanPhotoReference(body.photoUrl),
     sourceUrl: cleanUrl(body.sourceUrl),
     fileName: cleanText(body.fileName, 240),
+    productSummary: cleanText(body.productSummary, 500),
     bodyText: cleanText(body.bodyText, 12000),
     bodyHtml: String(body.bodyHtml || "").slice(0, 60000),
     links: Array.isArray(body.links)
@@ -492,6 +547,7 @@ export async function POST(request: Request) {
     const deliveryDate = extractDeliveryDate(input, text);
     const orderNumber = extractOrderNumber(input, text);
     const customerName = extractCustomerName(input, text);
+    const productSummary = extractProductSummary(input, text);
     const notes: string[] = [];
 
     if (!photoUrl) notes.push("Geen duidelijke fotolink gevonden.");
@@ -524,6 +580,7 @@ export async function POST(request: Request) {
       photoUrl,
       sourceUrl: input.sourceUrl,
       fileName,
+      productSummary,
       subject: input.subject,
       from: input.from,
       receivedAt: input.receivedAt,
