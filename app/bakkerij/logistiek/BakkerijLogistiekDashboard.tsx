@@ -887,7 +887,7 @@ function preferredBusForReceipt(receipt: ReceiptSummary): BusId | "" {
     return "A";
   }
   if (
-    /ziekerstraat|centrum|lent|waalkade|oosterhout|bemmel|elst|arnhem|noord/.test(
+    /ziekerstraat|centrum|lent|waalkade|jonkerbos|sanadome|cwz|goffert|crematorium|thermen|berendonck|wijchen|beuningen|oosterhout|bemmel|elst|arnhem|noord/.test(
       text
     )
   ) {
@@ -936,6 +936,32 @@ function receiptLoadScore(receipt: ReceiptSummary) {
     Number(isOutsideRouteReceipt(receipt)) * 1.4 +
     Math.min(4, receiptPastryUnits(receipt) / 45) +
     Math.min(4, iceTubCountForReceipt(receipt) / 3)
+  );
+}
+
+function fitsNaturalFirstLoop(receipt: ReceiptSummary, bus: PlannedBus) {
+  const shopKey = shopKeyForReceipt(receipt);
+  if (shopKey && bus.shopKeys.includes(shopKey)) return true;
+
+  const text = receiptSearchText(receipt);
+  const clusterKey = outsideClusterKeyForReceipt(receipt);
+
+  if (bus.id === "A") {
+    return (
+      clusterKey === "oost-buiten" ||
+      /radboud|heyendaal|han\b|kapittelweg|geert groote|maartenskliniek|brakkenstein|berg en dal|beek|ubbergen|groesbeek|malden|molenhoek|oost/.test(
+        text
+      )
+    );
+  }
+
+  return (
+    clusterKey === "jonkerbos" ||
+    clusterKey === "west-buiten" ||
+    clusterKey === "noord-buiten" ||
+    /ziekerstraat|centrum|lent|waalkade|jonkerbos|sanadome|cwz|goffert|crematorium|thermen|berendonck|wijchen|beuningen|oosterhout|bemmel|elst|arnhem|noord/.test(
+      text
+    )
   );
 }
 
@@ -1091,12 +1117,25 @@ function shouldUseSecondRound(
   if (minutes < 600) return false;
 
   const maxFirstStops =
-    loadProfile.pressure === "hoog" ? 7 : loadProfile.pressure === "middel" ? 9 : 11;
+    loadProfile.pressure === "hoog" ? 9 : loadProfile.pressure === "middel" ? 11 : 13;
+  const maxFirstScore =
+    loadProfile.pressure === "hoog" ? 22 : loadProfile.pressure === "middel" ? 27 : 34;
+  const projectedStops = bus.early.length + bus.first.length + 1;
+  const projectedScore = bus.firstScore + receiptLoadScore(receipt);
+  const canRideFirstLoop =
+    fitsNaturalFirstLoop(receipt, bus) &&
+    projectedStops <= maxFirstStops &&
+    projectedScore <= maxFirstScore;
+
+  if (canRideFirstLoop) return false;
+
+  if (projectedStops > maxFirstStops && minutes >= 660) return true;
+  if (projectedScore > maxFirstScore && minutes >= 660) return true;
 
   return (
-    (isOutsideRouteReceipt(receipt) && loadProfile.pressure !== "laag") ||
-    (isLargeReceipt(receipt) && minutes >= 570) ||
-    (bus.early.length + bus.first.length >= maxFirstStops && minutes >= 570)
+    isLargeReceipt(receipt) &&
+    minutes >= 720 &&
+    (projectedStops >= maxFirstStops - 1 || projectedScore >= maxFirstScore * 0.85)
   );
 }
 
