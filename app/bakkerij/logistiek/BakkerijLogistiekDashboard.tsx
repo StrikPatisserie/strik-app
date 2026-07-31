@@ -1188,6 +1188,10 @@ function createMarzipanPhotoPrintHtml(input: {
     <style>
       @page { margin: 8mm 10mm 60mm 10mm; size: A4 portrait; }
       * { box-sizing: border-box; }
+      :root {
+        --petit-four-size: 37.8mm;
+        --petit-four-gap: 0.25mm;
+      }
       body {
         background: #fff;
         color: #000;
@@ -1261,10 +1265,10 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .square-grid {
         display: grid;
-        gap: 0.35mm;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: var(--petit-four-gap);
+        grid-template-columns: repeat(5, var(--petit-four-size));
         justify-content: start;
-        width: 100%;
+        width: fit-content;
       }
       .round-grid {
         align-items: flex-start;
@@ -1281,7 +1285,7 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .square {
         margin-bottom: 0;
-        width: 100%;
+        width: var(--petit-four-size);
       }
       .photo-frame {
         background: #fff;
@@ -1292,10 +1296,11 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .square .photo-frame {
         aspect-ratio: 1 / 1;
+        background: #000;
         border: 0;
-        height: auto;
+        height: var(--petit-four-size);
         padding: 0;
-        width: 100%;
+        width: var(--petit-four-size);
       }
       .round .photo-frame {
         border-radius: 999px;
