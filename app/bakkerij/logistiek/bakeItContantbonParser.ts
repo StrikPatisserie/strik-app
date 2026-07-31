@@ -29,6 +29,7 @@ type ParsedPage = {
   topAddress: string;
   lines: LogisticsReceiptLine[];
   remarks: string[];
+  timeLines: string[];
   deliveryBlock: string[];
   alternativeAddressLines: string[];
   fulfillment: LogisticsFulfillment;
@@ -293,11 +294,43 @@ function inferRoute(customer: string, address: string, deliveryAddress: string) 
   return "Check";
 }
 
-function inferTime(lines: string[]) {
-  const timeLine = lines.find(
-    (line) => /\b\d{1,2}[:.]\d{2}\b/.test(line) && !/afdrukdatum/i.test(line)
+function normalizeTimeText(value: string) {
+  const [hour = "", minute = ""] = value.replace(".", ":").split(":");
+
+  return `${hour.padStart(2, "0")}:${minute}`;
+}
+
+function extractOperationalTime(line: string) {
+  if (/afdrukdatum/i.test(line) || isLikelyPhotoFileLine(line)) return "";
+
+  const range = line.match(
+    /\b(?:tussen|van)\s+(\d{1,2}[:.]\d{2})\s+(?:en|tot|-)\s+(\d{1,2}[:.]\d{2})\b/i
   );
-  const time = timeLine?.match(/\b\d{1,2}[:.]\d{2}\b/)?.[0]?.replace(".", ":");
+  if (range) {
+    return `${normalizeTimeText(range[1])}-${normalizeTimeText(range[2])}`;
+  }
+
+  const preferredTime = line.match(
+    /\b(?:voor|om|vanaf|tijd|afhaaltijd|bezorgtijd|wordt gehaald|bezorgen|bezorging)\b.*?(\d{1,2}[:.]\d{2})\b/i
+  );
+  if (preferredTime) return normalizeTimeText(preferredTime[1]);
+
+  const looseTime = line.match(/\b(\d{1,2}[:.]\d{2})\b/);
+  return looseTime ? normalizeTimeText(looseTime[1]) : "";
+}
+
+function inferTime(lines: string[]) {
+  const cleanLines = lines.filter(
+    (line) => !/afdrukdatum/i.test(line) && !isLikelyPhotoFileLine(line)
+  );
+  const preferredLine = cleanLines.find(
+    (line) =>
+      /\b(?:wordt gehaald|afhaal|bezorg|lever|tussen|tijd)\b/i.test(line) &&
+      extractOperationalTime(line)
+  );
+  const time =
+    (preferredLine ? extractOperationalTime(preferredLine) : "") ||
+    cleanLines.map(extractOperationalTime).find(Boolean);
 
   return time || "Geen tijd";
 }
@@ -353,12 +386,16 @@ function pickupLocationFromLine(line: string) {
 }
 
 function isFulfillmentLine(line: string) {
-  return /^(bezorgen|bezorging)$/i.test(line) || /^wordt gehaald\b/i.test(line);
+  return (
+    /^(bezorgen|bezorging)$/i.test(line) ||
+    /^wordt gehaald\b/i.test(line) ||
+    /^wordt bezorgd\b/i.test(line)
+  );
 }
 
 function inferFulfillment(bodyLines: string[]): LogisticsFulfillment {
   if (bodyLines.some((line) => /^wordt gehaald\b/i.test(line))) return "afhalen";
-  if (bodyLines.some((line) => /^bezorgen\b|^bezorging\b/i.test(line))) {
+  if (bodyLines.some((line) => /^bezorgen\b|^bezorging\b|^wordt bezorgd\b/i.test(line))) {
     return "bezorgen";
   }
 
@@ -554,6 +591,11 @@ function parsePage(pageText: string): ParsedPage | null {
   const deliveryBlock = findDeliveryBlock(bodyLines);
   const fulfillment = inferFulfillment(bodyLines);
   const pickupLocation = inferPickupLocation(bodyLines);
+  const timeLines = bodyLines.filter(
+    (line) =>
+      isFulfillmentLine(line) ||
+      /\b(?:afhaaltijd|bezorgtijd|tijdvak|levering|wordt bezorgd)\b/i.test(line)
+  );
   const parsedLines: LogisticsReceiptLine[] = [];
   const remarks: string[] = [];
   let currentLine: LogisticsReceiptLine | null = null;
@@ -632,6 +674,7 @@ function parsePage(pageText: string): ParsedPage | null {
     topAddress,
     lines: parsedLines,
     remarks: alternativeAddressResult.remarks,
+    timeLines,
     deliveryBlock,
     alternativeAddressLines: alternativeAddressResult.alternativeAddressLines,
     fulfillment,
@@ -643,6 +686,7 @@ function parsePage(pageText: string): ParsedPage | null {
 function mergePageIntoDraft(draft: ReceiptDraft, page: ParsedPage) {
   for (const line of page.lines) uniqueLinePush(draft.lines, line);
   for (const remark of page.remarks) uniquePush(draft.remarks, remark);
+  for (const timeLine of page.timeLines) uniquePush(draft.timeLines, timeLine);
   for (const deliveryLine of page.deliveryBlock) uniquePush(draft.deliveryBlock, deliveryLine);
   for (const addressLine of page.alternativeAddressLines) {
     uniquePush(draft.alternativeAddressLines, addressLine);
@@ -760,7 +804,7 @@ function createReceipt(draft: ReceiptDraft, index: number): LogisticsReceipt {
   return {
     id: draft.receiptNumber || `CB-${String(index + 1).padStart(3, "0")}`,
     receiptNumber: draft.receiptNumber,
-    time: inferTime([...draft.remarks, ...draft.deliveryBlock]),
+    time: inferTime([...draft.timeLines, ...draft.remarks, ...draft.deliveryBlock]),
     customer: draft.customer,
     address: originalAddress,
     deliveryAddress,

@@ -85,6 +85,13 @@ type RouteStop = {
 };
 
 type BusId = "A" | "B";
+type ReceiptTone =
+  | "neutral"
+  | "delivery"
+  | "heyendaalseweg"
+  | "daalseweg"
+  | "ziekerstraat"
+  | "lent";
 
 type DayLoadProfile = {
   pressure: string;
@@ -549,6 +556,126 @@ function fulfillmentLabel(receipt: ReceiptSummary) {
   if (fulfillment === "bezorgen") return "Bezorgen";
 
   return "Check";
+}
+
+function pickupAbbreviationForKey(key: string) {
+  if (key === "heyendaalseweg") return "HEY";
+  if (key === "daalseweg") return "DAAL";
+  if (key === "ziekerstraat") return "ZIEK";
+  if (key === "lent") return "LENT";
+
+  return "";
+}
+
+function receiptToneFor(receipt: ReceiptSummary): ReceiptTone {
+  if (receiptFulfillment(receipt) === "bezorgen") return "delivery";
+
+  const shopKey = shopKeyForText(pickupLocationFor(receipt)) || shopKeyForReceipt(receipt);
+  if (
+    shopKey === "heyendaalseweg" ||
+    shopKey === "daalseweg" ||
+    shopKey === "ziekerstraat" ||
+    shopKey === "lent"
+  ) {
+    return shopKey;
+  }
+
+  return "neutral";
+}
+
+function receiptToneForFilter(filter: OrdersFilter): ReceiptTone {
+  if (filter === "delivery") return "delivery";
+  if (filter === "pickup-heyendaalseweg") return "heyendaalseweg";
+  if (filter === "pickup-daalseweg") return "daalseweg";
+  if (filter === "pickup-ziekerstraat") return "ziekerstraat";
+  if (filter === "pickup-lent") return "lent";
+
+  return "neutral";
+}
+
+function receiptToneBadgeClasses(tone: ReceiptTone) {
+  if (tone === "lent") return "border-[#8fbc8c] bg-[#eef8ed] text-[#285631]";
+  if (tone === "heyendaalseweg") {
+    return "border-[#e5cf68] bg-[#fff7cf] text-[#685711]";
+  }
+  if (tone === "ziekerstraat") {
+    return "border-[#eeaaa3] bg-[#fff0ef] text-[#82352f]";
+  }
+  if (tone === "daalseweg") {
+    return "border-[#8dbde9] bg-[#eef7ff] text-[#1b517c]";
+  }
+  if (tone === "delivery") {
+    return "border-[#c8c3bb] bg-[#f2f1ee] text-[#4f4a44]";
+  }
+
+  return "border-[#1a1815] bg-[#1a1815] text-white";
+}
+
+function receiptFilterClasses(tone: ReceiptTone, active: boolean) {
+  if (active) {
+    if (tone === "neutral") return "border-[#1a1815] bg-[#1a1815] text-white";
+    if (tone === "lent") return "border-[#4f8d55] bg-[#4f8d55] text-white";
+    if (tone === "heyendaalseweg") {
+      return "border-[#d6bd3e] bg-[#fff0a7] text-[#1a1815]";
+    }
+    if (tone === "ziekerstraat") return "border-[#d4695f] bg-[#d4695f] text-white";
+    if (tone === "daalseweg") return "border-[#4f95d2] bg-[#4f95d2] text-white";
+
+    return "border-[#8a8580] bg-[#8a8580] text-white";
+  }
+
+  return receiptToneBadgeClasses(tone);
+}
+
+function receiptAccentClasses(tone: ReceiptTone) {
+  if (tone === "lent") return "border-l-[#8fbc8c] bg-[#fbfffb]";
+  if (tone === "heyendaalseweg") return "border-l-[#e5cf68] bg-[#fffdf5]";
+  if (tone === "ziekerstraat") return "border-l-[#eeaaa3] bg-[#fffafa]";
+  if (tone === "daalseweg") return "border-l-[#8dbde9] bg-[#fbfdff]";
+  if (tone === "delivery") return "border-l-[#c8c3bb] bg-[#fbfaf8]";
+
+  return "border-l-[#1a1815]";
+}
+
+function receiptLocationBadge(receipt: ReceiptSummary) {
+  if (receiptFulfillment(receipt) === "bezorgen") return "BEZ";
+
+  const shopKey = shopKeyForText(pickupLocationFor(receipt)) || shopKeyForReceipt(receipt);
+  return pickupAbbreviationForKey(shopKey) || "CHK";
+}
+
+function timeLooksLikePhotoTimestamp(receipt: ReceiptSummary, time: string) {
+  if (!/^\d{1,2}:\d{2}$/.test(time)) return false;
+
+  const dotted = time.replace(":", ".");
+  const haystack = receiptPhotoMatchText(receipt).toLowerCase();
+
+  return /\.(?:jpe?g|png|webp)\b/i.test(haystack) && haystack.includes(dotted);
+}
+
+function receiptOperationalTime(receipt: ReceiptSummary) {
+  const time = receipt.time.trim();
+  if (!time || /^geen tijd$/i.test(time)) return "";
+  if (timeLooksLikePhotoTimestamp(receipt, time)) return "";
+
+  return time;
+}
+
+function receiptListTimeLabel(receipt: ReceiptSummary) {
+  const time = receiptOperationalTime(receipt);
+  if (!time) return "";
+
+  const matches = [...time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
+  if (matches.length >= 2) {
+    const first = matches[0];
+    const last = matches.at(-1);
+
+    return last
+      ? `${first[1].padStart(2, "0")}:${first[2]}-${last[1].padStart(2, "0")}:${last[2]}`
+      : time;
+  }
+
+  return time;
 }
 
 function normalizeMatchText(value: string) {
@@ -1517,7 +1644,8 @@ function shopLabelForKey(key: string) {
 }
 
 function routeDeadlineMinutes(receipt: ReceiptSummary) {
-  const matches = [...receipt.time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
+  const time = receiptOperationalTime(receipt);
+  const matches = [...time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
   const deadline = matches.at(-1);
   if (!deadline) return 9999;
 
@@ -1525,14 +1653,17 @@ function routeDeadlineMinutes(receipt: ReceiptSummary) {
 }
 
 function routeTimeLabel(receipt: ReceiptSummary) {
-  const matches = [...receipt.time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
+  const time = receiptOperationalTime(receipt);
+  if (!time) return "tijd check";
+
+  const matches = [...time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
   if (matches.length >= 2) {
     const deadline = matches.at(-1);
 
-    return deadline ? `voor ${deadline[1].padStart(2, "0")}:${deadline[2]}` : receipt.time;
+    return deadline ? `voor ${deadline[1].padStart(2, "0")}:${deadline[2]}` : time;
   }
 
-  return receipt.time === "Geen tijd" ? "tijd check" : receipt.time;
+  return time;
 }
 
 function hasExplicitEarlyInstruction(receipt: ReceiptSummary) {
@@ -3284,6 +3415,7 @@ function OrdersPanel({
           {ordersFilters.map((filter) => {
             const active = activeFilter === filter.id;
             const count = receiptFilterCount(receiptSummaries, filter.id);
+            const tone = receiptToneForFilter(filter.id);
 
             return (
               <button
@@ -3292,9 +3424,7 @@ function OrdersPanel({
                 aria-pressed={active}
                 onClick={() => setActiveFilter(filter.id)}
                 className={`shrink-0 border px-1.5 py-0.5 text-[0.62rem] font-normal tracking-normal transition ${
-                  active
-                    ? "border-[#1a1815] bg-[#1a1815] text-white"
-                    : "border-[#e8e4de] bg-white text-[#6b645b] hover:bg-[#faf8f5]"
+                  receiptFilterClasses(tone, active)
                 }`}
               >
                 {filter.label} {count}
@@ -3413,58 +3543,69 @@ function ReceiptRow({
   receipt: ReceiptSummary;
 }>) {
   const fulfillment = fulfillmentLabel(receipt);
-  const target = receiptTargetLine(receipt);
-  const time = routeTimeLabel(receipt);
+  const time = receiptListTimeLabel(receipt);
+  const tone = receiptToneFor(receipt);
+  const locationBadge = receiptLocationBadge(receipt);
 
   return (
     <button
       type="button"
       aria-pressed={active}
       onClick={onSelect}
-      className={`grid w-full grid-cols-[2rem_minmax(0,1fr)] gap-2 border p-1.5 text-left transition ${
+      className={`grid w-full grid-cols-[1.75rem_minmax(0,1fr)] gap-1.5 border border-l-4 p-1.5 text-left transition ${
         active
-          ? "border-[#1a1815] bg-[#fff3ed]"
-          : "border-[#efe7dd] bg-[#faf8f5] hover:border-[#efc7b8] hover:bg-white"
-      }`}
+          ? "border-[#1a1815] bg-white"
+          : "border-[#efe7dd] bg-[#faf8f5] hover:border-[#d7cec4] hover:bg-white"
+      } ${receiptAccentClasses(tone)}`}
     >
-      <span className="flex h-7 w-7 items-center justify-center bg-[#1a1815] text-[0.68rem] font-black tabular-nums tracking-normal text-white">
+      <span className="flex h-6 w-6 items-center justify-center bg-[#1a1815] text-[0.62rem] font-bold tabular-nums tracking-normal text-white">
         {index + 1}
       </span>
       <div className="min-w-0">
-        <div className="flex min-w-0 items-start justify-between gap-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-1.5">
           <div className="min-w-0">
-            <p className="truncate text-xs font-black tracking-normal text-[#1a1815]">
+            <p className="truncate text-[0.72rem] font-bold leading-tight tracking-normal text-[#1a1815]">
               {receipt.customer}
             </p>
-            <p className="truncate text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
-              {time} · {target}
-            </p>
+            {time && (
+              <p className="mt-0.5 truncate text-[0.62rem] font-normal leading-tight tracking-normal text-[#6b645b]">
+                {time}
+              </p>
+            )}
           </div>
           <div className="shrink-0 text-right">
-            <p className="text-[0.68rem] font-black tracking-normal text-[#1a1815]">
-              {receipt.route}
-            </p>
+            <span
+              className={`inline-flex min-w-8 justify-center border px-1.5 py-0.5 text-[0.58rem] font-bold leading-none tracking-normal ${receiptToneBadgeClasses(
+                tone
+              )}`}
+            >
+              {locationBadge}
+            </span>
             {receipt.value ? (
-              <p className="text-[0.68rem] font-normal tracking-normal text-[#6b645b]">
+              <p className="mt-1 text-[0.62rem] font-normal leading-none tracking-normal text-[#6b645b]">
                 {formatCurrency(receipt.value)}
               </p>
             ) : (
-              <p className="text-[0.68rem] font-normal tracking-normal text-[#8b8278]">
+              <p className="mt-1 text-[0.62rem] font-normal leading-none tracking-normal text-[#8b8278]">
                 intern
               </p>
             )}
           </div>
         </div>
-        <div className="mt-1 flex items-center gap-1">
-          <span className="border border-[#e8e4de] bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]">
+        <div className="mt-1 flex items-center gap-1 overflow-hidden">
+          <span
+            className={`border px-1.5 py-0.5 text-[0.58rem] font-normal leading-none tracking-normal ${receiptToneBadgeClasses(
+              tone
+            )}`}
+          >
             {fulfillment}
           </span>
           {imageCount > 0 && (
-            <span className="border border-[#d6e5d8] bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#315641]">
+            <span className="border border-[#d6e5d8] bg-white px-1.5 py-0.5 text-[0.58rem] font-bold leading-none tracking-normal text-[#315641]">
               foto {imageCount}
             </span>
           )}
-          <span className="truncate text-[0.65rem] font-normal tracking-normal text-[#8b8278]">
+          <span className="truncate text-[0.6rem] font-normal leading-none tracking-normal text-[#8b8278]">
             {receipt.lines.length} regels
           </span>
         </div>
@@ -3479,6 +3620,8 @@ function ReceiptAddressBlock({
 }: Readonly<{ receipt: ReceiptSummary; selectedPlan: DayPlan }>) {
   const fulfillment = receiptFulfillment(receipt);
   const pickupLocation = pickupLocationFor(receipt);
+  const tone = receiptToneFor(receipt);
+  const displayTime = receiptListTimeLabel(receipt);
   const focusLabel =
     fulfillment === "afhalen"
       ? "Afhaalwinkel"
@@ -3513,24 +3656,22 @@ function ReceiptAddressBlock({
           <p className="mt-1 text-xs font-black uppercase tracking-normal text-[#000]">
             {fulfillmentLabel(receipt)}
           </p>
-          {receipt.time && (
+          {displayTime && (
             <p className="mt-0.5 text-xs font-bold tracking-normal text-[#000]">
-              {receipt.time}
+              {displayTime}
             </p>
           )}
         </div>
       </div>
       <div
-        className={`mt-4 border px-2.5 py-2 ${
-          fulfillment === "afhalen"
-            ? "border-[#111] bg-[#f4f4f4]"
-            : "border-[#d7d7d7] bg-[#f4f4f4]"
-        }`}
+        className={`mt-4 border border-l-4 px-2.5 py-2 ${receiptToneBadgeClasses(
+          tone
+        )}`}
       >
-        <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#555]">
+        <p className="text-[0.62rem] font-black uppercase tracking-normal opacity-80">
           {focusLabel}
         </p>
-        <p className="mt-0.5 text-sm font-black leading-snug tracking-normal text-[#111]">
+        <p className="mt-0.5 text-sm font-black leading-snug tracking-normal">
           {focusValue}
         </p>
       </div>
@@ -3912,7 +4053,7 @@ function ReceiptDetail({
             {fulfillment}
           </span>
           <span className="truncate text-[0.68rem] font-bold tracking-normal">
-            route {receipt.route} · {selectedPlan.title}
+            {selectedPlan.title}
             {receipt.tags.length > 0 ? ` · ${receipt.tags.join(" · ")}` : ""}
           </span>
         </div>
