@@ -1059,6 +1059,26 @@ function receiptTextContinuationSource(receipt: ReceiptSummary) {
     .join(" ");
 }
 
+function repairTextOptionContinuations(lines: ReceiptLine[], receipt: ReceiptSummary) {
+  const sourceText = receiptTextContinuationSource(receipt);
+
+  lines.forEach((line) => {
+    if (
+      productOptionKind(line.description) !== "tekst" ||
+      /\bjaar\b/i.test(line.description)
+    ) {
+      return;
+    }
+
+    const continuation = textOptionContinuationFromNote(sourceText, line.quantity);
+    if (continuation) {
+      line.description = `${line.description} ${continuation}`;
+    }
+
+    line.quantity = "1";
+  });
+}
+
 function receiptLineIdentity(line: ReceiptLine) {
   return `${line.quantity}|${normalizedLineDescription(line.description)}`;
 }
@@ -1213,6 +1233,8 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
 
     pushUniqueReceiptLine(lines, normalizedLine);
   });
+
+  repairTextOptionContinuations(lines, receipt);
 
   return lines;
 }
@@ -4131,11 +4153,11 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     .replace(/&euro;\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
     .replace(/€\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
-    .replace(/[–-]+$/g, "")
+    .replace(/[–—-]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  return /^(?:\d+\s*)?jaar!?$/i.test(cleaned) ? "" : cleaned;
+  return /^(?:\d+\s*)?jaar!?\s*[–—-]?$/i.test(cleaned) ? "" : cleaned;
 }
 
 function ReceiptOverrideEditor({
