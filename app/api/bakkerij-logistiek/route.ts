@@ -5,6 +5,7 @@ import {
   getLogisticsDayFeedbackForDate,
   getLogisticsReceiptOverridesForDate,
   getLogisticsWebshopImagesForDate,
+  readLogisticsState,
 } from "@/app/lib/bakeryLogisticsStorage";
 
 export const runtime = "nodejs";
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    const debug = url.searchParams.get("debug") === "1";
     const [batch, webshopImages, receiptOverrides, dayFeedback] =
       await Promise.all([
         getLogisticsBatchForDate(date),
@@ -34,6 +36,43 @@ export async function GET(request: Request) {
         getLogisticsReceiptOverridesForDate(date),
         getLogisticsDayFeedbackForDate(date),
       ]);
+
+    if (debug) {
+      const state = await readLogisticsState();
+      const batchesForDate = state.batches
+        .filter((item) => item.date === date)
+        .map((item) => ({
+          id: item.id,
+          status: item.status,
+          fileName: item.fileName,
+          subject: item.subject,
+          receivedAt: item.receivedAt,
+          importedAt: item.importedAt,
+          pageCount: item.pageCount,
+          orderCount: item.orderCount,
+          receiptNumbers: item.receipts
+            .map((receipt) => receipt.receiptNumber)
+            .filter(Boolean),
+        }));
+
+      return NextResponse.json({
+        batch: batch
+          ? {
+              id: batch.id,
+              status: batch.status,
+              fileName: batch.fileName,
+              subject: batch.subject,
+              receivedAt: batch.receivedAt,
+              importedAt: batch.importedAt,
+              pageCount: batch.pageCount,
+              orderCount: batch.orderCount,
+            }
+          : null,
+        batchesForDate,
+        batchCount: batchesForDate.length,
+        generatedAt: new Date().toISOString(),
+      });
+    }
 
     return NextResponse.json({
       batch,
