@@ -524,6 +524,7 @@ function cleanReceiptRemark(value: string) {
     .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
     .replace(/&euro;\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
     .replace(/€\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
+    .replace(/(?:€\s*)?[\d.,]+\s*€/g, " ")
     .replace(/(?:^|\s)(?:€\s*[\d.,]+\s*){2,}(?=\s|$)/g, " ")
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
     .replace(/\bgewenste betaling\s*:?\s*betalen bij afhalen\b/gi, "")

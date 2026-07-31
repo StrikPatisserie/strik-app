@@ -972,7 +972,7 @@ function cleanProductOptionCandidate(value: string) {
 function isPriceOnlyReceiptDescription(value: string) {
   const description = normalizedLineDescription(value).replace(/^eur\s+/, "€ ");
 
-  return /^€?\s*[\d.,]+$/.test(description);
+  return /^€?\s*[\d.,]*\s*€?$/.test(description) && /[€\d]/.test(description);
 }
 
 function parseReceiptMoneyText(value: string) {
@@ -996,9 +996,29 @@ function cleanReceiptLineDescription(value: string) {
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
+    .replace(/^€\s*$/g, "")
     .replace(/\s+(?:€\s*)?[\d.,]+\s*$/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function textOptionContinuationFromNote(value: string, quantity: string) {
+  const clean = value
+    .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
+    .replace(/\btrial mode\b\s*[–-]?/gi, "")
+    .replace(/click here for more information/gi, "")
+    .replace(/(?:€\s*)?[\d.,]+\s*€/g, " ")
+    .replace(/€\s*[\d.,]+/g, " ")
+    .replace(/&euro;\s*[\d.,]+/g, " ")
+    .replace(/\b(?:niet\s+)?betaald\s*!+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const quantityText = quantity.replace(/[^\d]/g, "");
+  const explicit = clean.match(/\b(\d{1,2}\s+jaar!?)\b/i);
+  if (explicit) return explicit[1];
+  if (quantityText && /\bjaar!?/i.test(clean)) return `${quantityText} jaar!`;
+
+  return "";
 }
 
 function receiptLineIdentity(line: ReceiptLine) {
@@ -1103,13 +1123,20 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
     const description = cleanReceiptLineDescription(line.description);
     const note = line.note ? cleanReceiptLineDescription(line.note) : "";
 
-    if (isPriceOnlyReceiptDescription(description)) {
+    if (
+      isPriceOnlyReceiptDescription(line.description) ||
+      isPriceOnlyReceiptDescription(description) ||
+      (!description && note && isProductOptionLine({ quantity: line.quantity, description: note }))
+    ) {
       if (note && isProductOptionLine({ quantity: line.quantity, description: note })) {
-        pushUniqueReceiptLine(lines, {
+        const optionLine: ReceiptLine = {
           quantity: line.quantity,
           description: note,
           ...(line.unitPrice !== undefined ? { unitPrice: line.unitPrice } : {}),
-        });
+        };
+
+        optionLine.quantity = normalizeProductOptionQuantity(optionLine, fallbackQuantity);
+        pushUniqueReceiptLine(lines, optionLine);
       }
       return;
     }
@@ -1126,11 +1153,17 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
       const kind = productOptionKind(normalizedLine.description);
       if (
         kind === "tekst" &&
-        /^\d{1,2}$/.test(normalizedLine.quantity) &&
-        /\bjaar!?/i.test(sourceNote) &&
+        /^[\d.,]+$/.test(normalizedLine.quantity) &&
         !/\bjaar\b/i.test(normalizedLine.description)
       ) {
-        normalizedLine.description = `${normalizedLine.description} ${normalizedLine.quantity} jaar!`;
+        const continuation = textOptionContinuationFromNote(
+          sourceNote,
+          normalizedLine.quantity
+        );
+
+        if (continuation) {
+          normalizedLine.description = `${normalizedLine.description} ${continuation}`;
+        }
       }
       normalizedLine.quantity = normalizeProductOptionQuantity(
         normalizedLine,
@@ -4050,7 +4083,9 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
       /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:.*?(?=\s+(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:|\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,]+\s+met referentie)\b|$)/gi,
       ""
     )
+    .replace(/(?:€\s*)?[\d.,]+\s*€/g, "")
     .replace(/\b(?:\d+(?:[.,]\d+)?\s+)?€\s*[\d.,]+\b/g, "")
+    .replace(/€+/g, "")
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
@@ -4058,6 +4093,7 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     .replace(/&euro;\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
     .replace(/€\s*[\d.,]+\s+met referentie\s+\S+/gi, "")
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
+    .replace(/[–-]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
