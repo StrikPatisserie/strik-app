@@ -786,6 +786,7 @@ function pushMarzipanPrintCopies(input: {
   receipt?: ReceiptSummary;
   copyTotal: number;
   planIndex: number;
+  needsCheck?: boolean;
 }) {
   const customerName =
     input.image.customerName || input.receipt?.customer || "Klant controleren";
@@ -810,9 +811,52 @@ function pushMarzipanPrintCopies(input: {
       copyNumber: copy,
       copyTotal: input.copyTotal,
       confidence: input.image.confidence,
-      needsCheck: input.plan.needsCheck,
+      needsCheck: input.needsCheck || input.plan.needsCheck,
     });
   }
+}
+
+function addMarzipanPrintItemsForReceipt(input: {
+  items: MarzipanPrintItem[];
+  receipt: ReceiptSummary;
+  images: WebshopImageSummary[];
+  inferredMatch?: boolean;
+}) {
+  const productPlans = photoProductPlansForReceipt(input.receipt);
+  if (input.images.length === 1 && productPlans.length > 1) {
+    productPlans.forEach((plan, planIndex) => {
+      pushMarzipanPrintCopies({
+        items: input.items,
+        image: input.images[0],
+        plan,
+        receipt: input.receipt,
+        copyTotal: plan.copies,
+        planIndex,
+        needsCheck: input.inferredMatch,
+      });
+    });
+    return;
+  }
+
+  input.images.forEach((image, imageIndex) => {
+    const plan =
+      productPlans[Math.min(imageIndex, productPlans.length - 1)] ||
+      fallbackPhotoProductPlan();
+    const copyTotal =
+      productPlans.length === 1
+        ? distributedCopyCount(plan.copies, imageIndex, input.images.length)
+        : plan.copies;
+
+    pushMarzipanPrintCopies({
+      items: input.items,
+      image,
+      plan,
+      receipt: input.receipt,
+      copyTotal,
+      planIndex: imageIndex,
+      needsCheck: input.inferredMatch,
+    });
+  });
 }
 
 function buildMarzipanPrintItems(
@@ -820,48 +864,61 @@ function buildMarzipanPrintItems(
   webshopImages: WebshopImageSummary[]
 ) {
   const items: MarzipanPrintItem[] = [];
+  const claimedImageIds = new Set<string>();
+  const receiptIdsWithImages = new Set<string>();
 
   receipts.forEach((receipt) => {
-    const matchedImages = imageMatchesForReceipt(receipt, webshopImages);
+    const matchedImages = imageMatchesForReceipt(receipt, webshopImages).filter(
+      (image) => !claimedImageIds.has(image.id)
+    );
     if (matchedImages.length === 0) return;
 
-    const productPlans = photoProductPlansForReceipt(receipt);
-    if (matchedImages.length === 1 && productPlans.length > 1) {
-      productPlans.forEach((plan, planIndex) => {
-        pushMarzipanPrintCopies({
-          items,
-          image: matchedImages[0],
-          plan,
-          receipt,
-          copyTotal: plan.copies,
-          planIndex,
-        });
-      });
-      return;
-    }
-
-    matchedImages.forEach((image, imageIndex) => {
-      const plan =
-        productPlans[Math.min(imageIndex, productPlans.length - 1)] ||
-        fallbackPhotoProductPlan();
-      const copyTotal =
-        productPlans.length === 1
-          ? distributedCopyCount(plan.copies, imageIndex, matchedImages.length)
-          : plan.copies;
-
-      pushMarzipanPrintCopies({
-        items,
-        image,
-        plan,
-        receipt,
-        copyTotal,
-        planIndex: imageIndex,
-      });
+    addMarzipanPrintItemsForReceipt({
+      items,
+      receipt,
+      images: matchedImages,
     });
+    receiptIdsWithImages.add(receipt.id);
+    matchedImages.forEach((image) => claimedImageIds.add(image.id));
   });
 
+  const unclaimedImages = webshopImages.filter(
+    (image) => !claimedImageIds.has(image.id)
+  );
+  const photoReceiptsWithoutImage = receipts.filter(
+    (receipt) =>
+      !receiptIdsWithImages.has(receipt.id) &&
+      photoProductPlansForReceipt(receipt).length > 0
+  );
+
+  if (unclaimedImages.length > 0 && photoReceiptsWithoutImage.length === 1) {
+    addMarzipanPrintItemsForReceipt({
+      items,
+      receipt: photoReceiptsWithoutImage[0],
+      images: unclaimedImages,
+      inferredMatch: true,
+    });
+    unclaimedImages.forEach((image) => claimedImageIds.add(image.id));
+  } else if (
+    unclaimedImages.length > 1 &&
+    unclaimedImages.length === photoReceiptsWithoutImage.length
+  ) {
+    unclaimedImages.forEach((image, index) => {
+      const receipt = photoReceiptsWithoutImage[index];
+      if (!receipt) return;
+
+      addMarzipanPrintItemsForReceipt({
+        items,
+        receipt,
+        images: [image],
+        inferredMatch: true,
+      });
+      claimedImageIds.add(image.id);
+    });
+  }
+
   webshopImages
-    .filter((image) => !imageHasReceiptMatch(image, receipts))
+    .filter((image) => !claimedImageIds.has(image.id))
     .forEach((image, imageIndex) => {
       pushMarzipanPrintCopies({
         items,
@@ -918,7 +975,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <meta charset="utf-8">
     <title>${escapeHtml(title)}</title>
     <style>
-      @page { margin: 8mm; size: A4 portrait; }
+      @page { margin: 8mm 8mm 60mm 8mm; size: A4 portrait; }
       * { box-sizing: border-box; }
       body {
         background: #fff;
