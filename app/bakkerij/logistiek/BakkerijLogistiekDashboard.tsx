@@ -1320,7 +1320,7 @@ function createMarzipanPhotoPrintHtml(input: {
   <body>
     <div class="screen-actions">
       <h1>${escapeHtml(title)} · ${input.items.length} printstukken</h1>
-      <button type="button" onclick="window.print()">Print</button>
+      <button type="button" onclick="window.print()">Afdrukken</button>
     </div>
     <main>
       <div class="sheet-header">
@@ -1331,22 +1331,11 @@ function createMarzipanPhotoPrintHtml(input: {
         ${itemHtml}
       </section>
     </main>
-    <script>
-      const images = Array.from(document.images);
-      Promise.all(images.map((image) => (
-        image.complete
-          ? Promise.resolve()
-          : new Promise((resolve) => {
-              image.onload = resolve;
-              image.onerror = resolve;
-            })
-      ))).then(() => window.setTimeout(() => window.print(), 250));
-    </script>
   </body>
 </html>`;
 }
 
-function printMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
+function openMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
   if (items.length === 0) {
     window.alert("Geen webshopfoto's gevonden voor deze dag.");
     return;
@@ -1354,7 +1343,7 @@ function printMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
 
   const printWindow = window.open("", "_blank", "width=1100,height=800");
   if (!printWindow) {
-    window.alert("Printvenster kon niet geopend worden.");
+    window.alert("Controlevenster kon niet geopend worden.");
     return;
   }
 
@@ -2952,7 +2941,7 @@ export default function BakkerijLogistiekDashboard() {
               count={marzipanPrintItems.length}
               disabled={marzipanPrintItems.length === 0}
               onClick={() =>
-                printMarzipanPhotoSheet(selectedPlan, marzipanPrintItems)
+                openMarzipanPhotoSheet(selectedPlan, marzipanPrintItems)
               }
             />
             <input
@@ -4028,13 +4017,13 @@ function MarzipanPhotoPrintButton({
   return (
     <button
       type="button"
-      aria-label="Marsepeinfoto's printen"
-      title="Marsepeinfoto's printen"
+      aria-label="Marsepeinfoto's controleren"
+      title="Marsepeinfoto's controleren"
       disabled={disabled}
       onClick={onClick}
       className="relative flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
     >
-      <PhotoPrintIcon />
+      <PhotoSheetIcon />
       {count > 0 && (
         <span className="absolute -right-1 -top-1 min-w-4 border border-[#1a1815] bg-[#1a1815] px-1 text-center text-[0.56rem] font-black leading-4 tracking-normal text-white">
           {count > 99 ? "99+" : count}
@@ -4044,7 +4033,7 @@ function MarzipanPhotoPrintButton({
   );
 }
 
-function PhotoPrintIcon() {
+function PhotoSheetIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -4056,10 +4045,10 @@ function PhotoPrintIcon() {
       strokeLinejoin="round"
       strokeWidth="2"
     >
-      <path d="M6 9V4h12v5" />
-      <path d="M6 18H5a3 3 0 0 1-3-3v-3a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3h-1" />
-      <path d="M7 14h10v6H7z" />
-      <path d="M8.5 17.5 10 16l1.5 1.5 1-1 2 2" />
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="8.5" cy="10" r="1.5" />
+      <path d="m21 15-4.5-4.5L7 19" />
+      <path d="m14 19-3.5-3.5" />
     </svg>
   );
 }
