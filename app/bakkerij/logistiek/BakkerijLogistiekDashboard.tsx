@@ -77,6 +77,11 @@ type RouteRound = {
   load: string;
 };
 
+type RouteGroup = {
+  vehicle: string;
+  routes: RouteRound[];
+};
+
 type RouteStop = {
   id: string;
   label: string;
@@ -1937,6 +1942,306 @@ function openMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
   printWindow.focus();
 }
 
+function createBusRoutePrintHtml(input: {
+  plan: DayPlan;
+  routeGroup: RouteGroup;
+}) {
+  const stopCount = input.routeGroup.routes.reduce(
+    (total, route) => total + route.stops.length,
+    0
+  );
+  const title = `${input.routeGroup.vehicle} route ${formatDateLabel(
+    input.plan.date
+  )}`;
+  const routesHtml = input.routeGroup.routes
+    .map((route) => {
+      const rowsHtml = route.stops
+        .map((stop, index) => {
+          const badges = stop.badges.length
+            ? `<small class="badges">${escapeHtml(stop.badges.join(" · "))}</small>`
+            : "";
+
+          return `
+            <tr>
+              <td class="check"><span></span></td>
+              <td class="nr">${index + 1}</td>
+              <td class="stop">
+                <strong>${escapeHtml(stop.label)}</strong>
+                <small>${escapeHtml(stop.detail)}</small>
+                ${badges}
+              </td>
+              <td class="arrival"></td>
+              <td class="note"></td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      return `
+        <section class="route-block">
+          <div class="route-title">
+            <div>
+              <h2>${escapeHtml(route.title)}</h2>
+              <p>${escapeHtml(route.departure)} · ${escapeHtml(route.badge)}</p>
+            </div>
+            <strong>${escapeHtml(route.load)}</strong>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th class="check">OK</th>
+                <th class="nr">#</th>
+                <th>Stop</th>
+                <th class="arrival">Aankomst</th>
+                <th class="note">Opmerking</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </section>
+      `;
+    })
+    .join("");
+
+  return `<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <title>${escapeHtml(title)}</title>
+    <style>
+      @page { margin: 7mm; size: A4 portrait; }
+      * { box-sizing: border-box; }
+      body {
+        background: #f7f4ef;
+        color: #111;
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 0;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      .screen-actions {
+        align-items: center;
+        background: #fff;
+        border-bottom: 1px solid #ddd;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+        padding: 10px 12px;
+      }
+      .screen-actions h1 {
+        font-size: 15px;
+        margin: 0;
+      }
+      .screen-actions .action-buttons {
+        display: flex;
+        gap: 8px;
+      }
+      .screen-actions button {
+        background: #111;
+        border: 0;
+        color: #fff;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 800;
+        padding: 8px 12px;
+      }
+      .screen-actions .secondary {
+        background: #fff;
+        border: 1px solid #111;
+        color: #111;
+      }
+      main {
+        background: #fff;
+        margin: 0 auto;
+        min-height: 297mm;
+        padding: 8mm;
+        width: 210mm;
+      }
+      .sheet-header {
+        align-items: flex-start;
+        border-bottom: 2px solid #111;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4mm;
+        padding-bottom: 3mm;
+      }
+      .sheet-header h1 {
+        font-size: 18px;
+        margin: 0;
+      }
+      .sheet-header p {
+        font-size: 10px;
+        font-weight: 700;
+        margin: 1mm 0 0;
+      }
+      .driver-fields {
+        display: grid;
+        gap: 2mm;
+        min-width: 62mm;
+      }
+      .driver-fields span {
+        border-bottom: 1px solid #111;
+        display: block;
+        font-size: 9px;
+        font-weight: 700;
+        height: 6mm;
+        padding-top: 1mm;
+      }
+      .route-block {
+        break-inside: avoid;
+        margin-bottom: 4mm;
+      }
+      .route-title {
+        align-items: center;
+        background: #f1eee8;
+        border: 1px solid #111;
+        display: flex;
+        justify-content: space-between;
+        padding: 1.5mm 2mm;
+      }
+      .route-title h2 {
+        font-size: 12px;
+        margin: 0;
+        text-transform: uppercase;
+      }
+      .route-title p,
+      .route-title strong {
+        font-size: 8px;
+        margin: 0.5mm 0 0;
+      }
+      table {
+        border-collapse: collapse;
+        table-layout: fixed;
+        width: 100%;
+      }
+      th,
+      td {
+        border: 1px solid #111;
+        font-size: 8px;
+        padding: 1.2mm;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #f8f8f8;
+        font-size: 7px;
+        text-transform: uppercase;
+      }
+      .check {
+        text-align: center;
+        width: 9mm;
+      }
+      .check span {
+        border: 1.5px solid #111;
+        display: inline-block;
+        height: 4mm;
+        width: 4mm;
+      }
+      .nr {
+        text-align: center;
+        width: 7mm;
+      }
+      .stop {
+        width: auto;
+      }
+      .stop strong,
+      .stop small {
+        display: block;
+      }
+      .stop strong {
+        font-size: 8.5px;
+      }
+      .stop small {
+        color: #333;
+        font-size: 7px;
+        margin-top: 0.5mm;
+      }
+      .badges {
+        font-weight: 700;
+      }
+      .arrival {
+        width: 22mm;
+      }
+      .note {
+        width: 38mm;
+      }
+      .general-notes {
+        border: 1px solid #111;
+        margin-top: 3mm;
+        min-height: 28mm;
+        padding: 2mm;
+      }
+      .general-notes h2 {
+        font-size: 10px;
+        margin: 0 0 2mm;
+        text-transform: uppercase;
+      }
+      .general-notes div {
+        border-bottom: 1px solid #888;
+        height: 6mm;
+      }
+      @media print {
+        body { background: #fff; }
+        .screen-actions { display: none; }
+        main {
+          min-height: auto;
+          padding: 0;
+          width: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen-actions">
+      <h1>${escapeHtml(title)} · ${stopCount} stops</h1>
+      <div class="action-buttons">
+        <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
+        <button type="button" onclick="window.print()">Afdrukken</button>
+      </div>
+    </div>
+    <main>
+      <header class="sheet-header">
+        <div>
+          <h1>${escapeHtml(title)}</h1>
+          <p>${escapeHtml(input.plan.title)} · ${escapeHtml(
+            input.plan.status
+          )} · ${stopCount} stops</p>
+        </div>
+        <div class="driver-fields">
+          <span>Chauffeur</span>
+          <span>Vertrek</span>
+          <span>Terug</span>
+        </div>
+      </header>
+      ${routesHtml}
+      <section class="general-notes">
+        <h2>Algemene opmerkingen</h2>
+        <div></div>
+        <div></div>
+        <div></div>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
+function openBusRouteSheet(plan: DayPlan, routeGroup: RouteGroup) {
+  if (routeGroup.routes.length === 0) {
+    window.alert("Geen routes gevonden voor deze bus.");
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=950,height=800");
+  if (!printWindow) {
+    window.alert("Routevenster kon niet geopend worden.");
+    return;
+  }
+
+  printWindow.document.write(createBusRoutePrintHtml({ plan, routeGroup }));
+  printWindow.document.close();
+  printWindow.focus();
+}
+
 function buildBakeryProductionTotals(
   receipts: ReceiptSummary[]
 ): BakeryProductionTotals {
@@ -3785,7 +4090,9 @@ export default function BakkerijLogistiekDashboard() {
       </div>
 
       <div className="mt-3">
-        {activeTab === "routes" && <RoutesPanel routeRounds={routeRounds} />}
+        {activeTab === "routes" && (
+          <RoutesPanel routeRounds={routeRounds} selectedPlan={selectedPlan} />
+        )}
         {activeTab === "bonnen" && (
           <OrdersPanel
             receiptSummaries={receiptSummaries}
@@ -3814,7 +4121,7 @@ export default function BakkerijLogistiekDashboard() {
   );
 }
 
-function routeGroupsFor(routeRounds: RouteRound[]) {
+function routeGroupsFor(routeRounds: RouteRound[]): RouteGroup[] {
   const groups = new Map<string, RouteRound[]>();
 
   routeRounds.forEach((route) => {
@@ -3833,7 +4140,8 @@ function routeGroupsFor(routeRounds: RouteRound[]) {
 
 function RoutesPanel({
   routeRounds,
-}: Readonly<{ routeRounds: RouteRound[] }>) {
+  selectedPlan,
+}: Readonly<{ routeRounds: RouteRound[]; selectedPlan: DayPlan }>) {
   const routeGroups = routeGroupsFor(routeRounds);
 
   return (
@@ -3847,9 +4155,16 @@ function RoutesPanel({
             <h2 className="text-base font-black tracking-normal text-[#1a1815]">
               {group.vehicle}
             </h2>
-            <span className="border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
-              {group.routes.length} ronde{group.routes.length === 1 ? "" : "s"}
-            </span>
+            <div className="flex items-center gap-2">
+              <RoutePrintButton
+                label={`Route printen voor ${group.vehicle}`}
+                onClick={() => openBusRouteSheet(selectedPlan, group)}
+              />
+              <span className="border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
+                {group.routes.length} ronde
+                {group.routes.length === 1 ? "" : "s"}
+              </span>
+            </div>
           </div>
           <div className="mt-2 grid gap-2">
             {group.routes.map((route) => (
@@ -4935,6 +5250,26 @@ function MarzipanPhotoPrintButton({
   );
 }
 
+function RoutePrintButton({
+  label,
+  onClick,
+}: Readonly<{
+  label: string;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="flex h-8 w-8 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5]"
+    >
+      <PrintIcon />
+    </button>
+  );
+}
+
 function PhotoSheetIcon() {
   return (
     <svg
@@ -4951,6 +5286,26 @@ function PhotoSheetIcon() {
       <circle cx="8.5" cy="10" r="1.5" />
       <path d="m21 15-4.5-4.5L7 19" />
       <path d="m14 19-3.5-3.5" />
+    </svg>
+  );
+}
+
+function PrintIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <path d="M6 9V3h12v6" />
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <path d="M6 14h12v7H6z" />
+      <path d="M18 12h.01" />
     </svg>
   );
 }
