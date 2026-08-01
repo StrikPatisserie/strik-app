@@ -1747,6 +1747,15 @@ function createMarzipanPhotoPrintHtml(input: {
         font-weight: 800;
         padding: 8px 12px;
       }
+      .screen-actions .action-buttons {
+        display: flex;
+        gap: 8px;
+      }
+      .screen-actions .secondary {
+        background: #fff;
+        border: 1px solid #111;
+        color: #111;
+      }
       main {
         margin: 0 auto;
         max-width: 210mm;
@@ -1893,7 +1902,10 @@ function createMarzipanPhotoPrintHtml(input: {
   <body>
     <div class="screen-actions">
       <h1>${escapeHtml(title)} · ${input.items.length} printstukken</h1>
-      <button type="button" onclick="window.print()">Afdrukken</button>
+      <div class="action-buttons">
+        <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
+        <button type="button" onclick="window.print()">Afdrukken</button>
+      </div>
     </div>
     <main>
       <div class="sheet-header">
