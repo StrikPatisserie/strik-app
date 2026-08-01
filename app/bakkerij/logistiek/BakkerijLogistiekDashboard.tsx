@@ -2522,6 +2522,23 @@ function preferredBusForReceipt(receipt: ReceiptSummary): BusId | "" {
 
   const text = receiptSearchText(receipt);
   if (isCenterRouteText(text)) return "B";
+
+  const clusterKey = outsideClusterKeyForReceipt(receipt);
+  if (
+    clusterKey === "molenhoek-groesbeek" ||
+    clusterKey === "berg-en-dal" ||
+    clusterKey === "oost-buiten"
+  ) {
+    return "A";
+  }
+  if (
+    clusterKey === "jonkerbos" ||
+    clusterKey === "west-buiten" ||
+    clusterKey === "noord-buiten"
+  ) {
+    return "B";
+  }
+
   if (
     /radboud|heyendaal|han\b|kapittelweg|geert groote|maartenskliniek|brakkenstein|berg en dal|beek|ubbergen|groesbeek|malden|molenhoek|oost/.test(
       text
@@ -2542,6 +2559,7 @@ function preferredBusForReceipt(receipt: ReceiptSummary): BusId | "" {
 
 function outsideClusterKeyForReceipt(receipt: ReceiptSummary) {
   const text = receiptSearchText(receipt);
+  const normalizedText = normalizeMatchText(text);
 
   if (/jonkerbos|sanadome|cwz|goffert|crematorium/.test(text)) {
     return "jonkerbos";
@@ -2549,10 +2567,20 @@ function outsideClusterKeyForReceipt(receipt: ReceiptSummary) {
   if (/thermen|berendonck|wijchen|beuningen/.test(text)) {
     return "west-buiten";
   }
-  if (/berg en dal|beek|ubbergen|groesbeek|malden|molenhoek/.test(text)) {
+  if (
+    /(?:^| )(jachtslot|mookerheide|molenhoek|heumensebaan|groesbeek|hopmans|hoge horst)(?: |$)/.test(
+      normalizedText
+    )
+  ) {
+    return "molenhoek-groesbeek";
+  }
+  if (/berg en dal|oude kleefsebaan|beek|ubbergen/.test(text)) {
+    return "berg-en-dal";
+  }
+  if (/malden|heumen/.test(text)) {
     return "oost-buiten";
   }
-  if (/bemmel|elst|arnhem|oosterhout/.test(text)) {
+  if (/gendt|huigensstraat|bemmel|elst|arnhem|oosterhout/.test(text)) {
     return "noord-buiten";
   }
 
@@ -2592,6 +2620,8 @@ function fitsNaturalFirstLoop(receipt: ReceiptSummary, bus: PlannedBus) {
   if (bus.id === "A") {
     return (
       clusterKey === "oost-buiten" ||
+      clusterKey === "molenhoek-groesbeek" ||
+      clusterKey === "berg-en-dal" ||
       /radboud|heyendaal|han\b|kapittelweg|geert groote|maartenskliniek|brakkenstein|berg en dal|beek|ubbergen|groesbeek|malden|molenhoek|oost/.test(
         text
       )
@@ -2622,8 +2652,10 @@ function routeAreaOrderForReceipt(receipt: ReceiptSummary) {
   const clusterKey = outsideClusterKeyForReceipt(receipt);
   if (clusterKey === "jonkerbos") return 50;
   if (clusterKey === "west-buiten") return 60;
-  if (clusterKey === "noord-buiten") return 70;
-  if (clusterKey === "oost-buiten") return 80;
+  if (clusterKey === "molenhoek-groesbeek") return 70;
+  if (clusterKey === "berg-en-dal") return 72;
+  if (clusterKey === "oost-buiten") return 74;
+  if (clusterKey === "noord-buiten") return 86;
 
   return 90;
 }
@@ -2647,15 +2679,22 @@ function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
 
     const firstDeadlinePriority = routeDeadlinePriorityForReceipt(first);
     const secondDeadlinePriority = routeDeadlinePriorityForReceipt(second);
-    const priorityCompare = firstDeadlinePriority - secondDeadlinePriority;
-    if (priorityCompare !== 0) return priorityCompare;
-
     const timeCompare = routeDeadlineMinutes(first) - routeDeadlineMinutes(second);
-    if (firstDeadlinePriority <= 1 && timeCompare !== 0) return timeCompare;
+    const firstHardDeadlinePriority =
+      firstDeadlinePriority <= 1 ? firstDeadlinePriority : 2;
+    const secondHardDeadlinePriority =
+      secondDeadlinePriority <= 1 ? secondDeadlinePriority : 2;
+    const hardDeadlineCompare =
+      firstHardDeadlinePriority - secondHardDeadlinePriority;
+    if (hardDeadlineCompare !== 0) return hardDeadlineCompare;
+    if (firstHardDeadlinePriority <= 1 && timeCompare !== 0) return timeCompare;
 
     const areaCompare =
       routeAreaOrderForReceipt(first) - routeAreaOrderForReceipt(second);
     if (areaCompare !== 0) return areaCompare;
+
+    const priorityCompare = firstDeadlinePriority - secondDeadlinePriority;
+    if (priorityCompare !== 0) return priorityCompare;
 
     if (timeCompare !== 0) return timeCompare;
 
