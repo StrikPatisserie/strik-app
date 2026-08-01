@@ -451,6 +451,20 @@ function debugBakeItLaatsteMails() {
   });
 }
 
+function maakBakeItImportTriggerAan() {
+  const functionName = 'importBakeItContantbonnen';
+  const existingTriggers = ScriptApp.getProjectTriggers().filter(
+    (trigger) => trigger.getHandlerFunction() === functionName
+  );
+
+  existingTriggers.forEach((trigger) => {
+    ScriptApp.deleteTrigger(trigger);
+  });
+
+  ScriptApp.newTrigger(functionName).timeBased().everyMinutes(5).create();
+  logBakeIt_('Bake-it importtrigger aangemaakt: elke 5 minuten.');
+}
+
 function logBakeIt_(message) {
   console.log(message);
   Logger.log(message);
