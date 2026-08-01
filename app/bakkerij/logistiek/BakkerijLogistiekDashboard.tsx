@@ -154,6 +154,29 @@ type ReceiptSeed = Omit<
   internalNote?: string;
 };
 
+const saturdayRouteShopPlan: Record<
+  BusId,
+  {
+    firstShopKeys: string[];
+    secondShopKeys: string[];
+    firstShopLabel: string;
+    secondShopLabel: string;
+  }
+> = {
+  A: {
+    firstShopKeys: ["heyendaalseweg"],
+    secondShopKeys: ["daalseweg"],
+    firstShopLabel: "Heyendaal",
+    secondShopLabel: "Daalseweg",
+  },
+  B: {
+    firstShopKeys: ["lent"],
+    secondShopKeys: ["ziekerstraat"],
+    firstShopLabel: "Lent",
+    secondShopLabel: "Ziekerstraat",
+  },
+};
+
 const tabs: { id: DashboardTab; label: string }[] = [
   { id: "routes", label: "Routes" },
   { id: "bonnen", label: "Bonnen" },
@@ -2458,11 +2481,7 @@ function iceStopForReceipt(receipt: ReceiptSummary): RouteStop {
   };
 }
 
-function busLoadLine(bus: PlannedBus, round: "first" | "second") {
-  const receipts =
-    round === "first"
-      ? [...bus.early, ...bus.first, ...bus.firstIce]
-      : [...bus.second, ...bus.ice];
+function routeLoadLineForReceipts(receipts: ReceiptSummary[]) {
   const largeCount = receipts.filter(isLargeReceipt).length;
   const iceTubs = receipts.reduce(
     (total, receipt) => total + iceTubCountForReceipt(receipt),
@@ -2477,11 +2496,41 @@ function busLoadLine(bus: PlannedBus, round: "first" | "second") {
   return detailParts.join(" · ");
 }
 
+function busLoadLine(bus: PlannedBus, round: "first" | "second" | "ice") {
+  if (round === "first") {
+    return routeLoadLineForReceipts([
+      ...bus.early,
+      ...bus.first,
+      ...bus.firstIce,
+    ]);
+  }
+  if (round === "ice") return routeLoadLineForReceipts(bus.ice);
+
+  return routeLoadLineForReceipts([...bus.second, ...bus.ice]);
+}
+
+function routeLoadLineWithFallback(loadLine: string, fallback: string) {
+  if (loadLine === "0 bonnen") return fallback;
+
+  return `${loadLine} · ${fallback}`;
+}
+
+function isSaturdayDate(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return false;
+
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay() === 6;
+}
+
 function buildRouteRounds(
   plan: DayPlan,
   receipts: ReceiptSummary[],
   loadProfile: DayLoadProfile
 ): RouteRound[] {
+  if (isSaturdayDate(plan.date)) {
+    return buildSaturdayRouteRounds(plan, receipts, loadProfile);
+  }
+
   const buses: Record<BusId, PlannedBus> = {
     A: createPlannedBus({
       id: "A",
@@ -2609,6 +2658,152 @@ function buildRouteRounds(
         vehicle: `Bus ${bus}`,
         departure: plan.isFuture ? "beslissen" : "na ronde 1",
         tone: "border-[#efc7b8] bg-[#fff3ed]",
+        stops: [
+          {
+            id: "ijs-check",
+            label: "IJsbonnen controleren",
+            detail: `${plan.iceTubs} bakken ijs · ${plan.tempexBoxes} zwarte tempexbakken`,
+            badges: ["ijs", `${plan.tempexBoxes} tempex`],
+          },
+        ],
+        reason:
+          "Er is ijsvolume herkend, maar geen losse ijssalonbon; controleer de bronbonnen.",
+        load: `${plan.iceTubs} ijsbakken per 3 in een zwarte tempexbak.`,
+        loadProfile,
+      })
+    );
+  }
+
+  return rounds.filter((round) => round.stops.length > 0);
+}
+
+function buildSaturdayRouteRounds(
+  plan: DayPlan,
+  receipts: ReceiptSummary[],
+  loadProfile: DayLoadProfile
+): RouteRound[] {
+  const buses: Record<BusId, PlannedBus> = {
+    A: createPlannedBus({
+      id: "A",
+      title: "Bus A",
+      tone: "border-[#d6e5d8] bg-[#f6faf4]",
+      shopKeys: ["heyendaalseweg", "daalseweg"],
+    }),
+    B: createPlannedBus({
+      id: "B",
+      title: "Bus B",
+      tone: "border-[#eadb8b] bg-[#fff8d8]",
+      shopKeys: ["lent", "ziekerstraat"],
+    }),
+  };
+  const clusterAssignments = new Map<string, BusId>();
+  const deliveryReceipts = sortDeliveryReceipts(receipts.filter(isRouteDelivery));
+  const iceReceipts = sortDeliveryReceipts(receipts.filter(isIceReceiptSummary));
+  const rounds: RouteRound[] = [];
+
+  deliveryReceipts.forEach((receipt) => {
+    const bus = chooseBusForReceipt({
+      buses,
+      clusterAssignments,
+      receipt,
+      round: "second",
+    });
+    const round = isEarlyException(receipt) ? "early" : "second";
+
+    addReceiptToBus(buses[bus], receipt, round);
+  });
+
+  iceReceipts.forEach((receipt) => {
+    const bus = chooseBusForReceipt({
+      buses,
+      clusterAssignments,
+      receipt,
+      round: "second",
+    });
+
+    addReceiptToBus(buses[bus], receipt, "ice");
+  });
+
+  ([buses.A, buses.B] as PlannedBus[]).forEach((bus) => {
+    const routePlan = saturdayRouteShopPlan[bus.id];
+    const firstStops = [
+      ...groupShopStops(receipts, routePlan.firstShopKeys, []),
+      ...sortDeliveryReceipts(bus.early).map((receipt) =>
+        routeStopForReceipt(receipt, `${bus.id}-early-`)
+      ),
+      ...sortDeliveryReceipts(bus.first).map((receipt) =>
+        routeStopForReceipt(receipt, `${bus.id}-first-`)
+      ),
+    ];
+    const secondStops = [
+      ...groupShopStops(receipts, routePlan.secondShopKeys, []),
+      ...sortDeliveryReceipts(bus.second).map((receipt) =>
+        routeStopForReceipt(receipt, `${bus.id}-second-`)
+      ),
+    ];
+    const iceStops = sortDeliveryReceipts(bus.ice).map(iceStopForReceipt);
+
+    if (firstStops.length) {
+      rounds.push(
+        buildRouteRound({
+          id: `bus-${bus.id}-1-saturday`,
+          title: "Ronde 1",
+          vehicle: bus.title,
+          departure: plan.isFuture ? "advies 08:00" : "08:00",
+          tone: bus.tone,
+          stops: firstStops,
+          reason: `Zaterdag: eerst ${routePlan.firstShopLabel}, bus vol laden door drukte.`,
+          load: routeLoadLineWithFallback(busLoadLine(bus, "first"), "volle bus"),
+          loadProfile,
+        })
+      );
+    }
+
+    if (secondStops.length) {
+      rounds.push(
+        buildRouteRound({
+          id: `bus-${bus.id}-2-saturday`,
+          title: "Ronde 2",
+          vehicle: bus.title,
+          departure: plan.isFuture ? "na ronde 1" : "na ronde 1",
+          tone: "border-[#efc7b8] bg-[#fff3ed]",
+          stops: secondStops,
+          reason: `Zaterdag: daarna ${routePlan.secondShopLabel} en de resterende stops van deze bus.`,
+          load: routeLoadLineWithFallback(
+            routeLoadLineForReceipts(bus.second),
+            "winkel + rest"
+          ),
+          loadProfile,
+        })
+      );
+    }
+
+    if (iceStops.length) {
+      rounds.push(
+        buildRouteRound({
+          id: `bus-${bus.id}-3-ice-saturday`,
+          title: "Ronde 3 · IJs",
+          vehicle: bus.title,
+          departure: plan.isFuture ? "na ronde 2" : "na ronde 2",
+          tone: "border-[#b8ddea] bg-[#eefaff]",
+          stops: iceStops,
+          reason: "Zaterdag: ijs apart houden tot na de vaste winkelrondes.",
+          load: busLoadLine(bus, "ice"),
+          loadProfile,
+        })
+      );
+    }
+  });
+
+  if (plan.iceTubs > 0 && iceReceipts.length === 0) {
+    const bus = chooseLightestBus(buses, "second");
+    rounds.push(
+      buildRouteRound({
+        id: `bus-${bus}-3-ice-check-saturday`,
+        title: "Ronde 3 · IJs check",
+        vehicle: `Bus ${bus}`,
+        departure: plan.isFuture ? "na ronde 2" : "na ronde 2",
+        tone: "border-[#b8ddea] bg-[#eefaff]",
         stops: [
           {
             id: "ijs-check",
