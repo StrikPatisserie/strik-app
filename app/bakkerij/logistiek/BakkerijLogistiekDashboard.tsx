@@ -159,6 +159,11 @@ type ReceiptSeed = Omit<
   internalNote?: string;
 };
 
+const routeDepot = {
+  name: "Strik Patisserie",
+  address: "Ambachtsweg 4, 6581 AX Malden",
+};
+
 const saturdayRouteShopPlan: Record<
   BusId,
   {
@@ -1986,6 +1991,11 @@ function createBusRoutePrintHtml(input: {
             </div>
             <strong>${escapeHtml(route.load)}</strong>
           </div>
+          <div class="depot-line">
+            Start: ${escapeHtml(routeDepot.name)} · ${escapeHtml(
+              routeDepot.address
+            )} <span>Terug naar ${escapeHtml(routeDepot.address)}</span>
+          </div>
           <table>
             <thead>
               <tr>
@@ -2109,6 +2119,16 @@ function createBusRoutePrintHtml(input: {
         font-size: 8px;
         margin: 0.5mm 0 0;
       }
+      .depot-line {
+        border-left: 1px solid #111;
+        border-right: 1px solid #111;
+        font-size: 7.5px;
+        font-weight: 800;
+        padding: 1.2mm 2mm;
+      }
+      .depot-line span {
+        float: right;
+      }
       table {
         border-collapse: collapse;
         table-layout: fixed;
@@ -2206,6 +2226,7 @@ function createBusRoutePrintHtml(input: {
           <p>${escapeHtml(input.plan.title)} · ${escapeHtml(
             input.plan.status
           )} · ${stopCount} stops</p>
+          <p>Start/eind: ${escapeHtml(routeDepot.address)}</p>
         </div>
         <div class="driver-fields">
           <span>Chauffeur</span>
@@ -2607,19 +2628,36 @@ function routeAreaOrderForReceipt(receipt: ReceiptSummary) {
   return 90;
 }
 
+function routeDeadlinePriorityForReceipt(receipt: ReceiptSummary) {
+  if (isEarlyException(receipt)) return 0;
+
+  const minutes = routeDeadlineMinutes(receipt);
+  if (minutes < 600) return 0;
+  if (minutes < 720) return 1;
+  if (minutes >= 780 && minutes < 9999) return 3;
+
+  return 2;
+}
+
 function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
   return [...receipts].sort((first, second) => {
     const earlyCompare =
       Number(isEarlyException(second)) - Number(isEarlyException(first));
     if (earlyCompare !== 0) return earlyCompare;
 
-    const timeCompare =
-      routeDeadlineMinutes(first) - routeDeadlineMinutes(second);
-    if (timeCompare !== 0) return timeCompare;
+    const firstDeadlinePriority = routeDeadlinePriorityForReceipt(first);
+    const secondDeadlinePriority = routeDeadlinePriorityForReceipt(second);
+    const priorityCompare = firstDeadlinePriority - secondDeadlinePriority;
+    if (priorityCompare !== 0) return priorityCompare;
+
+    const timeCompare = routeDeadlineMinutes(first) - routeDeadlineMinutes(second);
+    if (firstDeadlinePriority <= 1 && timeCompare !== 0) return timeCompare;
 
     const areaCompare =
       routeAreaOrderForReceipt(first) - routeAreaOrderForReceipt(second);
     if (areaCompare !== 0) return areaCompare;
+
+    if (timeCompare !== 0) return timeCompare;
 
     const largeCompare = Number(isLargeReceipt(second)) - Number(isLargeReceipt(first));
     if (largeCompare !== 0) return largeCompare;
@@ -2974,7 +3012,8 @@ function buildRouteRounds(
           departure: plan.isFuture ? "advies 08:00" : "08:00",
           tone: bus.tone,
           stops: firstStops,
-          reason: "Winkels eerst, daarna leveringen op tijd, volume en logische bundeling.",
+          reason:
+            "Adviesvolgorde op levertijd, volume en gebied; start en eind op Ambachtsweg 4.",
           load: busLoadLine(bus, "first"),
           loadProfile,
         })
@@ -2991,7 +3030,7 @@ function buildRouteRounds(
           tone: "border-[#efc7b8] bg-[#fff3ed]",
           stops: secondStops,
           reason:
-            "Tweede ronde voor ijs, grote of latere bonnen zodra ronde 1 lucht moet houden.",
+            "Tweede ronde voor ijs, grote of latere bonnen; late deadlines blijven achter normale stops.",
           load: busLoadLine(bus, "second"),
           loadProfile,
         })
@@ -3102,7 +3141,7 @@ function buildSaturdayRouteRounds(
           departure: plan.isFuture ? "advies 08:00" : "08:00",
           tone: bus.tone,
           stops: firstStops,
-          reason: `Zaterdag: eerst ${routePlan.firstShopLabel}, bus vol laden door drukte.`,
+          reason: `Zaterdag: eerst ${routePlan.firstShopLabel}, bus vol laden door drukte; start/eind Ambachtsweg 4.`,
           load: routeLoadLineWithFallback(busLoadLine(bus, "first"), "volle bus"),
           loadProfile,
         })
@@ -3118,7 +3157,7 @@ function buildSaturdayRouteRounds(
           departure: plan.isFuture ? "na ronde 1" : "na ronde 1",
           tone: "border-[#efc7b8] bg-[#fff3ed]",
           stops: secondStops,
-          reason: `Zaterdag: daarna ${routePlan.secondShopLabel} en de resterende stops van deze bus.`,
+          reason: `Zaterdag: daarna ${routePlan.secondShopLabel} en de resterende stops; late deadlines blijven later.`,
           load: routeLoadLineWithFallback(
             routeLoadLineForReceipts(bus.second),
             "winkel + rest"
@@ -4212,6 +4251,9 @@ function RoutesPanel({
                     </h3>
                     <p className="mt-0.5 text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
                       {route.departure} · {route.badge}
+                    </p>
+                    <p className="mt-0.5 text-[0.62rem] font-bold tracking-normal text-[#7a736c]">
+                      Start/eind: {routeDepot.address}
                     </p>
                   </div>
                   <span className="shrink-0 border border-white/80 bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]">
