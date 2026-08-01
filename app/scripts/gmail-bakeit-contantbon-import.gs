@@ -6,7 +6,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
   PROCESSED_LABEL: 'Ingelezen',
   ERROR_LABEL: 'Fout',
 
-  QUERY: 'subject:"contantbon Bake-it email" newer_than:30d',
+  QUERY: 'subject:"contantbon Bake-it" newer_than:30d',
   MAX_THREADS: 30,
   MAX_PDF_ATTACHMENTS: 4,
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
@@ -388,6 +388,16 @@ function debugBakeItBatchMorgen() {
   debugBakeItBatchDatum_(date);
 }
 
+function debugBakeItBatchVandaag() {
+  const date = Utilities.formatDate(
+    new Date(),
+    'Europe/Amsterdam',
+    'yyyy-MM-dd'
+  );
+
+  debugBakeItBatchDatum_(date);
+}
+
 function debugBakeItBatchDatum_(date) {
   const response = UrlFetchApp.fetch(
     `https://strik-app.vercel.app/api/bakkerij-logistiek?date=${date}&debug=1`,
@@ -402,6 +412,43 @@ function debugBakeItBatchDatum_(date) {
 
   logBakeIt_(`Debug ${date}: status ${response.getResponseCode()}`);
   logBakeIt_(response.getContentText());
+}
+
+function debugBakeItLaatsteMails() {
+  const props = PropertiesService.getScriptProperties();
+  const threads = GmailApp.search(BAKEIT_CONTANTBON_CONFIG.QUERY, 0, 10);
+
+  logBakeIt_(`Gevonden threads: ${threads.length}`);
+
+  threads.forEach((thread, threadIndex) => {
+    const labels = thread
+      .getLabels()
+      .map((label) => label.getName())
+      .join(', ');
+
+    thread.getMessages().forEach((message) => {
+      const importId = `bakeit-contantbon:${BAKEIT_CONTANTBON_CONFIG.IMPORT_VERSION}:${message.getId()}`;
+      const attachments = message.getAttachments({
+        includeInlineImages: false,
+        includeAttachments: true,
+      });
+      const pdfNames = attachments
+        .map((attachment) => attachment.getName() || 'naamloos')
+        .filter((fileName) => /\.pdf$/i.test(String(fileName)));
+
+      logBakeIt_(
+        [
+          `thread ${threadIndex + 1}`,
+          message.getDate().toISOString(),
+          props.getProperty(importId) ? 'al verwerkt' : 'nog niet verwerkt',
+          `status: ${inferBakeItStatus_(message) || 'automatisch'}`,
+          `pdfs: ${pdfNames.length ? pdfNames.join(', ') : 'geen'}`,
+          `labels: ${labels || 'geen'}`,
+          `subject: ${message.getSubject()}`,
+        ].join(' | ')
+      );
+    });
+  });
 }
 
 function logBakeIt_(message) {
