@@ -2671,6 +2671,10 @@ function routeDeadlinePriorityForReceipt(receipt: ReceiptSummary) {
   return 2;
 }
 
+function shouldRideAfterLentOnSaturday(receipt: ReceiptSummary) {
+  return outsideClusterKeyForReceipt(receipt) === "noord-buiten";
+}
+
 function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
   return [...receipts].sort((first, second) => {
     const earlyCompare =
@@ -3136,7 +3140,11 @@ function buildSaturdayRouteRounds(
       receipt,
       round: "second",
     });
-    const round = isEarlyException(receipt) ? "early" : "second";
+    const round = isEarlyException(receipt)
+      ? "early"
+      : bus === "B" && shouldRideAfterLentOnSaturday(receipt)
+        ? "first"
+        : "second";
 
     addReceiptToBus(buses[bus], receipt, round);
   });
@@ -3180,7 +3188,10 @@ function buildSaturdayRouteRounds(
           departure: plan.isFuture ? "advies 08:00" : "08:00",
           tone: bus.tone,
           stops: firstStops,
-          reason: `Zaterdag: eerst ${routePlan.firstShopLabel}, bus vol laden door drukte; start/eind Ambachtsweg 4.`,
+          reason:
+            bus.id === "B"
+              ? "Zaterdag: eerst Lent, daarna Gendt/noordkant als die erbij zit; start/eind Ambachtsweg 4."
+              : `Zaterdag: eerst ${routePlan.firstShopLabel}, bus vol laden door drukte; start/eind Ambachtsweg 4.`,
           load: routeLoadLineWithFallback(busLoadLine(bus, "first"), "volle bus"),
           loadProfile,
         })
