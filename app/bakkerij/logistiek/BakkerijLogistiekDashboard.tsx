@@ -89,6 +89,17 @@ type RouteStop = {
   badges: string[];
 };
 
+type RouteDragState = {
+  sourceRouteId: string;
+  stopId: string;
+};
+
+type RouteStopMove = RouteDragState & {
+  targetRouteId: string;
+  targetStopId?: string;
+  position: "before" | "after" | "end";
+};
+
 type BusId = "A" | "B";
 type ReceiptTone =
   | "neutral"
@@ -1951,14 +1962,17 @@ function createBusRoutePrintHtml(input: {
   plan: DayPlan;
   routeGroup: RouteGroup;
 }) {
-  const stopCount = input.routeGroup.routes.reduce(
+  const printableRoutes = input.routeGroup.routes.filter(
+    (route) => route.stops.length > 0
+  );
+  const stopCount = printableRoutes.reduce(
     (total, route) => total + route.stops.length,
     0
   );
   const title = `${input.routeGroup.vehicle} route ${formatDateLabel(
     input.plan.date
   )}`;
-  const routesHtml = input.routeGroup.routes
+  const routesHtml = printableRoutes
     .map((route) => {
       const rowsHtml = route.stops
         .map((stop, index) => {
@@ -2247,7 +2261,7 @@ function createBusRoutePrintHtml(input: {
 }
 
 function openBusRouteSheet(plan: DayPlan, routeGroup: RouteGroup) {
-  if (routeGroup.routes.length === 0) {
+  if (!routeGroup.routes.some((route) => route.stops.length > 0)) {
     window.alert("Geen routes gevonden voor deze bus.");
     return;
   }
@@ -2927,6 +2941,28 @@ function routeLoadLineForReceipts(receipts: ReceiptSummary[]) {
   return detailParts.join(" · ");
 }
 
+function routeLoadLineForStops(stops: RouteStop[]) {
+  const shopCount = stops.filter((stop) => stop.badges.includes("winkel")).length;
+  const largeCount = stops.filter((stop) => stop.badges.includes("groot")).length;
+  const iceTubs = stops.reduce((total, stop) => {
+    const stopIceTubs = stop.badges.reduce((badgeTotal, badge) => {
+      const match = badge.match(/^(\d+)\s+ijs$/i);
+
+      return badgeTotal + (match ? Number(match[1]) : 0);
+    }, 0);
+
+    return total + stopIceTubs;
+  }, 0);
+  const detailParts = [
+    `${stops.length} stops`,
+    shopCount ? `${shopCount} winkel` : "",
+    largeCount ? `${largeCount} groot` : "",
+    iceTubs ? `${iceTubs} ijs / ${Math.ceil(iceTubs / 3)} tempex` : "",
+  ].filter(Boolean);
+
+  return detailParts.join(" · ");
+}
+
 function busLoadLine(bus: PlannedBus, round: "first" | "second" | "ice") {
   if (round === "first") {
     return routeLoadLineForReceipts([
@@ -3260,6 +3296,59 @@ function buildSaturdayRouteRounds(
   }
 
   return rounds.filter((round) => round.stops.length > 0);
+}
+
+function refreshRouteRoundAfterManualMove(
+  route: RouteRound,
+  loadProfile: DayLoadProfile
+): RouteRound {
+  return {
+    ...route,
+    badge: routeBadgeFor(route.stops.length, loadProfile),
+    load: routeLoadLineForStops(route.stops),
+    reason: "Handmatig samengesteld; print gebruikt deze volgorde.",
+  };
+}
+
+function moveRouteStopInRounds(
+  routeRounds: RouteRound[],
+  move: RouteStopMove,
+  loadProfile: DayLoadProfile
+) {
+  if (
+    move.sourceRouteId === move.targetRouteId &&
+    move.stopId === move.targetStopId
+  ) {
+    return routeRounds;
+  }
+
+  const draft = routeRounds.map((route) => ({
+    ...route,
+    stops: [...route.stops],
+  }));
+  const sourceRoute = draft.find((route) => route.id === move.sourceRouteId);
+  const targetRoute = draft.find((route) => route.id === move.targetRouteId);
+  if (!sourceRoute || !targetRoute) return routeRounds;
+
+  const sourceStopIndex = sourceRoute.stops.findIndex(
+    (stop) => stop.id === move.stopId
+  );
+  if (sourceStopIndex < 0) return routeRounds;
+
+  const [stop] = sourceRoute.stops.splice(sourceStopIndex, 1);
+  const targetStopIndex = move.targetStopId
+    ? targetRoute.stops.findIndex((item) => item.id === move.targetStopId)
+    : -1;
+  const insertIndex =
+    move.position === "end" || targetStopIndex < 0
+      ? targetRoute.stops.length
+      : targetStopIndex + (move.position === "after" ? 1 : 0);
+
+  targetRoute.stops.splice(insertIndex, 0, stop);
+
+  return draft.map((route) =>
+    refreshRouteRoundAfterManualMove(route, loadProfile)
+  );
 }
 
 function buildReceiptLines(receipt: ReceiptSeed, plan: DayPlan): ReceiptLine[] {
@@ -3763,10 +3852,15 @@ export default function BakkerijLogistiekDashboard() {
     () => buildStats(selectedPlan, loadProfile, productionTotals),
     [loadProfile, productionTotals, selectedPlan]
   );
-  const routeRounds = useMemo(
+  const automaticRouteRounds = useMemo(
     () => buildRouteRounds(selectedPlan, receiptSummaries, loadProfile),
     [loadProfile, receiptSummaries, selectedPlan]
   );
+  const [manualRouteRounds, setManualRouteRounds] = useState<
+    RouteRound[] | null
+  >(null);
+  const [routesEdited, setRoutesEdited] = useState(false);
+  const routeRounds = manualRouteRounds || automaticRouteRounds;
   const marzipanPrintItems = useMemo(
     () => buildMarzipanPrintItems(receiptSummaries, webshopImages),
     [receiptSummaries, webshopImages]
@@ -3797,6 +3891,11 @@ export default function BakkerijLogistiekDashboard() {
     activeImportedBatch,
     batchStatusLine
   );
+
+  useEffect(() => {
+    setManualRouteRounds(null);
+    setRoutesEdited(false);
+  }, [automaticRouteRounds]);
 
   useEffect(() => {
     let ignoreResult = false;
@@ -3879,6 +3978,20 @@ export default function BakkerijLogistiekDashboard() {
     setImportMessage("bonnen opnieuw ophalen...");
     if (fileInputRef.current) fileInputRef.current.value = "";
     setBatchReloadCounter((current) => current + 1);
+  }
+
+  function moveRouteStop(move: RouteStopMove) {
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const nextRoutes = moveRouteStopInRounds(currentRoutes, move, loadProfile);
+    if (nextRoutes === currentRoutes) return;
+
+    setManualRouteRounds(nextRoutes);
+    setRoutesEdited(true);
+  }
+
+  function resetRouteDraft() {
+    setManualRouteRounds(null);
+    setRoutesEdited(false);
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -4213,7 +4326,13 @@ export default function BakkerijLogistiekDashboard() {
 
       <div className="mt-3">
         {activeTab === "routes" && (
-          <RoutesPanel routeRounds={routeRounds} selectedPlan={selectedPlan} />
+          <RoutesPanel
+            onRouteStopMove={moveRouteStop}
+            onRoutesReset={resetRouteDraft}
+            routeRounds={routeRounds}
+            routesEdited={routesEdited}
+            selectedPlan={selectedPlan}
+          />
         )}
         {activeTab === "bonnen" && (
           <OrdersPanel
@@ -4260,96 +4379,261 @@ function routeGroupsFor(routeRounds: RouteRound[]): RouteGroup[] {
     }));
 }
 
+const routeDragMimeType = "application/x-strik-route-stop";
+
+function isRouteDragState(value: unknown): value is RouteDragState {
+  if (!value || typeof value !== "object") return false;
+
+  const candidate = value as Partial<RouteDragState>;
+  return (
+    typeof candidate.sourceRouteId === "string" &&
+    typeof candidate.stopId === "string"
+  );
+}
+
+function routeDragStateFromEvent(
+  event: React.DragEvent<HTMLElement>,
+  fallback: RouteDragState | null
+) {
+  const raw =
+    event.dataTransfer.getData(routeDragMimeType) ||
+    event.dataTransfer.getData("text/plain");
+  if (!raw) return fallback;
+
+  try {
+    const data: unknown = JSON.parse(raw);
+    if (isRouteDragState(data)) return data;
+  } catch {
+    return fallback;
+  }
+
+  return fallback;
+}
+
+function eventHasRouteDragState(
+  event: React.DragEvent<HTMLElement>,
+  fallback: RouteDragState | null
+) {
+  if (fallback) return true;
+
+  return Array.from(event.dataTransfer.types).includes(routeDragMimeType);
+}
+
 function RoutesPanel({
+  onRouteStopMove,
+  onRoutesReset,
   routeRounds,
+  routesEdited,
   selectedPlan,
-}: Readonly<{ routeRounds: RouteRound[]; selectedPlan: DayPlan }>) {
+}: Readonly<{
+  onRouteStopMove: (move: RouteStopMove) => void;
+  onRoutesReset: () => void;
+  routeRounds: RouteRound[];
+  routesEdited: boolean;
+  selectedPlan: DayPlan;
+}>) {
+  const [dragging, setDragging] = useState<RouteDragState | null>(null);
   const routeGroups = routeGroupsFor(routeRounds);
 
+  function handleStopDragStart(
+    event: React.DragEvent<HTMLLIElement>,
+    sourceRouteId: string,
+    stopId: string
+  ) {
+    const dragState = { sourceRouteId, stopId };
+    setDragging(dragState);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(routeDragMimeType, JSON.stringify(dragState));
+    event.dataTransfer.setData("text/plain", JSON.stringify(dragState));
+  }
+
+  function handleRouteDragOver(event: React.DragEvent<HTMLElement>) {
+    if (!eventHasRouteDragState(event, dragging)) return;
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }
+
+  function handleStopDrop(
+    event: React.DragEvent<HTMLLIElement>,
+    targetRouteId: string,
+    targetStopId: string
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const dragState = routeDragStateFromEvent(event, dragging);
+    if (!dragState) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const position = event.clientY < rect.top + rect.height / 2
+      ? "before"
+      : "after";
+
+    onRouteStopMove({
+      ...dragState,
+      targetRouteId,
+      targetStopId,
+      position,
+    });
+    setDragging(null);
+  }
+
+  function handleRouteDrop(
+    event: React.DragEvent<HTMLElement>,
+    targetRouteId: string
+  ) {
+    event.preventDefault();
+
+    const dragState = routeDragStateFromEvent(event, dragging);
+    if (!dragState) return;
+
+    onRouteStopMove({
+      ...dragState,
+      targetRouteId,
+      position: "end",
+    });
+    setDragging(null);
+  }
+
   return (
-    <section className="grid gap-3 lg:grid-cols-2">
-      {routeGroups.map((group) => (
-        <article
-          key={group.vehicle}
-          className="rounded-lg border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-black tracking-normal text-[#1a1815]">
-              {group.vehicle}
-            </h2>
-            <div className="flex items-center gap-2">
-              <RoutePrintButton
-                label={`Route printen voor ${group.vehicle}`}
-                onClick={() => openBusRouteSheet(selectedPlan, group)}
-              />
-              <span className="border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
-                {group.routes.length} ronde
-                {group.routes.length === 1 ? "" : "s"}
-              </span>
-            </div>
-          </div>
-          <div className="mt-2 grid gap-2">
-            {group.routes.map((route) => (
-              <section
-                key={route.id}
-                className={`border p-2 ${route.tone}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="text-xs font-black uppercase tracking-normal text-[#1a1815]">
-                      {route.title}
-                    </h3>
-                    <p className="mt-0.5 text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
-                      {route.departure} · {route.badge}
-                    </p>
-                    <p className="mt-0.5 text-[0.62rem] font-bold tracking-normal text-[#7a736c]">
-                      Start/eind: {routeDepot.address}
-                    </p>
-                  </div>
-                  <span className="shrink-0 border border-white/80 bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]">
-                    {route.load}
+    <section className="grid gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3">
+        <div className="min-w-0">
+          <h2 className="text-base font-black tracking-normal text-[#1a1815]">
+            Routeplanning
+          </h2>
+          <span className="mt-1 inline-flex border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black uppercase tracking-normal text-[#6b645b]">
+            {routesEdited ? "Handmatig" : "Auto"}
+          </span>
+        </div>
+        <RouteResetButton disabled={!routesEdited} onClick={onRoutesReset} />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        {routeGroups.map((group) => {
+          const activeRouteCount = group.routes.filter(
+            (route) => route.stops.length > 0
+          ).length;
+
+          return (
+            <article
+              key={group.vehicle}
+              className="rounded-lg border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-base font-black tracking-normal text-[#1a1815]">
+                  {group.vehicle}
+                </h2>
+                <div className="flex items-center gap-2">
+                  <RoutePrintButton
+                    disabled={activeRouteCount === 0}
+                    label={`Route printen voor ${group.vehicle}`}
+                    onClick={() => openBusRouteSheet(selectedPlan, group)}
+                  />
+                  <span className="border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
+                    {activeRouteCount} ronde
+                    {activeRouteCount === 1 ? "" : "s"}
                   </span>
                 </div>
-                <ol className="mt-2 grid gap-1">
-                  {route.stops.map((stop, index) => (
-                    <li
-                      key={stop.id}
-                      className="grid grid-cols-[1.45rem_minmax(0,1fr)] gap-1.5 border border-white/80 bg-white px-1.5 py-1"
-                    >
-                      <span className="flex h-5 w-5 items-center justify-center bg-[#1a1815] text-[0.62rem] font-black tabular-nums tracking-normal text-white">
-                        {index + 1}
+              </div>
+              <div className="mt-2 grid gap-2">
+                {group.routes.map((route) => (
+                  <section
+                    key={route.id}
+                    onDragOver={handleRouteDragOver}
+                    onDrop={(event) => handleRouteDrop(event, route.id)}
+                    className={`border p-2 transition ${
+                      route.tone
+                    } ${
+                      dragging
+                        ? "outline outline-1 outline-offset-1 outline-[#d7cec4]"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="text-xs font-black uppercase tracking-normal text-[#1a1815]">
+                          {route.title}
+                        </h3>
+                        <p className="mt-0.5 text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
+                          {route.departure} · {route.badge}
+                        </p>
+                        <p className="mt-0.5 text-[0.62rem] font-bold tracking-normal text-[#7a736c]">
+                          Start/eind: {routeDepot.address}
+                        </p>
+                      </div>
+                      <span className="shrink-0 border border-white/80 bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]">
+                        {route.load}
                       </span>
-                      <span className="min-w-0">
-                        <span className="block truncate text-xs font-black tracking-normal text-[#1a1815]">
-                          {stop.label}
-                        </span>
-                        <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#6b645b]">
-                          {stop.detail}
-                        </span>
-                        {stop.badges.length > 0 && (
-                          <span className="mt-1 flex flex-wrap gap-1">
-                            {stop.badges.map((badge) => (
-                              <span
-                                key={`${stop.id}-${badge}`}
-                                className="border border-[#e8e4de] bg-white px-1 py-0.5 text-[0.58rem] font-black tracking-normal text-[#6b645b]"
-                              >
-                                {badge}
-                              </span>
-                            ))}
+                    </div>
+                    <ol className="mt-2 grid min-h-12 gap-1">
+                      {route.stops.length === 0 && (
+                        <li className="border border-dashed border-white/90 bg-white/70 px-2 py-2 text-xs font-black tracking-normal text-[#8b8278]">
+                          Leeg
+                        </li>
+                      )}
+                      {route.stops.map((stop, index) => (
+                        <li
+                          key={stop.id}
+                          draggable
+                          aria-grabbed={dragging?.stopId === stop.id}
+                          onDragStart={(event) =>
+                            handleStopDragStart(event, route.id, stop.id)
+                          }
+                          onDragEnd={() => setDragging(null)}
+                          onDragOver={handleRouteDragOver}
+                          onDrop={(event) =>
+                            handleStopDrop(event, route.id, stop.id)
+                          }
+                          className={`grid cursor-move grid-cols-[1.45rem_minmax(0,1fr)] gap-1.5 border border-white/80 bg-white px-1.5 py-1 transition hover:border-[#d7cec4] ${
+                            dragging?.stopId === stop.id ? "opacity-45" : ""
+                          }`}
+                        >
+                          <span
+                            title="Versleep stop"
+                            className="flex h-5 w-5 items-center justify-center bg-[#1a1815] text-[0.62rem] font-black tabular-nums tracking-normal text-white"
+                          >
+                            {index + 1}
                           </span>
-                        )}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-                <p className="mt-2 text-[0.68rem] font-normal leading-snug tracking-normal text-[#4a4540]">
-                  {route.reason}
-                </p>
-              </section>
-            ))}
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-black tracking-normal text-[#1a1815]">
+                              {stop.label}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#6b645b]">
+                              {stop.detail}
+                            </span>
+                            {stop.badges.length > 0 && (
+                              <span className="mt-1 flex flex-wrap gap-1">
+                                {stop.badges.map((badge) => (
+                                  <span
+                                    key={`${stop.id}-${badge}`}
+                                    className="border border-[#e8e4de] bg-white px-1 py-0.5 text-[0.58rem] font-black tracking-normal text-[#6b645b]"
+                                  >
+                                    {badge}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                    <p className="mt-2 text-[0.68rem] font-normal leading-snug tracking-normal text-[#4a4540]">
+                      {route.reason}
+                    </p>
+                  </section>
+                ))}
+              </div>
+            </article>
+          );
+        })}
+        {routeGroups.length === 0 && (
+          <div className="border border-[#e8e4de] bg-white p-3 text-sm font-bold tracking-normal text-[#6b645b] shadow-sm">
+            Geen routes gevonden voor deze dag.
           </div>
-        </article>
-      ))}
+        )}
+      </div>
     </section>
   );
 }
@@ -5375,10 +5659,33 @@ function MarzipanPhotoPrintButton({
   );
 }
 
+function RouteResetButton({
+  disabled,
+  onClick,
+}: Readonly<{
+  disabled: boolean;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      aria-label="Automatische route herstellen"
+      title="Automatische route herstellen"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-8 w-8 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <RefreshIcon spinning={false} />
+    </button>
+  );
+}
+
 function RoutePrintButton({
+  disabled,
   label,
   onClick,
 }: Readonly<{
+  disabled?: boolean;
   label: string;
   onClick: () => void;
 }>) {
@@ -5387,8 +5694,9 @@ function RoutePrintButton({
       type="button"
       aria-label={label}
       title={label}
+      disabled={disabled}
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5]"
+      className="flex h-8 w-8 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
     >
       <PrintIcon />
     </button>
