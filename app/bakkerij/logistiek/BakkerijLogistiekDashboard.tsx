@@ -2487,11 +2487,20 @@ function busForShopKey(key: string): BusId | "" {
   return "";
 }
 
+function isCenterRouteText(text: string) {
+  const normalizedText = normalizeMatchText(text);
+
+  return /(?:^| )(centrum|credible|restaurant steven|hertogstraat|grote markt|plein 1944|marienburg|molenstraat|burchtstraat|broerstraat|koningstraat|houtstraat|waalkade|kelfkensbos|ganzenheuvel|augustijnenstraat|van welderenstraat|in de betouwstraat|lange hezelstraat|stikke hezelstraat|bloemerstraat|smetiusstraat|oranjesingel|oranje singel|keizer karelplein)(?: |$)/.test(
+    normalizedText
+  );
+}
+
 function preferredBusForReceipt(receipt: ReceiptSummary): BusId | "" {
   const shopBus = busForShopKey(shopKeyForReceipt(receipt));
   if (shopBus) return shopBus;
 
   const text = receiptSearchText(receipt);
+  if (isCenterRouteText(text)) return "B";
   if (
     /radboud|heyendaal|han\b|kapittelweg|geert groote|maartenskliniek|brakkenstein|berg en dal|beek|ubbergen|groesbeek|malden|molenhoek|oost/.test(
       text
@@ -2572,10 +2581,30 @@ function fitsNaturalFirstLoop(receipt: ReceiptSummary, bus: PlannedBus) {
     clusterKey === "jonkerbos" ||
     clusterKey === "west-buiten" ||
     clusterKey === "noord-buiten" ||
+    isCenterRouteText(text) ||
     /ziekerstraat|centrum|lent|waalkade|jonkerbos|sanadome|cwz|goffert|crematorium|thermen|berendonck|wijchen|beuningen|oosterhout|bemmel|elst|arnhem|noord/.test(
       text
     )
   );
+}
+
+function routeAreaOrderForReceipt(receipt: ReceiptSummary) {
+  const shopKey = shopKeyForReceipt(receipt);
+  if (shopKey === "heyendaalseweg") return 10;
+  if (shopKey === "daalseweg") return 20;
+  if (shopKey === "lent") return 30;
+  if (shopKey === "ziekerstraat") return 40;
+
+  const text = receiptSearchText(receipt);
+  if (isCenterRouteText(text)) return 45;
+
+  const clusterKey = outsideClusterKeyForReceipt(receipt);
+  if (clusterKey === "jonkerbos") return 50;
+  if (clusterKey === "west-buiten") return 60;
+  if (clusterKey === "noord-buiten") return 70;
+  if (clusterKey === "oost-buiten") return 80;
+
+  return 90;
 }
 
 function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
@@ -2587,6 +2616,10 @@ function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
     const timeCompare =
       routeDeadlineMinutes(first) - routeDeadlineMinutes(second);
     if (timeCompare !== 0) return timeCompare;
+
+    const areaCompare =
+      routeAreaOrderForReceipt(first) - routeAreaOrderForReceipt(second);
+    if (areaCompare !== 0) return areaCompare;
 
     const largeCompare = Number(isLargeReceipt(second)) - Number(isLargeReceipt(first));
     if (largeCompare !== 0) return largeCompare;
