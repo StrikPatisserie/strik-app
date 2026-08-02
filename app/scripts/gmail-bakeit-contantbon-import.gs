@@ -15,6 +15,10 @@ const BAKEIT_CONTANTBON_CONFIG = {
   IMPORT_VERSION: 'split-mails-v1',
 };
 
+function importBakeItBonnen() {
+  importBakeItContantbonnen();
+}
+
 function importBakeItContantbonnen() {
   const processedLabel = getOrCreateBakeItLabel_(
     BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL
@@ -89,6 +93,7 @@ function importBakeItContantbonnen() {
       thread.addLabel(processedLabel);
       thread.removeLabel(errorLabel);
     } else if (hasImported) {
+      thread.addLabel(processedLabel);
       thread.removeLabel(errorLabel);
     } else if (failed) {
       thread.addLabel(errorLabel);
@@ -453,8 +458,11 @@ function debugBakeItLaatsteMails() {
 
 function maakBakeItImportTriggerAan() {
   const functionName = 'importBakeItContantbonnen';
+  const legacyFunctionNames = ['importBakeItBonnen'];
   const existingTriggers = ScriptApp.getProjectTriggers().filter(
-    (trigger) => trigger.getHandlerFunction() === functionName
+    (trigger) =>
+      trigger.getHandlerFunction() === functionName ||
+      legacyFunctionNames.indexOf(trigger.getHandlerFunction()) >= 0
   );
 
   existingTriggers.forEach((trigger) => {
