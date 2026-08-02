@@ -159,6 +159,8 @@ function sendBakeItPdfAttachment_(message, attachment, importWaveId) {
 }
 
 function inferBakeItStatus_(message) {
+  if (isBakeItDefinitiveMailTime_(message)) return 'definitief';
+
   const labelText = message
     .getThread()
     .getLabels()
@@ -170,6 +172,14 @@ function inferBakeItStatus_(message) {
   if (haystack.indexOf('prognose') >= 0) return 'prognose';
 
   return '';
+}
+
+function isBakeItDefinitiveMailTime_(message) {
+  const hour = Number(
+    Utilities.formatDate(message.getDate(), 'Europe/Amsterdam', 'H')
+  );
+
+  return Number.isFinite(hour) && hour >= 22;
 }
 
 function findBakeItWaitingGroups_(threads, props) {

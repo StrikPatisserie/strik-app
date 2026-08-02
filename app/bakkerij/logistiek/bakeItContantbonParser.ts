@@ -259,6 +259,15 @@ function inferStatus(
     return metadata.status;
   }
 
+  const receivedAt = metadata.receivedAt ? new Date(metadata.receivedAt) : new Date();
+  const receivedParts = getAmsterdamDateTimeParts(
+    Number.isFinite(receivedAt.getTime()) ? receivedAt : new Date()
+  );
+
+  if (metadata.source === "gmail" && receivedParts.hour >= 22) {
+    return "definitief";
+  }
+
   const haystack = `${metadata.fileName} ${metadata.subject || ""}`.toLowerCase();
   if (haystack.includes("definit")) return "definitief";
   if (haystack.includes("prognose") || haystack.includes("prognosen")) {
@@ -266,11 +275,6 @@ function inferStatus(
   }
 
   if (metadata.status && metadata.source !== "gmail") return metadata.status;
-
-  const receivedAt = metadata.receivedAt ? new Date(metadata.receivedAt) : new Date();
-  const receivedParts = getAmsterdamDateTimeParts(
-    Number.isFinite(receivedAt.getTime()) ? receivedAt : new Date()
-  );
 
   if (receivedParts.hour >= 22) return "definitief";
   if (batchDate && batchDate < receivedParts.dateKey) return "definitief";
