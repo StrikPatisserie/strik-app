@@ -57,6 +57,33 @@ export type LogisticsDayFeedback = {
   updatedAt: string;
 };
 
+export type LogisticsRouteDraftStop = {
+  id: string;
+  sourceId: string;
+  label: string;
+  detail: string;
+  badges: string[];
+};
+
+export type LogisticsRouteDraftRound = {
+  id: string;
+  title: string;
+  vehicle: string;
+  departure: string;
+  badge: string;
+  tone: string;
+  stops: LogisticsRouteDraftStop[];
+  reason: string;
+  load: string;
+};
+
+export type LogisticsRouteDraft = {
+  id: string;
+  date: string;
+  routes: LogisticsRouteDraftRound[];
+  updatedAt: string;
+};
+
 export type LogisticsBatch = {
   id: string;
   date: string;

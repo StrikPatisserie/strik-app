@@ -4,6 +4,7 @@ import {
   getLogisticsBatchForDate,
   getLogisticsDayFeedbackForDate,
   getLogisticsReceiptOverridesForDate,
+  getLogisticsRouteDraftForDate,
   getLogisticsWebshopImagesForDate,
   readLogisticsState,
 } from "@/app/lib/bakeryLogisticsStorage";
@@ -29,12 +30,13 @@ export async function GET(request: Request) {
 
   try {
     const debug = url.searchParams.get("debug") === "1";
-    const [batch, webshopImages, receiptOverrides, dayFeedback] =
+    const [batch, webshopImages, receiptOverrides, dayFeedback, routeDraft] =
       await Promise.all([
         getLogisticsBatchForDate(date),
         getLogisticsWebshopImagesForDate(date),
         getLogisticsReceiptOverridesForDate(date),
         getLogisticsDayFeedbackForDate(date),
+        getLogisticsRouteDraftForDate(date),
       ]);
 
     if (debug) {
@@ -81,6 +83,7 @@ export async function GET(request: Request) {
       webshopImages,
       receiptOverrides,
       dayFeedback,
+      routeDraft,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

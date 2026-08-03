@@ -4,6 +4,9 @@ import type {
   LogisticsBatch,
   LogisticsDayFeedback,
   LogisticsReceiptOverride,
+  LogisticsRouteDraft,
+  LogisticsRouteDraftRound,
+  LogisticsRouteDraftStop,
   LogisticsWebshopImage,
 } from "@/app/bakkerij/logistiek/logisticsTypes";
 import { createAdminClient } from "./supabase/admin";
@@ -14,12 +17,14 @@ const LOGISTICS_WEBSHOP_IMAGES_SETTING_KEY = "bakery_logistics_webshop_images";
 const LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY =
   "bakery_logistics_receipt_overrides";
 const LOGISTICS_DAY_FEEDBACK_SETTING_KEY = "bakery_logistics_day_feedback";
+const LOGISTICS_ROUTE_DRAFTS_SETTING_KEY = "bakery_logistics_route_drafts";
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
 const MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES = 5_500_000;
 const WEBSHOP_IMAGE_RETENTION_DAYS = 14;
 const MAX_STORED_RECEIPT_OVERRIDES = 3000;
 const MAX_STORED_DAY_FEEDBACK = 1200;
+const MAX_STORED_ROUTE_DRAFTS = 180;
 
 type LogisticsState = {
   batches: LogisticsBatch[];
@@ -37,6 +42,10 @@ type LogisticsDayFeedbackState = {
   feedback: LogisticsDayFeedback[];
 };
 
+type LogisticsRouteDraftsState = {
+  drafts: LogisticsRouteDraft[];
+};
+
 function emptyLogisticsState(): LogisticsState {
   return { batches: [] };
 }
@@ -51,6 +60,10 @@ function emptyLogisticsReceiptOverridesState(): LogisticsReceiptOverridesState {
 
 function emptyLogisticsDayFeedbackState(): LogisticsDayFeedbackState {
   return { feedback: [] };
+}
+
+function emptyLogisticsRouteDraftsState(): LogisticsRouteDraftsState {
+  return { drafts: [] };
 }
 
 function isLogisticsBatch(value: unknown): value is LogisticsBatch {
@@ -134,6 +147,43 @@ function isLogisticsDayFeedback(value: unknown): value is LogisticsDayFeedback {
   );
 }
 
+function isLogisticsRouteDraftStop(
+  value: unknown
+): value is LogisticsRouteDraftStop {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as LogisticsRouteDraftStop).id === "string" &&
+      typeof (value as LogisticsRouteDraftStop).sourceId === "string" &&
+      typeof (value as LogisticsRouteDraftStop).label === "string" &&
+      typeof (value as LogisticsRouteDraftStop).detail === "string" &&
+      Array.isArray((value as LogisticsRouteDraftStop).badges)
+  );
+}
+
+function isLogisticsRouteDraftRound(
+  value: unknown
+): value is LogisticsRouteDraftRound {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as LogisticsRouteDraftRound).id === "string" &&
+      typeof (value as LogisticsRouteDraftRound).title === "string" &&
+      typeof (value as LogisticsRouteDraftRound).vehicle === "string" &&
+      Array.isArray((value as LogisticsRouteDraftRound).stops)
+  );
+}
+
+function isLogisticsRouteDraft(value: unknown): value is LogisticsRouteDraft {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as LogisticsRouteDraft).id === "string" &&
+      typeof (value as LogisticsRouteDraft).date === "string" &&
+      Array.isArray((value as LogisticsRouteDraft).routes)
+  );
+}
+
 function normalizeLogisticsState(value: unknown): LogisticsState {
   if (!value || typeof value !== "object") return emptyLogisticsState();
 
@@ -190,12 +240,41 @@ function normalizeLogisticsDayFeedbackState(
   };
 }
 
+function normalizeLogisticsRouteDraftsState(
+  value: unknown
+): LogisticsRouteDraftsState {
+  if (!value || typeof value !== "object") {
+    return emptyLogisticsRouteDraftsState();
+  }
+
+  const drafts = (value as { drafts?: unknown }).drafts;
+  if (!Array.isArray(drafts)) return emptyLogisticsRouteDraftsState();
+
+  return {
+    drafts: drafts
+      .filter(isLogisticsRouteDraft)
+      .map((draft) => ({
+        ...draft,
+        routes: draft.routes.filter(isLogisticsRouteDraftRound).map((route) => ({
+          ...route,
+          stops: route.stops.filter(isLogisticsRouteDraftStop).map((stop) => ({
+            ...stop,
+            badges: stop.badges.filter((badge): badge is string =>
+              typeof badge === "string"
+            ),
+          })),
+        })),
+      })),
+  };
+}
+
 function toJson(
   value:
     | LogisticsState
     | LogisticsWebshopImagesState
     | LogisticsReceiptOverridesState
     | LogisticsDayFeedbackState
+    | LogisticsRouteDraftsState
 ): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
 }
@@ -531,6 +610,15 @@ function sortDayFeedback(feedback: LogisticsDayFeedback[]) {
   });
 }
 
+function sortRouteDrafts(drafts: LogisticsRouteDraft[]) {
+  return [...drafts].sort((first, second) => {
+    const dateCompare = second.date.localeCompare(first.date);
+    if (dateCompare !== 0) return dateCompare;
+
+    return second.updatedAt.localeCompare(first.updatedAt);
+  });
+}
+
 export async function readLogisticsState() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
@@ -616,6 +704,19 @@ export async function readLogisticsDayFeedbackState() {
   return normalizeLogisticsDayFeedbackState(data.value);
 }
 
+export async function readLogisticsRouteDraftsState() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", LOGISTICS_ROUTE_DRAFTS_SETTING_KEY)
+    .maybeSingle();
+
+  if (error || !data) return emptyLogisticsRouteDraftsState();
+
+  return normalizeLogisticsRouteDraftsState(data.value);
+}
+
 export async function getLogisticsBatchForDate(date: string) {
   const state = await readLogisticsState();
 
@@ -646,6 +747,14 @@ export async function getLogisticsDayFeedbackForDate(date: string) {
   return (
     sortDayFeedback(state.feedback).find((feedback) => feedback.date === date) ||
     null
+  );
+}
+
+export async function getLogisticsRouteDraftForDate(date: string) {
+  const state = await readLogisticsRouteDraftsState();
+
+  return (
+    sortRouteDrafts(state.drafts).find((draft) => draft.date === date) || null
   );
 }
 
@@ -781,4 +890,45 @@ export async function upsertLogisticsDayFeedback(
   if (error) throw new Error(error.message);
 
   return feedback;
+}
+
+export async function upsertLogisticsRouteDraft(draft: LogisticsRouteDraft) {
+  const state = await readLogisticsRouteDraftsState();
+  const drafts = sortRouteDrafts([
+    draft,
+    ...state.drafts.filter((item) => item.id !== draft.id),
+  ]).slice(0, MAX_STORED_ROUTE_DRAFTS);
+
+  const nextState = { drafts };
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_ROUTE_DRAFTS_SETTING_KEY,
+      value: toJson(nextState),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
+
+  return draft;
+}
+
+export async function deleteLogisticsRouteDraft(date: string) {
+  const state = await readLogisticsRouteDraftsState();
+  const drafts = state.drafts.filter((item) => item.date !== date);
+
+  const nextState = { drafts };
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_ROUTE_DRAFTS_SETTING_KEY,
+      value: toJson(nextState),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
 }

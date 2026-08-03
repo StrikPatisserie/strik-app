@@ -10,12 +10,14 @@ import type {
   LogisticsReceipt,
   LogisticsReceiptLine,
   LogisticsReceiptOverride,
+  LogisticsRouteDraft,
   LogisticsWebshopImage,
 } from "./logisticsTypes";
 
 type DashboardTab = "routes" | "bonnen" | "leren";
 type BatchStatus = LogisticsBatchStatus;
 type BatchLoadState = "idle" | "loading" | "ready" | "error";
+type RouteSaveState = "idle" | "saving" | "saved" | "error";
 type OrdersFilter =
   | "all"
   | "delivery"
@@ -84,6 +86,7 @@ type RouteGroup = {
 
 type RouteStop = {
   id: string;
+  sourceId: string;
   label: string;
   detail: string;
   badges: string[];
@@ -101,6 +104,7 @@ type RouteStopMove = RouteDragState & {
 };
 
 type BusId = "A" | "B";
+type ShopKey = "heyendaalseweg" | "daalseweg" | "ziekerstraat" | "lent";
 type ReceiptTone =
   | "neutral"
   | "delivery"
@@ -123,6 +127,7 @@ type ReceiptSummary = LogisticsReceipt;
 type DayFeedbackSummary = LogisticsDayFeedback;
 type ReceiptOverrideSummary = LogisticsReceiptOverride;
 type WebshopImageSummary = LogisticsWebshopImage;
+type RouteDraftSummary = LogisticsRouteDraft;
 
 type MarzipanPrintShape = "square" | "round";
 
@@ -175,11 +180,78 @@ const routeDepot = {
   address: "Ambachtsweg 4, 6581 AX Malden",
 };
 
+type RoutePoint = {
+  x: number;
+  y: number;
+};
+
+const depotRoutePoint: RoutePoint = { x: 0, y: 0 };
+
+const shopRouteMeta: Record<
+  ShopKey,
+  {
+    label: string;
+    shortLabel: string;
+    address: string;
+    point: RoutePoint;
+  }
+> = {
+  heyendaalseweg: {
+    label: "Winkel Heyendaalseweg",
+    shortLabel: "Heyendaal",
+    address: "Heyendaalseweg 217, Nijmegen",
+    point: { x: 0.8, y: 2.5 },
+  },
+  daalseweg: {
+    label: "Winkel Daalseweg",
+    shortLabel: "Daalseweg",
+    address: "Daalseweg 254, Nijmegen",
+    point: { x: 0.9, y: 3.6 },
+  },
+  ziekerstraat: {
+    label: "Winkel Ziekerstraat",
+    shortLabel: "Ziekerstraat",
+    address: "Ziekerstraat 124, Nijmegen",
+    point: { x: -0.1, y: 3.3 },
+  },
+  lent: {
+    label: "Winkel Lent",
+    shortLabel: "Lent",
+    address: "Oranje Marieplein 11, Lent",
+    point: { x: 0.1, y: 5.7 },
+  },
+};
+
+const shopRouteKeys = Object.keys(shopRouteMeta) as ShopKey[];
+
+const busRouteMeta: Record<
+  BusId,
+  {
+    title: string;
+    capacity: number;
+    description: string;
+    tone: string;
+  }
+> = {
+  A: {
+    title: "Bus A",
+    capacity: 1.3,
+    description: "Renault Master elektrisch · grootste bus",
+    tone: "border-[#d6e5d8] bg-[#f6faf4]",
+  },
+  B: {
+    title: "Bus B",
+    capacity: 1,
+    description: "Renault Trafic",
+    tone: "border-[#eadb8b] bg-[#fff8d8]",
+  },
+};
+
 const saturdayRouteShopPlan: Record<
   BusId,
   {
-    firstShopKeys: string[];
-    secondShopKeys: string[];
+    firstShopKeys: ShopKey[];
+    secondShopKeys: ShopKey[];
     firstShopLabel: string;
     secondShopLabel: string;
   }
@@ -2370,7 +2442,7 @@ function isShopReceipt(receipt: ReceiptSummary) {
   return receipt.tags.includes("winkel") || /^winkel\b/i.test(receipt.customer);
 }
 
-function shopKeyForText(value: string) {
+function shopKeyForText(value: string): ShopKey | "" {
   const text = value.toLowerCase();
   if (text.includes("heyendaalseweg") || text.includes("heyendaal")) {
     return "heyendaalseweg";
@@ -2382,7 +2454,7 @@ function shopKeyForText(value: string) {
   return "";
 }
 
-function shopKeyForReceipt(receipt: ReceiptSummary) {
+function shopKeyForReceipt(receipt: ReceiptSummary): ShopKey | "" {
   return shopKeyForText(
     [
       receipt.customer,
@@ -2397,10 +2469,8 @@ function shopKeyForReceipt(receipt: ReceiptSummary) {
 }
 
 function shopLabelForKey(key: string) {
-  if (key === "heyendaalseweg") return "Winkel Heyendaalseweg";
-  if (key === "daalseweg") return "Winkel Daalseweg";
-  if (key === "ziekerstraat") return "Winkel Ziekerstraat";
-  if (key === "lent") return "Winkel Lent";
+  const meta = shopRouteMeta[key as ShopKey];
+  if (meta) return meta.label;
 
   return "Winkel";
 }
@@ -2463,8 +2533,8 @@ function isLargeReceipt(receipt: ReceiptSummary) {
 
 function isCriticalReceipt(receipt: ReceiptSummary) {
   return (
-    routeDeadlineMinutes(receipt) < 600 ||
-    receipt.tags.includes("zorg") ||
+    isPriorityEarlyDelivery(receipt) ||
+    (receipt.tags.includes("zorg") && !isFlexibleLateDelivery(receipt)) ||
     receipt.tags.some((tag) => tag.startsWith("levering ")) ||
     hasExplicitEarlyInstruction(receipt)
   );
@@ -2479,6 +2549,7 @@ function receiptStopBadges(receipt: ReceiptSummary) {
   if (isIceReceiptSummary(receipt)) badges.push("ijs");
   if (iceTubs > 0) badges.push(`${iceTubs} ijs`);
   if (isLargeReceipt(receipt)) badges.push("groot");
+  if (isPriorityEarlyDelivery(receipt)) badges.push("vroeg");
   if (isCriticalReceipt(receipt)) badges.push("tijd");
   if (receipt.tags.includes("zorg")) badges.push("zorg");
   if (receipt.value) badges.push(formatCurrency(receipt.value));
@@ -2492,6 +2563,7 @@ function routeStopForReceipt(receipt: ReceiptSummary, prefix = ""): RouteStop {
 
   return {
     id: `${prefix}${receipt.id}`,
+    sourceId: `receipt:${receipt.id}`,
     label: receipt.customer,
     detail: `${time} · ${target}`,
     badges: receiptStopBadges(receipt),
@@ -2500,11 +2572,12 @@ function routeStopForReceipt(receipt: ReceiptSummary, prefix = ""): RouteStop {
 
 function groupShopStops(
   receipts: ReceiptSummary[],
-  shopKeys: string[],
+  shopKeys: ShopKey[],
   pairedIceReceipts: ReceiptSummary[]
 ): RouteStop[] {
   return shopKeys
     .map((shopKey) => {
+      const shopMeta = shopRouteMeta[shopKey];
       const shopReceipts = receipts.filter(
         (receipt) =>
           isShopReceipt(receipt) &&
@@ -2523,19 +2596,29 @@ function groupShopStops(
         (total, receipt) => total + iceTubCountForReceipt(receipt),
         0
       );
+      const pastryUnits = shopReceipts.reduce(
+        (total, receipt) => total + receiptPastryUnits(receipt),
+        0
+      );
 
-      if (!shopReceipts.length && !pickupReceipts.length && !iceTubs) return null;
-
-      const detailParts = [];
+      const detailParts = [shopMeta.address];
       if (shopReceipts.length) detailParts.push(`${shopReceipts.length} winkelbon`);
+      if (pastryUnits) detailParts.push(`${formatCompactNumber(pastryUnits)} gebak/taart`);
       if (pickupReceipts.length) detailParts.push(`${pickupReceipts.length} afhaal`);
       if (iceTubs) detailParts.push(`${iceTubs} ijs / ${Math.ceil(iceTubs / 3)} tempex`);
+      if (!shopReceipts.length && !pickupReceipts.length && !iceTubs) {
+        detailParts.push("vaste winkelstop");
+      }
 
       return {
         id: `shop-${shopKey}`,
-        label: shopLabelForKey(shopKey),
+        sourceId: `shop:${shopKey}`,
+        label: shopMeta.label,
         detail: detailParts.join(" · "),
-        badges: ["winkel"],
+        badges: [
+          "winkel",
+          ...(pastryUnits >= 80 || shopReceipts.length >= 2 ? ["druk"] : []),
+        ],
       };
     })
     .filter((stop): stop is RouteStop => Boolean(stop));
@@ -2557,9 +2640,6 @@ function isCenterRouteText(text: string) {
 }
 
 function preferredBusForReceipt(receipt: ReceiptSummary): BusId | "" {
-  const shopBus = busForShopKey(shopKeyForReceipt(receipt));
-  if (shopBus) return shopBus;
-
   const text = receiptSearchText(receipt);
   if (isCenterRouteText(text)) return "B";
 
@@ -2625,6 +2705,108 @@ function outsideClusterKeyForReceipt(receipt: ReceiptSummary) {
   }
 
   return "";
+}
+
+function weekdayForIsoDate(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  if (!year || !month || !day) return -1;
+
+  return new Date(year, month - 1, day).getDay();
+}
+
+function isMondayOrThursday(date: string) {
+  const weekday = weekdayForIsoDate(date);
+
+  return weekday === 1 || weekday === 4;
+}
+
+function routeDistance(first: RoutePoint, second: RoutePoint) {
+  return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function routePointForShopKey(shopKey: ShopKey | "") {
+  if (!shopKey) return null;
+
+  return shopRouteMeta[shopKey].point;
+}
+
+function receiptRoutePoint(receipt: ReceiptSummary): RoutePoint {
+  const shopPoint = routePointForShopKey(shopKeyForReceipt(receipt));
+  if (shopPoint) return shopPoint;
+
+  const text = normalizeMatchText(receiptSearchText(receipt));
+
+  if (/dries|elst/.test(text)) return { x: -0.2, y: 8.1 };
+  if (/gendt|huigensstraat|bemmel|arnhem/.test(text)) return { x: 1.1, y: 8.8 };
+  if (/lent|oosterhout/.test(text)) return { x: 0.1, y: 5.9 };
+  if (/credible|restaurant steven|centrum|hertogstraat|grote markt|waalkade/.test(text)) {
+    return { x: -0.1, y: 3.7 };
+  }
+  if (/ziekerstraat|molenstraat|burchtstraat|marienburg|plein 1944/.test(text)) {
+    return { x: -0.1, y: 3.4 };
+  }
+  if (/radboud|vermaat|umc|kapittelweg|geert groote|heyendaal/.test(text)) {
+    return { x: 0.8, y: 2.7 };
+  }
+  if (/maartenskliniek|sint maartens|berg en dal|beek|ubbergen|oude kleefsebaan/.test(text)) {
+    return { x: 1.7, y: 3.8 };
+  }
+  if (/sanadome|jonkerbos|cwz|goffert/.test(text)) return { x: -0.8, y: 2.1 };
+  if (/jachtslot|mookerheide|molenhoek|heumensebaan/.test(text)) {
+    return { x: 0.8, y: -1.0 };
+  }
+  if (/groesbeek|hopmans|hoge horst/.test(text)) return { x: 2.2, y: 1.4 };
+  if (/gennep|cuijk|ottersum|heijen/.test(text)) return { x: 3.4, y: -7.2 };
+  if (/malden|heumen/.test(text)) return { x: 0.2, y: 0.3 };
+  if (/wijchen|beuningen|berendonck|thermen/.test(text)) {
+    return { x: -2.5, y: 2.0 };
+  }
+
+  return { x: 0.4, y: 3.0 };
+}
+
+function isRadboudReceipt(receipt: ReceiptSummary) {
+  return /radboud|vermaat|umc|kapittelweg|geert groote/i.test(
+    receiptSearchText(receipt)
+  );
+}
+
+function isSintMaartenskliniekReceipt(receipt: ReceiptSummary) {
+  return /maartenskliniek|sint\s+maartens/i.test(receiptSearchText(receipt));
+}
+
+function isDriesElstReceipt(receipt: ReceiptSummary) {
+  return /dries\s*(?:en|&)\s*co|dries|elst/i.test(receiptSearchText(receipt));
+}
+
+function isSanadomeReceipt(receipt: ReceiptSummary) {
+  return /sanadome/i.test(receiptSearchText(receipt));
+}
+
+function isGennepRouteReceipt(receipt: ReceiptSummary) {
+  return /gennep|cuijk|ottersum|heijen/i.test(receiptSearchText(receipt));
+}
+
+function isPriorityEarlyDelivery(receipt: ReceiptSummary) {
+  const deadline = routeDeadlineMinutes(receipt);
+
+  return (
+    hasExplicitEarlyInstruction(receipt) ||
+    deadline < 600 ||
+    isRadboudReceipt(receipt) ||
+    isSintMaartenskliniekReceipt(receipt) ||
+    isDriesElstReceipt(receipt)
+  );
+}
+
+function isFlexibleLateDelivery(receipt: ReceiptSummary, date = "") {
+  const deadline = routeDeadlineMinutes(receipt);
+
+  return (
+    isSanadomeReceipt(receipt) ||
+    (isGennepRouteReceipt(receipt) && (!date || isMondayOrThursday(date))) ||
+    deadline >= 780
+  );
 }
 
 function isOutsideRouteReceipt(receipt: ReceiptSummary) {
@@ -2709,6 +2891,108 @@ function routeDeadlinePriorityForReceipt(receipt: ReceiptSummary) {
   if (minutes >= 780 && minutes < 9999) return 3;
 
   return 2;
+}
+
+function sortShopKeysByRoutePath(shopKeys: ShopKey[]) {
+  const remaining = [...shopKeys];
+  const sorted: ShopKey[] = [];
+  let currentPoint = depotRoutePoint;
+
+  while (remaining.length) {
+    let bestIndex = 0;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    remaining.forEach((shopKey, index) => {
+      const score = routeDistance(currentPoint, shopRouteMeta[shopKey].point);
+      if (score < bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+
+    const [nextShopKey] = remaining.splice(bestIndex, 1);
+    sorted.push(nextShopKey);
+    currentPoint = shopRouteMeta[nextShopKey].point;
+  }
+
+  return sorted;
+}
+
+function lastShopRoutePoint(shopKeys: ShopKey[]) {
+  const sortedShopKeys = sortShopKeysByRoutePath(shopKeys);
+  const lastShopKey = sortedShopKeys.at(-1);
+
+  return lastShopKey ? shopRouteMeta[lastShopKey].point : depotRoutePoint;
+}
+
+function sortReceiptsAlongRoute(
+  receipts: ReceiptSummary[],
+  startPoint: RoutePoint
+) {
+  const remaining = [...receipts];
+  const sorted: ReceiptSummary[] = [];
+  let currentPoint = startPoint;
+
+  while (remaining.length) {
+    let bestIndex = 0;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    remaining.forEach((receipt, index) => {
+      const distanceScore = routeDistance(currentPoint, receiptRoutePoint(receipt));
+      const deadline = routeDeadlineMinutes(receipt);
+      const latePenalty = deadline >= 780 ? 1.8 : 0;
+      const score = distanceScore + latePenalty;
+
+      if (score < bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+
+    const [nextReceipt] = remaining.splice(bestIndex, 1);
+    sorted.push(nextReceipt);
+    currentPoint = receiptRoutePoint(nextReceipt);
+  }
+
+  return sorted;
+}
+
+function sortReceiptsForRoute(
+  receipts: ReceiptSummary[],
+  shopKeys: ShopKey[],
+  date: string
+) {
+  const startPoint = lastShopRoutePoint(shopKeys);
+  const early = receipts.filter(isPriorityEarlyDelivery).sort((first, second) => {
+    const deadlineCompare = routeDeadlineMinutes(first) - routeDeadlineMinutes(second);
+    if (deadlineCompare !== 0) return deadlineCompare;
+
+    return (
+      routeDistance(startPoint, receiptRoutePoint(first)) -
+      routeDistance(startPoint, receiptRoutePoint(second))
+    );
+  });
+  const normal = receipts.filter(
+    (receipt) =>
+      !isPriorityEarlyDelivery(receipt) && !isFlexibleLateDelivery(receipt, date)
+  );
+  const late = receipts.filter(
+    (receipt) =>
+      !isPriorityEarlyDelivery(receipt) && isFlexibleLateDelivery(receipt, date)
+  );
+  const afterEarlyPoint = early.length
+    ? receiptRoutePoint(early.at(-1)!)
+    : startPoint;
+  const normalSorted = sortReceiptsAlongRoute(normal, afterEarlyPoint);
+  const afterNormalPoint = normalSorted.length
+    ? receiptRoutePoint(normalSorted.at(-1)!)
+    : afterEarlyPoint;
+
+  return [
+    ...early,
+    ...normalSorted,
+    ...sortReceiptsAlongRoute(late, afterNormalPoint),
+  ];
 }
 
 function shouldRideAfterLentOnSaturday(receipt: ReceiptSummary) {
@@ -2815,7 +3099,7 @@ type PlannedBus = {
   id: BusId;
   title: string;
   tone: string;
-  shopKeys: string[];
+  shopKeys: ShopKey[];
   early: ReceiptSummary[];
   first: ReceiptSummary[];
   firstIce: ReceiptSummary[];
@@ -2829,7 +3113,7 @@ function createPlannedBus(input: {
   id: BusId;
   title: string;
   tone: string;
-  shopKeys: string[];
+  shopKeys: ShopKey[];
 }): PlannedBus {
   return {
     ...input,
@@ -2841,6 +3125,159 @@ function createPlannedBus(input: {
     firstScore: 0,
     secondScore: 0,
   };
+}
+
+function shopLoadScore(receipts: ReceiptSummary[], shopKey: ShopKey) {
+  const shopReceipts = receipts.filter(
+    (receipt) => isShopReceipt(receipt) && shopKeyForReceipt(receipt) === shopKey
+  );
+  const pastryUnits = shopReceipts.reduce(
+    (total, receipt) => total + receiptPastryUnits(receipt),
+    0
+  );
+  const orderValue = shopReceipts.reduce(
+    (total, receipt) => total + (receipt.value || 0),
+    0
+  );
+  const iceTubs = shopReceipts.reduce(
+    (total, receipt) => total + iceTubCountForReceipt(receipt),
+    0
+  );
+
+  return (
+    4 +
+    shopReceipts.length * 2.8 +
+    pastryUnits / 12 +
+    orderValue / 220 +
+    iceTubs / 2
+  );
+}
+
+function shopRouteDistance(shopKeys: ShopKey[]) {
+  const sortedShopKeys = sortShopKeysByRoutePath(shopKeys);
+  let currentPoint = depotRoutePoint;
+  let distance = 0;
+
+  sortedShopKeys.forEach((shopKey) => {
+    const nextPoint = shopRouteMeta[shopKey].point;
+    distance += routeDistance(currentPoint, nextPoint);
+    currentPoint = nextPoint;
+  });
+
+  return distance + routeDistance(currentPoint, depotRoutePoint);
+}
+
+function routeAssignmentCostForReceipt(
+  receipt: ReceiptSummary,
+  shopKeys: ShopKey[],
+  date: string
+) {
+  const point = receiptRoutePoint(receipt);
+  const nearestShopDistance = Math.min(
+    ...shopKeys.map((shopKey) => routeDistance(point, shopRouteMeta[shopKey].point))
+  );
+  let cost = nearestShopDistance + routeDeadlinePriorityForReceipt(receipt) * 0.45;
+
+  if (isRadboudReceipt(receipt) && shopKeys.includes("heyendaalseweg")) {
+    cost -= 2.2;
+  }
+  if (
+    isSintMaartenskliniekReceipt(receipt) &&
+    (shopKeys.includes("heyendaalseweg") || shopKeys.includes("daalseweg"))
+  ) {
+    cost -= 1.5;
+  }
+  if (isDriesElstReceipt(receipt) && shopKeys.includes("lent")) {
+    cost -= 1.8;
+  }
+  if (
+    outsideClusterKeyForReceipt(receipt) === "noord-buiten" &&
+    shopKeys.includes("lent")
+  ) {
+    cost -= 1.4;
+  }
+  if (isCenterRouteText(receiptSearchText(receipt)) && shopKeys.includes("ziekerstraat")) {
+    cost -= 1.2;
+  }
+  if (isFlexibleLateDelivery(receipt, date)) {
+    cost += 0.8;
+  }
+
+  return cost;
+}
+
+function buildShopAssignmentCandidates() {
+  const candidates: { A: ShopKey[]; B: ShopKey[] }[] = [];
+  const maxMask = 1 << shopRouteKeys.length;
+
+  for (let mask = 1; mask < maxMask - 1; mask += 1) {
+    const aShopKeys = shopRouteKeys.filter((_, index) => mask & (1 << index));
+    if (aShopKeys.length < 1 || aShopKeys.length > 3) continue;
+
+    const bShopKeys = shopRouteKeys.filter((shopKey) => !aShopKeys.includes(shopKey));
+    if (bShopKeys.length < 1 || bShopKeys.length > 3) continue;
+
+    candidates.push({
+      A: sortShopKeysByRoutePath(aShopKeys),
+      B: sortShopKeysByRoutePath(bShopKeys),
+    });
+  }
+
+  return candidates;
+}
+
+function chooseShopAssignment(
+  plan: DayPlan,
+  receipts: ReceiptSummary[],
+  loadProfile: DayLoadProfile
+) {
+  const deliveryReceipts = receipts.filter(isRouteDelivery);
+  const candidates = buildShopAssignmentCandidates();
+  let bestCandidate = candidates[0] || {
+    A: ["heyendaalseweg", "daalseweg"] as ShopKey[],
+    B: ["ziekerstraat", "lent"] as ShopKey[],
+  };
+  let bestScore = Number.POSITIVE_INFINITY;
+
+  candidates.forEach((candidate) => {
+    const loads: Record<BusId, number> = {
+      A: candidate.A.reduce(
+        (total, shopKey) => total + shopLoadScore(receipts, shopKey),
+        0
+      ),
+      B: candidate.B.reduce(
+        (total, shopKey) => total + shopLoadScore(receipts, shopKey),
+        0
+      ),
+    };
+    let score =
+      shopRouteDistance(candidate.A) * 1.4 +
+      shopRouteDistance(candidate.B) * 1.4 +
+      Math.max(0, candidate.B.length - 2) * 2.8 +
+      Math.max(0, candidate.A.length - 2) * 1.2;
+
+    deliveryReceipts.forEach((receipt) => {
+      const costA = routeAssignmentCostForReceipt(receipt, candidate.A, plan.date);
+      const costB = routeAssignmentCostForReceipt(receipt, candidate.B, plan.date);
+      const bus = costA <= costB ? "A" : "B";
+
+      loads[bus] += receiptLoadScore(receipt);
+      score += Math.min(costA, costB);
+    });
+
+    const normalizedA = loads.A / busRouteMeta.A.capacity;
+    const normalizedB = loads.B / busRouteMeta.B.capacity;
+    score += Math.abs(normalizedA - normalizedB) * 0.65;
+    if (loads.B > loads.A) score += (loads.B - loads.A) * 0.45;
+    if (loadProfile.pressure === "hoog" && candidate.B.length > 2) score += 4;
+
+    if (score < bestScore) {
+      bestScore = score;
+      bestCandidate = candidate;
+    }
+  });
+
+  return bestCandidate;
 }
 
 function chooseLightestBus(
@@ -2855,9 +3292,32 @@ function chooseLightestBus(
 function chooseBusForReceipt(input: {
   buses: Record<BusId, PlannedBus>;
   clusterAssignments: Map<string, BusId>;
+  date: string;
   receipt: ReceiptSummary;
   round: "first" | "second";
 }) {
+  const shopKey = shopKeyForReceipt(input.receipt);
+  if (shopKey) {
+    const shopBus = (["A", "B"] as BusId[]).find((bus) =>
+      input.buses[bus].shopKeys.includes(shopKey)
+    );
+    if (shopBus) return shopBus;
+  }
+
+  const routeCostA = routeAssignmentCostForReceipt(
+    input.receipt,
+    input.buses.A.shopKeys,
+    input.date
+  );
+  const routeCostB = routeAssignmentCostForReceipt(
+    input.receipt,
+    input.buses.B.shopKeys,
+    input.date
+  );
+  if (Math.abs(routeCostA - routeCostB) >= 1.2) {
+    return routeCostA < routeCostB ? "A" : "B";
+  }
+
   const preferredBus = preferredBusForReceipt(input.receipt);
   if (preferredBus) return preferredBus;
 
@@ -2876,12 +3336,20 @@ function chooseBusForReceipt(input: {
 function shouldUseSecondRound(
   receipt: ReceiptSummary,
   bus: PlannedBus,
-  loadProfile: DayLoadProfile
+  loadProfile: DayLoadProfile,
+  date: string
 ) {
-  if (isEarlyException(receipt)) return false;
+  if (isPriorityEarlyDelivery(receipt)) return false;
 
   const minutes = routeDeadlineMinutes(receipt);
   if (minutes < 600) return false;
+  if (
+    isFlexibleLateDelivery(receipt, date) &&
+    loadProfile.pressure !== "laag" &&
+    bus.firstScore + receiptLoadScore(receipt) > 10
+  ) {
+    return true;
+  }
 
   const maxFirstStops =
     loadProfile.pressure === "hoog" ? 9 : loadProfile.pressure === "middel" ? 11 : 13;
@@ -2946,6 +3414,7 @@ function iceStopForReceipt(receipt: ReceiptSummary): RouteStop {
 
   return {
     id: `ice-${receipt.id}`,
+    sourceId: `ice:${receipt.id}`,
     label: receipt.customer,
     detail: detailParts.join(" · "),
     badges: receiptStopBadges(receipt),
@@ -3024,18 +3493,19 @@ function buildRouteRounds(
     return buildSaturdayRouteRounds(plan, receipts, loadProfile);
   }
 
+  const shopAssignment = chooseShopAssignment(plan, receipts, loadProfile);
   const buses: Record<BusId, PlannedBus> = {
     A: createPlannedBus({
       id: "A",
-      title: "Bus A",
-      tone: "border-[#d6e5d8] bg-[#f6faf4]",
-      shopKeys: ["heyendaalseweg", "daalseweg"],
+      title: busRouteMeta.A.title,
+      tone: busRouteMeta.A.tone,
+      shopKeys: shopAssignment.A,
     }),
     B: createPlannedBus({
       id: "B",
-      title: "Bus B",
-      tone: "border-[#eadb8b] bg-[#fff8d8]",
-      shopKeys: ["ziekerstraat", "lent"],
+      title: busRouteMeta.B.title,
+      tone: busRouteMeta.B.tone,
+      shopKeys: shopAssignment.B,
     }),
   };
   const clusterAssignments = new Map<string, BusId>();
@@ -3047,16 +3517,18 @@ function buildRouteRounds(
     const firstChoiceBus = chooseBusForReceipt({
       buses,
       clusterAssignments,
+      date: plan.date,
       receipt,
       round: "first",
     });
     const round = shouldUseSecondRound(
       receipt,
       buses[firstChoiceBus],
-      loadProfile
+      loadProfile,
+      plan.date
     )
       ? "second"
-      : isEarlyException(receipt)
+      : isPriorityEarlyDelivery(receipt)
         ? "early"
         : "first";
     const bus =
@@ -3064,6 +3536,7 @@ function buildRouteRounds(
         ? chooseBusForReceipt({
             buses,
             clusterAssignments,
+            date: plan.date,
             receipt,
             round: "second",
           })
@@ -3076,6 +3549,7 @@ function buildRouteRounds(
     const bus = chooseBusForReceipt({
       buses,
       clusterAssignments,
+      date: plan.date,
       receipt,
       round: "second",
     });
@@ -3087,25 +3561,29 @@ function buildRouteRounds(
   });
 
   ([buses.A, buses.B] as PlannedBus[]).forEach((bus) => {
-    const shopStops = groupShopStops(receipts, bus.shopKeys, bus.firstIce);
+    const shopStops = groupShopStops(
+      receipts,
+      sortShopKeysByRoutePath(bus.shopKeys),
+      bus.firstIce
+    );
     const looseFirstIceStops = sortDeliveryReceipts(
       bus.firstIce.filter((receipt) => !shopKeyForReceipt(receipt))
     ).map(iceStopForReceipt);
     const firstStops = [
-      ...sortDeliveryReceipts(bus.early).map((receipt) =>
+      ...shopStops,
+      ...sortReceiptsForRoute(bus.early, bus.shopKeys, plan.date).map((receipt) =>
         routeStopForReceipt(receipt, `${bus.id}-early-`)
       ),
-      ...shopStops,
       ...looseFirstIceStops,
-      ...sortDeliveryReceipts(bus.first).map((receipt) =>
+      ...sortReceiptsForRoute(bus.first, bus.shopKeys, plan.date).map((receipt) =>
         routeStopForReceipt(receipt, `${bus.id}-first-`)
       ),
     ];
     const secondStops = [
-      ...sortDeliveryReceipts(bus.second).map((receipt) =>
+      ...sortReceiptsForRoute(bus.second, bus.shopKeys, plan.date).map((receipt) =>
         routeStopForReceipt(receipt, `${bus.id}-second-`)
       ),
-      ...sortDeliveryReceipts(bus.ice).map(iceStopForReceipt),
+      ...sortReceiptsForRoute(bus.ice, bus.shopKeys, plan.date).map(iceStopForReceipt),
     ];
 
     if (firstStops.length) {
@@ -3118,8 +3596,10 @@ function buildRouteRounds(
           tone: bus.tone,
           stops: firstStops,
           reason:
-            "Adviesvolgorde op levertijd, volume en gebied; start en eind op Ambachtsweg 4.",
-          load: busLoadLine(bus, "first"),
+            `${busRouteMeta[bus.id].description}. Eerst vaste winkels (${bus.shopKeys
+              .map((shopKey) => shopRouteMeta[shopKey].shortLabel)
+              .join(", ")}), daarna vroege en logische bezorgstops. Start/eind Ambachtsweg 4.`,
+          load: routeLoadLineForStops(firstStops),
           loadProfile,
         })
       );
@@ -3135,8 +3615,8 @@ function buildRouteRounds(
           tone: "border-[#efc7b8] bg-[#fff3ed]",
           stops: secondStops,
           reason:
-            "Tweede ronde voor ijs, grote of latere bonnen; late deadlines blijven achter normale stops.",
-          load: busLoadLine(bus, "second"),
+            "Tweede ronde voor ijs, Sanadome/Gennep/late bonnen of volume dat niet logisch in de eerste ronde past.",
+          load: routeLoadLineForStops(secondStops),
           loadProfile,
         })
       );
@@ -3155,6 +3635,7 @@ function buildRouteRounds(
         stops: [
           {
             id: "ijs-check",
+            sourceId: "check:ijs",
             label: "IJsbonnen controleren",
             detail: `${plan.iceTubs} bakken ijs · ${plan.tempexBoxes} zwarte tempexbakken`,
             badges: ["ijs", `${plan.tempexBoxes} tempex`],
@@ -3179,14 +3660,14 @@ function buildSaturdayRouteRounds(
   const buses: Record<BusId, PlannedBus> = {
     A: createPlannedBus({
       id: "A",
-      title: "Bus A",
-      tone: "border-[#d6e5d8] bg-[#f6faf4]",
+      title: busRouteMeta.A.title,
+      tone: busRouteMeta.A.tone,
       shopKeys: ["heyendaalseweg", "daalseweg"],
     }),
     B: createPlannedBus({
       id: "B",
-      title: "Bus B",
-      tone: "border-[#eadb8b] bg-[#fff8d8]",
+      title: busRouteMeta.B.title,
+      tone: busRouteMeta.B.tone,
       shopKeys: ["lent", "ziekerstraat"],
     }),
   };
@@ -3199,10 +3680,11 @@ function buildSaturdayRouteRounds(
     const bus = chooseBusForReceipt({
       buses,
       clusterAssignments,
+      date: plan.date,
       receipt,
       round: "second",
     });
-    const round = isEarlyException(receipt)
+    const round = isPriorityEarlyDelivery(receipt)
       ? "early"
       : bus === "B" && shouldRideAfterLentOnSaturday(receipt)
         ? "first"
@@ -3215,6 +3697,7 @@ function buildSaturdayRouteRounds(
     const bus = chooseBusForReceipt({
       buses,
       clusterAssignments,
+      date: plan.date,
       receipt,
       round: "second",
     });
@@ -3226,20 +3709,22 @@ function buildSaturdayRouteRounds(
     const routePlan = saturdayRouteShopPlan[bus.id];
     const firstStops = [
       ...groupShopStops(receipts, routePlan.firstShopKeys, []),
-      ...sortDeliveryReceipts(bus.early).map((receipt) =>
+      ...sortReceiptsForRoute(bus.early, bus.shopKeys, plan.date).map((receipt) =>
         routeStopForReceipt(receipt, `${bus.id}-early-`)
       ),
-      ...sortDeliveryReceipts(bus.first).map((receipt) =>
+      ...sortReceiptsForRoute(bus.first, bus.shopKeys, plan.date).map((receipt) =>
         routeStopForReceipt(receipt, `${bus.id}-first-`)
       ),
     ];
     const secondStops = [
       ...groupShopStops(receipts, routePlan.secondShopKeys, []),
-      ...sortDeliveryReceipts(bus.second).map((receipt) =>
+      ...sortReceiptsForRoute(bus.second, bus.shopKeys, plan.date).map((receipt) =>
         routeStopForReceipt(receipt, `${bus.id}-second-`)
       ),
     ];
-    const iceStops = sortDeliveryReceipts(bus.ice).map(iceStopForReceipt);
+    const iceStops = sortReceiptsForRoute(bus.ice, bus.shopKeys, plan.date).map(
+      iceStopForReceipt
+    );
 
     if (firstStops.length) {
       rounds.push(
@@ -3254,7 +3739,10 @@ function buildSaturdayRouteRounds(
             bus.id === "B"
               ? "Zaterdag: eerst Lent, daarna Gendt/noordkant als die erbij zit; start/eind Ambachtsweg 4."
               : `Zaterdag: eerst ${routePlan.firstShopLabel}, bus vol laden door drukte; start/eind Ambachtsweg 4.`,
-          load: routeLoadLineWithFallback(busLoadLine(bus, "first"), "volle bus"),
+          load: routeLoadLineWithFallback(
+            routeLoadLineForStops(firstStops),
+            "volle bus"
+          ),
           loadProfile,
         })
       );
@@ -3271,7 +3759,7 @@ function buildSaturdayRouteRounds(
           stops: secondStops,
           reason: `Zaterdag: daarna ${routePlan.secondShopLabel} en de resterende stops; late deadlines blijven later.`,
           load: routeLoadLineWithFallback(
-            routeLoadLineForReceipts(bus.second),
+            routeLoadLineForStops(secondStops),
             "winkel + rest"
           ),
           loadProfile,
@@ -3308,6 +3796,7 @@ function buildSaturdayRouteRounds(
         stops: [
           {
             id: "ijs-check",
+            sourceId: "check:ijs",
             label: "IJsbonnen controleren",
             detail: `${plan.iceTubs} bakken ijs · ${plan.tempexBoxes} zwarte tempexbakken`,
             badges: ["ijs", `${plan.tempexBoxes} tempex`],
@@ -3375,6 +3864,103 @@ function moveRouteStopInRounds(
   return draft.map((route) =>
     refreshRouteRoundAfterManualMove(route, loadProfile)
   );
+}
+
+function routeStopSourceKey(stop: RouteStop) {
+  return stop.sourceId || stop.id;
+}
+
+function serializeRouteRounds(routeRounds: RouteRound[]) {
+  return routeRounds.map((route) => ({
+    id: route.id,
+    title: route.title,
+    vehicle: route.vehicle,
+    departure: route.departure,
+    badge: route.badge,
+    tone: route.tone,
+    reason: route.reason,
+    load: route.load,
+    stops: route.stops.map((stop) => ({
+      id: stop.id,
+      sourceId: routeStopSourceKey(stop),
+      label: stop.label,
+      detail: stop.detail,
+      badges: stop.badges,
+    })),
+  }));
+}
+
+function reconcileRouteDraftRounds(
+  routeDraft: RouteDraftSummary,
+  automaticRouteRounds: RouteRound[],
+  loadProfile: DayLoadProfile
+): RouteRound[] {
+  const automaticStopBySourceKey = new Map<string, RouteStop>();
+  const automaticRouteById = new Map(
+    automaticRouteRounds.map((route) => [route.id, route])
+  );
+
+  automaticRouteRounds.forEach((route) => {
+    route.stops.forEach((stop) => {
+      automaticStopBySourceKey.set(routeStopSourceKey(stop), stop);
+    });
+  });
+
+  const usedSourceKeys = new Set<string>();
+  const reconciledRoutes = routeDraft.routes.map((draftRoute) => {
+    const automaticRoute = automaticRouteById.get(draftRoute.id);
+    const stops = draftRoute.stops
+      .map((draftStop) => {
+        const sourceKey = draftStop.sourceId || draftStop.id;
+        const stop = automaticStopBySourceKey.get(sourceKey);
+        if (!stop) return null;
+
+        usedSourceKeys.add(sourceKey);
+        return stop;
+      })
+      .filter((stop): stop is RouteStop => Boolean(stop));
+
+    return refreshRouteRoundAfterManualMove(
+      {
+        ...(automaticRoute || draftRoute),
+        stops,
+      },
+      loadProfile
+    );
+  });
+
+  automaticRouteRounds.forEach((automaticRoute) => {
+    const unassignedStops = automaticRoute.stops.filter(
+      (stop) => !usedSourceKeys.has(routeStopSourceKey(stop))
+    );
+    if (!unassignedStops.length) return;
+
+    const existingRoute = reconciledRoutes.find(
+      (route) => route.id === automaticRoute.id
+    );
+
+    if (existingRoute) {
+      existingRoute.stops.push(...unassignedStops);
+      const refreshedRoute = refreshRouteRoundAfterManualMove(
+        existingRoute,
+        loadProfile
+      );
+      Object.assign(existingRoute, refreshedRoute);
+      return;
+    }
+
+    reconciledRoutes.push(
+      refreshRouteRoundAfterManualMove(
+        {
+          ...automaticRoute,
+          stops: unassignedStops,
+        },
+        loadProfile
+      )
+    );
+  });
+
+  return reconciledRoutes.filter((route) => route.stops.length > 0);
 }
 
 function buildReceiptLines(receipt: ReceiptSeed, plan: DayPlan): ReceiptLine[] {
@@ -3833,8 +4419,11 @@ export default function BakkerijLogistiekDashboard() {
   const [receiptOverrides, setReceiptOverrides] = useState<
     ReceiptOverrideSummary[]
   >([]);
+  const [routeDraft, setRouteDraft] = useState<RouteDraftSummary | null>(null);
   const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
   const [batchReloadCounter, setBatchReloadCounter] = useState(0);
+  const [routeSaveState, setRouteSaveState] = useState<RouteSaveState>("idle");
+  const [routeSaveMessage, setRouteSaveMessage] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [overrideMessage, setOverrideMessage] = useState("");
@@ -3970,9 +4559,17 @@ export default function BakkerijLogistiekDashboard() {
   }, []);
 
   useEffect(() => {
+    if (routeDraft?.date === selectedPlan.date) {
+      setManualRouteRounds(
+        reconcileRouteDraftRounds(routeDraft, automaticRouteRounds, loadProfile)
+      );
+      setRoutesEdited(true);
+      return;
+    }
+
     setManualRouteRounds(null);
     setRoutesEdited(false);
-  }, [automaticRouteRounds]);
+  }, [automaticRouteRounds, loadProfile, routeDraft, selectedPlan.date]);
 
   useEffect(() => {
     let ignoreResult = false;
@@ -3992,6 +4589,7 @@ export default function BakkerijLogistiekDashboard() {
           dayFeedback?: DayFeedbackSummary | null;
           webshopImages?: WebshopImageSummary[];
           receiptOverrides?: ReceiptOverrideSummary[];
+          routeDraft?: RouteDraftSummary | null;
           message?: string;
         };
 
@@ -4001,6 +4599,7 @@ export default function BakkerijLogistiekDashboard() {
           setBatchLoadState("error");
           setWebshopImages([]);
           setReceiptOverrides([]);
+          setRouteDraft(null);
           if (manualRefresh) {
             setImportMessage(data.message || "Opnieuw ophalen is niet gelukt.");
           }
@@ -4010,6 +4609,7 @@ export default function BakkerijLogistiekDashboard() {
         setImportedBatch(data.batch || null);
         setWebshopImages(data.webshopImages || []);
         setReceiptOverrides(data.receiptOverrides || []);
+        setRouteDraft(data.routeDraft || null);
         setFeedbackByDate((current) => ({
           ...current,
           [dateState.selectedDate]: data.dayFeedback?.text || "",
@@ -4026,6 +4626,7 @@ export default function BakkerijLogistiekDashboard() {
         if (!ignoreResult) {
           setBatchLoadState("error");
           setReceiptOverrides([]);
+          setRouteDraft(null);
           if (manualRefresh) setImportMessage("Opnieuw ophalen is niet gelukt.");
         }
       } finally {
@@ -4047,6 +4648,8 @@ export default function BakkerijLogistiekDashboard() {
     setOverrideMessage("");
     setPhotoLinkMessage("");
     setFeedbackMessage("");
+    setRouteSaveMessage("");
+    setRouteSaveState("idle");
   }
 
   function refreshBatch() {
@@ -4057,6 +4660,40 @@ export default function BakkerijLogistiekDashboard() {
     setBatchReloadCounter((current) => current + 1);
   }
 
+  async function saveRouteDraft(routeRoundsToSave: RouteRound[]) {
+    setRouteSaveState("saving");
+    setRouteSaveMessage("route opslaan...");
+
+    try {
+      const response = await fetch("/api/bakkerij-logistiek/route-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedPlan.date,
+          routes: serializeRouteRounds(routeRoundsToSave),
+        }),
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        routeDraft?: RouteDraftSummary | null;
+        message?: string;
+      };
+
+      if (!response.ok || !data.ok || !data.routeDraft) {
+        throw new Error(data.message || "Route opslaan is niet gelukt.");
+      }
+
+      setRouteDraft(data.routeDraft);
+      setRouteSaveState("saved");
+      setRouteSaveMessage(`handmatige route bewaard om ${getUploadTime()}`);
+    } catch (error) {
+      setRouteSaveState("error");
+      setRouteSaveMessage(
+        error instanceof Error ? error.message : "Route opslaan is niet gelukt."
+      );
+    }
+  }
+
   function moveRouteStop(move: RouteStopMove) {
     const currentRoutes = manualRouteRounds || automaticRouteRounds;
     const nextRoutes = moveRouteStopInRounds(currentRoutes, move, loadProfile);
@@ -4064,11 +4701,44 @@ export default function BakkerijLogistiekDashboard() {
 
     setManualRouteRounds(nextRoutes);
     setRoutesEdited(true);
+    void saveRouteDraft(nextRoutes);
   }
 
-  function resetRouteDraft() {
+  async function resetRouteDraft() {
     setManualRouteRounds(null);
     setRoutesEdited(false);
+    setRouteDraft(null);
+    setRouteSaveState("saving");
+    setRouteSaveMessage("route opnieuw berekenen...");
+
+    try {
+      const response = await fetch("/api/bakkerij-logistiek/route-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedPlan.date,
+          reset: true,
+        }),
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+      };
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.message || "Route opnieuw berekenen is niet gelukt.");
+      }
+
+      setRouteSaveState("idle");
+      setRouteSaveMessage("berekende route actief");
+    } catch (error) {
+      setRouteSaveState("error");
+      setRouteSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Route opnieuw berekenen is niet gelukt."
+      );
+    }
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -4098,6 +4768,7 @@ export default function BakkerijLogistiekDashboard() {
       }
 
       setImportedBatch(data.batch);
+      setRouteDraft(null);
       setDateState((current) => ({ ...current, selectedDate: data.batch!.date }));
       setFileSnapshot({
         name: file.name,
@@ -4407,6 +5078,8 @@ export default function BakkerijLogistiekDashboard() {
             onRouteStopMove={moveRouteStop}
             onRoutesReset={resetRouteDraft}
             routeRounds={routeRounds}
+            routeSaveMessage={routeSaveMessage}
+            routeSaveState={routeSaveState}
             routesEdited={routesEdited}
             selectedPlan={selectedPlan}
           />
@@ -4500,12 +5173,16 @@ function RoutesPanel({
   onRouteStopMove,
   onRoutesReset,
   routeRounds,
+  routeSaveMessage,
+  routeSaveState,
   routesEdited,
   selectedPlan,
 }: Readonly<{
   onRouteStopMove: (move: RouteStopMove) => void;
   onRoutesReset: () => void;
   routeRounds: RouteRound[];
+  routeSaveMessage: string;
+  routeSaveState: RouteSaveState;
   routesEdited: boolean;
   selectedPlan: DayPlan;
 }>) {
@@ -4580,11 +5257,25 @@ function RoutesPanel({
           <h2 className="text-base font-black tracking-normal text-[#1a1815]">
             Routeplanning
           </h2>
-          <span className="mt-1 inline-flex border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black uppercase tracking-normal text-[#6b645b]">
-            {routesEdited ? "Handmatig" : "Auto"}
-          </span>
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+            <span className="inline-flex border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black uppercase tracking-normal text-[#6b645b]">
+              {routesEdited ? "Handmatig" : "Auto"}
+            </span>
+            {(routeSaveMessage || routeSaveState === "saving") && (
+              <span
+                className={`min-w-0 truncate text-[0.68rem] font-bold tracking-normal ${
+                  routeSaveState === "error" ? "text-[#9b2d1f]" : "text-[#6b645b]"
+                }`}
+              >
+                {routeSaveMessage || "route opslaan..."}
+              </span>
+            )}
+          </div>
         </div>
-        <RouteResetButton disabled={!routesEdited} onClick={onRoutesReset} />
+        <RouteResetButton
+          disabled={!routesEdited || routeSaveState === "saving"}
+          onClick={onRoutesReset}
+        />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -4663,12 +5354,17 @@ function RoutesPanel({
                           onDrop={(event) =>
                             handleStopDrop(event, route.id, stop.id)
                           }
-                          className={`grid cursor-move grid-cols-[1.45rem_minmax(0,1fr)] gap-1.5 border border-white/80 bg-white px-1.5 py-1 transition hover:border-[#d7cec4] ${
+                          className={`grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)] gap-1.5 border border-white/80 bg-white px-1.5 py-1 transition hover:border-[#d7cec4] hover:shadow-sm active:cursor-grabbing ${
                             dragging?.stopId === stop.id ? "opacity-45" : ""
                           }`}
                         >
                           <span
-                            title="Versleep stop"
+                            title="Versleep"
+                            className="flex h-5 w-4 items-center justify-center text-[#8b8278]"
+                          >
+                            <GripIcon />
+                          </span>
+                          <span
                             className="flex h-5 w-5 items-center justify-center bg-[#1a1815] text-[0.62rem] font-black tabular-nums tracking-normal text-white"
                           >
                             {index + 1}
@@ -5746,8 +6442,8 @@ function RouteResetButton({
   return (
     <button
       type="button"
-      aria-label="Automatische route herstellen"
-      title="Automatische route herstellen"
+      aria-label="Bereken route"
+      title="Bereken route"
       disabled={disabled}
       onClick={onClick}
       className="flex h-8 w-8 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
@@ -5777,6 +6473,24 @@ function RoutePrintButton({
     >
       <PrintIcon />
     </button>
+  );
+}
+
+function GripIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+      fill="currentColor"
+    >
+      <circle cx="5" cy="3" r="1" />
+      <circle cx="11" cy="3" r="1" />
+      <circle cx="5" cy="8" r="1" />
+      <circle cx="11" cy="8" r="1" />
+      <circle cx="5" cy="13" r="1" />
+      <circle cx="11" cy="13" r="1" />
+    </svg>
   );
 }
 
