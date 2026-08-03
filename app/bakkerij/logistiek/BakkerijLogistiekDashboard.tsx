@@ -244,6 +244,32 @@ function createDateState(): DateState {
   };
 }
 
+function syncDateState(current: DateState): DateState {
+  const next = createDateState();
+  let selectedDate = current.selectedDate;
+
+  if (
+    current.selectedDate === current.today ||
+    (current.selectedDate === current.tomorrow && current.selectedDate < next.today)
+  ) {
+    selectedDate = next.today;
+  }
+
+  if (
+    current.today === next.today &&
+    current.tomorrow === next.tomorrow &&
+    current.hour === next.hour &&
+    current.selectedDate === selectedDate
+  ) {
+    return current;
+  }
+
+  return {
+    ...next,
+    selectedDate,
+  };
+}
+
 function formatDateLabel(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return value;
@@ -3820,6 +3846,7 @@ export default function BakkerijLogistiekDashboard() {
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const manualBatchRefreshRef = useRef(false);
+  const dateStateRef = useRef(dateState);
   const activeImportedBatch =
     importedBatch?.date === dateState.selectedDate ? importedBatch : null;
 
@@ -3891,6 +3918,56 @@ export default function BakkerijLogistiekDashboard() {
     activeImportedBatch,
     batchStatusLine
   );
+
+  useEffect(() => {
+    dateStateRef.current = dateState;
+  }, [dateState]);
+
+  useEffect(() => {
+    function syncOpenAppDate() {
+      const current = dateStateRef.current;
+      const next = syncDateState(current);
+
+      if (next === current) return;
+
+      const selectedDateChanged = next.selectedDate !== current.selectedDate;
+      const calendarChanged =
+        next.today !== current.today || next.tomorrow !== current.tomorrow;
+      const definitiveWindowStarted = current.hour < 22 && next.hour >= 22;
+
+      dateStateRef.current = next;
+      setDateState(next);
+
+      if (selectedDateChanged) {
+        setFileSnapshot(null);
+      }
+
+      if (calendarChanged || definitiveWindowStarted) {
+        setImportMessage("");
+        setBatchReloadCounter((value) => value + 1);
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        syncOpenAppDate();
+      }
+    }
+
+    syncOpenAppDate();
+
+    const intervalId = window.setInterval(syncOpenAppDate, 60 * 1000);
+    window.addEventListener("focus", syncOpenAppDate);
+    window.addEventListener("pageshow", syncOpenAppDate);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", syncOpenAppDate);
+      window.removeEventListener("pageshow", syncOpenAppDate);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     setManualRouteRounds(null);
