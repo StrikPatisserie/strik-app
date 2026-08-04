@@ -170,7 +170,9 @@ export async function POST(request: Request) {
 
     if (body.reset === true) {
       await deleteLogisticsRouteDraft(date);
-      await deleteLogisticsRouteLearningObservation(date);
+      if (body.forgetLearning === true) {
+        await deleteLogisticsRouteLearningObservation(date);
+      }
       const routeLearning = await getLogisticsRouteLearning();
 
       return NextResponse.json({

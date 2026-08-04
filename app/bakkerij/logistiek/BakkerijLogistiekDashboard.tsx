@@ -5084,7 +5084,7 @@ export default function BakkerijLogistiekDashboard() {
 
       setRouteLearning(data.routeLearning || null);
       setRouteSaveState("idle");
-      setRouteSaveMessage("berekende route actief");
+      setRouteSaveMessage("automatische route actief · leerdata bewaard");
     } catch (error) {
       setRouteSaveState("error");
       setRouteSaveMessage(
@@ -5681,12 +5681,12 @@ function RoutesPanel({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <RouteSaveButton
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <RouteConfirmButton
             disabled={!routeCanSave || routeSaveState === "saving"}
             onClick={onRoutesSave}
           />
-          <RouteResetButton
+          <RouteRecalculateButton
             disabled={!routesEdited || routeSaveState === "saving"}
             onClick={onRoutesReset}
           />
@@ -6939,7 +6939,7 @@ function MarzipanPhotoPrintButton({
   );
 }
 
-function RouteResetButton({
+function RouteRecalculateButton({
   disabled,
   onClick,
 }: Readonly<{
@@ -6949,18 +6949,19 @@ function RouteResetButton({
   return (
     <button
       type="button"
-      aria-label="Bereken route"
-      title="Bereken route"
+      aria-label="Herbereken automatisch"
+      title="Herbereken automatisch"
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-8 items-center gap-1.5 border border-[#e8e4de] bg-white px-2 text-xs font-black tracking-normal text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
     >
       <RefreshIcon spinning={false} />
+      <span>Herbereken</span>
     </button>
   );
 }
 
-function RouteSaveButton({
+function RouteConfirmButton({
   disabled,
   onClick,
 }: Readonly<{
@@ -6970,13 +6971,15 @@ function RouteSaveButton({
   return (
     <button
       type="button"
-      aria-label="Definitieve route opslaan"
-      title="Definitieve route opslaan"
+      aria-label="Definitieve route bevestigen"
+      title="Definitieve route bevestigen"
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center border border-[#d6e5d8] bg-[#f6faf4] text-[#1a1815] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-8 items-center gap-1.5 border border-[#bfe3c8] bg-[#f6faf4] px-2 text-xs font-black tracking-normal text-[#1a1815] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
     >
       <SaveIcon />
+      <span className="sm:hidden">Definitief</span>
+      <span className="hidden sm:inline">Definitieve route bevestigen</span>
     </button>
   );
 }
