@@ -3,10 +3,15 @@ import type {
   LogisticsRouteDraft,
   LogisticsRouteDraftRound,
   LogisticsRouteDraftStop,
+  LogisticsRouteLearningObservation,
+  LogisticsRouteLearningObservationStop,
 } from "@/app/bakkerij/logistiek/logisticsTypes";
 import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
 import {
   deleteLogisticsRouteDraft,
+  deleteLogisticsRouteLearningObservation,
+  getLogisticsRouteLearning,
+  upsertLogisticsRouteLearningObservation,
   upsertLogisticsRouteDraft,
 } from "@/app/lib/bakeryLogisticsStorage";
 
@@ -34,6 +39,35 @@ function cleanBadges(value: unknown) {
     .slice(0, 8);
 }
 
+function cleanLearningKind(
+  value: unknown
+): LogisticsRouteLearningObservationStop["kind"] | "" {
+  if (
+    value === "shop" ||
+    value === "receipt" ||
+    value === "ice" ||
+    value === "check"
+  ) {
+    return value;
+  }
+
+  return "";
+}
+
+function inferLearningKind(
+  stop: LogisticsRouteDraftStop
+): LogisticsRouteLearningObservationStop["kind"] {
+  const kind = cleanLearningKind(stop.learningKind);
+  if (kind) return kind;
+  if (stop.badges.includes("winkel")) return "shop";
+  if (stop.badges.includes("ijs")) return "ice";
+  if (stop.badges.includes("tijd") || stop.badges.includes("groot")) {
+    return "receipt";
+  }
+
+  return stop.sourceId.startsWith("check:") ? "check" : "receipt";
+}
+
 function cleanRouteStop(value: unknown): LogisticsRouteDraftStop | null {
   if (!value || typeof value !== "object") return null;
 
@@ -48,6 +82,10 @@ function cleanRouteStop(value: unknown): LogisticsRouteDraftStop | null {
   return {
     id,
     sourceId,
+    learningKey: cleanText(candidate.learningKey, 220),
+    learningLabel: cleanText(candidate.learningLabel, 180),
+    learningTarget: cleanText(candidate.learningTarget, 500),
+    learningKind: cleanLearningKind(candidate.learningKind) || undefined,
     label,
     detail,
     badges: cleanBadges(candidate.badges),
@@ -79,6 +117,44 @@ function cleanRouteRound(value: unknown): LogisticsRouteDraftRound | null {
   };
 }
 
+function routeLearningObservationFromDraft(
+  date: string,
+  draft: LogisticsRouteDraft,
+  updatedAt: string
+): LogisticsRouteLearningObservation {
+  const stops = draft.routes.flatMap((route, routeIndex) =>
+    route.stops
+      .map((stop, stopIndex) => {
+        const key =
+          cleanText(stop.learningKey, 220) ||
+          cleanText(`${stop.label} ${stop.detail}`, 220);
+        if (!key) return null;
+
+        return {
+          key,
+          label: cleanText(stop.learningLabel, 180) || stop.label,
+          target: cleanText(stop.learningTarget, 500) || stop.detail,
+          kind: inferLearningKind(stop),
+          vehicle: route.vehicle,
+          routeId: route.id,
+          routeTitle: route.title,
+          position: routeIndex * 100 + stopIndex,
+          badges: stop.badges,
+        };
+      })
+      .filter(
+        (stop): stop is LogisticsRouteLearningObservationStop => Boolean(stop)
+      )
+  );
+
+  return {
+    id: date,
+    date,
+    stops,
+    updatedAt,
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -94,11 +170,14 @@ export async function POST(request: Request) {
 
     if (body.reset === true) {
       await deleteLogisticsRouteDraft(date);
+      await deleteLogisticsRouteLearningObservation(date);
+      const routeLearning = await getLogisticsRouteLearning();
 
       return NextResponse.json({
         ok: true,
         deleted: true,
         routeDraft: null,
+        routeLearning,
         generatedAt: new Date().toISOString(),
       });
     }
@@ -115,11 +194,16 @@ export async function POST(request: Request) {
     };
 
     await upsertLogisticsRouteDraft(draft);
+    await upsertLogisticsRouteLearningObservation(
+      routeLearningObservationFromDraft(date, draft, draft.updatedAt)
+    );
+    const routeLearning = await getLogisticsRouteLearning();
 
     return NextResponse.json({
       ok: true,
       deleted: false,
       routeDraft: draft,
+      routeLearning,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

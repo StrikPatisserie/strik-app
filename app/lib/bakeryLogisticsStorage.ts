@@ -7,6 +7,11 @@ import type {
   LogisticsRouteDraft,
   LogisticsRouteDraftRound,
   LogisticsRouteDraftStop,
+  LogisticsRouteLearning,
+  LogisticsRouteLearningObservation,
+  LogisticsRouteLearningObservationStop,
+  LogisticsRouteLearningPair,
+  LogisticsRouteLearningStop,
   LogisticsWebshopImage,
 } from "@/app/bakkerij/logistiek/logisticsTypes";
 import { createAdminClient } from "./supabase/admin";
@@ -18,6 +23,7 @@ const LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY =
   "bakery_logistics_receipt_overrides";
 const LOGISTICS_DAY_FEEDBACK_SETTING_KEY = "bakery_logistics_day_feedback";
 const LOGISTICS_ROUTE_DRAFTS_SETTING_KEY = "bakery_logistics_route_drafts";
+const LOGISTICS_ROUTE_LEARNING_SETTING_KEY = "bakery_logistics_route_learning";
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
 const MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES = 5_500_000;
@@ -25,6 +31,9 @@ const WEBSHOP_IMAGE_RETENTION_DAYS = 14;
 const MAX_STORED_RECEIPT_OVERRIDES = 3000;
 const MAX_STORED_DAY_FEEDBACK = 1200;
 const MAX_STORED_ROUTE_DRAFTS = 180;
+const MAX_STORED_ROUTE_LEARNING_OBSERVATIONS = 180;
+const MAX_ROUTE_LEARNING_STOPS = 500;
+const MAX_ROUTE_LEARNING_PAIRS = 800;
 
 type LogisticsState = {
   batches: LogisticsBatch[];
@@ -46,6 +55,10 @@ type LogisticsRouteDraftsState = {
   drafts: LogisticsRouteDraft[];
 };
 
+type LogisticsRouteLearningState = {
+  observations: LogisticsRouteLearningObservation[];
+};
+
 function emptyLogisticsState(): LogisticsState {
   return { batches: [] };
 }
@@ -64,6 +77,10 @@ function emptyLogisticsDayFeedbackState(): LogisticsDayFeedbackState {
 
 function emptyLogisticsRouteDraftsState(): LogisticsRouteDraftsState {
   return { drafts: [] };
+}
+
+function emptyLogisticsRouteLearningState(): LogisticsRouteLearningState {
+  return { observations: [] };
 }
 
 function isLogisticsBatch(value: unknown): value is LogisticsBatch {
@@ -184,6 +201,55 @@ function isLogisticsRouteDraft(value: unknown): value is LogisticsRouteDraft {
   );
 }
 
+function isLogisticsRouteLearningKind(
+  value: unknown
+): value is LogisticsRouteLearningObservationStop["kind"] {
+  return (
+    value === "shop" ||
+    value === "receipt" ||
+    value === "ice" ||
+    value === "check"
+  );
+}
+
+function isLogisticsRouteLearningObservationStop(
+  value: unknown
+): value is LogisticsRouteLearningObservationStop {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as LogisticsRouteLearningObservationStop).key === "string" &&
+      typeof (value as LogisticsRouteLearningObservationStop).label ===
+        "string" &&
+      typeof (value as LogisticsRouteLearningObservationStop).target ===
+        "string" &&
+      isLogisticsRouteLearningKind(
+        (value as LogisticsRouteLearningObservationStop).kind
+      ) &&
+      typeof (value as LogisticsRouteLearningObservationStop).vehicle ===
+        "string" &&
+      typeof (value as LogisticsRouteLearningObservationStop).routeId ===
+        "string" &&
+      typeof (value as LogisticsRouteLearningObservationStop).routeTitle ===
+        "string" &&
+      typeof (value as LogisticsRouteLearningObservationStop).position ===
+        "number" &&
+      Array.isArray((value as LogisticsRouteLearningObservationStop).badges)
+  );
+}
+
+function isLogisticsRouteLearningObservation(
+  value: unknown
+): value is LogisticsRouteLearningObservation {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as LogisticsRouteLearningObservation).id === "string" &&
+      typeof (value as LogisticsRouteLearningObservation).date === "string" &&
+      Array.isArray((value as LogisticsRouteLearningObservation).stops)
+  );
+}
+
 function normalizeLogisticsState(value: unknown): LogisticsState {
   if (!value || typeof value !== "object") return emptyLogisticsState();
 
@@ -259,11 +325,51 @@ function normalizeLogisticsRouteDraftsState(
           ...route,
           stops: route.stops.filter(isLogisticsRouteDraftStop).map((stop) => ({
             ...stop,
+            learningKey:
+              typeof stop.learningKey === "string" ? stop.learningKey : undefined,
+            learningLabel:
+              typeof stop.learningLabel === "string"
+                ? stop.learningLabel
+                : undefined,
+            learningTarget:
+              typeof stop.learningTarget === "string"
+                ? stop.learningTarget
+                : undefined,
+            learningKind: isLogisticsRouteLearningKind(stop.learningKind)
+              ? stop.learningKind
+              : undefined,
             badges: stop.badges.filter((badge): badge is string =>
               typeof badge === "string"
             ),
           })),
         })),
+      })),
+  };
+}
+
+function normalizeLogisticsRouteLearningState(
+  value: unknown
+): LogisticsRouteLearningState {
+  if (!value || typeof value !== "object") {
+    return emptyLogisticsRouteLearningState();
+  }
+
+  const observations = (value as { observations?: unknown }).observations;
+  if (!Array.isArray(observations)) return emptyLogisticsRouteLearningState();
+
+  return {
+    observations: observations
+      .filter(isLogisticsRouteLearningObservation)
+      .map((observation) => ({
+        ...observation,
+        stops: observation.stops
+          .filter(isLogisticsRouteLearningObservationStop)
+          .map((stop) => ({
+            ...stop,
+            badges: stop.badges.filter((badge): badge is string =>
+              typeof badge === "string"
+            ),
+          })),
       })),
   };
 }
@@ -275,6 +381,7 @@ function toJson(
     | LogisticsReceiptOverridesState
     | LogisticsDayFeedbackState
     | LogisticsRouteDraftsState
+    | LogisticsRouteLearningState
 ): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
 }
@@ -619,6 +726,247 @@ function sortRouteDrafts(drafts: LogisticsRouteDraft[]) {
   });
 }
 
+function sortRouteLearningObservations(
+  observations: LogisticsRouteLearningObservation[]
+) {
+  return [...observations].sort((first, second) => {
+    const dateCompare = second.date.localeCompare(first.date);
+    if (dateCompare !== 0) return dateCompare;
+
+    return second.updatedAt.localeCompare(first.updatedAt);
+  });
+}
+
+function mostCommonText(counts: Map<string, number>) {
+  let bestValue = "";
+  let bestCount = -1;
+
+  counts.forEach((count, value) => {
+    if (count > bestCount || (count === bestCount && value < bestValue)) {
+      bestValue = value;
+      bestCount = count;
+    }
+  });
+
+  return bestValue;
+}
+
+function routeLearningKeyForDraftStop(stop: LogisticsRouteDraftStop) {
+  if (stop.learningKey) return stop.learningKey;
+
+  return normalizedReceiptText(`${stop.label} ${stop.detail}`)
+    .replace(/\b(?:voor\s+)?\d{1,2}:\d{2}\b/g, " ")
+    .replace(/\beur\s+\d+(?:[,.]\d+)?\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 220);
+}
+
+function routeLearningKindForDraftStop(
+  stop: LogisticsRouteDraftStop
+): LogisticsRouteLearningObservationStop["kind"] {
+  if (isLogisticsRouteLearningKind(stop.learningKind)) return stop.learningKind;
+  if (stop.badges.includes("winkel")) return "shop";
+  if (stop.badges.includes("ijs")) return "ice";
+  if (stop.sourceId.startsWith("check:")) return "check";
+
+  return "receipt";
+}
+
+function routeLearningObservationFromStoredDraft(
+  draft: LogisticsRouteDraft
+): LogisticsRouteLearningObservation {
+  return {
+    id: draft.date,
+    date: draft.date,
+    updatedAt: draft.updatedAt,
+    stops: draft.routes.flatMap((route, routeIndex) =>
+      route.stops
+        .map((stop, stopIndex) => {
+          const key = routeLearningKeyForDraftStop(stop);
+          if (!key) return null;
+
+          return {
+            key,
+            label: stop.learningLabel || stop.label,
+            target: stop.learningTarget || stop.detail,
+            kind: routeLearningKindForDraftStop(stop),
+            vehicle: route.vehicle,
+            routeId: route.id,
+            routeTitle: route.title,
+            position: routeIndex * 100 + stopIndex,
+            badges: stop.badges,
+          };
+        })
+        .filter(
+          (stop): stop is LogisticsRouteLearningObservationStop =>
+            Boolean(stop)
+        )
+    ),
+  };
+}
+
+function summarizeLogisticsRouteLearning(
+  state: LogisticsRouteLearningState
+): LogisticsRouteLearning {
+  type StopAggregate = {
+    key: string;
+    label: string;
+    target: string;
+    kind: LogisticsRouteLearningStop["kind"];
+    samples: number;
+    positionTotal: number;
+    lastSeenAt: string;
+    vehicleCounts: Map<string, number>;
+    routeCounts: Map<string, number>;
+  };
+  type PairAggregate = {
+    key: string;
+    fromKey: string;
+    toKey: string;
+    fromLabel: string;
+    toLabel: string;
+    samples: number;
+    lastSeenAt: string;
+  };
+
+  const stopAggregates = new Map<string, StopAggregate>();
+  const pairAggregates = new Map<string, PairAggregate>();
+  const observations = sortRouteLearningObservations(state.observations);
+
+  observations.forEach((observation) => {
+    observation.stops.forEach((stop) => {
+      const existing = stopAggregates.get(stop.key);
+      const aggregate =
+        existing ||
+        ({
+          key: stop.key,
+          label: stop.label,
+          target: stop.target,
+          kind: stop.kind,
+          samples: 0,
+          positionTotal: 0,
+          lastSeenAt: stop.routeId ? observation.updatedAt : "",
+          vehicleCounts: new Map<string, number>(),
+          routeCounts: new Map<string, number>(),
+        } satisfies StopAggregate);
+
+      aggregate.label = stop.label || aggregate.label;
+      aggregate.target = stop.target || aggregate.target;
+      aggregate.kind = stop.kind || aggregate.kind;
+      aggregate.samples += 1;
+      aggregate.positionTotal += Number.isFinite(stop.position)
+        ? stop.position
+        : 0;
+      aggregate.lastSeenAt =
+        observation.updatedAt > aggregate.lastSeenAt
+          ? observation.updatedAt
+          : aggregate.lastSeenAt;
+      aggregate.vehicleCounts.set(
+        stop.vehicle,
+        (aggregate.vehicleCounts.get(stop.vehicle) || 0) + 1
+      );
+      aggregate.routeCounts.set(
+        stop.routeId,
+        (aggregate.routeCounts.get(stop.routeId) || 0) + 1
+      );
+
+      stopAggregates.set(stop.key, aggregate);
+    });
+
+    const stopsByRoute = new Map<string, LogisticsRouteLearningObservationStop[]>();
+    observation.stops.forEach((stop) => {
+      const routeStops = stopsByRoute.get(stop.routeId) || [];
+      routeStops.push(stop);
+      stopsByRoute.set(stop.routeId, routeStops);
+    });
+
+    stopsByRoute.forEach((routeStops) => {
+      const sortedStops = [...routeStops].sort(
+        (first, second) => first.position - second.position
+      );
+
+      sortedStops.forEach((stop, index) => {
+        const nextStop = sortedStops[index + 1];
+        if (!nextStop) return;
+
+        const key = `${stop.key}->${nextStop.key}`;
+        const existing = pairAggregates.get(key);
+        const aggregate =
+          existing ||
+          ({
+            key,
+            fromKey: stop.key,
+            toKey: nextStop.key,
+            fromLabel: stop.label,
+            toLabel: nextStop.label,
+            samples: 0,
+            lastSeenAt: observation.updatedAt,
+          } satisfies PairAggregate);
+
+        aggregate.fromLabel = stop.label || aggregate.fromLabel;
+        aggregate.toLabel = nextStop.label || aggregate.toLabel;
+        aggregate.samples += 1;
+        aggregate.lastSeenAt =
+          observation.updatedAt > aggregate.lastSeenAt
+            ? observation.updatedAt
+            : aggregate.lastSeenAt;
+
+        pairAggregates.set(key, aggregate);
+      });
+    });
+  });
+
+  const stops: LogisticsRouteLearningStop[] = Array.from(
+    stopAggregates.values()
+  )
+    .map((aggregate) => ({
+      key: aggregate.key,
+      label: aggregate.label,
+      target: aggregate.target,
+      kind: aggregate.kind,
+      preferredVehicle: mostCommonText(aggregate.vehicleCounts),
+      preferredRouteId: mostCommonText(aggregate.routeCounts),
+      averagePosition: aggregate.samples
+        ? aggregate.positionTotal / aggregate.samples
+        : 0,
+      samples: aggregate.samples,
+      lastSeenAt: aggregate.lastSeenAt,
+    }))
+    .sort((first, second) => {
+      const samplesCompare = second.samples - first.samples;
+      if (samplesCompare !== 0) return samplesCompare;
+
+      return second.lastSeenAt.localeCompare(first.lastSeenAt);
+    })
+    .slice(0, MAX_ROUTE_LEARNING_STOPS);
+
+  const pairs: LogisticsRouteLearningPair[] = Array.from(
+    pairAggregates.values()
+  )
+    .sort((first, second) => {
+      const samplesCompare = second.samples - first.samples;
+      if (samplesCompare !== 0) return samplesCompare;
+
+      return second.lastSeenAt.localeCompare(first.lastSeenAt);
+    })
+    .slice(0, MAX_ROUTE_LEARNING_PAIRS);
+  const updatedAt =
+    observations.reduce(
+      (latest, observation) =>
+        observation.updatedAt > latest ? observation.updatedAt : latest,
+      ""
+    ) || new Date(0).toISOString();
+
+  return {
+    id: "system",
+    stops,
+    pairs,
+    observationCount: observations.length,
+    updatedAt,
+  };
+}
+
 export async function readLogisticsState() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
@@ -717,6 +1065,19 @@ export async function readLogisticsRouteDraftsState() {
   return normalizeLogisticsRouteDraftsState(data.value);
 }
 
+export async function readLogisticsRouteLearningState() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", LOGISTICS_ROUTE_LEARNING_SETTING_KEY)
+    .maybeSingle();
+
+  if (error || !data) return emptyLogisticsRouteLearningState();
+
+  return normalizeLogisticsRouteLearningState(data.value);
+}
+
 export async function getLogisticsBatchForDate(date: string) {
   const state = await readLogisticsState();
 
@@ -756,6 +1117,24 @@ export async function getLogisticsRouteDraftForDate(date: string) {
   return (
     sortRouteDrafts(state.drafts).find((draft) => draft.date === date) || null
   );
+}
+
+export async function getLogisticsRouteLearning() {
+  const [state, routeDraftsState] = await Promise.all([
+    readLogisticsRouteLearningState(),
+    readLogisticsRouteDraftsState(),
+  ]);
+  const observedDates = new Set(
+    state.observations.map((observation) => observation.date)
+  );
+  const draftObservations = routeDraftsState.drafts
+    .filter((draft) => !observedDates.has(draft.date))
+    .map(routeLearningObservationFromStoredDraft)
+    .filter((observation) => observation.stops.length > 0);
+
+  return summarizeLogisticsRouteLearning({
+    observations: [...state.observations, ...draftObservations],
+  });
 }
 
 export async function upsertLogisticsBatch(batch: LogisticsBatch) {
@@ -924,6 +1303,49 @@ export async function deleteLogisticsRouteDraft(date: string) {
   const { error } = await supabase.from("app_settings").upsert(
     {
       key: LOGISTICS_ROUTE_DRAFTS_SETTING_KEY,
+      value: toJson(nextState),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
+}
+
+export async function upsertLogisticsRouteLearningObservation(
+  observation: LogisticsRouteLearningObservation
+) {
+  const state = await readLogisticsRouteLearningState();
+  const observations = sortRouteLearningObservations([
+    observation,
+    ...state.observations.filter((item) => item.id !== observation.id),
+  ]).slice(0, MAX_STORED_ROUTE_LEARNING_OBSERVATIONS);
+
+  const nextState = { observations };
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_ROUTE_LEARNING_SETTING_KEY,
+      value: toJson(nextState),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
+
+  return observation;
+}
+
+export async function deleteLogisticsRouteLearningObservation(date: string) {
+  const state = await readLogisticsRouteLearningState();
+  const observations = state.observations.filter((item) => item.date !== date);
+
+  const nextState = { observations };
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_ROUTE_LEARNING_SETTING_KEY,
       value: toJson(nextState),
       updated_at: new Date().toISOString(),
     },

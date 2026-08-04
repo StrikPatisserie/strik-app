@@ -11,6 +11,7 @@ import type {
   LogisticsReceiptLine,
   LogisticsReceiptOverride,
   LogisticsRouteDraft,
+  LogisticsRouteLearning,
   LogisticsWebshopImage,
 } from "./logisticsTypes";
 
@@ -87,6 +88,10 @@ type RouteGroup = {
 type RouteStop = {
   id: string;
   sourceId: string;
+  learningKey: string;
+  learningLabel: string;
+  learningTarget: string;
+  learningKind: "shop" | "receipt" | "ice" | "check";
   label: string;
   detail: string;
   badges: string[];
@@ -128,6 +133,7 @@ type DayFeedbackSummary = LogisticsDayFeedback;
 type ReceiptOverrideSummary = LogisticsReceiptOverride;
 type WebshopImageSummary = LogisticsWebshopImage;
 type RouteDraftSummary = LogisticsRouteDraft;
+type RouteLearningSummary = LogisticsRouteLearning;
 
 type MarzipanPrintShape = "square" | "round";
 
@@ -2557,6 +2563,79 @@ function receiptStopBadges(receipt: ReceiptSummary) {
   return badges.slice(0, 3);
 }
 
+function routeLearningKeyPart(value: string) {
+  return normalizeMatchText(value)
+    .replace(/\b(?:voor\s+)?\d{1,2}:\d{2}\b/g, " ")
+    .replace(/\beur\s+\d+(?:[,.]\d+)?\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 90);
+}
+
+function routeLearningKeyForReceipt(receipt: ReceiptSummary, kind = "receipt") {
+  const customer = routeLearningKeyPart(receipt.customer);
+  const target = routeLearningKeyPart(receiptTargetLine(receipt));
+  const receiptKind =
+    kind === "ice" || isIceReceiptSummary(receipt) ? "ice" : "receipt";
+
+  return `${receiptKind}:${customer || "klant"}:${target || "adres-check"}`;
+}
+
+function routeLearningStopForKey(
+  routeLearning: RouteLearningSummary | null,
+  key: string
+) {
+  if (!routeLearning) return null;
+
+  return routeLearning.stops.find((stop) => stop.key === key) || null;
+}
+
+function routeLearningStopForReceipt(
+  routeLearning: RouteLearningSummary | null,
+  receipt: ReceiptSummary,
+  kind = "receipt"
+) {
+  return routeLearningStopForKey(
+    routeLearning,
+    routeLearningKeyForReceipt(receipt, kind)
+  );
+}
+
+function busIdFromVehicleName(vehicle: string): BusId | "" {
+  const text = vehicle.toLowerCase();
+  if (/\bbus\s*a\b/.test(text)) return "A";
+  if (/\bbus\s*b\b/.test(text)) return "B";
+
+  return "";
+}
+
+function learnedBusForReceipt(
+  routeLearning: RouteLearningSummary | null,
+  receipt: ReceiptSummary
+) {
+  const learnedStop = routeLearningStopForReceipt(routeLearning, receipt);
+  if (!learnedStop) return null;
+
+  const bus = busIdFromVehicleName(learnedStop.preferredVehicle);
+  if (!bus) return null;
+
+  return {
+    bus,
+    samples: learnedStop.samples,
+  };
+}
+
+function routeLearningPairSamples(
+  routeLearning: RouteLearningSummary | null,
+  fromKey: string,
+  toKey: string
+) {
+  if (!routeLearning || !fromKey || !toKey) return 0;
+
+  const key = `${fromKey}->${toKey}`;
+  return routeLearning.pairs.find((pair) => pair.key === key)?.samples || 0;
+}
+
 function routeStopForReceipt(receipt: ReceiptSummary, prefix = ""): RouteStop {
   const target = receiptTargetLine(receipt);
   const time = routeTimeLabel(receipt);
@@ -2564,6 +2643,10 @@ function routeStopForReceipt(receipt: ReceiptSummary, prefix = ""): RouteStop {
   return {
     id: `${prefix}${receipt.id}`,
     sourceId: `receipt:${receipt.id}`,
+    learningKey: routeLearningKeyForReceipt(receipt),
+    learningLabel: receipt.customer,
+    learningTarget: target,
+    learningKind: "receipt",
     label: receipt.customer,
     detail: `${time} · ${target}`,
     badges: receiptStopBadges(receipt),
@@ -2613,6 +2696,10 @@ function groupShopStops(
       return {
         id: `shop-${shopKey}`,
         sourceId: `shop:${shopKey}`,
+        learningKey: `shop:${shopKey}`,
+        learningLabel: shopMeta.label,
+        learningTarget: shopMeta.address,
+        learningKind: "shop",
         label: shopMeta.label,
         detail: detailParts.join(" · "),
         badges: [
@@ -2927,11 +3014,14 @@ function lastShopRoutePoint(shopKeys: ShopKey[]) {
 
 function sortReceiptsAlongRoute(
   receipts: ReceiptSummary[],
-  startPoint: RoutePoint
+  startPoint: RoutePoint,
+  routeLearning: RouteLearningSummary | null,
+  startLearningKey = ""
 ) {
   const remaining = [...receipts];
   const sorted: ReceiptSummary[] = [];
   let currentPoint = startPoint;
+  let currentLearningKey = startLearningKey;
 
   while (remaining.length) {
     let bestIndex = 0;
@@ -2941,7 +3031,25 @@ function sortReceiptsAlongRoute(
       const distanceScore = routeDistance(currentPoint, receiptRoutePoint(receipt));
       const deadline = routeDeadlineMinutes(receipt);
       const latePenalty = deadline >= 780 ? 1.8 : 0;
-      const score = distanceScore + latePenalty;
+      const receiptLearningKey = routeLearningKeyForReceipt(receipt);
+      const learnedPairBoost = Math.min(
+        3.4,
+        routeLearningPairSamples(
+          routeLearning,
+          currentLearningKey,
+          receiptLearningKey
+        ) * 0.9
+      );
+      const learnedReversePenalty = Math.min(
+        2.2,
+        routeLearningPairSamples(
+          routeLearning,
+          receiptLearningKey,
+          currentLearningKey
+        ) * 0.7
+      );
+      const score =
+        distanceScore + latePenalty - learnedPairBoost + learnedReversePenalty;
 
       if (score < bestScore) {
         bestScore = score;
@@ -2952,6 +3060,7 @@ function sortReceiptsAlongRoute(
     const [nextReceipt] = remaining.splice(bestIndex, 1);
     sorted.push(nextReceipt);
     currentPoint = receiptRoutePoint(nextReceipt);
+    currentLearningKey = routeLearningKeyForReceipt(nextReceipt);
   }
 
   return sorted;
@@ -2960,12 +3069,28 @@ function sortReceiptsAlongRoute(
 function sortReceiptsForRoute(
   receipts: ReceiptSummary[],
   shopKeys: ShopKey[],
-  date: string
+  date: string,
+  routeLearning: RouteLearningSummary | null
 ) {
   const startPoint = lastShopRoutePoint(shopKeys);
+  const lastShopKey = sortShopKeysByRoutePath(shopKeys).at(-1);
+  const startLearningKey = lastShopKey ? `shop:${lastShopKey}` : "";
   const early = receipts.filter(isPriorityEarlyDelivery).sort((first, second) => {
     const deadlineCompare = routeDeadlineMinutes(first) - routeDeadlineMinutes(second);
     if (deadlineCompare !== 0) return deadlineCompare;
+
+    const firstPairBoost = routeLearningPairSamples(
+      routeLearning,
+      startLearningKey,
+      routeLearningKeyForReceipt(first)
+    );
+    const secondPairBoost = routeLearningPairSamples(
+      routeLearning,
+      startLearningKey,
+      routeLearningKeyForReceipt(second)
+    );
+    const pairCompare = secondPairBoost - firstPairBoost;
+    if (pairCompare !== 0) return pairCompare;
 
     return (
       routeDistance(startPoint, receiptRoutePoint(first)) -
@@ -2983,15 +3108,31 @@ function sortReceiptsForRoute(
   const afterEarlyPoint = early.length
     ? receiptRoutePoint(early.at(-1)!)
     : startPoint;
-  const normalSorted = sortReceiptsAlongRoute(normal, afterEarlyPoint);
+  const afterEarlyLearningKey = early.length
+    ? routeLearningKeyForReceipt(early.at(-1)!)
+    : startLearningKey;
+  const normalSorted = sortReceiptsAlongRoute(
+    normal,
+    afterEarlyPoint,
+    routeLearning,
+    afterEarlyLearningKey
+  );
   const afterNormalPoint = normalSorted.length
     ? receiptRoutePoint(normalSorted.at(-1)!)
     : afterEarlyPoint;
+  const afterNormalLearningKey = normalSorted.length
+    ? routeLearningKeyForReceipt(normalSorted.at(-1)!)
+    : afterEarlyLearningKey;
 
   return [
     ...early,
     ...normalSorted,
-    ...sortReceiptsAlongRoute(late, afterNormalPoint),
+    ...sortReceiptsAlongRoute(
+      late,
+      afterNormalPoint,
+      routeLearning,
+      afterNormalLearningKey
+    ),
   ];
 }
 
@@ -3170,13 +3311,16 @@ function shopRouteDistance(shopKeys: ShopKey[]) {
 function routeAssignmentCostForReceipt(
   receipt: ReceiptSummary,
   shopKeys: ShopKey[],
-  date: string
+  date: string,
+  routeLearning: RouteLearningSummary | null = null,
+  busId: BusId | "" = ""
 ) {
   const point = receiptRoutePoint(receipt);
   const nearestShopDistance = Math.min(
     ...shopKeys.map((shopKey) => routeDistance(point, shopRouteMeta[shopKey].point))
   );
   let cost = nearestShopDistance + routeDeadlinePriorityForReceipt(receipt) * 0.45;
+  const learnedBus = learnedBusForReceipt(routeLearning, receipt);
 
   if (isRadboudReceipt(receipt) && shopKeys.includes("heyendaalseweg")) {
     cost -= 2.2;
@@ -3201,6 +3345,10 @@ function routeAssignmentCostForReceipt(
   }
   if (isFlexibleLateDelivery(receipt, date)) {
     cost += 0.8;
+  }
+  if (learnedBus && busId) {
+    const learningWeight = Math.min(2.4, 0.9 + learnedBus.samples * 0.35);
+    cost += learnedBus.bus === busId ? -learningWeight : learningWeight * 0.8;
   }
 
   return cost;
@@ -3229,7 +3377,8 @@ function buildShopAssignmentCandidates() {
 function chooseShopAssignment(
   plan: DayPlan,
   receipts: ReceiptSummary[],
-  loadProfile: DayLoadProfile
+  loadProfile: DayLoadProfile,
+  routeLearning: RouteLearningSummary | null
 ) {
   const deliveryReceipts = receipts.filter(isRouteDelivery);
   const candidates = buildShopAssignmentCandidates();
@@ -3257,8 +3406,20 @@ function chooseShopAssignment(
       Math.max(0, candidate.A.length - 2) * 1.2;
 
     deliveryReceipts.forEach((receipt) => {
-      const costA = routeAssignmentCostForReceipt(receipt, candidate.A, plan.date);
-      const costB = routeAssignmentCostForReceipt(receipt, candidate.B, plan.date);
+      const costA = routeAssignmentCostForReceipt(
+        receipt,
+        candidate.A,
+        plan.date,
+        routeLearning,
+        "A"
+      );
+      const costB = routeAssignmentCostForReceipt(
+        receipt,
+        candidate.B,
+        plan.date,
+        routeLearning,
+        "B"
+      );
       const bus = costA <= costB ? "A" : "B";
 
       loads[bus] += receiptLoadScore(receipt);
@@ -3294,6 +3455,7 @@ function chooseBusForReceipt(input: {
   clusterAssignments: Map<string, BusId>;
   date: string;
   receipt: ReceiptSummary;
+  routeLearning: RouteLearningSummary | null;
   round: "first" | "second";
 }) {
   const shopKey = shopKeyForReceipt(input.receipt);
@@ -3307,12 +3469,16 @@ function chooseBusForReceipt(input: {
   const routeCostA = routeAssignmentCostForReceipt(
     input.receipt,
     input.buses.A.shopKeys,
-    input.date
+    input.date,
+    input.routeLearning,
+    "A"
   );
   const routeCostB = routeAssignmentCostForReceipt(
     input.receipt,
     input.buses.B.shopKeys,
-    input.date
+    input.date,
+    input.routeLearning,
+    "B"
   );
   if (Math.abs(routeCostA - routeCostB) >= 1.2) {
     return routeCostA < routeCostB ? "A" : "B";
@@ -3415,6 +3581,10 @@ function iceStopForReceipt(receipt: ReceiptSummary): RouteStop {
   return {
     id: `ice-${receipt.id}`,
     sourceId: `ice:${receipt.id}`,
+    learningKey: routeLearningKeyForReceipt(receipt, "ice"),
+    learningLabel: receipt.customer,
+    learningTarget: target,
+    learningKind: "ice",
     label: receipt.customer,
     detail: detailParts.join(" · "),
     badges: receiptStopBadges(receipt),
@@ -3487,13 +3657,19 @@ function isSaturdayDate(date: string) {
 function buildRouteRounds(
   plan: DayPlan,
   receipts: ReceiptSummary[],
-  loadProfile: DayLoadProfile
+  loadProfile: DayLoadProfile,
+  routeLearning: RouteLearningSummary | null
 ): RouteRound[] {
   if (isSaturdayDate(plan.date)) {
-    return buildSaturdayRouteRounds(plan, receipts, loadProfile);
+    return buildSaturdayRouteRounds(plan, receipts, loadProfile, routeLearning);
   }
 
-  const shopAssignment = chooseShopAssignment(plan, receipts, loadProfile);
+  const shopAssignment = chooseShopAssignment(
+    plan,
+    receipts,
+    loadProfile,
+    routeLearning
+  );
   const buses: Record<BusId, PlannedBus> = {
     A: createPlannedBus({
       id: "A",
@@ -3519,6 +3695,7 @@ function buildRouteRounds(
       clusterAssignments,
       date: plan.date,
       receipt,
+      routeLearning,
       round: "first",
     });
     const round = shouldUseSecondRound(
@@ -3538,6 +3715,7 @@ function buildRouteRounds(
             clusterAssignments,
             date: plan.date,
             receipt,
+            routeLearning,
             round: "second",
           })
         : firstChoiceBus;
@@ -3551,6 +3729,7 @@ function buildRouteRounds(
       clusterAssignments,
       date: plan.date,
       receipt,
+      routeLearning,
       round: "second",
     });
     const round = shouldDeliverIceWithShopReceipt(receipt, loadProfile)
@@ -3571,19 +3750,33 @@ function buildRouteRounds(
     ).map(iceStopForReceipt);
     const firstStops = [
       ...shopStops,
-      ...sortReceiptsForRoute(bus.early, bus.shopKeys, plan.date).map((receipt) =>
-        routeStopForReceipt(receipt, `${bus.id}-early-`)
-      ),
+      ...sortReceiptsForRoute(
+        bus.early,
+        bus.shopKeys,
+        plan.date,
+        routeLearning
+      ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-early-`)),
       ...looseFirstIceStops,
-      ...sortReceiptsForRoute(bus.first, bus.shopKeys, plan.date).map((receipt) =>
-        routeStopForReceipt(receipt, `${bus.id}-first-`)
-      ),
+      ...sortReceiptsForRoute(
+        bus.first,
+        bus.shopKeys,
+        plan.date,
+        routeLearning
+      ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-first-`)),
     ];
     const secondStops = [
-      ...sortReceiptsForRoute(bus.second, bus.shopKeys, plan.date).map((receipt) =>
-        routeStopForReceipt(receipt, `${bus.id}-second-`)
-      ),
-      ...sortReceiptsForRoute(bus.ice, bus.shopKeys, plan.date).map(iceStopForReceipt),
+      ...sortReceiptsForRoute(
+        bus.second,
+        bus.shopKeys,
+        plan.date,
+        routeLearning
+      ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-second-`)),
+      ...sortReceiptsForRoute(
+        bus.ice,
+        bus.shopKeys,
+        plan.date,
+        routeLearning
+      ).map(iceStopForReceipt),
     ];
 
     if (firstStops.length) {
@@ -3636,6 +3829,10 @@ function buildRouteRounds(
           {
             id: "ijs-check",
             sourceId: "check:ijs",
+            learningKey: "check:ijs",
+            learningLabel: "IJsbonnen controleren",
+            learningTarget: "ijsvolume zonder losse ijssalonbon",
+            learningKind: "check",
             label: "IJsbonnen controleren",
             detail: `${plan.iceTubs} bakken ijs · ${plan.tempexBoxes} zwarte tempexbakken`,
             badges: ["ijs", `${plan.tempexBoxes} tempex`],
@@ -3655,7 +3852,8 @@ function buildRouteRounds(
 function buildSaturdayRouteRounds(
   plan: DayPlan,
   receipts: ReceiptSummary[],
-  loadProfile: DayLoadProfile
+  loadProfile: DayLoadProfile,
+  routeLearning: RouteLearningSummary | null
 ): RouteRound[] {
   const buses: Record<BusId, PlannedBus> = {
     A: createPlannedBus({
@@ -3682,6 +3880,7 @@ function buildSaturdayRouteRounds(
       clusterAssignments,
       date: plan.date,
       receipt,
+      routeLearning,
       round: "second",
     });
     const round = isPriorityEarlyDelivery(receipt)
@@ -3699,6 +3898,7 @@ function buildSaturdayRouteRounds(
       clusterAssignments,
       date: plan.date,
       receipt,
+      routeLearning,
       round: "second",
     });
 
@@ -3709,22 +3909,34 @@ function buildSaturdayRouteRounds(
     const routePlan = saturdayRouteShopPlan[bus.id];
     const firstStops = [
       ...groupShopStops(receipts, routePlan.firstShopKeys, []),
-      ...sortReceiptsForRoute(bus.early, bus.shopKeys, plan.date).map((receipt) =>
-        routeStopForReceipt(receipt, `${bus.id}-early-`)
-      ),
-      ...sortReceiptsForRoute(bus.first, bus.shopKeys, plan.date).map((receipt) =>
-        routeStopForReceipt(receipt, `${bus.id}-first-`)
-      ),
+      ...sortReceiptsForRoute(
+        bus.early,
+        bus.shopKeys,
+        plan.date,
+        routeLearning
+      ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-early-`)),
+      ...sortReceiptsForRoute(
+        bus.first,
+        bus.shopKeys,
+        plan.date,
+        routeLearning
+      ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-first-`)),
     ];
     const secondStops = [
       ...groupShopStops(receipts, routePlan.secondShopKeys, []),
-      ...sortReceiptsForRoute(bus.second, bus.shopKeys, plan.date).map((receipt) =>
-        routeStopForReceipt(receipt, `${bus.id}-second-`)
-      ),
+      ...sortReceiptsForRoute(
+        bus.second,
+        bus.shopKeys,
+        plan.date,
+        routeLearning
+      ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-second-`)),
     ];
-    const iceStops = sortReceiptsForRoute(bus.ice, bus.shopKeys, plan.date).map(
-      iceStopForReceipt
-    );
+    const iceStops = sortReceiptsForRoute(
+      bus.ice,
+      bus.shopKeys,
+      plan.date,
+      routeLearning
+    ).map(iceStopForReceipt);
 
     if (firstStops.length) {
       rounds.push(
@@ -3797,6 +4009,10 @@ function buildSaturdayRouteRounds(
           {
             id: "ijs-check",
             sourceId: "check:ijs",
+            learningKey: "check:ijs",
+            learningLabel: "IJsbonnen controleren",
+            learningTarget: "ijsvolume zonder losse ijssalonbon",
+            learningKind: "check",
             label: "IJsbonnen controleren",
             detail: `${plan.iceTubs} bakken ijs · ${plan.tempexBoxes} zwarte tempexbakken`,
             badges: ["ijs", `${plan.tempexBoxes} tempex`],
@@ -3883,6 +4099,10 @@ function serializeRouteRounds(routeRounds: RouteRound[]) {
     stops: route.stops.map((stop) => ({
       id: stop.id,
       sourceId: routeStopSourceKey(stop),
+      learningKey: stop.learningKey,
+      learningLabel: stop.learningLabel,
+      learningTarget: stop.learningTarget,
+      learningKind: stop.learningKind,
       label: stop.label,
       detail: stop.detail,
       badges: stop.badges,
@@ -4420,6 +4640,8 @@ export default function BakkerijLogistiekDashboard() {
     ReceiptOverrideSummary[]
   >([]);
   const [routeDraft, setRouteDraft] = useState<RouteDraftSummary | null>(null);
+  const [routeLearning, setRouteLearning] =
+    useState<RouteLearningSummary | null>(null);
   const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
   const [batchReloadCounter, setBatchReloadCounter] = useState(0);
   const [routeSaveState, setRouteSaveState] = useState<RouteSaveState>("idle");
@@ -4469,8 +4691,9 @@ export default function BakkerijLogistiekDashboard() {
     [loadProfile, productionTotals, selectedPlan]
   );
   const automaticRouteRounds = useMemo(
-    () => buildRouteRounds(selectedPlan, receiptSummaries, loadProfile),
-    [loadProfile, receiptSummaries, selectedPlan]
+    () =>
+      buildRouteRounds(selectedPlan, receiptSummaries, loadProfile, routeLearning),
+    [loadProfile, receiptSummaries, routeLearning, selectedPlan]
   );
   const [manualRouteRounds, setManualRouteRounds] = useState<
     RouteRound[] | null
@@ -4590,6 +4813,7 @@ export default function BakkerijLogistiekDashboard() {
           webshopImages?: WebshopImageSummary[];
           receiptOverrides?: ReceiptOverrideSummary[];
           routeDraft?: RouteDraftSummary | null;
+          routeLearning?: RouteLearningSummary | null;
           message?: string;
         };
 
@@ -4600,6 +4824,7 @@ export default function BakkerijLogistiekDashboard() {
           setWebshopImages([]);
           setReceiptOverrides([]);
           setRouteDraft(null);
+          setRouteLearning(null);
           if (manualRefresh) {
             setImportMessage(data.message || "Opnieuw ophalen is niet gelukt.");
           }
@@ -4610,6 +4835,7 @@ export default function BakkerijLogistiekDashboard() {
         setWebshopImages(data.webshopImages || []);
         setReceiptOverrides(data.receiptOverrides || []);
         setRouteDraft(data.routeDraft || null);
+        setRouteLearning(data.routeLearning || null);
         setFeedbackByDate((current) => ({
           ...current,
           [dateState.selectedDate]: data.dayFeedback?.text || "",
@@ -4627,6 +4853,7 @@ export default function BakkerijLogistiekDashboard() {
           setBatchLoadState("error");
           setReceiptOverrides([]);
           setRouteDraft(null);
+          setRouteLearning(null);
           if (manualRefresh) setImportMessage("Opnieuw ophalen is niet gelukt.");
         }
       } finally {
@@ -4676,6 +4903,7 @@ export default function BakkerijLogistiekDashboard() {
       const data = (await response.json()) as {
         ok?: boolean;
         routeDraft?: RouteDraftSummary | null;
+        routeLearning?: RouteLearningSummary | null;
         message?: string;
       };
 
@@ -4684,6 +4912,7 @@ export default function BakkerijLogistiekDashboard() {
       }
 
       setRouteDraft(data.routeDraft);
+      setRouteLearning(data.routeLearning || null);
       setRouteSaveState("saved");
       setRouteSaveMessage(`handmatige route bewaard om ${getUploadTime()}`);
     } catch (error) {
@@ -4722,6 +4951,7 @@ export default function BakkerijLogistiekDashboard() {
       });
       const data = (await response.json()) as {
         ok?: boolean;
+        routeLearning?: RouteLearningSummary | null;
         message?: string;
       };
 
@@ -4729,6 +4959,7 @@ export default function BakkerijLogistiekDashboard() {
         throw new Error(data.message || "Route opnieuw berekenen is niet gelukt.");
       }
 
+      setRouteLearning(data.routeLearning || null);
       setRouteSaveState("idle");
       setRouteSaveMessage("berekende route actief");
     } catch (error) {
@@ -5102,6 +5333,7 @@ export default function BakkerijLogistiekDashboard() {
             isSaving={isSavingFeedback}
             message={feedbackMessage}
             learningSignals={learningSignals}
+            routeLearning={routeLearning}
             onFeedbackChange={updateFeedback}
             onSave={saveFeedback}
             selectedPlan={selectedPlan}
@@ -6303,6 +6535,7 @@ function LearningPanel({
   message,
   onFeedbackChange,
   onSave,
+  routeLearning,
   selectedPlan,
 }: Readonly<{
   feedback: string;
@@ -6311,8 +6544,12 @@ function LearningPanel({
   message: string;
   onFeedbackChange: (value: string) => void;
   onSave: () => void;
+  routeLearning: RouteLearningSummary | null;
   selectedPlan: DayPlan;
 }>) {
+  const learnedStops = routeLearning?.stops.slice(0, 6) || [];
+  const learnedPairs = routeLearning?.pairs.slice(0, 4) || [];
+
   return (
     <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
       <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
@@ -6357,6 +6594,47 @@ function LearningPanel({
               {signal}
             </span>
           ))}
+        </div>
+
+        <div className="mt-4 border-t border-[#d6e5d8] pt-3">
+          <p className="text-xs font-black uppercase tracking-normal text-[#4a6d5a]">
+            Routegeheugen · {routeLearning?.observationCount || 0} routes
+          </p>
+          <div className="mt-2 grid gap-2">
+            {learnedStops.length ? (
+              learnedStops.map((stop) => (
+                <div
+                  key={stop.key}
+                  className="border border-[#d6e5d8] bg-white px-2 py-1.5"
+                >
+                  <p className="truncate text-xs font-black tracking-normal text-[#1a1815]">
+                    {stop.label}
+                  </p>
+                  <p className="truncate text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
+                    {stop.preferredVehicle || "bus check"} · {stop.samples}x
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs font-bold tracking-normal text-[#6b645b]">
+                Nog geen handmatige routevolgordes opgeslagen.
+              </p>
+            )}
+          </div>
+          {learnedPairs.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {learnedPairs.map((pair) => (
+                <span
+                  key={pair.key}
+                  className="border border-[#d6e5d8] bg-white px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#1a1815]"
+                >
+                  {pair.fromLabel}
+                  {" -> "}
+                  {pair.toLabel}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>

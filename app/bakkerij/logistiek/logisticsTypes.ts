@@ -60,6 +60,10 @@ export type LogisticsDayFeedback = {
 export type LogisticsRouteDraftStop = {
   id: string;
   sourceId: string;
+  learningKey?: string;
+  learningLabel?: string;
+  learningTarget?: string;
+  learningKind?: "shop" | "receipt" | "ice" | "check";
   label: string;
   detail: string;
   badges: string[];
@@ -81,6 +85,55 @@ export type LogisticsRouteDraft = {
   id: string;
   date: string;
   routes: LogisticsRouteDraftRound[];
+  updatedAt: string;
+};
+
+export type LogisticsRouteLearningObservationStop = {
+  key: string;
+  label: string;
+  target: string;
+  kind: "shop" | "receipt" | "ice" | "check";
+  vehicle: string;
+  routeId: string;
+  routeTitle: string;
+  position: number;
+  badges: string[];
+};
+
+export type LogisticsRouteLearningObservation = {
+  id: string;
+  date: string;
+  stops: LogisticsRouteLearningObservationStop[];
+  updatedAt: string;
+};
+
+export type LogisticsRouteLearningStop = {
+  key: string;
+  label: string;
+  target: string;
+  kind: "shop" | "receipt" | "ice" | "check";
+  preferredVehicle: string;
+  preferredRouteId: string;
+  averagePosition: number;
+  samples: number;
+  lastSeenAt: string;
+};
+
+export type LogisticsRouteLearningPair = {
+  key: string;
+  fromKey: string;
+  toKey: string;
+  fromLabel: string;
+  toLabel: string;
+  samples: number;
+  lastSeenAt: string;
+};
+
+export type LogisticsRouteLearning = {
+  id: "system";
+  stops: LogisticsRouteLearningStop[];
+  pairs: LogisticsRouteLearningPair[];
+  observationCount: number;
   updatedAt: string;
 };
 
