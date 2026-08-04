@@ -235,8 +235,6 @@ const shopRouteMeta: Record<
   },
 };
 
-const shopRouteKeys = Object.keys(shopRouteMeta) as ShopKey[];
-
 const busRouteMeta: Record<
   BusId,
   {
@@ -2737,8 +2735,8 @@ function groupShopStops(
 }
 
 function busForShopKey(key: string): BusId | "" {
-  if (key === "heyendaalseweg" || key === "daalseweg") return "A";
-  if (key === "ziekerstraat" || key === "lent") return "B";
+  if (key === "daalseweg" || key === "lent") return "A";
+  if (key === "heyendaalseweg" || key === "ziekerstraat") return "B";
 
   return "";
 }
@@ -2793,7 +2791,7 @@ function outsideClusterKeyForReceipt(receipt: ReceiptSummary) {
   const text = receiptSearchText(receipt);
   const normalizedText = normalizeMatchText(text);
 
-  if (/jonkerbos|sanadome|cwz|goffert|crematorium/.test(text)) {
+  if (/jonkerbos|sanadome|cwz|goffert|crematorium|nxp|novio tech|douglas/.test(text)) {
     return "jonkerbos";
   }
   if (/thermen|berendonck|wijchen|beuningen/.test(text)) {
@@ -2863,7 +2861,9 @@ function receiptRoutePoint(receipt: ReceiptSummary): RoutePoint {
   if (/maartenskliniek|sint maartens|berg en dal|beek|ubbergen|oude kleefsebaan/.test(text)) {
     return { x: 1.7, y: 3.8 };
   }
-  if (/sanadome|jonkerbos|cwz|goffert/.test(text)) return { x: -0.8, y: 2.1 };
+  if (/sanadome|jonkerbos|cwz|goffert|nxp|novio tech|douglas/.test(text)) {
+    return { x: -0.8, y: 2.1 };
+  }
   if (/jachtslot|mookerheide|molenhoek|heumensebaan/.test(text)) {
     return { x: 0.8, y: -1.0 };
   }
@@ -2923,6 +2923,16 @@ function isFlexibleLateDelivery(receipt: ReceiptSummary, date = "") {
 
 function isOutsideRouteReceipt(receipt: ReceiptSummary) {
   return outsideClusterKeyForReceipt(receipt) !== "";
+}
+
+function isLentOutsideRouteReceipt(receipt: ReceiptSummary) {
+  const clusterKey = outsideClusterKeyForReceipt(receipt);
+
+  return (
+    clusterKey === "jonkerbos" ||
+    clusterKey === "west-buiten" ||
+    clusterKey === "noord-buiten"
+  );
 }
 
 function iceTubCountForReceipt(receipt: ReceiptSummary) {
@@ -3371,6 +3381,12 @@ function routeAssignmentCostForReceipt(
   ) {
     cost -= 1.4;
   }
+  if (isLentOutsideRouteReceipt(receipt) && shopKeys.includes("lent")) {
+    cost -= 3.2;
+  }
+  if (isLentOutsideRouteReceipt(receipt) && !shopKeys.includes("lent")) {
+    cost += 0.9;
+  }
   if (isCenterRouteText(receiptSearchText(receipt)) && shopKeys.includes("ziekerstraat")) {
     cost -= 1.2;
   }
@@ -3385,24 +3401,60 @@ function routeAssignmentCostForReceipt(
   return cost;
 }
 
-function buildShopAssignmentCandidates() {
-  const candidates: { A: ShopKey[]; B: ShopKey[] }[] = [];
-  const maxMask = 1 << shopRouteKeys.length;
+function shouldShiftDaalsewegToHeyendaalRoute(
+  deliveryReceipts: ReceiptSummary[],
+  loadProfile: DayLoadProfile
+) {
+  const outsideReceipts = deliveryReceipts.filter(isLentOutsideRouteReceipt);
+  const outsideStops = new Set(
+    outsideReceipts.map((receipt) => normalizeMatchText(receiptTargetLine(receipt)))
+  ).size;
+  const outsideLoadScore = outsideReceipts.reduce(
+    (total, receipt) => total + receiptLoadScore(receipt),
+    0
+  );
+  const outsideLargeReceipts = outsideReceipts.filter(isLargeReceipt).length;
 
-  for (let mask = 1; mask < maxMask - 1; mask += 1) {
-    const aShopKeys = shopRouteKeys.filter((_, index) => mask & (1 << index));
-    if (aShopKeys.length < 1 || aShopKeys.length > 3) continue;
+  return (
+    outsideStops >= 3 ||
+    outsideReceipts.length >= 4 ||
+    outsideLoadScore >= 10 ||
+    outsideLargeReceipts >= 2 ||
+    (loadProfile.pressure === "hoog" && outsideStops >= 2)
+  );
+}
 
-    const bShopKeys = shopRouteKeys.filter((shopKey) => !aShopKeys.includes(shopKey));
-    if (bShopKeys.length < 1 || bShopKeys.length > 3) continue;
+function shopAssignmentCandidate(
+  first: ShopKey[],
+  second: ShopKey[]
+): { A: ShopKey[]; B: ShopKey[] }[] {
+  return [
+    {
+      A: sortShopKeysByRoutePath(first),
+      B: sortShopKeysByRoutePath(second),
+    },
+    {
+      A: sortShopKeysByRoutePath(second),
+      B: sortShopKeysByRoutePath(first),
+    },
+  ];
+}
 
-    candidates.push({
-      A: sortShopKeysByRoutePath(aShopKeys),
-      B: sortShopKeysByRoutePath(bShopKeys),
-    });
+function buildShopAssignmentCandidates(
+  deliveryReceipts: ReceiptSummary[],
+  loadProfile: DayLoadProfile
+) {
+  if (shouldShiftDaalsewegToHeyendaalRoute(deliveryReceipts, loadProfile)) {
+    return shopAssignmentCandidate(
+      ["lent"],
+      ["heyendaalseweg", "daalseweg", "ziekerstraat"]
+    );
   }
 
-  return candidates;
+  return shopAssignmentCandidate(
+    ["daalseweg", "lent"],
+    ["heyendaalseweg", "ziekerstraat"]
+  );
 }
 
 function chooseShopAssignment(
@@ -3412,10 +3464,10 @@ function chooseShopAssignment(
   routeLearning: RouteLearningSummary | null
 ) {
   const deliveryReceipts = receipts.filter(isRouteDelivery);
-  const candidates = buildShopAssignmentCandidates();
+  const candidates = buildShopAssignmentCandidates(deliveryReceipts, loadProfile);
   let bestCandidate = candidates[0] || {
-    A: ["heyendaalseweg", "daalseweg"] as ShopKey[],
-    B: ["ziekerstraat", "lent"] as ShopKey[],
+    A: ["daalseweg", "lent"] as ShopKey[],
+    B: ["heyendaalseweg", "ziekerstraat"] as ShopKey[],
   };
   let bestScore = Number.POSITIVE_INFINITY;
 
