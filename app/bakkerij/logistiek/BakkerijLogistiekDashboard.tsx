@@ -7,6 +7,7 @@ import type {
   LogisticsBatchStatus,
   LogisticsDayFeedback,
   LogisticsFulfillment,
+  LogisticsLoadPressure,
   LogisticsReceipt,
   LogisticsReceiptLine,
   LogisticsReceiptOverride,
@@ -102,6 +103,12 @@ type RouteDragState = {
   stopId: string;
 };
 
+type RouteDropIndicator = {
+  routeId: string;
+  stopId?: string;
+  position: "before" | "after" | "end";
+};
+
 type RouteStopMove = RouteDragState & {
   targetRouteId: string;
   targetStopId?: string;
@@ -119,7 +126,7 @@ type ReceiptTone =
   | "lent";
 
 type DayLoadProfile = {
-  pressure: string;
+  pressure: LogisticsLoadPressure;
   deliveryReceipts: number;
   deliveryStops: number;
   largeReceipts: number;
@@ -295,6 +302,24 @@ const ordersFilters: {
   { id: "pickup-ziekerstraat", label: "ZIEK", location: "Ziekerstraat" },
   { id: "pickup-lent", label: "LENT", location: "Lent" },
 ];
+
+const pressureOptions: {
+  value: LogisticsLoadPressure | "";
+  label: string;
+}[] = [
+  { value: "", label: "Auto" },
+  { value: "laag", label: "Rustig" },
+  { value: "middel", label: "Middel" },
+  { value: "hoog", label: "Hoog" },
+];
+
+function pressureLabelFor(pressure: LogisticsLoadPressure | "") {
+  if (pressure === "laag") return "rustig";
+  if (pressure === "middel") return "middel";
+  if (pressure === "hoog") return "hoog";
+
+  return "auto";
+}
 
 function toInputDate(date: Date) {
   const year = date.getFullYear();
@@ -608,7 +633,7 @@ function buildStats(
     },
     {
       label: "Drukte",
-      value: loadProfile.pressure,
+      value: pressureLabelFor(loadProfile.pressure),
     },
   ];
 }
@@ -3174,7 +3199,11 @@ function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
   });
 }
 
-function buildDayLoadProfile(plan: DayPlan, receipts: ReceiptSummary[]): DayLoadProfile {
+function buildDayLoadProfile(
+  plan: DayPlan,
+  receipts: ReceiptSummary[],
+  pressureOverride: LogisticsLoadPressure | ""
+): DayLoadProfile {
   const deliveryReceipts = receipts.filter(isRouteDelivery);
   const deliveryStops = new Set(
     deliveryReceipts.map((receipt) => normalizeMatchText(receiptTargetLine(receipt)))
@@ -3193,7 +3222,9 @@ function buildDayLoadProfile(plan: DayPlan, receipts: ReceiptSummary[]): DayLoad
     Math.floor(pastryUnits / 45) +
     Math.floor(plan.iceTubs / 9) +
     Math.floor(plan.orderValue / 900);
-  const pressure = score >= 32 ? "hoog" : score >= 17 ? "middel" : "laag";
+  const calculatedPressure: LogisticsLoadPressure =
+    score >= 32 ? "hoog" : score >= 17 ? "middel" : "laag";
+  const pressure = pressureOverride || calculatedPressure;
 
   return {
     pressure,
@@ -4614,10 +4645,16 @@ function buildReceiptSummaries(
   return visibleReceipts;
 }
 
-function learningSignalsFor(feedback: string) {
+function learningSignalsFor(
+  feedback: string,
+  pressureOverride: LogisticsLoadPressure | ""
+) {
   const text = feedback.toLowerCase();
   const signals: string[] = [];
 
+  if (pressureOverride) {
+    signals.push(`drukte handmatig: ${pressureLabelFor(pressureOverride)}`);
+  }
   if (text.includes("rustig")) signals.push("rustig label bewaren");
   if (text.includes("druk")) signals.push("drukte hoger wegen");
   if (text.includes("grote") || text.includes("200")) signals.push("grote order = laadtijd");
@@ -4653,6 +4690,9 @@ export default function BakkerijLogistiekDashboard() {
   const [feedbackByDate, setFeedbackByDate] = useState<Record<string, string>>(
     {}
   );
+  const [pressureByDate, setPressureByDate] = useState<
+    Record<string, LogisticsLoadPressure | "">
+  >({});
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -4678,9 +4718,11 @@ export default function BakkerijLogistiekDashboard() {
       ),
     [baseReceiptSummaries, receiptOverrides, selectedPlan.date]
   );
+  const pressureOverride = pressureByDate[selectedPlan.date] || "";
   const loadProfile = useMemo(
-    () => buildDayLoadProfile(selectedPlan, receiptSummaries),
-    [selectedPlan, receiptSummaries]
+    () =>
+      buildDayLoadProfile(selectedPlan, receiptSummaries, pressureOverride),
+    [pressureOverride, selectedPlan, receiptSummaries]
   );
   const productionTotals = useMemo(
     () => buildBakeryProductionTotals(receiptSummaries),
@@ -4699,13 +4741,19 @@ export default function BakkerijLogistiekDashboard() {
     RouteRound[] | null
   >(null);
   const [routesEdited, setRoutesEdited] = useState(false);
+  const [routeHasUnsavedChanges, setRouteHasUnsavedChanges] = useState(false);
   const routeRounds = manualRouteRounds || automaticRouteRounds;
+  const routeCanSave =
+    routeHasUnsavedChanges || (routesEdited && routeDraft?.isFinal !== true);
   const marzipanPrintItems = useMemo(
     () => buildMarzipanPrintItems(receiptSummaries, webshopImages),
     [receiptSummaries, webshopImages]
   );
   const feedback = feedbackByDate[selectedPlan.date] || "";
-  const learningSignals = useMemo(() => learningSignalsFor(feedback), [feedback]);
+  const learningSignals = useMemo(
+    () => learningSignalsFor(feedback, pressureOverride),
+    [feedback, pressureOverride]
+  );
   const headerTone = statusToneFor(selectedPlan.status);
 
   const uploadStatus = useMemo(() => {
@@ -4787,11 +4835,13 @@ export default function BakkerijLogistiekDashboard() {
         reconcileRouteDraftRounds(routeDraft, automaticRouteRounds, loadProfile)
       );
       setRoutesEdited(true);
+      setRouteHasUnsavedChanges(false);
       return;
     }
 
     setManualRouteRounds(null);
     setRoutesEdited(false);
+    setRouteHasUnsavedChanges(false);
   }, [automaticRouteRounds, loadProfile, routeDraft, selectedPlan.date]);
 
   useEffect(() => {
@@ -4840,6 +4890,10 @@ export default function BakkerijLogistiekDashboard() {
           ...current,
           [dateState.selectedDate]: data.dayFeedback?.text || "",
         }));
+        setPressureByDate((current) => ({
+          ...current,
+          [dateState.selectedDate]: data.dayFeedback?.pressureOverride || "",
+        }));
         setBatchLoadState("ready");
         if (manualRefresh) {
           setImportMessage(
@@ -4877,6 +4931,7 @@ export default function BakkerijLogistiekDashboard() {
     setFeedbackMessage("");
     setRouteSaveMessage("");
     setRouteSaveState("idle");
+    setRouteHasUnsavedChanges(false);
   }
 
   function refreshBatch() {
@@ -4887,9 +4942,11 @@ export default function BakkerijLogistiekDashboard() {
     setBatchReloadCounter((current) => current + 1);
   }
 
-  async function saveRouteDraft(routeRoundsToSave: RouteRound[]) {
+  async function saveRouteDraft(routeRoundsToSave: RouteRound[], learn = true) {
     setRouteSaveState("saving");
-    setRouteSaveMessage("route opslaan...");
+    setRouteSaveMessage(
+      learn ? "definitieve route opslaan..." : "routeconcept opslaan..."
+    );
 
     try {
       const response = await fetch("/api/bakkerij-logistiek/route-draft", {
@@ -4898,6 +4955,7 @@ export default function BakkerijLogistiekDashboard() {
         body: JSON.stringify({
           date: selectedPlan.date,
           routes: serializeRouteRounds(routeRoundsToSave),
+          learn,
         }),
       });
       const data = (await response.json()) as {
@@ -4913,8 +4971,13 @@ export default function BakkerijLogistiekDashboard() {
 
       setRouteDraft(data.routeDraft);
       setRouteLearning(data.routeLearning || null);
+      setRouteHasUnsavedChanges(false);
       setRouteSaveState("saved");
-      setRouteSaveMessage(`handmatige route bewaard om ${getUploadTime()}`);
+      setRouteSaveMessage(
+        learn
+          ? `definitieve route opgeslagen om ${getUploadTime()}`
+          : `routeconcept bewaard om ${getUploadTime()}`
+      );
     } catch (error) {
       setRouteSaveState("error");
       setRouteSaveMessage(
@@ -4930,12 +4993,20 @@ export default function BakkerijLogistiekDashboard() {
 
     setManualRouteRounds(nextRoutes);
     setRoutesEdited(true);
-    void saveRouteDraft(nextRoutes);
+    setRouteHasUnsavedChanges(true);
+    setRouteSaveState("idle");
+    setRouteSaveMessage("concept gewijzigd · nog niet definitief opgeslagen");
+    void saveRouteDraft(nextRoutes, false);
+  }
+
+  function saveCurrentRouteDraft() {
+    void saveRouteDraft(routeRounds, true);
   }
 
   async function resetRouteDraft() {
     setManualRouteRounds(null);
     setRoutesEdited(false);
+    setRouteHasUnsavedChanges(false);
     setRouteDraft(null);
     setRouteSaveState("saving");
     setRouteSaveMessage("route opnieuw berekenen...");
@@ -5000,6 +5071,7 @@ export default function BakkerijLogistiekDashboard() {
 
       setImportedBatch(data.batch);
       setRouteDraft(null);
+      setRouteHasUnsavedChanges(false);
       setDateState((current) => ({ ...current, selectedDate: data.batch!.date }));
       setFileSnapshot({
         name: file.name,
@@ -5108,6 +5180,13 @@ export default function BakkerijLogistiekDashboard() {
     }));
   }
 
+  function updatePressureOverride(value: LogisticsLoadPressure | "") {
+    setPressureByDate((current) => ({
+      ...current,
+      [selectedPlan.date]: value,
+    }));
+  }
+
   async function saveFeedback() {
     setIsSavingFeedback(true);
     setFeedbackMessage("feedback opslaan...");
@@ -5119,6 +5198,7 @@ export default function BakkerijLogistiekDashboard() {
         body: JSON.stringify({
           date: selectedPlan.date,
           text: feedback,
+          pressureOverride,
         }),
       });
       const data = (await response.json()) as {
@@ -5133,6 +5213,10 @@ export default function BakkerijLogistiekDashboard() {
       setFeedbackByDate((current) => ({
         ...current,
         [data.feedback!.date]: data.feedback!.text,
+      }));
+      setPressureByDate((current) => ({
+        ...current,
+        [data.feedback!.date]: data.feedback!.pressureOverride || "",
       }));
       setFeedbackMessage("Feedback opgeslagen en verwerkt.");
     } catch (error) {
@@ -5308,6 +5392,8 @@ export default function BakkerijLogistiekDashboard() {
           <RoutesPanel
             onRouteStopMove={moveRouteStop}
             onRoutesReset={resetRouteDraft}
+            onRoutesSave={saveCurrentRouteDraft}
+            routeCanSave={routeCanSave}
             routeRounds={routeRounds}
             routeSaveMessage={routeSaveMessage}
             routeSaveState={routeSaveState}
@@ -5335,7 +5421,9 @@ export default function BakkerijLogistiekDashboard() {
             learningSignals={learningSignals}
             routeLearning={routeLearning}
             onFeedbackChange={updateFeedback}
+            onPressureChange={updatePressureOverride}
             onSave={saveFeedback}
+            pressureOverride={pressureOverride}
             selectedPlan={selectedPlan}
           />
         )}
@@ -5404,6 +5492,8 @@ function eventHasRouteDragState(
 function RoutesPanel({
   onRouteStopMove,
   onRoutesReset,
+  onRoutesSave,
+  routeCanSave,
   routeRounds,
   routeSaveMessage,
   routeSaveState,
@@ -5412,6 +5502,8 @@ function RoutesPanel({
 }: Readonly<{
   onRouteStopMove: (move: RouteStopMove) => void;
   onRoutesReset: () => void;
+  onRoutesSave: () => void;
+  routeCanSave: boolean;
   routeRounds: RouteRound[];
   routeSaveMessage: string;
   routeSaveState: RouteSaveState;
@@ -5419,6 +5511,8 @@ function RoutesPanel({
   selectedPlan: DayPlan;
 }>) {
   const [dragging, setDragging] = useState<RouteDragState | null>(null);
+  const [dropIndicator, setDropIndicator] =
+    useState<RouteDropIndicator | null>(null);
   const routeGroups = routeGroupsFor(routeRounds);
 
   function handleStopDragStart(
@@ -5433,11 +5527,40 @@ function RoutesPanel({
     event.dataTransfer.setData("text/plain", JSON.stringify(dragState));
   }
 
-  function handleRouteDragOver(event: React.DragEvent<HTMLElement>) {
+  function handleRouteDragOver(
+    event: React.DragEvent<HTMLElement>,
+    targetRouteId?: string
+  ) {
     if (!eventHasRouteDragState(event, dragging)) return;
 
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
+    if (targetRouteId) {
+      setDropIndicator({
+        routeId: targetRouteId,
+        position: "end",
+      });
+    }
+  }
+
+  function handleStopDragOver(
+    event: React.DragEvent<HTMLLIElement>,
+    targetRouteId: string,
+    targetStopId: string
+  ) {
+    if (!eventHasRouteDragState(event, dragging)) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    setDropIndicator({
+      routeId: targetRouteId,
+      stopId: targetStopId,
+      position: event.clientY < rect.top + rect.height / 2 ? "before" : "after",
+    });
   }
 
   function handleStopDrop(
@@ -5463,6 +5586,7 @@ function RoutesPanel({
       position,
     });
     setDragging(null);
+    setDropIndicator(null);
   }
 
   function handleRouteDrop(
@@ -5480,6 +5604,7 @@ function RoutesPanel({
       position: "end",
     });
     setDragging(null);
+    setDropIndicator(null);
   }
 
   return (
@@ -5504,10 +5629,16 @@ function RoutesPanel({
             )}
           </div>
         </div>
-        <RouteResetButton
-          disabled={!routesEdited || routeSaveState === "saving"}
-          onClick={onRoutesReset}
-        />
+        <div className="flex items-center gap-2">
+          <RouteSaveButton
+            disabled={!routeCanSave || routeSaveState === "saving"}
+            onClick={onRoutesSave}
+          />
+          <RouteResetButton
+            disabled={!routesEdited || routeSaveState === "saving"}
+            onClick={onRoutesReset}
+          />
+        </div>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -5541,7 +5672,7 @@ function RoutesPanel({
                 {group.routes.map((route) => (
                   <section
                     key={route.id}
-                    onDragOver={handleRouteDragOver}
+                    onDragOver={(event) => handleRouteDragOver(event, route.id)}
                     onDrop={(event) => handleRouteDrop(event, route.id)}
                     className={`border p-2 transition ${
                       route.tone
@@ -5569,7 +5700,11 @@ function RoutesPanel({
                     </div>
                     <ol className="mt-2 grid min-h-12 gap-1">
                       {route.stops.length === 0 && (
-                        <li className="border border-dashed border-white/90 bg-white/70 px-2 py-2 text-xs font-black tracking-normal text-[#8b8278]">
+                        <li className="relative border border-dashed border-white/90 bg-white/70 px-2 py-2 text-xs font-black tracking-normal text-[#8b8278]">
+                          {dropIndicator?.routeId === route.id &&
+                            dropIndicator.position === "end" && (
+                              <RouteDropLine />
+                            )}
                           Leeg
                         </li>
                       )}
@@ -5581,15 +5716,25 @@ function RoutesPanel({
                           onDragStart={(event) =>
                             handleStopDragStart(event, route.id, stop.id)
                           }
-                          onDragEnd={() => setDragging(null)}
-                          onDragOver={handleRouteDragOver}
+                          onDragEnd={() => {
+                            setDragging(null);
+                            setDropIndicator(null);
+                          }}
+                          onDragOver={(event) =>
+                            handleStopDragOver(event, route.id, stop.id)
+                          }
                           onDrop={(event) =>
                             handleStopDrop(event, route.id, stop.id)
                           }
-                          className={`grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)] gap-1.5 border border-white/80 bg-white px-1.5 py-1 transition hover:border-[#d7cec4] hover:shadow-sm active:cursor-grabbing ${
+                          className={`relative grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)] gap-1.5 border border-white/80 bg-white px-1.5 py-1 transition hover:border-[#d7cec4] hover:shadow-sm active:cursor-grabbing ${
                             dragging?.stopId === stop.id ? "opacity-45" : ""
                           }`}
                         >
+                          {dropIndicator?.routeId === route.id &&
+                            dropIndicator.stopId === stop.id &&
+                            dropIndicator.position !== "end" && (
+                              <RouteDropLine position={dropIndicator.position} />
+                            )}
                           <span
                             title="Versleep"
                             className="flex h-5 w-4 items-center justify-center text-[#8b8278]"
@@ -5623,6 +5768,13 @@ function RoutesPanel({
                           </span>
                         </li>
                       ))}
+                      {route.stops.length > 0 &&
+                        dropIndicator?.routeId === route.id &&
+                        dropIndicator.position === "end" && (
+                          <li className="relative h-3 list-none">
+                            <RouteDropLine position="after" />
+                          </li>
+                        )}
                     </ol>
                     <p className="mt-2 text-[0.68rem] font-normal leading-snug tracking-normal text-[#4a4540]">
                       {route.reason}
@@ -6534,7 +6686,9 @@ function LearningPanel({
   learningSignals,
   message,
   onFeedbackChange,
+  onPressureChange,
   onSave,
+  pressureOverride,
   routeLearning,
   selectedPlan,
 }: Readonly<{
@@ -6543,7 +6697,9 @@ function LearningPanel({
   learningSignals: string[];
   message: string;
   onFeedbackChange: (value: string) => void;
+  onPressureChange: (value: LogisticsLoadPressure | "") => void;
   onSave: () => void;
+  pressureOverride: LogisticsLoadPressure | "";
   routeLearning: RouteLearningSummary | null;
   selectedPlan: DayPlan;
 }>) {
@@ -6574,6 +6730,27 @@ function LearningPanel({
           placeholder="Vandaag was rustig, maar de grote gebaksorder duurde lang..."
           className="mt-3 min-h-36 w-full resize-y border border-[#e8e4de] bg-[#faf8f5] p-3 text-sm font-bold leading-snug tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
         />
+        <div className="mt-3 grid grid-cols-4 border border-[#e8e4de] bg-[#faf8f5] p-1">
+          {pressureOptions.map((option) => {
+            const active = pressureOverride === option.value;
+
+            return (
+              <button
+                key={option.label}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onPressureChange(option.value)}
+                className={`min-h-9 px-1 text-xs font-black tracking-normal transition ${
+                  active
+                    ? "bg-[#1a1815] text-white"
+                    : "bg-white text-[#6b645b] hover:bg-[#f6faf4]"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
         {message && (
           <p className="mt-2 text-xs font-bold tracking-normal text-[#6b645b]">
             {message}
@@ -6731,6 +6908,27 @@ function RouteResetButton({
   );
 }
 
+function RouteSaveButton({
+  disabled,
+  onClick,
+}: Readonly<{
+  disabled: boolean;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      aria-label="Definitieve route opslaan"
+      title="Definitieve route opslaan"
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-8 w-8 items-center justify-center border border-[#d6e5d8] bg-[#f6faf4] text-[#1a1815] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <SaveIcon />
+    </button>
+  );
+}
+
 function RoutePrintButton({
   disabled,
   label,
@@ -6754,6 +6952,23 @@ function RoutePrintButton({
   );
 }
 
+function RouteDropLine({
+  position = "before",
+}: Readonly<{
+  position?: "before" | "after";
+}>) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`pointer-events-none absolute left-0 right-0 z-10 h-1 rounded-full bg-[#2fbf71] shadow-[0_0_0_2px_rgba(47,191,113,0.22)] ${
+        position === "after" ? "-bottom-1" : "-top-1"
+      }`}
+    >
+      <span className="absolute -left-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-[#2fbf71]" />
+    </span>
+  );
+}
+
 function GripIcon() {
   return (
     <svg
@@ -6768,6 +6983,25 @@ function GripIcon() {
       <circle cx="11" cy="8" r="1" />
       <circle cx="5" cy="13" r="1" />
       <circle cx="11" cy="13" r="1" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.2"
+    >
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+      <path d="M17 21v-8H7v8" />
+      <path d="M7 3v5h8" />
     </svg>
   );
 }

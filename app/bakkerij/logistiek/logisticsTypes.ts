@@ -9,6 +9,8 @@ export type LogisticsBatchSource = "gmail" | "manual";
 
 export type LogisticsFulfillment = "bezorgen" | "afhalen" | "onbekend";
 
+export type LogisticsLoadPressure = "laag" | "middel" | "hoog";
+
 export type LogisticsReceiptLine = {
   quantity: string;
   description: string;
@@ -53,6 +55,7 @@ export type LogisticsDayFeedback = {
   id: string;
   date: string;
   text: string;
+  pressureOverride?: LogisticsLoadPressure | "";
   signals: string[];
   updatedAt: string;
 };
@@ -85,6 +88,8 @@ export type LogisticsRouteDraft = {
   id: string;
   date: string;
   routes: LogisticsRouteDraftRound[];
+  isFinal?: boolean;
+  finalizedAt?: string;
   updatedAt: string;
 };
 

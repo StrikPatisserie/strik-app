@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import type { LogisticsDayFeedback } from "@/app/bakkerij/logistiek/logisticsTypes";
+import type {
+  LogisticsDayFeedback,
+  LogisticsLoadPressure,
+} from "@/app/bakkerij/logistiek/logisticsTypes";
 import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
 import { upsertLogisticsDayFeedback } from "@/app/lib/bakeryLogisticsStorage";
 
@@ -18,10 +21,29 @@ function cleanText(value: unknown, maxLength = 2000) {
     .slice(0, maxLength);
 }
 
-function learningSignalsFor(feedback: string) {
+function cleanPressureOverride(value: unknown): LogisticsLoadPressure | "" {
+  if (value === "laag" || value === "middel" || value === "hoog") return value;
+
+  return "";
+}
+
+function pressureSignalLabel(pressureOverride: LogisticsLoadPressure | "") {
+  if (pressureOverride === "laag") return "rustig";
+  if (pressureOverride === "middel") return "middel";
+  if (pressureOverride === "hoog") return "hoog";
+
+  return "";
+}
+
+function learningSignalsFor(
+  feedback: string,
+  pressureOverride: LogisticsLoadPressure | ""
+) {
   const text = feedback.toLowerCase();
   const signals: string[] = [];
+  const pressureLabel = pressureSignalLabel(pressureOverride);
 
+  if (pressureLabel) signals.push(`drukte handmatig: ${pressureLabel}`);
   if (text.includes("rustig")) signals.push("rustig label bewaren");
   if (text.includes("druk")) signals.push("drukte hoger wegen");
   if (text.includes("grote") || text.includes("200")) {
@@ -56,11 +78,13 @@ export async function POST(request: Request) {
     }
 
     const text = cleanText(body.text, 2000);
+    const pressureOverride = cleanPressureOverride(body.pressureOverride);
     const feedback: LogisticsDayFeedback = {
       id: date,
       date,
       text,
-      signals: learningSignalsFor(text),
+      pressureOverride,
+      signals: learningSignalsFor(text, pressureOverride),
       updatedAt: new Date().toISOString(),
     };
 

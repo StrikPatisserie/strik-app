@@ -185,18 +185,24 @@ export async function POST(request: Request) {
     const routes = Array.isArray(body.routes)
       ? body.routes.map(cleanRouteRound).filter(Boolean)
       : [];
+    const shouldLearn = body.learn === true;
+    const updatedAt = new Date().toISOString();
 
     const draft: LogisticsRouteDraft = {
       id: date,
       date,
       routes: routes as LogisticsRouteDraftRound[],
-      updatedAt: new Date().toISOString(),
+      isFinal: shouldLearn,
+      finalizedAt: shouldLearn ? updatedAt : "",
+      updatedAt,
     };
 
     await upsertLogisticsRouteDraft(draft);
-    await upsertLogisticsRouteLearningObservation(
-      routeLearningObservationFromDraft(date, draft, draft.updatedAt)
-    );
+    if (shouldLearn) {
+      await upsertLogisticsRouteLearningObservation(
+        routeLearningObservationFromDraft(date, draft, draft.updatedAt)
+      );
+    }
     const routeLearning = await getLogisticsRouteLearning();
 
     return NextResponse.json({

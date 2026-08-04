@@ -3,6 +3,7 @@ import "server-only";
 import type {
   LogisticsBatch,
   LogisticsDayFeedback,
+  LogisticsLoadPressure,
   LogisticsReceiptOverride,
   LogisticsRouteDraft,
   LogisticsRouteDraftRound,
@@ -164,6 +165,10 @@ function isLogisticsDayFeedback(value: unknown): value is LogisticsDayFeedback {
   );
 }
 
+function isLogisticsLoadPressure(value: unknown): value is LogisticsLoadPressure {
+  return value === "laag" || value === "middel" || value === "hoog";
+}
+
 function isLogisticsRouteDraftStop(
   value: unknown
 ): value is LogisticsRouteDraftStop {
@@ -302,7 +307,12 @@ function normalizeLogisticsDayFeedbackState(
   if (!Array.isArray(feedback)) return emptyLogisticsDayFeedbackState();
 
   return {
-    feedback: feedback.filter(isLogisticsDayFeedback),
+    feedback: feedback.filter(isLogisticsDayFeedback).map((item) => ({
+      ...item,
+      pressureOverride: isLogisticsLoadPressure(item.pressureOverride)
+        ? item.pressureOverride
+        : "",
+    })),
   };
 }
 
@@ -1128,7 +1138,7 @@ export async function getLogisticsRouteLearning() {
     state.observations.map((observation) => observation.date)
   );
   const draftObservations = routeDraftsState.drafts
-    .filter((draft) => !observedDates.has(draft.date))
+    .filter((draft) => draft.isFinal === true && !observedDates.has(draft.date))
     .map(routeLearningObservationFromStoredDraft)
     .filter((observation) => observation.stops.length > 0);
 
