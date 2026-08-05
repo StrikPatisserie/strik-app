@@ -6,7 +6,8 @@ const BAKEIT_CONTANTBON_CONFIG = {
   PROCESSED_LABEL: 'Ingelezen',
   ERROR_LABEL: 'Fout',
 
-  QUERY: 'subject:"contantbon Bake-it" newer_than:30d',
+  QUERY:
+    '{subject:"contantbon Bake-it" subject:"Orders email-Contantbonnen"} newer_than:30d',
   MAX_THREADS: 30,
   MAX_PDF_ATTACHMENTS: 4,
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
@@ -294,14 +295,14 @@ function buildBakeItImportGroupKey_(message) {
 function normalizeBakeItSubjectForWave_(subject) {
   return String(subject || '')
     .toLowerCase()
-    .replace(/\bemail\s+2\b/g, 'email')
+    .replace(/\b(?:email|deel)[\s-]+[12]\b/g, '')
     .replace(/\s*\(\d+\)\s*$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function isBakeItSecondPart_(subject) {
-  return /\bemail\s+2\b/i.test(String(subject || ''));
+  return /\b(?:email|deel)[\s-]+2\b/i.test(String(subject || ''));
 }
 
 function buildBakeItImportWaveStateKey_(groupKey) {
