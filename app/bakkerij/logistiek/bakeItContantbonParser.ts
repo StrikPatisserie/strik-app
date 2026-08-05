@@ -75,6 +75,7 @@ const internalLinePatterns = [
 ];
 const articleNumberPattern =
   "(?:\\d{3,9}|[A-Z]{1,4}\\d{3,9})(?:\\.[A-Z0-9]{1,8})?";
+const deliveryCostArticleNumber = "990010";
 
 function normalizeTextLine(line: string) {
   const normalizedWhitespace = line.replace(/\u00a0/g, " ");
@@ -535,13 +536,36 @@ function extractArticleFromProductDescription(value: string) {
 function articleFieldsForReceiptLine(article: {
   articleNumber: string;
   subcode: string;
-}) {
+}): Partial<LogisticsReceiptLine> {
   if (!article.articleNumber) return {};
 
   return {
     articleNumber: article.articleNumber,
     ...(article.subcode ? { note: `Subcode ${article.subcode}` } : {}),
   };
+}
+
+function isDeliveryCostDescription(value: string) {
+  return /\bbezorgkosten\b/.test(
+    normalizedLineDescription(cleanProductDescription(value))
+  );
+}
+
+function articleFieldsForReceiptDescription(
+  article: {
+    articleNumber: string;
+    subcode: string;
+  },
+  description: string
+): Partial<LogisticsReceiptLine> {
+  const articleFields = articleFieldsForReceiptLine(article);
+  if (articleFields.articleNumber) return articleFields;
+
+  if (isDeliveryCostDescription(description)) {
+    return { articleNumber: deliveryCostArticleNumber };
+  }
+
+  return {};
 }
 
 function isPlausibleReceiptQuantity(value: string) {
@@ -922,7 +946,7 @@ function parseProductLine(line: string): LogisticsReceiptLine | null {
   );
 
   return {
-    ...articleFieldsForReceiptLine(article),
+    ...articleFieldsForReceiptDescription(article, description),
     quantity: product.quantityText.replace(".", ","),
     description,
     ...(unitPrice !== undefined ? { unitPrice } : {}),
@@ -963,7 +987,7 @@ function parseTrailingQuantityProductLine(
   );
 
   return {
-    ...articleFieldsForReceiptLine(article),
+    ...articleFieldsForReceiptDescription(article, description),
     quantity: quantityText.replace(".", ","),
     description,
     ...(unitPrice !== undefined ? { unitPrice } : {}),
@@ -989,7 +1013,7 @@ function parseProductStartLine(line: string): LogisticsReceiptLine | null {
   if (!productLike) return null;
 
   return {
-    ...articleFieldsForReceiptLine(article),
+    ...articleFieldsForReceiptDescription(article, description),
     quantity: product.quantityText.replace(".", ","),
     description,
   };
@@ -1122,7 +1146,10 @@ function recoverProductDetailsFromRemark(
 }
 
 function looksLikeSplitProductDescription(line: string) {
-  if (!shouldAppendProductContinuation(line)) return false;
+  const standaloneSplitProduct = isStandaloneSplitProductDescription(line);
+  if (!standaloneSplitProduct && !shouldAppendProductContinuation(line)) {
+    return false;
+  }
   if (/^\d+(?:[.,]\d+)?$/.test(line)) return false;
 
   const description = cleanProductDescription(line);
@@ -1132,6 +1159,7 @@ function looksLikeSplitProductDescription(line: string) {
   const normalized = normalizedLineDescription(description);
 
   return (
+    standaloneSplitProduct ||
     /\b(?:taart|petit|four|gebak|slagroom|marsepein|creme|slof|vlaai|gateau|bombe|bol|tompouce|croissant|brood|cake|cheese|cheesecake)\b/.test(
       normalized
     ) ||
@@ -1140,12 +1168,18 @@ function looksLikeSplitProductDescription(line: string) {
 }
 
 function parsePriceQuantityLine(line: string) {
-  const match = line.match(/^€\s*([\d.,:]+)\s+(\d+(?:[.,]\d+)?)$/);
+  const match = line.match(
+    new RegExp(
+      `^(?:(${articleNumberPattern})\\s+)?€\\s*([\\d.,:]+)\\s+(\\d+(?:[.,]\\d+)?)$`,
+      "i"
+    )
+  );
   if (!match) return null;
 
   return {
-    priceText: match[1],
-    quantityText: match[2].replace(".", ","),
+    articleText: match[1] || "",
+    priceText: match[2],
+    quantityText: match[3].replace(".", ","),
   };
 }
 
@@ -1169,6 +1203,7 @@ function normalizeRemarksAndRecoverLines(
 
 function shouldAppendProductContinuation(line: string) {
   if (!isUsableProductDescription(line)) return false;
+  if (isStandaloneSplitProductDescription(line)) return false;
   if (isAdministrativeRemarkLine(line)) return false;
   if (isFulfillmentLine(line) || pickupLocationFromLine(line)) return false;
   if (/\b(?:betaald|niet betaald|gewenste betaling|referentie)\b/i.test(line)) {
@@ -1176,6 +1211,10 @@ function shouldAppendProductContinuation(line: string) {
   }
 
   return !/€\s*[\d.,:]+/.test(line);
+}
+
+function isStandaloneSplitProductDescription(line: string) {
+  return isDeliveryCostDescription(line);
 }
 
 function lineWithoutRepeatedQuantity(line: string, quantity: string) {
@@ -1338,7 +1377,9 @@ function parsePage(pageText: string): ParsedPage | null {
         const pricedSplitLine = parsePriceQuantityLine(line);
         if (pricedSplitLine) {
           const article = extractArticleFromProductDescription(
-            pendingSplitProductDescription
+            [pendingSplitProductDescription, pricedSplitLine.articleText]
+              .filter(Boolean)
+              .join(" ")
           );
           const description = article.description;
           const unitPrice = pickUnitPrice(
@@ -1346,7 +1387,7 @@ function parsePage(pageText: string): ParsedPage | null {
             pricedSplitLine.quantityText
           );
           currentLine = uniqueLinePush(parsedLines, {
-            ...articleFieldsForReceiptLine(article),
+            ...articleFieldsForReceiptDescription(article, description),
             quantity: pricedSplitLine.quantityText,
             description,
             ...(unitPrice !== undefined ? { unitPrice } : {}),
@@ -1401,6 +1442,12 @@ function parsePage(pageText: string): ParsedPage | null {
       if (productStartLine) {
         pendingSplitProductDescription = "";
         currentLine = uniqueLinePush(parsedLines, productStartLine);
+        continue;
+      }
+
+      if (isStandaloneSplitProductDescription(line)) {
+        pendingSplitProductDescription = line;
+        currentLine = null;
         continue;
       }
 

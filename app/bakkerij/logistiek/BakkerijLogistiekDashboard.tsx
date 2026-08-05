@@ -1126,6 +1126,28 @@ function shouldDropReceiptLine(line: ReceiptLine) {
   return isArticleSubcodeQuantity(line.quantity);
 }
 
+function deliveryCostDescriptionFrom(value: string) {
+  const description = cleanReceiptLineDescription(value);
+  const match = description.match(/\bbezorgkosten\b.*$/i);
+  if (!match) return "";
+
+  return match[0]
+    .replace(/^bezorgkosten\b/i, "Bezorgkosten")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeKnownReceiptLine(line: ReceiptLine): ReceiptLine {
+  const deliveryCostDescription = deliveryCostDescriptionFrom(line.description);
+  if (!deliveryCostDescription) return line;
+
+  return {
+    ...line,
+    articleNumber: line.articleNumber || "990010",
+    description: deliveryCostDescription,
+  };
+}
+
 function normalizedLineDescription(value: string) {
   return value
     .toLowerCase()
@@ -1304,7 +1326,8 @@ function receiptLineIdentity(line: ReceiptLine) {
   return `${line.quantity}|${normalizedLineDescription(line.description)}`;
 }
 
-function pushUniqueReceiptLine(target: ReceiptLine[], line: ReceiptLine) {
+function pushUniqueReceiptLine(target: ReceiptLine[], incomingLine: ReceiptLine) {
+  const line = normalizeKnownReceiptLine(incomingLine);
   if (shouldDropReceiptLine(line)) return;
 
   if (isProductOptionLine(line)) {
@@ -6959,7 +6982,9 @@ function ReceiptDetail({
   }
 
   const receiptNumber = receipt.receiptNumber || receipt.id;
-  const displayLines = receipt.lines.filter((line) => !shouldDropReceiptLine(line));
+  const displayLines = receipt.lines
+    .map(normalizeKnownReceiptLine)
+    .filter((line) => !shouldDropReceiptLine(line));
   const visibleNotes = [
     receipt.customerNote,
     overrideMessage,
