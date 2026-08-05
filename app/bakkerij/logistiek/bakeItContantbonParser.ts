@@ -65,7 +65,7 @@ const pickupLocations = [
   { label: "Lent", key: "lent" },
 ] as const;
 const prognoseMailStartMinutes = 8 * 60 + 20;
-const definitiveMailStartMinutes = 20 * 60;
+const definitiveMailStartMinutes = 20 * 60 + 15;
 const internalLinePatterns = [
   /kostenpl/i,
   /inkoopnr/i,
