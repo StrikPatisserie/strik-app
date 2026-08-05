@@ -58,6 +58,33 @@ const dutchMonths: Record<string, string> = {
 };
 
 const storeNames = ["heyendaalseweg", "daalseweg", "ziekerstraat", "lent"];
+const storeLocations = [
+  {
+    label: "Heyendaalseweg",
+    key: "heyendaalseweg",
+    aliases: ["heyendaalseweg", "heyendaalseweg 217", "heyendaal"],
+  },
+  {
+    label: "Daalseweg",
+    key: "daalseweg",
+    aliases: ["daalseweg", "daalseweg 254", "daal"],
+  },
+  {
+    label: "Ziekerstraat",
+    key: "ziekerstraat",
+    aliases: ["ziekerstraat", "ziekerstraat 124"],
+  },
+  {
+    label: "Lent",
+    key: "lent",
+    aliases: [
+      "lent",
+      "oranje marieplein",
+      "oranje marieplein 11",
+      "oranje marie plein",
+    ],
+  },
+] as const;
 const pickupLocations = [
   { label: "Heyendaalseweg", key: "heyendaalseweg" },
   { label: "Daalseweg", key: "daalseweg" },
@@ -73,7 +100,7 @@ const internalLinePatterns = [
   /naam aanvrager/i,
   /factuurgegevens/i,
 ];
-const articleNumberPattern = "(?:\\d{4,9}|[A-Z]{1,4}\\d{3,9})";
+const articleNumberPattern = "(?:\\d{4,9}(?:\\.\\d{1,6})?|[A-Z]{1,4}\\d{3,9}(?:\\.\\d{1,6})?)";
 
 function normalizeTextLine(line: string) {
   const singleLine = line.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -238,6 +265,26 @@ function isContantbonDocumentLine(line: string) {
   return /\bcontantbon(?:nen)?\b/i.test(line);
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizedPhrasePattern(phrase: string) {
+  return new RegExp(
+    `\\b${escapeRegExp(phrase).replace(/\\s+/g, "\\s+")}\\b`,
+    "i"
+  );
+}
+
+function storeLocationFromText(value: string) {
+  const normalized = normalizedLineDescription(value);
+  const location = storeLocations.find((store) =>
+    store.aliases.some((alias) => normalizedPhrasePattern(alias).test(normalized))
+  );
+
+  return location?.label || "";
+}
+
 function findDeliveryDateLineIndex(lines: string[]) {
   const weekDateIndex = lines.findIndex(
     (line) => /\bweek\s+\d+\b/i.test(line) && parseDutchDate(line)
@@ -250,35 +297,123 @@ function findDeliveryDateLineIndex(lines: string[]) {
 }
 
 function cleanCustomerName(value: string) {
-  return value.replace(/^\d{2,}\s+/, "").trim();
+  return value
+    .replace(/^\d{2,}\s+/, "")
+    .replace(/\s+\d+\s+van\s+\d+$/i, "")
+    .trim();
+}
+
+function isReceiptHeaderNoiseLine(line: string) {
+  return (
+    /^bon\s+\d+\b/i.test(line) ||
+    /\bNL\d{2}[a-z0-9]{8,}\b/i.test(line) ||
+    /\b\d{4}\s*[a-z]{2}\s+malden\b/i.test(line) ||
+    /^\d{1,6}\s+[a-z]{2}\s+malden\b/i.test(line)
+  );
+}
+
+function isPageCountLine(line: string) {
+  return /^\d+\s+van\s+\d+$/i.test(line) || /^\d+\s*\/\s*\d+$/.test(line);
+}
+
+function looksLikeStreetAddressLine(line: string) {
+  return (
+    /\d/.test(line) &&
+    /\b(?:straat|weg|laan|plein|pad|hof|dijk|singel|kade|baan|markt)\b/i.test(
+      line
+    )
+  );
+}
+
+function isPossibleStandaloneCustomerNameLine(line: string) {
+  if (!line.trim()) return false;
+  if (isReceiptHeaderNoiseLine(line)) return false;
+  if (isPhoneLine(line)) return false;
+  if (isBoilerplateLine(line) || isContantbonDocumentLine(line)) return false;
+  if (isPageCountLine(line) || parseDutchDate(line)) return false;
+  if (/€/.test(line)) return false;
+  if (/^\d+(?:[.,]\d+)?$/.test(line)) return false;
+  if (/^bon\b|^levering\b|\blevering\b|^artikel\b|^aantal\b|prijs|totaal/i.test(line)) {
+    return false;
+  }
+  if (looksLikeStreetAddressLine(line) && !storeLocationFromText(line)) return false;
+
+  return /[a-z]{2}/i.test(line);
+}
+
+function inferRepeatedCustomerName(lines: string[]) {
+  const seen = new Map<string, string>();
+
+  for (const line of lines) {
+    if (!isPossibleStandaloneCustomerNameLine(line)) continue;
+
+    const clean = cleanCustomerName(line);
+    const normalized = normalizedLineDescription(clean);
+    if (!normalized) continue;
+    if (seen.has(normalized)) return seen.get(normalized) || clean;
+    seen.set(normalized, clean);
+  }
+
+  return "";
 }
 
 function isLikelyCustomerLine(line: string) {
+  if (isReceiptHeaderNoiseLine(line)) return false;
   if (!/^\d{2,}\s+\S/.test(line)) return false;
   if (isPhoneLine(line)) return false;
   if (/\blevering\b/i.test(line)) return false;
 
-  return !isBoilerplateLine(line) && !isContantbonDocumentLine(line);
+  const customerName = cleanCustomerName(line);
+
+  return (
+    !isBoilerplateLine(line) &&
+    !isContantbonDocumentLine(line) &&
+    isPossibleStandaloneCustomerNameLine(customerName)
+  );
 }
 
 function inferCustomerLine(lines: string[], dateLineIndex: number) {
-  const beforeDateLine = lines
-    .slice(0, dateLineIndex)
-    .reverse()
-    .find(isLikelyCustomerLine);
+  const headerLines = collapseRepeatedSequence(lines.slice(0, dateLineIndex));
+  const storeLine = [...headerLines].reverse().find(storeLocationFromText);
+  if (storeLine) return `Winkel ${storeLocationFromText(storeLine)}`;
+
+  const beforeDateLine = [...headerLines].reverse().find(isLikelyCustomerLine);
   if (beforeDateLine) return cleanCustomerName(beforeDateLine);
 
-  const afterDateLine = lines
-    .slice(dateLineIndex + 1, dateLineIndex + 5)
-    .find(
-      (line) =>
-        !/\blevering\b/i.test(line) &&
-        !/\bartikelomschrijving\b/i.test(line) &&
-        !isBoilerplateLine(line) &&
-        !isContantbonDocumentLine(line)
-    );
+  const repeatedCustomerName = inferRepeatedCustomerName(headerLines);
+  if (repeatedCustomerName) return repeatedCustomerName;
 
-  return afterDateLine ? cleanCustomerName(afterDateLine) : "Onbekende klant";
+  const standaloneCustomerName = [...headerLines]
+    .reverse()
+    .find(isPossibleStandaloneCustomerNameLine);
+
+  return standaloneCustomerName
+    ? cleanCustomerName(standaloneCustomerName)
+    : "Onbekende klant";
+}
+
+function inferReceiptNumber(lines: string[]) {
+  for (const line of [...lines].reverse()) {
+    const bonMatch = line.match(/\bbon\s+(\d{1,8})\b/i);
+    if (bonMatch) return bonMatch[1];
+  }
+
+  for (const line of [...lines].reverse()) {
+    const combinedHeaderMatch = line.match(/^(\d{1,8})\s+.*\bNL\d{2}[a-z0-9]{8,}\b/i);
+    if (combinedHeaderMatch) return combinedHeaderMatch[1];
+  }
+
+  return [...lines].reverse().find((line) => /^\d{2,}$/.test(line)) || "";
+}
+
+function lineMatchesCustomer(line: string, customer: string) {
+  if (!customer || /^onbekende klant$/i.test(customer)) return false;
+  if (/^winkel\s+/i.test(customer) && storeLocationFromText(line)) return false;
+
+  const normalizedLine = normalizedLineDescription(cleanCustomerName(line));
+  const normalizedCustomer = normalizedLineDescription(customer);
+
+  return normalizedLine === normalizedCustomer;
 }
 
 function inferDeliveryCodeFromHeader(lines: string[], dateLineIndex: number) {
@@ -392,7 +527,9 @@ function isFooterLine(line: string) {
 
 function isBoilerplateLine(line: string) {
   return (
-    line === "Contantbon" ||
+    isReceiptHeaderNoiseLine(line) ||
+    isPageCountLine(line) ||
+    /^contantbon(?:nen)?(?:\s+deel\s+\d+)?$/i.test(line) ||
     /^e-mail:/i.test(line) ||
     /@strik-patisserie\.nl/i.test(line) ||
     /^tel\./i.test(line) ||
@@ -403,7 +540,8 @@ function isBoilerplateLine(line: string) {
     /^strik patisserie bv$/i.test(line) ||
     /^www\.strik-patisserie\.nl$/i.test(line) ||
     /^malden\b/i.test(line) ||
-    /^artikelomschrijving\b/i.test(line)
+    /^artikelomschrijving\b/i.test(line) ||
+    /^aantal\b.*\bartikel(?:omschrijving)?\b/i.test(line)
   );
 }
 
@@ -413,7 +551,10 @@ function isPhoneLine(line: string) {
 
 function isInternalReceipt(customer: string) {
   const normalized = customer.toLowerCase();
-  return storeNames.some((store) => normalized.includes(store));
+  return (
+    Boolean(storeLocationFromText(customer)) ||
+    storeNames.some((store) => normalized.includes(store))
+  );
 }
 
 function inferRoute(customer: string, address: string, deliveryAddress: string) {
@@ -517,14 +658,17 @@ function cleanProductDescription(value: string) {
 }
 
 function extractArticleNumberFromDescription(value: string) {
-  const match = value.trim().match(/^(\d{4,9}|[A-Z]{1,4}\d{3,9})\s+(.+)$/i);
+  const match = value
+    .trim()
+    .match(/^((\d{4,9}|[A-Z]{1,4}\d{3,9})(?:\.(\d{1,6}))?)\s+(.+)$/i);
   if (!match) {
-    return { articleNumber: "", description: value.trim() };
+    return { articleNumber: "", subcode: "", description: value.trim() };
   }
 
   return {
-    articleNumber: match[1].trim(),
-    description: match[2].trim(),
+    articleNumber: match[2].trim(),
+    subcode: match[3]?.trim() || "",
+    description: match[4].trim(),
   };
 }
 
@@ -741,9 +885,11 @@ function isReceiptPaymentBlockLine(line: string) {
 
 function pickupLocationFromLine(line: string) {
   const clean = line.trim().toLowerCase();
-  const location = pickupLocations.find((item) => clean === item.key);
+  const location = pickupLocations.find(
+    (item) => clean === item.key || clean === item.label.toLowerCase()
+  );
 
-  return location?.label || "";
+  return location?.label || storeLocationFromText(line);
 }
 
 function isFulfillmentLine(line: string) {
@@ -889,6 +1035,7 @@ function parseProductLine(line: string): LogisticsReceiptLine | null {
 
   return {
     ...(article.articleNumber ? { articleNumber: article.articleNumber } : {}),
+    ...(article.subcode ? { note: `Subcode ${article.subcode}` } : {}),
     quantity: product.quantityText.replace(".", ","),
     description,
     ...(unitPrice !== undefined ? { unitPrice } : {}),
@@ -917,6 +1064,7 @@ function parseProductStartLine(line: string): LogisticsReceiptLine | null {
 
   return {
     ...(article.articleNumber ? { articleNumber: article.articleNumber } : {}),
+    ...(article.subcode ? { note: `Subcode ${article.subcode}` } : {}),
     quantity: product.quantityText.replace(".", ","),
     description,
   };
@@ -1170,21 +1318,21 @@ function parsePage(pageText: string): ParsedPage | null {
   if (weekIndex < 0) return null;
 
   const topBlock = collapseRepeatedSequence(lines.slice(1, weekIndex));
-  const receiptNumber =
-    [...topBlock].reverse().find((line) => /^\d{2,}$/.test(line)) || "";
+  const receiptNumber = inferReceiptNumber(topBlock);
+  const date = parseDutchDate(lines[weekIndex]);
+  const customer = inferCustomerLine(lines, weekIndex);
   const topAddress = topBlock
     .filter(
       (line) =>
         line !== receiptNumber &&
         !isPhoneLine(line) &&
+        !lineMatchesCustomer(line, customer) &&
         !isBoilerplateLine(line) &&
         !isContantbonDocumentLine(line) &&
         !/\blevering\b/i.test(line) &&
         !isLikelyCustomerLine(line)
     )
     .join(", ");
-  const date = parseDutchDate(lines[weekIndex]);
-  const customer = inferCustomerLine(lines, weekIndex);
   const deliveryCode = inferDeliveryCodeFromHeader(lines, weekIndex);
   const declaredPageTotal = lines.reduce((highest, line) => {
     const match = line.match(/\bpagina\s+\d+\s+van\s+(\d+)\b/i);
@@ -1197,8 +1345,15 @@ function parsePage(pageText: string): ParsedPage | null {
   );
   const bodyLines = productHeaderIndex >= 0 ? lines.slice(productHeaderIndex + 1) : [];
   const deliveryBlock = findDeliveryBlock(bodyLines);
-  const fulfillment = inferFulfillment(bodyLines);
-  const pickupLocation = inferPickupLocation(bodyLines);
+  const inferredFulfillment = inferFulfillment(bodyLines);
+  const headerPickupLocation = storeLocationFromText(
+    [customer, topAddress, ...topBlock].join(" ")
+  );
+  const pickupLocation = inferPickupLocation(bodyLines) || headerPickupLocation;
+  const fulfillment =
+    inferredFulfillment === "onbekend" && pickupLocation
+      ? "afhalen"
+      : inferredFulfillment;
   const timeLines = bodyLines.filter(
     (line) =>
       isFulfillmentLine(line) ||
@@ -1451,7 +1606,7 @@ function inferTags(draft: ReceiptDraft) {
     .toLowerCase();
   const tags = new Set<string>();
 
-  if (isInternalReceipt(draft.customer)) {
+  if (isInternalReceipt(draft.customer) || storeLocationFromText(haystack)) {
     tags.add("winkel");
     tags.add("intern");
   }
