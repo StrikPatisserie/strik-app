@@ -100,7 +100,7 @@ const internalLinePatterns = [
   /naam aanvrager/i,
   /factuurgegevens/i,
 ];
-const articleNumberPattern = "(?:\\d{4,9}(?:\\.\\d{1,6})?|[A-Z]{1,4}\\d{3,9}(?:\\.\\d{1,6})?)";
+const articleNumberPattern = "(?:\\d{3,9}(?:\\.\\d{1,6})?|[A-Z]{1,4}\\d{3,9}(?:\\.\\d{1,6})?)";
 
 function normalizeTextLine(line: string) {
   const singleLine = line.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -307,13 +307,26 @@ function isReceiptHeaderNoiseLine(line: string) {
   return (
     /^bon\s+\d+\b/i.test(line) ||
     /\bNL\d{2}[a-z0-9]{8,}\b/i.test(line) ||
-    /\b\d{4}\s*[a-z]{2}\s+malden\b/i.test(line) ||
-    /^\d{1,6}\s+[a-z]{2}\s+malden\b/i.test(line)
+    isDutchPostalCodeLine(line) ||
+    isDutchPostalCodeFragmentLine(line)
   );
 }
 
 function isPageCountLine(line: string) {
   return /^\d+\s+van\s+\d+$/i.test(line) || /^\d+\s*\/\s*\d+$/.test(line);
+}
+
+function isDutchPostalCodeLine(line: string) {
+  return /^\d{4}\s*[a-z]{2}(?:\s+[a-zÀ-ÿ][a-zÀ-ÿ .'’-]*)?$/i.test(
+    line.trim()
+  );
+}
+
+function isDutchPostalCodeFragmentLine(line: string) {
+  const clean = line.trim();
+  if (/^[A-Z]{2}$/.test(clean)) return true;
+
+  return /^[A-Z]{2}\s+[A-ZÀ-Ý][A-ZÀ-Ý .'’-]*$/.test(clean);
 }
 
 function looksLikeStreetAddressLine(line: string) {
@@ -328,12 +341,16 @@ function looksLikeStreetAddressLine(line: string) {
 function isPossibleStandaloneCustomerNameLine(line: string) {
   if (!line.trim()) return false;
   if (isReceiptHeaderNoiseLine(line)) return false;
+  if (isDutchPostalCodeLine(line) || isDutchPostalCodeFragmentLine(line)) return false;
   if (isPhoneLine(line)) return false;
-  if (isBoilerplateLine(line) || isContantbonDocumentLine(line)) return false;
+  if (isBoilerplateLine(line) || isContantbonDocumentLine(line) || isFooterLine(line)) {
+    return false;
+  }
   if (isPageCountLine(line) || parseDutchDate(line)) return false;
   if (/€/.test(line)) return false;
   if (/^\d+(?:[.,]\d+)?$/.test(line)) return false;
-  if (/^bon\b|^levering\b|\blevering\b|^artikel\b|^aantal\b|prijs|totaal/i.test(line)) {
+  if (/^[A-Z]{1,2}$/.test(line.trim())) return false;
+  if (/^bon\b|^levering\b|\blevering\b|^artikel\b|^aantal\b|prijs|totaal|^btw\b/i.test(line)) {
     return false;
   }
   if (looksLikeStreetAddressLine(line) && !storeLocationFromText(line)) return false;
@@ -364,6 +381,14 @@ function isLikelyCustomerLine(line: string) {
   if (/\blevering\b/i.test(line)) return false;
 
   const customerName = cleanCustomerName(line);
+  if (
+    isDutchPostalCodeLine(line) ||
+    isDutchPostalCodeFragmentLine(line) ||
+    isDutchPostalCodeLine(customerName) ||
+    isDutchPostalCodeFragmentLine(customerName)
+  ) {
+    return false;
+  }
 
   return (
     !isBoilerplateLine(line) &&
@@ -372,15 +397,28 @@ function isLikelyCustomerLine(line: string) {
   );
 }
 
+function inferFooterCustomerLine(lines: string[]) {
+  const markerIndex = lines.findIndex((line) => /^afdrukdatum\b/i.test(line));
+  if (markerIndex < 0) return "";
+
+  const candidates = lines.slice(Math.max(0, markerIndex - 10), markerIndex).reverse();
+  const customerLine = candidates.find(isPossibleStandaloneCustomerNameLine);
+
+  return customerLine ? cleanCustomerName(customerLine) : "";
+}
+
 function inferCustomerLine(lines: string[], dateLineIndex: number) {
   const headerLines = collapseRepeatedSequence(lines.slice(0, dateLineIndex));
   const storeLine = [...headerLines].reverse().find(storeLocationFromText);
   if (storeLine) return `Winkel ${storeLocationFromText(storeLine)}`;
 
+  const footerCustomerLine = inferFooterCustomerLine(lines);
+  if (footerCustomerLine) return footerCustomerLine;
+
   const beforeDateLine = [...headerLines].reverse().find(isLikelyCustomerLine);
   if (beforeDateLine) return cleanCustomerName(beforeDateLine);
 
-  const repeatedCustomerName = inferRepeatedCustomerName(headerLines);
+  const repeatedCustomerName = inferRepeatedCustomerName(lines);
   if (repeatedCustomerName) return repeatedCustomerName;
 
   const standaloneCustomerName = [...headerLines]
@@ -657,10 +695,20 @@ function cleanProductDescription(value: string) {
     .trim();
 }
 
+function parseArticleToken(value: string) {
+  const match = value.match(/^(\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.(\d{1,6}))?$/i);
+  if (!match) return null;
+
+  return {
+    articleNumber: match[1].trim(),
+    subcode: match[2]?.trim() || "",
+  };
+}
+
 function extractArticleNumberFromDescription(value: string) {
   const match = value
     .trim()
-    .match(/^((\d{4,9}|[A-Z]{1,4}\d{3,9})(?:\.(\d{1,6}))?)\s+(.+)$/i);
+    .match(/^((\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.(\d{1,6}))?)\s+(.+)$/i);
   if (!match) {
     return { articleNumber: "", subcode: "", description: value.trim() };
   }
@@ -669,6 +717,32 @@ function extractArticleNumberFromDescription(value: string) {
     articleNumber: match[2].trim(),
     subcode: match[3]?.trim() || "",
     description: match[4].trim(),
+  };
+}
+
+function extractArticleFromProductDescription(value: string) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  const leadingArticle = extractArticleNumberFromDescription(clean);
+  if (leadingArticle.articleNumber) {
+    return {
+      ...leadingArticle,
+      description: cleanProductDescription(leadingArticle.description),
+    };
+  }
+
+  const trailingMatch = clean.match(/^(.+?)\s+(\S+)$/);
+  const trailingArticle = trailingMatch ? parseArticleToken(trailingMatch[2]) : null;
+  if (trailingMatch && trailingArticle) {
+    return {
+      ...trailingArticle,
+      description: cleanProductDescription(trailingMatch[1]),
+    };
+  }
+
+  return {
+    articleNumber: "",
+    subcode: "",
+    description: cleanProductDescription(clean),
   };
 }
 
@@ -1021,9 +1095,7 @@ function parseProductLine(line: string): LogisticsReceiptLine | null {
   );
   if (!product) return null;
 
-  const article = extractArticleNumberFromDescription(
-    cleanProductDescription(product.descriptionText)
-  );
+  const article = extractArticleFromProductDescription(product.descriptionText);
   const description = article.description;
   if (!isUsableProductDescription(description)) return null;
   if (isProductOptionDescription(description)) return null;
@@ -1046,9 +1118,7 @@ function parseProductStartLine(line: string): LogisticsReceiptLine | null {
   const product = extractProductQuantityAndDescription(line);
   if (!product) return null;
 
-  const article = extractArticleNumberFromDescription(
-    cleanProductDescription(product.descriptionText)
-  );
+  const article = extractArticleFromProductDescription(product.descriptionText);
   const description = article.description;
   if (!isUsableProductDescription(description)) return null;
   if (isProductOptionDescription(description)) return null;
@@ -1426,12 +1496,19 @@ function parsePage(pageText: string): ParsedPage | null {
       if (pendingSplitProductDescription) {
         const pricedSplitLine = parsePriceQuantityLine(line);
         if (pricedSplitLine) {
-          const description = cleanProductDescription(pendingSplitProductDescription);
+          const article = extractArticleFromProductDescription(
+            pendingSplitProductDescription
+          );
+          const description = article.description;
           const unitPrice = pickUnitPrice(
             [pricedSplitLine.priceText],
             pricedSplitLine.quantityText
           );
           currentLine = uniqueLinePush(parsedLines, {
+            ...(article.articleNumber
+              ? { articleNumber: article.articleNumber }
+              : {}),
+            ...(article.subcode ? { note: `Subcode ${article.subcode}` } : {}),
             quantity: pricedSplitLine.quantityText,
             description,
             ...(unitPrice !== undefined ? { unitPrice } : {}),
