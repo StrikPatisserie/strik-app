@@ -471,6 +471,12 @@ function parseArticleToken(value: string) {
   };
 }
 
+function isArticleCodeWithSubcode(value: string) {
+  return /^(?:\d{3,9}|[A-Z]{1,4}\d{3,9})\.[A-Z0-9]{1,8}$/i.test(
+    value.trim()
+  );
+}
+
 function extractArticleFromProductDescription(value: string) {
   const clean = value.replace(/\s+/g, " ").trim();
   const leadingMatch = clean.match(
@@ -517,6 +523,8 @@ function articleFieldsForReceiptLine(article: {
 }
 
 function isPlausibleReceiptQuantity(value: string) {
+  if (isArticleCodeWithSubcode(value)) return false;
+
   const amount = parseDutchNumber(value);
 
   return (

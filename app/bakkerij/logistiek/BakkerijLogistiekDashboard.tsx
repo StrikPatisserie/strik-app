@@ -1110,8 +1110,16 @@ function receiptSearchText(receipt: ReceiptSummary) {
 }
 
 function numericQuantity(value: string) {
+  if (isArticleSubcodeQuantity(value)) return 0;
+
   const parsed = Number.parseFloat(value.replace(",", ".").replace(/[^\d.-]/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isArticleSubcodeQuantity(value: string) {
+  return /^(?:\d{3,9}|[A-Z]{1,4}\d{3,9})[.,][A-Z0-9]{1,8}$/i.test(
+    value.trim()
+  );
 }
 
 function normalizedLineDescription(value: string) {
@@ -1415,6 +1423,8 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
       description,
       ...(note && note !== description ? { note } : { note: undefined }),
     };
+
+    if (isArticleSubcodeQuantity(normalizedLine.quantity)) return;
 
     if (isProductOptionLine(normalizedLine)) {
       const kind = productOptionKind(normalizedLine.description);
@@ -2549,6 +2559,8 @@ function buildBakeryProductionTotals(
 ): BakeryProductionTotals {
   return receipts.reduce(
     (totals, receipt) => {
+      if (isInternalReceiptSummary(receipt)) return totals;
+
       receipt.lines.forEach((line) => {
         const quantity = numericQuantity(line.quantity);
 
