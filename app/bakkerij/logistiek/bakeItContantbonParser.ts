@@ -234,6 +234,61 @@ function parseDutchDate(value: string) {
   return `${year}-${month}-${day.padStart(2, "0")}`;
 }
 
+function isContantbonDocumentLine(line: string) {
+  return /\bcontantbon(?:nen)?\b/i.test(line);
+}
+
+function findDeliveryDateLineIndex(lines: string[]) {
+  const weekDateIndex = lines.findIndex(
+    (line) => /\bweek\s+\d+\b/i.test(line) && parseDutchDate(line)
+  );
+  if (weekDateIndex >= 0) return weekDateIndex;
+
+  return lines.findIndex(
+    (line) => parseDutchDate(line) && !/afdrukdatum/i.test(line)
+  );
+}
+
+function cleanCustomerName(value: string) {
+  return value.replace(/^\d{2,}\s+/, "").trim();
+}
+
+function isLikelyCustomerLine(line: string) {
+  if (!/^\d{2,}\s+\S/.test(line)) return false;
+  if (isPhoneLine(line)) return false;
+  if (/\blevering\b/i.test(line)) return false;
+
+  return !isBoilerplateLine(line) && !isContantbonDocumentLine(line);
+}
+
+function inferCustomerLine(lines: string[], dateLineIndex: number) {
+  const beforeDateLine = lines
+    .slice(0, dateLineIndex)
+    .reverse()
+    .find(isLikelyCustomerLine);
+  if (beforeDateLine) return cleanCustomerName(beforeDateLine);
+
+  const afterDateLine = lines
+    .slice(dateLineIndex + 1, dateLineIndex + 5)
+    .find(
+      (line) =>
+        !/\blevering\b/i.test(line) &&
+        !/\bartikelomschrijving\b/i.test(line) &&
+        !isBoilerplateLine(line) &&
+        !isContantbonDocumentLine(line)
+    );
+
+  return afterDateLine ? cleanCustomerName(afterDateLine) : "Onbekende klant";
+}
+
+function inferDeliveryCodeFromHeader(lines: string[], dateLineIndex: number) {
+  const headerLines = lines.slice(Math.max(0, dateLineIndex - 4), dateLineIndex + 3);
+  const deliveryLine = headerLines.find((line) => /\blevering\b/i.test(line));
+  const match = deliveryLine?.match(/\blevering\s+(\d+)\b/i);
+
+  return match?.[1] || "";
+}
+
 function getAmsterdamDateTimeParts(date: Date) {
   const formatter = new Intl.DateTimeFormat("nl-NL", {
     day: "2-digit",
@@ -339,9 +394,12 @@ function isBoilerplateLine(line: string) {
   return (
     line === "Contantbon" ||
     /^e-mail:/i.test(line) ||
+    /@strik-patisserie\.nl/i.test(line) ||
     /^tel\./i.test(line) ||
     /^iban:/i.test(line) ||
+    /^nl\d{2}[a-z0-9]+$/i.test(line) ||
     /^ambachtsweg/i.test(line) ||
+    /^\d{4}\s*[a-z]{2}\s+malden$/i.test(line) ||
     /^strik patisserie bv$/i.test(line) ||
     /^www\.strik-patisserie\.nl$/i.test(line) ||
     /^malden\b/i.test(line) ||
@@ -1106,21 +1164,28 @@ function parsePage(pageText: string): ParsedPage | null {
     .split(/\n/)
     .map(normalizeTextLine)
     .filter(Boolean);
-  if (!lines.length || !lines.includes("Contantbon")) return null;
+  if (!lines.length || !lines.some(isContantbonDocumentLine)) return null;
 
-  const weekIndex = lines.findIndex((line) => /^week\s+\d+\b/i.test(line));
+  const weekIndex = findDeliveryDateLineIndex(lines);
   if (weekIndex < 0) return null;
 
   const topBlock = collapseRepeatedSequence(lines.slice(1, weekIndex));
   const receiptNumber =
     [...topBlock].reverse().find((line) => /^\d{2,}$/.test(line)) || "";
   const topAddress = topBlock
-    .filter((line) => line !== receiptNumber && !isPhoneLine(line))
+    .filter(
+      (line) =>
+        line !== receiptNumber &&
+        !isPhoneLine(line) &&
+        !isBoilerplateLine(line) &&
+        !isContantbonDocumentLine(line) &&
+        !/\blevering\b/i.test(line) &&
+        !isLikelyCustomerLine(line)
+    )
     .join(", ");
   const date = parseDutchDate(lines[weekIndex]);
-  const customer = lines[weekIndex + 1] || "Onbekende klant";
-  const deliveryCodeMatch = (lines[weekIndex + 2] || "").match(/levering\s+(\d+)/i);
-  const deliveryCode = deliveryCodeMatch?.[1] || "";
+  const customer = inferCustomerLine(lines, weekIndex);
+  const deliveryCode = inferDeliveryCodeFromHeader(lines, weekIndex);
   const declaredPageTotal = lines.reduce((highest, line) => {
     const match = line.match(/\bpagina\s+\d+\s+van\s+(\d+)\b/i);
     const total = match ? Number(match[1]) : 0;
