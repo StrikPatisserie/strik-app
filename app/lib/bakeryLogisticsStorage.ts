@@ -1237,6 +1237,13 @@ export async function upsertLogisticsWebshopImage(
   return nextImage;
 }
 
+export async function deleteLogisticsWebshopImage(imageId: string) {
+  const state = await readLogisticsWebshopImagesState();
+  const images = state.images.filter((item) => item.id !== imageId);
+
+  await writeLogisticsWebshopImagesState({ images });
+}
+
 export async function upsertLogisticsReceiptOverride(
   override: LogisticsReceiptOverride
 ) {

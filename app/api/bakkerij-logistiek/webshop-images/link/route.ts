@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { LogisticsWebshopImage } from "@/app/bakkerij/logistiek/logisticsTypes";
 import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
 import {
+  deleteLogisticsWebshopImage,
   readLogisticsWebshopImagesState,
   upsertLogisticsWebshopImage,
 } from "@/app/lib/bakeryLogisticsStorage";
@@ -21,6 +22,13 @@ function cleanText(value: unknown, maxLength = 500) {
     .slice(0, maxLength);
 }
 
+function isManualUploadedImage(image: LogisticsWebshopImage) {
+  return (
+    image.messageId.startsWith("manual-mail-photo:") ||
+    image.id.startsWith("manual-mail-photo-")
+  );
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -35,7 +43,7 @@ export async function POST(request: Request) {
     const receiptNumber = cleanText(body.receiptNumber, 120);
     const receiptCustomer = cleanText(body.receiptCustomer, 180);
 
-    if (!imageId || (action !== "unlink" && !receiptId)) {
+    if (!imageId || (!["unlink", "delete"].includes(action) && !receiptId)) {
       return jsonError("Geen geldige foto-koppeling ontvangen.");
     }
 
@@ -44,6 +52,21 @@ export async function POST(request: Request) {
 
     if (!image) {
       return jsonError("Webshopfoto niet gevonden.", 404);
+    }
+
+    if (action === "delete") {
+      if (!isManualUploadedImage(image)) {
+        return jsonError("Alleen handmatig geuploade foto's kunnen weg.", 403);
+      }
+
+      await deleteLogisticsWebshopImage(imageId);
+
+      return NextResponse.json({
+        ok: true,
+        deleted: true,
+        imageId,
+        generatedAt: new Date().toISOString(),
+      });
     }
 
     if (action === "unlink") {

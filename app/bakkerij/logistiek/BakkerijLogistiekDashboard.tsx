@@ -180,6 +180,8 @@ type ReceiptOverrideDraft = {
   routeNote: string;
 };
 
+const MAX_MANUAL_PHOTO_UPLOAD_BYTES = 1_250_000;
+
 type ReceiptSeed = Omit<
   ReceiptSummary,
   "receiptNumber" | "deliveryAddress" | "customerNote" | "internalNote" | "lines"
@@ -1654,6 +1656,108 @@ function fallbackPhotoProductPlan(needsCheck = true): PhotoProductPlan {
     copies: 1,
     needsCheck,
   };
+}
+
+function photoProductSummaryForReceipt(receipt: ReceiptSummary) {
+  const strictPlans = photoProductPlansForReceipt(receipt, {
+    requirePhotoSignal: true,
+  });
+  const plans =
+    strictPlans.length > 0 ? strictPlans : inferredPhotoProductPlansForReceipt(receipt);
+
+  return plans
+    .map((plan) => `${plan.copies}x ${plan.product}`)
+    .join(" · ")
+    .slice(0, 500);
+}
+
+function receiptNeedsManualPhotoUpload(receipt: ReceiptSummary) {
+  return (
+    photoProductPlansForReceipt(receipt, { requirePhotoSignal: true }).length > 0
+  );
+}
+
+function isManualUploadedWebshopImage(image: WebshopImageSummary) {
+  return (
+    image.messageId.startsWith("manual-mail-photo:") ||
+    image.id.startsWith("manual-mail-photo-")
+  );
+}
+
+function imageElementForFile(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Foto kon niet worden gelezen."));
+    };
+    image.src = objectUrl;
+  });
+}
+
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality: number
+) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Foto kon niet worden voorbereid."));
+      },
+      type,
+      quality
+    );
+  });
+}
+
+async function prepareManualPhotoUploadFile(file: File) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Kies een JPG, PNG of WEBP foto.");
+  }
+
+  const acceptedType = ["image/jpeg", "image/png", "image/webp"].includes(
+    file.type.toLowerCase()
+  );
+  if (acceptedType && file.size <= MAX_MANUAL_PHOTO_UPLOAD_BYTES) return file;
+
+  const image = await imageElementForFile(file);
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Foto kon niet worden voorbereid.");
+
+  canvas.width = width;
+  canvas.height = height;
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+
+  const baseName = file.name.replace(/\.[^.]+$/, "") || "mailfoto";
+  let smallestBlob = await canvasToBlob(canvas, "image/jpeg", 0.88);
+
+  for (const quality of [0.78, 0.68]) {
+    if (smallestBlob.size <= MAX_MANUAL_PHOTO_UPLOAD_BYTES) break;
+    smallestBlob = await canvasToBlob(canvas, "image/jpeg", quality);
+  }
+
+  if (smallestBlob.size > MAX_MANUAL_PHOTO_UPLOAD_BYTES) {
+    throw new Error("Foto is te groot. Maak hem iets kleiner en probeer opnieuw.");
+  }
+
+  return new File([smallestBlob], `${baseName}.jpg`, {
+    type: "image/jpeg",
+  });
 }
 
 function distributedCopyCount(
@@ -5230,6 +5334,51 @@ export default function BakkerijLogistiekDashboard() {
     }
   }
 
+  async function uploadManualWebshopImageForReceipt(
+    receipt: ReceiptSummary,
+    file: File
+  ) {
+    setPhotoLinkMessage("foto voorbereiden...");
+
+    try {
+      const uploadFile = await prepareManualPhotoUploadFile(file);
+      const formData = new FormData();
+      formData.set("file", uploadFile);
+      formData.set("date", selectedPlan.date);
+      formData.set("receiptId", receipt.id);
+      formData.set("receiptNumber", receipt.receiptNumber);
+      formData.set("receiptCustomer", receipt.customer);
+      formData.set("productSummary", photoProductSummaryForReceipt(receipt));
+
+      setPhotoLinkMessage("foto uploaden...");
+      const response = await fetch(
+        "/api/bakkerij-logistiek/webshop-images/manual",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+      const data = (await response.json()) as {
+        image?: WebshopImageSummary;
+        message?: string;
+      };
+
+      if (!response.ok || !data.image) {
+        throw new Error(data.message || "Foto uploaden is niet gelukt.");
+      }
+
+      setWebshopImages((current) => [
+        data.image!,
+        ...current.filter((item) => item.id !== data.image!.id),
+      ]);
+      setPhotoLinkMessage(`Foto gekoppeld aan ${receipt.customer}.`);
+    } catch (error) {
+      setPhotoLinkMessage(
+        error instanceof Error ? error.message : "Foto uploaden is niet gelukt."
+      );
+    }
+  }
+
   async function linkWebshopImageToReceipt(
     image: WebshopImageSummary,
     receipt: ReceiptSummary
@@ -5297,6 +5446,41 @@ export default function BakkerijLogistiekDashboard() {
         error instanceof Error
           ? error.message
           : "Foto loskoppelen is niet gelukt."
+      );
+    }
+  }
+
+  async function deleteWebshopImage(image: WebshopImageSummary) {
+    setPhotoLinkMessage("foto verwijderen...");
+
+    try {
+      const response = await fetch("/api/bakkerij-logistiek/webshop-images/link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          imageId: image.id,
+        }),
+      });
+      const data = (await response.json()) as {
+        deleted?: boolean;
+        imageId?: string;
+        message?: string;
+      };
+
+      if (!response.ok || !data.deleted) {
+        throw new Error(data.message || "Foto verwijderen is niet gelukt.");
+      }
+
+      setWebshopImages((current) =>
+        current.filter((item) => item.id !== (data.imageId || image.id))
+      );
+      setPhotoLinkMessage("Foto verwijderd.");
+    } catch (error) {
+      setPhotoLinkMessage(
+        error instanceof Error
+          ? error.message
+          : "Foto verwijderen is niet gelukt."
       );
     }
   }
@@ -5536,6 +5720,10 @@ export default function BakkerijLogistiekDashboard() {
             onSaveReceiptOverride={saveReceiptOverride}
             onLinkWebshopImageToReceipt={linkWebshopImageToReceipt}
             onUnlinkWebshopImageFromReceipt={unlinkWebshopImageFromReceipt}
+            onDeleteWebshopImage={deleteWebshopImage}
+            onUploadManualWebshopImageForReceipt={
+              uploadManualWebshopImageForReceipt
+            }
             overrideMessage={overrideMessage}
             photoLinkMessage={photoLinkMessage}
             selectedPlan={selectedPlan}
@@ -5925,8 +6113,10 @@ function RoutesPanel({
 }
 
 function OrdersPanel({
+  onDeleteWebshopImage,
   onLinkWebshopImageToReceipt,
   onUnlinkWebshopImageFromReceipt,
+  onUploadManualWebshopImageForReceipt,
   onSaveReceiptOverride,
   overrideMessage,
   photoLinkMessage,
@@ -5935,11 +6125,16 @@ function OrdersPanel({
   selectedPlan,
   webshopImages,
 }: Readonly<{
+  onDeleteWebshopImage: (image: WebshopImageSummary) => Promise<void>;
   onLinkWebshopImageToReceipt: (
     image: WebshopImageSummary,
     receipt: ReceiptSummary
   ) => Promise<void>;
   onUnlinkWebshopImageFromReceipt: (image: WebshopImageSummary) => Promise<void>;
+  onUploadManualWebshopImageForReceipt: (
+    receipt: ReceiptSummary,
+    file: File
+  ) => Promise<void>;
   onSaveReceiptOverride: (
     receipt: ReceiptSummary,
     draft: ReceiptOverrideDraft
@@ -6101,10 +6296,15 @@ function OrdersPanel({
 
       <ReceiptDetail
         imageMatches={selectedImageMatches}
+        onDeleteWebshopImage={onDeleteWebshopImage}
         onUnlinkWebshopImageFromReceipt={onUnlinkWebshopImageFromReceipt}
+        onUploadManualWebshopImageForReceipt={
+          onUploadManualWebshopImageForReceipt
+        }
         onSaveReceiptOverride={onSaveReceiptOverride}
         override={selectedOverride}
         overrideMessage={overrideMessage}
+        photoLinkMessage={photoLinkMessage}
         receipt={selectedReceipt}
         selectedPlan={selectedPlan}
       />
@@ -6249,10 +6449,12 @@ function thumbnailStyleFor(image: WebshopImageSummary) {
 
 function WebshopImageBlock({
   images,
+  onDelete,
   onUnlink,
   receipt,
 }: Readonly<{
   images: WebshopImageSummary[];
+  onDelete: (image: WebshopImageSummary) => Promise<void>;
   onUnlink: (image: WebshopImageSummary) => Promise<void>;
   receipt: ReceiptSummary;
 }>) {
@@ -6270,6 +6472,7 @@ function WebshopImageBlock({
       </div>
       <div className="mt-2 grid gap-1.5">
         {images.map((image) => {
+          const manualUpload = isManualUploadedWebshopImage(image);
           const displayCustomerName =
             image.customerName ||
             image.matchedReceiptCustomer ||
@@ -6329,7 +6532,15 @@ function WebshopImageBlock({
                   )}
                 </span>
               </a>
-              {image.matchSource === "manual" && (
+              {manualUpload ? (
+                <button
+                  type="button"
+                  onClick={() => void onDelete(image)}
+                  className="min-h-8 border border-[#d4695f] bg-white px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#9a2f28] transition hover:bg-[#fff1ef]"
+                >
+                  Verwijder
+                </button>
+              ) : image.matchSource === "manual" ? (
                 <button
                   type="button"
                   onClick={() => void onUnlink(image)}
@@ -6337,7 +6548,7 @@ function WebshopImageBlock({
                 >
                   Ontkoppel
                 </button>
-              )}
+              ) : null}
             </div>
           );
         })}
@@ -6674,16 +6885,24 @@ function ReceiptFulfillmentBlock({
 
 function ReceiptDetail({
   imageMatches,
+  onDeleteWebshopImage,
   onUnlinkWebshopImageFromReceipt,
+  onUploadManualWebshopImageForReceipt,
   onSaveReceiptOverride,
   override,
   overrideMessage,
+  photoLinkMessage,
   receipt,
   selectedPlan,
 }: Readonly<{
   imageMatches: WebshopImageSummary[];
+  onDeleteWebshopImage: (image: WebshopImageSummary) => Promise<void>;
   onUnlinkWebshopImageFromReceipt: (
     image: WebshopImageSummary
+  ) => Promise<void>;
+  onUploadManualWebshopImageForReceipt: (
+    receipt: ReceiptSummary,
+    file: File
   ) => Promise<void>;
   onSaveReceiptOverride: (
     receipt: ReceiptSummary,
@@ -6691,9 +6910,28 @@ function ReceiptDetail({
   ) => Promise<void>;
   override: ReceiptOverrideSummary | null;
   overrideMessage: string;
+  photoLinkMessage: string;
   receipt: ReceiptSummary | null;
   selectedPlan: DayPlan;
 }>) {
+  const manualPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingManualPhoto, setIsUploadingManualPhoto] = useState(false);
+
+  async function handleManualPhotoChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+    if (!file || !receipt) return;
+
+    setIsUploadingManualPhoto(true);
+    try {
+      await onUploadManualWebshopImageForReceipt(receipt, file);
+    } finally {
+      setIsUploadingManualPhoto(false);
+      event.target.value = "";
+    }
+  }
+
   if (!receipt) {
     return (
       <div className="flex h-[30rem] items-center justify-center rounded-lg border border-[#e8e4de] bg-white p-4 text-sm font-bold tracking-normal text-[#6b645b] shadow-sm">
@@ -6714,6 +6952,8 @@ function ReceiptDetail({
         !/^geen aparte opmerking\.?$/i.test(note) &&
         !/^geen aparte logistieke waarschuwing\.?$/i.test(note)
     );
+  const showManualPhotoUpload =
+    receiptNeedsManualPhotoUpload(receipt) && imageMatches.length === 0;
 
   return (
     <article className="h-[30rem] overflow-y-auto rounded-sm border border-[#111] bg-[#f3f1ed] p-2 text-[#000] shadow-sm">
@@ -6835,9 +7075,44 @@ function ReceiptDetail({
           <ReceiptFulfillmentBlock receipt={receipt} />
           <WebshopImageBlock
             images={imageMatches}
+            onDelete={onDeleteWebshopImage}
             onUnlink={onUnlinkWebshopImageFromReceipt}
             receipt={receipt}
           />
+          {showManualPhotoUpload && (
+            <div className="border-b border-dashed border-[#d7d7d7] bg-[#fff8d8] p-3">
+              <input
+                ref={manualPhotoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/*"
+                className="hidden"
+                onChange={(event) => void handleManualPhotoChange(event)}
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-black uppercase tracking-normal text-[#6f5212]">
+                  Marsepeinfoto ontbreekt
+                </p>
+                <button
+                  type="button"
+                  disabled={isUploadingManualPhoto}
+                  onClick={() => manualPhotoInputRef.current?.click()}
+                  className="min-h-8 border border-[#1a1815] bg-[#1a1815] px-2.5 text-[0.62rem] font-black uppercase tracking-normal text-white transition hover:bg-[#3b352f] disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isUploadingManualPhoto ? "Uploaden" : "Foto uploaden"}
+                </button>
+              </div>
+              {photoLinkMessage && (
+                <p className="mt-1 truncate text-[0.65rem] font-bold tracking-normal text-[#6f5212]">
+                  {photoLinkMessage}
+                </p>
+              )}
+            </div>
+          )}
+          {!showManualPhotoUpload && photoLinkMessage && (
+            <p className="border-b border-dashed border-[#d7d7d7] bg-white px-3 py-2 text-[0.65rem] font-bold tracking-normal text-[#315641]">
+              {photoLinkMessage}
+            </p>
+          )}
         </div>
       </div>
     </article>
