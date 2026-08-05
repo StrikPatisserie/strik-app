@@ -8,7 +8,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
   ERROR_LABEL: 'Fout',
 
   QUERY:
-    'newer_than:30d {subject:"contantbon Bake-it" subject:"Orders email-Contantbonnen" label:"Contantbonnen"}',
+    'newer_than:30d {subject:"contantbon Bake-it" subject:"Orders email-Contantbonnen" subject:"Orders email-Contantbon A5" subject:"Orders email-Contantbon" label:"Contantbonnen"}',
   MAX_THREADS: 30,
   MAX_PDF_ATTACHMENTS: 4,
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
@@ -540,7 +540,7 @@ function herimporteerLaatsteBakeItContantbonnen() {
 function isBakeItOrdersEmailContantbonMail_(message) {
   const subject = String(message.getSubject() || '');
 
-  return /orders\s+email[-\s]+contantbonnen/i.test(subject);
+  return /orders\s+email[-\s]+contantbon(?:nen)?(?:\s+a5)?/i.test(subject);
 }
 
 function maakBakeItImportTriggerAan() {
