@@ -109,6 +109,18 @@ type RecepturenAppProps = {
   profile?: UserProfile | null;
 };
 
+type PersonnelDashboardEvent = {
+  id: string;
+  type: "birthday" | "anniversary";
+  employeeName: string;
+  title: string;
+  occurrenceDate: string;
+  daysUntil: number;
+  years?: number;
+};
+
+const importantDashboardJubileeYears = [5, 10, 12.5, 25, 40, 50] as const;
+
 function mainTabForPath(pathname: string): MainTabId {
   if (pathname.startsWith("/bakkerij/management")) return "beheer";
   if (pathname.startsWith("/bakkerij/productieplanning")) return "planning";
@@ -487,6 +499,47 @@ function formatBakeryDate(value?: string, fallback = "geen datum") {
     day: "2-digit",
     month: "long",
   }).format(date);
+}
+
+function formatShortBakeryDate(value?: string) {
+  if (!value) return "";
+
+  const date = dateFromKey(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    day: "numeric",
+    month: "long",
+  }).format(date);
+}
+
+function eventDaysLabel(daysUntil: number) {
+  if (daysUntil === 0) return "vandaag";
+  if (daysUntil === 1) return "morgen";
+
+  return `over ${daysUntil} dagen`;
+}
+
+function formatPersonnelYears(years: number) {
+  return Number.isInteger(years) ? String(years) : String(years).replace(".", ",");
+}
+
+function isImportantDashboardJubilee(years: number | undefined) {
+  return typeof years === "number"
+    ? importantDashboardJubileeYears.some(
+        (importantYear) => Math.abs(importantYear - years) < 0.01
+      )
+    : false;
+}
+
+function personnelDashboardEventText(event: PersonnelDashboardEvent) {
+  if (event.type === "anniversary") {
+    return `${event.employeeName} ${
+      event.years ? `${formatPersonnelYears(event.years)} jaar` : "jubileum"
+    }`;
+  }
+
+  return `${event.employeeName} jarig`;
 }
 
 function getWeddingCakeDeliveryDate(draft: WeddingCakeDraft) {
@@ -2318,13 +2371,14 @@ function BakkerijStartScreen({
   profile?: UserProfile | null;
 }>) {
   const offer = offerForWeek(home, selectedWeek);
-  const visibleNotes = home.notes.slice(0, 3);
+  const canOpenWeddingCakeAgenda = canAccessWeddingCakes(profile);
+  const [isWeddingCakeAgendaOpen, setIsWeddingCakeAgendaOpen] = useState(false);
 
   return (
     <section className="mx-auto h-full w-full max-w-[76rem] overflow-y-auto px-3 py-3 sm:px-6 sm:py-5">
-      <div className="grid grid-cols-2 items-start gap-2 sm:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] sm:gap-5 lg:gap-7">
+      <div className="grid gap-4 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.55fr)] lg:gap-7">
         {showProductionLinks && (
-          <header className="col-span-2 flex min-w-0 items-center gap-3 pb-1 sm:gap-4">
+          <header className="flex min-w-0 items-center gap-3 pb-1 sm:gap-4 lg:col-span-2">
             <span
               className="productie-page-heading-icon shrink-0"
               aria-hidden="true"
@@ -2334,21 +2388,25 @@ function BakkerijStartScreen({
             </h1>
           </header>
         )}
-        <section className="min-w-0 rounded-[1.15rem] border border-[#d7d4cf] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.45rem] sm:p-3">
-          <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-1.5">
-            <div className="min-w-0">
-              <h2 className="winkel-card-heading text-[clamp(1.15rem,3.4vw,1.95rem)]">
-                aanbieding
-              </h2>
-              <p className="text-[0.62rem] font-normal italic leading-tight text-[#6f6961] sm:text-[0.76rem]">
+
+        <section className="min-w-0">
+          <div className="flex h-[34rem] flex-col sm:h-[38rem]">
+            <div className="mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+              <div className="min-w-0">
+                <h2 className="winkel-card-heading text-[clamp(1.2rem,3.2vw,1.9rem)]">
+                  aanbieding
+                </h2>
+              </div>
+              <p className="pb-1 text-right text-[0.72rem] font-semibold italic leading-tight text-[#2d2a26] sm:text-sm">
                 {formatWeekRange(selectedWeek)}
               </p>
             </div>
-            <div className="col-span-2 flex items-center gap-1 self-start">
+
+            <div className="relative min-h-0 flex-1 overflow-hidden bg-[#e8e3dc]">
               <button
                 type="button"
                 onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/65 text-2xl font-light leading-none text-[#111111] shadow-sm sm:h-8 sm:w-8"
+                className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-2xl font-black leading-none text-[#111111] shadow-sm"
                 aria-label="Vorige week"
               >
                 ‹
@@ -2356,92 +2414,103 @@ function BakkerijStartScreen({
               <button
                 type="button"
                 onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/65 text-2xl font-light leading-none text-[#111111] shadow-sm sm:h-8 sm:w-8"
+                className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-2xl font-black leading-none text-[#111111] shadow-sm"
                 aria-label="Volgende week"
               >
                 ›
               </button>
+
+              <div className="flex h-full w-full items-center justify-center">
+                {offer?.imageUrl ? (
+                  <img
+                    src={offer.imageUrl}
+                    alt={offer.label || "Aanbieding van de week"}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <p className="px-4 text-center text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/35">
+                    Geen aanbieding ingesteld
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="mx-auto flex aspect-[210/297] w-full max-w-[10.5rem] items-center justify-center overflow-hidden rounded-[1rem] bg-white sm:max-w-[17rem] lg:max-w-[18.5rem]">
-              {offer?.imageUrl ? (
-                <img
-                  src={offer.imageUrl}
-                  alt={offer.label || "Aanbieding van de week"}
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <p className="px-3 text-center text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/35 sm:text-xs">
-                  Geen aanbieding ingesteld
-                </p>
-              )}
           </div>
         </section>
 
-        <section className="min-w-0 rounded-[1.15rem] border border-[#d7d4cf] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.45rem] sm:p-3">
-          <div className="mb-2 flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="winkel-card-heading text-[clamp(1.05rem,3.2vw,1.9rem)]">
+        <div className="grid h-[34rem] min-w-0 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-4 sm:h-[38rem]">
+          <section className="flex min-h-0 flex-col">
+            <div className="mb-1 flex items-end justify-between gap-3">
+              <h2 className="winkel-card-heading text-[clamp(1.2rem,3.2vw,1.9rem)]">
                 notities
               </h2>
-              <p className="text-[0.62rem] font-normal italic leading-tight text-[#6f6961] sm:text-[0.76rem]">
-                to do
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={onAddNote}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/80 text-2xl font-light leading-none text-[#30462f] shadow-sm sm:h-10 sm:w-10"
-              aria-label="Notitie toevoegen"
-            >
-              +
-            </button>
-          </div>
-          <div className="grid gap-2">
-            {visibleNotes.map((note) => (
-              <label key={note.id} className="relative block">
-                <textarea
-                  value={note.text}
-                  onChange={(event) => onUpdateNoteText(note.id, event.target.value)}
-                  onBlur={(event) => onSaveNote(note.id, event.currentTarget.value)}
-                  placeholder="Schrijf notitie..."
-                  className="h-[4.3rem] w-full resize-none rounded-[0.8rem] border border-[#e2ded8] bg-white px-2.5 py-2 text-[0.7rem] font-semibold leading-snug text-[#2d2a26] outline-none placeholder:text-[#9a9a9a] focus:border-[#30462f] sm:h-[5.2rem] sm:text-sm"
-                />
-                <button
-                  type="button"
-                  onClick={() => onDeleteNote(note.id)}
-                  className="absolute -right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#d75a48] text-lg font-light leading-none text-white"
-                  aria-label="Notitie verwijderen"
-                >
-                  -
-                </button>
-              </label>
-            ))}
-            {!home.notes.length && (
               <button
                 type="button"
                 onClick={onAddNote}
-                className="h-[9rem] rounded-[0.9rem] border border-[#e2ded8] bg-white px-3 py-2.5 text-left text-xs font-semibold text-[#9a9a9a] sm:h-[12rem] sm:text-sm"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#9bc79c] text-2xl font-black leading-none text-[#1a1815] shadow-sm"
+                aria-label="Notitie toevoegen"
               >
-                Schrijf notitie...
+                +
               </button>
-            )}
-          </div>
-          {home.notes.length > visibleNotes.length && (
-            <p className="mt-2 text-[0.62rem] font-bold text-[#30462f]/55">
-              +{home.notes.length - visibleNotes.length} extra notitie
-            </p>
-          )}
-          {status && (
-            <p className="mt-2 text-[0.62rem] font-bold text-[#707070] sm:text-xs">
-              {status}
-            </p>
-          )}
-        </section>
-      </div>
+            </div>
 
-      {canAccessWeddingCakes(profile) && <BakkerijWeddingCakeAgenda />}
-      {showProductionLinks && <ProductionOverviewLinks profile={profile} />}
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-[1.65rem] bg-[#e8e0d9] p-3">
+              <div className="grid gap-2">
+                {home.notes.map((note) => (
+                  <label key={note.id} className="relative block">
+                    <textarea
+                      value={note.text}
+                      onChange={(event) =>
+                        onUpdateNoteText(note.id, event.target.value)
+                      }
+                      onBlur={(event) =>
+                        onSaveNote(note.id, event.currentTarget.value)
+                      }
+                      placeholder="Schrijf notitie..."
+                      className="min-h-[4.3rem] w-full resize-none rounded-[1rem] border border-transparent bg-white/85 px-3 py-2.5 text-sm font-semibold leading-snug text-[#2d2a26] outline-none placeholder:text-[#8d8881] focus:border-[#9bc79c]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onDeleteNote(note.id)}
+                      className="absolute -right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-[#d75a48] text-lg font-black leading-none text-white"
+                      aria-label="Notitie verwijderen"
+                    >
+                      -
+                    </button>
+                  </label>
+                ))}
+                {!home.notes.length && (
+                  <button
+                    type="button"
+                    onClick={onAddNote}
+                    className="min-h-[8rem] rounded-[1rem] bg-white/85 px-3 py-2.5 text-left text-sm font-semibold text-[#8d8881]"
+                  >
+                    Schrijf notitie...
+                  </button>
+                )}
+              </div>
+              {status && (
+                <p className="mt-2 text-xs font-bold text-[#707070]">{status}</p>
+              )}
+            </div>
+          </section>
+
+          <PersonnelMilestonesPanel />
+        </div>
+
+        {showProductionLinks && (
+          <ProductionOverviewTiles
+            canOpenWeddingCakeAgenda={canOpenWeddingCakeAgenda}
+            onOpenWeddingCakeAgenda={() => setIsWeddingCakeAgendaOpen(true)}
+            profile={profile}
+          />
+        )}
+        {canOpenWeddingCakeAgenda && (
+          <BakkerijWeddingCakeAgendaModal
+            open={isWeddingCakeAgendaOpen}
+            onClose={() => setIsWeddingCakeAgendaOpen(false)}
+          />
+        )}
+      </div>
     </section>
   );
 }
@@ -2450,66 +2519,222 @@ const productionOverviewLinks = [
   {
     href: "/bakkerij/bakkerij",
     label: "Bakkerij",
-    icon: strikIcons.gebak,
-    iconTone: "bg-[#c3d3bc]",
-    tone: "border-[#cbdcc5] bg-white hover:bg-[#f6faf4]",
-  },
-  {
-    href: "/bakkerij/ijs-chocolade",
-    label: "IJs & chocolade",
-    icon: strikIcons.ijsChocolade,
-    iconTone: "bg-[#f7df83]",
-    tone: "border-[#eadb8b] bg-white hover:bg-[#fff8d8]",
+    icon: strikIcons.bakkerij,
   },
   {
     href: "/bakkerij/logistiek",
     label: "Logistiek",
     icon: strikIcons.logistiek,
-    iconTone: "bg-[#efc7b8]",
-    tone: "border-[#efc7b8] bg-white hover:bg-[#fff3ed]",
+  },
+  {
+    href: "/bakkerij/ijs-chocolade",
+    label: "Chocola & ijs",
+    icon: strikIcons.ijsChocolade,
   },
   {
     href: "/bakkerij/management",
     label: "Data",
     icon: strikIcons.data,
-    iconTone: "bg-[#b9d7ea]",
-    tone: "border-[#bcd7e8] bg-white hover:bg-[#edf5fb]",
   },
 ];
 
-function ProductionOverviewLinks({
-  profile,
-}: Readonly<{ profile?: UserProfile | null }>) {
-  const visibleLinks = filterAllowedItems(productionOverviewLinks, profile);
+function PersonnelMilestonesPanel() {
+  const [events, setEvents] = useState<PersonnelDashboardEvent[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [status, setStatus] = useState("");
+  const [todayKey, setTodayKey] = useState(() => dateKey(new Date()));
 
-  if (visibleLinks.length === 0) return null;
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setTodayKey(dateKey(new Date()));
+    }, 60 * 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignoreResult = false;
+
+    async function loadEvents() {
+      setIsLoading(true);
+      setStatus("");
+
+      try {
+        const response = await fetch("/api/tamigo-employees?view=shop", {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Tamigo gaf status ${response.status}.`);
+        }
+
+        const data = (await response.json()) as {
+          personnelEvents?: PersonnelDashboardEvent[];
+        };
+        if (ignoreResult) return;
+
+        const upcomingEvents = (data.personnelEvents || [])
+          .filter((event) => {
+            const isUpcoming =
+              Number.isFinite(event.daysUntil) &&
+              event.daysUntil >= 0 &&
+              event.daysUntil <= 14;
+            const isShownType =
+              event.type === "birthday" ||
+              (event.type === "anniversary" &&
+                isImportantDashboardJubilee(event.years));
+
+            return isUpcoming && isShownType;
+          })
+          .sort((first, second) => {
+            const dateDiff = first.occurrenceDate.localeCompare(
+              second.occurrenceDate
+            );
+            if (dateDiff !== 0) return dateDiff;
+
+            return first.employeeName.localeCompare(second.employeeName);
+          });
+
+        setEvents(upcomingEvents);
+      } catch (error) {
+        if (ignoreResult) return;
+        setEvents([]);
+        setStatus(
+          error instanceof Error
+            ? `Agenda niet beschikbaar. ${error.message}`
+            : "Agenda niet beschikbaar."
+        );
+      } finally {
+        if (!ignoreResult) setIsLoading(false);
+      }
+    }
+
+    void loadEvents();
+
+    return () => {
+      ignoreResult = true;
+    };
+  }, [todayKey]);
 
   return (
-    <section className="mt-3 grid gap-2 sm:mt-5">
+    <section className="flex min-h-0 flex-col">
+      <div className="mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+        <h2 className="winkel-card-heading text-[clamp(1.2rem,3.2vw,1.9rem)]">
+          agenda
+        </h2>
+        <p className="pb-1 text-right text-[0.72rem] font-semibold italic leading-tight text-[#2d2a26] sm:text-sm">
+          vandaag: {formatShortBakeryDate(todayKey)}
+        </p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-[1.65rem] bg-[#e8e0d9] px-5 py-4">
+        {isLoading ? (
+          <p className="text-sm font-bold italic text-[#2d2a26]/45">
+            Agenda laden...
+          </p>
+        ) : events.length ? (
+          <ul className="grid gap-2 text-[clamp(0.92rem,1.9vw,1.25rem)] font-semibold italic leading-snug text-[#111111]">
+            {events.map((event) => (
+              <li key={event.id} className="grid gap-0.5">
+                <span>
+                  {formatShortBakeryDate(event.occurrenceDate)}:{" "}
+                  {personnelDashboardEventText(event)}
+                </span>
+                <span className="text-xs font-bold not-italic text-[#2d2a26]/45">
+                  {eventDaysLabel(event.daysUntil)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm font-bold italic text-[#2d2a26]/45">
+            {status || "Geen verjaardagen of grote jubilea."}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ProductionOverviewTile({
+  href,
+  icon,
+  label,
+  onClick,
+}: Readonly<{
+  href?: string;
+  icon: string;
+  label: string;
+  onClick?: () => void;
+}>) {
+  const className =
+    "group flex min-h-[5.8rem] items-center gap-5 rounded-full bg-[#b9cbb0] px-3 py-3 text-left shadow-sm ring-1 ring-[#a9bea1] transition hover:-translate-y-0.5 hover:bg-[#c4d5bc] hover:shadow-md active:translate-y-0 sm:min-h-[6.25rem] sm:px-4";
+  const content = (
+    <>
+      <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white shadow-sm sm:h-[4.4rem] sm:w-[4.4rem]">
+        <img src={icon} alt="" className="h-9 w-9 object-contain" />
+      </span>
+      <span className="min-w-0 text-[clamp(1rem,2.1vw,1.35rem)] font-black uppercase leading-tight text-[#111111]">
+        {label}
+      </span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
+    </button>
+  );
+}
+
+function ProductionOverviewTiles({
+  profile,
+  canOpenWeddingCakeAgenda,
+  onOpenWeddingCakeAgenda,
+}: Readonly<{
+  profile?: UserProfile | null;
+  canOpenWeddingCakeAgenda: boolean;
+  onOpenWeddingCakeAgenda: () => void;
+}>) {
+  const visibleLinks = filterAllowedItems(productionOverviewLinks, profile);
+
+  if (visibleLinks.length === 0 && !canOpenWeddingCakeAgenda) return null;
+
+  return (
+    <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:col-span-2 xl:grid-cols-3">
+      {canOpenWeddingCakeAgenda && (
+        <ProductionOverviewTile
+          icon={strikIcons.bruidstaart}
+          label="Bruidstaart agenda"
+          onClick={onOpenWeddingCakeAgenda}
+        />
+      )}
       {visibleLinks.map((item) => (
-        <Link
+        <ProductionOverviewTile
           key={item.href}
           href={item.href}
-          className={`flex min-h-16 items-center justify-between border px-3 py-2 shadow-sm transition active:scale-[0.99] ${item.tone}`}
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center ${item.iconTone}`}>
-              <img src={item.icon} alt="" className="h-6 w-6 object-contain" />
-            </span>
-            <span className="truncate text-xl font-black leading-tight text-[#111111]">
-              {item.label}
-            </span>
-          </span>
-          <span className={`flex h-10 w-10 shrink-0 items-center justify-center text-xl font-black ${item.iconTone}`}>
-            &gt;
-          </span>
-        </Link>
+          icon={item.icon}
+          label={item.label}
+        />
       ))}
     </section>
   );
 }
 
-function BakkerijWeddingCakeAgenda() {
+function BakkerijWeddingCakeAgendaModal({
+  open,
+  onClose,
+}: Readonly<{ open: boolean; onClose: () => void }>) {
   const [weekStart, setWeekStart] = useState(weekStartForDate);
   const [drafts, setDrafts] = useState<WeddingCakeDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState<WeddingCakeDraft | null>(null);
@@ -2518,6 +2743,8 @@ function BakkerijWeddingCakeAgenda() {
   const weekDates = weekDatesFor(weekStart);
 
   useEffect(() => {
+    if (!open) return;
+
     let ignoreResult = false;
 
     async function loadAgenda() {
@@ -2579,126 +2806,165 @@ function BakkerijWeddingCakeAgenda() {
     return () => {
       ignoreResult = true;
     };
-  }, [weekStart]);
+  }, [open, weekStart]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose, open]);
 
   const groupedDrafts = weekDates.map((date) => ({
     date,
     drafts: drafts.filter((draft) => getWeddingCakeDeliveryDate(draft) === date),
   }));
 
+  if (!open) return null;
+
   return (
-    <details className="group mt-4 rounded-[1.2rem] border border-[#bdd2b6] bg-[#dfead9] shadow-sm sm:mt-5">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[1.2rem] bg-[#f6faf4] px-3 py-2.5 marker:hidden sm:px-4 sm:py-3">
-        <span className="min-w-0">
-          <span className="block text-[0.85rem] font-black uppercase tracking-[0.12em] text-[#30462f] sm:text-sm">
-            bruidstaart agenda
-          </span>
-          <span className="mt-0.5 block text-[0.66rem] font-semibold italic text-[#30462f]/60 sm:text-xs">
-            {formatWeekRange(weekStart)}
-          </span>
-        </span>
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ef5737] text-lg font-black leading-none text-white transition group-open:rotate-180">
-          ˅
-        </span>
-      </summary>
-
-      <div className="p-3 sm:p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-bold text-[#30462f]/55">
-            {isLoading ? "Laden..." : status}
-          </p>
-          <div className="flex overflow-hidden rounded-full border border-[#bdd2b6] bg-white/80 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setWeekStart(addDays(weekStart, -7))}
-              className="flex h-9 w-10 items-center justify-center border-r border-[#d6e5d8] text-2xl leading-none text-[#30462f]"
-              aria-label="Vorige week bruidstaarten"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              onClick={() => setWeekStart(weekStartForDate())}
-              className="px-3 text-xs font-bold text-[#30462f]"
-            >
-              deze week
-            </button>
-            <button
-              type="button"
-              onClick={() => setWeekStart(addDays(weekStart, 7))}
-              className="flex h-9 w-10 items-center justify-center border-l border-[#d6e5d8] text-2xl leading-none text-[#30462f]"
-              aria-label="Volgende week bruidstaarten"
-            >
-              ›
-            </button>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1a1815]/35 p-3"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Bruidstaart agenda"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default"
+        aria-label="Bruidstaart agenda sluiten"
+      />
+      <section className="relative flex max-h-[calc(100vh-1.5rem)] w-full max-w-[78rem] flex-col overflow-hidden rounded-[1.6rem] bg-[#f6faf4] shadow-2xl">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#d6e5d8] bg-white/85 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[0.8rem] font-black uppercase tracking-[0.14em] text-[#30462f]">
+              bruidstaart agenda
+            </p>
+            <p className="mt-0.5 text-xs font-semibold italic text-[#30462f]/60">
+              {formatWeekRange(weekStart)}
+            </p>
+            <p className="mt-1 text-xs font-bold text-[#30462f]/55">
+              {isLoading ? "Laden..." : status}
+            </p>
           </div>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)]">
-        <div className="rounded-[1.25rem] bg-white/75 p-3">
-          <div className="grid gap-2 md:grid-cols-7">
-            {groupedDrafts.map((group) => (
-              <div
-                key={group.date}
-                className="min-h-[8.5rem] rounded-[1rem] bg-[#faf8f5] p-3 ring-1 ring-[#d6e5d8]"
+          <div className="flex items-center gap-2">
+            <div className="flex overflow-hidden rounded-full border border-[#bdd2b6] bg-white shadow-sm">
+              <button
+                type="button"
+                onClick={() => setWeekStart(addDays(weekStart, -7))}
+                className="flex h-9 w-10 items-center justify-center border-r border-[#d6e5d8] text-2xl leading-none text-[#30462f]"
+                aria-label="Vorige week bruidstaarten"
               >
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#30462f]/45">
-                  {formatBakeryDate(group.date).split(" ")[0]}
-                </p>
-                <p className="text-sm font-black text-[#30462f]">
-                  {formatBakeryDate(group.date).replace(/^[^ ]+\s/, "")}
-                </p>
-                <div className="mt-3 grid gap-2">
-                  {group.drafts.map((draft) => {
-                    const size = findOption(cakeSizes, draft.config.sizeId);
-                    const isSelected = selectedDraft?.code === draft.code;
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={() => setWeekStart(weekStartForDate())}
+                className="px-3 text-xs font-bold text-[#30462f]"
+              >
+                deze week
+              </button>
+              <button
+                type="button"
+                onClick={() => setWeekStart(addDays(weekStart, 7))}
+                className="flex h-9 w-10 items-center justify-center border-l border-[#d6e5d8] text-2xl leading-none text-[#30462f]"
+                aria-label="Volgende week bruidstaarten"
+              >
+                ›
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#ef5737] text-xl font-black leading-none text-white shadow-sm"
+              aria-label="Sluiten"
+            >
+              ×
+            </button>
+          </div>
+        </header>
 
-                    return (
-                      <button
-                        key={draft.code}
-                        type="button"
-                        onClick={() => setSelectedDraft(draft)}
-                        className={`rounded-[0.9rem] p-2 text-left text-xs transition ${
-                          isSelected
-                            ? "bg-[#ef5737] text-white shadow-sm"
-                            : "bg-white text-[#2d2a26] hover:bg-[#fff4ee]"
-                        }`}
-                      >
-                        <span className="block font-black">
-                          {weddingCakeCustomerName(draft) || draft.code}
-                        </span>
-                        <span
-                          className={`mt-1 block font-bold ${
-                            isSelected ? "text-white/80" : "text-[#2d2a26]/50"
-                          }`}
-                        >
-                          {size ? `${size.code} · ${size.personsLabel}` : draft.code}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  {!group.drafts.length && (
-                    <p className="text-xs text-[#30462f]/35">Geen taarten</p>
-                  )}
-                </div>
+        <div className="min-h-0 overflow-y-auto p-3 sm:p-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)]">
+            <div className="rounded-[1.25rem] bg-white/75 p-3">
+              <div className="grid gap-2 md:grid-cols-7">
+                {groupedDrafts.map((group) => (
+                  <div
+                    key={group.date}
+                    className="min-h-[8.5rem] rounded-[1rem] bg-[#faf8f5] p-3 ring-1 ring-[#d6e5d8]"
+                  >
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#30462f]/45">
+                      {formatBakeryDate(group.date).split(" ")[0]}
+                    </p>
+                    <p className="text-sm font-black text-[#30462f]">
+                      {formatBakeryDate(group.date).replace(/^[^ ]+\s/, "")}
+                    </p>
+                    <div className="mt-3 grid gap-2">
+                      {group.drafts.map((draft) => {
+                        const size = findOption(cakeSizes, draft.config.sizeId);
+                        const isSelected = selectedDraft?.code === draft.code;
+
+                        return (
+                          <button
+                            key={draft.code}
+                            type="button"
+                            onClick={() => setSelectedDraft(draft)}
+                            className={`rounded-[0.9rem] p-2 text-left text-xs transition ${
+                              isSelected
+                                ? "bg-[#ef5737] text-white shadow-sm"
+                                : "bg-white text-[#2d2a26] hover:bg-[#fff4ee]"
+                            }`}
+                          >
+                            <span className="block font-black">
+                              {weddingCakeCustomerName(draft) || draft.code}
+                            </span>
+                            <span
+                              className={`mt-1 block font-bold ${
+                                isSelected
+                                  ? "text-white/80"
+                                  : "text-[#2d2a26]/50"
+                              }`}
+                            >
+                              {size
+                                ? `${size.code} · ${size.personsLabel}`
+                                : draft.code}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      {!group.drafts.length && (
+                        <p className="text-xs text-[#30462f]/35">
+                          Geen taarten
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            <div className="min-w-0 rounded-[1.25rem] bg-white/85 p-4 shadow-sm">
+              {selectedDraft ? (
+                <BakkerijWeddingCakeDetail draft={selectedDraft} />
+              ) : (
+                <div className="flex min-h-[18rem] items-center justify-center rounded-[1rem] border border-dashed border-[#bdd2b6] px-5 text-center text-sm font-bold leading-relaxed text-[#30462f]/55">
+                  Klik op een definitieve bruidstaart om de productiekaart en
+                  printversie te openen.
+                </div>
+              )}
+            </div>
           </div>
         </div>
-
-        <div className="min-w-0 rounded-[1.25rem] bg-white/85 p-4 shadow-sm">
-          {selectedDraft ? (
-            <BakkerijWeddingCakeDetail draft={selectedDraft} />
-          ) : (
-            <div className="flex min-h-[18rem] items-center justify-center rounded-[1rem] border border-dashed border-[#bdd2b6] px-5 text-center text-sm font-bold leading-relaxed text-[#30462f]/55">
-              Klik op een definitieve bruidstaart om de productiekaart en
-              printversie te openen.
-            </div>
-          )}
-        </div>
-      </div>
-      </div>
-    </details>
+      </section>
+    </div>
   );
 }
 
