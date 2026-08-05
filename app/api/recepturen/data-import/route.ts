@@ -44,6 +44,7 @@ type IngredientColumnMap = {
 
 type RecipeColumnMap = {
   recipe?: number;
+  strikArticleNumber?: number;
   group?: number;
   type?: number;
   batchQuantity?: number;
@@ -141,6 +142,19 @@ const PRICE_HEADERS = [
 const ALLERGEN_HEADERS = ["allergenen", "allergeen", "allergens"];
 const ALIAS_HEADERS = ["aliassen", "alias", "zoeknamen"];
 const RECIPE_HEADERS = ["recept", "receptnaam", "naam", "product"];
+const STRIK_ARTICLE_HEADERS = [
+  "strik artikelnummer",
+  "strik artikel nr",
+  "strik artikelnr",
+  "strik artikelcode",
+  "bake-it artikelnummer",
+  "bake it artikelnummer",
+  "bakeit artikelnummer",
+  "artikelnummer",
+  "artikel nr",
+  "artikelnr",
+  "artikelcode",
+];
 const GROUP_HEADERS = ["productgroep", "groep", "categorie"];
 const TYPE_HEADERS = ["type", "soort"];
 const BATCH_QUANTITY_HEADERS = ["batch aantal", "standaard batch", "opbrengst"];
@@ -840,6 +854,7 @@ function mapRecipeHeaders(row: string[]): RecipeColumnMap {
   const ingredientIndex = findHeaderIndex(headers, INGREDIENT_NAME_HEADERS);
   const map: RecipeColumnMap = {
     recipe: findHeaderIndex(headers, RECIPE_HEADERS),
+    strikArticleNumber: findHeaderIndex(headers, STRIK_ARTICLE_HEADERS),
     group: findHeaderIndex(headers, GROUP_HEADERS),
     type: findHeaderIndex(headers, TYPE_HEADERS),
     batchQuantity: findHeaderIndex(headers, BATCH_QUANTITY_HEADERS),
@@ -961,6 +976,7 @@ function parseRecipeRows(
       fileName
     );
     const group = getCell(row, map.group);
+    const strikArticleNumber = getCell(row, map.strikArticleNumber);
     const type = getCell(row, map.type);
     const batchQuantity = parseDutchNumber(getCell(row, map.batchQuantity));
     const batchUnitText = getCell(row, map.batchUnit);
@@ -974,6 +990,7 @@ function parseRecipeRows(
     const allergens = parseList(getCell(row, map.allergens));
 
     if (group) recipe.productGroup = group;
+    if (strikArticleNumber) recipe.strikArticleNumber = strikArticleNumber;
     if (type) recipe.type = /half|basis|vulling|mousse/i.test(type)
       ? "semiFinished"
       : "finalProduct";
@@ -1035,6 +1052,7 @@ function getOrCreateImportedRecipe(
     name,
     type: "finalProduct",
     productGroup: "Import",
+    strikArticleNumber: "",
     standardBatchQuantity: 1,
     standardBatchUnit: "stuk",
     salesPrice: 0,

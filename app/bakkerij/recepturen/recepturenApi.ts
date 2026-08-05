@@ -81,7 +81,7 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
 
   return {
     ingredients: Array.isArray(record.ingredients) ? record.ingredients : [],
-    recipes: Array.isArray(record.recipes) ? record.recipes : [],
+    recipes: normalizeStoredRecipes(record.recipes),
     packagingItems: Array.isArray(record.packagingItems)
       ? record.packagingItems
       : [],
@@ -153,6 +153,24 @@ function normalizeHefeOrderHistory(value: unknown): HefeOrderHistoryEntry[] {
 
 function cleanStoredText(value: unknown, maxLength = 600) {
   return typeof value === "string" ? value.slice(0, maxLength) : "";
+}
+
+function normalizeStoredRecipe(value: Recipe): Recipe {
+  return {
+    ...value,
+    strikArticleNumber: cleanStoredText(value.strikArticleNumber, 80).trim(),
+  };
+}
+
+function normalizeStoredRecipes(value: unknown): Recipe[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(
+      (recipe): recipe is Recipe =>
+        Boolean(recipe && typeof recipe === "object")
+    )
+    .map(normalizeStoredRecipe);
 }
 
 function cleanStoredDate(value: unknown) {
@@ -281,6 +299,7 @@ export function pruneInvoiceImports(invoiceImports: InvoiceImport[]) {
 function prepareRecepturenDataForStorage(data: RecepturenData) {
   return {
     ...data,
+    recipes: normalizeStoredRecipes(data.recipes),
     invoiceImports: pruneInvoiceImports(data.invoiceImports),
     hefeOrderHistory: normalizeHefeOrderHistory(data.hefeOrderHistory),
     bakeryHome: data.bakeryHome ?? emptyBakeryHomeData,

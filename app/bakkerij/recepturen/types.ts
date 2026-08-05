@@ -141,6 +141,7 @@ export type ManualProductionPlanningItem = {
 export type Recipe = {
   id: string;
   name: string;
+  strikArticleNumber?: string;
   type: RecipeType;
   productGroup: string;
   createdAt?: string;

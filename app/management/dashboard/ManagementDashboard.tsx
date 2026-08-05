@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 type DashboardStatus = "loading" | "ready" | "error";
 type BadgeStatus = "green" | "orange" | "red" | "missing";
 type CompareMode = "none" | "previous" | "lastYear" | "custom";
+type Period = "day" | "week" | "month";
 
 type DashboardRow = {
   shop: string;
@@ -26,10 +27,14 @@ type DashboardRow = {
 };
 
 type DashboardResponse = {
-  period: "week" | "month";
+  period: Period;
   periodLabel: string;
   year: number;
   week: number;
+  date: string;
+  previousDay?: string;
+  sameDayLastYear?: string;
+  manualCompareDate?: string;
   previousWeek: { year: number; week: number };
   sameWeekLastYear: { year: number; week: number };
   manualCompare: { year: number; week: number };
@@ -70,6 +75,69 @@ const monthNames = [
   "december",
 ];
 
+function formatIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function parseIsoDateInput(value: string, fallback: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return fallback;
+  }
+
+  return value;
+}
+
+function addDaysToIsoDate(value: string, days: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return date.toISOString().slice(0, 10);
+}
+
+function addYearsToIsoDate(value: string, years: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year + years, month - 1, day));
+
+  if (date.getUTCMonth() !== month - 1) {
+    return new Date(Date.UTC(year + years, month, 0)).toISOString().slice(0, 10);
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function getIsoPartsForIsoDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return {
+    year: getIsoWeekYear(date),
+    week: getIsoWeek(date),
+  };
+}
+
+function formatDateLabel(value: string) {
+  return new Intl.DateTimeFormat("nl-NL", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00.000Z`));
+}
+
 function getIsoWeekYear(date: Date) {
   const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNumber = target.getUTCDay() || 7;
@@ -94,6 +162,7 @@ function getCurrentPeriodParts() {
     year: getIsoWeekYear(now),
     week: getIsoWeek(now),
     month: now.getMonth() + 1,
+    date: formatIsoDate(now),
   };
 }
 
@@ -186,7 +255,14 @@ function formatIndex(value: number | null) {
   return `${sign}${decimalFormatter.format(value)}%`;
 }
 
-function formatPeriodLabel(period: "week" | "month", year: number, week: number, month: number) {
+function formatPeriodLabel(
+  period: Period,
+  year: number,
+  week: number,
+  month: number,
+  date: string
+) {
+  if (period === "day") return formatDateLabel(date);
   if (period === "month") return `${monthNames[month - 1]} ${year}`;
 
   return `week ${week} · ${year}`;
@@ -194,27 +270,63 @@ function formatPeriodLabel(period: "week" | "month", year: number, week: number,
 
 function getCompareTarget(
   mode: CompareMode,
-  period: "week" | "month",
+  period: Period,
   year: number,
   week: number,
   month: number,
+  date: string,
   customYear: number,
   customWeek: number,
-  customMonth: number
+  customMonth: number,
+  customDate: string
 ) {
   if (mode === "custom") {
+    if (period === "day") {
+      const customDateParts = getIsoPartsForIsoDate(customDate);
+
+      return {
+        ...customDateParts,
+        month: Number(customDate.slice(5, 7)),
+        date: customDate,
+      };
+    }
+
     return {
       year: customYear,
       week: period === "month" ? getIsoWeekForMonth(customYear, customMonth) : customWeek,
       month: customMonth,
+      date,
     };
   }
 
   if (mode === "lastYear") {
+    if (period === "day") {
+      const lastYearDate = addYearsToIsoDate(date, -1);
+      const lastYearParts = getIsoPartsForIsoDate(lastYearDate);
+
+      return {
+        ...lastYearParts,
+        month,
+        date: lastYearDate,
+      };
+    }
+
     return {
       year: year - 1,
       week: period === "month" ? getIsoWeekForMonth(year - 1, month) : week,
       month,
+      date,
+    };
+  }
+
+  if (period === "day") {
+    const previousDate = addDaysToIsoDate(date, -1);
+    const previousParts = getIsoPartsForIsoDate(previousDate);
+
+    return {
+      ...previousParts,
+      month: Number(previousDate.slice(5, 7)),
+      date: previousDate,
     };
   }
 
@@ -224,23 +336,31 @@ function getCompareTarget(
     return {
       ...previous,
       week: getIsoWeekForMonth(previous.year, previous.month),
+      date,
     };
   }
 
   return {
     ...previousWeek(year, week),
     month,
+    date,
   };
 }
 
 function getCompareLabel(
   mode: CompareMode,
-  period: "week" | "month",
-  target: { year: number; week: number; month: number }
+  period: Period,
+  target: { year: number; week: number; month: number; date: string }
 ) {
   if (mode === "none") return "";
-  if (mode === "previous") return period === "month" ? "maand eerder" : "week eerder";
+  if (mode === "previous") {
+    if (period === "day") return "dag eerder";
+
+    return period === "month" ? "maand eerder" : "week eerder";
+  }
   if (mode === "lastYear") return "jaar eerder";
+
+  if (period === "day") return formatDateLabel(target.date);
 
   return period === "month"
     ? `${monthNames[target.month - 1]} ${target.year}`
@@ -291,7 +411,13 @@ function DashboardRowCard({
   showCompare: boolean;
 }>) {
   const source =
-    row.source === "excel" ? "Excel" : row.source === "manual" ? "Handmatig" : "Geen omzet";
+    row.source === "excel"
+      ? "Excel"
+      : row.source === "manual"
+        ? "Handmatig"
+        : row.source === "dagafsluiting"
+          ? "Dagafsluiting"
+          : "Geen omzet";
 
   return (
     <article className="rounded-md border border-[#e7e0d8]/80 bg-white/92 px-2 py-1.5 shadow-sm sm:px-3 sm:py-2">
@@ -406,28 +532,40 @@ function DashboardRowCard({
 
 export default function ManagementDashboard() {
   const initialPeriod = useMemo(() => getCurrentPeriodParts(), []);
-  const [period, setPeriod] = useState<"week" | "month">("week");
+  const [period, setPeriod] = useState<Period>("week");
   const [year, setYear] = useState(initialPeriod.year);
   const [week, setWeek] = useState(initialPeriod.week);
   const [month, setMonth] = useState(initialPeriod.month);
+  const [date, setDate] = useState(initialPeriod.date);
   const [compareMode, setCompareMode] = useState<CompareMode>("none");
   const [compareYear, setCompareYear] = useState(initialPeriod.year - 1);
   const [compareWeek, setCompareWeek] = useState(initialPeriod.week);
   const [compareMonth, setCompareMonth] = useState(initialPeriod.month);
-  const [draftPeriod, setDraftPeriod] = useState<"week" | "month">("week");
+  const [compareDate, setCompareDate] = useState(
+    addYearsToIsoDate(initialPeriod.date, -1)
+  );
+  const [draftPeriod, setDraftPeriod] = useState<Period>("week");
   const [draftYear, setDraftYear] = useState(String(initialPeriod.year));
   const [draftWeek, setDraftWeek] = useState(String(initialPeriod.week));
   const [draftMonth, setDraftMonth] = useState(initialPeriod.month);
+  const [draftDate, setDraftDate] = useState(initialPeriod.date);
   const [draftCompareMode, setDraftCompareMode] = useState<CompareMode>("none");
   const [draftCompareYear, setDraftCompareYear] = useState(String(initialPeriod.year - 1));
   const [draftCompareWeek, setDraftCompareWeek] = useState(String(initialPeriod.week));
   const [draftCompareMonth, setDraftCompareMonth] = useState(initialPeriod.month);
+  const [draftCompareDate, setDraftCompareDate] = useState(
+    addYearsToIsoDate(initialPeriod.date, -1)
+  );
   const [compareOpen, setCompareOpen] = useState(false);
   const [state, setState] = useState<DashboardStatus>("loading");
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const dashboardWeek =
-    period === "month" ? getIsoWeekForMonth(year, month) : week;
+    period === "month"
+      ? getIsoWeekForMonth(year, month)
+      : period === "day"
+        ? getIsoPartsForIsoDate(date).week
+        : week;
   const compareTarget = useMemo(
     () =>
       getCompareTarget(
@@ -436,11 +574,24 @@ export default function ManagementDashboard() {
         year,
         week,
         month,
+        date,
         compareYear,
         compareWeek,
-        compareMonth
+        compareMonth,
+        compareDate
       ),
-    [compareMode, compareMonth, compareWeek, compareYear, month, period, week, year]
+    [
+      compareDate,
+      compareMode,
+      compareMonth,
+      compareWeek,
+      compareYear,
+      date,
+      month,
+      period,
+      week,
+      year,
+    ]
   );
   const showCompare = compareMode !== "none";
   const compareLabel = useMemo(
@@ -463,6 +614,10 @@ export default function ManagementDashboard() {
           compareYear: String(compareTarget.year),
           compareWeek: String(compareTarget.week),
         });
+        if (period === "day") {
+          params.set("date", date);
+          params.set("compareDate", compareTarget.date);
+        }
         const response = await fetch(`/api/management-dashboard?${params}`, {
           cache: "no-store",
         });
@@ -500,30 +655,63 @@ export default function ManagementDashboard() {
     return () => {
       ignoreResult = true;
     };
-  }, [compareTarget.week, compareTarget.year, dashboardWeek, period, year]);
+  }, [
+    compareTarget.date,
+    compareTarget.week,
+    compareTarget.year,
+    dashboardWeek,
+    date,
+    period,
+    year,
+  ]);
 
   function applyFilters() {
-    const nextYear = parseYear(draftYear, year);
-    const nextWeek = parseWeek(draftWeek, week, nextYear);
+    const nextDate = parseIsoDateInput(draftDate, date);
+    const nextDateParts = getIsoPartsForIsoDate(nextDate);
+    const nextYear =
+      draftPeriod === "day" ? nextDateParts.year : parseYear(draftYear, year);
+    const nextWeek =
+      draftPeriod === "day"
+        ? nextDateParts.week
+        : parseWeek(draftWeek, week, nextYear);
+    const nextMonth =
+      draftPeriod === "day" ? Number(nextDate.slice(5, 7)) : draftMonth;
+    const nextCompareDate = parseIsoDateInput(draftCompareDate, compareDate);
     const nextCompareYear = parseYear(draftCompareYear, compareYear);
     const nextCompareWeek = parseWeek(draftCompareWeek, compareWeek, nextCompareYear);
 
     setPeriod(draftPeriod);
     setYear(nextYear);
     setWeek(nextWeek);
-    setMonth(draftMonth);
+    setMonth(nextMonth);
+    setDate(nextDate);
     setCompareMode(draftCompareMode);
     setCompareYear(nextCompareYear);
     setCompareWeek(nextCompareWeek);
     setCompareMonth(draftCompareMonth);
+    setCompareDate(nextCompareDate);
     setDraftYear(String(nextYear));
     setDraftWeek(String(nextWeek));
+    setDraftMonth(nextMonth);
+    setDraftDate(nextDate);
     setDraftCompareYear(String(nextCompareYear));
     setDraftCompareWeek(String(nextCompareWeek));
+    setDraftCompareDate(nextCompareDate);
   }
 
   function nudgeDraftPeriod(direction: -1 | 1) {
     const parsedYear = parseYear(draftYear, year);
+
+    if (draftPeriod === "day") {
+      const nextDate = addDaysToIsoDate(parseIsoDateInput(draftDate, date), direction);
+      const nextDateParts = getIsoPartsForIsoDate(nextDate);
+
+      setDraftDate(nextDate);
+      setDraftYear(String(nextDateParts.year));
+      setDraftWeek(String(nextDateParts.week));
+      setDraftMonth(Number(nextDate.slice(5, 7)));
+      return;
+    }
 
     if (draftPeriod === "month") {
       const next =
@@ -553,16 +741,20 @@ export default function ManagementDashboard() {
     setYear(current.year);
     setWeek(current.week);
     setMonth(current.month);
+    setDate(current.date);
     setCompareMode("none");
     setCompareOpen(false);
     setDraftPeriod("week");
     setDraftYear(String(current.year));
     setDraftWeek(String(current.week));
     setDraftMonth(current.month);
+    setDraftDate(current.date);
     setDraftCompareMode("none");
     setDraftCompareYear(String(current.year - 1));
     setDraftCompareWeek(String(current.week));
     setDraftCompareMonth(current.month);
+    setCompareDate(addYearsToIsoDate(current.date, -1));
+    setDraftCompareDate(addYearsToIsoDate(current.date, -1));
   }
 
   function resetCompare() {
@@ -582,7 +774,8 @@ export default function ManagementDashboard() {
     draftPeriod,
     parseYear(draftYear, year),
     parseWeek(draftWeek, week, parseYear(draftYear, year)),
-    draftMonth
+    draftMonth,
+    parseIsoDateInput(draftDate, date)
   );
 
   return (
@@ -590,7 +783,7 @@ export default function ManagementDashboard() {
       <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/88 p-2 shadow-sm">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <p className="min-w-0 truncate text-[0.68rem] font-black uppercase tracking-[0.08em] text-[#ef533b] sm:text-xs">
-            {data?.periodLabel || formatPeriodLabel(period, year, week, month)}
+            {data?.periodLabel || formatPeriodLabel(period, year, week, month, date)}
           </p>
           <button
             type="button"
@@ -602,15 +795,16 @@ export default function ManagementDashboard() {
         </div>
 
         <div className="flex flex-wrap items-end gap-1.5">
-          <div className="grid h-8 grid-cols-2 rounded-full bg-[#f8f6f3] p-0.5">
+          <div className="grid h-8 grid-cols-3 rounded-full bg-[#f8f6f3] p-0.5">
             {[
+              ["day", "Dag"],
               ["week", "Week"],
               ["month", "Maand"],
             ].map(([value, label]) => (
               <button
                 key={value}
                 type="button"
-                onClick={() => setDraftPeriod(value as "week" | "month")}
+                onClick={() => setDraftPeriod(value as Period)}
                 className={`rounded-full px-2.5 text-[0.68rem] font-black transition ${
                   draftPeriod === value
                     ? "bg-[#ef533b] text-white shadow-sm"
@@ -622,18 +816,30 @@ export default function ManagementDashboard() {
             ))}
           </div>
 
-          <label className="grid w-16 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
-            Jaar
-            <input
-              type="text"
-              inputMode="numeric"
-              value={draftYear}
-              onChange={(event) => setDraftYear(cleanDigits(event.target.value, 4))}
-              className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
-            />
-          </label>
+          {draftPeriod !== "day" && (
+            <label className="grid w-16 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+              Jaar
+              <input
+                type="text"
+                inputMode="numeric"
+                value={draftYear}
+                onChange={(event) => setDraftYear(cleanDigits(event.target.value, 4))}
+                className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+              />
+            </label>
+          )}
 
-          {draftPeriod === "month" ? (
+          {draftPeriod === "day" ? (
+            <label className="grid min-w-36 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+              Datum
+              <input
+                type="date"
+                value={draftDate}
+                onChange={(event) => setDraftDate(event.target.value)}
+                className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-xs font-black normal-case tracking-normal text-[#1a1815]"
+              />
+            </label>
+          ) : draftPeriod === "month" ? (
             <label className="grid min-w-28 flex-1 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:max-w-40">
               Maand
               <select
@@ -697,7 +903,14 @@ export default function ManagementDashboard() {
           <div className="mt-2 rounded-md border border-[#e7e0d8]/80 bg-[#f8f6f3] p-2">
             <div className="grid grid-cols-3 gap-1">
               {[
-                ["previous", draftPeriod === "month" ? "maand eerder" : "week eerder"],
+                [
+                  "previous",
+                  draftPeriod === "day"
+                    ? "dag eerder"
+                    : draftPeriod === "month"
+                      ? "maand eerder"
+                      : "week eerder",
+                ],
                 ["lastYear", "jaar eerder"],
                 ["custom", "anders"],
               ].map(([value, label]) => (
@@ -718,18 +931,32 @@ export default function ManagementDashboard() {
 
             {draftCompareMode === "custom" && (
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <label className="grid w-16 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
-                  Jaar
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={draftCompareYear}
-                    onChange={(event) =>
-                      setDraftCompareYear(cleanDigits(event.target.value, 4))
-                    }
-                    className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
-                  />
-                </label>
+                {draftPeriod === "day" ? (
+                  <label className="grid min-w-36 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                    Datum
+                    <input
+                      type="date"
+                      value={draftCompareDate}
+                      onChange={(event) =>
+                        setDraftCompareDate(event.target.value)
+                      }
+                      className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-xs font-black normal-case tracking-normal text-[#1a1815]"
+                    />
+                  </label>
+                ) : (
+                  <label className="grid w-16 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                    Jaar
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={draftCompareYear}
+                      onChange={(event) =>
+                        setDraftCompareYear(cleanDigits(event.target.value, 4))
+                      }
+                      className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+                    />
+                  </label>
+                )}
                 {draftPeriod === "month" ? (
                   <label className="grid min-w-28 flex-1 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:max-w-40">
                     Maand
@@ -747,7 +974,7 @@ export default function ManagementDashboard() {
                       ))}
                     </select>
                   </label>
-                ) : (
+                ) : draftPeriod === "week" ? (
                   <label className="grid w-14 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
                     Week
                     <input
@@ -760,7 +987,7 @@ export default function ManagementDashboard() {
                       className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
                     />
                   </label>
-                )}
+                ) : null}
               </div>
             )}
 
@@ -810,7 +1037,13 @@ export default function ManagementDashboard() {
         <>
           <section className="grid grid-cols-4 gap-1.5 sm:gap-2">
             <Metric
-              label={data.period === "month" ? "Maandomzet" : "Weekomzet"}
+              label={
+                data.period === "day"
+                  ? "Dagomzet"
+                  : data.period === "month"
+                    ? "Maandomzet"
+                    : "Weekomzet"
+              }
               value={formatMoney(data.totals.revenue)}
             />
             <Metric label="Uren" value={formatHours(data.totals.hours)} />

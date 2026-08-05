@@ -3490,6 +3490,7 @@ function createBlankRecipe(type: RecipeType): Recipe {
     name: type === "semiFinished" ? "Nieuw halffabricaat" : "Nieuw recept",
     type,
     productGroup: type === "semiFinished" ? "Vullingen" : "Gebak",
+    strikArticleNumber: "",
     createdAt: now,
     standardBatchQuantity: type === "semiFinished" ? 1 : 40,
     standardBatchUnit: type === "semiFinished" ? "kg" : "stuk",
@@ -3610,6 +3611,7 @@ async function downloadRecepturenExcelBackup(data: RecepturenData) {
     data.recipes.map((recipe) => ({
       id: recipe.id,
       naam: recipe.name,
+      strikArtikelnummer: recipe.strikArticleNumber || "",
       soort: recipeTypeLabel(recipe.type),
       groep: recipe.productGroup,
       status: recipe.status,

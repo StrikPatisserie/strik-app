@@ -67,7 +67,10 @@ export default function RecipesList({
 
     return recipes
       .filter((recipe) => {
-        const matchesSearch = !query || normalizeSearch(recipe.name).includes(query);
+        const matchesSearch =
+          !query ||
+          normalizeSearch(recipe.name).includes(query) ||
+          normalizeSearch(recipe.strikArticleNumber || "").includes(query);
         const matchesGroup = recipeMatchesGroupFilter(recipe, activeGroup);
         const matchesStatus = status === "all" || recipe.status === status;
         const matchesType = type === "all" || recipe.type === type;
@@ -245,9 +248,10 @@ export default function RecipesList({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col border border-[#c3d3bc] bg-white">
         {filteredRecipes.length ? (
           <>
-            <div className="hidden shrink-0 border-b border-[#c3d3bc] bg-[#f5f5f3] text-[0.56rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c] md:grid md:grid-cols-[1.25rem_minmax(12rem,1fr)_6.5rem_6rem_5rem_7.25rem] lg:grid-cols-[1.25rem_minmax(18rem,42rem)_7.5rem_7rem_6rem_8rem] xl:grid-cols-[1.25rem_minmax(20rem,48rem)_8rem_7.5rem_6rem_8rem]">
+            <div className="hidden shrink-0 border-b border-[#c3d3bc] bg-[#f5f5f3] text-[0.56rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c] md:grid md:grid-cols-[1.25rem_minmax(11rem,1fr)_5.5rem_6.5rem_6rem_5rem_7.25rem] lg:grid-cols-[1.25rem_minmax(16rem,40rem)_6rem_7.5rem_7rem_6rem_8rem] xl:grid-cols-[1.25rem_minmax(18rem,44rem)_6.5rem_8rem_7.5rem_6rem_8rem]">
               <span />
               <span>Recept</span>
+              <span>Artikel</span>
               <span>Soort</span>
               <span>Categorie</span>
               <span>Batch</span>
@@ -260,7 +264,7 @@ export default function RecipesList({
                     key={recipe.id}
                     type="button"
                     onClick={() => onOpenRecipe(recipe)}
-                    className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center border-b border-[#c3d3bc] text-left transition hover:bg-[#f8f8f6] md:grid-cols-[1.25rem_minmax(12rem,1fr)_6.5rem_6rem_5rem_7.25rem] lg:grid-cols-[1.25rem_minmax(18rem,42rem)_7.5rem_7rem_6rem_8rem] xl:grid-cols-[1.25rem_minmax(20rem,48rem)_8rem_7.5rem_6rem_8rem]"
+                    className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center border-b border-[#c3d3bc] text-left transition hover:bg-[#f8f8f6] md:grid-cols-[1.25rem_minmax(11rem,1fr)_5.5rem_6.5rem_6rem_5rem_7.25rem] lg:grid-cols-[1.25rem_minmax(16rem,40rem)_6rem_7.5rem_7rem_6rem_8rem] xl:grid-cols-[1.25rem_minmax(18rem,44rem)_6.5rem_8rem_7.5rem_6rem_8rem]"
                   >
                     <span className={`h-full min-h-[3rem] md:min-h-[2.15rem] ${recipeStripeClass(recipe)}`} />
                     <div className="min-w-0 px-2 py-1.5 md:py-0.5">
@@ -271,6 +275,9 @@ export default function RecipesList({
                         {compactRecipeMeta(recipe)}
                       </p>
                     </div>
+                    <p className="hidden truncate px-2 text-[0.62rem] font-black text-[#707070] md:block">
+                      {recipe.strikArticleNumber || "-"}
+                    </p>
                     <p className="hidden truncate px-2 text-[0.62rem] font-black text-[#707070] md:block">
                       {recipeTypeLabel(recipe.type)}
                     </p>
@@ -370,6 +377,7 @@ function compactRecipeMeta(recipe: Recipe) {
 
   return [
     recipe.productGroup || recipeTypeLabel(recipe.type),
+    recipe.strikArticleNumber ? `art. ${recipe.strikArticleNumber}` : "",
     recipe.batchSize,
     latestProduction === "-"
       ? "nog niet gemaakt"

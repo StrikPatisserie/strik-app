@@ -64,6 +64,8 @@ const pickupLocations = [
   { label: "Ziekerstraat", key: "ziekerstraat" },
   { label: "Lent", key: "lent" },
 ] as const;
+const prognoseMailStartMinutes = 8 * 60 + 20;
+const definitiveMailStartMinutes = 20 * 60 + 15;
 const internalLinePatterns = [
   /kostenpl/i,
   /inkoopnr/i,
@@ -71,6 +73,7 @@ const internalLinePatterns = [
   /naam aanvrager/i,
   /factuurgegevens/i,
 ];
+const articleNumberPattern = "(?:\\d{4,9}|[A-Z]{1,4}\\d{3,9})";
 
 function normalizeTextLine(line: string) {
   const singleLine = line.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -115,12 +118,15 @@ function lineMatchesReceiptLine(
   existing: LogisticsReceiptLine,
   line: LogisticsReceiptLine
 ) {
+  const existingArticleNumber = existing.articleNumber || "";
+  const lineArticleNumber = line.articleNumber || "";
   const existingPrice = existing.unitPrice || "";
   const linePrice = line.unitPrice || "";
   const existingNote = existing.note || "";
   const lineNote = line.note || "";
 
   if (
+    existingArticleNumber !== lineArticleNumber ||
     existing.quantity !== line.quantity ||
     existingPrice !== linePrice ||
     existingNote !== lineNote
@@ -170,10 +176,10 @@ function uniqueLinePush(
     }
   }
 
-  const key = `${line.quantity}|${line.description}|${line.note || ""}|${line.unitPrice || ""}`;
+  const key = `${line.articleNumber || ""}|${line.quantity}|${line.description}|${line.note || ""}|${line.unitPrice || ""}`;
   const existing = target.find(
     (item) =>
-      `${item.quantity}|${item.description}|${item.note || ""}|${item.unitPrice || ""}` ===
+      `${item.articleNumber || ""}|${item.quantity}|${item.description}|${item.note || ""}|${item.unitPrice || ""}` ===
         key || lineMatchesReceiptLine(item, line)
   );
   if (existing) return existing;
@@ -233,6 +239,7 @@ function getAmsterdamDateTimeParts(date: Date) {
     day: "2-digit",
     hour: "2-digit",
     hour12: false,
+    minute: "2-digit",
     month: "2-digit",
     timeZone: "Europe/Amsterdam",
     year: "numeric",
@@ -241,10 +248,12 @@ function getAmsterdamDateTimeParts(date: Date) {
   const part = (type: string) =>
     parts.find((item) => item.type === type)?.value || "";
   const hour = Number(part("hour"));
+  const minute = Number(part("minute"));
 
   return {
     dateKey: `${part("year")}-${part("month")}-${part("day")}`,
     hour: Number.isFinite(hour) ? hour : 0,
+    minute: Number.isFinite(minute) ? minute : 0,
   };
 }
 
@@ -264,7 +273,12 @@ function inferStatus(
     Number.isFinite(receivedAt.getTime()) ? receivedAt : new Date()
   );
 
-  if (metadata.source === "gmail" && receivedParts.hour >= 22) {
+  const receivedMinuteOfDay = receivedParts.hour * 60 + receivedParts.minute;
+
+  if (
+    metadata.source === "gmail" &&
+    receivedMinuteOfDay >= definitiveMailStartMinutes
+  ) {
     return "definitief";
   }
 
@@ -276,7 +290,8 @@ function inferStatus(
 
   if (metadata.status && metadata.source !== "gmail") return metadata.status;
 
-  if (receivedParts.hour >= 22) return "definitief";
+  if (receivedMinuteOfDay >= definitiveMailStartMinutes) return "definitief";
+  if (receivedMinuteOfDay >= prognoseMailStartMinutes) return "prognose";
   if (batchDate && batchDate < receivedParts.dateKey) return "definitief";
   if (batchDate && batchDate > receivedParts.dateKey) return "prognose";
 
@@ -416,6 +431,71 @@ function cleanProductDescription(value: string) {
     .replace(/\s+\d{2,6}(?:[.,]\d+)*$/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function extractArticleNumberFromDescription(value: string) {
+  const match = value.trim().match(/^(\d{4,9}|[A-Z]{1,4}\d{3,9})\s+(.+)$/i);
+  if (!match) {
+    return { articleNumber: "", description: value.trim() };
+  }
+
+  return {
+    articleNumber: match[1].trim(),
+    description: match[2].trim(),
+  };
+}
+
+function isPlausibleReceiptQuantity(value: string) {
+  const amount = parseDutchNumber(value);
+
+  return (
+    typeof amount === "number" &&
+    Number.isFinite(amount) &&
+    amount > 0 &&
+    amount <= 300
+  );
+}
+
+function extractProductQuantityAndDescription(value: string) {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+
+  const articleQuantityMatch = text.match(
+    new RegExp(`^(${articleNumberPattern})\\s+(\\d+(?:[.,]\\d+)?)\\s+(.+)$`, "i")
+  );
+  if (
+    articleQuantityMatch &&
+    isPlausibleReceiptQuantity(articleQuantityMatch[2])
+  ) {
+    return {
+      quantityText: articleQuantityMatch[2],
+      descriptionText: `${articleQuantityMatch[1]} ${articleQuantityMatch[3]}`,
+    };
+  }
+
+  const leadingQuantityMatch = text.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
+  if (
+    leadingQuantityMatch &&
+    isPlausibleReceiptQuantity(leadingQuantityMatch[1])
+  ) {
+    return {
+      quantityText: leadingQuantityMatch[1],
+      descriptionText: leadingQuantityMatch[2],
+    };
+  }
+
+  const trailingQuantityMatch = text.match(/^(.+?)\s+(\d+(?:[.,]\d+)?)$/);
+  if (
+    trailingQuantityMatch &&
+    isPlausibleReceiptQuantity(trailingQuantityMatch[2])
+  ) {
+    return {
+      quantityText: trailingQuantityMatch[2],
+      descriptionText: trailingQuantityMatch[1],
+    };
+  }
+
+  return null;
 }
 
 function cleanProductOptionDescription(value: string) {
@@ -701,44 +781,45 @@ function splitAlternativeAddressFromRemarks(
 }
 
 function parseProductLine(line: string): LogisticsReceiptLine | null {
-  const leadingQuantity = line.match(/^(\d+(?:[.,]\d+)?)\s+(?!€)(.+)$/);
-  const trailingQuantity = line.match(/\s+(\d+(?:[.,]\d+)?)\s*$/);
-  const quantityText = leadingQuantity?.[1] || trailingQuantity?.[1];
-  if (!quantityText) return null;
-
-  let content = leadingQuantity ? leadingQuantity[2] : line;
-  if (!leadingQuantity && trailingQuantity?.index !== undefined) {
-    content = line.slice(0, trailingQuantity.index);
-  }
-
-  const priceMatches = Array.from(content.matchAll(/€\s*([\d.,:]+)/g));
+  const priceMatches = Array.from(line.matchAll(/€\s*([\d.,:]+)/g));
   if (priceMatches.length === 0) return null;
 
   const firstPriceIndex = priceMatches[0].index;
   if (firstPriceIndex === undefined || firstPriceIndex <= 0) return null;
 
-  const description = cleanProductDescription(content.slice(0, firstPriceIndex));
+  const product = extractProductQuantityAndDescription(
+    line.slice(0, firstPriceIndex)
+  );
+  if (!product) return null;
+
+  const article = extractArticleNumberFromDescription(
+    cleanProductDescription(product.descriptionText)
+  );
+  const description = article.description;
   if (!isUsableProductDescription(description)) return null;
   if (isProductOptionDescription(description)) return null;
 
   const unitPrice = pickUnitPrice(
     priceMatches.map((match) => match[1]),
-    quantityText
+    product.quantityText
   );
 
   return {
-    quantity: quantityText.replace(".", ","),
+    ...(article.articleNumber ? { articleNumber: article.articleNumber } : {}),
+    quantity: product.quantityText.replace(".", ","),
     description,
     ...(unitPrice !== undefined ? { unitPrice } : {}),
   };
 }
 
 function parseProductStartLine(line: string): LogisticsReceiptLine | null {
-  const match = line.match(/^(\d+(?:[.,]\d+)?)\s+(?!€)(.+)$/);
-  if (!match) return null;
+  const product = extractProductQuantityAndDescription(line);
+  if (!product) return null;
 
-  const [, quantityText, rawDescription] = match;
-  const description = cleanProductDescription(rawDescription);
+  const article = extractArticleNumberFromDescription(
+    cleanProductDescription(product.descriptionText)
+  );
+  const description = article.description;
   if (!isUsableProductDescription(description)) return null;
   if (isProductOptionDescription(description)) return null;
 
@@ -752,7 +833,8 @@ function parseProductStartLine(line: string): LogisticsReceiptLine | null {
   if (!productLike) return null;
 
   return {
-    quantity: quantityText.replace(".", ","),
+    ...(article.articleNumber ? { articleNumber: article.articleNumber } : {}),
+    quantity: product.quantityText.replace(".", ","),
     description,
   };
 }
@@ -883,6 +965,34 @@ function recoverProductDetailsFromRemark(
   };
 }
 
+function looksLikeSplitProductDescription(line: string) {
+  if (!shouldAppendProductContinuation(line)) return false;
+  if (/^\d+(?:[.,]\d+)?$/.test(line)) return false;
+
+  const description = cleanProductDescription(line);
+  if (!isUsableProductDescription(description)) return false;
+  if (isProductOptionDescription(description)) return false;
+
+  const normalized = normalizedLineDescription(description);
+
+  return (
+    /\b(?:taart|petit|four|gebak|slagroom|marsepein|creme|slof|vlaai|gateau|bombe|bol|tompouce|croissant|brood|cake|cheese|cheesecake)\b/.test(
+      normalized
+    ) ||
+    (description.length >= 14 && /^[A-ZÀ-Ý0-9]/.test(description))
+  );
+}
+
+function parsePriceQuantityLine(line: string) {
+  const match = line.match(/^€\s*([\d.,:]+)\s+(\d+(?:[.,]\d+)?)$/);
+  if (!match) return null;
+
+  return {
+    priceText: match[1],
+    quantityText: match[2].replace(".", ","),
+  };
+}
+
 function normalizeRemarksAndRecoverLines(
   remarks: string[],
   parsedLines: LogisticsReceiptLine[]
@@ -1007,6 +1117,7 @@ function parsePage(pageText: string): ParsedPage | null {
   const parsedLines: LogisticsReceiptLine[] = [];
   const remarks: string[] = [];
   let currentLine: LogisticsReceiptLine | null = null;
+  let pendingSplitProductDescription = "";
   let productSectionOpen = true;
   let total: number | undefined;
 
@@ -1067,8 +1178,34 @@ function parsePage(pageText: string): ParsedPage | null {
     }
 
     if (productSectionOpen) {
+      if (pendingSplitProductDescription) {
+        const pricedSplitLine = parsePriceQuantityLine(line);
+        if (pricedSplitLine) {
+          const description = cleanProductDescription(pendingSplitProductDescription);
+          const unitPrice = pickUnitPrice(
+            [pricedSplitLine.priceText],
+            pricedSplitLine.quantityText
+          );
+          currentLine = uniqueLinePush(parsedLines, {
+            quantity: pricedSplitLine.quantityText,
+            description,
+            ...(unitPrice !== undefined ? { unitPrice } : {}),
+          });
+          pendingSplitProductDescription = "";
+          continue;
+        }
+
+        if (shouldAppendProductContinuation(line)) {
+          pendingSplitProductDescription = `${pendingSplitProductDescription} ${line}`
+            .replace(/\s+/g, " ")
+            .trim();
+          continue;
+        }
+      }
+
       const productLine = parseProductLine(line);
       if (productLine) {
+        pendingSplitProductDescription = "";
         currentLine = uniqueLinePush(parsedLines, productLine);
         if (lineIsInternalNoteLine(productLine.description)) {
           uniquePush(remarks, productLine.description);
@@ -1081,11 +1218,13 @@ function parsePage(pageText: string): ParsedPage | null {
         currentLine?.quantity || "1"
       );
       if (productOptionLine) {
+        pendingSplitProductDescription = "";
         currentLine = uniqueLinePush(parsedLines, productOptionLine);
         continue;
       }
 
       if (currentLine && applyPricedContinuation(currentLine, line)) {
+        pendingSplitProductDescription = "";
         continue;
       }
 
@@ -1100,12 +1239,18 @@ function parsePage(pageText: string): ParsedPage | null {
 
       const productStartLine = parseProductStartLine(line);
       if (productStartLine) {
+        pendingSplitProductDescription = "";
         currentLine = uniqueLinePush(parsedLines, productStartLine);
         continue;
       }
 
       if (currentLine && shouldAppendProductContinuation(line)) {
         appendDescription(currentLine, line);
+        continue;
+      }
+
+      if (!currentLine && looksLikeSplitProductDescription(line)) {
+        pendingSplitProductDescription = line;
         continue;
       }
     }

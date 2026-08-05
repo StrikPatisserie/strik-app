@@ -12,6 +12,7 @@ export type LogisticsFulfillment = "bezorgen" | "afhalen" | "onbekend";
 export type LogisticsLoadPressure = "laag" | "middel" | "hoog";
 
 export type LogisticsReceiptLine = {
+  articleNumber?: string;
   quantity: string;
   description: string;
   note?: string;

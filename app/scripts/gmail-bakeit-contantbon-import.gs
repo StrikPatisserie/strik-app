@@ -12,6 +12,10 @@ const BAKEIT_CONTANTBON_CONFIG = {
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
   MIN_MESSAGE_AGE_MS: 60 * 1000,
   SPLIT_PART_WINDOW_MS: 30 * 60 * 1000,
+  PROGNOSE_MAIL_START_HOUR: 8,
+  PROGNOSE_MAIL_START_MINUTE: 20,
+  DEFINITIVE_MAIL_START_HOUR: 20,
+  DEFINITIVE_MAIL_START_MINUTE: 15,
   IMPORT_VERSION: 'split-mails-v1',
 };
 
@@ -159,8 +163,6 @@ function sendBakeItPdfAttachment_(message, attachment, importWaveId) {
 }
 
 function inferBakeItStatus_(message) {
-  if (isBakeItDefinitiveMailTime_(message)) return 'definitief';
-
   const labelText = message
     .getThread()
     .getLabels()
@@ -171,15 +173,35 @@ function inferBakeItStatus_(message) {
   if (haystack.indexOf('definitief') >= 0) return 'definitief';
   if (haystack.indexOf('prognose') >= 0) return 'prognose';
 
-  return '';
+  return inferBakeItMailTimeStatus_(message);
 }
 
-function isBakeItDefinitiveMailTime_(message) {
+function inferBakeItMailTimeStatus_(message) {
   const hour = Number(
     Utilities.formatDate(message.getDate(), 'Europe/Amsterdam', 'H')
   );
+  const minute = Number(
+    Utilities.formatDate(message.getDate(), 'Europe/Amsterdam', 'm')
+  );
 
-  return Number.isFinite(hour) && hour >= 22;
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return '';
+
+  const receivedMinuteOfDay = hour * 60 + minute;
+  const definitiveStartMinuteOfDay =
+    BAKEIT_CONTANTBON_CONFIG.DEFINITIVE_MAIL_START_HOUR * 60 +
+    BAKEIT_CONTANTBON_CONFIG.DEFINITIVE_MAIL_START_MINUTE;
+  const prognoseStartMinuteOfDay =
+    BAKEIT_CONTANTBON_CONFIG.PROGNOSE_MAIL_START_HOUR * 60 +
+    BAKEIT_CONTANTBON_CONFIG.PROGNOSE_MAIL_START_MINUTE;
+
+  if (receivedMinuteOfDay >= definitiveStartMinuteOfDay) {
+    return 'definitief';
+  }
+  if (receivedMinuteOfDay >= prognoseStartMinuteOfDay) {
+    return 'prognose';
+  }
+
+  return '';
 }
 
 function findBakeItWaitingGroups_(threads, props) {

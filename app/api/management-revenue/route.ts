@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  getStoredRevenueData,
   getMergedRevenueData,
   saveRevenueData,
 } from "../../management/revenueServer";
@@ -20,7 +21,18 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   const body = (await request.json().catch(() => null)) as unknown;
-  const result = await saveRevenueData(normalizeRevenueData(body));
+  const normalized = normalizeRevenueData(body);
+
+  if (
+    !body ||
+    typeof body !== "object" ||
+    !Array.isArray((body as { dailyRecords?: unknown }).dailyRecords)
+  ) {
+    const stored = await getStoredRevenueData();
+    normalized.dailyRecords = stored.data.dailyRecords || [];
+  }
+
+  const result = await saveRevenueData(normalized);
 
   if (!result.ok) {
     return NextResponse.json(

@@ -2,8 +2,12 @@ import "server-only";
 
 import { excelRevenueSeed } from "./revenueSeed";
 import {
+  createWeeklyRevenueRecordsFromDays,
+  mergeRevenueDayRecords,
   mergeRevenueRecords,
+  normalizeRevenueDayRecord,
   normalizeRevenueData,
+  type RevenueDayRecord,
   type RevenueData,
 } from "./revenueData";
 
@@ -79,7 +83,7 @@ export async function getStoredRevenueData(): Promise<{
     }
 
     return {
-      data: { records: [] },
+      data: { records: [], dailyRecords: [] },
       storage: {
         status: "seed",
         message: getWordPressMessage(response.status),
@@ -88,7 +92,7 @@ export async function getStoredRevenueData(): Promise<{
     };
   } catch {
     return {
-      data: { records: [] },
+      data: { records: [], dailyRecords: [] },
       storage: {
         status: "seed",
         message: "Kan geen verbinding maken met WordPress omzetopslag.",
@@ -99,9 +103,17 @@ export async function getStoredRevenueData(): Promise<{
 
 export async function getMergedRevenueData() {
   const stored = await getStoredRevenueData();
+  const dailyWeekRecords = createWeeklyRevenueRecordsFromDays(
+    stored.data.dailyRecords || []
+  );
+  const recordsWithDaily = mergeRevenueRecords(
+    excelRevenueSeed,
+    dailyWeekRecords
+  );
 
   return {
-    records: mergeRevenueRecords(excelRevenueSeed, stored.data.records),
+    records: mergeRevenueRecords(recordsWithDaily, stored.data.records),
+    dailyRecords: stored.data.dailyRecords || [],
     updatedAt: stored.data.updatedAt,
     storage: stored.storage,
     seedCount: excelRevenueSeed.length,
@@ -133,4 +145,21 @@ export async function saveRevenueData(data: RevenueData) {
     ok: true as const,
     data: normalizeRevenueData(body),
   };
+}
+
+export async function upsertRevenueDayRecords(dayRecords: RevenueDayRecord[]) {
+  const stored = await getStoredRevenueData();
+  const normalizedDayRecords = dayRecords.flatMap((record) => {
+    const normalized = normalizeRevenueDayRecord(record);
+    return normalized ? [normalized] : [];
+  });
+  const nextData = normalizeRevenueData({
+    ...stored.data,
+    dailyRecords: mergeRevenueDayRecords(
+      stored.data.dailyRecords || [],
+      normalizedDayRecords
+    ),
+  });
+
+  return saveRevenueData(nextData);
 }

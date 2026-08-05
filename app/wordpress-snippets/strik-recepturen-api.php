@@ -11,6 +11,7 @@
  * - GET /wp-json/strik/v1/recepturen-revisions/{id}?key=...
  * - POST /wp-json/strik/v1/recepturen-revisions/{id}/restore?key=...
  * - POST /wp-json/strik/v1/recepturen-home-photo?key=...
+ * - WordPress beheer: Recepturen menu met download en handmatige backup.
  *
  * Hiermee worden recepturen, ingredienten en Beko factuurimports in WordPress
  * opgeslagen zodat koppelingen, prijsupdates en voorpagina-aanbiedingen niet
@@ -55,7 +56,8 @@ function strik_recepturen_v1_permission($request) {
 }
 }
 
-add_action('init', function () {
+if (!function_exists('strik_recepturen_v1_register_revision_post_type')) {
+function strik_recepturen_v1_register_revision_post_type() {
     register_post_type(STRIK_RECEPTUREN_REVISION_POST_TYPE, array(
         'labels' => array(
             'name' => 'Strik recepturen revisies',
@@ -63,11 +65,17 @@ add_action('init', function () {
         ),
         'public' => false,
         'show_ui' => true,
-        'show_in_menu' => 'tools.php',
+        'show_in_menu' => 'strik-recepturen',
         'supports' => array('title', 'editor'),
         'capability_type' => 'post',
     ));
-});
+}
+}
+
+add_action('init', 'strik_recepturen_v1_register_revision_post_type');
+if (did_action('init')) {
+    strik_recepturen_v1_register_revision_post_type();
+}
 
 if (!function_exists('strik_recepturen_v1_defaults')) {
 function strik_recepturen_v1_defaults() {
@@ -726,6 +734,232 @@ function strik_recepturen_v1_home_photo_upload($request) {
     ));
 }
 }
+
+if (!function_exists('strik_recepturen_v1_option_storage_bytes')) {
+function strik_recepturen_v1_option_storage_bytes() {
+    global $wpdb;
+
+    $bytes = $wpdb->get_var($wpdb->prepare(
+        "SELECT OCTET_LENGTH(option_value) FROM {$wpdb->options} WHERE option_name = %s",
+        STRIK_RECEPTUREN_OPTION_NAME
+    ));
+
+    return $bytes === null ? 0 : absint($bytes);
+}
+}
+
+if (!function_exists('strik_recepturen_v1_admin_size')) {
+function strik_recepturen_v1_admin_size($bytes) {
+    $bytes = absint($bytes);
+
+    return function_exists('size_format')
+        ? size_format($bytes)
+        : $bytes . ' bytes';
+}
+}
+
+if (!function_exists('strik_recepturen_v1_admin_revision_posts')) {
+function strik_recepturen_v1_admin_revision_posts($limit = 12) {
+    return get_posts(array(
+        'post_type' => STRIK_RECEPTUREN_REVISION_POST_TYPE,
+        'post_status' => 'private',
+        'posts_per_page' => absint($limit),
+        'orderby' => 'date',
+        'order' => 'DESC',
+        'no_found_rows' => true,
+    ));
+}
+}
+
+if (!function_exists('strik_recepturen_v1_admin_metric')) {
+function strik_recepturen_v1_admin_metric($label, $value, $hint = '') {
+    echo '<div class="strik-recepturen-metric">';
+    echo '<span>' . esc_html($label) . '</span>';
+    echo '<strong>' . esc_html((string) $value) . '</strong>';
+    if ($hint !== '') {
+        echo '<small>' . esc_html($hint) . '</small>';
+    }
+    echo '</div>';
+}
+}
+
+if (!function_exists('strik_recepturen_v1_admin_notice')) {
+function strik_recepturen_v1_admin_notice() {
+    $status = isset($_GET['strik_recepturen_backup'])
+        ? sanitize_text_field(wp_unslash($_GET['strik_recepturen_backup']))
+        : '';
+
+    if ($status === 'created') {
+        $revision_id = isset($_GET['revision_id']) ? absint($_GET['revision_id']) : 0;
+        echo '<div class="notice notice-success inline"><p>Recepturenbackup opgeslagen.';
+        if ($revision_id > 0) {
+            echo ' Revisie #' . esc_html((string) $revision_id) . '.';
+        }
+        echo '</p></div>';
+    }
+
+    if ($status === 'failed') {
+        echo '<div class="notice notice-error inline"><p>Recepturenbackup kon niet worden opgeslagen. Download voor de zekerheid eerst de huidige JSON.</p></div>';
+    }
+}
+}
+
+if (!function_exists('strik_recepturen_v1_admin_page')) {
+function strik_recepturen_v1_admin_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die('Geen toegang tot recepturen.');
+    }
+
+    $data = strik_recepturen_v1_get_data();
+    $revisions = strik_recepturen_v1_admin_revision_posts(12);
+    $json = wp_json_encode($data);
+    $json_bytes = is_string($json) ? strlen($json) : 0;
+    $storage_bytes = strik_recepturen_v1_option_storage_bytes();
+    $offers = isset($data['bakeryHome']['offers']) && is_array($data['bakeryHome']['offers'])
+        ? count($data['bakeryHome']['offers'])
+        : 0;
+    $download_url = wp_nonce_url(
+        admin_url('admin-post.php?action=strik_recepturen_download_current'),
+        'strik_recepturen_download_current'
+    );
+
+    echo '<div class="wrap strik-recepturen-admin">';
+    echo '<style>
+        .strik-recepturen-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:18px 0 22px}
+        .strik-recepturen-metric{background:#fff;border:1px solid #dcdcde;border-radius:4px;padding:14px 16px;min-height:88px}
+        .strik-recepturen-metric span{display:block;color:#646970;font-size:12px;font-weight:600;text-transform:uppercase}
+        .strik-recepturen-metric strong{display:block;color:#1d2327;font-size:28px;line-height:1.25;margin-top:6px}
+        .strik-recepturen-metric small{display:block;color:#646970;margin-top:6px}
+        .strik-recepturen-actions{align-items:center;display:flex;flex-wrap:wrap;gap:10px;margin:12px 0 22px}
+        .strik-recepturen-actions form{margin:0}
+        .strik-recepturen-note{max-width:780px}
+    </style>';
+    echo '<h1>Recepturen</h1>';
+    echo '<p class="strik-recepturen-note">Hier staat de actuele recepturendata uit de WordPress option <code>' . esc_html(STRIK_RECEPTUREN_OPTION_NAME) . '</code>. De app blijft dezelfde opslag gebruiken; dit scherm maakt de data zichtbaar, downloadbaar en handmatig te backuppen.</p>';
+
+    strik_recepturen_v1_admin_notice();
+
+    echo '<div class="strik-recepturen-grid">';
+    strik_recepturen_v1_admin_metric('Recepten', number_format_i18n(strik_recepturen_v1_count_list($data, 'recipes')));
+    strik_recepturen_v1_admin_metric('Ingredienten', number_format_i18n(strik_recepturen_v1_count_list($data, 'ingredients')));
+    strik_recepturen_v1_admin_metric('Verpakkingen', number_format_i18n(strik_recepturen_v1_count_list($data, 'packagingItems')));
+    strik_recepturen_v1_admin_metric('Factuurimports', number_format_i18n(strik_recepturen_v1_count_list($data, 'invoiceImports')));
+    strik_recepturen_v1_admin_metric('Planning', number_format_i18n(strik_recepturen_v1_count_list($data, 'manualProductionPlanningItems')));
+    strik_recepturen_v1_admin_metric('Aanbiedingen', number_format_i18n($offers), 'voorpagina');
+    strik_recepturen_v1_admin_metric('JSON grootte', strik_recepturen_v1_admin_size($json_bytes), 'download');
+    strik_recepturen_v1_admin_metric('WordPress opslag', strik_recepturen_v1_admin_size($storage_bytes), 'option');
+    echo '</div>';
+
+    echo '<h2>Backup en export</h2>';
+    echo '<p class="strik-recepturen-note">Download de huidige data als JSON voordat je grote wijzigingen doet. Met "Maak nu backup" komt er een herstelpunt onder Recepturen > Strik recepturen revisies.</p>';
+    echo '<div class="strik-recepturen-actions">';
+    echo '<a class="button button-secondary" href="' . esc_url($download_url) . '">Download huidige data</a>';
+    echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+    echo '<input type="hidden" name="action" value="strik_recepturen_create_backup">';
+    wp_nonce_field('strik_recepturen_create_backup');
+    submit_button('Maak nu backup', 'primary', 'submit', false);
+    echo '</form>';
+    echo '</div>';
+
+    echo '<h2>WordPress backups</h2>';
+    if (empty($revisions)) {
+        echo '<div class="notice notice-warning inline"><p>Nog geen WordPress backups gevonden. Klik op "Maak nu backup" om meteen een eerste herstelpunt te maken.</p></div>';
+    } else {
+        echo '<table class="widefat striped">';
+        echo '<thead><tr><th>Datum</th><th>Titel</th><th>Reden</th><th>Recepten</th><th>Ingredienten</th><th>Grootte</th><th></th></tr></thead>';
+        echo '<tbody>';
+        foreach ($revisions as $revision_post) {
+            $summary = strik_recepturen_v1_revision_summary($revision_post);
+            $edit_link = get_edit_post_link($summary['id'], '');
+            echo '<tr>';
+            echo '<td>' . esc_html($summary['createdAt']) . '</td>';
+            echo '<td>' . esc_html($summary['title']) . '</td>';
+            echo '<td>' . esc_html($summary['reason']) . '</td>';
+            echo '<td>' . esc_html(number_format_i18n($summary['recipes'])) . '</td>';
+            echo '<td>' . esc_html(number_format_i18n($summary['ingredients'])) . '</td>';
+            echo '<td>' . esc_html(strik_recepturen_v1_admin_size($summary['bytes'])) . '</td>';
+            echo '<td>';
+            if ($edit_link) {
+                echo '<a href="' . esc_url($edit_link) . '">Bekijk</a>';
+            }
+            echo '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+    }
+
+    echo '<p class="strik-recepturen-note"><strong>Laatst bijgewerkt:</strong> ' . esc_html($data['updatedAt'] !== '' ? $data['updatedAt'] : 'nog onbekend') . '</p>';
+    echo '</div>';
+}
+}
+
+if (!function_exists('strik_recepturen_v1_admin_menu')) {
+function strik_recepturen_v1_admin_menu() {
+    add_menu_page(
+        'Strik recepturen',
+        'Recepturen',
+        'manage_options',
+        'strik-recepturen',
+        'strik_recepturen_v1_admin_page',
+        'dashicons-list-view',
+        24
+    );
+}
+}
+
+add_action('admin_menu', 'strik_recepturen_v1_admin_menu');
+
+if (!function_exists('strik_recepturen_v1_admin_download_current')) {
+function strik_recepturen_v1_admin_download_current() {
+    if (!current_user_can('manage_options')) {
+        wp_die('Geen toegang tot recepturen.');
+    }
+
+    check_admin_referer('strik_recepturen_download_current');
+
+    $json = wp_json_encode(
+        strik_recepturen_v1_get_data(),
+        JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
+    );
+
+    if (!is_string($json)) {
+        wp_die('Recepturendata kon niet worden geexporteerd.');
+    }
+
+    nocache_headers();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Content-Disposition: attachment; filename="strik-recepturen-' . wp_date('Ymd-His') . '.json"');
+    header('Content-Length: ' . strlen($json));
+    echo $json;
+    exit;
+}
+}
+
+add_action('admin_post_strik_recepturen_download_current', 'strik_recepturen_v1_admin_download_current');
+
+if (!function_exists('strik_recepturen_v1_admin_create_backup')) {
+function strik_recepturen_v1_admin_create_backup() {
+    if (!current_user_can('manage_options')) {
+        wp_die('Geen toegang tot recepturen.');
+    }
+
+    check_admin_referer('strik_recepturen_create_backup');
+
+    $revision_id = strik_recepturen_v1_create_revision(
+        get_option(STRIK_RECEPTUREN_OPTION_NAME, array()),
+        'manual_admin_backup'
+    );
+
+    $args = $revision_id > 0
+        ? array('strik_recepturen_backup' => 'created', 'revision_id' => $revision_id)
+        : array('strik_recepturen_backup' => 'failed');
+
+    wp_safe_redirect(add_query_arg($args, admin_url('admin.php?page=strik-recepturen')));
+    exit;
+}
+}
+
+add_action('admin_post_strik_recepturen_create_backup', 'strik_recepturen_v1_admin_create_backup');
 
 add_action('rest_api_init', function () {
     register_rest_route('strik/v1', '/recepturen', array(

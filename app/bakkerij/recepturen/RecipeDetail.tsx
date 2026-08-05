@@ -1315,6 +1315,16 @@ export default function RecipeDetail({
               <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
                 {isEditing ? draft.productGroup || recipe.productGroup : recipe.productGroup}
               </span>
+              {(isEditing
+                ? draft.strikArticleNumber
+                : recipe.strikArticleNumber) && (
+                <span className="rounded-full bg-[#edf5ea] px-2.5 py-1 text-xs font-black text-[#45663b]">
+                  art.{" "}
+                  {isEditing
+                    ? draft.strikArticleNumber
+                    : recipe.strikArticleNumber}
+                </span>
+              )}
               {!isEditing && (
                 <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
                   {recipe.version}
@@ -1398,8 +1408,8 @@ export default function RecipeDetail({
               <div
                 className={`grid gap-2 ${
                   draft.type === "finalProduct"
-                    ? "md:grid-cols-[minmax(12rem,1.3fr)_minmax(9rem,0.8fr)_6.5rem_6.5rem_7rem]"
-                    : "md:grid-cols-[minmax(12rem,1fr)_minmax(9rem,0.8fr)_9rem]"
+                    ? "md:grid-cols-[minmax(12rem,1.25fr)_minmax(9rem,0.85fr)_8rem_6.5rem_6.5rem_7rem]"
+                    : "md:grid-cols-[minmax(12rem,1fr)_minmax(9rem,0.8fr)_8rem_9rem]"
                 }`}
               >
                 <EditTextField
@@ -1416,6 +1426,11 @@ export default function RecipeDetail({
                     draft.type === "semiFinished" ? "Bodems & beslag" : "Gebak",
                     draft.type === "semiFinished" ? "Vullingen" : "Petit Gateau",
                   ]).map((option) => option.label)}
+                />
+                <EditTextField
+                  label="Strik artikelnummer"
+                  value={draft.strikArticleNumber}
+                  onChange={(value) => updateDraft({ strikArticleNumber: value })}
                 />
                 {draft.type === "finalProduct" && (
                   <>
@@ -2778,6 +2793,7 @@ type RecipeDraft = {
   name: string;
   type: RecipeType;
   productGroup: string;
+  strikArticleNumber: string;
   salesPrice: string;
   targetMargin: string;
   status: RecipeStatus;
@@ -2912,6 +2928,7 @@ function createRecipeDraft(recipe: Recipe): RecipeDraft {
     name: recipe.name,
     type: recipe.type,
     productGroup: recipe.productGroup,
+    strikArticleNumber: recipe.strikArticleNumber || "",
     salesPrice: formatInputNumber(recipe.salesPrice),
     targetMargin: formatInputNumber(recipe.targetMargin),
     status: recipe.status,
@@ -2994,6 +3011,8 @@ function recipeDraftFromImportedRecipe(
     name: importedRecipe.name || current.name,
     type: current.type,
     productGroup: importedRecipe.productGroup || current.productGroup,
+    strikArticleNumber:
+      importedRecipe.strikArticleNumber || current.strikArticleNumber,
     standardBatchQuantity: formatInputNumber(
       importedRecipe.standardBatchQuantity ||
         getBatchInfo(importedRecipe)?.quantity ||
@@ -3110,6 +3129,7 @@ function buildRecipeFromDraft(
     name: draft.name.trim() || recipe.name,
     type: draft.type,
     productGroup: draft.productGroup.trim() || recipe.productGroup,
+    strikArticleNumber: draft.strikArticleNumber.trim(),
     standardBatchQuantity,
     standardBatchUnit,
     salesPrice,
@@ -3592,6 +3612,7 @@ function createBlankSemiFinishedRecipe(
     name,
     type: "semiFinished",
     productGroup: "Halffabricaat",
+    strikArticleNumber: "",
     createdAt: todayIsoDate(),
     standardBatchQuantity: batchUnit === "stuk" ? 1 : undefined,
     standardBatchUnit: batchUnit,
@@ -3830,6 +3851,9 @@ function createRecipeText(
   return [
     recipe.name,
     `Groep: ${recipe.productGroup}`,
+    ...(recipe.strikArticleNumber
+      ? [`Strik artikelnummer: ${recipe.strikArticleNumber}`]
+      : []),
     `Batch: ${recipe.batchSize}`,
     `Batchgewicht: ${batchWeight}`,
     `Portie: ${recipe.portionLabel}`,
@@ -3933,6 +3957,11 @@ function createRecipePrintHtml(
         formatEuro(selectedTotalCost)
       )}</td></tr></tfoot>`
     : "";
+  const articleNumberMeta = recipe.strikArticleNumber
+    ? `<p class="type">Strik artikelnummer: ${escapeHtml(
+        recipe.strikArticleNumber
+      )}</p>`
+    : "";
 
   return `<!doctype html>
 <html lang="nl">
@@ -3978,6 +4007,7 @@ function createRecipePrintHtml(
       <main>
         <h1>${escapeHtml(recipe.name)}</h1>
         <p class="type">${escapeHtml(recipe.productGroup || recipeTypeLabel(recipe.type))}</p>
+        ${articleNumberMeta}
         <p class="qty">${escapeHtml(formatInputNumber(quantity))} ${escapeHtml(unitLabelText(unit))}</p>
         ${summaryCards}
         <section class="box">
@@ -4116,6 +4146,11 @@ function BakkerRecipeCard({
                   <p className="mt-1 text-xs italic text-[#555555]">
                     {recipe.productGroup || recipeTypeLabel(recipe.type)}
                   </p>
+                  {recipe.strikArticleNumber && (
+                    <p className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#45663b]">
+                      art. {recipe.strikArticleNumber}
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-[3.35rem_2.35rem_2.6rem_2.35rem] border border-[#c3d3bc] text-center text-[0.58rem] uppercase tracking-[0.08em]">
@@ -5462,6 +5497,7 @@ function semiFinishedSearchScore(recipe: Recipe, normalizedQuery: string) {
 
   const haystack = [
     recipe.name,
+    recipe.strikArticleNumber || "",
     recipe.productGroup,
     recipe.batchSize,
     recipe.version,

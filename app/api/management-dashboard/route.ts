@@ -5,8 +5,10 @@ import {
   type LaborCostSchedule,
 } from "../../tamigoApi";
 import {
+  findRevenueDayRecord,
   findRevenueRecord,
   revenueShops,
+  type RevenueDayRecord,
   type RevenueRecord,
   type RevenueShop,
 } from "../../management/revenueData";
@@ -16,7 +18,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type Status = "green" | "orange" | "red" | "missing";
-type Period = "week" | "month";
+type Period = "day" | "week" | "month";
 type PeriodWeek = { year: number; week: number };
 
 function getIsoWeekYear(date: Date) {
@@ -41,6 +43,52 @@ function getIsoParts(date: Date): PeriodWeek {
     year: getIsoWeekYear(date),
     week: getIsoWeek(date),
   };
+}
+
+function formatIsoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function parseIsoDate(value: string | null, fallback: string) {
+  const text = value || fallback;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return fallback;
+
+  const [year, month, day] = text.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return fallback;
+  }
+
+  return text;
+}
+
+function addDaysToIsoDate(value: string, days: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return formatIsoDate(date);
+}
+
+function addYearsToIsoDate(value: string, years: number) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year + years, month - 1, day));
+
+  if (date.getUTCMonth() !== month - 1) {
+    return formatIsoDate(new Date(Date.UTC(year + years, month, 0)));
+  }
+
+  return formatIsoDate(date);
+}
+
+function getIsoPartsForDate(value: string): PeriodWeek {
+  const [year, month, day] = value.split("-").map(Number);
+
+  return getIsoParts(new Date(Date.UTC(year, month - 1, day)));
 }
 
 function getWeeksInIsoYear(year: number) {
@@ -91,7 +139,10 @@ function getShiftedYearWeek(year: number, week: number, yearOffset: number) {
 }
 
 function numberParam(url: URL, key: string, fallback: number) {
-  const value = Number(url.searchParams.get(key));
+  const rawValue = url.searchParams.get(key);
+  if (!rawValue) return fallback;
+
+  const value = Number(rawValue);
 
   return Number.isFinite(value) ? Math.trunc(value) : fallback;
 }
@@ -101,7 +152,10 @@ function clampWeek(week: number) {
 }
 
 function getPeriod(url: URL): Period {
-  return url.searchParams.get("period") === "month" ? "month" : "week";
+  const period = url.searchParams.get("period");
+  if (period === "day" || period === "month") return period;
+
+  return "week";
 }
 
 function dedupeWeeks(weeks: PeriodWeek[]) {
@@ -117,6 +171,7 @@ function dedupeWeeks(weeks: PeriodWeek[]) {
 }
 
 function getPeriodWeeks(year: number, week: number, period: Period) {
+  if (period === "day") return [{ year, week }];
   if (period === "week") return [{ year, week }];
 
   const selectedWeekStart = getIsoWeekStartDate(year, week);
@@ -137,7 +192,17 @@ function getPeriodWeeks(year: number, week: number, period: Period) {
   return dedupeWeeks(weeks);
 }
 
-function getPeriodLabel(year: number, week: number, period: Period) {
+function getPeriodLabel(year: number, week: number, period: Period, date = "") {
+  if (period === "day" && date) {
+    return new Intl.DateTimeFormat("nl-NL", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(`${date}T00:00:00.000Z`));
+  }
+
   if (period === "week") return `Week ${week} · ${year}`;
 
   const selectedWeekStart = getIsoWeekStartDate(year, week);
@@ -198,6 +263,7 @@ function sumRevenue(
   let amount = 0;
   let foundCount = 0;
   let hasManual = false;
+  let hasDaily = false;
   const notes: string[] = [];
 
   for (const periodWeek of weeks) {
@@ -207,6 +273,7 @@ function sumRevenue(
     amount += record.amount;
     foundCount += 1;
     if (record.source === "manual") hasManual = true;
+    if (record.source === "dagafsluiting") hasDaily = true;
     if (record.note) notes.push(record.note);
   }
 
@@ -214,7 +281,23 @@ function sumRevenue(
     amount: foundCount > 0 ? Number(amount.toFixed(2)) : null,
     missing: foundCount < weeks.length,
     note: [...new Set(notes)].join(" · "),
-    source: foundCount === 0 ? null : hasManual ? "manual" : "excel",
+    source:
+      foundCount === 0 ? null : hasManual ? "manual" : hasDaily ? "dagafsluiting" : "excel",
+  };
+}
+
+function sumRevenueDay(
+  records: RevenueDayRecord[] | undefined,
+  date: string,
+  shop: RevenueShop
+) {
+  const record = findRevenueDayRecord(records, date, shop);
+
+  return {
+    amount: record ? record.amount : null,
+    missing: !record,
+    note: record?.note || "",
+    source: record ? record.source || "dagafsluiting" : null,
   };
 }
 
@@ -247,10 +330,16 @@ async function fetchLaborSchedules(weeks: PeriodWeek[]) {
   };
 }
 
-function sumLaborForShop(schedules: LaborCostSchedule[], shop: RevenueShop) {
+function sumLaborForShop(
+  schedules: LaborCostSchedule[],
+  shop: RevenueShop,
+  date?: string
+) {
   return schedules.reduce(
     (totals, schedule) => {
       for (const day of schedule.days) {
+        if (date && day.date !== date) continue;
+
         const dayShop = day.shops.find((item) => item.shop === shop);
         if (!dayShop) continue;
 
@@ -270,47 +359,81 @@ export async function GET(request: Request) {
   const now = new Date();
   const url = new URL(request.url);
   const period = getPeriod(url);
-  const currentDate = new Date(
-    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+  const currentIsoDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const selectedDate = parseIsoDate(url.searchParams.get("date"), currentIsoDate);
+  const selectedDateWeek = getIsoPartsForDate(selectedDate);
+  const year =
+    period === "day"
+      ? selectedDateWeek.year
+      : numberParam(url, "year", selectedDateWeek.year);
+  const week =
+    period === "day"
+      ? selectedDateWeek.week
+      : clampWeek(numberParam(url, "week", selectedDateWeek.week));
+  const previousDay = addDaysToIsoDate(selectedDate, -1);
+  const sameDayLastYear = addYearsToIsoDate(selectedDate, -1);
+  const manualCompareDate = parseIsoDate(
+    url.searchParams.get("compareDate"),
+    sameDayLastYear
   );
-  const year = numberParam(url, "year", getIsoWeekYear(currentDate));
-  const week = clampWeek(numberParam(url, "week", getIsoWeek(currentDate)));
   const previousPeriod =
-    period === "month"
-      ? getShiftedMonthWeek(year, week, -1)
-      : getPreviousWeek(year, week);
-  const samePeriodLastYear = getCompareAnchor(year, week, period);
+    period === "day"
+      ? getIsoPartsForDate(previousDay)
+      : period === "month"
+        ? getShiftedMonthWeek(year, week, -1)
+        : getPreviousWeek(year, week);
+  const samePeriodLastYear =
+    period === "day" ? getIsoPartsForDate(sameDayLastYear) : getCompareAnchor(year, week, period);
   const compareYear = numberParam(url, "compareYear", samePeriodLastYear.year);
   const compareWeek = clampWeek(
     numberParam(url, "compareWeek", samePeriodLastYear.week)
   );
-  const periodWeeks = getPeriodWeeks(year, week, period);
-  const previousPeriodWeeks = getPeriodWeeks(
-    previousPeriod.year,
-    previousPeriod.week,
-    period
-  );
-  const samePeriodLastYearWeeks = getPeriodWeeks(
-    samePeriodLastYear.year,
-    samePeriodLastYear.week,
-    period
-  );
-  const manualPeriodWeeks = getPeriodWeeks(compareYear, compareWeek, period);
+  const periodWeeks =
+    period === "day" ? [selectedDateWeek] : getPeriodWeeks(year, week, period);
+  const previousPeriodWeeks =
+    period === "day"
+      ? [getIsoPartsForDate(previousDay)]
+      : getPeriodWeeks(previousPeriod.year, previousPeriod.week, period);
+  const samePeriodLastYearWeeks =
+    period === "day"
+      ? [getIsoPartsForDate(sameDayLastYear)]
+      : getPeriodWeeks(samePeriodLastYear.year, samePeriodLastYear.week, period);
+  const manualPeriodWeeks =
+    period === "day"
+      ? [getIsoPartsForDate(manualCompareDate)]
+      : getPeriodWeeks(compareYear, compareWeek, period);
   const [revenue, labor] = await Promise.all([
     getMergedRevenueData(),
     fetchLaborSchedules(periodWeeks),
   ]);
 
   const rows = revenueShops.map((shop) => {
-    const currentRevenue = sumRevenue(revenue.records, periodWeeks, shop);
-    const previousRevenue = sumRevenue(revenue.records, previousPeriodWeeks, shop);
-    const lastYearRevenue = sumRevenue(
-      revenue.records,
-      samePeriodLastYearWeeks,
-      shop
+    const currentRevenue =
+      period === "day"
+        ? sumRevenueDay(revenue.dailyRecords, selectedDate, shop)
+        : sumRevenue(revenue.records, periodWeeks, shop);
+    const previousRevenue =
+      period === "day"
+        ? sumRevenueDay(revenue.dailyRecords, previousDay, shop)
+        : sumRevenue(revenue.records, previousPeriodWeeks, shop);
+    const lastYearRevenue =
+      period === "day"
+        ? sumRevenueDay(revenue.dailyRecords, sameDayLastYear, shop)
+        : sumRevenue(revenue.records, samePeriodLastYearWeeks, shop);
+    const manualRevenue =
+      period === "day"
+        ? sumRevenueDay(revenue.dailyRecords, manualCompareDate, shop)
+        : sumRevenue(revenue.records, manualPeriodWeeks, shop);
+    const laborShop = sumLaborForShop(
+      labor.schedules,
+      shop,
+      period === "day" ? selectedDate : undefined
     );
-    const manualRevenue = sumRevenue(revenue.records, manualPeriodWeeks, shop);
-    const laborShop = sumLaborForShop(labor.schedules, shop);
     const revenueAmount = currentRevenue.amount;
     const hours = labor.schedules.length
       ? Number(laborShop.hours.toFixed(2))
@@ -368,10 +491,14 @@ export async function GET(request: Request) {
     {
       generatedAt: now.toISOString(),
       period,
-      periodLabel: getPeriodLabel(year, week, period),
+      periodLabel: getPeriodLabel(year, week, period, selectedDate),
       periodWeeks,
       year,
       week,
+      date: selectedDate,
+      previousDay,
+      sameDayLastYear,
+      manualCompareDate,
       previousWeek: previousPeriod,
       sameWeekLastYear: samePeriodLastYear,
       manualCompare: { year: compareYear, week: compareWeek },

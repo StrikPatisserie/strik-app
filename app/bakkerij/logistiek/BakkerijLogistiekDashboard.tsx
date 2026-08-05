@@ -6661,6 +6661,7 @@ function ReceiptDetail({
             <thead>
               <tr className="border-b-2 border-[#c9c9c9] text-left font-normal">
                 <th className="w-14 pb-1 font-normal">Aantal</th>
+                <th className="w-20 pb-1 font-normal">Artikel</th>
                 <th className="pb-1 font-normal">Artikelomschrijving</th>
                 <th className="w-20 pb-1 text-right font-normal">Prijs incl.</th>
                 <th className="w-24 pb-1 text-right font-normal">Totaal</th>
@@ -6680,6 +6681,9 @@ function ReceiptDetail({
                   >
                     <td className="py-0.5 pr-2 text-right tabular-nums">
                       {line.quantity}
+                    </td>
+                    <td className="py-0.5 pr-2 font-normal tabular-nums text-[#333]">
+                      {line.articleNumber || ""}
                     </td>
                     <td className="py-0.5 pr-2">
                       <span>{line.description}</span>
