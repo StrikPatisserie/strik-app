@@ -405,6 +405,32 @@ function sortBatches(batches: LogisticsBatch[]) {
   });
 }
 
+function logisticsBatchStatusPriority(status: LogisticsBatch["status"]) {
+  if (status === "definitief") return 4;
+  if (status === "prognose") return 3;
+  if (status === "handmatig") return 2;
+  if (status === "historie") return 1;
+  return 0;
+}
+
+function selectLogisticsBatchForDate(
+  batches: LogisticsBatch[],
+  date: string
+) {
+  return (
+    batches
+      .filter((batch) => batch.date === date)
+      .sort((first, second) => {
+        const statusCompare =
+          logisticsBatchStatusPriority(second.status) -
+          logisticsBatchStatusPriority(first.status);
+        if (statusCompare !== 0) return statusCompare;
+
+        return second.importedAt.localeCompare(first.importedAt);
+      })[0] || null
+  );
+}
+
 function parseReceiptQuantity(quantity: string) {
   const clean = String(quantity || "")
     .replace(/[^\d,.-]/g, "")
@@ -1091,9 +1117,7 @@ export async function readLogisticsRouteLearningState() {
 export async function getLogisticsBatchForDate(date: string) {
   const state = await readLogisticsState();
 
-  return (
-    sortBatches(state.batches).find((batch) => batch.date === date) || null
-  );
+  return selectLogisticsBatchForDate(state.batches, date);
 }
 
 export async function getLogisticsWebshopImagesForDate(date: string) {

@@ -65,7 +65,7 @@ const pickupLocations = [
   { label: "Lent", key: "lent" },
 ] as const;
 const prognoseMailStartMinutes = 8 * 60 + 20;
-const definitiveMailStartMinutes = 20 * 60 + 15;
+const definitiveMailStartMinutes = 20 * 60;
 const internalLinePatterns = [
   /kostenpl/i,
   /inkoopnr/i,
@@ -255,6 +255,31 @@ function getAmsterdamDateTimeParts(date: Date) {
     hour: Number.isFinite(hour) ? hour : 0,
     minute: Number.isFinite(minute) ? minute : 0,
   };
+}
+
+function addDaysToDateKey(dateKey: string, days: number) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  if (!year || !month || !day) return dateKey;
+
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function fallbackBatchDateForMetadata(metadata: ParseMetadata) {
+  const receivedAt = metadata.receivedAt ? new Date(metadata.receivedAt) : new Date();
+  const receivedParts = getAmsterdamDateTimeParts(
+    Number.isFinite(receivedAt.getTime()) ? receivedAt : new Date()
+  );
+
+  return metadata.source === "gmail"
+    ? addDaysToDateKey(receivedParts.dateKey, 1)
+    : receivedParts.dateKey;
 }
 
 function inferStatus(
@@ -1501,8 +1526,7 @@ export async function parseBakeItContantbonPdf(
 
   const receipts = Array.from(drafts.values()).map(createReceipt);
   const parsedDate = Array.from(drafts.values()).find((draft) => draft.date)?.date || "";
-  const batchDate =
-    parsedDate || new Date(metadata.receivedAt || Date.now()).toISOString().slice(0, 10);
+  const batchDate = parsedDate || fallbackBatchDateForMetadata(metadata);
   const status = inferStatus(metadata, batchDate);
   const receivedAt = metadata.receivedAt || new Date().toISOString();
   const orderValue = receipts
@@ -1518,6 +1542,11 @@ export async function parseBakeItContantbonPdf(
 
   if (!receipts.length) {
     warnings.push("Geen contantbonnen gevonden in PDF.");
+  }
+  if (!parsedDate) {
+    warnings.push(
+      `Geen herkenbare bon-datum gevonden; batchdatum teruggevallen op ${batchDate}.`
+    );
   }
   if (receipts.some((receipt) => receipt.lines.length === 0)) {
     warnings.push("Een of meer bonnen hebben geen herkende artikelregels.");

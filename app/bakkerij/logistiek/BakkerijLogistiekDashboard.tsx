@@ -336,7 +336,7 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
-const DEFINITIVE_BATCH_START_MINUTE_OF_DAY = 20 * 60 + 15;
+const DEFINITIVE_BATCH_START_MINUTE_OF_DAY = 20 * 60;
 
 function minuteOfDay(hour: number, minute: number) {
   return hour * 60 + minute;
@@ -634,7 +634,7 @@ function sourceLabelFor(status: BatchStatus) {
 
 function batchLabelFor(status: BatchStatus) {
   if (status === "prognose") return "Prognose 08:20";
-  if (status === "definitief") return "Definitief 20:15";
+  if (status === "definitief") return "Definitief 20:00";
   if (status === "handmatig") return "Upload";
   if (status === "historie") return "Archief";
   return "Nog niet";
@@ -4720,10 +4720,10 @@ function buildReceiptSummaries(
       id: `P-${String(index + 1).padStart(3, "0")}`,
       note: receipt.tags.includes("intern")
         ? receipt.note
-        : "Prognosebon, definitieve aantallen na 20:15.",
+        : "Prognosebon, definitieve aantallen na 20:00.",
       internalNote: receipt.tags.includes("intern")
         ? receipt.internalNote
-        : "Prognosebon, definitieve aantallen na 20:15.",
+        : "Prognosebon, definitieve aantallen na 20:00.",
       customerNote: receipt.tags.includes("intern")
         ? receipt.customerNote
         : "Nog prognose: controleer na de definitieve batch.",
@@ -4773,8 +4773,6 @@ export default function BakkerijLogistiekDashboard() {
   const [routeSaveMessage, setRouteSaveMessage] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState("");
-  const [manualUploadStatus, setManualUploadStatus] =
-    useState<ManualUploadStatus>("prognose");
   const [overrideMessage, setOverrideMessage] = useState("");
   const [photoLinkMessage, setPhotoLinkMessage] = useState("");
   const [feedbackByDate, setFeedbackByDate] = useState<Record<string, string>>(
@@ -4790,17 +4788,6 @@ export default function BakkerijLogistiekDashboard() {
   const dateStateRef = useRef(dateState);
   const activeImportedBatch =
     importedBatch?.date === dateState.selectedDate ? importedBatch : null;
-
-  useEffect(() => {
-    setManualUploadStatus(defaultManualUploadStatus(dateState, activeImportedBatch));
-  }, [
-    activeImportedBatch?.status,
-    dateState.hour,
-    dateState.minute,
-    dateState.selectedDate,
-    dateState.today,
-    dateState.tomorrow,
-  ]);
 
   const selectedPlan = useMemo(
     () => buildDayPlan(dateState, fileSnapshot, activeImportedBatch),
@@ -5158,7 +5145,7 @@ export default function BakkerijLogistiekDashboard() {
       const formData = new FormData();
       formData.set("file", file);
       formData.set("source", "manual");
-      formData.set("status", manualUploadStatus);
+      formData.set("status", defaultManualUploadStatus(dateState, activeImportedBatch));
 
       const response = await fetch("/api/bakkerij-logistiek/import", {
         method: "POST",
@@ -5417,33 +5404,6 @@ export default function BakkerijLogistiekDashboard() {
                 openMarzipanPhotoSheet(selectedPlan, marzipanPrintItems)
               }
             />
-            <div
-              className="flex min-h-10 overflow-hidden border border-[#e8e4de] bg-white shadow-sm"
-              aria-label="Uploadstatus kiezen"
-            >
-              {(["prognose", "definitief"] as const).map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setManualUploadStatus(status)}
-                  className={`px-2.5 text-[0.68rem] font-black uppercase tracking-normal transition ${
-                    manualUploadStatus === status
-                      ? "bg-[#1a1815] text-white"
-                      : "text-[#6b645b] hover:bg-[#faf8f5]"
-                  }`}
-                >
-                  {status === "prognose" ? "Prognose" : "Definitief"}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              disabled={isImporting}
-              onClick={() => fileInputRef.current?.click()}
-              className="min-h-10 border border-[#e8e4de] bg-white px-3 text-sm font-black tracking-normal text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              {isImporting ? "Lezen..." : "Upload bonnen"}
-            </button>
             <input
               ref={fileInputRef}
               type="file"

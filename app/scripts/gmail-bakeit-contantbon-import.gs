@@ -3,6 +3,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
   IMPORT_KEY: 'zet-hier-dezelfde-logistiek-sleutel',
 
   SOURCE_LABEL: 'Contantbonnen',
+  BAKEIT_LABEL: 'Bake-it',
   PROCESSED_LABEL: 'Ingelezen',
   ERROR_LABEL: 'Fout',
 
@@ -16,7 +17,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
   PROGNOSE_MAIL_START_HOUR: 8,
   PROGNOSE_MAIL_START_MINUTE: 20,
   DEFINITIVE_MAIL_START_HOUR: 20,
-  DEFINITIVE_MAIL_START_MINUTE: 15,
+  DEFINITIVE_MAIL_START_MINUTE: 0,
   IMPORT_VERSION: 'split-mails-v1',
 };
 
@@ -27,6 +28,9 @@ function importBakeItBonnen() {
 function importBakeItContantbonnen() {
   const processedLabel = getOrCreateBakeItLabel_(
     BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL
+  );
+  const bakeItLabel = getOrCreateBakeItLabel_(
+    BAKEIT_CONTANTBON_CONFIG.BAKEIT_LABEL
   );
   const errorLabel = getOrCreateBakeItLabel_(BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL);
   const props = PropertiesService.getScriptProperties();
@@ -95,9 +99,11 @@ function importBakeItContantbonnen() {
     });
 
     if (successThisRun) {
+      thread.addLabel(bakeItLabel);
       thread.addLabel(processedLabel);
       thread.removeLabel(errorLabel);
     } else if (hasImported) {
+      thread.addLabel(bakeItLabel);
       thread.addLabel(processedLabel);
       thread.removeLabel(errorLabel);
     } else if (failed) {
@@ -492,6 +498,49 @@ function debugBakeItLaatsteMails() {
       );
     });
   });
+}
+
+function herimporteerLaatsteBakeItContantbonnen() {
+  const props = PropertiesService.getScriptProperties();
+  const processedLabel = GmailApp.getUserLabelByName(
+    BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL
+  );
+  const errorLabel = GmailApp.getUserLabelByName(
+    BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL
+  );
+  const threads = GmailApp.search(BAKEIT_CONTANTBON_CONFIG.QUERY, 0, 10);
+  let resetCount = 0;
+
+  threads.forEach((thread) => {
+    let threadReset = false;
+
+    thread.getMessages().forEach((message) => {
+      if (!isBakeItOrdersEmailContantbonMail_(message)) return;
+
+      const importId = `bakeit-contantbon:${BAKEIT_CONTANTBON_CONFIG.IMPORT_VERSION}:${message.getId()}`;
+      const groupKey = buildBakeItImportGroupKey_(message);
+
+      props.deleteProperty(importId);
+      props.deleteProperty(buildBakeItImportWaveStateKey_(groupKey));
+      resetCount += 1;
+      threadReset = true;
+    });
+
+    if (threadReset) {
+      if (processedLabel) thread.removeLabel(processedLabel);
+      if (errorLabel) thread.removeLabel(errorLabel);
+    }
+  });
+
+  logBakeIt_(
+    `Bake-it Orders email herimport reset: ${resetCount} bericht(en) opnieuw klaar gezet. Draai nu importBakeItContantbonnen().`
+  );
+}
+
+function isBakeItOrdersEmailContantbonMail_(message) {
+  const subject = String(message.getSubject() || '');
+
+  return /orders\s+email[-\s]+contantbonnen/i.test(subject);
 }
 
 function maakBakeItImportTriggerAan() {
