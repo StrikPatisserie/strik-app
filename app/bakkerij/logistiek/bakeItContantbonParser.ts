@@ -77,16 +77,20 @@ const articleNumberPattern =
   "(?:\\d{3,9}|[A-Z]{1,4}\\d{3,9})(?:\\.[A-Z0-9]{1,8})?";
 
 function normalizeTextLine(line: string) {
-  const singleLine = line.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  const normalizedWhitespace = line.replace(/\u00a0/g, " ");
+  const singleLine = normalizedWhitespace.replace(/\s+/g, " ").trim();
   if (!singleLine) return "";
 
-  const tabParts = line
+  const tabParts = normalizedWhitespace
     .split(/\t+/)
     .map((part) => part.replace(/\s+/g, " ").trim())
     .filter(Boolean);
 
   if (tabParts.length > 1 && tabParts.every((part) => part === tabParts[0])) {
     return tabParts[0];
+  }
+  if (tabParts.length > 1) {
+    return tabParts.join("\t");
   }
 
   const tokens = singleLine.split(/\s+/);
@@ -127,7 +131,9 @@ function lineMatchesReceiptLine(
   const lineNote = line.note || "";
 
   if (
-    existingArticleNumber !== lineArticleNumber ||
+    (existingArticleNumber &&
+      lineArticleNumber &&
+      existingArticleNumber !== lineArticleNumber) ||
     existing.quantity !== line.quantity ||
     existingPrice !== linePrice ||
     existingNote !== lineNote
@@ -183,7 +189,16 @@ function uniqueLinePush(
       `${item.articleNumber || ""}|${item.quantity}|${item.description}|${item.note || ""}|${item.unitPrice || ""}` ===
         key || lineMatchesReceiptLine(item, line)
   );
-  if (existing) return existing;
+  if (existing) {
+    if (!existing.articleNumber && line.articleNumber) {
+      existing.articleNumber = line.articleNumber;
+    }
+    if (!existing.note && line.note) {
+      existing.note = line.note;
+    }
+
+    return existing;
+  }
 
   target.push(line);
   return line;
@@ -477,6 +492,13 @@ function isArticleCodeWithSubcode(value: string) {
   );
 }
 
+function isLikelyStandaloneArticleCode(value: string) {
+  const article = parseArticleToken(value);
+  if (!article) return false;
+
+  return article.articleNumber.replace(/\D/g, "").length >= 3;
+}
+
 function extractArticleFromProductDescription(value: string) {
   const clean = value.replace(/\s+/g, " ").trim();
   const leadingMatch = clean.match(
@@ -536,6 +558,7 @@ function isPlausibleReceiptQuantity(value: string) {
 }
 
 function extractProductQuantityAndDescription(value: string) {
+  const hasColumnSeparator = /\t/.test(value);
   const text = value.replace(/\s+/g, " ").trim();
   if (!text) return null;
 
@@ -550,6 +573,17 @@ function extractProductQuantityAndDescription(value: string) {
       quantityText: articleQuantityMatch[2],
       descriptionText: `${articleQuantityMatch[1]} ${articleQuantityMatch[3]}`,
     };
+  }
+
+  const leadingArticleOnlyMatch = text.match(
+    new RegExp(`^(${articleNumberPattern})\\s+(.+)$`, "i")
+  );
+  if (
+    leadingArticleOnlyMatch &&
+    isLikelyStandaloneArticleCode(leadingArticleOnlyMatch[1]) &&
+    (hasColumnSeparator || isArticleCodeWithSubcode(leadingArticleOnlyMatch[1]))
+  ) {
+    return null;
   }
 
   const leadingQuantityMatch = text.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
