@@ -11,8 +11,6 @@ import {
 } from "../../bakkerij/recepturen/recepturenApi";
 import type { BakeryHomeData, BakeryHomeOffer } from "../../bakkerij/recepturen/types";
 
-const fallbackOfferImageUrl = "/bakkerij-aanbieding-papa.png";
-
 function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
     2,
@@ -96,9 +94,14 @@ export default function ManagementBakkerijPage() {
     };
   }, [selectedWeek]);
 
-  useEffect(() => {
-    setLabel(selectedOffer?.label || "");
-  }, [selectedOffer?.label, selectedWeek]);
+  function selectWeek(nextWeek: string) {
+    setSelectedWeek(nextWeek);
+    setLabel(offerForWeek(home, nextWeek)?.label || "");
+  }
+
+  function selectRelativeWeek(days: number) {
+    selectWeek(addDays(selectedWeek, days));
+  }
 
   async function persistHome(nextHome: BakeryHomeData, message: string) {
     const nextData: RecepturenData = {
@@ -190,7 +193,7 @@ export default function ManagementBakkerijPage() {
         <div className="grid gap-3 sm:grid-cols-[2.75rem_minmax(0,1fr)_2.75rem]">
           <button
             type="button"
-            onClick={() => setSelectedWeek(addDays(selectedWeek, -7))}
+            onClick={() => selectRelativeWeek(-7)}
             className="border border-[#c3d3bc] bg-[#c3d3bc] text-3xl leading-none"
             aria-label="Vorige week"
           >
@@ -201,7 +204,7 @@ export default function ManagementBakkerijPage() {
           </div>
           <button
             type="button"
-            onClick={() => setSelectedWeek(addDays(selectedWeek, 7))}
+            onClick={() => selectRelativeWeek(7)}
             className="border border-[#c3d3bc] bg-[#c3d3bc] text-3xl leading-none"
             aria-label="Volgende week"
           >
@@ -238,11 +241,17 @@ export default function ManagementBakkerijPage() {
             Huidige foto
           </p>
           <div className="flex max-h-[28rem] items-center justify-center overflow-hidden bg-white">
-            <img
-              src={selectedOffer?.imageUrl || fallbackOfferImageUrl}
-              alt={selectedOffer?.label || "Aanbieding"}
-              className="max-h-[28rem] max-w-full object-contain"
-            />
+            {selectedOffer?.imageUrl ? (
+              <img
+                src={selectedOffer.imageUrl}
+                alt={selectedOffer.label || "Aanbieding"}
+                className="max-h-[28rem] max-w-full object-contain"
+              />
+            ) : (
+              <div className="flex min-h-64 w-full items-center justify-center px-4 text-center text-sm font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+                Nog geen foto voor deze week
+              </div>
+            )}
           </div>
         </div>
 
