@@ -30,11 +30,12 @@ export async function POST(request: Request) {
     }
 
     const imageId = cleanText(body.imageId, 180);
+    const action = cleanText(body.action, 40);
     const receiptId = cleanText(body.receiptId, 180);
     const receiptNumber = cleanText(body.receiptNumber, 120);
     const receiptCustomer = cleanText(body.receiptCustomer, 180);
 
-    if (!imageId || !receiptId) {
+    if (!imageId || (action !== "unlink" && !receiptId)) {
       return jsonError("Geen geldige foto-koppeling ontvangen.");
     }
 
@@ -43,6 +44,22 @@ export async function POST(request: Request) {
 
     if (!image) {
       return jsonError("Webshopfoto niet gevonden.", 404);
+    }
+
+    if (action === "unlink") {
+      const unlinkedImage: LogisticsWebshopImage = { ...image };
+      delete unlinkedImage.matchedReceiptId;
+      delete unlinkedImage.matchedReceiptNumber;
+      delete unlinkedImage.matchedReceiptCustomer;
+      delete unlinkedImage.matchedAt;
+      delete unlinkedImage.matchSource;
+      const savedImage = await upsertLogisticsWebshopImage(unlinkedImage);
+
+      return NextResponse.json({
+        ok: true,
+        image: savedImage,
+        generatedAt: new Date().toISOString(),
+      });
     }
 
     const linkedImage: LogisticsWebshopImage = {

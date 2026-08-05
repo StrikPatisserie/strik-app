@@ -5267,6 +5267,40 @@ export default function BakkerijLogistiekDashboard() {
     }
   }
 
+  async function unlinkWebshopImageFromReceipt(image: WebshopImageSummary) {
+    setPhotoLinkMessage("foto loskoppelen...");
+
+    try {
+      const response = await fetch("/api/bakkerij-logistiek/webshop-images/link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "unlink",
+          imageId: image.id,
+        }),
+      });
+      const data = (await response.json()) as {
+        image?: WebshopImageSummary;
+        message?: string;
+      };
+
+      if (!response.ok || !data.image) {
+        throw new Error(data.message || "Foto loskoppelen is niet gelukt.");
+      }
+
+      setWebshopImages((current) =>
+        current.map((item) => (item.id === data.image!.id ? data.image! : item))
+      );
+      setPhotoLinkMessage("Foto is losgekoppeld.");
+    } catch (error) {
+      setPhotoLinkMessage(
+        error instanceof Error
+          ? error.message
+          : "Foto loskoppelen is niet gelukt."
+      );
+    }
+  }
+
   function updateFeedback(value: string) {
     setFeedbackByDate((current) => ({
       ...current,
@@ -5501,6 +5535,7 @@ export default function BakkerijLogistiekDashboard() {
             receiptOverrides={receiptOverrides}
             onSaveReceiptOverride={saveReceiptOverride}
             onLinkWebshopImageToReceipt={linkWebshopImageToReceipt}
+            onUnlinkWebshopImageFromReceipt={unlinkWebshopImageFromReceipt}
             overrideMessage={overrideMessage}
             photoLinkMessage={photoLinkMessage}
             selectedPlan={selectedPlan}
@@ -5891,6 +5926,7 @@ function RoutesPanel({
 
 function OrdersPanel({
   onLinkWebshopImageToReceipt,
+  onUnlinkWebshopImageFromReceipt,
   onSaveReceiptOverride,
   overrideMessage,
   photoLinkMessage,
@@ -5903,6 +5939,7 @@ function OrdersPanel({
     image: WebshopImageSummary,
     receipt: ReceiptSummary
   ) => Promise<void>;
+  onUnlinkWebshopImageFromReceipt: (image: WebshopImageSummary) => Promise<void>;
   onSaveReceiptOverride: (
     receipt: ReceiptSummary,
     draft: ReceiptOverrideDraft
@@ -6064,6 +6101,7 @@ function OrdersPanel({
 
       <ReceiptDetail
         imageMatches={selectedImageMatches}
+        onUnlinkWebshopImageFromReceipt={onUnlinkWebshopImageFromReceipt}
         onSaveReceiptOverride={onSaveReceiptOverride}
         override={selectedOverride}
         overrideMessage={overrideMessage}
@@ -6211,8 +6249,13 @@ function thumbnailStyleFor(image: WebshopImageSummary) {
 
 function WebshopImageBlock({
   images,
+  onUnlink,
   receipt,
-}: Readonly<{ images: WebshopImageSummary[]; receipt: ReceiptSummary }>) {
+}: Readonly<{
+  images: WebshopImageSummary[];
+  onUnlink: (image: WebshopImageSummary) => Promise<void>;
+  receipt: ReceiptSummary;
+}>) {
   if (images.length === 0) return null;
 
   return (
@@ -6239,48 +6282,63 @@ function WebshopImageBlock({
           );
 
           return (
-            <a
+            <div
               key={image.id}
-              href={image.photoUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2 border border-[#d7d7d7] bg-white p-1.5 text-left transition hover:border-[#111]"
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border border-[#d7d7d7] bg-white p-1.5 text-left transition hover:border-[#111]"
             >
-              <span
-                aria-hidden="true"
-                className="h-12 w-12 bg-[#faf8f5] bg-cover bg-center"
-                style={thumbnailStyleFor(image)}
-              />
-              <span className="min-w-0">
-                <span className="block truncate text-xs font-black tracking-normal text-[#111]">
-                  {displayCustomerName}
+              <a
+                href={image.photoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="grid min-w-0 grid-cols-[3rem_minmax(0,1fr)] gap-2"
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-12 w-12 bg-[#faf8f5] bg-cover bg-center"
+                  style={thumbnailStyleFor(image)}
+                />
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-black tracking-normal text-[#111]">
+                    {displayCustomerName}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#555]">
+                    {image.orderNumber || "zonder bestelnummer"} · match{" "}
+                    {image.matchSource === "manual"
+                      ? "handmatig"
+                      : image.confidence}
+                  </span>
+                  {image.productSummary && (
+                    <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                      {image.productSummary}
+                    </span>
+                  )}
+                  {image.fileName && (
+                    <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                      {image.fileName}
+                    </span>
+                  )}
+                  {!image.customerName && displayCustomerName !== "Klant controleren" && (
+                    <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                      klant uit gekoppelde bon
+                    </span>
+                  )}
+                  {notes.length > 0 && (
+                    <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
+                      {notes.join(" ")}
+                    </span>
+                  )}
                 </span>
-                <span className="mt-0.5 block truncate text-[0.68rem] font-normal tracking-normal text-[#555]">
-                  {image.orderNumber || "zonder bestelnummer"} · match{" "}
-                  {image.matchSource === "manual" ? "handmatig" : image.confidence}
-                </span>
-                {image.productSummary && (
-                  <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
-                    {image.productSummary}
-                  </span>
-                )}
-                {image.fileName && (
-                  <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
-                    {image.fileName}
-                  </span>
-                )}
-                {!image.customerName && displayCustomerName !== "Klant controleren" && (
-                  <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
-                    klant uit gekoppelde bon
-                  </span>
-                )}
-                {notes.length > 0 && (
-                  <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#555]">
-                    {notes.join(" ")}
-                  </span>
-                )}
-              </span>
-            </a>
+              </a>
+              {image.matchSource === "manual" && (
+                <button
+                  type="button"
+                  onClick={() => void onUnlink(image)}
+                  className="min-h-8 border border-[#d4695f] bg-white px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#9a2f28] transition hover:bg-[#fff1ef]"
+                >
+                  Ontkoppel
+                </button>
+              )}
+            </div>
           );
         })}
       </div>
@@ -6616,6 +6674,7 @@ function ReceiptFulfillmentBlock({
 
 function ReceiptDetail({
   imageMatches,
+  onUnlinkWebshopImageFromReceipt,
   onSaveReceiptOverride,
   override,
   overrideMessage,
@@ -6623,6 +6682,9 @@ function ReceiptDetail({
   selectedPlan,
 }: Readonly<{
   imageMatches: WebshopImageSummary[];
+  onUnlinkWebshopImageFromReceipt: (
+    image: WebshopImageSummary
+  ) => Promise<void>;
   onSaveReceiptOverride: (
     receipt: ReceiptSummary,
     draft: ReceiptOverrideDraft
@@ -6771,7 +6833,11 @@ function ReceiptDetail({
             </div>
           )}
           <ReceiptFulfillmentBlock receipt={receipt} />
-          <WebshopImageBlock images={imageMatches} receipt={receipt} />
+          <WebshopImageBlock
+            images={imageMatches}
+            onUnlink={onUnlinkWebshopImageFromReceipt}
+            receipt={receipt}
+          />
         </div>
       </div>
     </article>
