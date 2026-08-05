@@ -18,6 +18,7 @@ import type {
 
 type DashboardTab = "routes" | "bonnen" | "leren";
 type BatchStatus = LogisticsBatchStatus;
+type ManualUploadStatus = Extract<BatchStatus, "prognose" | "definitief">;
 type BatchLoadState = "idle" | "loading" | "ready" | "error";
 type RouteSaveState = "idle" | "saving" | "saved" | "error";
 type OrdersFilter =
@@ -31,6 +32,7 @@ type OrdersFilter =
 type FileSnapshot = {
   name: string;
   size: number;
+  status: BatchStatus;
   uploadedAt: string;
 };
 
@@ -39,6 +41,7 @@ type DateState = {
   tomorrow: string;
   selectedDate: string;
   hour: number;
+  minute: number;
 };
 
 type DayPlan = {
@@ -333,6 +336,12 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
+const DEFINITIVE_BATCH_START_MINUTE_OF_DAY = 20 * 60 + 15;
+
+function minuteOfDay(hour: number, minute: number) {
+  return hour * 60 + minute;
+}
+
 function createDateState(): DateState {
   const now = new Date();
   const today = toInputDate(now);
@@ -342,6 +351,7 @@ function createDateState(): DateState {
     tomorrow: toInputDate(addDays(now, 1)),
     selectedDate: today,
     hour: now.getHours(),
+    minute: now.getMinutes(),
   };
 }
 
@@ -360,6 +370,7 @@ function syncDateState(current: DateState): DateState {
     current.today === next.today &&
     current.tomorrow === next.tomorrow &&
     current.hour === next.hour &&
+    current.minute === next.minute &&
     current.selectedDate === selectedDate
   ) {
     return current;
@@ -447,9 +458,34 @@ function getUploadTime() {
   }).format(new Date());
 }
 
-function tomorrowStatus(hour: number): BatchStatus {
-  if (hour >= 22) return "definitief";
+function tomorrowStatus(hour: number, minute: number): BatchStatus {
+  if (
+    minuteOfDay(hour, minute) >= DEFINITIVE_BATCH_START_MINUTE_OF_DAY
+  ) {
+    return "definitief";
+  }
+
   return "prognose";
+}
+
+function defaultManualUploadStatus(
+  dateState: DateState,
+  importedBatch: LogisticsBatch | null
+): ManualUploadStatus {
+  if (
+    importedBatch?.status === "prognose" ||
+    importedBatch?.status === "definitief"
+  ) {
+    return importedBatch.status;
+  }
+
+  if (dateState.selectedDate === dateState.tomorrow) {
+    return tomorrowStatus(dateState.hour, dateState.minute) === "definitief"
+      ? "definitief"
+      : "prognose";
+  }
+
+  return dateState.selectedDate > dateState.today ? "prognose" : "definitief";
 }
 
 function receiptOverrideId(date: string, receipt: ReceiptSummary) {
@@ -534,17 +570,17 @@ function buildDayPlan(
   fileSnapshot: FileSnapshot | null,
   importedBatch: LogisticsBatch | null
 ): DayPlan {
-  const { selectedDate, today, tomorrow, hour } = dateState;
+  const { selectedDate, today, tomorrow, hour, minute } = dateState;
   const isToday = selectedDate === today;
   const isTomorrow = selectedDate === tomorrow;
   const status = fileSnapshot
-    ? "handmatig"
+    ? fileSnapshot.status
     : importedBatch
       ? importedBatch.status
       : isToday
         ? "definitief"
         : isTomorrow
-          ? tomorrowStatus(hour)
+          ? tomorrowStatus(hour, minute)
           : "historie";
 
   const isFuture = selectedDate > today;
@@ -597,8 +633,8 @@ function sourceLabelFor(status: BatchStatus) {
 }
 
 function batchLabelFor(status: BatchStatus) {
-  if (status === "prognose") return "Orbak 10:00";
-  if (status === "definitief") return "Orbak 22:00";
+  if (status === "prognose") return "Prognose 08:20";
+  if (status === "definitief") return "Definitief 20:15";
   if (status === "handmatig") return "Upload";
   if (status === "historie") return "Archief";
   return "Nog niet";
@@ -4684,10 +4720,10 @@ function buildReceiptSummaries(
       id: `P-${String(index + 1).padStart(3, "0")}`,
       note: receipt.tags.includes("intern")
         ? receipt.note
-        : "Prognosebon, definitieve aantallen na 22:00.",
+        : "Prognosebon, definitieve aantallen na 20:15.",
       internalNote: receipt.tags.includes("intern")
         ? receipt.internalNote
-        : "Prognosebon, definitieve aantallen na 22:00.",
+        : "Prognosebon, definitieve aantallen na 20:15.",
       customerNote: receipt.tags.includes("intern")
         ? receipt.customerNote
         : "Nog prognose: controleer na de definitieve batch.",
@@ -4737,6 +4773,8 @@ export default function BakkerijLogistiekDashboard() {
   const [routeSaveMessage, setRouteSaveMessage] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [importMessage, setImportMessage] = useState("");
+  const [manualUploadStatus, setManualUploadStatus] =
+    useState<ManualUploadStatus>("prognose");
   const [overrideMessage, setOverrideMessage] = useState("");
   const [photoLinkMessage, setPhotoLinkMessage] = useState("");
   const [feedbackByDate, setFeedbackByDate] = useState<Record<string, string>>(
@@ -4752,6 +4790,17 @@ export default function BakkerijLogistiekDashboard() {
   const dateStateRef = useRef(dateState);
   const activeImportedBatch =
     importedBatch?.date === dateState.selectedDate ? importedBatch : null;
+
+  useEffect(() => {
+    setManualUploadStatus(defaultManualUploadStatus(dateState, activeImportedBatch));
+  }, [
+    activeImportedBatch?.status,
+    dateState.hour,
+    dateState.minute,
+    dateState.selectedDate,
+    dateState.today,
+    dateState.tomorrow,
+  ]);
 
   const selectedPlan = useMemo(
     () => buildDayPlan(dateState, fileSnapshot, activeImportedBatch),
@@ -4812,7 +4861,7 @@ export default function BakkerijLogistiekDashboard() {
     if (isImporting) return "batch wordt ingelezen...";
     if (!fileSnapshot) return selectedPlan.sourceLabel;
 
-    return `${fileSnapshot.name} · ${formatBytes(fileSnapshot.size)} · ${fileSnapshot.uploadedAt}`;
+    return `${batchLabelFor(fileSnapshot.status)} · ${fileSnapshot.name} · ${formatBytes(fileSnapshot.size)} · ${fileSnapshot.uploadedAt}`;
   }, [fileSnapshot, isImporting, selectedPlan.sourceLabel]);
 
   const batchStatusLine = useMemo(() => {
@@ -4845,7 +4894,10 @@ export default function BakkerijLogistiekDashboard() {
       const selectedDateChanged = next.selectedDate !== current.selectedDate;
       const calendarChanged =
         next.today !== current.today || next.tomorrow !== current.tomorrow;
-      const definitiveWindowStarted = current.hour < 22 && next.hour >= 22;
+      const definitiveWindowStarted =
+        minuteOfDay(current.hour, current.minute) <
+          DEFINITIVE_BATCH_START_MINUTE_OF_DAY &&
+        minuteOfDay(next.hour, next.minute) >= DEFINITIVE_BATCH_START_MINUTE_OF_DAY;
 
       dateStateRef.current = next;
       setDateState(next);
@@ -5106,7 +5158,7 @@ export default function BakkerijLogistiekDashboard() {
       const formData = new FormData();
       formData.set("file", file);
       formData.set("source", "manual");
-      formData.set("status", "handmatig");
+      formData.set("status", manualUploadStatus);
 
       const response = await fetch("/api/bakkerij-logistiek/import", {
         method: "POST",
@@ -5128,9 +5180,12 @@ export default function BakkerijLogistiekDashboard() {
       setFileSnapshot({
         name: file.name,
         size: file.size,
+        status: data.batch.status,
         uploadedAt: getUploadTime(),
       });
-      setImportMessage(`${data.batch.orderCount} bonnen ingelezen.`);
+      setImportMessage(
+        `${batchLabelFor(data.batch.status)} · ${data.batch.orderCount} bonnen ingelezen.`
+      );
     } catch (error) {
       setImportMessage(
         error instanceof Error ? error.message : "Batch inlezen is niet gelukt."
@@ -5362,6 +5417,33 @@ export default function BakkerijLogistiekDashboard() {
                 openMarzipanPhotoSheet(selectedPlan, marzipanPrintItems)
               }
             />
+            <div
+              className="flex min-h-10 overflow-hidden border border-[#e8e4de] bg-white shadow-sm"
+              aria-label="Uploadstatus kiezen"
+            >
+              {(["prognose", "definitief"] as const).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setManualUploadStatus(status)}
+                  className={`px-2.5 text-[0.68rem] font-black uppercase tracking-normal transition ${
+                    manualUploadStatus === status
+                      ? "bg-[#1a1815] text-white"
+                      : "text-[#6b645b] hover:bg-[#faf8f5]"
+                  }`}
+                >
+                  {status === "prognose" ? "Prognose" : "Definitief"}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={isImporting}
+              onClick={() => fileInputRef.current?.click()}
+              className="min-h-10 border border-[#e8e4de] bg-white px-3 text-sm font-black tracking-normal text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              {isImporting ? "Lezen..." : "Upload bonnen"}
+            </button>
             <input
               ref={fileInputRef}
               type="file"
