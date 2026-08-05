@@ -73,7 +73,8 @@ const internalLinePatterns = [
   /naam aanvrager/i,
   /factuurgegevens/i,
 ];
-const articleNumberPattern = "(?:\\d{4,9}|[A-Z]{1,4}\\d{3,9})";
+const articleNumberPattern =
+  "(?:\\d{3,9}|[A-Z]{1,4}\\d{3,9})(?:\\.[A-Z0-9]{1,8})?";
 
 function normalizeTextLine(line: string) {
   const singleLine = line.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -458,15 +459,60 @@ function cleanProductDescription(value: string) {
     .trim();
 }
 
-function extractArticleNumberFromDescription(value: string) {
-  const match = value.trim().match(/^(\d{4,9}|[A-Z]{1,4}\d{3,9})\s+(.+)$/i);
-  if (!match) {
-    return { articleNumber: "", description: value.trim() };
-  }
+function parseArticleToken(value: string) {
+  const match = value
+    .trim()
+    .match(/^((?:\d{3,9}|[A-Z]{1,4}\d{3,9}))(?:\.([A-Z0-9]{1,8}))?$/i);
+  if (!match) return null;
 
   return {
     articleNumber: match[1].trim(),
-    description: match[2].trim(),
+    subcode: match[2]?.trim() || "",
+  };
+}
+
+function extractArticleFromProductDescription(value: string) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  const leadingMatch = clean.match(
+    /^((?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?)\s+(.+)$/i
+  );
+  const leadingArticle = leadingMatch ? parseArticleToken(leadingMatch[1]) : null;
+  if (leadingMatch && leadingArticle) {
+    return {
+      ...leadingArticle,
+      description: cleanProductDescription(leadingMatch[2]),
+    };
+  }
+
+  const trailingMatch = clean.match(
+    /^(.+?)\s+((?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?)$/i
+  );
+  const trailingArticle = trailingMatch
+    ? parseArticleToken(trailingMatch[2])
+    : null;
+  if (trailingMatch && trailingArticle) {
+    return {
+      ...trailingArticle,
+      description: cleanProductDescription(trailingMatch[1]),
+    };
+  }
+
+  return {
+    articleNumber: "",
+    subcode: "",
+    description: cleanProductDescription(clean),
+  };
+}
+
+function articleFieldsForReceiptLine(article: {
+  articleNumber: string;
+  subcode: string;
+}) {
+  if (!article.articleNumber) return {};
+
+  return {
+    articleNumber: article.articleNumber,
+    ...(article.subcode ? { note: `Subcode ${article.subcode}` } : {}),
   };
 }
 
@@ -823,9 +869,7 @@ function parseProductLine(line: string): LogisticsReceiptLine | null {
   );
   if (!product) return null;
 
-  const article = extractArticleNumberFromDescription(
-    cleanProductDescription(product.descriptionText)
-  );
+  const article = extractArticleFromProductDescription(product.descriptionText);
   const description = article.description;
   if (!isUsableProductDescription(description)) return null;
   if (isProductOptionDescription(description)) return null;
@@ -836,7 +880,7 @@ function parseProductLine(line: string): LogisticsReceiptLine | null {
   );
 
   return {
-    ...(article.articleNumber ? { articleNumber: article.articleNumber } : {}),
+    ...articleFieldsForReceiptLine(article),
     quantity: product.quantityText.replace(".", ","),
     description,
     ...(unitPrice !== undefined ? { unitPrice } : {}),
@@ -864,10 +908,9 @@ function parseTrailingQuantityProductLine(
   if (!/^\d+(?:[.,]\d+)?$/.test(quantityText)) return null;
   if (!isPlausibleReceiptQuantity(quantityText)) return null;
 
-  const descriptionText = cleanProductDescription(
+  const article = extractArticleFromProductDescription(
     line.slice(0, firstPriceIndex)
   );
-  const article = extractArticleNumberFromDescription(descriptionText);
   const description = article.description;
   if (!isUsableProductDescription(description)) return null;
   if (isProductOptionDescription(description)) return null;
@@ -878,7 +921,7 @@ function parseTrailingQuantityProductLine(
   );
 
   return {
-    ...(article.articleNumber ? { articleNumber: article.articleNumber } : {}),
+    ...articleFieldsForReceiptLine(article),
     quantity: quantityText.replace(".", ","),
     description,
     ...(unitPrice !== undefined ? { unitPrice } : {}),
@@ -889,9 +932,7 @@ function parseProductStartLine(line: string): LogisticsReceiptLine | null {
   const product = extractProductQuantityAndDescription(line);
   if (!product) return null;
 
-  const article = extractArticleNumberFromDescription(
-    cleanProductDescription(product.descriptionText)
-  );
+  const article = extractArticleFromProductDescription(product.descriptionText);
   const description = article.description;
   if (!isUsableProductDescription(description)) return null;
   if (isProductOptionDescription(description)) return null;
@@ -906,7 +947,7 @@ function parseProductStartLine(line: string): LogisticsReceiptLine | null {
   if (!productLike) return null;
 
   return {
-    ...(article.articleNumber ? { articleNumber: article.articleNumber } : {}),
+    ...articleFieldsForReceiptLine(article),
     quantity: product.quantityText.replace(".", ","),
     description,
   };
@@ -1254,12 +1295,16 @@ function parsePage(pageText: string): ParsedPage | null {
       if (pendingSplitProductDescription) {
         const pricedSplitLine = parsePriceQuantityLine(line);
         if (pricedSplitLine) {
-          const description = cleanProductDescription(pendingSplitProductDescription);
+          const article = extractArticleFromProductDescription(
+            pendingSplitProductDescription
+          );
+          const description = article.description;
           const unitPrice = pickUnitPrice(
             [pricedSplitLine.priceText],
             pricedSplitLine.quantityText
           );
           currentLine = uniqueLinePush(parsedLines, {
+            ...articleFieldsForReceiptLine(article),
             quantity: pricedSplitLine.quantityText,
             description,
             ...(unitPrice !== undefined ? { unitPrice } : {}),
