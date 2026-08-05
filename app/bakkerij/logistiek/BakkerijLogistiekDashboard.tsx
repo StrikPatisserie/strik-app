@@ -1122,6 +1122,10 @@ function isArticleSubcodeQuantity(value: string) {
   );
 }
 
+function shouldDropReceiptLine(line: ReceiptLine) {
+  return isArticleSubcodeQuantity(line.quantity);
+}
+
 function normalizedLineDescription(value: string) {
   return value
     .toLowerCase()
@@ -1301,6 +1305,8 @@ function receiptLineIdentity(line: ReceiptLine) {
 }
 
 function pushUniqueReceiptLine(target: ReceiptLine[], line: ReceiptLine) {
+  if (shouldDropReceiptLine(line)) return;
+
   if (isProductOptionLine(line)) {
     const optionKey = normalizedProductOptionDescription(line.description);
     const existingOption = target.find(
@@ -1424,7 +1430,7 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
       ...(note && note !== description ? { note } : { note: undefined }),
     };
 
-    if (isArticleSubcodeQuantity(normalizedLine.quantity)) return;
+    if (shouldDropReceiptLine(normalizedLine)) return;
 
     if (isProductOptionLine(normalizedLine)) {
       const kind = productOptionKind(normalizedLine.description);
@@ -6953,11 +6959,12 @@ function ReceiptDetail({
   }
 
   const receiptNumber = receipt.receiptNumber || receipt.id;
+  const displayLines = receipt.lines.filter((line) => !shouldDropReceiptLine(line));
   const visibleNotes = [
     receipt.customerNote,
     overrideMessage,
   ]
-    .map((note) => (note ? cleanReceiptDisplayNote(note, receipt.lines) : ""))
+    .map((note) => (note ? cleanReceiptDisplayNote(note, displayLines) : ""))
     .filter(
       (note) =>
         note &&
@@ -7024,7 +7031,7 @@ function ReceiptDetail({
               </tr>
             </thead>
             <tbody>
-              {receipt.lines.map((line, index) => {
+              {displayLines.map((line, index) => {
                 const total = receiptLineTotal(line);
                 const optionLine = isProductOptionLine(line);
 
