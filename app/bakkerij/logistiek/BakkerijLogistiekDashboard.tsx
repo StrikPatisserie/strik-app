@@ -92,10 +92,10 @@ type RouteGroup = {
 type RouteStop = {
   id: string;
   sourceId: string;
-  learningKey: string;
-  learningLabel: string;
-  learningTarget: string;
-  learningKind: "shop" | "receipt" | "ice" | "check";
+  learningKey?: string;
+  learningLabel?: string;
+  learningTarget?: string;
+  learningKind?: "shop" | "receipt" | "ice" | "check";
   label: string;
   detail: string;
   badges: string[];
@@ -559,9 +559,7 @@ function applyReceiptOverrides(
       pickupLocation: override.pickupLocation || receipt.pickupLocation,
       tags: nextTags,
       note: override.routeNote || receipt.note,
-      customerNote: override.routeNote
-        ? `${receipt.customerNote} Regie: ${override.routeNote}`.trim()
-        : receipt.customerNote,
+      customerNote: receipt.customerNote,
       internalNote: nextInternalNote,
     };
   });
@@ -1419,10 +1417,6 @@ function normalizeImportedReceiptLines(receipt: ReceiptSummary) {
   let fallbackQuantity = "1";
   const sourceText = receiptTextContinuationSource(receipt);
 
-  recoveredReceiptLinesFromNote(receipt.customerNote || "").forEach((line) =>
-    pushUniqueReceiptLine(lines, line)
-  );
-
   receipt.lines.forEach((line) => {
     const description = cleanReceiptLineDescription(line.description);
     const note = line.note ? cleanReceiptLineDescription(line.note) : "";
@@ -1540,7 +1534,9 @@ function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
   const description = lineSearchDescription(line);
   const isCake =
     (/\bmarsepein/.test(description) && /taart(?:en)?\b/.test(description)) ||
-    (/\bslagroom/.test(description) && /taart(?:en)?\b/.test(description));
+    (/\bslagroom/.test(description) && /taart(?:en)?\b/.test(description)) ||
+    /\bcremetaart\b/.test(description) ||
+    (/\bcreme\b/.test(description) && /taart(?:en)?\b/.test(description));
 
   return isCake && hasLargeCakeSize(description);
 }
@@ -2282,6 +2278,8 @@ function createBusRoutePrintHtml(input: {
     .map((route) => {
       const rowsHtml = route.stops
         .map((stop, index) => {
+          const detailParts = routePrintTimeParts(stop);
+          const timeBadge = routePrintTimeBadgeHtml(stop);
           const badges = stop.badges.length
             ? `<small class="badges">${escapeHtml(stop.badges.join(" · "))}</small>`
             : "";
@@ -2292,7 +2290,8 @@ function createBusRoutePrintHtml(input: {
               <td class="nr">${index + 1}</td>
               <td class="stop">
                 <strong>${escapeHtml(stop.label)}</strong>
-                <small>${escapeHtml(stop.detail)}</small>
+                ${timeBadge}
+                <small>${escapeHtml(detailParts.detail)}</small>
                 ${badges}
               </td>
               <td class="arrival"></td>
@@ -2490,6 +2489,21 @@ function createBusRoutePrintHtml(input: {
       }
       .stop strong {
         font-size: 8.5px;
+      }
+      .time-badge {
+        background: #111;
+        color: #fff;
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0;
+        margin: 0.8mm 0;
+        padding: 0.7mm 1.4mm;
+        text-transform: uppercase;
+      }
+      .time-badge.urgent {
+        background: #b42318;
+        font-size: 12px;
       }
       .stop small {
         color: #333;
@@ -2903,7 +2917,7 @@ function groupShopStops(
         learningKey: `shop:${shopKey}`,
         learningLabel: shopMeta.label,
         learningTarget: shopMeta.address,
-        learningKind: "shop",
+        learningKind: "shop" as const,
         label: shopMeta.label,
         detail: detailParts.join(" · "),
         badges: [
@@ -2911,8 +2925,7 @@ function groupShopStops(
           ...(pastryUnits >= 80 || shopReceipts.length >= 2 ? ["druk"] : []),
         ],
       };
-    })
-    .filter((stop): stop is RouteStop => Boolean(stop));
+    });
 }
 
 function busForShopKey(key: string): BusId | "" {
@@ -3906,9 +3919,41 @@ function busLoadLine(bus: PlannedBus, round: "first" | "second" | "ice") {
 }
 
 function routeLoadLineWithFallback(loadLine: string, fallback: string) {
-  if (loadLine === "0 bonnen") return fallback;
+  if (/^0\s+/i.test(loadLine)) return loadLine;
 
   return `${loadLine} · ${fallback}`;
+}
+
+function routePrintTimeParts(stop: RouteStop) {
+  const detailParts = stop.detail.split(" · ");
+  const firstPart = detailParts[0] || "";
+  const firstPartLooksLikeTime =
+    /\b(?:voor\s+)?\d{1,2}:\d{2}\b/i.test(firstPart) ||
+    /tijd\s+check/i.test(firstPart);
+
+  return {
+    time: firstPartLooksLikeTime ? firstPart : "",
+    detail: firstPartLooksLikeTime ? detailParts.slice(1).join(" · ") : stop.detail,
+  };
+}
+
+function routePrintTimeMinutes(value: string) {
+  const matches = [...value.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
+  const match = matches.at(-1);
+  if (!match) return 9999;
+
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function routePrintTimeBadgeHtml(stop: RouteStop) {
+  const { time } = routePrintTimeParts(stop);
+  if (!time) return "";
+
+  const urgent = routePrintTimeMinutes(time) < 10 * 60;
+
+  return `<span class="time-badge ${urgent ? "urgent" : ""}">${urgent ? "! " : ""}${escapeHtml(
+    time
+  )}</span>`;
 }
 
 function isSaturdayDate(date: string) {
@@ -4043,41 +4088,37 @@ function buildRouteRounds(
       ).map(iceStopForReceipt),
     ];
 
-    if (firstStops.length) {
-      rounds.push(
-        buildRouteRound({
-          id: `bus-${bus.id}-1`,
-          title: "Ronde 1",
-          vehicle: bus.title,
-          departure: plan.isFuture ? "advies 08:00" : "08:00",
-          tone: bus.tone,
-          stops: firstStops,
-          reason:
-            `${busRouteMeta[bus.id].description}. Eerst vaste winkels (${bus.shopKeys
-              .map((shopKey) => shopRouteMeta[shopKey].shortLabel)
-              .join(", ")}), daarna vroege en logische bezorgstops. Start/eind Ambachtsweg 4.`,
-          load: routeLoadLineForStops(firstStops),
-          loadProfile,
-        })
-      );
-    }
+    rounds.push(
+      buildRouteRound({
+        id: `bus-${bus.id}-1`,
+        title: "Ronde 1",
+        vehicle: bus.title,
+        departure: plan.isFuture ? "advies 08:00" : "08:00",
+        tone: bus.tone,
+        stops: firstStops,
+        reason:
+          `${busRouteMeta[bus.id].description}. Eerst vaste winkels (${bus.shopKeys
+            .map((shopKey) => shopRouteMeta[shopKey].shortLabel)
+            .join(", ")}), daarna vroege en logische bezorgstops. Start/eind Ambachtsweg 4.`,
+        load: routeLoadLineForStops(firstStops),
+        loadProfile,
+      })
+    );
 
-    if (secondStops.length) {
-      rounds.push(
-        buildRouteRound({
-          id: `bus-${bus.id}-2`,
-          title: "Ronde 2",
-          vehicle: bus.title,
-          departure: plan.isFuture ? "beslissen" : "na ronde 1",
-          tone: "border-[#efc7b8] bg-[#fff3ed]",
-          stops: secondStops,
-          reason:
-            "Tweede ronde voor ijs, Sanadome/Gennep/late bonnen of volume dat niet logisch in de eerste ronde past.",
-          load: routeLoadLineForStops(secondStops),
-          loadProfile,
-        })
-      );
-    }
+    rounds.push(
+      buildRouteRound({
+        id: `bus-${bus.id}-2`,
+        title: "Ronde 2",
+        vehicle: bus.title,
+        departure: plan.isFuture ? "beslissen" : "na ronde 1",
+        tone: "border-[#efc7b8] bg-[#fff3ed]",
+        stops: secondStops,
+        reason:
+          "Tweede ronde voor ijs, Sanadome/Gennep/late bonnen of volume dat niet logisch in de eerste ronde past.",
+        load: routeLoadLineForStops(secondStops),
+        loadProfile,
+      })
+    );
   });
 
   if (plan.iceTubs > 0 && iceReceipts.length === 0) {
@@ -4110,7 +4151,7 @@ function buildRouteRounds(
     );
   }
 
-  return rounds.filter((round) => round.stops.length > 0);
+  return rounds;
 }
 
 function buildSaturdayRouteRounds(
@@ -4202,46 +4243,42 @@ function buildSaturdayRouteRounds(
       routeLearning
     ).map(iceStopForReceipt);
 
-    if (firstStops.length) {
-      rounds.push(
-        buildRouteRound({
-          id: `bus-${bus.id}-1-saturday`,
-          title: "Ronde 1",
-          vehicle: bus.title,
-          departure: plan.isFuture ? "advies 08:00" : "08:00",
-          tone: bus.tone,
-          stops: firstStops,
-          reason:
-            bus.id === "B"
-              ? "Zaterdag: eerst Lent, daarna Gendt/noordkant als die erbij zit; start/eind Ambachtsweg 4."
-              : `Zaterdag: eerst ${routePlan.firstShopLabel}, bus vol laden door drukte; start/eind Ambachtsweg 4.`,
-          load: routeLoadLineWithFallback(
-            routeLoadLineForStops(firstStops),
-            "volle bus"
-          ),
-          loadProfile,
-        })
-      );
-    }
+    rounds.push(
+      buildRouteRound({
+        id: `bus-${bus.id}-1-saturday`,
+        title: "Ronde 1",
+        vehicle: bus.title,
+        departure: plan.isFuture ? "advies 08:00" : "08:00",
+        tone: bus.tone,
+        stops: firstStops,
+        reason:
+          bus.id === "B"
+            ? "Zaterdag: eerst Lent, daarna Gendt/noordkant als die erbij zit; start/eind Ambachtsweg 4."
+            : `Zaterdag: eerst ${routePlan.firstShopLabel}, bus vol laden door drukte; start/eind Ambachtsweg 4.`,
+        load: routeLoadLineWithFallback(
+          routeLoadLineForStops(firstStops),
+          "volle bus"
+        ),
+        loadProfile,
+      })
+    );
 
-    if (secondStops.length) {
-      rounds.push(
-        buildRouteRound({
-          id: `bus-${bus.id}-2-saturday`,
-          title: "Ronde 2",
-          vehicle: bus.title,
-          departure: plan.isFuture ? "na ronde 1" : "na ronde 1",
-          tone: "border-[#efc7b8] bg-[#fff3ed]",
-          stops: secondStops,
-          reason: `Zaterdag: daarna ${routePlan.secondShopLabel} en de resterende stops; late deadlines blijven later.`,
-          load: routeLoadLineWithFallback(
-            routeLoadLineForStops(secondStops),
-            "winkel + rest"
-          ),
-          loadProfile,
-        })
-      );
-    }
+    rounds.push(
+      buildRouteRound({
+        id: `bus-${bus.id}-2-saturday`,
+        title: "Ronde 2",
+        vehicle: bus.title,
+        departure: plan.isFuture ? "na ronde 1" : "na ronde 1",
+        tone: "border-[#efc7b8] bg-[#fff3ed]",
+        stops: secondStops,
+        reason: `Zaterdag: daarna ${routePlan.secondShopLabel} en de resterende stops; late deadlines blijven later.`,
+        load: routeLoadLineWithFallback(
+          routeLoadLineForStops(secondStops),
+          "winkel + rest"
+        ),
+        loadProfile,
+      })
+    );
 
     if (iceStops.length) {
       rounds.push(
@@ -4290,7 +4327,7 @@ function buildSaturdayRouteRounds(
     );
   }
 
-  return rounds.filter((round) => round.stops.length > 0);
+  return rounds;
 }
 
 function refreshRouteRoundAfterManualMove(
@@ -4379,6 +4416,7 @@ function reconcileRouteDraftRounds(
   automaticRouteRounds: RouteRound[],
   loadProfile: DayLoadProfile
 ): RouteRound[] {
+  const excludedSourceIds = new Set(routeDraft.excludedSourceIds || []);
   const automaticStopBySourceKey = new Map<string, RouteStop>();
   const automaticRouteById = new Map(
     automaticRouteRounds.map((route) => [route.id, route])
@@ -4396,6 +4434,12 @@ function reconcileRouteDraftRounds(
     const stops = draftRoute.stops
       .map((draftStop) => {
         const sourceKey = draftStop.sourceId || draftStop.id;
+        if (excludedSourceIds.has(sourceKey)) return null;
+        if (sourceKey.startsWith("manual:")) {
+          usedSourceKeys.add(sourceKey);
+          return draftStop;
+        }
+
         const stop = automaticStopBySourceKey.get(sourceKey);
         if (!stop) return null;
 
@@ -4415,9 +4459,10 @@ function reconcileRouteDraftRounds(
 
   automaticRouteRounds.forEach((automaticRoute) => {
     const unassignedStops = automaticRoute.stops.filter(
-      (stop) => !usedSourceKeys.has(routeStopSourceKey(stop))
+      (stop) =>
+        !usedSourceKeys.has(routeStopSourceKey(stop)) &&
+        !excludedSourceIds.has(routeStopSourceKey(stop))
     );
-    if (!unassignedStops.length) return;
 
     const existingRoute = reconciledRoutes.find(
       (route) => route.id === automaticRoute.id
@@ -4444,7 +4489,7 @@ function reconcileRouteDraftRounds(
     );
   });
 
-  return reconciledRoutes.filter((route) => route.stops.length > 0);
+  return reconciledRoutes;
 }
 
 function buildReceiptLines(receipt: ReceiptSeed, plan: DayPlan): ReceiptLine[] {
@@ -4973,6 +5018,9 @@ export default function BakkerijLogistiekDashboard() {
   const [manualRouteRounds, setManualRouteRounds] = useState<
     RouteRound[] | null
   >(null);
+  const [excludedRouteStopSourceIds, setExcludedRouteStopSourceIds] = useState<
+    string[]
+  >([]);
   const [routesEdited, setRoutesEdited] = useState(false);
   const [routeHasUnsavedChanges, setRouteHasUnsavedChanges] = useState(false);
   const routeRounds = manualRouteRounds || automaticRouteRounds;
@@ -5070,12 +5118,14 @@ export default function BakkerijLogistiekDashboard() {
       setManualRouteRounds(
         reconcileRouteDraftRounds(routeDraft, automaticRouteRounds, loadProfile)
       );
+      setExcludedRouteStopSourceIds(routeDraft.excludedSourceIds || []);
       setRoutesEdited(true);
       setRouteHasUnsavedChanges(false);
       return;
     }
 
     setManualRouteRounds(null);
+    setExcludedRouteStopSourceIds([]);
     setRoutesEdited(false);
     setRouteHasUnsavedChanges(false);
   }, [automaticRouteRounds, loadProfile, routeDraft, selectedPlan.date]);
@@ -5178,7 +5228,11 @@ export default function BakkerijLogistiekDashboard() {
     setBatchReloadCounter((current) => current + 1);
   }
 
-  async function saveRouteDraft(routeRoundsToSave: RouteRound[], learn = true) {
+  async function saveRouteDraft(
+    routeRoundsToSave: RouteRound[],
+    learn = true,
+    excludedSourceIds = excludedRouteStopSourceIds
+  ) {
     setRouteSaveState("saving");
     setRouteSaveMessage(
       learn ? "definitieve route opslaan..." : "routeconcept opslaan..."
@@ -5191,6 +5245,7 @@ export default function BakkerijLogistiekDashboard() {
         body: JSON.stringify({
           date: selectedPlan.date,
           routes: serializeRouteRounds(routeRoundsToSave),
+          excludedSourceIds,
           learn,
         }),
       });
@@ -5235,12 +5290,84 @@ export default function BakkerijLogistiekDashboard() {
     void saveRouteDraft(nextRoutes, false);
   }
 
+  function addManualRouteStop(routeId: string, label: string, detail: string) {
+    const cleanLabel = label.replace(/\s+/g, " ").trim();
+    const cleanDetail = detail.replace(/\s+/g, " ").trim();
+    if (!cleanLabel) return;
+
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const stopId = `manual-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const manualStop: RouteStop = {
+      id: stopId,
+      sourceId: `manual:${stopId}`,
+      learningKey: `manual:${cleanLabel}:${cleanDetail}`.slice(0, 220),
+      learningLabel: cleanLabel,
+      learningTarget: cleanDetail,
+      learningKind: "check",
+      label: cleanLabel,
+      detail: cleanDetail || "Handmatige stop",
+      badges: ["handmatig"],
+    };
+    const nextRoutes = currentRoutes.map((route) =>
+      route.id === routeId
+        ? refreshRouteRoundAfterManualMove(
+            {
+              ...route,
+              stops: [...route.stops, manualStop],
+            },
+            loadProfile
+          )
+        : route
+    );
+
+    setManualRouteRounds(nextRoutes);
+    setRoutesEdited(true);
+    setRouteHasUnsavedChanges(true);
+    setRouteSaveState("idle");
+    setRouteSaveMessage("handmatige stop toegevoegd · nog niet definitief opgeslagen");
+    void saveRouteDraft(nextRoutes, false);
+  }
+
+  function deleteRouteStop(routeId: string, stopId: string) {
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const sourceRoute = currentRoutes.find((route) => route.id === routeId);
+    const stop = sourceRoute?.stops.find((item) => item.id === stopId);
+    if (!sourceRoute || !stop) return;
+
+    const sourceKey = routeStopSourceKey(stop);
+    const nextExcludedSourceIds = sourceKey.startsWith("manual:")
+      ? excludedRouteStopSourceIds
+      : Array.from(new Set([...excludedRouteStopSourceIds, sourceKey]));
+    const nextRoutes = currentRoutes.map((route) =>
+      route.id === routeId
+        ? refreshRouteRoundAfterManualMove(
+            {
+              ...route,
+              stops: route.stops.filter((item) => item.id !== stopId),
+            },
+            loadProfile
+          )
+        : route
+    );
+
+    setManualRouteRounds(nextRoutes);
+    setExcludedRouteStopSourceIds(nextExcludedSourceIds);
+    setRoutesEdited(true);
+    setRouteHasUnsavedChanges(true);
+    setRouteSaveState("idle");
+    setRouteSaveMessage("stop verwijderd · nog niet definitief opgeslagen");
+    void saveRouteDraft(nextRoutes, false, nextExcludedSourceIds);
+  }
+
   function saveCurrentRouteDraft() {
     void saveRouteDraft(routeRounds, true);
   }
 
   async function resetRouteDraft() {
     setManualRouteRounds(null);
+    setExcludedRouteStopSourceIds([]);
     setRoutesEdited(false);
     setRouteHasUnsavedChanges(false);
     setRouteDraft(null);
@@ -5743,6 +5870,8 @@ export default function BakkerijLogistiekDashboard() {
       <div className="mt-3">
         {activeTab === "routes" && (
           <RoutesPanel
+            onRouteStopAdd={addManualRouteStop}
+            onRouteStopDelete={deleteRouteStop}
             onRouteStopMove={moveRouteStop}
             onRoutesReset={resetRouteDraft}
             onRoutesSave={saveCurrentRouteDraft}
@@ -5848,6 +5977,8 @@ function eventHasRouteDragState(
 }
 
 function RoutesPanel({
+  onRouteStopAdd,
+  onRouteStopDelete,
   onRouteStopMove,
   onRoutesReset,
   onRoutesSave,
@@ -5858,6 +5989,8 @@ function RoutesPanel({
   routesEdited,
   selectedPlan,
 }: Readonly<{
+  onRouteStopAdd: (routeId: string, label: string, detail: string) => void;
+  onRouteStopDelete: (routeId: string, stopId: string) => void;
   onRouteStopMove: (move: RouteStopMove) => void;
   onRoutesReset: () => void;
   onRoutesSave: () => void;
@@ -5965,6 +6098,14 @@ function RoutesPanel({
     setDropIndicator(null);
   }
 
+  function addManualStop(routeId: string) {
+    const label = window.prompt("Stopnaam", "");
+    if (!label) return;
+
+    const detail = window.prompt("Adres/opmerking", "") || "";
+    onRouteStopAdd(routeId, label, detail);
+  }
+
   return (
     <section className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2 border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3">
@@ -6055,6 +6196,15 @@ function RoutesPanel({
                       <span className="shrink-0 border border-white/80 bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]">
                         {route.load}
                       </span>
+                      <button
+                        type="button"
+                        aria-label={`Stop toevoegen aan ${route.title}`}
+                        title="Stop toevoegen"
+                        onClick={() => addManualStop(route.id)}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center border border-white/80 bg-white text-sm font-black text-[#1a1815] transition hover:border-[#111]"
+                      >
+                        +
+                      </button>
                     </div>
                     <ol className="mt-2 grid min-h-12 gap-1">
                       {route.stops.length === 0 && (
@@ -6084,7 +6234,7 @@ function RoutesPanel({
                           onDrop={(event) =>
                             handleStopDrop(event, route.id, stop.id)
                           }
-                          className={`relative grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)] gap-1.5 border border-white/80 bg-white px-1.5 py-1 transition hover:border-[#d7cec4] hover:shadow-sm active:cursor-grabbing ${
+                          className={`relative grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)_1.5rem] gap-1.5 border border-white/80 bg-white px-1.5 py-1 transition hover:border-[#d7cec4] hover:shadow-sm active:cursor-grabbing ${
                             dragging?.stopId === stop.id ? "opacity-45" : ""
                           }`}
                         >
@@ -6124,6 +6274,18 @@ function RoutesPanel({
                               </span>
                             )}
                           </span>
+                          <button
+                            type="button"
+                            aria-label={`${stop.label} uit route halen`}
+                            title="Stop verwijderen"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onRouteStopDelete(route.id, stop.id);
+                            }}
+                            className="flex h-5 w-5 items-center justify-center border border-[#e8e4de] bg-white text-[0.6rem] font-black text-[#6b645b] transition hover:border-[#9b2d1f] hover:text-[#9b2d1f]"
+                          >
+                            X
+                          </button>
                         </li>
                       ))}
                       {route.stops.length > 0 &&
@@ -6619,7 +6781,7 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
   lineDescriptions.forEach((description) => {
     clean = clean.replace(
       new RegExp(
-        `(?:\\d+(?:[.,]\\d+)?\\s+)?${escapeRegExp(description)}\\s*(?:€\\s*[\\d.,:]+\\s*){0,2}(?:\\d+(?:[.,]\\d+)?\\s*)?`,
+        `(?:\\d+(?:[.,]\\d+)?\\s+)?${escapeRegExp(description)}\\s*(?:€\\s*[\\d.,:]+\\s*|\\d{1,9}(?:[.,]\\d{1,3})?\\s*){0,5}`,
         "gi"
       ),
       " "
@@ -6627,6 +6789,7 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
   });
 
   const cleaned = clean
+    .replace(/\b(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:[.,][A-Z0-9]{1,8})?\b/gi, " ")
     .replace(
       /\b(?:\d+(?:[.,]\d+)?\s+)?(?:(?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)|petit\s+four)[^€]{4,180}\s+€\s*[\d.,:]+(?:\s+\d+(?:[.,]\d+)?\s+€\s*[\d.,:]+(?:\s+€\s*[\d.,:]+)*)?/gi,
       ""
@@ -6645,6 +6808,8 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     .replace(/&euro;\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
     .replace(/€\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
+    .replace(/^\d+(?:[.,]\d+)?\s+/g, "")
+    .replace(/\s+\d+(?:[.,]\d+)?$/g, "")
     .replace(/[–—-]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -6775,6 +6940,10 @@ function ReceiptOverrideEditor({
                 setDraft((current) => ({
                   ...current,
                   fulfillment: event.target.value as LogisticsFulfillment | "",
+                  pickupLocation:
+                    event.target.value === "bezorgen"
+                      ? ""
+                      : current.pickupLocation,
                 }))
               }
               className="h-8 border border-[#d7d7d7] bg-white px-2 text-xs font-bold tracking-normal text-[#111] outline-none focus:border-[#111]"
@@ -6819,7 +6988,7 @@ function ReceiptOverrideEditor({
           </label>
           <label className="grid gap-1">
             <span className="text-[0.58rem] font-black uppercase tracking-normal text-[#555]">
-              Afhaal
+              Wordt gehaald bij
             </span>
             <select
               value={draft.pickupLocation}
@@ -6827,11 +6996,12 @@ function ReceiptOverrideEditor({
                 setDraft((current) => ({
                   ...current,
                   pickupLocation: event.target.value,
+                  fulfillment: event.target.value ? "afhalen" : current.fulfillment,
                 }))
               }
               className="h-8 border border-[#d7d7d7] bg-white px-2 text-xs font-bold tracking-normal text-[#111] outline-none focus:border-[#111]"
             >
-              <option value="">winkel</option>
+              <option value="">geen winkel</option>
               <option value="Heyendaalseweg">HEY</option>
               <option value="Daalseweg">DAAL</option>
               <option value="Ziekerstraat">ZIEK</option>

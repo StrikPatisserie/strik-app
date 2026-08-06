@@ -1183,19 +1183,12 @@ function parsePriceQuantityLine(line: string) {
   };
 }
 
-function normalizeRemarksAndRecoverLines(
-  remarks: string[],
-  parsedLines: LogisticsReceiptLine[]
-) {
+function normalizeRemarksAndRecoverLines(remarks: string[]) {
   const cleanRemarks: string[] = [];
-  const fallbackQuantity =
-    [...parsedLines].reverse().find((line) => !isProductOptionDescription(line.description))
-      ?.quantity || "1";
 
   for (const remark of remarks) {
-    const result = recoverProductDetailsFromRemark(remark, fallbackQuantity);
-    for (const line of result.lines) uniqueLinePush(parsedLines, line);
-    if (result.remark) uniquePush(cleanRemarks, result.remark);
+    const cleanRemark = cleanReceiptRemark(remark);
+    if (cleanRemark) uniquePush(cleanRemarks, cleanRemark);
   }
 
   return cleanRemarks;
@@ -1475,7 +1468,7 @@ function parsePage(pageText: string): ParsedPage | null {
   }
 
   const key = `${receiptNumber || customer}-${customer}`.toLowerCase();
-  const normalizedRemarks = normalizeRemarksAndRecoverLines(remarks, parsedLines);
+  const normalizedRemarks = normalizeRemarksAndRecoverLines(remarks);
   const alternativeAddressResult = splitAlternativeAddressFromRemarks(
     normalizedRemarks,
     fulfillment

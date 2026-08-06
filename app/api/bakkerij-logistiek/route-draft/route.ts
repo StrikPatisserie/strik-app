@@ -39,6 +39,14 @@ function cleanBadges(value: unknown) {
     .slice(0, 8);
 }
 
+function cleanStringList(value: unknown, maxItems = 200) {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(
+    new Set(value.map((item) => cleanText(item, 180)).filter(Boolean))
+  ).slice(0, maxItems);
+}
+
 function cleanLearningKind(
   value: unknown
 ): LogisticsRouteLearningObservationStop["kind"] | "" {
@@ -187,6 +195,7 @@ export async function POST(request: Request) {
     const routes = Array.isArray(body.routes)
       ? body.routes.map(cleanRouteRound).filter(Boolean)
       : [];
+    const excludedSourceIds = cleanStringList(body.excludedSourceIds);
     const shouldLearn = body.learn === true;
     const updatedAt = new Date().toISOString();
 
@@ -194,6 +203,7 @@ export async function POST(request: Request) {
       id: date,
       date,
       routes: routes as LogisticsRouteDraftRound[],
+      excludedSourceIds,
       isFinal: shouldLearn,
       finalizedAt: shouldLearn ? updatedAt : "",
       updatedAt,

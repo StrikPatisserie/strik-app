@@ -331,6 +331,15 @@ function normalizeLogisticsRouteDraftsState(
       .filter(isLogisticsRouteDraft)
       .map((draft) => ({
         ...draft,
+        excludedSourceIds: Array.isArray(draft.excludedSourceIds)
+          ? Array.from(
+              new Set(
+                draft.excludedSourceIds.filter(
+                  (sourceId): sourceId is string => typeof sourceId === "string"
+                )
+              )
+            )
+          : [],
         routes: draft.routes.filter(isLogisticsRouteDraftRound).map((route) => ({
           ...route,
           stops: route.stops.filter(isLogisticsRouteDraftStop).map((stop) => ({

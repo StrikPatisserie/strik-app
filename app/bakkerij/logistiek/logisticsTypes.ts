@@ -89,6 +89,7 @@ export type LogisticsRouteDraft = {
   id: string;
   date: string;
   routes: LogisticsRouteDraftRound[];
+  excludedSourceIds?: string[];
   isFinal?: boolean;
   finalizedAt?: string;
   updatedAt: string;
