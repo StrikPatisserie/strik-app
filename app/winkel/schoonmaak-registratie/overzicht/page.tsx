@@ -69,11 +69,15 @@ function toDateInput(year: number, month: number, day: number) {
   )}`;
 }
 
-function formatDutchDate(date: string) {
+function formatDutchDateHeading(date: string) {
   const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return date;
 
-  return `${match[3]}-${match[2]}-${match[1]}`;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    .toLocaleDateString("nl-NL", {
+      day: "numeric",
+      month: "long",
+    });
 }
 
 function formatDutchTime(value: string) {
@@ -136,11 +140,26 @@ function registrationHasContent(registration: TemperatureRegistration) {
   return Boolean(
     registration.inactive ||
       registration.status === "inactive" ||
-    getMeasuredTemperature(registration).trim() ||
+      getMeasuredTemperature(registration).trim() ||
       (registration.displayTemperatuur || "").trim() ||
       (registration.actionTaken || "").trim() ||
       (registration.note || "").trim()
   );
+}
+
+function groupRowsByDate(rows: OverviewRow[]) {
+  const groups = new Map<string, OverviewRow[]>();
+
+  rows.forEach((row) => {
+    const groupRows = groups.get(row.date) || [];
+    groupRows.push(row);
+    groups.set(row.date, groupRows);
+  });
+
+  return Array.from(groups.entries()).map(([date, groupRows]) => ({
+    date,
+    rows: groupRows,
+  }));
 }
 
 function statusClass(status: TemperatureStatus) {
@@ -442,7 +461,7 @@ export function TemperatureRegistrationOverviewPage({
     TemperatureDeviceType | "all"
   >("all");
   const [onlyProblems, setOnlyProblems] = useState(false);
-  const [includeMissingRows, setIncludeMissingRows] = useState(true);
+  const [includeMissingRows, setIncludeMissingRows] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -620,6 +639,11 @@ export function TemperatureRegistrationOverviewPage({
     locationFilter === "all"
       ? allLocationsLabel
       : getLocationLabel(locationFilter, allowedLocationOptions);
+  const reportRows = useMemo(
+    () => rows.filter((row) => row.source === "registration"),
+    [rows]
+  );
+  const groupedRows = useMemo(() => groupRowsByDate(rows), [rows]);
 
   function updateMonth(delta: number) {
     const next = new Date(year, month + delta, 1);
@@ -642,7 +666,7 @@ export function TemperatureRegistrationOverviewPage({
       "note",
       "created_at",
     ];
-    const csvRows = rows.map((row) =>
+    const csvRows = reportRows.map((row) =>
       [
         row.date,
         row.time,
@@ -682,26 +706,52 @@ export function TemperatureRegistrationOverviewPage({
       dateStyle: "short",
       timeStyle: "short",
     });
-    const tableRows = rows.length
-      ? rows
+    const groupedReportRows = groupRowsByDate(reportRows);
+    const tableRows = groupedReportRows.length
+      ? groupedReportRows
           .map(
-            (row) => `
-              <tr style="background:${statusPdfColor(row.status)}">
-                <td>${escapeHtml(formatDutchDate(row.date))}</td>
-                <td>${escapeHtml(row.time)}</td>
-                <td>${escapeHtml(row.location)}</td>
-                <td>${escapeHtml(row.deviceName)}</td>
-                <td>${escapeHtml(getDeviceTypeLabel(row.deviceType))}</td>
-                <td>${escapeHtml(row.displayTemperature || "-")}</td>
-                <td>${escapeHtml(row.temperature || "-")}</td>
-                <td>${escapeHtml(row.statusLabel)}</td>
-                <td>${escapeHtml(row.actionTaken || "-")}</td>
-                <td>${escapeHtml(row.enteredBy || "-")}</td>
-                <td>${escapeHtml(row.note || "-")}</td>
-              </tr>`
+            (group) => `
+              <section class="day-group">
+                <h2>${escapeHtml(formatDutchDateHeading(group.date))}</h2>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Tijd</th>
+                      <th>Locatie</th>
+                      <th>Apparaatnaam</th>
+                      <th>Type</th>
+                      <th>Display</th>
+                      <th>Handmeting</th>
+                      <th>Status</th>
+                      <th>Actie</th>
+                      <th>Door</th>
+                      <th>Opmerking</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${group.rows
+                      .map(
+                        (row) => `
+                          <tr style="background:${statusPdfColor(row.status)}">
+                            <td>${escapeHtml(row.time)}</td>
+                            <td>${escapeHtml(row.location)}</td>
+                            <td>${escapeHtml(row.deviceName)}</td>
+                            <td>${escapeHtml(getDeviceTypeLabel(row.deviceType))}</td>
+                            <td>${escapeHtml(row.displayTemperature || "-")}</td>
+                            <td>${escapeHtml(row.temperature || "-")}</td>
+                            <td>${escapeHtml(row.statusLabel)}</td>
+                            <td>${escapeHtml(row.actionTaken || "-")}</td>
+                            <td>${escapeHtml(row.enteredBy || "-")}</td>
+                            <td>${escapeHtml(row.note || "-")}</td>
+                          </tr>`
+                      )
+                      .join("")}
+                  </tbody>
+                </table>
+              </section>`
           )
           .join("")
-      : `<tr><td colspan="11">Geen temperatuurregistraties gevonden voor deze periode.</td></tr>`;
+      : `<p class="empty">Geen temperatuurregistraties gevonden voor deze periode.</p>`;
     const html = `
       <!doctype html>
       <html lang="nl">
@@ -714,39 +764,33 @@ export function TemperatureRegistrationOverviewPage({
             body { font-family: Arial, sans-serif; color: #2d2a26; margin: 28px; }
             h1 { margin: 0 0 8px; font-size: 26px; }
             .meta { margin: 0 0 18px; font-size: 13px; line-height: 1.55; }
+            .screen-actions { display: flex; gap: 8px; margin-bottom: 18px; }
+            .screen-actions button { border: 1px solid #d8d0c7; background: #f8f6f3; border-radius: 999px; color: #2d2a26; cursor: pointer; font-size: 13px; font-weight: 800; padding: 10px 14px; }
+            .screen-actions .primary { background: #d95749; border-color: #d95749; color: white; }
+            .day-group { break-inside: avoid; margin: 0 0 18px; }
+            .day-group h2 { border-bottom: 2px solid #2d2a26; font-size: 18px; margin: 0 0 8px; padding-bottom: 5px; }
+            .empty { background: #f8f6f3; border: 1px solid #d8d0c7; border-radius: 10px; font-size: 13px; font-weight: 800; padding: 14px; }
             table { width: 100%; border-collapse: collapse; font-size: 10px; }
             th, td { border: 1px solid #d8d0c7; padding: 6px; text-align: left; vertical-align: top; }
             th { background: #dbe9ee; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
             .signature { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px; font-size: 13px; }
             .line { border-bottom: 1px solid #2d2a26; height: 28px; }
+            @media print { .screen-actions { display: none; } }
             @page { size: landscape; margin: 14mm; }
           </style>
         </head>
         <body>
+          <div class="screen-actions">
+            <button type="button" onclick="if (window.opener) { window.close(); } else { history.back(); }">Terug</button>
+            <button type="button" class="primary" onclick="window.print()">Print/PDF</button>
+          </div>
           <h1>Temperatuurregistratie</h1>
           <p class="meta">
             <strong>Locatie:</strong> ${escapeHtml(locationLabel)}<br />
             <strong>Periode:</strong> ${escapeHtml(periodLabel)}<br />
             <strong>Gegenereerd op:</strong> ${escapeHtml(generatedAt)}
           </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Datum</th>
-                <th>Tijd</th>
-                <th>Locatie</th>
-                <th>Apparaatnaam</th>
-                <th>Type</th>
-                <th>Display</th>
-                <th>Handmeting</th>
-                <th>Status</th>
-                <th>Actie</th>
-                <th>Door</th>
-                <th>Opmerking</th>
-              </tr>
-            </thead>
-            <tbody>${tableRows}</tbody>
-          </table>
+          ${tableRows}
           <div class="signature">
             <div>Gecontroleerd door:<div class="line"></div></div>
             <div>Datum controle:<div class="line"></div></div>
@@ -763,9 +807,6 @@ export function TemperatureRegistrationOverviewPage({
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.focus();
-    window.setTimeout(() => {
-      printWindow.print();
-    }, 250);
   }
 
   return (
@@ -782,7 +823,7 @@ export function TemperatureRegistrationOverviewPage({
             href={registrationHref}
             className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
           >
-            Registratie invullen
+            Terug
           </Link>
         </div>
 
@@ -964,10 +1005,9 @@ export function TemperatureRegistrationOverviewPage({
 
         <section className="overflow-hidden rounded-[1.75rem] border border-[#e7e0d8] bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-[78rem] w-full border-collapse text-left text-xs">
+            <table className="min-w-[72rem] w-full border-collapse text-left text-xs">
               <thead className="bg-[#f8f6f3] text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
                 <tr>
-                  <th className="px-3 py-2">Datum</th>
                   <th className="px-3 py-2">Tijd</th>
                   <th className="px-3 py-2">Locatie</th>
                   <th className="px-3 py-2">Apparaatnaam</th>
@@ -980,13 +1020,19 @@ export function TemperatureRegistrationOverviewPage({
                   <th className="px-3 py-2">Opmerking</th>
                 </tr>
               </thead>
-              <tbody>
-                {rows.length ? (
-                  rows.map((row) => (
-                    <tr key={row.key} className="border-t border-[#eee7de]">
-                      <td className="px-3 py-2 font-bold">
-                        {formatDutchDate(row.date)}
+              {groupedRows.length ? (
+                groupedRows.map((group) => (
+                  <tbody key={group.date}>
+                    <tr className="border-t border-[#d8d0c7] bg-[#efeae3]">
+                      <td
+                        colSpan={10}
+                        className="px-3 py-2 text-sm font-black text-[#1a1815]"
+                      >
+                        {formatDutchDateHeading(group.date)}
                       </td>
+                    </tr>
+                    {group.rows.map((row) => (
+                    <tr key={row.key} className="border-t border-[#eee7de]">
                       <td className="px-3 py-2">{row.time}</td>
                       <td className="px-3 py-2">{row.location}</td>
                       <td className="px-3 py-2 font-bold">{row.deviceName}</td>
@@ -1016,18 +1062,21 @@ export function TemperatureRegistrationOverviewPage({
                         {row.note || "-"}
                       </td>
                     </tr>
-                  ))
-                ) : (
+                    ))}
+                  </tbody>
+                ))
+              ) : (
+                <tbody>
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={10}
                       className="px-4 py-8 text-center text-sm font-bold text-[#2d2a26]/55"
                     >
                       Geen temperatuurregistraties gevonden voor deze periode.
                     </td>
                   </tr>
-                )}
-              </tbody>
+                </tbody>
+              )}
             </table>
           </div>
         </section>
