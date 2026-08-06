@@ -106,8 +106,8 @@ function OfferHero({ offer }: Readonly<{ offer: BakeryHomeOffer | null }>) {
         </div>
       </div>
       {offer.imageUrl ? (
-        <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-[#e8e4de] bg-[#faf8f5]">
-          <img src={offer.imageUrl} alt={offerTitle} className="h-44 w-full object-cover" />
+        <div className="mt-5 mx-auto flex aspect-[210/297] w-full max-w-64 items-center justify-center overflow-hidden rounded-[1.5rem] border border-[#b9d1ae] bg-[#eef6ea] p-2 sm:max-w-72">
+          <img src={offer.imageUrl} alt={offerTitle} className="h-full w-full object-contain" />
         </div>
       ) : null}
     </article>

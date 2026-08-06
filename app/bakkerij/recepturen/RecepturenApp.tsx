@@ -2402,7 +2402,7 @@ function BakkerijStartScreen({
               </p>
             </div>
 
-            <div className="relative min-h-0 flex-1 overflow-hidden bg-[#e8e3dc]">
+            <div className="relative min-h-0 flex-1 overflow-hidden border border-[#b9d1ae] bg-[#eef6ea] p-3">
               <button
                 type="button"
                 onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
@@ -2425,7 +2425,7 @@ function BakkerijStartScreen({
                   <img
                     src={offer.imageUrl}
                     alt={offer.label || "Aanbieding van de week"}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                   />
                 ) : (
                   <p className="px-4 text-center text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/35">

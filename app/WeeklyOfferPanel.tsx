@@ -142,7 +142,7 @@ export default function WeeklyOfferPanel() {
         </div>
       </div>
 
-      <div className="mx-auto flex aspect-[210/297] w-full max-w-[11rem] items-center justify-center overflow-hidden rounded-[0.75rem] bg-white sm:max-w-[17rem] sm:rounded-[1rem] lg:max-w-[18rem]">
+      <div className="mx-auto flex aspect-[210/297] w-full max-w-[11rem] items-center justify-center overflow-hidden rounded-[0.75rem] border border-[#b9d1ae] bg-[#eef6ea] p-1 sm:max-w-[17rem] sm:rounded-[1rem] sm:p-2 lg:max-w-[18rem]">
         {offer?.imageUrl ? (
           <img
             src={offer.imageUrl}

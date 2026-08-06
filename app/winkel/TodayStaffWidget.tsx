@@ -322,11 +322,13 @@ function BakeryOfferThumbnail({
       </div>
       <div className="flex min-h-36 items-center justify-center bg-white p-2">
         {offer?.imageUrl ? (
-          <img
-            src={offer.imageUrl}
-            alt={offer.label || "Aanbieding van de week"}
-            className="mx-auto max-h-44 w-full object-contain"
-          />
+          <div className="mx-auto flex aspect-[210/297] w-full max-w-36 items-center justify-center overflow-hidden rounded-xl border border-[#b9d1ae] bg-[#eef6ea] p-1">
+            <img
+              src={offer.imageUrl}
+              alt={offer.label || "Aanbieding van de week"}
+              className="h-full w-full object-contain"
+            />
+          </div>
         ) : (
           <p className="px-4 text-center text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/35">
             Geen aanbieding deze week
