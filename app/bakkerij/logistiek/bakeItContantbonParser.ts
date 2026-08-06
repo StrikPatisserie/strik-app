@@ -677,11 +677,11 @@ function productOptionNeedsContinuation(line: LogisticsReceiptLine) {
 }
 
 function productOptionKeywordRegex() {
-  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|tekst\b|vulling\b|voorsnijden\b)/i;
+  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|geschreven\s+tekst\b|tekst\s+op\s+(?:taart|gebak|cake|product)\b|tekst\b|vulling\b|voorsnijden\b)/i;
 }
 
 function productOptionSearchRegex() {
-  return /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?/i;
+  return /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst|vulling|voorsnijden)\s*:?/i;
 }
 
 function productOptionKind(value: string) {
@@ -689,7 +689,13 @@ function productOptionKind(value: string) {
 
   if (/^kleur\b/.test(text)) return "kleur";
   if (/^(?:foto\s*\/\s*logo|foto|logo)\b/.test(text)) return "foto";
-  if (/^tekst\b/.test(text)) return "tekst";
+  if (
+    /^(?:geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst)\b/.test(
+      text
+    )
+  ) {
+    return "tekst";
+  }
   if (/^vulling\b/.test(text)) return "vulling";
   if (/^voorsnijden\b/.test(text)) return "voorsnijden";
 

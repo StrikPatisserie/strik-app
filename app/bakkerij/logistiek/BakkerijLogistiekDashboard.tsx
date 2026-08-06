@@ -177,6 +177,18 @@ type MarzipanPrintItem = {
   needsCheck: boolean;
 };
 
+type WrittenTextPrintItem = {
+  id: string;
+  customerName: string;
+  customerLastName: string;
+  receiptNumber: string;
+  product: string;
+  quantity: string;
+  text: string;
+  sourceLabel: string;
+  needsCheck: boolean;
+};
+
 type ReceiptOverrideDraft = {
   time: string;
   fulfillment: LogisticsFulfillment | "";
@@ -1164,9 +1176,7 @@ function normalizedLineDescription(value: string) {
 function isProductOptionLine(line: ReceiptLine) {
   const description = normalizedLineDescription(line.description);
 
-  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|tekst\b|vulling\b|voorsnijden\b)/.test(
-    description
-  );
+  return /^(?:ja,\s*)?(?:kleur\b|foto\s*\/\s*logo\b|foto\b|logo\b|geschreven\s+tekst\b|tekst\s+op\s+(?:taart|gebak|cake|product)\b|tekst\b|vulling\b|voorsnijden\b)/.test(description);
 }
 
 function productOptionKind(value: string) {
@@ -1174,7 +1184,13 @@ function productOptionKind(value: string) {
 
   if (/^kleur\b/.test(description)) return "kleur";
   if (/^(?:foto\s*\/\s*logo|foto|logo)\b/.test(description)) return "foto";
-  if (/^tekst\b/.test(description)) return "tekst";
+  if (
+    /^(?:geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst)\b/.test(
+      description
+    )
+  ) {
+    return "tekst";
+  }
   if (/^vulling\b/.test(description)) return "vulling";
   if (/^voorsnijden\b/.test(description)) return "voorsnijden";
 
@@ -1217,7 +1233,7 @@ function cleanProductOptionCandidate(value: string) {
   if (!clean) return "";
 
   const optionIndex = clean.search(
-    /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?/i
+    /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst|vulling|voorsnijden)\s*:?/i
   );
 
   if (optionIndex > 0) {
@@ -1387,8 +1403,8 @@ function recoveredReceiptLinesFromNote(value: string) {
   const patterns = [
     /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)[^€]{4,180})\s+€\s*([\d.,:]+)/gi,
     /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:petit\s+four)[^€]{4,180})\s+€\s*([\d.,:]+)/gi,
-    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?\s*[^€]{1,180})\s+€\s*([\d.,:]+)/gi,
-    /(?:€\s*[\d.,:]+\s+)+((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:?\s*.+?)\s+(\d+(?:[.,]\d+)?)\b/gi,
+    /\b(?:(\d+(?:[.,]\d+)?)\s+)?((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst|vulling|voorsnijden)\s*:?\s*[^€]{1,180})\s+€\s*([\d.,:]+)/gi,
+    /(?:€\s*[\d.,:]+\s+)+((?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst|vulling|voorsnijden)\s*:?\s*.+?)\s+(\d+(?:[.,]\d+)?)\b/gi,
   ];
 
   patterns.slice(0, 3).forEach((pattern) => {
@@ -1937,6 +1953,202 @@ function buildMarzipanPrintItems(
   return items;
 }
 
+function cleanWrittenTextSource(value: string) {
+  return value
+    .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
+    .replace(/\btrial mode\b\s*[–-]?/gi, "")
+    .replace(/click here for more information/gi, "")
+    .replace(/(?:€\s*)?[\d.,:]+\s*€/g, " ")
+    .replace(/€\s*[\d.,:]+/g, " ")
+    .replace(/&euro;\s*[\d.,:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function writtenTextSignalMatch(value: string) {
+  return cleanWrittenTextSource(value).match(
+    /(?:^|[\s'"“”‘’])((?:geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst)\b)/i
+  );
+}
+
+function writtenTextValueFromSource(value: string) {
+  const clean = cleanWrittenTextSource(value);
+  const match = writtenTextSignalMatch(clean);
+  if (!match || match.index === undefined) return null;
+
+  const labelStart = match.index + match[0].indexOf(match[1]);
+  const afterLabel = clean.slice(labelStart + match[1].length);
+  const text = afterLabel
+    .replace(/^\s*[,;:.-]\s*/, "")
+    .replace(/^ja\b\s*[,;:.-]?\s*/i, "")
+    .replace(
+      /\s+(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|vulling|voorsnijden|bezorgkosten)\b.*$/i,
+      ""
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+  const needsCheck = !text || /^(?:ja|nee|nvt|n\.v\.t\.|-)?$/i.test(text);
+
+  return {
+    text: needsCheck ? "Tekst controleren" : text,
+    needsCheck,
+  };
+}
+
+function isWrittenTextSignalLine(value: string) {
+  return Boolean(writtenTextSignalMatch(value));
+}
+
+function isReceiptProductLineForWrittenText(line: ReceiptLine) {
+  if (isProductOptionLine(line)) return false;
+  if (shouldDropReceiptLine(line)) return false;
+  if (isPriceOnlyReceiptDescription(line.description)) return false;
+
+  const description = normalizedLineDescription(line.description);
+  if (/^bezorgkosten\b/.test(description)) return false;
+
+  return true;
+}
+
+function writtenTextProductLabel(line: ReceiptLine | null | undefined) {
+  if (!line) return "Product controleren";
+
+  return (
+    cleanProductLabel(line.description)
+      .replace(
+        /\b(?:geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst)\b.*$/i,
+        ""
+      )
+      .replace(/\s+/g, " ")
+      .trim() || "Product controleren"
+  );
+}
+
+function nearbyProductLineForWrittenText(
+  lines: ReceiptLine[],
+  index: number,
+  currentProduct: ReceiptLine | null
+) {
+  if (currentProduct) return currentProduct;
+
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (isReceiptProductLineForWrittenText(lines[cursor])) return lines[cursor];
+  }
+  for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+    if (isReceiptProductLineForWrittenText(lines[cursor])) return lines[cursor];
+  }
+
+  return null;
+}
+
+function pushWrittenTextPrintItem(input: {
+  items: WrittenTextPrintItem[];
+  seen: Set<string>;
+  receipt: ReceiptSummary;
+  productLine: ReceiptLine | null;
+  sourceIndex: number;
+  text: string;
+  needsCheck: boolean;
+}) {
+  const product = writtenTextProductLabel(input.productLine);
+  const quantity = input.productLine?.quantity || "1";
+  const receiptNumber = input.receipt.receiptNumber || input.receipt.id || "";
+  const sourceLabel = [
+    receiptNumber ? `bon ${receiptNumber}` : "",
+    receiptListTimeLabel(input.receipt),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const key = normalizeMatchText(
+    [
+      input.receipt.id,
+      receiptNumber,
+      input.receipt.customer,
+      product,
+      input.text,
+    ].join(" ")
+  );
+
+  if (input.seen.has(key)) return;
+  input.seen.add(key);
+
+  input.items.push({
+    id: `${input.receipt.id || receiptNumber || "bon"}-tekst-${input.sourceIndex}`,
+    customerName: input.receipt.customer || "Klant controleren",
+    customerLastName: customerLastNameFor(input.receipt.customer),
+    receiptNumber,
+    product,
+    quantity,
+    text: input.text,
+    sourceLabel,
+    needsCheck: input.needsCheck,
+  });
+}
+
+function buildWrittenTextPrintItems(receipts: ReceiptSummary[]) {
+  const items: WrittenTextPrintItem[] = [];
+  const seen = new Set<string>();
+
+  receipts.forEach((receipt) => {
+    const lines = receipt.lines
+      .map(normalizeKnownReceiptLine)
+      .filter((line) => !shouldDropReceiptLine(line));
+    let currentProduct: ReceiptLine | null = null;
+
+    lines.forEach((line, index) => {
+      const lineIsTextOption =
+        isProductOptionLine(line) || isWrittenTextSignalLine(line.description);
+      if (!lineIsTextOption && isReceiptProductLineForWrittenText(line)) {
+        currentProduct = line;
+      }
+
+      const productLine = lineIsTextOption
+        ? nearbyProductLineForWrittenText(lines, index, currentProduct)
+        : line;
+      const sources = [line.description, line.note || ""].filter(Boolean);
+
+      sources.forEach((source, sourceIndex) => {
+        const textResult = writtenTextValueFromSource(source);
+        if (!textResult) return;
+
+        pushWrittenTextPrintItem({
+          items,
+          seen,
+          receipt,
+          productLine,
+          sourceIndex: index * 10 + sourceIndex,
+          text: textResult.text,
+          needsCheck: textResult.needsCheck,
+        });
+      });
+    });
+
+    const fallbackProduct =
+      lines.find(isMarzipanOrCreamCakeLine) ||
+      lines.find(isPetitFourLine) ||
+      lines.find(isReceiptProductLineForWrittenText) ||
+      null;
+    [receipt.customerNote, receipt.internalNote, receipt.note]
+      .filter(Boolean)
+      .forEach((source, sourceIndex) => {
+        const textResult = writtenTextValueFromSource(source);
+        if (!textResult) return;
+
+        pushWrittenTextPrintItem({
+          items,
+          seen,
+          receipt,
+          productLine: fallbackProduct,
+          sourceIndex: 1000 + sourceIndex,
+          text: textResult.text,
+          needsCheck: true,
+        });
+      });
+  });
+
+  return items;
+}
+
 function marzipanPrintSizeLabel(item: MarzipanPrintItem) {
   return item.shape === "square" ? "ca. 3,8 cm vierkant" : "12 cm rond";
 }
@@ -2262,6 +2474,211 @@ function openMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
   }
 
   printWindow.document.write(createMarzipanPhotoPrintHtml({ items, plan }));
+  printWindow.document.close();
+  printWindow.focus();
+}
+
+function createWrittenTextPrintHtml(input: {
+  items: WrittenTextPrintItem[];
+  plan: DayPlan;
+}) {
+  const title = `Geschreven teksten ${formatDateLabel(input.plan.date)}`;
+  const itemsHtml = input.items
+    .map((item, index) => {
+      const quantityLabel =
+        item.quantity && item.quantity !== "1" ? `${item.quantity}x ` : "";
+
+      return `
+        <article class="text-item ${item.needsCheck ? "needs-check" : ""}">
+          <div class="item-top">
+            <span class="number">${index + 1}</span>
+            <div>
+              <strong>${escapeHtml(item.customerLastName)}</strong>
+              <small>${escapeHtml(item.sourceLabel || item.customerName)}</small>
+            </div>
+          </div>
+          <div class="written-text">${escapeHtml(item.text)}</div>
+          <div class="product-line">
+            <strong>${escapeHtml(`${quantityLabel}${item.product}`)}</strong>
+            <span>${escapeHtml(item.customerName)}</span>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  return `<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <title>${escapeHtml(title)}</title>
+    <style>
+      @page { margin: 10mm; size: A4 portrait; }
+      * { box-sizing: border-box; }
+      body {
+        background: #fff;
+        color: #111;
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 0;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      .screen-actions {
+        align-items: center;
+        border-bottom: 1px solid #ddd;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+        padding: 10px 12px;
+      }
+      .screen-actions h1 {
+        font-size: 15px;
+        margin: 0;
+      }
+      .screen-actions button {
+        background: #111;
+        border: 0;
+        color: #fff;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 800;
+        padding: 8px 12px;
+      }
+      .screen-actions .secondary {
+        background: #fff;
+        border: 1px solid #111;
+        color: #111;
+      }
+      main {
+        margin: 0 auto;
+        max-width: 210mm;
+        padding: 8mm 10mm;
+        width: 100%;
+      }
+      .sheet-header {
+        align-items: baseline;
+        border-bottom: 1px solid #111;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5mm;
+        padding-bottom: 2mm;
+      }
+      .sheet-header h1 {
+        font-size: 18px;
+        margin: 0;
+      }
+      .sheet-header p {
+        font-size: 10px;
+        font-weight: 700;
+        margin: 0;
+      }
+      .text-grid {
+        display: grid;
+        gap: 4mm;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .text-item {
+        border: 0.35mm solid #111;
+        break-inside: avoid;
+        min-height: 48mm;
+        padding: 4mm;
+        page-break-inside: avoid;
+      }
+      .text-item.needs-check {
+        border-style: dashed;
+      }
+      .item-top {
+        align-items: center;
+        display: flex;
+        gap: 3mm;
+      }
+      .number {
+        align-items: center;
+        background: #111;
+        color: #fff;
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 900;
+        height: 8mm;
+        justify-content: center;
+        width: 8mm;
+      }
+      .item-top strong,
+      .item-top small,
+      .product-line strong,
+      .product-line span {
+        display: block;
+      }
+      .item-top strong {
+        font-size: 13px;
+      }
+      .item-top small,
+      .product-line span {
+        color: #444;
+        font-size: 9px;
+        font-weight: 700;
+        margin-top: 0.7mm;
+      }
+      .written-text {
+        align-items: center;
+        border-bottom: 0.25mm solid #ddd;
+        border-top: 0.25mm solid #ddd;
+        display: flex;
+        font-size: 22px;
+        font-weight: 900;
+        line-height: 1.14;
+        margin: 4mm 0;
+        min-height: 18mm;
+        overflow-wrap: anywhere;
+        padding: 3mm 0;
+      }
+      .product-line strong {
+        font-size: 12px;
+        line-height: 1.2;
+      }
+      @media print {
+        .screen-actions { display: none; }
+        main {
+          max-width: none;
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen-actions">
+      <h1>${escapeHtml(title)} · ${input.items.length} tekst${input.items.length === 1 ? "" : "en"}</h1>
+      <div>
+        <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
+        <button type="button" onclick="window.print()">Afdrukken</button>
+      </div>
+    </div>
+    <main>
+      <div class="sheet-header">
+        <h1>${escapeHtml(title)}</h1>
+        <p>${input.items.length} geschreven tekst${input.items.length === 1 ? "" : "en"}</p>
+      </div>
+      <section class="text-grid">
+        ${itemsHtml}
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
+function openWrittenTextSheet(plan: DayPlan, items: WrittenTextPrintItem[]) {
+  if (items.length === 0) {
+    window.alert("Geen geschreven teksten gevonden voor deze dag.");
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=1000,height=800");
+  if (!printWindow) {
+    window.alert("Tekstvenster kon niet geopend worden.");
+    return;
+  }
+
+  printWindow.document.write(createWrittenTextPrintHtml({ items, plan }));
   printWindow.document.close();
   printWindow.focus();
 }
@@ -5048,6 +5465,10 @@ export default function BakkerijLogistiekDashboard() {
     () => buildMarzipanPrintItems(receiptSummaries, webshopImages),
     [receiptSummaries, webshopImages]
   );
+  const writtenTextPrintItems = useMemo(
+    () => buildWrittenTextPrintItems(receiptSummaries),
+    [receiptSummaries]
+  );
   const feedback = feedbackByDate[selectedPlan.date] || "";
   const learningSignals = useMemo(
     () => learningSignalsFor(feedback, pressureOverride),
@@ -5842,6 +6263,13 @@ export default function BakkerijLogistiekDashboard() {
               disabled={marzipanPrintItems.length === 0}
               onClick={() =>
                 openMarzipanPhotoSheet(selectedPlan, marzipanPrintItems)
+              }
+            />
+            <WrittenTextPrintButton
+              count={writtenTextPrintItems.length}
+              disabled={writtenTextPrintItems.length === 0}
+              onClick={() =>
+                openWrittenTextSheet(selectedPlan, writtenTextPrintItems)
               }
             />
             <input
@@ -6864,7 +7292,7 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
       ""
     )
     .replace(
-      /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:.*?(?=\s+(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|tekst|vulling|voorsnijden)\s*:|\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,:]+\s+met referentie)\b|$)/gi,
+      /\b(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst|vulling|voorsnijden)\s*:.*?(?=\s+(?:kleur\s+petit\s*fours?|foto\s*\/\s*logo|foto|logo|geschreven\s+tekst|tekst\s+op\s+(?:taart|gebak|cake|product)|tekst|vulling|voorsnijden)\s*:|\s+(?:\d+(?:[.,]\d+)?\s+)?(?:betaald|niet betaald|gewenste betaling|trial mode|click here|&euro;|€\s*[\d.,:]+\s+met referentie)\b|$)/gi,
       ""
     )
     .replace(/(?:€\s*)?[\d.,:]+\s*€/g, "")
@@ -7609,6 +8037,34 @@ function MarzipanPhotoPrintButton({
   );
 }
 
+function WrittenTextPrintButton({
+  count,
+  disabled,
+  onClick,
+}: Readonly<{
+  count: number;
+  disabled: boolean;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      aria-label="Geschreven teksten controleren"
+      title="Geschreven teksten controleren"
+      disabled={disabled}
+      onClick={onClick}
+      className="relative flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <TextSheetIcon />
+      {count > 0 && (
+        <span className="absolute -right-1 -top-1 min-w-4 border border-[#1a1815] bg-[#1a1815] px-1 text-center text-[0.56rem] font-black leading-4 tracking-normal text-white">
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 function RouteRecalculateButton({
   disabled,
   onClick,
@@ -7747,6 +8203,27 @@ function PhotoSheetIcon() {
       <circle cx="8.5" cy="10" r="1.5" />
       <path d="m21 15-4.5-4.5L7 19" />
       <path d="m14 19-3.5-3.5" />
+    </svg>
+  );
+}
+
+function TextSheetIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <path d="M5 4h14v16H5z" />
+      <path d="M8 8h8" />
+      <path d="M8 12h8" />
+      <path d="M8 16h5" />
+      <path d="M15.5 15.5 18 18" />
     </svg>
   );
 }
