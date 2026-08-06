@@ -4082,6 +4082,10 @@ function BakkerRecipeCard({
     () => scalableRows[0]?.id || ""
   );
   const [scaleAmount, setScaleAmount] = useState("");
+  const [quantityInput, setQuantityInput] = useState(() =>
+    formatInputNumber(quantity)
+  );
+  const [quantityInputFocused, setQuantityInputFocused] = useState(false);
   const selectedScaleRow =
     scalableRows.find((row) => row.id === scaleIngredientId) || scalableRows[0];
   const cleanPreparationSteps = cleanRecipeSteps(recipe.preparationSteps);
@@ -4102,6 +4106,27 @@ function BakkerRecipeCard({
   const cardMargin = recipe.salesPrice
     ? calculateMargin(recipe.salesPrice, recipe.costPrice)
     : 0;
+
+  useEffect(() => {
+    if (!quantityInputFocused) {
+      setQuantityInput(formatInputNumber(quantity));
+    }
+  }, [quantity, quantityInputFocused]);
+
+  function changeQuantityInput(value: string) {
+    setQuantityInput(value);
+    const parsed = parseDutchNumber(value);
+
+    if (parsed > 0) {
+      onQuantityChange(value);
+    }
+  }
+
+  function finishQuantityInput() {
+    const parsed = parseDutchNumber(quantityInput);
+    setQuantityInputFocused(false);
+    setQuantityInput(formatInputNumber(parsed > 0 ? parsed : quantity));
+  }
 
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-white/70 px-2 py-2 backdrop-blur-[1px] sm:py-4">
@@ -4201,8 +4226,10 @@ function BakkerRecipeCard({
                   -
                 </button>
                 <input
-                  value={formatInputNumber(quantity)}
-                  onChange={(event) => onQuantityChange(event.target.value)}
+                  value={quantityInput}
+                  onChange={(event) => changeQuantityInput(event.target.value)}
+                  onFocus={() => setQuantityInputFocused(true)}
+                  onBlur={finishQuantityInput}
                   inputMode="decimal"
                   className="h-8 w-20 rounded-lg border border-[#e4d8cb] bg-white text-center text-xs font-black outline-none"
                   aria-label="Hoeveelheid"
