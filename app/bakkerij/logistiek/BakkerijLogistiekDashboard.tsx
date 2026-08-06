@@ -118,6 +118,12 @@ type RouteStopMove = RouteDragState & {
   position: "before" | "after" | "end";
 };
 
+type DeletedRouteStopSnapshot = {
+  stopLabel: string;
+  routeRounds: RouteRound[];
+  excludedSourceIds: string[];
+};
+
 type BusId = "A" | "B";
 type ShopKey = "heyendaalseweg" | "daalseweg" | "ziekerstraat" | "lent";
 type ReceiptTone =
@@ -4342,6 +4348,16 @@ function refreshRouteRoundAfterManualMove(
   };
 }
 
+function cloneRouteRounds(routeRounds: RouteRound[]): RouteRound[] {
+  return routeRounds.map((route) => ({
+    ...route,
+    stops: route.stops.map((stop) => ({
+      ...stop,
+      badges: [...stop.badges],
+    })),
+  }));
+}
+
 function moveRouteStopInRounds(
   routeRounds: RouteRound[],
   move: RouteStopMove,
@@ -5021,6 +5037,8 @@ export default function BakkerijLogistiekDashboard() {
   const [excludedRouteStopSourceIds, setExcludedRouteStopSourceIds] = useState<
     string[]
   >([]);
+  const [deletedRouteStopSnapshot, setDeletedRouteStopSnapshot] =
+    useState<DeletedRouteStopSnapshot | null>(null);
   const [routesEdited, setRoutesEdited] = useState(false);
   const [routeHasUnsavedChanges, setRouteHasUnsavedChanges] = useState(false);
   const routeRounds = manualRouteRounds || automaticRouteRounds;
@@ -5084,6 +5102,7 @@ export default function BakkerijLogistiekDashboard() {
 
       if (selectedDateChanged) {
         setFileSnapshot(null);
+        setDeletedRouteStopSnapshot(null);
       }
 
       if (calendarChanged || definitiveWindowStarted) {
@@ -5218,12 +5237,14 @@ export default function BakkerijLogistiekDashboard() {
     setRouteSaveMessage("");
     setRouteSaveState("idle");
     setRouteHasUnsavedChanges(false);
+    setDeletedRouteStopSnapshot(null);
   }
 
   function refreshBatch() {
     manualBatchRefreshRef.current = true;
     setFileSnapshot(null);
     setImportMessage("bonnen opnieuw ophalen...");
+    setDeletedRouteStopSnapshot(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setBatchReloadCounter((current) => current + 1);
   }
@@ -5283,6 +5304,7 @@ export default function BakkerijLogistiekDashboard() {
     if (nextRoutes === currentRoutes) return;
 
     setManualRouteRounds(nextRoutes);
+    setDeletedRouteStopSnapshot(null);
     setRoutesEdited(true);
     setRouteHasUnsavedChanges(true);
     setRouteSaveState("idle");
@@ -5323,6 +5345,7 @@ export default function BakkerijLogistiekDashboard() {
     );
 
     setManualRouteRounds(nextRoutes);
+    setDeletedRouteStopSnapshot(null);
     setRoutesEdited(true);
     setRouteHasUnsavedChanges(true);
     setRouteSaveState("idle");
@@ -5335,6 +5358,11 @@ export default function BakkerijLogistiekDashboard() {
     const sourceRoute = currentRoutes.find((route) => route.id === routeId);
     const stop = sourceRoute?.stops.find((item) => item.id === stopId);
     if (!sourceRoute || !stop) return;
+
+    const confirmed = window.confirm(
+      `Weet je zeker dat je "${stop.label}" uit ${sourceRoute.title} wil verwijderen?`
+    );
+    if (!confirmed) return;
 
     const sourceKey = routeStopSourceKey(stop);
     const nextExcludedSourceIds = sourceKey.startsWith("manual:")
@@ -5354,11 +5382,36 @@ export default function BakkerijLogistiekDashboard() {
 
     setManualRouteRounds(nextRoutes);
     setExcludedRouteStopSourceIds(nextExcludedSourceIds);
+    setDeletedRouteStopSnapshot({
+      stopLabel: stop.label,
+      routeRounds: cloneRouteRounds(currentRoutes),
+      excludedSourceIds: [...excludedRouteStopSourceIds],
+    });
     setRoutesEdited(true);
     setRouteHasUnsavedChanges(true);
     setRouteSaveState("idle");
     setRouteSaveMessage("stop verwijderd · nog niet definitief opgeslagen");
     void saveRouteDraft(nextRoutes, false, nextExcludedSourceIds);
+  }
+
+  function undoRouteStopDelete() {
+    if (!deletedRouteStopSnapshot) return;
+
+    const restoredRoutes = cloneRouteRounds(deletedRouteStopSnapshot.routeRounds);
+    const restoredExcludedSourceIds = [
+      ...deletedRouteStopSnapshot.excludedSourceIds,
+    ];
+
+    setManualRouteRounds(restoredRoutes);
+    setExcludedRouteStopSourceIds(restoredExcludedSourceIds);
+    setDeletedRouteStopSnapshot(null);
+    setRoutesEdited(true);
+    setRouteHasUnsavedChanges(true);
+    setRouteSaveState("idle");
+    setRouteSaveMessage(
+      `${deletedRouteStopSnapshot.stopLabel} teruggezet · nog niet definitief opgeslagen`
+    );
+    void saveRouteDraft(restoredRoutes, false, restoredExcludedSourceIds);
   }
 
   function saveCurrentRouteDraft() {
@@ -5368,6 +5421,7 @@ export default function BakkerijLogistiekDashboard() {
   async function resetRouteDraft() {
     setManualRouteRounds(null);
     setExcludedRouteStopSourceIds([]);
+    setDeletedRouteStopSnapshot(null);
     setRoutesEdited(false);
     setRouteHasUnsavedChanges(false);
     setRouteDraft(null);
@@ -5870,9 +5924,11 @@ export default function BakkerijLogistiekDashboard() {
       <div className="mt-3">
         {activeTab === "routes" && (
           <RoutesPanel
+            deletedRouteStopLabel={deletedRouteStopSnapshot?.stopLabel || ""}
             onRouteStopAdd={addManualRouteStop}
             onRouteStopDelete={deleteRouteStop}
             onRouteStopMove={moveRouteStop}
+            onRouteStopUndo={undoRouteStopDelete}
             onRoutesReset={resetRouteDraft}
             onRoutesSave={saveCurrentRouteDraft}
             routeCanSave={routeCanSave}
@@ -5977,9 +6033,11 @@ function eventHasRouteDragState(
 }
 
 function RoutesPanel({
+  deletedRouteStopLabel,
   onRouteStopAdd,
   onRouteStopDelete,
   onRouteStopMove,
+  onRouteStopUndo,
   onRoutesReset,
   onRoutesSave,
   routeCanSave,
@@ -5989,9 +6047,11 @@ function RoutesPanel({
   routesEdited,
   selectedPlan,
 }: Readonly<{
+  deletedRouteStopLabel: string;
   onRouteStopAdd: (routeId: string, label: string, detail: string) => void;
   onRouteStopDelete: (routeId: string, stopId: string) => void;
   onRouteStopMove: (move: RouteStopMove) => void;
+  onRouteStopUndo: () => void;
   onRoutesReset: () => void;
   onRoutesSave: () => void;
   routeCanSave: boolean;
@@ -6129,6 +6189,15 @@ function RoutesPanel({
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {deletedRouteStopLabel && (
+            <button
+              type="button"
+              onClick={onRouteStopUndo}
+              className="min-h-9 border border-[#d7cec4] bg-white px-3 py-2 text-xs font-black tracking-normal text-[#1a1815] transition hover:border-[#111]"
+            >
+              Ongedaan
+            </button>
+          )}
           <RouteConfirmButton
             disabled={!routeCanSave || routeSaveState === "saving"}
             onClick={onRoutesSave}
