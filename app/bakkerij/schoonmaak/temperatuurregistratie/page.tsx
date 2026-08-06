@@ -12,7 +12,7 @@ export default function BakkerijTemperatuurregistratiePage() {
       locationOptions={bakkerijTemperatureOptions}
       rowsByLocation={bakkerijTemperatureRows}
       defaultLocationId="bakkerij"
-      overviewHref={null}
+      overviewHref="/bakkerij/schoonmaak/temperatuurregistratie/overzicht"
       loadCleaningFallback={false}
     />
   );

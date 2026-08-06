@@ -164,6 +164,7 @@ function normalizeRegistrations(
       : undefined,
     actionTaken: item.actionTaken || "",
     note: item.note || "",
+    inactive: item.inactive || item.status === "inactive",
   }));
   const usedItemIds = new Set<string>();
   const rowsWithDefaults = defaultRows.map((defaultRow) => {
@@ -201,29 +202,40 @@ function cleanRegistrations(items: TemperatureRegistration[]) {
         item.deviceType,
         item.naam
       );
-      const measuredTemperature = getMeasuredTemperature(item);
-      const evaluation = evaluateTemperature(
-        deviceType,
-        measuredTemperature,
-        item.maxTemperature
-      );
+      const inactive = Boolean(item.inactive);
+      const measuredTemperature = inactive ? "" : getMeasuredTemperature(item);
+      const evaluation = inactive
+        ? {
+            status: "inactive" as const,
+            label: "Tijdelijk uitgezet",
+            shortLabel: "Uit",
+            actionRequired: false,
+            actionHint: "",
+          }
+        : evaluateTemperature(
+            deviceType,
+            measuredTemperature,
+            item.maxTemperature
+          );
 
       return {
         id: item.id,
         naam: item.naam.trim(),
-        displayTemperatuur: item.displayTemperatuur.trim(),
-        handTemperatuur: item.handTemperatuur.trim(),
+        displayTemperatuur: inactive ? "" : item.displayTemperatuur.trim(),
+        handTemperatuur: inactive ? "" : item.handTemperatuur.trim(),
         temperature: measuredTemperature,
         deviceType,
         department: item.department || "",
         maxTemperature: item.maxTemperature,
         status: evaluation.status,
-        actionTaken: (item.actionTaken || "").trim(),
+        actionTaken: inactive ? "" : (item.actionTaken || "").trim(),
         note: (item.note || "").trim(),
+        inactive,
       };
     })
     .filter(
       (item) =>
+        item.inactive ||
         item.displayTemperatuur ||
         item.handTemperatuur ||
         item.temperature ||
@@ -251,6 +263,7 @@ function makeSignature(payload: TemperaturePayload) {
       status: item.status,
       actionTaken: item.actionTaken,
       note: item.note,
+      inactive: Boolean(item.inactive),
     })),
   });
 }
@@ -328,7 +341,8 @@ function payloadHasDraftContent(payload: TemperaturePayload) {
           (item.temperature || "").trim() ||
           (item.temperatuur || "").trim() ||
           (item.actionTaken || "").trim() ||
-          (item.note || "").trim()
+          (item.note || "").trim() ||
+          item.inactive
       )
   );
 }
@@ -347,7 +361,8 @@ function payloadHasRegistrationContent(payload: TemperaturePayload) {
           (item.temperature || "").trim() ||
           (item.temperatuur || "").trim() ||
           (item.actionTaken || "").trim() ||
-          (item.note || "").trim()
+          (item.note || "").trim() ||
+          item.inactive
       )
   );
 }
@@ -427,6 +442,9 @@ function statusPillClass(status: ReturnType<typeof evaluateTemperature>["status"
   if (status === "deviation") {
     return "border-[#efb4aa] bg-[#fff0ed] text-[#a0382f]";
   }
+  if (status === "inactive") {
+    return "border-[#d8d0c7] bg-[#eee9e2] text-[#2d2a26]/50";
+  }
 
   return "border-[#ded8cf] bg-white text-[#2d2a26]/45";
 }
@@ -435,10 +453,12 @@ function TemperatureValueInput({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   const isNegative = temperatureValueIsNegative(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -482,9 +502,10 @@ function TemperatureValueInput({
           ref={inputRef}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
           inputMode="decimal"
           placeholder="0,0"
-          className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1.5 py-1.5 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:px-2 sm:text-sm"
+          className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1.5 py-1.5 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/35 sm:px-2 sm:text-sm"
         />
       </span>
     </label>
@@ -545,7 +566,7 @@ type TemperatureRegistrationPageProps = {
   locationOptions?: readonly TemperatureLocationOption[];
   rowsByLocation?: Record<string, TemperatureDeviceConfig[]>;
   defaultLocationId?: string;
-  overviewHref?: ((locationId: string) => string | null) | null;
+  overviewHref?: string | ((locationId: string) => string | null) | null;
   loadCleaningFallback?: boolean;
 };
 
@@ -584,17 +605,24 @@ export function TemperatureRegistrationPage({
   const selectedWinkel = getSelectedLocation(winkelId, allowedLocationOptions);
   const currentOverviewHref =
     typeof overviewHref === "function" ? overviewHref(winkelId) : overviewHref;
-  const missingRegistrationCount = form.temperatuurRegistraties.filter(
-    (item) => !getMeasuredTemperature(item).trim()
+  const activeRegistrationCount = form.temperatuurRegistraties.filter(
+    (item) => !item.inactive
   ).length;
-  const problemRegistrationCount = form.temperatuurRegistraties.filter((item) =>
-    isActionRequiredStatus(
-      evaluateTemperature(
-        normalizeTemperatureDeviceType(item.deviceType, item.naam),
-        getMeasuredTemperature(item),
-        item.maxTemperature
-      ).status
-    )
+  const inactiveRegistrationCount =
+    form.temperatuurRegistraties.length - activeRegistrationCount;
+  const missingRegistrationCount = form.temperatuurRegistraties.filter(
+    (item) => !item.inactive && !getMeasuredTemperature(item).trim()
+  ).length;
+  const problemRegistrationCount = form.temperatuurRegistraties.filter(
+    (item) =>
+      !item.inactive &&
+      isActionRequiredStatus(
+        evaluateTemperature(
+          normalizeTemperatureDeviceType(item.deviceType, item.naam),
+          getMeasuredTemperature(item),
+          item.maxTemperature
+        ).status
+      )
   ).length;
   const summaryStatus =
     missingRegistrationCount > 0
@@ -672,6 +700,8 @@ export function TemperatureRegistrationPage({
 
     if (!options.allowPartial) {
       const missingAction = payload.temperatuurRegistraties.find((item) => {
+        if (item.inactive) return false;
+
         const deviceType = normalizeTemperatureDeviceType(
           item.deviceType,
           item.naam
@@ -810,6 +840,15 @@ export function TemperatureRegistrationPage({
       temperatuurRegistraties: nextRows.length
         ? nextRows
         : [createTemperatureRow("", "meetpunt-1")],
+    });
+  }
+
+  function toggleRegistrationInactive(id: string) {
+    updateForm({
+      ...form,
+      temperatuurRegistraties: form.temperatuurRegistraties.map((item) =>
+        item.id === id ? { ...item, inactive: !item.inactive } : item
+      ),
     });
   }
 
@@ -1024,7 +1063,14 @@ export function TemperatureRegistrationPage({
 
           <div className="mt-2 grid grid-cols-3 gap-1.5">
             {[
-              { id: "meetpunten", value: `${form.temperatuurRegistraties.length} meetpunten` },
+              {
+                id: "meetpunten",
+                value: `${activeRegistrationCount} actief${
+                  inactiveRegistrationCount
+                    ? ` · ${inactiveRegistrationCount} uit`
+                    : ""
+                }`,
+              },
               { id: "ontbreekt", value: `${missingRegistrationCount} ontbreekt` },
               { id: "status", value: summaryStatus },
             ].map((item) => (
@@ -1075,11 +1121,20 @@ export function TemperatureRegistrationPage({
                 item.deviceType,
                 item.naam
               );
-              const evaluation = evaluateTemperature(
-                deviceType,
-                getMeasuredTemperature(item),
-                item.maxTemperature
-              );
+              const isInactive = Boolean(item.inactive);
+              const evaluation = isInactive
+                ? {
+                    status: "inactive" as const,
+                    label: "Tijdelijk uitgezet",
+                    shortLabel: "Uit",
+                    actionRequired: false,
+                    actionHint: "",
+                  }
+                : evaluateTemperature(
+                    deviceType,
+                    getMeasuredTemperature(item),
+                    item.maxTemperature
+                  );
 
               return (
                 <div
@@ -1087,7 +1142,11 @@ export function TemperatureRegistrationPage({
                   ref={(element) => {
                     registrationRowRefs.current[item.id] = element;
                   }}
-                  className="grid grid-cols-[minmax(5.3rem,1fr)_3.55rem_3.9rem_3.9rem_3.7rem] items-end gap-1 rounded-[0.75rem] border border-[#e7e0d8] bg-[#f8f6f3] p-1.5 sm:grid-cols-[minmax(8rem,1fr)_5.25rem_5.2rem_5.2rem_5rem_auto] sm:gap-2 sm:p-2"
+                  className={`grid grid-cols-[minmax(5.3rem,1fr)_3.55rem_3.9rem_3.9rem_3.7rem] items-end gap-1 rounded-[0.75rem] border p-1.5 transition sm:grid-cols-[minmax(8rem,1fr)_5.25rem_5.2rem_5.2rem_5rem_auto] sm:gap-2 sm:p-2 ${
+                    isInactive
+                      ? "border-dashed border-[#d8d0c7] bg-[#f3f0eb] opacity-55"
+                      : "border-[#e7e0d8] bg-[#f8f6f3]"
+                  }`}
                 >
                   <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
                     <span className="flex min-w-0 items-center justify-between gap-1">
@@ -1103,8 +1162,9 @@ export function TemperatureRegistrationPage({
                       onChange={(event) =>
                         updateRegistration(item.id, "naam", event.target.value)
                       }
+                      disabled={isInactive}
                       placeholder="Bijvoorbeeld koeling"
-                      className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1.5 py-1.5 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:px-2 sm:text-sm"
+                      className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1.5 py-1.5 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/45 sm:px-2 sm:text-sm"
                     />
                     {Number.isFinite(item.maxTemperature) && (
                       <span className="text-[0.52rem] font-black normal-case tracking-normal text-[#a0382f] sm:text-[0.6rem]">
@@ -1123,7 +1183,8 @@ export function TemperatureRegistrationPage({
                           event.target.value as TemperatureDeviceType
                         )
                       }
-                      className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1 py-1.5 text-[0.64rem] font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:px-2 sm:text-sm"
+                      disabled={isInactive}
+                      className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1 py-1.5 text-[0.64rem] font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/45 sm:px-2 sm:text-sm"
                     >
                       {deviceTypeOptions.map((option) => (
                         <option key={option.id} value={option.id}>
@@ -1138,6 +1199,7 @@ export function TemperatureRegistrationPage({
                     onChange={(value) =>
                       updateRegistration(item.id, "displayTemperatuur", value)
                     }
+                    disabled={isInactive}
                   />
                   <TemperatureValueInput
                     label="Handmeting"
@@ -1145,6 +1207,7 @@ export function TemperatureRegistrationPage({
                     onChange={(value) =>
                       updateRegistration(item.id, "handTemperatuur", value)
                     }
+                    disabled={isInactive}
                   />
                   <div className="grid min-w-0 content-end gap-1">
                     <p className="text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
@@ -1159,7 +1222,17 @@ export function TemperatureRegistrationPage({
                     </span>
                   </div>
                   {isDefaultRow ? (
-                    <span className="hidden sm:block" aria-hidden="true" />
+                    <button
+                      type="button"
+                      onClick={() => toggleRegistrationInactive(item.id)}
+                      className={`col-span-full justify-self-start rounded-full px-2 py-1 text-[0.58rem] font-black shadow-sm sm:col-auto sm:self-end sm:text-xs ${
+                        isInactive
+                          ? "bg-[#dbe9ee] text-[#214456]"
+                          : "bg-white text-[#8a6a3d]"
+                      }`}
+                    >
+                      {isInactive ? "Weer aan" : "Tijdelijk uit"}
+                    </button>
                   ) : (
                     <button
                       type="button"

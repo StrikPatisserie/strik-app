@@ -14,31 +14,30 @@ import {
   getDeviceTypeLabel,
   getMeasuredTemperature,
   getTemperatureDeviceName,
-  getWinkelLabel,
   inferDeviceType,
   isAttentionOrDeviationStatus,
-  isWinkelId,
   monthOptions,
   normalizeDeviceName,
   normalizeTemperatureDeviceType,
   temperatureRowsByWinkel,
   winkelOptions,
+  type TemperatureDeviceConfig,
   type TemperatureDeviceType,
+  type TemperatureLocationOption,
   type TemperatureRegistration,
   type TemperatureRecord,
   type TemperatureStatus,
-  type WinkelId,
 } from "../temperatureRegistrationShared";
 import { fetchTemperatureRegistrations } from "../temperatureRegistrationApi";
 import { useAllowedWinkelOptions } from "../useAllowedWinkelOptions";
 
-type LocationFilter = WinkelId | "all";
+type LocationFilter = string | "all";
 
 type OverviewRow = {
   key: string;
   date: string;
   time: string;
-  locationId?: WinkelId;
+  locationId?: string;
   location: string;
   deviceName: string;
   deviceType: TemperatureDeviceType;
@@ -89,26 +88,54 @@ function formatDutchTime(value: string) {
   });
 }
 
-function getLocationIdFromName(value: string) {
+function getLocationLabel(
+  locationId: string,
+  locationOptions: readonly TemperatureLocationOption[]
+) {
+  return (
+    locationOptions.find((location) => location.id === locationId)?.label ||
+    locationId
+  );
+}
+
+function isLocationOptionId(
+  value: string,
+  locationOptions: readonly TemperatureLocationOption[]
+) {
+  return locationOptions.some((location) => location.id === value);
+}
+
+function getLocationIdFromName(
+  value: string,
+  locationOptions: readonly TemperatureLocationOption[]
+) {
   const normalized = normalizeDeviceName(value).replace(/^ijsloket\s+/, "");
 
-  return winkelOptions.find(
-    (winkel) =>
-      normalizeDeviceName(winkel.id) === normalized ||
-      normalizeDeviceName(winkel.label) === normalized
+  return locationOptions.find(
+    (location) =>
+      normalizeDeviceName(location.id) === normalized ||
+      normalizeDeviceName(location.label) === normalized
   )?.id;
 }
 
-function getRecordLocationId(record: TemperatureRecord) {
-  return getLocationIdFromName(record.winkel || "");
+function getRecordLocationId(
+  record: TemperatureRecord,
+  locationOptions: readonly TemperatureLocationOption[]
+) {
+  return getLocationIdFromName(record.winkel || "", locationOptions);
 }
 
-function getCleaningItemLocationId(item: CleaningItem) {
-  return getLocationIdFromName(item.winkel || "");
+function getCleaningItemLocationId(
+  item: CleaningItem,
+  locationOptions: readonly TemperatureLocationOption[]
+) {
+  return getLocationIdFromName(item.winkel || "", locationOptions);
 }
 
 function registrationHasContent(registration: TemperatureRegistration) {
   return Boolean(
+    registration.inactive ||
+      registration.status === "inactive" ||
     getMeasuredTemperature(registration).trim() ||
       (registration.displayTemperatuur || "").trim() ||
       (registration.actionTaken || "").trim() ||
@@ -124,6 +151,9 @@ function statusClass(status: TemperatureStatus) {
   if (status === "deviation") {
     return "border-[#efb4aa] bg-[#fff0ed] text-[#a0382f]";
   }
+  if (status === "inactive") {
+    return "border-[#d8d0c7] bg-[#eee9e2] text-[#2d2a26]/55";
+  }
 
   return "border-[#ded8cf] bg-[#f8f6f3] text-[#2d2a26]/55";
 }
@@ -132,6 +162,7 @@ function statusPdfColor(status: TemperatureStatus) {
   if (status === "ok") return "#edf7ea";
   if (status === "attention") return "#fff5d8";
   if (status === "deviation") return "#fff0ed";
+  if (status === "inactive") return "#eee9e2";
 
   return "#f1efea";
 }
@@ -155,11 +186,13 @@ function buildRows(
   month: number,
   year: number,
   includeMissingRows: boolean,
-  allowedWinkelOptions: readonly (typeof winkelOptions)[number][]
+  allowedLocationOptions: readonly TemperatureLocationOption[],
+  rowsByLocation: Record<string, TemperatureDeviceConfig[]>,
+  loadCleaningFallback: boolean
 ) {
   const selectedLocationIds =
     locationFilter === "all"
-      ? allowedWinkelOptions.map((winkel) => winkel.id)
+      ? allowedLocationOptions.map((location) => location.id)
       : [locationFilter];
   const selectedLocationIdSet = new Set(selectedLocationIds);
   const rows: OverviewRow[] = [];
@@ -173,13 +206,15 @@ function buildRows(
     const recordMonth = Number(dateParts[2]) - 1;
     if (recordYear !== year || recordMonth !== month) return;
 
-    const locationId = getRecordLocationId(record);
+    const locationId = getRecordLocationId(record, allowedLocationOptions);
     const locationMatches =
       locationFilter === "all"
         ? Boolean(locationId && selectedLocationIdSet.has(locationId))
         : locationId === locationFilter ||
           normalizeDeviceName(record.winkel || "") ===
-            normalizeDeviceName(getWinkelLabel(locationFilter));
+            normalizeDeviceName(
+              getLocationLabel(locationFilter, allowedLocationOptions)
+            );
     if (!locationMatches) return;
 
     const createdAt = record.updatedAt || record.createdAt || "";
@@ -195,8 +230,22 @@ function buildRows(
           registration.deviceType,
           registration.naam || ""
         );
-        const temperature = getMeasuredTemperature(registration);
-        const evaluation = evaluateTemperature(deviceType, temperature);
+        const inactive =
+          registration.inactive || registration.status === "inactive";
+        const temperature = inactive ? "" : getMeasuredTemperature(registration);
+        const evaluation = inactive
+          ? {
+              status: "inactive" as const,
+              label: "Tijdelijk uitgezet",
+              shortLabel: "Uit",
+              actionRequired: false,
+              actionHint: "",
+            }
+          : evaluateTemperature(
+              deviceType,
+              temperature,
+              registration.maxTemperature
+            );
         const note = registration.note || record.opmerking || "";
 
         rows.push({
@@ -204,10 +253,14 @@ function buildRows(
           date: recordDate,
           time: formatDutchTime(createdAt),
           locationId,
-          location: locationId ? getWinkelLabel(locationId) : record.winkel,
+          location: locationId
+            ? getLocationLabel(locationId, allowedLocationOptions)
+            : record.winkel,
           deviceName,
           deviceType,
-          displayTemperature: registration.displayTemperatuur || "",
+          displayTemperature: inactive
+            ? ""
+            : registration.displayTemperatuur || "",
           temperature,
           status: evaluation.status,
           statusLabel: evaluation.label,
@@ -222,16 +275,18 @@ function buildRows(
 
   const latestCleaningItems = new Map<string, CleaningItem>();
 
-  cleaningItems.forEach((item) => {
-    if (item.titel !== "Afsluitplan") return;
-    const locationId = getCleaningItemLocationId(item);
-    const key = `${item.datum}|${locationId || item.winkel}|${item.titel}`;
-    const existingItem = latestCleaningItems.get(key);
+  if (loadCleaningFallback) {
+    cleaningItems.forEach((item) => {
+      if (item.titel !== "Afsluitplan") return;
+      const locationId = getCleaningItemLocationId(item, allowedLocationOptions);
+      const key = `${item.datum}|${locationId || item.winkel}|${item.titel}`;
+      const existingItem = latestCleaningItems.get(key);
 
-    if (!existingItem || item.id > existingItem.id) {
-      latestCleaningItems.set(key, item);
-    }
-  });
+      if (!existingItem || item.id > existingItem.id) {
+        latestCleaningItems.set(key, item);
+      }
+    });
+  }
 
   Array.from(latestCleaningItems.values()).forEach((item) => {
     const recordDate = item.datum || "";
@@ -242,7 +297,7 @@ function buildRows(
     const recordMonth = Number(dateParts[2]) - 1;
     if (recordYear !== year || recordMonth !== month) return;
 
-    const locationId = getCleaningItemLocationId(item);
+    const locationId = getCleaningItemLocationId(item, allowedLocationOptions);
     const locationMatches =
       locationFilter === "all"
         ? Boolean(locationId && selectedLocationIdSet.has(locationId))
@@ -264,7 +319,9 @@ function buildRows(
         date: recordDate,
         time: "-",
         locationId,
-        location: locationId ? getWinkelLabel(locationId) : item.winkel,
+        location: locationId
+          ? getLocationLabel(locationId, allowedLocationOptions)
+          : item.winkel,
         deviceName,
         deviceType,
         displayTemperature: "",
@@ -298,8 +355,12 @@ function buildRows(
 
     if (!isFutureMonth) {
       selectedLocationIds.forEach((locationId) => {
-        temperatureRowsByWinkel[locationId].forEach((device) => {
+        (rowsByLocation[locationId] || []).forEach((device) => {
           const deviceName = getTemperatureDeviceName(device);
+          const deviceType =
+            typeof device === "string"
+              ? inferDeviceType(deviceName)
+              : device.deviceType || inferDeviceType(deviceName);
 
           for (let day = 1; day <= lastDay; day += 1) {
             const date = toDateInput(year, month, day);
@@ -316,9 +377,9 @@ function buildRows(
               date,
               time: "-",
               locationId,
-              location: getWinkelLabel(locationId),
+              location: getLocationLabel(locationId, allowedLocationOptions),
               deviceName,
-              deviceType: inferDeviceType(deviceName),
+              deviceType,
               displayTemperature: "",
               temperature: "",
               status: "missing",
@@ -345,13 +406,35 @@ function buildRows(
   });
 }
 
-export default function TemperatuurRegistratieOverzichtPage() {
+type TemperatureRegistrationOverviewPageProps = {
+  title?: string;
+  kicker?: string;
+  locationOptions?: readonly TemperatureLocationOption[];
+  rowsByLocation?: Record<string, TemperatureDeviceConfig[]>;
+  defaultLocationId?: string;
+  registrationHref?: string;
+  loadCleaningFallback?: boolean;
+  allLocationsLabel?: string;
+};
+
+export function TemperatureRegistrationOverviewPage({
+  title = "Temperatuurregistratie",
+  kicker = "HACCP overzicht",
+  locationOptions = winkelOptions,
+  rowsByLocation = temperatureRowsByWinkel,
+  defaultLocationId,
+  registrationHref = "/winkel/schoonmaak-registratie",
+  loadCleaningFallback = true,
+  allLocationsLabel = "Alle winkels",
+}: Readonly<TemperatureRegistrationOverviewPageProps> = {}) {
   const today = getTodayParts();
-  const allowedWinkelOptions = useAllowedWinkelOptions(winkelOptions);
+  const allowedLocationOptions = useAllowedWinkelOptions(locationOptions);
+  const initialLocationId =
+    defaultLocationId || allowedLocationOptions[0]?.id || locationOptions[0]?.id;
   const [records, setRecords] = useState<TemperatureRecord[]>([]);
   const [cleaningItems, setCleaningItems] = useState<CleaningItem[]>([]);
   const [locationFilter, setLocationFilter] =
-    useState<LocationFilter>("ziekerstraat");
+    useState<LocationFilter>(initialLocationId || "all");
   const [month, setMonth] = useState(today.month);
   const [year, setYear] = useState(today.year);
   const [deviceFilter, setDeviceFilter] = useState("all");
@@ -369,26 +452,26 @@ export default function TemperatuurRegistratieOverzichtPage() {
 
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
-      const winkel = params.get("winkel") || "";
+      const location = params.get("winkel") || params.get("locatie") || "";
 
       if (
-        isWinkelId(winkel) &&
-        allowedWinkelOptions.some((option) => option.id === winkel)
+        isLocationOptionId(location, allowedLocationOptions) &&
+        allowedLocationOptions.some((option) => option.id === location)
       ) {
-        setLocationFilter(winkel);
+        setLocationFilter(location);
       }
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [allowedWinkelOptions]);
+  }, [allowedLocationOptions]);
 
   useEffect(() => {
-    if (!allowedWinkelOptions.length) return;
+    if (!allowedLocationOptions.length) return;
 
     if (locationFilter === "all") {
-      if (allowedWinkelOptions.length === 1) {
+      if (allowedLocationOptions.length === 1) {
         const timer = window.setTimeout(() => {
-          setLocationFilter(allowedWinkelOptions[0].id);
+          setLocationFilter(allowedLocationOptions[0].id);
           setDeviceFilter("all");
         }, 0);
 
@@ -398,17 +481,17 @@ export default function TemperatuurRegistratieOverzichtPage() {
       return;
     }
 
-    if (allowedWinkelOptions.some((option) => option.id === locationFilter)) {
+    if (allowedLocationOptions.some((option) => option.id === locationFilter)) {
       return;
     }
 
     const timer = window.setTimeout(() => {
-      setLocationFilter(allowedWinkelOptions[0].id);
+      setLocationFilter(allowedLocationOptions[0].id);
       setDeviceFilter("all");
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [allowedWinkelOptions, locationFilter]);
+  }, [allowedLocationOptions, locationFilter]);
 
   useEffect(() => {
     let ignoreResult = false;
@@ -418,10 +501,10 @@ export default function TemperatuurRegistratieOverzichtPage() {
       setStatus("");
 
       try {
-        const [temperatureResult, cleaningResult] = await Promise.all([
-          fetchTemperatureRegistrations(),
-          fetchCleaningItems(),
-        ]);
+        const temperatureResult = await fetchTemperatureRegistrations();
+        const cleaningResult = loadCleaningFallback
+          ? await fetchCleaningItems()
+          : { ok: true as const, data: [] as CleaningItem[] };
 
         if (ignoreResult) return;
 
@@ -456,7 +539,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
     return () => {
       ignoreResult = true;
     };
-  }, []);
+  }, [loadCleaningFallback]);
 
   const rows = useMemo(
     () =>
@@ -467,7 +550,9 @@ export default function TemperatuurRegistratieOverzichtPage() {
         month,
         year,
         includeMissingRows,
-        allowedWinkelOptions
+        allowedLocationOptions,
+        rowsByLocation,
+        loadCleaningFallback
       ).filter((row) => {
         if (
           deviceFilter !== "all" &&
@@ -500,7 +585,9 @@ export default function TemperatuurRegistratieOverzichtPage() {
       deviceFilter,
       deviceTypeFilter,
       onlyProblems,
-      allowedWinkelOptions,
+      allowedLocationOptions,
+      rowsByLocation,
+      loadCleaningFallback,
     ]
   );
 
@@ -508,13 +595,13 @@ export default function TemperatuurRegistratieOverzichtPage() {
     const names = new Set<string>();
 
     if (locationFilter === "all") {
-      allowedWinkelOptions.forEach((winkel) => {
-        temperatureRowsByWinkel[winkel.id].forEach((device) =>
+      allowedLocationOptions.forEach((location) => {
+        (rowsByLocation[location.id] || []).forEach((device) =>
           names.add(getTemperatureDeviceName(device))
         );
       });
     } else {
-      temperatureRowsByWinkel[locationFilter].forEach((device) =>
+      (rowsByLocation[locationFilter] || []).forEach((device) =>
         names.add(getTemperatureDeviceName(device))
       );
     }
@@ -524,13 +611,15 @@ export default function TemperatuurRegistratieOverzichtPage() {
     return Array.from(names).sort((first, second) =>
       first.localeCompare(second)
     );
-  }, [allowedWinkelOptions, locationFilter, rows]);
+  }, [allowedLocationOptions, locationFilter, rows, rowsByLocation]);
 
   const periodLabel = `${
     monthOptions.find((option) => option.value === month)?.label || ""
   } ${year}`;
   const locationLabel =
-    locationFilter === "all" ? "Alle winkels" : getWinkelLabel(locationFilter);
+    locationFilter === "all"
+      ? allLocationsLabel
+      : getLocationLabel(locationFilter, allowedLocationOptions);
 
   function updateMonth(delta: number) {
     const next = new Date(year, month + delta, 1);
@@ -545,7 +634,8 @@ export default function TemperatuurRegistratieOverzichtPage() {
       "location",
       "device_name",
       "device_type",
-      "temperature",
+      "display_temperature",
+      "hand_temperature",
       "status",
       "action_taken",
       "entered_by",
@@ -559,6 +649,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
         row.location,
         row.deviceName,
         getDeviceTypeLabel(row.deviceType),
+        row.displayTemperature,
         row.temperature,
         row.statusLabel,
         row.actionTaken,
@@ -601,6 +692,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
                 <td>${escapeHtml(row.location)}</td>
                 <td>${escapeHtml(row.deviceName)}</td>
                 <td>${escapeHtml(getDeviceTypeLabel(row.deviceType))}</td>
+                <td>${escapeHtml(row.displayTemperature || "-")}</td>
                 <td>${escapeHtml(row.temperature || "-")}</td>
                 <td>${escapeHtml(row.statusLabel)}</td>
                 <td>${escapeHtml(row.actionTaken || "-")}</td>
@@ -609,7 +701,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
               </tr>`
           )
           .join("")
-      : `<tr><td colspan="10">Geen temperatuurregistraties gevonden voor deze periode.</td></tr>`;
+      : `<tr><td colspan="11">Geen temperatuurregistraties gevonden voor deze periode.</td></tr>`;
     const html = `
       <!doctype html>
       <html lang="nl">
@@ -642,10 +734,11 @@ export default function TemperatuurRegistratieOverzichtPage() {
               <tr>
                 <th>Datum</th>
                 <th>Tijd</th>
-                <th>Winkel</th>
+                <th>Locatie</th>
                 <th>Apparaatnaam</th>
                 <th>Type</th>
-                <th>Gemeten</th>
+                <th>Display</th>
+                <th>Handmeting</th>
                 <th>Status</th>
                 <th>Actie</th>
                 <th>Door</th>
@@ -680,13 +773,13 @@ export default function TemperatuurRegistratieOverzichtPage() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <StrikPageHeader
-            title="Temperatuurregistratie"
+            title={title}
             description={`${locationLabel} · ${periodLabel}`}
-            kicker="HACCP overzicht"
+            kicker={kicker}
             icon={strikIcons.cleaning}
           />
           <Link
-            href="/winkel/schoonmaak-registratie"
+            href={registrationHref}
             className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
           >
             Registratie invullen
@@ -709,7 +802,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
                 onClick={downloadPdf}
                 className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black shadow-sm"
               >
-                Download PDF
+                Maandrapport openen
               </button>
               <button
                 type="button"
@@ -740,7 +833,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
             }`}
           >
             <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-              Winkel
+              Locatie
               <select
                 value={locationFilter}
                 onChange={(event) => {
@@ -749,12 +842,12 @@ export default function TemperatuurRegistratieOverzichtPage() {
                 }}
                 className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
               >
-                {allowedWinkelOptions.length > 1 && (
-                  <option value="all">Alle winkels</option>
+                {allowedLocationOptions.length > 1 && (
+                  <option value="all">{allLocationsLabel}</option>
                 )}
-                {allowedWinkelOptions.map((winkel) => (
-                  <option key={winkel.id} value={winkel.id}>
-                    {winkel.label}
+                {allowedLocationOptions.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.label}
                   </option>
                 ))}
               </select>
@@ -871,15 +964,16 @@ export default function TemperatuurRegistratieOverzichtPage() {
 
         <section className="overflow-hidden rounded-[1.75rem] border border-[#e7e0d8] bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="min-w-[72rem] w-full border-collapse text-left text-xs">
+            <table className="min-w-[78rem] w-full border-collapse text-left text-xs">
               <thead className="bg-[#f8f6f3] text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
                 <tr>
                   <th className="px-3 py-2">Datum</th>
                   <th className="px-3 py-2">Tijd</th>
-                  <th className="px-3 py-2">Winkel</th>
+                  <th className="px-3 py-2">Locatie</th>
                   <th className="px-3 py-2">Apparaatnaam</th>
                   <th className="px-3 py-2">Type</th>
-                  <th className="px-3 py-2">Gemeten temperatuur</th>
+                  <th className="px-3 py-2">Display</th>
+                  <th className="px-3 py-2">Handmeting</th>
                   <th className="px-3 py-2">Akkoord / afwijking</th>
                   <th className="px-3 py-2">Actie bij afwijking</th>
                   <th className="px-3 py-2">Ingevuld door</th>
@@ -898,6 +992,9 @@ export default function TemperatuurRegistratieOverzichtPage() {
                       <td className="px-3 py-2 font-bold">{row.deviceName}</td>
                       <td className="px-3 py-2">
                         {getDeviceTypeLabel(row.deviceType)}
+                      </td>
+                      <td className="px-3 py-2 font-black">
+                        {row.displayTemperature || "-"}
                       </td>
                       <td className="px-3 py-2 font-black">
                         {row.temperature || "-"}
@@ -923,7 +1020,7 @@ export default function TemperatuurRegistratieOverzichtPage() {
                 ) : (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="px-4 py-8 text-center text-sm font-bold text-[#2d2a26]/55"
                     >
                       Geen temperatuurregistraties gevonden voor deze periode.
@@ -937,4 +1034,8 @@ export default function TemperatuurRegistratieOverzichtPage() {
       </div>
     </StrikShell>
   );
+}
+
+export default function TemperatuurRegistratieOverzichtPage() {
+  return <TemperatureRegistrationOverviewPage />;
 }

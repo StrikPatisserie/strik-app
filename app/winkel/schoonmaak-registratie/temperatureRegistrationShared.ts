@@ -17,7 +17,8 @@ export type TemperatureStatus =
   | "ok"
   | "attention"
   | "deviation"
-  | "missing";
+  | "missing"
+  | "inactive";
 
 export type TemperatureRegistration = {
   id: string;
@@ -32,6 +33,7 @@ export type TemperatureRegistration = {
   status?: TemperatureStatus;
   actionTaken?: string;
   note?: string;
+  inactive?: boolean;
 };
 
 export type TemperaturePayload = {
