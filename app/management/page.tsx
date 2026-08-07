@@ -37,6 +37,13 @@ const managementGroups: {
         icon: strikIcons.info,
       },
       {
+        href: "/management/gegevens/geld-tellen",
+        label: "Cash",
+        title: "Geld tellen",
+        description: "Dagtellingen, weektotalen en stortingen.",
+        icon: strikIcons.management,
+      },
+      {
         href: "/management/rooster",
         label: "Tamigo",
         title: "Rooster",

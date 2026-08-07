@@ -153,6 +153,115 @@ function strik_revenue_normalize_daily_record($record) {
 }
 }
 
+if (!function_exists('strik_revenue_cash_denominations')) {
+function strik_revenue_cash_denominations() {
+    return array(
+        'eur500', 'eur200', 'eur100', 'eur50', 'eur20', 'eur10', 'eur5',
+        'eur2', 'eur1', 'cent50', 'cent20', 'cent10', 'cent5', 'cent2', 'cent1',
+    );
+}
+}
+
+if (!function_exists('strik_revenue_normalize_cash_denominations')) {
+function strik_revenue_normalize_cash_denominations($value) {
+    $counts = array();
+    $source = is_array($value) ? $value : array();
+
+    foreach (strik_revenue_cash_denominations() as $key) {
+        $count = isset($source[$key]) ? absint($source[$key]) : 0;
+        if ($count > 0) $counts[$key] = $count;
+    }
+
+    return $counts;
+}
+}
+
+if (!function_exists('strik_revenue_normalize_cash_record')) {
+function strik_revenue_normalize_cash_record($record) {
+    if (!is_array($record)) return null;
+
+    $date = isset($record['date']) ? strik_revenue_date($record['date']) : '';
+    $shop = isset($record['shop']) ? strik_revenue_shop($record['shop']) : '';
+    if ($date === '' || $shop === '') return null;
+
+    $iso_parts = strik_revenue_iso_parts($date);
+    $denominations = strik_revenue_normalize_cash_denominations(
+        isset($record['denominations']) ? $record['denominations'] : array()
+    );
+    $source = isset($record['source'])
+        ? strik_revenue_source($record['source'], 'dagafsluiting')
+        : 'dagafsluiting';
+    if ($source === 'excel') $source = 'dagafsluiting';
+
+    return array(
+        'id' => isset($record['id'])
+            ? sanitize_key($record['id'])
+            : sanitize_key('cash-' . $date . '-' . $shop),
+        'date' => $date,
+        'year' => $iso_parts['year'],
+        'week' => $iso_parts['week'],
+        'shop' => $shop,
+        'denominations' => $denominations,
+        'denominationTotal' => isset($record['denominationTotal']) ? round((float) $record['denominationTotal'], 2) : 0,
+        'countedCash' => isset($record['countedCash']) ? round((float) $record['countedCash'], 2) : 0,
+        'startCash' => isset($record['startCash']) ? round((float) $record['startCash'], 2) : null,
+        'cashRevenue' => isset($record['cashRevenue']) ? round((float) $record['cashRevenue'], 2) : null,
+        'expectedCash' => isset($record['expectedCash']) ? round((float) $record['expectedCash'], 2) : null,
+        'difference' => isset($record['difference']) ? round((float) $record['difference'], 2) : null,
+        'countedBy' => isset($record['countedBy']) ? strik_revenue_text($record['countedBy'], 120) : '',
+        'openedAt' => isset($record['openedAt']) ? strik_revenue_text($record['openedAt'], 40) : '',
+        'closedAt' => isset($record['closedAt']) ? strik_revenue_text($record['closedAt'], 40) : '',
+        'checkedAt' => isset($record['checkedAt']) ? strik_revenue_text($record['checkedAt'], 120) : '',
+        'checkedBy' => isset($record['checkedBy']) ? strik_revenue_text($record['checkedBy'], 120) : '',
+        'note' => isset($record['note']) ? strik_revenue_text($record['note']) : '',
+        'source' => $source,
+        'messageId' => isset($record['messageId']) ? strik_revenue_text($record['messageId'], 200) : '',
+        'importedAt' => isset($record['importedAt']) ? strik_revenue_text($record['importedAt'], 120) : wp_date(DATE_ATOM),
+        'updatedAt' => isset($record['updatedAt']) ? strik_revenue_text($record['updatedAt'], 120) : wp_date(DATE_ATOM),
+    );
+}
+}
+
+if (!function_exists('strik_revenue_normalize_cash_deposit')) {
+function strik_revenue_normalize_cash_deposit($record) {
+    if (!is_array($record)) return null;
+
+    $year = isset($record['year']) ? absint($record['year']) : 0;
+    $week = isset($record['week']) ? absint($record['week']) : 0;
+    $shop = isset($record['shop']) ? strik_revenue_shop($record['shop']) : '';
+    if ($year < 2020 || $year > 2100 || $week < 1 || $week > 53 || $shop === '') {
+        return null;
+    }
+
+    $cash_record_ids = array();
+    $raw_cash_record_ids = isset($record['cashRecordIds']) && is_array($record['cashRecordIds'])
+        ? $record['cashRecordIds']
+        : array();
+    foreach (array_slice($raw_cash_record_ids, 0, 400) as $id) {
+        $clean_id = strik_revenue_text($id, 160);
+        if ($clean_id !== '') $cash_record_ids[] = $clean_id;
+    }
+
+    return array(
+        'id' => isset($record['id'])
+            ? sanitize_key($record['id'])
+            : sanitize_key('cash-deposit-' . $year . '-' . $week . '-' . $shop),
+        'year' => $year,
+        'week' => $week,
+        'shop' => $shop,
+        'amount' => isset($record['amount']) ? max(0, round((float) $record['amount'], 2)) : 0,
+        'dateFrom' => isset($record['dateFrom']) ? strik_revenue_date($record['dateFrom']) : '',
+        'dateTo' => isset($record['dateTo']) ? strik_revenue_date($record['dateTo']) : '',
+        'cashRecordIds' => $cash_record_ids,
+        'depositedAt' => isset($record['depositedAt']) ? strik_revenue_text($record['depositedAt'], 120) : '',
+        'depositedBy' => isset($record['depositedBy']) ? strik_revenue_text($record['depositedBy'], 120) : '',
+        'note' => isset($record['note']) ? strik_revenue_text($record['note']) : '',
+        'createdAt' => isset($record['createdAt']) ? strik_revenue_text($record['createdAt'], 120) : wp_date(DATE_ATOM),
+        'updatedAt' => isset($record['updatedAt']) ? strik_revenue_text($record['updatedAt'], 120) : wp_date(DATE_ATOM),
+    );
+}
+}
+
 if (!function_exists('strik_revenue_normalize_data')) {
 function strik_revenue_normalize_data($data) {
     if (!is_array($data)) {
@@ -177,9 +286,31 @@ function strik_revenue_normalize_data($data) {
         if ($clean_record) $daily_records[] = $clean_record;
     }
 
+    $cash_records = array();
+    $raw_cash_records = isset($data['cashRecords']) && is_array($data['cashRecords'])
+        ? $data['cashRecords']
+        : array();
+
+    foreach (array_slice($raw_cash_records, 0, 8000) as $record) {
+        $clean_record = strik_revenue_normalize_cash_record($record);
+        if ($clean_record) $cash_records[] = $clean_record;
+    }
+
+    $cash_deposits = array();
+    $raw_cash_deposits = isset($data['cashDeposits']) && is_array($data['cashDeposits'])
+        ? $data['cashDeposits']
+        : array();
+
+    foreach (array_slice($raw_cash_deposits, 0, 4000) as $record) {
+        $clean_record = strik_revenue_normalize_cash_deposit($record);
+        if ($clean_record) $cash_deposits[] = $clean_record;
+    }
+
     return array(
         'records' => $records,
         'dailyRecords' => $daily_records,
+        'cashRecords' => $cash_records,
+        'cashDeposits' => $cash_deposits,
         'updatedAt' => isset($data['updatedAt']) ? strik_revenue_text($data['updatedAt'], 120) : '',
     );
 }
@@ -190,6 +321,8 @@ function strik_revenue_get_data() {
     $data = get_option(STRIK_REVENUE_OPTION_NAME, array(
         'records' => array(),
         'dailyRecords' => array(),
+        'cashRecords' => array(),
+        'cashDeposits' => array(),
         'updatedAt' => '',
     ));
 

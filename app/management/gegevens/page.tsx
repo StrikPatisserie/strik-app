@@ -32,6 +32,14 @@ const gegevensItems = [
     tone: "honey" as const,
   },
   {
+    href: "/management/gegevens/geld-tellen",
+    label: "Cash",
+    title: "Geld tellen",
+    description: "Controleer dagtellingen, weektotalen en stortingen.",
+    icon: strikIcons.management,
+    tone: "green" as const,
+  },
+  {
     href: "/settings/app",
     label: "Settings",
     title: "App instellingen",

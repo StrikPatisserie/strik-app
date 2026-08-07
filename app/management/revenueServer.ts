@@ -3,10 +3,16 @@ import "server-only";
 import { excelRevenueSeed } from "./revenueSeed";
 import {
   createWeeklyRevenueRecordsFromDays,
+  mergeRevenueCashDeposits,
+  mergeRevenueCashRecords,
   mergeRevenueDayRecords,
   mergeRevenueRecords,
+  normalizeRevenueCashDeposit,
+  normalizeRevenueCashRecord,
   normalizeRevenueDayRecord,
   normalizeRevenueData,
+  type RevenueCashDeposit,
+  type RevenueCashRecord,
   type RevenueDayRecord,
   type RevenueData,
 } from "./revenueData";
@@ -83,7 +89,7 @@ export async function getStoredRevenueData(): Promise<{
     }
 
     return {
-      data: { records: [], dailyRecords: [] },
+      data: { records: [], dailyRecords: [], cashRecords: [], cashDeposits: [] },
       storage: {
         status: "seed",
         message: getWordPressMessage(response.status),
@@ -92,7 +98,7 @@ export async function getStoredRevenueData(): Promise<{
     };
   } catch {
     return {
-      data: { records: [], dailyRecords: [] },
+      data: { records: [], dailyRecords: [], cashRecords: [], cashDeposits: [] },
       storage: {
         status: "seed",
         message: "Kan geen verbinding maken met WordPress omzetopslag.",
@@ -114,6 +120,8 @@ export async function getMergedRevenueData() {
   return {
     records: mergeRevenueRecords(recordsWithDaily, stored.data.records),
     dailyRecords: stored.data.dailyRecords || [],
+    cashRecords: stored.data.cashRecords || [],
+    cashDeposits: stored.data.cashDeposits || [],
     updatedAt: stored.data.updatedAt,
     storage: stored.storage,
     seedCount: excelRevenueSeed.length,
@@ -158,6 +166,42 @@ export async function upsertRevenueDayRecords(dayRecords: RevenueDayRecord[]) {
     dailyRecords: mergeRevenueDayRecords(
       stored.data.dailyRecords || [],
       normalizedDayRecords
+    ),
+  });
+
+  return saveRevenueData(nextData);
+}
+
+export async function upsertRevenueCashRecords(cashRecords: RevenueCashRecord[]) {
+  const stored = await getStoredRevenueData();
+  const normalizedCashRecords = cashRecords.flatMap((record) => {
+    const normalized = normalizeRevenueCashRecord(record);
+    return normalized ? [normalized] : [];
+  });
+  const nextData = normalizeRevenueData({
+    ...stored.data,
+    cashRecords: mergeRevenueCashRecords(
+      stored.data.cashRecords || [],
+      normalizedCashRecords
+    ),
+  });
+
+  return saveRevenueData(nextData);
+}
+
+export async function upsertRevenueCashDeposits(
+  cashDeposits: RevenueCashDeposit[]
+) {
+  const stored = await getStoredRevenueData();
+  const normalizedCashDeposits = cashDeposits.flatMap((record) => {
+    const normalized = normalizeRevenueCashDeposit(record);
+    return normalized ? [normalized] : [];
+  });
+  const nextData = normalizeRevenueData({
+    ...stored.data,
+    cashDeposits: mergeRevenueCashDeposits(
+      stored.data.cashDeposits || [],
+      normalizedCashDeposits
     ),
   });
 

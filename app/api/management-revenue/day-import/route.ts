@@ -3,13 +3,21 @@ import { PDFParse } from "pdf-parse";
 import { NextResponse } from "next/server";
 import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
 import {
+  cashDenominationTotal,
+  createRevenueCashKey,
   createRevenueDayKey,
   normalizeRevenueShop,
   revenueShops,
+  type CashDenominationKey,
+  type CashDenominationCounts,
+  type RevenueCashRecord,
   type RevenueDayRecord,
   type RevenueShop,
 } from "@/app/management/revenueData";
-import { upsertRevenueDayRecords } from "@/app/management/revenueServer";
+import {
+  upsertRevenueCashRecords,
+  upsertRevenueDayRecords,
+} from "@/app/management/revenueServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +48,12 @@ type ShopAmountCandidate = {
   line: string;
 };
 
+type CashAmountMatch = {
+  amount: number;
+  index: number;
+  raw: string;
+};
+
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const dutchMonths: Record<string, number> = {
@@ -63,6 +77,24 @@ const shopPatterns: Record<RevenueShop, RegExp[]> = {
   Daalseweg: [/\bdaal(?:seweg)?\b/i, /\bdaalseweg\b/i],
   Lent: [/\blent\b/i],
 };
+
+const cashCountParseOrder: CashDenominationKey[] = [
+  "eur2",
+  "eur1",
+  "cent50",
+  "cent20",
+  "cent10",
+  "cent5",
+  "cent2",
+  "cent1",
+  "eur5",
+  "eur10",
+  "eur20",
+  "eur50",
+  "eur100",
+  "eur200",
+  "eur500",
+];
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, message }, { status });
@@ -222,6 +254,21 @@ function parseDutchAmount(value: string) {
   return Number(amount.toFixed(2));
 }
 
+function parseSignedDutchAmount(value: string) {
+  let clean = value
+    .replace(/\bEUR\b/gi, "")
+    .replace(/€/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+  const negative = clean.startsWith("-");
+  clean = clean.replace(/^-/, "");
+
+  const amount = parseDutchAmount(clean);
+  if (amount === null) return null;
+
+  return negative ? -amount : amount;
+}
+
 function extractAmountMatches(line: string) {
   return Array.from(
     line.matchAll(
@@ -238,6 +285,24 @@ function extractAmountMatches(line: string) {
         match.amount !== null
     )
     .filter((match) => !/\b\d{1,2}[-/]\d{1,2}[-/]20\d{2}\b/.test(match.raw));
+}
+
+function extractSignedAmountMatches(line: string): CashAmountMatch[] {
+  return Array.from(
+    line.matchAll(
+      /(?:€|\bEUR\b)?\s*-?\d{1,6}(?:[.\s]\d{3})*(?:,\d{2})|(?:€|\bEUR\b)\s*-?\d+(?:\.\d{2})?/gi
+    )
+  )
+    .map((match) => ({
+      amount: parseSignedDutchAmount(match[0]),
+      index: match.index || 0,
+      raw: match[0],
+    }))
+    .filter(
+      (match): match is CashAmountMatch =>
+        match.amount !== null &&
+        !/\b\d{1,2}[-/]\d{1,2}[-/]20\d{2}\b/.test(match.raw)
+    );
 }
 
 function scoreLine(line: string, sameLine: boolean) {
@@ -344,6 +409,155 @@ function extractShopAmounts(text: string) {
     );
 }
 
+function extractCashReportSections(text: string) {
+  const matches = Array.from(
+    text.matchAll(/Openen\s+kassa\s+locatie\s+([^\n]+)/gi)
+  );
+
+  return matches.flatMap((match, index) => {
+    const shop = pickShopFromText(match[1] || "");
+    if (!shop || match.index === undefined) return [];
+
+    const nextIndex = matches[index + 1]?.index ?? text.length;
+
+    return [
+      {
+        shop,
+        text: text.slice(match.index, nextIndex),
+      },
+    ];
+  });
+}
+
+function extractFirstSignedAmount(pattern: RegExp, text: string) {
+  const match = text.match(pattern);
+  if (!match) return undefined;
+
+  return parseSignedDutchAmount(match[1] || match[0]) ?? undefined;
+}
+
+function extractCashCountedBy(text: string) {
+  const match = text.match(/\bgeteld\s+door\s*:\s*([^\n]+)/i);
+  if (!match) return "";
+
+  return cleanText(match[1], 80).replace(/\s+Door\s*:.*$/i, "");
+}
+
+function extractCashTimes(sectionText: string) {
+  const openedAt = sectionText.match(/Openen\s+kassa\s+locatie[^\n]*[\s\S]*?\bTijd\s*:\s*(\d{1,2}:\d{2})/i)?.[1];
+  const closedAt = sectionText.match(/Sluiten\s+kassa\s+locatie[^\n]*[\s\S]*?\bTijd\s*:\s*(\d{1,2}:\d{2})/i)?.[1];
+
+  return {
+    openedAt,
+    closedAt,
+  };
+}
+
+function extractCashDenominations(sectionText: string) {
+  const correctionIndex = sectionText.search(/\bCorrectie\b/i);
+  if (correctionIndex < 0) return null;
+
+  const afterCorrection = sectionText.slice(correctionIndex);
+  const totalMatch = afterCorrection.match(/\bTotaal\s*:\s*([-\d.,]+)/i);
+  if (!totalMatch || totalMatch.index === undefined) return null;
+
+  const countBlock = afterCorrection.slice(0, totalMatch.index);
+  const countMatches = Array.from(
+    countBlock.matchAll(/(?:^|\n)\s*(\d{1,4})\s*(?=\n|X\b)/g)
+  ).map((match) => Number(match[1]));
+  const counts = countMatches.slice(-cashCountParseOrder.length);
+  if (counts.length < cashCountParseOrder.length) return null;
+
+  const denominations: CashDenominationCounts = {};
+  cashCountParseOrder.forEach((key, index) => {
+    const count = Math.max(0, Math.trunc(counts[index] || 0));
+    if (count > 0) denominations[key] = count;
+  });
+
+  return {
+    denominations,
+    denominationTotal:
+      parseSignedDutchAmount(totalMatch[1] || "") ??
+      cashDenominationTotal(denominations),
+  };
+}
+
+function extractCashRecordAmounts(sectionText: string) {
+  const correctionIndex = sectionText.search(/\bCorrectie\b/i);
+  const beforeCorrection =
+    correctionIndex >= 0 ? sectionText.slice(0, correctionIndex) : sectionText;
+  const afterCloseMatch = beforeCorrection.match(
+    /Sluiten\s+kassa\s+locatie[^\n]*([\s\S]*)$/i
+  );
+  const afterCloseAmounts = extractSignedAmountMatches(afterCloseMatch?.[1] || "");
+  const beforeCorrectionAmounts = extractSignedAmountMatches(beforeCorrection);
+  const tail = beforeCorrectionAmounts.slice(-5);
+  const countedCash = extractFirstSignedAmount(
+    /\bGeteld\s*:\s*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    sectionText
+  );
+
+  return {
+    countedCash,
+    startCash: afterCloseAmounts[0]?.amount,
+    cashRevenue: tail.length >= 5 ? tail[2]?.amount : undefined,
+    expectedCash: tail.length >= 5 ? tail[3]?.amount : undefined,
+    difference: tail.length >= 5 ? tail[4]?.amount : undefined,
+  };
+}
+
+function extractCashRecords(
+  input: DayRevenueImportInput,
+  text: string,
+  date: string
+) {
+  const importedAt = new Date().toISOString();
+  const dateParts = getIsoPartsForDate(date);
+  const messageHash = createHash("sha1")
+    .update(`${input.messageId}|${input.subject}|${date}|cash`)
+    .digest("hex")
+    .slice(0, 8);
+
+  return extractCashReportSections(text).flatMap((section): RevenueCashRecord[] => {
+    const cashCounts = extractCashDenominations(section.text);
+    if (!cashCounts) return [];
+
+    const amounts = extractCashRecordAmounts(section.text);
+    const countedCash =
+      amounts.countedCash ?? cashCounts.denominationTotal;
+    const times = extractCashTimes(section.text);
+
+    return [
+      {
+        id: createRevenueCashKey(date, section.shop),
+        date,
+        year: dateParts.year,
+        week: dateParts.week,
+        shop: section.shop,
+        denominations: cashCounts.denominations,
+        denominationTotal: cashCounts.denominationTotal,
+        countedCash,
+        startCash: amounts.startCash,
+        cashRevenue: amounts.cashRevenue,
+        expectedCash: amounts.expectedCash,
+        difference:
+          amounts.difference ??
+          (amounts.expectedCash === undefined
+            ? undefined
+            : Number((countedCash - amounts.expectedCash).toFixed(2))),
+        countedBy: extractCashCountedBy(section.text),
+        openedAt: times.openedAt,
+        closedAt: times.closedAt,
+        note: `Geldtelling via Gmail · ${cleanText(input.subject, 160) || "zonder onderwerp"}`,
+        source: "dagafsluiting",
+        messageId: cleanText(input.messageId, 200) || messageHash,
+        importedAt,
+        updatedAt: importedAt,
+      },
+    ];
+  });
+}
+
 function isPdfAttachment(attachment: PdfAttachmentInput) {
   const fileName = cleanText(attachment.fileName, 240).toLowerCase();
   const contentType = cleanText(attachment.contentType, 120).toLowerCase();
@@ -447,6 +661,7 @@ export async function POST(request: Request) {
       .join("\n");
     const date = extractReportDate(input, fullText);
     const shopAmounts = extractShopAmounts(fullText);
+    const cashRecords = extractCashRecords(input, fullText, date);
 
     if (!shopAmounts.length) {
       return jsonError(
@@ -478,6 +693,15 @@ export async function POST(request: Request) {
       if (!result.ok) {
         return jsonError(result.message, result.status === 403 ? 403 : 502);
       }
+      if (cashRecords.length > 0) {
+        const cashResult = await upsertRevenueCashRecords(cashRecords);
+        if (!cashResult.ok) {
+          return jsonError(
+            cashResult.message,
+            cashResult.status === 403 ? 403 : 502
+          );
+        }
+      }
     }
 
     return NextResponse.json(
@@ -485,6 +709,7 @@ export async function POST(request: Request) {
         ok: true,
         date,
         records,
+        cashRecords,
         matches: shopAmounts,
         warnings,
       },
