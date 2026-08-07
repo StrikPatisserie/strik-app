@@ -68,6 +68,188 @@ type LogisticsFixedCustomersState = {
   updatedAt: string;
 };
 
+const DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT =
+  "2026-08-07T00:00:00.000Z";
+
+const DEFAULT_LOGISTICS_FIXED_CUSTOMERS: LogisticsFixedCustomer[] = [
+  {
+    id: "fixed:60001",
+    customerNumbers: ["60001"],
+    customerName: "Bakkerij Koenen anna molen",
+    deliveryWindow: "08:00 - 13:00",
+    address: "Hatertseweg 14 Nijmegen",
+    routeNote: "Wordt meestal meegenomen door de stadroute",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:60067",
+    customerNumbers: ["60067"],
+    customerName: "Scandic Sanadome",
+    deliveryWindow: "08:00 - 13:00",
+    address: "Weg door jonkerbos",
+    routeNote:
+      "Wordt meestal meegenomen door de buitenroute aan het einde van de route richting Malden",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:60090-60696-61116",
+    customerNumbers: ["60090", "60696", "61116"],
+    customerName: "Sint Maartenskliniek",
+    deliveryWindow: "08:30 - 09:30",
+    address: "Hengstdal 3",
+    routeNote: "Wordt meestal direct na Ziekerstraat of Daalseweg bezorgd",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:60248-60249",
+    customerNumbers: ["60248", "60249"],
+    customerName: "Radboud UMC",
+    deliveryWindow: "09:30 - 10:30",
+    address: "Hoofdingang Raboud UMC",
+    routeNote: "Wordt meestal na de Maartenskliniek geleverd",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:60918",
+    customerNumbers: ["60918"],
+    customerName: "Crematorium Jonkerbos",
+    deliveryWindow:
+      "09:00 - 10:00 (afhankelijk van de dienst, staat op de bon)",
+    address: "Weg door jonkerbos",
+    routeNote:
+      "Wordt meestal voor Sanadome bezorgd, tenzij het heel vroeg moet vanwege en dienst dan direct na winkel Lent",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:60988",
+    customerNumbers: ["60988"],
+    customerName: "Konings Maters",
+    deliveryWindow: "09:30 - 11:00",
+    address: "Keizer Karelplein 1",
+    routeNote:
+      "Wordt meestal direct na winkel ziekerstraat bezorgd of na 2e ronde ziekerstraat want hebben vaak warme producten die in de ziekerstraat opgewarmd moeten worden.",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:61654",
+    customerNumbers: ["61654"],
+    customerName: "De ontdekking",
+    deliveryWindow: "10:00 - 13:00",
+    address: "Oude Kleefsebaan 425",
+    routeNote:
+      "Wordt soms na Maartenskliniek bezorgd, maar ook vaak in combinatie met groesbeek leveringen, want hoeft nooit vroeg",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:61771",
+    customerNumbers: ["61771"],
+    customerName: "Gasterij de Arend",
+    deliveryWindow: "10:00 - 14:00",
+    address: "Notaris Stefanus roesstr 28 Winssen",
+    routeNote:
+      "Wordt altijd na winkel Lent bezorgd in Winssen, geen specifieke tijd maar wel bevroren producten dus niet te lang in de bus",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:61956",
+    customerNumbers: ["61956"],
+    customerName: "Pret Inn",
+    deliveryWindow: "07:00 - 10:00",
+    address: "Bolder 18 Malden",
+    routeNote:
+      "Wordt vaak direct na 1e ronde winkels bezorgd bij route Malden (Ah malden, jachtslot, etc)",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:62705",
+    customerNumbers: ["62705"],
+    customerName: "Vermaat",
+    deliveryWindow: "08:30 - 09:15",
+    address: "Geert Groteplein Zuid",
+    routeNote: "Wordt direct na winkel Heyendaal of Daal bezorgd want moet vroeg",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:63840-63872-64126",
+    customerNumbers: ["63840", "63872", "64126"],
+    customerName: "Buren, Stadsherberg en Koffiehuis Gennep",
+    deliveryWindow: "10:00 - 14:00",
+    address: "Zandstraat 1 Gennep",
+    routeNote:
+      "Liggen alle 3 naast elkaar, worden altijd als 2e ronde bezorgd op vaste dagen dat ze bestellen met AH gennep ivt",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:64042",
+    customerNumbers: ["64042"],
+    customerName: "Dries en Co",
+    deliveryWindow: "08:00 - 11:00",
+    address: "Valburgseweg 18C Elst",
+    routeNote: "Wordt1e ronde na winkel Lent bezorgd",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:64105",
+    customerNumbers: ["64105"],
+    customerName: "Jachtslot Mookerheide",
+    deliveryWindow:
+      "09:00 - 10:30 doordeweeks en 09:00 - 10:00 in het weekend",
+    address: "Heumensebaan 2 Molenhoek",
+    routeNote:
+      "Wordt direct na de 1e ronde bezorgd, als eerste van de 2e ronde (soms aan het einde van 1e ronde) vanwege vroege levering",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:64398",
+    customerNumbers: ["64398"],
+    customerName: "Restaurant Steven",
+    deliveryWindow: "10:00 - 14:00",
+    address: "Stikke Hezelstraat 54 Nijmegen",
+    routeNote:
+      "Wordt met stadroute bezorgd, mag 2e ronde, meestal gecombineerd met Ziekerstraat, Credible, Brasserie Jan en andere centrum adressen",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:64404",
+    customerNumbers: ["64404"],
+    customerName: "Brasserie Jan",
+    deliveryWindow: "10:00 - 14:00",
+    address: "Grote Markt 32",
+    routeNote:
+      "Wordt met stadroute bezorgd, mag 2e ronde, meestal gecombineerd met Ziekerstraat, Credible, Restaurant Steven en andere centrum adressen",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:64408",
+    customerNumbers: ["64408"],
+    customerName: "Hotel Credible",
+    deliveryWindow: "08:00 - 14:00",
+    address: "Hertogstraat 1",
+    routeNote:
+      "Wordt met stadroute bezorgd, mag 2e ronde, meestal gecombineerd met Ziekerstraat, Brasserie Jan, Restaurant Steven en andere centrum adressen",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:64466",
+    customerNumbers: ["64466"],
+    customerName: "Food&I Locatie NXP",
+    deliveryWindow: "08:00 - 10:00",
+    address: "Gerstweg 2",
+    routeNote: "Wordt na winkel Lent bezorgd op 1e route",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+  {
+    id: "fixed:64542",
+    customerNumbers: ["64542"],
+    customerName: "Blue by MANNA",
+    deliveryWindow: "10:00 - 14:00",
+    address: "Oranjesingel 14-20",
+    routeNote:
+      "Wordt met stadroute bezorgd, mag 2e ronde, meestal gecombineerd met Ziekerstraat, Brasserie Jan, Restaurant Steven en andere centrum adressen",
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  },
+];
+
 function emptyLogisticsState(): LogisticsState {
   return { batches: [] };
 }
@@ -93,7 +275,10 @@ function emptyLogisticsRouteLearningState(): LogisticsRouteLearningState {
 }
 
 function emptyLogisticsFixedCustomersState(): LogisticsFixedCustomersState {
-  return { customers: [], updatedAt: new Date(0).toISOString() };
+  return {
+    customers: DEFAULT_LOGISTICS_FIXED_CUSTOMERS,
+    updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  };
 }
 
 function isLogisticsBatch(value: unknown): value is LogisticsBatch {
