@@ -107,6 +107,10 @@ export const revenueShops: RevenueShop[] = [
   "Lent",
 ];
 
+const cashRecordNotePrefix = "[[strik-cash-record:";
+const cashDepositNotePrefix = "[[strik-cash-deposit:";
+const cashNoteSuffix = "]]";
+
 const shopAliases: Record<string, RevenueShop> = {
   heyendaal: "Heyendaal",
   heyendaalseweg: "Heyendaal",
@@ -127,6 +131,148 @@ function numberFrom(value: unknown) {
 
 function textFrom(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function cleanRevenueNote(value: unknown) {
+  return stripEncodedRevenueCashNotes(textFrom(value));
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extractEncodedRevenueNotePayloads(note: string, prefix: string) {
+  const pattern = new RegExp(
+    `${escapeRegExp(prefix)}([^\\]]+)${escapeRegExp(cashNoteSuffix)}`,
+    "g"
+  );
+  const payloads: unknown[] = [];
+
+  for (const match of note.matchAll(pattern)) {
+    try {
+      payloads.push(JSON.parse(decodeURIComponent(match[1] || "")));
+    } catch {
+      // Ignore unreadable legacy payloads and keep the visible note usable.
+    }
+  }
+
+  return payloads;
+}
+
+function stripEncodedRevenueCashNotes(note: string) {
+  const patterns = [cashRecordNotePrefix, cashDepositNotePrefix].map(
+    (prefix) =>
+      new RegExp(
+        `\\s*${escapeRegExp(prefix)}[^\\]]+${escapeRegExp(cashNoteSuffix)}`,
+        "g"
+      )
+  );
+
+  return patterns.reduce((result, pattern) => result.replace(pattern, ""), note).trim();
+}
+
+function compactCashRecordPayload(record: RevenueCashRecord) {
+  return {
+    d: record.denominations,
+    dt: record.denominationTotal,
+    cc: record.countedCash,
+    sc: record.startCash,
+    cr: record.cashRevenue,
+    ec: record.expectedCash,
+    df: record.difference,
+    cb: record.countedBy,
+    oa: record.openedAt,
+    ca: record.closedAt,
+    cha: record.checkedAt,
+    chb: record.checkedBy,
+    n: record.note,
+    s: record.source,
+    m: record.messageId,
+    ia: record.importedAt,
+    ua: record.updatedAt,
+  };
+}
+
+function expandCashRecordPayload(
+  payload: unknown,
+  date: string,
+  shop: RevenueShop
+): unknown {
+  if (!isRecord(payload)) return null;
+
+  return {
+    date,
+    shop,
+    denominations: payload.denominations || payload.d,
+    denominationTotal: payload.denominationTotal ?? payload.dt,
+    countedCash: payload.countedCash ?? payload.cc,
+    startCash: payload.startCash ?? payload.sc,
+    cashRevenue: payload.cashRevenue ?? payload.cr,
+    expectedCash: payload.expectedCash ?? payload.ec,
+    difference: payload.difference ?? payload.df,
+    countedBy: payload.countedBy ?? payload.cb,
+    openedAt: payload.openedAt ?? payload.oa,
+    closedAt: payload.closedAt ?? payload.ca,
+    checkedAt: payload.checkedAt ?? payload.cha,
+    checkedBy: payload.checkedBy ?? payload.chb,
+    note: payload.note ?? payload.n,
+    source: payload.source ?? payload.s,
+    messageId: payload.messageId ?? payload.m,
+    importedAt: payload.importedAt ?? payload.ia,
+    updatedAt: payload.updatedAt ?? payload.ua,
+  };
+}
+
+function compactCashDepositPayload(deposit: RevenueCashDeposit) {
+  return {
+    a: deposit.amount,
+    df: deposit.dateFrom,
+    dt: deposit.dateTo,
+    ids: deposit.cashRecordIds,
+    da: deposit.depositedAt,
+    db: deposit.depositedBy,
+    n: deposit.note,
+    ca: deposit.createdAt,
+    ua: deposit.updatedAt,
+  };
+}
+
+function expandCashDepositPayload(
+  payload: unknown,
+  year: number,
+  week: number,
+  shop: RevenueShop
+): unknown {
+  if (!isRecord(payload)) return null;
+
+  return {
+    year,
+    week,
+    shop,
+    amount: payload.amount ?? payload.a,
+    dateFrom: payload.dateFrom ?? payload.df,
+    dateTo: payload.dateTo ?? payload.dt,
+    cashRecordIds: payload.cashRecordIds ?? payload.ids,
+    depositedAt: payload.depositedAt ?? payload.da,
+    depositedBy: payload.depositedBy ?? payload.db,
+    note: payload.note ?? payload.n,
+    createdAt: payload.createdAt ?? payload.ca,
+    updatedAt: payload.updatedAt ?? payload.ua,
+  };
+}
+
+function encodedRevenueNote(prefix: string, payload: unknown) {
+  return `${prefix}${encodeURIComponent(JSON.stringify(payload))}${cashNoteSuffix}`;
+}
+
+function noteWithEncodedRevenueCashPayload(
+  note: string | undefined,
+  prefix: string,
+  payload: unknown
+) {
+  return [stripEncodedRevenueCashNotes(note || ""), encodedRevenueNote(prefix, payload)]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function createRevenueKey(
@@ -263,7 +409,7 @@ export function normalizeRevenueRecord(value: unknown): RevenueRecord | null {
     week,
     shop,
     amount: Math.max(0, Number(amount.toFixed(2))),
-    note: textFrom(value.note),
+    note: cleanRevenueNote(value.note),
     source: normalizeRevenueSource(value.source, "manual"),
     updatedAt: textFrom(value.updatedAt) || undefined,
   };
@@ -290,7 +436,7 @@ export function normalizeRevenueDayRecord(value: unknown): RevenueDayRecord | nu
     week,
     shop,
     amount: Math.max(0, Number(amount.toFixed(2))),
-    note: textFrom(value.note),
+    note: cleanRevenueNote(value.note),
     source:
       source === "excel"
         ? "dagafsluiting"
@@ -299,6 +445,60 @@ export function normalizeRevenueDayRecord(value: unknown): RevenueDayRecord | nu
     importedAt: textFrom(value.importedAt) || undefined,
     updatedAt: textFrom(value.updatedAt) || undefined,
   };
+}
+
+function extractEmbeddedCashRecords(value: unknown): RevenueCashRecord[] {
+  if (!isRecord(value) || !Array.isArray(value.dailyRecords)) return [];
+
+  return value.dailyRecords.flatMap((record) => {
+    if (!isRecord(record)) return [];
+
+    const date = parseIsoDate(record.date);
+    const shop = normalizeRevenueShop(record.shop);
+    if (!date || !shop) return [];
+
+    const dateKey = date.toISOString().slice(0, 10);
+    const payloads = extractEncodedRevenueNotePayloads(
+      textFrom(record.note),
+      cashRecordNotePrefix
+    );
+
+    return payloads.flatMap((payload) => {
+      const normalized = normalizeRevenueCashRecord(
+        expandCashRecordPayload(payload, dateKey, shop)
+      );
+
+      return normalized ? [normalized] : [];
+    });
+  });
+}
+
+function extractEmbeddedCashDeposits(value: unknown): RevenueCashDeposit[] {
+  if (!isRecord(value) || !Array.isArray(value.records)) return [];
+
+  return value.records.flatMap((record) => {
+    if (!isRecord(record)) return [];
+
+    const year = Math.trunc(numberFrom(record.year));
+    const week = Math.trunc(numberFrom(record.week));
+    const shop = normalizeRevenueShop(record.shop);
+    if (year < 2020 || year > 2100 || week < 1 || week > 53 || !shop) {
+      return [];
+    }
+
+    const payloads = extractEncodedRevenueNotePayloads(
+      textFrom(record.note),
+      cashDepositNotePrefix
+    );
+
+    return payloads.flatMap((payload) => {
+      const normalized = normalizeRevenueCashDeposit(
+        expandCashDepositPayload(payload, year, week, shop)
+      );
+
+      return normalized ? [normalized] : [];
+    });
+  });
 }
 
 export function normalizeRevenueCashRecord(
@@ -407,13 +607,15 @@ export function normalizeRevenueData(value: unknown): RevenueData {
         return normalized ? [normalized] : [];
       })
     : [];
-  const cashRecords = Array.isArray(value.cashRecords)
+  const embeddedCashRecords = extractEmbeddedCashRecords(value);
+  const directCashRecords = Array.isArray(value.cashRecords)
     ? value.cashRecords.flatMap((record) => {
         const normalized = normalizeRevenueCashRecord(record);
         return normalized ? [normalized] : [];
       })
     : [];
-  const cashDeposits = Array.isArray(value.cashDeposits)
+  const embeddedCashDeposits = extractEmbeddedCashDeposits(value);
+  const directCashDeposits = Array.isArray(value.cashDeposits)
     ? value.cashDeposits.flatMap((record) => {
         const normalized = normalizeRevenueCashDeposit(record);
         return normalized ? [normalized] : [];
@@ -423,9 +625,73 @@ export function normalizeRevenueData(value: unknown): RevenueData {
   return {
     records,
     dailyRecords,
-    cashRecords,
-    cashDeposits,
+    cashRecords: mergeRevenueCashRecords(embeddedCashRecords, directCashRecords),
+    cashDeposits: mergeRevenueCashDeposits(
+      embeddedCashDeposits,
+      directCashDeposits
+    ),
     updatedAt: textFrom(value.updatedAt) || undefined,
+  };
+}
+
+export function embedRevenueCashDataInNotes(data: RevenueData): RevenueData {
+  const cashRecordByKey = new Map(
+    (data.cashRecords || []).map((record) => [
+      createRevenueCashKey(record.date, record.shop),
+      record,
+    ])
+  );
+  const cashDepositByKey = new Map(
+    (data.cashDeposits || []).map((deposit) => [
+      createRevenueCashDepositKey(deposit.year, deposit.week, deposit.shop),
+      deposit,
+    ])
+  );
+
+  return {
+    ...data,
+    records: data.records.map((record) => {
+      const deposit = cashDepositByKey.get(
+        createRevenueCashDepositKey(record.year, record.week, record.shop)
+      );
+
+      if (!deposit) {
+        return {
+          ...record,
+          note: stripEncodedRevenueCashNotes(record.note || ""),
+        };
+      }
+
+      return {
+        ...record,
+        note: noteWithEncodedRevenueCashPayload(
+          record.note,
+          cashDepositNotePrefix,
+          compactCashDepositPayload(deposit)
+        ),
+      };
+    }),
+    dailyRecords: (data.dailyRecords || []).map((record) => {
+      const cashRecord = cashRecordByKey.get(
+        createRevenueCashKey(record.date, record.shop)
+      );
+
+      if (!cashRecord) {
+        return {
+          ...record,
+          note: stripEncodedRevenueCashNotes(record.note || ""),
+        };
+      }
+
+      return {
+        ...record,
+        note: noteWithEncodedRevenueCashPayload(
+          record.note,
+          cashRecordNotePrefix,
+          compactCashRecordPayload(cashRecord)
+        ),
+      };
+    }),
   };
 }
 

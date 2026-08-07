@@ -3,6 +3,7 @@ import "server-only";
 import { excelRevenueSeed } from "./revenueSeed";
 import {
   createWeeklyRevenueRecordsFromDays,
+  embedRevenueCashDataInNotes,
   mergeRevenueCashDeposits,
   mergeRevenueCashRecords,
   mergeRevenueDayRecords,
@@ -129,7 +130,7 @@ export async function getMergedRevenueData() {
 }
 
 export async function saveRevenueData(data: RevenueData) {
-  const normalized = normalizeRevenueData(data);
+  const normalized = embedRevenueCashDataInNotes(normalizeRevenueData(data));
   const response = await fetch(getWordPressRevenueUrl(), {
     method: "PUT",
     headers: {
