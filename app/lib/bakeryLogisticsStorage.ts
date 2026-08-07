@@ -3,6 +3,7 @@ import "server-only";
 import type {
   LogisticsBatch,
   LogisticsDayFeedback,
+  LogisticsFixedCustomer,
   LogisticsLoadPressure,
   LogisticsReceiptOverride,
   LogisticsRouteDraft,
@@ -25,6 +26,7 @@ const LOGISTICS_RECEIPT_OVERRIDES_SETTING_KEY =
 const LOGISTICS_DAY_FEEDBACK_SETTING_KEY = "bakery_logistics_day_feedback";
 const LOGISTICS_ROUTE_DRAFTS_SETTING_KEY = "bakery_logistics_route_drafts";
 const LOGISTICS_ROUTE_LEARNING_SETTING_KEY = "bakery_logistics_route_learning";
+const LOGISTICS_FIXED_CUSTOMERS_SETTING_KEY = "bakery_logistics_fixed_customers";
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
 const MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES = 5_500_000;
@@ -35,6 +37,7 @@ const MAX_STORED_ROUTE_DRAFTS = 180;
 const MAX_STORED_ROUTE_LEARNING_OBSERVATIONS = 180;
 const MAX_ROUTE_LEARNING_STOPS = 500;
 const MAX_ROUTE_LEARNING_PAIRS = 800;
+const MAX_STORED_FIXED_CUSTOMERS = 1000;
 
 type LogisticsState = {
   batches: LogisticsBatch[];
@@ -60,6 +63,11 @@ type LogisticsRouteLearningState = {
   observations: LogisticsRouteLearningObservation[];
 };
 
+type LogisticsFixedCustomersState = {
+  customers: LogisticsFixedCustomer[];
+  updatedAt: string;
+};
+
 function emptyLogisticsState(): LogisticsState {
   return { batches: [] };
 }
@@ -82,6 +90,10 @@ function emptyLogisticsRouteDraftsState(): LogisticsRouteDraftsState {
 
 function emptyLogisticsRouteLearningState(): LogisticsRouteLearningState {
   return { observations: [] };
+}
+
+function emptyLogisticsFixedCustomersState(): LogisticsFixedCustomersState {
+  return { customers: [], updatedAt: new Date(0).toISOString() };
 }
 
 function isLogisticsBatch(value: unknown): value is LogisticsBatch {
@@ -255,6 +267,67 @@ function isLogisticsRouteLearningObservation(
   );
 }
 
+function isLogisticsFixedCustomer(value: unknown): value is LogisticsFixedCustomer {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as LogisticsFixedCustomer).id === "string" &&
+      Array.isArray((value as LogisticsFixedCustomer).customerNumbers) &&
+      typeof (value as LogisticsFixedCustomer).customerName === "string" &&
+      typeof (value as LogisticsFixedCustomer).deliveryWindow === "string" &&
+      typeof (value as LogisticsFixedCustomer).address === "string" &&
+      typeof (value as LogisticsFixedCustomer).routeNote === "string" &&
+      typeof (value as LogisticsFixedCustomer).updatedAt === "string"
+  );
+}
+
+function cleanFixedCustomerText(value: unknown, maxLength = 500) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function cleanFixedCustomerNumbers(value: unknown) {
+  const rawValues = Array.isArray(value) ? value : String(value || "").split(",");
+  const numbers = rawValues
+    .flatMap((item) => String(item || "").match(/\d{2,}/g) || [])
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(numbers));
+}
+
+function normalizeLogisticsFixedCustomer(
+  value: unknown
+): LogisticsFixedCustomer | null {
+  if (!value || typeof value !== "object") return null;
+
+  const raw = value as Partial<LogisticsFixedCustomer>;
+  const customerNumbers = cleanFixedCustomerNumbers(raw.customerNumbers);
+  const customerName = cleanFixedCustomerText(raw.customerName, 200);
+  const deliveryWindow = cleanFixedCustomerText(raw.deliveryWindow, 180);
+  const address = cleanFixedCustomerText(raw.address, 240);
+  const routeNote = cleanFixedCustomerText(raw.routeNote, 800);
+  const updatedAt = cleanFixedCustomerText(raw.updatedAt, 80) || new Date().toISOString();
+  const id =
+    cleanFixedCustomerText(raw.id, 160) ||
+    `fixed:${customerNumbers.join("-") || customerName.toLowerCase()}`;
+
+  if (!customerName && customerNumbers.length === 0) return null;
+
+  return {
+    id,
+    customerNumbers,
+    customerName,
+    deliveryWindow,
+    address,
+    routeNote,
+    updatedAt,
+  };
+}
+
 function normalizeLogisticsState(value: unknown): LogisticsState {
   if (!value || typeof value !== "object") return emptyLogisticsState();
 
@@ -393,6 +466,44 @@ function normalizeLogisticsRouteLearningState(
   };
 }
 
+function normalizeLogisticsFixedCustomersState(
+  value: unknown
+): LogisticsFixedCustomersState {
+  if (!value || typeof value !== "object") {
+    return emptyLogisticsFixedCustomersState();
+  }
+
+  const rawCustomers = (value as { customers?: unknown }).customers;
+  const rawUpdatedAt = (value as { updatedAt?: unknown }).updatedAt;
+  if (!Array.isArray(rawCustomers)) return emptyLogisticsFixedCustomersState();
+
+  const customerById = new Map<string, LogisticsFixedCustomer>();
+  rawCustomers
+    .map((customer) =>
+      isLogisticsFixedCustomer(customer)
+        ? normalizeLogisticsFixedCustomer(customer)
+        : normalizeLogisticsFixedCustomer(customer)
+    )
+    .forEach((customer) => {
+      if (!customer) return;
+      customerById.set(customer.id, customer);
+    });
+  const customers = Array.from(customerById.values()).slice(
+    0,
+    MAX_STORED_FIXED_CUSTOMERS
+  );
+  const updatedAt =
+    cleanFixedCustomerText(rawUpdatedAt, 80) ||
+    customers.reduce(
+      (latest, customer) =>
+        customer.updatedAt > latest ? customer.updatedAt : latest,
+      ""
+    ) ||
+    new Date(0).toISOString();
+
+  return { customers, updatedAt };
+}
+
 function toJson(
   value:
     | LogisticsState
@@ -401,6 +512,7 @@ function toJson(
     | LogisticsDayFeedbackState
     | LogisticsRouteDraftsState
     | LogisticsRouteLearningState
+    | LogisticsFixedCustomersState
 ): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
 }
@@ -1123,6 +1235,35 @@ export async function readLogisticsRouteLearningState() {
   return normalizeLogisticsRouteLearningState(data.value);
 }
 
+async function writeLogisticsFixedCustomersState(
+  state: LogisticsFixedCustomersState
+) {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_FIXED_CUSTOMERS_SETTING_KEY,
+      value: toJson(state),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
+}
+
+export async function readLogisticsFixedCustomersState() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", LOGISTICS_FIXED_CUSTOMERS_SETTING_KEY)
+    .maybeSingle();
+
+  if (error || !data) return emptyLogisticsFixedCustomersState();
+
+  return normalizeLogisticsFixedCustomersState(data.value);
+}
+
 export async function getLogisticsBatchForDate(date: string) {
   const state = await readLogisticsState();
 
@@ -1178,6 +1319,29 @@ export async function getLogisticsRouteLearning() {
   return summarizeLogisticsRouteLearning({
     observations: [...state.observations, ...draftObservations],
   });
+}
+
+export async function getLogisticsFixedCustomers() {
+  const state = await readLogisticsFixedCustomersState();
+
+  return state.customers;
+}
+
+export async function replaceLogisticsFixedCustomers(
+  customers: LogisticsFixedCustomer[]
+) {
+  const updatedAt = new Date().toISOString();
+  const state = normalizeLogisticsFixedCustomersState({
+    customers: customers.map((customer) => ({
+      ...customer,
+      updatedAt: customer.updatedAt || updatedAt,
+    })),
+    updatedAt,
+  });
+
+  await writeLogisticsFixedCustomersState(state);
+
+  return state.customers;
 }
 
 export async function upsertLogisticsBatch(batch: LogisticsBatch) {

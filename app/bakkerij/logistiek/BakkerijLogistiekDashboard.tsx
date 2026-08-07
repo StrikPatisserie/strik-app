@@ -6,6 +6,7 @@ import type {
   LogisticsBatch,
   LogisticsBatchStatus,
   LogisticsDayFeedback,
+  LogisticsFixedCustomer,
   LogisticsFulfillment,
   LogisticsLoadPressure,
   LogisticsReceipt,
@@ -150,6 +151,7 @@ type ReceiptOverrideSummary = LogisticsReceiptOverride;
 type WebshopImageSummary = LogisticsWebshopImage;
 type RouteDraftSummary = LogisticsRouteDraft;
 type RouteLearningSummary = LogisticsRouteLearning;
+type FixedCustomerSummary = LogisticsFixedCustomer;
 
 type MarzipanPrintShape = "square" | "round";
 
@@ -581,6 +583,142 @@ function applyReceiptOverrides(
       note: override.routeNote || receipt.note,
       customerNote: receipt.customerNote,
       internalNote: nextInternalNote,
+    };
+  });
+}
+
+function fixedCustomerNumbersForReceipt(receipt: ReceiptSummary) {
+  const values = [
+    receipt.receiptNumber,
+    /^\d{2,}$/.test(receipt.id) ? receipt.id : "",
+  ]
+    .flatMap((value) => String(value || "").match(/\d{2,}/g) || [])
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(values));
+}
+
+function fieldLooksMissing(value: string | undefined) {
+  const clean = String(value || "").trim();
+
+  return (
+    !clean ||
+    /^adres controleren$/i.test(clean) ||
+    /^alternatief adres/i.test(clean)
+  );
+}
+
+function fixedCustomerMatchesByText(
+  receipt: ReceiptSummary,
+  fixedCustomer: FixedCustomerSummary
+) {
+  const receiptCustomer = normalizeMatchText(receipt.customer);
+  const receiptAddress = normalizeMatchText(
+    [receipt.address, receipt.deliveryAddress, receipt.alternativeAddress || ""].join(
+      " "
+    )
+  );
+  const fixedName = normalizeMatchText(fixedCustomer.customerName);
+  const fixedAddress = normalizeMatchText(fixedCustomer.address);
+  if (receiptCustomer.length < 3 || fixedName.length < 5) return false;
+
+  const nameWords = significantWords(fixedCustomer.customerName);
+  const addressWords = significantWords(fixedCustomer.address);
+  const nameMatch =
+    receiptCustomer.includes(fixedName) ||
+    fixedName.includes(receiptCustomer) ||
+    nameWords.some((word) => hasNormalizedWord(receiptCustomer, word));
+  const addressMatch =
+    !fixedAddress ||
+    receiptAddress.includes(fixedAddress) ||
+    addressWords.some((word) => hasNormalizedWord(receiptAddress, word));
+
+  return Boolean(nameMatch && addressMatch);
+}
+
+function fixedCustomerForReceipt(
+  receipt: ReceiptSummary,
+  fixedCustomers: FixedCustomerSummary[]
+) {
+  if (!fixedCustomers.length) return null;
+
+  const receiptNumbers = new Set(fixedCustomerNumbersForReceipt(receipt));
+  const numberMatch = fixedCustomers.find((fixedCustomer) =>
+    fixedCustomer.customerNumbers.some((number) => receiptNumbers.has(number))
+  );
+  if (numberMatch) return numberMatch;
+
+  return (
+    fixedCustomers.find((fixedCustomer) =>
+      fixedCustomerMatchesByText(receipt, fixedCustomer)
+    ) || null
+  );
+}
+
+function receiptHasBonDeliveryWindow(receipt: ReceiptSummary) {
+  return Boolean(receiptOperationalTime(receipt));
+}
+
+function appendRouteNote(base: string, addition: string) {
+  const cleanBase = String(base || "").trim();
+  const cleanAddition = addition.replace(/\s+/g, " ").trim();
+  if (!cleanAddition) return cleanBase;
+  if (!cleanBase) return cleanAddition;
+  if (/^geen aparte/i.test(cleanBase)) return cleanAddition;
+
+  const normalizedBase = normalizeMatchText(cleanBase);
+  const normalizedAddition = normalizeMatchText(cleanAddition);
+  if (
+    normalizedAddition &&
+    normalizedBase.includes(normalizedAddition.slice(0, 80))
+  ) {
+    return cleanBase;
+  }
+
+  return `${cleanBase} · ${cleanAddition}`;
+}
+
+function applyFixedCustomerDefaults(
+  receipts: ReceiptSummary[],
+  fixedCustomers: FixedCustomerSummary[]
+): ReceiptSummary[] {
+  if (!fixedCustomers.length) return receipts;
+
+  return receipts.map((receipt) => {
+    const fixedCustomer = fixedCustomerForReceipt(receipt, fixedCustomers);
+    if (!fixedCustomer) return receipt;
+
+    const hasBonTime = receiptHasBonDeliveryWindow(receipt);
+    const fixedNotes = [
+      !hasBonTime && fixedCustomer.deliveryWindow
+        ? `Vaste levertijd ${fixedCustomer.deliveryWindow}`
+        : "",
+      fixedCustomer.routeNote ? `Vaste route: ${fixedCustomer.routeNote}` : "",
+    ].filter(Boolean);
+    const visibleFixedNote = fixedNotes.join(" · ");
+    const tags = receipt.tags.includes("vaste klant")
+      ? receipt.tags
+      : [...receipt.tags, "vaste klant"];
+
+    return {
+      ...receipt,
+      time:
+        hasBonTime || !fixedCustomer.deliveryWindow
+          ? receipt.time
+          : fixedCustomer.deliveryWindow,
+      address: fieldLooksMissing(receipt.address)
+        ? fixedCustomer.address || receipt.address
+        : receipt.address,
+      deliveryAddress: fieldLooksMissing(receipt.deliveryAddress)
+        ? fixedCustomer.address || receipt.deliveryAddress
+        : receipt.deliveryAddress,
+      tags,
+      customerNote: appendRouteNote(receipt.customerNote, visibleFixedNote),
+      internalNote: fixedNotes.reduce(
+        (note, fixedNote) => appendRouteNote(note, fixedNote),
+        receipt.internalNote
+      ),
     };
   });
 }
@@ -3443,6 +3581,7 @@ function receiptStopBadges(receipt: ReceiptSummary) {
   const iceTubs = iceTubCountForReceipt(receipt);
 
   if (fulfillment === "afhalen") badges.push("afhaal");
+  if (receipt.tags.includes("vaste klant")) badges.push("vast");
   if (isIceReceiptSummary(receipt)) badges.push("ijs");
   if (iceTubs > 0) badges.push(`${iceTubs} ijs`);
   if (isLargeReceipt(receipt)) badges.push("groot");
@@ -3452,6 +3591,13 @@ function receiptStopBadges(receipt: ReceiptSummary) {
   if (receipt.value) badges.push(formatCurrency(receipt.value));
 
   return badges.slice(0, 3);
+}
+
+function receiptFixedRouteHint(receipt: ReceiptSummary) {
+  const match = receipt.customerNote.match(/Vaste route:\s*([^·]+)/i);
+  if (!match) return "";
+
+  return match[1].replace(/\s+/g, " ").trim().slice(0, 110);
 }
 
 function routeLearningKeyPart(value: string) {
@@ -3530,6 +3676,7 @@ function routeLearningPairSamples(
 function routeStopForReceipt(receipt: ReceiptSummary, prefix = ""): RouteStop {
   const target = receiptTargetLine(receipt);
   const time = routeTimeLabel(receipt);
+  const fixedRouteHint = receiptFixedRouteHint(receipt);
 
   return {
     id: `${prefix}${receipt.id}`,
@@ -3539,7 +3686,9 @@ function routeStopForReceipt(receipt: ReceiptSummary, prefix = ""): RouteStop {
     learningTarget: target,
     learningKind: "receipt",
     label: receipt.customer,
-    detail: `${time} · ${target}`,
+    detail: [time, target, fixedRouteHint ? `vast: ${fixedRouteHint}` : ""]
+      .filter(Boolean)
+      .join(" · "),
     badges: receiptStopBadges(receipt),
   };
 }
@@ -5640,6 +5789,9 @@ export default function BakkerijLogistiekDashboard() {
   const [routeDraft, setRouteDraft] = useState<RouteDraftSummary | null>(null);
   const [routeLearning, setRouteLearning] =
     useState<RouteLearningSummary | null>(null);
+  const [fixedCustomers, setFixedCustomers] = useState<FixedCustomerSummary[]>(
+    []
+  );
   const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
   const [batchReloadCounter, setBatchReloadCounter] = useState(0);
   const [routeSaveState, setRouteSaveState] = useState<RouteSaveState>("idle");
@@ -5671,13 +5823,16 @@ export default function BakkerijLogistiekDashboard() {
     [selectedPlan, activeImportedBatch]
   );
   const receiptSummaries = useMemo(
-    () =>
-      applyReceiptOverrides(
+    () => {
+      const overriddenReceipts = applyReceiptOverrides(
         baseReceiptSummaries,
         receiptOverrides,
         selectedPlan.date
-      ),
-    [baseReceiptSummaries, receiptOverrides, selectedPlan.date]
+      );
+
+      return applyFixedCustomerDefaults(overriddenReceipts, fixedCustomers);
+    },
+    [baseReceiptSummaries, fixedCustomers, receiptOverrides, selectedPlan.date]
   );
   const pressureOverride = pressureByDate[selectedPlan.date] || "";
   const loadProfile = useMemo(
@@ -5840,6 +5995,7 @@ export default function BakkerijLogistiekDashboard() {
           receiptOverrides?: ReceiptOverrideSummary[];
           routeDraft?: RouteDraftSummary | null;
           routeLearning?: RouteLearningSummary | null;
+          fixedCustomers?: FixedCustomerSummary[];
           message?: string;
         };
 
@@ -5851,6 +6007,7 @@ export default function BakkerijLogistiekDashboard() {
           setReceiptOverrides([]);
           setRouteDraft(null);
           setRouteLearning(null);
+          setFixedCustomers([]);
           if (manualRefresh) {
             setImportMessage(data.message || "Opnieuw ophalen is niet gelukt.");
           }
@@ -5862,6 +6019,7 @@ export default function BakkerijLogistiekDashboard() {
         setReceiptOverrides(data.receiptOverrides || []);
         setRouteDraft(data.routeDraft || null);
         setRouteLearning(data.routeLearning || null);
+        setFixedCustomers(data.fixedCustomers || []);
         setFeedbackByDate((current) => ({
           ...current,
           [dateState.selectedDate]: data.dayFeedback?.text || "",
@@ -5884,6 +6042,7 @@ export default function BakkerijLogistiekDashboard() {
           setReceiptOverrides([]);
           setRouteDraft(null);
           setRouteLearning(null);
+          setFixedCustomers([]);
           if (manualRefresh) setImportMessage("Opnieuw ophalen is niet gelukt.");
         }
       } finally {

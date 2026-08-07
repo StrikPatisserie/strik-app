@@ -3,6 +3,7 @@ import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
 import {
   getLogisticsBatchForDate,
   getLogisticsDayFeedbackForDate,
+  getLogisticsFixedCustomers,
   getLogisticsReceiptOverridesForDate,
   getLogisticsRouteDraftForDate,
   getLogisticsRouteLearning,
@@ -38,6 +39,7 @@ export async function GET(request: Request) {
       dayFeedback,
       routeDraft,
       routeLearning,
+      fixedCustomers,
     ] =
       await Promise.all([
         getLogisticsBatchForDate(date),
@@ -46,6 +48,7 @@ export async function GET(request: Request) {
         getLogisticsDayFeedbackForDate(date),
         getLogisticsRouteDraftForDate(date),
         getLogisticsRouteLearning(),
+        getLogisticsFixedCustomers(),
       ]);
 
     if (debug) {
@@ -94,6 +97,7 @@ export async function GET(request: Request) {
       dayFeedback,
       routeDraft,
       routeLearning,
+      fixedCustomers,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

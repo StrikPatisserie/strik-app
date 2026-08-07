@@ -144,6 +144,16 @@ export type LogisticsRouteLearning = {
   updatedAt: string;
 };
 
+export type LogisticsFixedCustomer = {
+  id: string;
+  customerNumbers: string[];
+  customerName: string;
+  deliveryWindow: string;
+  address: string;
+  routeNote: string;
+  updatedAt: string;
+};
+
 export type LogisticsBatch = {
   id: string;
   date: string;
