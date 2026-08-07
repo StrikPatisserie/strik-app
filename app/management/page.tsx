@@ -40,7 +40,7 @@ const managementGroups: {
         href: "/management/gegevens/geld-tellen",
         label: "Cash",
         title: "Geld tellen",
-        description: "Dagtellingen, weektotalen en stortingen.",
+        description: "Kluiscontrole, weektotalen en stortingen.",
         icon: strikIcons.management,
       },
       {

@@ -10,7 +10,7 @@ export default function CashCountPage() {
     <StrikShell wide>
       <StrikPageHeader
         title="Geld tellen"
-        description="Dagcontrole, weektotalen en definitieve stortingen per filiaal."
+        description="Kluiscontrole door de geldteller, weektotalen en definitieve stortingen per filiaal."
         icon={strikIcons.management}
         kicker="Management"
         tone="honey"

@@ -64,6 +64,8 @@ export type RevenueCashRecord = {
   cashRevenue?: number;
   expectedCash?: number;
   difference?: number;
+  safeCash?: number;
+  safeDifference?: number;
   countedBy?: string;
   openedAt?: string;
   closedAt?: string;
@@ -180,6 +182,8 @@ function compactCashRecordPayload(record: RevenueCashRecord) {
     cr: record.cashRevenue,
     ec: record.expectedCash,
     df: record.difference,
+    sf: record.safeCash,
+    sd: record.safeDifference,
     cb: record.countedBy,
     oa: record.openedAt,
     ca: record.closedAt,
@@ -210,6 +214,8 @@ function expandCashRecordPayload(
     cashRevenue: payload.cashRevenue ?? payload.cr,
     expectedCash: payload.expectedCash ?? payload.ec,
     difference: payload.difference ?? payload.df,
+    safeCash: payload.safeCash ?? payload.sf,
+    safeDifference: payload.safeDifference ?? payload.sd,
     countedBy: payload.countedBy ?? payload.cb,
     openedAt: payload.openedAt ?? payload.oa,
     closedAt: payload.closedAt ?? payload.ca,
@@ -576,6 +582,12 @@ export function normalizeRevenueCashRecord(
         : positiveMoneyFrom(value.expectedCash),
     difference:
       value.difference === undefined ? undefined : moneyFrom(value.difference),
+    safeCash:
+      value.safeCash === undefined ? undefined : positiveMoneyFrom(value.safeCash),
+    safeDifference:
+      value.safeDifference === undefined
+        ? undefined
+        : moneyFrom(value.safeDifference),
     countedBy: textFrom(value.countedBy) || undefined,
     openedAt: textFrom(value.openedAt) || undefined,
     closedAt: textFrom(value.closedAt) || undefined,

@@ -35,7 +35,7 @@ const gegevensItems = [
     href: "/management/gegevens/geld-tellen",
     label: "Cash",
     title: "Geld tellen",
-    description: "Controleer dagtellingen, weektotalen en stortingen.",
+    description: "Controleer kluisgeld, weektotalen en stortingen.",
     icon: strikIcons.management,
     tone: "green" as const,
   },

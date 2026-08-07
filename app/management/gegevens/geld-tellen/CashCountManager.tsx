@@ -2,14 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  cashDenominationTotal,
   cashDenominations,
   createRevenueCashDepositKey,
   createRevenueCashKey,
   mergeRevenueCashDeposits,
   mergeRevenueCashRecords,
   revenueShops,
-  type CashDenominationKey,
   type RevenueCashDeposit,
   type RevenueCashRecord,
   type RevenueData,
@@ -100,46 +98,32 @@ function formatMoney(value: number | undefined) {
   return euroFormatter.format(value || 0);
 }
 
-function numberFrom(value: unknown) {
-  const numberValue = Number(value);
+function safeExpectedCash(record: RevenueCashRecord | undefined) {
+  if (!record) return 0;
 
-  return Number.isFinite(numberValue) ? numberValue : 0;
+  if (record.startCash !== undefined) {
+    return Math.max(
+      0,
+      Number(((record.countedCash || 0) - record.startCash).toFixed(2))
+    );
+  }
+
+  return record.cashRevenue ?? record.countedCash ?? 0;
 }
 
-function blankCashRecord(date: string, shop: RevenueShop): RevenueCashRecord {
-  const parts = weekPartsForDate(date);
-  const now = new Date().toISOString();
+function safeCheckedCash(record: RevenueCashRecord | undefined) {
+  if (!record) return 0;
 
-  return {
-    id: createRevenueCashKey(date, shop),
-    date,
-    year: parts.year,
-    week: parts.week,
-    shop,
-    denominations: {},
-    denominationTotal: 0,
-    countedCash: 0,
-    note: "",
-    source: "manual",
-    importedAt: now,
-    updatedAt: now,
-  };
+  return record.safeCash ?? safeExpectedCash(record);
 }
 
-function recalcCashRecord(record: RevenueCashRecord): RevenueCashRecord {
-  const denominationTotal = cashDenominationTotal(record.denominations);
-  const expectedCash = record.expectedCash;
+function safeDifference(record: RevenueCashRecord | undefined) {
+  if (!record) return 0;
 
-  return {
-    ...record,
-    denominationTotal,
-    countedCash: denominationTotal,
-    difference:
-      expectedCash === undefined
-        ? record.difference
-        : Number((denominationTotal - expectedCash).toFixed(2)),
-    updatedAt: new Date().toISOString(),
-  };
+  return (
+    record.safeDifference ??
+    Number((safeCheckedCash(record) - safeExpectedCash(record)).toFixed(2))
+  );
 }
 
 function findCashRecord(
@@ -182,12 +166,15 @@ function dayName(value: string) {
 }
 
 function cashWarning(record: RevenueCashRecord | undefined) {
-  if (!record) return "Geen geldtelling ontvangen.";
+  if (!record) return "Geen Cash-it dagafsluiting ontvangen.";
   if (Math.abs(record.countedCash - record.denominationTotal) > 0.01) {
-    return "Coupures tellen niet op naar geteld bedrag.";
+    return "Cash-it coupures tellen niet op naar dagafsluiting.";
+  }
+  if (record.checkedAt && Math.abs(safeDifference(record)) > 0.01) {
+    return "Kluis wijkt af van wat volgens Cash-it is weggelegd.";
   }
   if (record.difference !== undefined && Math.abs(record.difference) > 5) {
-    return "Kasverschil is groter dan EUR 5.";
+    return "Kasverschil in de dagafsluiting is groter dan EUR 5.";
   }
 
   return "";
@@ -199,6 +186,7 @@ export default function CashCountManager() {
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
   const [cashRecords, setCashRecords] = useState<RevenueCashRecord[]>([]);
   const [cashDeposits, setCashDeposits] = useState<RevenueCashDeposit[]>([]);
+  const [safeCashDrafts, setSafeCashDrafts] = useState<Record<string, string>>({});
   const [depositDrafts, setDepositDrafts] = useState<Record<string, string>>({});
   const [depositNotes, setDepositNotes] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
@@ -274,7 +262,7 @@ export default function CashCountManager() {
   const dayTotal = useMemo(
     () =>
       dayRecords.reduce(
-        (total, row) => total + (row.record?.countedCash || 0),
+        (total, row) => total + safeExpectedCash(row.record),
         0
       ),
     [dayRecords]
@@ -294,12 +282,16 @@ export default function CashCountManager() {
           (total, record) => total + (record.cashRevenue ?? record.countedCash),
           0
         );
-        const countedCash = shopRecords.reduce(
-          (total, record) => total + record.countedCash,
+        const expectedSafeCash = shopRecords.reduce(
+          (total, record) => total + safeExpectedCash(record),
+          0
+        );
+        const checkedSafeCash = shopRecords.reduce(
+          (total, record) => total + safeCheckedCash(record),
           0
         );
         const difference = shopRecords.reduce(
-          (total, record) => total + (record.difference || 0),
+          (total, record) => total + safeDifference(record),
           0
         );
         const deposit = existingDepositFor(
@@ -313,7 +305,8 @@ export default function CashCountManager() {
           shop,
           records: shopRecords,
           cashRevenue,
-          countedCash,
+          expectedSafeCash,
+          checkedSafeCash,
           difference,
           checkedCount: shopRecords.filter((record) => record.checkedAt).length,
           deposit,
@@ -323,13 +316,29 @@ export default function CashCountManager() {
   );
 
   useEffect(() => {
+    setSafeCashDrafts((current) => {
+      const next = { ...current };
+
+      dayRecords.forEach((row) => {
+        if (!row.record) return;
+
+        const key = `${row.record.date}:${row.shop}`;
+        if (next[key] !== undefined) return;
+        next[key] = formatAmountInput(safeCheckedCash(row.record));
+      });
+
+      return next;
+    });
+  }, [dayRecords]);
+
+  useEffect(() => {
     setDepositDrafts((current) => {
       const next = { ...current };
 
       weekRows.forEach((row) => {
         const key = `${depositWeekKey}:${row.shop}`;
         if (next[key] !== undefined) return;
-        next[key] = formatAmountInput(row.deposit?.amount || row.cashRevenue);
+        next[key] = formatAmountInput(row.deposit?.amount || row.checkedSafeCash);
       });
 
       return next;
@@ -347,50 +356,61 @@ export default function CashCountManager() {
     });
   }, [depositWeekKey, weekRows]);
 
+  function buildUpdatedCashRecords(
+    current: RevenueCashRecord[],
+    shop: RevenueShop,
+    updater: (record: RevenueCashRecord) => RevenueCashRecord
+  ) {
+    const existing = findCashRecord(current, selectedDate, shop);
+    if (!existing) return current;
+
+    const updated = updater(existing);
+
+    return mergeRevenueCashRecords(
+      current.filter((record) => record.id !== updated.id),
+      [updated]
+    );
+  }
+
   function updateCashRecord(
     shop: RevenueShop,
     updater: (record: RevenueCashRecord) => RevenueCashRecord
   ) {
-    setCashRecords((current) => {
-      const existing = findCashRecord(current, selectedDate, shop);
-      const base = existing || blankCashRecord(selectedDate, shop);
-      const updated = updater(base);
-
-      return mergeRevenueCashRecords(
-        current.filter((record) => record.id !== updated.id),
-        [updated]
-      );
-    });
+    setCashRecords((current) => buildUpdatedCashRecords(current, shop, updater));
   }
 
-  function updateDenomination(
-    shop: RevenueShop,
-    key: CashDenominationKey,
-    value: string
-  ) {
-    updateCashRecord(shop, (record) =>
-      recalcCashRecord({
-        ...record,
-        denominations: {
-          ...record.denominations,
-          [key]: Math.max(0, Math.trunc(numberFrom(value))),
-        },
-      })
+  async function markChecked(shop: RevenueShop) {
+    const key = `${selectedDate}:${shop}`;
+    const now = new Date().toISOString();
+    const nextCashRecords = buildUpdatedCashRecords(
+      cashRecords,
+      shop,
+      (record) => {
+        const safeCash = parseAmount(
+          safeCashDrafts[key] || formatAmountInput(safeCheckedCash(record))
+        );
+
+        return {
+          ...record,
+          safeCash,
+          safeDifference: Number((safeCash - safeExpectedCash(record)).toFixed(2)),
+          checkedAt: now,
+          checkedBy: "Geld teller",
+          updatedAt: now,
+        };
+      }
     );
+
+    setCashRecords(nextCashRecords);
+    await saveCash(cashDeposits, nextCashRecords);
   }
 
-  function markChecked(shop: RevenueShop) {
-    updateCashRecord(shop, (record) => ({
-      ...recalcCashRecord(record),
-      checkedAt: new Date().toISOString(),
-      checkedBy: "Strik app",
-      updatedAt: new Date().toISOString(),
-    }));
-  }
-
-  async function saveCash(nextDeposits = cashDeposits) {
+  async function saveCash(
+    nextDeposits = cashDeposits,
+    nextCashRecords = cashRecords
+  ) {
     setState("saving");
-    setStatus("Geldtelling opslaan...");
+    setStatus("Geldcontrole opslaan...");
 
     try {
       const response = await fetch("/api/management-revenue", {
@@ -401,7 +421,7 @@ export default function CashCountManager() {
         body: JSON.stringify({
           records,
           dailyRecords,
-          cashRecords,
+          cashRecords: nextCashRecords,
           cashDeposits: nextDeposits,
         }),
       });
@@ -413,7 +433,7 @@ export default function CashCountManager() {
       if (!response.ok || !data || !("records" in data)) {
         throw new Error(
           (data && "message" in data && data.message) ||
-            "Geldtelling opslaan is mislukt."
+            "Geldcontrole opslaan is mislukt."
         );
       }
 
@@ -422,17 +442,17 @@ export default function CashCountManager() {
         Array.isArray(data.dailyRecords) ? data.dailyRecords : dailyRecords
       );
       setCashRecords(
-        Array.isArray(data.cashRecords) ? data.cashRecords : cashRecords
+        Array.isArray(data.cashRecords) ? data.cashRecords : nextCashRecords
       );
       setCashDeposits(
         Array.isArray(data.cashDeposits) ? data.cashDeposits : nextDeposits
       );
       setStorage(data.storage);
-      setStatus("Geldtelling opgeslagen.");
+      setStatus("Geldcontrole opgeslagen.");
       setState("ready");
     } catch (error) {
       setStatus(
-        error instanceof Error ? error.message : "Geldtelling opslaan is mislukt."
+        error instanceof Error ? error.message : "Geldcontrole opslaan is mislukt."
       );
       setState("ready");
     }
@@ -491,7 +511,7 @@ export default function CashCountManager() {
             </div>
             <div className="border-r border-[#e7e0d8] px-2 py-1.5">
               <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                Geteld
+                Kluis verwacht
               </p>
               <p className="text-sm font-black text-[#1a1815]">
                 {formatMoney(dayTotal)}
@@ -512,13 +532,13 @@ export default function CashCountManager() {
             disabled={state === "loading" || state === "saving"}
             className="rounded-md bg-[#1a1815] px-3 py-2 text-xs font-black uppercase tracking-normal text-white shadow-sm transition hover:bg-[#3b352f] disabled:opacity-60"
           >
-            {state === "saving" ? "Opslaan..." : "Dag opslaan"}
+            {state === "saving" ? "Opslaan..." : "Wijzigingen opslaan"}
           </button>
         </div>
 
         {storage?.status === "seed" && (
           <p className="mt-2 rounded-md border border-[#f3d4a4] bg-[#fef9f3] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
-            {storage.message} Nieuwe geldtellingen worden pas blijvend opgeslagen
+            {storage.message} Nieuwe geldcontroles worden pas blijvend opgeslagen
             zodra de WordPress omzet-snippet actief is.
           </p>
         )}
@@ -533,6 +553,19 @@ export default function CashCountManager() {
       <section className="grid gap-2 xl:grid-cols-2">
         {dayRecords.map(({ shop, record }) => {
           const warning = cashWarning(record);
+          const safeDraftKey = `${selectedDate}:${shop}`;
+          const safeInputValue =
+            safeCashDrafts[safeDraftKey] ??
+            (record ? formatAmountInput(safeCheckedCash(record)) : "");
+          const safeDraftDifference =
+            record === undefined
+              ? 0
+              : Number((parseAmount(safeInputValue) - safeExpectedCash(record)).toFixed(2));
+          const visibleDenominations = cashDenominations.filter(
+            (denomination) =>
+              record?.denominations[denomination.key] &&
+              Number(record.denominations[denomination.key]) > 0
+          );
 
           return (
             <article
@@ -555,33 +588,40 @@ export default function CashCountManager() {
                   </h2>
                   <p className="mt-0.5 text-[0.68rem] font-bold text-[#6b645b]">
                     {record
-                      ? `${record.openedAt || "open ?"} - ${record.closedAt || "sluit ?"} · ${record.countedBy || "teller onbekend"}`
+                      ? `Cash-it ${record.openedAt || "open ?"} - ${record.closedAt || "sluit ?"} · geteld door ${record.countedBy || "onbekend"}`
                       : "Nog geen Cash-it telling ontvangen."}
                   </p>
                 </div>
                 <button
                   type="button"
                   disabled={!record}
-                  onClick={() => markChecked(shop)}
+                  onClick={() => void markChecked(shop)}
                   className={`rounded-md border px-2 py-1 text-[0.62rem] font-black uppercase tracking-normal ${
                     record?.checkedAt
                       ? "border-[#cbdcc5] bg-[#ecf4ed] text-[#1f4f35]"
                       : "border-[#1a1815] bg-white text-[#1a1815] disabled:border-[#e7e0d8] disabled:text-[#aaa]"
                   }`}
                 >
-                  {record?.checkedAt ? "Gecheckt" : "Afvinken"}
+                  {record?.checkedAt ? "Kluis gecheckt" : "Kluis klopt"}
                 </button>
               </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+              <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
                 <StatBox label="Startgeld" value={formatMoney(record?.startCash)} />
                 <StatBox
                   label="Kasomzet"
                   value={formatMoney(record?.cashRevenue)}
                 />
-                <StatBox label="Geteld" value={formatMoney(record?.countedCash)} />
                 <StatBox
-                  label="Verschil"
+                  label="Cash-it geteld"
+                  value={formatMoney(record?.countedCash)}
+                />
+                <StatBox
+                  label="Kluis verwacht"
+                  value={formatMoney(record ? safeExpectedCash(record) : undefined)}
+                />
+                <StatBox
+                  label="Kasverschil"
                   value={formatMoney(record?.difference)}
                   tone={
                     record?.difference && Math.abs(record.difference) > 0.05
@@ -597,32 +637,59 @@ export default function CashCountManager() {
                 </p>
               )}
 
-              <div className="mt-2 grid grid-cols-3 gap-1 sm:grid-cols-5">
-                {cashDenominations.map((denomination) => (
-                  <label
-                    key={denomination.key}
-                    className="grid gap-0.5 rounded-md border border-[#ece5dd] bg-[#faf8f5] px-1.5 py-1 text-[0.54rem] font-black uppercase tracking-normal text-[#8b8278]"
-                  >
-                    EUR {denomination.label}
-                    <input
-                      value={record?.denominations[denomination.key] || ""}
-                      onChange={(event) =>
-                        updateDenomination(
-                          shop,
-                          denomination.key,
-                          event.target.value
-                        )
-                      }
-                      inputMode="numeric"
-                      placeholder="0"
-                      className="h-7 rounded border border-[#d9d2c9] bg-white px-1.5 text-sm font-black normal-case tracking-normal text-[#1a1815]"
-                    />
-                  </label>
-                ))}
+              <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+                  Kluis geteld
+                  <input
+                    value={safeInputValue}
+                    onChange={(event) =>
+                      setSafeCashDrafts((current) => ({
+                        ...current,
+                        [safeDraftKey]: event.target.value,
+                      }))
+                    }
+                    disabled={!record}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:bg-[#f8f6f3] disabled:text-[#aaa]"
+                  />
+                </label>
+                <StatBox
+                  label="Controleverschil"
+                  value={formatMoney(record ? safeDraftDifference : undefined)}
+                  tone={
+                    record?.checkedAt && Math.abs(safeDraftDifference) > 0.01
+                      ? "warn"
+                      : "normal"
+                  }
+                />
+              </div>
+
+              <div className="mt-2 rounded-md border border-[#ece5dd] bg-[#faf8f5] p-1.5">
+                <p className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
+                  Cash-it coupures
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {visibleDenominations.length ? (
+                    visibleDenominations.map((denomination) => (
+                      <span
+                        key={denomination.key}
+                        className="rounded border border-[#ded5ca] bg-white px-1.5 py-0.5 text-[0.62rem] font-black text-[#1a1815]"
+                      >
+                        {record?.denominations[denomination.key]} x EUR{" "}
+                        {denomination.label}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs font-bold text-[#8b8278]">
+                      Geen coupures ontvangen.
+                    </span>
+                  )}
+                </div>
               </div>
 
               <label className="mt-2 grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                Notitie
+                Controle-notitie
                 <input
                   value={record?.note || ""}
                   onChange={(event) =>
@@ -632,8 +699,9 @@ export default function CashCountManager() {
                       updatedAt: new Date().toISOString(),
                     }))
                   }
-                  placeholder="Bijv. wisselgeld aangepast of kasverschil verklaard"
-                  className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
+                  disabled={!record}
+                  placeholder="Bijv. kluis mist EUR 5 of kasverschil verklaard"
+                  className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:bg-[#f8f6f3] disabled:text-[#aaa]"
                 />
               </label>
             </article>
@@ -648,8 +716,8 @@ export default function CashCountManager() {
               Week {selectedWeek.week} · {selectedWeek.year}
             </h2>
             <p className="text-[0.68rem] font-bold leading-tight text-[#8b8278]">
-              Kasomzet is het advies voor de storting; geteld cash blijft
-              zichtbaar voor controle op startgeld en verschil.
+              De geldteller controleert per dag wat er in de kluis ligt; de
+              weekstorting bundelt die gecontroleerde kluisbedragen.
             </p>
           </div>
         </div>
@@ -661,7 +729,7 @@ export default function CashCountManager() {
             return (
               <article
                 key={row.shop}
-                className="grid gap-2 rounded-md border border-[#e7e0d8] bg-[#faf8f5] p-2 lg:grid-cols-[7rem_repeat(4,minmax(0,1fr))_10rem_10rem_auto] lg:items-center"
+                className="grid gap-2 rounded-md border border-[#e7e0d8] bg-[#faf8f5] p-2 lg:grid-cols-[7rem_repeat(5,minmax(0,1fr))_10rem_10rem_auto] lg:items-center"
               >
                 <h3 className="text-sm font-black text-[#1a1815]">{row.shop}</h3>
                 <StatBox
@@ -669,7 +737,14 @@ export default function CashCountManager() {
                   value={`${row.checkedCount}/${row.records.length}`}
                 />
                 <StatBox label="Kasomzet" value={formatMoney(row.cashRevenue)} />
-                <StatBox label="Geteld" value={formatMoney(row.countedCash)} />
+                <StatBox
+                  label="Kluis verwacht"
+                  value={formatMoney(row.expectedSafeCash)}
+                />
+                <StatBox
+                  label="Kluis geteld"
+                  value={formatMoney(row.checkedSafeCash)}
+                />
                 <StatBox label="Verschil" value={formatMoney(row.difference)} />
                 <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
                   Storting
