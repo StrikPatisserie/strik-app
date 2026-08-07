@@ -296,15 +296,15 @@ const saturdayRouteShopPlan: Record<
 > = {
   A: {
     firstShopKeys: ["heyendaalseweg"],
-    secondShopKeys: ["daalseweg"],
+    secondShopKeys: ["daalseweg", "ziekerstraat"],
     firstShopLabel: "Heyendaal",
-    secondShopLabel: "Daalseweg",
+    secondShopLabel: "Daalseweg + Ziekerstraat",
   },
   B: {
     firstShopKeys: ["lent"],
-    secondShopKeys: ["ziekerstraat"],
+    secondShopKeys: [],
     firstShopLabel: "Lent",
-    secondShopLabel: "Ziekerstraat",
+    secondShopLabel: "resterende stops",
   },
 };
 
@@ -4987,13 +4987,13 @@ function buildSaturdayRouteRounds(
       id: "A",
       title: busRouteMeta.A.title,
       tone: busRouteMeta.A.tone,
-      shopKeys: ["heyendaalseweg", "daalseweg"],
+      shopKeys: ["heyendaalseweg", "daalseweg", "ziekerstraat"],
     }),
     B: createPlannedBus({
       id: "B",
       title: busRouteMeta.B.title,
       tone: busRouteMeta.B.tone,
-      shopKeys: ["lent", "ziekerstraat"],
+      shopKeys: ["lent"],
     }),
   };
   const clusterAssignments = new Map<string, BusId>();
@@ -5010,9 +5010,11 @@ function buildSaturdayRouteRounds(
       routeLearning,
       round: "second",
     });
-    const round = isPriorityEarlyDelivery(receipt)
-      ? "early"
-      : bus === "B" && shouldRideAfterLentOnSaturday(receipt)
+    const round =
+      bus === "B" &&
+      (isPriorityEarlyDelivery(receipt) ||
+        shouldRideAfterLentOnSaturday(receipt) ||
+        !isFlexibleLateDelivery(receipt, plan.date))
         ? "first"
         : "second";
 
@@ -5034,16 +5036,16 @@ function buildSaturdayRouteRounds(
 
   ([buses.A, buses.B] as PlannedBus[]).forEach((bus) => {
     const routePlan = saturdayRouteShopPlan[bus.id];
+    const firstRouteReceipts =
+      bus.id === "A" ? [] : [...bus.early, ...bus.first];
+    const secondRouteReceipts =
+      bus.id === "A"
+        ? [...bus.early, ...bus.first, ...bus.second]
+        : bus.second;
     const firstStops = [
       ...groupShopStops(receipts, routePlan.firstShopKeys, []),
       ...sortReceiptsForRoute(
-        bus.early,
-        bus.shopKeys,
-        plan.date,
-        routeLearning
-      ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-early-`)),
-      ...sortReceiptsForRoute(
-        bus.first,
+        firstRouteReceipts,
         bus.shopKeys,
         plan.date,
         routeLearning
@@ -5052,7 +5054,7 @@ function buildSaturdayRouteRounds(
     const secondStops = [
       ...groupShopStops(receipts, routePlan.secondShopKeys, []),
       ...sortReceiptsForRoute(
-        bus.second,
+        secondRouteReceipts,
         bus.shopKeys,
         plan.date,
         routeLearning
@@ -5076,7 +5078,7 @@ function buildSaturdayRouteRounds(
         reason:
           bus.id === "B"
             ? "Zaterdag: eerst Lent, daarna Gendt/noordkant als die erbij zit; start/eind Ambachtsweg 4."
-            : `Zaterdag: eerst ${routePlan.firstShopLabel}, bus vol laden door drukte; start/eind Ambachtsweg 4.`,
+            : `Zaterdag: alleen ${routePlan.firstShopLabel}; geen externe adressen in deze ronde, daarna terug naar Ambachtsweg 4.`,
         load: routeLoadLineWithFallback(
           routeLoadLineForStops(firstStops),
           "volle bus"
@@ -5093,7 +5095,10 @@ function buildSaturdayRouteRounds(
         departure: plan.isFuture ? "na ronde 1" : "na ronde 1",
         tone: "border-[#efc7b8] bg-[#fff3ed]",
         stops: secondStops,
-        reason: `Zaterdag: daarna ${routePlan.secondShopLabel} en de resterende stops; late deadlines blijven later.`,
+        reason:
+          bus.id === "A"
+            ? `Zaterdag: daarna ${routePlan.secondShopLabel}, daarna alle overige adressen.`
+            : `Zaterdag: daarna ${routePlan.secondShopLabel}; late deadlines blijven later.`,
         load: routeLoadLineWithFallback(
           routeLoadLineForStops(secondStops),
           "winkel + rest"
