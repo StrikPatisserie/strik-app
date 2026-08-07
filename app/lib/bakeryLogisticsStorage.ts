@@ -301,6 +301,57 @@ function isLogisticsWebshopImage(value: unknown): value is LogisticsWebshopImage
   );
 }
 
+function logisticsWebshopImageDuplicateKey(image: LogisticsWebshopImage) {
+  const photoKey = image.photoUrl.startsWith("data:")
+    ? image.photoUrl.slice(0, 4000)
+    : image.photoUrl;
+
+  return [
+    image.deliveryDate,
+    image.matchedReceiptId || image.matchedReceiptNumber || image.orderNumber,
+    image.customerName,
+    image.fileName,
+    image.productSummary || "",
+    photoKey,
+  ]
+    .filter(Boolean)
+    .map((part) => part.trim().toLowerCase())
+    .join("|");
+}
+
+function shouldPreferWebshopImageCandidate(
+  candidate: LogisticsWebshopImage,
+  existing: LogisticsWebshopImage
+) {
+  if (candidate.matchSource === "manual" && existing.matchSource !== "manual") {
+    return true;
+  }
+  if (
+    (candidate.matchedReceiptId || candidate.matchedReceiptNumber) &&
+    !existing.matchedReceiptId &&
+    !existing.matchedReceiptNumber
+  ) {
+    return true;
+  }
+
+  return candidate.importedAt > existing.importedAt;
+}
+
+function dedupeLogisticsWebshopImages(images: LogisticsWebshopImage[]) {
+  const imageByKey = new Map<string, LogisticsWebshopImage>();
+
+  images.forEach((image) => {
+    const key = logisticsWebshopImageDuplicateKey(image) || image.id;
+    const existing = imageByKey.get(key);
+
+    if (!existing || shouldPreferWebshopImageCandidate(image, existing)) {
+      imageByKey.set(key, image);
+    }
+  });
+
+  return Array.from(imageByKey.values());
+}
+
 function dateStamp(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) return null;
@@ -535,7 +586,9 @@ function normalizeLogisticsWebshopImagesState(
   if (!Array.isArray(images)) return emptyLogisticsWebshopImagesState();
 
   return {
-    images: pruneExpiredWebshopImages(images.filter(isLogisticsWebshopImage)),
+    images: pruneExpiredWebshopImages(
+      dedupeLogisticsWebshopImages(images.filter(isLogisticsWebshopImage))
+    ),
   };
 }
 
@@ -1574,6 +1627,11 @@ export async function upsertLogisticsWebshopImage(
   const state = await readLogisticsWebshopImagesState();
   const existing =
     state.images.find((item) => item.id === image.id) ||
+    state.images.find(
+      (item) =>
+        logisticsWebshopImageDuplicateKey(item) ===
+        logisticsWebshopImageDuplicateKey(image)
+    ) ||
     state.images.find(
       (item) =>
         item.messageId === image.messageId &&

@@ -1235,11 +1235,44 @@ function imageMatchesReceipt(
   );
 }
 
+function webshopImageDuplicateKey(image: WebshopImageSummary) {
+  const photoKey = image.photoUrl.startsWith("data:")
+    ? image.photoUrl.slice(0, 4000)
+    : image.photoUrl;
+
+  return normalizeMatchText(
+    [
+      image.deliveryDate,
+      image.matchedReceiptId || image.matchedReceiptNumber || image.orderNumber,
+      image.customerName,
+      image.fileName,
+      image.productSummary || "",
+      photoKey,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+function uniqueWebshopImages(images: WebshopImageSummary[]) {
+  const seen = new Set<string>();
+
+  return images.filter((image) => {
+    const key = webshopImageDuplicateKey(image) || image.id;
+    if (seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
+}
+
 function imageMatchesForReceipt(
   receipt: ReceiptSummary,
   webshopImages: WebshopImageSummary[]
 ) {
-  return webshopImages.filter((image) => imageMatchesReceipt(image, receipt));
+  return uniqueWebshopImages(
+    webshopImages.filter((image) => imageMatchesReceipt(image, receipt))
+  );
 }
 
 function imageHasReceiptMatch(
@@ -2096,12 +2129,13 @@ function distributedCopyCount(
   imageIndex: number,
   imageCount: number
 ) {
-  if (imageCount <= 1 || copies <= 1) return copies;
+  if (imageCount <= 1) return copies;
+  if (copies <= 0) return 0;
 
   const base = Math.floor(copies / imageCount);
   const remainder = copies % imageCount;
 
-  return Math.max(1, base + (imageIndex < remainder ? 1 : 0));
+  return Math.max(0, base + (imageIndex < remainder ? 1 : 0));
 }
 
 function pushMarzipanPrintCopies(input: {
@@ -2113,11 +2147,14 @@ function pushMarzipanPrintCopies(input: {
   planIndex: number;
   needsCheck?: boolean;
 }) {
+  const copyTotal = Math.max(0, Math.round(input.copyTotal));
+  if (copyTotal <= 0) return;
+
   const customerName =
     input.image.customerName || input.receipt?.customer || "Klant controleren";
   const receiptNumber = input.receipt?.receiptNumber || input.receipt?.id || "";
 
-  for (let copy = 1; copy <= input.copyTotal; copy += 1) {
+  for (let copy = 1; copy <= copyTotal; copy += 1) {
     input.items.push({
       id: [
         receiptNumber || "zonder-bon",
@@ -2135,7 +2172,7 @@ function pushMarzipanPrintCopies(input: {
       sizeCm: input.plan.sizeCm,
       minimumSizeCm: input.plan.minimumSizeCm,
       copyNumber: copy,
-      copyTotal: input.copyTotal,
+      copyTotal,
       confidence: input.image.confidence,
       needsCheck: input.needsCheck || input.plan.needsCheck,
     });
