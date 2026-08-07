@@ -47,7 +47,7 @@ type JsonPdfAttachmentInput = {
 };
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
-const MAX_REQUEST_BYTES = MAX_FILE_BYTES * 4;
+const MAX_REQUEST_BYTES = MAX_FILE_BYTES * 8;
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ message }, { status });

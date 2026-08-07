@@ -1185,11 +1185,15 @@ export async function upsertLogisticsBatch(batch: LogisticsBatch) {
   const compatibleBatches = state.batches.filter(
     (item) => item.date === batch.date && item.status === batch.status
   );
-  const mergeCandidates = batch.importWaveId
+  const sameWaveCandidates = batch.importWaveId
     ? compatibleBatches.filter(
         (item) => item.importWaveId === batch.importWaveId
       )
-    : compatibleBatches;
+    : [];
+  const mergeCandidates =
+    batch.importWaveId && sameWaveCandidates.length > 0
+      ? sameWaveCandidates
+      : compatibleBatches;
   const nextBatch = mergeCompatibleBatches(mergeCandidates, batch);
   const batches = sortBatches([
     nextBatch,

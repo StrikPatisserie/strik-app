@@ -8,12 +8,12 @@ const BAKEIT_CONTANTBON_CONFIG = {
   ERROR_LABEL: 'Fout',
 
   QUERY:
-    'newer_than:30d {subject:"contantbon Bake-it" subject:"Orders email-Contantbonnen" subject:"Orders email-Contantbon A5" subject:"Orders email-Contantbon" label:"Contantbonnen"}',
-  MAX_THREADS: 30,
+    'newer_than:30d {subject:"contantbon Bake-it" subject:"Orders email-Contantbonnen" subject:"Orders email-Contantbon A5" subject:"Orders email-Contantbon" subject:"Contantbonnen" subject:"Contantbon" label:"Contantbonnen"}',
+  MAX_THREADS: 60,
   MAX_PDF_ATTACHMENTS: 4,
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
   MIN_MESSAGE_AGE_MS: 60 * 1000,
-  SPLIT_PART_WINDOW_MS: 30 * 60 * 1000,
+  SPLIT_PART_WINDOW_MS: 4 * 60 * 60 * 1000,
   PROGNOSE_MAIL_START_HOUR: 8,
   PROGNOSE_MAIL_START_MINUTE: 20,
   DEFINITIVE_MAIL_START_HOUR: 20,
@@ -301,8 +301,9 @@ function buildBakeItImportGroupKey_(message) {
 function normalizeBakeItSubjectForWave_(subject) {
   return String(subject || '')
     .toLowerCase()
-    .replace(/\bemail[\s-]+\d+\b/g, 'email')
-    .replace(/\bdeel[\s-]+\d+\b/g, '')
+    .replace(/\bemail[\s-]*\d+(?:\s*(?:van|of|\/)\s*\d+)?\b/g, 'email')
+    .replace(/\b(?:deel|part)[\s-]*\d+(?:\s*(?:van|of|\/)\s*\d+)?\b/g, '')
+    .replace(/\(\s*\d+\s*\/\s*\d+\s*\)/g, '')
     .replace(/\s*[-–—]\s*/g, ' ')
     .replace(/\s*\(\d+\)\s*$/g, '')
     .replace(/\s+/g, ' ')
@@ -310,10 +311,20 @@ function normalizeBakeItSubjectForWave_(subject) {
 }
 
 function isBakeItSecondPart_(subject) {
-  const match = String(subject || '').match(/\b(?:email|deel)[\s-]+(\d+)\b/i);
-  if (!match) return false;
+  return getBakeItMailPartNumber_(subject) > 1;
+}
 
-  return Number(match[1]) > 1;
+function getBakeItMailPartNumber_(subject) {
+  const text = String(subject || '');
+  const namedPart = text.match(
+    /\b(?:email|deel|part)[\s-]*(\d+)(?:\s*(?:van|of|\/)\s*\d+)?\b/i
+  );
+  if (namedPart) return Number(namedPart[1]) || 1;
+
+  const fractionPart = text.match(/(?:^|[\s(])(\d+)\s*\/\s*\d+(?:[\s)]|$)/);
+  if (fractionPart) return Number(fractionPart[1]) || 1;
+
+  return 1;
 }
 
 function buildBakeItImportWaveStateKey_(groupKey) {
@@ -465,7 +476,7 @@ function debugBakeItBatchDatum_(date) {
 
 function debugBakeItLaatsteMails() {
   const props = PropertiesService.getScriptProperties();
-  const threads = GmailApp.search(BAKEIT_CONTANTBON_CONFIG.QUERY, 0, 10);
+  const threads = GmailApp.search(BAKEIT_CONTANTBON_CONFIG.QUERY, 0, 30);
 
   logBakeIt_(`Gevonden threads: ${threads.length}`);
 
@@ -490,6 +501,7 @@ function debugBakeItLaatsteMails() {
           `thread ${threadIndex + 1}`,
           message.getDate().toISOString(),
           props.getProperty(importId) ? 'al verwerkt' : 'nog niet verwerkt',
+          `deel: ${getBakeItMailPartNumber_(message.getSubject())}`,
           `status: ${inferBakeItStatus_(message) || 'automatisch'}`,
           `pdfs: ${pdfNames.length ? pdfNames.join(', ') : 'geen'}`,
           `labels: ${labels || 'geen'}`,
@@ -508,7 +520,7 @@ function herimporteerLaatsteBakeItContantbonnen() {
   const errorLabel = GmailApp.getUserLabelByName(
     BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL
   );
-  const threads = GmailApp.search(BAKEIT_CONTANTBON_CONFIG.QUERY, 0, 10);
+  const threads = GmailApp.search(BAKEIT_CONTANTBON_CONFIG.QUERY, 0, 30);
   let resetCount = 0;
 
   threads.forEach((thread) => {
@@ -540,7 +552,9 @@ function herimporteerLaatsteBakeItContantbonnen() {
 function isBakeItOrdersEmailContantbonMail_(message) {
   const subject = String(message.getSubject() || '');
 
-  return /orders\s+email[-\s]+contantbon(?:nen)?(?:\s+a5)?/i.test(subject);
+  return /orders\s+email(?:[-\s]*\d+)?[-\s]+contantbon(?:nen)?(?:\s+a5)?/i.test(
+    subject
+  );
 }
 
 function maakBakeItImportTriggerAan() {
