@@ -150,7 +150,7 @@ function extractEncodedRevenueNotePayloads(note: string, prefix: string) {
 
   for (const match of note.matchAll(pattern)) {
     try {
-      payloads.push(JSON.parse(decodeURIComponent(match[1] || "")));
+      payloads.push(JSON.parse(decodeRevenueNotePayload(match[1] || "")));
     } catch {
       // Ignore unreadable legacy payloads and keep the visible note usable.
     }
@@ -261,8 +261,44 @@ function expandCashDepositPayload(
   };
 }
 
+function encodeRevenueNotePayload(payload: unknown) {
+  const json = JSON.stringify(payload);
+
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(json, "utf8").toString("base64url");
+  }
+
+  const bytes = new TextEncoder().encode(json);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeRevenueNotePayload(payload: string) {
+  if (payload.includes("%")) {
+    return decodeURIComponent(payload);
+  }
+
+  if (typeof Buffer !== "undefined") {
+    return Buffer.from(payload, "base64url").toString("utf8");
+  }
+
+  const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64.padEnd(
+    base64.length + ((4 - (base64.length % 4)) % 4),
+    "="
+  );
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+
+  return new TextDecoder().decode(bytes);
+}
+
 function encodedRevenueNote(prefix: string, payload: unknown) {
-  return `${prefix}${encodeURIComponent(JSON.stringify(payload))}${cashNoteSuffix}`;
+  return `${prefix}${encodeRevenueNotePayload(payload)}${cashNoteSuffix}`;
 }
 
 function noteWithEncodedRevenueCashPayload(
