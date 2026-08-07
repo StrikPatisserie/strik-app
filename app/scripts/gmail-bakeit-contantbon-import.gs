@@ -9,6 +9,14 @@ const BAKEIT_CONTANTBON_CONFIG = {
 
   QUERY:
     'newer_than:30d {subject:"contantbon Bake-it" subject:"Orders email-Contantbonnen" subject:"Orders email-Contantbon A5" subject:"Orders email-Contantbon" subject:"Contantbonnen" subject:"Contantbon" label:"Contantbonnen"}',
+  SEARCH_QUERIES: [
+    'newer_than:30d label:"Contantbonnen"',
+    'newer_than:30d subject:contantbon',
+    'newer_than:30d subject:contantbonnen',
+    'newer_than:30d subject:"Orders email"',
+    'newer_than:30d filename:pdf contantbon',
+    'newer_than:30d filename:pdf contantbonnen',
+  ],
   MAX_THREADS: 60,
   MAX_PDF_ATTACHMENTS: 4,
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
@@ -19,6 +27,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
   DEFINITIVE_MAIL_START_HOUR: 20,
   DEFINITIVE_MAIL_START_MINUTE: 15,
   IMPORT_VERSION: 'split-mails-v1',
+  SCRIPT_VERSION: 'gmail-search-v2',
 };
 
 function importBakeItBonnen() {
@@ -34,11 +43,7 @@ function importBakeItContantbonnen() {
   );
   const errorLabel = getOrCreateBakeItLabel_(BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL);
   const props = PropertiesService.getScriptProperties();
-  const threads = GmailApp.search(
-    BAKEIT_CONTANTBON_CONFIG.QUERY,
-    0,
-    BAKEIT_CONTANTBON_CONFIG.MAX_THREADS
-  );
+  const threads = searchBakeItThreads_(BAKEIT_CONTANTBON_CONFIG.MAX_THREADS);
   const importRunId = Utilities.getUuid();
   const waitingGroups = findBakeItWaitingGroups_(threads, props);
   const importWaveIds = buildBakeItImportWaveIds_(
@@ -47,6 +52,9 @@ function importBakeItContantbonnen() {
     waitingGroups,
     importRunId
   );
+  logBakeIt_(
+    `Bake-it import ${BAKEIT_CONTANTBON_CONFIG.SCRIPT_VERSION}: ${threads.length} thread(s) gevonden.`
+  );
 
   threads.forEach((thread) => {
     let hasImported = false;
@@ -54,6 +62,8 @@ function importBakeItContantbonnen() {
     let failed = false;
 
     thread.getMessages().forEach((message) => {
+      if (!isBakeItContantbonCandidate_(message)) return;
+
       const importId = `bakeit-contantbon:${BAKEIT_CONTANTBON_CONFIG.IMPORT_VERSION}:${message.getId()}`;
       if (props.getProperty(importId)) {
         hasImported = true;
@@ -112,6 +122,39 @@ function importBakeItContantbonnen() {
   });
 
   herstelBakeItFoutLabels();
+}
+
+function searchBakeItThreads_(maxThreads) {
+  const queries =
+    BAKEIT_CONTANTBON_CONFIG.SEARCH_QUERIES || [BAKEIT_CONTANTBON_CONFIG.QUERY];
+  const threadByKey = {};
+  const threads = [];
+
+  queries.forEach((query) => {
+    try {
+      GmailApp.search(query, 0, maxThreads).forEach((thread) => {
+        const key = getBakeItThreadKey_(thread);
+        if (threadByKey[key]) return;
+
+        threadByKey[key] = true;
+        threads.push(thread);
+      });
+    } catch (error) {
+      console.error(error);
+      logBakeIt_(`Bake-it Gmail zoekquery mislukt: ${query}`);
+    }
+  });
+
+  return threads.slice(0, maxThreads);
+}
+
+function getBakeItThreadKey_(thread) {
+  try {
+    return thread.getId();
+  } catch (error) {
+    const messages = thread.getMessages();
+    return messages.length ? messages[0].getId() : Utilities.getUuid();
+  }
 }
 
 function herstelBakeItFoutLabels() {
@@ -216,6 +259,8 @@ function findBakeItWaitingGroups_(threads, props) {
 
   threads.forEach((thread) => {
     thread.getMessages().forEach((message) => {
+      if (!isBakeItContantbonCandidate_(message)) return;
+
       const importId = `bakeit-contantbon:${BAKEIT_CONTANTBON_CONFIG.IMPORT_VERSION}:${message.getId()}`;
       if (props.getProperty(importId)) return;
 
@@ -239,6 +284,8 @@ function buildBakeItImportWaveIds_(
 
   threads.forEach((thread) => {
     thread.getMessages().forEach((message) => {
+      if (!isBakeItContantbonCandidate_(message)) return;
+
       const importId = `bakeit-contantbon:${BAKEIT_CONTANTBON_CONFIG.IMPORT_VERSION}:${message.getId()}`;
       if (props.getProperty(importId)) return;
 
@@ -296,6 +343,18 @@ function buildBakeItImportGroupKey_(message) {
   const status = inferBakeItStatus_(message) || 'auto';
 
   return `bakeit:${status}:${subject}`;
+}
+
+function isBakeItContantbonCandidate_(message) {
+  const subject = String(message.getSubject() || '');
+  const labelText = message
+    .getThread()
+    .getLabels()
+    .map((label) => label.getName())
+    .join(' ');
+  const haystack = `${subject} ${labelText}`.toLowerCase();
+
+  return haystack.indexOf('contantbon') >= 0;
 }
 
 function normalizeBakeItSubjectForWave_(subject) {
@@ -476,7 +535,7 @@ function debugBakeItBatchDatum_(date) {
 
 function debugBakeItLaatsteMails() {
   const props = PropertiesService.getScriptProperties();
-  const threads = GmailApp.search(BAKEIT_CONTANTBON_CONFIG.QUERY, 0, 30);
+  const threads = searchBakeItThreads_(30);
 
   logBakeIt_(`Gevonden threads: ${threads.length}`);
 
@@ -487,6 +546,8 @@ function debugBakeItLaatsteMails() {
       .join(', ');
 
     thread.getMessages().forEach((message) => {
+      if (!isBakeItContantbonCandidate_(message)) return;
+
       const importId = `bakeit-contantbon:${BAKEIT_CONTANTBON_CONFIG.IMPORT_VERSION}:${message.getId()}`;
       const attachments = message.getAttachments({
         includeInlineImages: false,
@@ -520,7 +581,7 @@ function herimporteerLaatsteBakeItContantbonnen() {
   const errorLabel = GmailApp.getUserLabelByName(
     BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL
   );
-  const threads = GmailApp.search(BAKEIT_CONTANTBON_CONFIG.QUERY, 0, 30);
+  const threads = searchBakeItThreads_(30);
   let resetCount = 0;
 
   threads.forEach((thread) => {
@@ -572,6 +633,22 @@ function maakBakeItImportTriggerAan() {
 
   ScriptApp.newTrigger(functionName).timeBased().everyMinutes(5).create();
   logBakeIt_('Bake-it importtrigger aangemaakt: elke 5 minuten.');
+}
+
+function debugBakeItTriggerStatus() {
+  const triggers = ScriptApp.getProjectTriggers();
+
+  logBakeIt_(`Bake-it scriptversie: ${BAKEIT_CONTANTBON_CONFIG.SCRIPT_VERSION}`);
+  logBakeIt_(`Projecttriggers: ${triggers.length}`);
+  triggers.forEach((trigger, index) => {
+    logBakeIt_(
+      [
+        `trigger ${index + 1}`,
+        `functie: ${trigger.getHandlerFunction()}`,
+        `type: ${trigger.getEventType()}`,
+      ].join(' | ')
+    );
+  });
 }
 
 function logBakeIt_(message) {
