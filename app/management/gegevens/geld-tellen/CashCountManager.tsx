@@ -6,6 +6,7 @@ import {
   createRevenueCashDepositKey,
   mergeRevenueCashDeposits,
   revenueShops,
+  type CashDenominationCounts,
   type CashDenominationKey,
   type RevenueCashDeposit,
   type RevenueCashRecord,
@@ -173,6 +174,12 @@ function parseAmount(value: string) {
   return Number.isFinite(amount) ? Math.max(0, Number(amount.toFixed(2))) : 0;
 }
 
+function parseCount(value: string) {
+  const count = Number(value.replace(/[^0-9]/g, ""));
+
+  return Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0;
+}
+
 function formatAmountInput(value: number | undefined) {
   if (!value) return "";
 
@@ -188,6 +195,16 @@ function formatMoney(value: number | undefined) {
 
 function formatOptionalMoney(value: number | undefined) {
   return value === undefined ? "-" : formatMoney(value);
+}
+
+function isDefaultCashNote(value: string | undefined) {
+  return /^Geldtelling via Gmail\b/i.test(String(value || "").trim());
+}
+
+function visibleCashNote(value: string | undefined) {
+  const note = String(value || "").trim();
+
+  return isDefaultCashNote(note) ? "" : note;
 }
 
 function safeExpectedCash(record: RevenueCashRecord | undefined) {
@@ -233,6 +250,74 @@ function cashAdjustmentAmount(record: RevenueCashRecord) {
 
   return Number(
     (record.startCash + record.cashRevenue - record.expectedCash).toFixed(2)
+  );
+}
+
+function cashOutAmount(record: RevenueCashRecord) {
+  if (record.cashOut !== undefined) return record.cashOut;
+
+  return cashAdjustmentAmount(record);
+}
+
+function receiptAmount(record: RevenueCashRecord) {
+  return record.receipts;
+}
+
+function checkedCashNoteCount(record: RevenueCashRecord, key: CashDenominationKey) {
+  return Math.max(
+    0,
+    Math.trunc(Number(record.checkedDenominations?.[key]) || 0)
+  );
+}
+
+function cashNoteDraftKey(record: RevenueCashRecord, key: CashDenominationKey) {
+  return `${record.date}:${record.shop}:${key}`;
+}
+
+function cashNoteInputValue(
+  record: RevenueCashRecord,
+  key: CashDenominationKey,
+  drafts: Record<string, string>
+) {
+  const draft = drafts[cashNoteDraftKey(record, key)];
+  if (draft !== undefined) return draft;
+
+  if (record.checkedDenominations?.[key] !== undefined) {
+    return String(checkedCashNoteCount(record, key));
+  }
+
+  return String(cashNoteCount(record, key));
+}
+
+function buildCheckedCashDenominations(
+  record: RevenueCashRecord,
+  drafts: Record<string, string>
+) {
+  const counts: CashDenominationCounts = {};
+
+  banknoteDenominations.forEach((denomination) => {
+    const count = parseCount(cashNoteInputValue(record, denomination.key, drafts));
+    counts[denomination.key] = count;
+  });
+
+  return counts;
+}
+
+function cashNoteControlDifference(
+  record: RevenueCashRecord,
+  drafts: Record<string, string>
+) {
+  return Number(
+    banknoteDenominations
+      .reduce((total, denomination) => {
+        const expected = cashNoteCount(record, denomination.key);
+        const actual = parseCount(
+          cashNoteInputValue(record, denomination.key, drafts)
+        );
+
+        return total + (actual - expected) * denomination.value;
+      }, 0)
+      .toFixed(2)
   );
 }
 
@@ -312,6 +397,7 @@ export default function CashCountManager() {
   const [cashRecords, setCashRecords] = useState<RevenueCashRecord[]>([]);
   const [cashDeposits, setCashDeposits] = useState<RevenueCashDeposit[]>([]);
   const [safeCashDrafts, setSafeCashDrafts] = useState<Record<string, string>>({});
+  const [cashNoteDrafts, setCashNoteDrafts] = useState<Record<string, string>>({});
   const [depositDrafts, setDepositDrafts] = useState<Record<string, string>>({});
   const [depositNotes, setDepositNotes] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
@@ -553,8 +639,13 @@ export default function CashCountManager() {
           ...current,
           safeCash,
           safeDifference: Number((safeCash - safeExpectedCash(current)).toFixed(2)),
+          checkedDenominations: buildCheckedCashDenominations(
+            current,
+            cashNoteDrafts
+          ),
           checkedAt: now,
           checkedBy: "Geld teller",
+          note: visibleCashNote(current.note),
           updatedAt: now,
         };
       }
@@ -595,6 +686,11 @@ export default function CashCountManager() {
     nextDeposits = cashDeposits,
     nextCashRecords = cashRecords
   ) {
+    const cleanedCashRecords = nextCashRecords.map((record) => ({
+      ...record,
+      note: visibleCashNote(record.note),
+    }));
+
     setState("saving");
     setStatus("Geldcontrole opslaan...");
 
@@ -607,7 +703,7 @@ export default function CashCountManager() {
         body: JSON.stringify({
           records,
           dailyRecords,
-          cashRecords: nextCashRecords,
+          cashRecords: cleanedCashRecords,
           cashDeposits: nextDeposits,
         }),
       });
@@ -628,7 +724,7 @@ export default function CashCountManager() {
         Array.isArray(data.dailyRecords) ? data.dailyRecords : dailyRecords
       );
       setCashRecords(
-        Array.isArray(data.cashRecords) ? data.cashRecords : nextCashRecords
+        Array.isArray(data.cashRecords) ? data.cashRecords : cleanedCashRecords
       );
       setCashDeposits(
         Array.isArray(data.cashDeposits) ? data.cashDeposits : nextDeposits
@@ -868,7 +964,8 @@ export default function CashCountManager() {
               const safeDraftDifference = Number(
                 (parseAmount(safeInputValue) - safeExpectedCash(record)).toFixed(2)
               );
-              const adjustmentAmount = cashAdjustmentAmount(record);
+              const cashOut = cashOutAmount(record);
+              const receipts = receiptAmount(record);
 
               return (
                 <article
@@ -909,18 +1006,27 @@ export default function CashCountManager() {
                       </span>
                     </label>
 
-                    <div className="grid gap-x-4 gap-y-2 sm:grid-cols-3 xl:grid-cols-5">
+                    <div className="grid gap-x-4 gap-y-2 sm:grid-cols-3 xl:grid-cols-6">
                       <AmountCell
                         label="Start"
                         value={formatOptionalMoney(record.startCash)}
                       />
                       <AmountCell label="Geteld" value={formatMoney(record.countedCash)} />
                       <AmountCell
-                        label="Kas-uit/bonnen"
-                        value={formatOptionalMoney(adjustmentAmount)}
+                        label="Kas-uit"
+                        value={formatOptionalMoney(cashOut)}
                         tone={
-                          adjustmentAmount !== undefined &&
-                          Math.abs(adjustmentAmount) > 0.01
+                          cashOut !== undefined &&
+                          Math.abs(cashOut) > 0.01
+                            ? "warn"
+                            : "normal"
+                        }
+                      />
+                      <AmountCell
+                        label="Bonnen"
+                        value={formatOptionalMoney(receipts)}
+                        tone={
+                          receipts !== undefined && Math.abs(receipts) > 0.01
                             ? "warn"
                             : "normal"
                         }
@@ -956,7 +1062,17 @@ export default function CashCountManager() {
                   </div>
 
                   <div className="mt-3 grid gap-3 border-t border-[#e7e0d8]/80 pt-2 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-                    <CashNoteStrip record={record} />
+                    <CashNoteControl
+                      disabled={Boolean(record.checkedAt) || state === "saving"}
+                      drafts={cashNoteDrafts}
+                      onChange={(key, value) =>
+                        setCashNoteDrafts((current) => ({
+                          ...current,
+                          [cashNoteDraftKey(record, key)]: value,
+                        }))
+                      }
+                      record={record}
+                    />
 
                     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
                       <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
@@ -970,8 +1086,9 @@ export default function CashCountManager() {
                             }))
                           }
                           inputMode="decimal"
+                          disabled={Boolean(record.checkedAt) || state === "saving"}
                           placeholder="0,00"
-                          className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+                          className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
                         />
                       </label>
 
@@ -986,7 +1103,7 @@ export default function CashCountManager() {
                       <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278] sm:col-span-2">
                         Controle-notitie
                         <input
-                          value={record.note || ""}
+                          value={visibleCashNote(record.note)}
                           onChange={(event) =>
                             updateCashRecord(
                               record.date,
@@ -998,8 +1115,9 @@ export default function CashCountManager() {
                               })
                             )
                           }
+                          disabled={Boolean(record.checkedAt) || state === "saving"}
                           placeholder="Bijv. kas-uitbon ontbreekt of bedrag gecorrigeerd"
-                          className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
+                          className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
                         />
                       </label>
                     </div>
@@ -1107,68 +1225,104 @@ export default function CashCountManager() {
   );
 }
 
-function CashNoteStrip({ record }: Readonly<{ record: RevenueCashRecord }>) {
-  const notes = banknoteDenominations
-    .map((denomination) => ({
-      denomination,
-      count: cashNoteCount(record, denomination.key),
-    }))
-    .filter((note) => note.count > 0);
+function CashNoteControl({
+  disabled,
+  drafts,
+  onChange,
+  record,
+}: Readonly<{
+  disabled: boolean;
+  drafts: Record<string, string>;
+  onChange: (key: CashDenominationKey, value: string) => void;
+  record: RevenueCashRecord;
+}>) {
+  const totalDifference = cashNoteControlDifference(record, drafts);
 
   return (
     <div className="min-w-0">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
-          Briefjes Cash-it
+          Briefjescontrole
         </p>
         <p className="truncate text-[0.58rem] font-bold text-[#8b8278]">
           {record.countedBy || "teller onbekend"}
         </p>
       </div>
-      <div className="mt-1 flex min-h-8 flex-wrap items-center gap-1.5">
-        {notes.length ? (
-          notes.map(({ denomination, count }) => (
-            <CashNote
+      <div className="mt-1 overflow-hidden rounded-md border border-[#e7e0d8] bg-white">
+        <div className="grid grid-cols-[4.6rem_4.5rem_5rem_minmax(5.5rem,1fr)] border-b border-[#e7e0d8] bg-[#f8f6f3] px-2 py-1 text-[0.54rem] font-black uppercase tracking-normal text-[#8b8278]">
+          <span>Briefje</span>
+          <span>Geteld</span>
+          <span>Werkelijk</span>
+          <span>Verschil</span>
+        </div>
+        {banknoteDenominations.map((denomination) => {
+          const expected = cashNoteCount(record, denomination.key);
+          const inputValue = cashNoteInputValue(record, denomination.key, drafts);
+          const actual = parseCount(inputValue);
+          const countDifference = actual - expected;
+          const valueDifference = Number(
+            (countDifference * denomination.value).toFixed(2)
+          );
+
+          return (
+            <div
               key={denomination.key}
-              count={count}
-              denomination={denomination}
-            />
-          ))
-        ) : (
-          <span className="text-xs font-bold text-[#8b8278]">
-            Geen briefjes ontvangen.
-          </span>
-        )}
+              className="grid grid-cols-[4.6rem_4.5rem_5rem_minmax(5.5rem,1fr)] items-center border-b border-[#eee7df] px-2 py-1 last:border-b-0"
+            >
+              <CashNote denomination={denomination} />
+              <span className="text-xs font-black text-[#1a1815]">
+                {expected}
+              </span>
+              <input
+                value={inputValue}
+                onChange={(event) => onChange(denomination.key, event.target.value)}
+                inputMode="numeric"
+                disabled={disabled}
+                className="h-7 w-14 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black text-[#1a1815] disabled:opacity-60"
+              />
+              <span
+                className={`text-xs font-black ${
+                  valueDifference === 0 ? "text-[#6b645b]" : "text-[#7a5417]"
+                }`}
+              >
+                {countDifference > 0 ? "+" : ""}
+                {countDifference} · {formatMoney(valueDifference)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div
+        className={`mt-1 text-right text-xs font-black ${
+          totalDifference === 0 ? "text-[#6b645b]" : "text-[#7a5417]"
+        }`}
+      >
+        Briefjesverschil: {formatMoney(totalDifference)}
       </div>
     </div>
   );
 }
 
 function CashNote({
-  count,
   denomination,
 }: Readonly<{
-  count: number;
   denomination: (typeof banknoteDenominations)[number];
 }>) {
   const style = banknoteStyles[denomination.key] || banknoteStyles.eur5;
 
   return (
-    <span className="inline-flex items-center gap-1">
-      <span
-        aria-hidden="true"
-        className="relative inline-flex h-6 w-12 items-center justify-center overflow-hidden rounded-[3px] border text-[0.58rem] font-black shadow-sm"
-        style={{
-          background: `linear-gradient(135deg, ${style.bg}, #fffdf8 48%, ${style.bg})`,
-          borderColor: style.border,
-          color: style.text,
-        }}
-      >
-        <span className="absolute left-1 top-1 h-1.5 w-1.5 rounded-full border border-current opacity-45" />
-        <span>EUR {denomination.label}</span>
-        <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-current opacity-45" />
-      </span>
-      <span className="text-[0.62rem] font-black text-[#1a1815]">x{count}</span>
+    <span
+      aria-hidden="true"
+      className="relative inline-flex h-6 w-14 items-center justify-center overflow-hidden rounded-[3px] border text-[0.58rem] font-black shadow-sm"
+      style={{
+        background: `linear-gradient(135deg, ${style.bg}, #fffdf8 48%, ${style.bg})`,
+        borderColor: style.border,
+        color: style.text,
+      }}
+    >
+      <span className="absolute left-1 top-1 h-1.5 w-1.5 rounded-full border border-current opacity-45" />
+      <span>EUR {denomination.label}</span>
+      <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-current opacity-45" />
     </span>
   );
 }

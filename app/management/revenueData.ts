@@ -62,10 +62,13 @@ export type RevenueCashRecord = {
   countedCash: number;
   startCash?: number;
   cashRevenue?: number;
+  cashOut?: number;
+  receipts?: number;
   expectedCash?: number;
   difference?: number;
   safeCash?: number;
   safeDifference?: number;
+  checkedDenominations?: CashDenominationCounts;
   countedBy?: string;
   openedAt?: string;
   closedAt?: string;
@@ -180,10 +183,13 @@ function compactCashRecordPayload(record: RevenueCashRecord) {
     cc: record.countedCash,
     sc: record.startCash,
     cr: record.cashRevenue,
+    cu: record.cashOut,
+    rc: record.receipts,
     ec: record.expectedCash,
     df: record.difference,
     sf: record.safeCash,
     sd: record.safeDifference,
+    xd: record.checkedDenominations,
     cb: record.countedBy,
     oa: record.openedAt,
     ca: record.closedAt,
@@ -212,10 +218,13 @@ function expandCashRecordPayload(
     countedCash: payload.countedCash ?? payload.cc,
     startCash: payload.startCash ?? payload.sc,
     cashRevenue: payload.cashRevenue ?? payload.cr,
+    cashOut: payload.cashOut ?? payload.cu,
+    receipts: payload.receipts ?? payload.rc,
     expectedCash: payload.expectedCash ?? payload.ec,
     difference: payload.difference ?? payload.df,
     safeCash: payload.safeCash ?? payload.sf,
     safeDifference: payload.safeDifference ?? payload.sd,
+    checkedDenominations: payload.checkedDenominations ?? payload.xd,
     countedBy: payload.countedBy ?? payload.cb,
     openedAt: payload.openedAt ?? payload.oa,
     closedAt: payload.closedAt ?? payload.ca,
@@ -418,16 +427,25 @@ export function cashDenominationTotal(counts: CashDenominationCounts) {
   );
 }
 
-function normalizeCashDenominations(value: unknown): CashDenominationCounts {
+function normalizeCashDenominations(
+  value: unknown,
+  includeZeroCounts = false
+): CashDenominationCounts {
   const source = isRecord(value) ? value : {};
   const counts: CashDenominationCounts = {};
 
   cashDenominations.forEach((denomination) => {
+    const hasCount = Object.prototype.hasOwnProperty.call(
+      source,
+      denomination.key
+    );
     const count = Math.max(
       0,
       Math.trunc(numberFrom((source as Record<string, unknown>)[denomination.key]))
     );
-    if (count > 0) counts[denomination.key] = count;
+    if (count > 0 || (includeZeroCounts && hasCount)) {
+      counts[denomination.key] = count;
+    }
   });
 
   return counts;
@@ -556,6 +574,10 @@ export function normalizeRevenueCashRecord(
   const year = getIsoWeekYear(date);
   const week = getIsoWeek(date);
   const denominations = normalizeCashDenominations(value.denominations);
+  const checkedDenominations =
+    value.checkedDenominations === undefined
+      ? undefined
+      : normalizeCashDenominations(value.checkedDenominations, true);
   const denominationTotal =
     positiveMoneyFrom(value.denominationTotal) || cashDenominationTotal(denominations);
   const countedCash = positiveMoneyFrom(value.countedCash) || denominationTotal;
@@ -576,6 +598,10 @@ export function normalizeRevenueCashRecord(
       value.cashRevenue === undefined
         ? undefined
         : positiveMoneyFrom(value.cashRevenue),
+    cashOut:
+      value.cashOut === undefined ? undefined : positiveMoneyFrom(value.cashOut),
+    receipts:
+      value.receipts === undefined ? undefined : positiveMoneyFrom(value.receipts),
     expectedCash:
       value.expectedCash === undefined
         ? undefined
@@ -588,6 +614,7 @@ export function normalizeRevenueCashRecord(
       value.safeDifference === undefined
         ? undefined
         : moneyFrom(value.safeDifference),
+    checkedDenominations,
     countedBy: textFrom(value.countedBy) || undefined,
     openedAt: textFrom(value.openedAt) || undefined,
     closedAt: textFrom(value.closedAt) || undefined,
@@ -812,6 +839,10 @@ export function mergeRevenueCashRecords(
     byKey.set(key, {
       ...existing,
       ...record,
+      cashOut: record.cashOut ?? existing?.cashOut,
+      receipts: record.receipts ?? existing?.receipts,
+      checkedDenominations:
+        record.checkedDenominations || existing?.checkedDenominations,
       checkedAt: record.checkedAt || existing?.checkedAt,
       checkedBy: record.checkedBy || existing?.checkedBy,
       note: record.note || existing?.note || "",

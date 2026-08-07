@@ -496,11 +496,21 @@ function extractCashRecordAmounts(sectionText: string) {
     /\bGeteld\s*:\s*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
     sectionText
   );
+  const cashOut = extractFirstSignedAmount(
+    /\bKas\s*-?\s*uit\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    beforeCorrection
+  );
+  const receipts = extractFirstSignedAmount(
+    /\b(?:Bonnen|Kasbonnen|Contantbonnen)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    beforeCorrection
+  );
 
   return {
     countedCash,
     startCash: afterCloseAmounts[0]?.amount,
     cashRevenue: tail.length >= 5 ? tail[2]?.amount : undefined,
+    cashOut,
+    receipts,
     expectedCash: tail.length >= 5 ? tail[3]?.amount : undefined,
     difference: tail.length >= 5 ? tail[4]?.amount : undefined,
   };
@@ -539,6 +549,8 @@ function extractCashRecords(
         countedCash,
         startCash: amounts.startCash,
         cashRevenue: amounts.cashRevenue,
+        cashOut: amounts.cashOut,
+        receipts: amounts.receipts,
         expectedCash: amounts.expectedCash,
         difference:
           amounts.difference ??
@@ -548,7 +560,7 @@ function extractCashRecords(
         countedBy: extractCashCountedBy(section.text),
         openedAt: times.openedAt,
         closedAt: times.closedAt,
-        note: `Geldtelling via Gmail · ${cleanText(input.subject, 160) || "zonder onderwerp"}`,
+        note: "",
         source: "dagafsluiting",
         messageId: cleanText(input.messageId, 200) || messageHash,
         importedAt,
