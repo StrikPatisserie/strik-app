@@ -662,6 +662,9 @@ export function normalizeRevenueData(value: unknown): RevenueData {
         return normalized ? [normalized] : [];
       })
     : [];
+  const shouldUseDirectCashRecords =
+    Array.isArray(value.cashRecords) &&
+    (directCashRecords.length > 0 || embeddedCashRecords.length === 0);
   const embeddedCashDeposits = extractEmbeddedCashDeposits(value);
   const directCashDeposits = Array.isArray(value.cashDeposits)
     ? value.cashDeposits.flatMap((record) => {
@@ -673,7 +676,7 @@ export function normalizeRevenueData(value: unknown): RevenueData {
   return {
     records,
     dailyRecords,
-    cashRecords: mergeRevenueCashRecords(embeddedCashRecords, directCashRecords),
+    cashRecords: shouldUseDirectCashRecords ? directCashRecords : embeddedCashRecords,
     cashDeposits: mergeRevenueCashDeposits(
       embeddedCashDeposits,
       directCashDeposits
