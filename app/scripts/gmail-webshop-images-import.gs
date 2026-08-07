@@ -7,8 +7,11 @@ const WEBSHOP_IMAGE_CONFIG = {
   PROCESSED_LABEL: 'Ingelezen',
   ERROR_LABEL: 'Fout',
 
-  QUERY: 'label:"Afbeeldingen Webshop" newer_than:30d',
-  MAX_THREADS: 20,
+  QUERY:
+    'label:"Afbeeldingen Webshop" newer_than:7d -label:"Ingelezen" -label:"Fout"',
+  RECOVERY_QUERY: 'label:"Afbeeldingen Webshop" newer_than:30d',
+  MAX_THREADS: 10,
+  RECOVERY_MAX_THREADS: 30,
   MAX_IMAGE_ATTACHMENTS: 4,
   MAX_IMAGE_ATTACHMENT_BYTES: 1500000,
   IMPORT_VERSION: 'strict-match-v4',

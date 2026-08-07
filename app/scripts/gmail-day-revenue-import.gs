@@ -6,8 +6,10 @@ const DAGOMZET_IMPORT_CONFIG = {
   PROCESSED_LABEL: 'Ingelezen',
   ERROR_LABEL: 'Fout',
 
-  QUERY: 'label:"Dagomzet" newer_than:30d',
-  MAX_THREADS: 20,
+  QUERY: 'label:"Dagomzet" newer_than:7d -label:"Ingelezen" -label:"Fout"',
+  RECOVERY_QUERY: 'label:"Dagomzet" newer_than:30d',
+  MAX_THREADS: 10,
+  RECOVERY_MAX_THREADS: 30,
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
@@ -73,6 +75,48 @@ function importDagomzet() {
 
     if (imported) thread.addLabel(processedLabel);
     if (failed) thread.addLabel(errorLabel);
+  });
+}
+
+function debugDagomzetLaatsteMails() {
+  const props = PropertiesService.getScriptProperties();
+  const threads = GmailApp.search(
+    DAGOMZET_IMPORT_CONFIG.RECOVERY_QUERY,
+    0,
+    DAGOMZET_IMPORT_CONFIG.RECOVERY_MAX_THREADS
+  );
+
+  console.log(`Dagomzet gevonden threads: ${threads.length}`);
+  Logger.log(`Dagomzet gevonden threads: ${threads.length}`);
+
+  threads.forEach((thread, threadIndex) => {
+    const labels = thread
+      .getLabels()
+      .map((label) => label.getName())
+      .join(', ');
+
+    thread.getMessages().forEach((message) => {
+      const importId = `dagomzet:${DAGOMZET_IMPORT_CONFIG.IMPORT_VERSION}:${message.getId()}`;
+      const attachments = message.getAttachments({
+        includeInlineImages: false,
+        includeAttachments: true,
+      });
+      const pdfNames = attachments
+        .map((attachment) => attachment.getName() || 'naamloos')
+        .filter((fileName) => /\.pdf$/i.test(String(fileName)));
+
+      const line = [
+        `thread ${threadIndex + 1}`,
+        message.getDate().toISOString(),
+        props.getProperty(importId) ? 'al verwerkt' : 'nog niet verwerkt',
+        `pdfs: ${pdfNames.length ? pdfNames.join(', ') : 'geen'}`,
+        `labels: ${labels || 'geen'}`,
+        `subject: ${message.getSubject()}`,
+      ].join(' | ');
+
+      console.log(line);
+      Logger.log(line);
+    });
   });
 }
 

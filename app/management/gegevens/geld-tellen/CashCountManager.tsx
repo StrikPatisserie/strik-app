@@ -146,6 +146,24 @@ function weekRangeLabel(year: number, week: number) {
   })}`;
 }
 
+function datesInIsoWeek(year: number, week: number) {
+  const start = dateFromIsoWeekParts(year, week);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+
+    return isoDateFromDate(date);
+  });
+}
+
+function shiftedWeekDate(year: number, week: number, offset: number) {
+  const date = dateFromIsoWeekParts(year, week);
+  date.setDate(date.getDate() + offset * 7);
+
+  return isoDateFromDate(date);
+}
+
 function parseAmount(value: string) {
   const normalized = value
     .replace(/[^0-9,.-]/g, "")
@@ -167,6 +185,10 @@ function formatAmountInput(value: number | undefined) {
 
 function formatMoney(value: number | undefined) {
   return euroFormatter.format(value || 0);
+}
+
+function formatOptionalMoney(value: number | undefined) {
+  return value === undefined ? "-" : formatMoney(value);
 }
 
 function safeExpectedCash(record: RevenueCashRecord | undefined) {
@@ -199,6 +221,20 @@ function safeDifference(record: RevenueCashRecord | undefined) {
 
 function cashNoteCount(record: RevenueCashRecord, key: CashDenominationKey) {
   return Math.max(0, Math.trunc(Number(record.denominations[key]) || 0));
+}
+
+function cashAdjustmentAmount(record: RevenueCashRecord) {
+  if (
+    record.startCash === undefined ||
+    record.cashRevenue === undefined ||
+    record.expectedCash === undefined
+  ) {
+    return undefined;
+  }
+
+  return Number(
+    (record.startCash + record.cashRevenue - record.expectedCash).toFixed(2)
+  );
 }
 
 function findCashRecord(
@@ -240,6 +276,12 @@ function dayName(value: string) {
   });
 }
 
+function dayShortName(value: string) {
+  return dateFromIso(value).toLocaleDateString("nl-NL", {
+    weekday: "short",
+  });
+}
+
 function cashWarning(record: RevenueCashRecord | undefined) {
   if (!record) return "Geen Cash-it dagafsluiting ontvangen.";
   if (Math.abs(record.countedCash - record.denominationTotal) > 0.01) {
@@ -257,6 +299,7 @@ function cashWarning(record: RevenueCashRecord | undefined) {
 
 export default function CashCountManager() {
   const [selectedDate, setSelectedDate] = useState(localIsoDate());
+  const [selectedShop, setSelectedShop] = useState<RevenueShop>(revenueShops[0]);
   const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
   const [cashRecords, setCashRecords] = useState<RevenueCashRecord[]>([]);
@@ -292,7 +335,10 @@ export default function CashCountManager() {
           nextCashRecords
             .map((record) => record.date)
             .sort()
-            .at(-1) || selectedDate;
+            .at(-1) || localIsoDate();
+        const latestRecord = [...nextCashRecords].sort((first, second) =>
+          first.date.localeCompare(second.date)
+        ).at(-1);
 
         setRecords(Array.isArray(data.records) ? data.records : []);
         setDailyRecords(Array.isArray(data.dailyRecords) ? data.dailyRecords : []);
@@ -302,6 +348,7 @@ export default function CashCountManager() {
         );
         setStorage(data.storage);
         setSelectedDate(latestDate);
+        if (latestRecord) setSelectedShop(latestRecord.shop);
         setState("ready");
       } catch (error) {
         if (!ignoreResult) {
@@ -324,6 +371,10 @@ export default function CashCountManager() {
 
   const selectedWeek = useMemo(() => weekPartsForDate(selectedDate), [selectedDate]);
   const depositWeekKey = weekKey(selectedWeek.year, selectedWeek.week);
+  const selectedWeekDates = useMemo(
+    () => datesInIsoWeek(selectedWeek.year, selectedWeek.week),
+    [selectedWeek.week, selectedWeek.year]
+  );
   const weekRows = useMemo(
     () =>
       revenueShops.map((shop) => {
@@ -333,6 +384,7 @@ export default function CashCountManager() {
           selectedWeek.week,
           shop
         ).sort((first, second) => first.date.localeCompare(second.date));
+        const checkedRecords = shopRecords.filter((record) => record.checkedAt);
         const cashRevenue = shopRecords.reduce(
           (total, record) => total + (record.cashRevenue ?? record.countedCash),
           0
@@ -345,7 +397,19 @@ export default function CashCountManager() {
           (total, record) => total + safeCheckedCash(record),
           0
         );
-        const difference = shopRecords.reduce(
+        const includedCashRevenue = checkedRecords.reduce(
+          (total, record) => total + (record.cashRevenue ?? record.countedCash),
+          0
+        );
+        const includedExpectedSafeCash = checkedRecords.reduce(
+          (total, record) => total + safeExpectedCash(record),
+          0
+        );
+        const includedCheckedSafeCash = checkedRecords.reduce(
+          (total, record) => total + safeCheckedCash(record),
+          0
+        );
+        const difference = checkedRecords.reduce(
           (total, record) => total + safeDifference(record),
           0
         );
@@ -362,28 +426,60 @@ export default function CashCountManager() {
           cashRevenue,
           expectedSafeCash,
           checkedSafeCash,
+          includedCashRevenue,
+          includedExpectedSafeCash,
+          includedCheckedSafeCash,
           difference,
-          checkedCount: shopRecords.filter((record) => record.checkedAt).length,
+          checkedCount: checkedRecords.length,
+          missingCount: selectedWeekDates.filter(
+            (date) => !findCashRecord(shopRecords, date, shop)
+          ).length,
           deposit,
         };
       }),
-    [cashDeposits, cashRecords, selectedWeek.week, selectedWeek.year]
+    [
+      cashDeposits,
+      cashRecords,
+      selectedWeek.week,
+      selectedWeek.year,
+      selectedWeekDates,
+    ]
+  );
+  const selectedShopRow =
+    weekRows.find((row) => row.shop === selectedShop) || weekRows[0];
+  const selectedShopDays = useMemo(
+    () =>
+      selectedWeekDates.map((date) => ({
+        date,
+        record: findCashRecord(cashRecords, date, selectedShop),
+      })),
+    [cashRecords, selectedShop, selectedWeekDates]
   );
   const weekRecords = useMemo(
     () => weekRows.flatMap((row) => row.records),
     [weekRows]
   );
+  const checkedWeekRecords = useMemo(
+    () => weekRecords.filter((record) => record.checkedAt),
+    [weekRecords]
+  );
   const weekExpectedTotal = useMemo(
     () =>
-      weekRecords.reduce((total, record) => total + safeExpectedCash(record), 0),
-    [weekRecords]
+      checkedWeekRecords.reduce(
+        (total, record) => total + safeExpectedCash(record),
+        0
+      ),
+    [checkedWeekRecords]
   );
   const weekCheckedTotal = useMemo(
     () =>
-      weekRecords.reduce((total, record) => total + safeCheckedCash(record), 0),
-    [weekRecords]
+      checkedWeekRecords.reduce(
+        (total, record) => total + safeCheckedCash(record),
+        0
+      ),
+    [checkedWeekRecords]
   );
-  const weekCheckedCount = weekRecords.filter((record) => record.checkedAt).length;
+  const weekCheckedCount = checkedWeekRecords.length;
   const availableWeeks = useMemo(() => {
     const byKey = new Map<string, { key: string; year: number; week: number }>();
 
@@ -407,45 +503,6 @@ export default function CashCountManager() {
       (first, second) => second.year - first.year || second.week - first.week
     );
   }, [cashRecords, depositWeekKey, selectedWeek.week, selectedWeek.year]);
-
-  useEffect(() => {
-    setSafeCashDrafts((current) => {
-      const next = { ...current };
-
-      weekRecords.forEach((record) => {
-        const key = `${record.date}:${record.shop}`;
-        if (next[key] !== undefined) return;
-        next[key] = formatAmountInput(safeCheckedCash(record));
-      });
-
-      return next;
-    });
-  }, [weekRecords]);
-
-  useEffect(() => {
-    setDepositDrafts((current) => {
-      const next = { ...current };
-
-      weekRows.forEach((row) => {
-        const key = `${depositWeekKey}:${row.shop}`;
-        if (next[key] !== undefined) return;
-        next[key] = formatAmountInput(row.deposit?.amount || row.checkedSafeCash);
-      });
-
-      return next;
-    });
-    setDepositNotes((current) => {
-      const next = { ...current };
-
-      weekRows.forEach((row) => {
-        const key = `${depositWeekKey}:${row.shop}`;
-        if (next[key] !== undefined || !row.deposit?.note) return;
-        next[key] = row.deposit.note;
-      });
-
-      return next;
-    });
-  }, [depositWeekKey, weekRows]);
 
   function buildUpdatedCashRecords(
     current: RevenueCashRecord[],
@@ -557,8 +614,12 @@ export default function CashCountManager() {
   async function saveDeposit(row: (typeof weekRows)[number]) {
     const now = new Date().toISOString();
     const draftKey = `${depositWeekKey}:${row.shop}`;
-    const amount = parseAmount(depositDrafts[draftKey] || "");
-    const dateRange = row.records.map((record) => record.date).sort();
+    const amount = parseAmount(
+      depositDrafts[draftKey] ??
+        formatAmountInput(row.deposit?.amount || row.includedCheckedSafeCash)
+    );
+    const checkedRecords = row.records.filter((record) => record.checkedAt);
+    const dateRange = checkedRecords.map((record) => record.date).sort();
     const deposit: RevenueCashDeposit = {
       id: createRevenueCashDepositKey(selectedWeek.year, selectedWeek.week, row.shop),
       year: selectedWeek.year,
@@ -567,7 +628,7 @@ export default function CashCountManager() {
       amount,
       dateFrom: dateRange[0],
       dateTo: dateRange.at(-1),
-      cashRecordIds: row.records.map((record) => record.id),
+      cashRecordIds: checkedRecords.map((record) => record.id),
       depositedAt: now,
       depositedBy: "Strik app",
       note: depositNotes[draftKey] || row.deposit?.note || "",
@@ -583,10 +644,14 @@ export default function CashCountManager() {
     await saveCash(nextDeposits);
   }
 
+  const selectedDepositDraftKey = selectedShopRow
+    ? `${depositWeekKey}:${selectedShopRow.shop}`
+    : "";
+
   return (
     <div className="space-y-3">
       <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/88 p-2 shadow-sm">
-        <div className="grid gap-2 md:grid-cols-[15rem_minmax(0,1fr)_auto] md:items-end">
+        <div className="grid gap-2 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)_auto] lg:items-end">
           <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
             Week
             <select
@@ -595,7 +660,9 @@ export default function CashCountManager() {
                 const parts = parseWeekKey(event.target.value);
                 if (!parts) return;
 
-                setSelectedDate(isoDateFromDate(dateFromIsoWeekParts(parts.year, parts.week)));
+                setSelectedDate(
+                  isoDateFromDate(dateFromIsoWeekParts(parts.year, parts.week))
+                );
               }}
               className="h-9 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
             >
@@ -606,6 +673,7 @@ export default function CashCountManager() {
               ))}
             </select>
           </label>
+
           <div className="grid grid-cols-3 rounded-md bg-[#f8f6f3] text-center">
             <div className="border-r border-[#e7e0d8] px-2 py-1.5">
               <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
@@ -617,7 +685,7 @@ export default function CashCountManager() {
             </div>
             <div className="border-r border-[#e7e0d8] px-2 py-1.5">
               <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                Kluis verwacht
+                Verwacht
               </p>
               <p className="text-sm font-black text-[#1a1815]">
                 {formatMoney(weekExpectedTotal)}
@@ -625,21 +693,73 @@ export default function CashCountManager() {
             </div>
             <div className="px-2 py-1.5">
               <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                Kluis geteld
+                Weektotaal
               </p>
               <p className="text-sm font-black text-[#1a1815]">
                 {formatMoney(weekCheckedTotal)}
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void saveCash()}
-            disabled={state === "loading" || state === "saving"}
-            className="rounded-md bg-[#1a1815] px-3 py-2 text-xs font-black uppercase tracking-normal text-white shadow-sm transition hover:bg-[#3b352f] disabled:opacity-60"
-          >
-            {state === "saving" ? "Opslaan..." : "Wijzigingen opslaan"}
-          </button>
+
+          <div className="grid grid-cols-3 gap-1">
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedDate(
+                  shiftedWeekDate(selectedWeek.year, selectedWeek.week, -1)
+                )
+              }
+              className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815]"
+            >
+              Vorige
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(localIsoDate())}
+              className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815]"
+            >
+              Vandaag
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedDate(
+                  shiftedWeekDate(selectedWeek.year, selectedWeek.week, 1)
+                )
+              }
+              className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815]"
+            >
+              Volgende
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
+          {weekRows.map((row) => {
+            const isSelected = row.shop === selectedShop;
+
+            return (
+              <button
+                key={row.shop}
+                type="button"
+                onClick={() => setSelectedShop(row.shop)}
+                className={`rounded-md border p-2 text-left transition ${
+                  isSelected
+                    ? "border-[#1a1815] bg-[#1a1815] text-white"
+                    : "border-[#e7e0d8] bg-white text-[#1a1815] hover:border-[#cfc5ba]"
+                }`}
+              >
+                <span className="block text-sm font-black">{row.shop}</span>
+                <span
+                  className={`mt-1 block text-[0.62rem] font-black uppercase tracking-normal ${
+                    isSelected ? "text-white/70" : "text-[#8b8278]"
+                  }`}
+                >
+                  {row.checkedCount}/7 compleet · {formatMoney(row.includedCheckedSafeCash)}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {storage?.status === "seed" && (
@@ -656,251 +776,280 @@ export default function CashCountManager() {
         )}
       </section>
 
-      <section className="grid gap-2">
-        {weekRows.map((row) => (
-          <article
-            key={row.shop}
-            className="rounded-lg border border-[#e7e0d8]/80 bg-white/92 p-2 shadow-sm"
-          >
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-                  Filiaal
-                </p>
-                <h2 className="text-base font-black leading-tight text-[#1a1815]">
-                  {row.shop}
-                </h2>
-              </div>
-              <div className="grid min-w-[16rem] grid-cols-3 rounded-md bg-[#f8f6f3] text-center">
-                <StatBox label="Dagen" value={`${row.checkedCount}/${row.records.length}`} />
-                <StatBox
-                  label="Kluis verwacht"
-                  value={formatMoney(row.expectedSafeCash)}
-                />
-                <StatBox
-                  label="Kluis geteld"
-                  value={formatMoney(row.checkedSafeCash)}
-                />
-              </div>
+      {selectedShopRow && (
+        <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/92 p-2 shadow-sm">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
+                Filiaal
+              </p>
+              <h2 className="text-lg font-black leading-tight text-[#1a1815]">
+                {selectedShopRow.shop}
+              </h2>
+              <p className="text-[0.68rem] font-bold text-[#8b8278]">
+                Week {selectedWeek.week} · {weekRangeLabel(selectedWeek.year, selectedWeek.week)}
+              </p>
             </div>
-
-            <div className="mt-2 grid gap-1.5">
-              {row.records.length ? (
-                row.records.map((record) => {
-                  const warning = cashWarning(record);
-                  const safeDraftKey = `${record.date}:${record.shop}`;
-                  const safeInputValue =
-                    safeCashDrafts[safeDraftKey] ??
-                    formatAmountInput(safeCheckedCash(record));
-                  const safeDraftDifference = Number(
-                    (parseAmount(safeInputValue) - safeExpectedCash(record)).toFixed(2)
-                  );
-
-                  return (
-                    <div
-                      key={record.id}
-                      className={`grid gap-2 rounded-md border p-2 lg:grid-cols-[6.4rem_minmax(12rem,1.15fr)_minmax(12rem,1.1fr)_8.5rem_8rem_auto] lg:items-center ${
-                        record.checkedAt
-                          ? "border-[#cbdcc5] bg-[#f6fbf5]"
-                          : warning
-                            ? "border-[#efd1a1] bg-[#fffdf5]"
-                            : "border-[#ece5dd] bg-[#faf8f5]"
-                      }`}
-                    >
-                      <div>
-                        <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-                          {dayName(record.date)}
-                        </p>
-                        <p className="text-[0.68rem] font-bold text-[#6b645b]">
-                          {record.checkedAt ? "kluis gecheckt" : "nog open"}
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                        <StatBox
-                          label="Kasomzet"
-                          value={formatMoney(record.cashRevenue)}
-                        />
-                        <StatBox
-                          label="Startgeld"
-                          value={formatMoney(record.startCash)}
-                        />
-                        <StatBox
-                          label="Kluis verwacht"
-                          value={formatMoney(safeExpectedCash(record))}
-                        />
-                        <StatBox
-                          label="Kasverschil"
-                          value={formatMoney(record.difference)}
-                          tone={
-                            record.difference && Math.abs(record.difference) > 0.05
-                              ? "warn"
-                              : "normal"
-                          }
-                        />
-                      </div>
-
-                      <CashNoteStrip record={record} />
-
-                      <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                        Kluis geteld
-                        <input
-                          value={safeInputValue}
-                          onChange={(event) =>
-                            setSafeCashDrafts((current) => ({
-                              ...current,
-                              [safeDraftKey]: event.target.value,
-                            }))
-                          }
-                          inputMode="decimal"
-                          placeholder="0,00"
-                          className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
-                        />
-                      </label>
-
-                      <StatBox
-                        label="Verschil"
-                        value={formatMoney(safeDraftDifference)}
-                        tone={
-                          record.checkedAt && Math.abs(safeDraftDifference) > 0.01
-                            ? "warn"
-                            : "normal"
-                        }
-                      />
-
-                      <button
-                        type="button"
-                        onClick={() => void markChecked(record)}
-                        disabled={state === "saving"}
-                        className={`rounded-md border px-2 py-2 text-[0.62rem] font-black uppercase tracking-normal ${
-                          record.checkedAt
-                            ? "border-[#cbdcc5] bg-[#ecf4ed] text-[#1f4f35]"
-                            : "border-[#1a1815] bg-white text-[#1a1815] disabled:opacity-60"
-                        }`}
-                      >
-                        {record.checkedAt ? "Gecheckt" : "Kluis klopt"}
-                      </button>
-
-                      <div className="grid gap-1 lg:col-span-6">
-                        {warning && (
-                          <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417]">
-                            {warning}
-                          </p>
-                        )}
-                        <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                          Controle-notitie
-                          <input
-                            value={record.note || ""}
-                            onChange={(event) =>
-                              updateCashRecord(
-                                record.date,
-                                record.shop,
-                                (current) => ({
-                                  ...current,
-                                  note: event.target.value,
-                                  updatedAt: new Date().toISOString(),
-                                })
-                              )
-                            }
-                            placeholder="Bijv. kluis mist EUR 5 of kasverschil verklaard"
-                            className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="rounded-md border border-[#ece5dd] bg-[#faf8f5] px-2 py-3 text-sm font-bold text-[#8b8278]">
-                  Geen Cash-it dagafsluitingen voor dit filiaal in deze week.
-                </p>
-              )}
+            <div className="grid min-w-[18rem] grid-cols-3 rounded-md bg-[#f8f6f3] text-center">
+              <StatBox label="Compleet" value={`${selectedShopRow.checkedCount}/7`} />
+              <StatBox
+                label="Weektotaal"
+                value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
+              />
+              <StatBox
+                label="Open"
+                value={`${7 - selectedShopRow.checkedCount}`}
+                tone={selectedShopRow.checkedCount < 7 ? "warn" : "normal"}
+              />
             </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/92 p-2 shadow-sm">
-        <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-black text-[#1a1815]">
-              Week {selectedWeek.week} · {selectedWeek.year}
-            </h2>
-            <p className="text-[0.68rem] font-bold leading-tight text-[#8b8278]">
-              De geldteller controleert per dag wat er in de kluis ligt; de
-              weekstorting bundelt die gecontroleerde kluisbedragen.
-            </p>
           </div>
-        </div>
 
-        <div className="grid gap-1.5">
-          {weekRows.map((row) => {
-            const draftKey = `${depositWeekKey}:${row.shop}`;
+          <div className="mt-2 grid gap-1.5">
+            {selectedShopDays.map(({ date, record }) => {
+              if (!record) {
+                return (
+                  <div
+                    key={date}
+                    className="grid gap-2 rounded-md border border-[#ece5dd] bg-[#faf8f5] p-2 sm:grid-cols-[6rem_minmax(0,1fr)] sm:items-center"
+                  >
+                    <div>
+                      <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
+                        {dayName(date)}
+                      </p>
+                      <p className="text-[0.68rem] font-bold text-[#8b8278]">
+                        ontbreekt
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold text-[#8b8278]">
+                      Geen Cash-it dagafsluiting ontvangen.
+                    </p>
+                  </div>
+                );
+              }
 
-            return (
-              <article
-                key={row.shop}
-                className="grid gap-2 rounded-md border border-[#e7e0d8] bg-[#faf8f5] p-2 lg:grid-cols-[7rem_repeat(5,minmax(0,1fr))_10rem_10rem_auto] lg:items-center"
-              >
-                <h3 className="text-sm font-black text-[#1a1815]">{row.shop}</h3>
-                <StatBox
-                  label="Dagen"
-                  value={`${row.checkedCount}/${row.records.length}`}
-                />
-                <StatBox label="Kasomzet" value={formatMoney(row.cashRevenue)} />
-                <StatBox
-                  label="Kluis verwacht"
-                  value={formatMoney(row.expectedSafeCash)}
-                />
-                <StatBox
-                  label="Kluis geteld"
-                  value={formatMoney(row.checkedSafeCash)}
-                />
-                <StatBox label="Verschil" value={formatMoney(row.difference)} />
-                <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                  Storting
-                  <input
-                    value={depositDrafts[draftKey] || ""}
-                    onChange={(event) =>
-                      setDepositDrafts((current) => ({
-                        ...current,
-                        [draftKey]: event.target.value,
-                      }))
-                    }
-                    inputMode="decimal"
-                    placeholder="0,00"
-                    className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
-                  />
-                </label>
-                <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                  Stortnotitie
-                  <input
-                    value={depositNotes[draftKey] ?? row.deposit?.note ?? ""}
-                    onChange={(event) =>
-                      setDepositNotes((current) => ({
-                        ...current,
-                        [draftKey]: event.target.value,
-                      }))
-                    }
-                    placeholder={row.deposit?.depositedAt ? "al gestort" : "optioneel"}
-                    className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => void saveDeposit(row)}
-                  disabled={state === "saving" || row.records.length === 0}
-                  className="rounded-md bg-[#c3d3bc] px-2 py-2 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815] disabled:opacity-50"
+              const warning = cashWarning(record);
+              const safeDraftKey = `${record.date}:${record.shop}`;
+              const safeInputValue =
+                safeCashDrafts[safeDraftKey] ??
+                formatAmountInput(safeCheckedCash(record));
+              const safeDraftDifference = Number(
+                (parseAmount(safeInputValue) - safeExpectedCash(record)).toFixed(2)
+              );
+              const adjustmentAmount = cashAdjustmentAmount(record);
+
+              return (
+                <article
+                  key={record.id}
+                  className={`grid gap-2 rounded-md border p-2 xl:grid-cols-[6rem_minmax(16rem,1fr)_minmax(13rem,0.8fr)_8.5rem_8rem_7rem] xl:items-center ${
+                    record.checkedAt
+                      ? "border-[#cbdcc5] bg-[#f6fbf5]"
+                      : warning
+                        ? "border-[#efd1a1] bg-[#fffdf5]"
+                        : "border-[#ece5dd] bg-[#faf8f5]"
+                  }`}
                 >
-                  {row.deposit?.depositedAt
-                    ? "Storting bijwerken"
-                    : "Storting opslaan"}
-                </button>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+                  <label className="flex items-center gap-2 xl:block">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(record.checkedAt)}
+                      disabled={state === "saving" || Boolean(record.checkedAt)}
+                      onChange={(event) => {
+                        if (event.target.checked) void markChecked(record);
+                      }}
+                      className="h-4 w-4 accent-[#1f4f35]"
+                    />
+                    <span>
+                      <span className="block text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
+                        {dayShortName(record.date)}
+                      </span>
+                      <span className="block text-sm font-black text-[#1a1815]">
+                        {record.date.slice(8, 10)}-{record.date.slice(5, 7)}
+                      </span>
+                      <span className="block text-[0.68rem] font-bold text-[#6b645b]">
+                        {record.checkedAt ? "compleet" : "open"}
+                      </span>
+                    </span>
+                  </label>
+
+                  <div className="grid grid-cols-2 gap-1.5 md:grid-cols-5">
+                    <StatBox
+                      label="Startbedrag"
+                      value={formatOptionalMoney(record.startCash)}
+                    />
+                    <StatBox label="Geteld" value={formatMoney(record.countedCash)} />
+                    <StatBox
+                      label="Kas-uit/bonnen"
+                      value={formatOptionalMoney(adjustmentAmount)}
+                      tone={
+                        adjustmentAmount !== undefined && Math.abs(adjustmentAmount) > 0.01
+                          ? "warn"
+                          : "normal"
+                      }
+                    />
+                    <StatBox
+                      label="Kluis/week"
+                      value={formatMoney(safeExpectedCash(record))}
+                    />
+                    <StatBox
+                      label="Kasverschil"
+                      value={formatOptionalMoney(record.difference)}
+                      tone={
+                        record.difference !== undefined &&
+                        Math.abs(record.difference) > 0.05
+                          ? "warn"
+                          : "normal"
+                      }
+                    />
+                  </div>
+
+                  <CashNoteStrip record={record} />
+
+                  <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+                    Controlebedrag
+                    <input
+                      value={safeInputValue}
+                      onChange={(event) =>
+                        setSafeCashDrafts((current) => ({
+                          ...current,
+                          [safeDraftKey]: event.target.value,
+                        }))
+                      }
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+                    />
+                  </label>
+
+                  <StatBox
+                    label="Verschil"
+                    value={formatMoney(safeDraftDifference)}
+                    tone={
+                      record.checkedAt && Math.abs(safeDraftDifference) > 0.01
+                        ? "warn"
+                        : "normal"
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => void markChecked(record)}
+                    disabled={state === "saving" || Boolean(record.checkedAt)}
+                    className={`rounded-md border px-2 py-2 text-[0.62rem] font-black uppercase tracking-normal ${
+                      record.checkedAt
+                        ? "border-[#cbdcc5] bg-[#ecf4ed] text-[#1f4f35]"
+                        : "border-[#1a1815] bg-white text-[#1a1815] disabled:opacity-60"
+                    }`}
+                  >
+                    {record.checkedAt ? "Compleet" : "Afvinken"}
+                  </button>
+
+                  <div className="grid gap-1 xl:col-span-6">
+                    {warning && (
+                      <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417]">
+                        {warning}
+                      </p>
+                    )}
+                    <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+                      Controle-notitie
+                      <input
+                        value={record.note || ""}
+                        onChange={(event) =>
+                          updateCashRecord(
+                            record.date,
+                            record.shop,
+                            (current) => ({
+                              ...current,
+                              note: event.target.value,
+                              updatedAt: new Date().toISOString(),
+                            })
+                          )
+                        }
+                        placeholder="Bijv. kas-uitbon ontbreekt of bedrag gecorrigeerd"
+                        className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
+                      />
+                    </label>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {selectedShopRow && (
+        <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/92 p-2 shadow-sm">
+          <div className="grid gap-2 lg:grid-cols-[8rem_repeat(4,minmax(0,1fr))_11rem_12rem_auto] lg:items-end">
+            <h2 className="text-sm font-black text-[#1a1815]">
+              {selectedShopRow.shop}
+            </h2>
+            <StatBox
+              label="Compleet"
+              value={`${selectedShopRow.checkedCount}/7`}
+            />
+            <StatBox
+              label="Kasomzet"
+              value={formatMoney(selectedShopRow.includedCashRevenue)}
+            />
+            <StatBox
+              label="Verwacht"
+              value={formatMoney(selectedShopRow.includedExpectedSafeCash)}
+            />
+            <StatBox
+              label="Weektotaal"
+              value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
+            />
+            <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+              Storting
+              <input
+                value={
+                  depositDrafts[selectedDepositDraftKey] ??
+                  formatAmountInput(
+                    selectedShopRow.deposit?.amount ||
+                      selectedShopRow.includedCheckedSafeCash
+                  )
+                }
+                onChange={(event) =>
+                  setDepositDrafts((current) => ({
+                    ...current,
+                    [selectedDepositDraftKey]: event.target.value,
+                  }))
+                }
+                inputMode="decimal"
+                placeholder="0,00"
+                className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+              />
+            </label>
+            <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+              Stortnotitie
+              <input
+                value={
+                  depositNotes[selectedDepositDraftKey] ??
+                  selectedShopRow.deposit?.note ??
+                  ""
+                }
+                onChange={(event) =>
+                  setDepositNotes((current) => ({
+                    ...current,
+                    [selectedDepositDraftKey]: event.target.value,
+                  }))
+                }
+                placeholder={selectedShopRow.deposit?.depositedAt ? "al gestort" : "optioneel"}
+                className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void saveDeposit(selectedShopRow)}
+              disabled={state === "saving" || selectedShopRow.checkedCount === 0}
+              className="rounded-md bg-[#c3d3bc] px-2 py-2 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815] disabled:opacity-50"
+            >
+              {selectedShopRow.deposit?.depositedAt
+                ? "Storting bijwerken"
+                : "Storting opslaan"}
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
