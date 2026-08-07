@@ -1681,47 +1681,132 @@ function isPhotoSignalLine(line: ReceiptLine) {
   );
 }
 
+function isReceiptProductLineForPhoto(line: ReceiptLine) {
+  if (isProductOptionLine(line)) return false;
+  if (shouldDropReceiptLine(line)) return false;
+  if (isPriceOnlyReceiptDescription(line.description)) return false;
+
+  const description = normalizedLineDescription(line.description);
+  if (/^bezorgkosten\b/.test(description)) return false;
+
+  return true;
+}
+
+function nearbyProductLineForPhoto(
+  lines: ReceiptLine[],
+  index: number,
+  currentProduct: ReceiptLine | null
+) {
+  if (currentProduct) return currentProduct;
+
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (isReceiptProductLineForPhoto(lines[cursor])) return lines[cursor];
+  }
+  for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+    if (isReceiptProductLineForPhoto(lines[cursor])) return lines[cursor];
+  }
+
+  return null;
+}
+
+function addPhotoProductPlan(input: {
+  plans: PhotoProductPlan[];
+  seen: Set<string>;
+  line: ReceiptLine;
+  forceRound?: boolean;
+  needsCheck?: boolean;
+}) {
+  const description = lineSearchDescription(input.line);
+  const product = cleanProductLabel(input.line.description);
+  const copies = printCopiesForLine(input.line);
+  const isPetitFourProduct = isPetitFourLine(input.line);
+  const isRoundProduct =
+    input.forceRound ||
+    isMarzipanOrCreamCakeProductLine(input.line) ||
+    Boolean(cakeServingSizeForText(description));
+  if (!isPetitFourProduct && !isRoundProduct) return;
+
+  const shape: MarzipanPrintShape = isPetitFourProduct ? "square" : "round";
+  const cakeSizePlan = roundPhotoSizePlanForCakeText(description);
+  const plan: PhotoProductPlan =
+    shape === "square"
+      ? {
+          product,
+          shape,
+          sizeCm: 3.5,
+          minimumSizeCm: 3.5,
+          copies,
+          needsCheck: Boolean(input.needsCheck),
+        }
+      : {
+          product,
+          shape,
+          sizeCm: cakeSizePlan.sizeCm,
+          minimumSizeCm: cakeSizePlan.minimumSizeCm,
+          copies,
+          needsCheck: Boolean(input.needsCheck),
+        };
+  const key = normalizeMatchText(
+    [plan.shape, plan.product, plan.sizeCm, plan.copies].join(" ")
+  );
+
+  if (input.seen.has(key)) return;
+  input.seen.add(key);
+  input.plans.push(plan);
+}
+
 function photoProductPlansForReceipt(
   receipt: ReceiptSummary,
   options: { requirePhotoSignal?: boolean } = {}
 ): PhotoProductPlan[] {
   const plans: PhotoProductPlan[] = [];
+  const seen = new Set<string>();
+  let currentProduct: ReceiptLine | null = null;
 
-  receipt.lines.forEach((line) => {
+  receipt.lines.forEach((line, index) => {
     const description = lineSearchDescription(line);
     const hasPhotoSignal = isPhotoSignalLine(line);
-    const product = cleanProductLabel(line.description);
-    const copies = printCopiesForLine(line);
+    if (isReceiptProductLineForPhoto(line)) currentProduct = line;
+
+    if (hasPhotoSignal) {
+      const productLine = nearbyProductLineForPhoto(
+        receipt.lines,
+        index,
+        currentProduct
+      );
+      if (productLine && productLine !== line) {
+        addPhotoProductPlan({
+          plans,
+          seen,
+          line: productLine,
+          forceRound: Boolean(cakeServingSizeForText(lineSearchDescription(productLine))),
+        });
+      }
+    }
 
     if (
       (!options.requirePhotoSignal || hasPhotoSignal) &&
       (isPetitFourLine(line) ||
         (hasPhotoSignal && /\bpetit\s*-?\s*fours?\b/.test(description)))
     ) {
-      plans.push({
-        product,
-        shape: "square",
-        sizeCm: 3.5,
-        minimumSizeCm: 3.5,
-        copies,
-        needsCheck: false,
+      addPhotoProductPlan({
+        plans,
+        seen,
+        line,
       });
       return;
     }
 
-    const cakeSizePlan = roundPhotoSizePlanForCakeText(description);
     if (
       (!options.requirePhotoSignal || hasPhotoSignal) &&
       (isMarzipanOrCreamCakeProductLine(line) ||
         (hasPhotoSignal &&
           /taart|marsepein|slagroom/.test(description)))
     ) {
-      plans.push({
-        product,
-        shape: "round",
-        sizeCm: cakeSizePlan.sizeCm,
-        minimumSizeCm: cakeSizePlan.minimumSizeCm,
-        copies,
+      addPhotoProductPlan({
+        plans,
+        seen,
+        line,
         needsCheck: !isMarzipanOrCreamCakeProductLine(line),
       });
     }
@@ -2218,9 +2303,60 @@ function roundPrintSizeCmForItem(
     (roundItem) => roundItem.minimumSizeCm < roundItem.sizeCm
   ).length;
   if (scalableRoundCount >= 5) return Math.max(item.minimumSizeCm, 6);
-  if (scalableRoundCount >= 2) return Math.max(item.minimumSizeCm, 10);
+  if (scalableRoundCount >= 3) return Math.max(item.minimumSizeCm, 10);
 
   return item.sizeCm;
+}
+
+function formatCssCm(value: number) {
+  return `${Number(value.toFixed(2))}cm`;
+}
+
+function diagonalRoundLayoutFor(
+  roundItems: MarzipanPrintItem[],
+  printSizeCmById: Map<string, number>
+) {
+  if (roundItems.length !== 2) return null;
+
+  const [first, second] = roundItems;
+  const firstSize = printSizeCmById.get(first.id) || first.sizeCm;
+  const secondSize = printSizeCmById.get(second.id) || second.sizeCm;
+  const pageWidth = 20;
+  if (firstSize + secondSize <= pageWidth) return null;
+
+  const secondLeft = Math.max(0, pageWidth - secondSize);
+  const centerDistanceX = Math.abs(
+    secondLeft + secondSize / 2 - firstSize / 2
+  );
+  const requiredCenterDistance = (firstSize + secondSize) / 2;
+  const secondTop =
+    Math.sqrt(
+      Math.max(
+        0,
+        requiredCenterDistance * requiredCenterDistance -
+          centerDistanceX * centerDistanceX
+      )
+    ) +
+    firstSize / 2 -
+    secondSize / 2 +
+    0.3;
+  const labelHeight = 1.9;
+  const height = Math.max(
+    firstSize + labelHeight,
+    secondTop + secondSize + labelHeight
+  );
+
+  return {
+    className: "diagonal",
+    sectionStyle: `height:${formatCssCm(height)}`,
+    itemStyleById: new Map<string, string>([
+      [first.id, "left:0;top:0;"],
+      [
+        second.id,
+        `left:${formatCssCm(secondLeft)};top:${formatCssCm(secondTop)};`,
+      ],
+    ]),
+  };
 }
 
 function marzipanPrintSizeLabel(
@@ -2287,14 +2423,28 @@ function createMarzipanPhotoPrintHtml(input: {
       .filter(Boolean)
       .join(" · ");
 
+  const roundPrintSizeCmById = new Map(
+    roundItems.map((item) => [item.id, roundPrintSizeCmForItem(item, roundItems)])
+  );
+  const diagonalRoundLayout = diagonalRoundLayoutFor(
+    roundItems,
+    roundPrintSizeCmById
+  );
+
   const printItemHtmlFor = (item: MarzipanPrintItem, includeLabel = false) => {
     const copyLabel = item.copyTotal > 1 ? ` · ${item.copyTotal}x totaal` : "";
     const sourceLabel = sourceLabelFor(item);
     const printSizeCm =
-      item.shape === "round" ? roundPrintSizeCmForItem(item, roundItems) : item.sizeCm;
+      item.shape === "round"
+        ? roundPrintSizeCmById.get(item.id) || item.sizeCm
+        : item.sizeCm;
+    const layoutStyle =
+      item.shape === "round"
+        ? diagonalRoundLayout?.itemStyleById.get(item.id) || ""
+        : "";
 
     return `
-      <article class="print-item ${item.shape} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${printSizeCm}cm">
+      <article class="print-item ${item.shape} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${printSizeCm}cm;${layoutStyle}">
         <div class="photo-frame">
           <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}">
         </div>
@@ -2328,7 +2478,7 @@ function createMarzipanPhotoPrintHtml(input: {
     .join("");
   const roundHtml =
     roundItems.length > 0
-      ? `<section class="round-grid">
+      ? `<section class="round-grid ${diagonalRoundLayout?.className || ""}" style="${diagonalRoundLayout?.sectionStyle || ""}">
           ${roundItems.map((item) => printItemHtmlFor(item, true)).join("")}
         </section>`
       : "";
@@ -2442,6 +2592,11 @@ function createMarzipanPhotoPrintHtml(input: {
         row-gap: 4mm;
         margin-top: 4mm;
       }
+      .round-grid.diagonal {
+        display: block;
+        position: relative;
+        width: 200mm;
+      }
       .print-item {
         break-inside: avoid;
         page-break-inside: avoid;
@@ -2473,6 +2628,9 @@ function createMarzipanPhotoPrintHtml(input: {
       .round .photo-frame {
         border-radius: 999px;
       }
+      .round-grid.diagonal .round {
+        position: absolute;
+      }
       .photo-frame img {
         display: block;
         height: 100%;
@@ -2488,6 +2646,10 @@ function createMarzipanPhotoPrintHtml(input: {
         margin-top: 1mm;
         overflow-wrap: anywhere;
         padding-right: 2mm;
+      }
+      .round-grid.diagonal .label {
+        max-width: 76mm;
+        padding-right: 0;
       }
       .label strong,
       .label span,
