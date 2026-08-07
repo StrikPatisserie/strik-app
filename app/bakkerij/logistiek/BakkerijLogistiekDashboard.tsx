@@ -157,6 +157,7 @@ type PhotoProductPlan = {
   product: string;
   shape: MarzipanPrintShape;
   sizeCm: number;
+  minimumSizeCm: number;
   copies: number;
   needsCheck: boolean;
 };
@@ -171,6 +172,7 @@ type MarzipanPrintItem = {
   orderNumber: string;
   shape: MarzipanPrintShape;
   sizeCm: number;
+  minimumSizeCm: number;
   copyNumber: number;
   copyTotal: number;
   confidence: string;
@@ -1537,30 +1539,74 @@ function lineSearchDescription(line: ReceiptLine) {
 }
 
 function hasLargeCakeSize(text: string) {
+  const size = cakeServingSizeForText(text);
+  if (!size) return false;
+
+  return size.min >= 10;
+}
+
+function cakeServingSizeForText(text: string) {
   const rangeMatch = text.match(
     /\b(\d{1,2})\s*(?:-|\/|tot|a|t\/m)\s*(\d{1,2})\s*(?:p|pers\.?|personen|persoons)\b/
   );
   if (rangeMatch) {
-    return Number(rangeMatch[1]) >= 10;
+    return {
+      min: Number(rangeMatch[1]),
+      max: Number(rangeMatch[2]),
+    };
   }
 
   const sizeMatch = text.match(/\b(\d{1,2})\s*(?:p|pers\.?|personen|persoons)\b/);
-  if (!sizeMatch) return false;
+  if (!sizeMatch) return null;
 
-  return Number(sizeMatch[1]) >= 10;
+  const size = Number(sizeMatch[1]);
+  return {
+    min: size,
+    max: size,
+  };
 }
 
-function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
-  if (isProductOptionLine(line)) return false;
-
-  const description = lineSearchDescription(line);
-  const isCake =
+function isMarzipanOrCreamCakeDescription(description: string) {
+  return (
     (/\bmarsepein/.test(description) && /taart(?:en)?\b/.test(description)) ||
     (/\bslagroom/.test(description) && /taart(?:en)?\b/.test(description)) ||
     /\bcremetaart\b/.test(description) ||
-    (/\bcreme\b/.test(description) && /taart(?:en)?\b/.test(description));
+    (/\bcreme\b/.test(description) && /taart(?:en)?\b/.test(description))
+  );
+}
 
-  return isCake && hasLargeCakeSize(description);
+function isMarzipanOrCreamCakeProductLine(line: ReceiptLine) {
+  if (isProductOptionLine(line)) return false;
+
+  return isMarzipanOrCreamCakeDescription(lineSearchDescription(line));
+}
+
+function isMarzipanOrCreamCakeLine(line: ReceiptLine) {
+  if (!isMarzipanOrCreamCakeProductLine(line)) return false;
+
+  return hasLargeCakeSize(lineSearchDescription(line));
+}
+
+function roundPhotoSizePlanForCakeText(text: string) {
+  const size = cakeServingSizeForText(text);
+  if (!size) {
+    return {
+      sizeCm: 12,
+      minimumSizeCm: 6,
+    };
+  }
+
+  if (size.max <= 8) {
+    return {
+      sizeCm: 8,
+      minimumSizeCm: 8,
+    };
+  }
+
+  return {
+    sizeCm: 12,
+    minimumSizeCm: 6,
+  };
 }
 
 function isLikelyCakePhotoLine(line: ReceiptLine) {
@@ -1568,7 +1614,7 @@ function isLikelyCakePhotoLine(line: ReceiptLine) {
 
   const description = lineSearchDescription(line);
 
-  if (isMarzipanOrCreamCakeLine(line)) return true;
+  if (isMarzipanOrCreamCakeProductLine(line)) return true;
   if (isPetitFourLine(line) || isAssortedPastryLine(line)) return false;
   if (/\b(cupcake|cakepop|macaron|soes|slof|vlaai|gebak)\b/.test(description)) {
     return false;
@@ -1656,25 +1702,27 @@ function photoProductPlansForReceipt(
         product,
         shape: "square",
         sizeCm: 3.5,
+        minimumSizeCm: 3.5,
         copies,
         needsCheck: false,
       });
       return;
     }
 
+    const cakeSizePlan = roundPhotoSizePlanForCakeText(description);
     if (
       (!options.requirePhotoSignal || hasPhotoSignal) &&
-      (isMarzipanOrCreamCakeLine(line) ||
+      (isMarzipanOrCreamCakeProductLine(line) ||
         (hasPhotoSignal &&
-          /taart|marsepein|slagroom/.test(description) &&
-          hasLargeCakeSize(description)))
+          /taart|marsepein|slagroom/.test(description)))
     ) {
       plans.push({
         product,
         shape: "round",
-        sizeCm: 12,
+        sizeCm: cakeSizePlan.sizeCm,
+        minimumSizeCm: cakeSizePlan.minimumSizeCm,
         copies,
-        needsCheck: false,
+        needsCheck: !isMarzipanOrCreamCakeProductLine(line),
       });
     }
   });
@@ -1691,14 +1739,16 @@ function inferredPhotoProductPlansForReceipt(
     if (!isLikelyCakePhotoLine(line)) return;
 
     const description = lineSearchDescription(line);
-    const isCertainCakeLine = isMarzipanOrCreamCakeLine(line);
+    const isCertainCakeLine = isMarzipanOrCreamCakeProductLine(line);
+    const cakeSizePlan = roundPhotoSizePlanForCakeText(description);
 
     plans.push({
       product: cleanProductLabel(line.description),
       shape: "round",
-      sizeCm: 12,
+      sizeCm: cakeSizePlan.sizeCm,
+      minimumSizeCm: cakeSizePlan.minimumSizeCm,
       copies: printCopiesForLine(line),
-      needsCheck: !isCertainCakeLine && !hasLargeCakeSize(description),
+      needsCheck: !isCertainCakeLine && !cakeServingSizeForText(description),
     });
   });
 
@@ -1710,6 +1760,7 @@ function fallbackPhotoProductPlan(needsCheck = true): PhotoProductPlan {
     product: needsCheck ? "Foto controleren" : "Marsepeinfoto",
     shape: "round",
     sizeCm: 12,
+    minimumSizeCm: 6,
     copies: 1,
     needsCheck,
   };
@@ -1859,6 +1910,7 @@ function pushMarzipanPrintCopies(input: {
       orderNumber: input.image.orderNumber,
       shape: input.plan.shape,
       sizeCm: input.plan.sizeCm,
+      minimumSizeCm: input.plan.minimumSizeCm,
       copyNumber: copy,
       copyTotal: input.copyTotal,
       confidence: input.image.confidence,
@@ -2149,8 +2201,40 @@ function buildWrittenTextPrintItems(receipts: ReceiptSummary[]) {
   return items;
 }
 
-function marzipanPrintSizeLabel(item: MarzipanPrintItem) {
-  return item.shape === "square" ? "ca. 3,8 cm vierkant" : "12 cm rond";
+function formatPrintCm(value: number) {
+  return Number.isInteger(value)
+    ? String(value)
+    : String(Number(value.toFixed(1))).replace(".", ",");
+}
+
+function roundPrintSizeCmForItem(
+  item: MarzipanPrintItem,
+  roundItems: MarzipanPrintItem[]
+) {
+  if (item.shape !== "round") return item.sizeCm;
+  if (item.minimumSizeCm >= item.sizeCm) return item.sizeCm;
+
+  const scalableRoundCount = roundItems.filter(
+    (roundItem) => roundItem.minimumSizeCm < roundItem.sizeCm
+  ).length;
+  if (scalableRoundCount >= 5) return Math.max(item.minimumSizeCm, 6);
+  if (scalableRoundCount >= 2) return Math.max(item.minimumSizeCm, 10);
+
+  return item.sizeCm;
+}
+
+function marzipanPrintSizeLabel(
+  item: MarzipanPrintItem,
+  printSizeCm = item.sizeCm
+) {
+  if (item.shape === "square") return "ca. 3,8 cm vierkant";
+
+  const printLabel = `${formatPrintCm(printSizeCm)} cm rond`;
+  if (printSizeCm < item.sizeCm) {
+    return `${printLabel} · geschaald vanaf ${formatPrintCm(item.sizeCm)} cm`;
+  }
+
+  return printLabel;
 }
 
 function createMarzipanPhotoPrintHtml(input: {
@@ -2206,9 +2290,11 @@ function createMarzipanPhotoPrintHtml(input: {
   const printItemHtmlFor = (item: MarzipanPrintItem, includeLabel = false) => {
     const copyLabel = item.copyTotal > 1 ? ` · ${item.copyTotal}x totaal` : "";
     const sourceLabel = sourceLabelFor(item);
+    const printSizeCm =
+      item.shape === "round" ? roundPrintSizeCmForItem(item, roundItems) : item.sizeCm;
 
     return `
-      <article class="print-item ${item.shape} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${item.sizeCm}cm">
+      <article class="print-item ${item.shape} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${printSizeCm}cm">
         <div class="photo-frame">
           <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}">
         </div>
@@ -2217,7 +2303,7 @@ function createMarzipanPhotoPrintHtml(input: {
             ? `<div class="label">
                 <strong>${escapeHtml(item.customerLastName)}</strong>
                 <span>${escapeHtml(item.product)}</span>
-                <small>${escapeHtml(marzipanPrintSizeLabel(item))}${escapeHtml(copyLabel)}</small>
+                <small>${escapeHtml(marzipanPrintSizeLabel(item, printSizeCm))}${escapeHtml(copyLabel)}</small>
                 ${sourceLabel ? `<small>${escapeHtml(sourceLabel)}</small>` : ""}
               </div>`
             : ""
@@ -2254,7 +2340,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <meta charset="utf-8">
     <title>${escapeHtml(title)}</title>
     <style>
-      @page { margin: 8mm 10mm 60mm 10mm; size: A4 portrait; }
+      @page { margin: 5mm; size: A4 portrait; }
       * { box-sizing: border-box; }
       :root {
         --petit-four-size: 37.8mm;
@@ -2300,7 +2386,7 @@ function createMarzipanPhotoPrintHtml(input: {
       main {
         margin: 0 auto;
         max-width: 210mm;
-        padding: 8mm 10mm 60mm;
+        padding: 6mm 5mm 10mm;
         width: 100%;
       }
       .sheet-header {
@@ -2352,8 +2438,9 @@ function createMarzipanPhotoPrintHtml(input: {
         align-items: flex-start;
         display: flex;
         flex-wrap: wrap;
-        gap: 5mm;
-        margin-top: 6mm;
+        column-gap: 0;
+        row-gap: 4mm;
+        margin-top: 4mm;
       }
       .print-item {
         break-inside: avoid;
@@ -2398,8 +2485,9 @@ function createMarzipanPhotoPrintHtml(input: {
       .label {
         font-size: 7.5px;
         line-height: 1.18;
-        margin-top: 1.5mm;
+        margin-top: 1mm;
         overflow-wrap: anywhere;
+        padding-right: 2mm;
       }
       .label strong,
       .label span,
@@ -2425,7 +2513,7 @@ function createMarzipanPhotoPrintHtml(input: {
         main {
           max-width: none;
           padding: 0;
-          width: 190mm;
+          width: 200mm;
         }
         .square-grid {
           gap: 0 !important;
@@ -2451,7 +2539,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <main>
       <div class="sheet-header">
         <h1>${escapeHtml(title)}</h1>
-        <p>${input.items.length} printstukken · petit four ca. 3,8 cm vierkant · taart 12 cm rond</p>
+        <p>${input.items.length} printstukken · petit four ca. 3,8 cm · taart 6-12 cm rond</p>
       </div>
       <section class="sheet">
         ${itemHtml}
