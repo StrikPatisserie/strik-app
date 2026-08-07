@@ -8,16 +8,11 @@ const BAKEIT_CONTANTBON_CONFIG = {
   ERROR_LABEL: 'Fout',
 
   QUERY:
-    'newer_than:30d {subject:"contantbon Bake-it" subject:"Orders email-Contantbonnen" subject:"Orders email-Contantbon A5" subject:"Orders email-Contantbon" subject:"Contantbonnen" subject:"Contantbon" label:"Contantbonnen"}',
+    'newer_than:30d {label:"Contantbonnen" subject:"contantbon Bake-it" subject:"Orders email" subject:contantbon subject:contantbonnen}',
   SEARCH_QUERIES: [
-    'newer_than:30d label:"Contantbonnen"',
-    'newer_than:30d subject:contantbon',
-    'newer_than:30d subject:contantbonnen',
-    'newer_than:30d subject:"Orders email"',
-    'newer_than:30d filename:pdf contantbon',
-    'newer_than:30d filename:pdf contantbonnen',
+    'newer_than:30d {label:"Contantbonnen" subject:"contantbon Bake-it" subject:"Orders email" subject:contantbon subject:contantbonnen}',
   ],
-  MAX_THREADS: 60,
+  MAX_THREADS: 30,
   MAX_PDF_ATTACHMENTS: 4,
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
   MIN_MESSAGE_AGE_MS: 60 * 1000,
@@ -27,7 +22,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
   DEFINITIVE_MAIL_START_HOUR: 20,
   DEFINITIVE_MAIL_START_MINUTE: 15,
   IMPORT_VERSION: 'split-mails-v1',
-  SCRIPT_VERSION: 'gmail-search-v2',
+  SCRIPT_VERSION: 'gmail-quota-v3',
 };
 
 function importBakeItBonnen() {
@@ -35,14 +30,8 @@ function importBakeItBonnen() {
 }
 
 function importBakeItContantbonnen() {
-  const processedLabel = getOrCreateBakeItLabel_(
-    BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL
-  );
-  const bakeItLabel = getOrCreateBakeItLabel_(
-    BAKEIT_CONTANTBON_CONFIG.BAKEIT_LABEL
-  );
-  const errorLabel = getOrCreateBakeItLabel_(BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL);
   const props = PropertiesService.getScriptProperties();
+  const labelCache = {};
   const threads = searchBakeItThreads_(BAKEIT_CONTANTBON_CONFIG.MAX_THREADS);
   const importRunId = Utilities.getUuid();
   const waitingGroups = findBakeItWaitingGroups_(threads, props);
@@ -109,19 +98,55 @@ function importBakeItContantbonnen() {
     });
 
     if (successThisRun) {
+      const bakeItLabel = getBakeItLabelForRun_(
+        labelCache,
+        BAKEIT_CONTANTBON_CONFIG.BAKEIT_LABEL,
+        true
+      );
+      const processedLabel = getBakeItLabelForRun_(
+        labelCache,
+        BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL,
+        true
+      );
+      const errorLabel = getBakeItLabelForRun_(
+        labelCache,
+        BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL,
+        false
+      );
+
       thread.addLabel(bakeItLabel);
       thread.addLabel(processedLabel);
-      thread.removeLabel(errorLabel);
+      if (errorLabel) thread.removeLabel(errorLabel);
     } else if (hasImported) {
+      const bakeItLabel = getBakeItLabelForRun_(
+        labelCache,
+        BAKEIT_CONTANTBON_CONFIG.BAKEIT_LABEL,
+        true
+      );
+      const processedLabel = getBakeItLabelForRun_(
+        labelCache,
+        BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL,
+        true
+      );
+      const errorLabel = getBakeItLabelForRun_(
+        labelCache,
+        BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL,
+        false
+      );
+
       thread.addLabel(bakeItLabel);
       thread.addLabel(processedLabel);
-      thread.removeLabel(errorLabel);
+      if (errorLabel) thread.removeLabel(errorLabel);
     } else if (failed) {
+      const errorLabel = getBakeItLabelForRun_(
+        labelCache,
+        BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL,
+        true
+      );
+
       thread.addLabel(errorLabel);
     }
   });
-
-  herstelBakeItFoutLabels();
 }
 
 function searchBakeItThreads_(maxThreads) {
@@ -178,6 +203,17 @@ function getOrCreateBakeItLabel_(name) {
   return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
 }
 
+function getBakeItLabelForRun_(labelCache, name, createIfMissing) {
+  if (Object.prototype.hasOwnProperty.call(labelCache, name)) {
+    return labelCache[name];
+  }
+
+  const label = GmailApp.getUserLabelByName(name);
+  labelCache[name] = label || (createIfMissing ? GmailApp.createLabel(name) : null);
+
+  return labelCache[name];
+}
+
 function sendBakeItPdfAttachment_(message, attachment, importWaveId) {
   const response = UrlFetchApp.fetch(BAKEIT_CONTANTBON_CONFIG.IMPORT_URL, {
     method: 'post',
@@ -213,12 +249,7 @@ function sendBakeItPdfAttachment_(message, attachment, importWaveId) {
 }
 
 function inferBakeItStatus_(message) {
-  const labelText = message
-    .getThread()
-    .getLabels()
-    .map((label) => label.getName())
-    .join(' ');
-  const haystack = `${message.getSubject()} ${labelText}`.toLowerCase();
+  const haystack = String(message.getSubject() || '').toLowerCase();
 
   if (haystack.indexOf('definitief') >= 0) return 'definitief';
   if (haystack.indexOf('prognose') >= 0) return 'prognose';
@@ -347,14 +378,12 @@ function buildBakeItImportGroupKey_(message) {
 
 function isBakeItContantbonCandidate_(message) {
   const subject = String(message.getSubject() || '');
-  const labelText = message
-    .getThread()
-    .getLabels()
-    .map((label) => label.getName())
-    .join(' ');
-  const haystack = `${subject} ${labelText}`.toLowerCase();
+  const haystack = subject.toLowerCase();
 
-  return haystack.indexOf('contantbon') >= 0;
+  return (
+    haystack.indexOf('contantbon') >= 0 ||
+    /orders\s+email/i.test(subject)
+  );
 }
 
 function normalizeBakeItSubjectForWave_(subject) {
