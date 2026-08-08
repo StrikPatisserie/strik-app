@@ -104,6 +104,11 @@ export type LogisticsRouteLearningObservationStop = {
   routeId: string;
   routeTitle: string;
   position: number;
+  originalVehicle?: string;
+  originalRouteId?: string;
+  originalRouteTitle?: string;
+  originalPosition?: number;
+  moved?: boolean;
   badges: string[];
 };
 

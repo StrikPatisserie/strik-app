@@ -65,13 +65,15 @@ const pickupLocations = [
   { label: "Lent", key: "lent" },
 ] as const;
 const alternativeAddressStartPatterns = [
-  /^wordt\s+(?:bezorgd|geleverd|afgeleverd)\s+(?:bij|op|naar|aan|voor)\b\s*:?\s*/i,
-  /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:bij|op|naar|aan|voor)\b\s*:?\s*/i,
-  /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s*:\s*/i,
-  /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?!tussen\b|voor\b|om\b|vanaf\b|kosten\b|\d+\b)\s*:?\s*/i,
-  /^(?:(?:alternatief|afwijkend|ander)\s+)?(?:bezorgadres|afleveradres|leveradres)\b\s*:?\s*/i,
-  /^(?:alternatief|afwijkend|ander)\s+adres\b\s*:?\s*/i,
+  /^wordt\s+(?:bezorgd|geleverd|afgeleverd|afgegeven)\s+(?:bij|op|naar|aan|voor)\b\s*:?\s*/i,
+  /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering|afgeven|afgifte)\s+(?:bij|op|naar|aan|voor)\b\s*:?\s*/i,
+  /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering|afgeven|afgifte)\s*[:;]\s*/i,
+  /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering|afgeven|afgifte)\s+(?!tussen\b|voor\b|om\b|vanaf\b|kosten\b|\d+\b)\s*:?\s*/i,
+  /^(?:(?:alternatief|afwijkend|ander)\s+)?(?:bezorgadres|afleveradres|leveradres)\b\s*[:;]?\s*/i,
+  /^(?:alternatief|afwijkend|ander)\s+adres\b\s*[:;]?\s*/i,
 ];
+const deliveryAddressActionPattern =
+  /\b(?:bezorgen|bezorging|bezorgadres|afleveren|aflevering|afleveradres|leveren|leveradres|afgeven|afgifte|wordt\s+(?:bezorgd|geleverd|afgeleverd|afgegeven))\b/i;
 const prognoseMailStartMinutes = 8 * 60 + 20;
 const definitiveMailStartMinutes = 20 * 60 + 15;
 const internalLinePatterns = [
@@ -816,9 +818,9 @@ function pickupLocationFromLine(line: string) {
 
 function isFulfillmentLine(line: string) {
   return (
-    /^(bezorgen|bezorging|afleveren|aflevering|leveren)$/i.test(line) ||
+    /^(bezorgen|bezorging|afleveren|aflevering|leveren|afgeven|afgifte)$/i.test(line) ||
     /^wordt gehaald\b/i.test(line) ||
-    /^wordt (?:bezorgd|geleverd|afgeleverd)\b/i.test(line)
+    /^wordt (?:bezorgd|geleverd|afgeleverd|afgegeven)\b/i.test(line)
   );
 }
 
@@ -826,9 +828,8 @@ function inferFulfillment(bodyLines: string[]): LogisticsFulfillment {
   if (bodyLines.some((line) => /^wordt gehaald\b/i.test(line))) return "afhalen";
   if (
     bodyLines.some((line) =>
-      /^bezorgen\b|^bezorging\b|^bezorgadres\b|^afleveren\b|^aflevering\b|^afleveradres\b|^leveren\b|^leveradres\b|^levering\s*(?::|bij\b|op\b|naar\b|aan\b|voor\b)|^wordt (?:bezorgd|geleverd|afgeleverd)\b/i.test(
-        line
-      )
+      deliveryAddressActionPattern.test(line) ||
+      (/^adres\b\s*:?\s*/i.test(line) && deliveryAddressActionPattern.test(line))
     )
   ) {
     return "bezorgen";
@@ -859,17 +860,23 @@ function inferPickupLocation(bodyLines: string[]) {
 function cleanAlternativeAddressLine(line: string) {
   return alternativeAddressStartPatterns
     .reduce((value, pattern) => value.replace(pattern, ""), line)
+    .replace(/^adres\b\s*[:;]?\s*/i, "")
+    .replace(/^[,;:]+/g, "")
     .replace(/\b(?:nummer|nr\.?|telefoon|tel\.?|contact|ceremoniemeester)\b.*$/i, "")
     .replace(/\bis betaald\b.*$/i, "")
-    .replace(/\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:tussen|voor|om|vanaf)\b.*$/i, "")
+    .replace(/\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering|afgeven|afgifte)\s+(?:tussen|voor|om|vanaf)\b.*$/i, "")
     .replace(/^(?:tussen|voor|om|vanaf)\b.*\d{1,2}[:.]\d{2}.*$/i, "")
+    .replace(/\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering|afgeven|afgifte)\s*$/i, "")
     .replace(/,?\s+graag$/i, "")
     .replace(/[,;:]+$/g, "")
     .trim();
 }
 
 function isAlternativeAddressStart(line: string) {
-  return alternativeAddressStartPatterns.some((pattern) => pattern.test(line));
+  return (
+    alternativeAddressStartPatterns.some((pattern) => pattern.test(line)) ||
+    (/^adres\b\s*:?\s*/i.test(line) && deliveryAddressActionPattern.test(line))
+  );
 }
 
 function isStandaloneAlternativeAddressLine(line: string) {
@@ -885,7 +892,7 @@ function isInstructionLine(line: string) {
     ) ||
     /^0\d[\d\s-]{7,}$/.test(line) ||
     Boolean(extractOperationalTime(line)) ||
-    /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:tussen|voor|om|vanaf)\b/i.test(
+    /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering|afgeven|afgifte)\s+(?:tussen|voor|om|vanaf)\b/i.test(
       line
     )
   );

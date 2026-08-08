@@ -6156,6 +6156,9 @@ export default function BakkerijLogistiekDashboard() {
         body: JSON.stringify({
           date: selectedPlan.date,
           routes: serializeRouteRounds(routeRoundsToSave),
+          baselineRoutes: learn
+            ? serializeRouteRounds(automaticRouteRounds)
+            : undefined,
           excludedSourceIds,
           learn,
         }),

@@ -696,6 +696,24 @@ function normalizeLogisticsRouteLearningState(
           .filter(isLogisticsRouteLearningObservationStop)
           .map((stop) => ({
             ...stop,
+            originalVehicle:
+              typeof stop.originalVehicle === "string"
+                ? stop.originalVehicle
+                : undefined,
+            originalRouteId:
+              typeof stop.originalRouteId === "string"
+                ? stop.originalRouteId
+                : undefined,
+            originalRouteTitle:
+              typeof stop.originalRouteTitle === "string"
+                ? stop.originalRouteTitle
+                : undefined,
+            originalPosition:
+              typeof stop.originalPosition === "number" &&
+              Number.isFinite(stop.originalPosition)
+                ? stop.originalPosition
+                : undefined,
+            moved: stop.moved === true,
             badges: stop.badges.filter((badge): badge is string =>
               typeof badge === "string"
             ),
@@ -1168,6 +1186,12 @@ function routeLearningKindForDraftStop(
   return "receipt";
 }
 
+function routeLearningCorrectionWeight(
+  stop: LogisticsRouteLearningObservationStop
+) {
+  return stop.moved ? 4 : 1;
+}
+
 function routeLearningObservationFromStoredDraft(
   draft: LogisticsRouteDraft
 ): LogisticsRouteLearningObservation {
@@ -1232,6 +1256,7 @@ function summarizeLogisticsRouteLearning(
   observations.forEach((observation) => {
     observation.stops.forEach((stop) => {
       const existing = stopAggregates.get(stop.key);
+      const correctionWeight = routeLearningCorrectionWeight(stop);
       const aggregate =
         existing ||
         ({
@@ -1259,11 +1284,11 @@ function summarizeLogisticsRouteLearning(
           : aggregate.lastSeenAt;
       aggregate.vehicleCounts.set(
         stop.vehicle,
-        (aggregate.vehicleCounts.get(stop.vehicle) || 0) + 1
+        (aggregate.vehicleCounts.get(stop.vehicle) || 0) + correctionWeight
       );
       aggregate.routeCounts.set(
         stop.routeId,
-        (aggregate.routeCounts.get(stop.routeId) || 0) + 1
+        (aggregate.routeCounts.get(stop.routeId) || 0) + correctionWeight
       );
 
       stopAggregates.set(stop.key, aggregate);
@@ -1286,6 +1311,7 @@ function summarizeLogisticsRouteLearning(
         if (!nextStop) return;
 
         const key = `${stop.key}->${nextStop.key}`;
+        const pairWeight = stop.moved || nextStop.moved ? 2 : 1;
         const existing = pairAggregates.get(key);
         const aggregate =
           existing ||
@@ -1301,7 +1327,7 @@ function summarizeLogisticsRouteLearning(
 
         aggregate.fromLabel = stop.label || aggregate.fromLabel;
         aggregate.toLabel = nextStop.label || aggregate.toLabel;
-        aggregate.samples += 1;
+        aggregate.samples += pairWeight;
         aggregate.lastSeenAt =
           observation.updatedAt > aggregate.lastSeenAt
             ? observation.updatedAt

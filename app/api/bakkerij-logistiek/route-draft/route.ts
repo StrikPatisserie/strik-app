@@ -125,18 +125,76 @@ function cleanRouteRound(value: unknown): LogisticsRouteDraftRound | null {
   };
 }
 
+type RouteLearningBaselineStop = {
+  key: string;
+  sourceId: string;
+  vehicle: string;
+  routeId: string;
+  routeTitle: string;
+  position: number;
+};
+
+function routeStopLearningKey(stop: LogisticsRouteDraftStop) {
+  return (
+    cleanText(stop.learningKey, 220) ||
+    cleanText(`${stop.label} ${stop.detail}`, 220)
+  );
+}
+
+function buildRouteLearningBaseline(
+  routes: LogisticsRouteDraftRound[]
+) {
+  const bySourceId = new Map<string, RouteLearningBaselineStop>();
+  const byLearningKey = new Map<string, RouteLearningBaselineStop>();
+
+  routes.forEach((route, routeIndex) => {
+    route.stops.forEach((stop, stopIndex) => {
+      const key = routeStopLearningKey(stop);
+      const sourceId = cleanText(stop.sourceId, 180);
+      const baselineStop = {
+        key,
+        sourceId,
+        vehicle: route.vehicle,
+        routeId: route.id,
+        routeTitle: route.title,
+        position: routeIndex * 100 + stopIndex,
+      };
+
+      if (sourceId && !bySourceId.has(sourceId)) {
+        bySourceId.set(sourceId, baselineStop);
+      }
+      if (key && !byLearningKey.has(key)) {
+        byLearningKey.set(key, baselineStop);
+      }
+    });
+  });
+
+  return { bySourceId, byLearningKey };
+}
+
 function routeLearningObservationFromDraft(
   date: string,
   draft: LogisticsRouteDraft,
-  updatedAt: string
+  updatedAt: string,
+  baselineRoutes: LogisticsRouteDraftRound[] = []
 ): LogisticsRouteLearningObservation {
+  const baseline = buildRouteLearningBaseline(baselineRoutes);
   const stops = draft.routes.flatMap((route, routeIndex) =>
     route.stops
       .map((stop, stopIndex) => {
-        const key =
-          cleanText(stop.learningKey, 220) ||
-          cleanText(`${stop.label} ${stop.detail}`, 220);
+        const key = routeStopLearningKey(stop);
         if (!key) return null;
+
+        const position = routeIndex * 100 + stopIndex;
+        const sourceId = cleanText(stop.sourceId, 180);
+        const baselineStop =
+          baseline.bySourceId.get(sourceId) || baseline.byLearningKey.get(key);
+        const moved = Boolean(
+          baselineStop &&
+            (baselineStop.vehicle !== route.vehicle ||
+              baselineStop.routeId !== route.id ||
+              baselineStop.position !== position)
+        );
 
         return {
           key,
@@ -146,7 +204,16 @@ function routeLearningObservationFromDraft(
           vehicle: route.vehicle,
           routeId: route.id,
           routeTitle: route.title,
-          position: routeIndex * 100 + stopIndex,
+          position,
+          ...(baselineStop
+            ? {
+                originalVehicle: baselineStop.vehicle,
+                originalRouteId: baselineStop.routeId,
+                originalRouteTitle: baselineStop.routeTitle,
+                originalPosition: baselineStop.position,
+                moved,
+              }
+            : {}),
           badges: stop.badges,
         };
       })
@@ -195,6 +262,9 @@ export async function POST(request: Request) {
     const routes = Array.isArray(body.routes)
       ? body.routes.map(cleanRouteRound).filter(Boolean)
       : [];
+    const baselineRoutes = Array.isArray(body.baselineRoutes)
+      ? body.baselineRoutes.map(cleanRouteRound).filter(Boolean)
+      : [];
     const excludedSourceIds = cleanStringList(body.excludedSourceIds);
     const shouldLearn = body.learn === true;
     const updatedAt = new Date().toISOString();
@@ -212,7 +282,12 @@ export async function POST(request: Request) {
     await upsertLogisticsRouteDraft(draft);
     if (shouldLearn) {
       await upsertLogisticsRouteLearningObservation(
-        routeLearningObservationFromDraft(date, draft, draft.updatedAt)
+        routeLearningObservationFromDraft(
+          date,
+          draft,
+          draft.updatedAt,
+          baselineRoutes as LogisticsRouteDraftRound[]
+        )
       );
     }
     const routeLearning = await getLogisticsRouteLearning();
