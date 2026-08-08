@@ -64,6 +64,14 @@ const pickupLocations = [
   { label: "Ziekerstraat", key: "ziekerstraat" },
   { label: "Lent", key: "lent" },
 ] as const;
+const alternativeAddressStartPatterns = [
+  /^wordt\s+(?:bezorgd|geleverd|afgeleverd)\s+(?:bij|op|naar|aan|voor)\b\s*:?\s*/i,
+  /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:bij|op|naar|aan|voor)\b\s*:?\s*/i,
+  /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s*:\s*/i,
+  /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?!tussen\b|voor\b|om\b|vanaf\b|kosten\b|\d+\b)\s*:?\s*/i,
+  /^(?:(?:alternatief|afwijkend|ander)\s+)?(?:bezorgadres|afleveradres|leveradres)\b\s*:?\s*/i,
+  /^(?:alternatief|afwijkend|ander)\s+adres\b\s*:?\s*/i,
+];
 const prognoseMailStartMinutes = 8 * 60 + 20;
 const definitiveMailStartMinutes = 20 * 60 + 15;
 const internalLinePatterns = [
@@ -808,15 +816,21 @@ function pickupLocationFromLine(line: string) {
 
 function isFulfillmentLine(line: string) {
   return (
-    /^(bezorgen|bezorging)$/i.test(line) ||
+    /^(bezorgen|bezorging|afleveren|aflevering|leveren)$/i.test(line) ||
     /^wordt gehaald\b/i.test(line) ||
-    /^wordt bezorgd\b/i.test(line)
+    /^wordt (?:bezorgd|geleverd|afgeleverd)\b/i.test(line)
   );
 }
 
 function inferFulfillment(bodyLines: string[]): LogisticsFulfillment {
   if (bodyLines.some((line) => /^wordt gehaald\b/i.test(line))) return "afhalen";
-  if (bodyLines.some((line) => /^bezorgen\b|^bezorging\b|^wordt bezorgd\b/i.test(line))) {
+  if (
+    bodyLines.some((line) =>
+      /^bezorgen\b|^bezorging\b|^bezorgadres\b|^afleveren\b|^aflevering\b|^afleveradres\b|^leveren\b|^leveradres\b|^levering\s*(?::|bij\b|op\b|naar\b|aan\b|voor\b)|^wordt (?:bezorgd|geleverd|afgeleverd)\b/i.test(
+        line
+      )
+    )
+  ) {
     return "bezorgen";
   }
 
@@ -843,20 +857,19 @@ function inferPickupLocation(bodyLines: string[]) {
 }
 
 function cleanAlternativeAddressLine(line: string) {
-  return line
-    .replace(/^bezorgen\s+bij\s+/i, "")
-    .replace(/^bezorgen\s+op\s+/i, "")
-    .replace(/^alternatief\s+bezorgadres\s*:?\s*/i, "")
-    .replace(/^alternatief\s+afleveradres\s*:?\s*/i, "")
-    .replace(/^afwijkend\s+afleveradres\s*:?\s*/i, "")
+  return alternativeAddressStartPatterns
+    .reduce((value, pattern) => value.replace(pattern, ""), line)
+    .replace(/\b(?:nummer|nr\.?|telefoon|tel\.?|contact|ceremoniemeester)\b.*$/i, "")
+    .replace(/\bis betaald\b.*$/i, "")
+    .replace(/\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:tussen|voor|om|vanaf)\b.*$/i, "")
+    .replace(/^(?:tussen|voor|om|vanaf)\b.*\d{1,2}[:.]\d{2}.*$/i, "")
     .replace(/,?\s+graag$/i, "")
+    .replace(/[,;:]+$/g, "")
     .trim();
 }
 
 function isAlternativeAddressStart(line: string) {
-  return /^(bezorgen bij|bezorgen op|alternatief bezorgadres|alternatief afleveradres|afwijkend afleveradres)\b/i.test(
-    line
-  );
+  return alternativeAddressStartPatterns.some((pattern) => pattern.test(line));
 }
 
 function isStandaloneAlternativeAddressLine(line: string) {
@@ -869,7 +882,22 @@ function isInstructionLine(line: string) {
   return (
     /^(bellen|graag|wij willen|via mail|de factuur|kostenplaats|naam aanvrager|factuurgegevens|t\.?b\.?v\.?|voor het ophalen)\b/i.test(
       line
-    ) || /^0\d[\d\s-]{7,}$/.test(line)
+    ) ||
+    /^0\d[\d\s-]{7,}$/.test(line) ||
+    Boolean(extractOperationalTime(line)) ||
+    /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:tussen|voor|om|vanaf)\b/i.test(
+      line
+    )
+  );
+}
+
+function shouldKeepAlternativeAddressRemark(line: string, addressLine: string) {
+  return (
+    Boolean(extractOperationalTime(line)) ||
+    /\b(?:nummer|nr\.?|telefoon|tel\.?|contact|ceremoniemeester|betaald)\b/i.test(
+      line
+    ) ||
+    cleanReceiptRemark(line) !== addressLine
   );
 }
 
@@ -877,25 +905,37 @@ function splitAlternativeAddressFromRemarks(
   remarks: string[],
   fulfillment: LogisticsFulfillment
 ) {
-  if (fulfillment !== "bezorgen") {
+  const hasAlternativeAddressCue = remarks.some(isAlternativeAddressStart);
+  if (fulfillment !== "bezorgen" && !hasAlternativeAddressCue) {
     return {
       alternativeAddressLines: [] as string[],
       remarks,
+      impliesDelivery: false,
     };
   }
 
   const alternativeAddressLines: string[] = [];
   const remainingRemarks: string[] = [];
   let consumeAddressContinuation = false;
+  let impliesDelivery = fulfillment === "bezorgen";
 
   for (const remark of remarks) {
-    if (pickupLocationFromLine(remark) || isFulfillmentLine(remark)) {
+    if (pickupLocationFromLine(remark)) {
       continue;
     }
 
     if (isAlternativeAddressStart(remark)) {
-      uniquePush(alternativeAddressLines, cleanAlternativeAddressLine(remark));
+      const addressLine = cleanAlternativeAddressLine(remark);
+      uniquePush(alternativeAddressLines, addressLine);
+      if (shouldKeepAlternativeAddressRemark(remark, addressLine)) {
+        uniquePush(remainingRemarks, remark);
+      }
       consumeAddressContinuation = true;
+      impliesDelivery = true;
+      continue;
+    }
+
+    if (isFulfillmentLine(remark)) {
       continue;
     }
 
@@ -920,6 +960,7 @@ function splitAlternativeAddressFromRemarks(
   return {
     alternativeAddressLines,
     remarks: remainingRemarks,
+    impliesDelivery: impliesDelivery || alternativeAddressLines.length > 0,
   };
 }
 
@@ -1479,6 +1520,10 @@ function parsePage(pageText: string): ParsedPage | null {
     normalizedRemarks,
     fulfillment
   );
+  const pageFulfillment =
+    fulfillment !== "afhalen" && alternativeAddressResult.impliesDelivery
+      ? "bezorgen"
+      : fulfillment;
 
   return {
     key,
@@ -1493,7 +1538,7 @@ function parsePage(pageText: string): ParsedPage | null {
     timeLines,
     deliveryBlock,
     alternativeAddressLines: alternativeAddressResult.alternativeAddressLines,
-    fulfillment,
+    fulfillment: pageFulfillment,
     pickupLocation,
     total,
   };
@@ -1560,6 +1605,7 @@ function inferTags(draft: ReceiptDraft) {
     draft.customer,
     draft.topAddress,
     draft.deliveryBlock.join(" "),
+    draft.alternativeAddressLines.join(" "),
     draft.lines.map((line) => line.description).join(" "),
     draft.remarks.join(" "),
   ]

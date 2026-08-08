@@ -3669,10 +3669,26 @@ function routeLearningStopForReceipt(
   receipt: ReceiptSummary,
   kind = "receipt"
 ) {
-  return routeLearningStopForKey(
+  const exactStop = routeLearningStopForKey(
     routeLearning,
     routeLearningKeyForReceipt(receipt, kind)
   );
+  if (exactStop || !routeLearning) return exactStop;
+
+  const customer = routeLearningKeyPart(receipt.customer);
+  const receiptKind =
+    kind === "ice" || isIceReceiptSummary(receipt) ? "ice" : "receipt";
+  const customerPrefix = `${receiptKind}:${customer || "klant"}:`;
+  const matches = routeLearning.stops
+    .filter((stop) => stop.key.startsWith(customerPrefix))
+    .sort((first, second) => {
+      const samplesCompare = second.samples - first.samples;
+      if (samplesCompare !== 0) return samplesCompare;
+
+      return second.lastSeenAt.localeCompare(first.lastSeenAt);
+    });
+
+  return matches[0] || null;
 }
 
 function busIdFromVehicleName(vehicle: string): BusId | "" {
@@ -4121,20 +4137,20 @@ function sortReceiptsAlongRoute(
       const latePenalty = deadline >= 780 ? 1.8 : 0;
       const receiptLearningKey = routeLearningKeyForReceipt(receipt);
       const learnedPairBoost = Math.min(
-        3.4,
+        6,
         routeLearningPairSamples(
           routeLearning,
           currentLearningKey,
           receiptLearningKey
-        ) * 0.9
+        ) * 1.25
       );
       const learnedReversePenalty = Math.min(
-        2.2,
+        4,
         routeLearningPairSamples(
           routeLearning,
           receiptLearningKey,
           currentLearningKey
-        ) * 0.7
+        ) * 1
       );
       const score =
         distanceScore + latePenalty - learnedPairBoost + learnedReversePenalty;
@@ -4447,8 +4463,8 @@ function routeAssignmentCostForReceipt(
     cost += 0.8;
   }
   if (learnedBus && busId) {
-    const learningWeight = Math.min(2.4, 0.9 + learnedBus.samples * 0.35);
-    cost += learnedBus.bus === busId ? -learningWeight : learningWeight * 0.8;
+    const learningWeight = Math.min(7, 2.2 + learnedBus.samples * 0.85);
+    cost += learnedBus.bus === busId ? -learningWeight : learningWeight * 1.1;
   }
 
   return cost;
@@ -6128,7 +6144,9 @@ export default function BakkerijLogistiekDashboard() {
   ) {
     setRouteSaveState("saving");
     setRouteSaveMessage(
-      learn ? "definitieve route opslaan..." : "routeconcept opslaan..."
+      learn
+        ? "definitieve route opslaan en leren..."
+        : "routeconcept opslaan..."
     );
 
     try {
@@ -6159,7 +6177,7 @@ export default function BakkerijLogistiekDashboard() {
       setRouteSaveState("saved");
       setRouteSaveMessage(
         learn
-          ? `definitieve route opgeslagen om ${getUploadTime()}`
+          ? `definitieve route opgeslagen en geleerd om ${getUploadTime()}`
           : `routeconcept bewaard om ${getUploadTime()}`
       );
     } catch (error) {
@@ -6221,7 +6239,9 @@ export default function BakkerijLogistiekDashboard() {
     setRoutesEdited(true);
     setRouteHasUnsavedChanges(true);
     setRouteSaveState("idle");
-    setRouteSaveMessage("handmatige stop toegevoegd · nog niet definitief opgeslagen");
+    setRouteSaveMessage(
+      "handmatige stop toegevoegd · nog niet definitief opgeslagen"
+    );
     void saveRouteDraft(nextRoutes, false);
   }
 
@@ -8548,15 +8568,15 @@ function RouteConfirmButton({
   return (
     <button
       type="button"
-      aria-label="Definitieve route bevestigen"
-      title="Definitieve route bevestigen"
+      aria-label="Definitieve route opslaan"
+      title="Definitieve route opslaan en routegeheugen bijwerken"
       disabled={disabled}
       onClick={onClick}
       className="flex h-8 items-center gap-1.5 border border-[#bfe3c8] bg-[#f6faf4] px-2 text-xs font-black tracking-normal text-[#1a1815] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
     >
       <SaveIcon />
       <span className="sm:hidden">Definitief</span>
-      <span className="hidden sm:inline">Definitieve route bevestigen</span>
+      <span className="hidden sm:inline">Definitieve route opslaan</span>
     </button>
   );
 }
