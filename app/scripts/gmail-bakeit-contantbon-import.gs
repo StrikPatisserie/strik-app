@@ -10,10 +10,14 @@ const BAKEIT_CONTANTBON_CONFIG = {
   QUERY:
     'newer_than:1d label:"Contantbonnen" -label:"Ingelezen" -label:"Fout" {subject:"contantbon Bake-it" subject:"Orders email" subject:contantbon subject:contantbonnen}',
   SEARCH_QUERIES: [
+    'newer_than:2d -label:"Ingelezen" -label:"Fout" subject:"Orders email" subject:contantbon',
     'newer_than:1d label:"Contantbonnen" -label:"Ingelezen" -label:"Fout" {subject:"contantbon Bake-it" subject:"Orders email" subject:contantbon subject:contantbonnen}',
+    'newer_than:2d -label:"Ingelezen" -label:"Fout" {subject:"contantbon Bake-it" subject:"contantbon A5" subject:contantbonnen}',
   ],
   RECOVERY_SEARCH_QUERIES: [
+    'newer_than:30d subject:"Orders email" subject:contantbon',
     'newer_than:30d {label:"Contantbonnen" subject:"contantbon Bake-it" subject:"Orders email" subject:contantbon subject:contantbonnen}',
+    'newer_than:30d {subject:"contantbon Bake-it" subject:"contantbon A5" subject:contantbonnen}',
   ],
   MAX_THREADS: 8,
   RECOVERY_MAX_THREADS: 30,
@@ -34,7 +38,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
     { HOUR: 20, MINUTE: 35 },
   ],
   IMPORT_VERSION: 'split-mails-v1',
-  SCRIPT_VERSION: 'gmail-quota-v3',
+  SCRIPT_VERSION: 'gmail-archive-v7',
 };
 
 function importBakeItContantbonnen() {
@@ -108,45 +112,9 @@ function importBakeItContantbonnen() {
     });
 
     if (successThisRun) {
-      const bakeItLabel = getBakeItLabelForRun_(
-        labelCache,
-        BAKEIT_CONTANTBON_CONFIG.BAKEIT_LABEL,
-        true
-      );
-      const processedLabel = getBakeItLabelForRun_(
-        labelCache,
-        BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL,
-        true
-      );
-      const errorLabel = getBakeItLabelForRun_(
-        labelCache,
-        BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL,
-        false
-      );
-
-      thread.addLabel(bakeItLabel);
-      thread.addLabel(processedLabel);
-      if (errorLabel) thread.removeLabel(errorLabel);
+      markBakeItThreadProcessed_(thread, labelCache);
     } else if (hasImported) {
-      const bakeItLabel = getBakeItLabelForRun_(
-        labelCache,
-        BAKEIT_CONTANTBON_CONFIG.BAKEIT_LABEL,
-        true
-      );
-      const processedLabel = getBakeItLabelForRun_(
-        labelCache,
-        BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL,
-        true
-      );
-      const errorLabel = getBakeItLabelForRun_(
-        labelCache,
-        BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL,
-        false
-      );
-
-      thread.addLabel(bakeItLabel);
-      thread.addLabel(processedLabel);
-      if (errorLabel) thread.removeLabel(errorLabel);
+      markBakeItThreadProcessed_(thread, labelCache);
     } else if (failed) {
       const errorLabel = getBakeItLabelForRun_(
         labelCache,
@@ -157,6 +125,37 @@ function importBakeItContantbonnen() {
       thread.addLabel(errorLabel);
     }
   });
+
+  verplaatsBakeItIngelezenThreads_(labelCache);
+}
+
+function markBakeItThreadProcessed_(thread, labelCache) {
+  const bakeItLabel = getBakeItLabelForRun_(
+    labelCache,
+    BAKEIT_CONTANTBON_CONFIG.BAKEIT_LABEL,
+    true
+  );
+  const processedLabel = getBakeItLabelForRun_(
+    labelCache,
+    BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL,
+    true
+  );
+  const sourceLabel = getBakeItLabelForRun_(
+    labelCache,
+    BAKEIT_CONTANTBON_CONFIG.SOURCE_LABEL,
+    false
+  );
+  const errorLabel = getBakeItLabelForRun_(
+    labelCache,
+    BAKEIT_CONTANTBON_CONFIG.ERROR_LABEL,
+    false
+  );
+
+  thread.addLabel(bakeItLabel);
+  thread.addLabel(processedLabel);
+  if (sourceLabel) thread.removeLabel(sourceLabel);
+  if (errorLabel) thread.removeLabel(errorLabel);
+  thread.moveToArchive();
 }
 
 function searchBakeItThreads_(maxThreads, queriesOverride) {
@@ -169,7 +168,12 @@ function searchBakeItThreads_(maxThreads, queriesOverride) {
 
   queries.forEach((query) => {
     try {
-      GmailApp.search(query, 0, maxThreads).forEach((thread) => {
+      const foundThreads = GmailApp.search(query, 0, maxThreads);
+      logBakeIt_(
+        `Bake-it zoekquery: ${foundThreads.length} thread(s) voor ${query}`
+      );
+
+      foundThreads.forEach((thread) => {
         const key = getBakeItThreadKey_(thread);
         if (threadByKey[key]) return;
 
@@ -191,6 +195,49 @@ function searchBakeItRecoveryThreads_(maxThreads) {
     BAKEIT_CONTANTBON_CONFIG.RECOVERY_SEARCH_QUERIES ||
       BAKEIT_CONTANTBON_CONFIG.SEARCH_QUERIES
   );
+}
+
+function verplaatsBakeItIngelezenThreads_(labelCache) {
+  const sourceLabel = getBakeItLabelForRun_(
+    labelCache,
+    BAKEIT_CONTANTBON_CONFIG.SOURCE_LABEL,
+    false
+  );
+  const processedLabel = getBakeItLabelForRun_(
+    labelCache,
+    BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL,
+    false
+  );
+
+  if (!processedLabel) return;
+
+  const queries = [
+    `newer_than:30d label:"${BAKEIT_CONTANTBON_CONFIG.SOURCE_LABEL}" label:"${BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL}" {subject:"contantbon Bake-it" subject:"Orders email" subject:contantbon subject:contantbonnen}`,
+    `newer_than:30d in:inbox label:"${BAKEIT_CONTANTBON_CONFIG.PROCESSED_LABEL}" {subject:"contantbon Bake-it" subject:"Orders email" subject:contantbon subject:contantbonnen}`,
+  ];
+  const threadByKey = {};
+  const threads = [];
+
+  queries.forEach((query) => {
+    GmailApp.search(query, 0, 100).forEach((thread) => {
+      const key = getBakeItThreadKey_(thread);
+      if (threadByKey[key]) return;
+
+      threadByKey[key] = true;
+      threads.push(thread);
+    });
+  });
+
+  threads.forEach((thread) => {
+    if (sourceLabel) thread.removeLabel(sourceLabel);
+    thread.moveToArchive();
+  });
+
+  if (threads.length) {
+    logBakeIt_(
+      `Bake-it Gmail cleanup: ${threads.length} ingelezen thread(s) uit ${BAKEIT_CONTANTBON_CONFIG.SOURCE_LABEL}/Inbox gehaald.`
+    );
+  }
 }
 
 function loadBakeItThreadData_(threads) {
