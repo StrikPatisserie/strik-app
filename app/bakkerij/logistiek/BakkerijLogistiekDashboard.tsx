@@ -5236,7 +5236,7 @@ function routeRoundNumber(route: RouteRound) {
   const idMatch = route.id.match(/\bbus-[ab]-(\d+)\b/i);
   if (idMatch) return Number(idMatch[1]) || 1;
 
-  return 1;
+  return 0;
 }
 
 function isPrimaryRouteRound(route: RouteRound) {
@@ -5256,15 +5256,11 @@ function shouldShowRouteRound(route: RouteRound) {
 }
 
 function compactEmptyRouteRounds(routeRounds: RouteRound[]) {
-  return routeRounds.filter(
-    (route) => isPrimaryRouteRound(route) || route.stops.length > 0
-  );
+  return routeRounds.filter(shouldShowRouteRound);
 }
 
 function routeRoundsForPersistence(routeRounds: RouteRound[]) {
-  return routeRounds.filter(
-    (route) => isPrimaryRouteRound(route) || route.stops.length > 0
-  );
+  return routeRounds.filter(shouldShowRouteRound);
 }
 
 function busIdFromRouteVehicle(vehicle: string): BusId | "" {
