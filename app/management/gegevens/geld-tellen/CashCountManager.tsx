@@ -34,12 +34,13 @@ const euroFormatter = new Intl.NumberFormat("nl-NL", {
 const banknoteDenominations = cashDenominations.filter(
   (denomination) =>
     denomination.kind === "note" &&
-    denomination.value >= 5 &&
-    denomination.value <= 100
+    denomination.value >= 5
 );
 
 const banknoteStyles: Record<string, { bg: string; border: string; text: string }> =
   {
+    eur500: { bg: "#c3b1dd", border: "#7a5aa4", text: "#2a1745" },
+    eur200: { bg: "#e5d58a", border: "#b2922f", text: "#46390c" },
     eur100: { bg: "#b8d7b4", border: "#6fa06b", text: "#15351f" },
     eur50: { bg: "#f6c28b", border: "#cf8345", text: "#462307" },
     eur20: { bg: "#a9cfe8", border: "#5f94b7", text: "#102f48" },
