@@ -17,6 +17,7 @@ import {
 } from "@/app/management/revenueData";
 
 type LoadState = "loading" | "ready" | "error" | "saving";
+type CashMenuKind = "patisserie" | "ice";
 
 type RevenueResponse = RevenueData & {
   storage?: {
@@ -405,6 +406,8 @@ function cashWarning(record: RevenueCashRecord | undefined) {
 export default function CashCountManager() {
   const [selectedDate, setSelectedDate] = useState(localIsoDate());
   const [selectedShop, setSelectedShop] = useState<RevenueShop>(revenueShops[0]);
+  const [selectedCashMenuKind, setSelectedCashMenuKind] =
+    useState<CashMenuKind>("patisserie");
   const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
   const [cashRecords, setCashRecords] = useState<RevenueCashRecord[]>([]);
@@ -1125,7 +1128,7 @@ export default function CashCountManager() {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/88 p-2 shadow-sm">
+      <section className="rounded-lg border border-[#d9cbb8] bg-[#f7f1e7]/90 p-2 shadow-sm">
         <div className="grid gap-2 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)_auto] lg:items-end">
           <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
             Week
@@ -1234,17 +1237,22 @@ export default function CashCountManager() {
             </p>
             <div className="grid gap-1.5 sm:grid-cols-2">
               {weekRows.map((row) => {
-                const isSelected = row.shop === selectedShop;
+                const isSelected =
+                  row.shop === selectedShop &&
+                  selectedCashMenuKind === "patisserie";
 
                 return (
                   <button
                     key={row.shop}
                     type="button"
-                    onClick={() => setSelectedShop(row.shop)}
-                    className={`rounded-md border p-2 text-left transition ${
+                    onClick={() => {
+                      setSelectedShop(row.shop);
+                      setSelectedCashMenuKind("patisserie");
+                    }}
+                    className={`rounded-md border p-2 text-left shadow-sm transition ${
                       isSelected
                         ? "border-[#1a1815] bg-[#1a1815] text-white"
-                        : "border-[#e7e0d8] bg-white text-[#1a1815] hover:border-[#cfc5ba]"
+                        : "border-[#e0d5c8] bg-white/94 text-[#1a1815] hover:border-[#1a1815]/45"
                     }`}
                   >
                     <span
@@ -1277,17 +1285,21 @@ export default function CashCountManager() {
             </p>
             <div className="grid gap-1.5 sm:grid-cols-2">
               {weekRows.map((row) => {
-                const isSelected = row.shop === selectedShop;
+                const isSelected =
+                  row.shop === selectedShop && selectedCashMenuKind === "ice";
 
                 return (
                   <button
                     key={`ice-${row.shop}`}
                     type="button"
-                    onClick={() => setSelectedShop(row.shop)}
-                    className={`rounded-md border p-2 text-left transition ${
+                    onClick={() => {
+                      setSelectedShop(row.shop);
+                      setSelectedCashMenuKind("ice");
+                    }}
+                    className={`rounded-md border p-2 text-left shadow-sm transition ${
                       isSelected
-                        ? "border-[#d9b15f] bg-[#fff7df] text-[#1a1815]"
-                        : "border-[#e7e0d8] bg-white text-[#1a1815] hover:border-[#d9b15f]"
+                        ? "border-[#1f4f35] bg-[#fff7df] text-[#1a1815] ring-2 ring-[#1f4f35]/45"
+                        : "border-[#e0d5c8] bg-white/94 text-[#1a1815] hover:border-[#d9b15f]"
                     }`}
                   >
                     <span className="block text-[0.56rem] font-black uppercase tracking-normal text-[#9a7531]">
@@ -1326,7 +1338,7 @@ export default function CashCountManager() {
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-                Filiaal
+                {selectedCashMenuKind === "ice" ? "Ijsloket" : "Patisserie"}
               </p>
               <h2 className="text-lg font-black leading-tight text-[#1a1815]">
                 {selectedShopRow.shop}
