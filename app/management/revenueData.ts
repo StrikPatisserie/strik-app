@@ -68,6 +68,7 @@ export type RevenueCashRecord = {
   difference?: number;
   safeCash?: number;
   safeDifference?: number;
+  iceCash?: number;
   checkedDenominations?: CashDenominationCounts;
   countedBy?: string;
   openedAt?: string;
@@ -189,6 +190,7 @@ function compactCashRecordPayload(record: RevenueCashRecord) {
     df: record.difference,
     sf: record.safeCash,
     sd: record.safeDifference,
+    ic: record.iceCash,
     xd: record.checkedDenominations,
     cb: record.countedBy,
     oa: record.openedAt,
@@ -224,6 +226,7 @@ function expandCashRecordPayload(
     difference: payload.difference ?? payload.df,
     safeCash: payload.safeCash ?? payload.sf,
     safeDifference: payload.safeDifference ?? payload.sd,
+    iceCash: payload.iceCash ?? payload.ic,
     checkedDenominations: payload.checkedDenominations ?? payload.xd,
     countedBy: payload.countedBy ?? payload.cb,
     openedAt: payload.openedAt ?? payload.oa,
@@ -614,6 +617,8 @@ export function normalizeRevenueCashRecord(
       value.safeDifference === undefined
         ? undefined
         : moneyFrom(value.safeDifference),
+    iceCash:
+      value.iceCash === undefined ? undefined : positiveMoneyFrom(value.iceCash),
     checkedDenominations,
     countedBy: textFrom(value.countedBy) || undefined,
     openedAt: textFrom(value.openedAt) || undefined,
@@ -692,6 +697,10 @@ export function normalizeRevenueData(value: unknown): RevenueData {
   const shouldUseDirectCashRecords =
     Array.isArray(value.cashRecords) &&
     (directCashRecords.length > 0 || embeddedCashRecords.length === 0);
+  const mergedCashRecords = mergeRevenueCashRecords(
+    embeddedCashRecords,
+    directCashRecords
+  );
   const embeddedCashDeposits = extractEmbeddedCashDeposits(value);
   const directCashDeposits = Array.isArray(value.cashDeposits)
     ? value.cashDeposits.flatMap((record) => {
@@ -703,7 +712,9 @@ export function normalizeRevenueData(value: unknown): RevenueData {
   return {
     records,
     dailyRecords,
-    cashRecords: shouldUseDirectCashRecords ? directCashRecords : embeddedCashRecords,
+    cashRecords: shouldUseDirectCashRecords
+      ? mergedCashRecords
+      : embeddedCashRecords,
     cashDeposits: mergeRevenueCashDeposits(
       embeddedCashDeposits,
       directCashDeposits
@@ -841,6 +852,7 @@ export function mergeRevenueCashRecords(
       ...record,
       cashOut: record.cashOut ?? existing?.cashOut,
       receipts: record.receipts ?? existing?.receipts,
+      iceCash: record.iceCash ?? existing?.iceCash,
       checkedDenominations:
         record.checkedDenominations || existing?.checkedDenominations,
       checkedAt: record.checkedAt || existing?.checkedAt,

@@ -19,7 +19,8 @@ import {
 export type PersonnelMailOrderType =
   | "cupcake-jubilee"
   | "major-jubilee"
-  | "birthday-cake";
+  | "birthday-cake"
+  | "cash-deposit-summary";
 
 export type PersonnelMailOrder = {
   id: string;

@@ -264,6 +264,10 @@ function receiptAmount(record: RevenueCashRecord) {
   return record.receipts;
 }
 
+function iceCashAmount(record: RevenueCashRecord | undefined) {
+  return record?.iceCash ?? 0;
+}
+
 function checkedCashNoteCount(record: RevenueCashRecord, key: CashDenominationKey) {
   return Math.max(
     0,
@@ -375,6 +379,10 @@ function dayShortName(value: string) {
   });
 }
 
+function isCashExpectedForShopDate(shop: RevenueShop, date: string) {
+  return !(shop === "Daalseweg" && dateFromIso(date).getDay() === 0);
+}
+
 function cashWarning(record: RevenueCashRecord | undefined) {
   if (!record) return "Geen Cash-it dagafsluiting ontvangen.";
   if (Math.abs(record.countedCash - record.denominationTotal) > 0.01) {
@@ -399,9 +407,11 @@ export default function CashCountManager() {
   const [cashDeposits, setCashDeposits] = useState<RevenueCashDeposit[]>([]);
   const [safeCashDrafts, setSafeCashDrafts] = useState<Record<string, string>>({});
   const [cashNoteDrafts, setCashNoteDrafts] = useState<Record<string, string>>({});
+  const [iceCashDrafts, setIceCashDrafts] = useState<Record<string, string>>({});
   const [depositDrafts, setDepositDrafts] = useState<Record<string, string>>({});
   const [depositNotes, setDepositNotes] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
+  const [mailState, setMailState] = useState<"idle" | "sending">("idle");
   const [status, setStatus] = useState("");
   const [storage, setStorage] = useState<RevenueResponse["storage"]>();
 
@@ -478,7 +488,16 @@ export default function CashCountManager() {
           selectedWeek.week,
           shop
         ).sort((first, second) => first.date.localeCompare(second.date));
-        const checkedRecords = shopRecords.filter((record) => record.checkedAt);
+        const expectedDates = selectedWeekDates.filter(
+          (date) =>
+            isCashExpectedForShopDate(shop, date) ||
+            Boolean(findCashRecord(shopRecords, date, shop))
+        );
+        const checkedRecords = expectedDates.flatMap((date) => {
+          const record = findCashRecord(shopRecords, date, shop);
+
+          return record?.checkedAt ? [record] : [];
+        });
         const cashRevenue = shopRecords.reduce(
           (total, record) => total + (record.cashRevenue ?? record.countedCash),
           0
@@ -525,9 +544,11 @@ export default function CashCountManager() {
           includedCheckedSafeCash,
           difference,
           checkedCount: checkedRecords.length,
-          missingCount: selectedWeekDates.filter(
+          expectedCount: expectedDates.length,
+          missingCount: expectedDates.filter(
             (date) => !findCashRecord(shopRecords, date, shop)
           ).length,
+          expectedDates,
           deposit,
         };
       }),
@@ -546,6 +567,7 @@ export default function CashCountManager() {
       selectedWeekDates.map((date) => ({
         date,
         record: findCashRecord(cashRecords, date, selectedShop),
+        isExpected: isCashExpectedForShopDate(selectedShop, date),
       })),
     [cashRecords, selectedShop, selectedWeekDates]
   );
@@ -599,7 +621,22 @@ export default function CashCountManager() {
       ),
     [checkedWeekRecords]
   );
-  const weekCheckedCount = checkedWeekRecords.length;
+  const weekCheckedCount = weekRows.reduce(
+    (total, row) => total + row.checkedCount,
+    0
+  );
+  const weekExpectedCount = weekRows.reduce(
+    (total, row) => total + row.expectedCount,
+    0
+  );
+  const weekMissingCount = weekRows.reduce(
+    (total, row) => total + row.missingCount,
+    0
+  );
+  const isSelectedWeekComplete =
+    weekExpectedCount > 0 &&
+    weekMissingCount === 0 &&
+    weekRows.every((row) => row.checkedCount >= row.expectedCount);
   const availableWeeks = useMemo(() => {
     const byKey = new Map<string, { key: string; year: number; week: number }>();
 
@@ -666,6 +703,9 @@ export default function CashCountManager() {
           ...current,
           safeCash,
           safeDifference: Number((safeCash - safeExpectedCash(current)).toFixed(2)),
+          iceCash: parseAmount(
+            iceCashDrafts[key] || formatAmountInput(iceCashAmount(current))
+          ),
           checkedDenominations: buildCheckedCashDenominations(
             current,
             cashNoteDrafts
@@ -707,6 +747,54 @@ export default function CashCountManager() {
     }
 
     await markChecked(record);
+  }
+
+  function cashRecordDraftKey(record: RevenueCashRecord) {
+    return `${record.date}:${record.shop}`;
+  }
+
+  function iceCashInputValue(record: RevenueCashRecord) {
+    return (
+      iceCashDrafts[cashRecordDraftKey(record)] ??
+      formatAmountInput(iceCashAmount(record))
+    );
+  }
+
+  function applyIceCashDrafts(sourceRecords = cashRecords) {
+    const now = new Date().toISOString();
+
+    return sourceRecords.map((record) => {
+      const key = cashRecordDraftKey(record);
+      if (!Object.prototype.hasOwnProperty.call(iceCashDrafts, key)) {
+        return record;
+      }
+
+      return {
+        ...record,
+        iceCash: parseAmount(iceCashDrafts[key] || "0"),
+        updatedAt: now,
+      };
+    });
+  }
+
+  async function saveIceCash(record: RevenueCashRecord) {
+    const key = cashRecordDraftKey(record);
+    const now = new Date().toISOString();
+    const nextCashRecords = buildUpdatedCashRecords(
+      cashRecords,
+      record.date,
+      record.shop,
+      (current) => ({
+        ...current,
+        iceCash: parseAmount(
+          iceCashDrafts[key] ?? formatAmountInput(iceCashAmount(current))
+        ),
+        updatedAt: now,
+      })
+    );
+
+    setCashRecords(nextCashRecords);
+    await saveCash(cashDeposits, nextCashRecords);
   }
 
   async function saveCash(
@@ -800,6 +888,192 @@ export default function CashCountManager() {
     await saveCash(nextDeposits);
   }
 
+  function buildWeekCashDeposits(sourceRecords = cashRecords) {
+    const now = new Date().toISOString();
+    const weekShops = new Set(weekRows.map((row) => row.shop));
+    const deposits = weekRows.map((row) => {
+      const shopRecords = recordsForWeek(
+        sourceRecords,
+        selectedWeek.year,
+        selectedWeek.week,
+        row.shop
+      );
+      const checkedRecords = row.expectedDates.flatMap((date) => {
+        const record = findCashRecord(shopRecords, date, row.shop);
+
+        return record?.checkedAt ? [record] : [];
+      });
+      const checkedSafeCash = checkedRecords.reduce(
+        (total, record) => total + safeCheckedCash(record),
+        0
+      );
+      const dateRange = checkedRecords.map((record) => record.date).sort();
+      const draftKey = `${depositWeekKey}:${row.shop}`;
+      const amount = parseAmount(
+        depositDrafts[draftKey] ??
+          formatAmountInput(row.deposit?.amount || checkedSafeCash)
+      );
+
+      return {
+        id: createRevenueCashDepositKey(selectedWeek.year, selectedWeek.week, row.shop),
+        year: selectedWeek.year,
+        week: selectedWeek.week,
+        shop: row.shop,
+        amount,
+        dateFrom: dateRange[0],
+        dateTo: dateRange.at(-1),
+        cashRecordIds: checkedRecords.map((record) => record.id),
+        depositedAt: row.deposit?.depositedAt || now,
+        depositedBy: row.deposit?.depositedBy || "Strik app",
+        note: depositNotes[draftKey] || row.deposit?.note || "",
+        createdAt: row.deposit?.createdAt || now,
+        updatedAt: now,
+      } satisfies RevenueCashDeposit;
+    });
+
+    return mergeRevenueCashDeposits(
+      cashDeposits.filter(
+        (item) =>
+          item.year !== selectedWeek.year ||
+          item.week !== selectedWeek.week ||
+          !weekShops.has(item.shop)
+      ),
+      deposits
+    );
+  }
+
+  function buildWeekDepositMailRows(
+    sourceRecords = cashRecords,
+    sourceDeposits = cashDeposits
+  ) {
+    return weekRows.map((row) => {
+      const shopRecords = recordsForWeek(
+        sourceRecords,
+        selectedWeek.year,
+        selectedWeek.week,
+        row.shop
+      );
+      const checkedRecords = row.expectedDates.flatMap((date) => {
+        const record = findCashRecord(shopRecords, date, row.shop);
+
+        return record?.checkedAt ? [record] : [];
+      });
+      const depositDraftKey = `${depositWeekKey}:${row.shop}`;
+      const expectedSafeCash = checkedRecords.reduce(
+        (total, record) => total + safeExpectedCash(record),
+        0
+      );
+      const checkedSafeCash = checkedRecords.reduce(
+        (total, record) => total + safeCheckedCash(record),
+        0
+      );
+      const iceCash = checkedRecords.reduce(
+        (total, record) =>
+          total +
+          parseAmount(
+            iceCashDrafts[cashRecordDraftKey(record)] ??
+              formatAmountInput(iceCashAmount(record))
+          ),
+        0
+      );
+      const cashRevenue = checkedRecords.reduce(
+        (total, record) => total + (record.cashRevenue ?? record.countedCash),
+        0
+      );
+      const difference = checkedRecords.reduce(
+        (total, record) => total + safeDifference(record),
+        0
+      );
+      const sourceDeposit =
+        sourceDeposits.find(
+          (deposit) =>
+            deposit.year === selectedWeek.year &&
+            deposit.week === selectedWeek.week &&
+            deposit.shop === row.shop
+        ) || row.deposit;
+      const depositAmount = parseAmount(
+        depositDrafts[depositDraftKey] ??
+          formatAmountInput(sourceDeposit?.amount || checkedSafeCash)
+      );
+
+      return {
+        shop: row.shop,
+        expectedCount: row.expectedCount,
+        checkedCount: checkedRecords.length,
+        missingCount: row.missingCount,
+        cashRevenue,
+        expectedSafeCash,
+        checkedSafeCash,
+        difference,
+        iceCash,
+        depositAmount,
+        depositNote: depositNotes[depositDraftKey] || sourceDeposit?.note || "",
+        days: row.expectedDates.map((date) => {
+          const record = findCashRecord(shopRecords, date, row.shop);
+
+          return {
+            date,
+            checked: Boolean(record?.checkedAt),
+            safeCash: record ? safeCheckedCash(record) : 0,
+            iceCash: record
+              ? parseAmount(
+                  iceCashDrafts[cashRecordDraftKey(record)] ??
+                    formatAmountInput(iceCashAmount(record))
+                )
+              : 0,
+          };
+        }),
+      };
+    });
+  }
+
+  async function sendWeekDepositMail() {
+    if (!isSelectedWeekComplete) {
+      setStatus("Weekstorting kan pas worden gemaild als alle verwachte dagen compleet zijn.");
+      return;
+    }
+
+    const nextCashRecords = applyIceCashDrafts();
+    const nextDeposits = buildWeekCashDeposits(nextCashRecords);
+    setCashRecords(nextCashRecords);
+    setCashDeposits(nextDeposits);
+    setMailState("sending");
+
+    try {
+      await saveCash(nextDeposits, nextCashRecords);
+
+      const response = await fetch("/api/management-revenue/cash-deposit-mail", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          year: selectedWeek.year,
+          week: selectedWeek.week,
+          weekLabel: weekRangeLabel(selectedWeek.year, selectedWeek.week),
+          rows: buildWeekDepositMailRows(nextCashRecords, nextDeposits),
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { message?: string }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(data?.message || "Weekstorting mailen is mislukt.");
+      }
+
+      setStatus(data?.message || "Weekstorting naar administratie gemaild.");
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Weekstorting mailen is mislukt."
+      );
+    } finally {
+      setMailState("idle");
+    }
+  }
+
   const selectedDepositDraftKey = selectedShopRow
     ? `${depositWeekKey}:${selectedShopRow.shop}`
     : "";
@@ -836,7 +1110,7 @@ export default function CashCountManager() {
                 Gecheckt
               </p>
               <p className="text-sm font-black text-[#1a1815]">
-                {weekCheckedCount}/{weekRecords.length}
+                {weekCheckedCount}/{weekExpectedCount}
               </p>
             </div>
             <div className="border-r border-[#e7e0d8] px-2 py-1.5">
@@ -857,7 +1131,7 @@ export default function CashCountManager() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-4 gap-1">
             <button
               type="button"
               onClick={() =>
@@ -887,6 +1161,24 @@ export default function CashCountManager() {
             >
               Volgende
             </button>
+            <button
+              type="button"
+              onClick={() => void sendWeekDepositMail()}
+              aria-label="Mail weekstorting naar administratie"
+              disabled={
+                !isSelectedWeekComplete ||
+                state === "saving" ||
+                mailState === "sending"
+              }
+              title={
+                isSelectedWeekComplete
+                  ? "Mail weekstorting naar administratie"
+                  : "Alle verwachte dagen eerst afvinken"
+              }
+              className="flex h-9 items-center justify-center rounded-md border border-[#1a1815] bg-[#1a1815] px-2 text-white disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
+            >
+              <MailIcon />
+            </button>
           </div>
         </div>
 
@@ -911,7 +1203,7 @@ export default function CashCountManager() {
                     isSelected ? "text-white/70" : "text-[#8b8278]"
                   }`}
                 >
-                  {row.checkedCount}/7 compleet · {formatMoney(row.includedCheckedSafeCash)}
+                  {row.checkedCount}/{row.expectedCount} compleet · {formatMoney(row.includedCheckedSafeCash)}
                 </span>
               </button>
             );
@@ -947,7 +1239,10 @@ export default function CashCountManager() {
               </p>
             </div>
             <div className="grid min-w-[18rem] grid-cols-3 rounded-md bg-[#f8f6f3] text-center">
-              <StatBox label="Compleet" value={`${selectedShopRow.checkedCount}/7`} />
+              <StatBox
+                label="Compleet"
+                value={`${selectedShopRow.checkedCount}/${selectedShopRow.expectedCount}`}
+              />
               <StatBox
                 label="Weektotaal"
                 value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
@@ -961,10 +1256,13 @@ export default function CashCountManager() {
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-7">
-            {selectedShopDays.map(({ date, record }) => {
+            {selectedShopDays.map(({ date, isExpected, record }) => {
               const isActive = date === selectedDate;
               const warning = cashWarning(record);
-              const statusLabel = !record
+              const isClosed = !isExpected && !record;
+              const statusLabel = isClosed
+                ? "Gesloten"
+                : !record
                 ? "Ontbreekt"
                 : record.checkedAt
                   ? "Compleet"
@@ -1010,7 +1308,11 @@ export default function CashCountManager() {
                       isActive ? "text-white" : "text-[#1a1815]"
                     }`}
                   >
-                    {record ? formatMoney(safeExpectedCash(record)) : "-"}
+                    {record
+                      ? formatMoney(safeExpectedCash(record))
+                      : isClosed
+                        ? "geen dienst"
+                        : "-"}
                   </span>
                 </button>
               );
@@ -1018,7 +1320,21 @@ export default function CashCountManager() {
           </div>
 
           <div className="mt-2">
-            {!selectedCashRecord ? (
+            {!selectedCashRecord && selectedShopDay && !selectedShopDay.isExpected ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#e7e0d8] bg-[#f5f2ee] px-3 py-3">
+                <div>
+                  <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
+                    {dayName(selectedShopDay.date)}
+                  </p>
+                  <p className="text-sm font-black text-[#1a1815]">
+                    Daalseweg gesloten
+                  </p>
+                </div>
+                <p className="text-sm font-bold text-[#8b8278]">
+                  Deze dag telt niet mee als ontbrekende storting.
+                </p>
+              </div>
+            ) : !selectedCashRecord ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#ece5dd] bg-[#faf8f5] px-3 py-3">
                 <div>
                   <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
@@ -1194,6 +1510,39 @@ export default function CashCountManager() {
                     </label>
                   </div>
 
+                  <div className="grid gap-2 rounded-md border border-[#d9b15f] bg-[#fff7df] p-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end lg:col-span-2">
+                    <div>
+                      <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#7a5417]">
+                        Ijs contant
+                      </p>
+                    </div>
+                    <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#7a5417]">
+                      Bedrag
+                      <input
+                        value={iceCashInputValue(selectedCashRecord)}
+                        onChange={(event) =>
+                          setIceCashDrafts((current) => ({
+                            ...current,
+                            [cashRecordDraftKey(selectedCashRecord)]:
+                              event.target.value,
+                          }))
+                        }
+                        inputMode="decimal"
+                        disabled={state === "saving"}
+                        placeholder="0,00"
+                        className="h-9 rounded-md border border-[#d9b15f] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void saveIceCash(selectedCashRecord)}
+                      disabled={state === "saving"}
+                      className="h-9 rounded-md bg-[#1a1815] px-3 text-[0.62rem] font-black uppercase tracking-normal text-white disabled:opacity-60"
+                    >
+                      Opslaan
+                    </button>
+                  </div>
+
                   {selectedCashWarning && (
                     <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417] lg:col-span-2">
                       {selectedCashWarning}
@@ -1220,7 +1569,7 @@ export default function CashCountManager() {
             <div className="grid w-full gap-3 sm:grid-cols-4 lg:w-auto lg:min-w-[32rem]">
               <AmountCell
                 label="Compleet"
-                value={`${selectedShopRow.checkedCount}/7`}
+                value={`${selectedShopRow.checkedCount}/${selectedShopRow.expectedCount}`}
               />
               <AmountCell
                 label="Kasomzet"
@@ -1395,6 +1744,32 @@ function CashNote({
       <span>EUR {denomination.label}</span>
       <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-current opacity-45" />
     </span>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M4 6.5h16v11H4z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path
+        d="m5 7 7 6 7-6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
   );
 }
 
