@@ -1247,7 +1247,16 @@ export default function CashCountManager() {
                         : "border-[#e7e0d8] bg-white text-[#1a1815] hover:border-[#cfc5ba]"
                     }`}
                   >
-                    <span className="block text-sm font-black">{row.shop}</span>
+                    <span
+                      className={`block text-[0.56rem] font-black uppercase tracking-normal ${
+                        isSelected ? "text-white/62" : "text-[#8b8278]"
+                      }`}
+                    >
+                      Patisserie
+                    </span>
+                    <span className="mt-0.5 block text-sm font-black">
+                      {row.shop}
+                    </span>
                     <span
                       className={`mt-1 block text-[0.62rem] font-black uppercase tracking-normal ${
                         isSelected ? "text-white/70" : "text-[#8b8278]"
@@ -1281,7 +1290,12 @@ export default function CashCountManager() {
                         : "border-[#e7e0d8] bg-white text-[#1a1815] hover:border-[#d9b15f]"
                     }`}
                   >
-                    <span className="block text-sm font-black">{row.shop}</span>
+                    <span className="block text-[0.56rem] font-black uppercase tracking-normal text-[#9a7531]">
+                      Ijs
+                    </span>
+                    <span className="mt-0.5 block text-sm font-black">
+                      {row.shop}
+                    </span>
                     <span className="mt-1 block text-[0.62rem] font-black uppercase tracking-normal text-[#8b8278]">
                       {row.iceCount}/{row.expectedCount} ijs ·{" "}
                       {formatMoney(row.iceTotal)}
