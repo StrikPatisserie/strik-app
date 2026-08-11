@@ -85,6 +85,7 @@ import {
 
 const beheerViewIds = [
   "dashboard",
+  "voorpagina",
   "recepten",
   "halffabricaten",
   "ingredienten",
@@ -600,6 +601,12 @@ function createBlankHomeNote(): BakeryHomeNote {
 
 function offerForWeek(home: BakeryHomeData, weekStart: string) {
   return home.offers.find((offer) => offer.weekStart === weekStart);
+}
+
+function clampOfferWeekCount(value: number) {
+  if (!Number.isFinite(value)) return 1;
+
+  return Math.max(1, Math.min(4, Math.round(value)));
 }
 
 export default function RecepturenApp({
@@ -2015,11 +2022,19 @@ export default function RecepturenApp({
     );
   }
 
-  async function uploadBakeryOfferImage(file: File | null, label: string) {
+  async function uploadBakeryOfferImage(
+    file: File | null,
+    label: string,
+    weekCount = 1
+  ) {
     if (!file) return;
 
     setOfferUploadStatus("Aanbieding uploaden naar WordPress...");
 
+    const targetWeekCount = clampOfferWeekCount(weekCount);
+    const targetWeeks = Array.from({ length: targetWeekCount }, (_, index) =>
+      addDays(selectedOfferWeek, index * 7)
+    );
     const formData = new FormData();
     formData.set("file", file);
     formData.set("weekStart", selectedOfferWeek);
@@ -2042,21 +2057,30 @@ export default function RecepturenApp({
     }
 
     const now = new Date().toISOString();
-    const currentOffer = offerForWeek(bakeryHome, selectedOfferWeek);
-    const nextOffer: BakeryHomeOffer = {
-      id: currentOffer?.id || `offer-${Date.now()}`,
-      weekStart: selectedOfferWeek,
-      weekEnd: addDays(selectedOfferWeek, 6),
-      label: label.trim() || formatWeekRange(selectedOfferWeek),
-      imageUrl: data.url,
-      mediaId: data.id || 0,
-      fileName: data.fileName || file.name,
-      createdAt: currentOffer?.createdAt || now,
-      updatedAt: now,
-    };
+    const cleanLabel = label.trim();
+    const imageUrl = data.url;
+    const targetWeekSet = new Set(targetWeeks);
+    const nextOfferByWeek = new Map(
+      targetWeeks.map((weekStart, index) => {
+        const currentOffer = offerForWeek(bakeryHome, weekStart);
+        const nextOffer: BakeryHomeOffer = {
+          id: currentOffer?.id || `offer-${weekStart}-${Date.now()}-${index + 1}`,
+          weekStart,
+          weekEnd: addDays(weekStart, 6),
+          label: cleanLabel || formatWeekRange(weekStart),
+          imageUrl,
+          mediaId: data.id || 0,
+          fileName: data.fileName || file.name,
+          createdAt: currentOffer?.createdAt || now,
+          updatedAt: now,
+        };
+
+        return [weekStart, nextOffer];
+      })
+    );
     const nextOffers = [
-      nextOffer,
-      ...bakeryHome.offers.filter((offer) => offer.weekStart !== selectedOfferWeek),
+      ...targetWeeks.map((weekStart) => nextOfferByWeek.get(weekStart)!),
+      ...bakeryHome.offers.filter((offer) => !targetWeekSet.has(offer.weekStart)),
     ];
 
     persistBakeryHome(
@@ -2064,9 +2088,15 @@ export default function RecepturenApp({
         ...bakeryHome,
         offers: nextOffers,
       },
-      "Aanbieding opgeslagen."
+      targetWeekCount > 1
+        ? `Aanbieding opgeslagen voor ${targetWeekCount} weken.`
+        : "Aanbieding opgeslagen."
     );
-    setOfferUploadStatus("Aanbieding opgeslagen.");
+    setOfferUploadStatus(
+      targetWeekCount > 1
+        ? `Aanbieding opgeslagen voor ${targetWeekCount} weken.`
+        : "Aanbieding opgeslagen."
+    );
   }
 
   function renderBeheerContent() {
@@ -2107,6 +2137,16 @@ export default function RecepturenApp({
             recipes={recipeItems}
             ingredients={ingredientItems}
             invoice={latestInvoice}
+          />
+        )}
+        {beheerView === "voorpagina" && (
+          <BakeryHomeManager
+            home={bakeryHome}
+            selectedWeek={selectedOfferWeek}
+            status={bakeryHomeStatus}
+            uploadStatus={offerUploadStatus}
+            onSelectWeek={selectOfferWeek}
+            onUploadOfferImage={uploadBakeryOfferImage}
           />
         )}
         {beheerView === "recepten" && (
@@ -3161,6 +3201,11 @@ function BeheerHome({
   const [downloadsOpen, setDownloadsOpen] = useState(false);
   const dataTiles = [
     {
+      title: "Voorpagina",
+      icon: "/UI-apps_data.svg",
+      onClick: () => onOpen("voorpagina" as TabId),
+    },
+    {
       title: "Grondstoffen",
       icon: "/UI-apps_data.svg",
       onClick: () => onOpen("ingredienten" as TabId),
@@ -3219,7 +3264,7 @@ function BeheerHome({
           </span>
         </button>
 
-        <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-4">
           {dataTiles.map((tile) => (
             <DataTileButton
               key={tile.title}
@@ -3383,9 +3428,15 @@ function BakeryHomeManager({
   status: string;
   uploadStatus: string;
   onSelectWeek: (weekStart: string) => void;
-  onUploadOfferImage: (file: File | null, label: string) => void;
+  onUploadOfferImage: (
+    file: File | null,
+    label: string,
+    weekCount?: number
+  ) => void;
 }>) {
   const [label, setLabel] = useState("");
+  const [appliesMultipleWeeks, setAppliesMultipleWeeks] = useState(false);
+  const [weekCount, setWeekCount] = useState(2);
   const selectedOffer = offerForWeek(home, selectedWeek);
 
   useEffect(() => {
@@ -3441,12 +3492,44 @@ function BakeryHomeManager({
               type="file"
               accept="image/jpeg,image/png,image/webp"
               onChange={(event) => {
-                void onUploadOfferImage(event.currentTarget.files?.[0] || null, label);
+                void onUploadOfferImage(
+                  event.currentTarget.files?.[0] || null,
+                  label,
+                  appliesMultipleWeeks ? weekCount : 1
+                );
                 event.currentTarget.value = "";
               }}
               className="min-w-0 border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525]"
             />
           </label>
+
+          <div className="flex flex-wrap items-center gap-3 border border-[#c3d3bc] bg-[#f8f8f6] px-3 py-2">
+            <label className="inline-flex min-w-0 items-center gap-2 text-xs font-black uppercase tracking-[0.08em] text-[#252525]">
+              <input
+                type="checkbox"
+                checked={appliesMultipleWeeks}
+                onChange={(event) => setAppliesMultipleWeeks(event.target.checked)}
+                className="h-4 w-4 border-[#c3d3bc] accent-[#9bc79c]"
+              />
+              Geldt voor meerdere weken
+            </label>
+            {appliesMultipleWeeks && (
+              <label className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.08em] text-[#8c8c8c]">
+                Aantal
+                <select
+                  value={weekCount}
+                  onChange={(event) => setWeekCount(Number(event.target.value))}
+                  className="border border-[#c3d3bc] bg-white px-2 py-1 text-xs font-black text-[#252525]"
+                >
+                  {[2, 3, 4].map((count) => (
+                    <option key={count} value={count}>
+                      {count} weken
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
 
           <p className="text-xs font-bold leading-relaxed text-[#707070]">
             Foto&apos;s worden als WordPress media opgeslagen; de app bewaart alleen de link bij de juiste week.
