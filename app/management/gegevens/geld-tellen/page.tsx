@@ -1,14 +1,20 @@
-import { StrikShell } from "@/app/StrikUI";
+import {
+  StrikPageHeader,
+  StrikShell,
+  strikIcons,
+} from "@/app/StrikUI";
 import CashCountManager from "./CashCountManager";
 
 export default function CashCountPage() {
   return (
     <StrikShell wide>
-      <header className="mb-2">
-        <h1 className="text-lg font-black leading-none text-[#1a1815]">
-          Geld tellen
-        </h1>
-      </header>
+      <StrikPageHeader
+        title="Geld tellen"
+        description="Kluiscontrole door de geldteller, weektotalen en definitieve stortingen per filiaal."
+        icon={strikIcons.management}
+        kicker="Management"
+        tone="honey"
+      />
 
       <CashCountManager />
     </StrikShell>
