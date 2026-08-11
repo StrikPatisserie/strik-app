@@ -468,11 +468,13 @@ function extractCashReportSections(text: string) {
     if (!shop || match.index === undefined) return [];
 
     const nextIndex = matches[index + 1]?.index ?? text.length;
+    const rawSectionText = text.slice(match.index, nextIndex);
+    const totalIndex = rawSectionText.search(/\n\s*Totaal\s+Alle\s+Filialen\b/i);
 
     return [
       {
         shop,
-        text: text.slice(match.index, nextIndex),
+        text: totalIndex >= 0 ? rawSectionText.slice(0, totalIndex) : rawSectionText,
       },
     ];
   });
@@ -743,6 +745,91 @@ function extractIceCashDetails(text: string): IceCashDetails {
   };
 }
 
+function extractSignedAmountsAfter(
+  text: string,
+  startPattern: RegExp,
+  endPattern?: RegExp,
+  maxLength = 1600
+) {
+  const match = text.match(startPattern);
+  if (!match || match.index === undefined) return [];
+
+  const startIndex = match.index + match[0].length;
+  let block = text.slice(startIndex, startIndex + maxLength);
+  const endIndex = endPattern ? block.search(endPattern) : -1;
+  if (endIndex >= 0) block = block.slice(0, endIndex);
+
+  return extractSignedAmountMatches(block);
+}
+
+function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
+  const weekdayPattern =
+    /\b(?:maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\b/i;
+  const closeTableAmounts = extractSignedAmountsAfter(
+    sectionText,
+    /Sluiten\s+kassa\s+locatie[^\n]*/i,
+    /\n\s*Aantal\b/i,
+    2000
+  );
+  const depositedAmounts = extractSignedAmountsAfter(
+    sectionText,
+    weekdayPattern,
+    /\b(?:Extra\s+uit|Creditcard|Start\s+Telling|Ideal|Cashless|Niet\s+gekoppeld|Pagina)\b/i,
+    600
+  );
+  const cashMovementAmounts = extractSignedAmountsAfter(
+    sectionText,
+    /\bKas\s*-?\s*uit\s*:/i,
+    weekdayPattern,
+    600
+  );
+  const voucherAmounts = extractSignedAmountsAfter(
+    sectionText,
+    /\bCreditcard\s*:/i,
+    /\b(?:Start\s+Telling|Ideal|Cashless|Niet\s+gekoppeld|Pagina)\b/i,
+    900
+  );
+  const startCash = firstNumber(
+    extractFirstSignedAmount(
+      /\bStart\s+Telling[\s\S]*?\bTotaal\s*:\s*([-\d.,]+)/i,
+      sectionText
+    ),
+    closeTableAmounts[0]?.amount
+  );
+  const countedCash = firstNumber(
+    extractFirstSignedAmount(
+      /\bGeteld\s*:\s*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+      sectionText
+    ),
+    extractFirstSignedAmount(
+      /\bSluit\s+Telling[\s\S]*?\bTotaal\s*:\s*([-\d.,]+)/i,
+      sectionText
+    )
+  );
+  const cashRevenue = firstNumber(
+    closeTableAmounts[4]?.amount,
+    depositedAmounts[0]?.amount
+  );
+  const expectedCash = firstNumber(
+    depositedAmounts[0]?.amount,
+    closeTableAmounts[4]?.amount
+  );
+  const cashOut =
+    cashMovementAmounts.length > 1
+      ? cashMovementAmounts[1]?.amount
+      : cashMovementAmounts[0]?.amount;
+
+  return {
+    startCash,
+    countedCash,
+    cashRevenue,
+    cashOut,
+    receipts: voucherAmounts[2]?.amount,
+    expectedCash,
+    difference: closeTableAmounts[2]?.amount,
+  };
+}
+
 function resolveIceCashAmount(details: IceCashDetails, fallbackAmount?: number) {
   return firstNumber(details.expectedCash, details.cashRevenue, fallbackAmount);
 }
@@ -756,6 +843,133 @@ function rememberIceCandidate(
   if (!current || candidate.score > current.score) {
     map.set(shop, candidate);
   }
+}
+
+function buildIceCashRecord(
+  input: DayRevenueImportInput,
+  date: string,
+  dateParts: { year: number; week: number },
+  importedAt: string,
+  item: IceCashCandidate & { shop: RevenueShop }
+) {
+  const messageHash = createHash("sha1")
+    .update(`${input.messageId}|${input.subject}|${date}|ice|${item.shop}`)
+    .digest("hex")
+    .slice(0, 8);
+
+  return {
+    id: createRevenueCashKey(date, item.shop),
+    date,
+    year: dateParts.year,
+    week: dateParts.week,
+    shop: item.shop,
+    denominations: {},
+    denominationTotal: 0,
+    countedCash: 0,
+    iceCash: item.amount,
+    iceStartCash: item.startCash,
+    iceCountedCash: item.countedCash,
+    iceCashRevenue: item.cashRevenue,
+    iceCashOut: item.cashOut,
+    iceReceipts: item.receipts,
+    iceExpectedCash: item.expectedCash ?? item.amount,
+    iceDifference: item.difference,
+    iceCountedBy: item.countedBy,
+    iceOpenedAt: item.openedAt,
+    iceClosedAt: item.closedAt,
+    cashImportKind: "ice",
+    note: `Ijs dagrapport via Gmail · ${input.subject || "zonder onderwerp"}`,
+    source: "dagafsluiting",
+    messageId: cleanText(input.messageId, 200) || messageHash,
+    importedAt,
+    updatedAt: importedAt,
+  } satisfies RevenueCashRecord;
+}
+
+function mergeIceCashRecordDetails(
+  primary: RevenueCashRecord,
+  fallback: RevenueCashRecord
+) {
+  return {
+    ...primary,
+    iceCash: primary.iceCash ?? fallback.iceCash,
+    iceStartCash: primary.iceStartCash ?? fallback.iceStartCash,
+    iceCountedCash: primary.iceCountedCash ?? fallback.iceCountedCash,
+    iceCashRevenue: primary.iceCashRevenue ?? fallback.iceCashRevenue,
+    iceCashOut: primary.iceCashOut ?? fallback.iceCashOut,
+    iceReceipts: primary.iceReceipts ?? fallback.iceReceipts,
+    iceExpectedCash: primary.iceExpectedCash ?? fallback.iceExpectedCash,
+    iceDifference: primary.iceDifference ?? fallback.iceDifference,
+    iceCountedBy: primary.iceCountedBy || fallback.iceCountedBy,
+    iceOpenedAt: primary.iceOpenedAt || fallback.iceOpenedAt,
+    iceClosedAt: primary.iceClosedAt || fallback.iceClosedAt,
+  };
+}
+
+function extractIceCashRecordsFromCashSections(
+  input: DayRevenueImportInput,
+  text: string,
+  date: string,
+  importedAt: string,
+  dateParts: { year: number; week: number }
+) {
+  return extractCashReportSections(text).flatMap((section): RevenueCashRecord[] => {
+    const cashCounts = extractCashDenominations(section.text);
+    const amounts = extractCashRecordAmounts(section.text);
+    const sectionDetails = extractIceCashSectionAmounts(section.text);
+    const details = extractIceCashDetails(section.text);
+    const countedCash =
+      sectionDetails.countedCash ??
+      amounts.countedCash ??
+      details.countedCash ??
+      cashCounts?.denominationTotal;
+    const startCash =
+      sectionDetails.startCash ?? amounts.startCash ?? details.startCash;
+    const cashRevenue =
+      sectionDetails.cashRevenue ?? amounts.cashRevenue ?? details.cashRevenue;
+    const cashOut = sectionDetails.cashOut ?? amounts.cashOut ?? details.cashOut;
+    const receipts =
+      sectionDetails.receipts ?? amounts.receipts ?? details.receipts;
+    const difference =
+      sectionDetails.difference ?? amounts.difference ?? details.difference;
+    const expectedCash = firstNumber(
+      sectionDetails.expectedCash,
+      amounts.expectedCash,
+      details.expectedCash,
+      countedCash !== undefined && startCash !== undefined
+        ? Math.max(0, Number((countedCash - startCash).toFixed(2)))
+        : undefined
+    );
+    const amount = resolveIceCashAmount(
+      {
+        ...details,
+        cashRevenue,
+        expectedCash,
+      },
+      expectedCash
+    );
+
+    if (amount === undefined) return [];
+
+    return [
+      buildIceCashRecord(input, date, dateParts, importedAt, {
+        shop: section.shop,
+        amount,
+        score: 80,
+        line: "Cash-it ijs dagrapport",
+        startCash,
+        countedCash,
+        cashRevenue,
+        cashOut,
+        receipts,
+        expectedCash,
+        difference,
+        countedBy: extractCashCountedBy(section.text) || details.countedBy,
+        openedAt: extractCashTimes(section.text).openedAt || details.openedAt,
+        closedAt: extractCashTimes(section.text).closedAt || details.closedAt,
+      }),
+    ];
+  });
 }
 
 function extractIceCashCandidate(text: string) {
@@ -886,6 +1100,13 @@ function extractIceCashRecords(
   const dateParts = getIsoPartsForDate(date);
   const labels = Array.isArray(input.labels) ? input.labels.join(" ") : "";
   const fullText = `${input.subject || ""}\n${input.from || ""}\n${labels}\n${text}`;
+  const sectionRecords = extractIceCashRecordsFromCashSections(
+    input,
+    fullText,
+    date,
+    importedAt,
+    dateParts
+  );
   const multiShopAmounts = extractIceCashAmountsByShop(fullText);
   const singleShop = pickShopFromText(fullText);
   const singleCandidate = extractIceCashCandidate(fullText);
@@ -912,44 +1133,30 @@ function extractIceCashRecords(
           ]
         : [];
 
-  return amounts.flatMap((item): RevenueCashRecord[] => {
+  const fallbackRecords = amounts.flatMap((item): RevenueCashRecord[] => {
     if (!Number.isFinite(item.amount)) return [];
 
-    const messageHash = createHash("sha1")
-      .update(`${input.messageId}|${input.subject}|${date}|ice|${item.shop}`)
-      .digest("hex")
-      .slice(0, 8);
-
     return [
-      {
-        id: createRevenueCashKey(date, item.shop),
-        date,
-        year: dateParts.year,
-        week: dateParts.week,
-        shop: item.shop,
-        denominations: {},
-        denominationTotal: 0,
-        countedCash: 0,
-        iceCash: item.amount,
-        iceStartCash: item.startCash,
-        iceCountedCash: item.countedCash,
-        iceCashRevenue: item.cashRevenue,
-        iceCashOut: item.cashOut,
-        iceReceipts: item.receipts,
-        iceExpectedCash: item.expectedCash ?? item.amount,
-        iceDifference: item.difference,
-        iceCountedBy: item.countedBy,
-        iceOpenedAt: item.openedAt,
-        iceClosedAt: item.closedAt,
-        cashImportKind: "ice",
-        note: `Ijs dagrapport via Gmail · ${input.subject || "zonder onderwerp"}`,
-        source: "dagafsluiting",
-        messageId: cleanText(input.messageId, 200) || messageHash,
-        importedAt,
-        updatedAt: importedAt,
-      },
+      buildIceCashRecord(input, date, dateParts, importedAt, item),
     ];
   });
+
+  const recordsByKey = new Map<string, RevenueCashRecord>();
+
+  sectionRecords.forEach((record) => {
+    recordsByKey.set(createRevenueCashKey(record.date, record.shop), record);
+  });
+  fallbackRecords.forEach((record) => {
+    const key = createRevenueCashKey(record.date, record.shop);
+    const existing = recordsByKey.get(key);
+
+    recordsByKey.set(
+      key,
+      existing ? mergeIceCashRecordDetails(existing, record) : record
+    );
+  });
+
+  return [...recordsByKey.values()];
 }
 
 function isPdfAttachment(attachment: PdfAttachmentInput) {
@@ -1058,10 +1265,9 @@ export async function POST(request: Request) {
       previousAmsterdamDayForNightMail: iceReport,
     });
     const shopAmounts = iceReport ? [] : extractShopAmounts(fullText);
-    const cashRecords = [
-      ...extractCashRecords(input, fullText, date),
-      ...extractIceCashRecords(input, fullText, date),
-    ];
+    const cashRecords = iceReport
+      ? extractIceCashRecords(input, fullText, date)
+      : extractCashRecords(input, fullText, date);
 
     if (!shopAmounts.length && !cashRecords.length) {
       return jsonError(
