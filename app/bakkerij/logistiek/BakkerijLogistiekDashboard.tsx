@@ -5229,6 +5229,132 @@ function refreshRouteRoundAfterManualMove(
   };
 }
 
+function routeRoundNumber(route: RouteRound) {
+  const titleMatch = route.title.match(/\bronde\s+(\d+)\b/i);
+  if (titleMatch) return Number(titleMatch[1]) || 1;
+
+  const idMatch = route.id.match(/\bbus-[ab]-(\d+)\b/i);
+  if (idMatch) return Number(idMatch[1]) || 1;
+
+  return 1;
+}
+
+function isPrimaryRouteRound(route: RouteRound) {
+  return routeRoundNumber(route) === 1;
+}
+
+function isUserAddedRouteRound(route: RouteRound) {
+  return /-extra-\d+/i.test(route.id);
+}
+
+function shouldShowRouteRound(route: RouteRound) {
+  return (
+    isPrimaryRouteRound(route) ||
+    route.stops.length > 0 ||
+    isUserAddedRouteRound(route)
+  );
+}
+
+function compactEmptyRouteRounds(routeRounds: RouteRound[]) {
+  return routeRounds.filter(
+    (route) => isPrimaryRouteRound(route) || route.stops.length > 0
+  );
+}
+
+function routeRoundsForPersistence(routeRounds: RouteRound[]) {
+  return routeRounds.filter(
+    (route) => isPrimaryRouteRound(route) || route.stops.length > 0
+  );
+}
+
+function busIdFromRouteVehicle(vehicle: string): BusId | "" {
+  const match = vehicle.match(/\bbus\s+([ab])\b/i);
+
+  return match ? (match[1].toUpperCase() as BusId) : "";
+}
+
+function routeToneForRoundNumber(roundNumber: number, fallbackTone: string) {
+  if (roundNumber <= 1) return fallbackTone;
+  if (roundNumber >= 3) return "border-[#b8ddea] bg-[#eefaff]";
+
+  return "border-[#efc7b8] bg-[#fff3ed]";
+}
+
+function addRouteRoundForVehicle(
+  routeRounds: RouteRound[],
+  vehicle: string,
+  loadProfile: DayLoadProfile
+) {
+  const busId = busIdFromRouteVehicle(vehicle);
+  const primaryRoute =
+    routeRounds.find(
+      (route) => route.vehicle === vehicle && isPrimaryRouteRound(route)
+    ) || routeRounds.find((route) => route.vehicle === vehicle);
+  if (!busId || !primaryRoute) return routeRounds;
+
+  const visibleRouteNumbers = routeRounds
+    .filter((route) => route.vehicle === vehicle && shouldShowRouteRound(route))
+    .map(routeRoundNumber);
+  const nextRoundNumber = Math.max(1, ...visibleRouteNumbers) + 1;
+  const hiddenSameNumberRoute = routeRounds.find(
+    (route) =>
+      route.vehicle === vehicle &&
+      routeRoundNumber(route) === nextRoundNumber &&
+      !shouldShowRouteRound(route)
+  );
+  const routeId = `bus-${busId}-${nextRoundNumber}-extra-${Date.now()}`;
+  const routeToAdd = {
+    ...refreshRouteRoundAfterManualMove(
+      {
+        ...(hiddenSameNumberRoute || primaryRoute),
+        id: routeId,
+        title: `Ronde ${nextRoundNumber}`,
+        vehicle,
+        departure: `na ronde ${nextRoundNumber - 1}`,
+        tone: routeToneForRoundNumber(nextRoundNumber, primaryRoute.tone),
+        stops: [],
+        reason: "",
+        load: routeLoadLineForStops([]),
+      },
+      loadProfile
+    ),
+    reason: "Handmatig toegevoegde ronde; sleep stops hierheen.",
+  };
+
+  return [
+    ...routeRounds.filter((route) => route !== hiddenSameNumberRoute),
+    routeToAdd,
+  ];
+}
+
+function deleteRouteRoundFromRounds(
+  routeRounds: RouteRound[],
+  routeId: string,
+  loadProfile: DayLoadProfile
+) {
+  const routeToDelete = routeRounds.find((route) => route.id === routeId);
+  if (!routeToDelete || isPrimaryRouteRound(routeToDelete)) return routeRounds;
+
+  const primaryRoute = routeRounds.find(
+    (route) =>
+      route.vehicle === routeToDelete.vehicle && isPrimaryRouteRound(route)
+  );
+  if (!primaryRoute || primaryRoute.id === routeToDelete.id) return routeRounds;
+
+  const nextRoutes = routeRounds
+    .filter((route) => route.id !== routeToDelete.id)
+    .map((route) => ({
+      ...route,
+      stops:
+        route.id === primaryRoute.id
+          ? [...route.stops, ...routeToDelete.stops]
+          : [...route.stops],
+    }))
+    .map((route) => refreshRouteRoundAfterManualMove(route, loadProfile));
+
+  return compactEmptyRouteRounds(nextRoutes);
+}
+
 function cloneRouteRounds(routeRounds: RouteRound[]): RouteRound[] {
   return routeRounds.map((route) => ({
     ...route,
@@ -6162,7 +6288,9 @@ export default function BakkerijLogistiekDashboard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           date: selectedPlan.date,
-          routes: serializeRouteRounds(routeRoundsToSave),
+          routes: serializeRouteRounds(
+            routeRoundsForPersistence(routeRoundsToSave)
+          ),
           baselineRoutes: learn
             ? serializeRouteRounds(automaticRouteRounds)
             : undefined,
@@ -6200,8 +6328,10 @@ export default function BakkerijLogistiekDashboard() {
 
   function moveRouteStop(move: RouteStopMove) {
     const currentRoutes = manualRouteRounds || automaticRouteRounds;
-    const nextRoutes = moveRouteStopInRounds(currentRoutes, move, loadProfile);
-    if (nextRoutes === currentRoutes) return;
+    const movedRoutes = moveRouteStopInRounds(currentRoutes, move, loadProfile);
+    if (movedRoutes === currentRoutes) return;
+
+    const nextRoutes = compactEmptyRouteRounds(movedRoutes);
 
     setManualRouteRounds(nextRoutes);
     setDeletedRouteStopSnapshot(null);
@@ -6209,6 +6339,20 @@ export default function BakkerijLogistiekDashboard() {
     setRouteHasUnsavedChanges(true);
     setRouteSaveState("idle");
     setRouteSaveMessage("concept gewijzigd · nog niet definitief opgeslagen");
+    void saveRouteDraft(nextRoutes, false);
+  }
+
+  function addRouteRound(vehicle: string) {
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const nextRoutes = addRouteRoundForVehicle(currentRoutes, vehicle, loadProfile);
+    if (nextRoutes === currentRoutes) return;
+
+    setManualRouteRounds(nextRoutes);
+    setDeletedRouteStopSnapshot(null);
+    setRoutesEdited(true);
+    setRouteHasUnsavedChanges(true);
+    setRouteSaveState("idle");
+    setRouteSaveMessage("ronde toegevoegd · nog niet definitief opgeslagen");
     void saveRouteDraft(nextRoutes, false);
   }
 
@@ -6270,16 +6414,18 @@ export default function BakkerijLogistiekDashboard() {
     const nextExcludedSourceIds = sourceKey.startsWith("manual:")
       ? excludedRouteStopSourceIds
       : Array.from(new Set([...excludedRouteStopSourceIds, sourceKey]));
-    const nextRoutes = currentRoutes.map((route) =>
-      route.id === routeId
-        ? refreshRouteRoundAfterManualMove(
-            {
-              ...route,
-              stops: route.stops.filter((item) => item.id !== stopId),
-            },
-            loadProfile
-          )
-        : route
+    const nextRoutes = compactEmptyRouteRounds(
+      currentRoutes.map((route) =>
+        route.id === routeId
+          ? refreshRouteRoundAfterManualMove(
+              {
+                ...route,
+                stops: route.stops.filter((item) => item.id !== stopId),
+              },
+              loadProfile
+            )
+          : route
+      )
     );
 
     setManualRouteRounds(nextRoutes);
@@ -6294,6 +6440,31 @@ export default function BakkerijLogistiekDashboard() {
     setRouteSaveState("idle");
     setRouteSaveMessage("stop verwijderd · nog niet definitief opgeslagen");
     void saveRouteDraft(nextRoutes, false, nextExcludedSourceIds);
+  }
+
+  function deleteRouteRound(routeId: string) {
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const route = currentRoutes.find((item) => item.id === routeId);
+    if (!route || isPrimaryRouteRound(route)) return;
+
+    const nextRoutes = deleteRouteRoundFromRounds(
+      currentRoutes,
+      routeId,
+      loadProfile
+    );
+    if (nextRoutes === currentRoutes) return;
+
+    setManualRouteRounds(nextRoutes);
+    setDeletedRouteStopSnapshot(null);
+    setRoutesEdited(true);
+    setRouteHasUnsavedChanges(true);
+    setRouteSaveState("idle");
+    setRouteSaveMessage(
+      route.stops.length
+        ? `${route.title} verwijderd · stops naar ronde 1 gezet`
+        : `${route.title} verwijderd`
+    );
+    void saveRouteDraft(nextRoutes, false);
   }
 
   function undoRouteStopDelete() {
@@ -6834,6 +7005,8 @@ export default function BakkerijLogistiekDashboard() {
         {activeTab === "routes" && (
           <RoutesPanel
             deletedRouteStopLabel={deletedRouteStopSnapshot?.stopLabel || ""}
+            onRouteAdd={addRouteRound}
+            onRouteDelete={deleteRouteRound}
             onRouteStopAdd={addManualRouteStop}
             onRouteStopDelete={deleteRouteStop}
             onRouteStopMove={moveRouteStop}
@@ -6888,6 +7061,8 @@ function routeGroupsFor(routeRounds: RouteRound[]): RouteGroup[] {
   const groups = new Map<string, RouteRound[]>();
 
   routeRounds.forEach((route) => {
+    if (!shouldShowRouteRound(route)) return;
+
     const routes = groups.get(route.vehicle) || [];
     routes.push(route);
     groups.set(route.vehicle, routes);
@@ -6943,6 +7118,8 @@ function eventHasRouteDragState(
 
 function RoutesPanel({
   deletedRouteStopLabel,
+  onRouteAdd,
+  onRouteDelete,
   onRouteStopAdd,
   onRouteStopDelete,
   onRouteStopMove,
@@ -6957,6 +7134,8 @@ function RoutesPanel({
   selectedPlan,
 }: Readonly<{
   deletedRouteStopLabel: string;
+  onRouteAdd: (vehicle: string) => void;
+  onRouteDelete: (routeId: string) => void;
   onRouteStopAdd: (routeId: string, label: string, detail: string) => void;
   onRouteStopDelete: (routeId: string, stopId: string) => void;
   onRouteStopMove: (move: RouteStopMove) => void;
@@ -7120,9 +7299,10 @@ function RoutesPanel({
 
       <div className="grid gap-3 lg:grid-cols-2">
         {routeGroups.map((group) => {
-          const activeRouteCount = group.routes.filter(
+          const printableRouteCount = group.routes.filter(
             (route) => route.stops.length > 0
           ).length;
+          const visibleRouteCount = group.routes.length;
 
           return (
             <article
@@ -7134,14 +7314,23 @@ function RoutesPanel({
                   {group.vehicle}
                 </h2>
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label={`Ronde toevoegen aan ${group.vehicle}`}
+                    title="Ronde toevoegen"
+                    onClick={() => onRouteAdd(group.vehicle)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center border border-[#e8e4de] bg-white text-base font-black text-[#1a1815] shadow-sm transition hover:border-[#111] hover:bg-[#faf8f5]"
+                  >
+                    +
+                  </button>
                   <RoutePrintButton
-                    disabled={activeRouteCount === 0}
+                    disabled={printableRouteCount === 0}
                     label={`Route printen voor ${group.vehicle}`}
                     onClick={() => openBusRouteSheet(selectedPlan, group)}
                   />
                   <span className="border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
-                    {activeRouteCount} ronde
-                    {activeRouteCount === 1 ? "" : "s"}
+                    {visibleRouteCount} ronde
+                    {visibleRouteCount === 1 ? "" : "s"}
                   </span>
                 </div>
               </div>
@@ -7174,6 +7363,17 @@ function RoutesPanel({
                       <span className="shrink-0 border border-white/80 bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]">
                         {route.load}
                       </span>
+                      {!isPrimaryRouteRound(route) && (
+                        <button
+                          type="button"
+                          aria-label={`${route.title} verwijderen`}
+                          title="Ronde verwijderen"
+                          onClick={() => onRouteDelete(route.id)}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center border border-white/80 bg-white text-xs font-black text-[#6b645b] transition hover:border-[#9b2d1f] hover:text-[#9b2d1f]"
+                        >
+                          X
+                        </button>
+                      )}
                       <button
                         type="button"
                         aria-label={`Stop toevoegen aan ${route.title}`}
