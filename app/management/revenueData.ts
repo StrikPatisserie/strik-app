@@ -69,6 +69,7 @@ export type RevenueCashRecord = {
   safeCash?: number;
   safeDifference?: number;
   iceCash?: number;
+  cashImportKind?: "patisserie" | "ice";
   checkedDenominations?: CashDenominationCounts;
   countedBy?: string;
   openedAt?: string;
@@ -191,6 +192,7 @@ function compactCashRecordPayload(record: RevenueCashRecord) {
     sf: record.safeCash,
     sd: record.safeDifference,
     ic: record.iceCash,
+    ck: record.cashImportKind,
     xd: record.checkedDenominations,
     cb: record.countedBy,
     oa: record.openedAt,
@@ -227,6 +229,7 @@ function expandCashRecordPayload(
     safeCash: payload.safeCash ?? payload.sf,
     safeDifference: payload.safeDifference ?? payload.sd,
     iceCash: payload.iceCash ?? payload.ic,
+    cashImportKind: payload.cashImportKind ?? payload.ck,
     checkedDenominations: payload.checkedDenominations ?? payload.xd,
     countedBy: payload.countedBy ?? payload.cb,
     openedAt: payload.openedAt ?? payload.oa,
@@ -408,6 +411,12 @@ function normalizeRevenueSource(value: unknown, fallback: RevenueSource) {
   return fallback;
 }
 
+function normalizeCashImportKind(value: unknown) {
+  const kind = textFrom(value).toLowerCase();
+
+  return kind === "patisserie" || kind === "ice" ? kind : undefined;
+}
+
 function moneyFrom(value: unknown) {
   const amount = numberFrom(value);
 
@@ -585,6 +594,7 @@ export function normalizeRevenueCashRecord(
     positiveMoneyFrom(value.denominationTotal) || cashDenominationTotal(denominations);
   const countedCash = positiveMoneyFrom(value.countedCash) || denominationTotal;
   const source = normalizeRevenueSource(value.source, "dagafsluiting");
+  const cashImportKind = normalizeCashImportKind(value.cashImportKind);
 
   return {
     id: textFrom(value.id) || createRevenueCashKey(dateKey, shop),
@@ -619,6 +629,7 @@ export function normalizeRevenueCashRecord(
         : moneyFrom(value.safeDifference),
     iceCash:
       value.iceCash === undefined ? undefined : positiveMoneyFrom(value.iceCash),
+    cashImportKind,
     checkedDenominations,
     countedBy: textFrom(value.countedBy) || undefined,
     openedAt: textFrom(value.openedAt) || undefined,
@@ -846,18 +857,69 @@ export function mergeRevenueCashRecords(
   for (const record of overrideRecords) {
     const key = createRevenueCashKey(record.date, record.shop);
     const existing = byKey.get(key);
+    const existingIsPatisserie =
+      existing && (existing.cashImportKind || "patisserie") !== "ice";
+    const isIceOnly = record.cashImportKind === "ice";
 
     byKey.set(key, {
       ...existing,
       ...record,
-      cashOut: record.cashOut ?? existing?.cashOut,
-      receipts: record.receipts ?? existing?.receipts,
+      denominations:
+        isIceOnly && existing ? existing.denominations : record.denominations,
+      denominationTotal:
+        isIceOnly && existing
+          ? existing.denominationTotal
+          : record.denominationTotal,
+      countedCash:
+        isIceOnly && existing ? existing.countedCash : record.countedCash,
+      startCash: isIceOnly
+        ? existing?.startCash
+        : record.startCash ?? existing?.startCash,
+      cashRevenue: isIceOnly
+        ? existing?.cashRevenue
+        : record.cashRevenue ?? existing?.cashRevenue,
+      cashOut: isIceOnly ? existing?.cashOut : record.cashOut ?? existing?.cashOut,
+      receipts: isIceOnly
+        ? existing?.receipts
+        : record.receipts ?? existing?.receipts,
+      expectedCash: isIceOnly
+        ? existing?.expectedCash
+        : record.expectedCash ?? existing?.expectedCash,
+      difference: isIceOnly
+        ? existing?.difference
+        : record.difference ?? existing?.difference,
+      safeCash: isIceOnly ? existing?.safeCash : record.safeCash ?? existing?.safeCash,
+      safeDifference: isIceOnly
+        ? existing?.safeDifference
+        : record.safeDifference ?? existing?.safeDifference,
       iceCash: record.iceCash ?? existing?.iceCash,
       checkedDenominations:
-        record.checkedDenominations || existing?.checkedDenominations,
-      checkedAt: record.checkedAt || existing?.checkedAt,
-      checkedBy: record.checkedBy || existing?.checkedBy,
-      note: record.note || existing?.note || "",
+        isIceOnly && existing
+          ? existing.checkedDenominations
+          : record.checkedDenominations || existing?.checkedDenominations,
+      countedBy: isIceOnly && existing
+        ? existing.countedBy
+        : record.countedBy || existing?.countedBy,
+      openedAt: isIceOnly && existing
+        ? existing.openedAt
+        : record.openedAt || existing?.openedAt,
+      closedAt: isIceOnly && existing
+        ? existing.closedAt
+        : record.closedAt || existing?.closedAt,
+      checkedAt: isIceOnly && existing
+        ? existing.checkedAt
+        : record.checkedAt || existing?.checkedAt,
+      checkedBy: isIceOnly && existing
+        ? existing.checkedBy
+        : record.checkedBy || existing?.checkedBy,
+      note:
+        isIceOnly && existingIsPatisserie
+          ? existing?.note || ""
+          : record.note || existing?.note || "",
+      cashImportKind:
+        isIceOnly && existingIsPatisserie
+          ? existing?.cashImportKind || "patisserie"
+          : record.cashImportKind || (isIceOnly ? existing?.cashImportKind : "patisserie"),
       source: record.source || existing?.source || "dagafsluiting",
     });
   }

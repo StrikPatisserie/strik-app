@@ -268,6 +268,10 @@ function iceCashAmount(record: RevenueCashRecord | undefined) {
   return record?.iceCash ?? 0;
 }
 
+function hasPatisserieCashRecord(record: RevenueCashRecord | undefined) {
+  return Boolean(record && record.cashImportKind !== "ice");
+}
+
 function checkedCashNoteCount(record: RevenueCashRecord, key: CashDenominationKey) {
   return Math.max(
     0,
@@ -488,25 +492,47 @@ export default function CashCountManager() {
           selectedWeek.week,
           shop
         ).sort((first, second) => first.date.localeCompare(second.date));
+        const patisserieRecords = shopRecords.filter(hasPatisserieCashRecord);
         const expectedDates = selectedWeekDates.filter(
-          (date) =>
-            isCashExpectedForShopDate(shop, date) ||
-            Boolean(findCashRecord(shopRecords, date, shop))
+          (date) => {
+            const record = findCashRecord(shopRecords, date, shop);
+
+            return (
+              isCashExpectedForShopDate(shop, date) ||
+              hasPatisserieCashRecord(record) ||
+              iceCashAmount(record) > 0
+            );
+          }
         );
-        const checkedRecords = expectedDates.flatMap((date) => {
+        const expectedPatisserieDates = selectedWeekDates.filter(
+          (date) => {
+            const record = findCashRecord(shopRecords, date, shop);
+
+            return (
+              isCashExpectedForShopDate(shop, date) ||
+              hasPatisserieCashRecord(record)
+            );
+          }
+        );
+        const checkedRecords = expectedPatisserieDates.flatMap((date) => {
           const record = findCashRecord(shopRecords, date, shop);
 
-          return record?.checkedAt ? [record] : [];
+          return hasPatisserieCashRecord(record) && record?.checkedAt ? [record] : [];
         });
-        const cashRevenue = shopRecords.reduce(
+        const iceRecords = expectedDates.flatMap((date) => {
+          const record = findCashRecord(shopRecords, date, shop);
+
+          return record && record.iceCash !== undefined ? [record] : [];
+        });
+        const cashRevenue = patisserieRecords.reduce(
           (total, record) => total + (record.cashRevenue ?? record.countedCash),
           0
         );
-        const expectedSafeCash = shopRecords.reduce(
+        const expectedSafeCash = patisserieRecords.reduce(
           (total, record) => total + safeExpectedCash(record),
           0
         );
-        const checkedSafeCash = shopRecords.reduce(
+        const checkedSafeCash = patisserieRecords.reduce(
           (total, record) => total + safeCheckedCash(record),
           0
         );
@@ -526,6 +552,15 @@ export default function CashCountManager() {
           (total, record) => total + safeDifference(record),
           0
         );
+        const iceTotal = iceRecords.reduce(
+          (total, record) =>
+            total +
+            parseAmount(
+              iceCashDrafts[cashRecordDraftKey(record)] ??
+                formatAmountInput(iceCashAmount(record))
+            ),
+          0
+        );
         const deposit = existingDepositFor(
           cashDeposits,
           selectedWeek.year,
@@ -543,10 +578,12 @@ export default function CashCountManager() {
           includedExpectedSafeCash,
           includedCheckedSafeCash,
           difference,
+          iceTotal,
+          iceCount: iceRecords.length,
           checkedCount: checkedRecords.length,
-          expectedCount: expectedDates.length,
-          missingCount: expectedDates.filter(
-            (date) => !findCashRecord(shopRecords, date, shop)
+          expectedCount: expectedPatisserieDates.length,
+          missingCount: expectedPatisserieDates.filter(
+            (date) => !hasPatisserieCashRecord(findCashRecord(shopRecords, date, shop))
           ).length,
           expectedDates,
           deposit,
@@ -555,6 +592,7 @@ export default function CashCountManager() {
     [
       cashDeposits,
       cashRecords,
+      iceCashDrafts,
       selectedWeek.week,
       selectedWeek.year,
       selectedWeekDates,
@@ -564,17 +602,23 @@ export default function CashCountManager() {
     weekRows.find((row) => row.shop === selectedShop) || weekRows[0];
   const selectedShopDays = useMemo(
     () =>
-      selectedWeekDates.map((date) => ({
-        date,
-        record: findCashRecord(cashRecords, date, selectedShop),
-        isExpected: isCashExpectedForShopDate(selectedShop, date),
-      })),
+      selectedWeekDates.map((date) => {
+        const record = findCashRecord(cashRecords, date, selectedShop);
+
+        return {
+          date,
+          record,
+          patisserieRecord: hasPatisserieCashRecord(record) ? record : undefined,
+          isExpected: isCashExpectedForShopDate(selectedShop, date),
+        };
+      }),
     [cashRecords, selectedShop, selectedWeekDates]
   );
   const selectedShopDay =
     selectedShopDays.find((day) => day.date === selectedDate) ||
     selectedShopDays[0];
-  const selectedCashRecord = selectedShopDay?.record;
+  const selectedCashRecord = selectedShopDay?.patisserieRecord;
+  const selectedIceCashRecord = selectedShopDay?.record;
   const selectedCashWarning = cashWarning(selectedCashRecord);
   const selectedSafeDraftKey = selectedCashRecord
     ? `${selectedCashRecord.date}:${selectedCashRecord.shop}`
@@ -701,6 +745,7 @@ export default function CashCountManager() {
 
         return {
           ...current,
+          cashImportKind: "patisserie",
           safeCash,
           safeDifference: Number((safeCash - safeExpectedCash(current)).toFixed(2)),
           iceCash: parseAmount(
@@ -1182,32 +1227,70 @@ export default function CashCountManager() {
           </div>
         </div>
 
-        <div className="mt-2 grid gap-1.5 sm:grid-cols-2 xl:grid-cols-4">
-          {weekRows.map((row) => {
-            const isSelected = row.shop === selectedShop;
+        <div className="mt-2 grid gap-2 xl:grid-cols-2">
+          <div>
+            <p className="mb-1 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+              Patisserie
+            </p>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {weekRows.map((row) => {
+                const isSelected = row.shop === selectedShop;
 
-            return (
-              <button
-                key={row.shop}
-                type="button"
-                onClick={() => setSelectedShop(row.shop)}
-                className={`rounded-md border p-2 text-left transition ${
-                  isSelected
-                    ? "border-[#1a1815] bg-[#1a1815] text-white"
-                    : "border-[#e7e0d8] bg-white text-[#1a1815] hover:border-[#cfc5ba]"
-                }`}
-              >
-                <span className="block text-sm font-black">{row.shop}</span>
-                <span
-                  className={`mt-1 block text-[0.62rem] font-black uppercase tracking-normal ${
-                    isSelected ? "text-white/70" : "text-[#8b8278]"
-                  }`}
-                >
-                  {row.checkedCount}/{row.expectedCount} compleet · {formatMoney(row.includedCheckedSafeCash)}
-                </span>
-              </button>
-            );
-          })}
+                return (
+                  <button
+                    key={row.shop}
+                    type="button"
+                    onClick={() => setSelectedShop(row.shop)}
+                    className={`rounded-md border p-2 text-left transition ${
+                      isSelected
+                        ? "border-[#1a1815] bg-[#1a1815] text-white"
+                        : "border-[#e7e0d8] bg-white text-[#1a1815] hover:border-[#cfc5ba]"
+                    }`}
+                  >
+                    <span className="block text-sm font-black">{row.shop}</span>
+                    <span
+                      className={`mt-1 block text-[0.62rem] font-black uppercase tracking-normal ${
+                        isSelected ? "text-white/70" : "text-[#8b8278]"
+                      }`}
+                    >
+                      {row.checkedCount}/{row.expectedCount} compleet ·{" "}
+                      {formatMoney(row.includedCheckedSafeCash)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+              Ijs
+            </p>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {weekRows.map((row) => {
+                const isSelected = row.shop === selectedShop;
+
+                return (
+                  <button
+                    key={`ice-${row.shop}`}
+                    type="button"
+                    onClick={() => setSelectedShop(row.shop)}
+                    className={`rounded-md border p-2 text-left transition ${
+                      isSelected
+                        ? "border-[#d9b15f] bg-[#fff7df] text-[#1a1815]"
+                        : "border-[#e7e0d8] bg-white text-[#1a1815] hover:border-[#d9b15f]"
+                    }`}
+                  >
+                    <span className="block text-sm font-black">{row.shop}</span>
+                    <span className="mt-1 block text-[0.62rem] font-black uppercase tracking-normal text-[#8b8278]">
+                      {row.iceCount}/{row.expectedCount} ijs ·{" "}
+                      {formatMoney(row.iceTotal)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {storage?.status === "seed" && (
@@ -1256,24 +1339,24 @@ export default function CashCountManager() {
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-7">
-            {selectedShopDays.map(({ date, isExpected, record }) => {
+            {selectedShopDays.map(({ date, isExpected, patisserieRecord }) => {
               const isActive = date === selectedDate;
-              const warning = cashWarning(record);
-              const isClosed = !isExpected && !record;
+              const warning = cashWarning(patisserieRecord);
+              const isClosed = !isExpected && !patisserieRecord;
               const statusLabel = isClosed
                 ? "Gesloten"
-                : !record
+                : !patisserieRecord
                 ? "Ontbreekt"
-                : record.checkedAt
+                : patisserieRecord.checkedAt
                   ? "Compleet"
                   : warning
                     ? "Let op"
                     : "Open";
               const tileClass = isActive
                 ? "border-[#1a1815] bg-[#1a1815] text-white shadow-sm"
-                : !record
+                : !patisserieRecord
                   ? "border-[#e7e0d8] bg-[#f5f2ee] text-[#8b8278]"
-                  : record.checkedAt
+                  : patisserieRecord.checkedAt
                     ? "border-[#cbdcc5] bg-[#f6fbf5] text-[#1a1815]"
                     : warning
                       ? "border-[#efd1a1] bg-[#fff8d8] text-[#1a1815]"
@@ -1308,8 +1391,8 @@ export default function CashCountManager() {
                       isActive ? "text-white" : "text-[#1a1815]"
                     }`}
                   >
-                    {record
-                      ? formatMoney(safeExpectedCash(record))
+                    {patisserieRecord
+                      ? formatMoney(safeExpectedCash(patisserieRecord))
                       : isClosed
                         ? "geen dienst"
                         : "-"}
@@ -1321,33 +1404,69 @@ export default function CashCountManager() {
 
           <div className="mt-2">
             {!selectedCashRecord && selectedShopDay && !selectedShopDay.isExpected ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#e7e0d8] bg-[#f5f2ee] px-3 py-3">
-                <div>
-                  <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-                    {dayName(selectedShopDay.date)}
-                  </p>
-                  <p className="text-sm font-black text-[#1a1815]">
-                    Daalseweg gesloten
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#e7e0d8] bg-[#f5f2ee] px-3 py-3">
+                  <div>
+                    <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
+                      {dayName(selectedShopDay.date)}
+                    </p>
+                    <p className="text-sm font-black text-[#1a1815]">
+                      Daalseweg gesloten
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold text-[#8b8278]">
+                    Deze dag telt niet mee als ontbrekende storting.
                   </p>
                 </div>
-                <p className="text-sm font-bold text-[#8b8278]">
-                  Deze dag telt niet mee als ontbrekende storting.
-                </p>
-              </div>
+                {selectedIceCashRecord && (
+                  <div className="mt-2">
+                    <IceCashEditor
+                      disabled={state === "saving"}
+                      onSave={() => void saveIceCash(selectedIceCashRecord)}
+                      onValueChange={(value) =>
+                        setIceCashDrafts((current) => ({
+                          ...current,
+                          [cashRecordDraftKey(selectedIceCashRecord)]: value,
+                        }))
+                      }
+                      record={selectedIceCashRecord}
+                      value={iceCashInputValue(selectedIceCashRecord)}
+                    />
+                  </div>
+                )}
+              </>
             ) : !selectedCashRecord ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#ece5dd] bg-[#faf8f5] px-3 py-3">
-                <div>
-                  <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-                    {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"}
-                  </p>
-                  <p className="text-sm font-black text-[#1a1815]">
-                    Dagafsluiting ontbreekt
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#ece5dd] bg-[#faf8f5] px-3 py-3">
+                  <div>
+                    <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
+                      {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"}
+                    </p>
+                    <p className="text-sm font-black text-[#1a1815]">
+                      Dagafsluiting ontbreekt
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold text-[#8b8278]">
+                    Geen Cash-it dagafsluiting ontvangen.
                   </p>
                 </div>
-                <p className="text-sm font-bold text-[#8b8278]">
-                  Geen Cash-it dagafsluiting ontvangen.
-                </p>
-              </div>
+                {selectedIceCashRecord && (
+                  <div className="mt-2">
+                    <IceCashEditor
+                      disabled={state === "saving"}
+                      onSave={() => void saveIceCash(selectedIceCashRecord)}
+                      onValueChange={(value) =>
+                        setIceCashDrafts((current) => ({
+                          ...current,
+                          [cashRecordDraftKey(selectedIceCashRecord)]: value,
+                        }))
+                      }
+                      record={selectedIceCashRecord}
+                      value={iceCashInputValue(selectedIceCashRecord)}
+                    />
+                  </div>
+                )}
+              </>
             ) : (
               <article
                 key={selectedCashRecord.id}
@@ -1510,38 +1629,18 @@ export default function CashCountManager() {
                     </label>
                   </div>
 
-                  <div className="grid gap-2 rounded-md border border-[#d9b15f] bg-[#fff7df] p-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end lg:col-span-2">
-                    <div>
-                      <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#7a5417]">
-                        Ijs contant
-                      </p>
-                    </div>
-                    <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#7a5417]">
-                      Bedrag
-                      <input
-                        value={iceCashInputValue(selectedCashRecord)}
-                        onChange={(event) =>
-                          setIceCashDrafts((current) => ({
-                            ...current,
-                            [cashRecordDraftKey(selectedCashRecord)]:
-                              event.target.value,
-                          }))
-                        }
-                        inputMode="decimal"
-                        disabled={state === "saving"}
-                        placeholder="0,00"
-                        className="h-9 rounded-md border border-[#d9b15f] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => void saveIceCash(selectedCashRecord)}
-                      disabled={state === "saving"}
-                      className="h-9 rounded-md bg-[#1a1815] px-3 text-[0.62rem] font-black uppercase tracking-normal text-white disabled:opacity-60"
-                    >
-                      Opslaan
-                    </button>
-                  </div>
+                  <IceCashEditor
+                    disabled={state === "saving"}
+                    onSave={() => void saveIceCash(selectedCashRecord)}
+                    onValueChange={(value) =>
+                      setIceCashDrafts((current) => ({
+                        ...current,
+                        [cashRecordDraftKey(selectedCashRecord)]: value,
+                      }))
+                    }
+                    record={selectedCashRecord}
+                    value={iceCashInputValue(selectedCashRecord)}
+                  />
 
                   {selectedCashWarning && (
                     <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417] lg:col-span-2">
@@ -1641,6 +1740,52 @@ export default function CashCountManager() {
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+function IceCashEditor({
+  disabled,
+  onSave,
+  onValueChange,
+  record,
+  value,
+}: Readonly<{
+  disabled: boolean;
+  onSave: () => void;
+  onValueChange: (value: string) => void;
+  record: RevenueCashRecord;
+  value: string;
+}>) {
+  return (
+    <div className="grid gap-2 rounded-md border border-[#d9b15f] bg-[#fff7df] p-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end lg:col-span-2">
+      <div>
+        <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#7a5417]">
+          Ijs contant
+        </p>
+        <p className="text-[0.6rem] font-bold uppercase tracking-normal text-[#9a7531]">
+          {record.shop} · {record.date.slice(8, 10)}-{record.date.slice(5, 7)}
+        </p>
+      </div>
+      <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#7a5417]">
+        Bedrag
+        <input
+          value={value}
+          onChange={(event) => onValueChange(event.target.value)}
+          inputMode="decimal"
+          disabled={disabled}
+          placeholder="0,00"
+          className="h-9 rounded-md border border-[#d9b15f] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+        />
+      </label>
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={disabled}
+        className="h-9 rounded-md bg-[#1a1815] px-3 text-[0.62rem] font-black uppercase tracking-normal text-white disabled:opacity-60"
+      >
+        Opslaan
+      </button>
     </div>
   );
 }

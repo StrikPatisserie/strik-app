@@ -211,6 +211,7 @@ function strik_revenue_normalize_cash_record($record) {
         'safeCash' => isset($record['safeCash']) ? round((float) $record['safeCash'], 2) : null,
         'safeDifference' => isset($record['safeDifference']) ? round((float) $record['safeDifference'], 2) : null,
         'iceCash' => isset($record['iceCash']) ? round((float) $record['iceCash'], 2) : null,
+        'cashImportKind' => isset($record['cashImportKind']) && in_array(strtolower((string) $record['cashImportKind']), array('patisserie', 'ice'), true) ? strtolower((string) $record['cashImportKind']) : '',
         'countedBy' => isset($record['countedBy']) ? strik_revenue_text($record['countedBy'], 120) : '',
         'openedAt' => isset($record['openedAt']) ? strik_revenue_text($record['openedAt'], 40) : '',
         'closedAt' => isset($record['closedAt']) ? strik_revenue_text($record['closedAt'], 40) : '',

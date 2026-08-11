@@ -31,6 +31,7 @@ type DayRevenueImportInput = {
   receivedAt?: string;
   bodyText?: string;
   bodyHtml?: string;
+  labels?: string[];
   attachments?: PdfAttachmentInput[];
 };
 
@@ -561,6 +562,192 @@ function extractCashRecords(
         openedAt: times.openedAt,
         closedAt: times.closedAt,
         note: "",
+        cashImportKind: "patisserie",
+        source: "dagafsluiting",
+        messageId: cleanText(input.messageId, 200) || messageHash,
+        importedAt,
+        updatedAt: importedAt,
+      },
+    ];
+  });
+}
+
+function isIceDayReport(input: DayRevenueImportInput, text: string) {
+  const subject = String(input.subject || "").toLowerCase();
+  if (
+    /\bijs\b/.test(subject) &&
+    /\b(dag\s*rapport|dagrapport|dagafsluiting|rapport)\b/.test(subject)
+  ) {
+    return true;
+  }
+
+  const haystack = `${input.subject || ""}\n${text}`.toLowerCase();
+
+  return (
+    /\bijs\b/.test(haystack) &&
+    /\b(ijs\s+dag\s*rapport|dag\s*rapport\s+ijs|ijs\s+dagrapport|dagrapport\s+ijs)\b/.test(
+      haystack
+    )
+  );
+}
+
+function scoreIceCashLine(line: string) {
+  let score = 0;
+
+  if (/\b(contant|cash|kasgeld|geld)\b/i.test(line)) score += 22;
+  if (/\b(ijs|ijsloket|dag\s*rapport|dagrapport|omzet|totaal|afsluiting)\b/i.test(line)) {
+    score += 7;
+  }
+  if (/\b(totaal|omzet)\b/i.test(line) && /\b(contant|cash)\b/i.test(line)) {
+    score += 10;
+  }
+  if (/\b(pin|kaart|bancontact|ideal|btw|belasting|korting|retour|wisselgeld|start|begin|eind|verschil|fooi)\b/i.test(line)) {
+    score -= 12;
+  }
+
+  return score;
+}
+
+function extractIceCashCandidate(text: string) {
+  const lines = text
+    .split(/\n/)
+    .map((line) => cleanText(line, 2000))
+    .filter(Boolean);
+  const candidates: ShopAmountCandidate[] = [];
+
+  lines.forEach((line, index) => {
+    const amounts = extractSignedAmountMatches(line).filter(
+      (match) => match.amount >= 0 && match.amount <= 10000
+    );
+    const score = scoreIceCashLine(line);
+
+    if (amounts.length && score > 0) {
+      candidates.push({
+        amount: amounts[amounts.length - 1].amount,
+        score,
+        line,
+      });
+    }
+
+    if (!amounts.length && score > 12) {
+      const windowText = [line, lines[index + 1] || "", lines[index + 2] || ""]
+        .filter(Boolean)
+        .join(" ");
+      const windowAmounts = extractSignedAmountMatches(windowText).filter(
+        (match) => match.amount >= 0 && match.amount <= 10000
+      );
+
+      if (windowAmounts.length) {
+        candidates.push({
+          amount: windowAmounts[windowAmounts.length - 1].amount,
+          score: score + 3,
+          line: windowText,
+        });
+      }
+    }
+  });
+
+  return candidates.sort((first, second) => second.score - first.score)[0];
+}
+
+function extractIceCashAmountsByShop(text: string) {
+  const lines = text
+    .split(/\n/)
+    .map((line) => cleanText(line, 2000))
+    .filter(Boolean);
+  const candidates = new Map<RevenueShop, ShopAmountCandidate>();
+
+  lines.forEach((line) => {
+    const shopHits = findShopsInLine(line);
+    const amounts = extractSignedAmountMatches(line).filter(
+      (match) => match.amount >= 0 && match.amount <= 10000
+    );
+    const score = scoreIceCashLine(line);
+
+    if (!shopHits.length || !amounts.length || score <= 0) return;
+
+    shopHits.forEach((hit) => {
+      rememberCandidate(candidates, hit.shop, {
+        amount: amounts[amounts.length - 1].amount,
+        score: score + 8,
+        line,
+      });
+    });
+  });
+
+  const shopLineHits = lines.flatMap((line, index) =>
+    findShopsInLine(line).map((hit) => ({ ...hit, lineIndex: index }))
+  );
+
+  shopLineHits.forEach((hit, index) => {
+    const nextLineIndex = shopLineHits[index + 1]?.lineIndex ?? lines.length;
+    const sectionText = lines.slice(hit.lineIndex, nextLineIndex).join("\n");
+    const candidate = extractIceCashCandidate(sectionText);
+
+    if (!candidate) return;
+
+    rememberCandidate(candidates, hit.shop, {
+      ...candidate,
+      score: candidate.score + 2,
+    });
+  });
+
+  return [...candidates.entries()].map(([shop, candidate]) => ({
+    shop,
+    amount: candidate.amount,
+    line: candidate.line,
+    score: candidate.score,
+  }));
+}
+
+function extractIceCashRecords(
+  input: DayRevenueImportInput,
+  text: string,
+  date: string
+) {
+  if (!isIceDayReport(input, text)) return [];
+
+  const importedAt = new Date().toISOString();
+  const dateParts = getIsoPartsForDate(date);
+  const labels = Array.isArray(input.labels) ? input.labels.join(" ") : "";
+  const fullText = `${input.subject || ""}\n${input.from || ""}\n${labels}\n${text}`;
+  const multiShopAmounts = extractIceCashAmountsByShop(fullText);
+  const singleShop = pickShopFromText(fullText);
+  const singleCandidate = extractIceCashCandidate(fullText);
+  const amounts = multiShopAmounts.length
+    ? multiShopAmounts
+    : singleShop && singleCandidate
+      ? [
+          {
+            shop: singleShop,
+            amount: singleCandidate.amount,
+            line: singleCandidate.line,
+            score: singleCandidate.score,
+          },
+        ]
+      : [];
+
+  return amounts.flatMap((item): RevenueCashRecord[] => {
+    if (!Number.isFinite(item.amount)) return [];
+
+    const messageHash = createHash("sha1")
+      .update(`${input.messageId}|${input.subject}|${date}|ice|${item.shop}`)
+      .digest("hex")
+      .slice(0, 8);
+
+    return [
+      {
+        id: createRevenueCashKey(date, item.shop),
+        date,
+        year: dateParts.year,
+        week: dateParts.week,
+        shop: item.shop,
+        denominations: {},
+        denominationTotal: 0,
+        countedCash: 0,
+        iceCash: item.amount,
+        cashImportKind: "ice",
+        note: `Ijs dagrapport via Gmail · ${input.subject || "zonder onderwerp"}`,
         source: "dagafsluiting",
         messageId: cleanText(input.messageId, 200) || messageHash,
         importedAt,
@@ -672,12 +859,16 @@ export async function POST(request: Request) {
       .filter(Boolean)
       .join("\n");
     const date = extractReportDate(input, fullText);
-    const shopAmounts = extractShopAmounts(fullText);
-    const cashRecords = extractCashRecords(input, fullText, date);
+    const iceReport = isIceDayReport(input, fullText);
+    const shopAmounts = iceReport ? [] : extractShopAmounts(fullText);
+    const cashRecords = [
+      ...extractCashRecords(input, fullText, date),
+      ...extractIceCashRecords(input, fullText, date),
+    ];
 
-    if (!shopAmounts.length) {
+    if (!shopAmounts.length && !cashRecords.length) {
       return jsonError(
-        "Geen winkelomzetten gevonden in de dagafsluiting-mail.",
+        "Geen winkelomzetten of ijs-contant bedrag gevonden in de dagafsluiting-mail.",
         422
       );
     }
@@ -694,16 +885,18 @@ export async function POST(request: Request) {
       })
     );
     const warnings = [];
-    if (shopAmounts.length < revenueShops.length) {
+    if (shopAmounts.length > 0 && shopAmounts.length < revenueShops.length) {
       warnings.push(
         `Niet alle winkels gevonden: ${shopAmounts.length}/${revenueShops.length}.`
       );
     }
 
     if (new URL(request.url).searchParams.get("dryRun") !== "1") {
-      const result = await upsertRevenueDayRecords(records);
-      if (!result.ok) {
-        return jsonError(result.message, result.status === 403 ? 403 : 502);
+      if (records.length > 0) {
+        const result = await upsertRevenueDayRecords(records);
+        if (!result.ok) {
+          return jsonError(result.message, result.status === 403 ? 403 : 502);
+        }
       }
       if (cashRecords.length > 0) {
         const cashResult = await upsertRevenueCashRecords(cashRecords);

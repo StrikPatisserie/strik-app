@@ -7,7 +7,17 @@ const DAGOMZET_IMPORT_CONFIG = {
   ERROR_LABEL: 'Fout',
 
   QUERY: 'label:"Dagomzet" newer_than:7d -label:"Ingelezen" -label:"Fout"',
+  SEARCH_QUERIES: [
+    'label:"Dagomzet" newer_than:7d -label:"Ingelezen" -label:"Fout"',
+    'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Dag Rapport ijs"',
+    'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Dagafsluiting email-Filiaal" subject:ijs',
+  ],
   RECOVERY_QUERY: 'label:"Dagomzet" newer_than:30d',
+  RECOVERY_SEARCH_QUERIES: [
+    'label:"Dagomzet" newer_than:30d',
+    'newer_than:30d subject:"Dag Rapport ijs"',
+    'newer_than:30d subject:"Dagafsluiting email-Filiaal" subject:ijs',
+  ],
   MAX_THREADS: 10,
   RECOVERY_MAX_THREADS: 30,
   MAX_PDF_ATTACHMENTS: 5,
@@ -21,11 +31,7 @@ function importDagomzet() {
   );
   const errorLabel = getOrCreateDagomzetLabel_(DAGOMZET_IMPORT_CONFIG.ERROR_LABEL);
   const props = PropertiesService.getScriptProperties();
-  const threads = GmailApp.search(
-    DAGOMZET_IMPORT_CONFIG.QUERY,
-    0,
-    DAGOMZET_IMPORT_CONFIG.MAX_THREADS
-  );
+  const threads = searchDagomzetThreads_(DAGOMZET_IMPORT_CONFIG.MAX_THREADS);
 
   threads.forEach((thread) => {
     let imported = false;
@@ -56,6 +62,7 @@ function importDagomzet() {
             bodyText,
             bodyHtml,
             attachments,
+            labels: thread.getLabels().map((label) => label.getName()),
             sourceUrl: `https://mail.google.com/mail/u/0/#inbox/${message.getId()}`,
           }),
         });
@@ -80,9 +87,7 @@ function importDagomzet() {
 
 function debugDagomzetLaatsteMails() {
   const props = PropertiesService.getScriptProperties();
-  const threads = GmailApp.search(
-    DAGOMZET_IMPORT_CONFIG.RECOVERY_QUERY,
-    0,
+  const threads = searchDagomzetRecoveryThreads_(
     DAGOMZET_IMPORT_CONFIG.RECOVERY_MAX_THREADS
   );
 
@@ -118,6 +123,49 @@ function debugDagomzetLaatsteMails() {
       Logger.log(line);
     });
   });
+}
+
+function searchDagomzetThreads_(maxThreads, queriesOverride) {
+  const queries =
+    queriesOverride ||
+    DAGOMZET_IMPORT_CONFIG.SEARCH_QUERIES ||
+    [DAGOMZET_IMPORT_CONFIG.QUERY];
+  const threadByKey = {};
+  const threads = [];
+
+  queries.forEach((query) => {
+    try {
+      GmailApp.search(query, 0, maxThreads).forEach((thread) => {
+        const key = getDagomzetThreadKey_(thread);
+        if (threadByKey[key]) return;
+
+        threadByKey[key] = true;
+        threads.push(thread);
+      });
+    } catch (error) {
+      console.error(error);
+      Logger.log(`Dagomzet zoekquery mislukt: ${query}`);
+    }
+  });
+
+  return threads.slice(0, maxThreads);
+}
+
+function searchDagomzetRecoveryThreads_(maxThreads) {
+  return searchDagomzetThreads_(
+    maxThreads,
+    DAGOMZET_IMPORT_CONFIG.RECOVERY_SEARCH_QUERIES ||
+      [DAGOMZET_IMPORT_CONFIG.RECOVERY_QUERY]
+  );
+}
+
+function getDagomzetThreadKey_(thread) {
+  try {
+    return thread.getId();
+  } catch (error) {
+    const messages = thread.getMessages();
+    return messages.length ? messages[0].getId() : Utilities.getUuid();
+  }
 }
 
 function getOrCreateDagomzetLabel_(name) {
