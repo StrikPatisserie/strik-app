@@ -72,6 +72,7 @@ type CashAmountMatch = {
 
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
+const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -205,6 +206,28 @@ function amsterdamDateFrom(value: unknown) {
   }).format(date);
 }
 
+function amsterdamHourFrom(value: unknown) {
+  const parsed = new Date(String(value || ""));
+  const date = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const hour = Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Europe/Amsterdam",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(date)
+  );
+
+  return Number.isFinite(hour) ? hour : 12;
+}
+
+function previousAmsterdamDateFrom(value: unknown) {
+  const [year, month, day] = amsterdamDateFrom(value).split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() - 1);
+
+  return date.toISOString().slice(0, 10);
+}
+
 function parseDateFromText(value: string) {
   const iso = value.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
   if (iso) return isoDateFromParts(Number(iso[1]), Number(iso[2]), Number(iso[3]));
@@ -232,19 +255,29 @@ function parseDateFromText(value: string) {
   return "";
 }
 
-function extractReportDate(input: DayRevenueImportInput, text: string) {
+function extractReportDate(
+  input: DayRevenueImportInput,
+  text: string,
+  options: { previousAmsterdamDayForNightMail?: boolean } = {}
+) {
   const preferredDateLine = text
     .split(/\n/)
     .find((line) =>
       /\b(datum|rapportdatum|dagafsluiting|omzetdatum|boekdatum)\b/i.test(line)
     );
   const preferredDate = preferredDateLine ? parseDateFromText(preferredDateLine) : "";
+  const parsedDate =
+    preferredDate || parseDateFromText(`${input.subject || ""}\n${text}`);
+  if (parsedDate) return parsedDate;
 
-  return (
-    preferredDate ||
-    parseDateFromText(`${input.subject || ""}\n${text}`) ||
-    amsterdamDateFrom(input.receivedAt)
-  );
+  if (
+    options.previousAmsterdamDayForNightMail &&
+    amsterdamHourFrom(input.receivedAt) < ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR
+  ) {
+    return previousAmsterdamDateFrom(input.receivedAt);
+  }
+
+  return amsterdamDateFrom(input.receivedAt);
 }
 
 function parseDutchAmount(value: string) {
@@ -1020,8 +1053,10 @@ export async function POST(request: Request) {
     const fullText = [bodyText, bodyHtmlText, ...pdfTexts]
       .filter(Boolean)
       .join("\n");
-    const date = extractReportDate(input, fullText);
     const iceReport = isIceDayReport(input, fullText);
+    const date = extractReportDate(input, fullText, {
+      previousAmsterdamDayForNightMail: iceReport,
+    });
     const shopAmounts = iceReport ? [] : extractShopAmounts(fullText);
     const cashRecords = [
       ...extractCashRecords(input, fullText, date),
