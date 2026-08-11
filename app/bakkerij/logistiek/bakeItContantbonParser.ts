@@ -74,6 +74,9 @@ const alternativeAddressStartPatterns = [
 ];
 const deliveryAddressActionPattern =
   /\b(?:bezorgen|bezorging|bezorgadres|afleveren|aflevering|afleveradres|leveren|leveradres|afgeven|afgifte|wordt\s+(?:bezorgd|geleverd|afgeleverd|afgegeven))\b/i;
+const dutchPostalCodePattern = /\b\d{4}\s?[A-Z]{2}\b/i;
+const streetAddressWordPattern =
+  /\b(?:straat|str\.?|steeg|weg|laan|plein|hof|pad|dijk|singel|kade|markt|boulevard|plantsoen|baan|wal|gracht|hofje|park|allee)\b/i;
 const prognoseMailStartMinutes = 8 * 60 + 20;
 const definitiveMailStartMinutes = 20 * 60 + 15;
 const internalLinePatterns = [
@@ -380,6 +383,33 @@ function isPhoneLine(line: string) {
   return /^0\d[\d\s-]{7,}$/.test(line);
 }
 
+function isContactLine(line: string) {
+  return /^(?:mob\.?|mobiel|tel\.?|telefoon|phone)\b/i.test(line.trim());
+}
+
+function lineWithoutLeadingReceiptQuantity(line: string) {
+  return line.replace(/^\d+(?:[.,]\d+)?\s+/, "").trim();
+}
+
+function isLikelyAddressLine(line: string) {
+  const clean = line.replace(/\s+/g, " ").trim();
+  if (!clean) return false;
+  if (dutchPostalCodePattern.test(clean)) return true;
+
+  return streetAddressWordPattern.test(clean) && /\b\d+[A-Z]?\b/i.test(clean);
+}
+
+function isLikelyAddressOrContactLine(line: string) {
+  const clean = line.replace(/\s+/g, " ").trim();
+  const withoutQuantity = lineWithoutLeadingReceiptQuantity(clean);
+
+  return (
+    isContactLine(clean) ||
+    isLikelyAddressLine(clean) ||
+    (withoutQuantity !== clean && isLikelyAddressLine(withoutQuantity))
+  );
+}
+
 function isInternalReceipt(customer: string) {
   const normalized = customer.toLowerCase();
   return storeNames.some((store) => normalized.includes(store));
@@ -595,6 +625,7 @@ function extractProductQuantityAndDescription(value: string) {
   const hasColumnSeparator = /\t/.test(value);
   const text = value.replace(/\s+/g, " ").trim();
   if (!text) return null;
+  if (isLikelyAddressOrContactLine(text)) return null;
 
   const articleQuantityMatch = text.match(
     new RegExp(`^(${articleNumberPattern})\\s+(\\d+(?:[.,]\\d+)?)\\s+(.+)$`, "i")
@@ -662,6 +693,8 @@ function isUsableProductDescription(value: string) {
   if (/^totaalprijs\b|^btw\b|^factuurkorting\b/i.test(clean)) return false;
   if (/trial mode|click here for more information/i.test(clean)) return false;
   if (/^(?:niet\s+)?betaald\b|^gewenste betaling\b/i.test(clean)) return false;
+  if (/^(?:betaalverzoek|mvg|met vriendelijke groet)\b/i.test(clean)) return false;
+  if (isLikelyAddressOrContactLine(clean)) return false;
 
   return true;
 }
@@ -769,15 +802,19 @@ function cleanProductOptionCandidate(candidate: string) {
 }
 
 function isAdministrativeRemarkLine(line: string) {
+  const cleanLine = lineWithoutLeadingReceiptQuantity(line);
+
   return (
-    /^betaald\b/i.test(line) ||
-    /^niet betaald\b/i.test(line) ||
-    /^gewenste betaling\b/i.test(line) ||
-    /trial mode|click here for more information/i.test(line) ||
-    /betaald via\s+\[/i.test(line) ||
-    /\bmet referentie\s+\S+/i.test(line) ||
-    /^&euro;/i.test(line) ||
-    /^€\s*[\d.,:]+\s+met referentie\b/i.test(line)
+    /^betaald\b/i.test(cleanLine) ||
+    /^betaalverzoek\b/i.test(cleanLine) ||
+    /^niet betaald\b/i.test(cleanLine) ||
+    /^gewenste betaling\b/i.test(cleanLine) ||
+    /^(?:mvg|met vriendelijke groet)\b/i.test(cleanLine) ||
+    /trial mode|click here for more information/i.test(cleanLine) ||
+    /betaald via\s+\[/i.test(cleanLine) ||
+    /\bmet referentie\s+\S+/i.test(cleanLine) ||
+    /^&euro;/i.test(cleanLine) ||
+    /^€\s*[\d.,:]+\s+met referentie\b/i.test(cleanLine)
   );
 }
 
@@ -829,7 +866,9 @@ function inferFulfillment(bodyLines: string[]): LogisticsFulfillment {
   if (
     bodyLines.some((line) =>
       deliveryAddressActionPattern.test(line) ||
-      (/^adres\b\s*:?\s*/i.test(line) && deliveryAddressActionPattern.test(line))
+      (/^adres\b\s*:?\s*/i.test(line) && deliveryAddressActionPattern.test(line)) ||
+      isDeliveryCostDescription(line) ||
+      /^levering\s*[:;]\s*/i.test(line)
     )
   ) {
     return "bezorgen";
@@ -858,11 +897,18 @@ function inferPickupLocation(bodyLines: string[]) {
 }
 
 function cleanAlternativeAddressLine(line: string) {
+  const withoutQuantity = lineWithoutLeadingReceiptQuantity(line);
+  const candidate =
+    withoutQuantity !== line && isLikelyAddressLine(withoutQuantity)
+      ? withoutQuantity
+      : line;
+
   return alternativeAddressStartPatterns
-    .reduce((value, pattern) => value.replace(pattern, ""), line)
+    .reduce((value, pattern) => value.replace(pattern, ""), candidate)
     .replace(/^adres\b\s*[:;]?\s*/i, "")
+    .replace(/^levering\s*[:;]\s*/i, "")
     .replace(/^[,;:]+/g, "")
-    .replace(/\b(?:nummer|nr\.?|telefoon|tel\.?|contact|ceremoniemeester)\b.*$/i, "")
+    .replace(/\b(?:mob\.?|mobiel|nummer|nr\.?|telefoon|tel\.?|contact|ceremoniemeester)\b.*$/i, "")
     .replace(/\bis betaald\b.*$/i, "")
     .replace(/\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering|afgeven|afgifte)\s+(?:tussen|voor|om|vanaf)\b.*$/i, "")
     .replace(/^(?:tussen|voor|om|vanaf)\b.*\d{1,2}[:.]\d{2}.*$/i, "")
@@ -890,6 +936,7 @@ function isInstructionLine(line: string) {
     /^(bellen|graag|wij willen|via mail|de factuur|kostenplaats|naam aanvrager|factuurgegevens|t\.?b\.?v\.?|voor het ophalen)\b/i.test(
       line
     ) ||
+    isContactLine(line) ||
     /^0\d[\d\s-]{7,}$/.test(line) ||
     Boolean(extractOperationalTime(line)) ||
     /^(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering|afgeven|afgifte)\s+(?:tussen|voor|om|vanaf)\b/i.test(
@@ -949,6 +996,13 @@ function splitAlternativeAddressFromRemarks(
     if (isStandaloneAlternativeAddressLine(remark)) {
       uniquePush(alternativeAddressLines, cleanAlternativeAddressLine(remark));
       consumeAddressContinuation = false;
+      continue;
+    }
+
+    if (fulfillment === "bezorgen" && isLikelyAddressLine(remark)) {
+      uniquePush(alternativeAddressLines, cleanAlternativeAddressLine(remark));
+      consumeAddressContinuation = true;
+      impliesDelivery = true;
       continue;
     }
 
@@ -1253,6 +1307,7 @@ function shouldAppendProductContinuation(line: string) {
   if (isStandaloneSplitProductDescription(line)) return false;
   if (isAdministrativeRemarkLine(line)) return false;
   if (isFulfillmentLine(line) || pickupLocationFromLine(line)) return false;
+  if (isLikelyAddressOrContactLine(line)) return false;
   if (/\b(?:betaald|niet betaald|gewenste betaling|referentie)\b/i.test(line)) {
     return false;
   }
@@ -1306,13 +1361,24 @@ function applyPricedContinuation(
 }
 
 function findDeliveryBlock(bodyLines: string[]) {
-  const startIndex = bodyLines.findIndex((line) => /^levering;?$/i.test(line));
+  const startIndex = bodyLines.findIndex((line) =>
+    /^levering\s*[:;]?$/i.test(line) || /^levering\s*[:;]\s+\S+/i.test(line)
+  );
   if (startIndex < 0) return [];
 
   const block: string[] = [];
+  const firstLineMatch = bodyLines[startIndex].match(/^levering\s*[:;]\s+(.+)$/i);
+  if (firstLineMatch) {
+    const firstLine = cleanAlternativeAddressLine(firstLineMatch[1]);
+    if (firstLine && !isContactLine(firstLine)) uniquePush(block, firstLine);
+  }
+
   for (const line of bodyLines.slice(startIndex + 1)) {
-    if (/^levering;?$/i.test(line) || isFooterLine(line)) break;
-    uniquePush(block, line);
+    if (/^levering\s*[:;]?$/i.test(line) || isFooterLine(line)) break;
+    if (isContactLine(line) || isPhoneLine(line)) continue;
+
+    const addressLine = cleanAlternativeAddressLine(line);
+    if (addressLine) uniquePush(block, addressLine);
   }
 
   return block;
@@ -1365,7 +1431,7 @@ function parsePage(pageText: string): ParsedPage | null {
 
   for (const line of bodyLines) {
     if (isBoilerplateLine(line) || isFooterLine(line)) continue;
-    if (/^levering;?$/i.test(line)) continue;
+    if (/^levering\s*[:;]/i.test(line)) continue;
     if (deliveryBlock.includes(line)) continue;
 
     if (/^totaalprijs$/i.test(line) && parsedLines.length === 0) {

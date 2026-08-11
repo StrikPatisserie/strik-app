@@ -3826,7 +3826,8 @@ function preferredBusForReceipt(receipt: ReceiptSummary): BusId | "" {
   if (
     clusterKey === "molenhoek-groesbeek" ||
     clusterKey === "berg-en-dal" ||
-    clusterKey === "oost-buiten"
+    clusterKey === "oost-buiten" ||
+    clusterKey === "land-van-cuijk"
   ) {
     return "A";
   }
@@ -3878,6 +3879,9 @@ function outsideClusterKeyForReceipt(receipt: ReceiptSummary) {
   }
   if (/malden|heumen/.test(text)) {
     return "oost-buiten";
+  }
+  if (/grave|cuijk|gennep|ottersum|heijen/.test(text)) {
+    return "land-van-cuijk";
   }
   if (/gendt|huigensstraat|bemmel|elst|arnhem|oosterhout/.test(text)) {
     return "noord-buiten";
@@ -3937,6 +3941,7 @@ function receiptRoutePoint(receipt: ReceiptSummary): RoutePoint {
     return { x: 0.8, y: -1.0 };
   }
   if (/groesbeek|hopmans|hoge horst/.test(text)) return { x: 2.2, y: 1.4 };
+  if (/grave/.test(text)) return { x: -1.8, y: -3.8 };
   if (/gennep|cuijk|ottersum|heijen/.test(text)) return { x: 3.4, y: -7.2 };
   if (/malden|heumen/.test(text)) return { x: 0.2, y: 0.3 };
   if (/wijchen|beuningen|berendonck|thermen/.test(text)) {
@@ -3965,7 +3970,7 @@ function isSanadomeReceipt(receipt: ReceiptSummary) {
 }
 
 function isGennepRouteReceipt(receipt: ReceiptSummary) {
-  return /gennep|cuijk|ottersum|heijen/i.test(receiptSearchText(receipt));
+  return /grave|gennep|cuijk|ottersum|heijen/i.test(receiptSearchText(receipt));
 }
 
 function isPriorityEarlyDelivery(receipt: ReceiptSummary) {
@@ -4032,6 +4037,7 @@ function fitsNaturalFirstLoop(receipt: ReceiptSummary, bus: PlannedBus) {
 
   if (bus.id === "A") {
     return (
+      clusterKey === "land-van-cuijk" ||
       clusterKey === "oost-buiten" ||
       clusterKey === "molenhoek-groesbeek" ||
       clusterKey === "berg-en-dal" ||
@@ -4068,6 +4074,7 @@ function routeAreaOrderForReceipt(receipt: ReceiptSummary) {
   if (clusterKey === "molenhoek-groesbeek") return 70;
   if (clusterKey === "berg-en-dal") return 72;
   if (clusterKey === "oost-buiten") return 74;
+  if (clusterKey === "land-van-cuijk") return 78;
   if (clusterKey === "noord-buiten") return 86;
 
   return 90;
