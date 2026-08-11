@@ -69,6 +69,16 @@ export type RevenueCashRecord = {
   safeCash?: number;
   safeDifference?: number;
   iceCash?: number;
+  iceStartCash?: number;
+  iceCountedCash?: number;
+  iceCashRevenue?: number;
+  iceCashOut?: number;
+  iceReceipts?: number;
+  iceExpectedCash?: number;
+  iceDifference?: number;
+  iceCountedBy?: string;
+  iceOpenedAt?: string;
+  iceClosedAt?: string;
   cashImportKind?: "patisserie" | "ice";
   checkedDenominations?: CashDenominationCounts;
   countedBy?: string;
@@ -192,6 +202,16 @@ function compactCashRecordPayload(record: RevenueCashRecord) {
     sf: record.safeCash,
     sd: record.safeDifference,
     ic: record.iceCash,
+    isc: record.iceStartCash,
+    icc: record.iceCountedCash,
+    icr: record.iceCashRevenue,
+    icu: record.iceCashOut,
+    irc: record.iceReceipts,
+    iec: record.iceExpectedCash,
+    idf: record.iceDifference,
+    icb: record.iceCountedBy,
+    ioa: record.iceOpenedAt,
+    ica: record.iceClosedAt,
     ck: record.cashImportKind,
     xd: record.checkedDenominations,
     cb: record.countedBy,
@@ -229,6 +249,16 @@ function expandCashRecordPayload(
     safeCash: payload.safeCash ?? payload.sf,
     safeDifference: payload.safeDifference ?? payload.sd,
     iceCash: payload.iceCash ?? payload.ic,
+    iceStartCash: payload.iceStartCash ?? payload.isc,
+    iceCountedCash: payload.iceCountedCash ?? payload.icc,
+    iceCashRevenue: payload.iceCashRevenue ?? payload.icr,
+    iceCashOut: payload.iceCashOut ?? payload.icu,
+    iceReceipts: payload.iceReceipts ?? payload.irc,
+    iceExpectedCash: payload.iceExpectedCash ?? payload.iec,
+    iceDifference: payload.iceDifference ?? payload.idf,
+    iceCountedBy: payload.iceCountedBy ?? payload.icb,
+    iceOpenedAt: payload.iceOpenedAt ?? payload.ioa,
+    iceClosedAt: payload.iceClosedAt ?? payload.ica,
     cashImportKind: payload.cashImportKind ?? payload.ck,
     checkedDenominations: payload.checkedDenominations ?? payload.xd,
     countedBy: payload.countedBy ?? payload.cb,
@@ -629,6 +659,35 @@ export function normalizeRevenueCashRecord(
         : moneyFrom(value.safeDifference),
     iceCash:
       value.iceCash === undefined ? undefined : positiveMoneyFrom(value.iceCash),
+    iceStartCash:
+      value.iceStartCash === undefined
+        ? undefined
+        : positiveMoneyFrom(value.iceStartCash),
+    iceCountedCash:
+      value.iceCountedCash === undefined
+        ? undefined
+        : positiveMoneyFrom(value.iceCountedCash),
+    iceCashRevenue:
+      value.iceCashRevenue === undefined
+        ? undefined
+        : positiveMoneyFrom(value.iceCashRevenue),
+    iceCashOut:
+      value.iceCashOut === undefined
+        ? undefined
+        : positiveMoneyFrom(value.iceCashOut),
+    iceReceipts:
+      value.iceReceipts === undefined
+        ? undefined
+        : positiveMoneyFrom(value.iceReceipts),
+    iceExpectedCash:
+      value.iceExpectedCash === undefined
+        ? undefined
+        : positiveMoneyFrom(value.iceExpectedCash),
+    iceDifference:
+      value.iceDifference === undefined ? undefined : moneyFrom(value.iceDifference),
+    iceCountedBy: textFrom(value.iceCountedBy) || undefined,
+    iceOpenedAt: textFrom(value.iceOpenedAt) || undefined,
+    iceClosedAt: textFrom(value.iceClosedAt) || undefined,
     cashImportKind,
     checkedDenominations,
     countedBy: textFrom(value.countedBy) || undefined,
@@ -893,6 +952,16 @@ export function mergeRevenueCashRecords(
         ? existing?.safeDifference
         : record.safeDifference ?? existing?.safeDifference,
       iceCash: record.iceCash ?? existing?.iceCash,
+      iceStartCash: record.iceStartCash ?? existing?.iceStartCash,
+      iceCountedCash: record.iceCountedCash ?? existing?.iceCountedCash,
+      iceCashRevenue: record.iceCashRevenue ?? existing?.iceCashRevenue,
+      iceCashOut: record.iceCashOut ?? existing?.iceCashOut,
+      iceReceipts: record.iceReceipts ?? existing?.iceReceipts,
+      iceExpectedCash: record.iceExpectedCash ?? existing?.iceExpectedCash,
+      iceDifference: record.iceDifference ?? existing?.iceDifference,
+      iceCountedBy: record.iceCountedBy || existing?.iceCountedBy,
+      iceOpenedAt: record.iceOpenedAt || existing?.iceOpenedAt,
+      iceClosedAt: record.iceClosedAt || existing?.iceClosedAt,
       checkedDenominations:
         isIceOnly && existing
           ? existing.checkedDenominations

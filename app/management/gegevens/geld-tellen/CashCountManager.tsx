@@ -266,11 +266,57 @@ function receiptAmount(record: RevenueCashRecord) {
 }
 
 function iceCashAmount(record: RevenueCashRecord | undefined) {
-  return record?.iceCash ?? 0;
+  return record?.iceCash ?? iceExpectedCash(record);
+}
+
+function iceExpectedCash(record: RevenueCashRecord | undefined) {
+  if (!record) return 0;
+  if (record.iceExpectedCash !== undefined) return record.iceExpectedCash;
+  if (
+    record.iceStartCash !== undefined &&
+    record.iceCountedCash !== undefined
+  ) {
+    return Math.max(
+      0,
+      Number((record.iceCountedCash - record.iceStartCash).toFixed(2))
+    );
+  }
+
+  return record.iceCash ?? 0;
+}
+
+function iceCountedCash(record: RevenueCashRecord | undefined) {
+  if (!record) return undefined;
+  if (record.iceCountedCash !== undefined) return record.iceCountedCash;
+  if (record.iceStartCash !== undefined) {
+    return Number((record.iceStartCash + iceExpectedCash(record)).toFixed(2));
+  }
+
+  return undefined;
+}
+
+function hasIceCashRecord(record: RevenueCashRecord | undefined) {
+  return Boolean(
+    record &&
+      (record.cashImportKind === "ice" ||
+        record.iceCash !== undefined ||
+        record.iceStartCash !== undefined ||
+        record.iceCountedCash !== undefined ||
+        record.iceExpectedCash !== undefined)
+  );
 }
 
 function hasPatisserieCashRecord(record: RevenueCashRecord | undefined) {
   return Boolean(record && record.cashImportKind !== "ice");
+}
+
+function iceCashWarning(record: RevenueCashRecord | undefined) {
+  if (!hasIceCashRecord(record)) return "Geen ijs dagrapport ontvangen.";
+  if (record?.iceDifference !== undefined && Math.abs(record.iceDifference) > 5) {
+    return "Kasverschil in het ijsrapport is groter dan EUR 5.";
+  }
+
+  return "";
 }
 
 function checkedCashNoteCount(record: RevenueCashRecord, key: CashDenominationKey) {
@@ -503,7 +549,7 @@ export default function CashCountManager() {
             return (
               isCashExpectedForShopDate(shop, date) ||
               hasPatisserieCashRecord(record) ||
-              iceCashAmount(record) > 0
+              hasIceCashRecord(record)
             );
           }
         );
@@ -525,7 +571,7 @@ export default function CashCountManager() {
         const iceRecords = expectedDates.flatMap((date) => {
           const record = findCashRecord(shopRecords, date, shop);
 
-          return record && record.iceCash !== undefined ? [record] : [];
+          return hasIceCashRecord(record) && record ? [record] : [];
         });
         const cashRevenue = patisserieRecords.reduce(
           (total, record) => total + (record.cashRevenue ?? record.countedCash),
@@ -620,9 +666,19 @@ export default function CashCountManager() {
   const selectedShopDay =
     selectedShopDays.find((day) => day.date === selectedDate) ||
     selectedShopDays[0];
-  const selectedCashRecord = selectedShopDay?.patisserieRecord;
+  const selectedPatisserieCashRecord = selectedShopDay?.patisserieRecord;
   const selectedIceCashRecord = selectedShopDay?.record;
-  const selectedCashWarning = cashWarning(selectedCashRecord);
+  const selectedCashRecord =
+    selectedCashMenuKind === "ice"
+      ? hasIceCashRecord(selectedIceCashRecord)
+        ? selectedIceCashRecord
+        : undefined
+      : selectedPatisserieCashRecord;
+  const selectedIsIceRecord =
+    selectedCashMenuKind === "ice" && Boolean(selectedCashRecord);
+  const selectedCashWarning = selectedIsIceRecord
+    ? iceCashWarning(selectedCashRecord)
+    : cashWarning(selectedCashRecord);
   const selectedSafeDraftKey = selectedCashRecord
     ? `${selectedCashRecord.date}:${selectedCashRecord.shop}`
     : "";
@@ -639,10 +695,34 @@ export default function CashCountManager() {
       )
     : 0;
   const selectedCashOut = selectedCashRecord
-    ? cashOutAmount(selectedCashRecord)
+    ? selectedIsIceRecord
+      ? selectedCashRecord.iceCashOut
+      : cashOutAmount(selectedCashRecord)
     : undefined;
   const selectedReceipts = selectedCashRecord
-    ? receiptAmount(selectedCashRecord)
+    ? selectedIsIceRecord
+      ? selectedCashRecord.iceReceipts
+      : receiptAmount(selectedCashRecord)
+    : undefined;
+  const selectedStartCash = selectedCashRecord
+    ? selectedIsIceRecord
+      ? selectedCashRecord.iceStartCash
+      : selectedCashRecord.startCash
+    : undefined;
+  const selectedCountedCash = selectedCashRecord
+    ? selectedIsIceRecord
+      ? iceCountedCash(selectedCashRecord)
+      : selectedCashRecord.countedCash
+    : undefined;
+  const selectedExpectedCash = selectedCashRecord
+    ? selectedIsIceRecord
+      ? iceExpectedCash(selectedCashRecord)
+      : safeExpectedCash(selectedCashRecord)
+    : 0;
+  const selectedDifference = selectedCashRecord
+    ? selectedIsIceRecord
+      ? selectedCashRecord.iceDifference
+      : selectedCashRecord.difference
     : undefined;
   const weekRecords = useMemo(
     () => weekRows.flatMap((row) => row.records),
@@ -754,6 +834,9 @@ export default function CashCountManager() {
           iceCash: parseAmount(
             iceCashDrafts[key] || formatAmountInput(iceCashAmount(current))
           ),
+          iceExpectedCash: parseAmount(
+            iceCashDrafts[key] || formatAmountInput(iceCashAmount(current))
+          ),
           checkedDenominations: buildCheckedCashDenominations(
             current,
             cashNoteDrafts
@@ -820,6 +903,7 @@ export default function CashCountManager() {
       return {
         ...record,
         iceCash: parseAmount(iceCashDrafts[key] || "0"),
+        iceExpectedCash: parseAmount(iceCashDrafts[key] || "0"),
         updatedAt: now,
       };
     });
@@ -835,6 +919,9 @@ export default function CashCountManager() {
       (current) => ({
         ...current,
         iceCash: parseAmount(
+          iceCashDrafts[key] ?? formatAmountInput(iceCashAmount(current))
+        ),
+        iceExpectedCash: parseAmount(
           iceCashDrafts[key] ?? formatAmountInput(iceCashAmount(current))
         ),
         updatedAt: now,
@@ -1365,24 +1452,39 @@ export default function CashCountManager() {
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-7">
-            {selectedShopDays.map(({ date, isExpected, patisserieRecord }) => {
+            {selectedShopDays.map(({ date, isExpected, patisserieRecord, record }) => {
               const isActive = date === selectedDate;
-              const warning = cashWarning(patisserieRecord);
-              const isClosed = !isExpected && !patisserieRecord;
-              const statusLabel = isClosed
-                ? "Gesloten"
-                : !patisserieRecord
-                ? "Ontbreekt"
-                : patisserieRecord.checkedAt
-                  ? "Compleet"
-                  : warning
-                    ? "Let op"
-                    : "Open";
+              const iceRecord = hasIceCashRecord(record) ? record : undefined;
+              const dayRecord =
+                selectedCashMenuKind === "ice" ? iceRecord : patisserieRecord;
+              const warning =
+                selectedCashMenuKind === "ice"
+                  ? iceCashWarning(dayRecord)
+                  : cashWarning(dayRecord);
+              const isClosed = !isExpected && !dayRecord;
+              const statusLabel =
+                selectedCashMenuKind === "ice"
+                  ? isClosed
+                    ? "Gesloten"
+                    : !dayRecord
+                      ? "Ontbreekt"
+                      : warning
+                        ? "Let op"
+                        : "Rapport"
+                  : isClosed
+                    ? "Gesloten"
+                    : !dayRecord
+                      ? "Ontbreekt"
+                      : dayRecord.checkedAt
+                        ? "Compleet"
+                        : warning
+                          ? "Let op"
+                          : "Open";
               const tileClass = isActive
                 ? "border-[#1a1815] bg-[#1a1815] text-white shadow-sm"
-                : !patisserieRecord
+                : !dayRecord
                   ? "border-[#e7e0d8] bg-[#f5f2ee] text-[#8b8278]"
-                  : patisserieRecord.checkedAt
+                  : selectedCashMenuKind !== "ice" && dayRecord.checkedAt
                     ? "border-[#cbdcc5] bg-[#f6fbf5] text-[#1a1815]"
                     : warning
                       ? "border-[#efd1a1] bg-[#fff8d8] text-[#1a1815]"
@@ -1417,8 +1519,10 @@ export default function CashCountManager() {
                       isActive ? "text-white" : "text-[#1a1815]"
                     }`}
                   >
-                    {patisserieRecord
-                      ? formatMoney(safeExpectedCash(patisserieRecord))
+                    {dayRecord
+                      ? selectedCashMenuKind === "ice"
+                        ? formatMoney(iceCashAmount(dayRecord))
+                        : formatMoney(safeExpectedCash(dayRecord))
                       : isClosed
                         ? "geen dienst"
                         : "-"}
@@ -1469,11 +1573,15 @@ export default function CashCountManager() {
                       {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"}
                     </p>
                     <p className="text-sm font-black text-[#1a1815]">
-                      Dagafsluiting ontbreekt
+                      {selectedCashMenuKind === "ice"
+                        ? "Ijs dagrapport ontbreekt"
+                        : "Dagafsluiting ontbreekt"}
                     </p>
                   </div>
                   <p className="text-sm font-bold text-[#8b8278]">
-                    Geen Cash-it dagafsluiting ontvangen.
+                    {selectedCashMenuKind === "ice"
+                      ? "Geen ijs dagrapport ontvangen."
+                      : "Geen Cash-it dagafsluiting ontvangen."}
                   </p>
                 </div>
                 {selectedIceCashRecord && (
@@ -1497,7 +1605,9 @@ export default function CashCountManager() {
               <article
                 key={selectedCashRecord.id}
                 className={`rounded-md border px-3 py-2 ${
-                  selectedCashRecord.checkedAt
+                  selectedIsIceRecord
+                    ? "border-[#d9b15f] bg-[#fffaf0]"
+                    : selectedCashRecord.checkedAt
                     ? "border-[#cbdcc5] bg-[#f6fbf5]"
                     : selectedCashWarning
                       ? "border-[#efd1a1] bg-[#fffdf5]"
@@ -1506,13 +1616,17 @@ export default function CashCountManager() {
               >
                 <div className="grid gap-3 lg:grid-cols-[6rem_minmax(0,1fr)_7rem] lg:items-start">
                   <label className="flex items-center gap-2 lg:items-start">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(selectedCashRecord.checkedAt)}
-                      disabled={state === "saving"}
-                      onChange={() => void toggleChecked(selectedCashRecord)}
-                      className="mt-0.5 h-4 w-4 accent-[#1f4f35]"
-                    />
+                    {selectedIsIceRecord ? (
+                      <span className="mt-0.5 h-4 w-4 rounded-sm border border-[#d9b15f] bg-[#fff7df]" />
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selectedCashRecord.checkedAt)}
+                        disabled={state === "saving"}
+                        onChange={() => void toggleChecked(selectedCashRecord)}
+                        className="mt-0.5 h-4 w-4 accent-[#1f4f35]"
+                      />
+                    )}
                     <span>
                       <span className="block text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
                         {dayShortName(selectedCashRecord.date)}
@@ -1523,12 +1637,18 @@ export default function CashCountManager() {
                       </span>
                       <span
                         className={`mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-normal ${
-                          selectedCashRecord.checkedAt
+                          selectedIsIceRecord
+                            ? "bg-[#fff1c4] text-[#7a5417]"
+                            : selectedCashRecord.checkedAt
                             ? "bg-[#dfeadd] text-[#1f4f35]"
                             : "bg-[#f5ead6] text-[#7a5417]"
                         }`}
                       >
-                        {selectedCashRecord.checkedAt ? "compleet" : "open"}
+                        {selectedIsIceRecord
+                          ? "ijsrapport"
+                          : selectedCashRecord.checkedAt
+                            ? "compleet"
+                            : "open"}
                       </span>
                     </span>
                   </label>
@@ -1536,11 +1656,11 @@ export default function CashCountManager() {
                   <div className="grid gap-x-4 gap-y-2 sm:grid-cols-3 xl:grid-cols-6">
                     <AmountCell
                       label="Start"
-                      value={formatOptionalMoney(selectedCashRecord.startCash)}
+                      value={formatOptionalMoney(selectedStartCash)}
                     />
                     <AmountCell
                       label="Geteld"
-                      value={formatMoney(selectedCashRecord.countedCash)}
+                      value={formatOptionalMoney(selectedCountedCash)}
                     />
                     <AmountCell
                       label="Kas-uit"
@@ -1564,114 +1684,154 @@ export default function CashCountManager() {
                     />
                     <AmountCell
                       label="Naar kluis"
-                      value={formatMoney(safeExpectedCash(selectedCashRecord))}
+                      value={formatMoney(selectedExpectedCash)}
                     />
                     <AmountCell
                       label="Kasverschil"
-                      value={formatOptionalMoney(selectedCashRecord.difference)}
+                      value={formatOptionalMoney(selectedDifference)}
                       tone={
-                        selectedCashRecord.difference !== undefined &&
-                        Math.abs(selectedCashRecord.difference) > 0.05
+                        selectedDifference !== undefined &&
+                        Math.abs(selectedDifference) > 0.05
                           ? "warn"
                           : "normal"
                       }
                     />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => void toggleChecked(selectedCashRecord)}
-                    disabled={state === "saving"}
-                    className={`h-9 rounded-md border px-2 text-[0.62rem] font-black uppercase tracking-normal disabled:opacity-60 ${
-                      selectedCashRecord.checkedAt
-                        ? "border-[#d9d2c9] bg-white text-[#6b645b]"
-                        : "border-[#1a1815] bg-[#1a1815] text-white"
-                    }`}
-                  >
-                    {selectedCashRecord.checkedAt ? "Heropenen" : "Afvinken"}
-                  </button>
+                  {selectedIsIceRecord ? (
+                    <div className="flex h-9 items-center justify-center rounded-md border border-[#d9b15f] bg-[#fff7df] px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#7a5417]">
+                      Gmail
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void toggleChecked(selectedCashRecord)}
+                      disabled={state === "saving"}
+                      className={`h-9 rounded-md border px-2 text-[0.62rem] font-black uppercase tracking-normal disabled:opacity-60 ${
+                        selectedCashRecord.checkedAt
+                          ? "border-[#d9d2c9] bg-white text-[#6b645b]"
+                          : "border-[#1a1815] bg-[#1a1815] text-white"
+                      }`}
+                    >
+                      {selectedCashRecord.checkedAt ? "Heropenen" : "Afvinken"}
+                    </button>
+                  )}
                 </div>
 
                 <div className="mt-3 grid gap-3 border-t border-[#e7e0d8]/80 pt-2 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-                  <CashNoteControl
-                    disabled={Boolean(selectedCashRecord.checkedAt) || state === "saving"}
-                    drafts={cashNoteDrafts}
-                    onChange={(key, value) =>
-                      setCashNoteDrafts((current) => ({
-                        ...current,
-                        [cashNoteDraftKey(selectedCashRecord, key)]: value,
-                      }))
-                    }
-                    record={selectedCashRecord}
-                  />
-
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
-                    <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                      Controlebedrag
-                      <input
-                        value={selectedSafeInputValue}
-                        onChange={(event) =>
-                          setSafeCashDrafts((current) => ({
+                  {selectedIsIceRecord ? (
+                    <>
+                      <IceCashEditor
+                        disabled={state === "saving"}
+                        onSave={() => void saveIceCash(selectedCashRecord)}
+                        onValueChange={(value) =>
+                          setIceCashDrafts((current) => ({
                             ...current,
-                            [selectedSafeDraftKey]: event.target.value,
+                            [cashRecordDraftKey(selectedCashRecord)]: value,
                           }))
                         }
-                        inputMode="decimal"
-                        disabled={Boolean(selectedCashRecord.checkedAt) || state === "saving"}
-                        placeholder="0,00"
-                        className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                        record={selectedCashRecord}
+                        value={iceCashInputValue(selectedCashRecord)}
                       />
-                    </label>
 
-                    <AmountCell
-                      label="Verschil"
-                      value={formatMoney(selectedSafeDraftDifference)}
-                      tone={
-                        Math.abs(selectedSafeDraftDifference) > 0.01
-                          ? "warn"
-                          : "normal"
-                      }
-                    />
-
-                    <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278] sm:col-span-2">
-                      Controle-notitie
-                      <input
-                        value={visibleCashNote(selectedCashRecord.note)}
-                        onChange={(event) =>
-                          updateCashRecord(
-                            selectedCashRecord.date,
-                            selectedCashRecord.shop,
-                            (current) => ({
-                              ...current,
-                              note: event.target.value,
-                              updatedAt: new Date().toISOString(),
-                            })
-                          )
+                      {selectedCashWarning && (
+                        <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417] lg:col-span-2">
+                          {selectedCashWarning}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <CashNoteControl
+                        disabled={
+                          Boolean(selectedCashRecord.checkedAt) ||
+                          state === "saving"
                         }
-                        disabled={Boolean(selectedCashRecord.checkedAt) || state === "saving"}
-                        placeholder="Bijv. kas-uitbon ontbreekt of bedrag gecorrigeerd"
-                        className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                        drafts={cashNoteDrafts}
+                        onChange={(key, value) =>
+                          setCashNoteDrafts((current) => ({
+                            ...current,
+                            [cashNoteDraftKey(selectedCashRecord, key)]: value,
+                          }))
+                        }
+                        record={selectedCashRecord}
                       />
-                    </label>
-                  </div>
 
-                  <IceCashEditor
-                    disabled={state === "saving"}
-                    onSave={() => void saveIceCash(selectedCashRecord)}
-                    onValueChange={(value) =>
-                      setIceCashDrafts((current) => ({
-                        ...current,
-                        [cashRecordDraftKey(selectedCashRecord)]: value,
-                      }))
-                    }
-                    record={selectedCashRecord}
-                    value={iceCashInputValue(selectedCashRecord)}
-                  />
+                      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
+                        <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+                          Controlebedrag
+                          <input
+                            value={selectedSafeInputValue}
+                            onChange={(event) =>
+                              setSafeCashDrafts((current) => ({
+                                ...current,
+                                [selectedSafeDraftKey]: event.target.value,
+                              }))
+                            }
+                            inputMode="decimal"
+                            disabled={
+                              Boolean(selectedCashRecord.checkedAt) ||
+                              state === "saving"
+                            }
+                            placeholder="0,00"
+                            className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                          />
+                        </label>
 
-                  {selectedCashWarning && (
-                    <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417] lg:col-span-2">
-                      {selectedCashWarning}
-                    </p>
+                        <AmountCell
+                          label="Verschil"
+                          value={formatMoney(selectedSafeDraftDifference)}
+                          tone={
+                            Math.abs(selectedSafeDraftDifference) > 0.01
+                              ? "warn"
+                              : "normal"
+                          }
+                        />
+
+                        <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278] sm:col-span-2">
+                          Controle-notitie
+                          <input
+                            value={visibleCashNote(selectedCashRecord.note)}
+                            onChange={(event) =>
+                              updateCashRecord(
+                                selectedCashRecord.date,
+                                selectedCashRecord.shop,
+                                (current) => ({
+                                  ...current,
+                                  note: event.target.value,
+                                  updatedAt: new Date().toISOString(),
+                                })
+                              )
+                            }
+                            disabled={
+                              Boolean(selectedCashRecord.checkedAt) ||
+                              state === "saving"
+                            }
+                            placeholder="Bijv. kas-uitbon ontbreekt of bedrag gecorrigeerd"
+                            className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                          />
+                        </label>
+                      </div>
+
+                      <IceCashEditor
+                        disabled={state === "saving"}
+                        onSave={() => void saveIceCash(selectedCashRecord)}
+                        onValueChange={(value) =>
+                          setIceCashDrafts((current) => ({
+                            ...current,
+                            [cashRecordDraftKey(selectedCashRecord)]: value,
+                          }))
+                        }
+                        record={selectedCashRecord}
+                        value={iceCashInputValue(selectedCashRecord)}
+                      />
+
+                      {selectedCashWarning && (
+                        <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417] lg:col-span-2">
+                          {selectedCashWarning}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               </article>

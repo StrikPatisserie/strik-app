@@ -49,6 +49,21 @@ type ShopAmountCandidate = {
   line: string;
 };
 
+type IceCashCandidate = ShopAmountCandidate & {
+  startCash?: number;
+  countedCash?: number;
+  cashRevenue?: number;
+  cashOut?: number;
+  receipts?: number;
+  expectedCash?: number;
+  difference?: number;
+  countedBy?: string;
+  openedAt?: string;
+  closedAt?: string;
+};
+
+type IceCashDetails = Omit<IceCashCandidate, "amount" | "score" | "line">;
+
 type CashAmountMatch = {
   amount: number;
   index: number;
@@ -608,11 +623,114 @@ function scoreIceCashLine(line: string) {
   return score;
 }
 
+function firstNumber(...values: Array<number | undefined>) {
+  return values.find((value) => typeof value === "number");
+}
+
+function extractFirstIceAmount(patterns: RegExp[], text: string) {
+  for (const pattern of patterns) {
+    const amount = extractFirstSignedAmount(pattern, text);
+    if (amount !== undefined) return amount;
+  }
+
+  return undefined;
+}
+
+function extractIceCashDetails(text: string): IceCashDetails {
+  const startCash = extractFirstIceAmount(
+    [
+      /\b(?:Startgeld|Start\s*geld|Begingeld|Begin\s*geld|Start\s*kas|Openingsgeld|Wisselgeld)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    ],
+    text
+  );
+  const countedCash = extractFirstIceAmount(
+    [
+      /\b(?:Geteld(?:\s+bedrag)?|Eindgeld|Eind\s*geld|Telling|Totaal\s+geteld|Getelde\s+kas)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    ],
+    text
+  );
+  const cashRevenue = extractFirstIceAmount(
+    [
+      /\b(?:Contante?\s+omzet|Omzet\s+contant|Cash\s+omzet|Contant\s+ijs|Contant\s+geld|Cash)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+      /\b(?:Ijs|IJsloket)[^\n]*(?:contant|cash)[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    ],
+    text
+  );
+  const cashOut = extractFirstIceAmount(
+    [
+      /\b(?:Kas\s*-?\s*uit|Kasuit|Uit\s+kas|Kassa\s+uit)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    ],
+    text
+  );
+  const receipts = extractFirstIceAmount(
+    [
+      /\b(?:Bonnen|Kasbonnen|Contantbonnen)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    ],
+    text
+  );
+  const explicitExpectedCash = extractFirstIceAmount(
+    [
+      /\b(?:Naar\s+kluis|Kluis|Afstort(?:ing)?|Afstorten|Stort(?:ing)?|Te\s+storten|Naar\s+bank)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    ],
+    text
+  );
+  const difference = extractFirstIceAmount(
+    [
+      /\b(?:Kasverschil|Kassa\s*verschil|Verschil)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    ],
+    text
+  );
+  const times = extractCashTimes(text);
+  const countedBy =
+    extractCashCountedBy(text) ||
+    cleanText(
+      text.match(/\b(?:Medewerker|Teller|Door)\s*:\s*([^\n]+)/i)?.[1],
+      80
+    );
+  const derivedExpectedCash =
+    countedCash !== undefined && startCash !== undefined
+      ? Math.max(0, Number((countedCash - startCash).toFixed(2)))
+      : undefined;
+
+  return {
+    startCash,
+    countedCash,
+    cashRevenue,
+    cashOut,
+    receipts,
+    expectedCash: firstNumber(explicitExpectedCash, derivedExpectedCash),
+    difference,
+    countedBy: countedBy || undefined,
+    openedAt:
+      times.openedAt ||
+      text.match(/\b(?:Open|Start|Geopend)\b[^\n]*(\d{1,2}:\d{2})\b/i)?.[1],
+    closedAt:
+      times.closedAt ||
+      text.match(/\b(?:Sluit|Eind|Gesloten)\b[^\n]*(\d{1,2}:\d{2})\b/i)?.[1],
+  };
+}
+
+function resolveIceCashAmount(details: IceCashDetails, fallbackAmount?: number) {
+  return firstNumber(details.expectedCash, details.cashRevenue, fallbackAmount);
+}
+
+function rememberIceCandidate(
+  map: Map<RevenueShop, IceCashCandidate>,
+  shop: RevenueShop,
+  candidate: IceCashCandidate
+) {
+  const current = map.get(shop);
+  if (!current || candidate.score > current.score) {
+    map.set(shop, candidate);
+  }
+}
+
 function extractIceCashCandidate(text: string) {
   const lines = text
     .split(/\n/)
     .map((line) => cleanText(line, 2000))
     .filter(Boolean);
+  const details = extractIceCashDetails(text);
   const candidates: ShopAmountCandidate[] = [];
 
   lines.forEach((line, index) => {
@@ -647,7 +765,18 @@ function extractIceCashCandidate(text: string) {
     }
   });
 
-  return candidates.sort((first, second) => second.score - first.score)[0];
+  const bestCandidate = candidates.sort(
+    (first, second) => second.score - first.score
+  )[0];
+  const amount = resolveIceCashAmount(details, bestCandidate?.amount);
+  if (amount === undefined) return undefined;
+
+  return {
+    amount,
+    score: bestCandidate ? bestCandidate.score + 4 : 20,
+    line: bestCandidate?.line || "Ijs dagrapport",
+    ...details,
+  } satisfies IceCashCandidate;
 }
 
 function extractIceCashAmountsByShop(text: string) {
@@ -655,7 +784,7 @@ function extractIceCashAmountsByShop(text: string) {
     .split(/\n/)
     .map((line) => cleanText(line, 2000))
     .filter(Boolean);
-  const candidates = new Map<RevenueShop, ShopAmountCandidate>();
+  const candidates = new Map<RevenueShop, IceCashCandidate>();
 
   lines.forEach((line) => {
     const shopHits = findShopsInLine(line);
@@ -666,11 +795,14 @@ function extractIceCashAmountsByShop(text: string) {
 
     if (!shopHits.length || !amounts.length || score <= 0) return;
 
+    const details = extractIceCashDetails(line);
+
     shopHits.forEach((hit) => {
-      rememberCandidate(candidates, hit.shop, {
+      rememberIceCandidate(candidates, hit.shop, {
         amount: amounts[amounts.length - 1].amount,
         score: score + 8,
         line,
+        ...details,
       });
     });
   });
@@ -686,7 +818,7 @@ function extractIceCashAmountsByShop(text: string) {
 
     if (!candidate) return;
 
-    rememberCandidate(candidates, hit.shop, {
+    rememberIceCandidate(candidates, hit.shop, {
       ...candidate,
       score: candidate.score + 2,
     });
@@ -697,6 +829,16 @@ function extractIceCashAmountsByShop(text: string) {
     amount: candidate.amount,
     line: candidate.line,
     score: candidate.score,
+    startCash: candidate.startCash,
+    countedCash: candidate.countedCash,
+    cashRevenue: candidate.cashRevenue,
+    cashOut: candidate.cashOut,
+    receipts: candidate.receipts,
+    expectedCash: candidate.expectedCash,
+    difference: candidate.difference,
+    countedBy: candidate.countedBy,
+    openedAt: candidate.openedAt,
+    closedAt: candidate.closedAt,
   }));
 }
 
@@ -717,15 +859,25 @@ function extractIceCashRecords(
   const amounts = multiShopAmounts.length
     ? multiShopAmounts
     : singleShop && singleCandidate
-      ? [
-          {
-            shop: singleShop,
-            amount: singleCandidate.amount,
-            line: singleCandidate.line,
-            score: singleCandidate.score,
-          },
-        ]
-      : [];
+        ? [
+            {
+              shop: singleShop,
+              amount: singleCandidate.amount,
+              line: singleCandidate.line,
+              score: singleCandidate.score,
+              startCash: singleCandidate.startCash,
+              countedCash: singleCandidate.countedCash,
+              cashRevenue: singleCandidate.cashRevenue,
+              cashOut: singleCandidate.cashOut,
+              receipts: singleCandidate.receipts,
+              expectedCash: singleCandidate.expectedCash,
+              difference: singleCandidate.difference,
+              countedBy: singleCandidate.countedBy,
+              openedAt: singleCandidate.openedAt,
+              closedAt: singleCandidate.closedAt,
+            },
+          ]
+        : [];
 
   return amounts.flatMap((item): RevenueCashRecord[] => {
     if (!Number.isFinite(item.amount)) return [];
@@ -746,6 +898,16 @@ function extractIceCashRecords(
         denominationTotal: 0,
         countedCash: 0,
         iceCash: item.amount,
+        iceStartCash: item.startCash,
+        iceCountedCash: item.countedCash,
+        iceCashRevenue: item.cashRevenue,
+        iceCashOut: item.cashOut,
+        iceReceipts: item.receipts,
+        iceExpectedCash: item.expectedCash ?? item.amount,
+        iceDifference: item.difference,
+        iceCountedBy: item.countedBy,
+        iceOpenedAt: item.openedAt,
+        iceClosedAt: item.closedAt,
         cashImportKind: "ice",
         note: `Ijs dagrapport via Gmail · ${input.subject || "zonder onderwerp"}`,
         source: "dagafsluiting",
