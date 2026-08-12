@@ -23,6 +23,7 @@ export default function AppChrome({
     pathname === "/reset-password" ||
     pathname === "/update-password" ||
     pathname.startsWith("/auth/");
+  const isPrintArea = pathname === "/bakkerij/logistiek/arend-print";
   const isBakeryWorkArea =
     pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
   const isWinkelWorkArea =
@@ -40,7 +41,7 @@ export default function AppChrome({
     pathname.startsWith("/vierdaagse/") ||
     pathname === "/kraamrekenaar";
 
-  if (isAuthArea) {
+  if (isAuthArea || isPrintArea) {
     return <>{children}</>;
   }
 

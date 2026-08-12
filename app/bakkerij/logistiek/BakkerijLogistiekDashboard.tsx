@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
+import {
+  AREND_PRINT_SESSION_KEY,
+  AREND_PRINT_SQUARES_PER_SHEET,
+  type ArendPrintSession,
+} from "./arendPrintSession";
 import type {
   LogisticsBatch,
   LogisticsBatchStatus,
@@ -232,7 +237,6 @@ type ArendNumberPrintParseResult = {
 };
 
 const AREND_ORDERED_SQUARES_PER_SHEET = 50;
-const AREND_PRINT_SQUARES_PER_SHEET = 54;
 
 type PreparationCategory = "bakkerij" | "logistiek";
 
@@ -3473,174 +3477,45 @@ function openMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
   printWindow.focus();
 }
 
-function createArendNumberPrintHtml(input: {
-  items: ArendNumberPrintItem[];
+function openMarzipanPrintChoice(input: {
+  arendOrders: ArendNumberPrintOrder[];
+  marzipanItems: MarzipanPrintItem[];
   plan: DayPlan;
-  orderedCount: number;
-  requestedCount: number;
 }) {
-  const title = `Arend cijfers ${formatDateLabel(input.plan.date)}`;
-  const sheetHtml = Array.from(
-    { length: Math.ceil(input.items.length / AREND_PRINT_SQUARES_PER_SHEET) },
-    (_, sheetIndex) => {
-      const sheetItems = input.items.slice(
-        sheetIndex * AREND_PRINT_SQUARES_PER_SHEET,
-        (sheetIndex + 1) * AREND_PRINT_SQUARES_PER_SHEET
-      );
+  if (input.arendOrders.length > 0 && input.marzipanItems.length > 0) {
+    const answer = window.prompt(
+      [
+        "Wat wil je printen?",
+        "Typ 1 voor Arend cijfers.",
+        "Typ 2 voor overige marsepeinfoto's.",
+      ].join("\n"),
+      "1"
+    );
+    if (answer === null) return;
 
-      return `
-        <section class="sheet-grid">
-          ${sheetItems
-            .map(
-              (item, itemIndex) => `
-                <article class="number-tile ${
-                  Math.floor(itemIndex / 6) % 2 === 0 ? "light" : "dark"
-                }">
-                  <div class="number">${escapeHtml(item.displayNumber)}</div>
-                </article>
-              `
-            )
-            .join("")}
-        </section>
-      `;
+    if (answer.trim() === "1" || /arend/i.test(answer)) {
+      openArendNumberSheet(input.plan, input.arendOrders);
+      return;
     }
-  )
-    .join("");
 
-  return `<!doctype html>
-<html lang="nl">
-  <head>
-    <meta charset="utf-8">
-    <title>${escapeHtml(title)}</title>
-    <style>
-      @page { margin: 12mm 16mm 50mm; size: A4 portrait; }
-      @font-face {
-        font-family: "ArendBona";
-        src: url("/61771%20-%20Gasterij%20de%20Arend/BORUTTA%20GROUP%20-%20Bona%20Title%20Bold.otf") format("opentype");
-        font-display: block;
-        font-weight: 800;
-      }
-      * { box-sizing: border-box; }
-      :root {
-        --arend-anthracite: #313130;
-        --arend-green: #ccccb0;
-        --arend-white: #f7f4f1;
-        --tile-width: 29.4mm;
-        --tile-height: 25.2mm;
-      }
-      body {
-        background: var(--arend-white);
-        color: var(--arend-anthracite);
-        font-family: Arial, Helvetica, sans-serif;
-        margin: 0;
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
-      }
-      .screen-actions {
-        align-items: center;
-        border-bottom: 1px solid #ddd;
-        display: flex;
-        gap: 8px;
-        justify-content: space-between;
-        padding: 10px 12px;
-      }
-      .screen-actions h1 {
-        font-size: 15px;
-        margin: 0;
-      }
-      .screen-actions button {
-        background: var(--arend-anthracite);
-        border: 0;
-        color: #fff;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 800;
-        padding: 8px 12px;
-      }
-      main {
-        margin: 0 auto;
-        max-width: 210mm;
-        padding: 12mm 16mm 50mm;
-        width: 100%;
-      }
-      .sheet-header {
-        align-items: baseline;
-        border-bottom: 1px solid var(--arend-anthracite);
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 3mm;
-        padding-bottom: 1.2mm;
-      }
-      .sheet-header h1,
-      .sheet-header p {
-        font-size: 9px;
-        font-weight: 800;
-        margin: 0;
-      }
-      .sheet-grid {
-        break-after: page;
-        display: grid;
-        grid-template-columns: repeat(6, var(--tile-width));
-        gap: 0;
-        justify-content: center;
-        page-break-after: always;
-      }
-      .sheet-grid:last-child {
-        break-after: auto;
-        page-break-after: auto;
-      }
-      .number-tile {
-        align-items: center;
-        background: var(--arend-green);
-        border: 0.25mm solid var(--arend-white);
-        display: flex;
-        height: var(--tile-height);
-        justify-content: center;
-        page-break-inside: avoid;
-        width: var(--tile-width);
-      }
-      .number-tile.dark {
-        background: var(--arend-anthracite);
-      }
-      .number-tile.dark .number {
-        color: var(--arend-white);
-      }
-      .number-tile.light .number {
-        color: var(--arend-anthracite);
-      }
-      .number {
-        font-family: "ArendBona", "Bona Title", Georgia, serif;
-        font-size: 15.6mm;
-        font-weight: 800;
-        line-height: 0.86;
-        margin-top: -0.7mm;
-        text-align: center;
-      }
-      @media print {
-        .screen-actions { display: none; }
-        main {
-          max-width: none;
-          padding: 0;
-          width: 178mm;
-        }
-        .sheet-header { display: none; }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="screen-actions">
-      <h1>${escapeHtml(title)} · ${input.requestedCount}/${input.orderedCount} besteld · ${input.items.length} printvakjes</h1>
-      <button type="button" onclick="window.print()">Afdrukken</button>
-    </div>
-    <main>
-      <div class="sheet-header">
-        <h1>${escapeHtml(title)}</h1>
-        <p>${input.requestedCount}/${input.orderedCount} besteld · ${input.items.length} printvakjes · nul als letter O</p>
-      </div>
-      ${sheetHtml}
-    </main>
-  </body>
-</html>`;
+    if (
+      answer.trim() === "2" ||
+      /overig|foto|afbeelding|klant/i.test(answer)
+    ) {
+      openMarzipanPhotoSheet(input.plan, input.marzipanItems);
+      return;
+    }
+
+    window.alert("Kies 1 voor Arend of 2 voor overige klanten.");
+    return;
+  }
+
+  if (input.arendOrders.length > 0) {
+    openArendNumberSheet(input.plan, input.arendOrders);
+    return;
+  }
+
+  openMarzipanPhotoSheet(input.plan, input.marzipanItems);
 }
 
 function arendPromptDefaultFor(orders: ArendNumberPrintOrder[]) {
@@ -3665,50 +3540,19 @@ function arendPromptLabelFor(orders: ArendNumberPrintOrder[]) {
     .join("\n");
 }
 
-function openArendPrintPreview(html: string) {
-  let printWindow: Window | null = null;
-
+function openArendPrintPreview(session: ArendPrintSession) {
   try {
-    printWindow = window.open("", "_blank", "width=1100,height=800");
+    window.sessionStorage.setItem(
+      AREND_PRINT_SESSION_KEY,
+      JSON.stringify(session)
+    );
   } catch (error) {
     console.error(error);
-  }
-
-  if (printWindow) {
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
+    window.alert("Arend-printdata kon niet klaargezet worden.");
     return;
   }
 
-  const printFrame = document.createElement("iframe");
-  printFrame.title = "Arend cijfers print";
-  printFrame.style.border = "0";
-  printFrame.style.bottom = "0";
-  printFrame.style.height = "0";
-  printFrame.style.opacity = "0";
-  printFrame.style.position = "fixed";
-  printFrame.style.right = "0";
-  printFrame.style.width = "0";
-  document.body.appendChild(printFrame);
-
-  const frameWindow = printFrame.contentWindow;
-  const frameDocument = frameWindow?.document;
-  if (!frameWindow || !frameDocument) {
-    printFrame.remove();
-    window.alert("Arend-printvenster kon niet geopend worden.");
-    return;
-  }
-
-  frameDocument.open();
-  frameDocument.write(html);
-  frameDocument.close();
-
-  window.setTimeout(() => {
-    frameWindow.focus();
-    frameWindow.print();
-    window.setTimeout(() => printFrame.remove(), 1000);
-  }, 250);
+  window.location.assign("/bakkerij/logistiek/arend-print");
 }
 
 function openArendNumberSheet(plan: DayPlan, orders: ArendNumberPrintOrder[]) {
@@ -3731,14 +3575,19 @@ function openArendNumberSheet(plan: DayPlan, orders: ArendNumberPrintOrder[]) {
     return;
   }
 
-  openArendPrintPreview(
-    createArendNumberPrintHtml({
-      items: result.items,
-      orderedCount: result.orderedCount,
-      plan,
-      requestedCount: result.requestedCount,
-    })
-  );
+  openArendPrintPreview({
+    createdAt: new Date().toISOString(),
+    date: plan.date,
+    items: result.items.map((item) => ({
+      displayNumber: item.displayNumber,
+      id: item.id,
+      number: item.number,
+      sourceLabel: item.sourceLabel,
+    })),
+    orderedCount: result.orderedCount,
+    requestedCount: result.requestedCount,
+    title: `Arend cijfers ${formatDateLabel(plan.date)}`,
+  });
 }
 
 function createWrittenTextPrintHtml(input: {
@@ -8671,10 +8520,17 @@ export default function BakkerijLogistiekDashboard() {
               onClick={refreshBatch}
             />
             <MarzipanPhotoPrintButton
-              count={marzipanPrintItems.length}
-              disabled={marzipanPrintItems.length === 0}
+              count={marzipanPrintItems.length + arendNumberPrintCount}
+              disabled={
+                marzipanPrintItems.length === 0 &&
+                arendNumberPrintOrders.length === 0
+              }
               onClick={() =>
-                openMarzipanPhotoSheet(selectedPlan, marzipanPrintItems)
+                openMarzipanPrintChoice({
+                  arendOrders: arendNumberPrintOrders,
+                  marzipanItems: marzipanPrintItems,
+                  plan: selectedPlan,
+                })
               }
             />
             <WrittenTextPrintButton
@@ -8682,13 +8538,6 @@ export default function BakkerijLogistiekDashboard() {
               disabled={writtenTextPrintItems.length === 0}
               onClick={() =>
                 openWrittenTextSheet(selectedPlan, writtenTextPrintItems)
-              }
-            />
-            <ArendNumberPrintButton
-              count={arendNumberPrintCount}
-              disabled={arendNumberPrintOrders.length === 0}
-              onClick={() =>
-                openArendNumberSheet(selectedPlan, arendNumberPrintOrders)
               }
             />
             <PreparationPrintButton
@@ -10220,11 +10069,6 @@ function ReceiptDetail({
     .filter((line) => !shouldDropReceiptLine(line));
   const visibleNotes = visibleReceiptNotes(receipt, displayLines);
   const internalRouteNotes = receiptInternalRouteNotes(receipt);
-  const arendNumberPrintOrders = buildArendNumberPrintOrders([receipt]);
-  const arendNumberPrintCount = arendNumberPrintOrders.reduce(
-    (sum, order) => sum + order.defaultSquareCount,
-    0
-  );
   const showManualPhotoUpload =
     receiptNeedsManualPhotoUpload(receipt) && imageMatches.length === 0;
 
@@ -10274,27 +10118,6 @@ function ReceiptDetail({
         />
 
         <div className="bg-white px-3 pb-3 pt-6">
-          {arendNumberPrintOrders.length > 0 && (
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-[#1a1815] bg-[#faf8f5] px-2.5 py-2">
-              <div>
-                <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#6b645b]">
-                  Arend marsepein
-                </p>
-                <p className="text-xs font-black tracking-normal text-[#1a1815]">
-                  {arendNumberPrintCount} cijfer-vakjes
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  openArendNumberSheet(selectedPlan, arendNumberPrintOrders)
-                }
-                className="min-h-8 border border-[#1a1815] bg-[#1a1815] px-3 text-[0.62rem] font-black uppercase tracking-normal text-white transition hover:bg-[#3b352f]"
-              >
-                Print cijfers
-              </button>
-            </div>
-          )}
           <table className="w-full border-collapse text-[0.72rem] tracking-normal text-[#000]">
             <thead>
               <tr className="border-b-2 border-[#c9c9c9] text-left font-normal">
@@ -10813,34 +10636,6 @@ function WrittenTextPrintButton({
   );
 }
 
-function ArendNumberPrintButton({
-  count,
-  disabled,
-  onClick,
-}: Readonly<{
-  count: number;
-  disabled: boolean;
-  onClick: () => void;
-}>) {
-  return (
-    <button
-      type="button"
-      aria-label="Arend cijferprints"
-      title="Arend cijferprints"
-      disabled={disabled}
-      onClick={onClick}
-      className="relative flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      <NumberSheetIcon />
-      {count > 0 && (
-        <span className="absolute -right-1 -top-1 min-w-4 border border-[#1a1815] bg-[#1a1815] px-1 text-center text-[0.56rem] font-black leading-4 tracking-normal text-white">
-          {count > 99 ? "99+" : count}
-        </span>
-      )}
-    </button>
-  );
-}
-
 function RouteRecalculateButton({
   disabled,
   onClick,
@@ -11068,27 +10863,6 @@ function TextSheetIcon() {
       <path d="M8 12h8" />
       <path d="M8 16h5" />
       <path d="M15.5 15.5 18 18" />
-    </svg>
-  );
-}
-
-function NumberSheetIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-    >
-      <path d="M5 4h14v16H5z" />
-      <path d="M8 8h8" />
-      <path d="M8 16h8" />
-      <path d="M9 12h2" />
-      <path d="M14 10.5c0-.9.7-1.5 1.6-1.5s1.6.6 1.6 1.5c0 1.6-3.1 2.1-3.1 4.2h3.2" />
     </svg>
   );
 }
