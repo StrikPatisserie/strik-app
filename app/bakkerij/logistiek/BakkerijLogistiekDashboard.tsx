@@ -1570,8 +1570,12 @@ function normalizedLineDescription(value: string) {
     .trim();
 }
 
+function hasArendMarzipanLogoSignal(value: string) {
+  return /\blogo\s+op\s+marsepein\b/i.test(value.trim());
+}
+
 function isStandaloneMarzipanLogoProduct(value: string) {
-  return /^logo\s+op\s+marsepein\b/i.test(value.trim());
+  return hasArendMarzipanLogoSignal(value);
 }
 
 function isProductOptionLine(line: ReceiptLine) {
@@ -2773,7 +2777,9 @@ function isGasterijDeArendReceipt(receipt: ReceiptSummary) {
 }
 
 function isArendMarzipanLogoLine(line: ReceiptLine) {
-  return /^logo\s+op\s+marsepein\b/i.test(line.description.trim());
+  return hasArendMarzipanLogoSignal(
+    [line.description, line.note || ""].filter(Boolean).join(" ")
+  );
 }
 
 function arendNumberFromText(value: string) {
@@ -2809,11 +2815,43 @@ function arendMarzipanSheetQuantityFor(
   return Math.max(parsedQuantity, recoveredQuantity || 0);
 }
 
+function arendMarzipanSheetQuantityFromSource(value: string) {
+  const match = value.match(/(?:^|\s)(\d{1,3})\s+logo\s+op\s+marsepein\b/i);
+  const quantity = Number(match?.[1] || 0);
+
+  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+}
+
+function arendFallbackNumberPrintOrder(
+  receipt: ReceiptSummary,
+  receiptNumber: string
+): ArendNumberPrintOrder | null {
+  const source = [receipt.note, receipt.customerNote, receipt.internalNote]
+    .filter(Boolean)
+    .find((value) => hasArendMarzipanLogoSignal(value));
+  if (!source) return null;
+
+  const sheetQuantity = arendMarzipanSheetQuantityFromSource(source);
+
+  return {
+    id: `${receipt.id || receiptNumber || "arend"}-note`,
+    receiptNumber,
+    customerName: receipt.customer || "Gasterij de Arend",
+    lineDescription: "Logo op Marsepein",
+    sheetQuantity,
+    defaultSquareCount: sheetQuantity * 50,
+    inferredNumber: arendNumberFromText(source),
+  };
+}
+
 function buildArendNumberPrintOrders(receipts: ReceiptSummary[]) {
   const orders: ArendNumberPrintOrder[] = [];
 
   receipts.forEach((receipt) => {
     if (!isGasterijDeArendReceipt(receipt)) return;
+
+    const receiptNumber = receipt.receiptNumber || receipt.id || "";
+    const receiptOrders: ArendNumberPrintOrder[] = [];
 
     receipt.lines
       .map(normalizeKnownReceiptLine)
@@ -2822,8 +2860,7 @@ function buildArendNumberPrintOrders(receipts: ReceiptSummary[]) {
         if (!isArendMarzipanLogoLine(line)) return;
 
         const sheetQuantity = arendMarzipanSheetQuantityFor(line, receipt);
-        const receiptNumber = receipt.receiptNumber || receipt.id || "";
-        orders.push({
+        receiptOrders.push({
           id: `${receipt.id || receiptNumber || "arend"}-${lineIndex}`,
           receiptNumber,
           customerName: receipt.customer || "Gasterij de Arend",
@@ -2837,6 +2874,13 @@ function buildArendNumberPrintOrders(receipts: ReceiptSummary[]) {
           ),
         });
       });
+
+    if (receiptOrders.length === 0) {
+      const fallbackOrder = arendFallbackNumberPrintOrder(receipt, receiptNumber);
+      if (fallbackOrder) receiptOrders.push(fallbackOrder);
+    }
+
+    orders.push(...receiptOrders);
   });
 
   return orders;
@@ -10013,6 +10057,11 @@ function ReceiptDetail({
     .filter((line) => !shouldDropReceiptLine(line));
   const visibleNotes = visibleReceiptNotes(receipt, displayLines);
   const internalRouteNotes = receiptInternalRouteNotes(receipt);
+  const arendNumberPrintOrders = buildArendNumberPrintOrders([receipt]);
+  const arendNumberPrintCount = arendNumberPrintOrders.reduce(
+    (sum, order) => sum + order.defaultSquareCount,
+    0
+  );
   const showManualPhotoUpload =
     receiptNeedsManualPhotoUpload(receipt) && imageMatches.length === 0;
 
@@ -10062,6 +10111,27 @@ function ReceiptDetail({
         />
 
         <div className="bg-white px-3 pb-3 pt-6">
+          {arendNumberPrintOrders.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-[#1a1815] bg-[#faf8f5] px-2.5 py-2">
+              <div>
+                <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#6b645b]">
+                  Arend marsepein
+                </p>
+                <p className="text-xs font-black tracking-normal text-[#1a1815]">
+                  {arendNumberPrintCount} cijfer-vakjes
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  openArendNumberSheet(selectedPlan, arendNumberPrintOrders)
+                }
+                className="min-h-8 border border-[#1a1815] bg-[#1a1815] px-3 text-[0.62rem] font-black uppercase tracking-normal text-white transition hover:bg-[#3b352f]"
+              >
+                Print cijfers
+              </button>
+            </div>
+          )}
           <table className="w-full border-collapse text-[0.72rem] tracking-normal text-[#000]">
             <thead>
               <tr className="border-b-2 border-[#c9c9c9] text-left font-normal">
