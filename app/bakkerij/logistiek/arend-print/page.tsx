@@ -8,6 +8,26 @@ import {
   type ArendPrintSession,
 } from "../arendPrintSession";
 
+const AREND_FONT_NAME = "ArendBona";
+const AREND_FONT_LOAD = `400 16px "${AREND_FONT_NAME}"`;
+
+async function waitForArendFont() {
+  const fontSet = "fonts" in document ? document.fonts : null;
+
+  if (!fontSet) return true;
+
+  try {
+    await fontSet.load(AREND_FONT_LOAD);
+    await fontSet.ready;
+
+    return fontSet.check(AREND_FONT_LOAD);
+  } catch (error) {
+    console.error(error);
+  }
+
+  return false;
+}
+
 function formatBreakdown(items: ArendPrintSessionBreakdown[]) {
   return items.map((item) => `${item.count}x${item.number}`).join(", ");
 }
@@ -40,7 +60,7 @@ function ArendNumberValue({
 
   return (
     <div
-      className={`arend-number mt-[-0.7mm] flex items-center justify-center text-center font-[ArendBona,Georgia,serif] font-black leading-none ${
+      className={`arend-number mt-[-0.7mm] flex items-center justify-center text-center leading-none ${
         hasZero ? "gap-[0.4mm]" : ""
       } ${isDark ? "text-[#f7f4f1]" : "text-[#313130]"}`}
     >
@@ -61,6 +81,8 @@ function ArendNumberValue({
 }
 
 function readArendPrintSession() {
+  if (typeof window === "undefined") return null;
+
   try {
     const raw = window.sessionStorage.getItem(AREND_PRINT_SESSION_KEY);
     if (!raw) return null;
@@ -98,7 +120,10 @@ function readArendPrintSession() {
 }
 
 export default function ArendPrintPage() {
-  const [session, setSession] = useState<ArendPrintSession | null>(null);
+  const [session] = useState<ArendPrintSession | null>(() =>
+    readArendPrintSession()
+  );
+  const [isFontReady, setIsFontReady] = useState(false);
   const sheets = useMemo(() => {
     if (!session) return [];
 
@@ -117,8 +142,31 @@ export default function ArendPrintPage() {
   }, [session]);
 
   useEffect(() => {
-    setSession(readArendPrintSession());
-  }, []);
+    if (!session) return;
+
+    let isCancelled = false;
+
+    waitForArendFont().then((loaded) => {
+      if (!isCancelled) setIsFontReady(loaded);
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [session]);
+
+  async function handlePrint() {
+    const loaded = await waitForArendFont();
+
+    if (!loaded) {
+      window.alert(
+        "Het Arend-lettertype kon niet geladen worden. Herlaad de pagina en probeer opnieuw, anders kan de print afwijken."
+      );
+      return;
+    }
+
+    window.print();
+  }
 
   if (!session) {
     return (
@@ -141,13 +189,30 @@ export default function ArendPrintPage() {
   }
 
   return (
-    <main className="arend-print-page min-h-dvh bg-[#f7f4f1] text-[#313130]">
+    <main
+      className={`arend-print-page min-h-dvh bg-[#f7f4f1] text-[#313130] ${
+        isFontReady ? "" : "arend-font-loading"
+      }`}
+    >
       <style>{`
         @font-face {
           font-family: "ArendBona";
           src: url("/61771%20-%20Gasterij%20de%20Arend/BORUTTA%20GROUP%20-%20Bona%20Title%20Bold.otf") format("opentype");
           font-display: block;
-          font-weight: 800;
+          font-style: normal;
+          font-weight: 400;
+        }
+        .arend-number,
+        .arend-number * {
+          font-family: "ArendBona", Georgia, serif !important;
+          font-style: normal !important;
+          font-synthesis: none !important;
+          font-weight: 400 !important;
+          text-rendering: geometricPrecision;
+          -webkit-font-smoothing: antialiased;
+        }
+        .arend-font-loading .arend-number {
+          visibility: hidden;
         }
         @media print {
           @page {
@@ -173,6 +238,9 @@ export default function ArendPrintPage() {
             min-height: auto !important;
             position: absolute;
             width: 100%;
+          }
+          .arend-font-loading .arend-number {
+            visibility: visible !important;
           }
           .arend-screen-actions,
           .arend-sheet-header {
@@ -212,7 +280,7 @@ export default function ArendPrintPage() {
           </button>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={handlePrint}
             className="min-h-9 border border-[#313130] bg-[#313130] px-3 text-xs font-black uppercase tracking-normal text-white"
           >
             Afdrukken
