@@ -7,7 +7,7 @@ import {
 
 const haccpLinks = [
   {
-    href: "/winkel/haccp",
+    href: "/schoonmaak",
     title: "Schoonmaakrooster",
     icon: strikIcons.cleaning,
     tone: "green" as const,
@@ -18,13 +18,26 @@ const haccpLinks = [
     icon: strikIcons.cleaning,
     tone: "yellow" as const,
   },
+  {
+    href: "/winkel/haccp/afsluitplan",
+    title: "Afsluitplan patisserie",
+    icon: strikIcons.afsluitplan,
+    tone: "blue" as const,
+  },
+  {
+    href: "/winkel/haccp/opstartplan",
+    title: "Opstartplan patisserie",
+    icon: strikIcons.opstartplan,
+    tone: "neutral" as const,
+  },
 ];
 
 export default function HaccpPage() {
   return (
     <StrikShell>
       <StrikPageHeader
-        title="HACCP"
+        title="HACCP & werkplannen"
+        description="Schoonmaak, temperatuurregistratie en vaste werkplannen voor de patisserie."
         icon={strikIcons.cleaning}
       />
 

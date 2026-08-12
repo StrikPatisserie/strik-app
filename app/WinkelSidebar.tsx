@@ -3,7 +3,6 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import NewsUnreadBadge from "./NewsUnreadBadge";
 import { strikIcons } from "./StrikUI";
 import {
   filterVisibleMainNavigationItems,
@@ -30,10 +29,8 @@ const mainNavItems = [
 
 const winkelNavItems = [
   { href: "/winkel", label: "Overzicht", icon: strikIcons.overview },
-  { href: "/winkel/haccp", label: "HACCP", icon: strikIcons.cleaning },
+  { href: "/winkel/haccp", label: "HACCP & werkplannen", icon: strikIcons.cleaning },
   { href: "/bruidstaarten", label: "Bruidstaarten", icon: strikIcons.bruidstaart },
-  { href: "/strik-agenda", label: "Agenda", icon: strikIcons.strikAgenda },
-  { href: "/nieuws", label: "Nieuws", icon: strikIcons.news },
   { href: "/info", label: "Documenten", icon: strikIcons.info },
 ];
 
@@ -191,9 +188,6 @@ export default function WinkelSidebar({
                   alt=""
                   className={`${item.desktopIconClass ?? "h-8 w-8"} object-contain ${active ? "brightness-0 invert" : ""}`}
                 />
-                {item.href === "/nieuws" && (
-                  <NewsUnreadBadge className="right-1 top-1" />
-                )}
                 <span className="sr-only">{item.label}</span>
               </Link>
             );
@@ -223,9 +217,6 @@ export default function WinkelSidebar({
                     className={`${item.mobileIconClass ?? "h-3.5 w-3.5"} object-contain ${active ? "brightness-0 invert" : ""}`}
                   />
                   {item.label}
-                  {item.href === "/nieuws" && (
-                    <NewsUnreadBadge className="-right-1 -top-1" />
-                  )}
                 </Link>
               );
             })}
