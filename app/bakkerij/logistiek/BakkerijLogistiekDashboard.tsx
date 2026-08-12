@@ -223,6 +223,17 @@ type ArendNumberPrintItem = {
   sourceLabel: string;
 };
 
+type ArendNumberPrintParseResult = {
+  error?: string;
+  items: ArendNumberPrintItem[];
+  orderedCount: number;
+  printCapacity: number;
+  requestedCount: number;
+};
+
+const AREND_ORDERED_SQUARES_PER_SHEET = 50;
+const AREND_PRINT_SQUARES_PER_SHEET = 54;
+
 type PreparationCategory = "bakkerij" | "logistiek";
 
 type PreparationRule = {
@@ -2897,7 +2908,28 @@ function arendPrintNumberFor(value: string) {
   return normalizeArendNumber(value).replace(/0/g, "O");
 }
 
-function parseArendNumberPrintItems(input: string, orders: ArendNumberPrintOrder[]) {
+function arendOrderedSquareCountFor(orders: ArendNumberPrintOrder[]) {
+  const sheetCount = orders.reduce((sum, order) => sum + order.sheetQuantity, 0);
+
+  return Math.max(
+    AREND_ORDERED_SQUARES_PER_SHEET,
+    sheetCount * AREND_ORDERED_SQUARES_PER_SHEET
+  );
+}
+
+function arendPrintCapacityFor(orders: ArendNumberPrintOrder[]) {
+  const sheetCount = orders.reduce((sum, order) => sum + order.sheetQuantity, 0);
+
+  return Math.max(
+    AREND_PRINT_SQUARES_PER_SHEET,
+    sheetCount * AREND_PRINT_SQUARES_PER_SHEET
+  );
+}
+
+function parseArendNumberPrintItems(
+  input: string,
+  orders: ArendNumberPrintOrder[]
+): ArendNumberPrintParseResult {
   const sourceLabel =
     orders
       .map((order) =>
@@ -2907,20 +2939,28 @@ function parseArendNumberPrintItems(input: string, orders: ArendNumberPrintOrder
       )
       .filter(Boolean)
       .join(" | ") || "Gasterij de Arend";
-  const totalFallback = orders.reduce(
-    (sum, order) => sum + order.defaultSquareCount,
-    0
-  );
+  const orderedCount = arendOrderedSquareCountFor(orders);
+  const printCapacity = arendPrintCapacityFor(orders);
   const chunks = input
-    .split(/[,\n;]+/)
+    .split(/(?:[,\n;]+|\s+en\s+)/i)
     .map((chunk) => chunk.trim())
     .filter(Boolean);
   const parsed: { count: number; number: string }[] = [];
 
+  if (chunks.length === 0) {
+    return {
+      error: "Geen cijfers ingevuld. Gebruik bijvoorbeeld 40x20, 10x50.",
+      items: [],
+      orderedCount,
+      printCapacity,
+      requestedCount: 0,
+    };
+  }
+
   chunks.forEach((chunk) => {
-    const repeated = chunk.match(/^(\d{1,3})\s*[xX*]\s*(\d{1,3})$/);
+    const repeated = chunk.match(/^(\d{1,3})\s*(?:x|×|\*)\s*(\d{1,3})$/i);
     if (repeated) {
-      const count = Math.max(1, Math.min(500, Number(repeated[1])));
+      const count = Math.max(1, Number(repeated[1]));
       const number = normalizeArendNumber(repeated[2]);
       if (number) parsed.push({ count, number });
       return;
@@ -2929,31 +2969,66 @@ function parseArendNumberPrintItems(input: string, orders: ArendNumberPrintOrder
     const number = normalizeArendNumber(chunk);
     if (number) {
       parsed.push({
-        count: chunks.length === 1 ? Math.max(1, totalFallback) : 1,
+        count: chunks.length === 1 ? orderedCount : 1,
         number,
       });
     }
   });
 
-  const expanded = parsed.flatMap((entry) =>
+  const requestedNumbers = parsed.flatMap((entry) =>
     Array.from({ length: entry.count }, () => entry.number)
   );
-  const numbers =
-    expanded.length > 0
-      ? expanded
+  const requestedCount = requestedNumbers.length;
+
+  if (requestedCount === 0) {
+    return {
+      error: "Geen geldige cijfers gevonden. Gebruik bijvoorbeeld 40x20, 10x50.",
+      items: [],
+      orderedCount,
+      printCapacity,
+      requestedCount,
+    };
+  }
+
+  if (requestedCount > orderedCount) {
+    return {
+      error: `Je hebt ${requestedCount} vakjes ingevuld, maar deze bon is maximaal ${orderedCount} bestelde petit fours. Maak het totaal maximaal ${orderedCount}.`,
+      items: [],
+      orderedCount,
+      printCapacity,
+      requestedCount,
+    };
+  }
+
+  const fallbackNumbers =
+    requestedNumbers.length > 0
+      ? requestedNumbers
       : orders
           .flatMap((order) =>
             Array.from({ length: order.defaultSquareCount }, () => order.inferredNumber)
           )
           .filter(Boolean);
+  const reserveNumbers =
+    fallbackNumbers.length > 0
+      ? Array.from(
+          { length: printCapacity - requestedCount },
+          (_, index) => fallbackNumbers[index % fallbackNumbers.length]
+        )
+      : [];
+  const numbers = [...requestedNumbers, ...reserveNumbers];
 
-  return numbers.slice(0, Math.max(500, totalFallback)).map((number, index) => ({
-    id: `arend-${index}-${number}`,
-    number,
-    displayNumber: arendPrintNumberFor(number),
-    copyNumber: index + 1,
-    sourceLabel,
-  }));
+  return {
+    items: numbers.slice(0, printCapacity).map((number, index) => ({
+      id: `arend-${index}-${number}`,
+      number,
+      displayNumber: arendPrintNumberFor(number),
+      copyNumber: index + 1,
+      sourceLabel,
+    })),
+    orderedCount,
+    printCapacity,
+    requestedCount,
+  };
 }
 
 function formatPrintCm(value: number) {
@@ -3401,16 +3476,35 @@ function openMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
 function createArendNumberPrintHtml(input: {
   items: ArendNumberPrintItem[];
   plan: DayPlan;
+  orderedCount: number;
+  requestedCount: number;
 }) {
   const title = `Arend cijfers ${formatDateLabel(input.plan.date)}`;
-  const itemHtml = input.items
-    .map(
-      (item) => `
-        <article class="number-tile">
-          <div class="number">${escapeHtml(item.displayNumber)}</div>
-        </article>
-      `
-    )
+  const sheetHtml = Array.from(
+    { length: Math.ceil(input.items.length / AREND_PRINT_SQUARES_PER_SHEET) },
+    (_, sheetIndex) => {
+      const sheetItems = input.items.slice(
+        sheetIndex * AREND_PRINT_SQUARES_PER_SHEET,
+        (sheetIndex + 1) * AREND_PRINT_SQUARES_PER_SHEET
+      );
+
+      return `
+        <section class="sheet-grid">
+          ${sheetItems
+            .map(
+              (item, itemIndex) => `
+                <article class="number-tile ${
+                  Math.floor(itemIndex / 6) % 2 === 0 ? "light" : "dark"
+                }">
+                  <div class="number">${escapeHtml(item.displayNumber)}</div>
+                </article>
+              `
+            )
+            .join("")}
+        </section>
+      `;
+    }
+  )
     .join("");
 
   return `<!doctype html>
@@ -3419,16 +3513,24 @@ function createArendNumberPrintHtml(input: {
     <meta charset="utf-8">
     <title>${escapeHtml(title)}</title>
     <style>
-      @page { margin: 7mm 8mm 28mm; size: A4 portrait; }
+      @page { margin: 12mm 16mm 50mm; size: A4 portrait; }
       @font-face {
         font-family: "ArendBona";
         src: url("/61771%20-%20Gasterij%20de%20Arend/BORUTTA%20GROUP%20-%20Bona%20Title%20Bold.otf") format("opentype");
+        font-display: block;
         font-weight: 800;
       }
       * { box-sizing: border-box; }
+      :root {
+        --arend-anthracite: #313130;
+        --arend-green: #ccccb0;
+        --arend-white: #f7f4f1;
+        --tile-width: 29.4mm;
+        --tile-height: 25.2mm;
+      }
       body {
-        background: #fff;
-        color: #000;
+        background: var(--arend-white);
+        color: var(--arend-anthracite);
         font-family: Arial, Helvetica, sans-serif;
         margin: 0;
         print-color-adjust: exact;
@@ -3447,7 +3549,7 @@ function createArendNumberPrintHtml(input: {
         margin: 0;
       }
       .screen-actions button {
-        background: #111;
+        background: var(--arend-anthracite);
         border: 0;
         color: #fff;
         cursor: pointer;
@@ -3458,16 +3560,16 @@ function createArendNumberPrintHtml(input: {
       main {
         margin: 0 auto;
         max-width: 210mm;
-        padding: 7mm 8mm 28mm;
+        padding: 12mm 16mm 50mm;
         width: 100%;
       }
       .sheet-header {
         align-items: baseline;
-        border-bottom: 1px solid #111;
+        border-bottom: 1px solid var(--arend-anthracite);
         display: flex;
         justify-content: space-between;
-        margin-bottom: 4mm;
-        padding-bottom: 1.5mm;
+        margin-bottom: 3mm;
+        padding-bottom: 1.2mm;
       }
       .sheet-header h1,
       .sheet-header p {
@@ -3475,38 +3577,51 @@ function createArendNumberPrintHtml(input: {
         font-weight: 800;
         margin: 0;
       }
-      .grid {
+      .sheet-grid {
+        break-after: page;
         display: grid;
-        grid-template-columns: repeat(7, 27.5mm);
+        grid-template-columns: repeat(6, var(--tile-width));
         gap: 0;
-        justify-content: start;
+        justify-content: center;
+        page-break-after: always;
+      }
+      .sheet-grid:last-child {
+        break-after: auto;
+        page-break-after: auto;
       }
       .number-tile {
         align-items: center;
-        border: 0.15mm dashed #d8d8d8;
+        background: var(--arend-green);
+        border: 0.25mm solid var(--arend-white);
         display: flex;
-        height: 27.5mm;
+        height: var(--tile-height);
         justify-content: center;
         page-break-inside: avoid;
-        width: 27.5mm;
+        width: var(--tile-width);
+      }
+      .number-tile.dark {
+        background: var(--arend-anthracite);
+      }
+      .number-tile.dark .number {
+        color: var(--arend-white);
+      }
+      .number-tile.light .number {
+        color: var(--arend-anthracite);
       }
       .number {
-        color: #111;
-        font-family: "ArendBona", Georgia, serif;
-        font-size: 26mm;
+        font-family: "ArendBona", "Bona Title", Georgia, serif;
+        font-size: 15.6mm;
         font-weight: 800;
-        line-height: 0.82;
-        margin-top: -0.8mm;
+        line-height: 0.86;
+        margin-top: -0.7mm;
         text-align: center;
-        transform: scaleX(0.74);
-        transform-origin: center;
       }
       @media print {
         .screen-actions { display: none; }
         main {
           max-width: none;
           padding: 0;
-          width: 194mm;
+          width: 178mm;
         }
         .sheet-header { display: none; }
       }
@@ -3514,15 +3629,15 @@ function createArendNumberPrintHtml(input: {
   </head>
   <body>
     <div class="screen-actions">
-      <h1>${escapeHtml(title)} · ${input.items.length} vakjes</h1>
+      <h1>${escapeHtml(title)} · ${input.requestedCount}/${input.orderedCount} besteld · ${input.items.length} printvakjes</h1>
       <button type="button" onclick="window.print()">Afdrukken</button>
     </div>
     <main>
       <div class="sheet-header">
         <h1>${escapeHtml(title)}</h1>
-        <p>${input.items.length} vakjes · 3x3 cm · nul als letter O</p>
+        <p>${input.requestedCount}/${input.orderedCount} besteld · ${input.items.length} printvakjes · nul als letter O</p>
       </div>
-      <section class="grid">${itemHtml}</section>
+      ${sheetHtml}
     </main>
   </body>
 </html>`;
@@ -3530,7 +3645,7 @@ function createArendNumberPrintHtml(input: {
 
 function arendPromptDefaultFor(orders: ArendNumberPrintOrder[]) {
   const inferred = orders.find((order) => order.inferredNumber)?.inferredNumber || "";
-  const total = orders.reduce((sum, order) => sum + order.defaultSquareCount, 0);
+  const total = arendOrderedSquareCountFor(orders);
 
   return inferred && total > 0 ? `${total}x${inferred}` : "";
 }
@@ -3542,8 +3657,9 @@ function arendPromptLabelFor(orders: ArendNumberPrintOrder[]) {
 
   return [
     "Welke cijfers moeten op de Arend-marsepeinsheet?",
-    "Gebruik bijvoorbeeld: 100x65 of 20x50, 15x60.",
+    "Gebruik bijvoorbeeld: 40x20, 10x50.",
     orderLabel ? `Bon: ${orderLabel}.` : "",
+    "Maximaal 50 bestelde vakjes per sheet; de print maakt automatisch 4 reservevakjes.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -3555,25 +3671,36 @@ function openArendNumberSheet(plan: DayPlan, orders: ArendNumberPrintOrder[]) {
     return;
   }
 
-  const answer = window.prompt(
-    arendPromptLabelFor(orders),
-    arendPromptDefaultFor(orders)
-  );
-  if (answer === null) return;
-
-  const items = parseArendNumberPrintItems(answer, orders);
-  if (items.length === 0) {
-    window.alert("Geen cijfers ingevuld. Gebruik bijvoorbeeld 100x65.");
-    return;
-  }
-
   const printWindow = window.open("", "_blank", "width=1100,height=800");
   if (!printWindow) {
     window.alert("Arend-printvenster kon niet geopend worden.");
     return;
   }
 
-  printWindow.document.write(createArendNumberPrintHtml({ items, plan }));
+  const answer = window.prompt(
+    arendPromptLabelFor(orders),
+    arendPromptDefaultFor(orders)
+  );
+  if (answer === null) {
+    printWindow.close();
+    return;
+  }
+
+  const result = parseArendNumberPrintItems(answer, orders);
+  if (result.error || result.items.length === 0) {
+    printWindow.close();
+    window.alert(result.error || "Geen cijfers ingevuld. Gebruik bijvoorbeeld 40x20, 10x50.");
+    return;
+  }
+
+  printWindow.document.write(
+    createArendNumberPrintHtml({
+      items: result.items,
+      orderedCount: result.orderedCount,
+      plan,
+      requestedCount: result.requestedCount,
+    })
+  );
   printWindow.document.close();
   printWindow.focus();
 }
