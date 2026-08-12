@@ -1954,6 +1954,10 @@ function escapeAttribute(value: string) {
   return escapeHtml(value).replace(/`/g, "&#96;");
 }
 
+function escapeHtmlLines(value: string) {
+  return escapeHtml(value).replace(/\n/g, "<br />");
+}
+
 function cleanProductLabel(value: string) {
   return value.replace(/\s+/g, " ").trim() || "Product controleren";
 }
@@ -3586,6 +3590,344 @@ function openBusRouteSheet(plan: DayPlan, routeGroup: RouteGroup) {
   }
 
   printWindow.document.write(createBusRoutePrintHtml({ plan, routeGroup }));
+  printWindow.document.close();
+  printWindow.focus();
+}
+
+function createReceiptPrintHtml(input: {
+  notes: string[];
+  receipt: ReceiptSummary;
+  selectedPlan: DayPlan;
+}) {
+  const { notes, receipt, selectedPlan } = input;
+  const receiptNumber = receipt.receiptNumber || receipt.id;
+  const displayLines = receipt.lines
+    .map(normalizeKnownReceiptLine)
+    .filter((line) => !shouldDropReceiptLine(line));
+  const title = `Contantbon ${receiptNumber}`;
+  const rowsHtml = displayLines
+    .map((line) => {
+      const total = receiptLineTotal(line);
+      const optionClass = isProductOptionLine(line) ? " option" : "";
+
+      return `<tr class="${optionClass}">
+        <td>${escapeHtml(line.quantity)}</td>
+        <td>${escapeHtml(line.articleNumber || "")}</td>
+        <td>
+          <strong>${escapeHtml(line.description)}</strong>
+          ${line.note ? `<small>${escapeHtml(line.note)}</small>` : ""}
+        </td>
+        <td>${line.unitPrice !== undefined ? escapeHtml(formatReceiptMoney(line.unitPrice)) : ""}</td>
+        <td>${total !== undefined ? escapeHtml(formatReceiptMoney(total)) : ""}</td>
+      </tr>`;
+    })
+    .join("");
+  const notesHtml = notes.length
+    ? `<section class="notes">${notes.map((note) => `<p>${escapeHtml(note)}</p>`).join("")}</section>`
+    : "";
+  const target = fulfillmentTargetFor(receipt);
+
+  return `<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        background: #f4f1ec;
+        color: #111;
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 0;
+      }
+      .screen-actions {
+        align-items: center;
+        background: #171512;
+        color: #fff;
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        padding: 12px 16px;
+      }
+      .screen-actions h1 {
+        font-size: 16px;
+        margin: 0;
+      }
+      .action-buttons {
+        display: flex;
+        gap: 8px;
+      }
+      button {
+        background: #fff;
+        border: 1px solid #fff;
+        color: #171512;
+        cursor: pointer;
+        font: 800 12px Arial, Helvetica, sans-serif;
+        padding: 8px 12px;
+        text-transform: uppercase;
+      }
+      button.secondary {
+        background: transparent;
+        color: #fff;
+      }
+      main {
+        margin: 0 auto;
+        max-width: 210mm;
+        min-height: 297mm;
+        padding: 12mm;
+      }
+      .receipt {
+        background: #fff;
+        border: 1px solid #111;
+        box-shadow: 0 12px 36px rgba(0,0,0,0.12);
+        min-height: 270mm;
+        padding: 10mm;
+      }
+      .top {
+        border: 2px solid #111;
+        border-bottom-width: 7px;
+        display: grid;
+        gap: 10mm;
+        grid-template-columns: 1fr auto 1fr;
+        padding: 4mm 6mm;
+      }
+      .top h1 {
+        font-size: 28pt;
+        line-height: 1;
+        margin: 0;
+        text-align: center;
+      }
+      .top p {
+        font-size: 10pt;
+        font-weight: 800;
+        line-height: 1.15;
+        margin: 0;
+      }
+      .top .right {
+        text-align: right;
+      }
+      .meta {
+        display: grid;
+        gap: 8mm;
+        grid-template-columns: minmax(0,1fr) auto;
+        padding: 8mm 2mm 7mm;
+      }
+      .customer {
+        font-size: 17pt;
+        font-weight: 900;
+        line-height: 1.1;
+        margin: 0;
+      }
+      .address {
+        font-size: 11pt;
+        font-weight: 800;
+        line-height: 1.3;
+        margin: 2mm 0 0;
+        white-space: pre-line;
+      }
+      .date {
+        font-size: 14pt;
+        font-weight: 900;
+        margin: 0;
+        text-align: right;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 11pt;
+        width: 100%;
+      }
+      th {
+        border-bottom: 2px solid #bdbdbd;
+        font-weight: 400;
+        padding: 0 2mm 2mm;
+        text-align: left;
+      }
+      td {
+        padding: 1.1mm 2mm;
+        vertical-align: top;
+      }
+      td:first-child {
+        font-weight: 900;
+        text-align: right;
+        width: 16mm;
+      }
+      td:nth-child(2) {
+        color: #333;
+        width: 24mm;
+      }
+      th:nth-child(4),
+      th:nth-child(5),
+      td:nth-child(4),
+      td:nth-child(5) {
+        text-align: right;
+        white-space: nowrap;
+        width: 28mm;
+      }
+      tr.option td,
+      tr.option strong {
+        font-style: italic;
+        font-weight: 400;
+      }
+      small {
+        color: #333;
+        display: block;
+        font-size: 9pt;
+        font-weight: 400;
+        line-height: 1.25;
+        margin-top: 1mm;
+      }
+      .total {
+        border-top: 2px solid #bdbdbd;
+        display: grid;
+        font-size: 15pt;
+        font-weight: 400;
+        gap: 16mm;
+        grid-template-columns: minmax(0,1fr) auto;
+        margin-left: auto;
+        margin-top: 5mm;
+        max-width: 82mm;
+        padding-top: 4mm;
+      }
+      .total strong {
+        font-weight: 900;
+      }
+      .notes {
+        border-top: 1px solid #d0d0d0;
+        margin-top: 8mm;
+        padding: 5mm 10mm 0;
+        text-align: center;
+      }
+      .notes p {
+        color: #333;
+        font-size: 11pt;
+        font-style: italic;
+        line-height: 1.35;
+        margin: 0 0 1.5mm;
+      }
+      .fulfillment {
+        background: #f2f1ee;
+        border: 1px solid #bfbcb5;
+        border-left: 4px solid #bfbcb5;
+        margin-top: 12mm;
+        padding: 7mm;
+        text-align: center;
+      }
+      .fulfillment h2 {
+        font-size: 20pt;
+        line-height: 1.1;
+        margin: 0;
+      }
+      .fulfillment p {
+        font-size: 22pt;
+        font-weight: 900;
+        line-height: 1.12;
+        margin: 2mm 0 0;
+        text-transform: uppercase;
+      }
+      @media print {
+        @page { margin: 8mm; size: A4 portrait; }
+        body { background: #fff; }
+        .screen-actions { display: none; }
+        main {
+          max-width: none;
+          min-height: auto;
+          padding: 0;
+        }
+        .receipt {
+          border: 0;
+          box-shadow: none;
+          min-height: auto;
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen-actions">
+      <h1>${escapeHtml(title)} · ${escapeHtml(receipt.customer)}</h1>
+      <div class="action-buttons">
+        <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
+        <button type="button" onclick="window.print()">Afdrukken</button>
+      </div>
+    </div>
+    <main>
+      <article class="receipt">
+        <header class="top">
+          <div>
+            <p>Strik Patisserie BV</p>
+            <p>Ambachtsweg 4</p>
+            <p>6581 AX&nbsp;&nbsp; MALDEN</p>
+          </div>
+          <div>
+            <h1>Contantbon</h1>
+            <p style="text-align:center;margin-top:2mm;">BON ${escapeHtml(receiptNumber)}</p>
+          </div>
+          <div class="right">
+            <p>info@strik-patisserie.nl</p>
+            <p style="margin-top:7mm;">NL36RABO0167935798</p>
+          </div>
+        </header>
+        <section class="meta">
+          <div>
+            <p class="customer">${escapeHtml(receiptNumber)} ${escapeHtml(receipt.customer)}</p>
+            <p class="address">${escapeHtmlLines(
+              receipt.alternativeAddress || receipt.deliveryAddress || receipt.address
+            )}</p>
+            ${
+              receipt.address &&
+              receipt.address !== (receipt.alternativeAddress || receipt.deliveryAddress || receipt.address)
+                ? `<p class="address" style="color:#666;font-size:9pt;font-weight:400;">Origineel adres: ${escapeHtml(receipt.address)}</p>`
+                : ""
+            }
+          </div>
+          <p class="date">${escapeHtml(formatReceiptDateLabel(selectedPlan.date))}</p>
+        </section>
+        <table>
+          <thead>
+            <tr>
+              <th>Aantal</th>
+              <th>Artikel</th>
+              <th>Artikelomschrijving</th>
+              <th>Prijs incl.</th>
+              <th>Totaal</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <div class="total">
+          <strong>Totaalprijs</strong>
+          <span>${receipt.value ? escapeHtml(formatReceiptMoney(receipt.value)) : "intern"}</span>
+        </div>
+        ${notesHtml}
+        <section class="fulfillment">
+          <h2>${escapeHtml(fulfillmentSentenceFor(receipt))}</h2>
+          ${target ? `<p>${escapeHtmlLines(target)}</p>` : ""}
+        </section>
+      </article>
+    </main>
+  </body>
+</html>`;
+}
+
+function openReceiptPrintSheet(receipt: ReceiptSummary, selectedPlan: DayPlan) {
+  const printWindow = window.open("", "_blank", "width=900,height=850");
+  if (!printWindow) {
+    window.alert("Bonvenster kon niet geopend worden.");
+    return;
+  }
+
+  const displayLines = receipt.lines
+    .map(normalizeKnownReceiptLine)
+    .filter((line) => !shouldDropReceiptLine(line));
+
+  printWindow.document.write(
+    createReceiptPrintHtml({
+      notes: visibleReceiptNotes(receipt, displayLines),
+      receipt,
+      selectedPlan,
+    })
+  );
   printWindow.document.close();
   printWindow.focus();
 }
@@ -7850,9 +8192,23 @@ function OrdersPanel({
           <h2 className="text-base font-black tracking-normal text-[#1a1815]">
             Bonnen
           </h2>
-          <span className="w-fit border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
-            {filteredReceipts.length}/{receiptSummaries.length} · foto {webshopImages.length}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-fit border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
+              {filteredReceipts.length}/{receiptSummaries.length} · foto {webshopImages.length}
+            </span>
+            <ReceiptPrintButton
+              disabled={!selectedReceipt}
+              label={
+                selectedReceipt
+                  ? `Contantbon ${selectedReceipt.receiptNumber || selectedReceipt.id} printen`
+                  : "Contantbon printen"
+              }
+              onClick={() => {
+                if (!selectedReceipt) return;
+                openReceiptPrintSheet(selectedReceipt, selectedPlan);
+              }}
+            />
+          </div>
         </div>
         <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
           {ordersFilters.map((filter) => {
@@ -8288,6 +8644,17 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
   return cleaned;
 }
 
+function visibleReceiptNotes(receipt: ReceiptSummary, lines: ReceiptLine[]) {
+  return [receipt.customerNote]
+    .map((note) => (note ? cleanReceiptDisplayNote(note, lines) : ""))
+    .filter(
+      (note) =>
+        note &&
+        !/^geen aparte opmerking\.?$/i.test(note) &&
+        !/^geen aparte logistieke waarschuwing\.?$/i.test(note)
+    );
+}
+
 function isReceiptNoteRemainder(value: string) {
   const normalized = value
     .normalize("NFKC")
@@ -8624,17 +8991,7 @@ function ReceiptDetail({
   const displayLines = receipt.lines
     .map(normalizeKnownReceiptLine)
     .filter((line) => !shouldDropReceiptLine(line));
-  const visibleNotes = [
-    receipt.customerNote,
-    overrideMessage,
-  ]
-    .map((note) => (note ? cleanReceiptDisplayNote(note, displayLines) : ""))
-    .filter(
-      (note) =>
-        note &&
-        !/^geen aparte opmerking\.?$/i.test(note) &&
-        !/^geen aparte logistieke waarschuwing\.?$/i.test(note)
-    );
+  const visibleNotes = visibleReceiptNotes(receipt, displayLines);
   const showManualPhotoUpload =
     receiptNeedsManualPhotoUpload(receipt) && imageMatches.length === 0;
 
@@ -9256,6 +9613,29 @@ function RoutePrintButton({
       disabled={disabled}
       onClick={onClick}
       className="flex h-8 w-8 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <PrintIcon />
+    </button>
+  );
+}
+
+function ReceiptPrintButton({
+  disabled,
+  label,
+  onClick,
+}: Readonly<{
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-8 w-8 items-center justify-center border border-[#d7d1c8] bg-white text-[#1a1815] shadow-sm transition hover:border-[#1a1815] hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
     >
       <PrintIcon />
     </button>
