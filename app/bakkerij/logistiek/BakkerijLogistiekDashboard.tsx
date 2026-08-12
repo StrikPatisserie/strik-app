@@ -3665,15 +3665,55 @@ function arendPromptLabelFor(orders: ArendNumberPrintOrder[]) {
     .join("\n");
 }
 
-function openArendNumberSheet(plan: DayPlan, orders: ArendNumberPrintOrder[]) {
-  if (orders.length === 0) {
-    window.alert("Geen Arend-cijferprint gevonden voor deze dag.");
+function openArendPrintPreview(html: string) {
+  let printWindow: Window | null = null;
+
+  try {
+    printWindow = window.open("", "_blank", "width=1100,height=800");
+  } catch (error) {
+    console.error(error);
+  }
+
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
     return;
   }
 
-  const printWindow = window.open("", "_blank", "width=1100,height=800");
-  if (!printWindow) {
+  const printFrame = document.createElement("iframe");
+  printFrame.title = "Arend cijfers print";
+  printFrame.style.border = "0";
+  printFrame.style.bottom = "0";
+  printFrame.style.height = "0";
+  printFrame.style.opacity = "0";
+  printFrame.style.position = "fixed";
+  printFrame.style.right = "0";
+  printFrame.style.width = "0";
+  document.body.appendChild(printFrame);
+
+  const frameWindow = printFrame.contentWindow;
+  const frameDocument = frameWindow?.document;
+  if (!frameWindow || !frameDocument) {
+    printFrame.remove();
     window.alert("Arend-printvenster kon niet geopend worden.");
+    return;
+  }
+
+  frameDocument.open();
+  frameDocument.write(html);
+  frameDocument.close();
+
+  window.setTimeout(() => {
+    frameWindow.focus();
+    frameWindow.print();
+    window.setTimeout(() => printFrame.remove(), 1000);
+  }, 250);
+}
+
+function openArendNumberSheet(plan: DayPlan, orders: ArendNumberPrintOrder[]) {
+  if (orders.length === 0) {
+    window.alert("Geen Arend-cijferprint gevonden voor deze dag.");
     return;
   }
 
@@ -3682,18 +3722,16 @@ function openArendNumberSheet(plan: DayPlan, orders: ArendNumberPrintOrder[]) {
     arendPromptDefaultFor(orders)
   );
   if (answer === null) {
-    printWindow.close();
     return;
   }
 
   const result = parseArendNumberPrintItems(answer, orders);
   if (result.error || result.items.length === 0) {
-    printWindow.close();
     window.alert(result.error || "Geen cijfers ingevuld. Gebruik bijvoorbeeld 40x20, 10x50.");
     return;
   }
 
-  printWindow.document.write(
+  openArendPrintPreview(
     createArendNumberPrintHtml({
       items: result.items,
       orderedCount: result.orderedCount,
@@ -3701,8 +3739,6 @@ function openArendNumberSheet(plan: DayPlan, orders: ArendNumberPrintOrder[]) {
       requestedCount: result.requestedCount,
     })
   );
-  printWindow.document.close();
-  printWindow.focus();
 }
 
 function createWrittenTextPrintHtml(input: {
