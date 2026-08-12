@@ -3,7 +3,9 @@ import "server-only";
 import type {
   LogisticsBatch,
   LogisticsDayFeedback,
+  LogisticsDayOperations,
   LogisticsFixedCustomer,
+  LogisticsTeamMember,
   LogisticsLoadPressure,
   LogisticsReceiptOverride,
   LogisticsRouteDraft,
@@ -417,6 +419,79 @@ function isLogisticsLoadPressure(value: unknown): value is LogisticsLoadPressure
   return value === "laag" || value === "middel" || value === "hoog";
 }
 
+function cleanStoredTime(value: unknown) {
+  if (typeof value !== "string") return "";
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return "";
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return "";
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function normalizeLogisticsTeamMembers(value: unknown): LogisticsTeamMember[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((member, index) => {
+      if (!member || typeof member !== "object") return null;
+
+      const record = member as { id?: unknown; name?: unknown };
+      const name = typeof record.name === "string" ? record.name.trim() : "";
+      if (!name) return null;
+
+      const id = typeof record.id === "string" ? record.id.trim() : "";
+
+      return {
+        id: id || `persoon-${index + 1}`,
+        name: name.slice(0, 80),
+      };
+    })
+    .filter((member): member is LogisticsTeamMember => Boolean(member))
+    .slice(0, 12);
+}
+
+function normalizeLogisticsDayOperations(
+  value: unknown
+): LogisticsDayOperations | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  const record = value as {
+    busDepartures?: Record<string, unknown>;
+    teamStartTime?: unknown;
+    teamEndTime?: unknown;
+    teamMembers?: unknown;
+  };
+  const busA = cleanStoredTime(record.busDepartures?.A);
+  const busB = cleanStoredTime(record.busDepartures?.B);
+  const teamStartTime = cleanStoredTime(record.teamStartTime);
+  const teamEndTime = cleanStoredTime(record.teamEndTime);
+  const teamMembers = normalizeLogisticsTeamMembers(record.teamMembers);
+  const operations: LogisticsDayOperations = {
+    busDepartures: {
+      ...(busA ? { A: busA } : {}),
+      ...(busB ? { B: busB } : {}),
+    },
+    ...(teamStartTime ? { teamStartTime } : {}),
+    ...(teamEndTime ? { teamEndTime } : {}),
+    ...(teamMembers.length ? { teamMembers } : {}),
+  };
+
+  if (
+    !operations.busDepartures?.A &&
+    !operations.busDepartures?.B &&
+    !operations.teamStartTime &&
+    !operations.teamEndTime &&
+    !operations.teamMembers?.length
+  ) {
+    return undefined;
+  }
+
+  return operations;
+}
+
 function isLogisticsRouteDraftStop(
   value: unknown
 ): value is LogisticsRouteDraftStop {
@@ -623,6 +698,7 @@ function normalizeLogisticsDayFeedbackState(
       pressureOverride: isLogisticsLoadPressure(item.pressureOverride)
         ? item.pressureOverride
         : "",
+      operations: normalizeLogisticsDayOperations(item.operations),
     })),
   };
 }
@@ -1557,6 +1633,17 @@ export async function getLogisticsDayFeedbackForDate(date: string) {
     sortDayFeedback(state.feedback).find((feedback) => feedback.date === date) ||
     null
   );
+}
+
+export async function getRecentLogisticsDayFeedback(
+  beforeDate: string,
+  limit = 8
+) {
+  const state = await readLogisticsDayFeedbackState();
+
+  return sortDayFeedback(state.feedback)
+    .filter((feedback) => feedback.date < beforeDate)
+    .slice(0, Math.max(1, Math.min(30, limit)));
 }
 
 export async function getLogisticsRouteDraftForDate(date: string) {

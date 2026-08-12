@@ -6,6 +6,7 @@ import type {
   LogisticsBatch,
   LogisticsBatchStatus,
   LogisticsDayFeedback,
+  LogisticsDayOperations,
   LogisticsFixedCustomer,
   LogisticsFulfillment,
   LogisticsLoadPressure,
@@ -152,6 +153,19 @@ type WebshopImageSummary = LogisticsWebshopImage;
 type RouteDraftSummary = LogisticsRouteDraft;
 type RouteLearningSummary = LogisticsRouteLearning;
 type FixedCustomerSummary = LogisticsFixedCustomer;
+type OperationsDraft = Required<
+  Pick<LogisticsDayOperations, "teamStartTime" | "teamEndTime" | "teamMembers">
+> & {
+  busDepartures: Record<BusId, string>;
+};
+
+type LogisticsAdvice = {
+  teamStartTime: string;
+  teamSize: number;
+  busADeparture: string;
+  busBDeparture: string;
+  reason: string;
+};
 
 type MarzipanPrintShape = "square" | "round";
 
@@ -360,10 +374,102 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
+function emptyOperationsDraft(): OperationsDraft {
+  return {
+    busDepartures: { A: "", B: "" },
+    teamStartTime: "",
+    teamEndTime: "",
+    teamMembers: [{ id: "persoon-1", name: "" }],
+  };
+}
+
+function operationsDraftFromFeedback(
+  operations?: LogisticsDayOperations
+): OperationsDraft {
+  const members = operations?.teamMembers?.length
+    ? operations.teamMembers
+    : emptyOperationsDraft().teamMembers;
+
+  return {
+    busDepartures: {
+      A: operations?.busDepartures?.A || "",
+      B: operations?.busDepartures?.B || "",
+    },
+    teamStartTime: operations?.teamStartTime || "",
+    teamEndTime: operations?.teamEndTime || "",
+    teamMembers: members.map((member, index) => ({
+      id: member.id || `persoon-${index + 1}`,
+      name: member.name,
+    })),
+  };
+}
+
+function operationsDraftToPayload(
+  draft: OperationsDraft
+): LogisticsDayOperations | undefined {
+  const teamMembers = draft.teamMembers
+    .map((member, index) => ({
+      id: member.id || `persoon-${index + 1}`,
+      name: member.name.trim(),
+    }))
+    .filter((member) => member.name);
+  const operations: LogisticsDayOperations = {
+    busDepartures: {
+      ...(draft.busDepartures.A ? { A: draft.busDepartures.A } : {}),
+      ...(draft.busDepartures.B ? { B: draft.busDepartures.B } : {}),
+    },
+    ...(draft.teamStartTime ? { teamStartTime: draft.teamStartTime } : {}),
+    ...(draft.teamEndTime ? { teamEndTime: draft.teamEndTime } : {}),
+    ...(teamMembers.length ? { teamMembers } : {}),
+  };
+
+  if (
+    !operations.busDepartures?.A &&
+    !operations.busDepartures?.B &&
+    !operations.teamStartTime &&
+    !operations.teamEndTime &&
+    !operations.teamMembers?.length
+  ) {
+    return undefined;
+  }
+
+  return operations;
+}
+
 const DEFINITIVE_BATCH_START_MINUTE_OF_DAY = 20 * 60;
 
 function minuteOfDay(hour: number, minute: number) {
   return hour * 60 + minute;
+}
+
+function minutesFromTime(value: string) {
+  const match = value.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+
+  return hour * 60 + minute;
+}
+
+function timeFromMinutes(value: number) {
+  const normalized = Math.max(0, Math.min(23 * 60 + 59, Math.round(value)));
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function roundedAverageTime(values: string[], fallback: string) {
+  const minutes = values
+    .map(minutesFromTime)
+    .filter((value): value is number => value !== null);
+  if (!minutes.length) return fallback;
+
+  const average = minutes.reduce((sum, value) => sum + value, 0) / minutes.length;
+
+  return timeFromMinutes(Math.round(average / 5) * 5);
 }
 
 function createDateState(): DateState {
@@ -4322,6 +4428,73 @@ function buildDayLoadProfile(
   };
 }
 
+function recommendedTeamSize(
+  loadProfile: DayLoadProfile,
+  recentFeedback: DayFeedbackSummary[]
+) {
+  const recentSizes = recentFeedback
+    .map((feedback) => feedback.operations?.teamMembers?.length || 0)
+    .filter((size) => size > 0);
+  const learnedSize = recentSizes.length
+    ? Math.round(
+        recentSizes.reduce((sum, size) => sum + size, 0) / recentSizes.length
+      )
+    : 1;
+  const pressureSize =
+    loadProfile.pressure === "hoog"
+      ? 3
+      : loadProfile.pressure === "middel"
+        ? 2
+        : 1;
+  const volumeSize =
+    loadProfile.deliveryStops >= 16 || loadProfile.pastryUnits >= 200
+      ? 3
+      : loadProfile.deliveryStops >= 9 || loadProfile.largeReceipts >= 2
+        ? 2
+        : 1;
+
+  return Math.max(1, Math.min(5, Math.max(learnedSize, pressureSize, volumeSize)));
+}
+
+function buildLogisticsAdvice(
+  loadProfile: DayLoadProfile,
+  recentFeedback: DayFeedbackSummary[]
+): LogisticsAdvice {
+  const recentOperations = recentFeedback
+    .map((feedback) => feedback.operations)
+    .filter((operations): operations is LogisticsDayOperations =>
+      Boolean(operations)
+    );
+  const teamStartTime = roundedAverageTime(
+    recentOperations.map((operations) => operations.teamStartTime || ""),
+    loadProfile.pressure === "hoog" ? "06:45" : "07:00"
+  );
+  const busADeparture = roundedAverageTime(
+    recentOperations.map((operations) => operations.busDepartures?.A || ""),
+    loadProfile.pressure === "hoog" ? "07:45" : "08:00"
+  );
+  const busBDeparture = roundedAverageTime(
+    recentOperations.map((operations) => operations.busDepartures?.B || ""),
+    loadProfile.pressure === "hoog" ? "07:55" : "08:05"
+  );
+  const teamSize = recommendedTeamSize(loadProfile, recentFeedback);
+  const reasonParts = [
+    `${loadProfile.deliveryStops} stops`,
+    `${loadProfile.deliveryReceipts} bezorgbonnen`,
+  ];
+  if (loadProfile.largeReceipts) reasonParts.push(`${loadProfile.largeReceipts} groot`);
+  if (loadProfile.pastryUnits) reasonParts.push(`${loadProfile.pastryUnits} gebak`);
+  if (recentOperations.length) reasonParts.push(`${recentOperations.length} leerdagen`);
+
+  return {
+    teamStartTime,
+    teamSize,
+    busADeparture,
+    busBDeparture,
+    reason: reasonParts.join(" · "),
+  };
+}
+
 function routeBadgeFor(stopCount: number, loadProfile: DayLoadProfile) {
   if (stopCount === 0) return "geen stops";
   if (loadProfile.pressure === "hoog") return `${stopCount} stops · strak`;
@@ -5944,7 +6117,8 @@ function buildReceiptSummaries(
 
 function learningSignalsFor(
   feedback: string,
-  pressureOverride: LogisticsLoadPressure | ""
+  pressureOverride: LogisticsLoadPressure | "",
+  operations?: LogisticsDayOperations
 ) {
   const text = feedback.toLowerCase();
   const signals: string[] = [];
@@ -5952,6 +6126,13 @@ function learningSignalsFor(
   if (pressureOverride) {
     signals.push(`drukte handmatig: ${pressureLabelFor(pressureOverride)}`);
   }
+  if (operations?.teamStartTime) signals.push(`team startte ${operations.teamStartTime}`);
+  if (operations?.teamEndTime) signals.push(`team klaar ${operations.teamEndTime}`);
+  if (operations?.teamMembers?.length) {
+    signals.push(`${operations.teamMembers.length} mensen logistiek`);
+  }
+  if (operations?.busDepartures?.A) signals.push(`bus A weg ${operations.busDepartures.A}`);
+  if (operations?.busDepartures?.B) signals.push(`bus B weg ${operations.busDepartures.B}`);
   if (text.includes("rustig")) signals.push("rustig label bewaren");
   if (text.includes("druk")) signals.push("drukte hoger wegen");
   if (text.includes("grote") || text.includes("200")) signals.push("grote order = laadtijd");
@@ -5993,6 +6174,12 @@ export default function BakkerijLogistiekDashboard() {
   const [pressureByDate, setPressureByDate] = useState<
     Record<string, LogisticsLoadPressure | "">
   >({});
+  const [operationsByDate, setOperationsByDate] = useState<
+    Record<string, OperationsDraft>
+  >({});
+  const [recentDayFeedback, setRecentDayFeedback] = useState<
+    DayFeedbackSummary[]
+  >([]);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -6062,9 +6249,20 @@ export default function BakkerijLogistiekDashboard() {
     [receiptSummaries]
   );
   const feedback = feedbackByDate[selectedPlan.date] || "";
+  const operationsDraft =
+    operationsByDate[selectedPlan.date] || emptyOperationsDraft();
+  const logisticsAdvice = useMemo(
+    () => buildLogisticsAdvice(loadProfile, recentDayFeedback),
+    [loadProfile, recentDayFeedback]
+  );
   const learningSignals = useMemo(
-    () => learningSignalsFor(feedback, pressureOverride),
-    [feedback, pressureOverride]
+    () =>
+      learningSignalsFor(
+        feedback,
+        pressureOverride,
+        operationsDraftToPayload(operationsDraft)
+      ),
+    [feedback, operationsDraft, pressureOverride]
   );
   const headerTone = statusToneFor(selectedPlan.status);
 
@@ -6178,6 +6376,7 @@ export default function BakkerijLogistiekDashboard() {
         const data = (await response.json()) as {
           batch?: LogisticsBatch | null;
           dayFeedback?: DayFeedbackSummary | null;
+          recentDayFeedback?: DayFeedbackSummary[];
           webshopImages?: WebshopImageSummary[];
           receiptOverrides?: ReceiptOverrideSummary[];
           routeDraft?: RouteDraftSummary | null;
@@ -6207,6 +6406,7 @@ export default function BakkerijLogistiekDashboard() {
         setRouteDraft(data.routeDraft || null);
         setRouteLearning(data.routeLearning || null);
         setFixedCustomers(data.fixedCustomers || []);
+        setRecentDayFeedback(data.recentDayFeedback || []);
         setFeedbackByDate((current) => ({
           ...current,
           [dateState.selectedDate]: data.dayFeedback?.text || "",
@@ -6214,6 +6414,12 @@ export default function BakkerijLogistiekDashboard() {
         setPressureByDate((current) => ({
           ...current,
           [dateState.selectedDate]: data.dayFeedback?.pressureOverride || "",
+        }));
+        setOperationsByDate((current) => ({
+          ...current,
+          [dateState.selectedDate]: operationsDraftFromFeedback(
+            data.dayFeedback?.operations
+          ),
         }));
         setBatchLoadState("ready");
         if (manualRefresh) {
@@ -6790,6 +6996,69 @@ export default function BakkerijLogistiekDashboard() {
     }));
   }
 
+  function updateOperationsDraft(updater: (draft: OperationsDraft) => OperationsDraft) {
+    setOperationsByDate((current) => ({
+      ...current,
+      [selectedPlan.date]: updater(
+        current[selectedPlan.date] || emptyOperationsDraft()
+      ),
+    }));
+  }
+
+  function updateBusDeparture(bus: BusId, value: string) {
+    updateOperationsDraft((draft) => ({
+      ...draft,
+      busDepartures: {
+        ...draft.busDepartures,
+        [bus]: value,
+      },
+    }));
+  }
+
+  function updateTeamTime(field: "teamStartTime" | "teamEndTime", value: string) {
+    updateOperationsDraft((draft) => ({
+      ...draft,
+      [field]: value,
+    }));
+  }
+
+  function updateTeamMemberName(memberId: string, value: string) {
+    updateOperationsDraft((draft) => ({
+      ...draft,
+      teamMembers: draft.teamMembers.map((member) =>
+        member.id === memberId ? { ...member, name: value } : member
+      ),
+    }));
+  }
+
+  function addTeamMember() {
+    updateOperationsDraft((draft) => ({
+      ...draft,
+      teamMembers: [
+        ...draft.teamMembers,
+        {
+          id: `persoon-${Date.now()}`,
+          name: "",
+        },
+      ],
+    }));
+  }
+
+  function removeTeamMember(memberId: string) {
+    updateOperationsDraft((draft) => {
+      const nextMembers = draft.teamMembers.filter(
+        (member) => member.id !== memberId
+      );
+
+      return {
+        ...draft,
+        teamMembers: nextMembers.length
+          ? nextMembers
+          : emptyOperationsDraft().teamMembers,
+      };
+    });
+  }
+
   async function saveFeedback() {
     setIsSavingFeedback(true);
     setFeedbackMessage("feedback opslaan...");
@@ -6802,6 +7071,7 @@ export default function BakkerijLogistiekDashboard() {
           date: selectedPlan.date,
           text: feedback,
           pressureOverride,
+          operations: operationsDraftToPayload(operationsDraft),
         }),
       });
       const data = (await response.json()) as {
@@ -6821,6 +7091,16 @@ export default function BakkerijLogistiekDashboard() {
         ...current,
         [data.feedback!.date]: data.feedback!.pressureOverride || "",
       }));
+      setOperationsByDate((current) => ({
+        ...current,
+        [data.feedback!.date]: operationsDraftFromFeedback(
+          data.feedback!.operations
+        ),
+      }));
+      setRecentDayFeedback((current) => [
+        data.feedback!,
+        ...current.filter((item) => item.date !== data.feedback!.date),
+      ]);
       setFeedbackMessage("Feedback opgeslagen en verwerkt.");
     } catch (error) {
       setFeedbackMessage(
@@ -7038,13 +7318,21 @@ export default function BakkerijLogistiekDashboard() {
           <LearningPanel
             feedback={feedback}
             isSaving={isSavingFeedback}
+            logisticsAdvice={logisticsAdvice}
             message={feedbackMessage}
             learningSignals={learningSignals}
+            operationsDraft={operationsDraft}
             routeLearning={routeLearning}
+            onAddTeamMember={addTeamMember}
+            onBusDepartureChange={updateBusDeparture}
             onFeedbackChange={updateFeedback}
             onPressureChange={updatePressureOverride}
+            onRemoveTeamMember={removeTeamMember}
             onSave={saveFeedback}
+            onTeamMemberNameChange={updateTeamMemberName}
+            onTeamTimeChange={updateTeamTime}
             pressureOverride={pressureOverride}
+            recentDayFeedback={recentDayFeedback}
             selectedPlan={selectedPlan}
           />
         )}
@@ -8511,78 +8799,218 @@ function LearningPanel({
   feedback,
   isSaving,
   learningSignals,
+  logisticsAdvice,
   message,
+  onAddTeamMember,
+  onBusDepartureChange,
   onFeedbackChange,
   onPressureChange,
+  onRemoveTeamMember,
   onSave,
+  onTeamMemberNameChange,
+  onTeamTimeChange,
+  operationsDraft,
   pressureOverride,
+  recentDayFeedback,
   routeLearning,
   selectedPlan,
 }: Readonly<{
   feedback: string;
   isSaving: boolean;
   learningSignals: string[];
+  logisticsAdvice: LogisticsAdvice;
   message: string;
+  onAddTeamMember: () => void;
+  onBusDepartureChange: (bus: BusId, value: string) => void;
   onFeedbackChange: (value: string) => void;
   onPressureChange: (value: LogisticsLoadPressure | "") => void;
+  onRemoveTeamMember: (memberId: string) => void;
   onSave: () => void;
+  onTeamMemberNameChange: (memberId: string, value: string) => void;
+  onTeamTimeChange: (field: "teamStartTime" | "teamEndTime", value: string) => void;
+  operationsDraft: OperationsDraft;
   pressureOverride: LogisticsLoadPressure | "";
+  recentDayFeedback: DayFeedbackSummary[];
   routeLearning: RouteLearningSummary | null;
   selectedPlan: DayPlan;
 }>) {
   const learnedStops = routeLearning?.stops.slice(0, 6) || [];
   const learnedPairs = routeLearning?.pairs.slice(0, 4) || [];
+  const savedOperationsCount = recentDayFeedback.filter(
+    (item) => item.operations
+  ).length;
 
   return (
-    <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)]">
-      <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-black tracking-normal text-[#1a1815]">
-            Dagfeedback
-          </h2>
-          <button
-            type="button"
-            aria-label="Feedback opslaan"
-            title="Feedback opslaan"
-            disabled={isSaving}
-            onClick={onSave}
-            className="flex h-9 w-9 items-center justify-center border border-[#d6e5d8] bg-[#f6faf4] text-sm font-black text-[#1a1815] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            OK
-          </button>
-        </div>
-        <textarea
-          value={feedback}
-          onChange={(event) => onFeedbackChange(event.target.value)}
-          placeholder="Vandaag was rustig, maar de grote gebaksorder duurde lang..."
-          className="mt-3 min-h-36 w-full resize-y border border-[#e8e4de] bg-[#faf8f5] p-3 text-sm font-bold leading-snug tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
-        />
-        <div className="mt-3 grid grid-cols-4 border border-[#e8e4de] bg-[#faf8f5] p-1">
-          {pressureOptions.map((option) => {
-            const active = pressureOverride === option.value;
-
-            return (
-              <button
-                key={option.label}
-                type="button"
-                aria-pressed={active}
-                onClick={() => onPressureChange(option.value)}
-                className={`min-h-9 px-1 text-xs font-black tracking-normal transition ${
-                  active
-                    ? "bg-[#1a1815] text-white"
-                    : "bg-white text-[#6b645b] hover:bg-[#f6faf4]"
-                }`}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-        {message && (
-          <p className="mt-2 text-xs font-bold tracking-normal text-[#6b645b]">
-            {message}
+    <section className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
+      <div className="grid gap-3">
+        <div className="border border-[#1a1815] bg-[#1a1815] p-3 text-white shadow-sm sm:p-4">
+          <p className="text-[0.68rem] font-black uppercase tracking-normal text-white/60">
+            Advies startteam · {selectedPlan.title}
           </p>
-        )}
+          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            <AdviceMetric label="Startteam" value={logisticsAdvice.teamStartTime} />
+            <AdviceMetric
+              label="Mensen"
+              value={`${logisticsAdvice.teamSize}`}
+            />
+            <AdviceMetric label="Bus A" value={logisticsAdvice.busADeparture} />
+            <AdviceMetric label="Bus B" value={logisticsAdvice.busBDeparture} />
+          </div>
+          <p className="mt-3 text-xs font-bold tracking-normal text-white/70">
+            {logisticsAdvice.reason}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-black tracking-normal text-[#1a1815]">
+                Logistiek logboek
+              </h2>
+              <p className="text-xs font-bold tracking-normal text-[#8a8178]">
+                {savedOperationsCount} dag(en) met teamdata in geheugen
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label="Feedback opslaan"
+              title="Feedback opslaan"
+              disabled={isSaving}
+              onClick={onSave}
+              className="flex h-9 w-9 items-center justify-center border border-[#d6e5d8] bg-[#f6faf4] text-sm font-black text-[#1a1815] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              OK
+            </button>
+          </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="grid gap-2">
+              <p className="text-[0.68rem] font-black uppercase tracking-normal text-[#8a8178]">
+                Vertrek
+              </p>
+              {(["A", "B"] as BusId[]).map((bus) => (
+                <label
+                  key={bus}
+                  className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 text-xs font-black tracking-normal text-[#6b645b]"
+                >
+                  Bus {bus}
+                  <input
+                    type="time"
+                    value={operationsDraft.busDepartures[bus]}
+                    onChange={(event) =>
+                      onBusDepartureChange(bus, event.target.value)
+                    }
+                    className="min-h-10 border border-[#e8e4de] bg-[#faf8f5] px-2 text-sm font-black tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+                  />
+                </label>
+              ))}
+            </div>
+
+            <div className="grid gap-2">
+              <p className="text-[0.68rem] font-black uppercase tracking-normal text-[#8a8178]">
+                Team
+              </p>
+              <label className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 text-xs font-black tracking-normal text-[#6b645b]">
+                Start
+                <input
+                  type="time"
+                  value={operationsDraft.teamStartTime}
+                  onChange={(event) =>
+                    onTeamTimeChange("teamStartTime", event.target.value)
+                  }
+                  className="min-h-10 border border-[#e8e4de] bg-[#faf8f5] px-2 text-sm font-black tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+                />
+              </label>
+              <label className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 text-xs font-black tracking-normal text-[#6b645b]">
+                Klaar
+                <input
+                  type="time"
+                  value={operationsDraft.teamEndTime}
+                  onChange={(event) =>
+                    onTeamTimeChange("teamEndTime", event.target.value)
+                  }
+                  className="min-h-10 border border-[#e8e4de] bg-[#faf8f5] px-2 text-sm font-black tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-3 border-t border-[#e8e4de] pt-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[0.68rem] font-black uppercase tracking-normal text-[#8a8178]">
+                Personen
+              </p>
+              <button
+                type="button"
+                onClick={onAddTeamMember}
+                className="border border-[#d6e5d8] bg-[#f6faf4] px-2 py-1 text-xs font-black tracking-normal text-[#1a1815] transition hover:bg-white"
+              >
+                + persoon
+              </button>
+            </div>
+            <div className="mt-2 grid gap-2">
+              {operationsDraft.teamMembers.map((member, index) => (
+                <div
+                  key={member.id}
+                  className="grid grid-cols-[minmax(0,1fr)_2rem] gap-2"
+                >
+                  <input
+                    type="text"
+                    value={member.name}
+                    onChange={(event) =>
+                      onTeamMemberNameChange(member.id, event.target.value)
+                    }
+                    placeholder={`Pers ${index + 1}`}
+                    className="min-h-10 border border-[#e8e4de] bg-[#faf8f5] px-2 text-sm font-black tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Persoon verwijderen"
+                    title="Persoon verwijderen"
+                    onClick={() => onRemoveTeamMember(member.id)}
+                    className="flex h-10 items-center justify-center border border-[#e8e4de] bg-white text-sm font-black text-[#8a8178] transition hover:border-[#1a1815] hover:text-[#1a1815]"
+                  >
+                    -
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-4 border border-[#e8e4de] bg-[#faf8f5] p-1">
+            {pressureOptions.map((option) => {
+              const active = pressureOverride === option.value;
+
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onPressureChange(option.value)}
+                  className={`min-h-9 px-1 text-xs font-black tracking-normal transition ${
+                    active
+                      ? "bg-[#1a1815] text-white"
+                      : "bg-white text-[#6b645b] hover:bg-[#f6faf4]"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <textarea
+            value={feedback}
+            onChange={(event) => onFeedbackChange(event.target.value)}
+            placeholder="Bijv. bus B moest later weg door ijsvolume..."
+            className="mt-3 min-h-24 w-full resize-y border border-[#e8e4de] bg-[#faf8f5] p-3 text-sm font-bold leading-snug tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+          />
+          {message && (
+            <p className="mt-2 text-xs font-bold tracking-normal text-[#6b645b]">
+              {message}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-3 shadow-sm sm:p-4">
@@ -8642,6 +9070,25 @@ function LearningPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+function AdviceMetric({
+  label,
+  value,
+}: Readonly<{
+  label: string;
+  value: string;
+}>) {
+  return (
+    <div className="border border-white/15 bg-white/10 px-2 py-2">
+      <p className="text-[0.62rem] font-black uppercase tracking-normal text-white/50">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-black tracking-normal text-white">
+        {value}
+      </p>
+    </div>
   );
 }
 

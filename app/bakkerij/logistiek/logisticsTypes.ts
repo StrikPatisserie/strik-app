@@ -11,6 +11,18 @@ export type LogisticsFulfillment = "bezorgen" | "afhalen" | "onbekend";
 
 export type LogisticsLoadPressure = "laag" | "middel" | "hoog";
 
+export type LogisticsTeamMember = {
+  id: string;
+  name: string;
+};
+
+export type LogisticsDayOperations = {
+  busDepartures?: Partial<Record<"A" | "B", string>>;
+  teamStartTime?: string;
+  teamEndTime?: string;
+  teamMembers?: LogisticsTeamMember[];
+};
+
 export type LogisticsReceiptLine = {
   articleNumber?: string;
   quantity: string;
@@ -57,6 +69,7 @@ export type LogisticsDayFeedback = {
   date: string;
   text: string;
   pressureOverride?: LogisticsLoadPressure | "";
+  operations?: LogisticsDayOperations;
   signals: string[];
   updatedAt: string;
 };
