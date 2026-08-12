@@ -89,6 +89,10 @@ const internalLinePatterns = [
 const articleNumberPattern =
   "(?:\\d{3,9}|[A-Z]{1,4}\\d{3,9})(?:\\.[A-Z0-9]{1,8})?";
 const deliveryCostArticleNumber = "990010";
+const customerInstructionCuePattern =
+  /\b(?:het\s+liefst|graag|s\.?v\.?p\.?|opstelling|cr[eè]me\s+stippen|creme\s+stippen|bellen|contact|ceremoniemeester|afdeling|hoofdingang|receptie|ingang|route|voor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen|klaar))\b/i;
+const productResidueRemarkPattern =
+  /\b(?:taart|tartelette|gebak|bombe|slofje|slof|hazelino|hazelnootbol|bossche\s+bol|tompouce|appel\s+royale|lente\s+parel|steventje|nougatine|pistache|passievol|cheese\s+punt|cremetaart|slagroom|vulling|kleur|bezorgkosten)\b/i;
 
 function normalizeTextLine(line: string) {
   const normalizedWhitespace = line.replace(/\u00a0/g, " ");
@@ -818,8 +822,66 @@ function isAdministrativeRemarkLine(line: string) {
   );
 }
 
-function cleanReceiptRemark(value: string) {
+function isProductResidueRemark(line: string) {
+  const clean = cleanReceiptRemarkText(line);
+  if (!clean || customerInstructionCuePattern.test(clean)) return false;
+
+  return (
+    productResidueRemarkPattern.test(clean) &&
+    (/^\d+(?:[.,]\d+)?\s+/.test(clean) ||
+      /\s+\d+(?:[.,]\d+)?\.?$/.test(clean) ||
+      /(?:^|\s)€\s*[\d.,:]+/.test(clean) ||
+      /\b(?:excl\.?\s*btw|btw|totaalprijs|factuurkorting)\b/i.test(clean))
+  );
+}
+
+function cleanReceiptRemarkText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function trimRemarkToCustomerInstruction(value: string) {
+  const clean = cleanReceiptRemarkText(value);
+  const instructionMatch = clean.match(customerInstructionCuePattern);
+  if (!instructionMatch || instructionMatch.index === undefined) return clean;
+  if (instructionMatch.index <= 0) return clean;
+
+  const prefix = clean.slice(0, instructionMatch.index).trim();
+  if (
+    isProductResidueRemark(prefix) ||
+    productResidueRemarkPattern.test(prefix) ||
+    /\b(?:btw|totaalprijs|factuurkorting|bezorgkosten)\b/i.test(prefix) ||
+    /(?:^|\s)€\s*[\d.,:]+/.test(prefix)
+  ) {
+    return clean.slice(instructionMatch.index).trim();
+  }
+
+  return clean;
+}
+
+function stripEmbeddedDeliveryNoise(value: string) {
   return value
+    .replace(
+      /\b(?:bezorging|bezorgen|levering|leveren)\s+(?!tussen\b|voor\b|om\b|vanaf\b|kosten\b).*?(?=\bvoor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen)\b)/gi,
+      " "
+    )
+    .replace(
+      /\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:tussen|voor|om|vanaf)\s+\d{1,2}[:.]\d{2}(?:\s+(?:en|tot|-)\s+\d{1,2}[:.]\d{2})?.*$/i,
+      " "
+    )
+    .replace(
+      /\s+\d+(?:[.,]\s*)?cr[eè]me\s+stippen\s*\([^)]*\)\s+\d+(?=\s*\bvoor\s+\d{1,2}[:.]\d{2}\b)/gi,
+      " "
+    )
+    .replace(
+      /\s+cr[eè]me\s+stippen\s*\([^)]*\)\s+\d+(?=\s*\bvoor\s+\d{1,2}[:.]\d{2}\b)/gi,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanReceiptRemark(value: string) {
+  const withoutNoise = value
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
@@ -833,6 +895,11 @@ function cleanReceiptRemark(value: string) {
     .replace(/\s+/g, " ")
     .replace(/\s+([?.!,])/g, "$1")
     .trim();
+  const clean = stripEmbeddedDeliveryNoise(
+    trimRemarkToCustomerInstruction(withoutNoise)
+  );
+
+  return isProductResidueRemark(clean) ? "" : clean;
 }
 
 function isReceiptPaymentBlockLine(line: string) {
@@ -933,6 +1000,7 @@ function isStandaloneAlternativeAddressLine(line: string) {
 
 function isInstructionLine(line: string) {
   return (
+    customerInstructionCuePattern.test(line) ||
     /^(bellen|graag|wij willen|via mail|de factuur|kostenplaats|naam aanvrager|factuurgegevens|t\.?b\.?v\.?|voor het ophalen)\b/i.test(
       line
     ) ||
@@ -1420,6 +1488,7 @@ function parsePage(pageText: string): ParsedPage | null {
   const timeLines = bodyLines.filter(
     (line) =>
       isFulfillmentLine(line) ||
+      Boolean(extractOperationalTime(line)) ||
       /\b(?:afhaaltijd|bezorgtijd|tijdvak|levering|wordt bezorgd)\b/i.test(line)
   );
   const parsedLines: LogisticsReceiptLine[] = [];

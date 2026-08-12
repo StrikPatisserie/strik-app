@@ -1542,6 +1542,65 @@ function cleanReceiptLineDescription(value: string) {
     .trim();
 }
 
+const customerInstructionCuePattern =
+  /\b(?:het\s+liefst|graag|s\.?v\.?p\.?|opstelling|cr[eè]me\s+stippen|creme\s+stippen|bellen|contact|ceremoniemeester|afdeling|hoofdingang|receptie|ingang|route|voor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen|klaar))\b/i;
+const productResidueRemarkPattern =
+  /\b(?:taart|tartelette|gebak|bombe|slofje|slof|hazelino|hazelnootbol|bossche\s+bol|tompouce|appel\s+royale|lente\s+parel|steventje|nougatine|pistache|passievol|cheese\s+punt|cremetaart|slagroom|vulling|kleur|bezorgkosten)\b/i;
+
+function isProductResidueDisplayNote(value: string) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  if (!clean || customerInstructionCuePattern.test(clean)) return false;
+
+  return (
+    productResidueRemarkPattern.test(clean) &&
+    (/^\d+(?:[.,]\d+)?\s+/.test(clean) ||
+      /\s+\d+(?:[.,]\d+)?\.?$/.test(clean) ||
+      /(?:^|\s)€\s*[\d.,:]+/.test(clean) ||
+      /\b(?:excl\.?\s*btw|btw|totaalprijs|factuurkorting)\b/i.test(clean))
+  );
+}
+
+function trimDisplayNoteToCustomerInstruction(value: string) {
+  const clean = value.replace(/\s+/g, " ").trim();
+  const instructionMatch = clean.match(customerInstructionCuePattern);
+  if (!instructionMatch || instructionMatch.index === undefined) return clean;
+  if (instructionMatch.index <= 0) return clean;
+
+  const prefix = clean.slice(0, instructionMatch.index).trim();
+  if (
+    isProductResidueDisplayNote(prefix) ||
+    productResidueRemarkPattern.test(prefix) ||
+    /\b(?:btw|totaalprijs|factuurkorting|bezorgkosten)\b/i.test(prefix) ||
+    /(?:^|\s)€\s*[\d.,:]+/.test(prefix)
+  ) {
+    return clean.slice(instructionMatch.index).trim();
+  }
+
+  return clean;
+}
+
+function stripEmbeddedDisplayDeliveryNoise(value: string) {
+  return value
+    .replace(
+      /\b(?:bezorging|bezorgen|levering|leveren)\s+(?!tussen\b|voor\b|om\b|vanaf\b|kosten\b).*?(?=\bvoor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen)\b)/gi,
+      " "
+    )
+    .replace(
+      /\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:tussen|voor|om|vanaf)\s+\d{1,2}[:.]\d{2}(?:\s+(?:en|tot|-)\s+\d{1,2}[:.]\d{2})?.*$/i,
+      " "
+    )
+    .replace(
+      /\s+\d+(?:[.,]\s*)?cr[eè]me\s+stippen\s*\([^)]*\)\s+\d+(?=\s*\bvoor\s+\d{1,2}[:.]\d{2}\b)/gi,
+      " "
+    )
+    .replace(
+      /\s+cr[eè]me\s+stippen\s*\([^)]*\)\s+\d+(?=\s*\bvoor\s+\d{1,2}[:.]\d{2}\b)/gi,
+      " "
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function textOptionContinuationFromNote(value: string, quantity: string) {
   const clean = value
     .replace(/trial mode\s*[–-]\s*click here for more information/gi, "")
@@ -8187,7 +8246,7 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     );
   });
 
-  const cleaned = clean
+  const withoutNoise = clean
     .replace(/\b(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:[.,][A-Z0-9]{1,8})?\b/gi, " ")
     .replace(
       /\b(?:\d+(?:[.,]\d+)?\s+)?(?:(?:strik's\s+)?(?:marsepeintaart|slagroomtaart|cremetaart)|petit\s+four)[^€]{4,180}\s+€\s*[\d.,:]+(?:\s+\d+(?:[.,]\d+)?\s+€\s*[\d.,:]+(?:\s+€\s*[\d.,:]+)*)?/gi,
@@ -8212,8 +8271,13 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     .replace(/[–—-]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
+  const cleaned = stripEmbeddedDisplayDeliveryNoise(
+    trimDisplayNoteToCustomerInstruction(withoutNoise)
+  );
 
-  if (isReceiptNoteRemainder(cleaned)) return "";
+  if (isProductResidueDisplayNote(cleaned) || isReceiptNoteRemainder(cleaned)) {
+    return "";
+  }
 
   return cleaned;
 }
