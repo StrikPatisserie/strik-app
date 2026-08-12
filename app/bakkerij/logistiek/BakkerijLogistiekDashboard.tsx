@@ -205,6 +205,39 @@ type WrittenTextPrintItem = {
   needsCheck: boolean;
 };
 
+type PreparationCategory = "bakkerij" | "logistiek";
+
+type PreparationRule = {
+  category: PreparationCategory;
+  code: string;
+  label: string;
+  articleNumber?: string;
+  subcode?: string;
+};
+
+type PreparationSource = {
+  receiptNumber: string;
+  customerName: string;
+  quantity: number;
+};
+
+type PreparationItem = {
+  id: string;
+  category: PreparationCategory;
+  rule: PreparationRule;
+  articleNumber: string;
+  subcode: string;
+  description: string;
+  quantity: number;
+  sources: PreparationSource[];
+};
+
+type WeddingCakeReceiptReference = {
+  search: string;
+  code: string;
+  href: string;
+};
+
 type ReceiptOverrideDraft = {
   time: string;
   fulfillment: LogisticsFulfillment | "";
@@ -338,6 +371,83 @@ const ordersFilters: {
   { id: "pickup-daalseweg", label: "DAAL", location: "Daalseweg" },
   { id: "pickup-ziekerstraat", label: "ZIEK", location: "Ziekerstraat" },
   { id: "pickup-lent", label: "LENT", location: "Lent" },
+];
+
+const preparationCategories: Record<
+  PreparationCategory,
+  { label: string; shortLabel: string; emptyLabel: string }
+> = {
+  bakkerij: {
+    label: "Voorbereiden bakkerij",
+    shortLabel: "Bakkerij",
+    emptyLabel: "Geen bakkerij-voorbereiding gevonden voor deze dag.",
+  },
+  logistiek: {
+    label: "Voorbereiden logistiek",
+    shortLabel: "Logistiek",
+    emptyLabel: "Geen logistieke voorbereiding gevonden voor deze dag.",
+  },
+};
+
+const preparationRules: PreparationRule[] = [
+  {
+    category: "logistiek",
+    code: ".686",
+    label: "6-8 pers.",
+    subcode: "686",
+  },
+  {
+    category: "bakkerij",
+    code: ".690",
+    label: "12 pers. DV Horeca",
+    subcode: "690",
+  },
+  {
+    category: "bakkerij",
+    code: "550",
+    label: "Petit four (p.s.)",
+    articleNumber: "550",
+  },
+  {
+    category: "bakkerij",
+    code: "551",
+    label: "Petit Four met tekst",
+    articleNumber: "551",
+  },
+  {
+    category: "bakkerij",
+    code: "552",
+    label: "Petit Four met logo",
+    articleNumber: "552",
+  },
+  {
+    category: "bakkerij",
+    code: "509.611",
+    label: "Petit gateau Lemon Merengue",
+    articleNumber: "509",
+    subcode: "611",
+  },
+  {
+    category: "bakkerij",
+    code: "509.612",
+    label: "Petit gateau Choco Mousse",
+    articleNumber: "509",
+    subcode: "612",
+  },
+  {
+    category: "bakkerij",
+    code: "509.613",
+    label: "Petit gateau Blueberry Cheese",
+    articleNumber: "509",
+    subcode: "613",
+  },
+  {
+    category: "bakkerij",
+    code: "509.614",
+    label: "Petit gateau Passie/Mango",
+    articleNumber: "509",
+    subcode: "614",
+  },
 ];
 
 const pressureOptions: {
@@ -3253,6 +3363,387 @@ function openWrittenTextSheet(plan: DayPlan, items: WrittenTextPrintItem[]) {
   }
 
   printWindow.document.write(createWrittenTextPrintHtml({ items, plan }));
+  printWindow.document.close();
+  printWindow.focus();
+}
+
+function normalizePreparationCode(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function receiptLineArticleParts(line: ReceiptLine) {
+  const article = String(line.articleNumber || "").trim();
+  const articleMatch = article.match(
+    /^([A-Z]{0,4}\d{3,9})(?:[.,]([A-Z0-9]{1,8}))?$/i
+  );
+  const descriptionMatch = String(line.description || "")
+    .trim()
+    .match(/^([A-Z]{0,4}\d{3,9})(?:[.,]([A-Z0-9]{1,8}))?\s+/i);
+  const noteSubcodeMatch = String(line.note || "").match(
+    /\bsubcode\s*[:#-]?\s*([A-Z0-9]{1,8})\b/i
+  );
+  const articleNumber = normalizePreparationCode(
+    articleMatch?.[1] || descriptionMatch?.[1] || article
+  );
+  const subcode = normalizePreparationCode(
+    articleMatch?.[2] || descriptionMatch?.[2] || noteSubcodeMatch?.[1] || ""
+  );
+
+  return { articleNumber, subcode };
+}
+
+function preparationRuleMatchesLine(rule: PreparationRule, line: ReceiptLine) {
+  const { articleNumber, subcode } = receiptLineArticleParts(line);
+  const ruleArticle = normalizePreparationCode(rule.articleNumber || "");
+  const ruleSubcode = normalizePreparationCode(rule.subcode || "");
+
+  if (ruleArticle && ruleSubcode) {
+    return (
+      (articleNumber === ruleArticle && subcode === ruleSubcode) ||
+      articleNumber === `${ruleArticle}${ruleSubcode}`
+    );
+  }
+  if (ruleArticle && articleNumber !== ruleArticle) return false;
+  if (ruleSubcode && subcode !== ruleSubcode) return false;
+
+  return Boolean(ruleArticle || ruleSubcode);
+}
+
+function preparationItemKeyFor(rule: PreparationRule, line: ReceiptLine) {
+  const { articleNumber, subcode } = receiptLineArticleParts(line);
+  const description = cleanProductLabel(cleanReceiptLineDescription(line.description));
+  const productKey = rule.subcode && !rule.articleNumber
+    ? `${articleNumber}|${subcode}|${normalizeMatchText(description)}`
+    : `${rule.code}|${normalizeMatchText(description)}`;
+
+  return `${rule.category}|${rule.code}|${productKey}`;
+}
+
+function buildPreparationItems(
+  receipts: ReceiptSummary[],
+  category: PreparationCategory
+) {
+  const rules = preparationRules.filter((rule) => rule.category === category);
+  const ruleIndex = new Map(rules.map((rule, index) => [rule.code, index]));
+  const itemsByKey = new Map<string, PreparationItem>();
+
+  receipts.forEach((receipt) => {
+    const displayLines = receipt.lines
+      .map(normalizeKnownReceiptLine)
+      .filter((line) => !shouldDropReceiptLine(line));
+
+    displayLines.forEach((line) => {
+      if (isProductOptionLine(line)) return;
+
+      const quantity = numericQuantity(line.quantity);
+      if (quantity <= 0) return;
+
+      rules.forEach((rule) => {
+        if (!preparationRuleMatchesLine(rule, line)) return;
+
+        const key = preparationItemKeyFor(rule, line);
+        const { articleNumber, subcode } = receiptLineArticleParts(line);
+        const source = {
+          receiptNumber: receipt.receiptNumber || receipt.id,
+          customerName: receipt.customer || "Klant controleren",
+          quantity,
+        };
+        const existing = itemsByKey.get(key);
+
+        if (existing) {
+          existing.quantity += quantity;
+          existing.sources.push(source);
+          return;
+        }
+
+        itemsByKey.set(key, {
+          id: key,
+          category,
+          rule,
+          articleNumber,
+          subcode,
+          description:
+            cleanProductLabel(cleanReceiptLineDescription(line.description)) ||
+            rule.label,
+          quantity,
+          sources: [source],
+        });
+      });
+    });
+  });
+
+  return Array.from(itemsByKey.values()).sort((first, second) => {
+    const ruleCompare =
+      (ruleIndex.get(first.rule.code) ?? 999) -
+      (ruleIndex.get(second.rule.code) ?? 999);
+
+    if (ruleCompare) return ruleCompare;
+
+    return first.description.localeCompare(second.description, "nl-NL");
+  });
+}
+
+function formatPreparationQuantity(value: number) {
+  return value.toLocaleString("nl-NL", {
+    maximumFractionDigits: Number.isInteger(value) ? 0 : 1,
+    minimumFractionDigits: 0,
+  });
+}
+
+function preparationCodeLabelFor(item: PreparationItem) {
+  if (item.rule.articleNumber && item.rule.subcode) {
+    return `${item.rule.articleNumber}.${item.rule.subcode}`;
+  }
+
+  const parts = [
+    item.articleNumber,
+    item.subcode ? `.${item.subcode}` : "",
+  ].filter(Boolean);
+
+  return parts.join("") || item.rule.code;
+}
+
+function preparationSourcesFor(item: PreparationItem) {
+  const sourceByKey = new Map<string, PreparationSource>();
+
+  item.sources.forEach((source) => {
+    const key = `${source.receiptNumber}|${source.customerName}`;
+    const existing = sourceByKey.get(key);
+    if (existing) {
+      existing.quantity += source.quantity;
+      return;
+    }
+
+    sourceByKey.set(key, { ...source });
+  });
+
+  return Array.from(sourceByKey.values()).sort((first, second) =>
+    first.customerName.localeCompare(second.customerName, "nl-NL")
+  );
+}
+
+function createPreparationPrintHtml(input: {
+  category: PreparationCategory;
+  items: PreparationItem[];
+  plan: DayPlan;
+}) {
+  const category = preparationCategories[input.category];
+  const title = `${category.label} ${formatDateLabel(input.plan.date)}`;
+  const rowsHtml = input.items
+    .map((item, index) => {
+      const sources = preparationSourcesFor(item);
+      const sourceHtml = sources
+        .slice(0, 8)
+        .map(
+          (source) =>
+            `<span>${escapeHtml(formatPreparationQuantity(source.quantity))}x ${escapeHtml(
+              source.customerName
+            )}${source.receiptNumber ? ` · bon ${escapeHtml(source.receiptNumber)}` : ""}</span>`
+        )
+        .join("");
+      const moreLabel =
+        sources.length > 8
+          ? `<span>+ ${sources.length - 8} extra bon${sources.length - 8 === 1 ? "" : "nen"}</span>`
+          : "";
+
+      return `
+        <tr>
+          <td class="check"><span></span></td>
+          <td class="number">${index + 1}</td>
+          <td class="quantity">${escapeHtml(formatPreparationQuantity(item.quantity))}</td>
+          <td>
+            <strong>${escapeHtml(item.description)}</strong>
+            <small>${escapeHtml(item.rule.label)} · ${escapeHtml(preparationCodeLabelFor(item))}</small>
+          </td>
+          <td class="sources">${sourceHtml}${moreLabel}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8">
+    <title>${escapeHtml(title)}</title>
+    <style>
+      @page { margin: 10mm; size: A4 portrait; }
+      * { box-sizing: border-box; }
+      body {
+        background: #fff;
+        color: #111;
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 0;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+      .screen-actions {
+        align-items: center;
+        border-bottom: 1px solid #ddd;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+        padding: 10px 12px;
+      }
+      .screen-actions h1 {
+        font-size: 15px;
+        margin: 0;
+      }
+      .screen-actions button {
+        background: #111;
+        border: 0;
+        color: #fff;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 800;
+        padding: 8px 12px;
+      }
+      .screen-actions .secondary {
+        background: #fff;
+        border: 1px solid #111;
+        color: #111;
+      }
+      main {
+        margin: 0 auto;
+        max-width: 210mm;
+        padding: 8mm 10mm;
+        width: 100%;
+      }
+      .sheet-header {
+        align-items: baseline;
+        border-bottom: 1px solid #111;
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5mm;
+        padding-bottom: 2mm;
+      }
+      .sheet-header h1 {
+        font-size: 18px;
+        margin: 0;
+      }
+      .sheet-header p {
+        font-size: 10px;
+        font-weight: 700;
+        margin: 0;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 10pt;
+        width: 100%;
+      }
+      th {
+        border-bottom: 2px solid #111;
+        font-size: 8pt;
+        padding: 0 2mm 2mm;
+        text-align: left;
+        text-transform: uppercase;
+      }
+      td {
+        border-bottom: 1px solid #ddd;
+        padding: 2mm;
+        vertical-align: top;
+      }
+      .check {
+        width: 9mm;
+      }
+      .check span {
+        border: 1.4px solid #111;
+        display: block;
+        height: 5mm;
+        width: 5mm;
+      }
+      .number {
+        color: #666;
+        font-size: 8pt;
+        font-weight: 800;
+        width: 10mm;
+      }
+      .quantity {
+        font-size: 15pt;
+        font-weight: 900;
+        text-align: right;
+        width: 18mm;
+      }
+      strong {
+        display: block;
+        font-size: 11pt;
+        line-height: 1.15;
+      }
+      small {
+        color: #555;
+        display: block;
+        font-size: 8pt;
+        font-weight: 700;
+        margin-top: 1mm;
+      }
+      .sources {
+        color: #333;
+        font-size: 8pt;
+        line-height: 1.28;
+        width: 58mm;
+      }
+      .sources span {
+        display: block;
+      }
+      @media print {
+        .screen-actions { display: none; }
+        main {
+          max-width: none;
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen-actions">
+      <h1>${escapeHtml(title)} · ${input.items.length} regel${input.items.length === 1 ? "" : "s"}</h1>
+      <div>
+        <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
+        <button type="button" onclick="window.print()">Afdrukken</button>
+      </div>
+    </div>
+    <main>
+      <div class="sheet-header">
+        <h1>${escapeHtml(title)}</h1>
+        <p>${input.items.length} voorbereidregel${input.items.length === 1 ? "" : "s"}</p>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>#</th>
+            <th>Aantal</th>
+            <th>Product</th>
+            <th>Bonnen</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </main>
+  </body>
+</html>`;
+}
+
+function openPreparationSheet(
+  plan: DayPlan,
+  receipts: ReceiptSummary[],
+  category: PreparationCategory
+) {
+  const items = buildPreparationItems(receipts, category);
+  if (items.length === 0) {
+    window.alert(preparationCategories[category].emptyLabel);
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=1000,height=800");
+  if (!printWindow) {
+    window.alert("Voorbereidingslijst kon niet geopend worden.");
+    return;
+  }
+
+  printWindow.document.write(
+    createPreparationPrintHtml({ category, items, plan })
+  );
   printWindow.document.close();
   printWindow.focus();
 }
@@ -7485,6 +7976,28 @@ export default function BakkerijLogistiekDashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <label
+              className={`relative flex min-h-8 cursor-pointer items-center border px-2 text-[0.68rem] font-black tracking-normal transition ${
+                selectedPlan.date !== dateState.today &&
+                selectedPlan.date !== dateState.tomorrow
+                  ? "border-[#1a1815] bg-[#1a1815] text-white"
+                  : "border-[#e8e4de] bg-white/70 text-[#8b8278] hover:bg-white"
+              }`}
+            >
+              Eerder
+              <input
+                type="date"
+                value={
+                  selectedPlan.date <= dateState.today
+                    ? selectedPlan.date
+                    : dateState.today
+                }
+                max={dateState.today}
+                aria-label="Eerdere datum kiezen"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                onChange={(event) => selectDate(event.target.value)}
+              />
+            </label>
             <button
               type="button"
               onClick={() => selectDate(dateState.today)}
@@ -7507,23 +8020,6 @@ export default function BakkerijLogistiekDashboard() {
             >
               Morgen
             </button>
-            <label
-              className={`min-h-10 border px-3 text-sm font-black tracking-normal transition ${
-                selectedPlan.date !== dateState.today &&
-                selectedPlan.date !== dateState.tomorrow
-                  ? "border-[#1a1815] bg-[#1a1815] text-white"
-                  : "border-[#e8e4de] bg-white text-[#1a1815] hover:bg-[#faf8f5]"
-              } relative flex cursor-pointer items-center`}
-            >
-              Datum
-              <input
-                type="date"
-                value={selectedPlan.date}
-                aria-label="Datum kiezen"
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                onChange={(event) => selectDate(event.target.value)}
-              />
-            </label>
             <RefreshButton
               disabled={batchLoadState === "loading" || isImporting}
               loading={batchLoadState === "loading"}
@@ -7541,6 +8037,12 @@ export default function BakkerijLogistiekDashboard() {
               disabled={writtenTextPrintItems.length === 0}
               onClick={() =>
                 openWrittenTextSheet(selectedPlan, writtenTextPrintItems)
+              }
+            />
+            <PreparationPrintButton
+              disabled={receiptSummaries.length === 0}
+              onSelect={(category) =>
+                openPreparationSheet(selectedPlan, receiptSummaries, category)
               }
             />
             <input
@@ -8434,6 +8936,10 @@ function ReceiptAddressBlock({
     mainAddress &&
     receipt.address !== mainAddress;
   const receiptNumber = receipt.receiptNumber || receipt.id;
+  const weddingCakeReference = weddingCakeReferenceForReceipt(
+    receipt,
+    selectedPlan.date
+  );
 
   return (
     <div className="bg-white px-3 py-3">
@@ -8451,6 +8957,16 @@ function ReceiptAddressBlock({
             <p className="mt-1 max-w-md text-[0.62rem] font-normal leading-snug tracking-normal text-[#666]">
               Origineel adres: {receipt.address}
             </p>
+          )}
+          {weddingCakeReference && (
+            <a
+              href={weddingCakeReference.href}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex border border-[#ead8aa] bg-[#fff7df] px-2 py-1 text-[0.62rem] font-black uppercase tracking-normal text-[#5c4921] underline-offset-2 hover:underline"
+            >
+              Design {weddingCakeReference.code || weddingCakeReference.search}
+            </a>
           )}
         </div>
         <div className="text-left sm:min-w-56 sm:text-right">
@@ -8898,6 +9414,48 @@ function fulfillmentTargetFor(receipt: ReceiptSummary) {
   }
 
   return receipt.alternativeAddress || receipt.deliveryAddress || receipt.address;
+}
+
+function weddingCakeReferenceForReceipt(
+  receipt: ReceiptSummary,
+  date: string
+): WeddingCakeReceiptReference | null {
+  const haystack = [
+    receipt.customer,
+    receipt.customerNote,
+    receipt.internalNote,
+    receipt.note,
+    receipt.lines
+      .map((line) => [line.articleNumber, line.description, line.note].join(" "))
+      .join(" "),
+  ].join(" ");
+  const hasWeddingSignal =
+    /\b(?:bruidstaart|bruidstaarten|bruids|bruidspaar|trouwtaart|trouwen)\b/i.test(
+      haystack
+    );
+  const explicitCodeMatch = haystack.match(
+    /\b(?:herkenningscode|bruidstaart\s*code|bruidstaartcode|trouwtaart\s*code|code)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{2,24})\b/i
+  );
+  const compactCodeMatch = hasWeddingSignal
+    ? haystack.match(/\b((?:BT|BR|BRUID|TAART|WED)[-\s]?\d{2,8})\b/i)
+    : null;
+  const code = (explicitCodeMatch?.[1] || compactCodeMatch?.[1] || "")
+    .replace(/\s+/g, "-")
+    .trim();
+  const fallbackName = customerLastNameFor(receipt.customer);
+  const search = code || (hasWeddingSignal ? fallbackName || receipt.customer : "");
+
+  if (!search) return null;
+
+  const params = new URLSearchParams();
+  params.set("zoek", search);
+  params.set("datum", date);
+
+  return {
+    search,
+    code,
+    href: `/bruidstaarten/studio?${params.toString()}`,
+  };
 }
 
 function ReceiptFulfillmentBlock({
@@ -9642,6 +10200,51 @@ function ReceiptPrintButton({
   );
 }
 
+function PreparationPrintButton({
+  disabled,
+  onSelect,
+}: Readonly<{
+  disabled?: boolean;
+  onSelect: (category: PreparationCategory) => void;
+}>) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label="Voorbereidingslijst openen"
+        title="Voorbereidingslijst openen"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className="relative flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <PreparationIcon />
+      </button>
+      {open && !disabled && (
+        <div className="absolute right-0 z-30 mt-1 grid min-w-36 gap-1 border border-[#d7d1c8] bg-white p-1 shadow-lg">
+          {(["bakkerij", "logistiek"] as PreparationCategory[]).map(
+            (category) => (
+              <button
+                key={category}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onSelect(category);
+                }}
+                className="min-h-8 px-2 text-left text-[0.68rem] font-black uppercase tracking-normal text-[#1a1815] transition hover:bg-[#faf8f5]"
+              >
+                {preparationCategories[category].shortLabel}
+              </button>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RouteDropLine({
   position = "before",
 }: Readonly<{
@@ -9733,6 +10336,28 @@ function TextSheetIcon() {
       <path d="M8 12h8" />
       <path d="M8 16h5" />
       <path d="M15.5 15.5 18 18" />
+    </svg>
+  );
+}
+
+function PreparationIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <path d="M9 3h6l1 2h3v16H5V5h3l1-2z" />
+      <path d="M9 8h6" />
+      <path d="M8 13h3" />
+      <path d="M8 17h3" />
+      <path d="m15 13 1.5 1.5L20 11" />
+      <path d="m15 17 1.5 1.5L20 15" />
     </svg>
   );
 }

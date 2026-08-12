@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   cakeSizes,
   cakeStyles,
@@ -3773,6 +3773,16 @@ export default function BruidstaartStudioConfigurator() {
   const [allOverviewStatus, setAllOverviewStatus] = useState("");
   const [allOverviewLoading, setAllOverviewLoading] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const search = params.get("zoek") || params.get("search") || "";
+    const deliveryDate = params.get("datum") || params.get("date") || "";
+
+    if (search) setDraftSearch(search);
+    if (deliveryDate) setDraftDeliveryDate(deliveryDate);
+  }, []);
+
   const visibleSteps = useMemo(
     () => getVisibleSteps(config.styleId),
     [config.styleId]
