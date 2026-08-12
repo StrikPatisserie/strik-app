@@ -4,20 +4,10 @@ import {
 } from "./temperatureRegistrationShared";
 
 const APP_TEMPERATURE_REGISTRATION_URL = "/api/temperature-registration";
-const WORDPRESS_TEMPERATURE_REGISTRATION_URL =
-  "https://strik-patisserie.nl/wp-json/strik/v1/temperature-registration";
-const WORDPRESS_TEMPERATURE_REGISTRATION_API_KEY = "schoonmaak-ijs-strik";
 
 type TemperatureApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; message: string };
-
-function getWordPressTemperatureRegistrationUrl() {
-  const url = new URL(WORDPRESS_TEMPERATURE_REGISTRATION_URL);
-  url.searchParams.set("key", WORDPRESS_TEMPERATURE_REGISTRATION_API_KEY);
-
-  return url.toString();
-}
 
 async function readJson(response: Response) {
   return (await response.json().catch(() => null)) as unknown;
@@ -63,18 +53,8 @@ export async function fetchTemperatureRegistrations(): Promise<
   TemperatureApiResult<TemperatureRecord[]>
 > {
   try {
-    const appResult = await fetchTemperatureRegistrationsFrom(
-      APP_TEMPERATURE_REGISTRATION_URL
-    );
-
-    if (appResult.ok) return appResult;
-  } catch {
-    // Probeer WordPress direct als de app-route in de browser hapert.
-  }
-
-  try {
     return await fetchTemperatureRegistrationsFrom(
-      getWordPressTemperatureRegistrationUrl()
+      APP_TEMPERATURE_REGISTRATION_URL
     );
   } catch {
     return {
@@ -115,19 +95,8 @@ export async function saveTemperatureRegistration(
   payload: TemperaturePayload
 ): Promise<TemperatureApiResult<TemperatureRecord>> {
   try {
-    const appResult = await saveTemperatureRegistrationTo(
-      APP_TEMPERATURE_REGISTRATION_URL,
-      payload
-    );
-
-    if (appResult.ok) return appResult;
-  } catch {
-    // Probeer WordPress direct als de app-route in de browser hapert.
-  }
-
-  try {
     return await saveTemperatureRegistrationTo(
-      getWordPressTemperatureRegistrationUrl(),
+      APP_TEMPERATURE_REGISTRATION_URL,
       payload
     );
   } catch {

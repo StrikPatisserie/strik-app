@@ -12,10 +12,10 @@ import {
   type WinkelWorkPlanStoreId,
 } from "../workPlans";
 
-export default async function PatisserieOpstartplanPage() {
+export default async function PatisserieSchoonmaakroosterPage() {
   const profile = await requireCurrentProfile();
   const allowedStoreIds = new Set(getAllowedWinkelStoreIds(profile));
-  const definitions = getWinkelWorkPlansForPlan("opstartplan").filter(
+  const definitions = getWinkelWorkPlansForPlan("schoonmaakrooster").filter(
     (definition) => allowedStoreIds.has(definition.storeId)
   );
   const rawProfileStore = (profile.store || "").trim().toLowerCase();
@@ -33,9 +33,9 @@ export default async function PatisserieOpstartplanPage() {
   return (
     <StrikShell>
       <StrikPageHeader
-        title="Opstartplan patisserie"
-        description="Knop staat klaar; lijst volgt zodra het definitieve plan er is."
-        icon={strikIcons.opstartplan}
+        title="Schoonmaakrooster patisserie"
+        description="Weektaak en dagtaken met autosave per winkel."
+        icon={strikIcons.cleaning}
       />
 
       {definitions.length ? (
@@ -46,7 +46,7 @@ export default async function PatisserieOpstartplanPage() {
       ) : (
         <section className="border border-[#e8e4de] bg-white p-4 shadow-sm">
           <p className="text-sm font-bold leading-snug text-[#6b645b]">
-            Voor jouw winkel is nog geen opstartplan ingericht.
+            Voor jouw winkel is nog geen schoonmaakrooster ingericht.
           </p>
         </section>
       )}

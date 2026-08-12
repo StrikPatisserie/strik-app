@@ -8,9 +8,6 @@ import {
 
 export const CLEANING_API_URL =
   "/api/cleaning";
-const WORDPRESS_CLEANING_API_URL =
-  "https://strik-patisserie.nl/wp-json/strik/v1/cleaning";
-const WORDPRESS_CLEANING_API_KEY = "schoonmaak-ijs-strik";
 
 const PLAN_MARKER_PREFIX = "__strik_plan:";
 const PHOTO_MARKER_PREFIX = "__strik_photo:";
@@ -71,14 +68,6 @@ export function getCleaningUrl() {
   return CLEANING_API_URL;
 }
 
-function getWordPressCleaningUrl(options: FetchCleaningItemsOptions = {}) {
-  const url = new URL(WORDPRESS_CLEANING_API_URL);
-  url.searchParams.set("key", WORDPRESS_CLEANING_API_KEY);
-  if (options.includeDataUrl) url.searchParams.set("includeDataUrl", "1");
-
-  return url.toString();
-}
-
 function getAppCleaningUrl(options: FetchCleaningItemsOptions = {}) {
   if (!options.includeDataUrl) return CLEANING_API_URL;
 
@@ -127,14 +116,7 @@ export async function fetchCleaningItems(
   options: FetchCleaningItemsOptions = {}
 ): Promise<CleaningApiResult<CleaningItem[]>> {
   try {
-    const appResult = await fetchCleaningItemsFrom(getAppCleaningUrl(options));
-    if (appResult.ok) return appResult;
-  } catch {
-    // Probeer WordPress direct als de app-route in de browser hapert.
-  }
-
-  try {
-    return await fetchCleaningItemsFrom(getWordPressCleaningUrl(options));
+    return await fetchCleaningItemsFrom(getAppCleaningUrl(options));
   } catch {
     return {
       ok: false,
@@ -172,14 +154,7 @@ export async function saveCleaningItem(
   payload: unknown
 ): Promise<CleaningApiResult<CleaningItem>> {
   try {
-    const appResult = await saveCleaningItemTo(CLEANING_API_URL, payload);
-    if (appResult.ok) return appResult;
-  } catch {
-    // Probeer WordPress direct als de app-route in de browser hapert.
-  }
-
-  try {
-    return await saveCleaningItemTo(getWordPressCleaningUrl(), payload);
+    return await saveCleaningItemTo(CLEANING_API_URL, payload);
   } catch {
     return {
       ok: false,

@@ -7,7 +7,7 @@ import {
 
 const haccpLinks = [
   {
-    href: "/schoonmaak",
+    href: "/winkel/haccp/schoonmaakrooster",
     title: "Schoonmaakrooster",
     icon: strikIcons.cleaning,
     tone: "green" as const,

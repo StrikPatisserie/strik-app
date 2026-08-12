@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import { getCurrentProfile } from "../../lib/auth/session";
+import {
+  canAccessWinkelLocation,
+  filterWinkelScopedItems,
+  getWinkelStoreIdFromLocation,
+} from "../../lib/winkelLocationAccess";
+import type { UserProfile } from "../../lib/supabase/types";
 
 export const dynamic = "force-dynamic";
 
@@ -81,8 +88,54 @@ function createWordPressErrorResponse(status: number) {
   );
 }
 
+function unauthenticatedResponse() {
+  return NextResponse.json({ message: "Niet ingelogd." }, { status: 401 });
+}
+
+function forbiddenResponse() {
+  return NextResponse.json(
+    { message: "Deze winkel hoort niet bij je account." },
+    { status: 403 }
+  );
+}
+
+function hasTemperatureAccess(profile: UserProfile | null | undefined) {
+  if (!profile?.active) return false;
+  const role = String(profile.role || "").trim().toLowerCase();
+
+  return (
+    role === "winkel" ||
+    role === "ijs" ||
+    role === "ijssalon" ||
+    role === "bakkerij" ||
+    profile.permissions?.["winkel.view"] ||
+    profile.permissions?.["ijs.view"] ||
+    profile.permissions?.["bakkerij.view"] ||
+    profile.permissions?.["app.all"]
+  );
+}
+
+function getPayloadLocation(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+
+  const payload = value as { winkel?: unknown };
+
+  return typeof payload.winkel === "string" ? payload.winkel : "";
+}
+
+function shouldCheckWinkelScope(profile: UserProfile | null | undefined) {
+  const role = String(profile?.role || "").trim().toLowerCase();
+
+  return role === "winkel";
+}
+
 export async function GET() {
   try {
+    const profile = await getCurrentProfile();
+    if (!profile?.active || !hasTemperatureAccess(profile)) {
+      return unauthenticatedResponse();
+    }
+
     const response = await fetchWordPressTemperature();
     const data = await readWordPressResponse(response);
 
@@ -99,6 +152,15 @@ export async function GET() {
       );
     }
 
+    if (shouldCheckWinkelScope(profile)) {
+      return NextResponse.json(
+        filterWinkelScopedItems(
+          profile,
+          data as { winkel?: string }[]
+        )
+      );
+    }
+
     return NextResponse.json(data);
   } catch {
     return NextResponse.json(
@@ -112,9 +174,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   let body = "";
+  let parsedBody: unknown = null;
 
   try {
     body = await request.text();
+    parsedBody = body ? JSON.parse(body) : null;
   } catch {
     return NextResponse.json(
       { message: "Temperatuurregistratie kon niet gelezen worden." },
@@ -123,6 +187,20 @@ export async function POST(request: Request) {
   }
 
   try {
+    const profile = await getCurrentProfile();
+    if (!profile?.active || !hasTemperatureAccess(profile)) {
+      return unauthenticatedResponse();
+    }
+
+    const payloadLocation = getPayloadLocation(parsedBody);
+    if (
+      shouldCheckWinkelScope(profile) &&
+      getWinkelStoreIdFromLocation(payloadLocation) &&
+      !canAccessWinkelLocation(profile, payloadLocation)
+    ) {
+      return forbiddenResponse();
+    }
+
     const response = await fetch(getWordPressTemperatureUrl(), {
       method: "POST",
       headers: {
