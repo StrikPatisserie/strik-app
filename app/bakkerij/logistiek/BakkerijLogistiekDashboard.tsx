@@ -162,8 +162,6 @@ type OperationsDraft = Required<
 type LogisticsAdvice = {
   teamStartTime: string;
   teamSize: number;
-  busADeparture: string;
-  busBDeparture: string;
   reason: string;
 };
 
@@ -442,36 +440,6 @@ function minuteOfDay(hour: number, minute: number) {
   return hour * 60 + minute;
 }
 
-function minutesFromTime(value: string) {
-  const match = value.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-
-  return hour * 60 + minute;
-}
-
-function timeFromMinutes(value: number) {
-  const normalized = Math.max(0, Math.min(23 * 60 + 59, Math.round(value)));
-  const hour = Math.floor(normalized / 60);
-  const minute = normalized % 60;
-
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function roundedAverageTime(values: string[], fallback: string) {
-  const minutes = values
-    .map(minutesFromTime)
-    .filter((value): value is number => value !== null);
-  if (!minutes.length) return fallback;
-
-  const average = minutes.reduce((sum, value) => sum + value, 0) / minutes.length;
-
-  return timeFromMinutes(Math.round(average / 5) * 5);
-}
-
 function createDateState(): DateState {
   const now = new Date();
   const today = toInputDate(now);
@@ -520,6 +488,13 @@ function formatDateLabel(value: string) {
     day: "2-digit",
     month: "2-digit",
   }).format(new Date(year, month - 1, day));
+}
+
+function dayOfWeekForDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return 1;
+
+  return new Date(year, month - 1, day).getDay();
 }
 
 function isoWeekNumber(date: Date) {
@@ -4428,70 +4403,32 @@ function buildDayLoadProfile(
   };
 }
 
-function recommendedTeamSize(
-  loadProfile: DayLoadProfile,
-  recentFeedback: DayFeedbackSummary[]
-) {
-  const recentSizes = recentFeedback
-    .map((feedback) => feedback.operations?.teamMembers?.length || 0)
-    .filter((size) => size > 0);
-  const learnedSize = recentSizes.length
-    ? Math.round(
-        recentSizes.reduce((sum, size) => sum + size, 0) / recentSizes.length
-      )
-    : 1;
-  const pressureSize =
-    loadProfile.pressure === "hoog"
-      ? 3
-      : loadProfile.pressure === "middel"
-        ? 2
-        : 1;
-  const volumeSize =
-    loadProfile.deliveryStops >= 16 || loadProfile.pastryUnits >= 200
-      ? 3
-      : loadProfile.deliveryStops >= 9 || loadProfile.largeReceipts >= 2
-        ? 2
-        : 1;
+function teamStartTimeForPressure(pressure: LogisticsLoadPressure) {
+  if (pressure === "laag") return "06:30";
+  if (pressure === "hoog") return "05:45";
 
-  return Math.max(1, Math.min(5, Math.max(learnedSize, pressureSize, volumeSize)));
+  return "06:00";
+}
+
+function teamSizeForDate(date: string) {
+  const dayOfWeek = dayOfWeekForDate(date);
+
+  if (dayOfWeek === 1 || dayOfWeek === 2) return 1;
+  if (dayOfWeek >= 3 && dayOfWeek <= 6) return 2;
+
+  return 1;
 }
 
 function buildLogisticsAdvice(
   loadProfile: DayLoadProfile,
-  recentFeedback: DayFeedbackSummary[]
+  date: string
 ): LogisticsAdvice {
-  const recentOperations = recentFeedback
-    .map((feedback) => feedback.operations)
-    .filter((operations): operations is LogisticsDayOperations =>
-      Boolean(operations)
-    );
-  const teamStartTime = roundedAverageTime(
-    recentOperations.map((operations) => operations.teamStartTime || ""),
-    loadProfile.pressure === "hoog" ? "06:45" : "07:00"
-  );
-  const busADeparture = roundedAverageTime(
-    recentOperations.map((operations) => operations.busDepartures?.A || ""),
-    loadProfile.pressure === "hoog" ? "07:45" : "08:00"
-  );
-  const busBDeparture = roundedAverageTime(
-    recentOperations.map((operations) => operations.busDepartures?.B || ""),
-    loadProfile.pressure === "hoog" ? "07:55" : "08:05"
-  );
-  const teamSize = recommendedTeamSize(loadProfile, recentFeedback);
-  const reasonParts = [
-    `${loadProfile.deliveryStops} stops`,
-    `${loadProfile.deliveryReceipts} bezorgbonnen`,
-  ];
-  if (loadProfile.largeReceipts) reasonParts.push(`${loadProfile.largeReceipts} groot`);
-  if (loadProfile.pastryUnits) reasonParts.push(`${loadProfile.pastryUnits} gebak`);
-  if (recentOperations.length) reasonParts.push(`${recentOperations.length} leerdagen`);
-
   return {
-    teamStartTime,
-    teamSize,
-    busADeparture,
-    busBDeparture,
-    reason: reasonParts.join(" · "),
+    teamStartTime: teamStartTimeForPressure(loadProfile.pressure),
+    teamSize: teamSizeForDate(date),
+    reason: `Drukte ${pressureLabelFor(
+      loadProfile.pressure
+    )} · rustig 06:30 · normaal 06:00 · druk 05:45 · ma/di 1, wo-za 2`,
   };
 }
 
@@ -6252,8 +6189,8 @@ export default function BakkerijLogistiekDashboard() {
   const operationsDraft =
     operationsByDate[selectedPlan.date] || emptyOperationsDraft();
   const logisticsAdvice = useMemo(
-    () => buildLogisticsAdvice(loadProfile, recentDayFeedback),
-    [loadProfile, recentDayFeedback]
+    () => buildLogisticsAdvice(loadProfile, selectedPlan.date),
+    [loadProfile, selectedPlan.date]
   );
   const learningSignals = useMemo(
     () =>
@@ -8843,20 +8780,18 @@ function LearningPanel({
   return (
     <section className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
       <div className="grid gap-3">
-        <div className="border border-[#1a1815] bg-[#1a1815] p-3 text-white shadow-sm sm:p-4">
-          <p className="text-[0.68rem] font-black uppercase tracking-normal text-white/60">
-            Advies startteam · {selectedPlan.title}
+        <div className="rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-3 shadow-sm sm:p-4">
+          <p className="text-[0.68rem] font-black uppercase tracking-normal text-[#6f7d68]">
+            Richtlijn startteam · {selectedPlan.title}
           </p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-4">
-            <AdviceMetric label="Startteam" value={logisticsAdvice.teamStartTime} />
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <AdviceMetric label="Start" value={logisticsAdvice.teamStartTime} />
             <AdviceMetric
-              label="Mensen"
-              value={`${logisticsAdvice.teamSize}`}
+              label="Bezetting"
+              value={`${logisticsAdvice.teamSize} pers`}
             />
-            <AdviceMetric label="Bus A" value={logisticsAdvice.busADeparture} />
-            <AdviceMetric label="Bus B" value={logisticsAdvice.busBDeparture} />
           </div>
-          <p className="mt-3 text-xs font-bold tracking-normal text-white/70">
+          <p className="mt-3 text-xs font-bold tracking-normal text-[#6f7d68]">
             {logisticsAdvice.reason}
           </p>
         </div>
@@ -9081,11 +9016,11 @@ function AdviceMetric({
   value: string;
 }>) {
   return (
-    <div className="border border-white/15 bg-white/10 px-2 py-2">
-      <p className="text-[0.62rem] font-black uppercase tracking-normal text-white/50">
+    <div className="rounded-md border border-[#d6e5d8] bg-white px-2 py-2">
+      <p className="text-[0.62rem] font-black uppercase tracking-normal text-[#8a8178]">
         {label}
       </p>
-      <p className="mt-1 text-lg font-black tracking-normal text-white">
+      <p className="mt-1 text-lg font-black tracking-normal text-[#1a1815]">
         {value}
       </p>
     </div>
