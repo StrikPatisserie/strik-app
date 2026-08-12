@@ -213,6 +213,7 @@ type PreparationRule = {
   label: string;
   articleNumber?: string;
   subcode?: string;
+  textPatterns?: RegExp[];
 };
 
 type PreparationSource = {
@@ -395,30 +396,38 @@ const preparationRules: PreparationRule[] = [
     code: ".686",
     label: "6-8 pers.",
     subcode: "686",
+    textPatterns: [/\b6\s*8\s*pers\b/, /\b6\s*8p\b/],
   },
   {
     category: "bakkerij",
     code: ".690",
     label: "12 pers. DV Horeca",
     subcode: "690",
+    textPatterns: [/\bdv horeca\b/, /\b12\s*pers\b.*\bhoreca\b/],
   },
   {
     category: "bakkerij",
     code: "550",
     label: "Petit four (p.s.)",
     articleNumber: "550",
+    textPatterns: [/^(?!.*\b(?:tekst|logo|foto)\b).*\bpetit fours?\b/],
   },
   {
     category: "bakkerij",
     code: "551",
     label: "Petit Four met tekst",
     articleNumber: "551",
+    textPatterns: [/\bpetit fours?\b.*\btekst\b/, /\btekst\b.*\bpetit fours?\b/],
   },
   {
     category: "bakkerij",
     code: "552",
     label: "Petit Four met logo",
     articleNumber: "552",
+    textPatterns: [
+      /\bpetit fours?\b.*\b(?:logo|foto)\b/,
+      /\b(?:logo|foto)\b.*\bpetit fours?\b/,
+    ],
   },
   {
     category: "bakkerij",
@@ -426,6 +435,9 @@ const preparationRules: PreparationRule[] = [
     label: "Petit gateau Lemon Merengue",
     articleNumber: "509",
     subcode: "611",
+    textPatterns: [
+      /\bpetit gateau\b.*\b(?:lemon|citroen)\b.*\b(?:merengue|meringue)\b/,
+    ],
   },
   {
     category: "bakkerij",
@@ -433,6 +445,7 @@ const preparationRules: PreparationRule[] = [
     label: "Petit gateau Choco Mousse",
     articleNumber: "509",
     subcode: "612",
+    textPatterns: [/\bpetit gateau\b.*\b(?:choco|chocolade)\b.*\bmousse\b/],
   },
   {
     category: "bakkerij",
@@ -440,6 +453,7 @@ const preparationRules: PreparationRule[] = [
     label: "Petit gateau Blueberry Cheese",
     articleNumber: "509",
     subcode: "613",
+    textPatterns: [/\bpetit gateau\b.*\b(?:blueberry|blauwe bes)\b.*\bcheese\b/],
   },
   {
     category: "bakkerij",
@@ -447,6 +461,7 @@ const preparationRules: PreparationRule[] = [
     label: "Petit gateau Passie/Mango",
     articleNumber: "509",
     subcode: "614",
+    textPatterns: [/\bpetit gateau\b.*\b(?:passie|passion|mango)\b/],
   },
 ];
 
@@ -3388,25 +3403,60 @@ function receiptLineArticleParts(line: ReceiptLine) {
   const subcode = normalizePreparationCode(
     articleMatch?.[2] || descriptionMatch?.[2] || noteSubcodeMatch?.[1] || ""
   );
+  const compactRule =
+    articleNumber && !subcode
+      ? preparationRules.find(
+          (rule) =>
+            rule.articleNumber &&
+            rule.subcode &&
+            articleNumber ===
+              normalizePreparationCode(`${rule.articleNumber}${rule.subcode}`)
+        )
+      : null;
+
+  if (compactRule?.articleNumber && compactRule.subcode) {
+    return {
+      articleNumber: normalizePreparationCode(compactRule.articleNumber),
+      subcode: normalizePreparationCode(compactRule.subcode),
+    };
+  }
 
   return { articleNumber, subcode };
+}
+
+function preparationLineText(line: ReceiptLine) {
+  return normalizeMatchText(
+    [line.articleNumber || "", line.description, line.note || ""]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+function preparationRuleMatchesText(rule: PreparationRule, line: ReceiptLine) {
+  if (!rule.textPatterns?.length) return false;
+
+  const text = preparationLineText(line);
+
+  return rule.textPatterns.some((pattern) => pattern.test(text));
 }
 
 function preparationRuleMatchesLine(rule: PreparationRule, line: ReceiptLine) {
   const { articleNumber, subcode } = receiptLineArticleParts(line);
   const ruleArticle = normalizePreparationCode(rule.articleNumber || "");
   const ruleSubcode = normalizePreparationCode(rule.subcode || "");
+  const textMatched = preparationRuleMatchesText(rule, line);
 
   if (ruleArticle && ruleSubcode) {
     return (
       (articleNumber === ruleArticle && subcode === ruleSubcode) ||
-      articleNumber === `${ruleArticle}${ruleSubcode}`
+      articleNumber === `${ruleArticle}${ruleSubcode}` ||
+      textMatched
     );
   }
-  if (ruleArticle && articleNumber !== ruleArticle) return false;
-  if (ruleSubcode && subcode !== ruleSubcode) return false;
+  if (ruleArticle) return articleNumber === ruleArticle || textMatched;
+  if (ruleSubcode) return subcode === ruleSubcode || textMatched;
 
-  return Boolean(ruleArticle || ruleSubcode);
+  return textMatched;
 }
 
 function preparationItemKeyFor(rule: PreparationRule, line: ReceiptLine) {
