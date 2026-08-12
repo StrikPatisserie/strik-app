@@ -5,6 +5,7 @@ import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import {
   AREND_PRINT_SESSION_KEY,
   AREND_PRINT_SQUARES_PER_SHEET,
+  type ArendPrintSessionBreakdown,
   type ArendPrintSession,
 } from "./arendPrintSession";
 import type {
@@ -232,8 +233,11 @@ type ArendNumberPrintParseResult = {
   error?: string;
   items: ArendNumberPrintItem[];
   orderedCount: number;
+  printBreakdown: ArendPrintSessionBreakdown[];
   printCapacity: number;
   requestedCount: number;
+  requestedBreakdown: ArendPrintSessionBreakdown[];
+  reserveCount: number;
 };
 
 const AREND_ORDERED_SQUARES_PER_SHEET = 50;
@@ -2912,6 +2916,22 @@ function arendPrintNumberFor(value: string) {
   return normalizeArendNumber(value).replace(/0/g, "O");
 }
 
+function summarizeArendNumbers(numbers: string[]) {
+  const countByNumber = new Map<string, number>();
+  const order: string[] = [];
+
+  numbers.forEach((number) => {
+    if (!countByNumber.has(number)) order.push(number);
+    countByNumber.set(number, (countByNumber.get(number) || 0) + 1);
+  });
+
+  return order.map((number) => ({
+    count: countByNumber.get(number) || 0,
+    displayNumber: arendPrintNumberFor(number),
+    number,
+  }));
+}
+
 function arendOrderedSquareCountFor(orders: ArendNumberPrintOrder[]) {
   const sheetCount = orders.reduce((sum, order) => sum + order.sheetQuantity, 0);
 
@@ -2956,8 +2976,11 @@ function parseArendNumberPrintItems(
       error: "Geen cijfers ingevuld. Gebruik bijvoorbeeld 40x20, 10x50.",
       items: [],
       orderedCount,
+      printBreakdown: [],
       printCapacity,
       requestedCount: 0,
+      requestedBreakdown: [],
+      reserveCount: 0,
     };
   }
 
@@ -2989,18 +3012,24 @@ function parseArendNumberPrintItems(
       error: "Geen geldige cijfers gevonden. Gebruik bijvoorbeeld 40x20, 10x50.",
       items: [],
       orderedCount,
+      printBreakdown: [],
       printCapacity,
       requestedCount,
+      requestedBreakdown: [],
+      reserveCount: 0,
     };
   }
 
   if (requestedCount > orderedCount) {
     return {
-      error: `Je hebt ${requestedCount} vakjes ingevuld, maar deze bon is maximaal ${orderedCount} bestelde petit fours. Maak het totaal maximaal ${orderedCount}.`,
+      error: `Let op, meer dan ${orderedCount}: je hebt ${requestedCount} vakjes ingevuld. Links van de x is het aantal, rechts is het cijfer. Voorbeeld: 10x8 = 10 vakjes met cijfer 8.`,
       items: [],
       orderedCount,
+      printBreakdown: [],
       printCapacity,
       requestedCount,
+      requestedBreakdown: summarizeArendNumbers(requestedNumbers),
+      reserveCount: 0,
     };
   }
 
@@ -3030,8 +3059,11 @@ function parseArendNumberPrintItems(
       sourceLabel,
     })),
     orderedCount,
+    printBreakdown: summarizeArendNumbers(numbers.slice(0, printCapacity)),
     printCapacity,
     requestedCount,
+    requestedBreakdown: summarizeArendNumbers(requestedNumbers),
+    reserveCount: Math.max(0, printCapacity - requestedCount),
   };
 }
 
@@ -3532,9 +3564,11 @@ function arendPromptLabelFor(orders: ArendNumberPrintOrder[]) {
 
   return [
     "Welke cijfers moeten op de Arend-marsepeinsheet?",
-    "Gebruik bijvoorbeeld: 40x20, 10x50.",
+    "Vul in als: aantal x cijfer.",
+    "Voorbeeld: 10x8 = 10 vakjes met cijfer 8.",
+    "Combineren kan zo: 40x10, 10x8.",
     orderLabel ? `Bon: ${orderLabel}.` : "",
-    "Maximaal 50 bestelde vakjes per sheet; de print maakt automatisch 4 reservevakjes.",
+    "Het totaal links van de x mag maximaal 50 per sheet zijn; de print maakt automatisch 4 reservevakjes.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -3585,7 +3619,10 @@ function openArendNumberSheet(plan: DayPlan, orders: ArendNumberPrintOrder[]) {
       sourceLabel: item.sourceLabel,
     })),
     orderedCount: result.orderedCount,
+    printBreakdown: result.printBreakdown,
     requestedCount: result.requestedCount,
+    requestedBreakdown: result.requestedBreakdown,
+    reserveCount: result.reserveCount,
     title: `Arend cijfers ${formatDateLabel(plan.date)}`,
   });
 }

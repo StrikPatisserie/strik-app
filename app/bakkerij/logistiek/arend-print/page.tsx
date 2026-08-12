@@ -4,8 +4,61 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AREND_PRINT_SESSION_KEY,
   AREND_PRINT_SQUARES_PER_SHEET,
+  type ArendPrintSessionBreakdown,
   type ArendPrintSession,
 } from "../arendPrintSession";
+
+function formatBreakdown(items: ArendPrintSessionBreakdown[]) {
+  return items.map((item) => `${item.count}x${item.number}`).join(", ");
+}
+
+function summarizeItems(items: ArendPrintSession["items"]) {
+  const counts = new Map<string, number>();
+  const order: string[] = [];
+
+  items.forEach((item) => {
+    if (!counts.has(item.number)) order.push(item.number);
+    counts.set(item.number, (counts.get(item.number) || 0) + 1);
+  });
+
+  return order.map((number) => ({
+    count: counts.get(number) || 0,
+    displayNumber: number.replace(/0/g, "O"),
+    number,
+  }));
+}
+
+function ArendNumberValue({
+  displayNumber,
+  isDark,
+}: Readonly<{
+  displayNumber: string;
+  isDark: boolean;
+}>) {
+  const chars = Array.from(displayNumber);
+  const hasZero = chars.includes("O");
+
+  return (
+    <div
+      className={`arend-number mt-[-0.7mm] flex items-center justify-center text-center font-[ArendBona,Georgia,serif] font-black leading-none ${
+        hasZero ? "gap-[0.4mm]" : ""
+      } ${isDark ? "text-[#f7f4f1]" : "text-[#313130]"}`}
+    >
+      {chars.map((char, index) => (
+        <span
+          key={`${displayNumber}-${index}`}
+          className={
+            char === "O"
+              ? "arend-number-zero inline-block origin-center scale-x-[0.82] text-[15.1mm]"
+              : "inline-block text-[15.6mm]"
+          }
+        >
+          {char}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function readArendPrintSession() {
   try {
@@ -20,7 +73,22 @@ function readArendPrintSession() {
       typeof session.requestedCount === "number" &&
       Array.isArray(session.items)
     ) {
-      return session as ArendPrintSession;
+      const printBreakdown = Array.isArray(session.printBreakdown)
+        ? session.printBreakdown
+        : summarizeItems(session.items as ArendPrintSession["items"]);
+      const requestedBreakdown = Array.isArray(session.requestedBreakdown)
+        ? session.requestedBreakdown
+        : printBreakdown;
+
+      return {
+        ...session,
+        printBreakdown,
+        requestedBreakdown,
+        reserveCount:
+          typeof session.reserveCount === "number"
+            ? session.reserveCount
+            : Math.max(0, session.items.length - session.requestedCount),
+      } as ArendPrintSession;
     }
   } catch (error) {
     console.error(error);
@@ -110,6 +178,9 @@ export default function ArendPrintPage() {
           .arend-sheet-header {
             display: none !important;
           }
+          .arend-print-summary {
+            display: block !important;
+          }
           .arend-sheet-wrap {
             margin: 0 !important;
             max-width: none !important;
@@ -158,6 +229,18 @@ export default function ArendPrintPage() {
             {session.items.length} printvakjes · nul als letter O
           </p>
         </div>
+        <div className="arend-print-summary mb-[3mm] grid gap-[1mm] border-b border-[#313130] pb-[2mm] text-[8px] font-black uppercase tracking-normal">
+          <div className="flex flex-wrap items-center justify-between gap-[2mm]">
+            <span>Besteld: {formatBreakdown(session.requestedBreakdown)}</span>
+            <span>
+              Totaal: {session.requestedCount}/{session.orderedCount}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-[2mm] text-[#6b645b]">
+            <span>Print: {formatBreakdown(session.printBreakdown)}</span>
+            <span>Reserve: {session.reserveCount}</span>
+          </div>
+        </div>
         {sheets.map((sheetItems, sheetIndex) => (
           <section
             key={`sheet-${sheetIndex}`}
@@ -173,13 +256,10 @@ export default function ArendPrintPage() {
                     isDark ? "bg-[#313130]" : "bg-[#ccccb0]"
                   }`}
                 >
-                  <div
-                    className={`mt-[-0.7mm] text-center font-[ArendBona,Georgia,serif] text-[15.6mm] font-black leading-[0.86] ${
-                      isDark ? "text-[#f7f4f1]" : "text-[#313130]"
-                    }`}
-                  >
-                    {item.displayNumber}
-                  </div>
+                  <ArendNumberValue
+                    displayNumber={item.displayNumber}
+                    isDark={isDark}
+                  />
                 </article>
               );
             })}

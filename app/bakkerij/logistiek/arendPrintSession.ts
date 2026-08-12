@@ -9,11 +9,20 @@ export type ArendPrintSessionItem = {
   sourceLabel: string;
 };
 
+export type ArendPrintSessionBreakdown = {
+  count: number;
+  displayNumber: string;
+  number: string;
+};
+
 export type ArendPrintSession = {
   createdAt: string;
   date: string;
   items: ArendPrintSessionItem[];
   orderedCount: number;
+  printBreakdown: ArendPrintSessionBreakdown[];
   requestedCount: number;
+  requestedBreakdown: ArendPrintSessionBreakdown[];
+  reserveCount: number;
   title: string;
 };
