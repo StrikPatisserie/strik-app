@@ -245,6 +245,10 @@ export default function ArendPrintPage() {
           }
           .arend-print-summary {
             display: block !important;
+            font-size: 7px !important;
+            gap: 0.4mm !important;
+            margin-bottom: 2mm !important;
+            padding-bottom: 1.2mm !important;
           }
           .arend-sheet-wrap {
             margin: 0 !important;
@@ -254,7 +258,12 @@ export default function ArendPrintPage() {
           }
           .arend-sheet-grid {
             break-after: page;
+            grid-template-columns: repeat(6, 29.2mm) !important;
             page-break-after: always;
+          }
+          .arend-sheet-grid > article {
+            height: 24.2mm !important;
+            width: 29.2mm !important;
           }
           .arend-sheet-grid:last-child {
             break-after: auto;
