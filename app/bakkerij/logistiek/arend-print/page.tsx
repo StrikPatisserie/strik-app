@@ -11,21 +11,29 @@ import {
 const AREND_FONT_NAME = "ArendBona";
 const AREND_FONT_LOAD = `400 16px "${AREND_FONT_NAME}"`;
 
-async function waitForArendFont() {
+async function waitForArendFont(timeoutMs = 1400) {
   const fontSet = "fonts" in document ? document.fonts : null;
 
   if (!fontSet) return true;
 
-  try {
-    await fontSet.load(AREND_FONT_LOAD);
-    await fontSet.ready;
+  const loadFont = async () => {
+    try {
+      await fontSet.load(AREND_FONT_LOAD);
 
-    return fontSet.check(AREND_FONT_LOAD);
-  } catch (error) {
-    console.error(error);
-  }
+      return fontSet.check(AREND_FONT_LOAD);
+    } catch (error) {
+      console.error(error);
+    }
 
-  return false;
+    return false;
+  };
+
+  return Promise.race([
+    loadFont(),
+    new Promise<false>((resolve) => {
+      window.setTimeout(() => resolve(false), timeoutMs);
+    }),
+  ]);
 }
 
 function formatBreakdown(items: ArendPrintSessionBreakdown[]) {
@@ -123,7 +131,9 @@ export default function ArendPrintPage() {
   const [session] = useState<ArendPrintSession | null>(() =>
     readArendPrintSession()
   );
-  const [isFontReady, setIsFontReady] = useState(false);
+  const [fontLoadState, setFontLoadState] = useState<
+    "checking" | "ready" | "fallback"
+  >("checking");
   const sheets = useMemo(() => {
     if (!session) return [];
 
@@ -146,8 +156,8 @@ export default function ArendPrintPage() {
 
     let isCancelled = false;
 
-    waitForArendFont().then((loaded) => {
-      if (!isCancelled) setIsFontReady(loaded);
+    waitForArendFont(2200).then((loaded) => {
+      if (!isCancelled) setFontLoadState(loaded ? "ready" : "fallback");
     });
 
     return () => {
@@ -156,14 +166,7 @@ export default function ArendPrintPage() {
   }, [session]);
 
   async function handlePrint() {
-    const loaded = await waitForArendFont();
-
-    if (!loaded) {
-      window.alert(
-        "Het Arend-lettertype kon niet geladen worden. Herlaad de pagina en probeer opnieuw, anders kan de print afwijken."
-      );
-      return;
-    }
+    await waitForArendFont(700);
 
     window.print();
   }
@@ -189,30 +192,27 @@ export default function ArendPrintPage() {
   }
 
   return (
-    <main
-      className={`arend-print-page min-h-dvh bg-[#f7f4f1] text-[#313130] ${
-        isFontReady ? "" : "arend-font-loading"
-      }`}
-    >
+    <main className="arend-print-page min-h-dvh bg-[#f7f4f1] text-[#313130]">
       <style>{`
         @font-face {
           font-family: "ArendBona";
-          src: url("/61771%20-%20Gasterij%20de%20Arend/BORUTTA%20GROUP%20-%20Bona%20Title%20Bold.otf") format("opentype");
-          font-display: block;
+          src:
+            url("/fonts/arend-bona-title-bold.otf") format("opentype"),
+            local("Bona Title Bold"),
+            local("BonaTitle-Bold"),
+            local("Bona Title");
+          font-display: swap;
           font-style: normal;
           font-weight: 400;
         }
         .arend-number,
         .arend-number * {
-          font-family: "ArendBona", Georgia, serif !important;
+          font-family: "ArendBona", "Bona Title Bold", "BonaTitle-Bold", "Bona Title", Georgia, serif !important;
           font-style: normal !important;
           font-synthesis: none !important;
           font-weight: 400 !important;
           text-rendering: geometricPrecision;
           -webkit-font-smoothing: antialiased;
-        }
-        .arend-font-loading .arend-number {
-          visibility: hidden;
         }
         @media print {
           @page {
@@ -238,9 +238,6 @@ export default function ArendPrintPage() {
             min-height: auto !important;
             position: absolute;
             width: 100%;
-          }
-          .arend-font-loading .arend-number {
-            visibility: visible !important;
           }
           .arend-screen-actions,
           .arend-sheet-header {
@@ -270,7 +267,22 @@ export default function ArendPrintPage() {
           {session.title} · {session.requestedCount}/{session.orderedCount}{" "}
           besteld · {session.items.length} printvakjes
         </h1>
-        <div className="flex gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`hidden border px-2 py-1 text-[0.62rem] font-black uppercase tracking-normal sm:inline-flex ${
+              fontLoadState === "ready"
+                ? "border-[#c6dec0] bg-[#edf7ea] text-[#3f6b36]"
+                : fontLoadState === "fallback"
+                  ? "border-[#f1d28f] bg-[#fff5d8] text-[#7a5a18]"
+                  : "border-[#e8e4de] bg-white text-[#8b8278]"
+            }`}
+          >
+            {fontLoadState === "ready"
+              ? "font geladen"
+              : fontLoadState === "fallback"
+                ? "font fallback"
+                : "font laden"}
+          </span>
           <button
             type="button"
             onClick={() => window.location.assign("/bakkerij/logistiek")}
