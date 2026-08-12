@@ -89,10 +89,11 @@ const internalLinePatterns = [
 const articleNumberPattern =
   "(?:\\d{3,9}|[A-Z]{1,4}\\d{3,9})(?:\\.[A-Z0-9]{1,8})?";
 const deliveryCostArticleNumber = "990010";
+const emailAddressPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const customerInstructionCuePattern =
-  /\b(?:het\s+liefst|graag|s\.?v\.?p\.?|opstelling|cr[eè]me\s+stippen|creme\s+stippen|bellen|contact|ceremoniemeester|afdeling|hoofdingang|receptie|ingang|route|voor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen|klaar))\b/i;
+  /\b(?:het\s+liefst|graag|s\.?v\.?p\.?|t\.?\s*a\.?\s*v\.?|tav|ter\s+attentie\s+van|opstelling|cr[eè]me\s+stippen|creme\s+stippen|bellen|contact|ceremoniemeester|afdeling|hoofdingang|receptie|ingang|route|voor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen|klaar))\b/i;
 const productResidueRemarkPattern =
-  /\b(?:taart|tartelette|gebak|bombe|slofje|slof|hazelino|hazelnootbol|bossche\s+bol|tompouce|appel\s+royale|lente\s+parel|steventje|nougatine|pistache|passievol|cheese\s+punt|cremetaart|slagroom|vulling|kleur|bezorgkosten)\b/i;
+  /\b(?:gesorteerd|glutenvrij|schuim|taart|tartelette|gebak|bombe|slofje|slof|hazelino|hazelnootbol|bossche\s+bol|tompouce|appel\s+royale|lente\s+parel|steventje|nougatine|pistache|passievol|cheese\s+punt|cremetaart|slagroom|vulling|kleur|bezorgkosten|betaalverzoek|mailen)\b/i;
 
 function normalizeTextLine(line: string) {
   const normalizedWhitespace = line.replace(/\u00a0/g, " ");
@@ -387,8 +388,14 @@ function isPhoneLine(line: string) {
   return /^0\d[\d\s-]{7,}$/.test(line);
 }
 
+function isEmailLine(line: string) {
+  return emailAddressPattern.test(line);
+}
+
 function isContactLine(line: string) {
-  return /^(?:mob\.?|mobiel|tel\.?|telefoon|phone)\b/i.test(line.trim());
+  const clean = line.trim();
+
+  return /^(?:mob\.?|mobiel|tel\.?|telefoon|phone)\b/i.test(clean) || isEmailLine(clean);
 }
 
 function lineWithoutLeadingReceiptQuantity(line: string) {
@@ -409,6 +416,7 @@ function isLikelyAddressOrContactLine(line: string) {
 
   return (
     isContactLine(clean) ||
+    isContactLine(withoutQuantity) ||
     isLikelyAddressLine(clean) ||
     (withoutQuantity !== clean && isLikelyAddressLine(withoutQuantity))
   );
@@ -809,6 +817,7 @@ function isAdministrativeRemarkLine(line: string) {
   const cleanLine = lineWithoutLeadingReceiptQuantity(line);
 
   return (
+    isEmailLine(cleanLine) ||
     /^betaald\b/i.test(cleanLine) ||
     /^betaalverzoek\b/i.test(cleanLine) ||
     /^niet betaald\b/i.test(cleanLine) ||
@@ -849,6 +858,7 @@ function trimRemarkToCustomerInstruction(value: string) {
   if (
     isProductResidueRemark(prefix) ||
     productResidueRemarkPattern.test(prefix) ||
+    emailAddressPattern.test(prefix) ||
     /\b(?:btw|totaalprijs|factuurkorting|bezorgkosten)\b/i.test(prefix) ||
     /(?:^|\s)€\s*[\d.,:]+/.test(prefix)
   ) {
@@ -860,6 +870,10 @@ function trimRemarkToCustomerInstruction(value: string) {
 
 function stripEmbeddedDeliveryNoise(value: string) {
   return value
+    .replace(
+      /\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s*[:;]\s*(?=\bt\.?\s*a\.?\s*v\.?\b|\btav\b|\bter\s+attentie\s+van\b)/gi,
+      " "
+    )
     .replace(
       /\b(?:bezorging|bezorgen|levering|leveren)\s+(?!tussen\b|voor\b|om\b|vanaf\b|kosten\b).*?(?=\bvoor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen)\b)/gi,
       " "
@@ -886,6 +900,7 @@ function cleanReceiptRemark(value: string) {
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
     .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, " ")
     .replace(/&euro;\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
     .replace(/€\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
     .replace(/(?:€\s*)?[\d.,:]+\s*€/g, " ")
@@ -935,6 +950,7 @@ function inferFulfillment(bodyLines: string[]): LogisticsFulfillment {
       deliveryAddressActionPattern.test(line) ||
       (/^adres\b\s*:?\s*/i.test(line) && deliveryAddressActionPattern.test(line)) ||
       isDeliveryCostDescription(line) ||
+      alternativeAddressStartPatterns.some((pattern) => pattern.test(line)) ||
       /^levering\s*[:;]\s*/i.test(line)
     )
   ) {
@@ -1784,7 +1800,12 @@ function inferTags(draft: ReceiptDraft) {
 function createReceipt(draft: ReceiptDraft, index: number): LogisticsReceipt {
   const cleanRemarks = draft.remarks
     .map(cleanReceiptRemark)
-    .filter((remark) => remark && !isAdministrativeRemarkLine(remark));
+    .filter(
+      (remark) =>
+        remark &&
+        !/^\d+(?:[.,]\d+)?$/.test(remark) &&
+        !isAdministrativeRemarkLine(remark)
+    );
   const originalAddress = draft.topAddress || "Adres controleren";
   const deliveryBlockAddress = draft.deliveryBlock.length
     ? draft.deliveryBlock.join(", ")

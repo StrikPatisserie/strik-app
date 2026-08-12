@@ -1543,9 +1543,9 @@ function cleanReceiptLineDescription(value: string) {
 }
 
 const customerInstructionCuePattern =
-  /\b(?:het\s+liefst|graag|s\.?v\.?p\.?|opstelling|cr[eè]me\s+stippen|creme\s+stippen|bellen|contact|ceremoniemeester|afdeling|hoofdingang|receptie|ingang|route|voor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen|klaar))\b/i;
+  /\b(?:het\s+liefst|graag|s\.?v\.?p\.?|t\.?\s*a\.?\s*v\.?|tav|ter\s+attentie\s+van|opstelling|cr[eè]me\s+stippen|creme\s+stippen|bellen|contact|ceremoniemeester|afdeling|hoofdingang|receptie|ingang|route|voor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen|klaar))\b/i;
 const productResidueRemarkPattern =
-  /\b(?:taart|tartelette|gebak|bombe|slofje|slof|hazelino|hazelnootbol|bossche\s+bol|tompouce|appel\s+royale|lente\s+parel|steventje|nougatine|pistache|passievol|cheese\s+punt|cremetaart|slagroom|vulling|kleur|bezorgkosten)\b/i;
+  /\b(?:gesorteerd|glutenvrij|schuim|taart|tartelette|gebak|bombe|slofje|slof|hazelino|hazelnootbol|bossche\s+bol|tompouce|appel\s+royale|lente\s+parel|steventje|nougatine|pistache|passievol|cheese\s+punt|cremetaart|slagroom|vulling|kleur|bezorgkosten|betaalverzoek|mailen)\b/i;
 
 function isProductResidueDisplayNote(value: string) {
   const clean = value.replace(/\s+/g, " ").trim();
@@ -1570,6 +1570,7 @@ function trimDisplayNoteToCustomerInstruction(value: string) {
   if (
     isProductResidueDisplayNote(prefix) ||
     productResidueRemarkPattern.test(prefix) ||
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(prefix) ||
     /\b(?:btw|totaalprijs|factuurkorting|bezorgkosten)\b/i.test(prefix) ||
     /(?:^|\s)€\s*[\d.,:]+/.test(prefix)
   ) {
@@ -1581,6 +1582,10 @@ function trimDisplayNoteToCustomerInstruction(value: string) {
 
 function stripEmbeddedDisplayDeliveryNoise(value: string) {
   return value
+    .replace(
+      /\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s*[:;]\s*(?=\bt\.?\s*a\.?\s*v\.?\b|\btav\b|\bter\s+attentie\s+van\b)/gi,
+      " "
+    )
     .replace(
       /\b(?:bezorging|bezorgen|levering|leveren)\s+(?!tussen\b|voor\b|om\b|vanaf\b|kosten\b).*?(?=\bvoor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen)\b)/gi,
       " "
@@ -8263,6 +8268,7 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
     .replace(/\btrial mode\b\s*[–-]?/gi, "")
     .replace(/click here for more information/gi, "")
     .replace(/betaald via\s+\[[^\]]+\]\.?/gi, "")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, " ")
     .replace(/&euro;\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
     .replace(/€\s*[\d.,:]+\s+met referentie\s+\S+/gi, "")
     .replace(/\b(?:niet\s+)?betaald\s*!+/gi, "")
