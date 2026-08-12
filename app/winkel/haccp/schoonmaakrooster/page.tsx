@@ -9,12 +9,18 @@ import WinkelWorkPlanChecklist from "../WinkelWorkPlanChecklist";
 import {
   getWinkelWorkPlansForPlan,
   isWinkelWorkPlanStoreId,
+  WINKEL_WORK_PLAN_STORE_LABELS,
   type WinkelWorkPlanStoreId,
 } from "../workPlans";
 
 export default async function PatisserieSchoonmaakroosterPage() {
   const profile = await requireCurrentProfile();
-  const allowedStoreIds = new Set(getAllowedWinkelStoreIds(profile));
+  const allowedStoreIdList = getAllowedWinkelStoreIds(profile);
+  const allowedStoreIds = new Set(allowedStoreIdList);
+  const storeOptions = allowedStoreIdList.map((storeId) => ({
+    id: storeId,
+    label: WINKEL_WORK_PLAN_STORE_LABELS[storeId],
+  }));
   const definitions = getWinkelWorkPlansForPlan("schoonmaakrooster").filter(
     (definition) => allowedStoreIds.has(definition.storeId)
   );
@@ -25,9 +31,9 @@ export default async function PatisserieSchoonmaakroosterPage() {
     ? rawProfileStore
     : null;
   const defaultStoreId: WinkelWorkPlanStoreId =
-    definitions.find((definition) => definition.storeId === profileStore)
-      ?.storeId ||
-    definitions[0]?.storeId ||
+    (profileStore && allowedStoreIds.has(profileStore)
+      ? profileStore
+      : definitions[0]?.storeId || storeOptions[0]?.id) ||
     "heyendaal";
 
   return (
@@ -38,10 +44,12 @@ export default async function PatisserieSchoonmaakroosterPage() {
         icon={strikIcons.cleaning}
       />
 
-      {definitions.length ? (
+      {storeOptions.length ? (
         <WinkelWorkPlanChecklist
           definitions={definitions}
           defaultStoreId={defaultStoreId}
+          emptyPlanLabel="schoonmaakrooster"
+          storeOptions={storeOptions}
         />
       ) : (
         <section className="border border-[#e8e4de] bg-white p-4 shadow-sm">

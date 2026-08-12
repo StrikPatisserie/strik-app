@@ -38,6 +38,11 @@ type SaveStatus = "idle" | "loading" | "saving" | "saved" | "error";
 type Props = {
   definitions: WinkelWorkPlanDefinition[];
   defaultStoreId: WinkelWorkPlanStoreId;
+  emptyPlanLabel?: string;
+  storeOptions?: {
+    id: WinkelWorkPlanStoreId;
+    label: string;
+  }[];
 };
 
 function formatDateInput(date: Date) {
@@ -49,6 +54,13 @@ function formatDateInput(date: Date) {
 
 function getToday() {
   return formatDateInput(new Date());
+}
+
+function getYesterday() {
+  const date = new Date();
+  date.setDate(date.getDate() - 1);
+
+  return formatDateInput(date);
 }
 
 function getTomorrow() {
@@ -125,6 +137,8 @@ function statusText(status: SaveStatus) {
 export default function WinkelWorkPlanChecklist({
   definitions,
   defaultStoreId,
+  emptyPlanLabel = "lijst",
+  storeOptions,
 }: Readonly<Props>) {
   const [storeId, setStoreId] = useState(defaultStoreId);
   const [date, setDate] = useState(getToday);
@@ -136,10 +150,11 @@ export default function WinkelWorkPlanChecklist({
   const noteLoadedRef = useRef(false);
 
   const currentDefinition =
-    definitions.find((definition) => definition.storeId === storeId) ||
-    definitions[0];
+    definitions.find((definition) => definition.storeId === storeId) || null;
 
   const availableStores = useMemo(() => {
+    if (storeOptions?.length) return storeOptions;
+
     const seen = new Set<string>();
 
     return definitions
@@ -153,7 +168,7 @@ export default function WinkelWorkPlanChecklist({
         id: definition.storeId,
         label: definition.storeLabel,
       }));
-  }, [definitions]);
+  }, [definitions, storeOptions]);
 
   const visibleSections = currentDefinition
     ? getVisibleSections(currentDefinition, date)
@@ -168,6 +183,7 @@ export default function WinkelWorkPlanChecklist({
     if (!currentDefinition) return;
 
     let ignoreResult = false;
+    const definition = currentDefinition;
 
     async function loadState() {
       setStatus("loading");
@@ -175,8 +191,8 @@ export default function WinkelWorkPlanChecklist({
       noteLoadedRef.current = false;
 
       const params = new URLSearchParams({
-        storeId: currentDefinition.storeId,
-        planId: currentDefinition.id,
+        storeId: definition.storeId,
+        planId: definition.id,
         periodKey,
       });
 
@@ -234,17 +250,9 @@ export default function WinkelWorkPlanChecklist({
     };
   }, []);
 
-  if (!currentDefinition) {
-    return (
-      <section className="border border-[#e8e4de] bg-white p-4 shadow-sm">
-        <p className="text-sm font-bold text-[#6b645b]">
-          Voor jouw winkel is deze lijst nog niet ingericht.
-        </p>
-      </section>
-    );
-  }
-
   async function saveChange(payload: { itemId?: string; checked?: boolean; note?: string }) {
+    if (!currentDefinition) return;
+
     const params = new URLSearchParams({
       storeId: currentDefinition.storeId,
       planId: currentDefinition.id,
@@ -284,6 +292,8 @@ export default function WinkelWorkPlanChecklist({
   }
 
   async function toggleItem(itemId: string) {
+    if (!currentDefinition) return;
+
     const previousChecks = checks;
     const nextChecked = !checkedMap[itemId];
     const now = new Date().toISOString();
@@ -315,6 +325,8 @@ export default function WinkelWorkPlanChecklist({
   }
 
   function saveNoteDebounced(nextNote: string) {
+    if (!currentDefinition) return;
+
     setNote(nextNote);
 
     if (!noteLoadedRef.current) return;
@@ -338,17 +350,24 @@ export default function WinkelWorkPlanChecklist({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
             <p className="text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
-              {currentDefinition.storeLabel} · {currentDefinition.cadenceLabel}
+              {currentDefinition
+                ? `${currentDefinition.storeLabel} · ${currentDefinition.cadenceLabel}`
+                : `${
+                    availableStores.find((store) => store.id === storeId)
+                      ?.label || storeId
+                  } · nog niet ingericht`}
             </p>
             <h2 className="mt-1 text-2xl font-black leading-tight text-[#1a1815]">
-              {currentDefinition.title}
+              {currentDefinition?.title || `Nog geen ${emptyPlanLabel}`}
             </h2>
             <p className="mt-1 text-sm font-semibold leading-snug text-[#6b645b]">
-              {formatReadableDate(date)} · {checkedCount}/{visibleItems.length} klaar
+              {currentDefinition
+                ? `${formatReadableDate(date)} · ${checkedCount}/${visibleItems.length} klaar`
+                : `Voor deze winkel is nog geen ${emptyPlanLabel} ingericht.`}
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr] lg:min-w-[34rem]">
+          <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr] lg:min-w-[40rem]">
             {availableStores.length > 1 && (
               <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
                 Winkel
@@ -369,6 +388,17 @@ export default function WinkelWorkPlanChecklist({
             )}
 
             <div className="flex items-end gap-1">
+              <button
+                type="button"
+                onClick={() => setDate(getYesterday())}
+                className={`h-10 border px-3 text-xs font-black uppercase ${
+                  date === getYesterday()
+                    ? "border-[#1a1815] bg-[#1a1815] text-white"
+                    : "border-[#d8d0c7] bg-white text-[#1a1815]"
+                }`}
+              >
+                Gister
+              </button>
               <button
                 type="button"
                 onClick={() => setDate(getToday())}
@@ -407,13 +437,15 @@ export default function WinkelWorkPlanChecklist({
 
         <div
           className={`mt-3 border px-3 py-2 text-xs font-black uppercase tracking-[0.08em] ${
-            allDone
+            !currentDefinition
+              ? "border-[#e8e4de] bg-[#faf8f5] text-[#8b8278]"
+              : allDone
               ? "border-[#c6dec0] bg-[#edf7ea] text-[#3f6b36]"
               : "border-[#e8e4de] bg-[#faf8f5] text-[#8b8278]"
           }`}
         >
-          {statusText(status)}
-          {errorMessage && (
+          {currentDefinition ? statusText(status) : `geen ${emptyPlanLabel}`}
+          {currentDefinition && errorMessage && (
             <span className="ml-2 normal-case tracking-normal text-[#a0382f]">
               {errorMessage}
             </span>
@@ -421,7 +453,16 @@ export default function WinkelWorkPlanChecklist({
         </div>
       </section>
 
-      {visibleSections.length ? (
+      {!currentDefinition ? (
+        <section className="border border-[#e8e4de] bg-white p-4 shadow-sm">
+          <p className="text-sm font-bold text-[#6b645b]">
+            Nog geen {emptyPlanLabel} voor{" "}
+            {availableStores.find((store) => store.id === storeId)?.label ||
+              storeId}
+            .
+          </p>
+        </section>
+      ) : visibleSections.length ? (
         <div className="grid gap-3">
           {visibleSections.map((section) => (
             <section
@@ -502,18 +543,20 @@ export default function WinkelWorkPlanChecklist({
         </section>
       )}
 
-      <section className="border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-        <label className="grid gap-1 text-sm font-black text-[#1a1815]">
-          Notitie voor collega&apos;s
-          <textarea
-            value={note}
-            onChange={(event) => saveNoteDebounced(event.target.value)}
-            rows={3}
-            placeholder="Bijzonderheden, schoonmaaktip of overdracht..."
-            className="min-h-24 rounded-lg border border-[#d8d0c7] bg-[#faf8f5] px-3 py-2 text-sm font-semibold text-[#1a1815] outline-none focus:ring-2 focus:ring-[#c3d3bc]"
-          />
-        </label>
-      </section>
+      {currentDefinition && (
+        <section className="border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
+          <label className="grid gap-1 text-sm font-black text-[#1a1815]">
+            Notitie voor collega&apos;s
+            <textarea
+              value={note}
+              onChange={(event) => saveNoteDebounced(event.target.value)}
+              rows={3}
+              placeholder="Bijzonderheden, schoonmaaktip of overdracht..."
+              className="min-h-24 rounded-lg border border-[#d8d0c7] bg-[#faf8f5] px-3 py-2 text-sm font-semibold text-[#1a1815] outline-none focus:ring-2 focus:ring-[#c3d3bc]"
+            />
+          </label>
+        </section>
+      )}
     </div>
   );
 }

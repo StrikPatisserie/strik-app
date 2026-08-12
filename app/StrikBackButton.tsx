@@ -14,7 +14,7 @@ const parentRoutes: Record<string, string> = {
   "/vierdaagse/kassa-tool": "/vierdaagse",
   "/vierdaagse/kassa": "/vierdaagse/kassa-tool",
   "/vierdaagse/productie-bediening": "/vierdaagse/kassa-tool",
-  "/winkel/schoonmaak-registratie": "/winkel",
+  "/winkel/schoonmaak-registratie": "/winkel/haccp",
   "/winkel/schoonmaak-registratie/overzicht": "/winkel/schoonmaak-registratie",
   "/schoonmaak": "/ijs",
   "/schoonmaak/overzicht": "/management",

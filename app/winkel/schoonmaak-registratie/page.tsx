@@ -52,6 +52,39 @@ function getVandaag() {
   return `${jaar}-${maand}-${dag}`;
 }
 
+function getDatumMetOffset(offsetDays: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getGisteren() {
+  return getDatumMetOffset(-1);
+}
+
+function getMorgen() {
+  return getDatumMetOffset(1);
+}
+
+function formatReadableDate(dateValue: string) {
+  const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return dateValue;
+
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3])
+  ).toLocaleDateString("nl-NL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
 function createTemperatureRowId(prefix: string, index: number) {
   const normalizedPrefix = prefix
     .toLowerCase()
@@ -1020,48 +1053,99 @@ export function TemperatureRegistrationPage({
           )}
         </div>
 
-        <section className="max-w-4xl rounded-[0.95rem] border border-[#c3d3bc] bg-[#dfead9] p-2.5 shadow-sm sm:p-3">
-          <div className="grid gap-2 lg:grid-cols-[1fr_10.5rem_11rem]">
-            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-              {allowedLocationOptions.map((winkel) => (
-                <button
-                  key={winkel.id}
-                  type="button"
-                  onClick={() => setWinkelId(winkel.id)}
-                  className={`rounded-lg border px-2 py-1.5 text-[0.68rem] font-black transition active:scale-[0.98] sm:text-xs ${
-                    winkelId === winkel.id
-                      ? "border-[#4a7658] bg-white text-[#30462f] shadow-sm"
-                      : "border-[#c3d3bc] bg-[#f6faf4] text-[#30462f]/70 hover:border-[#8fab86]"
-                  }`}
-                >
-                  {winkel.label}
-                </button>
-              ))}
+        <section className="border border-[#d8d0c7] bg-white p-3 shadow-sm sm:p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
+                {selectedWinkel.label} · HACCP
+              </p>
+              <h2 className="mt-1 text-2xl font-black leading-tight text-[#1a1815]">
+                Temperatuurregistratie
+              </h2>
+              <p className="mt-1 text-sm font-semibold leading-snug text-[#6b645b]">
+                {formatReadableDate(datum)} · {summaryStatus.toLowerCase()}
+              </p>
             </div>
 
-            <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#30462f]/55">
-              Dag
-              <input
-                type="date"
-                value={datum}
-                onChange={(event) => setDatum(event.target.value)}
-                className="rounded-lg border border-[#c3d3bc] bg-white px-2 py-1.5 text-xs font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#4a7658]"
-              />
-            </label>
-            <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#30462f]/55">
-              Naam
-              <input
-                value={form.naam}
-                onChange={(event) =>
-                  updateForm({ ...form, naam: event.target.value })
-                }
-                placeholder="Naam medewerker"
-                className="rounded-lg border border-[#c3d3bc] bg-white px-2 py-1.5 text-xs font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#4a7658]"
-              />
-            </label>
+            <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr_11rem] lg:min-w-[48rem]">
+              {allowedLocationOptions.length > 1 && (
+                <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
+                  Winkel
+                  <select
+                    value={winkelId}
+                    onChange={(event) => setWinkelId(event.target.value)}
+                    className="h-10 border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#1a1815]"
+                  >
+                    {allowedLocationOptions.map((winkel) => (
+                      <option key={winkel.id} value={winkel.id}>
+                        {winkel.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              <div className="flex items-end gap-1">
+                <button
+                  type="button"
+                  onClick={() => setDatum(getGisteren())}
+                  className={`h-10 border px-3 text-xs font-black uppercase ${
+                    datum === getGisteren()
+                      ? "border-[#1a1815] bg-[#1a1815] text-white"
+                      : "border-[#d8d0c7] bg-white text-[#1a1815]"
+                  }`}
+                >
+                  Gister
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDatum(getVandaag())}
+                  className={`h-10 border px-3 text-xs font-black uppercase ${
+                    datum === getVandaag()
+                      ? "border-[#1a1815] bg-[#1a1815] text-white"
+                      : "border-[#d8d0c7] bg-white text-[#1a1815]"
+                  }`}
+                >
+                  Vandaag
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDatum(getMorgen())}
+                  className={`h-10 border px-3 text-xs font-black uppercase ${
+                    datum === getMorgen()
+                      ? "border-[#1a1815] bg-[#1a1815] text-white"
+                      : "border-[#d8d0c7] bg-white text-[#1a1815]"
+                  }`}
+                >
+                  Morgen
+                </button>
+              </div>
+
+              <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
+                Eerder
+                <input
+                  type="date"
+                  value={datum}
+                  onChange={(event) => setDatum(event.target.value)}
+                  className="h-10 border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#1a1815]"
+                />
+              </label>
+
+              <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
+                Naam
+                <input
+                  value={form.naam}
+                  onChange={(event) =>
+                    updateForm({ ...form, naam: event.target.value })
+                  }
+                  placeholder="Naam medewerker"
+                  className="h-10 border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#1a1815]"
+                />
+              </label>
+            </div>
           </div>
 
-          <div className="mt-2 grid grid-cols-3 gap-1.5">
+          <div className="mt-3 grid gap-1.5 sm:grid-cols-3">
             {[
               {
                 id: "meetpunten",
@@ -1076,7 +1160,7 @@ export function TemperatureRegistrationPage({
             ].map((item) => (
               <div
                 key={item.id}
-                className="rounded-lg bg-[#f6faf4] px-2 py-1 text-[0.62rem] font-black text-[#30462f] sm:text-xs"
+                className="border border-[#e8e4de] bg-[#faf8f5] px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#8b8278]"
               >
                 {item.value}
               </div>
@@ -1084,11 +1168,11 @@ export function TemperatureRegistrationPage({
           </div>
         </section>
 
-        <section className="rounded-[0.95rem] border border-[#e7e0d8] bg-white/90 p-2.5 shadow-sm sm:p-3">
+        <section className="border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-base font-black text-[#1a1815] sm:text-lg">Meetpunten</h2>
-              <p className="text-[0.58rem] font-bold uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-xs">
+              <p className="text-[0.58rem] font-bold uppercase tracking-[0.08em] text-[#8b8278] sm:text-xs">
                 {selectedWinkel.label} · {datum}
               </p>
             </div>
@@ -1097,7 +1181,7 @@ export function TemperatureRegistrationPage({
                 <button
                   type="button"
                   onClick={addRegistrationRow}
-                  className="rounded-full bg-[#fff0ed] px-3 py-1.5 text-xs font-black text-[#a0382f] shadow-sm transition hover:bg-[#f9ded8]"
+                  className="border border-[#1a1815] bg-[#1a1815] px-3 py-1.5 text-xs font-black text-white transition hover:bg-[#3b352f]"
                 >
                   + Meetpunt
                 </button>
@@ -1145,7 +1229,7 @@ export function TemperatureRegistrationPage({
                   className={`grid grid-cols-[minmax(5.3rem,1fr)_3.55rem_3.9rem_3.9rem_3.7rem] items-end gap-1 rounded-[0.75rem] border p-1.5 transition sm:grid-cols-[minmax(8rem,1fr)_5.25rem_5.2rem_5.2rem_5rem_auto] sm:gap-2 sm:p-2 ${
                     isInactive
                       ? "border-dashed border-[#d8d0c7] bg-[#f3f0eb] opacity-55"
-                      : "border-[#e7e0d8] bg-[#f8f6f3]"
+                      : "border-[#e8e4de] bg-[#faf8f5]"
                   }`}
                 >
                   <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
