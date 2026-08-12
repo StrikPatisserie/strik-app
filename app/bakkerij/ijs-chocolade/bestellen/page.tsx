@@ -392,8 +392,6 @@ export default function HefeBestellenPage() {
   const [saveAsIngredient, setSaveAsIngredient] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
   const [customLines, setCustomLines] = useState<CustomOrderLine[]>([]);
-  const [mailMenuOpen, setMailMenuOpen] = useState(false);
-  const [copyStatus, setCopyStatus] = useState("");
   const [orderHistory, setOrderHistory] = useState<HefeOrderHistoryEntry[]>([]);
   const [historyStatus, setHistoryStatus] = useState("");
   const [editingItem, setEditingItem] = useState<EditableHefeOrderItem | null>(
@@ -684,62 +682,17 @@ export default function HefeBestellenPage() {
     }
   }
 
-  function openOrderInMailApp(kind: "default" | "gmail" | "outlook") {
+  function openOrderInMailApp() {
     if (!selectedCount) return;
 
     const { body, subject } = createOrderMailContent();
-    setMailMenuOpen(false);
-    setCopyStatus("");
     void saveOrderHistoryCopy(subject);
-
-    if (kind === "gmail") {
-      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
-        HEFE_ORDER_RECIPIENT
-      )}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-      window.open(url, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    if (kind === "outlook") {
-      const url = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(
-        HEFE_ORDER_RECIPIENT
-      )}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-      window.open(url, "_blank", "noopener,noreferrer");
-      return;
-    }
 
     const mailto = `mailto:${HEFE_ORDER_RECIPIENT}?subject=${encodeURIComponent(
       subject
     )}&body=${encodeURIComponent(body)}`;
 
     window.location.href = mailto;
-  }
-
-  async function copyOrderText() {
-    if (!selectedCount) return;
-
-    const { body, subject } = createOrderMailContent();
-    const text = `${subject}\n\nAan: ${HEFE_ORDER_RECIPIENT}\n\n${body}`;
-    setMailMenuOpen(false);
-    void saveOrderHistoryCopy(subject);
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopyStatus("Bestelling gekopieerd.");
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = text;
-      textarea.setAttribute("readonly", "true");
-      textarea.style.position = "fixed";
-      textarea.style.left = "-9999px";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setCopyStatus("Bestelling gekopieerd.");
-    }
   }
 
   return (
@@ -770,54 +723,16 @@ export default function HefeBestellenPage() {
           </select>
         </div>
 
-        <div className="relative">
+        <div>
           <button
             type="button"
-            onClick={() => setMailMenuOpen((current) => !current)}
+            onClick={openOrderInMailApp}
             disabled={!selectedCount}
             className="min-h-11 w-full border border-[#a8bf9e] bg-[#c3d3bc] px-5 text-sm font-black text-[#1a1815] shadow-sm disabled:cursor-not-allowed disabled:opacity-45 lg:w-auto"
-            aria-expanded={mailMenuOpen}
           >
-            Mail bestelling ({selectedCount}) v
+            Mail bestelling ({selectedCount})
           </button>
 
-          {mailMenuOpen && (
-            <div className="absolute right-0 z-20 mt-2 grid min-w-[15rem] overflow-hidden border border-[#d7ccb7] bg-white shadow-lg">
-              <button
-                type="button"
-                onClick={() => openOrderInMailApp("default")}
-                className="px-4 py-3 text-left text-sm font-black hover:bg-[#f6faf4]"
-              >
-                Standaard mail-app
-              </button>
-              <button
-                type="button"
-                onClick={() => openOrderInMailApp("gmail")}
-                className="px-4 py-3 text-left text-sm font-black hover:bg-[#f6faf4]"
-              >
-                Gmail
-              </button>
-              <button
-                type="button"
-                onClick={() => openOrderInMailApp("outlook")}
-                className="px-4 py-3 text-left text-sm font-black hover:bg-[#f6faf4]"
-              >
-                Outlook
-              </button>
-              <button
-                type="button"
-                onClick={copyOrderText}
-                className="border-t border-[#e7e0d8] px-4 py-3 text-left text-sm font-black text-[#4f744d] hover:bg-[#f6faf4]"
-              >
-                Kopieer tekst
-              </button>
-            </div>
-          )}
-          {copyStatus && (
-            <p className="mt-1 text-xs font-black text-[#4f744d]">
-              {copyStatus}
-            </p>
-          )}
           {historyStatus && (
             <p className="mt-1 text-xs font-black text-[#4f744d]">
               {historyStatus}
