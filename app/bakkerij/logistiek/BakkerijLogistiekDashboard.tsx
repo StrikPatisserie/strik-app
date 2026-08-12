@@ -881,13 +881,14 @@ function applyFixedCustomerDefaults(
     if (!fixedCustomer) return receipt;
 
     const hasBonTime = receiptHasBonDeliveryWindow(receipt);
-    const fixedNotes = [
+    const fixedDeliveryNote =
       !hasBonTime && fixedCustomer.deliveryWindow
         ? `Vaste levertijd ${fixedCustomer.deliveryWindow}`
-        : "",
-      fixedCustomer.routeNote ? `Vaste route: ${fixedCustomer.routeNote}` : "",
-    ].filter(Boolean);
-    const visibleFixedNote = fixedNotes.join(" · ");
+        : "";
+    const fixedRouteNote = fixedCustomer.routeNote
+      ? `Vaste route: ${fixedCustomer.routeNote}`
+      : "";
+    const fixedNotes = [fixedDeliveryNote, fixedRouteNote].filter(Boolean);
     const tags = receipt.tags.includes("vaste klant")
       ? receipt.tags
       : [...receipt.tags, "vaste klant"];
@@ -905,7 +906,6 @@ function applyFixedCustomerDefaults(
         ? fixedCustomer.address || receipt.deliveryAddress
         : receipt.deliveryAddress,
       tags,
-      customerNote: appendRouteNote(receipt.customerNote, visibleFixedNote),
       internalNote: fixedNotes.reduce(
         (note, fixedNote) => appendRouteNote(note, fixedNote),
         receipt.internalNote
@@ -4609,10 +4609,29 @@ function receiptStopBadges(receipt: ReceiptSummary) {
 }
 
 function receiptFixedRouteHint(receipt: ReceiptSummary) {
-  const match = receipt.customerNote.match(/Vaste route:\s*([^·]+)/i);
+  const match = [receipt.internalNote, receipt.customerNote]
+    .join(" · ")
+    .match(/Vaste route:\s*([^·]+)/i);
   if (!match) return "";
 
   return match[1].replace(/\s+/g, " ").trim().slice(0, 110);
+}
+
+function receiptInternalRouteNotes(receipt: ReceiptSummary) {
+  const source = [receipt.internalNote, receipt.customerNote]
+    .join(" · ")
+    .split(/\s+·\s+/)
+    .map((part) => part.replace(/^Regie:\s*/i, "").trim())
+    .filter((part) => /^Vaste\s+(?:route|levertijd)\s*:?/i.test(part));
+  const seen = new Set<string>();
+
+  return source.filter((part) => {
+    const key = normalizeMatchText(part);
+    if (!key || seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
 }
 
 function routeLearningKeyPart(value: string) {
@@ -9160,9 +9179,26 @@ function cleanReceiptDisplayNote(value: string, lines: ReceiptLine[] = []) {
   return cleaned;
 }
 
+function stripInternalRouteNotesFromDisplayNote(value: string) {
+  return value
+    .split(/\s+·\s+/)
+    .filter(
+      (part) => !/^\s*Vaste\s+(?:route|levertijd)\s*:?/i.test(part.trim())
+    )
+    .join(" · ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function visibleReceiptNotes(receipt: ReceiptSummary, lines: ReceiptLine[]) {
   return [receipt.customerNote]
-    .map((note) => (note ? cleanReceiptDisplayNote(note, lines) : ""))
+    .map((note) =>
+      note
+        ? stripInternalRouteNotesFromDisplayNote(
+            cleanReceiptDisplayNote(note, lines)
+          )
+        : ""
+    )
     .filter(
       (note) =>
         note &&
@@ -9550,6 +9586,7 @@ function ReceiptDetail({
     .map(normalizeKnownReceiptLine)
     .filter((line) => !shouldDropReceiptLine(line));
   const visibleNotes = visibleReceiptNotes(receipt, displayLines);
+  const internalRouteNotes = receiptInternalRouteNotes(receipt);
   const showManualPhotoUpload =
     receiptNeedsManualPhotoUpload(receipt) && imageMatches.length === 0;
 
@@ -9671,6 +9708,14 @@ function ReceiptDetail({
             </div>
           )}
           <ReceiptFulfillmentBlock receipt={receipt} />
+          {internalRouteNotes.length > 0 && (
+            <div className="mt-2 border border-dashed border-[#d7d1c8] bg-[#faf8f5] px-2 py-1.5 text-[0.62rem] font-bold leading-snug tracking-normal text-[#8a8178]">
+              <span className="mr-1 font-black uppercase text-[#6b645b]">
+                Route
+              </span>
+              {internalRouteNotes.join(" · ")}
+            </div>
+          )}
           <WebshopImageBlock
             images={imageMatches}
             onDelete={onDeleteWebshopImage}
