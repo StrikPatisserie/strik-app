@@ -711,8 +711,15 @@ function isUsableProductDescription(value: string) {
   return true;
 }
 
+function isStandaloneMarzipanLogoProduct(value: string) {
+  return /^logo\s+op\s+marsepein\b/i.test(value.trim());
+}
+
 function isProductOptionDescription(value: string) {
-  return productOptionKeywordRegex().test(value.trim());
+  const clean = value.trim();
+  if (isStandaloneMarzipanLogoProduct(clean)) return false;
+
+  return productOptionKeywordRegex().test(clean);
 }
 
 function isLikelyPhotoFileLine(value: string) {
