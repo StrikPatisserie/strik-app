@@ -468,6 +468,14 @@ const preparationRules: PreparationRule[] = [
   },
   {
     category: "bakkerij",
+    code: "508.201",
+    label: "Petit Fleur (p.s.)",
+    articleNumber: "508",
+    subcode: "201",
+    textPatterns: [/\bpetit\s+fleur\b/],
+  },
+  {
+    category: "bakkerij",
     code: "509.611",
     label: "Petit gateau Lemon Merengue",
     articleNumber: "509",
