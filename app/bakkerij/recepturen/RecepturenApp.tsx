@@ -424,29 +424,6 @@ function sameSupplierArticle(
   );
 }
 
-function mergeRecipeIngredientLines(lines: Recipe["ingredients"]) {
-  const mergedLines: Recipe["ingredients"] = [];
-
-  lines.forEach((line) => {
-    const existingLine = mergedLines.find(
-      (item) =>
-        item.ingredientId === line.ingredientId &&
-        item.unit === line.unit &&
-        (item.wastePercentage || 0) === (line.wastePercentage || 0)
-    );
-
-    if (existingLine) {
-      existingLine.quantity += line.quantity;
-      existingLine.costContribution += line.costContribution;
-      return;
-    }
-
-    mergedLines.push({ ...line });
-  });
-
-  return mergedLines;
-}
-
 function dateKey(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1407,12 +1384,10 @@ export default function RecepturenApp({
       .filter((ingredient) => ingredient.id !== source.id);
     const recipesWithMergedIngredient = recipeItems.map((recipe) => ({
       ...recipe,
-      ingredients: mergeRecipeIngredientLines(
-        recipe.ingredients.map((line) =>
-          line.ingredientId === source.id
-            ? { ...line, ingredientId: target.id }
-            : line
-        )
+      ingredients: recipe.ingredients.map((line) =>
+        line.ingredientId === source.id
+          ? { ...line, ingredientId: target.id }
+          : line
       ),
     }));
     const nextRecipes = recalculateAllRecipeCosts(
