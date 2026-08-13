@@ -152,7 +152,7 @@ export default function CompactAgendaPanel() {
   const weekEvents = expandEvents(events, weekStart);
 
   return (
-    <section className="min-w-0 rounded-[0.9rem] border border-[#d9d6d1] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.25rem] sm:p-4">
+    <section className="min-w-0 rounded-[0.9rem] border border-[#ded8cf] bg-white p-2 shadow-sm sm:rounded-[1.25rem] sm:p-4">
       <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1 sm:mb-3 sm:gap-3">
         <div>
           <h2 className="winkel-card-heading text-[#1a1815]">
@@ -167,7 +167,7 @@ export default function CompactAgendaPanel() {
             type="button"
             onClick={() => setWeekStart(addDays(weekStart, -7))}
             aria-label="Vorige week"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-[#f4f1ec] sm:h-9 sm:w-9 sm:text-4xl"
           >
             ‹
           </button>
@@ -175,14 +175,14 @@ export default function CompactAgendaPanel() {
             type="button"
             onClick={() => setWeekStart(addDays(weekStart, 7))}
             aria-label="Volgende week"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-[#f4f1ec] sm:h-9 sm:w-9 sm:text-4xl"
           >
             ›
           </button>
         </div>
       </div>
 
-      <div className="rounded-[0.75rem] bg-white/70 p-2 sm:rounded-[1rem] sm:p-4">
+      <div className="rounded-[0.75rem] border border-[#eee7df] bg-[#fffdfa] p-2 sm:rounded-[1rem] sm:p-4">
         {weekEvents.length ? (
           <div className="space-y-1.5 sm:space-y-3">
             {weekEvents.slice(0, 3).map((event) => (

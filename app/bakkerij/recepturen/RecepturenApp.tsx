@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { strikIcons } from "../../StrikUI";
 import { canAccessWeddingCakes } from "../../lib/auth/access";
@@ -22,6 +23,13 @@ import RecipeDataImport, { type ImportKind } from "./RecipeDataImport";
 import RecipesList from "./RecipesList";
 import RecepturenDashboard from "./RecepturenDashboard";
 import RecepturenWorkMode from "./RecepturenWorkMode";
+import {
+  type TeamAgendaEvent,
+  getEventSourceLabel,
+  getEventTypeLabel,
+  getTeamAgendaUrl,
+  normalizeTeamAgenda,
+} from "../../strik-agenda/teamAgendaApi";
 import { CakeVisualizer } from "../../bruidstaart-studio/BruidstaartStudioConfigurator";
 import { cakeSizes } from "../../bruidstaart-studio/data";
 import {
@@ -109,17 +117,9 @@ type RecepturenAppProps = {
   profile?: UserProfile | null;
 };
 
-type PersonnelDashboardEvent = {
-  id: string;
-  type: "birthday" | "anniversary";
-  employeeName: string;
-  title: string;
-  occurrenceDate: string;
-  daysUntil: number;
-  years?: number;
+type BakeryDisplayAgendaEvent = TeamAgendaEvent & {
+  displayDate: Date;
 };
-
-const importantDashboardJubileeYears = [5, 10, 12.5, 25, 40, 50] as const;
 
 function mainTabForPath(pathname: string): MainTabId {
   if (pathname.startsWith("/bakkerij/management")) return "beheer";
@@ -478,45 +478,67 @@ function formatBakeryDate(value?: string, fallback = "geen datum") {
   }).format(date);
 }
 
-function formatShortBakeryDate(value?: string) {
-  if (!value) return "";
-
+function parseBakeryAgendaDate(value: string) {
   const date = dateFromKey(value);
-  if (Number.isNaN(date.getTime())) return value;
+  date.setHours(0, 0, 0, 0);
 
-  return new Intl.DateTimeFormat("nl-NL", {
-    day: "numeric",
-    month: "long",
-  }).format(date);
+  return date;
 }
 
-function eventDaysLabel(daysUntil: number) {
-  if (daysUntil === 0) return "vandaag";
-  if (daysUntil === 1) return "morgen";
+function weekNumberForDate(value: string) {
+  const date = dateFromKey(value);
+  const firstThursday = new Date(date.getFullYear(), 0, 4);
+  const day = firstThursday.getDay() || 7;
+  firstThursday.setDate(firstThursday.getDate() - day + 1);
 
-  return `over ${daysUntil} dagen`;
+  return Math.ceil(
+    ((date.getTime() - firstThursday.getTime()) / 86400000 + 1) / 7
+  );
 }
 
-function formatPersonnelYears(years: number) {
-  return Number.isInteger(years) ? String(years) : String(years).replace(".", ",");
+function formatBakeryAgendaDay(value: string) {
+  const date = dateFromKey(value);
+  const label = new Intl.DateTimeFormat("nl-NL", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+  })
+    .format(date)
+    .replace(".", "");
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-function isImportantDashboardJubilee(years: number | undefined) {
-  return typeof years === "number"
-    ? importantDashboardJubileeYears.some(
-        (importantYear) => Math.abs(importantYear - years) < 0.01
-      )
-    : false;
-}
+function expandBakeryAgendaEvents(
+  events: TeamAgendaEvent[],
+  weekStart: string
+) {
+  const start = dateFromKey(weekStart);
+  const end = dateFromKey(addDays(weekStart, 6));
+  const years = [
+    start.getFullYear() - 1,
+    start.getFullYear(),
+    start.getFullYear() + 1,
+  ];
 
-function personnelDashboardEventText(event: PersonnelDashboardEvent) {
-  if (event.type === "anniversary") {
-    return `${event.employeeName} ${
-      event.years ? `${formatPersonnelYears(event.years)} jaar` : "jubileum"
-    }`;
-  }
+  return events
+    .flatMap((event): BakeryDisplayAgendaEvent[] => {
+      if (!event.recurringYearly) {
+        return [{ ...event, displayDate: parseBakeryAgendaDate(event.date) }];
+      }
 
-  return `${event.employeeName} jarig`;
+      const baseDate = parseBakeryAgendaDate(event.date);
+
+      return years.map((year) => ({
+        ...event,
+        displayDate: new Date(year, baseDate.getMonth(), baseDate.getDate()),
+      }));
+    })
+    .filter((event) => event.displayDate >= start && event.displayDate <= end)
+    .sort(
+      (first, second) =>
+        first.displayDate.getTime() - second.displayDate.getTime()
+    );
 }
 
 function getWeddingCakeDeliveryDate(draft: WeddingCakeDraft) {
@@ -2399,8 +2421,8 @@ function BakkerijStartScreen({
           </header>
         )}
 
-        <section className="min-w-0">
-          <div className="flex h-[34rem] flex-col sm:h-[38rem]">
+        <section className="min-w-0 rounded-[1.25rem] border border-[#ded8cf] bg-white p-3 shadow-sm sm:p-4">
+          <div className="flex h-[33rem] flex-col sm:h-[37rem]">
             <div className="mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
               <div className="min-w-0">
                 <h2 className="winkel-card-heading text-[clamp(1.2rem,3.2vw,1.9rem)]">
@@ -2412,11 +2434,11 @@ function BakkerijStartScreen({
               </p>
             </div>
 
-            <div className="relative min-h-0 flex-1 overflow-hidden border border-[#b9d1ae] bg-[#eef6ea] p-3">
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-[0.75rem] border border-[#b9ad9f] bg-white p-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7)]">
               <button
                 type="button"
                 onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
-                className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-2xl font-black leading-none text-[#111111] shadow-sm"
+                className="absolute left-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-2xl font-black leading-none text-[#111111] shadow-sm ring-1 ring-[#ded8cf]"
                 aria-label="Vorige week"
               >
                 ‹
@@ -2424,7 +2446,7 @@ function BakkerijStartScreen({
               <button
                 type="button"
                 onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
-                className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 text-2xl font-black leading-none text-[#111111] shadow-sm"
+                className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-2xl font-black leading-none text-[#111111] shadow-sm ring-1 ring-[#ded8cf]"
                 aria-label="Volgende week"
               >
                 ›
@@ -2447,8 +2469,8 @@ function BakkerijStartScreen({
           </div>
         </section>
 
-        <div className="grid h-[34rem] min-w-0 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-4 sm:h-[38rem]">
-          <section className="flex min-h-0 flex-col">
+        <div className="grid h-[33rem] min-w-0 grid-rows-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4 sm:h-[37rem]">
+          <section className="flex min-h-0 flex-col rounded-[1.25rem] border border-[#ded8cf] bg-white p-3 shadow-sm sm:p-4">
             <div className="mb-1 flex items-end justify-between gap-3">
               <h2 className="winkel-card-heading text-[clamp(1.2rem,3.2vw,1.9rem)]">
                 notities
@@ -2463,7 +2485,7 @@ function BakkerijStartScreen({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-[1.65rem] bg-[#e8e0d9] p-3">
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-[0.9rem] border border-[#eee7df] bg-[#fffdfa] p-2">
               <div className="grid gap-2">
                 {home.notes.map((note) => (
                   <label key={note.id} className="relative block">
@@ -2476,7 +2498,7 @@ function BakkerijStartScreen({
                         onSaveNote(note.id, event.currentTarget.value)
                       }
                       placeholder="Schrijf notitie..."
-                      className="min-h-[4.3rem] w-full resize-none rounded-[1rem] border border-transparent bg-white/85 px-3 py-2.5 text-sm font-semibold leading-snug text-[#2d2a26] outline-none placeholder:text-[#8d8881] focus:border-[#9bc79c]"
+                      className="min-h-[4.3rem] w-full resize-none rounded-[0.75rem] border border-[#e7e0d8] bg-white px-3 py-2.5 text-sm font-semibold leading-snug text-[#2d2a26] outline-none placeholder:text-[#8d8881] focus:border-[#9bc79c]"
                     />
                     <button
                       type="button"
@@ -2492,7 +2514,7 @@ function BakkerijStartScreen({
                   <button
                     type="button"
                     onClick={onAddNote}
-                    className="min-h-[8rem] rounded-[1rem] bg-white/85 px-3 py-2.5 text-left text-sm font-semibold text-[#8d8881]"
+                    className="min-h-[8rem] rounded-[0.75rem] border border-dashed border-[#d9d2c9] bg-white px-3 py-2.5 text-left text-sm font-semibold text-[#8d8881]"
                   >
                     Schrijf notitie...
                   </button>
@@ -2504,87 +2526,69 @@ function BakkerijStartScreen({
             </div>
           </section>
 
-          <PersonnelMilestonesPanel />
+          <BakkerijTeamAgendaPanel />
         </div>
 
-        {showProductionLinks && (
-          <BakkerijWeddingCakeAgendaPanel
-            canOpenWeddingCakeAgenda={canOpenWeddingCakeAgenda}
-          />
-        )}
+        <BakkerijWeddingCakeAgendaPanel
+          canOpenWeddingCakeAgenda={canOpenWeddingCakeAgenda}
+          compact={!showProductionLinks}
+        />
       </div>
     </section>
   );
 }
 
-function PersonnelMilestonesPanel() {
-  const [events, setEvents] = useState<PersonnelDashboardEvent[]>([]);
+function BakkerijTeamAgendaPanel() {
+  const [weekStart, setWeekStart] = useState(weekStartForDate);
+  const [events, setEvents] = useState<TeamAgendaEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState("");
-  const [todayKey, setTodayKey] = useState(() => dateKey(new Date()));
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setTodayKey(dateKey(new Date()));
-    }, 60 * 1000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, []);
+  const [status, setStatus] = useState("Agenda laden...");
 
   useEffect(() => {
     let ignoreResult = false;
 
     async function loadEvents() {
       setIsLoading(true);
-      setStatus("");
+      setStatus("Agenda laden...");
 
       try {
-        const response = await fetch("/api/tamigo-employees?view=shop", {
-          cache: "no-store",
-        });
+        const [wordpressResult, tamigoResult, driveResult] =
+          await Promise.allSettled([
+            fetch(getTeamAgendaUrl(), { cache: "no-store" }),
+            fetch("/api/tamigo-employees?view=shop", { cache: "no-store" }),
+            fetch("/api/personnel-sheet-agenda?view=shop", { cache: "no-store" }),
+          ]);
 
-        if (!response.ok) {
-          throw new Error(`Tamigo gaf status ${response.status}.`);
+        if (ignoreResult) return;
+
+        const loadedEvents: TeamAgendaEvent[] = [];
+
+        if (wordpressResult.status === "fulfilled" && wordpressResult.value.ok) {
+          loadedEvents.push(
+            ...normalizeTeamAgenda(await wordpressResult.value.json()).events.filter(
+              (event) => event.source !== "tamigo"
+            )
+          );
         }
 
-        const data = (await response.json()) as {
-          personnelEvents?: PersonnelDashboardEvent[];
-        };
-        if (ignoreResult) return;
+        if (tamigoResult.status === "fulfilled" && tamigoResult.value.ok) {
+          loadedEvents.push(
+            ...normalizeTeamAgenda(await tamigoResult.value.json()).events
+          );
+        }
 
-        const upcomingEvents = (data.personnelEvents || [])
-          .filter((event) => {
-            const isUpcoming =
-              Number.isFinite(event.daysUntil) &&
-              event.daysUntil >= 0 &&
-              event.daysUntil <= 14;
-            const isShownType =
-              event.type === "birthday" ||
-              (event.type === "anniversary" &&
-                isImportantDashboardJubilee(event.years));
+        if (driveResult.status === "fulfilled" && driveResult.value.ok) {
+          loadedEvents.push(
+            ...normalizeTeamAgenda(await driveResult.value.json()).events
+          );
+        }
 
-            return isUpcoming && isShownType;
-          })
-          .sort((first, second) => {
-            const dateDiff = first.occurrenceDate.localeCompare(
-              second.occurrenceDate
-            );
-            if (dateDiff !== 0) return dateDiff;
-
-            return first.employeeName.localeCompare(second.employeeName);
-          });
-
-        setEvents(upcomingEvents);
-      } catch (error) {
+        setEvents(loadedEvents);
+        setStatus(loadedEvents.length ? "" : "Geen agenda-items gevonden.");
+      } catch {
         if (ignoreResult) return;
         setEvents([]);
-        setStatus(
-          error instanceof Error
-            ? `Agenda niet beschikbaar. ${error.message}`
-            : "Agenda niet beschikbaar."
-        );
+        setStatus("Agenda niet beschikbaar.");
       } finally {
         if (!ignoreResult) setIsLoading(false);
       }
@@ -2595,41 +2599,83 @@ function PersonnelMilestonesPanel() {
     return () => {
       ignoreResult = true;
     };
-  }, [todayKey]);
+  }, []);
+
+  const weekEvents = expandBakeryAgendaEvents(events, weekStart);
+  const groupedEvents = weekDatesFor(weekStart).map((date) => ({
+    date,
+    events: weekEvents.filter((event) => dateKey(event.displayDate) === date),
+  }));
 
   return (
-    <section className="flex min-h-0 flex-col">
+    <section className="flex min-h-0 flex-col rounded-[1.25rem] border border-[#ded8cf] bg-white p-3 shadow-sm sm:p-4">
       <div className="mb-1 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
-        <h2 className="winkel-card-heading text-[clamp(1.2rem,3.2vw,1.9rem)]">
-          agenda
-        </h2>
-        <p className="pb-1 text-right text-[0.72rem] font-semibold italic leading-tight text-[#2d2a26] sm:text-sm">
-          vandaag: {formatShortBakeryDate(todayKey)}
-        </p>
+        <div className="min-w-0">
+          <h2 className="winkel-card-heading text-[clamp(1.2rem,3.2vw,1.9rem)]">
+            agenda
+          </h2>
+          <p className="mt-0.5 text-xs font-bold italic text-[#2d2a26]/55">
+            week {weekNumberForDate(weekStart)}
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setWeekStart(addDays(weekStart, -7))}
+            aria-label="Vorige week"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-3xl font-light leading-none text-[#111111] hover:bg-[#f4f1ec]"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekStart(addDays(weekStart, 7))}
+            aria-label="Volgende week"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-3xl font-light leading-none text-[#111111] hover:bg-[#f4f1ec]"
+          >
+            ›
+          </button>
+        </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto rounded-[1.65rem] bg-[#e8e0d9] px-5 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-[0.9rem] border border-[#eee7df] bg-[#fffdfa] p-2">
         {isLoading ? (
-          <p className="text-sm font-bold italic text-[#2d2a26]/45">
+          <p className="px-2 py-4 text-sm font-bold italic text-[#2d2a26]/45">
             Agenda laden...
           </p>
-        ) : events.length ? (
-          <ul className="grid gap-2 text-[clamp(0.92rem,1.9vw,1.25rem)] font-semibold italic leading-snug text-[#111111]">
-            {events.map((event) => (
-              <li key={event.id} className="grid gap-0.5">
-                <span>
-                  {formatShortBakeryDate(event.occurrenceDate)}:{" "}
-                  {personnelDashboardEventText(event)}
-                </span>
-                <span className="text-xs font-bold not-italic text-[#2d2a26]/45">
-                  {eventDaysLabel(event.daysUntil)}
-                </span>
-              </li>
+        ) : weekEvents.length ? (
+          <div className="grid gap-1.5">
+            {groupedEvents.map((group) => (
+              <div
+                key={group.date}
+                className="grid grid-cols-[4.7rem_minmax(0,1fr)] gap-2 border-b border-[#eee7df] pb-1.5 last:border-b-0"
+              >
+                <p className="pt-1 text-[0.66rem] font-black uppercase leading-tight text-[#8d877f]">
+                  {formatBakeryAgendaDay(group.date)}
+                </p>
+                <div className="grid gap-1">
+                  {group.events.map((event) => (
+                    <Link
+                      key={`${event.id}-${dateKey(event.displayDate)}`}
+                      href="/strik-agenda"
+                      className="rounded-[0.7rem] bg-white px-2.5 py-2 text-left ring-1 ring-[#eee7df] transition hover:bg-[#fff4ee]"
+                    >
+                      <span className="block text-sm font-black leading-tight text-[#ef5737]">
+                        {event.title}
+                      </span>
+                      <span className="mt-0.5 block text-[0.62rem] font-bold leading-tight text-[#8d877f]">
+                        {getEventTypeLabel(event.type)} -{" "}
+                        {getEventSourceLabel(event)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         ) : (
-          <p className="text-sm font-bold italic text-[#2d2a26]/45">
-            {status || "Geen verjaardagen of grote jubilea."}
+          <p className="px-2 py-4 text-sm font-bold italic text-[#2d2a26]/45">
+            {status || "Geen agenda-items deze week."}
           </p>
         )}
       </div>
@@ -2639,8 +2685,10 @@ function PersonnelMilestonesPanel() {
 
 function BakkerijWeddingCakeAgendaPanel({
   canOpenWeddingCakeAgenda,
+  compact = false,
 }: Readonly<{
   canOpenWeddingCakeAgenda: boolean;
+  compact?: boolean;
 }>) {
   const [isOpen, setIsOpen] = useState(false);
   const [weekStart, setWeekStart] = useState(weekStartForDate);
@@ -2724,7 +2772,11 @@ function BakkerijWeddingCakeAgendaPanel({
   }));
 
   return (
-    <section className="mt-5 overflow-hidden rounded-[1.65rem] border border-[#c9dcc1] bg-[#f3f8f1] shadow-sm lg:col-span-2">
+    <section
+      className={`overflow-hidden rounded-[1.25rem] border border-[#ded8cf] bg-white shadow-sm ${
+        compact ? "lg:col-span-2" : "mt-5 lg:col-span-2"
+      }`}
+    >
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
@@ -2732,7 +2784,7 @@ function BakkerijWeddingCakeAgendaPanel({
         aria-expanded={isOpen}
       >
         <span className="flex min-w-0 items-center gap-3">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f6faf4] shadow-sm sm:h-12 sm:w-12">
             <img
               src={strikIcons.bruidstaart}
               alt=""
@@ -2740,10 +2792,10 @@ function BakkerijWeddingCakeAgendaPanel({
             />
           </span>
           <span className="min-w-0">
-            <span className="block text-[0.78rem] font-black uppercase tracking-[0.15em] text-[#30462f]/60">
+            <span className="block text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#30462f]/55 sm:text-[0.78rem]">
               bruidstaarten
             </span>
-            <span className="block text-[clamp(1.2rem,2.5vw,1.75rem)] font-black leading-tight text-[#111111]">
+            <span className="block text-[clamp(1.05rem,2.2vw,1.55rem)] font-black leading-tight text-[#111111]">
               Bruidstaart agenda
             </span>
             <span className="mt-0.5 block text-xs font-bold italic text-[#30462f]/60">
@@ -2757,18 +2809,18 @@ function BakkerijWeddingCakeAgendaPanel({
       </button>
 
       {isOpen && (
-        <div className="border-t border-[#d6e5d8] bg-[#f8fbf6] px-3 py-3 sm:px-4 sm:py-4">
+        <div className="border-t border-[#eee7df] bg-[#fffdfa] px-3 py-3 sm:px-4 sm:py-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-bold text-[#30462f]/55">
                 {isLoading ? "Laden..." : status}
               </p>
             </div>
-            <div className="flex overflow-hidden rounded-full border border-[#bdd2b6] bg-white shadow-sm">
+            <div className="flex overflow-hidden rounded-full border border-[#d9d2c9] bg-white shadow-sm">
               <button
                 type="button"
                 onClick={() => setWeekStart(addDays(weekStart, -7))}
-                className="flex h-9 w-10 items-center justify-center border-r border-[#d6e5d8] text-[#30462f]"
+                className="flex h-9 w-10 items-center justify-center border-r border-[#eee7df] text-[#30462f]"
                 aria-label="Vorige week bruidstaarten"
               >
                 <ChevronIcon direction="left" />
@@ -2783,7 +2835,7 @@ function BakkerijWeddingCakeAgendaPanel({
               <button
                 type="button"
                 onClick={() => setWeekStart(addDays(weekStart, 7))}
-                className="flex h-9 w-10 items-center justify-center border-l border-[#d6e5d8] text-[#30462f]"
+                className="flex h-9 w-10 items-center justify-center border-l border-[#eee7df] text-[#30462f]"
                 aria-label="Volgende week bruidstaarten"
               >
                 <ChevronIcon direction="right" />
@@ -2792,12 +2844,12 @@ function BakkerijWeddingCakeAgendaPanel({
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)]">
-            <div className="rounded-[1.25rem] bg-white/75 p-3 shadow-sm">
+            <div className="rounded-[1rem] border border-[#eee7df] bg-white p-3">
               <div className="grid gap-2 md:grid-cols-7">
                 {groupedDrafts.map((group) => (
                   <div
                     key={group.date}
-                    className="min-h-[8.5rem] rounded-[1rem] bg-[#faf8f5] p-3 ring-1 ring-[#d6e5d8]"
+                    className="min-h-[8.5rem] rounded-[0.85rem] bg-[#faf8f5] p-3 ring-1 ring-[#eee7df]"
                   >
                     <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#30462f]/45">
                       {formatBakeryDate(group.date).split(" ")[0]}
@@ -2849,7 +2901,7 @@ function BakkerijWeddingCakeAgendaPanel({
               </div>
             </div>
 
-            <div className="min-w-0 rounded-[1.25rem] bg-white/85 p-4 shadow-sm">
+            <div className="min-w-0 rounded-[1rem] border border-[#eee7df] bg-white p-4">
               {selectedDraft ? (
                 <BakkerijWeddingCakeDetail draft={selectedDraft} />
               ) : (

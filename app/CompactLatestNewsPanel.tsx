@@ -70,7 +70,7 @@ export default function CompactLatestNewsPanel() {
   return (
     <Link
       href="/nieuws"
-      className="group flex min-w-0 flex-col rounded-[0.9rem] border border-[#d9d6d1] bg-[#e8e8e6] p-2 shadow-sm transition hover:shadow-md sm:rounded-[1.25rem] sm:p-3"
+      className="group flex min-w-0 flex-col rounded-[0.9rem] border border-[#ded8cf] bg-white p-2 shadow-sm transition hover:shadow-md sm:rounded-[1.25rem] sm:p-3"
     >
       <div className="mb-1.5 flex items-start justify-between gap-2 sm:mb-2">
         <div>
@@ -81,13 +81,13 @@ export default function CompactLatestNewsPanel() {
             {latestPost ? formatDate(latestPost.date) : "actueel"}
           </p>
         </div>
-        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/75 sm:h-9 sm:w-9">
+        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#f6faf4] sm:h-9 sm:w-9">
           <img src={strikIcons.news} alt="" className="h-4 w-4 object-contain sm:h-5 sm:w-5" />
           <NewsUnreadBadge className="-right-1 -top-1" />
         </span>
       </div>
 
-      <div className="flex min-h-[8.5rem] flex-1 flex-col justify-between rounded-[0.75rem] bg-white/70 p-2 sm:min-h-[11rem] sm:rounded-[1rem] sm:p-3">
+      <div className="flex min-h-[8.5rem] flex-1 flex-col justify-between rounded-[0.75rem] border border-[#eee7df] bg-[#fffdfa] p-2 sm:min-h-[11rem] sm:rounded-[1rem] sm:p-3">
         {latestPost ? (
           <>
             <div>

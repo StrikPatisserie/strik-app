@@ -109,7 +109,7 @@ export default function WeeklyOfferPanel() {
   }, []);
 
   return (
-    <section className="min-w-0 rounded-[0.9rem] border border-[#d9d6d1] bg-[#e8e8e6] p-2 shadow-sm sm:rounded-[1.25rem] sm:p-3">
+    <section className="min-w-0 rounded-[0.9rem] border border-[#ded8cf] bg-white p-2 shadow-sm sm:rounded-[1.25rem] sm:p-3">
       <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1 sm:mb-2 sm:gap-2">
         <div>
           <h2 className="winkel-card-heading text-[#1a1815]">
@@ -127,7 +127,7 @@ export default function WeeklyOfferPanel() {
             type="button"
             onClick={() => setSelectedWeek(addDays(selectedWeek, -7))}
             aria-label="Vorige week"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-[#f4f1ec] sm:h-9 sm:w-9 sm:text-4xl"
           >
             ‹
           </button>
@@ -135,14 +135,14 @@ export default function WeeklyOfferPanel() {
             type="button"
             onClick={() => setSelectedWeek(addDays(selectedWeek, 7))}
             aria-label="Volgende week"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-white/75 sm:h-9 sm:w-9 sm:text-4xl"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-2xl font-light leading-none hover:bg-[#f4f1ec] sm:h-9 sm:w-9 sm:text-4xl"
           >
             ›
           </button>
         </div>
       </div>
 
-      <div className="mx-auto flex aspect-[210/297] w-full max-w-[11rem] items-center justify-center overflow-hidden rounded-[0.75rem] border border-[#b9d1ae] bg-[#eef6ea] p-1 sm:max-w-[17rem] sm:rounded-[1rem] sm:p-2 lg:max-w-[18rem]">
+      <div className="mx-auto flex aspect-[210/297] w-full max-w-[11rem] items-center justify-center overflow-hidden rounded-[0.5rem] border border-[#b9ad9f] bg-white p-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7)] sm:max-w-[17rem] sm:rounded-[0.65rem] sm:p-2 lg:max-w-[18rem]">
         {offer?.imageUrl ? (
           <img
             src={offer.imageUrl}
