@@ -17,7 +17,6 @@ import {
 } from "@/app/management/revenueData";
 
 type LoadState = "loading" | "ready" | "error" | "saving";
-type CashMenuKind = "patisserie" | "ice";
 
 type RevenueResponse = RevenueData & {
   storage?: {
@@ -265,58 +264,10 @@ function receiptAmount(record: RevenueCashRecord) {
   return record.receipts;
 }
 
-function iceCashAmount(record: RevenueCashRecord | undefined) {
-  return record?.iceCash ?? iceExpectedCash(record);
-}
-
-function iceExpectedCash(record: RevenueCashRecord | undefined) {
-  if (!record) return 0;
-  if (record.iceExpectedCash !== undefined) return record.iceExpectedCash;
-  if (
-    record.iceStartCash !== undefined &&
-    record.iceCountedCash !== undefined
-  ) {
-    return Math.max(
-      0,
-      Number((record.iceCountedCash - record.iceStartCash).toFixed(2))
-    );
-  }
-
-  return record.iceCash ?? 0;
-}
-
-function iceCountedCash(record: RevenueCashRecord | undefined) {
-  if (!record) return undefined;
-  if (record.iceCountedCash !== undefined) return record.iceCountedCash;
-  if (record.iceStartCash !== undefined) {
-    return Number((record.iceStartCash + iceExpectedCash(record)).toFixed(2));
-  }
-
-  return undefined;
-}
-
-function hasIceCashRecord(record: RevenueCashRecord | undefined) {
-  return Boolean(
-    record &&
-      (record.cashImportKind === "ice" ||
-        record.iceCash !== undefined ||
-        record.iceStartCash !== undefined ||
-        record.iceCountedCash !== undefined ||
-        record.iceExpectedCash !== undefined)
-  );
-}
-
-function hasPatisserieCashRecord(record: RevenueCashRecord | undefined) {
+function hasPatisserieCashRecord(
+  record: RevenueCashRecord | undefined
+): record is RevenueCashRecord {
   return Boolean(record && record.cashImportKind !== "ice");
-}
-
-function iceCashWarning(record: RevenueCashRecord | undefined) {
-  if (!hasIceCashRecord(record)) return "Geen ijs dagrapport ontvangen.";
-  if (record?.iceDifference !== undefined && Math.abs(record.iceDifference) > 5) {
-    return "Kasverschil in het ijsrapport is groter dan EUR 5.";
-  }
-
-  return "";
 }
 
 function checkedCashNoteCount(record: RevenueCashRecord, key: CashDenominationKey) {
@@ -452,15 +403,12 @@ function cashWarning(record: RevenueCashRecord | undefined) {
 export default function CashCountManager() {
   const [selectedDate, setSelectedDate] = useState(localIsoDate());
   const [selectedShop, setSelectedShop] = useState<RevenueShop>(revenueShops[0]);
-  const [selectedCashMenuKind, setSelectedCashMenuKind] =
-    useState<CashMenuKind>("patisserie");
   const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
   const [cashRecords, setCashRecords] = useState<RevenueCashRecord[]>([]);
   const [cashDeposits, setCashDeposits] = useState<RevenueCashDeposit[]>([]);
   const [safeCashDrafts, setSafeCashDrafts] = useState<Record<string, string>>({});
   const [cashNoteDrafts, setCashNoteDrafts] = useState<Record<string, string>>({});
-  const [iceCashDrafts, setIceCashDrafts] = useState<Record<string, string>>({});
   const [depositDrafts, setDepositDrafts] = useState<Record<string, string>>({});
   const [depositNotes, setDepositNotes] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
@@ -548,30 +496,14 @@ export default function CashCountManager() {
 
             return (
               isCashExpectedForShopDate(shop, date) ||
-              hasPatisserieCashRecord(record) ||
-              hasIceCashRecord(record)
-            );
-          }
-        );
-        const expectedPatisserieDates = selectedWeekDates.filter(
-          (date) => {
-            const record = findCashRecord(shopRecords, date, shop);
-
-            return (
-              isCashExpectedForShopDate(shop, date) ||
               hasPatisserieCashRecord(record)
             );
           }
         );
-        const checkedRecords = expectedPatisserieDates.flatMap((date) => {
+        const checkedRecords = expectedDates.flatMap((date) => {
           const record = findCashRecord(shopRecords, date, shop);
 
           return hasPatisserieCashRecord(record) && record?.checkedAt ? [record] : [];
-        });
-        const iceRecords = expectedDates.flatMap((date) => {
-          const record = findCashRecord(shopRecords, date, shop);
-
-          return hasIceCashRecord(record) && record ? [record] : [];
         });
         const cashRevenue = patisserieRecords.reduce(
           (total, record) => total + (record.cashRevenue ?? record.countedCash),
@@ -601,15 +533,6 @@ export default function CashCountManager() {
           (total, record) => total + safeDifference(record),
           0
         );
-        const iceTotal = iceRecords.reduce(
-          (total, record) =>
-            total +
-            parseAmount(
-              iceCashDrafts[cashRecordDraftKey(record)] ??
-                formatAmountInput(iceCashAmount(record))
-            ),
-          0
-        );
         const deposit = existingDepositFor(
           cashDeposits,
           selectedWeek.year,
@@ -627,11 +550,9 @@ export default function CashCountManager() {
           includedExpectedSafeCash,
           includedCheckedSafeCash,
           difference,
-          iceTotal,
-          iceCount: iceRecords.length,
           checkedCount: checkedRecords.length,
-          expectedCount: expectedPatisserieDates.length,
-          missingCount: expectedPatisserieDates.filter(
+          expectedCount: expectedDates.length,
+          missingCount: expectedDates.filter(
             (date) => !hasPatisserieCashRecord(findCashRecord(shopRecords, date, shop))
           ).length,
           expectedDates,
@@ -641,7 +562,6 @@ export default function CashCountManager() {
     [
       cashDeposits,
       cashRecords,
-      iceCashDrafts,
       selectedWeek.week,
       selectedWeek.year,
       selectedWeekDates,
@@ -656,7 +576,6 @@ export default function CashCountManager() {
 
         return {
           date,
-          record,
           patisserieRecord: hasPatisserieCashRecord(record) ? record : undefined,
           isExpected: isCashExpectedForShopDate(selectedShop, date),
         };
@@ -667,18 +586,8 @@ export default function CashCountManager() {
     selectedShopDays.find((day) => day.date === selectedDate) ||
     selectedShopDays[0];
   const selectedPatisserieCashRecord = selectedShopDay?.patisserieRecord;
-  const selectedIceCashRecord = selectedShopDay?.record;
-  const selectedCashRecord =
-    selectedCashMenuKind === "ice"
-      ? hasIceCashRecord(selectedIceCashRecord)
-        ? selectedIceCashRecord
-        : undefined
-      : selectedPatisserieCashRecord;
-  const selectedIsIceRecord =
-    selectedCashMenuKind === "ice" && Boolean(selectedCashRecord);
-  const selectedCashWarning = selectedIsIceRecord
-    ? iceCashWarning(selectedCashRecord)
-    : cashWarning(selectedCashRecord);
+  const selectedCashRecord = selectedPatisserieCashRecord;
+  const selectedCashWarning = cashWarning(selectedCashRecord);
   const selectedSafeDraftKey = selectedCashRecord
     ? `${selectedCashRecord.date}:${selectedCashRecord.shop}`
     : "";
@@ -695,37 +604,25 @@ export default function CashCountManager() {
       )
     : 0;
   const selectedCashOut = selectedCashRecord
-    ? selectedIsIceRecord
-      ? selectedCashRecord.iceCashOut
-      : cashOutAmount(selectedCashRecord)
+    ? cashOutAmount(selectedCashRecord)
     : undefined;
   const selectedReceipts = selectedCashRecord
-    ? selectedIsIceRecord
-      ? selectedCashRecord.iceReceipts
-      : receiptAmount(selectedCashRecord)
+    ? receiptAmount(selectedCashRecord)
     : undefined;
   const selectedStartCash = selectedCashRecord
-    ? selectedIsIceRecord
-      ? selectedCashRecord.iceStartCash
-      : selectedCashRecord.startCash
+    ? selectedCashRecord.startCash
     : undefined;
   const selectedCountedCash = selectedCashRecord
-    ? selectedIsIceRecord
-      ? iceCountedCash(selectedCashRecord)
-      : selectedCashRecord.countedCash
+    ? selectedCashRecord.countedCash
     : undefined;
   const selectedExpectedCash = selectedCashRecord
-    ? selectedIsIceRecord
-      ? iceExpectedCash(selectedCashRecord)
-      : safeExpectedCash(selectedCashRecord)
+    ? safeExpectedCash(selectedCashRecord)
     : 0;
   const selectedDifference = selectedCashRecord
-    ? selectedIsIceRecord
-      ? selectedCashRecord.iceDifference
-      : selectedCashRecord.difference
+    ? selectedCashRecord.difference
     : undefined;
   const weekRecords = useMemo(
-    () => weekRows.flatMap((row) => row.records),
+    () => weekRows.flatMap((row) => row.records).filter(hasPatisserieCashRecord),
     [weekRows]
   );
   const checkedWeekRecords = useMemo(
@@ -831,12 +728,6 @@ export default function CashCountManager() {
           cashImportKind: "patisserie",
           safeCash,
           safeDifference: Number((safeCash - safeExpectedCash(current)).toFixed(2)),
-          iceCash: parseAmount(
-            iceCashDrafts[key] || formatAmountInput(iceCashAmount(current))
-          ),
-          iceExpectedCash: parseAmount(
-            iceCashDrafts[key] || formatAmountInput(iceCashAmount(current))
-          ),
           checkedDenominations: buildCheckedCashDenominations(
             current,
             cashNoteDrafts
@@ -878,58 +769,6 @@ export default function CashCountManager() {
     }
 
     await markChecked(record);
-  }
-
-  function cashRecordDraftKey(record: RevenueCashRecord) {
-    return `${record.date}:${record.shop}`;
-  }
-
-  function iceCashInputValue(record: RevenueCashRecord) {
-    return (
-      iceCashDrafts[cashRecordDraftKey(record)] ??
-      formatAmountInput(iceCashAmount(record))
-    );
-  }
-
-  function applyIceCashDrafts(sourceRecords = cashRecords) {
-    const now = new Date().toISOString();
-
-    return sourceRecords.map((record) => {
-      const key = cashRecordDraftKey(record);
-      if (!Object.prototype.hasOwnProperty.call(iceCashDrafts, key)) {
-        return record;
-      }
-
-      return {
-        ...record,
-        iceCash: parseAmount(iceCashDrafts[key] || "0"),
-        iceExpectedCash: parseAmount(iceCashDrafts[key] || "0"),
-        updatedAt: now,
-      };
-    });
-  }
-
-  async function saveIceCash(record: RevenueCashRecord) {
-    const key = cashRecordDraftKey(record);
-    const now = new Date().toISOString();
-    const nextCashRecords = buildUpdatedCashRecords(
-      cashRecords,
-      record.date,
-      record.shop,
-      (current) => ({
-        ...current,
-        iceCash: parseAmount(
-          iceCashDrafts[key] ?? formatAmountInput(iceCashAmount(current))
-        ),
-        iceExpectedCash: parseAmount(
-          iceCashDrafts[key] ?? formatAmountInput(iceCashAmount(current))
-        ),
-        updatedAt: now,
-      })
-    );
-
-    setCashRecords(nextCashRecords);
-    await saveCash(cashDeposits, nextCashRecords);
   }
 
   async function saveCash(
@@ -997,7 +836,9 @@ export default function CashCountManager() {
       depositDrafts[draftKey] ??
         formatAmountInput(row.deposit?.amount || row.includedCheckedSafeCash)
     );
-    const checkedRecords = row.records.filter((record) => record.checkedAt);
+    const checkedRecords = row.records.filter(
+      (record) => hasPatisserieCashRecord(record) && record.checkedAt
+    );
     const dateRange = checkedRecords.map((record) => record.date).sort();
     const deposit: RevenueCashDeposit = {
       id: createRevenueCashDepositKey(selectedWeek.year, selectedWeek.week, row.shop),
@@ -1036,7 +877,7 @@ export default function CashCountManager() {
       const checkedRecords = row.expectedDates.flatMap((date) => {
         const record = findCashRecord(shopRecords, date, row.shop);
 
-        return record?.checkedAt ? [record] : [];
+        return hasPatisserieCashRecord(record) && record?.checkedAt ? [record] : [];
       });
       const checkedSafeCash = checkedRecords.reduce(
         (total, record) => total + safeCheckedCash(record),
@@ -1091,7 +932,7 @@ export default function CashCountManager() {
       const checkedRecords = row.expectedDates.flatMap((date) => {
         const record = findCashRecord(shopRecords, date, row.shop);
 
-        return record?.checkedAt ? [record] : [];
+        return hasPatisserieCashRecord(record) && record?.checkedAt ? [record] : [];
       });
       const depositDraftKey = `${depositWeekKey}:${row.shop}`;
       const expectedSafeCash = checkedRecords.reduce(
@@ -1100,15 +941,6 @@ export default function CashCountManager() {
       );
       const checkedSafeCash = checkedRecords.reduce(
         (total, record) => total + safeCheckedCash(record),
-        0
-      );
-      const iceCash = checkedRecords.reduce(
-        (total, record) =>
-          total +
-          parseAmount(
-            iceCashDrafts[cashRecordDraftKey(record)] ??
-              formatAmountInput(iceCashAmount(record))
-          ),
         0
       );
       const cashRevenue = checkedRecords.reduce(
@@ -1140,7 +972,6 @@ export default function CashCountManager() {
         expectedSafeCash,
         checkedSafeCash,
         difference,
-        iceCash,
         depositAmount,
         depositNote: depositNotes[depositDraftKey] || sourceDeposit?.note || "",
         days: row.expectedDates.map((date) => {
@@ -1148,14 +979,8 @@ export default function CashCountManager() {
 
           return {
             date,
-            checked: Boolean(record?.checkedAt),
-            safeCash: record ? safeCheckedCash(record) : 0,
-            iceCash: record
-              ? parseAmount(
-                  iceCashDrafts[cashRecordDraftKey(record)] ??
-                    formatAmountInput(iceCashAmount(record))
-                )
-              : 0,
+            checked: Boolean(hasPatisserieCashRecord(record) && record?.checkedAt),
+            safeCash: hasPatisserieCashRecord(record) ? safeCheckedCash(record) : 0,
           };
         }),
       };
@@ -1168,14 +993,12 @@ export default function CashCountManager() {
       return;
     }
 
-    const nextCashRecords = applyIceCashDrafts();
-    const nextDeposits = buildWeekCashDeposits(nextCashRecords);
-    setCashRecords(nextCashRecords);
+    const nextDeposits = buildWeekCashDeposits(cashRecords);
     setCashDeposits(nextDeposits);
     setMailState("sending");
 
     try {
-      await saveCash(nextDeposits, nextCashRecords);
+      await saveCash(nextDeposits, cashRecords);
 
       const response = await fetch("/api/management-revenue/cash-deposit-mail", {
         method: "POST",
@@ -1186,7 +1009,7 @@ export default function CashCountManager() {
           year: selectedWeek.year,
           week: selectedWeek.week,
           weekLabel: weekRangeLabel(selectedWeek.year, selectedWeek.week),
-          rows: buildWeekDepositMailRows(nextCashRecords, nextDeposits),
+          rows: buildWeekDepositMailRows(cashRecords, nextDeposits),
         }),
       });
       const data = (await response.json().catch(() => null)) as
@@ -1317,93 +1140,44 @@ export default function CashCountManager() {
           </div>
         </div>
 
-        <div className="mt-2 grid gap-2 xl:grid-cols-2">
-          <div>
-            <p className="mb-1 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-              Patisserie
-            </p>
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              {weekRows.map((row) => {
-                const isSelected =
-                  row.shop === selectedShop &&
-                  selectedCashMenuKind === "patisserie";
+        <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+          {weekRows.map((row) => {
+            const isSelected = row.shop === selectedShop;
 
-                return (
-                  <button
-                    key={row.shop}
-                    type="button"
-                    onClick={() => {
-                      setSelectedShop(row.shop);
-                      setSelectedCashMenuKind("patisserie");
-                    }}
-                    className={`rounded-md border p-2 text-left shadow-sm transition ${
-                      isSelected
-                        ? "border-[#1a1815] bg-[#1a1815] text-white"
-                        : "border-[#e0d5c8] bg-white/94 text-[#1a1815] hover:border-[#1a1815]/45"
-                    }`}
-                  >
-                    <span
-                      className={`block text-[0.56rem] font-black uppercase tracking-normal ${
-                        isSelected ? "text-white/62" : "text-[#8b8278]"
-                      }`}
-                    >
-                      Patisserie
-                    </span>
-                    <span className="mt-0.5 block text-sm font-black">
-                      {row.shop}
-                    </span>
-                    <span
-                      className={`mt-1 block text-[0.62rem] font-black uppercase tracking-normal ${
-                        isSelected ? "text-white/70" : "text-[#8b8278]"
-                      }`}
-                    >
-                      {row.checkedCount}/{row.expectedCount} compleet ·{" "}
-                      {formatMoney(row.includedCheckedSafeCash)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-1 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-              Ijs
-            </p>
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              {weekRows.map((row) => {
-                const isSelected =
-                  row.shop === selectedShop && selectedCashMenuKind === "ice";
-
-                return (
-                  <button
-                    key={`ice-${row.shop}`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedShop(row.shop);
-                      setSelectedCashMenuKind("ice");
-                    }}
-                    className={`rounded-md border p-2 text-left shadow-sm transition ${
-                      isSelected
-                        ? "border-[#1f4f35] bg-[#fff7df] text-[#1a1815] ring-2 ring-[#1f4f35]/45"
-                        : "border-[#e0d5c8] bg-white/94 text-[#1a1815] hover:border-[#d9b15f]"
-                    }`}
-                  >
-                    <span className="block text-[0.56rem] font-black uppercase tracking-normal text-[#9a7531]">
-                      Ijs
-                    </span>
-                    <span className="mt-0.5 block text-sm font-black">
-                      {row.shop}
-                    </span>
-                    <span className="mt-1 block text-[0.62rem] font-black uppercase tracking-normal text-[#8b8278]">
-                      {row.iceCount}/{row.expectedCount} ijs ·{" "}
-                      {formatMoney(row.iceTotal)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            return (
+              <button
+                key={row.shop}
+                type="button"
+                onClick={() => {
+                  setSelectedShop(row.shop);
+                }}
+                className={`rounded-md border p-2 text-left shadow-sm transition ${
+                  isSelected
+                    ? "border-[#1a1815] bg-[#1a1815] text-white"
+                    : "border-[#e0d5c8] bg-white/94 text-[#1a1815] hover:border-[#1a1815]/45"
+                }`}
+              >
+                <span
+                  className={`block text-[0.56rem] font-black uppercase tracking-normal ${
+                    isSelected ? "text-white/62" : "text-[#8b8278]"
+                  }`}
+                >
+                  Patisserie
+                </span>
+                <span className="mt-0.5 block text-sm font-black">
+                  {row.shop}
+                </span>
+                <span
+                  className={`mt-1 block text-[0.62rem] font-black uppercase tracking-normal ${
+                    isSelected ? "text-white/70" : "text-[#8b8278]"
+                  }`}
+                >
+                  {row.checkedCount}/{row.expectedCount} compleet ·{" "}
+                  {formatMoney(row.includedCheckedSafeCash)}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {storage?.status === "seed" && (
@@ -1425,7 +1199,7 @@ export default function CashCountManager() {
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-                {selectedCashMenuKind === "ice" ? "Ijsloket" : "Patisserie"}
+                Patisserie
               </p>
               <h2 className="text-lg font-black leading-tight text-[#1a1815]">
                 {selectedShopRow.shop}
@@ -1452,39 +1226,26 @@ export default function CashCountManager() {
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-7">
-            {selectedShopDays.map(({ date, isExpected, patisserieRecord, record }) => {
+            {selectedShopDays.map(({ date, isExpected, patisserieRecord }) => {
               const isActive = date === selectedDate;
-              const iceRecord = hasIceCashRecord(record) ? record : undefined;
-              const dayRecord =
-                selectedCashMenuKind === "ice" ? iceRecord : patisserieRecord;
-              const warning =
-                selectedCashMenuKind === "ice"
-                  ? iceCashWarning(dayRecord)
-                  : cashWarning(dayRecord);
+              const dayRecord = patisserieRecord;
+              const warning = cashWarning(dayRecord);
               const isClosed = !isExpected && !dayRecord;
               const statusLabel =
-                selectedCashMenuKind === "ice"
-                  ? isClosed
-                    ? "Gesloten"
-                    : !dayRecord
-                      ? "Ontbreekt"
+                isClosed
+                  ? "Gesloten"
+                  : !dayRecord
+                    ? "Ontbreekt"
+                    : dayRecord.checkedAt
+                      ? "Compleet"
                       : warning
                         ? "Let op"
-                        : "Rapport"
-                  : isClosed
-                    ? "Gesloten"
-                    : !dayRecord
-                      ? "Ontbreekt"
-                      : dayRecord.checkedAt
-                        ? "Compleet"
-                        : warning
-                          ? "Let op"
-                          : "Open";
+                        : "Open";
               const tileClass = isActive
                 ? "border-[#1a1815] bg-[#1a1815] text-white shadow-sm"
                 : !dayRecord
                   ? "border-[#e7e0d8] bg-[#f5f2ee] text-[#8b8278]"
-                  : selectedCashMenuKind !== "ice" && dayRecord.checkedAt
+                  : dayRecord.checkedAt
                     ? "border-[#cbdcc5] bg-[#f6fbf5] text-[#1a1815]"
                     : warning
                       ? "border-[#efd1a1] bg-[#fff8d8] text-[#1a1815]"
@@ -1520,9 +1281,7 @@ export default function CashCountManager() {
                     }`}
                   >
                     {dayRecord
-                      ? selectedCashMenuKind === "ice"
-                        ? formatMoney(iceCashAmount(dayRecord))
-                        : formatMoney(safeExpectedCash(dayRecord))
+                      ? formatMoney(safeExpectedCash(dayRecord))
                       : isClosed
                         ? "geen dienst"
                         : "-"}
@@ -1548,22 +1307,6 @@ export default function CashCountManager() {
                     Deze dag telt niet mee als ontbrekende storting.
                   </p>
                 </div>
-                {selectedIceCashRecord && (
-                  <div className="mt-2">
-                    <IceCashEditor
-                      disabled={state === "saving"}
-                      onSave={() => void saveIceCash(selectedIceCashRecord)}
-                      onValueChange={(value) =>
-                        setIceCashDrafts((current) => ({
-                          ...current,
-                          [cashRecordDraftKey(selectedIceCashRecord)]: value,
-                        }))
-                      }
-                      record={selectedIceCashRecord}
-                      value={iceCashInputValue(selectedIceCashRecord)}
-                    />
-                  </div>
-                )}
               </>
             ) : !selectedCashRecord ? (
               <>
@@ -1573,41 +1316,19 @@ export default function CashCountManager() {
                       {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"}
                     </p>
                     <p className="text-sm font-black text-[#1a1815]">
-                      {selectedCashMenuKind === "ice"
-                        ? "Ijs dagrapport ontbreekt"
-                        : "Dagafsluiting ontbreekt"}
+                      Dagafsluiting ontbreekt
                     </p>
                   </div>
                   <p className="text-sm font-bold text-[#8b8278]">
-                    {selectedCashMenuKind === "ice"
-                      ? "Geen ijs dagrapport ontvangen."
-                      : "Geen Cash-it dagafsluiting ontvangen."}
+                    Geen Cash-it dagafsluiting ontvangen.
                   </p>
                 </div>
-                {selectedIceCashRecord && (
-                  <div className="mt-2">
-                    <IceCashEditor
-                      disabled={state === "saving"}
-                      onSave={() => void saveIceCash(selectedIceCashRecord)}
-                      onValueChange={(value) =>
-                        setIceCashDrafts((current) => ({
-                          ...current,
-                          [cashRecordDraftKey(selectedIceCashRecord)]: value,
-                        }))
-                      }
-                      record={selectedIceCashRecord}
-                      value={iceCashInputValue(selectedIceCashRecord)}
-                    />
-                  </div>
-                )}
               </>
             ) : (
               <article
                 key={selectedCashRecord.id}
                 className={`rounded-md border px-3 py-2 ${
-                  selectedIsIceRecord
-                    ? "border-[#d9b15f] bg-[#fffaf0]"
-                    : selectedCashRecord.checkedAt
+                  selectedCashRecord.checkedAt
                     ? "border-[#cbdcc5] bg-[#f6fbf5]"
                     : selectedCashWarning
                       ? "border-[#efd1a1] bg-[#fffdf5]"
@@ -1616,17 +1337,13 @@ export default function CashCountManager() {
               >
                 <div className="grid gap-3 lg:grid-cols-[6rem_minmax(0,1fr)_7rem] lg:items-start">
                   <label className="flex items-center gap-2 lg:items-start">
-                    {selectedIsIceRecord ? (
-                      <span className="mt-0.5 h-4 w-4 rounded-sm border border-[#d9b15f] bg-[#fff7df]" />
-                    ) : (
-                      <input
-                        type="checkbox"
-                        checked={Boolean(selectedCashRecord.checkedAt)}
-                        disabled={state === "saving"}
-                        onChange={() => void toggleChecked(selectedCashRecord)}
-                        className="mt-0.5 h-4 w-4 accent-[#1f4f35]"
-                      />
-                    )}
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selectedCashRecord.checkedAt)}
+                      disabled={state === "saving"}
+                      onChange={() => void toggleChecked(selectedCashRecord)}
+                      className="mt-0.5 h-4 w-4 accent-[#1f4f35]"
+                    />
                     <span>
                       <span className="block text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
                         {dayShortName(selectedCashRecord.date)}
@@ -1637,18 +1354,12 @@ export default function CashCountManager() {
                       </span>
                       <span
                         className={`mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-normal ${
-                          selectedIsIceRecord
-                            ? "bg-[#fff1c4] text-[#7a5417]"
-                            : selectedCashRecord.checkedAt
+                          selectedCashRecord.checkedAt
                             ? "bg-[#dfeadd] text-[#1f4f35]"
                             : "bg-[#f5ead6] text-[#7a5417]"
                         }`}
                       >
-                        {selectedIsIceRecord
-                          ? "ijsrapport"
-                          : selectedCashRecord.checkedAt
-                            ? "compleet"
-                            : "open"}
+                        {selectedCashRecord.checkedAt ? "compleet" : "open"}
                       </span>
                     </span>
                   </label>
@@ -1698,140 +1409,96 @@ export default function CashCountManager() {
                     />
                   </div>
 
-                  {selectedIsIceRecord ? (
-                    <div className="flex h-9 items-center justify-center rounded-md border border-[#d9b15f] bg-[#fff7df] px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#7a5417]">
-                      Gmail
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void toggleChecked(selectedCashRecord)}
-                      disabled={state === "saving"}
-                      className={`h-9 rounded-md border px-2 text-[0.62rem] font-black uppercase tracking-normal disabled:opacity-60 ${
-                        selectedCashRecord.checkedAt
-                          ? "border-[#d9d2c9] bg-white text-[#6b645b]"
-                          : "border-[#1a1815] bg-[#1a1815] text-white"
-                      }`}
-                    >
-                      {selectedCashRecord.checkedAt ? "Heropenen" : "Afvinken"}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => void toggleChecked(selectedCashRecord)}
+                    disabled={state === "saving"}
+                    className={`h-9 rounded-md border px-2 text-[0.62rem] font-black uppercase tracking-normal disabled:opacity-60 ${
+                      selectedCashRecord.checkedAt
+                        ? "border-[#d9d2c9] bg-white text-[#6b645b]"
+                        : "border-[#1a1815] bg-[#1a1815] text-white"
+                    }`}
+                  >
+                    {selectedCashRecord.checkedAt ? "Heropenen" : "Afvinken"}
+                  </button>
                 </div>
 
                 <div className="mt-3 grid gap-3 border-t border-[#e7e0d8]/80 pt-2 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-                  {selectedIsIceRecord ? (
-                    <>
-                      <IceCashEditor
-                        disabled={state === "saving"}
-                        onSave={() => void saveIceCash(selectedCashRecord)}
-                        onValueChange={(value) =>
-                          setIceCashDrafts((current) => ({
+                  <CashNoteControl
+                    disabled={
+                      Boolean(selectedCashRecord.checkedAt) ||
+                      state === "saving"
+                    }
+                    drafts={cashNoteDrafts}
+                    onChange={(key, value) =>
+                      setCashNoteDrafts((current) => ({
+                        ...current,
+                        [cashNoteDraftKey(selectedCashRecord, key)]: value,
+                      }))
+                    }
+                    record={selectedCashRecord}
+                  />
+
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
+                    <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+                      Controlebedrag
+                      <input
+                        value={selectedSafeInputValue}
+                        onChange={(event) =>
+                          setSafeCashDrafts((current) => ({
                             ...current,
-                            [cashRecordDraftKey(selectedCashRecord)]: value,
+                            [selectedSafeDraftKey]: event.target.value,
                           }))
                         }
-                        record={selectedCashRecord}
-                        value={iceCashInputValue(selectedCashRecord)}
-                      />
-
-                      {selectedCashWarning && (
-                        <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417] lg:col-span-2">
-                          {selectedCashWarning}
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <CashNoteControl
+                        inputMode="decimal"
                         disabled={
                           Boolean(selectedCashRecord.checkedAt) ||
                           state === "saving"
                         }
-                        drafts={cashNoteDrafts}
-                        onChange={(key, value) =>
-                          setCashNoteDrafts((current) => ({
-                            ...current,
-                            [cashNoteDraftKey(selectedCashRecord, key)]: value,
-                          }))
-                        }
-                        record={selectedCashRecord}
+                        placeholder="0,00"
+                        className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
                       />
+                    </label>
 
-                      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
-                        <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                          Controlebedrag
-                          <input
-                            value={selectedSafeInputValue}
-                            onChange={(event) =>
-                              setSafeCashDrafts((current) => ({
-                                ...current,
-                                [selectedSafeDraftKey]: event.target.value,
-                              }))
-                            }
-                            inputMode="decimal"
-                            disabled={
-                              Boolean(selectedCashRecord.checkedAt) ||
-                              state === "saving"
-                            }
-                            placeholder="0,00"
-                            className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
-                          />
-                        </label>
+                    <AmountCell
+                      label="Verschil"
+                      value={formatMoney(selectedSafeDraftDifference)}
+                      tone={
+                        Math.abs(selectedSafeDraftDifference) > 0.01
+                          ? "warn"
+                          : "normal"
+                      }
+                    />
 
-                        <AmountCell
-                          label="Verschil"
-                          value={formatMoney(selectedSafeDraftDifference)}
-                          tone={
-                            Math.abs(selectedSafeDraftDifference) > 0.01
-                              ? "warn"
-                              : "normal"
-                          }
-                        />
-
-                        <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278] sm:col-span-2">
-                          Controle-notitie
-                          <input
-                            value={visibleCashNote(selectedCashRecord.note)}
-                            onChange={(event) =>
-                              updateCashRecord(
-                                selectedCashRecord.date,
-                                selectedCashRecord.shop,
-                                (current) => ({
-                                  ...current,
-                                  note: event.target.value,
-                                  updatedAt: new Date().toISOString(),
-                                })
-                              )
-                            }
-                            disabled={
-                              Boolean(selectedCashRecord.checkedAt) ||
-                              state === "saving"
-                            }
-                            placeholder="Bijv. kas-uitbon ontbreekt of bedrag gecorrigeerd"
-                            className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
-                          />
-                        </label>
-                      </div>
-
-                      <IceCashEditor
-                        disabled={state === "saving"}
-                        onSave={() => void saveIceCash(selectedCashRecord)}
-                        onValueChange={(value) =>
-                          setIceCashDrafts((current) => ({
-                            ...current,
-                            [cashRecordDraftKey(selectedCashRecord)]: value,
-                          }))
+                    <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278] sm:col-span-2">
+                      Controle-notitie
+                      <input
+                        value={visibleCashNote(selectedCashRecord.note)}
+                        onChange={(event) =>
+                          updateCashRecord(
+                            selectedCashRecord.date,
+                            selectedCashRecord.shop,
+                            (current) => ({
+                              ...current,
+                              note: event.target.value,
+                              updatedAt: new Date().toISOString(),
+                            })
+                          )
                         }
-                        record={selectedCashRecord}
-                        value={iceCashInputValue(selectedCashRecord)}
+                        disabled={
+                          Boolean(selectedCashRecord.checkedAt) ||
+                          state === "saving"
+                        }
+                        placeholder="Bijv. kas-uitbon ontbreekt of bedrag gecorrigeerd"
+                        className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
                       />
+                    </label>
+                  </div>
 
-                      {selectedCashWarning && (
-                        <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417] lg:col-span-2">
-                          {selectedCashWarning}
-                        </p>
-                      )}
-                    </>
+                  {selectedCashWarning && (
+                    <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417] lg:col-span-2">
+                      {selectedCashWarning}
+                    </p>
                   )}
                 </div>
               </article>
@@ -1926,52 +1593,6 @@ export default function CashCountManager() {
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-function IceCashEditor({
-  disabled,
-  onSave,
-  onValueChange,
-  record,
-  value,
-}: Readonly<{
-  disabled: boolean;
-  onSave: () => void;
-  onValueChange: (value: string) => void;
-  record: RevenueCashRecord;
-  value: string;
-}>) {
-  return (
-    <div className="grid gap-2 rounded-md border border-[#d9b15f] bg-[#fff7df] p-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end lg:col-span-2">
-      <div>
-        <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#7a5417]">
-          Ijs contant
-        </p>
-        <p className="text-[0.6rem] font-bold uppercase tracking-normal text-[#9a7531]">
-          {record.shop} · {record.date.slice(8, 10)}-{record.date.slice(5, 7)}
-        </p>
-      </div>
-      <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#7a5417]">
-        Bedrag
-        <input
-          value={value}
-          onChange={(event) => onValueChange(event.target.value)}
-          inputMode="decimal"
-          disabled={disabled}
-          placeholder="0,00"
-          className="h-9 rounded-md border border-[#d9b15f] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
-        />
-      </label>
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={disabled}
-        className="h-9 rounded-md bg-[#1a1815] px-3 text-[0.62rem] font-black uppercase tracking-normal text-white disabled:opacity-60"
-      >
-        Opslaan
-      </button>
     </div>
   );
 }

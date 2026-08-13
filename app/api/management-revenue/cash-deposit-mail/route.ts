@@ -12,7 +12,6 @@ type CashDepositMailDay = {
   date?: string;
   checked?: boolean;
   safeCash?: number;
-  iceCash?: number;
 };
 
 type CashDepositMailRow = {
@@ -24,7 +23,6 @@ type CashDepositMailRow = {
   expectedSafeCash?: number;
   checkedSafeCash?: number;
   difference?: number;
-  iceCash?: number;
   depositAmount?: number;
   depositNote?: string;
   days?: CashDepositMailDay[];
@@ -111,7 +109,6 @@ function normalizeRows(rows: unknown) {
       ),
       checkedSafeCash: moneyFrom((source as CashDepositMailRow).checkedSafeCash),
       difference: signedMoneyFrom((source as CashDepositMailRow).difference),
-      iceCash: moneyFrom((source as CashDepositMailRow).iceCash),
       depositAmount: moneyFrom((source as CashDepositMailRow).depositAmount),
       depositNote: cleanText((source as CashDepositMailRow).depositNote, 240),
       days: Array.isArray((source as CashDepositMailRow).days)
@@ -119,7 +116,6 @@ function normalizeRows(rows: unknown) {
             date: cleanText(day.date, 20),
             checked: Boolean(day.checked),
             safeCash: moneyFrom(day.safeCash),
-            iceCash: moneyFrom(day.iceCash),
           }))
         : [],
     };
@@ -133,8 +129,6 @@ function createMailBody(
   rows: ReturnType<typeof normalizeRows>
 ) {
   const totalDeposit = rows.reduce((total, row) => total + row.depositAmount, 0);
-  const totalIce = rows.reduce((total, row) => total + row.iceCash, 0);
-  const totalCombined = totalDeposit + totalIce;
   const lines = [
     `Weekstorting overzicht`,
     `Week ${week} ${year} - ${weekLabel}`,
@@ -145,10 +139,6 @@ function createMailBody(
     lines.push(row.shop || "Onbekende winkel");
     lines.push(`- Compleet: ${row.checkedCount}/${row.expectedCount}`);
     lines.push(`- Winkelstorting: ${formatMoney(row.depositAmount)}`);
-    lines.push(`- Ijs contant: ${formatMoney(row.iceCash)}`);
-    lines.push(
-      `- Totaal winkel + ijs: ${formatMoney(row.depositAmount + row.iceCash)}`
-    );
     lines.push(`- Kasomzet: ${formatMoney(row.cashRevenue)}`);
     lines.push(`- Kluis verwacht: ${formatMoney(row.expectedSafeCash)}`);
     lines.push(`- Kluis geteld: ${formatMoney(row.checkedSafeCash)}`);
@@ -156,19 +146,13 @@ function createMailBody(
     if (row.depositNote) lines.push(`- Notitie: ${row.depositNote}`);
     const daySummary = row.days
       .filter((day) => day.checked)
-      .map((day) => {
-        const iceLabel = day.iceCash > 0 ? `, ijs ${formatMoney(day.iceCash)}` : "";
-
-        return `${formatDayLabel(day.date)} ${formatMoney(day.safeCash)}${iceLabel}`;
-      })
+      .map((day) => `${formatDayLabel(day.date)} ${formatMoney(day.safeCash)}`)
       .join(" | ");
     if (daySummary) lines.push(`- Dagen: ${daySummary}`);
     lines.push("");
   });
 
   lines.push(`Totaal winkelstortingen: ${formatMoney(totalDeposit)}`);
-  lines.push(`Totaal ijs contant: ${formatMoney(totalIce)}`);
-  lines.push(`Totaal samen: ${formatMoney(totalCombined)}`);
   lines.push("");
   lines.push("Automatisch verstuurd vanuit de Strik Team app.");
 
