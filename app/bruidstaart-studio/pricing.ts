@@ -17,7 +17,8 @@ import {
 } from "./types";
 
 const CHOCOLATE_INITIALS_TOPPER_ID = "chocolade-initialen-geschreven";
-const DELIVERY_FEE = 10;
+const NIJMEGEN_DELIVERY_FEE = 10;
+const FAR_DELIVERY_FEE = 25;
 
 export function formatEuro(amount: number) {
   return new Intl.NumberFormat("nl-NL", {
@@ -447,8 +448,15 @@ export function calculateWeddingCakePrice(
 
   if (config.contact.deliveryMethod === "delivery") {
     lines.push({
-      label: "Bezorgkosten",
-      amount: DELIVERY_FEE,
+      label: "Bezorgkosten Nijmegen",
+      amount: NIJMEGEN_DELIVERY_FEE,
+    });
+  }
+
+  if (config.contact.deliveryMethod === "delivery_far") {
+    lines.push({
+      label: "Bezorgkosten ver",
+      amount: FAR_DELIVERY_FEE,
     });
   }
 
@@ -519,6 +527,15 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   };
 }
 
+export function getDeliveryMethodLabel(
+  deliveryMethod: WeddingCakeConfig["contact"]["deliveryMethod"]
+) {
+  if (deliveryMethod === "delivery_far") return "bezorgen ver";
+  if (deliveryMethod === "delivery") return "bezorgen Nijmegen";
+
+  return "afhalen";
+}
+
 export function createProductionForm(config: WeddingCakeConfig) {
   const labels = getSelectedWeddingCakeLabels(config);
   const price = calculateWeddingCakePrice(config);
@@ -544,7 +561,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
     "Factuur en levering",
     `Factuurnaam: ${config.contact.invoiceName || "-"}`,
     `Factuur e-mail: ${config.contact.invoiceEmail || "-"}`,
-    `Levering: ${config.contact.deliveryMethod === "delivery" ? "bezorgen" : "afhalen"}`,
+    `Levering: ${getDeliveryMethodLabel(config.contact.deliveryMethod)}`,
     `Adres: ${config.contact.deliveryAddress || "-"}`,
     "",
     "Taart",

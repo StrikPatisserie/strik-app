@@ -710,9 +710,15 @@ export const decorationOptions: StudioOption[] = [
     quantityLabel: "Aantal rozen",
   },
   {
-    id: "gipskruid",
-    label: "Gipskruid",
+    id: "gipskruid-zelf-aanleveren",
+    label: "Gipskruid zelf aanleveren",
     description: "Kleine witte bloemetjes bij de bloemdecoratie.",
+    price: { mode: "included", amount: 0 },
+  },
+  {
+    id: "gipskruid-strik",
+    label: "Gipskruid door Strik",
+    description: "Strik regelt het gipskruid.",
     price: { mode: "perPerson", amount: 0.25 },
   },
   {

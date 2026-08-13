@@ -117,6 +117,24 @@ function topperIdsFrom(value: unknown) {
     : [];
 }
 
+function decorationIdsFrom(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((id): id is string => typeof id === "string")
+    .map((id) => (id === "gipskruid" ? "gipskruid-strik" : id))
+    .filter((id, index, ids) => ids.indexOf(id) === index);
+}
+
+function deliveryMethodFrom(
+  value: unknown
+): WeddingCakeConfig["contact"]["deliveryMethod"] {
+  if (value === "delivery_far") return "delivery_far";
+  if (value === "delivery") return "delivery";
+
+  return "pickup";
+}
+
 function normalizedTopperInitialsText(value: unknown, topperIds: string[]) {
   if (!topperIds.includes(CHOCOLATE_INITIALS_TOPPER_ID)) return "";
 
@@ -137,6 +155,7 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
     : {};
   const now = new Date().toISOString();
   const topperIds = topperIdsFrom(config.topperIds);
+  const decorationIds = decorationIdsFrom(config.decorationIds);
 
   return {
     id: textFrom(value.id) || code,
@@ -180,6 +199,7 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
       ),
       paid: Boolean(config.paid),
       completed: Boolean(config.completed),
+      decorationIds,
       topperIds,
       contact: {
         ...config.contact,
@@ -187,6 +207,7 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
         surname: textFrom(contact.surname || value.surname),
         deliveryDate:
           textFrom(contact.deliveryDate) || textFrom(contact.weddingDate),
+        deliveryMethod: deliveryMethodFrom(contact.deliveryMethod),
       },
     },
     createdAt: textFrom(value.createdAt) || now,

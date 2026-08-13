@@ -61,7 +61,7 @@ export type ContactDetails = {
   phone: string;
   weddingDate: string;
   deliveryDate: string;
-  deliveryMethod: "pickup" | "delivery";
+  deliveryMethod: "pickup" | "delivery" | "delivery_far";
   deliveryAddress: string;
   invoiceName: string;
   invoiceEmail: string;

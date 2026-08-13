@@ -25,6 +25,7 @@ import {
   getDecorationNoteTexts,
   getDecorationQuantity,
   getDecorationSurcharges,
+  getDeliveryMethodLabel,
   getTopperNoteTexts,
   getTopperSurcharges,
   getDesignGroupsForLayers,
@@ -72,8 +73,19 @@ const MARZIPAN_BAND_DECORATION_ID = "marsepein-icing-band";
 const PEARL_BORDER_DECORATION_ID = "parelrand";
 const FLOWER_DECORATION_IDS = [
   ...ROSE_DECORATION_IDS,
-  "gipskruid",
+  "gipskruid-zelf-aanleveren",
+  "gipskruid-strik",
   "echte-bloemen",
+];
+const GYPSOPHILA_DECORATION_IDS = [
+  "gipskruid",
+  "gipskruid-zelf-aanleveren",
+  "gipskruid-strik",
+];
+const SELECTABLE_GYPSOPHILA_DECORATION_IDS = [
+  "gipskruid",
+  "gipskruid-zelf-aanleveren",
+  "gipskruid-strik",
 ];
 const ACCENT_DECORATION_IDS = ["rood-fruit", "bladgoud"];
 const FLOWER_PLACEMENT_NOTE_ID = "echte-bloemen-plaatsing";
@@ -2681,7 +2693,9 @@ export function CakeVisualizer({
     }
 
     function addGypsophila() {
-      if (!selectedDecorations.has("gipskruid")) return;
+      if (!GYPSOPHILA_DECORATION_IDS.some((id) => selectedDecorations.has(id))) {
+        return;
+      }
 
       const flowerPlacement = getFlowerPlacement(
         config.decorationColorNotes?.[FLOWER_PLACEMENT_NOTE_ID]
@@ -3778,9 +3792,12 @@ export default function BruidstaartStudioConfigurator() {
     const params = new URLSearchParams(window.location.search);
     const search = params.get("zoek") || params.get("search") || "";
     const deliveryDate = params.get("datum") || params.get("date") || "";
+    const timeout = window.setTimeout(() => {
+      if (search) setDraftSearch(search);
+      if (deliveryDate) setDraftDeliveryDate(deliveryDate);
+    }, 0);
 
-    if (search) setDraftSearch(search);
-    if (deliveryDate) setDraftDeliveryDate(deliveryDate);
+    return () => window.clearTimeout(timeout);
   }, []);
 
   const visibleSteps = useMemo(
@@ -4125,7 +4142,14 @@ export default function BruidstaartStudioConfigurator() {
           delete nextColorNotes[FLOWER_PLACEMENT_NOTE_ID];
         }
       } else {
-        nextDecorationIds = [...nextDecorationIds, id];
+        nextDecorationIds = [
+          ...nextDecorationIds.filter(
+            (item) =>
+              !SELECTABLE_GYPSOPHILA_DECORATION_IDS.includes(item) ||
+              !SELECTABLE_GYPSOPHILA_DECORATION_IDS.includes(id)
+          ),
+          id,
+        ];
 
         if (option.quantityLabel) {
           nextQuantities[id] =
@@ -4368,9 +4392,7 @@ export default function BruidstaartStudioConfigurator() {
       "Factuur en levering",
       `Factuurnaam: ${config.contact.invoiceName || "-"}`,
       `Factuur e-mail: ${config.contact.invoiceEmail || "-"}`,
-      `Levering: ${
-        config.contact.deliveryMethod === "delivery" ? "bezorgen" : "afhalen"
-      }`,
+      `Levering: ${getDeliveryMethodLabel(config.contact.deliveryMethod)}`,
       `Adres: ${config.contact.deliveryAddress || "-"}`,
       "",
       "Taart",
@@ -6367,23 +6389,31 @@ export default function BruidstaartStudioConfigurator() {
                   />
                 </label>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {(["pickup", "delivery"] as const).map((method) => (
+              <div className="grid gap-2 md:grid-cols-3">
+                {[
+                  { id: "pickup", label: "Afhalen" },
+                  { id: "delivery", label: "Bezorgkosten Nijmegen €10" },
+                  { id: "delivery_far", label: "Bezorgkosten ver €25" },
+                ].map((method) => (
                   <button
-                    key={method}
+                    key={method.id}
                     type="button"
                     onClick={() =>
                       setConfig((current) =>
-                        updateContact(current, "deliveryMethod", method)
+                        updateContact(
+                          current,
+                          "deliveryMethod",
+                          method.id as ContactDetails["deliveryMethod"]
+                        )
                       )
                     }
                     className={`rounded-xl border p-2.5 text-left text-sm font-bold ${
-                      config.contact.deliveryMethod === method
+                      config.contact.deliveryMethod === method.id
                         ? "border-[#8fb184] bg-[#dce8d6]"
                         : "border-[#e7e0d8] bg-white"
                     }`}
                   >
-                    {method === "pickup" ? "Afhalen" : "Bezorgen (+ €10)"}
+                    {method.label}
                   </button>
                 ))}
               </div>
