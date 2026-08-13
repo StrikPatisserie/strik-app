@@ -3,7 +3,7 @@ import CompactAgendaPanel from "../CompactAgendaPanel";
 import CompactLatestNewsPanel from "../CompactLatestNewsPanel";
 import CompactStaffOverview from "../CompactStaffOverview";
 import WeeklyOfferPanel from "../WeeklyOfferPanel";
-import WinkelBruidstaartAgendaPanel from "../WinkelBruidstaartAgendaPanel";
+import WinkelQuickLinks from "../WinkelQuickLinks";
 
 export default function WinkelPage() {
   return (
@@ -21,7 +21,7 @@ export default function WinkelPage() {
           <CompactLatestNewsPanel />
         </div>
 
-        <WinkelBruidstaartAgendaPanel />
+        <WinkelQuickLinks />
 
         <CompactAgendaPanel />
 
