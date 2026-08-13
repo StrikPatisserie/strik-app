@@ -9,6 +9,7 @@ import type {
   PackagingItem,
   Recipe,
 } from "./types";
+import { removeLegacyHalfFabricateIngredients } from "./legacyHalfFabricates";
 
 export type RecepturenData = {
   ingredients: Ingredient[];
@@ -79,7 +80,7 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
       ? record.bakeryHome
       : emptyBakeryHomeData;
 
-  return {
+  return removeLegacyHalfFabricateIngredients({
     ingredients: Array.isArray(record.ingredients) ? record.ingredients : [],
     recipes: normalizeStoredRecipes(record.recipes),
     packagingItems: Array.isArray(record.packagingItems)
@@ -97,7 +98,7 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
       record.manualProductionPlanningItems
     ),
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
-  };
+  });
 }
 
 function normalizeHefeOrderHistoryLine(
@@ -297,7 +298,7 @@ export function pruneInvoiceImports(invoiceImports: InvoiceImport[]) {
 }
 
 function prepareRecepturenDataForStorage(data: RecepturenData) {
-  return {
+  return removeLegacyHalfFabricateIngredients({
     ...data,
     recipes: normalizeStoredRecipes(data.recipes),
     invoiceImports: pruneInvoiceImports(data.invoiceImports),
@@ -306,7 +307,7 @@ function prepareRecepturenDataForStorage(data: RecepturenData) {
     manualProductionPlanningItems: normalizeManualProductionPlanningItems(
       data.manualProductionPlanningItems
     ),
-  };
+  });
 }
 
 async function fetchRecepturenDataFrom(url: string) {

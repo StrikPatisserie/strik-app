@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { removeLegacyHalfFabricateIngredients } from "../../bakkerij/recepturen/legacyHalfFabricates";
+import type { RecepturenData } from "../../bakkerij/recepturen/recepturenApi";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +93,12 @@ function isRecepturenData(data: unknown) {
   );
 }
 
+function cleanRecepturenData(data: unknown) {
+  if (!isRecepturenData(data)) return data;
+
+  return removeLegacyHalfFabricateIngredients(data as RecepturenData);
+}
+
 function listCount(data: unknown, key: "recipes" | "ingredients" | "packagingItems") {
   if (!data || typeof data !== "object") return 0;
 
@@ -164,7 +172,7 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(cleanRecepturenData(data));
   } catch {
     return NextResponse.json(
       {
@@ -190,6 +198,9 @@ export async function PUT(request: Request) {
   }
 
   try {
+    incomingData = cleanRecepturenData(incomingData);
+    body = JSON.stringify(incomingData);
+
     if (new URL(request.url).searchParams.get("force") !== "1") {
       const shrinkProtectionResponse =
         await createShrinkProtectionResponse(incomingData);
