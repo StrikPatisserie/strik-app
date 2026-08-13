@@ -75,15 +75,13 @@ const recipeEditSections: Array<{
   label: string;
   hint: string;
 }> = [
-  { id: "basis", label: "Verpakking", hint: "Verpakking en foto" },
-  { id: "productie", label: "Productie", hint: "Logboek en planning" },
+  { id: "basis", label: "Verpakking & productie", hint: "Foto, planning en logboek" },
   { id: "stappen", label: "Stappen", hint: "Bereiding" },
   { id: "notities", label: "Notities", hint: "Allergenen" },
 ];
 
 type RecipeEditSection =
   | "basis"
-  | "productie"
   | "stappen"
   | "notities";
 
@@ -322,6 +320,11 @@ export default function RecipeDetail({
   function startEditing(section: RecipeEditSection = "basis") {
     setActiveEditSection(section);
     setIsEditing(true);
+  }
+
+  function toggleAdvancedSection(section: RecipeEditSection) {
+    setActiveEditSection(section);
+    setIsAdvancedOpen((current) => !(current && activeEditSection === section));
   }
 
   async function updateRecipePhoto(file: File | null) {
@@ -1343,52 +1346,46 @@ export default function RecipeDetail({
         </div>
 
         {isEditing && (
-          <Panel className="mt-2 rounded-none border-[#cfdcc8] bg-[#efefef] p-2">
-            <div className="grid gap-2 border border-[#c3d3bc] bg-[#f7fbf5] p-2 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-xl font-black leading-tight">Ingredienten</h3>
-                  <p className="mt-1 text-xs italic text-[#2d2a26]/45">
-                    {draft.type === "finalProduct"
-                      ? `kost ${formatEuro(previewCostPrice)}/stuk · batch ${formatEuro(previewBatchCost)}`
-                      : `kost ${formatEuro(previewCostPrice)}/kg · batch ${formatEuro(previewBatchCost)}`}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <RecipeTypeToggle
-                    value={draft.type}
-                    onChange={(value) => {
-                      updateDraft({
-                        type: value,
-                        productGroup:
-                          value === "semiFinished"
-                            ? semiFinishedProductGroupFallback(draft)
-                            : finalProductGroupFallback(draft),
-                      });
-                      if (
-                        value === "semiFinished" &&
-                        (activeEditSection === "productie" ||
-                          activeEditSection === "basis")
-                      ) {
-                        setActiveEditSection("stappen");
-                      }
-                    }}
-                  />
-                  <label className="cursor-pointer rounded-full bg-white px-3 py-2 text-xs font-black text-[#2d2a26]/70 shadow-sm">
-                    {isImportingRecipe ? "Lezen..." : "Bestand inlezen"}
-                    <input
-                      type="file"
-                      accept={RECIPE_IMPORT_FILE_ACCEPT}
-                      disabled={isImportingRecipe}
-                      className="sr-only"
-                      onChange={(event) => {
-                        void importRecipeFile(event.target.files?.[0] || null);
-                        event.currentTarget.value = "";
+          <Panel className="mt-2 rounded-none border-[#d8d0c4] bg-[#f3eee8] p-2">
+            <div className="grid gap-3">
+              <div className="border border-[#111111] bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#111111] px-3 py-2">
+                  <div>
+                    <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
+                      Basisgegevens
+                    </p>
+                    <h3 className="text-lg font-black leading-tight">
+                      {startInEditMode ? "Recept toevoegen" : "Recept bewerken"}
+                    </h3>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <RecipeTypeToggle
+                      value={draft.type}
+                      onChange={(value) => {
+                        updateDraft({
+                          type: value,
+                          productGroup:
+                            value === "semiFinished"
+                              ? semiFinishedProductGroupFallback(draft)
+                              : finalProductGroupFallback(draft),
+                        });
                       }}
                     />
-                  </label>
+                    <label className="cursor-pointer border border-[#d8d0c4] bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/70 shadow-sm">
+                      {isImportingRecipe ? "Lezen..." : "Bestand inlezen"}
+                      <input
+                        type="file"
+                        accept={RECIPE_IMPORT_FILE_ACCEPT}
+                        disabled={isImportingRecipe}
+                        className="sr-only"
+                        onChange={(event) => {
+                          void importRecipeFile(event.target.files?.[0] || null);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
-              </div>
 
               {recipeImportWarnings.length > 0 && (
                 <div className="rounded-2xl border border-[#ead7a6] bg-[#fff8e3] p-3">
@@ -1405,19 +1402,13 @@ export default function RecipeDetail({
 
               {importCandidateReview}
 
-              <div
-                className={`grid gap-2 ${
-                  draft.type === "finalProduct"
-                    ? "md:grid-cols-[minmax(12rem,1.25fr)_minmax(9rem,0.85fr)_8rem_6.5rem_6.5rem_7rem]"
-                    : "md:grid-cols-[minmax(12rem,1fr)_minmax(9rem,0.8fr)_8rem_9rem]"
-                }`}
-              >
-                <EditTextField
+              <div className="grid gap-0 border-t border-[#d8d0c4]">
+                <CompactEditTextField
                   label="Naam"
                   value={draft.name}
                   onChange={(value) => updateDraft({ name: value })}
                 />
-                <GroupComboField
+                <CompactGroupComboField
                   label="Categorie"
                   value={draft.productGroup}
                   onChange={(value) => updateDraft({ productGroup: value })}
@@ -1427,13 +1418,42 @@ export default function RecipeDetail({
                     draft.type === "semiFinished" ? "Vullingen" : "Petit Gateau",
                   ]).map((option) => option.label)}
                 />
-                <EditTextField
+                <CompactEditTextField
                   label="Strik artikelnummer"
                   value={draft.strikArticleNumber}
                   onChange={(value) => updateDraft({ strikArticleNumber: value })}
                 />
+                {draft.type === "semiFinished" && (
+                  <div className="grid grid-cols-[9.5rem_minmax(0,1fr)] border-b border-[#d8d0c4] bg-white">
+                    <span className="border-r border-[#d8d0c4] px-3 py-2 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                      Batch
+                    </span>
+                    <span className="px-3 py-2 text-sm font-black">
+                      {formatBatchWeight(previewMadeWeightKg)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+              <div className="border border-[#d8d0c4] bg-[#fffdf8] p-2 shadow-sm">
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
+                      Receptinstellingen
+                    </p>
+                    <p className="text-sm font-black">
+                      Batch, eenheid en verkoopprijs
+                    </p>
+                  </div>
+                  <Metric
+                    label={draft.type === "finalProduct" ? "Kost/stuk" : "Kost/kg"}
+                    value={formatEuro(previewCostPrice)}
+                    className="bg-white"
+                  />
+                </div>
                 {draft.type === "finalProduct" && (
-                  <>
+                  <div className="grid gap-2 md:grid-cols-[7rem_7rem_8rem_minmax(8rem,1fr)]">
                     <EditTextField
                       label="Batch"
                       value={draft.standardBatchQuantity}
@@ -1460,18 +1480,35 @@ export default function RecipeDetail({
                         RECIPE_SALES_VAT_RATE * 100
                       )}% btw. Alle kostprijzen blijven ex btw.`}
                     />
-                  </>
+                    <Metric
+                      label="Batchkost"
+                      value={formatEuro(previewBatchCost)}
+                      className="bg-white"
+                    />
+                  </div>
                 )}
                 {draft.type === "semiFinished" && (
-                  <Metric
-                    label="Batch"
-                    value={formatBatchWeight(previewMadeWeightKg)}
-                    className="bg-white"
-                  />
+                  <p className="text-sm font-bold text-[#2d2a26]/60">
+                    Batchgewicht wordt automatisch berekend uit de receptregels.
+                  </p>
                 )}
               </div>
 
-              <div className="grid gap-0 border border-[#d7e4d1] bg-white">
+              <div className="border-2 border-[#8fb184] bg-[#dce8d6] p-2 shadow-sm">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#45663b]">
+                      Recept
+                    </p>
+                    <h3 className="text-xl font-black leading-tight">
+                      Grondstoffen en halffabricaten
+                    </h3>
+                  </div>
+                  <p className="text-xs font-black text-[#45663b]">
+                    {draftRecipeRows.length} regels · batch {formatEuro(previewBatchCost)}
+                  </p>
+                </div>
+                <div className="grid gap-0 border border-[#9fba96] bg-white">
                 <div className="grid gap-0 divide-y divide-[#d7e4d1]">
                   {draftRecipeRows.map((row, index) => {
                     if (row.kind === "ingredient") {
@@ -1707,22 +1744,29 @@ export default function RecipeDetail({
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 border-t border-[#d7e4d1] bg-[#fbfcf9] px-2 py-2">
+                <div className="flex flex-wrap items-center gap-2 border-t border-[#9fba96] bg-[#f7fbf5] px-2 py-2">
                   <button
                     type="button"
                     onClick={() => addIngredientLine()}
-                    className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
+                    className="inline-flex items-center gap-2 border border-[#45663b] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
                   >
-                    + grondstofregel
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#111111] text-white">
+                      +
+                    </span>
+                    Grondstof toevoegen
                   </button>
                   <button
                     type="button"
                     onClick={() => addSemiFinishedLine()}
-                    className="rounded-full bg-[#f2d58d] px-3 py-2 text-xs font-black shadow-sm"
+                    className="inline-flex items-center gap-2 border border-[#7a5a18] bg-[#f2d58d] px-4 py-2.5 text-sm font-black shadow-sm"
                   >
-                    + halffabricaat
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#111111] text-white">
+                      +
+                    </span>
+                    Halffabricaat toevoegen
                   </button>
                 </div>
+              </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 text-xs font-black text-[#2d2a26]/55">
@@ -1732,57 +1776,55 @@ export default function RecipeDetail({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  !isAdvancedOpen &&
-                  draft.type !== "finalProduct" &&
-                  activeEditSection === "basis"
-                ) {
-                  setActiveEditSection("productie");
-                }
-                setIsAdvancedOpen((current) => !current);
-              }}
-              className="mt-2 w-fit rounded-full border border-[#c3d3bc] bg-white px-4 py-2 text-sm font-black text-[#2d2a26] shadow-sm"
-            >
-              {isAdvancedOpen ? "Verberg uitgebreid" : "Uitgebreid"}
-            </button>
+            <div className="border border-[#d8d0c4] bg-white p-2 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
+                    Details
+                  </p>
+                  <p className="text-sm font-black">
+                    Verpakking, productie, stappen en notities
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-2">
+                {recipeEditSections.map((section) => {
+                  const isActive =
+                    isAdvancedOpen && activeEditSection === section.id;
+                  const label =
+                    draft.type !== "finalProduct" && section.id === "basis"
+                      ? "Productie"
+                      : section.label;
+
+                  return (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => toggleAdvancedSection(section.id)}
+                      className={`inline-flex items-center gap-2 border px-3 py-2 text-xs font-black shadow-sm transition ${
+                        isActive
+                          ? "border-[#111111] bg-[#111111] text-white"
+                          : "border-[#d8d0c4] bg-[#f8f6f3] text-[#2d2a26]/70"
+                      }`}
+                    >
+                      <span>{label}</span>
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                          isActive ? "bg-white text-[#111111]" : "bg-white"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        {isActive ? <XIcon /> : "+"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
             {isAdvancedOpen && (
-              <div className="mt-2 border border-[#dfe9d8] bg-white/75 p-2">
-
-            <div className="grid grid-cols-2 border border-[#c3d3bc] bg-white sm:grid-cols-3 lg:grid-cols-6">
-              {recipeEditSections.map((section) => {
-                if (
-                  draft.type !== "finalProduct" &&
-                  section.id === "basis"
-                ) {
-                  return null;
-                }
-
-                const isActive = activeEditSection === section.id;
-
-                return (
-                  <button
-                    key={section.id}
-                    type="button"
-                    onClick={() => setActiveEditSection(section.id)}
-                    className={`min-w-0 border-r border-[#c3d3bc] px-3 py-2 text-center uppercase tracking-[0.12em] transition last:border-r-0 ${
-                      isActive
-                        ? "bg-[#c3d3bc] text-[#111111]"
-                        : "bg-white text-[#111111]"
-                    }`}
-                  >
-                    <span className="block truncate text-xs font-light sm:text-sm">
-                      {section.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-3 grid gap-3">
+              <div className="mt-3 border-t border-[#d8d0c4] pt-3">
+            <div className="grid gap-3">
               {activeEditSection === "basis" && draft.type === "finalProduct" && (
                 <EditorBlock title="Verpakking">
                   <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
@@ -1937,7 +1979,7 @@ export default function RecipeDetail({
                 </EditorBlock>
               )}
 
-              {activeEditSection === "productie" && (
+              {activeEditSection === "basis" && (
               <EditorBlock title="Productieplanning">
                 {draft.type === "finalProduct" && (
                   <>
@@ -2277,6 +2319,7 @@ export default function RecipeDetail({
             </div>
               </div>
             )}
+            </div>
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#d8d0c4] pt-2">
               <div className="min-h-6 text-xs font-black text-[#45663b]">
@@ -5032,6 +5075,32 @@ function EditTextField({
   );
 }
 
+function CompactEditTextField({
+  label,
+  value,
+  onChange,
+  inputMode,
+}: Readonly<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  inputMode?: "decimal";
+}>) {
+  return (
+    <label className="grid grid-cols-[9.5rem_minmax(0,1fr)] border-b border-[#d8d0c4] bg-white text-sm">
+      <span className="border-r border-[#d8d0c4] px-3 py-2 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+        {label}
+      </span>
+      <input
+        value={value}
+        inputMode={inputMode}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-w-0 bg-white px-3 py-2 font-black text-[#111111] outline-none focus:bg-[#f7fbf5]"
+      />
+    </label>
+  );
+}
+
 function GroupComboField({
   label,
   value,
@@ -5054,6 +5123,40 @@ function GroupComboField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="min-w-0 rounded-xl border border-[#cfdcc8] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
+      />
+      <datalist id={listId}>
+        {uniqueOptions.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+    </label>
+  );
+}
+
+function CompactGroupComboField({
+  label,
+  value,
+  onChange,
+  options,
+}: Readonly<{
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+}>) {
+  const listId = "compact-recipe-product-group-options";
+  const uniqueOptions = Array.from(new Set(options.filter(Boolean)));
+
+  return (
+    <label className="grid grid-cols-[9.5rem_minmax(0,1fr)] border-b border-[#d8d0c4] bg-white text-sm">
+      <span className="border-r border-[#d8d0c4] px-3 py-2 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+        {label}
+      </span>
+      <input
+        list={listId}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="min-w-0 bg-white px-3 py-2 font-black text-[#111111] outline-none focus:bg-[#f7fbf5]"
       />
       <datalist id={listId}>
         {uniqueOptions.map((option) => (
