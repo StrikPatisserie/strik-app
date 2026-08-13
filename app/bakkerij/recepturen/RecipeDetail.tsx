@@ -1436,21 +1436,15 @@ export default function RecipeDetail({
               </div>
             </div>
 
-              <div className="border border-[#d8d0c4] bg-[#fffdf8] p-2 shadow-sm">
-                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
-                      Receptinstellingen
-                    </p>
-                    <p className="text-sm font-black">
-                      Batch, eenheid en verkoopprijs
-                    </p>
-                  </div>
-                  <Metric
-                    label={draft.type === "finalProduct" ? "Kost/stuk" : "Kost/kg"}
-                    value={formatEuro(previewCostPrice)}
-                    className="bg-white"
-                  />
+              <div className="grid gap-2 px-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-black text-[#111111]">
+                    Receptinstellingen
+                  </p>
+                  <p className="text-xs font-black text-[#2d2a26]/60">
+                    {draft.type === "finalProduct" ? "Kost/stuk" : "Kost/kg"}{" "}
+                    {formatEuro(previewCostPrice)}
+                  </p>
                 </div>
                 {draft.type === "finalProduct" && (
                   <div className="grid gap-2 md:grid-cols-[7rem_7rem_8rem_minmax(8rem,1fr)]">
@@ -1480,15 +1474,16 @@ export default function RecipeDetail({
                         RECIPE_SALES_VAT_RATE * 100
                       )}% btw. Alle kostprijzen blijven ex btw.`}
                     />
-                    <Metric
-                      label="Batchkost"
-                      value={formatEuro(previewBatchCost)}
-                      className="bg-white"
-                    />
+                    <div className="self-end py-1.5 text-sm font-black text-[#111111]">
+                      <p className="text-[0.65rem] uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                        Batchkost
+                      </p>
+                      <p>{formatEuro(previewBatchCost)}</p>
+                    </div>
                   </div>
                 )}
                 {draft.type === "semiFinished" && (
-                  <p className="text-sm font-bold text-[#2d2a26]/60">
+                  <p className="text-sm font-bold text-[#111111]">
                     Batchgewicht wordt automatisch berekend uit de receptregels.
                   </p>
                 )}
