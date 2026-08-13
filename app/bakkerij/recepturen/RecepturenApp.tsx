@@ -1,11 +1,10 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { strikIcons } from "../../StrikUI";
-import { canAccessWeddingCakes, filterAllowedItems } from "../../lib/auth/access";
+import { canAccessWeddingCakes } from "../../lib/auth/access";
 import type { UserProfile } from "../../lib/supabase/types";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
@@ -2384,7 +2383,6 @@ function BakkerijStartScreen({
 }>) {
   const offer = offerForWeek(home, selectedWeek);
   const canOpenWeddingCakeAgenda = canAccessWeddingCakes(profile);
-  const [isWeddingCakeAgendaOpen, setIsWeddingCakeAgendaOpen] = useState(false);
 
   return (
     <section className="mx-auto h-full w-full max-w-[76rem] overflow-y-auto px-3 py-3 sm:px-6 sm:py-5">
@@ -2510,45 +2508,14 @@ function BakkerijStartScreen({
         </div>
 
         {showProductionLinks && (
-          <ProductionOverviewTiles
+          <BakkerijWeddingCakeAgendaPanel
             canOpenWeddingCakeAgenda={canOpenWeddingCakeAgenda}
-            onOpenWeddingCakeAgenda={() => setIsWeddingCakeAgendaOpen(true)}
-            profile={profile}
-          />
-        )}
-        {canOpenWeddingCakeAgenda && (
-          <BakkerijWeddingCakeAgendaModal
-            open={isWeddingCakeAgendaOpen}
-            onClose={() => setIsWeddingCakeAgendaOpen(false)}
           />
         )}
       </div>
     </section>
   );
 }
-
-const productionOverviewLinks = [
-  {
-    href: "/bakkerij/bakkerij",
-    label: "Bakkerij",
-    icon: strikIcons.bakkerij,
-  },
-  {
-    href: "/bakkerij/logistiek",
-    label: "Logistiek",
-    icon: strikIcons.logistiek,
-  },
-  {
-    href: "/bakkerij/ijs-chocolade",
-    label: "Chocola & ijs",
-    icon: strikIcons.ijsChocolade,
-  },
-  {
-    href: "/bakkerij/management",
-    label: "Data",
-    icon: strikIcons.data,
-  },
-];
 
 function PersonnelMilestonesPanel() {
   const [events, setEvents] = useState<PersonnelDashboardEvent[]>([]);
@@ -2670,83 +2637,12 @@ function PersonnelMilestonesPanel() {
   );
 }
 
-function ProductionOverviewTile({
-  href,
-  icon,
-  label,
-  onClick,
-}: Readonly<{
-  href?: string;
-  icon: string;
-  label: string;
-  onClick?: () => void;
-}>) {
-  const className =
-    "group flex min-h-[5.8rem] items-center gap-5 rounded-full bg-[#b9cbb0] px-3 py-3 text-left shadow-sm ring-1 ring-[#a9bea1] transition hover:-translate-y-0.5 hover:bg-[#c4d5bc] hover:shadow-md active:translate-y-0 sm:min-h-[6.25rem] sm:px-4";
-  const content = (
-    <>
-      <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white shadow-sm sm:h-[4.4rem] sm:w-[4.4rem]">
-        <img src={icon} alt="" className="h-9 w-9 object-contain" />
-      </span>
-      <span className="min-w-0 text-[clamp(1rem,2.1vw,1.35rem)] font-black uppercase leading-tight text-[#111111]">
-        {label}
-      </span>
-    </>
-  );
-
-  if (href) {
-    return (
-      <Link href={href} className={className}>
-        {content}
-      </Link>
-    );
-  }
-
-  return (
-    <button type="button" onClick={onClick} className={className}>
-      {content}
-    </button>
-  );
-}
-
-function ProductionOverviewTiles({
-  profile,
+function BakkerijWeddingCakeAgendaPanel({
   canOpenWeddingCakeAgenda,
-  onOpenWeddingCakeAgenda,
 }: Readonly<{
-  profile?: UserProfile | null;
   canOpenWeddingCakeAgenda: boolean;
-  onOpenWeddingCakeAgenda: () => void;
 }>) {
-  const visibleLinks = filterAllowedItems(productionOverviewLinks, profile);
-
-  if (visibleLinks.length === 0 && !canOpenWeddingCakeAgenda) return null;
-
-  return (
-    <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:col-span-2 xl:grid-cols-3">
-      {canOpenWeddingCakeAgenda && (
-        <ProductionOverviewTile
-          icon={strikIcons.bruidstaart}
-          label="Bruidstaart agenda"
-          onClick={onOpenWeddingCakeAgenda}
-        />
-      )}
-      {visibleLinks.map((item) => (
-        <ProductionOverviewTile
-          key={item.href}
-          href={item.href}
-          icon={item.icon}
-          label={item.label}
-        />
-      ))}
-    </section>
-  );
-}
-
-function BakkerijWeddingCakeAgendaModal({
-  open,
-  onClose,
-}: Readonly<{ open: boolean; onClose: () => void }>) {
+  const [isOpen, setIsOpen] = useState(false);
   const [weekStart, setWeekStart] = useState(weekStartForDate);
   const [drafts, setDrafts] = useState<WeddingCakeDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState<WeddingCakeDraft | null>(null);
@@ -2755,7 +2651,7 @@ function BakkerijWeddingCakeAgendaModal({
   const weekDates = weekDatesFor(weekStart);
 
   useEffect(() => {
-    if (!open) return;
+    if (!isOpen || !canOpenWeddingCakeAgenda) return;
 
     let ignoreResult = false;
 
@@ -2818,64 +2714,64 @@ function BakkerijWeddingCakeAgendaModal({
     return () => {
       ignoreResult = true;
     };
-  }, [open, weekStart]);
+  }, [canOpenWeddingCakeAgenda, isOpen, weekStart]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-
-    window.addEventListener("keydown", closeOnEscape);
-
-    return () => {
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [onClose, open]);
+  if (!canOpenWeddingCakeAgenda) return null;
 
   const groupedDrafts = weekDates.map((date) => ({
     date,
     drafts: drafts.filter((draft) => getWeddingCakeDeliveryDate(draft) === date),
   }));
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1a1815]/35 p-3"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Bruidstaart agenda"
-    >
+    <section className="mt-5 overflow-hidden rounded-[1.65rem] border border-[#c9dcc1] bg-[#f3f8f1] shadow-sm lg:col-span-2">
       <button
         type="button"
-        onClick={onClose}
-        className="absolute inset-0 cursor-default"
-        aria-label="Bruidstaart agenda sluiten"
-      />
-      <section className="relative flex max-h-[calc(100vh-1.5rem)] w-full max-w-[78rem] flex-col overflow-hidden rounded-[1.6rem] bg-[#f6faf4] shadow-2xl">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#d6e5d8] bg-white/85 px-4 py-3 sm:px-5">
-          <div className="min-w-0">
-            <p className="text-[0.8rem] font-black uppercase tracking-[0.14em] text-[#30462f]">
-              bruidstaart agenda
-            </p>
-            <p className="mt-0.5 text-xs font-semibold italic text-[#30462f]/60">
-              {formatWeekRange(weekStart)}
-            </p>
-            <p className="mt-1 text-xs font-bold text-[#30462f]/55">
-              {isLoading ? "Laden..." : status}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+        onClick={() => setIsOpen((current) => !current)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left sm:px-5"
+        aria-expanded={isOpen}
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
+            <img
+              src={strikIcons.bruidstaart}
+              alt=""
+              className="h-7 w-7 object-contain"
+            />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[0.78rem] font-black uppercase tracking-[0.15em] text-[#30462f]/60">
+              bruidstaarten
+            </span>
+            <span className="block text-[clamp(1.2rem,2.5vw,1.75rem)] font-black leading-tight text-[#111111]">
+              Bruidstaart agenda
+            </span>
+            <span className="mt-0.5 block text-xs font-bold italic text-[#30462f]/60">
+              {isOpen ? formatWeekRange(weekStart) : "uitklappen voor weekoverzicht"}
+            </span>
+          </span>
+        </span>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#30462f] shadow-sm">
+          <ChevronIcon direction={isOpen ? "up" : "down"} />
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-[#d6e5d8] bg-[#f8fbf6] px-3 py-3 sm:px-4 sm:py-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-[#30462f]/55">
+                {isLoading ? "Laden..." : status}
+              </p>
+            </div>
             <div className="flex overflow-hidden rounded-full border border-[#bdd2b6] bg-white shadow-sm">
               <button
                 type="button"
                 onClick={() => setWeekStart(addDays(weekStart, -7))}
-                className="flex h-9 w-10 items-center justify-center border-r border-[#d6e5d8] text-2xl leading-none text-[#30462f]"
+                className="flex h-9 w-10 items-center justify-center border-r border-[#d6e5d8] text-[#30462f]"
                 aria-label="Vorige week bruidstaarten"
               >
-                ‹
+                <ChevronIcon direction="left" />
               </button>
               <button
                 type="button"
@@ -2887,26 +2783,16 @@ function BakkerijWeddingCakeAgendaModal({
               <button
                 type="button"
                 onClick={() => setWeekStart(addDays(weekStart, 7))}
-                className="flex h-9 w-10 items-center justify-center border-l border-[#d6e5d8] text-2xl leading-none text-[#30462f]"
+                className="flex h-9 w-10 items-center justify-center border-l border-[#d6e5d8] text-[#30462f]"
                 aria-label="Volgende week bruidstaarten"
               >
-                ›
+                <ChevronIcon direction="right" />
               </button>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#ef5737] text-xl font-black leading-none text-white shadow-sm"
-              aria-label="Sluiten"
-            >
-              ×
-            </button>
           </div>
-        </header>
 
-        <div className="min-h-0 overflow-y-auto p-3 sm:p-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,30rem)]">
-            <div className="rounded-[1.25rem] bg-white/75 p-3">
+            <div className="rounded-[1.25rem] bg-white/75 p-3 shadow-sm">
               <div className="grid gap-2 md:grid-cols-7">
                 {groupedDrafts.map((group) => (
                   <div
@@ -2975,8 +2861,8 @@ function BakkerijWeddingCakeAgendaModal({
             </div>
           </div>
         </div>
-      </section>
-    </div>
+      )}
+    </section>
   );
 }
 
@@ -3146,6 +3032,34 @@ function BakkerijWeddingCakeRow({
       <span className="font-black text-[#2d2a26]">{label}:</span>{" "}
       <span className="text-[#2d2a26]/75">{children}</span>
     </p>
+  );
+}
+
+function ChevronIcon({
+  direction,
+}: Readonly<{ direction: "up" | "down" | "left" | "right" }>) {
+  const rotation = {
+    down: "",
+    up: "rotate-180",
+    left: "rotate-90",
+    right: "-rotate-90",
+  }[direction];
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`h-4 w-4 ${rotation}`}
+      aria-hidden="true"
+    >
+      <path
+        d="m6 9 6 6 6-6"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.4"
+      />
+    </svg>
   );
 }
 
