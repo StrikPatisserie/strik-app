@@ -1310,30 +1310,25 @@ export default function RecipeDetail({
             <h2 className="mt-1 text-2xl font-black leading-tight sm:text-3xl">
               {isEditing ? draft.name || recipe.name : recipe.name}
             </h2>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <RecipeStatusBadge status={recipe.status} />
-              {!isEditing && recipe.type === "finalProduct" && (
-                <MarginBadge status={marginStatusForRecipe(previewRecipe)} />
-              )}
-              <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
-                {isEditing ? draft.productGroup || recipe.productGroup : recipe.productGroup}
-              </span>
-              {(isEditing
-                ? draft.strikArticleNumber
-                : recipe.strikArticleNumber) && (
-                <span className="rounded-full bg-[#edf5ea] px-2.5 py-1 text-xs font-black text-[#45663b]">
-                  art.{" "}
-                  {isEditing
-                    ? draft.strikArticleNumber
-                    : recipe.strikArticleNumber}
+            {!isEditing && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <RecipeStatusBadge status={recipe.status} />
+                {recipe.type === "finalProduct" && (
+                  <MarginBadge status={marginStatusForRecipe(previewRecipe)} />
+                )}
+                <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
+                  {recipe.productGroup}
                 </span>
-              )}
-              {!isEditing && (
+                {recipe.strikArticleNumber && (
+                  <span className="rounded-full bg-[#edf5ea] px-2.5 py-1 text-xs font-black text-[#45663b]">
+                    art. {recipe.strikArticleNumber}
+                  </span>
+                )}
                 <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-xs font-black text-[#2d2a26]/55">
                   {recipe.version}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
           <button
             type="button"
@@ -1348,17 +1343,8 @@ export default function RecipeDetail({
         {isEditing && (
           <Panel className="mt-2 rounded-none border-[#d8d0c4] bg-[#f3eee8] p-2">
             <div className="grid gap-3">
-              <div className="border border-[#111111] bg-white shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#111111] px-3 py-2">
-                  <div>
-                    <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
-                      Basisgegevens
-                    </p>
-                    <h3 className="text-lg font-black leading-tight">
-                      {startInEditMode ? "Recept toevoegen" : "Recept bewerken"}
-                    </h3>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="bg-white">
+                <div className="flex flex-wrap items-center justify-end gap-2 pb-2">
                     <RecipeTypeToggle
                       value={draft.type}
                       onChange={(value) => {
@@ -1384,7 +1370,6 @@ export default function RecipeDetail({
                         }}
                       />
                     </label>
-                  </div>
                 </div>
 
               {recipeImportWarnings.length > 0 && (
@@ -1402,7 +1387,7 @@ export default function RecipeDetail({
 
               {importCandidateReview}
 
-              <div className="grid gap-0 border-t border-[#d8d0c4]">
+              <div className="grid gap-0">
                 <CompactEditTextField
                   label="Naam"
                   value={draft.name}
@@ -1437,15 +1422,6 @@ export default function RecipeDetail({
             </div>
 
               <div className="grid gap-2 px-1">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-black text-[#111111]">
-                    Receptinstellingen
-                  </p>
-                  <p className="text-xs font-black text-[#2d2a26]/60">
-                    {draft.type === "finalProduct" ? "Kost/stuk" : "Kost/kg"}{" "}
-                    {formatEuro(previewCostPrice)}
-                  </p>
-                </div>
                 {draft.type === "finalProduct" && (
                   <div className="grid gap-2 md:grid-cols-[7rem_7rem_8rem_minmax(8rem,1fr)]">
                     <EditTextField
@@ -1482,23 +1458,13 @@ export default function RecipeDetail({
                     </div>
                   </div>
                 )}
-                {draft.type === "semiFinished" && (
-                  <p className="text-sm font-bold text-[#111111]">
-                    Batchgewicht wordt automatisch berekend uit de receptregels.
-                  </p>
-                )}
               </div>
 
               <div className="border-2 border-[#8fb184] bg-[#dce8d6] p-2 shadow-sm">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#45663b]">
-                      Recept
-                    </p>
-                    <h3 className="text-xl font-black leading-tight">
-                      Grondstoffen en halffabricaten
-                    </h3>
-                  </div>
+                  <p className="text-[0.72rem] font-black uppercase tracking-[0.16em] text-[#45663b]">
+                    Recept
+                  </p>
                   <p className="text-xs font-black text-[#45663b]">
                     {draftRecipeRows.length} regels · batch {formatEuro(previewBatchCost)}
                   </p>
@@ -1771,19 +1737,8 @@ export default function RecipeDetail({
               </div>
             </div>
 
-            <div className="border border-[#d8d0c4] bg-white p-2 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
-                    Details
-                  </p>
-                  <p className="text-sm font-black">
-                    Verpakking, productie, stappen en notities
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-2 flex flex-wrap gap-2">
+            <div className="grid gap-2 px-1">
+              <div className="flex flex-wrap gap-2">
                 {recipeEditSections.map((section) => {
                   const isActive =
                     isAdvancedOpen && activeEditSection === section.id;
@@ -2316,7 +2271,7 @@ export default function RecipeDetail({
             )}
             </div>
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#d8d0c4] pt-2">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-1">
               <div className="min-h-6 text-xs font-black text-[#45663b]">
                 {feedback || ""}
               </div>
