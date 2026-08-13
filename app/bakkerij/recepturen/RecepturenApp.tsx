@@ -2106,9 +2106,6 @@ export default function RecepturenApp({
           syncStatus={syncStatus}
           isLoadingData={isLoadingData}
           latestInvoiceNumber={latestInvoice?.invoiceNumber || ""}
-          recipes={recipeItems}
-          ingredients={ingredientItems}
-          invoice={latestInvoice}
           onOpen={openBeheerView}
           onDownloadExcel={downloadExcelBackup}
           onDownloadJson={downloadJsonBackup}
@@ -3181,9 +3178,6 @@ function BeheerHome({
   syncStatus,
   isLoadingData,
   latestInvoiceNumber,
-  recipes,
-  ingredients,
-  invoice,
   onOpen,
   onDownloadExcel,
   onDownloadJson,
@@ -3191,9 +3185,6 @@ function BeheerHome({
   syncStatus: string;
   isLoadingData: boolean;
   latestInvoiceNumber: string;
-  recipes: Recipe[];
-  ingredients: Ingredient[];
-  invoice: InvoiceImport;
   onOpen: (view: TabId) => void;
   onDownloadExcel: () => void;
   onDownloadJson: () => void;
@@ -3201,24 +3192,19 @@ function BeheerHome({
   const [downloadsOpen, setDownloadsOpen] = useState(false);
   const dataTiles = [
     {
-      title: "Voorpagina",
-      icon: "/UI-apps_data.svg",
-      onClick: () => onOpen("voorpagina" as TabId),
-    },
-    {
       title: "Grondstoffen",
       icon: "/UI-apps_data.svg",
       onClick: () => onOpen("ingredienten" as TabId),
     },
     {
-      title: "Verpakkingen",
-      icon: "/UI-apps_data.svg",
-      onClick: () => onOpen("verpakkingen" as TabId),
-    },
-    {
       title: "Halffabricaten",
       icon: "/UI-apps_productie.svg",
       onClick: () => onOpen("halffabricaten" as TabId),
+    },
+    {
+      title: "Verpakkingen",
+      icon: "/UI-apps_data.svg",
+      onClick: () => onOpen("verpakkingen" as TabId),
     },
   ];
 
@@ -3264,7 +3250,7 @@ function BeheerHome({
           </span>
         </button>
 
-        <div className="grid gap-2 md:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-3">
           {dataTiles.map((tile) => (
             <DataTileButton
               key={tile.title}
@@ -3317,13 +3303,6 @@ function BeheerHome({
         </div>
       </div>
 
-      <RecepturenDashboard
-        compact
-        recipes={recipes}
-        ingredients={ingredients}
-        invoice={invoice}
-      />
-
       <p className="text-xs font-bold leading-relaxed text-[#707070]">
         {isLoadingData ? "Laden..." : syncStatus}
         {latestInvoiceNumber ? ` Laatste factuur: ${latestInvoiceNumber}.` : ""}
@@ -3345,17 +3324,17 @@ function DataTileButton({
     <button
       type="button"
       onClick={onClick}
-      className="group flex min-h-14 items-center justify-between gap-3 rounded-lg border border-[#dbe9ee] bg-white px-3 py-2.5 text-left shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99] sm:min-h-16"
+      className="group flex min-h-10 items-center justify-between gap-2 rounded-lg border border-[#dbe9ee] bg-white px-2.5 py-2 text-left shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99] sm:min-h-11"
     >
-      <span className="flex min-w-0 items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#b9d7ea] sm:h-10 sm:w-10">
-          <img src={icon} alt="" className="h-5 w-5 object-contain sm:h-6 sm:w-6" />
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#b9d7ea] sm:h-8 sm:w-8">
+          <img src={icon} alt="" className="h-4 w-4 object-contain sm:h-5 sm:w-5" />
         </span>
-        <span className="truncate text-lg font-black leading-tight text-[#1a1815] md:text-base lg:text-lg">
+        <span className="truncate text-sm font-black leading-tight text-[#1a1815] sm:text-base">
           {title}
         </span>
       </span>
-      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#e8f3f8] text-base font-black transition group-active:scale-[0.96]">
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#e8f3f8] text-sm font-black transition group-active:scale-[0.96]">
         &gt;
       </span>
     </button>
