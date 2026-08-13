@@ -109,7 +109,7 @@ export default function WeeklyOfferPanel() {
   }, []);
 
   return (
-    <section className="min-w-0 rounded-[0.9rem] border border-[#ded8cf] bg-white p-2 shadow-sm sm:rounded-[1.25rem] sm:p-3">
+    <section className="flex h-full min-w-0 flex-col rounded-[0.9rem] border border-[#ded8cf] bg-white p-2 shadow-sm sm:rounded-[1.25rem] sm:p-3">
       <div className="mb-1.5 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-1 sm:mb-2 sm:gap-2">
         <div>
           <h2 className="winkel-card-heading text-[#1a1815]">
@@ -142,7 +142,7 @@ export default function WeeklyOfferPanel() {
         </div>
       </div>
 
-      <div className="mx-auto flex aspect-[210/297] w-full max-w-[11rem] items-center justify-center overflow-hidden rounded-[0.5rem] border border-[#b9ad9f] bg-white p-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7)] sm:max-w-[17rem] sm:rounded-[0.65rem] sm:p-2 lg:max-w-[18rem]">
+      <div className="mx-auto mt-1 flex aspect-[210/297] w-full max-w-[12rem] flex-1 items-center justify-center overflow-hidden rounded-[0.5rem] border border-[#b9ad9f] bg-white p-1 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.7)] sm:mt-2 sm:max-w-[23rem] sm:rounded-[0.65rem] sm:p-2 lg:max-w-[24rem] xl:max-w-[25rem]">
         {offer?.imageUrl ? (
           <img
             src={offer.imageUrl}
