@@ -205,6 +205,7 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
         ? Number(config.paymentRequestAmount)
         : 0,
       paymentRequestLinkId: textFrom(config.paymentRequestLinkId),
+      paymentRequestPaidAt: textFrom(config.paymentRequestPaidAt),
       decorationIds,
       topperIds,
       contact: {

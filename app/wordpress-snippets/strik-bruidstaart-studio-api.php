@@ -450,6 +450,12 @@ function strik_wedding_cakes_admin_page() {
         $payment_request_email = isset($config['paymentRequestEmail'])
             ? strik_wedding_cakes_admin_value($config, 'paymentRequestEmail')
             : '';
+        $payment_request_paid_at = isset($config['paymentRequestPaidAt'])
+            ? strik_wedding_cakes_admin_value($config, 'paymentRequestPaidAt')
+            : '';
+        $payment_request_amount = isset($config['paymentRequestAmount'])
+            ? strik_wedding_cakes_admin_value($config, 'paymentRequestAmount')
+            : '';
         $name = trim(
             strik_wedding_cakes_admin_value($draft, 'surname', '') . ' ' .
             strik_wedding_cakes_admin_value($draft, 'names', '')
@@ -478,6 +484,18 @@ function strik_wedding_cakes_admin_page() {
             }
         } else {
             echo 'Nog niet gemaild';
+        }
+        echo '</p>';
+        echo '<p><strong>Mollie betaling:</strong> ';
+        if ($payment_request_paid_at !== '') {
+            echo 'Betaald op ' . esc_html(strik_wedding_cakes_admin_date(substr($payment_request_paid_at, 0, 16)));
+            if ($payment_request_amount !== '') {
+                echo ' &middot; bedrag ' . esc_html($payment_request_amount);
+            }
+        } else if ($payment_request_emailed_at !== '') {
+            echo 'Nog niet betaald of nog niet gecontroleerd';
+        } else {
+            echo 'Geen betaalverzoek';
         }
         echo '</p>';
 

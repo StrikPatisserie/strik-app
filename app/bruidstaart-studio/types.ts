@@ -104,6 +104,7 @@ export type WeddingCakeConfig = {
   paymentRequestEmail?: string;
   paymentRequestAmount?: number;
   paymentRequestLinkId?: string;
+  paymentRequestPaidAt?: string;
   contact: ContactDetails;
 };
 

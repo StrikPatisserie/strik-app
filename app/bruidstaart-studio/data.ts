@@ -815,6 +815,7 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   paymentRequestEmail: "",
   paymentRequestAmount: 0,
   paymentRequestLinkId: "",
+  paymentRequestPaidAt: "",
   contact: emptyContactDetails,
 };
 

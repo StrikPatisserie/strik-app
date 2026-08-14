@@ -3777,6 +3777,7 @@ export default function BruidstaartStudioConfigurator() {
   const [config, setConfigState] = useState<WeddingCakeConfig>(
     createEmptyWeddingCakeConfig
   );
+  const configRef = useRef(config);
   const finalOrderEditProtectionRef = useRef(false);
   const finalOrderEditConfirmedRef = useRef(false);
   const [stepIndex, setStepIndex] = useState(0);
@@ -3806,6 +3807,11 @@ export default function BruidstaartStudioConfigurator() {
   const [paymentRequestAmount, setPaymentRequestAmount] = useState("");
   const [paymentRequestStatus, setPaymentRequestStatus] = useState("");
   const [paymentRequestSending, setPaymentRequestSending] = useState(false);
+  const [paymentStatusChecking, setPaymentStatusChecking] = useState(false);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -4463,6 +4469,11 @@ export default function BruidstaartStudioConfigurator() {
             }`
           : "Nee"
       }`,
+      `Betaallink betaald: ${
+        config.paymentRequestPaidAt
+          ? formatDutchDateTime(config.paymentRequestPaidAt)
+          : "Nee"
+      }`,
       "",
       "Opmerkingen",
       config.contact.notes || "-",
@@ -4608,6 +4619,7 @@ export default function BruidstaartStudioConfigurator() {
         paymentRequestEmail: targetEmail,
         paymentRequestAmount: amount,
         paymentRequestLinkId: data.paymentLinkId || config.paymentRequestLinkId,
+        paymentRequestPaidAt: "",
       };
       const sentLabel = formatDutchDateTime(sentAt);
       const message =
@@ -4628,6 +4640,104 @@ export default function BruidstaartStudioConfigurator() {
       );
     } finally {
       setPaymentRequestSending(false);
+    }
+  }
+
+  async function checkPaymentRequestStatus(
+    sourceConfig = config,
+    options: { silent?: boolean } = {}
+  ) {
+    const paymentLinkId = sourceConfig.paymentRequestLinkId?.trim();
+
+    if (!paymentLinkId) {
+      if (!options.silent) {
+        setPaymentRequestStatus("Er is nog geen Mollie betaallink om te checken.");
+      }
+      return;
+    }
+
+    if (sourceConfig.paymentRequestPaidAt) {
+      const message = `Betaallink al betaald op ${formatDutchDateTime(
+        sourceConfig.paymentRequestPaidAt
+      )}.`;
+      setPaymentRequestStatus(message);
+      setDraftStatus(message);
+      return;
+    }
+
+    setPaymentStatusChecking(true);
+    if (!options.silent) {
+      setPaymentRequestStatus("Betaling bij Mollie controleren...");
+    }
+
+    try {
+      const response = await fetch(
+        `/api/bruidstaart-payment-request/status?paymentLinkId=${encodeURIComponent(
+          paymentLinkId
+        )}`,
+        { cache: "no-store" }
+      );
+      const data = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        paid?: boolean;
+        paidAt?: string;
+        amount?: number;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.message || "Betaling controleren is mislukt.");
+      }
+
+      if (!data.paid || !data.paidAt) {
+        if (!options.silent) {
+          setPaymentRequestStatus("Nog niet betaald volgens Mollie.");
+        }
+        return;
+      }
+
+      const nextConfig = {
+        ...sourceConfig,
+        paid: true,
+        paymentRequestPaidAt: data.paidAt,
+        paymentRequestAmount:
+          Number.isFinite(Number(data.amount)) && Number(data.amount) > 0
+            ? Number(data.amount)
+            : sourceConfig.paymentRequestAmount,
+      };
+      const paidLabel = formatDutchDateTime(data.paidAt);
+      const message = `Betaallink betaald op ${paidLabel}.`;
+      const sourceCode = sourceConfig.contact.recognitionCode
+        .trim()
+        .toLowerCase();
+      const currentCode = configRef.current.contact.recognitionCode
+        .trim()
+        .toLowerCase();
+      const isCurrentDraft = sourceCode !== "" && sourceCode === currentCode;
+
+      if (isCurrentDraft) {
+        setConfigState(nextConfig);
+        setPaymentRequestStatus(message);
+        setDraftStatus(message);
+      } else if (!options.silent) {
+        setPaymentRequestStatus(message);
+        setDraftStatus(message);
+      }
+
+      await saveConfigDraft(nextConfig, {
+        silentMissingCode: true,
+        successStatus: `Mollie betaling opgeslagen: betaald op ${paidLabel}.`,
+        localStatus: `Mollie betaling gevonden op ${paidLabel}; WordPress-opslag lukte niet, lokaal opgeslagen.`,
+      });
+    } catch (error) {
+      if (!options.silent) {
+        setPaymentRequestStatus(
+          error instanceof Error
+            ? error.message
+            : "Betaling controleren is mislukt."
+        );
+      }
+    } finally {
+      setPaymentStatusChecking(false);
     }
   }
 
@@ -4919,6 +5029,7 @@ export default function BruidstaartStudioConfigurator() {
       paymentRequestEmail: draft.config.paymentRequestEmail || "",
       paymentRequestAmount: draft.config.paymentRequestAmount || 0,
       paymentRequestLinkId: draft.config.paymentRequestLinkId || "",
+      paymentRequestPaidAt: draft.config.paymentRequestPaidAt || "",
       topperIds: cleanedTopperIds,
       topperInitialsText: cleanedTopperIds.includes(CHOCOLATE_INITIALS_TOPPER_ID)
         ? normalizeChocoLetterText(draft.config.topperInitialsText)
@@ -4951,6 +5062,12 @@ export default function BruidstaartStudioConfigurator() {
       getVisibleSteps(nextConfig.styleId).length - 1,
       nextConfig.styleId
     );
+
+    if (loadedConfig.paymentRequestLinkId && !loadedConfig.paymentRequestPaidAt) {
+      window.setTimeout(() => {
+        void checkPaymentRequestStatus(loadedConfig, { silent: true });
+      }, 250);
+    }
   }
 
   async function deleteDraft(draft: WeddingCakeDraft) {
@@ -5720,6 +5837,18 @@ export default function BruidstaartStudioConfigurator() {
                                               )}
                                             </span>
                                           )}
+                                          {draft.config.paymentRequestPaidAt && (
+                                            <span className="rounded-full bg-[#e5f4e7] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
+                                              Mollie betaald{" "}
+                                              {formatDutchShortDate(
+                                                draft.config.paymentRequestPaidAt.slice(
+                                                  0,
+                                                  10
+                                                ),
+                                                ""
+                                              )}
+                                            </span>
+                                          )}
                                         </div>
                                         <p className="mt-1 text-sm font-semibold text-[#2d2a26]/60">
                                           {draft.surname ||
@@ -5868,6 +5997,18 @@ export default function BruidstaartStudioConfigurator() {
                                             )}
                                           </span>
                                         )}
+                                        {draft.config.paymentRequestPaidAt && (
+                                          <span className="rounded-full bg-[#e5f4e7] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
+                                            Mollie betaald{" "}
+                                            {formatDutchShortDate(
+                                              draft.config.paymentRequestPaidAt.slice(
+                                                0,
+                                                10
+                                              ),
+                                              ""
+                                            )}
+                                          </span>
+                                        )}
                                       </div>
                                       <p className="mt-1 text-sm font-semibold text-[#2d2a26]/60">
                                         {formatDutchShortDate(overviewDate)} ·{" "}
@@ -5938,6 +6079,18 @@ export default function BruidstaartStudioConfigurator() {
                                   betaalverzoek{" "}
                                   {formatDutchShortDate(
                                     draft.config.paymentRequestEmailedAt.slice(
+                                      0,
+                                      10
+                                    ),
+                                    ""
+                                  )}
+                                </span>
+                              )}
+                              {draft.config.paymentRequestPaidAt && (
+                                <span className="rounded-full bg-[#e5f4e7] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
+                                  Mollie betaald{" "}
+                                  {formatDutchShortDate(
+                                    draft.config.paymentRequestPaidAt.slice(
                                       0,
                                       10
                                     ),
@@ -6734,6 +6887,37 @@ export default function BruidstaartStudioConfigurator() {
                     : ""}
                 </div>
               )}
+              {config.paymentRequestLinkId && (
+                <div
+                  className={`rounded-[0.85rem] border p-3 text-xs font-black shadow-sm ${
+                    config.paymentRequestPaidAt
+                      ? "border-[#b5d3bd] bg-[#eef8ef] text-[#275d35]"
+                      : "border-[#ead8aa] bg-[#fffaf0] text-[#765819]"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      {config.paymentRequestPaidAt
+                        ? `✓ Betaallink betaald op ${formatDutchDateTime(
+                            config.paymentRequestPaidAt
+                          )}`
+                        : "Betaallink nog niet als betaald bevestigd"}
+                    </span>
+                    {!config.paymentRequestPaidAt && (
+                      <button
+                        type="button"
+                        onClick={() => void checkPaymentRequestStatus()}
+                        disabled={paymentStatusChecking}
+                        className="rounded-full bg-white px-3 py-1 text-[0.68rem] font-black text-[#1a1815] shadow-sm disabled:opacity-60"
+                      >
+                        {paymentStatusChecking
+                          ? "Controleren..."
+                          : "Controleer betaling"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -7014,7 +7198,8 @@ export default function BruidstaartStudioConfigurator() {
             {paymentRequestStatus && (
               <p
                 className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${
-                  paymentRequestStatus.includes("gemaild")
+                  paymentRequestStatus.includes("gemaild") ||
+                  paymentRequestStatus.includes("betaald")
                     ? "border-[#c8dbc2] bg-[#f3faf0] text-[#275d35]"
                     : "border-[#f1d0a7] bg-[#fff7e8] text-[#805f16]"
                 }`}
@@ -7031,6 +7216,18 @@ export default function BruidstaartStudioConfigurator() {
               >
                 Sluiten
               </button>
+              {config.paymentRequestLinkId && !config.paymentRequestPaidAt && (
+                <button
+                  type="button"
+                  onClick={() => void checkPaymentRequestStatus()}
+                  disabled={paymentStatusChecking}
+                  className="rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black text-[#1a1815] shadow-sm disabled:opacity-60"
+                >
+                  {paymentStatusChecking
+                    ? "Controleren..."
+                    : "Betaling checken"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void sendPaymentRequestMail()}
