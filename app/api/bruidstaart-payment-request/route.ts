@@ -32,8 +32,7 @@ const MOLLIE_PAYMENT_LINKS_URL =
   "https://api.mollie.com/v2/payment-links";
 const MOLLIE_REDIRECT_URL =
   process.env.MOLLIE_PAYMENT_LINK_REDIRECT_URL ||
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.STRIK_WEBSITE_URL ||
   "https://www.strik-patisserie.nl";
 
 type MolliePaymentLinkResponse = {
