@@ -1725,36 +1725,43 @@ function SchoonmaakForm() {
                   </div>
 
                   <div className="mt-3 grid gap-2">
-                    <button
-                      type="button"
-                      onClick={() => bevestigIjsBestelReminder("ordered")}
-                      className="rounded-2xl border border-[#c3d3bc] bg-[#f3faf0] px-3 py-2 text-center text-sm font-black text-[#243620] transition active:scale-[0.99]"
-                    >
-                      Ik heb al besteld
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        bevestigIjsBestelReminder("nothing-needed")
-                      }
-                      className="rounded-2xl border border-[#d7dfd2] bg-white px-3 py-2 text-center text-sm font-black text-[#243620] transition active:scale-[0.99]"
-                    >
-                      Ik heb niets nodig
-                    </button>
                     <a
                       href="/ijs/bestellen"
                       onClick={() => setIjsBestelReminderOpen(false)}
-                      className="rounded-2xl bg-[#243620] px-3 py-2 text-center text-sm font-black text-white shadow-sm transition active:scale-[0.99]"
+                      className="rounded-2xl bg-[#243620] px-3 py-2.5 text-center text-sm font-black text-white shadow-sm transition active:scale-[0.99]"
                     >
                       Nu bestellen
                     </a>
                     <button
                       type="button"
                       onClick={() => setIjsBestelReminderOpen(false)}
-                      className="rounded-2xl border border-[#e7e0d8] bg-[#faf8f5] px-3 py-2 text-sm font-black text-[#4f554c] transition active:scale-[0.99]"
+                      className="rounded-2xl border border-[#c3d3bc] bg-[#f3faf0] px-3 py-2.5 text-sm font-black text-[#243620] transition active:scale-[0.99]"
                     >
                       Ik doe het later
                     </button>
+                    <div className="mt-1 border-t border-[#edf0ea] pt-2">
+                      <p className="mb-1 text-center text-[0.58rem] font-black uppercase tracking-[0.16em] text-[#6f7769]/60">
+                        Alleen uitzetten als het echt klaar is
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => bevestigIjsBestelReminder("ordered")}
+                          className="rounded-xl border border-[#d7dfd2] bg-white px-2 py-1.5 text-[0.68rem] font-black text-[#4f5f4b]/75 transition hover:text-[#243620] active:scale-[0.99]"
+                        >
+                          Al besteld
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            bevestigIjsBestelReminder("nothing-needed")
+                          }
+                          className="rounded-xl border border-[#d7dfd2] bg-white px-2 py-1.5 text-[0.68rem] font-black text-[#4f5f4b]/75 transition hover:text-[#243620] active:scale-[0.99]"
+                        >
+                          Niets nodig
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </section>
               ) : (
