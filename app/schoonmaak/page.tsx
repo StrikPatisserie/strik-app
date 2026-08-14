@@ -85,8 +85,8 @@ function getDraftKey(winkel: string, datum: string, planType: PlanType) {
   return `strik-schoonmaak-${datum}-${winkel}-${planType}`;
 }
 
-function getIjsBestelReminderKey(datum: string) {
-  return `${IJS_BESTEL_REMINDER_KEY_PREFIX}-${datum}`;
+function getIjsBestelReminderKey(datum: string, winkel: string) {
+  return `${IJS_BESTEL_REMINDER_KEY_PREFIX}-${datum}-${winkel}`;
 }
 
 function readFileAsDataUrl(file: File) {
@@ -458,10 +458,11 @@ function bewaarLokaleDraft(
 }
 
 function leesIjsBestelReminderStatus(
-  datum: string
+  datum: string,
+  winkel: string
 ): IjsBestelReminderStatus | null {
   try {
-    const raw = localStorage.getItem(getIjsBestelReminderKey(datum));
+    const raw = localStorage.getItem(getIjsBestelReminderKey(datum, winkel));
     if (!raw) return null;
 
     const data = JSON.parse(raw) as { status?: unknown };
@@ -477,11 +478,12 @@ function leesIjsBestelReminderStatus(
 
 function bewaarIjsBestelReminderStatus(
   datum: string,
+  winkel: string,
   status: IjsBestelReminderStatus
 ) {
   try {
     localStorage.setItem(
-      getIjsBestelReminderKey(datum),
+      getIjsBestelReminderKey(datum, winkel),
       JSON.stringify({ status, savedAt: new Date().toISOString() })
     );
   } catch {
@@ -643,7 +645,7 @@ function SchoonmaakForm() {
       return;
     }
 
-    const opgeslagenStatus = leesIjsBestelReminderStatus(datum);
+    const opgeslagenStatus = leesIjsBestelReminderStatus(datum, winkel);
     setIjsBestelReminderStatus(opgeslagenStatus);
 
     if (opgeslagenStatus) {
@@ -660,7 +662,7 @@ function SchoonmaakForm() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [datum, ijsBestelReminderActief]);
+  }, [datum, winkel, ijsBestelReminderActief]);
 
   useEffect(() => {
     let negeerResultaat = false;
@@ -1194,7 +1196,7 @@ function SchoonmaakForm() {
   }
 
   function bevestigIjsBestelReminder(status: IjsBestelReminderStatus) {
-    bewaarIjsBestelReminderStatus(datum, status);
+    bewaarIjsBestelReminderStatus(datum, winkel, status);
     setIjsBestelReminderStatus(status);
     setIjsBestelReminderOpen(false);
   }
@@ -1726,11 +1728,8 @@ function SchoonmaakForm() {
                     <button
                       type="button"
                       onClick={() => bevestigIjsBestelReminder("ordered")}
-                      className="flex items-center gap-2 rounded-2xl border border-[#c3d3bc] bg-[#f3faf0] px-3 py-2 text-left text-sm font-black text-[#243620] transition active:scale-[0.99]"
+                      className="rounded-2xl border border-[#c3d3bc] bg-[#f3faf0] px-3 py-2 text-center text-sm font-black text-[#243620] transition active:scale-[0.99]"
                     >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[#8fb184] bg-white text-xs">
-                        ✓
-                      </span>
                       Ik heb al besteld
                     </button>
                     <button
@@ -1738,11 +1737,8 @@ function SchoonmaakForm() {
                       onClick={() =>
                         bevestigIjsBestelReminder("nothing-needed")
                       }
-                      className="flex items-center gap-2 rounded-2xl border border-[#d7dfd2] bg-white px-3 py-2 text-left text-sm font-black text-[#243620] transition active:scale-[0.99]"
+                      className="rounded-2xl border border-[#d7dfd2] bg-white px-3 py-2 text-center text-sm font-black text-[#243620] transition active:scale-[0.99]"
                     >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[#8fb184] bg-white text-xs">
-                        ✓
-                      </span>
                       Ik heb niets nodig
                     </button>
                     <a
