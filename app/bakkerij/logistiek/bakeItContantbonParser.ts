@@ -91,7 +91,7 @@ const articleNumberPattern =
 const deliveryCostArticleNumber = "990010";
 const emailAddressPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
 const customerInstructionCuePattern =
-  /\b(?:het\s+liefst|graag|s\.?v\.?p\.?|t\.?\s*a\.?\s*v\.?|tav|ter\s+attentie\s+van|opstelling|cr[eè]me\s+stippen|creme\s+stippen|bellen|contact|ceremoniemeester|afdeling|hoofdingang|receptie|ingang|route|voor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen|klaar))\b/i;
+  /\b(?:het\s+liefst|graag|s\.?v\.?p\.?|t\.?\s*a\.?\s*v\.?|tav|ter\s+attentie\s+van|opstelling|cr[eè]me\s+stippen|creme\s+stippen|bellen|contact|ceremoniemeester|afdeling|hoofdingang|receptie|ingang|route|voor\s+\d{1,2}[:.]\d{2}(?:\s*uur)?\s+(?:leveren|bezorgen|brengen|klaar))\b/i;
 const productResidueRemarkPattern =
   /\b(?:gesorteerd|glutenvrij|schuim|taart|tartelette|gebak|bombe|slofje|slof|hazelino|hazelnootbol|bossche\s+bol|tompouce|appel\s+royale|lente\s+parel|steventje|nougatine|pistache|passievol|cheese\s+punt|cremetaart|slagroom|vulling|kleur|bezorgkosten|betaalverzoek|mailen)\b/i;
 
@@ -882,11 +882,11 @@ function stripEmbeddedDeliveryNoise(value: string) {
       " "
     )
     .replace(
-      /\b(?:bezorging|bezorgen|levering|leveren)\s+(?!tussen\b|voor\b|om\b|vanaf\b|kosten\b).*?(?=\bvoor\s+\d{1,2}[:.]\d{2}\s+(?:leveren|bezorgen|brengen)\b)/gi,
+      /\b(?:bezorging|bezorgen|levering|leveren)\s+(?!tussen\b|voor\b|om\b|vanaf\b|kosten\b).*?(?=\bvoor\s+\d{1,2}[:.]\d{2}(?:\s*uur)?\s+(?:leveren|bezorgen|brengen)\b)/gi,
       " "
     )
     .replace(
-      /\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:tussen|voor|om|vanaf)\s+\d{1,2}[:.]\d{2}(?:\s+(?:en|tot|-)\s+\d{1,2}[:.]\d{2})?.*$/i,
+      /\b(?:bezorgen|bezorging|afleveren|aflevering|leveren|levering)\s+(?:tussen|voor|om|vanaf)\s+\d{1,2}[:.]\d{2}(?:\s*uur)?(?:\s+(?:en|tot|-)\s+\d{1,2}[:.]\d{2}(?:\s*uur)?)?.*$/i,
       " "
     )
     .replace(

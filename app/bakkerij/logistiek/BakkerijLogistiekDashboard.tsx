@@ -907,10 +907,6 @@ function fixedCustomerForReceipt(
   );
 }
 
-function receiptHasBonDeliveryWindow(receipt: ReceiptSummary) {
-  return Boolean(receiptOperationalTime(receipt));
-}
-
 function appendRouteNote(base: string, addition: string) {
   const cleanBase = String(base || "").trim();
   const cleanAddition = addition.replace(/\s+/g, " ").trim();
@@ -940,7 +936,8 @@ function applyFixedCustomerDefaults(
     const fixedCustomer = fixedCustomerForReceipt(receipt, fixedCustomers);
     if (!fixedCustomer) return receipt;
 
-    const hasBonTime = receiptHasBonDeliveryWindow(receipt);
+    const bonTime = receiptBonOperationalTime(receipt);
+    const hasBonTime = Boolean(bonTime);
     const fixedDeliveryNote =
       !hasBonTime && fixedCustomer.deliveryWindow
         ? `Vaste levertijd ${fixedCustomer.deliveryWindow}`
@@ -957,7 +954,7 @@ function applyFixedCustomerDefaults(
       ...receipt,
       time:
         hasBonTime || !fixedCustomer.deliveryWindow
-          ? receipt.time
+          ? bonTime || receipt.time
           : fixedCustomer.deliveryWindow,
       address: fieldLooksMissing(receipt.address)
         ? fixedCustomer.address || receipt.address
@@ -1301,6 +1298,53 @@ function hasValidClockTimes(value: string) {
   });
 }
 
+function normalizeReceiptClockTime(value: string) {
+  const match = value.trim().match(/^(\d{1,2})[:.](\d{2})$/);
+  if (!match) return "";
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return "";
+  }
+
+  return `${String(hour).padStart(2, "0")}:${match[2]}`;
+}
+
+function extractOperationalTimeFromFreeText(value: string) {
+  const text = value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+
+  const range = text.match(
+    /\b(?:tussen|van)\s+(\d{1,2}[:.]\d{2})\s*(?:uur)?\s*(?:en|tot|-)\s*(\d{1,2}[:.]\d{2})\s*(?:uur)?\b/i
+  );
+  if (range) {
+    const start = normalizeReceiptClockTime(range[1]);
+    const end = normalizeReceiptClockTime(range[2]);
+
+    return start && end ? `${start}-${end}` : "";
+  }
+
+  const preferred = text.match(
+    /\b(?:graag\s+)?(?:v[oó]or|uiterlijk|om|vanaf|bezorgen|bezorging|leveren|levering|tijd|bezorgtijd)\b[^.?!;\n]{0,80}?(\d{1,2}[:.]\d{2})\s*(?:uur)?\b/i
+  );
+  if (preferred) return normalizeReceiptClockTime(preferred[1]);
+
+  const deliveryAfterTime = text.match(
+    /\b(\d{1,2}[:.]\d{2})\s*(?:uur)?\s+(?:bezorgen|leveren|brengen|klaar)\b/i
+  );
+  if (deliveryAfterTime) return normalizeReceiptClockTime(deliveryAfterTime[1]);
+
+  return "";
+}
+
 function receiptOperationalTime(receipt: ReceiptSummary) {
   const time = receipt.time.trim();
   if (!time || /^geen tijd$/i.test(time)) return "";
@@ -1310,8 +1354,31 @@ function receiptOperationalTime(receipt: ReceiptSummary) {
   return time;
 }
 
+function receiptNoteOperationalTime(receipt: ReceiptSummary) {
+  const source = [
+    receipt.customerNote,
+    receipt.note,
+    receipt.lines.map((line) => line.note || "").join(" "),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (!/\b(?:graag|bezorg|lever|v[oó]or|om|vanaf|tijd|uur)\b/i.test(source)) {
+    return "";
+  }
+
+  const time = extractOperationalTimeFromFreeText(source);
+  if (!time || timeLooksLikePhotoTimestamp(receipt, time)) return "";
+
+  return time;
+}
+
+function receiptBonOperationalTime(receipt: ReceiptSummary) {
+  return receiptNoteOperationalTime(receipt) || receiptOperationalTime(receipt);
+}
+
 function receiptListTimeLabel(receipt: ReceiptSummary) {
-  const time = receiptOperationalTime(receipt);
+  const time = receiptBonOperationalTime(receipt);
   if (!time) return "";
 
   const matches = [...time.matchAll(/\b(\d{1,2}):(\d{2})\b/g)];
