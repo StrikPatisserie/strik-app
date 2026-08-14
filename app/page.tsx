@@ -21,6 +21,12 @@ const baseSections = [
     icon: strikIcons.ijs,
   },
   {
+    href: "/bakkerij/logistiek",
+    title: "Logistiek",
+    subtitle: "Routes en pakbonnen",
+    icon: strikIcons.logistiek,
+  },
+  {
     href: "/bakkerij",
     title: "Productie",
     subtitle: "Overzicht, bakkerij en data",
@@ -71,7 +77,7 @@ export default async function Home() {
 
         </header>
 
-        <section className="mx-auto grid w-full max-w-[calc(100vw-3.5rem)] grid-cols-1 gap-2 sm:max-w-none sm:grid-cols-2 sm:gap-3 xl:grid-cols-5">
+        <section className="mx-auto grid w-full max-w-[calc(100vw-3.5rem)] grid-cols-1 gap-2 sm:max-w-none sm:grid-cols-2 sm:gap-3 xl:grid-cols-6">
           {visibleSections.map((section) => (
             <Link
               key={section.href}

@@ -17,6 +17,7 @@ import {
 } from "../../lib/supabase/types";
 import {
   BAKERY_DEPARTMENT_PERMISSION_OPTIONS,
+  LOGISTICS_PERMISSION_OPTIONS,
   VIERDAAGSE_PERMISSION_OPTIONS,
   WINKEL_STORE_PERMISSION_OPTIONS,
 } from "../../lib/auth/access";
@@ -131,6 +132,9 @@ const basePermissionOptions = PERMISSION_OPTIONS.filter(
     !VIERDAAGSE_PERMISSION_OPTIONS.some(
       (option) => option.id === permission.id
     ) &&
+    !LOGISTICS_PERMISSION_OPTIONS.some(
+      (option) => option.id === permission.id
+    ) &&
     permission.id !== "bakkerij.data" &&
     permission.id !== "bruidstaarten.view"
 );
@@ -208,6 +212,12 @@ function UserFields({ profile }: Readonly<{ profile?: UserProfile }>) {
             title="Bakkerij afdelingen"
             description="Geen vinkjes betekent: bakkerij-account ziet beide afdelingen. Zet je hier vinkjes, dan ziet diegene alleen die afdelingen."
             options={BAKERY_DEPARTMENT_PERMISSION_OPTIONS}
+            permissions={profile?.permissions}
+          />
+          <PermissionGrid
+            title="Logistiek"
+            description="Alleen aangevinkte gebruikers zien Logistiek als hoofdonderdeel."
+            options={LOGISTICS_PERMISSION_OPTIONS}
             permissions={profile?.permissions}
           />
           <PermissionGrid

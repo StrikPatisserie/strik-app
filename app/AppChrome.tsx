@@ -24,8 +24,12 @@ export default function AppChrome({
     pathname === "/update-password" ||
     pathname.startsWith("/auth/");
   const isPrintArea = pathname === "/bakkerij/logistiek/arend-print";
+  const isLogistiekWorkArea =
+    pathname === "/bakkerij/logistiek" ||
+    pathname.startsWith("/bakkerij/logistiek/");
   const isBakeryWorkArea =
-    pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
+    (pathname === "/bakkerij" || pathname.startsWith("/bakkerij/")) &&
+    !isLogistiekWorkArea;
   const isWinkelWorkArea =
     pathname === "/winkel" ||
     pathname.startsWith("/winkel/") ||
@@ -35,7 +39,7 @@ export default function AppChrome({
     pathname.startsWith("/bruidstaarten") ||
     pathname === "/schoonmaak" ||
     pathname.startsWith("/schoonmaak/");
-  const isWorkArea = isWinkelWorkArea || isBakeryWorkArea;
+  const isWorkArea = isWinkelWorkArea || isBakeryWorkArea || isLogistiekWorkArea;
   const isVierdaagseWorkArea =
     pathname === "/vierdaagse" ||
     pathname.startsWith("/vierdaagse/") ||

@@ -8489,7 +8489,7 @@ export default function BakkerijLogistiekDashboard() {
       <StrikPageHeader
         title="Bakkerij logistiek"
         icon={strikIcons.logistiek}
-        kicker="Productie"
+        kicker="Logistiek"
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />
 

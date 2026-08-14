@@ -22,6 +22,7 @@ type NavItem = {
 const mainNavItems = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
+  { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
   { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
@@ -48,13 +49,19 @@ const bakkerijNavItems = [
     label: "IJs & chocolade",
     icon: strikIcons.ijsChocolade,
   },
-  { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
   { href: "/bakkerij/management", label: "Data", icon: strikIcons.data },
 ];
 
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/winkel") return pathname === "/winkel";
+  if (href === "/bakkerij/logistiek") return isLogistiekWorkArea(pathname);
+  if (href === "/bakkerij") {
+    return (
+      (pathname === "/bakkerij" || pathname.startsWith("/bakkerij/")) &&
+      !isLogistiekWorkArea(pathname)
+    );
+  }
   if (href === "/bakkerij/overzicht") {
     return pathname === "/bakkerij" || pathname === href;
   }
@@ -97,7 +104,17 @@ function isWinkelWorkArea(pathname: string) {
 }
 
 function isBakkerijWorkArea(pathname: string) {
-  return pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
+  return (
+    (pathname === "/bakkerij" || pathname.startsWith("/bakkerij/")) &&
+    !isLogistiekWorkArea(pathname)
+  );
+}
+
+function isLogistiekWorkArea(pathname: string) {
+  return (
+    pathname === "/bakkerij/logistiek" ||
+    pathname.startsWith("/bakkerij/logistiek/")
+  );
 }
 
 function isVierdaagseWorkArea(pathname: string) {
@@ -118,6 +135,7 @@ export default function WinkelSidebar({
   const pathname = usePathname();
   const showWinkelSubNav = isWinkelWorkArea(pathname);
   const showBakkerijSubNav = isBakkerijWorkArea(pathname);
+  const showLogistiekNav = isLogistiekWorkArea(pathname);
   const showVierdaagseNav = isVierdaagseWorkArea(pathname);
   const mainItems = filterAllowedItems(
     filterVisibleMainNavigationItems(mainNavItems, featureVisibility),
@@ -143,6 +161,7 @@ export default function WinkelSidebar({
           let active = isActivePath(pathname, item.href);
           if (item.href === "/winkel") active = showWinkelSubNav;
           if (item.href === "/bakkerij") active = showBakkerijSubNav;
+          if (item.href === "/bakkerij/logistiek") active = showLogistiekNav;
           if (item.href === "/vierdaagse") active = showVierdaagseNav;
 
           return (

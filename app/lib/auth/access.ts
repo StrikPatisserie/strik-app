@@ -4,7 +4,8 @@ export type SignupDepartment =
   | "winkel"
   | "ijs"
   | "bakkerij-patisserie"
-  | "bakkerij-ijs-chocolade";
+  | "bakkerij-ijs-chocolade"
+  | "logistiek";
 
 export const WINKEL_STORE_IDS = [
   "ziekerstraat",
@@ -23,6 +24,10 @@ export const WINKEL_STORE_PERMISSION_OPTIONS = [
 export const BAKERY_DEPARTMENT_PERMISSION_OPTIONS = [
   { id: "bakkerij.patisserie", label: "Bakkerij Patisserie" },
   { id: "bakkerij.ijs_chocolade", label: "Bakkerij IJs & chocolade" },
+];
+
+export const LOGISTICS_PERMISSION_OPTIONS = [
+  { id: "bakkerij.logistiek", label: "Logistiek" },
 ];
 
 export const VIERDAAGSE_PERMISSION_OPTIONS = [
@@ -81,6 +86,14 @@ export const SIGNUP_DEPARTMENTS: {
     store: "ijs-chocolade",
     permissions: { "bakkerij.ijs_chocolade": true },
   },
+  {
+    id: "logistiek",
+    label: "Logistiek",
+    description: "Ochtendregie, routes, pakbonnen en transport.",
+    role: "logistiek",
+    store: "logistiek",
+    permissions: { "bakkerij.logistiek": true },
+  },
 ];
 
 function normalizeRole(role: string | null | undefined) {
@@ -132,6 +145,7 @@ export function getDefaultPathForRole(role: string | null | undefined) {
   if (normalizedRole === "winkel") return "/winkel";
   if (normalizedRole === "ijs" || normalizedRole === "ijssalon") return "/ijs";
   if (normalizedRole === "bakkerij") return "/bakkerij";
+  if (normalizedRole === "logistiek") return "/bakkerij/logistiek";
 
   return "/";
 }
@@ -217,6 +231,13 @@ function isBakkerijPath(pathname: string) {
   return pathname === "/bakkerij" || pathname.startsWith("/bakkerij/");
 }
 
+function isLogistiekPath(pathname: string) {
+  return (
+    pathname === "/bakkerij/logistiek" ||
+    pathname.startsWith("/bakkerij/logistiek/")
+  );
+}
+
 function isVierdaagsePath(pathname: string) {
   return (
     pathname === "/vierdaagse" ||
@@ -284,6 +305,16 @@ export function canAccessBakkerijIjsChocolade(
   return (
     !hasBakeryDepartmentSelection(profile) ||
     hasPermission(profile, "bakkerij.ijs_chocolade")
+  );
+}
+
+export function canAccessLogistiek(profile: UserProfile | null | undefined) {
+  if (hasFullAccess(profile)) return true;
+  if (!profile?.active) return false;
+
+  return (
+    normalizeRole(profile.role) === "logistiek" ||
+    hasPermission(profile, "bakkerij.logistiek")
   );
 }
 
@@ -362,6 +393,10 @@ export function canAccessPath(
 
   if (isVierdaagsePath(pathname)) {
     return canAccessVierdaagsePath(profile, pathname);
+  }
+
+  if (isLogistiekPath(pathname)) {
+    return canAccessLogistiek(profile);
   }
 
   if (isBakkerijPath(pathname)) {

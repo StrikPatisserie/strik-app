@@ -15,13 +15,28 @@ const items = [
   { href: "/", label: "Home", icon: "/strik-logo.png" },
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
+  { href: "/bakkerij/logistiek", label: "Logistiek", icon: strikIcons.logistiek },
   { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
 ];
 
+function isLogistiekPath(pathname: string) {
+  return (
+    pathname === "/bakkerij/logistiek" ||
+    pathname.startsWith("/bakkerij/logistiek/")
+  );
+}
+
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
+  if (href === "/bakkerij/logistiek") return isLogistiekPath(pathname);
+  if (href === "/bakkerij") {
+    return (
+      (pathname === "/bakkerij" || pathname.startsWith("/bakkerij/")) &&
+      !isLogistiekPath(pathname)
+    );
+  }
   if (href === "/vierdaagse") {
     return (
       pathname === "/vierdaagse" ||

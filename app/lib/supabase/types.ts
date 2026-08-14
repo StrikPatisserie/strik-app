@@ -14,6 +14,7 @@ export type UserRole =
   | "management"
   | "winkel"
   | "bakkerij"
+  | "logistiek"
   | "ijs"
   | "medewerker";
 
@@ -42,6 +43,7 @@ export const USER_ROLES: { id: UserRole; label: string }[] = [
   { id: "winkel", label: "Winkel" },
   { id: "ijs", label: "IJssalon" },
   { id: "bakkerij", label: "Bakkerij" },
+  { id: "logistiek", label: "Logistiek" },
   { id: "medewerker", label: "Medewerker" },
 ];
 
@@ -54,6 +56,7 @@ export const USER_STORES = [
   { id: "daalseweg", label: "Daalseweg" },
   { id: "ziekerstraat", label: "Ziekerstraat" },
   { id: "bakkerij", label: "Bakkerij" },
+  { id: "logistiek", label: "Logistiek" },
   { id: "ijs-chocolade", label: "IJs & chocolade" },
 ];
 
@@ -79,6 +82,7 @@ export const PERMISSION_OPTIONS = [
   { id: "bakkerij.view", label: "Productie bekijken" },
   { id: "bakkerij.patisserie", label: "Bakkerij Patisserie" },
   { id: "bakkerij.ijs_chocolade", label: "Bakkerij IJs & chocolade" },
+  { id: "bakkerij.logistiek", label: "Logistiek bekijken" },
   { id: "bakkerij.data", label: "Bakkerij data bekijken" },
   { id: "recepturen.manage", label: "Recepturen beheren" },
   { id: "schoonmaak.manage", label: "Schoonmaak beheren" },
