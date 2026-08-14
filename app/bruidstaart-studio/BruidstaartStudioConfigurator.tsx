@@ -6105,28 +6105,21 @@ export default function BruidstaartStudioConfigurator() {
               )}
 
               {studioMode === "manage" && (
-              <div className="rounded-[0.85rem] border border-[#ead8aa] bg-[#fff7df] p-2.5 shadow-sm sm:p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="rounded-md border border-[#ded8cf] bg-white p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ece6dc] pb-2">
                   <div>
-                    <p className="text-[0.56rem] font-semibold uppercase tracking-wider text-[#8b8278]">
-                      Agenda en beheer
-                    </p>
-                    <h3 className="mt-0.5 text-sm font-bold leading-tight text-[#1a1815]">
+                    <h3 className="text-base font-black leading-tight text-[#1a1815]">
                       Bruidstaarten beheren
                     </h3>
-                    <p className="mt-0.5 text-[0.68rem] font-semibold leading-snug text-[#6b645b]">
-                      Bekijk de agenda of zoek op herkenningscode, achternaam of
-                      leverdatum.
-                    </p>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1">
                     <button
                       type="button"
                       onClick={toggleWeekOverview}
-                      className={`rounded-full border border-[#ead8aa] px-2.5 py-1.5 text-[0.64rem] font-black shadow-sm transition ${
+                      className={`rounded-md border px-2.5 py-1.5 text-[0.64rem] font-black transition ${
                         weekOverviewOpen
-                          ? "bg-[#dce8d6] text-[#2d2a26]"
-                          : "bg-white/55 text-[#2d2a26]/45 hover:text-[#2d2a26]/70"
+                          ? "border-[#bacfb4] bg-[#dce8d6] text-[#2d2a26]"
+                          : "border-[#ded8cf] bg-[#faf8f5] text-[#2d2a26]/55 hover:text-[#2d2a26]"
                       }`}
                     >
                       {weekOverviewOpen ? "Sluit weekoverzicht" : "Weekoverzicht"}
@@ -6134,24 +6127,24 @@ export default function BruidstaartStudioConfigurator() {
                     <button
                       type="button"
                       onClick={toggleAllOverview}
-                      className={`rounded-full border border-[#ead8aa] px-2.5 py-1.5 text-[0.64rem] font-black shadow-sm transition ${
+                      className={`rounded-md border px-2.5 py-1.5 text-[0.64rem] font-black transition ${
                         allOverviewOpen
-                          ? "bg-[#f1d28f] text-[#2d2a26]"
-                          : "bg-white/55 text-[#2d2a26]/45 hover:text-[#2d2a26]/70"
+                          ? "border-[#e6c368] bg-[#f1d28f] text-[#2d2a26]"
+                          : "border-[#ded8cf] bg-[#faf8f5] text-[#2d2a26]/55 hover:text-[#2d2a26]"
                       }`}
                     >
                       {allOverviewOpen ? "Sluit toon alle" : "Toon alle"}
                     </button>
                   </div>
                 </div>
-                <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_12rem_auto]">
+                <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_11rem_auto]">
                   <input
                     value={draftSearch}
                     onChange={(event) => setDraftSearch(event.target.value)}
                     placeholder="Zoek"
-                    className="min-w-0 rounded-xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold"
+                    className="min-w-0 rounded-md border border-[#ded8cf] bg-white px-3 py-2 text-sm font-bold outline-none focus:border-[#8fb184]"
                   />
-                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                  <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
                     Leverdatum
                     <input
                       value={draftDeliveryDate}
@@ -6160,19 +6153,19 @@ export default function BruidstaartStudioConfigurator() {
                       }
                       inputMode="numeric"
                       placeholder="DD-MM-JJ"
-                      className="min-w-0 rounded-xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
+                      className="min-w-0 rounded-md border border-[#ded8cf] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] outline-none focus:border-[#8fb184]"
                     />
                   </label>
                   <button
                     type="button"
                     onClick={searchDrafts}
-                    className="self-end rounded-full bg-[#f1d28f] px-4 py-2 text-xs font-black shadow-sm"
+                    className="self-end rounded-md bg-[#f1d28f] px-4 py-2 text-xs font-black"
                   >
                     Zoeken
                   </button>
                 </div>
                 {weekOverviewOpen && (
-                  <section className="mt-4 grid gap-3 rounded-[1.2rem] border border-[#ead8aa] bg-white/65 p-3">
+                  <section className="mt-3 grid gap-2 rounded-md border border-[#e7e0d8] bg-[#fbfaf8] p-2.5">
                     <div className="flex flex-wrap items-end justify-between gap-3">
                       <div>
                         <p className="text-sm font-black text-[#2d2a26]">
@@ -6196,11 +6189,11 @@ export default function BruidstaartStudioConfigurator() {
                             )
                           }
                           disabled={weekOverviewLoading}
-                          className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
+                          className="rounded-md border border-[#ded8cf] bg-white px-2.5 py-1.5 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
                         >
                           Vorige
                         </button>
-                        <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                        <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
                           Week van
                           <input
                             type="date"
@@ -6220,7 +6213,7 @@ export default function BruidstaartStudioConfigurator() {
                                   : ""
                               );
                             }}
-                            className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
+                            className="min-w-0 rounded-md border border-[#ded8cf] bg-white px-3 py-1.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
                           />
                         </label>
                         <button
@@ -6231,7 +6224,7 @@ export default function BruidstaartStudioConfigurator() {
                             )
                           }
                           disabled={weekOverviewLoading}
-                          className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
+                          className="rounded-md border border-[#ded8cf] bg-white px-2.5 py-1.5 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
                         >
                           Volgende
                         </button>
@@ -6239,7 +6232,7 @@ export default function BruidstaartStudioConfigurator() {
                           type="button"
                           onClick={() => void loadWeekOverview()}
                           disabled={weekOverviewLoading}
-                          className="rounded-full bg-[#dce8d6] px-4 py-2 text-xs font-black text-[#2d2a26] shadow-sm disabled:opacity-50"
+                          className="rounded-md bg-[#dce8d6] px-3 py-1.5 text-xs font-black text-[#2d2a26] disabled:opacity-50"
                         >
                           {weekOverviewLoading ? "Laden..." : "Toon"}
                         </button>
@@ -6251,7 +6244,7 @@ export default function BruidstaartStudioConfigurator() {
                       </p>
                     )}
                     {weekOverviewGroups.length > 0 && (
-                      <div className="grid gap-2">
+                      <div className="grid gap-1.5">
                         {weekOverviewGroups.map((group) => {
                           const definitiveCount = group.drafts.filter(
                             (draft) => draft.config.completed
@@ -6260,13 +6253,13 @@ export default function BruidstaartStudioConfigurator() {
                           return (
                             <div
                               key={group.date}
-                              className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
+                              className="rounded-md border border-[#e5dfd7] bg-white p-2"
                             >
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-sm font-black capitalize">
+                                <p className="text-xs font-black capitalize text-[#1a1815]">
                                   {formatWeekDayLabel(group.date)}
                                 </p>
-                                <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                                <span className="rounded-sm bg-[#f4f0ea] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
                                   {group.drafts.length} totaal
                                   {group.drafts.length > 0
                                     ? ` · ${definitiveCount} definitief`
@@ -6274,7 +6267,7 @@ export default function BruidstaartStudioConfigurator() {
                                 </span>
                               </div>
                               {group.drafts.length ? (
-                                <div className="mt-2 grid gap-2">
+                                <div className="mt-1.5 grid gap-1.5">
                                   {group.drafts.map((draft) => {
                                     const orderStatus =
                                       getOrderStatusLabel(draft);
@@ -6288,14 +6281,14 @@ export default function BruidstaartStudioConfigurator() {
                                         key={`${group.date}-${draft.code}`}
                                         type="button"
                                         onClick={() => openDraftActionDialog(draft)}
-                                        className="rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3 text-left shadow-sm transition active:scale-[0.99]"
+                                        className="rounded-md border border-[#e7e0d8] bg-white p-2 text-left transition hover:bg-[#faf8f5] active:scale-[0.99]"
                                       >
                                         <div className="flex flex-wrap items-center gap-2">
                                           <span className="font-black">
                                             {draft.code}
                                           </span>
                                           <span
-                                            className={`rounded-full px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] ${
+                                            className={`rounded-sm px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] ${
                                               orderStatus === "definitief"
                                                 ? "bg-[#dce8d6] text-[#4c6842]"
                                                 : "bg-[#f8f6f3] text-[#2d2a26]/55"
@@ -6304,12 +6297,12 @@ export default function BruidstaartStudioConfigurator() {
                                             {orderStatus}
                                           </span>
                                           {draft.config.paid && (
-                                            <span className="rounded-full bg-[#e8f0f2] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
+                                            <span className="rounded-sm bg-[#e8f0f2] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
                                               betaald
                                             </span>
                                           )}
                                           {draft.config.paymentRequestEmailedAt && (
-                                            <span className="rounded-full bg-[#f3faf0] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
+                                            <span className="rounded-sm bg-[#f3faf0] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
                                               betaalverzoek{" "}
                                               {formatDutchShortDate(
                                                 draft.config.paymentRequestEmailedAt.slice(
@@ -6321,7 +6314,7 @@ export default function BruidstaartStudioConfigurator() {
                                             </span>
                                           )}
                                           {draft.config.paymentRequestPaidAt && (
-                                            <span className="rounded-full bg-[#e5f4e7] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
+                                            <span className="rounded-sm bg-[#e5f4e7] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
                                               Mollie betaald{" "}
                                               {formatDutchShortDate(
                                                 draft.config.paymentRequestPaidAt.slice(
@@ -6333,7 +6326,7 @@ export default function BruidstaartStudioConfigurator() {
                                             </span>
                                           )}
                                         </div>
-                                        <p className="mt-1 text-sm font-semibold text-[#2d2a26]/60">
+                                        <p className="mt-0.5 text-xs font-semibold text-[#2d2a26]/60">
                                           {draft.surname ||
                                             draft.names ||
                                             "Geen naam"}
@@ -6346,7 +6339,7 @@ export default function BruidstaartStudioConfigurator() {
                                   })}
                                 </div>
                               ) : (
-                                <p className="mt-2 rounded-2xl bg-[#f8f6f3] p-3 text-xs font-bold text-[#2d2a26]/45">
+                                <p className="mt-1.5 rounded-md bg-[#f8f6f3] p-2 text-xs font-bold text-[#2d2a26]/45">
                                   Geen bruidstaarten.
                                 </p>
                               )}
@@ -6358,7 +6351,7 @@ export default function BruidstaartStudioConfigurator() {
                   </section>
                 )}
                 {allOverviewOpen && (
-                  <section className="mt-4 grid gap-3 rounded-[1.2rem] border border-[#ead8aa] bg-white/65 p-3">
+                  <section className="mt-3 grid gap-2 rounded-md border border-[#e7e0d8] bg-[#fbfaf8] p-2.5">
                     <div className="flex flex-wrap items-end justify-between gap-3">
                       <div>
                         <p className="text-sm font-black text-[#2d2a26]">
@@ -6375,11 +6368,11 @@ export default function BruidstaartStudioConfigurator() {
                             void loadAllOverview(String(Number(allOverviewYear) - 1))
                           }
                           disabled={allOverviewLoading}
-                          className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
+                          className="rounded-md border border-[#ded8cf] bg-white px-2.5 py-1.5 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
                         >
                           Vorig jaar
                         </button>
-                        <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+                        <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
                           Jaar
                           <input
                             value={allOverviewYear}
@@ -6389,7 +6382,7 @@ export default function BruidstaartStudioConfigurator() {
                               setAllOverviewStatus("");
                             }}
                             inputMode="numeric"
-                            className="min-w-0 rounded-2xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
+                            className="min-w-0 rounded-md border border-[#ded8cf] bg-white px-3 py-1.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
                           />
                         </label>
                         <button
@@ -6398,7 +6391,7 @@ export default function BruidstaartStudioConfigurator() {
                             void loadAllOverview(String(Number(allOverviewYear) + 1))
                           }
                           disabled={allOverviewLoading}
-                          className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
+                          className="rounded-md border border-[#ded8cf] bg-white px-2.5 py-1.5 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
                         >
                           Volgend jaar
                         </button>
@@ -6406,7 +6399,7 @@ export default function BruidstaartStudioConfigurator() {
                           type="button"
                           onClick={() => void loadAllOverview()}
                           disabled={allOverviewLoading}
-                          className="rounded-full bg-[#f1d28f] px-4 py-2 text-xs font-black text-[#2d2a26] shadow-sm disabled:opacity-50"
+                          className="rounded-md bg-[#f1d28f] px-3 py-1.5 text-xs font-black text-[#2d2a26] disabled:opacity-50"
                         >
                           {allOverviewLoading ? "Laden..." : "Toon alle"}
                         </button>
@@ -6418,7 +6411,7 @@ export default function BruidstaartStudioConfigurator() {
                       </p>
                     )}
                     {allOverviewGroups.length > 0 && (
-                      <div className="grid gap-3">
+                      <div className="grid gap-1.5">
                         {allOverviewGroups.map((group) => {
                           const definitiveCount = group.drafts.filter(
                             (draft) => draft.config.completed
@@ -6427,17 +6420,17 @@ export default function BruidstaartStudioConfigurator() {
                           return (
                             <div
                               key={group.monthKey}
-                              className="rounded-2xl border border-[#e7e0d8] bg-white p-3"
+                              className="rounded-md border border-[#e5dfd7] bg-white p-2"
                             >
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-sm font-black capitalize">
+                                <p className="text-xs font-black capitalize text-[#1a1815]">
                                   {formatMonthYearLabel(group.monthKey)}
                                 </p>
-                                <span className="rounded-full bg-[#f8f6f3] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                                <span className="rounded-sm bg-[#f4f0ea] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
                                   {group.drafts.length} totaal · {definitiveCount} definitief
                                 </span>
                               </div>
-                              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              <div className="mt-1.5 grid gap-1.5 xl:grid-cols-2">
                                 {group.drafts.map((draft) => {
                                   const orderStatus = getOrderStatusLabel(draft);
                                   const overviewDate = getDraftOverviewDate(draft);
@@ -6448,14 +6441,14 @@ export default function BruidstaartStudioConfigurator() {
                                       key={`${group.monthKey}-${draft.code}-${draft.updatedAt}`}
                                       type="button"
                                       onClick={() => openDraftActionDialog(draft)}
-                                      className="rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3 text-left shadow-sm transition active:scale-[0.99]"
+                                      className="rounded-md border border-[#e7e0d8] bg-white p-2 text-left transition hover:bg-[#faf8f5] active:scale-[0.99]"
                                     >
                                       <div className="flex flex-wrap items-center gap-2">
                                         <span className="font-black">
                                           {draft.code}
                                         </span>
                                         <span
-                                          className={`rounded-full px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] ${
+                                          className={`rounded-sm px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] ${
                                             orderStatus === "definitief"
                                               ? "bg-[#dce8d6] text-[#4c6842]"
                                               : "bg-[#f8f6f3] text-[#2d2a26]/55"
@@ -6464,12 +6457,12 @@ export default function BruidstaartStudioConfigurator() {
                                           {orderStatus}
                                         </span>
                                         {draft.config.paid && (
-                                          <span className="rounded-full bg-[#e8f0f2] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
+                                          <span className="rounded-sm bg-[#e8f0f2] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
                                             betaald
                                           </span>
                                         )}
                                         {draft.config.paymentRequestEmailedAt && (
-                                          <span className="rounded-full bg-[#f3faf0] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
+                                          <span className="rounded-sm bg-[#f3faf0] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
                                             betaalverzoek{" "}
                                             {formatDutchShortDate(
                                               draft.config.paymentRequestEmailedAt.slice(
@@ -6481,7 +6474,7 @@ export default function BruidstaartStudioConfigurator() {
                                           </span>
                                         )}
                                         {draft.config.paymentRequestPaidAt && (
-                                          <span className="rounded-full bg-[#e5f4e7] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
+                                          <span className="rounded-sm bg-[#e5f4e7] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
                                             Mollie betaald{" "}
                                             {formatDutchShortDate(
                                               draft.config.paymentRequestPaidAt.slice(
@@ -6493,11 +6486,11 @@ export default function BruidstaartStudioConfigurator() {
                                           </span>
                                         )}
                                       </div>
-                                      <p className="mt-1 text-sm font-semibold text-[#2d2a26]/60">
+                                      <p className="mt-0.5 text-xs font-semibold text-[#2d2a26]/60">
                                         {formatDutchShortDate(overviewDate)} ·{" "}
                                         {draft.surname || draft.names || "Geen naam"}
                                       </p>
-                                      <p className="mt-0.5 text-xs font-bold text-[#2d2a26]/40">
+                                      <p className="text-[0.68rem] font-bold text-[#2d2a26]/40">
                                         {size
                                           ? `${size.label} (${size.personsLabel})`
                                           : "Geen formaat"}{" "}
@@ -6524,7 +6517,7 @@ export default function BruidstaartStudioConfigurator() {
                   </p>
                 )}
                 {draftResults.length > 0 && (
-                  <div className="mt-4 grid gap-2">
+                  <div className="mt-3 grid gap-1.5">
                     {draftResults.map((draft) => {
                       const deliveryDate =
                         draft.config.contact.deliveryDate ||
@@ -6534,7 +6527,7 @@ export default function BruidstaartStudioConfigurator() {
                       return (
                         <div
                           key={`${draft.code}-${draft.updatedAt}`}
-                          className="flex gap-2 rounded-2xl border border-[#ead8aa] bg-white p-3 shadow-sm"
+                          className="flex gap-2 rounded-md border border-[#e5dfd7] bg-white p-2"
                         >
                           <button
                             type="button"
@@ -6544,7 +6537,7 @@ export default function BruidstaartStudioConfigurator() {
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-black">{draft.code}</p>
                               <span
-                                className={`rounded-full px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] ${
+                                className={`rounded-sm px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] ${
                                   orderStatus === "definitief"
                                     ? "bg-[#dce8d6] text-[#4c6842]"
                                     : "bg-[#f8f6f3] text-[#2d2a26]/55"
@@ -6553,12 +6546,12 @@ export default function BruidstaartStudioConfigurator() {
                                 {orderStatus}
                               </span>
                               {draft.config.paid && (
-                                <span className="rounded-full bg-[#e8f0f2] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
+                                <span className="rounded-sm bg-[#e8f0f2] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
                                   betaald
                                 </span>
                               )}
                               {draft.config.paymentRequestEmailedAt && (
-                                <span className="rounded-full bg-[#f3faf0] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
+                                <span className="rounded-sm bg-[#f3faf0] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
                                   betaalverzoek{" "}
                                   {formatDutchShortDate(
                                     draft.config.paymentRequestEmailedAt.slice(
@@ -6570,7 +6563,7 @@ export default function BruidstaartStudioConfigurator() {
                                 </span>
                               )}
                               {draft.config.paymentRequestPaidAt && (
-                                <span className="rounded-full bg-[#e5f4e7] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
+                                <span className="rounded-sm bg-[#e5f4e7] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
                                   Mollie betaald{" "}
                                   {formatDutchShortDate(
                                     draft.config.paymentRequestPaidAt.slice(
@@ -6582,7 +6575,7 @@ export default function BruidstaartStudioConfigurator() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm font-semibold text-[#2d2a26]/55">
+                            <p className="mt-0.5 text-xs font-semibold text-[#2d2a26]/55">
                               {draft.surname || draft.names || "Geen naam"} ·
                               Leverdatum: {formatDutchShortDate(deliveryDate)}
                             </p>
@@ -6591,7 +6584,7 @@ export default function BruidstaartStudioConfigurator() {
                             type="button"
                             onClick={() => deleteDraft(draft)}
                             aria-label={`Bestelling ${draft.code} verwijderen`}
-                            className="self-center rounded-full border border-[#e6b8af] bg-[#fff4f1] p-2.5 text-[#9f382f]"
+                            className="self-center rounded-md border border-[#e6b8af] bg-[#fff4f1] p-2 text-[#9f382f]"
                           >
                             <TrashIcon />
                           </button>
