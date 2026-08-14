@@ -462,9 +462,25 @@ function strik_wedding_cakes_admin_page() {
         $custom_cake_description = isset($config['customCakeDescription'])
             ? strik_wedding_cakes_admin_value($config, 'customCakeDescription', '')
             : '';
+        $custom_cake_persons = isset($config['customCakePersons'])
+            ? strik_wedding_cakes_admin_value($config, 'customCakePersons', '')
+            : '';
+        $custom_cake_surcharge = isset($config['customCakeSurchargePerPerson'])
+            ? strik_wedding_cakes_admin_value($config, 'customCakeSurchargePerPerson', '')
+            : '';
+        $custom_cake_fixed_surcharge = isset($config['customCakeFixedSurcharge'])
+            ? strik_wedding_cakes_admin_value($config, 'customCakeFixedSurcharge', '')
+            : '';
         $custom_cake_price = isset($config['customCakePrice'])
             ? strik_wedding_cakes_admin_value($config, 'customCakePrice', '')
             : '';
+        $is_custom_cake = isset($config['sizeId']) && $config['sizeId'] === 'custom';
+        $has_custom_cake_details =
+            $is_custom_cake
+            || $custom_cake_description !== ''
+            || floatval(str_replace(',', '.', $custom_cake_persons)) > 0
+            || floatval(str_replace(',', '.', $custom_cake_fixed_surcharge)) > 0
+            || floatval(str_replace(',', '.', $custom_cake_price)) > 0;
         $name = trim(
             strik_wedding_cakes_admin_value($draft, 'surname', '') . ' ' .
             strik_wedding_cakes_admin_value($draft, 'names', '')
@@ -489,10 +505,16 @@ function strik_wedding_cakes_admin_page() {
             echo ' &middot; in winkel op ' . esc_html(strik_wedding_cakes_admin_date(substr($paid_in_store_at, 0, 16)));
         }
         echo '</p>';
-        if ($custom_cake_description !== '' || $custom_cake_price !== '') {
+        if ($has_custom_cake_details) {
             echo '<p><strong>Custom taart:</strong><br>';
             echo 'Omschrijving: ' . esc_html($custom_cake_description !== '' ? $custom_cake_description : '-') . '<br>';
-            echo 'Handmatige prijs: ' . esc_html($custom_cake_price !== '' ? $custom_cake_price : '-') . '</p>';
+            echo 'Aantal personen: ' . esc_html($custom_cake_persons !== '' ? $custom_cake_persons : '-') . '<br>';
+            echo 'Toeslag p.p.: ' . esc_html($custom_cake_surcharge !== '' ? $custom_cake_surcharge : '-') . '<br>';
+            echo 'Extra vaste toeslag: ' . esc_html($custom_cake_fixed_surcharge !== '' ? $custom_cake_fixed_surcharge : '-');
+            if (floatval(str_replace(',', '.', $custom_cake_price)) > 0) {
+                echo '<br>Oude handmatige prijs: ' . esc_html($custom_cake_price);
+            }
+            echo '</p>';
         }
         echo '<p><strong>Betaalverzoek:</strong> ';
         if ($payment_request_emailed_at !== '') {

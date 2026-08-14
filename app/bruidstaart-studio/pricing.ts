@@ -20,6 +20,7 @@ import {
 const CHOCOLATE_INITIALS_TOPPER_ID = "chocolade-initialen-geschreven";
 const NIJMEGEN_DELIVERY_FEE = 10;
 const FAR_DELIVERY_FEE = 25;
+const DEFAULT_CUSTOM_CAKE_SURCHARGE_PER_PERSON = 1;
 
 export function formatEuro(amount: number) {
   return new Intl.NumberFormat("nl-NL", {
@@ -138,6 +139,30 @@ function getFlowerPlacementLabel(value: string) {
   return "standaard plaatsing door Strik";
 }
 
+function getCustomCakePersons(config: WeddingCakeConfig) {
+  const persons = Number(config.customCakePersons);
+
+  if (!Number.isFinite(persons)) return 0;
+
+  return Math.max(0, Math.round(persons));
+}
+
+function getCustomCakeSurchargePerPerson(config: WeddingCakeConfig) {
+  const amount = Number(config.customCakeSurchargePerPerson);
+
+  if (!Number.isFinite(amount)) return DEFAULT_CUSTOM_CAKE_SURCHARGE_PER_PERSON;
+
+  return Math.max(0, Number(amount.toFixed(2)));
+}
+
+function getCustomCakeFixedSurcharge(config: WeddingCakeConfig) {
+  const amount = Number(config.customCakeFixedSurcharge);
+
+  if (!Number.isFinite(amount)) return 0;
+
+  return Math.max(0, Number(amount.toFixed(2)));
+}
+
 export function getDecorationColorNotes(config: WeddingCakeConfig) {
   const colorNotes = config.decorationColorNotes || {};
 
@@ -161,7 +186,20 @@ export function getCakeLayers(config: WeddingCakeConfig): CakeLayer[] {
   const size = findOption(cakeSizes, config.sizeId);
 
   if (!size) return [];
-  if (size.id === CUSTOM_CAKE_SIZE_ID) return [];
+  if (size.id === CUSTOM_CAKE_SIZE_ID) {
+    const persons = getCustomCakePersons(config);
+
+    return persons > 0
+      ? [
+          {
+            id: `${CUSTOM_CAKE_SIZE_ID}-layer`,
+            label: "Custom taart",
+            persons,
+            personsLabel: `${persons} personen`,
+          },
+        ]
+      : [];
+  }
 
   return size.layers.length
     ? size.layers
@@ -371,35 +409,43 @@ export function calculateWeddingCakePrice(
   const style = findOption(cakeStyles, config.styleId);
   const size = findOption(cakeSizes, config.sizeId);
 
-  if (size?.id === CUSTOM_CAKE_SIZE_ID) {
-    const customAmount = Number(config.customCakePrice) || 0;
+  if (!style || !size) {
+    const isCustomCakeWithoutStyle = size?.id === CUSTOM_CAKE_SIZE_ID && !style;
 
-    return {
-      lines:
-        customAmount > 0
-          ? [
-              {
-                label: "Custom taart - handmatige prijs",
-                amount: customAmount,
-              },
-            ]
-          : [
-              {
-                label: "Custom taart - prijs handmatig bepalen",
-                amount: 0,
-                quote: true,
-              },
-            ],
-      total: customAmount,
-      hasQuoteItems: customAmount <= 0,
-    };
+    return isCustomCakeWithoutStyle
+      ? {
+          lines: [
+            {
+              label: "Custom taart - kies eerst een stijl",
+              amount: 0,
+              quote: true,
+            },
+          ],
+          total: 0,
+          hasQuoteItems: true,
+        }
+      : {
+          lines: [],
+          total: 0,
+          hasQuoteItems: false,
+        };
   }
 
-  if (!style || !size) {
+  const isCustomCake = size.id === CUSTOM_CAKE_SIZE_ID;
+  const customPersons = getCustomCakePersons(config);
+  const pricingPersons = isCustomCake ? customPersons : size.persons;
+
+  if (isCustomCake && pricingPersons <= 0) {
     return {
-      lines: [],
+      lines: [
+        {
+          label: "Custom taart - vul het aantal personen in",
+          amount: 0,
+          quote: true,
+        },
+      ],
       total: 0,
-      hasQuoteItems: false,
+      hasQuoteItems: true,
     };
   }
 
@@ -416,18 +462,39 @@ export function calculateWeddingCakePrice(
     {
       label: `${style.label} basistaart (${formatEuro(
         style.basePricePerPerson
-      )} p.p. x ${size.persons})`,
-      amount: style.basePricePerPerson * size.persons,
+      )} p.p. x ${pricingPersons})`,
+      amount: style.basePricePerPerson * pricingPersons,
     },
   ];
 
-  if (size.surchargePerPerson) {
+  if (!isCustomCake && size.surchargePerPerson) {
     lines.push({
       label: `Kleine bruidstaart toeslag (${formatEuro(
         size.surchargePerPerson
-      )} p.p. x ${size.persons})`,
-      amount: size.surchargePerPerson * size.persons,
+      )} p.p. x ${pricingPersons})`,
+      amount: size.surchargePerPerson * pricingPersons,
     });
+  }
+
+  if (isCustomCake) {
+    const customSurcharge = getCustomCakeSurchargePerPerson(config);
+    const customFixedSurcharge = getCustomCakeFixedSurcharge(config);
+
+    if (customSurcharge > 0) {
+      lines.push({
+        label: `Custom taart toeslag (${formatEuro(
+          customSurcharge
+        )} p.p. x ${pricingPersons})`,
+        amount: customSurcharge * pricingPersons,
+      });
+    }
+
+    if (customFixedSurcharge > 0) {
+      lines.push({
+        label: "Extra maatwerk toeslag",
+        amount: customFixedSurcharge,
+      });
+    }
   }
 
   fillingLinesForConfig(config).forEach((line) => lines.push(line));
@@ -444,14 +511,14 @@ export function calculateWeddingCakePrice(
     .filter((option): option is StudioOption => Boolean(option))
     .forEach((option) => {
       if (option.price.mode === "included") return;
-      lines.push(decorationToLine(config, option, size.persons));
+      lines.push(decorationToLine(config, option, pricingPersons));
     });
 
   toppers
     .filter((option): option is StudioOption => Boolean(option))
     .forEach((option) => {
       if (option.price.mode === "included") return;
-      lines.push(optionToLine(option, size.persons));
+      lines.push(optionToLine(option, pricingPersons));
     });
 
   getDecorationSurcharges(config).forEach((surcharge) => {
@@ -539,7 +606,9 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
     style: style?.label || "",
     size: size
       ? size.id === CUSTOM_CAKE_SIZE_ID
-        ? "Custom taart (maatwerk)"
+        ? getCustomCakePersons(config) > 0
+          ? `Custom taart (maatwerk, ${getCustomCakePersons(config)} personen)`
+          : "Custom taart (maatwerk)"
         : `${size.code} - ${size.label} (${size.persons} personen), ${size.tiers} laag${
             size.tiers === 1 ? "" : "en"
           }`
@@ -612,6 +681,15 @@ export function createProductionForm(config: WeddingCakeConfig) {
           "Maatwerk: ja",
           "Let op: eerst met de bakkerij afstemmen wat mogelijk is.",
           `Omschrijving maatwerk: ${config.customCakeDescription || "-"}`,
+          `Aantal personen maatwerk: ${
+            getCustomCakePersons(config) || "-"
+          }`,
+          `Custom toeslag p.p.: ${formatEuro(
+            getCustomCakeSurchargePerPerson(config)
+          )}`,
+          `Extra vaste toeslag: ${formatEuro(
+            getCustomCakeFixedSurcharge(config)
+          )}`,
         ]
       : []),
     `Stijl: ${labels.style || "-"}`,

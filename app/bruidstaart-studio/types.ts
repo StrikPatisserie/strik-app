@@ -99,6 +99,9 @@ export type WeddingCakeConfig = {
   topperNotes: string;
   topperSurcharges: DecorationSurcharge[];
   customCakeDescription?: string;
+  customCakePersons?: number;
+  customCakeSurchargePerPerson?: number;
+  customCakeFixedSurcharge?: number;
   customCakePrice?: number;
   paid: boolean;
   paidInStoreAt?: string;

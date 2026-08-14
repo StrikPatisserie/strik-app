@@ -296,7 +296,7 @@ export const cakeSizes: CakeSize[] = [
     layers: [],
     iconPath: "",
     description:
-      "Prijs en haalbaarheid handmatig met de bakkerij afstemmen.",
+      "Aantal personen en toeslag zelf invullen na overleg met de bakkerij.",
   },
 ];
 
@@ -824,6 +824,9 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   topperNotes: "",
   topperSurcharges: [],
   customCakeDescription: "",
+  customCakePersons: 0,
+  customCakeSurchargePerPerson: 1,
+  customCakeFixedSurcharge: 0,
   customCakePrice: 0,
   paid: false,
   paidInStoreAt: "",

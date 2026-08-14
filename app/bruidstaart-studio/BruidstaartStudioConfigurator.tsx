@@ -121,6 +121,7 @@ const CHOCO_LETTER_ADVANCE_RATIO = 0.68;
 const CHOCO_SPACE_RATIO = 0.32;
 const WHITE_CHOCOLATE_DECORATION_COLOR = "#fff4dc";
 const WHITE_CHOCOLATE_CONTRAST_DECORATION_COLOR = "#e8cf9f";
+const DEFAULT_CUSTOM_CAKE_SURCHARGE_PER_PERSON = 1;
 
 type StepId =
   | "start"
@@ -217,7 +218,7 @@ function sizeCompositionText(sizeId: string) {
   const size = findOption(cakeSizes, sizeId);
   if (!size) return "";
   if (size.id === CUSTOM_CAKE_SIZE_ID) {
-    return "Prijs handmatig bepalen na overleg met de bakkerij.";
+    return "Aantal personen en toeslag zelf invullen na overleg met de bakkerij.";
   }
 
   const counts = new Map<string, number>();
@@ -1365,7 +1366,8 @@ function CustomCakePlaceholder({ compact = false }: { compact?: boolean }) {
           Geen getekend voorbeeld
         </p>
         <p className="mt-2 text-sm font-bold leading-relaxed">
-          Stem vorm, maat en prijs eerst af met de bakkerij.
+          Stem vorm en opbouw eerst af met de bakkerij. De prijsindicatie rekent
+          mee op basis van personen en toeslag.
         </p>
       </div>
     </div>
@@ -3845,7 +3847,11 @@ export default function BruidstaartStudioConfigurator() {
   const [paymentRequestEmail, setPaymentRequestEmail] = useState("");
   const [paymentRequestAmount, setPaymentRequestAmount] = useState("");
   const [paymentRequestStatus, setPaymentRequestStatus] = useState("");
-  const [customCakePriceInput, setCustomCakePriceInput] = useState("");
+  const [customCakePersonsInput, setCustomCakePersonsInput] = useState("");
+  const [customCakeSurchargeInput, setCustomCakeSurchargeInput] =
+    useState("1,00");
+  const [customCakeFixedSurchargeInput, setCustomCakeFixedSurchargeInput] =
+    useState("");
   const [paymentDialogMode, setPaymentDialogMode] = useState<
     "choice" | "request"
   >("choice");
@@ -4099,7 +4105,8 @@ export default function BruidstaartStudioConfigurator() {
         [
           "Custom taart gebruiken?",
           "",
-          "De prijs moet dan handmatig bepaald worden en er wordt geen getekend voorbeeld gemaakt.",
+          "Vul straks handmatig het aantal personen en de custom toeslag in. De rest van de prijs rekent de app mee.",
+          "Er wordt geen exact getekend voorbeeld gemaakt.",
           "Bespreek eerst met de bakkerij wat mogelijk is.",
         ].join("\n")
       );
@@ -4491,6 +4498,13 @@ export default function BruidstaartStudioConfigurator() {
             "Maatwerk: ja",
             "Let op: eerst met de bakkerij afstemmen wat mogelijk is.",
             `Omschrijving maatwerk: ${config.customCakeDescription || "-"}`,
+            `Aantal personen maatwerk: ${config.customCakePersons || "-"}`,
+            `Custom toeslag p.p.: ${formatEuro(
+              getCustomCakeSurchargePerPersonValue()
+            )}`,
+            `Extra vaste toeslag: ${formatEuro(
+              Number(config.customCakeFixedSurcharge) || 0
+            )}`,
           ]
         : []),
       `Stijl: ${labels.style || "-"}`,
@@ -4613,21 +4627,85 @@ export default function BruidstaartStudioConfigurator() {
     return value > 0 ? value.toFixed(2).replace(".", ",") : "";
   }
 
-  function commitCustomCakePriceInput(value = customCakePriceInput) {
+  function formatEuroInputIncludingZero(value: number) {
+    return Number.isFinite(value) ? value.toFixed(2).replace(".", ",") : "";
+  }
+
+  function getCustomCakeSurchargePerPersonValue(
+    current: WeddingCakeConfig = config
+  ) {
+    const amount = Number(current.customCakeSurchargePerPerson);
+
+    return Number.isFinite(amount)
+      ? amount
+      : DEFAULT_CUSTOM_CAKE_SURCHARGE_PER_PERSON;
+  }
+
+  function parsePersonsInput(value: string) {
+    const numberValue = Number(value.replace(/[^\d]/g, ""));
+
+    return Number.isFinite(numberValue) ? Math.max(0, Math.round(numberValue)) : 0;
+  }
+
+  function formatPersonsInput(value: number) {
+    return value > 0 ? String(Math.round(value)) : "";
+  }
+
+  function syncCustomCakeInputs(current: WeddingCakeConfig) {
+    setCustomCakePersonsInput(
+      formatPersonsInput(Number(current.customCakePersons) || 0)
+    );
+    setCustomCakeSurchargeInput(
+      formatEuroInputIncludingZero(
+        Number.isFinite(Number(current.customCakeSurchargePerPerson))
+          ? Number(current.customCakeSurchargePerPerson)
+          : DEFAULT_CUSTOM_CAKE_SURCHARGE_PER_PERSON
+      )
+    );
+    setCustomCakeFixedSurchargeInput(
+      formatEuroInput(Number(current.customCakeFixedSurcharge) || 0)
+    );
+  }
+
+  function resetCustomCakeInputs() {
+    syncCustomCakeInputs(initialWeddingCakeConfig);
+  }
+
+  function commitCustomCakePersonsInput(value = customCakePersonsInput) {
+    const persons = parsePersonsInput(value);
+
+    setConfig((current) => ({
+      ...current,
+      customCakePersons: persons,
+    }));
+    setCustomCakePersonsInput(formatPersonsInput(persons));
+  }
+
+  function commitCustomCakeSurchargeInput(value = customCakeSurchargeInput) {
+    const amount = parseEuroInput(value);
+    const normalizedAmount =
+      value.trim() === "" ? DEFAULT_CUSTOM_CAKE_SURCHARGE_PER_PERSON : amount;
+
+    setConfig((current) => ({
+      ...current,
+      customCakeSurchargePerPerson: normalizedAmount,
+    }));
+    setCustomCakeSurchargeInput(formatEuroInputIncludingZero(normalizedAmount));
+  }
+
+  function commitCustomCakeFixedSurchargeInput(
+    value = customCakeFixedSurchargeInput
+  ) {
     const amount = parseEuroInput(value);
 
     setConfig((current) => ({
       ...current,
-      customCakePrice: amount,
+      customCakeFixedSurcharge: amount,
     }));
-    setCustomCakePriceInput(formatEuroInput(amount));
+    setCustomCakeFixedSurchargeInput(formatEuroInput(amount));
   }
 
   function getPaymentDefaultAmount() {
-    if (config.sizeId === CUSTOM_CAKE_SIZE_ID) {
-      return Number(config.customCakePrice) || 0;
-    }
-
     return price.total;
   }
 
@@ -5191,6 +5269,17 @@ export default function BruidstaartStudioConfigurator() {
       topperNotes: draft.config.topperNotes || "",
       topperSurcharges: draft.config.topperSurcharges || [],
       customCakeDescription: draft.config.customCakeDescription || "",
+      customCakePersons: Number(draft.config.customCakePersons) || 0,
+      customCakeSurchargePerPerson: Number.isFinite(
+        Number(draft.config.customCakeSurchargePerPerson)
+      )
+        ? Number(draft.config.customCakeSurchargePerPerson)
+        : DEFAULT_CUSTOM_CAKE_SURCHARGE_PER_PERSON,
+      customCakeFixedSurcharge: Number.isFinite(
+        Number(draft.config.customCakeFixedSurcharge)
+      )
+        ? Number(draft.config.customCakeFixedSurcharge)
+        : 0,
       customCakePrice: draft.config.customCakePrice || 0,
       paidInStoreAt: draft.config.paidInStoreAt || "",
       contact: {
@@ -5213,9 +5302,7 @@ export default function BruidstaartStudioConfigurator() {
     };
 
     setConfigState(loadedConfig);
-    setCustomCakePriceInput(
-      formatEuroInput(Number(loadedConfig.customCakePrice) || 0)
-    );
+    syncCustomCakeInputs(loadedConfig);
     markFinalOrderProtected(Boolean(loadedConfig.completed));
     setFinalOrderAccessMode(loadedConfig.completed ? "view" : "");
     setFinalOrderChoiceOpen(Boolean(loadedConfig.completed));
@@ -5303,7 +5390,7 @@ export default function BruidstaartStudioConfigurator() {
         current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
       );
       setConfigState(createEmptyWeddingCakeConfig());
-      setCustomCakePriceInput("");
+      resetCustomCakeInputs();
       setFinalOrderAccessMode("");
       setFinalOrderChoiceOpen(false);
       markFinalOrderProtected(false);
@@ -5318,7 +5405,7 @@ export default function BruidstaartStudioConfigurator() {
         current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
       );
       setConfigState(createEmptyWeddingCakeConfig());
-      setCustomCakePriceInput("");
+      resetCustomCakeInputs();
       setFinalOrderAccessMode("");
       setFinalOrderChoiceOpen(false);
       markFinalOrderProtected(false);
@@ -5347,7 +5434,7 @@ export default function BruidstaartStudioConfigurator() {
     markFinalOrderProtected(false);
     setFinalOrderAccessMode("");
     setFinalOrderChoiceOpen(false);
-    setCustomCakePriceInput("");
+    resetCustomCakeInputs();
     setDraftResults([]);
     setDraftStatus(
       "Taartontwerp gewist. Klantgegevens blijven staan; bestelling staat weer als concept."
@@ -5398,7 +5485,15 @@ export default function BruidstaartStudioConfigurator() {
       missing.push("omschrijving maatwerk");
     }
 
-    if (isCustom && ["stijl", "smaak", "kleur", "layout"].includes(stepId)) {
+    if (
+      stepId === "formaat" &&
+      isCustom &&
+      !(Number(current.customCakePersons) > 0)
+    ) {
+      missing.push("aantal personen maatwerk");
+    }
+
+    if (isCustom && ["smaak", "kleur", "layout"].includes(stepId)) {
       return Array.from(new Set(missing));
     }
 
@@ -5471,6 +5566,7 @@ export default function BruidstaartStudioConfigurator() {
       current.sizeId === CUSTOM_CAKE_SIZE_ID
         ? [
             ...getStepMissingFields("formaat", current),
+            ...getStepMissingFields("stijl", current),
             ...getFinalRequiredMissingFields(current),
           ]
         : [
@@ -5771,7 +5867,7 @@ export default function BruidstaartStudioConfigurator() {
                       markFinalOrderProtected(false);
                       setFinalOrderAccessMode("");
                       setFinalOrderChoiceOpen(false);
-                      setCustomCakePriceInput("");
+                      resetCustomCakeInputs();
                       setDraftResults([]);
                       setDraftStatus("Nieuw formulier gestart.");
                     }}
@@ -6353,7 +6449,8 @@ export default function BruidstaartStudioConfigurator() {
                     </p>
                     <p className="mt-1 leading-relaxed">
                       Let op: bespreek eerst met de bakkerij wat mogelijk is.
-                      De prijs moet handmatig bepaald worden en er wordt geen
+                      Vul het aantal personen en de custom toeslag in; de rest
+                      van de prijs rekent de app mee. Er wordt geen exact
                       getekend voorbeeld gemaakt.
                     </p>
                   </div>
@@ -6371,26 +6468,65 @@ export default function BruidstaartStudioConfigurator() {
                       className="min-h-24 rounded-xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
                     />
                   </label>
-                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268] sm:max-w-[13rem]">
-                    Handmatige prijs
-                    <span className="relative block">
-                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#6b645b]">
-                        €
-                      </span>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268]">
+                      Aantal personen
                       <input
-                        value={customCakePriceInput}
+                        value={customCakePersonsInput}
                         onChange={(event) =>
-                          setCustomCakePriceInput(event.target.value)
+                          setCustomCakePersonsInput(event.target.value)
                         }
                         onBlur={(event) =>
-                          commitCustomCakePriceInput(event.target.value)
+                          commitCustomCakePersonsInput(event.target.value)
                         }
-                        inputMode="decimal"
-                        placeholder="0,00"
-                        className="w-full rounded-xl border border-[#ead8aa] bg-white px-3 py-2 pl-7 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
+                        inputMode="numeric"
+                        placeholder="Bijv. 45"
+                        className="w-full rounded-xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
                       />
-                    </span>
-                  </label>
+                    </label>
+                    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268]">
+                      Custom toeslag p.p.
+                      <span className="relative block">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#6b645b]">
+                          €
+                        </span>
+                        <input
+                          value={customCakeSurchargeInput}
+                          onChange={(event) =>
+                            setCustomCakeSurchargeInput(event.target.value)
+                          }
+                          onBlur={(event) =>
+                            commitCustomCakeSurchargeInput(event.target.value)
+                          }
+                          inputMode="decimal"
+                          placeholder="1,00"
+                          className="w-full rounded-xl border border-[#ead8aa] bg-white px-3 py-2 pl-7 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
+                        />
+                      </span>
+                    </label>
+                    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268]">
+                      Extra toeslag
+                      <span className="relative block">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#6b645b]">
+                          €
+                        </span>
+                        <input
+                          value={customCakeFixedSurchargeInput}
+                          onChange={(event) =>
+                            setCustomCakeFixedSurchargeInput(event.target.value)
+                          }
+                          onBlur={(event) =>
+                            commitCustomCakeFixedSurchargeInput(
+                              event.target.value
+                            )
+                          }
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          className="w-full rounded-xl border border-[#ead8aa] bg-white px-3 py-2 pl-7 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
+                        />
+                      </span>
+                    </label>
+                  </div>
                 </section>
               )}
             </div>
@@ -7347,10 +7483,23 @@ export default function BruidstaartStudioConfigurator() {
                   <span className="font-bold">Formaat:</span> {labels.size}
                 </p>
                 {isCustomCake && (
-                  <p>
-                    <span className="font-bold">Maatwerk:</span>{" "}
-                    {config.customCakeDescription || "-"}
-                  </p>
+                  <>
+                    <p>
+                      <span className="font-bold">Maatwerk:</span>{" "}
+                      {config.customCakeDescription || "-"}
+                    </p>
+                    <p>
+                      <span className="font-bold">Custom personen:</span>{" "}
+                      {config.customCakePersons || "-"}
+                    </p>
+                    <p>
+                      <span className="font-bold">Custom toeslag:</span>{" "}
+                      {formatEuro(
+                        getCustomCakeSurchargePerPersonValue()
+                      )}{" "}
+                      p.p.
+                    </p>
+                  </>
                 )}
                 <p>
                   <span className="font-bold">Smaak:</span> {labels.filling}
