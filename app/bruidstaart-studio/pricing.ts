@@ -511,7 +511,7 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   return {
     style: style?.label || "",
     size: size
-      ? `${size.code} - ${size.label} (${size.personsLabel}), ${size.tiers} laag${
+      ? `${size.code} - ${size.label} (${size.persons} personen), ${size.tiers} laag${
           size.tiers === 1 ? "" : "en"
         }`
       : "",
