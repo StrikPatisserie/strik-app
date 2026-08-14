@@ -6352,15 +6352,7 @@ export default function BruidstaartStudioConfigurator() {
                 )}
                 {allOverviewOpen && (
                   <section className="mt-3 grid gap-2 rounded-md border border-[#e7e0d8] bg-[#fbfaf8] p-2.5">
-                    <div className="flex flex-wrap items-end justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-black text-[#2d2a26]">
-                          Alle bruidstaarten
-                        </p>
-                        <p className="mt-0.5 text-xs font-bold text-[#2d2a26]/50">
-                          Concepten en definitieve bestellingen in {allOverviewYear}.
-                        </p>
-                      </div>
+                    <div className="flex flex-wrap items-end justify-end gap-2">
                       <div className="flex flex-wrap items-end gap-2">
                         <button
                           type="button"
@@ -6405,11 +6397,6 @@ export default function BruidstaartStudioConfigurator() {
                         </button>
                       </div>
                     </div>
-                    {allOverviewStatus && (
-                      <p className="text-xs font-bold text-[#2d2a26]/55">
-                        {allOverviewStatus}
-                      </p>
-                    )}
                     {allOverviewGroups.length > 0 && (
                       <div className="grid gap-1.5">
                         {allOverviewGroups.map((group) => {
@@ -6422,11 +6409,17 @@ export default function BruidstaartStudioConfigurator() {
                               key={group.monthKey}
                               className="rounded-md border border-[#e5dfd7] bg-white p-2"
                             >
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-xs font-black capitalize text-[#1a1815]">
+                              <div
+                                className={`-m-2 mb-1.5 flex flex-wrap items-center justify-between gap-2 rounded-t-md border-b px-2 py-1.5 ${
+                                  group.monthKey === "zonder-datum"
+                                    ? "border-[#ead8aa] bg-[#fff4d1]"
+                                    : "border-[#cbdcc5] bg-[#dce8d6]"
+                                }`}
+                              >
+                                <p className="text-sm font-black capitalize text-[#1a1815]">
                                   {formatMonthYearLabel(group.monthKey)}
                                 </p>
-                                <span className="rounded-sm bg-[#f4f0ea] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+                                <span className="rounded-sm bg-white/70 px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/55">
                                   {group.drafts.length} totaal · {definitiveCount} definitief
                                 </span>
                               </div>
