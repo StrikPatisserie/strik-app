@@ -136,6 +136,8 @@ type StepId =
   | "overzicht";
 
 type FinalOrderAccessMode = "" | "view" | "payment";
+type StudioMode = "home" | "new" | "manage";
+type DraftAction = "edit" | "view" | "payment";
 
 const steps: { id: StepId; title: string; description: string }[] = [
   {
@@ -3818,11 +3820,14 @@ export default function BruidstaartStudioConfigurator() {
   const configRef = useRef(config);
   const finalOrderEditProtectionRef = useRef(false);
   const finalOrderEditConfirmedRef = useRef(false);
+  const [studioMode, setStudioMode] = useState<StudioMode>("home");
   const [stepIndex, setStepIndex] = useState(0);
   const [draftSearch, setDraftSearch] = useState("");
   const [draftDeliveryDate, setDraftDeliveryDate] = useState("");
   const [draftResults, setDraftResults] = useState<WeddingCakeDraft[]>([]);
   const [draftStatus, setDraftStatus] = useState("");
+  const [draftActionDraft, setDraftActionDraft] =
+    useState<WeddingCakeDraft | null>(null);
   const [finalOrderChoiceOpen, setFinalOrderChoiceOpen] = useState(false);
   const [finalOrderAccessMode, setFinalOrderAccessMode] =
     useState<FinalOrderAccessMode>("");
@@ -3867,6 +3872,7 @@ export default function BruidstaartStudioConfigurator() {
     const timeout = window.setTimeout(() => {
       if (search) setDraftSearch(search);
       if (deliveryDate) setDraftDeliveryDate(deliveryDate);
+      if (search || deliveryDate) setStudioMode("manage");
     }, 0);
 
     return () => window.clearTimeout(timeout);
@@ -4685,15 +4691,15 @@ export default function BruidstaartStudioConfigurator() {
     setCustomCakeSurchargeInput(formatEuroInputIncludingZero(normalizedAmount));
   }
 
-  function getPaymentDefaultAmount() {
-    return price.total;
+  function getPaymentDefaultAmount(current: WeddingCakeConfig = config) {
+    return calculateWeddingCakePrice(current).total;
   }
 
-  function openPaymentRequestDialog() {
+  function openPaymentRequestDialog(current: WeddingCakeConfig = config) {
     setPaymentRequestEmail(
-      config.contact.invoiceEmail.trim() || config.contact.email.trim()
+      current.contact.invoiceEmail.trim() || current.contact.email.trim()
     );
-    setPaymentRequestAmount(formatEuroInput(getPaymentDefaultAmount()));
+    setPaymentRequestAmount(formatEuroInput(getPaymentDefaultAmount(current)));
     setPaymentRequestStatus("");
     setPaymentDialogMode("choice");
     setPaymentRequestOpen(true);
@@ -5222,7 +5228,52 @@ export default function BruidstaartStudioConfigurator() {
     void loadAllOverview(allOverviewYear || getCurrentYearString());
   }
 
-  function loadDraft(draft: WeddingCakeDraft) {
+  function startNewWeddingCake() {
+    const updated = setConfig(createEmptyWeddingCakeConfig(), {
+      skipFinalOrderCheck: true,
+    });
+    if (!updated) return;
+
+    markFinalOrderProtected(false);
+    setFinalOrderAccessMode("");
+    setFinalOrderChoiceOpen(false);
+    setDraftActionDraft(null);
+    resetCustomCakeInputs();
+    setDraftResults([]);
+    setDraftStatus("Nieuwe bruidstaart gestart.");
+    setStudioMode("new");
+    goToStep(0);
+  }
+
+  function openManageMode() {
+    setStudioMode("manage");
+    setFinalOrderAccessMode("");
+    setFinalOrderChoiceOpen(false);
+    setDraftActionDraft(null);
+    markFinalOrderProtected(false);
+    goToStep(0);
+
+    if (!weekOverviewOpen && !allOverviewOpen && !draftResults.length) {
+      void loadWeekOverview(weekOverviewStart || getWeekStartIso());
+    }
+  }
+
+  function openDraftActionDialog(draft: WeddingCakeDraft) {
+    setDraftActionDraft(draft);
+  }
+
+  function handleDraftAction(action: DraftAction) {
+    if (!draftActionDraft) return;
+
+    const draft = draftActionDraft;
+    setDraftActionDraft(null);
+    loadDraft(draft, { action });
+  }
+
+  function loadDraft(
+    draft: WeddingCakeDraft,
+    options: { action?: DraftAction } = {}
+  ) {
     const cleanedTopperIds = cleanTopperIds(draft.config.topperIds || []);
     const nextConfig = {
       ...initialWeddingCakeConfig,
@@ -5276,16 +5327,42 @@ export default function BruidstaartStudioConfigurator() {
       layerLayoutIds: layerLayoutIdsForSize(nextConfig.sizeId, nextConfig),
     };
 
+    const isCompleted = Boolean(loadedConfig.completed);
+    const action = options.action;
+
     setConfigState(loadedConfig);
     syncCustomCakeInputs(loadedConfig);
-    markFinalOrderProtected(Boolean(loadedConfig.completed));
-    setFinalOrderAccessMode(loadedConfig.completed ? "view" : "");
-    setFinalOrderChoiceOpen(Boolean(loadedConfig.completed));
-    setDraftStatus(
-      loadedConfig.completed
-        ? `Bestelling ${draft.code} is definitief. Kies wat je wilt doen.`
-        : `Bestelling ${draft.code} geladen.`
-    );
+    setStudioMode("new");
+    setFinalOrderChoiceOpen(false);
+
+    if (action === "edit") {
+      markFinalOrderProtected(false);
+      setFinalOrderAccessMode("");
+      finalOrderEditConfirmedRef.current = isCompleted;
+      setDraftStatus(
+        isCompleted
+          ? `Definitieve bestelling ${draft.code} geopend voor wijzigingen.`
+          : `Concept ${draft.code} geopend om te wijzigen.`
+      );
+    } else if (action === "view") {
+      markFinalOrderProtected(true);
+      setFinalOrderAccessMode("view");
+      setDraftStatus(`Bestelling ${draft.code} geopend om te bekijken.`);
+    } else if (action === "payment") {
+      markFinalOrderProtected(true);
+      setFinalOrderAccessMode("payment");
+      setDraftStatus(`Betaling beheren voor bestelling ${draft.code}.`);
+      openPaymentRequestDialog(loadedConfig);
+    } else {
+      markFinalOrderProtected(isCompleted);
+      setFinalOrderAccessMode(isCompleted ? "view" : "");
+      setFinalOrderChoiceOpen(isCompleted);
+      setDraftStatus(
+        isCompleted
+          ? `Bestelling ${draft.code} is definitief. Kies wat je wilt doen.`
+          : `Bestelling ${draft.code} geladen.`
+      );
+    }
     goToStepForStyle(
       getVisibleSteps(nextConfig.styleId).length - 1,
       nextConfig.styleId
@@ -5617,10 +5694,71 @@ export default function BruidstaartStudioConfigurator() {
   const visibleDraftStatus = draftStatus.startsWith("Je hebt nog")
     ? ""
     : draftStatus;
+  const draftActionIsFinal = Boolean(draftActionDraft?.config.completed);
+  const draftActionTitle = draftActionIsFinal
+    ? "Deze bestelling is definitief, wat wil je doen?"
+    : "Wat wil je met dit concept doen?";
 
   return (
     <div className="space-y-3">
-      {!isFinalOrderReadOnly && (
+      {studioMode !== "home" && (
+        <section className="studio-no-print flex flex-wrap items-center justify-between gap-2 border border-[#e8e4de] bg-white px-3 py-2 shadow-sm">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className={`h-8 w-8 shrink-0 ${
+                studioMode === "manage" ? "bg-[#f7df83]" : "bg-[#c3d3bc]"
+              }`}
+              aria-hidden="true"
+            />
+            <div className="min-w-0">
+              <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
+                Bruidstaart Studio
+              </p>
+              <p className="truncate text-sm font-black text-[#111111]">
+                {studioMode === "manage"
+                  ? "Bruidstaarten beheren"
+                  : isFinalOrderReadOnly
+                  ? "Bestelling bekijken of betaling beheren"
+                  : "Nieuwe bruidstaart"}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                setStudioMode("home");
+                setFinalOrderChoiceOpen(false);
+                setDraftActionDraft(null);
+                scrollStudioToTop();
+              }}
+              className="rounded-full border border-[#ded8cf] bg-white px-3 py-2 text-xs font-black text-[#2d2a26]/55 shadow-sm"
+            >
+              Keuze
+            </button>
+            {studioMode !== "manage" && (
+              <button
+                type="button"
+                onClick={openManageMode}
+                className="rounded-full bg-[#f7df83] px-3 py-2 text-xs font-black text-[#1a1815] shadow-sm"
+              >
+                Beheren
+              </button>
+            )}
+            {studioMode === "manage" && (
+              <button
+                type="button"
+                onClick={startNewWeddingCake}
+                className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black text-[#1a1815] shadow-sm"
+              >
+                Nieuwe bruidstaart
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {studioMode === "new" && !isFinalOrderReadOnly && (
         <nav className="studio-no-print rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-2 shadow-sm">
           <div className="grid grid-cols-5 gap-1 sm:grid-cols-10">
             {visibleSteps.map((item, index) => (
@@ -5642,7 +5780,7 @@ export default function BruidstaartStudioConfigurator() {
         </nav>
       )}
 
-      {step.id === "overzicht" && !isFinalOrderReadOnly && (
+      {studioMode === "new" && step.id === "overzicht" && !isFinalOrderReadOnly && (
         <section className="studio-no-print ml-auto max-w-[44rem] rounded-[0.85rem] border border-[#ecd9a9] bg-[#fff4d1] p-1.5 shadow-sm">
           <div className="grid gap-1.5 lg:grid-cols-[6.8rem_minmax(0,1fr)_auto] lg:items-center">
             <div className="min-w-0">
@@ -5721,7 +5859,7 @@ export default function BruidstaartStudioConfigurator() {
         </section>
       )}
 
-      {step.id !== "start" && !isFinalOrderReadOnly && (
+      {studioMode === "new" && step.id !== "start" && !isFinalOrderReadOnly && (
         <section
           className={`studio-no-print rounded-[0.9rem] border p-2.5 shadow-sm ${
             hasVisibleWarnings
@@ -5807,6 +5945,69 @@ export default function BruidstaartStudioConfigurator() {
         </section>
       )}
 
+      {studioMode === "home" ? (
+        <section className="studio-no-print mx-auto grid w-full max-w-5xl gap-3">
+          <button
+            type="button"
+            onClick={startNewWeddingCake}
+            className="flex min-h-24 items-center justify-between gap-4 border border-[#cbdcc5] bg-white px-4 py-4 text-left shadow-sm transition hover:bg-[#f6faf4] active:scale-[0.99]"
+          >
+            <span className="flex min-w-0 items-center gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center bg-[#c3d3bc] text-2xl font-black text-[#1a1815]">
+                +
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#30462f]/55">
+                  Nieuwe aanvraag
+                </span>
+                <span className="mt-1 block text-[clamp(1.25rem,3.6vw,2rem)] font-black leading-none text-[#111111]">
+                  Nieuwe bruidstaart starten
+                </span>
+                <span className="mt-2 block text-sm font-bold italic leading-snug text-[#30462f]/60">
+                  Begin met code en achternaam. Daarna verschijnt het volledige
+                  stappenplan.
+                </span>
+              </span>
+            </span>
+            <span
+              className="flex h-12 w-12 shrink-0 items-center justify-center bg-[#c3d3bc] text-2xl font-black text-[#1a1815]"
+              aria-hidden="true"
+            >
+              &gt;
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openManageMode}
+            className="flex min-h-24 items-center justify-between gap-4 border border-[#eadb8b] bg-white px-4 py-4 text-left shadow-sm transition hover:bg-[#fff8d8] active:scale-[0.99]"
+          >
+            <span className="flex min-w-0 items-center gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center bg-[#f7df83] text-xl font-black text-[#1a1815]">
+                ↗
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#8a6a13]/65">
+                  Agenda en beheer
+                </span>
+                <span className="mt-1 block text-[clamp(1.25rem,3.6vw,2rem)] font-black leading-none text-[#111111]">
+                  Bruidstaarten beheren
+                </span>
+                <span className="mt-2 block text-sm font-bold italic leading-snug text-[#8a6a13]/65">
+                  Zoek bestellingen, bekijk de weekagenda en beheer betalingen
+                  of wijzigingen.
+                </span>
+              </span>
+            </span>
+            <span
+              className="flex h-12 w-12 shrink-0 items-center justify-center bg-[#f7df83] text-2xl font-black text-[#1a1815]"
+              aria-hidden="true"
+            >
+              &gt;
+            </span>
+          </button>
+        </section>
+      ) : (
       <div
         className={`studio-no-print grid gap-3 ${
           step.id === "start"
@@ -5819,6 +6020,7 @@ export default function BruidstaartStudioConfigurator() {
         <section className="rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-2.5 shadow-sm sm:p-3">
           {step.id === "start" && (
             <div className="grid gap-4">
+              {studioMode === "new" && (
               <div className="rounded-[0.85rem] border border-[#d6e5d8] bg-[#ecf4ed] p-2.5 shadow-sm sm:p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
@@ -5892,18 +6094,21 @@ export default function BruidstaartStudioConfigurator() {
                   </p>
                 )}
               </div>
+              )}
 
+              {studioMode === "manage" && (
               <div className="rounded-[0.85rem] border border-[#ead8aa] bg-[#fff7df] p-2.5 shadow-sm sm:p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="text-[0.56rem] font-semibold uppercase tracking-wider text-[#8b8278]">
-                      Bestaande aanvraag
+                      Agenda en beheer
                     </p>
                     <h3 className="mt-0.5 text-sm font-bold leading-tight text-[#1a1815]">
-                      Bruidstaart ophalen
+                      Bruidstaarten beheren
                     </h3>
                     <p className="mt-0.5 text-[0.68rem] font-semibold leading-snug text-[#6b645b]">
-                      Zoek op herkenningscode, achternaam of leverdatum.
+                      Bekijk de agenda of zoek op herkenningscode, achternaam of
+                      leverdatum.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -6074,7 +6279,7 @@ export default function BruidstaartStudioConfigurator() {
                                       <button
                                         key={`${group.date}-${draft.code}`}
                                         type="button"
-                                        onClick={() => loadDraft(draft)}
+                                        onClick={() => openDraftActionDialog(draft)}
                                         className="rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3 text-left shadow-sm transition active:scale-[0.99]"
                                       >
                                         <div className="flex flex-wrap items-center gap-2">
@@ -6234,7 +6439,7 @@ export default function BruidstaartStudioConfigurator() {
                                     <button
                                       key={`${group.monthKey}-${draft.code}-${draft.updatedAt}`}
                                       type="button"
-                                      onClick={() => loadDraft(draft)}
+                                      onClick={() => openDraftActionDialog(draft)}
                                       className="rounded-2xl border border-[#e7e0d8] bg-[#fffdf8] p-3 text-left shadow-sm transition active:scale-[0.99]"
                                     >
                                       <div className="flex flex-wrap items-center gap-2">
@@ -6325,7 +6530,7 @@ export default function BruidstaartStudioConfigurator() {
                         >
                           <button
                             type="button"
-                            onClick={() => loadDraft(draft)}
+                            onClick={() => openDraftActionDialog(draft)}
                             className="min-w-0 flex-1 text-left"
                           >
                             <div className="flex flex-wrap items-center gap-2">
@@ -6388,6 +6593,7 @@ export default function BruidstaartStudioConfigurator() {
                   </div>
                 )}
               </div>
+              )}
             </div>
           )}
 
@@ -7380,7 +7586,7 @@ export default function BruidstaartStudioConfigurator() {
                 {canManagePaymentFromFinalOrder && (
                   <button
                     type="button"
-                    onClick={openPaymentRequestDialog}
+                    onClick={() => openPaymentRequestDialog()}
                     className="rounded-full bg-[#dce8d6] px-3 py-2 text-xs font-black shadow-sm"
                   >
                     Betaling
@@ -7547,6 +7753,7 @@ export default function BruidstaartStudioConfigurator() {
           </aside>
         )}
       </div>
+      )}
 
       <section className="studio-print-report hidden bg-white text-black">
         <div className="mb-5 flex items-start justify-between gap-6 border-b border-black/20 pb-4">
@@ -7578,6 +7785,76 @@ export default function BruidstaartStudioConfigurator() {
           </pre>
         </div>
       </section>
+
+      {draftActionDraft && (
+        <div className="studio-no-print fixed inset-0 z-50 flex items-center justify-center bg-[#1a1815]/45 p-4">
+          <section className="w-full max-w-xl border border-[#ded8cf] bg-white p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#30462f]/55">
+                  {draftActionIsFinal ? "Definitieve bestelling" : "Concept"}
+                </p>
+                <h2 className="mt-1 text-xl font-black text-[#111111]">
+                  {draftActionTitle}
+                </h2>
+                <p className="mt-1 text-sm font-bold leading-snug text-[#6b645b]">
+                  {draftActionDraft.code} ·{" "}
+                  {draftActionDraft.surname ||
+                    draftActionDraft.names ||
+                    "Geen naam"}{" "}
+                  ·{" "}
+                  {formatDutchShortDate(getDraftOverviewDate(draftActionDraft))}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDraftActionDraft(null)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f8f6f3] text-xl font-black text-[#1a1815]"
+                aria-label="Sluiten"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                onClick={() => handleDraftAction("view")}
+                className="flex min-h-14 items-center justify-between border border-[#ded8cf] bg-white px-3 py-2 text-left text-sm font-black text-[#111111] shadow-sm transition hover:bg-[#faf8f5]"
+              >
+                <span>Bestelling bekijken</span>
+                <span className="flex h-9 w-9 items-center justify-center bg-[#ddd7cd] text-lg">
+                  &gt;
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDraftAction("payment")}
+                className="flex min-h-14 items-center justify-between border border-[#cbdcc5] bg-white px-3 py-2 text-left text-sm font-black text-[#111111] shadow-sm transition hover:bg-[#f6faf4]"
+              >
+                <span>Betaling beheren</span>
+                <span className="flex h-9 w-9 items-center justify-center bg-[#c3d3bc] text-lg">
+                  &gt;
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDraftAction("edit")}
+                className="flex min-h-14 items-center justify-between border border-[#eadb8b] bg-white px-3 py-2 text-left text-sm font-black text-[#111111] shadow-sm transition hover:bg-[#fff8d8]"
+              >
+                <span>
+                  {draftActionIsFinal
+                    ? "Bestelling toch wijzigen"
+                    : "Bruidstaart wijzigen"}
+                </span>
+                <span className="flex h-9 w-9 items-center justify-center bg-[#f7df83] text-lg">
+                  &gt;
+                </span>
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {finalOrderChoiceOpen && (
         <div className="studio-no-print fixed inset-0 z-50 flex items-center justify-center bg-[#1a1815]/45 p-4">

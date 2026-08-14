@@ -6,7 +6,7 @@ export default function BruidstaartStudioPage() {
     <StrikShell wide>
       <StrikPageHeader
         title="Bruidstaart Studio"
-        description="Vul stap voor stap het bruidstaart-bestelformulier in."
+        description="Start een nieuwe bruidstaart of beheer bestaande bestellingen."
         icon={strikIcons.bruidstaart}
         tone="honey"
       />
