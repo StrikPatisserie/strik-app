@@ -826,7 +826,6 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   customCakeDescription: "",
   customCakePersons: 0,
   customCakeSurchargePerPerson: 1,
-  customCakeFixedSurcharge: 0,
   customCakePrice: 0,
   paid: false,
   paidInStoreAt: "",

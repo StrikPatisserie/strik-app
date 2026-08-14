@@ -206,11 +206,6 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
       )
         ? Number(config.customCakeSurchargePerPerson)
         : 1,
-      customCakeFixedSurcharge: Number.isFinite(
-        Number(config.customCakeFixedSurcharge)
-      )
-        ? Number(config.customCakeFixedSurcharge)
-        : 0,
       customCakePrice: Number.isFinite(Number(config.customCakePrice))
         ? Number(config.customCakePrice)
         : 0,

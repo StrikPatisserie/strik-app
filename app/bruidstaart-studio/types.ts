@@ -101,7 +101,6 @@ export type WeddingCakeConfig = {
   customCakeDescription?: string;
   customCakePersons?: number;
   customCakeSurchargePerPerson?: number;
-  customCakeFixedSurcharge?: number;
   customCakePrice?: number;
   paid: boolean;
   paidInStoreAt?: string;

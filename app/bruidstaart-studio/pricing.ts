@@ -155,14 +155,6 @@ function getCustomCakeSurchargePerPerson(config: WeddingCakeConfig) {
   return Math.max(0, Number(amount.toFixed(2)));
 }
 
-function getCustomCakeFixedSurcharge(config: WeddingCakeConfig) {
-  const amount = Number(config.customCakeFixedSurcharge);
-
-  if (!Number.isFinite(amount)) return 0;
-
-  return Math.max(0, Number(amount.toFixed(2)));
-}
-
 export function getDecorationColorNotes(config: WeddingCakeConfig) {
   const colorNotes = config.decorationColorNotes || {};
 
@@ -478,7 +470,6 @@ export function calculateWeddingCakePrice(
 
   if (isCustomCake) {
     const customSurcharge = getCustomCakeSurchargePerPerson(config);
-    const customFixedSurcharge = getCustomCakeFixedSurcharge(config);
 
     if (customSurcharge > 0) {
       lines.push({
@@ -486,13 +477,6 @@ export function calculateWeddingCakePrice(
           customSurcharge
         )} p.p. x ${pricingPersons})`,
         amount: customSurcharge * pricingPersons,
-      });
-    }
-
-    if (customFixedSurcharge > 0) {
-      lines.push({
-        label: "Extra maatwerk toeslag",
-        amount: customFixedSurcharge,
       });
     }
   }
@@ -686,9 +670,6 @@ export function createProductionForm(config: WeddingCakeConfig) {
           }`,
           `Custom toeslag p.p.: ${formatEuro(
             getCustomCakeSurchargePerPerson(config)
-          )}`,
-          `Extra vaste toeslag: ${formatEuro(
-            getCustomCakeFixedSurcharge(config)
           )}`,
         ]
       : []),

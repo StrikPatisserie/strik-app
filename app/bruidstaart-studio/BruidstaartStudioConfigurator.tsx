@@ -3850,8 +3850,6 @@ export default function BruidstaartStudioConfigurator() {
   const [customCakePersonsInput, setCustomCakePersonsInput] = useState("");
   const [customCakeSurchargeInput, setCustomCakeSurchargeInput] =
     useState("1,00");
-  const [customCakeFixedSurchargeInput, setCustomCakeFixedSurchargeInput] =
-    useState("");
   const [paymentDialogMode, setPaymentDialogMode] = useState<
     "choice" | "request"
   >("choice");
@@ -4502,9 +4500,6 @@ export default function BruidstaartStudioConfigurator() {
             `Custom toeslag p.p.: ${formatEuro(
               getCustomCakeSurchargePerPersonValue()
             )}`,
-            `Extra vaste toeslag: ${formatEuro(
-              Number(config.customCakeFixedSurcharge) || 0
-            )}`,
           ]
         : []),
       `Stijl: ${labels.style || "-"}`,
@@ -4662,9 +4657,6 @@ export default function BruidstaartStudioConfigurator() {
           : DEFAULT_CUSTOM_CAKE_SURCHARGE_PER_PERSON
       )
     );
-    setCustomCakeFixedSurchargeInput(
-      formatEuroInput(Number(current.customCakeFixedSurcharge) || 0)
-    );
   }
 
   function resetCustomCakeInputs() {
@@ -4691,18 +4683,6 @@ export default function BruidstaartStudioConfigurator() {
       customCakeSurchargePerPerson: normalizedAmount,
     }));
     setCustomCakeSurchargeInput(formatEuroInputIncludingZero(normalizedAmount));
-  }
-
-  function commitCustomCakeFixedSurchargeInput(
-    value = customCakeFixedSurchargeInput
-  ) {
-    const amount = parseEuroInput(value);
-
-    setConfig((current) => ({
-      ...current,
-      customCakeFixedSurcharge: amount,
-    }));
-    setCustomCakeFixedSurchargeInput(formatEuroInput(amount));
   }
 
   function getPaymentDefaultAmount() {
@@ -5275,11 +5255,6 @@ export default function BruidstaartStudioConfigurator() {
       )
         ? Number(draft.config.customCakeSurchargePerPerson)
         : DEFAULT_CUSTOM_CAKE_SURCHARGE_PER_PERSON,
-      customCakeFixedSurcharge: Number.isFinite(
-        Number(draft.config.customCakeFixedSurcharge)
-      )
-        ? Number(draft.config.customCakeFixedSurcharge)
-        : 0,
       customCakePrice: draft.config.customCakePrice || 0,
       paidInStoreAt: draft.config.paidInStoreAt || "",
       contact: {
@@ -6468,7 +6443,7 @@ export default function BruidstaartStudioConfigurator() {
                       className="min-h-24 rounded-xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
                     />
                   </label>
-                  <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268]">
                       Aantal personen
                       <input
@@ -6500,28 +6475,6 @@ export default function BruidstaartStudioConfigurator() {
                           }
                           inputMode="decimal"
                           placeholder="1,00"
-                          className="w-full rounded-xl border border-[#ead8aa] bg-white px-3 py-2 pl-7 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
-                        />
-                      </span>
-                    </label>
-                    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268]">
-                      Extra toeslag
-                      <span className="relative block">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#6b645b]">
-                          €
-                        </span>
-                        <input
-                          value={customCakeFixedSurchargeInput}
-                          onChange={(event) =>
-                            setCustomCakeFixedSurchargeInput(event.target.value)
-                          }
-                          onBlur={(event) =>
-                            commitCustomCakeFixedSurchargeInput(
-                              event.target.value
-                            )
-                          }
-                          inputMode="decimal"
-                          placeholder="0,00"
                           className="w-full rounded-xl border border-[#ead8aa] bg-white px-3 py-2 pl-7 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
                         />
                       </span>
