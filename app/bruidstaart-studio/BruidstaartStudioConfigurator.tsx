@@ -134,6 +134,8 @@ type StepId =
   | "gegevens"
   | "overzicht";
 
+type FinalOrderAccessMode = "" | "view" | "payment";
+
 const steps: { id: StepId; title: string; description: string }[] = [
   {
     id: "start",
@@ -3819,6 +3821,9 @@ export default function BruidstaartStudioConfigurator() {
   const [draftDeliveryDate, setDraftDeliveryDate] = useState("");
   const [draftResults, setDraftResults] = useState<WeddingCakeDraft[]>([]);
   const [draftStatus, setDraftStatus] = useState("");
+  const [finalOrderChoiceOpen, setFinalOrderChoiceOpen] = useState(false);
+  const [finalOrderAccessMode, setFinalOrderAccessMode] =
+    useState<FinalOrderAccessMode>("");
   const [weekOverviewOpen, setWeekOverviewOpen] = useState(false);
   const [weekOverviewStart, setWeekOverviewStart] = useState("");
   const [weekOverviewResults, setWeekOverviewResults] = useState<
@@ -3892,6 +3897,10 @@ export default function BruidstaartStudioConfigurator() {
   const productionForm = useMemo(() => createProductionForm(config), [config]);
   const activeLayers = useMemo(() => getCakeDesignGroups(config), [config]);
   const isCustomCake = config.sizeId === CUSTOM_CAKE_SIZE_ID;
+  const isFinalOrderReadOnly =
+    finalOrderAccessMode === "view" || finalOrderAccessMode === "payment";
+  const canManagePaymentFromFinalOrder =
+    !isFinalOrderReadOnly || finalOrderAccessMode === "payment";
   const livePriceLabel =
     isCustomCake && price.total <= 0
       ? "Handmatig bepalen"
@@ -4624,6 +4633,33 @@ export default function BruidstaartStudioConfigurator() {
     setPaymentRequestOpen(true);
   }
 
+  function handleFinalOrderChoice(action: "edit" | "view" | "payment") {
+    setFinalOrderChoiceOpen(false);
+
+    if (action === "edit") {
+      setFinalOrderAccessMode("");
+      finalOrderEditConfirmedRef.current = true;
+      setDraftStatus(
+        "Definitieve bestelling geopend voor wijzigingen. Sla opnieuw op als je klaar bent."
+      );
+      return;
+    }
+
+    if (action === "view") {
+      setFinalOrderAccessMode("view");
+      markFinalOrderProtected(true);
+      setDraftStatus("Definitieve bestelling geopend om te bekijken.");
+      goToStepForStyle(getVisibleSteps(config.styleId).length - 1, config.styleId);
+      return;
+    }
+
+    setFinalOrderAccessMode("payment");
+    markFinalOrderProtected(true);
+    setDraftStatus("Betaling beheren voor deze definitieve bestelling.");
+    goToStepForStyle(getVisibleSteps(config.styleId).length - 1, config.styleId);
+    openPaymentRequestDialog();
+  }
+
   async function markPaidInStore() {
     const paidAt = new Date().toISOString();
     const paidLabel = formatDutchDateTime(paidAt);
@@ -5168,7 +5204,13 @@ export default function BruidstaartStudioConfigurator() {
       formatEuroInput(Number(loadedConfig.customCakePrice) || 0)
     );
     markFinalOrderProtected(Boolean(loadedConfig.completed));
-    setDraftStatus(`Bestelling ${draft.code} geladen.`);
+    setFinalOrderAccessMode(loadedConfig.completed ? "view" : "");
+    setFinalOrderChoiceOpen(Boolean(loadedConfig.completed));
+    setDraftStatus(
+      loadedConfig.completed
+        ? `Bestelling ${draft.code} is definitief. Kies wat je wilt doen.`
+        : `Bestelling ${draft.code} geladen.`
+    );
     goToStepForStyle(
       getVisibleSteps(nextConfig.styleId).length - 1,
       nextConfig.styleId
@@ -5249,6 +5291,8 @@ export default function BruidstaartStudioConfigurator() {
       );
       setConfigState(createEmptyWeddingCakeConfig());
       setCustomCakePriceInput("");
+      setFinalOrderAccessMode("");
+      setFinalOrderChoiceOpen(false);
       markFinalOrderProtected(false);
       setDraftStatus(`Bestelling ${code} verwijderd.`);
       goToStep(0);
@@ -5262,6 +5306,8 @@ export default function BruidstaartStudioConfigurator() {
       );
       setConfigState(createEmptyWeddingCakeConfig());
       setCustomCakePriceInput("");
+      setFinalOrderAccessMode("");
+      setFinalOrderChoiceOpen(false);
       markFinalOrderProtected(false);
       setDraftStatus(
         "Bestelling is lokaal verwijderd. Werk de WordPress snippet bij om ook op elk device te kunnen verwijderen."
@@ -5286,6 +5332,8 @@ export default function BruidstaartStudioConfigurator() {
     if (!updated) return;
 
     markFinalOrderProtected(false);
+    setFinalOrderAccessMode("");
+    setFinalOrderChoiceOpen(false);
     setCustomCakePriceInput("");
     setDraftResults([]);
     setDraftStatus(
@@ -5488,27 +5536,29 @@ export default function BruidstaartStudioConfigurator() {
 
   return (
     <div className="space-y-3">
-      <nav className="studio-no-print rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-2 shadow-sm">
-        <div className="grid grid-cols-5 gap-1 sm:grid-cols-10">
-          {visibleSteps.map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => goToStep(index)}
-              className={`min-w-0 rounded-lg px-1.5 py-1.5 text-[0.62rem] font-black leading-tight transition sm:text-[0.68rem] ${
-                currentStepIndex === index
-                  ? "bg-[#c3d3bc] text-[#2d2a26]"
-                  : "bg-[#f8f6f3] text-[#2d2a26]/55"
-              }`}
-            >
-              <span className="block">{index + 1}</span>
-              <span className="block truncate">{item.title}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+      {!isFinalOrderReadOnly && (
+        <nav className="studio-no-print rounded-[1rem] border border-[#e7e0d8] bg-white/85 p-2 shadow-sm">
+          <div className="grid grid-cols-5 gap-1 sm:grid-cols-10">
+            {visibleSteps.map((item, index) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => goToStep(index)}
+                className={`min-w-0 rounded-lg px-1.5 py-1.5 text-[0.62rem] font-black leading-tight transition sm:text-[0.68rem] ${
+                  currentStepIndex === index
+                    ? "bg-[#c3d3bc] text-[#2d2a26]"
+                    : "bg-[#f8f6f3] text-[#2d2a26]/55"
+                }`}
+              >
+                <span className="block">{index + 1}</span>
+                <span className="block truncate">{item.title}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+      )}
 
-      {step.id === "overzicht" && (
+      {step.id === "overzicht" && !isFinalOrderReadOnly && (
         <section className="studio-no-print ml-auto max-w-[44rem] rounded-[0.85rem] border border-[#ecd9a9] bg-[#fff4d1] p-1.5 shadow-sm">
           <div className="grid gap-1.5 lg:grid-cols-[6.8rem_minmax(0,1fr)_auto] lg:items-center">
             <div className="min-w-0">
@@ -5587,7 +5637,7 @@ export default function BruidstaartStudioConfigurator() {
         </section>
       )}
 
-      {step.id !== "start" && (
+      {step.id !== "start" && !isFinalOrderReadOnly && (
         <section
           className={`studio-no-print rounded-[0.9rem] border p-2.5 shadow-sm ${
             hasVisibleWarnings
@@ -5706,6 +5756,8 @@ export default function BruidstaartStudioConfigurator() {
                       if (!updated) return;
 
                       markFinalOrderProtected(false);
+                      setFinalOrderAccessMode("");
+                      setFinalOrderChoiceOpen(false);
                       setCustomCakePriceInput("");
                       setDraftResults([]);
                       setDraftStatus("Nieuw formulier gestart.");
@@ -7074,6 +7126,12 @@ export default function BruidstaartStudioConfigurator() {
 
           {step.id === "overzicht" && (
             <div className="space-y-2">
+              {isFinalOrderReadOnly && (
+                <div className="rounded-[0.85rem] border border-[#d7e3d2] bg-[#f8faf6] p-3 text-xs font-black text-[#4c6842] shadow-sm">
+                  Deze bestelling is definitief. Je bekijkt hem zonder
+                  bestelgegevens te wijzigen.
+                </div>
+              )}
               <div className="grid gap-2 sm:grid-cols-2">
                 <div
                   className={`rounded-[0.85rem] border p-2.5 text-xs font-black shadow-sm ${
@@ -7099,38 +7157,44 @@ export default function BruidstaartStudioConfigurator() {
                     "Nog geen betaling geregistreerd"
                   )}
                 </div>
-                <label className="flex items-center gap-2 rounded-[0.85rem] border border-[#e7e0d8] bg-white p-2.5 text-xs font-black shadow-sm">
-                  <input
-                    type="checkbox"
-                    checked={config.completed}
-                    onChange={(event) => {
-                      const checked = event.target.checked;
+                {isFinalOrderReadOnly ? (
+                  <div className="rounded-[0.85rem] border border-[#d7e3d2] bg-white p-2.5 text-xs font-black text-[#2d2a26]/70 shadow-sm">
+                    Status: definitief
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 rounded-[0.85rem] border border-[#e7e0d8] bg-white p-2.5 text-xs font-black shadow-sm">
+                    <input
+                      type="checkbox"
+                      checked={config.completed}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
 
-                      if (checked) {
-                        const missing = getCompletionWarnings();
+                        if (checked) {
+                          const missing = getCompletionWarnings();
 
-                        if (missing.length) {
-                          window.alert(
-                            `Kan niet definitief opslaan zonder dat alle gegevens zijn ingevuld. Ontbreekt nog: ${missing.join(
-                              ", "
-                            )}.`
-                          );
-                          return;
+                          if (missing.length) {
+                            window.alert(
+                              `Kan niet definitief opslaan zonder dat alle gegevens zijn ingevuld. Ontbreekt nog: ${missing.join(
+                                ", "
+                              )}.`
+                            );
+                            return;
+                          }
                         }
-                      }
 
-                      const updated = setConfig((current) => ({
-                        ...current,
-                        completed: checked,
-                      }));
-                      if (updated) {
-                        markFinalOrderProtected(false);
-                      }
-                    }}
-                    className="h-4 w-4 accent-[#8fb184]"
-                  />
-                  Bestelling definitief
-                </label>
+                        const updated = setConfig((current) => ({
+                          ...current,
+                          completed: checked,
+                        }));
+                        if (updated) {
+                          markFinalOrderProtected(false);
+                        }
+                      }}
+                      className="h-4 w-4 accent-[#8fb184]"
+                    />
+                    Bestelling definitief
+                  </label>
+                )}
               </div>
               {config.paymentRequestEmailedAt && (
                 <div className="rounded-[0.85rem] border border-[#c8dbc2] bg-[#f3faf0] p-3 text-xs font-black text-[#275d35] shadow-sm">
@@ -7157,7 +7221,8 @@ export default function BruidstaartStudioConfigurator() {
                           )}`
                         : "Betaallink nog niet als betaald bevestigd"}
                     </span>
-                    {!config.paymentRequestPaidAt && (
+                    {!config.paymentRequestPaidAt &&
+                      canManagePaymentFromFinalOrder && (
                       <button
                         type="button"
                         onClick={() => void checkPaymentRequestStatus()}
@@ -7185,7 +7250,15 @@ export default function BruidstaartStudioConfigurator() {
             }`}
           >
             {step.id === "overzicht" && (
-              <div className="grid gap-2 sm:grid-cols-3 lg:col-span-2">
+              <div
+                className={`grid gap-2 lg:col-span-2 ${
+                  isFinalOrderReadOnly
+                    ? canManagePaymentFromFinalOrder
+                      ? "sm:grid-cols-2"
+                      : "sm:grid-cols-1"
+                    : "sm:grid-cols-3"
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -7193,22 +7266,26 @@ export default function BruidstaartStudioConfigurator() {
                 >
                   Printen
                 </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    openMail(config.contact.email, STRIK_STUDIO_EMAIL)
-                  }
-                  className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
-                >
-                  Mail bestelling
-                </button>
-                <button
-                  type="button"
-                  onClick={openPaymentRequestDialog}
-                  className="rounded-full bg-[#dce8d6] px-3 py-2 text-xs font-black shadow-sm"
-                >
-                  Betaling
-                </button>
+                {!isFinalOrderReadOnly && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openMail(config.contact.email, STRIK_STUDIO_EMAIL)
+                    }
+                    className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
+                  >
+                    Mail bestelling
+                  </button>
+                )}
+                {canManagePaymentFromFinalOrder && (
+                  <button
+                    type="button"
+                    onClick={openPaymentRequestDialog}
+                    className="rounded-full bg-[#dce8d6] px-3 py-2 text-xs font-black shadow-sm"
+                  >
+                    Betaling
+                  </button>
+                )}
               </div>
             )}
 
@@ -7388,6 +7465,50 @@ export default function BruidstaartStudioConfigurator() {
           </pre>
         </div>
       </section>
+
+      {finalOrderChoiceOpen && (
+        <div className="studio-no-print fixed inset-0 z-50 flex items-center justify-center bg-[#1a1815]/45 p-4">
+          <section className="w-full max-w-xl rounded-[1.2rem] border border-[#ead8aa] bg-white p-4 shadow-2xl">
+            <div>
+              <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#8a5b10]">
+                Definitieve bestelling
+              </p>
+              <h2 className="mt-1 text-xl font-black text-[#1a1815]">
+                Deze bestelling is definitief, wat wil je doen?
+              </h2>
+              <p className="mt-1 text-sm font-bold leading-snug text-[#6b645b]">
+                Voorkom per ongeluk aanpassen. Kies bekijken voor bakkerij of
+                print, betaling beheren voor betaalstatus, of wijzig alleen als
+                het echt nodig is.
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                onClick={() => handleFinalOrderChoice("view")}
+                className="rounded-[1rem] border border-[#d7e3d2] bg-[#f8faf6] p-3 text-left text-sm font-black text-[#1a1815] shadow-sm"
+              >
+                Bestelling bekijken
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFinalOrderChoice("payment")}
+                className="rounded-[1rem] border border-[#d7e3d2] bg-[#dce8d6] p-3 text-left text-sm font-black text-[#1a1815] shadow-sm"
+              >
+                Betaling beheren
+              </button>
+              <button
+                type="button"
+                onClick={() => handleFinalOrderChoice("edit")}
+                className="rounded-[1rem] border border-[#ead8aa] bg-[#fffaf0] p-3 text-left text-sm font-black text-[#765819] shadow-sm"
+              >
+                Bestelling toch wijzigen
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {paymentRequestOpen && (
         <div className="studio-no-print fixed inset-0 z-50 flex items-center justify-center bg-[#1a1815]/45 p-4">
