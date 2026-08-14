@@ -20,7 +20,8 @@ export type PersonnelMailOrderType =
   | "cupcake-jubilee"
   | "major-jubilee"
   | "birthday-cake"
-  | "cash-deposit-summary";
+  | "cash-deposit-summary"
+  | "wedding-cake-payment-request";
 
 export type PersonnelMailOrder = {
   id: string;

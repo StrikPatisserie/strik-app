@@ -3787,6 +3787,11 @@ export default function BruidstaartStudioConfigurator() {
   const [allOverviewStatus, setAllOverviewStatus] = useState("");
   const [allOverviewLoading, setAllOverviewLoading] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState("");
+  const [paymentRequestOpen, setPaymentRequestOpen] = useState(false);
+  const [paymentRequestEmail, setPaymentRequestEmail] = useState("");
+  const [paymentRequestAmount, setPaymentRequestAmount] = useState("");
+  const [paymentRequestStatus, setPaymentRequestStatus] = useState("");
+  const [paymentRequestSending, setPaymentRequestSending] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -4473,6 +4478,173 @@ export default function BruidstaartStudioConfigurator() {
     )}?subject=${encodeURIComponent(getMailSubject())}&body=${encodeURIComponent(
       createMailBody()
     )}`;
+  }
+
+  function parseEuroInput(value: string) {
+    const cleaned = value.replace(/[^\d,.-]/g, "");
+    const lastComma = cleaned.lastIndexOf(",");
+    const lastDot = cleaned.lastIndexOf(".");
+    let normalized = cleaned;
+
+    if (lastComma >= 0 && lastDot >= 0) {
+      normalized =
+        lastComma > lastDot
+          ? cleaned.replace(/\./g, "").replace(",", ".")
+          : cleaned.replace(/,/g, "");
+    } else if (lastComma >= 0) {
+      normalized = cleaned.replace(",", ".");
+    }
+
+    const numberValue = Number(normalized);
+
+    return Number.isFinite(numberValue) ? Number(numberValue.toFixed(2)) : 0;
+  }
+
+  function formatEuroInput(value: number) {
+    return value > 0 ? value.toFixed(2).replace(".", ",") : "";
+  }
+
+  function openPaymentRequestDialog() {
+    setPaymentRequestEmail(
+      config.contact.invoiceEmail.trim() || config.contact.email.trim()
+    );
+    setPaymentRequestAmount(formatEuroInput(price.total));
+    setPaymentRequestStatus("");
+    setPaymentRequestOpen(true);
+  }
+
+  function createCustomerPaymentMailExample(amount: number) {
+    const names = config.contact.names.trim() || "bruidspaar";
+
+    return [
+      `Onderwerp: Betaalverzoek bruidstaart ${names}`,
+      "",
+      `Beste ${names},`,
+      "",
+      `Hierbij ontvangen jullie het betaalverzoek voor de bruidstaart van ${formatDutchShortDate(
+        config.contact.deliveryDate,
+        "de afgesproken datum"
+      )}.`,
+      `Bedrag: ${formatEuro(amount)}`,
+      "",
+      "Betaallink: [MOLLIE LINK HIER PLAKKEN]",
+      "",
+      "Zodra de betaling binnen is, verwerken wij deze bij de bestelling.",
+      "",
+      "Liefs,",
+      "Strik Patisserie",
+    ].join("\n");
+  }
+
+  function createPaymentRequestMailBody(targetEmail: string, amount: number) {
+    const priceLines = price.lines.length
+      ? price.lines
+          .map((line) =>
+            `${line.label}: ${line.quote ? "op aanvraag" : formatEuro(line.amount)}`
+          )
+          .join("\n")
+      : "Geen prijsregels";
+
+    return [
+      "Betaalverzoek bruidstaart",
+      "==========================",
+      "",
+      "Actie",
+      `Maak in Mollie een betaalverzoek van ${formatEuro(amount)}.`,
+      `Stuur het betaalverzoek naar: ${targetEmail}`,
+      "",
+      "Klant",
+      `Herkenningscode: ${config.contact.recognitionCode || "-"}`,
+      `Namen: ${config.contact.names || "-"}`,
+      `Achternaam: ${config.contact.surname || "-"}`,
+      `Klant e-mail: ${config.contact.email || "-"}`,
+      `Factuur e-mail: ${config.contact.invoiceEmail || "-"}`,
+      `Telefoon: ${config.contact.phone || "-"}`,
+      `Trouwdatum: ${formatDutchShortDate(config.contact.weddingDate, "-")}`,
+      `Leverdatum: ${formatDutchShortDate(config.contact.deliveryDate, "-")}`,
+      "",
+      "Taart",
+      `Stijl: ${labels.style || "-"}`,
+      `Formaat/opbouw: ${labels.size || "-"}`,
+      `Smaak/vulling: ${labels.filling || "-"}`,
+      `Kleur: ${config.styleId === "naked" ? "n.v.t." : labels.color || "-"}`,
+      `Layout: ${labels.layout || "-"}`,
+      `Decoratie: ${
+        labels.decorations.length ? labels.decorations.join(", ") : "geen"
+      }`,
+      `Topper/add-on: ${labels.topper}`,
+      "",
+      "Prijsregels",
+      priceLines,
+      `Totaal indicatie studio: ${formatEuro(price.total)}${
+        price.hasQuoteItems ? " + onderdelen op aanvraag" : ""
+      }`,
+      `Betaalverzoek bedrag: ${formatEuro(amount)}`,
+      "",
+      "Klantmail voorbeeld",
+      "-------------------",
+      createCustomerPaymentMailExample(amount),
+      "",
+      "Opmerking uit bestelling",
+      config.contact.notes || "-",
+    ].join("\n");
+  }
+
+  async function sendPaymentRequestMail() {
+    const targetEmail = paymentRequestEmail.trim();
+    const amount = parseEuroInput(paymentRequestAmount);
+
+    if (!targetEmail) {
+      setPaymentRequestStatus("Vul eerst het e-mailadres in.");
+      return;
+    }
+
+    if (amount <= 0) {
+      setPaymentRequestStatus("Vul eerst een bedrag hoger dan € 0,00 in.");
+      return;
+    }
+
+    setPaymentRequestSending(true);
+    setPaymentRequestStatus("Betaalverzoek mailen...");
+
+    try {
+      const response = await fetch("/api/bruidstaart-payment-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientEmail: targetEmail,
+          amount,
+          subject: `Betaalverzoek bruidstaart${
+            config.contact.recognitionCode
+              ? ` ${config.contact.recognitionCode}`
+              : ""
+          } - ${config.contact.names || config.contact.surname || "klant"}`,
+          body: createPaymentRequestMailBody(targetEmail, amount),
+          code: config.contact.recognitionCode,
+          customerName: config.contact.names || config.contact.surname,
+          deliveryDate: config.contact.deliveryDate,
+        }),
+      });
+
+      const data = (await response.json().catch(() => ({}))) as {
+        message?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.message || "Betaalverzoek mailen is mislukt.");
+      }
+
+      setPaymentRequestStatus(data.message || "Betaalverzoek is gemaild.");
+      setDraftStatus(data.message || "Betaalverzoek is naar Strik gemaild.");
+    } catch (error) {
+      setPaymentRequestStatus(
+        error instanceof Error
+          ? error.message
+          : "Betaalverzoek mailen is mislukt."
+      );
+    } finally {
+      setPaymentRequestSending(false);
+    }
   }
 
   function showSaveFeedback(message = "opgeslagen") {
@@ -6530,7 +6702,7 @@ export default function BruidstaartStudioConfigurator() {
             }`}
           >
             {step.id === "overzicht" && (
-              <div className="grid gap-2 sm:grid-cols-4 lg:col-span-2">
+              <div className="grid gap-2 sm:grid-cols-5 lg:col-span-2">
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -6551,6 +6723,13 @@ export default function BruidstaartStudioConfigurator() {
                   className="rounded-full bg-white px-3 py-2 text-xs font-black shadow-sm"
                 >
                   Mail naar klant
+                </button>
+                <button
+                  type="button"
+                  onClick={openPaymentRequestDialog}
+                  className="rounded-full bg-[#dce8d6] px-3 py-2 text-xs font-black shadow-sm"
+                >
+                  Betaalverzoek
                 </button>
                 <button
                   type="button"
@@ -6721,6 +6900,116 @@ export default function BruidstaartStudioConfigurator() {
           </pre>
         </div>
       </section>
+
+      {paymentRequestOpen && (
+        <div className="studio-no-print fixed inset-0 z-50 flex items-center justify-center bg-[#1a1815]/45 p-4">
+          <section className="w-full max-w-xl rounded-[1.2rem] border border-[#d7e3d2] bg-white p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#6d8665]">
+                  Bruidstaart
+                </p>
+                <h2 className="mt-1 text-xl font-black text-[#1a1815]">
+                  Betaalverzoek mailen
+                </h2>
+                <p className="mt-1 text-sm font-bold leading-snug text-[#6b645b]">
+                  Strik krijgt een mail met bedrag, klantmailadres en een
+                  klantmailvoorbeeld voor de Mollie-link.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentRequestOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f4f0ea] text-lg font-black text-[#1a1815]"
+                aria-label="Betaalverzoek sluiten"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_10rem]">
+              <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268]">
+                E-mailadres klant
+                <input
+                  value={paymentRequestEmail}
+                  onChange={(event) => setPaymentRequestEmail(event.target.value)}
+                  type="email"
+                  placeholder="klant@email.nl"
+                  className="min-w-0 rounded-xl border border-[#d7e3d2] bg-[#f8faf6] px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268]">
+                Bedrag
+                <span className="relative block">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#6b645b]">
+                    €
+                  </span>
+                  <input
+                    value={paymentRequestAmount}
+                    onChange={(event) =>
+                      setPaymentRequestAmount(event.target.value)
+                    }
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    className="w-full rounded-xl border border-[#d7e3d2] bg-[#f8faf6] px-3 py-2 pl-7 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
+                  />
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-4 rounded-[1rem] border border-[#eee7de] bg-[#faf8f5] p-3 text-sm font-bold leading-relaxed text-[#4f4942]">
+              <p>
+                <span className="font-black text-[#1a1815]">Klant:</span>{" "}
+                {config.contact.names || config.contact.surname || "-"}
+              </p>
+              <p>
+                <span className="font-black text-[#1a1815]">Leverdatum:</span>{" "}
+                {formatDutchShortDate(config.contact.deliveryDate, "-")}
+              </p>
+              <p>
+                <span className="font-black text-[#1a1815]">Taart:</span>{" "}
+                {[labels.size, labels.style, labels.filling]
+                  .filter(Boolean)
+                  .join(" · ") || "-"}
+              </p>
+              <p>
+                <span className="font-black text-[#1a1815]">Studio totaal:</span>{" "}
+                {formatEuro(price.total)}
+              </p>
+            </div>
+
+            {paymentRequestStatus && (
+              <p
+                className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${
+                  paymentRequestStatus.includes("gemaild")
+                    ? "border-[#c8dbc2] bg-[#f3faf0] text-[#275d35]"
+                    : "border-[#f1d0a7] bg-[#fff7e8] text-[#805f16]"
+                }`}
+              >
+                {paymentRequestStatus}
+              </p>
+            )}
+
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPaymentRequestOpen(false)}
+                className="rounded-full bg-[#f4f0ea] px-4 py-2 text-sm font-black text-[#1a1815]"
+              >
+                Sluiten
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendPaymentRequestMail()}
+                disabled={paymentRequestSending}
+                className="rounded-full bg-[#1f4f35] px-4 py-2 text-sm font-black text-white shadow-sm disabled:opacity-60"
+              >
+                {paymentRequestSending ? "Mailen..." : "Stuur naar Strik"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
