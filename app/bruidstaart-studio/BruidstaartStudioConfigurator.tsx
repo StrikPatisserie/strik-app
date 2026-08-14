@@ -548,40 +548,6 @@ function dateFromIsoDate(value: string) {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-function toIsoDate(date: Date) {
-  if (Number.isNaN(date.getTime())) return "";
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function getWeekStartIso(value?: string) {
-  const date = value ? dateFromIsoDate(value) : new Date();
-  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
-  const day = safeDate.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-
-  safeDate.setDate(safeDate.getDate() + mondayOffset);
-
-  return toIsoDate(safeDate);
-}
-
-function addDaysIso(value: string, days: number) {
-  const date = dateFromIsoDate(value);
-  date.setDate(date.getDate() + days);
-
-  return toIsoDate(date);
-}
-
-function getWeekDates(weekStartIso: string) {
-  return Array.from({ length: 7 }, (_item, index) =>
-    addDaysIso(weekStartIso, index)
-  );
-}
-
 function formatDutchShortDate(value?: string, fallback = "geen leverdatum") {
   if (!value) return fallback;
 
@@ -603,23 +569,6 @@ function formatDutchDateTime(value?: string, fallback = "-") {
     year: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date);
-}
-
-function formatWeekRange(weekStartIso: string) {
-  return `${formatDutchShortDate(weekStartIso)} t/m ${formatDutchShortDate(
-    addDaysIso(weekStartIso, 6)
-  )}`;
-}
-
-function formatWeekDayLabel(value: string) {
-  const date = dateFromIsoDate(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  return new Intl.DateTimeFormat("nl-NL", {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
   }).format(date);
 }
 
@@ -3831,13 +3780,6 @@ export default function BruidstaartStudioConfigurator() {
   const [finalOrderChoiceOpen, setFinalOrderChoiceOpen] = useState(false);
   const [finalOrderAccessMode, setFinalOrderAccessMode] =
     useState<FinalOrderAccessMode>("");
-  const [weekOverviewOpen, setWeekOverviewOpen] = useState(false);
-  const [weekOverviewStart, setWeekOverviewStart] = useState("");
-  const [weekOverviewResults, setWeekOverviewResults] = useState<
-    WeddingCakeDraft[]
-  >([]);
-  const [weekOverviewStatus, setWeekOverviewStatus] = useState("");
-  const [weekOverviewLoading, setWeekOverviewLoading] = useState(false);
   const [allOverviewOpen, setAllOverviewOpen] = useState(false);
   const [allOverviewYear, setAllOverviewYear] = useState(
     getCurrentYearString
@@ -3845,7 +3787,6 @@ export default function BruidstaartStudioConfigurator() {
   const [allOverviewResults, setAllOverviewResults] = useState<
     WeddingCakeDraft[]
   >([]);
-  const [allOverviewStatus, setAllOverviewStatus] = useState("");
   const [allOverviewLoading, setAllOverviewLoading] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState("");
   const [paymentRequestOpen, setPaymentRequestOpen] = useState(false);
@@ -3962,20 +3903,6 @@ export default function BruidstaartStudioConfigurator() {
   );
   const topperNoteTexts = useMemo(() => getTopperNoteTexts(config), [config]);
   const topperSurcharges = useMemo(() => getTopperSurcharges(config), [config]);
-  const weekOverviewDates = useMemo(
-    () => (weekOverviewStart ? getWeekDates(weekOverviewStart) : []),
-    [weekOverviewStart]
-  );
-  const weekOverviewGroups = useMemo(
-    () =>
-      weekOverviewDates.map((date) => ({
-        date,
-        drafts: weekOverviewResults.filter(
-          (draft) => getDraftOverviewDate(draft) === date
-        ),
-      })),
-    [weekOverviewDates, weekOverviewResults]
-  );
   const allOverviewGroups = useMemo(() => {
     const groups = new Map<string, WeddingCakeDraft[]>();
 
@@ -3984,10 +3911,26 @@ export default function BruidstaartStudioConfigurator() {
       groups.set(monthKey, [...(groups.get(monthKey) || []), draft]);
     });
 
-    return Array.from(groups.entries()).map(([monthKey, drafts]) => ({
-      monthKey,
-      drafts,
-    }));
+    return Array.from(groups.entries())
+      .sort(([firstMonthKey], [secondMonthKey]) => {
+        if (firstMonthKey === secondMonthKey) return 0;
+        if (firstMonthKey === "zonder-datum") return -1;
+        if (secondMonthKey === "zonder-datum") return 1;
+
+        return firstMonthKey.localeCompare(secondMonthKey, "nl-NL");
+      })
+      .map(([monthKey, drafts]) => ({
+        monthKey,
+        drafts: [...drafts].sort((first, second) => {
+          const dateCompare = getDraftOverviewDate(first).localeCompare(
+            getDraftOverviewDate(second)
+          );
+
+          if (dateCompare) return dateCompare;
+
+          return first.code.localeCompare(second.code, "nl-NL");
+        }),
+      }));
   }, [allOverviewResults]);
   const borderDecorationOptions = useMemo(
     () =>
@@ -5111,78 +5054,6 @@ export default function BruidstaartStudioConfigurator() {
     }
   }
 
-  async function loadWeekOverview(startIso = weekOverviewStart || getWeekStartIso()) {
-    const normalizedStart = getWeekStartIso(startIso);
-    const dates = getWeekDates(normalizedStart);
-
-    setWeekOverviewOpen(true);
-    setAllOverviewOpen(false);
-    setWeekOverviewStart(normalizedStart);
-    setWeekOverviewLoading(true);
-    setWeekOverviewStatus("Weekoverzicht laden...");
-
-    try {
-      const results = await Promise.all(
-        dates.map(async (date) => {
-          const res = await fetch(getWeddingCakeStudioUrl("", date), {
-            cache: "no-store",
-          });
-
-          if (!res.ok) throw new Error("WordPress niet beschikbaar.");
-
-          return normalizeDraftList(await res.json());
-        })
-      );
-      const drafts = uniqueDrafts(results.flat());
-
-      setWeekOverviewResults(drafts);
-      setWeekOverviewStatus(
-        drafts.length
-          ? `${drafts.length} bruidstaart${
-              drafts.length === 1 ? "" : "en"
-            } gevonden voor ${formatWeekRange(normalizedStart)}.`
-          : `Geen bruidstaarten gevonden voor ${formatWeekRange(
-              normalizedStart
-            )}.`
-      );
-    } catch {
-      const drafts = uniqueDrafts(
-        dates.flatMap((date) => searchLocalDrafts("", date))
-      );
-
-      setWeekOverviewResults(drafts);
-      setWeekOverviewStatus(
-        drafts.length
-          ? `Lokaal ${drafts.length} bruidstaart${
-              drafts.length === 1 ? "" : "en"
-            } gevonden voor ${formatWeekRange(normalizedStart)}.`
-          : `Geen lokale bruidstaarten gevonden voor ${formatWeekRange(
-              normalizedStart
-            )}.`
-      );
-    } finally {
-      setWeekOverviewLoading(false);
-    }
-  }
-
-  function createAllOverviewStatus(
-    drafts: WeddingCakeDraft[],
-    year: string,
-    sourceLabel = ""
-  ) {
-    const definitiveCount = drafts.filter(
-      (draft) => draft.config.completed
-    ).length;
-    const conceptCount = drafts.length - definitiveCount;
-    const sourceSuffix = sourceLabel ? ` ${sourceLabel}` : "";
-
-    return drafts.length
-      ? `${drafts.length} bruidstaart${
-          drafts.length === 1 ? "" : "en"
-        } gevonden voor ${year}${sourceSuffix}. Definitief: ${definitiveCount}, concept: ${conceptCount}.`
-      : `Geen bruidstaarten gevonden voor ${year}${sourceSuffix}.`;
-  }
-
   function normalizeOverviewYear(value: string) {
     const year = value.replace(/\D/g, "").slice(0, 4);
     return year.length === 4 ? year : getCurrentYearString();
@@ -5194,10 +5065,8 @@ export default function BruidstaartStudioConfigurator() {
     );
 
     setAllOverviewOpen(true);
-    setWeekOverviewOpen(false);
     setAllOverviewYear(normalizedYear);
     setAllOverviewLoading(true);
-    setAllOverviewStatus("Jaaroverzicht laden...");
 
     try {
       const res = await fetch(getWeddingCakeYearOverviewUrl(normalizedYear), {
@@ -5216,41 +5085,13 @@ export default function BruidstaartStudioConfigurator() {
       const drafts = uniqueDrafts([...wordpressDrafts, ...localDrafts]);
 
       setAllOverviewResults(drafts);
-      setAllOverviewStatus(
-        createAllOverviewStatus(
-          drafts,
-          normalizedYear,
-          localDrafts.length ? "inclusief lokale concepten op dit apparaat" : ""
-        )
-      );
     } catch {
       const drafts = uniqueDrafts(searchLocalDraftsByYear(normalizedYear));
 
       setAllOverviewResults(drafts);
-      setAllOverviewStatus(
-        createAllOverviewStatus(drafts, normalizedYear, "lokaal op dit apparaat")
-      );
     } finally {
       setAllOverviewLoading(false);
     }
-  }
-
-  function toggleWeekOverview() {
-    if (weekOverviewOpen) {
-      setWeekOverviewOpen(false);
-      return;
-    }
-
-    void loadWeekOverview(weekOverviewStart || getWeekStartIso());
-  }
-
-  function toggleAllOverview() {
-    if (allOverviewOpen) {
-      setAllOverviewOpen(false);
-      return;
-    }
-
-    void loadAllOverview(allOverviewYear || getCurrentYearString());
   }
 
   function startNewWeddingCake() {
@@ -5278,8 +5119,8 @@ export default function BruidstaartStudioConfigurator() {
     markFinalOrderProtected(false);
     goToStep(0);
 
-    if (!weekOverviewOpen && !allOverviewOpen && !draftResults.length) {
-      void loadWeekOverview(weekOverviewStart || getWeekStartIso());
+    if (!allOverviewOpen && !draftResults.length) {
+      void loadAllOverview(allOverviewYear || getCurrentYearString());
     }
   }
 
@@ -6112,30 +5953,6 @@ export default function BruidstaartStudioConfigurator() {
                       Bruidstaarten beheren
                     </h3>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    <button
-                      type="button"
-                      onClick={toggleWeekOverview}
-                      className={`rounded-md border px-2.5 py-1.5 text-[0.64rem] font-black transition ${
-                        weekOverviewOpen
-                          ? "border-[#bacfb4] bg-[#dce8d6] text-[#2d2a26]"
-                          : "border-[#ded8cf] bg-[#faf8f5] text-[#2d2a26]/55 hover:text-[#2d2a26]"
-                      }`}
-                    >
-                      {weekOverviewOpen ? "Sluit weekoverzicht" : "Weekoverzicht"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={toggleAllOverview}
-                      className={`rounded-md border px-2.5 py-1.5 text-[0.64rem] font-black transition ${
-                        allOverviewOpen
-                          ? "border-[#e6c368] bg-[#f1d28f] text-[#2d2a26]"
-                          : "border-[#ded8cf] bg-[#faf8f5] text-[#2d2a26]/55 hover:text-[#2d2a26]"
-                      }`}
-                    >
-                      {allOverviewOpen ? "Sluit toon alle" : "Toon alle"}
-                    </button>
-                  </div>
                 </div>
                 <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_11rem_auto]">
                   <input
@@ -6164,192 +5981,6 @@ export default function BruidstaartStudioConfigurator() {
                     Zoeken
                   </button>
                 </div>
-                {weekOverviewOpen && (
-                  <section className="mt-3 grid gap-2 rounded-md border border-[#e7e0d8] bg-[#fbfaf8] p-2.5">
-                    <div className="flex flex-wrap items-end justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-black text-[#2d2a26]">
-                          Weekoverzicht
-                        </p>
-                        <p className="mt-0.5 text-xs font-bold text-[#2d2a26]/50">
-                          {weekOverviewStart
-                            ? formatWeekRange(weekOverviewStart)
-                            : "Kies een week."}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void loadWeekOverview(
-                              addDaysIso(
-                                weekOverviewStart || getWeekStartIso(),
-                                -7
-                              )
-                            )
-                          }
-                          disabled={weekOverviewLoading}
-                          className="rounded-md border border-[#ded8cf] bg-white px-2.5 py-1.5 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
-                        >
-                          Vorige
-                        </button>
-                        <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
-                          Week van
-                          <input
-                            type="date"
-                            value={weekOverviewStart}
-                            onChange={(event) => {
-                              const nextStart = event.target.value
-                                ? getWeekStartIso(event.target.value)
-                                : "";
-
-                              setWeekOverviewStart(nextStart);
-                              setWeekOverviewResults([]);
-                              setWeekOverviewStatus(
-                                nextStart
-                                  ? `Klaar om ${formatWeekRange(
-                                      nextStart
-                                    )} te laden.`
-                                  : ""
-                              );
-                            }}
-                            className="min-w-0 rounded-md border border-[#ded8cf] bg-white px-3 py-1.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void loadWeekOverview(
-                              addDaysIso(weekOverviewStart || getWeekStartIso(), 7)
-                            )
-                          }
-                          disabled={weekOverviewLoading}
-                          className="rounded-md border border-[#ded8cf] bg-white px-2.5 py-1.5 text-xs font-black text-[#2d2a26]/55 disabled:opacity-50"
-                        >
-                          Volgende
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void loadWeekOverview()}
-                          disabled={weekOverviewLoading}
-                          className="rounded-md bg-[#dce8d6] px-3 py-1.5 text-xs font-black text-[#2d2a26] disabled:opacity-50"
-                        >
-                          {weekOverviewLoading ? "Laden..." : "Toon"}
-                        </button>
-                      </div>
-                    </div>
-                    {weekOverviewStatus && (
-                      <p className="text-xs font-bold text-[#2d2a26]/55">
-                        {weekOverviewStatus}
-                      </p>
-                    )}
-                    {weekOverviewGroups.length > 0 && (
-                      <div className="grid gap-1.5">
-                        {weekOverviewGroups.map((group) => {
-                          const definitiveCount = group.drafts.filter(
-                            (draft) => draft.config.completed
-                          ).length;
-
-                          return (
-                            <div
-                              key={group.date}
-                              className="rounded-md border border-[#e5dfd7] bg-white p-2"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-xs font-black capitalize text-[#1a1815]">
-                                  {formatWeekDayLabel(group.date)}
-                                </p>
-                                <span className="rounded-sm bg-[#f4f0ea] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
-                                  {group.drafts.length} totaal
-                                  {group.drafts.length > 0
-                                    ? ` · ${definitiveCount} definitief`
-                                    : ""}
-                                </span>
-                              </div>
-                              {group.drafts.length ? (
-                                <div className="mt-1.5 grid gap-1.5">
-                                  {group.drafts.map((draft) => {
-                                    const orderStatus =
-                                      getOrderStatusLabel(draft);
-                                    const size = findOption(
-                                      cakeSizes,
-                                      draft.config.sizeId
-                                    );
-
-                                    return (
-                                      <button
-                                        key={`${group.date}-${draft.code}`}
-                                        type="button"
-                                        onClick={() => openDraftActionDialog(draft)}
-                                        className="rounded-md border border-[#e7e0d8] bg-white p-2 text-left transition hover:bg-[#faf8f5] active:scale-[0.99]"
-                                      >
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <span className="font-black">
-                                            {draft.code}
-                                          </span>
-                                          <span
-                                            className={`rounded-sm px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] ${
-                                              orderStatus === "definitief"
-                                                ? "bg-[#dce8d6] text-[#4c6842]"
-                                                : "bg-[#f8f6f3] text-[#2d2a26]/55"
-                                            }`}
-                                          >
-                                            {orderStatus}
-                                          </span>
-                                          {draft.config.paid && (
-                                            <span className="rounded-sm bg-[#e8f0f2] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
-                                              betaald
-                                            </span>
-                                          )}
-                                          {draft.config.paymentRequestEmailedAt && (
-                                            <span className="rounded-sm bg-[#f3faf0] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
-                                              betaalverzoek{" "}
-                                              {formatDutchShortDate(
-                                                draft.config.paymentRequestEmailedAt.slice(
-                                                  0,
-                                                  10
-                                                ),
-                                                ""
-                                              )}
-                                            </span>
-                                          )}
-                                          {draft.config.paymentRequestPaidAt && (
-                                            <span className="rounded-sm bg-[#e5f4e7] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
-                                              Mollie betaald{" "}
-                                              {formatDutchShortDate(
-                                                draft.config.paymentRequestPaidAt.slice(
-                                                  0,
-                                                  10
-                                                ),
-                                                ""
-                                              )}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <p className="mt-0.5 text-xs font-semibold text-[#2d2a26]/60">
-                                          {draft.surname ||
-                                            draft.names ||
-                                            "Geen naam"}
-                                          {size
-                                            ? ` · ${size.label} (${size.personsLabel})`
-                                            : ""}
-                                        </p>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              ) : (
-                                <p className="mt-1.5 rounded-md bg-[#f8f6f3] p-2 text-xs font-bold text-[#2d2a26]/45">
-                                  Geen bruidstaarten.
-                                </p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </section>
-                )}
                 {allOverviewOpen && (
                   <section className="mt-3 grid gap-2 rounded-md border border-[#e7e0d8] bg-[#fbfaf8] p-2.5">
                     <div className="flex flex-wrap items-end justify-end gap-2">
@@ -6371,7 +6002,6 @@ export default function BruidstaartStudioConfigurator() {
                             onChange={(event) => {
                               setAllOverviewYear(event.target.value);
                               setAllOverviewResults([]);
-                              setAllOverviewStatus("");
                             }}
                             inputMode="numeric"
                             className="min-w-0 rounded-md border border-[#ded8cf] bg-white px-3 py-1.5 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
@@ -6393,7 +6023,7 @@ export default function BruidstaartStudioConfigurator() {
                           disabled={allOverviewLoading}
                           className="rounded-md bg-[#f1d28f] px-3 py-1.5 text-xs font-black text-[#2d2a26] disabled:opacity-50"
                         >
-                          {allOverviewLoading ? "Laden..." : "Toon alle"}
+                          {allOverviewLoading ? "Laden..." : "Toon jaar"}
                         </button>
                       </div>
                     </div>
@@ -6423,10 +6053,12 @@ export default function BruidstaartStudioConfigurator() {
                                   {group.drafts.length} totaal · {definitiveCount} definitief
                                 </span>
                               </div>
-                              <div className="mt-1.5 grid gap-1.5 xl:grid-cols-2">
+                              <div className="mt-1.5 grid gap-1">
                                 {group.drafts.map((draft) => {
                                   const orderStatus = getOrderStatusLabel(draft);
                                   const overviewDate = getDraftOverviewDate(draft);
+                                  const deliveryDate =
+                                    draft.config.contact.deliveryDate;
                                   const size = findOption(cakeSizes, draft.config.sizeId);
 
                                   return (
@@ -6434,12 +6066,39 @@ export default function BruidstaartStudioConfigurator() {
                                       key={`${group.monthKey}-${draft.code}-${draft.updatedAt}`}
                                       type="button"
                                       onClick={() => openDraftActionDialog(draft)}
-                                      className="rounded-md border border-[#e7e0d8] bg-white p-2 text-left transition hover:bg-[#faf8f5] active:scale-[0.99]"
+                                      className="grid gap-1.5 rounded-md border border-[#e7e0d8] bg-white px-2 py-1.5 text-left transition hover:bg-[#faf8f5] active:scale-[0.99] sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-center"
                                     >
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className="font-black">
+                                      <p className="text-xs font-black text-[#1a1815]">
+                                        Leverdatum:{" "}
+                                        {formatDutchShortDate(deliveryDate)}
+                                      </p>
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-black text-[#1a1815]">
                                           {draft.code}
-                                        </span>
+                                          <span className="px-1 text-[#2d2a26]/35">
+                                            ·
+                                          </span>
+                                          {draft.surname ||
+                                            draft.names ||
+                                            "Geen naam"}
+                                        </p>
+                                        <p className="truncate text-[0.68rem] font-bold text-[#2d2a26]/45">
+                                          {size
+                                            ? `${size.label} (${size.personsLabel})`
+                                            : "Geen formaat"}{" "}
+                                          · bijgewerkt{" "}
+                                          {formatDutchShortDate(
+                                            draft.updatedAt.slice(0, 10),
+                                            "-"
+                                          )}
+                                          {!deliveryDate && overviewDate
+                                            ? ` · datum: ${formatDutchShortDate(
+                                                overviewDate
+                                              )}`
+                                            : ""}
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-1 sm:justify-end">
                                         <span
                                           className={`rounded-sm px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] ${
                                             orderStatus === "definitief"
@@ -6479,20 +6138,6 @@ export default function BruidstaartStudioConfigurator() {
                                           </span>
                                         )}
                                       </div>
-                                      <p className="mt-0.5 text-xs font-semibold text-[#2d2a26]/60">
-                                        {formatDutchShortDate(overviewDate)} ·{" "}
-                                        {draft.surname || draft.names || "Geen naam"}
-                                      </p>
-                                      <p className="text-[0.68rem] font-bold text-[#2d2a26]/40">
-                                        {size
-                                          ? `${size.label} (${size.personsLabel})`
-                                          : "Geen formaat"}{" "}
-                                        · bijgewerkt{" "}
-                                        {formatDutchShortDate(
-                                          draft.updatedAt.slice(0, 10),
-                                          "-"
-                                        )}
-                                      </p>
                                     </button>
                                   );
                                 })}
