@@ -456,6 +456,15 @@ function strik_wedding_cakes_admin_page() {
         $payment_request_amount = isset($config['paymentRequestAmount'])
             ? strik_wedding_cakes_admin_value($config, 'paymentRequestAmount')
             : '';
+        $paid_in_store_at = isset($config['paidInStoreAt'])
+            ? strik_wedding_cakes_admin_value($config, 'paidInStoreAt')
+            : '';
+        $custom_cake_description = isset($config['customCakeDescription'])
+            ? strik_wedding_cakes_admin_value($config, 'customCakeDescription', '')
+            : '';
+        $custom_cake_price = isset($config['customCakePrice'])
+            ? strik_wedding_cakes_admin_value($config, 'customCakePrice', '')
+            : '';
         $name = trim(
             strik_wedding_cakes_admin_value($draft, 'surname', '') . ' ' .
             strik_wedding_cakes_admin_value($draft, 'names', '')
@@ -475,7 +484,16 @@ function strik_wedding_cakes_admin_page() {
         echo 'E-mail: ' . esc_html(strik_wedding_cakes_admin_value($contact, 'email')) . '<br>';
         echo 'Levering: ' . esc_html(strik_wedding_cakes_admin_value($contact, 'deliveryMethod')) . '<br>';
         echo 'Adres: ' . esc_html(strik_wedding_cakes_admin_value($contact, 'deliveryAddress')) . '</p>';
-        echo '<p><strong>Betaald:</strong> ' . esc_html($paid) . '</p>';
+        echo '<p><strong>Betaald:</strong> ' . esc_html($paid);
+        if ($paid_in_store_at !== '') {
+            echo ' &middot; in winkel op ' . esc_html(strik_wedding_cakes_admin_date(substr($paid_in_store_at, 0, 16)));
+        }
+        echo '</p>';
+        if ($custom_cake_description !== '' || $custom_cake_price !== '') {
+            echo '<p><strong>Custom taart:</strong><br>';
+            echo 'Omschrijving: ' . esc_html($custom_cake_description !== '' ? $custom_cake_description : '-') . '<br>';
+            echo 'Handmatige prijs: ' . esc_html($custom_cake_price !== '' ? $custom_cake_price : '-') . '</p>';
+        }
         echo '<p><strong>Betaalverzoek:</strong> ';
         if ($payment_request_emailed_at !== '') {
             echo 'Gemaild op ' . esc_html(strik_wedding_cakes_admin_date(substr($payment_request_emailed_at, 0, 16)));

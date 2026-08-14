@@ -57,6 +57,8 @@ function cakeSizeIcon(fileName: string) {
   return `/taartlagen_${fileName}.svg`;
 }
 
+export const CUSTOM_CAKE_SIZE_ID = "custom";
+
 export const cakeSizes: CakeSize[] = [
   {
     id: "small-6-8",
@@ -283,6 +285,18 @@ export const cakeSizes: CakeSize[] = [
     ],
     iconPath: cakeSizeIcon("S3B"),
     description: "Hoge opbouw met kleine, middelgrote en grote lagen.",
+  },
+  {
+    id: CUSTOM_CAKE_SIZE_ID,
+    code: "Custom",
+    label: "Custom taart",
+    persons: 0,
+    personsLabel: "maatwerk",
+    tiers: 0,
+    layers: [],
+    iconPath: "",
+    description:
+      "Prijs en haalbaarheid handmatig met de bakkerij afstemmen.",
   },
 ];
 
@@ -809,7 +823,10 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   topperInitialsText: "",
   topperNotes: "",
   topperSurcharges: [],
+  customCakeDescription: "",
+  customCakePrice: 0,
   paid: false,
+  paidInStoreAt: "",
   completed: false,
   paymentRequestEmailedAt: "",
   paymentRequestEmail: "",

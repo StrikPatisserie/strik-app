@@ -1,4 +1,5 @@
 import {
+  CUSTOM_CAKE_SIZE_ID,
   cakeSizes,
   cakeStyles,
   colorOptions,
@@ -160,6 +161,7 @@ export function getCakeLayers(config: WeddingCakeConfig): CakeLayer[] {
   const size = findOption(cakeSizes, config.sizeId);
 
   if (!size) return [];
+  if (size.id === CUSTOM_CAKE_SIZE_ID) return [];
 
   return size.layers.length
     ? size.layers
@@ -369,6 +371,30 @@ export function calculateWeddingCakePrice(
   const style = findOption(cakeStyles, config.styleId);
   const size = findOption(cakeSizes, config.sizeId);
 
+  if (size?.id === CUSTOM_CAKE_SIZE_ID) {
+    const customAmount = Number(config.customCakePrice) || 0;
+
+    return {
+      lines:
+        customAmount > 0
+          ? [
+              {
+                label: "Custom taart - handmatige prijs",
+                amount: customAmount,
+              },
+            ]
+          : [
+              {
+                label: "Custom taart - prijs handmatig bepalen",
+                amount: 0,
+                quote: true,
+              },
+            ],
+      total: customAmount,
+      hasQuoteItems: customAmount <= 0,
+    };
+  }
+
   if (!style || !size) {
     return {
       lines: [],
@@ -472,6 +498,7 @@ export function calculateWeddingCakePrice(
 export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   const style = findOption(cakeStyles, config.styleId);
   const size = findOption(cakeSizes, config.sizeId);
+  const isCustomCake = size?.id === CUSTOM_CAKE_SIZE_ID;
   const toppers = config.topperIds.flatMap((id) => {
     const topper = findOption(topperOptions, id);
     return topper ? [topper.label] : [];
@@ -511,15 +538,25 @@ export function getSelectedWeddingCakeLabels(config: WeddingCakeConfig) {
   return {
     style: style?.label || "",
     size: size
-      ? `${size.code} - ${size.label} (${size.persons} personen), ${size.tiers} laag${
-          size.tiers === 1 ? "" : "en"
-        }`
+      ? size.id === CUSTOM_CAKE_SIZE_ID
+        ? "Custom taart (maatwerk)"
+        : `${size.code} - ${size.label} (${size.persons} personen), ${size.tiers} laag${
+            size.tiers === 1 ? "" : "en"
+          }`
       : "",
-    filling: config.fillingId ? getSelectedFillingSummary(config) : "",
-    color: config.styleId !== "naked" && config.colorId
+    filling: isCustomCake
+      ? findOption(fillingOptions, config.fillingId)?.label || ""
+      : config.fillingId
+      ? getSelectedFillingSummary(config)
+      : "",
+    color: isCustomCake
+      ? findOption(colorOptions, config.colorId)?.label || ""
+      : config.styleId !== "naked" && config.colorId
       ? getSelectedLayerOptionSummary(config, getLayerColor)
       : "",
-    layout: config.layoutId
+    layout: isCustomCake
+      ? findOption(layoutOptions, config.layoutId)?.label || ""
+      : config.layoutId
       ? getSelectedLayerOptionSummary(config, getLayerLayout)
       : "",
     decorations,
@@ -539,6 +576,11 @@ export function getDeliveryMethodLabel(
 export function createProductionForm(config: WeddingCakeConfig) {
   const labels = getSelectedWeddingCakeLabels(config);
   const price = calculateWeddingCakePrice(config);
+  const isCustomCake = config.sizeId === CUSTOM_CAKE_SIZE_ID;
+  const totalLabel =
+    isCustomCake && price.total <= 0
+      ? "Handmatig bepalen"
+      : formatEuro(price.total);
   const showColor = config.styleId !== "naked";
   const decorationNotes = getDecorationNoteTexts(config);
   const decorationSurcharges = getDecorationSurcharges(config);
@@ -565,11 +607,18 @@ export function createProductionForm(config: WeddingCakeConfig) {
     `Adres: ${config.contact.deliveryAddress || "-"}`,
     "",
     "Taart",
-    `Stijl: ${labels.style}`,
+    ...(isCustomCake
+      ? [
+          "Maatwerk: ja",
+          "Let op: eerst met de bakkerij afstemmen wat mogelijk is.",
+          `Omschrijving maatwerk: ${config.customCakeDescription || "-"}`,
+        ]
+      : []),
+    `Stijl: ${labels.style || "-"}`,
     `Formaat/opbouw: ${labels.size}`,
-    `Smaak/vulling: ${labels.filling}`,
-    ...(showColor ? [`Kleur: ${labels.color}`] : []),
-    `Layout: ${labels.layout}`,
+    `Smaak/vulling: ${labels.filling || "-"}`,
+    ...(showColor ? [`Kleur: ${labels.color || "-"}`] : []),
+    `Layout: ${labels.layout || "-"}`,
     `Decoratie: ${labels.decorations.length ? labels.decorations.join(", ") : "geen"}`,
     `Decoratie opmerkingen: ${decorationNotes.length ? decorationNotes.join(" | ") : "-"}`,
     `Decoratie kleuren: ${
@@ -618,7 +667,7 @@ export function createProductionForm(config: WeddingCakeConfig) {
     "",
     "Prijsindicatie",
     ...price.lines.map((line) => `${line.label}: ${line.quote ? "op aanvraag" : formatEuro(line.amount)}`),
-    `Totaal indicatie: ${formatEuro(price.total)}${price.hasQuoteItems ? " + onderdelen op aanvraag" : ""}`,
+    `Totaal indicatie: ${totalLabel}${price.hasQuoteItems ? " + onderdelen op aanvraag" : ""}`,
     "",
     "Status: bestelformulier voor productie.",
   ].join("\n");

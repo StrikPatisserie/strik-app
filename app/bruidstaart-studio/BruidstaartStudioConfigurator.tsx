@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  CUSTOM_CAKE_SIZE_ID,
   cakeSizes,
   cakeStyles,
   colorOptions,
@@ -213,6 +214,9 @@ function personsText(value: string) {
 function sizeCompositionText(sizeId: string) {
   const size = findOption(cakeSizes, sizeId);
   if (!size) return "";
+  if (size.id === CUSTOM_CAKE_SIZE_ID) {
+    return "Prijs handmatig bepalen na overleg met de bakkerij.";
+  }
 
   const counts = new Map<string, number>();
 
@@ -227,6 +231,7 @@ function sizeCompositionText(sizeId: string) {
 }
 
 function sizeIconZoom(sizeId: string) {
+  if (sizeId === CUSTOM_CAKE_SIZE_ID) return 1;
   if (sizeId.startsWith("small")) return 1.25;
   if (sizeId === "s1a") return 1.2;
   if (["s2f", "s2g", "s3a"].includes(sizeId)) return 1.05;
@@ -789,6 +794,7 @@ function SizeCard({
   onClick: () => void;
 }) {
   const size = findOption(cakeSizes, sizeId) || cakeSizes[0];
+  const isCustomSize = size.id === CUSTOM_CAKE_SIZE_ID;
 
   return (
     <button
@@ -801,14 +807,20 @@ function SizeCard({
       }`}
     >
       <div className="flex h-12 w-full items-center justify-center overflow-hidden rounded-lg bg-white/75 p-1.5 sm:h-14">
-        <Image
-          src={size.iconPath}
-          alt=""
-          width={220}
-          height={140}
-          className="h-full w-full object-contain"
-          style={{ transform: `scale(${sizeIconZoom(size.id)})` }}
-        />
+        {isCustomSize ? (
+          <span className="rounded-full border border-dashed border-[#b8a99a] px-3 py-1 text-[0.65rem] font-black uppercase tracking-[0.14em] text-[#8a5b10]">
+            Maatwerk
+          </span>
+        ) : (
+          <Image
+            src={size.iconPath}
+            alt=""
+            width={220}
+            height={140}
+            className="h-full w-full object-contain"
+            style={{ transform: `scale(${sizeIconZoom(size.id)})` }}
+          />
+        )}
       </div>
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
@@ -1333,6 +1345,28 @@ function RestartIcon() {
       <path d="M3 12a9 9 0 1 0 3-6.7" />
       <path d="M3 4v6h6" />
     </svg>
+  );
+}
+
+function CustomCakePlaceholder({ compact = false }: { compact?: boolean }) {
+  return (
+    <div
+      className={`grid w-full place-items-center rounded-[1rem] border border-dashed border-[#d7c7b7] bg-[#fffaf0] p-4 text-center text-[#5d4717] ${
+        compact ? "min-h-[11rem]" : "min-h-[20rem]"
+      }`}
+    >
+      <div>
+        <p className="text-[0.65rem] font-black uppercase tracking-[0.18em] text-[#8a5b10]">
+          Maatwerk
+        </p>
+        <p className="mt-2 text-lg font-black text-[#1a1815]">
+          Geen getekend voorbeeld
+        </p>
+        <p className="mt-2 text-sm font-bold leading-relaxed">
+          Stem vorm, maat en prijs eerst af met de bakkerij.
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -3806,6 +3840,10 @@ export default function BruidstaartStudioConfigurator() {
   const [paymentRequestEmail, setPaymentRequestEmail] = useState("");
   const [paymentRequestAmount, setPaymentRequestAmount] = useState("");
   const [paymentRequestStatus, setPaymentRequestStatus] = useState("");
+  const [customCakePriceInput, setCustomCakePriceInput] = useState("");
+  const [paymentDialogMode, setPaymentDialogMode] = useState<
+    "choice" | "request"
+  >("choice");
   const [paymentRequestSending, setPaymentRequestSending] = useState(false);
   const [paymentStatusChecking, setPaymentStatusChecking] = useState(false);
 
@@ -3846,11 +3884,18 @@ export default function BruidstaartStudioConfigurator() {
       ),
     [config.styleId]
   );
+  const customColorOptions = config.styleId ? allowedColors : colorOptions;
+  const customLayoutOptions = config.styleId ? allowedLayouts : layoutOptions;
 
   const price = useMemo(() => calculateWeddingCakePrice(config), [config]);
   const labels = useMemo(() => getSelectedWeddingCakeLabels(config), [config]);
   const productionForm = useMemo(() => createProductionForm(config), [config]);
   const activeLayers = useMemo(() => getCakeDesignGroups(config), [config]);
+  const isCustomCake = config.sizeId === CUSTOM_CAKE_SIZE_ID;
+  const livePriceLabel =
+    isCustomCake && price.total <= 0
+      ? "Handmatig bepalen"
+      : formatEuro(price.total);
   const decorationNoteTexts = useMemo(
     () => getDecorationNoteTexts(config),
     [config]
@@ -4032,6 +4077,19 @@ export default function BruidstaartStudioConfigurator() {
   }
 
   function setSize(sizeId: string) {
+    if (sizeId === CUSTOM_CAKE_SIZE_ID && config.sizeId !== CUSTOM_CAKE_SIZE_ID) {
+      const confirmed = window.confirm(
+        [
+          "Custom taart gebruiken?",
+          "",
+          "De prijs moet dan handmatig bepaald worden en er wordt geen getekend voorbeeld gemaakt.",
+          "Bespreek eerst met de bakkerij wat mogelijk is.",
+        ].join("\n")
+      );
+
+      if (!confirmed) return;
+    }
+
     setConfig((current) => ({
       ...current,
       sizeId,
@@ -4411,6 +4469,13 @@ export default function BruidstaartStudioConfigurator() {
       `Adres: ${config.contact.deliveryAddress || "-"}`,
       "",
       "Taart",
+      ...(isCustomCake
+        ? [
+            "Maatwerk: ja",
+            "Let op: eerst met de bakkerij afstemmen wat mogelijk is.",
+            `Omschrijving maatwerk: ${config.customCakeDescription || "-"}`,
+          ]
+        : []),
       `Stijl: ${labels.style || "-"}`,
       `Formaat/opbouw: ${labels.size || "-"}`,
       `Smaak/vulling: ${labels.filling || "-"}`,
@@ -4480,7 +4545,7 @@ export default function BruidstaartStudioConfigurator() {
       "",
       "Prijsindicatie",
       priceLines,
-      `Totaal indicatie: ${formatEuro(price.total)}${
+      `Totaal indicatie: ${livePriceLabel}${
         price.hasQuoteItems ? " + onderdelen op aanvraag" : ""
       }`,
       "",
@@ -4531,13 +4596,50 @@ export default function BruidstaartStudioConfigurator() {
     return value > 0 ? value.toFixed(2).replace(".", ",") : "";
   }
 
+  function commitCustomCakePriceInput(value = customCakePriceInput) {
+    const amount = parseEuroInput(value);
+
+    setConfig((current) => ({
+      ...current,
+      customCakePrice: amount,
+    }));
+    setCustomCakePriceInput(formatEuroInput(amount));
+  }
+
+  function getPaymentDefaultAmount() {
+    if (config.sizeId === CUSTOM_CAKE_SIZE_ID) {
+      return Number(config.customCakePrice) || 0;
+    }
+
+    return price.total;
+  }
+
   function openPaymentRequestDialog() {
     setPaymentRequestEmail(
       config.contact.invoiceEmail.trim() || config.contact.email.trim()
     );
-    setPaymentRequestAmount(formatEuroInput(price.total));
+    setPaymentRequestAmount(formatEuroInput(getPaymentDefaultAmount()));
     setPaymentRequestStatus("");
+    setPaymentDialogMode("choice");
     setPaymentRequestOpen(true);
+  }
+
+  async function markPaidInStore() {
+    const paidAt = new Date().toISOString();
+    const paidLabel = formatDutchDateTime(paidAt);
+    const nextConfig = {
+      ...config,
+      paid: true,
+      paidInStoreAt: paidAt,
+    };
+
+    setConfigState(nextConfig);
+    setPaymentRequestStatus(`Betaling in de winkel opgeslagen op ${paidLabel}.`);
+    await saveConfigDraft(nextConfig, {
+      silentMissingCode: true,
+      successStatus: `Betaling in de winkel opgeslagen op ${paidLabel}.`,
+      localStatus: `Betaling in de winkel opgeslagen op ${paidLabel}; WordPress-opslag lukte niet, lokaal opgeslagen.`,
+    });
   }
 
   function createCustomerPaymentMailBody(amount: number) {
@@ -4615,6 +4717,8 @@ export default function BruidstaartStudioConfigurator() {
       const sentAt = new Date().toISOString();
       const nextConfig = {
         ...config,
+        paid: false,
+        paidInStoreAt: "",
         paymentRequestEmailedAt: sentAt,
         paymentRequestEmail: targetEmail,
         paymentRequestAmount: amount,
@@ -4698,6 +4802,7 @@ export default function BruidstaartStudioConfigurator() {
       const nextConfig = {
         ...sourceConfig,
         paid: true,
+        paidInStoreAt: "",
         paymentRequestPaidAt: data.paidAt,
         paymentRequestAmount:
           Number.isFinite(Number(data.amount)) && Number(data.amount) > 0
@@ -5036,6 +5141,9 @@ export default function BruidstaartStudioConfigurator() {
         : "",
       topperNotes: draft.config.topperNotes || "",
       topperSurcharges: draft.config.topperSurcharges || [],
+      customCakeDescription: draft.config.customCakeDescription || "",
+      customCakePrice: draft.config.customCakePrice || 0,
+      paidInStoreAt: draft.config.paidInStoreAt || "",
       contact: {
         ...initialWeddingCakeConfig.contact,
         ...draft.config.contact,
@@ -5056,6 +5164,9 @@ export default function BruidstaartStudioConfigurator() {
     };
 
     setConfigState(loadedConfig);
+    setCustomCakePriceInput(
+      formatEuroInput(Number(loadedConfig.customCakePrice) || 0)
+    );
     markFinalOrderProtected(Boolean(loadedConfig.completed));
     setDraftStatus(`Bestelling ${draft.code} geladen.`);
     goToStepForStyle(
@@ -5137,6 +5248,7 @@ export default function BruidstaartStudioConfigurator() {
         current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
       );
       setConfigState(createEmptyWeddingCakeConfig());
+      setCustomCakePriceInput("");
       markFinalOrderProtected(false);
       setDraftStatus(`Bestelling ${code} verwijderd.`);
       goToStep(0);
@@ -5149,6 +5261,7 @@ export default function BruidstaartStudioConfigurator() {
         current.filter((item) => item.code.toLowerCase() !== code.toLowerCase())
       );
       setConfigState(createEmptyWeddingCakeConfig());
+      setCustomCakePriceInput("");
       markFinalOrderProtected(false);
       setDraftStatus(
         "Bestelling is lokaal verwijderd. Werk de WordPress snippet bij om ook op elk device te kunnen verwijderen."
@@ -5173,6 +5286,7 @@ export default function BruidstaartStudioConfigurator() {
     if (!updated) return;
 
     markFinalOrderProtected(false);
+    setCustomCakePriceInput("");
     setDraftResults([]);
     setDraftStatus(
       "Taartontwerp gewist. Klantgegevens blijven staan; bestelling staat weer als concept."
@@ -5209,9 +5323,22 @@ export default function BruidstaartStudioConfigurator() {
   function getStepMissingFields(stepId = step.id, current = config) {
     const missing = getBaseMissingFields(current);
     const layers = getCakeDesignGroups(current);
+    const isCustom = current.sizeId === CUSTOM_CAKE_SIZE_ID;
 
     if (stepId === "formaat" && !current.sizeId) {
       missing.push("formaat");
+    }
+
+    if (
+      stepId === "formaat" &&
+      isCustom &&
+      !(current.customCakeDescription || "").trim()
+    ) {
+      missing.push("omschrijving maatwerk");
+    }
+
+    if (isCustom && ["stijl", "smaak", "kleur", "layout"].includes(stepId)) {
+      return Array.from(new Set(missing));
     }
 
     if (stepId === "stijl" && !current.styleId) {
@@ -5279,16 +5406,22 @@ export default function BruidstaartStudioConfigurator() {
   }
 
   function getCompletionWarnings(current = config) {
-    const missing = [
-      ...getStepMissingFields("formaat", current),
-      ...getStepMissingFields("stijl", current),
-      ...getStepMissingFields("smaak", current),
-      ...(current.styleId === "naked"
-        ? []
-        : getStepMissingFields("kleur", current)),
-      ...getStepMissingFields("layout", current),
-      ...getFinalRequiredMissingFields(current),
-    ];
+    const missing =
+      current.sizeId === CUSTOM_CAKE_SIZE_ID
+        ? [
+            ...getStepMissingFields("formaat", current),
+            ...getFinalRequiredMissingFields(current),
+          ]
+        : [
+            ...getStepMissingFields("formaat", current),
+            ...getStepMissingFields("stijl", current),
+            ...getStepMissingFields("smaak", current),
+            ...(current.styleId === "naked"
+              ? []
+              : getStepMissingFields("kleur", current)),
+            ...getStepMissingFields("layout", current),
+            ...getFinalRequiredMissingFields(current),
+          ];
 
     return Array.from(new Set(missing));
   }
@@ -5495,7 +5628,7 @@ export default function BruidstaartStudioConfigurator() {
                   Indicatie
                 </p>
                 <p className="text-sm font-black leading-none">
-                  {formatEuro(price.total)}
+                  {livePriceLabel}
                 </p>
               </div>
               {canGoNext && (
@@ -5573,6 +5706,7 @@ export default function BruidstaartStudioConfigurator() {
                       if (!updated) return;
 
                       markFinalOrderProtected(false);
+                      setCustomCakePriceInput("");
                       setDraftResults([]);
                       setDraftStatus("Nieuw formulier gestart.");
                     }}
@@ -6135,21 +6269,91 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "formaat" && (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {cakeSizes.map((size) => (
-                <SizeCard
-                  key={size.id}
-                  sizeId={size.id}
-                  selected={config.sizeId === size.id}
-                  onClick={() => setSize(size.id)}
-                />
-              ))}
+            <div className="space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {cakeSizes.map((size) => (
+                  <SizeCard
+                    key={size.id}
+                    sizeId={size.id}
+                    selected={config.sizeId === size.id}
+                    onClick={() => setSize(size.id)}
+                  />
+                ))}
+              </div>
+              {isCustomCake && (
+                <section className="grid gap-3 rounded-[1rem] border border-[#ead8aa] bg-[#fffaf0] p-3 text-sm font-bold text-[#5d4717] shadow-sm">
+                  <div>
+                    <p className="font-black text-[#1a1815]">
+                      Custom taart
+                    </p>
+                    <p className="mt-1 leading-relaxed">
+                      Let op: bespreek eerst met de bakkerij wat mogelijk is.
+                      De prijs moet handmatig bepaald worden en er wordt geen
+                      getekend voorbeeld gemaakt.
+                    </p>
+                  </div>
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268]">
+                    Omschrijving maatwerk
+                    <textarea
+                      value={config.customCakeDescription || ""}
+                      onChange={(event) =>
+                        setConfig((current) => ({
+                          ...current,
+                          customCakeDescription: event.target.value,
+                        }))
+                      }
+                      placeholder="Bijvoorbeeld: afwijkende vorm, extra grote maat, andere opbouw of speciale afwerking"
+                      className="min-h-24 rounded-xl border border-[#ead8aa] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268] sm:max-w-[13rem]">
+                    Handmatige prijs
+                    <span className="relative block">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#6b645b]">
+                        €
+                      </span>
+                      <input
+                        value={customCakePriceInput}
+                        onChange={(event) =>
+                          setCustomCakePriceInput(event.target.value)
+                        }
+                        onBlur={(event) =>
+                          commitCustomCakePriceInput(event.target.value)
+                        }
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        className="w-full rounded-xl border border-[#ead8aa] bg-white px-3 py-2 pl-7 text-sm font-bold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#8fb184]"
+                      />
+                    </span>
+                  </label>
+                </section>
+              )}
             </div>
           )}
 
           {step.id === "smaak" && (
             <div className="grid gap-2">
-              {activeLayers.length === 0 ? (
+              {isCustomCake ? (
+                <div className="grid gap-2">
+                  <p className="rounded-[1rem] border border-[#ead8aa] bg-[#fffaf0] p-3 text-sm font-bold leading-relaxed text-[#5d4717]">
+                    Custom taart: kies eventueel een globale smaak, maar stem
+                    de exacte opbouw eerst af met de bakkerij.
+                  </p>
+                  {fillingOptions.map((option) => (
+                    <OptionCard
+                      key={option.id}
+                      option={option}
+                      selected={config.fillingId === option.id}
+                      onClick={() =>
+                        setConfig((current) => ({
+                          ...current,
+                          fillingId: option.id,
+                        }))
+                      }
+                    />
+                  ))}
+                </div>
+              ) : activeLayers.length === 0 ? (
                 <p className="rounded-[1.4rem] bg-[#f8f6f3] p-4 text-sm font-bold text-[#2d2a26]/55">
                   Kies eerst een formaat. Daarna kun je per laag de smaak
                   invullen.
@@ -6210,7 +6414,27 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "kleur" && (
-            !config.styleId ? (
+            isCustomCake ? (
+              <div className="grid gap-2">
+                <p className="rounded-[1rem] border border-[#ead8aa] bg-[#fffaf0] p-3 text-sm font-bold leading-relaxed text-[#5d4717]">
+                  Custom taart: kies eventueel een globale kleur. De echte
+                  afwerking blijft maatwerk met de bakkerij.
+                </p>
+                {customColorOptions.map((option) => (
+                  <OptionCard
+                    key={option.id}
+                    option={option}
+                    selected={config.colorId === option.id}
+                    onClick={() =>
+                      setConfig((current) => ({
+                        ...current,
+                        colorId: option.id,
+                      }))
+                    }
+                  />
+                ))}
+              </div>
+            ) : !config.styleId ? (
               <p className="rounded-[1.4rem] bg-[#f8f6f3] p-4 text-sm font-bold text-[#2d2a26]/55">
                 Kies eerst een stijl. Daarna verschijnen de juiste kleuren.
               </p>
@@ -6236,7 +6460,27 @@ export default function BruidstaartStudioConfigurator() {
           )}
 
           {step.id === "layout" && (
-            !config.styleId ? (
+            isCustomCake ? (
+              <div className="grid gap-2">
+                <p className="rounded-[1rem] border border-[#ead8aa] bg-[#fffaf0] p-3 text-sm font-bold leading-relaxed text-[#5d4717]">
+                  Custom taart: kies eventueel een globale layout. Details
+                  blijven handmatig afstemmen.
+                </p>
+                {customLayoutOptions.map((option) => (
+                  <OptionCard
+                    key={option.id}
+                    option={option}
+                    selected={config.layoutId === option.id}
+                    onClick={() =>
+                      setConfig((current) => ({
+                        ...current,
+                        layoutId: option.id,
+                      }))
+                    }
+                  />
+                ))}
+              </div>
+            ) : !config.styleId ? (
               <p className="rounded-[1.4rem] bg-[#f8f6f3] p-4 text-sm font-bold text-[#2d2a26]/55">
                 Kies eerst een stijl. Daarna verschijnen de juiste layouts.
               </p>
@@ -6831,20 +7075,30 @@ export default function BruidstaartStudioConfigurator() {
           {step.id === "overzicht" && (
             <div className="space-y-2">
               <div className="grid gap-2 sm:grid-cols-2">
-                <label className="flex items-center gap-2 rounded-[0.85rem] border border-[#e7e0d8] bg-white p-2.5 text-xs font-black shadow-sm">
-                  <input
-                    type="checkbox"
-                    checked={config.paid}
-                    onChange={(event) =>
-                      setConfig((current) => ({
-                        ...current,
-                        paid: event.target.checked,
-                      }))
-                    }
-                    className="h-4 w-4 accent-[#8fb184]"
-                  />
-                  Heeft betaald
-                </label>
+                <div
+                  className={`rounded-[0.85rem] border p-2.5 text-xs font-black shadow-sm ${
+                    config.paid
+                      ? "border-[#c8dbc2] bg-[#f3faf0] text-[#275d35]"
+                      : "border-[#e7e0d8] bg-white text-[#2d2a26]/55"
+                  }`}
+                >
+                  {config.paid ? (
+                    <>
+                      ✓ Betaling geregistreerd
+                      {config.paymentRequestPaidAt
+                        ? ` via Mollie op ${formatDutchDateTime(
+                            config.paymentRequestPaidAt
+                          )}`
+                        : config.paidInStoreAt
+                        ? ` in de winkel op ${formatDutchDateTime(
+                            config.paidInStoreAt
+                          )}`
+                        : ""}
+                    </>
+                  ) : (
+                    "Nog geen betaling geregistreerd"
+                  )}
+                </div>
                 <label className="flex items-center gap-2 rounded-[0.85rem] border border-[#e7e0d8] bg-white p-2.5 text-xs font-black shadow-sm">
                   <input
                     type="checkbox"
@@ -6953,7 +7207,7 @@ export default function BruidstaartStudioConfigurator() {
                   onClick={openPaymentRequestDialog}
                   className="rounded-full bg-[#dce8d6] px-3 py-2 text-xs font-black shadow-sm"
                 >
-                  Betaalverzoek
+                  Betaling
                 </button>
               </div>
             )}
@@ -6965,7 +7219,14 @@ export default function BruidstaartStudioConfigurator() {
                   : ""
               }
             >
-              <CakeVisualizer config={config} compact={step.id === "overzicht"} />
+              {isCustomCake ? (
+                <CustomCakePlaceholder compact={step.id === "overzicht"} />
+              ) : (
+                <CakeVisualizer
+                  config={config}
+                  compact={step.id === "overzicht"}
+                />
+              )}
             </div>
 
             <div
@@ -6980,7 +7241,7 @@ export default function BruidstaartStudioConfigurator() {
                   Live prijs
                 </p>
                 <p className="mt-0.5 text-lg font-black">
-                  {formatEuro(price.total)}
+                  {livePriceLabel}
                 </p>
               </div>
               {price.hasQuoteItems && (
@@ -6997,6 +7258,12 @@ export default function BruidstaartStudioConfigurator() {
                 <p>
                   <span className="font-bold">Formaat:</span> {labels.size}
                 </p>
+                {isCustomCake && (
+                  <p>
+                    <span className="font-bold">Maatwerk:</span>{" "}
+                    {config.customCakeDescription || "-"}
+                  </p>
+                )}
                 <p>
                   <span className="font-bold">Smaak:</span> {labels.filling}
                 </p>
@@ -7104,14 +7371,18 @@ export default function BruidstaartStudioConfigurator() {
           </div>
           <div className="text-right text-sm">
             <p className="font-bold">Indicatie</p>
-            <p className="text-2xl font-black">{formatEuro(price.total)}</p>
+            <p className="text-2xl font-black">{livePriceLabel}</p>
             {config.contact.recognitionCode && (
               <p className="mt-2">Code: {config.contact.recognitionCode}</p>
             )}
           </div>
         </div>
         <div className="grid gap-5 print:grid-cols-[15rem_minmax(0,1fr)]">
-          <CakeVisualizer config={config} />
+          {isCustomCake ? (
+            <CustomCakePlaceholder />
+          ) : (
+            <CakeVisualizer config={config} />
+          )}
           <pre className="whitespace-pre-wrap rounded-none border-0 bg-white p-0 text-[11px] leading-relaxed">
             {productionForm}
           </pre>
@@ -7127,23 +7398,47 @@ export default function BruidstaartStudioConfigurator() {
                   Bruidstaart
                 </p>
                 <h2 className="mt-1 text-xl font-black text-[#1a1815]">
-                  Betaallink mailen
+                  Betaling
                 </h2>
                 <p className="mt-1 text-sm font-bold leading-snug text-[#6b645b]">
-                  De app maakt een Mollie-betaallink en mailt die direct naar
-                  de klant. Strik krijgt automatisch een kopie.
+                  Registreer een winkelbetaling of mail direct een
+                  Mollie-betaallink naar de klant. Strik krijgt automatisch een
+                  kopie van het betaalverzoek.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setPaymentRequestOpen(false)}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f4f0ea] text-lg font-black text-[#1a1815]"
-                aria-label="Betaalverzoek sluiten"
+                aria-label="Betaling sluiten"
               >
                 ×
               </button>
             </div>
 
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void markPaidInStore()}
+                className="rounded-[1rem] border border-[#c8dbc2] bg-[#f3faf0] p-3 text-left text-sm font-black text-[#275d35] shadow-sm"
+              >
+                Heeft betaald in de winkel
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentDialogMode("request")}
+                className={`rounded-[1rem] border p-3 text-left text-sm font-black shadow-sm ${
+                  paymentDialogMode === "request"
+                    ? "border-[#8fb184] bg-[#dce8d6] text-[#1a1815]"
+                    : "border-[#d7e3d2] bg-[#f8faf6] text-[#1a1815]"
+                }`}
+              >
+                Betaalverzoek mailen
+              </button>
+            </div>
+
+            {paymentDialogMode === "request" && (
+              <>
             <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_10rem]">
               <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#7b7268]">
                 E-mailadres klant
@@ -7191,15 +7486,18 @@ export default function BruidstaartStudioConfigurator() {
               </p>
               <p>
                 <span className="font-black text-[#1a1815]">Studio totaal:</span>{" "}
-                {formatEuro(price.total)}
+                {livePriceLabel}
               </p>
             </div>
+              </>
+            )}
 
             {paymentRequestStatus && (
               <p
                 className={`mt-3 rounded-xl border px-3 py-2 text-sm font-bold ${
-                  paymentRequestStatus.includes("gemaild") ||
-                  paymentRequestStatus.includes("betaald")
+                  paymentRequestStatus.toLowerCase().includes("gemaild") ||
+                  paymentRequestStatus.toLowerCase().includes("betaald") ||
+                  paymentRequestStatus.toLowerCase().includes("betaling")
                     ? "border-[#c8dbc2] bg-[#f3faf0] text-[#275d35]"
                     : "border-[#f1d0a7] bg-[#fff7e8] text-[#805f16]"
                 }`}
@@ -7228,16 +7526,18 @@ export default function BruidstaartStudioConfigurator() {
                     : "Betaling checken"}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => void sendPaymentRequestMail()}
-                disabled={paymentRequestSending}
-                className="rounded-full bg-[#1f4f35] px-4 py-2 text-sm font-black text-white shadow-sm disabled:opacity-60"
-              >
-                {paymentRequestSending
-                  ? "Mailen..."
-                  : "Betaallink maken en mailen"}
-              </button>
+              {paymentDialogMode === "request" && (
+                <button
+                  type="button"
+                  onClick={() => void sendPaymentRequestMail()}
+                  disabled={paymentRequestSending}
+                  className="rounded-full bg-[#1f4f35] px-4 py-2 text-sm font-black text-white shadow-sm disabled:opacity-60"
+                >
+                  {paymentRequestSending
+                    ? "Mailen..."
+                    : "Betaallink maken en mailen"}
+                </button>
+              )}
             </div>
           </section>
         </div>
