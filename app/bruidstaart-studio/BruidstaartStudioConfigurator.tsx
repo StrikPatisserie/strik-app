@@ -3901,6 +3901,14 @@ export default function BruidstaartStudioConfigurator() {
     finalOrderAccessMode === "view" || finalOrderAccessMode === "payment";
   const canManagePaymentFromFinalOrder =
     !isFinalOrderReadOnly || finalOrderAccessMode === "payment";
+  const paidInStoreChecked = Boolean(
+    config.paidInStoreAt || (config.paid && !config.paymentRequestPaidAt)
+  );
+  const paidInStoreLabel = config.paidInStoreAt
+    ? `in de winkel op ${formatDutchDateTime(config.paidInStoreAt)}`
+    : paidInStoreChecked
+    ? "aangevinkt in bestelling"
+    : "niet aangevinkt";
   const livePriceLabel =
     isCustomCake && price.total <= 0
       ? "Handmatig bepalen"
@@ -4660,21 +4668,26 @@ export default function BruidstaartStudioConfigurator() {
     openPaymentRequestDialog();
   }
 
-  async function markPaidInStore() {
-    const paidAt = new Date().toISOString();
-    const paidLabel = formatDutchDateTime(paidAt);
+  async function setPaidInStore(checked: boolean) {
+    const paidAt = checked
+      ? config.paidInStoreAt || new Date().toISOString()
+      : "";
+    const paidLabel = paidAt ? formatDutchDateTime(paidAt) : "";
     const nextConfig = {
       ...config,
-      paid: true,
+      paid: checked || Boolean(config.paymentRequestPaidAt),
       paidInStoreAt: paidAt,
     };
+    const status = checked
+      ? `Betaling in de winkel aangevinkt op ${paidLabel}.`
+      : "Betaling in de winkel uitgezet.";
 
     setConfigState(nextConfig);
-    setPaymentRequestStatus(`Betaling in de winkel opgeslagen op ${paidLabel}.`);
+    setPaymentRequestStatus(status);
     await saveConfigDraft(nextConfig, {
       silentMissingCode: true,
-      successStatus: `Betaling in de winkel opgeslagen op ${paidLabel}.`,
-      localStatus: `Betaling in de winkel opgeslagen op ${paidLabel}; WordPress-opslag lukte niet, lokaal opgeslagen.`,
+      successStatus: status,
+      localStatus: `${status} WordPress-opslag lukte niet, lokaal opgeslagen.`,
     });
   }
 
@@ -7147,10 +7160,8 @@ export default function BruidstaartStudioConfigurator() {
                         ? ` via Mollie op ${formatDutchDateTime(
                             config.paymentRequestPaidAt
                           )}`
-                        : config.paidInStoreAt
-                        ? ` in de winkel op ${formatDutchDateTime(
-                            config.paidInStoreAt
-                          )}`
+                        : paidInStoreChecked
+                        ? ` ${paidInStoreLabel}`
                         : ""}
                     </>
                   ) : (
@@ -7537,14 +7548,64 @@ export default function BruidstaartStudioConfigurator() {
               </button>
             </div>
 
+            <div className="mt-4 grid gap-2 rounded-[1rem] border border-[#eee7de] bg-[#faf8f5] p-3 text-sm font-bold leading-relaxed text-[#4f4942]">
+              <p>
+                <span className="font-black text-[#1a1815]">
+                  Betaald in winkel:
+                </span>{" "}
+                {paidInStoreLabel}
+              </p>
+              <p>
+                <span className="font-black text-[#1a1815]">
+                  Betaalverzoek:
+                </span>{" "}
+                {config.paymentRequestEmailedAt
+                  ? `gemaild op ${formatDutchDateTime(
+                      config.paymentRequestEmailedAt
+                    )}${
+                      config.paymentRequestEmail
+                        ? ` naar ${config.paymentRequestEmail}`
+                        : ""
+                    }`
+                  : "nog niet gemaild"}
+              </p>
+              <p>
+                <span className="font-black text-[#1a1815]">
+                  Mollie betaling:
+                </span>{" "}
+                {config.paymentRequestPaidAt
+                  ? `betaald op ${formatDutchDateTime(
+                      config.paymentRequestPaidAt
+                    )}`
+                  : config.paymentRequestLinkId
+                  ? "nog niet als betaald bevestigd"
+                  : "geen betaallink"}
+              </p>
+            </div>
+
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => void markPaidInStore()}
-                className="rounded-[1rem] border border-[#c8dbc2] bg-[#f3faf0] p-3 text-left text-sm font-black text-[#275d35] shadow-sm"
+              <label
+                className={`flex min-h-[4.5rem] items-center gap-3 rounded-[1rem] border p-3 text-left text-sm font-black shadow-sm ${
+                  paidInStoreChecked
+                    ? "border-[#c8dbc2] bg-[#f3faf0] text-[#275d35]"
+                    : "border-[#d7e3d2] bg-[#f8faf6] text-[#1a1815]"
+                }`}
               >
-                Heeft betaald in de winkel
-              </button>
+                <input
+                  type="checkbox"
+                  checked={paidInStoreChecked}
+                  onChange={(event) =>
+                    void setPaidInStore(event.target.checked)
+                  }
+                  className="h-5 w-5 shrink-0 accent-[#8fb184]"
+                />
+                <span>
+                  Heeft betaald in de winkel
+                  <span className="mt-1 block text-[0.68rem] font-bold opacity-70">
+                    {paidInStoreLabel}
+                  </span>
+                </span>
+              </label>
               <button
                 type="button"
                 onClick={() => setPaymentDialogMode("request")}
