@@ -30,6 +30,13 @@ const managementGroups: {
         icon: strikIcons.management,
       },
       {
+        href: "/management/cijfers-evaluaties",
+        label: "Evaluaties",
+        title: "Cijfers & evaluaties",
+        description: "Feestdagen, omzetnotities, assortiment en drukwerk.",
+        icon: strikIcons.data,
+      },
+      {
         href: "/management/gegevens",
         label: "Brondata",
         title: "Gegevens",
