@@ -811,6 +811,10 @@ export const initialWeddingCakeConfig: WeddingCakeConfig = {
   topperSurcharges: [],
   paid: false,
   completed: false,
+  paymentRequestEmailedAt: "",
+  paymentRequestEmail: "",
+  paymentRequestAmount: 0,
+  paymentRequestLinkId: "",
   contact: emptyContactDetails,
 };
 

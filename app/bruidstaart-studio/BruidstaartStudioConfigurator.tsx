@@ -581,6 +581,21 @@ function formatDutchShortDate(value?: string, fallback = "geen leverdatum") {
   return `${isoDate[3]}-${isoDate[2]}-${isoDate[1].slice(-2)}`;
 }
 
+function formatDutchDateTime(value?: string, fallback = "-") {
+  if (!value) return fallback;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function formatWeekRange(weekStartIso: string) {
   return `${formatDutchShortDate(weekStartIso)} t/m ${formatDutchShortDate(
     addDaysIso(weekStartIso, 6)
@@ -4441,6 +4456,13 @@ export default function BruidstaartStudioConfigurator() {
       }`,
       `Betaald: ${config.paid ? "Ja" : "Nee"}`,
       `Bestelling definitief: ${config.completed ? "Ja" : "Nee"}`,
+      `Betaalverzoek gemaild: ${
+        config.paymentRequestEmailedAt
+          ? `${formatDutchDateTime(config.paymentRequestEmailedAt)} naar ${
+              config.paymentRequestEmail || "-"
+            }`
+          : "Nee"
+      }`,
       "",
       "Opmerkingen",
       config.contact.notes || "-",
@@ -4566,14 +4588,38 @@ export default function BruidstaartStudioConfigurator() {
 
       const data = (await response.json().catch(() => ({}))) as {
         message?: string;
+        paymentLinkId?: string;
+        sent?: number;
       };
 
       if (!response.ok) {
         throw new Error(data.message || "Betaalverzoek mailen is mislukt.");
       }
 
-      setPaymentRequestStatus(data.message || "Betaalverzoek is gemaild.");
-      setDraftStatus(data.message || "Betaalverzoek is naar de klant gemaild.");
+      if ((data.sent ?? 1) <= 0) {
+        setPaymentRequestStatus(data.message || "Dit betaalverzoek was al gemaild.");
+        return;
+      }
+
+      const sentAt = new Date().toISOString();
+      const nextConfig = {
+        ...config,
+        paymentRequestEmailedAt: sentAt,
+        paymentRequestEmail: targetEmail,
+        paymentRequestAmount: amount,
+        paymentRequestLinkId: data.paymentLinkId || config.paymentRequestLinkId,
+      };
+      const sentLabel = formatDutchDateTime(sentAt);
+      const message =
+        data.message || `Betaalverzoek is naar de klant gemaild op ${sentLabel}.`;
+
+      setConfigState(nextConfig);
+      setPaymentRequestStatus(message);
+      await saveConfigDraft(nextConfig, {
+        silentMissingCode: true,
+        successStatus: `Betaalverzoek gemaild en opgeslagen op ${sentLabel}.`,
+        localStatus: `Betaalverzoek gemaild op ${sentLabel}; WordPress-opslag lukte niet, lokaal opgeslagen.`,
+      });
     } catch (error) {
       setPaymentRequestStatus(
         error instanceof Error
@@ -4611,26 +4657,33 @@ export default function BruidstaartStudioConfigurator() {
     setAllOverviewResults((current) => uniqueDrafts([...current, draft]));
   }
 
-  async function saveDraft(silentMissingCode = false) {
-    const code = config.contact.recognitionCode.trim();
-    const surname = config.contact.surname.trim();
+  async function saveConfigDraft(
+    nextConfig: WeddingCakeConfig,
+    options: {
+      silentMissingCode?: boolean;
+      successStatus?: string;
+      localStatus?: string;
+    } = {}
+  ) {
+    const code = nextConfig.contact.recognitionCode.trim();
+    const surname = nextConfig.contact.surname.trim();
 
     if (!code) {
-      if (!silentMissingCode) {
+      if (!options.silentMissingCode) {
         setDraftStatus("Vul eerst een herkenningscode in.");
       }
       return false;
     }
 
     if (!surname) {
-      if (!silentMissingCode) {
+      if (!options.silentMissingCode) {
         setDraftStatus("Vul eerst de achternaam van de klant in.");
       }
       return false;
     }
 
     setSaveFeedback("opslaan...");
-    const draft = createDraftFromConfig(config);
+    const draft = createDraftFromConfig(nextConfig);
 
     try {
       const res = await fetch(getWeddingCakeStudioUrl(), {
@@ -4645,7 +4698,7 @@ export default function BruidstaartStudioConfigurator() {
       saveLocalDraft(savedDraft);
       setDraftResults([savedDraft]);
       mergeDraftIntoAllOverview(savedDraft);
-      setDraftStatus("Bestelling opgeslagen in WordPress.");
+      setDraftStatus(options.successStatus || "Bestelling opgeslagen in WordPress.");
       showSaveFeedback();
       markFinalOrderProtected(Boolean(savedDraft.config.completed));
       return true;
@@ -4654,12 +4707,17 @@ export default function BruidstaartStudioConfigurator() {
       setDraftResults([draft]);
       mergeDraftIntoAllOverview(draft);
       setDraftStatus(
-        "WordPress-opslag is nog niet actief; bestelling is lokaal opgeslagen."
+        options.localStatus ||
+          "WordPress-opslag is nog niet actief; bestelling is lokaal opgeslagen."
       );
       showSaveFeedback();
       markFinalOrderProtected(Boolean(draft.config.completed));
       return true;
     }
+  }
+
+  async function saveDraft(silentMissingCode = false) {
+    return saveConfigDraft(config, { silentMissingCode });
   }
 
   async function searchDrafts() {
@@ -4857,6 +4915,10 @@ export default function BruidstaartStudioConfigurator() {
       decorationSurcharges: draft.config.decorationSurcharges || [],
       paid: Boolean(draft.config.paid),
       completed: Boolean(draft.config.completed),
+      paymentRequestEmailedAt: draft.config.paymentRequestEmailedAt || "",
+      paymentRequestEmail: draft.config.paymentRequestEmail || "",
+      paymentRequestAmount: draft.config.paymentRequestAmount || 0,
+      paymentRequestLinkId: draft.config.paymentRequestLinkId || "",
       topperIds: cleanedTopperIds,
       topperInitialsText: cleanedTopperIds.includes(CHOCOLATE_INITIALS_TOPPER_ID)
         ? normalizeChocoLetterText(draft.config.topperInitialsText)
@@ -5646,6 +5708,18 @@ export default function BruidstaartStudioConfigurator() {
                                               betaald
                                             </span>
                                           )}
+                                          {draft.config.paymentRequestEmailedAt && (
+                                            <span className="rounded-full bg-[#f3faf0] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
+                                              betaalverzoek{" "}
+                                              {formatDutchShortDate(
+                                                draft.config.paymentRequestEmailedAt.slice(
+                                                  0,
+                                                  10
+                                                ),
+                                                ""
+                                              )}
+                                            </span>
+                                          )}
                                         </div>
                                         <p className="mt-1 text-sm font-semibold text-[#2d2a26]/60">
                                           {draft.surname ||
@@ -5782,6 +5856,18 @@ export default function BruidstaartStudioConfigurator() {
                                             betaald
                                           </span>
                                         )}
+                                        {draft.config.paymentRequestEmailedAt && (
+                                          <span className="rounded-full bg-[#f3faf0] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
+                                            betaalverzoek{" "}
+                                            {formatDutchShortDate(
+                                              draft.config.paymentRequestEmailedAt.slice(
+                                                0,
+                                                10
+                                              ),
+                                              ""
+                                            )}
+                                          </span>
+                                        )}
                                       </div>
                                       <p className="mt-1 text-sm font-semibold text-[#2d2a26]/60">
                                         {formatDutchShortDate(overviewDate)} ·{" "}
@@ -5845,6 +5931,18 @@ export default function BruidstaartStudioConfigurator() {
                               {draft.config.paid && (
                                 <span className="rounded-full bg-[#e8f0f2] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
                                   betaald
+                                </span>
+                              )}
+                              {draft.config.paymentRequestEmailedAt && (
+                                <span className="rounded-full bg-[#f3faf0] px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
+                                  betaalverzoek{" "}
+                                  {formatDutchShortDate(
+                                    draft.config.paymentRequestEmailedAt.slice(
+                                      0,
+                                      10
+                                    ),
+                                    ""
+                                  )}
                                 </span>
                               )}
                             </div>
@@ -6627,6 +6725,15 @@ export default function BruidstaartStudioConfigurator() {
                   Bestelling definitief
                 </label>
               </div>
+              {config.paymentRequestEmailedAt && (
+                <div className="rounded-[0.85rem] border border-[#c8dbc2] bg-[#f3faf0] p-3 text-xs font-black text-[#275d35] shadow-sm">
+                  ✓ Betaalverzoek gemaild op{" "}
+                  {formatDutchDateTime(config.paymentRequestEmailedAt)}
+                  {config.paymentRequestEmail
+                    ? ` naar ${config.paymentRequestEmail}`
+                    : ""}
+                </div>
+              )}
             </div>
           )}
         </section>

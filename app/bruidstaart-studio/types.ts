@@ -100,6 +100,10 @@ export type WeddingCakeConfig = {
   topperSurcharges: DecorationSurcharge[];
   paid: boolean;
   completed: boolean;
+  paymentRequestEmailedAt?: string;
+  paymentRequestEmail?: string;
+  paymentRequestAmount?: number;
+  paymentRequestLinkId?: string;
   contact: ContactDetails;
 };
 

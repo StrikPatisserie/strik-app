@@ -444,6 +444,12 @@ function strik_wedding_cakes_admin_page() {
         $contact = isset($config['contact']) && is_array($config['contact']) ? $config['contact'] : array();
         $status = !empty($config['completed']) ? 'Definitief' : 'Concept';
         $paid = !empty($config['paid']) ? 'Ja' : 'Nee';
+        $payment_request_emailed_at = isset($config['paymentRequestEmailedAt'])
+            ? strik_wedding_cakes_admin_value($config, 'paymentRequestEmailedAt')
+            : '';
+        $payment_request_email = isset($config['paymentRequestEmail'])
+            ? strik_wedding_cakes_admin_value($config, 'paymentRequestEmail')
+            : '';
         $name = trim(
             strik_wedding_cakes_admin_value($draft, 'surname', '') . ' ' .
             strik_wedding_cakes_admin_value($draft, 'names', '')
@@ -464,6 +470,16 @@ function strik_wedding_cakes_admin_page() {
         echo 'Levering: ' . esc_html(strik_wedding_cakes_admin_value($contact, 'deliveryMethod')) . '<br>';
         echo 'Adres: ' . esc_html(strik_wedding_cakes_admin_value($contact, 'deliveryAddress')) . '</p>';
         echo '<p><strong>Betaald:</strong> ' . esc_html($paid) . '</p>';
+        echo '<p><strong>Betaalverzoek:</strong> ';
+        if ($payment_request_emailed_at !== '') {
+            echo 'Gemaild op ' . esc_html(strik_wedding_cakes_admin_date(substr($payment_request_emailed_at, 0, 16)));
+            if ($payment_request_email !== '') {
+                echo ' naar ' . esc_html($payment_request_email);
+            }
+        } else {
+            echo 'Nog niet gemaild';
+        }
+        echo '</p>';
 
         if (!empty($contact['notes'])) {
             echo '<p><strong>Notities:</strong><br>' . nl2br(esc_html($contact['notes'])) . '</p>';
