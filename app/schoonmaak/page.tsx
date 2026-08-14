@@ -542,6 +542,10 @@ function SchoonmaakForm() {
   const [ijsBestelReminderStatus, setIjsBestelReminderStatus] =
     useState<IjsBestelReminderStatus | null>(null);
   const [ijsBestelReminderOpen, setIjsBestelReminderOpen] = useState(false);
+  const [
+    ijsBestelReminderConfirmNothing,
+    setIjsBestelReminderConfirmNothing,
+  ] = useState(false);
   const [ladenBezig, setLadenBezig] = useState(false);
   const [verzendenBezig, setVerzendenBezig] = useState(false);
   const [activeInfo, setActiveInfo] = useState<
@@ -642,11 +646,13 @@ function SchoonmaakForm() {
     if (!ijsBestelReminderActief) {
       setIjsBestelReminderOpen(false);
       setIjsBestelReminderStatus(null);
+      setIjsBestelReminderConfirmNothing(false);
       return;
     }
 
     const opgeslagenStatus = leesIjsBestelReminderStatus(datum, winkel);
     setIjsBestelReminderStatus(opgeslagenStatus);
+    setIjsBestelReminderConfirmNothing(false);
 
     if (opgeslagenStatus) {
       setIjsBestelReminderOpen(false);
@@ -1199,6 +1205,7 @@ function SchoonmaakForm() {
     bewaarIjsBestelReminderStatus(datum, winkel, status);
     setIjsBestelReminderStatus(status);
     setIjsBestelReminderOpen(false);
+    setIjsBestelReminderConfirmNothing(false);
   }
 
   async function verzenden() {
@@ -1727,14 +1734,20 @@ function SchoonmaakForm() {
                   <div className="mt-3 grid gap-2">
                     <a
                       href="/ijs/bestellen"
-                      onClick={() => setIjsBestelReminderOpen(false)}
+                      onClick={() => {
+                        setIjsBestelReminderConfirmNothing(false);
+                        setIjsBestelReminderOpen(false);
+                      }}
                       className="rounded-2xl bg-[#243620] px-3 py-2.5 text-center text-sm font-black text-white shadow-sm transition active:scale-[0.99]"
                     >
                       Nu bestellen
                     </a>
                     <button
                       type="button"
-                      onClick={() => setIjsBestelReminderOpen(false)}
+                      onClick={() => {
+                        setIjsBestelReminderConfirmNothing(false);
+                        setIjsBestelReminderOpen(false);
+                      }}
                       className="rounded-2xl border border-[#c3d3bc] bg-[#f3faf0] px-3 py-2.5 text-sm font-black text-[#243620] transition active:scale-[0.99]"
                     >
                       Ik doe het later
@@ -1754,13 +1767,42 @@ function SchoonmaakForm() {
                         <button
                           type="button"
                           onClick={() =>
-                            bevestigIjsBestelReminder("nothing-needed")
+                            setIjsBestelReminderConfirmNothing(true)
                           }
                           className="rounded-xl border border-[#d7dfd2] bg-white px-2 py-1.5 text-[0.68rem] font-black text-[#4f5f4b]/75 transition hover:text-[#243620] active:scale-[0.99]"
                         >
                           Niets nodig
                         </button>
                       </div>
+                      {ijsBestelReminderConfirmNothing && (
+                        <div className="mt-2 rounded-2xl border border-[#f0d7a6] bg-[#fff9ec] p-2 text-center">
+                          <p className="text-[0.72rem] font-black leading-snug text-[#6b4b18]">
+                            Weet je zeker dat je niets nodig hebt? Heb je ook
+                            de ijshoorntjes, ijsbakjes en slagroom
+                            gecontroleerd?
+                          </p>
+                          <div className="mt-2 grid grid-cols-2 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setIjsBestelReminderConfirmNothing(false)
+                              }
+                              className="rounded-xl border border-[#e7d3a8] bg-white px-2 py-1.5 text-[0.68rem] font-black text-[#6b4b18]"
+                            >
+                              Terug
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                bevestigIjsBestelReminder("nothing-needed")
+                              }
+                              className="rounded-xl bg-[#6b4b18] px-2 py-1.5 text-[0.68rem] font-black text-white"
+                            >
+                              Ja, gecheckt
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </section>
