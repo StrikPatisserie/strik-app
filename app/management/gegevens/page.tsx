@@ -40,20 +40,12 @@ const gegevensItems = [
     tone: "green" as const,
   },
   {
-    href: "/settings/app",
+    href: "/settings",
     label: "Settings",
-    title: "App instellingen",
-    description: "Zet seizoensmenu's zoals Vierdaagse aan of uit.",
+    title: "Gebruikers & app",
+    description: "Beheer accounts, rechten en app-instellingen.",
     icon: strikIcons.management,
     tone: "medium" as const,
-  },
-  {
-    href: "/settings/users",
-    label: "Settings",
-    title: "Gebruikers",
-    description: "Accounts, rollen, winkels en rechten beheren.",
-    icon: strikIcons.management,
-    tone: "muted" as const,
   },
 ];
 

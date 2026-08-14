@@ -47,6 +47,7 @@ export async function updateFeatureVisibilityAction(
   }
 
   revalidatePath("/", "layout");
+  revalidatePath("/settings");
   revalidatePath("/settings/app");
 
   return {

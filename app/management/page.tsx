@@ -63,25 +63,11 @@ const managementGroups: {
     title: "Beheer",
     items: [
       {
-        href: "/settings/app",
-        label: "App",
-        title: "App instellingen",
-        description: "Seizoensmenu's aan of uit zetten.",
+        href: "/settings",
+        label: "Beheer",
+        title: "Gebruikers & app",
+        description: "Accounts, rechten en app-instellingen beheren.",
         icon: strikIcons.management,
-      },
-      {
-        href: "/settings/users",
-        label: "Accounts",
-        title: "Gebruikers",
-        description: "Rollen, winkels en rechten beheren.",
-        icon: strikIcons.management,
-      },
-      {
-        href: "/management/notities",
-        label: "Winkels",
-        title: "Notities",
-        description: "Notities en to-do's per ijssalon.",
-        icon: strikIcons.notities,
       },
       {
         href: "/schoonmaak/overzicht",

@@ -50,6 +50,11 @@ function getInviteRedirectUrl() {
   return getPasswordUpdateUrl(getSiteUrl());
 }
 
+function revalidateUserSettings() {
+  revalidatePath("/settings");
+  revalidatePath("/settings/users");
+}
+
 async function upsertProfile(
   userId: string,
   payload: ReturnType<typeof getProfilePayload>
@@ -118,7 +123,7 @@ export async function createUserAction(
     };
   }
 
-  revalidatePath("/settings/users");
+  revalidateUserSettings();
   return { ok: true, message: "Gebruiker aangemaakt." };
 }
 
@@ -162,7 +167,7 @@ export async function inviteUserAction(
     };
   }
 
-  revalidatePath("/settings/users");
+  revalidateUserSettings();
   return { ok: true, message: "Uitnodiging verstuurd." };
 }
 
@@ -193,7 +198,7 @@ export async function updateUserProfileAction(
   if (error) throw new Error(error.message);
 
   await upsertProfile(userId, payload);
-  revalidatePath("/settings/users");
+  revalidateUserSettings();
 }
 
 export async function setUserActiveAction(userId: string, active: boolean) {
@@ -228,7 +233,7 @@ export async function setUserActiveAction(userId: string, active: boolean) {
 
   if (error) throw new Error(error.message);
 
-  revalidatePath("/settings/users");
+  revalidateUserSettings();
 }
 
 export async function sendUserPasswordResetAction(formData: FormData) {
@@ -243,5 +248,5 @@ export async function sendUserPasswordResetAction(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
-  revalidatePath("/settings/users");
+  revalidateUserSettings();
 }
