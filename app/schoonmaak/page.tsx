@@ -67,6 +67,11 @@ type SubmitOptions = AntwoordOverrides & {
   skipIfUnchanged?: boolean;
 };
 
+type IjsBestelReminderStatus = "ordered" | "nothing-needed";
+
+const IJS_BESTEL_REMINDER_INTERVAL_MS = 15 * 60 * 1000;
+const IJS_BESTEL_REMINDER_KEY_PREFIX = "strik-ijs-bestel-reminder";
+
 function getVandaag() {
   const vandaag = new Date();
   const jaar = vandaag.getFullYear();
@@ -78,6 +83,10 @@ function getVandaag() {
 
 function getDraftKey(winkel: string, datum: string, planType: PlanType) {
   return `strik-schoonmaak-${datum}-${winkel}-${planType}`;
+}
+
+function getIjsBestelReminderKey(datum: string) {
+  return `${IJS_BESTEL_REMINDER_KEY_PREFIX}-${datum}`;
 }
 
 function readFileAsDataUrl(file: File) {
@@ -448,6 +457,38 @@ function bewaarLokaleDraft(
   }
 }
 
+function leesIjsBestelReminderStatus(
+  datum: string
+): IjsBestelReminderStatus | null {
+  try {
+    const raw = localStorage.getItem(getIjsBestelReminderKey(datum));
+    if (!raw) return null;
+
+    const data = JSON.parse(raw) as { status?: unknown };
+    if (data.status === "ordered" || data.status === "nothing-needed") {
+      return data.status;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function bewaarIjsBestelReminderStatus(
+  datum: string,
+  status: IjsBestelReminderStatus
+) {
+  try {
+    localStorage.setItem(
+      getIjsBestelReminderKey(datum),
+      JSON.stringify({ status, savedAt: new Date().toISOString() })
+    );
+  } catch {
+    // Als lokale opslag niet lukt, sluiten we de reminder voor deze sessie alsnog.
+  }
+}
+
 function leesLokaleDraft(
   winkel: string,
   datum: string,
@@ -496,6 +537,9 @@ function SchoonmaakForm() {
   >([]);
   const [verzondenSignatuur, setVerzondenSignatuur] = useState("");
   const [status, setStatus] = useState("");
+  const [ijsBestelReminderStatus, setIjsBestelReminderStatus] =
+    useState<IjsBestelReminderStatus | null>(null);
+  const [ijsBestelReminderOpen, setIjsBestelReminderOpen] = useState(false);
   const [ladenBezig, setLadenBezig] = useState(false);
   const [verzendenBezig, setVerzendenBezig] = useState(false);
   const [activeInfo, setActiveInfo] = useState<
@@ -506,6 +550,9 @@ function SchoonmaakForm() {
   const autoSaveTimerRef = useRef<number | null>(null);
   const verzondenSignatuurRef = useRef("");
   const photoUploadIdRef = useRef(0);
+  const vandaag = getVandaag();
+  const ijsBestelReminderActief =
+    planType === "Afsluitplan" && datum === vandaag;
 
   const takenLijst = useMemo(
     () => getTakenLijst(planType, winkel),
@@ -588,6 +635,32 @@ function SchoonmaakForm() {
     },
     []
   );
+
+  useEffect(() => {
+    if (!ijsBestelReminderActief) {
+      setIjsBestelReminderOpen(false);
+      setIjsBestelReminderStatus(null);
+      return;
+    }
+
+    const opgeslagenStatus = leesIjsBestelReminderStatus(datum);
+    setIjsBestelReminderStatus(opgeslagenStatus);
+
+    if (opgeslagenStatus) {
+      setIjsBestelReminderOpen(false);
+      return;
+    }
+
+    setIjsBestelReminderOpen(true);
+
+    const timer = window.setInterval(() => {
+      setIjsBestelReminderOpen(true);
+    }, IJS_BESTEL_REMINDER_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [datum, ijsBestelReminderActief]);
 
   useEffect(() => {
     let negeerResultaat = false;
@@ -1120,6 +1193,12 @@ function SchoonmaakForm() {
     void verzenden();
   }
 
+  function bevestigIjsBestelReminder(status: IjsBestelReminderStatus) {
+    bewaarIjsBestelReminderStatus(datum, status);
+    setIjsBestelReminderStatus(status);
+    setIjsBestelReminderOpen(false);
+  }
+
   async function verzenden() {
     await submitAntwoorden();
   }
@@ -1612,6 +1691,90 @@ function SchoonmaakForm() {
             <p className="rounded-2xl bg-white p-3 text-center text-sm shadow-sm">
               {status}
             </p>
+          )}
+
+          {ijsBestelReminderActief && !ijsBestelReminderStatus && (
+            <div className="fixed bottom-20 right-3 z-40 w-[min(calc(100vw-1.5rem),23rem)] sm:bottom-6 sm:right-6">
+              {ijsBestelReminderOpen ? (
+                <section
+                  aria-live="polite"
+                  className="rounded-[1.7rem] border border-[#b8ccb0] bg-white p-3 text-[#243620] shadow-2xl"
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#c3d3bc] shadow-sm">
+                      <img
+                        src={strikIcons.ijs}
+                        alt=""
+                        className="h-6 w-6"
+                      />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-[#4b6b43]">
+                        IJs reminder
+                      </p>
+                      <h2 className="mt-1 text-lg font-black leading-tight text-[#1f2d1d]">
+                        Vergeet je geen ijs te bestellen voor 20:00?
+                      </h2>
+                      <p className="mt-1 text-xs font-semibold leading-snug text-[#4f5f4b]">
+                        Deze melding komt elke 15 minuten terug tot je aangeeft
+                        dat het geregeld is.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid gap-2">
+                    <button
+                      type="button"
+                      onClick={() => bevestigIjsBestelReminder("ordered")}
+                      className="flex items-center gap-2 rounded-2xl border border-[#c3d3bc] bg-[#f3faf0] px-3 py-2 text-left text-sm font-black text-[#243620] transition active:scale-[0.99]"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[#8fb184] bg-white text-xs">
+                        ✓
+                      </span>
+                      Ik heb al besteld
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        bevestigIjsBestelReminder("nothing-needed")
+                      }
+                      className="flex items-center gap-2 rounded-2xl border border-[#d7dfd2] bg-white px-3 py-2 text-left text-sm font-black text-[#243620] transition active:scale-[0.99]"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[#8fb184] bg-white text-xs">
+                        ✓
+                      </span>
+                      Ik heb niets nodig
+                    </button>
+                    <a
+                      href="/ijs/bestellen"
+                      onClick={() => setIjsBestelReminderOpen(false)}
+                      className="rounded-2xl bg-[#243620] px-3 py-2 text-center text-sm font-black text-white shadow-sm transition active:scale-[0.99]"
+                    >
+                      Nu bestellen
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setIjsBestelReminderOpen(false)}
+                      className="rounded-2xl border border-[#e7e0d8] bg-[#faf8f5] px-3 py-2 text-sm font-black text-[#4f554c] transition active:scale-[0.99]"
+                    >
+                      Ik doe het later
+                    </button>
+                  </div>
+                </section>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIjsBestelReminderOpen(true)}
+                  aria-label="Open ijs bestel reminder"
+                  className="relative ml-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#9fb891] bg-[#c3d3bc] shadow-xl transition active:scale-95"
+                >
+                  <img src={strikIcons.ijs} alt="" className="h-7 w-7" />
+                  <span className="absolute -right-1 -top-1 rounded-full bg-[#243620] px-1.5 py-0.5 text-[0.58rem] font-black text-white">
+                    20:00
+                  </span>
+                </button>
+              )}
+            </div>
           )}
 
           {activeInfo && (
