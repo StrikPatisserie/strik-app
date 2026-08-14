@@ -3866,6 +3866,31 @@ export default function BruidstaartStudioConfigurator() {
   }, [config]);
 
   useEffect(() => {
+    function handleStudioBack(event: Event) {
+      if (studioMode === "home") return;
+
+      event.preventDefault();
+      setStudioMode("home");
+      setFinalOrderChoiceOpen(false);
+      setDraftActionDraft(null);
+      setPaymentRequestOpen(false);
+      scrollStudioToTop();
+    }
+
+    window.addEventListener(
+      "strik:wedding-cake-studio-back",
+      handleStudioBack
+    );
+
+    return () => {
+      window.removeEventListener(
+        "strik:wedding-cake-studio-back",
+        handleStudioBack
+      );
+    };
+  }, [studioMode]);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const search = params.get("zoek") || params.get("search") || "";
     const deliveryDate = params.get("datum") || params.get("date") || "";
@@ -5711,9 +5736,6 @@ export default function BruidstaartStudioConfigurator() {
               aria-hidden="true"
             />
             <div className="min-w-0">
-              <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
-                Bruidstaart Studio
-              </p>
               <p className="truncate text-sm font-black text-[#111111]">
                 {studioMode === "manage"
                   ? "Bruidstaarten beheren"
@@ -5957,15 +5979,8 @@ export default function BruidstaartStudioConfigurator() {
                 +
               </span>
               <span className="min-w-0">
-                <span className="block text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#30462f]/55">
-                  Nieuwe aanvraag
-                </span>
-                <span className="mt-1 block text-[clamp(1.25rem,3.6vw,2rem)] font-black leading-none text-[#111111]">
+                <span className="block text-[clamp(1.25rem,3.6vw,2rem)] font-black leading-none text-[#111111]">
                   Nieuwe bruidstaart starten
-                </span>
-                <span className="mt-2 block text-sm font-bold italic leading-snug text-[#30462f]/60">
-                  Begin met code en achternaam. Daarna verschijnt het volledige
-                  stappenplan.
                 </span>
               </span>
             </span>
@@ -5987,15 +6002,8 @@ export default function BruidstaartStudioConfigurator() {
                 ↗
               </span>
               <span className="min-w-0">
-                <span className="block text-[0.68rem] font-black uppercase tracking-[0.16em] text-[#8a6a13]/65">
-                  Agenda en beheer
-                </span>
-                <span className="mt-1 block text-[clamp(1.25rem,3.6vw,2rem)] font-black leading-none text-[#111111]">
+                <span className="block text-[clamp(1.25rem,3.6vw,2rem)] font-black leading-none text-[#111111]">
                   Bruidstaarten beheren
-                </span>
-                <span className="mt-2 block text-sm font-bold italic leading-snug text-[#8a6a13]/65">
-                  Zoek bestellingen, bekijk de weekagenda en beheer betalingen
-                  of wijzigingen.
                 </span>
               </span>
             </span>

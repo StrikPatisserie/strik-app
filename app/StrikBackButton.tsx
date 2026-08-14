@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+
+const WEDDING_CAKE_STUDIO_BACK_EVENT = "strik:wedding-cake-studio-back";
 
 const parentRoutes: Record<string, string> = {
   "/agenda": "/bruidstaarten",
@@ -55,14 +57,39 @@ function getParentRoute(pathname: string) {
 
 export default function StrikBackButton() {
   const pathname = usePathname();
+  const router = useRouter();
   const parentRoute = getParentRoute(pathname);
+  const className =
+    "mb-4 inline-flex items-center gap-2 rounded-lg border border-[#e8e4de] bg-white px-3 py-2 text-sm font-medium text-[#8b8278] transition hover:bg-[#faf8f5] active:scale-[0.97]";
 
   if (!parentRoute) return null;
+
+  if (pathname === "/bruidstaarten/studio") {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          const event = new Event(WEDDING_CAKE_STUDIO_BACK_EVENT, {
+            cancelable: true,
+          });
+          const shouldNavigate = window.dispatchEvent(event);
+
+          if (shouldNavigate) {
+            router.push(parentRoute);
+          }
+        }}
+        className={className}
+      >
+        <span className="text-base leading-none">←</span>
+        Terug
+      </button>
+    );
+  }
 
   return (
     <Link
       href={parentRoute}
-      className="mb-4 inline-flex items-center gap-2 rounded-lg border border-[#e8e4de] bg-white px-3 py-2 text-sm font-medium text-[#8b8278] transition hover:bg-[#faf8f5] active:scale-[0.97]"
+      className={className}
     >
       <span className="text-base leading-none">←</span>
       Terug
