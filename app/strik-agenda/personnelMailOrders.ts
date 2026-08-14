@@ -39,6 +39,7 @@ export type PersonnelMailOrder = {
   daysUntil: number;
   source: "tamigo" | "drive";
   recipients: string[];
+  ccRecipients?: string[];
   subject: string;
   body: string;
   deliveryShop: string;

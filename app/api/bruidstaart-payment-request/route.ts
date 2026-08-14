@@ -27,6 +27,27 @@ const PAYMENT_REQUEST_RECIPIENTS = (
   .split(",")
   .map((recipient) => recipient.trim())
   .filter(Boolean);
+const MOLLIE_PAYMENT_LINKS_URL =
+  process.env.MOLLIE_PAYMENT_LINKS_URL ||
+  "https://api.mollie.com/v2/payment-links";
+const MOLLIE_REDIRECT_URL =
+  process.env.MOLLIE_PAYMENT_LINK_REDIRECT_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "https://www.strik-patisserie.nl";
+
+type MolliePaymentLinkResponse = {
+  id?: string;
+  description?: string;
+  _links?: {
+    paymentLink?: {
+      href?: string;
+    };
+    checkout?: {
+      href?: string;
+    };
+  };
+};
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ message }, { status });
@@ -60,6 +81,135 @@ function isEmail(value: string) {
 
 function normalizeDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+}
+
+function formatMollieAmount(amount: number) {
+  return amount.toFixed(2);
+}
+
+function formatEuro(amount: number) {
+  return new Intl.NumberFormat("nl-NL", {
+    style: "currency",
+    currency: "EUR",
+  }).format(amount);
+}
+
+function getMollieApiKey() {
+  return (
+    process.env.MOLLIE_API_KEY ||
+    process.env.MOLLIE_ACCESS_TOKEN ||
+    process.env.STRIK_MOLLIE_API_KEY ||
+    ""
+  ).trim();
+}
+
+function getMollieErrorMessage(data: unknown) {
+  if (!data || typeof data !== "object") return "";
+
+  const source = data as {
+    title?: unknown;
+    detail?: unknown;
+    message?: unknown;
+    field?: unknown;
+  };
+
+  return [source.title, source.detail || source.message, source.field]
+    .map((part) => cleanText(part, 240))
+    .filter(Boolean)
+    .join(" - ");
+}
+
+async function readJson(response: Response) {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+async function createMolliePaymentLink(input: {
+  amount: number;
+  description: string;
+}) {
+  const apiKey = getMollieApiKey();
+
+  if (!apiKey) {
+    throw new Error(
+      "Mollie is nog niet ingesteld. Vul MOLLIE_API_KEY in bij de app-instellingen."
+    );
+  }
+
+  const response = await fetch(MOLLIE_PAYMENT_LINKS_URL, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      amount: {
+        currency: "EUR",
+        value: formatMollieAmount(input.amount),
+      },
+      description: input.description,
+      redirectUrl: MOLLIE_REDIRECT_URL,
+    }),
+  });
+  const data = (await readJson(response)) as MolliePaymentLinkResponse | null;
+
+  if (!response.ok) {
+    const mollieMessage = getMollieErrorMessage(data);
+    throw new Error(
+      mollieMessage
+        ? `Mollie betaalverzoek maken lukt niet: ${mollieMessage}`
+        : "Mollie betaalverzoek maken lukt niet."
+    );
+  }
+
+  const paymentLinkUrl =
+    data?._links?.paymentLink?.href || data?._links?.checkout?.href || "";
+
+  if (!paymentLinkUrl) {
+    throw new Error("Mollie gaf geen betaallink terug.");
+  }
+
+  return {
+    id: cleanText(data?.id, 80),
+    url: paymentLinkUrl,
+  };
+}
+
+function createPaymentDescription(input: {
+  amount: number;
+  code: string;
+  customerName: string;
+  deliveryDate: string;
+}) {
+  return cleanText(
+    [
+      "Bruidstaart",
+      input.code,
+      input.customerName,
+      input.deliveryDate,
+      formatEuro(input.amount),
+    ]
+      .filter(Boolean)
+      .join(" - "),
+    255
+  );
+}
+
+function withPaymentLink(body: string, paymentLinkUrl: string) {
+  const placeholder = "[MOLLIE LINK HIER PLAKKEN]";
+
+  if (body.includes(placeholder)) {
+    return body.replaceAll(placeholder, paymentLinkUrl);
+  }
+
+  return [body, "", `Betaallink: ${paymentLinkUrl}`].join("\n");
 }
 
 export async function POST(request: Request) {
@@ -97,14 +247,45 @@ export async function POST(request: Request) {
     return jsonError("Betaalverzoek is niet compleet.");
   }
 
+  let paymentLink: { id: string; url: string };
+
+  try {
+    paymentLink = await createMolliePaymentLink({
+      amount,
+      description: createPaymentDescription({
+        amount,
+        code,
+        customerName,
+        deliveryDate,
+      }),
+    });
+  } catch (error) {
+    return jsonError(
+      error instanceof Error
+        ? error.message
+        : "Mollie betaalverzoek maken lukt niet.",
+      502
+    );
+  }
+
   const now = new Date().toISOString();
   const hash = createHash("sha1")
-    .update(JSON.stringify({ recipientEmail, amount, subject, body, now }))
+    .update(
+      JSON.stringify({
+        recipientEmail,
+        amount,
+        subject,
+        body,
+        paymentLinkId: paymentLink.id,
+        paymentLinkUrl: paymentLink.url,
+        now,
+      })
+    )
     .digest("hex")
     .slice(0, 10);
 
   const order: PersonnelMailOrder = {
-    id: `wedding-cake-payment-request-${code || "zonder-code"}-${hash}`,
+    id: `wedding-cake-payment-link-${code || "zonder-code"}-${hash}`,
     mailType: "wedding-cake-payment-request",
     employeeName: customerName,
     firstName: customerName.split(/\s+/)[0] || "Bruidstaart",
@@ -112,14 +293,15 @@ export async function POST(request: Request) {
     eventDateLabel: deliveryDate || "Geen leverdatum",
     daysUntil: 0,
     source: "drive",
-    recipients: PAYMENT_REQUEST_RECIPIENTS,
+    recipients: [recipientEmail],
+    ccRecipients: PAYMENT_REQUEST_RECIPIENTS,
     subject,
-    body,
+    body: withPaymentLink(body, paymentLink.url),
     deliveryShop: "Bruidstaarten",
     deliveryDate,
     deliveryDateLabel: deliveryDate || "Geen leverdatum",
     deliveryTimeLabel: "",
-    note: `Betaalverzoek naar ${recipientEmail}`,
+    note: `Mollie betaallink ${paymentLink.id || "zonder-id"} naar ${recipientEmail}`,
   };
 
   try {
@@ -132,8 +314,10 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: result.sent.length
-        ? "Betaalverzoek is naar Strik gemaild."
+        ? "Betaalverzoek is naar de klant gemaild."
         : "Dit betaalverzoek was al gemaild.",
+      paymentLinkId: paymentLink.id,
+      paymentLinkUrl: paymentLink.url,
       sent: result.sent.length,
       skipped: result.skipped.length,
     });

@@ -146,6 +146,10 @@ function strik_personnel_mail_sanitize_order($order) {
         'recipients' => strik_personnel_mail_sanitize_recipients(
             isset($order['recipients']) ? $order['recipients'] : STRIK_CUPCAKE_ORDERS_RECIPIENT
         ),
+        'ccRecipients' => strik_personnel_mail_sanitize_recipients(
+            isset($order['ccRecipients']) ? $order['ccRecipients'] : array(),
+            ''
+        ),
         'subject' => $subject,
         'body' => $body,
         'deliveryShop' => isset($order['deliveryShop']) ? strik_cupcake_text($order['deliveryShop'], 120) : '',
@@ -230,6 +234,10 @@ function strik_cupcake_send_order($order) {
 if (!function_exists('strik_personnel_mail_send_order')) {
 function strik_personnel_mail_send_order($order) {
     $headers = array('Content-Type: text/plain; charset=UTF-8');
+
+    if (!empty($order['ccRecipients'])) {
+        $headers[] = 'Cc: ' . implode(', ', $order['ccRecipients']);
+    }
 
     return wp_mail(
         $order['recipients'],
@@ -339,6 +347,7 @@ function strik_personnel_mail_post($request) {
             $log[$order['id']] = array(
                 'sentAt' => wp_date(DATE_ATOM),
                 'recipients' => $order['recipients'],
+                'ccRecipients' => isset($order['ccRecipients']) ? $order['ccRecipients'] : array(),
                 'mailType' => $order['mailType'],
                 'order' => $order,
             );

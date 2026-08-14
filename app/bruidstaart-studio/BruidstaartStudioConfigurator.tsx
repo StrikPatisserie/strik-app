@@ -4507,12 +4507,10 @@ export default function BruidstaartStudioConfigurator() {
     setPaymentRequestOpen(true);
   }
 
-  function createCustomerPaymentMailExample(amount: number) {
+  function createCustomerPaymentMailBody(amount: number) {
     const names = config.contact.names.trim() || "bruidspaar";
 
     return [
-      `Onderwerp: Betaalverzoek bruidstaart ${names}`,
-      "",
       `Beste ${names},`,
       "",
       `Hierbij ontvangen jullie het betaalverzoek voor de bruidstaart van ${formatDutchShortDate(
@@ -4527,60 +4525,6 @@ export default function BruidstaartStudioConfigurator() {
       "",
       "Liefs,",
       "Strik Patisserie",
-    ].join("\n");
-  }
-
-  function createPaymentRequestMailBody(targetEmail: string, amount: number) {
-    const priceLines = price.lines.length
-      ? price.lines
-          .map((line) =>
-            `${line.label}: ${line.quote ? "op aanvraag" : formatEuro(line.amount)}`
-          )
-          .join("\n")
-      : "Geen prijsregels";
-
-    return [
-      "Betaalverzoek bruidstaart",
-      "==========================",
-      "",
-      "Actie",
-      `Maak in Mollie een betaalverzoek van ${formatEuro(amount)}.`,
-      `Stuur het betaalverzoek naar: ${targetEmail}`,
-      "",
-      "Klant",
-      `Herkenningscode: ${config.contact.recognitionCode || "-"}`,
-      `Namen: ${config.contact.names || "-"}`,
-      `Achternaam: ${config.contact.surname || "-"}`,
-      `Klant e-mail: ${config.contact.email || "-"}`,
-      `Factuur e-mail: ${config.contact.invoiceEmail || "-"}`,
-      `Telefoon: ${config.contact.phone || "-"}`,
-      `Trouwdatum: ${formatDutchShortDate(config.contact.weddingDate, "-")}`,
-      `Leverdatum: ${formatDutchShortDate(config.contact.deliveryDate, "-")}`,
-      "",
-      "Taart",
-      `Stijl: ${labels.style || "-"}`,
-      `Formaat/opbouw: ${labels.size || "-"}`,
-      `Smaak/vulling: ${labels.filling || "-"}`,
-      `Kleur: ${config.styleId === "naked" ? "n.v.t." : labels.color || "-"}`,
-      `Layout: ${labels.layout || "-"}`,
-      `Decoratie: ${
-        labels.decorations.length ? labels.decorations.join(", ") : "geen"
-      }`,
-      `Topper/add-on: ${labels.topper}`,
-      "",
-      "Prijsregels",
-      priceLines,
-      `Totaal indicatie studio: ${formatEuro(price.total)}${
-        price.hasQuoteItems ? " + onderdelen op aanvraag" : ""
-      }`,
-      `Betaalverzoek bedrag: ${formatEuro(amount)}`,
-      "",
-      "Klantmail voorbeeld",
-      "-------------------",
-      createCustomerPaymentMailExample(amount),
-      "",
-      "Opmerking uit bestelling",
-      config.contact.notes || "-",
     ].join("\n");
   }
 
@@ -4599,7 +4543,7 @@ export default function BruidstaartStudioConfigurator() {
     }
 
     setPaymentRequestSending(true);
-    setPaymentRequestStatus("Betaalverzoek mailen...");
+    setPaymentRequestStatus("Betaallink maken en mailen...");
 
     try {
       const response = await fetch("/api/bruidstaart-payment-request", {
@@ -4613,7 +4557,7 @@ export default function BruidstaartStudioConfigurator() {
               ? ` ${config.contact.recognitionCode}`
               : ""
           } - ${config.contact.names || config.contact.surname || "klant"}`,
-          body: createPaymentRequestMailBody(targetEmail, amount),
+          body: createCustomerPaymentMailBody(amount),
           code: config.contact.recognitionCode,
           customerName: config.contact.names || config.contact.surname,
           deliveryDate: config.contact.deliveryDate,
@@ -4629,7 +4573,7 @@ export default function BruidstaartStudioConfigurator() {
       }
 
       setPaymentRequestStatus(data.message || "Betaalverzoek is gemaild.");
-      setDraftStatus(data.message || "Betaalverzoek is naar Strik gemaild.");
+      setDraftStatus(data.message || "Betaalverzoek is naar de klant gemaild.");
     } catch (error) {
       setPaymentRequestStatus(
         error instanceof Error
@@ -6892,11 +6836,11 @@ export default function BruidstaartStudioConfigurator() {
                   Bruidstaart
                 </p>
                 <h2 className="mt-1 text-xl font-black text-[#1a1815]">
-                  Betaalverzoek mailen
+                  Betaallink mailen
                 </h2>
                 <p className="mt-1 text-sm font-bold leading-snug text-[#6b645b]">
-                  Strik krijgt een mail met bedrag, klantmailadres en een
-                  klantmailvoorbeeld voor de Mollie-link.
+                  De app maakt een Mollie-betaallink en mailt die direct naar
+                  de klant. Strik krijgt automatisch een kopie.
                 </p>
               </div>
               <button
@@ -6986,7 +6930,9 @@ export default function BruidstaartStudioConfigurator() {
                 disabled={paymentRequestSending}
                 className="rounded-full bg-[#1f4f35] px-4 py-2 text-sm font-black text-white shadow-sm disabled:opacity-60"
               >
-                {paymentRequestSending ? "Mailen..." : "Stuur naar Strik"}
+                {paymentRequestSending
+                  ? "Mailen..."
+                  : "Betaallink maken en mailen"}
               </button>
             </div>
           </section>
