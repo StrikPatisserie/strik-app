@@ -3765,7 +3765,6 @@ export default function BruidstaartStudioConfigurator() {
   const finalOrderEditProtectionRef = useRef(false);
   const finalOrderEditConfirmedRef = useRef(false);
   const [stepIndex, setStepIndex] = useState(0);
-  const [copied, setCopied] = useState(false);
   const [draftSearch, setDraftSearch] = useState("");
   const [draftDeliveryDate, setDraftDeliveryDate] = useState("");
   const [draftResults, setDraftResults] = useState<WeddingCakeDraft[]>([]);
@@ -4351,16 +4350,6 @@ export default function BruidstaartStudioConfigurator() {
     }));
   }
 
-  async function copyProductionForm() {
-    try {
-      await navigator.clipboard.writeText(productionForm);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
-    }
-  }
-
   function getMailSubject() {
     const code = config.contact.recognitionCode.trim();
     const names = config.contact.names.trim() || "bruidstaart";
@@ -4467,15 +4456,20 @@ export default function BruidstaartStudioConfigurator() {
     ].join("\n");
   }
 
-  function openMail(to: string) {
-    if (!to.trim()) {
+  function openMail(to: string, cc?: string) {
+    const recipient = to.trim();
+    const copyTo = cc?.trim() || "";
+
+    if (!recipient) {
       setDraftStatus("Vul eerst een e-mailadres in.");
       return;
     }
 
+    const ccQuery = copyTo ? `&cc=${encodeURIComponent(copyTo)}` : "";
+
     window.location.href = `mailto:${encodeURIComponent(
-      to.trim()
-    )}?subject=${encodeURIComponent(getMailSubject())}&body=${encodeURIComponent(
+      recipient
+    )}?subject=${encodeURIComponent(getMailSubject())}${ccQuery}&body=${encodeURIComponent(
       createMailBody()
     )}`;
   }
@@ -6702,7 +6696,7 @@ export default function BruidstaartStudioConfigurator() {
             }`}
           >
             {step.id === "overzicht" && (
-              <div className="grid gap-2 sm:grid-cols-5 lg:col-span-2">
+              <div className="grid gap-2 sm:grid-cols-3 lg:col-span-2">
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -6712,17 +6706,12 @@ export default function BruidstaartStudioConfigurator() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => openMail(STRIK_STUDIO_EMAIL)}
+                  onClick={() =>
+                    openMail(config.contact.email, STRIK_STUDIO_EMAIL)
+                  }
                   className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
                 >
-                  Mail naar Strik
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openMail(config.contact.email)}
-                  className="rounded-full bg-white px-3 py-2 text-xs font-black shadow-sm"
-                >
-                  Mail naar klant
+                  Mail bestelling
                 </button>
                 <button
                   type="button"
@@ -6730,13 +6719,6 @@ export default function BruidstaartStudioConfigurator() {
                   className="rounded-full bg-[#dce8d6] px-3 py-2 text-xs font-black shadow-sm"
                 >
                   Betaalverzoek
-                </button>
-                <button
-                  type="button"
-                  onClick={copyProductionForm}
-                  className="rounded-full bg-[#f8f6f3] px-3 py-2 text-xs font-black shadow-sm"
-                >
-                  {copied ? "Gekopieerd" : "Formulier kopiëren"}
                 </button>
               </div>
             )}
