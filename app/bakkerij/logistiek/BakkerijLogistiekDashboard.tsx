@@ -184,6 +184,8 @@ type PhotoProductPlan = {
 
 type MarzipanPrintItem = {
   id: string;
+  imageId: string;
+  imageImportedAt: string;
   photoUrl: string;
   customerName: string;
   customerLastName: string;
@@ -197,6 +199,12 @@ type MarzipanPrintItem = {
   copyTotal: number;
   confidence: string;
   needsCheck: boolean;
+  printKey: string;
+};
+
+type MarzipanPhotoPrintHistory = {
+  printedAt: string;
+  printedKeys: string[];
 };
 
 type WrittenTextPrintItem = {
@@ -286,6 +294,8 @@ type ReceiptOverrideDraft = {
 };
 
 const MAX_MANUAL_PHOTO_UPLOAD_BYTES = 1_250_000;
+const MARZIPAN_PHOTO_PRINT_HISTORY_STORAGE_KEY =
+  "strik-logistiek-marsepeinfoto-print-history-v1";
 
 type ReceiptSeed = Omit<
   ReceiptSummary,
@@ -536,10 +546,25 @@ function toInputDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function dateFromInputDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return new Date(Number.NaN);
+
+  return new Date(year, month - 1, day);
+}
+
 function addDays(date: Date, days: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
+}
+
+function nextLogisticsDateFor(date: Date) {
+  const weekday = date.getDay();
+  if (weekday === 6) return addDays(date, 2);
+  if (weekday === 0) return addDays(date, 1);
+
+  return addDays(date, 1);
 }
 
 function emptyOperationsDraft(): OperationsDraft {
@@ -613,11 +638,13 @@ function minuteOfDay(hour: number, minute: number) {
 function createDateState(): DateState {
   const now = new Date();
   const today = toInputDate(now);
+  const nextLogisticsDate = toInputDate(nextLogisticsDateFor(now));
+  const isWeekend = now.getDay() === 0 || now.getDay() === 6;
 
   return {
     today,
-    tomorrow: toInputDate(addDays(now, 1)),
-    selectedDate: today,
+    tomorrow: nextLogisticsDate,
+    selectedDate: isWeekend ? nextLogisticsDate : today,
     hour: now.getHours(),
     minute: now.getMinutes(),
   };
@@ -631,7 +658,7 @@ function syncDateState(current: DateState): DateState {
     current.selectedDate === current.today ||
     (current.selectedDate === current.tomorrow && current.selectedDate < next.today)
   ) {
-    selectedDate = next.today;
+    selectedDate = next.selectedDate;
   }
 
   if (
@@ -658,6 +685,40 @@ function formatDateLabel(value: string) {
     day: "2-digit",
     month: "2-digit",
   }).format(new Date(year, month - 1, day));
+}
+
+function formatWeekdayDateLabel(value: string) {
+  const date = dateFromInputDate(value);
+  if (!Number.isFinite(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    weekday: "long",
+  }).format(date);
+}
+
+function nextLogisticsDateLabel(dateState: DateState) {
+  if (isNextLogisticsDateCalendarTomorrow(dateState)) return "Morgen";
+
+  const weekday = formatWeekdayDateLabel(dateState.tomorrow);
+  return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+}
+
+function isNextLogisticsDateCalendarTomorrow(dateState: DateState) {
+  const todayDate = dateFromInputDate(dateState.today);
+  const calendarTomorrow = Number.isFinite(todayDate.getTime())
+    ? toInputDate(addDays(todayDate, 1))
+    : "";
+
+  return dateState.tomorrow === calendarTomorrow;
+}
+
+function planTitleForDate(dateState: DateState) {
+  if (dateState.selectedDate === dateState.today) return "Vandaag";
+  if (dateState.selectedDate === dateState.tomorrow) {
+    return nextLogisticsDateLabel(dateState);
+  }
+
+  return formatDateLabel(dateState.selectedDate);
 }
 
 function dayOfWeekForDate(value: string) {
@@ -755,6 +816,8 @@ function defaultManualUploadStatus(
   }
 
   if (dateState.selectedDate === dateState.tomorrow) {
+    if (!isNextLogisticsDateCalendarTomorrow(dateState)) return "prognose";
+
     return tomorrowStatus(dateState.hour, dateState.minute) === "definitief"
       ? "definitief"
       : "prognose";
@@ -979,6 +1042,8 @@ function buildDayPlan(
   const { selectedDate, today, tomorrow, hour, minute } = dateState;
   const isToday = selectedDate === today;
   const isTomorrow = selectedDate === tomorrow;
+  const shouldUseTomorrowStatus =
+    isTomorrow && isNextLogisticsDateCalendarTomorrow(dateState);
   const status = fileSnapshot
     ? fileSnapshot.status
     : importedBatch
@@ -986,7 +1051,9 @@ function buildDayPlan(
       : isToday
         ? "definitief"
         : isTomorrow
-          ? tomorrowStatus(hour, minute)
+          ? shouldUseTomorrowStatus
+            ? tomorrowStatus(hour, minute)
+            : "prognose"
           : "historie";
 
   const isFuture = selectedDate > today;
@@ -1009,7 +1076,7 @@ function buildDayPlan(
 
   return {
     date: selectedDate,
-    title: isToday ? "Vandaag" : isTomorrow ? "Morgen" : formatDateLabel(selectedDate),
+    title: planTitleForDate(dateState),
     status,
     sourceLabel: sourceLabelFor(status),
     batchLabel: batchLabelFor(status),
@@ -2533,6 +2600,18 @@ function distributedCopyCount(
   return Math.max(0, base + (imageIndex < remainder ? 1 : 0));
 }
 
+function marzipanPhotoPrintKeyFor(input: {
+  imageId: string;
+  planIndex: number;
+  copyNumber: number;
+}) {
+  return [input.imageId, input.planIndex, input.copyNumber].join(":");
+}
+
+function imageImportedAtForPrint(image: WebshopImageSummary) {
+  return image.importedAt || image.receivedAt || "";
+}
+
 function pushMarzipanPrintCopies(input: {
   items: MarzipanPrintItem[];
   image: WebshopImageSummary;
@@ -2548,8 +2627,15 @@ function pushMarzipanPrintCopies(input: {
   const customerName =
     input.image.customerName || input.receipt?.customer || "Klant controleren";
   const receiptNumber = input.receipt?.receiptNumber || input.receipt?.id || "";
+  const imageImportedAt = imageImportedAtForPrint(input.image);
 
   for (let copy = 1; copy <= copyTotal; copy += 1) {
+    const printKey = marzipanPhotoPrintKeyFor({
+      imageId: input.image.id,
+      planIndex: input.planIndex,
+      copyNumber: copy,
+    });
+
     input.items.push({
       id: [
         receiptNumber || "zonder-bon",
@@ -2557,6 +2643,8 @@ function pushMarzipanPrintCopies(input: {
         input.planIndex,
         copy,
       ].join("-"),
+      imageId: input.image.id,
+      imageImportedAt,
       photoUrl: input.image.photoUrl,
       customerName,
       customerLastName: customerLastNameFor(customerName),
@@ -2570,6 +2658,7 @@ function pushMarzipanPrintCopies(input: {
       copyTotal,
       confidence: input.image.confidence,
       needsCheck: input.needsCheck || input.plan.needsCheck,
+      printKey,
     });
   }
 }
@@ -2658,6 +2747,61 @@ function buildMarzipanPrintItems(
   });
 
   return items;
+}
+
+function readMarzipanPhotoPrintHistory() {
+  try {
+    const raw = window.localStorage.getItem(
+      MARZIPAN_PHOTO_PRINT_HISTORY_STORAGE_KEY
+    );
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([date, value]) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          return [];
+        }
+
+        const history = value as Partial<MarzipanPhotoPrintHistory>;
+        const printedKeys = Array.isArray(history.printedKeys)
+          ? history.printedKeys.filter(
+              (key): key is string => typeof key === "string" && key.length > 0
+            )
+          : [];
+
+        return [
+          [
+            date,
+            {
+              printedAt:
+                typeof history.printedAt === "string" ? history.printedAt : "",
+              printedKeys,
+            },
+          ],
+        ];
+      })
+    ) as Record<string, MarzipanPhotoPrintHistory>;
+  } catch {
+    return {};
+  }
+}
+
+function writeMarzipanPhotoPrintHistory(
+  history: Record<string, MarzipanPhotoPrintHistory>
+) {
+  try {
+    window.localStorage.setItem(
+      MARZIPAN_PHOTO_PRINT_HISTORY_STORAGE_KEY,
+      JSON.stringify(history)
+    );
+  } catch {
+    // Niet kritisch: printen moet blijven werken, ook zonder opslag.
+  }
 }
 
 function cleanWrittenTextSource(value: string) {
@@ -3567,7 +3711,11 @@ function createMarzipanPhotoPrintHtml(input: {
 </html>`;
 }
 
-function openMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
+function openMarzipanPhotoSheet(
+  plan: DayPlan,
+  items: MarzipanPrintItem[],
+  onPrinted?: (items: MarzipanPrintItem[]) => void
+) {
   if (items.length === 0) {
     window.alert("Geen webshopfoto's gevonden voor deze dag.");
     return;
@@ -3582,19 +3730,34 @@ function openMarzipanPhotoSheet(plan: DayPlan, items: MarzipanPrintItem[]) {
   printWindow.document.write(createMarzipanPhotoPrintHtml({ items, plan }));
   printWindow.document.close();
   printWindow.focus();
+  onPrinted?.(items);
 }
 
 function openMarzipanPrintChoice(input: {
   arendOrders: ArendNumberPrintOrder[];
   marzipanItems: MarzipanPrintItem[];
+  newMarzipanItems: MarzipanPrintItem[];
+  lastPhotoPrintAt?: string;
+  onPhotoPrint?: (items: MarzipanPrintItem[]) => void;
   plan: DayPlan;
 }) {
+  const newItems = input.lastPhotoPrintAt
+    ? input.newMarzipanItems
+    : input.marzipanItems;
+  const openPhotoItems = (items: MarzipanPrintItem[]) =>
+    openMarzipanPhotoSheet(input.plan, items, input.onPhotoPrint);
+
   if (input.arendOrders.length > 0 && input.marzipanItems.length > 0) {
     const answer = window.prompt(
       [
         "Wat wil je printen?",
         "Typ 1 voor Arend cijfers.",
-        "Typ 2 voor overige marsepeinfoto's.",
+        input.lastPhotoPrintAt
+          ? `Typ 2 voor nieuwe overige marsepeinfoto's (${newItems.length}).`
+          : `Typ 2 voor overige marsepeinfoto's (${input.marzipanItems.length}).`,
+        input.lastPhotoPrintAt
+          ? `Typ 3 voor alle overige marsepeinfoto's (${input.marzipanItems.length}).`
+          : "",
       ].join("\n"),
       "1"
     );
@@ -3609,11 +3772,21 @@ function openMarzipanPrintChoice(input: {
       answer.trim() === "2" ||
       /overig|foto|afbeelding|klant/i.test(answer)
     ) {
-      openMarzipanPhotoSheet(input.plan, input.marzipanItems);
+      if (newItems.length === 0) {
+        window.alert("Geen nieuwe marsepeinfoto's sinds de laatste print.");
+        return;
+      }
+
+      openPhotoItems(newItems);
       return;
     }
 
-    window.alert("Kies 1 voor Arend of 2 voor overige klanten.");
+    if (answer.trim() === "3" || /alles|alle/i.test(answer)) {
+      openPhotoItems(input.marzipanItems);
+      return;
+    }
+
+    window.alert("Kies 1 voor Arend, 2 voor nieuwe foto's of 3 voor alle foto's.");
     return;
   }
 
@@ -3622,7 +3795,46 @@ function openMarzipanPrintChoice(input: {
     return;
   }
 
-  openMarzipanPhotoSheet(input.plan, input.marzipanItems);
+  if (
+    input.lastPhotoPrintAt &&
+    newItems.length > 0 &&
+    newItems.length < input.marzipanItems.length
+  ) {
+    const answer = window.prompt(
+      [
+        `${newItems.length} nieuwe marsepeinfoto's sinds de laatste print.`,
+        `Typ 1 voor alleen nieuw (${newItems.length}).`,
+        `Typ 2 voor alles opnieuw (${input.marzipanItems.length}).`,
+      ].join("\n"),
+      "1"
+    );
+    if (answer === null) return;
+
+    if (answer.trim() === "1" || /nieuw/i.test(answer)) {
+      openPhotoItems(newItems);
+      return;
+    }
+
+    if (answer.trim() === "2" || /alles|alle/i.test(answer)) {
+      openPhotoItems(input.marzipanItems);
+      return;
+    }
+
+    window.alert("Kies 1 voor nieuw of 2 voor alles.");
+    return;
+  }
+
+  if (input.lastPhotoPrintAt && newItems.length === 0) {
+    const shouldPrintAll = window.confirm(
+      "Geen nieuwe marsepeinfoto's sinds de laatste print. Wil je alles toch opnieuw openen?"
+    );
+    if (!shouldPrintAll) return;
+
+    openPhotoItems(input.marzipanItems);
+    return;
+  }
+
+  openPhotoItems(input.marzipanItems);
 }
 
 function arendPromptDefaultFor(orders: ArendNumberPrintOrder[]) {
@@ -7579,6 +7791,9 @@ export default function BakkerijLogistiekDashboard() {
   const [fileSnapshot, setFileSnapshot] = useState<FileSnapshot | null>(null);
   const [importedBatch, setImportedBatch] = useState<LogisticsBatch | null>(null);
   const [webshopImages, setWebshopImages] = useState<WebshopImageSummary[]>([]);
+  const [photoPrintHistoryByDate, setPhotoPrintHistoryByDate] = useState<
+    Record<string, MarzipanPhotoPrintHistory>
+  >({});
   const [receiptOverrides, setReceiptOverrides] = useState<
     ReceiptOverrideSummary[]
   >([]);
@@ -7672,6 +7887,16 @@ export default function BakkerijLogistiekDashboard() {
     () => buildMarzipanPrintItems(receiptSummaries, webshopImages),
     [receiptSummaries, webshopImages]
   );
+  const photoPrintHistory = photoPrintHistoryByDate[selectedPlan.date] || null;
+  const printedPhotoKeys = useMemo(
+    () => new Set(photoPrintHistory?.printedKeys || []),
+    [photoPrintHistory]
+  );
+  const newMarzipanPrintItems = useMemo(
+    () =>
+      marzipanPrintItems.filter((item) => !printedPhotoKeys.has(item.printKey)),
+    [marzipanPrintItems, printedPhotoKeys]
+  );
   const writtenTextPrintItems = useMemo(
     () => buildWrittenTextPrintItems(receiptSummaries),
     [receiptSummaries]
@@ -7732,6 +7957,10 @@ export default function BakkerijLogistiekDashboard() {
   useEffect(() => {
     dateStateRef.current = dateState;
   }, [dateState]);
+
+  useEffect(() => {
+    setPhotoPrintHistoryByDate(readMarzipanPhotoPrintHistory());
+  }, []);
 
   useEffect(() => {
     function syncOpenAppDate() {
@@ -7910,6 +8139,31 @@ export default function BakkerijLogistiekDashboard() {
     setDeletedRouteStopSnapshot(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setBatchReloadCounter((current) => current + 1);
+  }
+
+  function rememberMarzipanPhotoPrint(items: MarzipanPrintItem[]) {
+    if (items.length === 0) return;
+
+    const date = selectedPlan.date;
+    const printedAt = new Date().toISOString();
+
+    setPhotoPrintHistoryByDate((current) => {
+      const previous = current[date];
+      const printedKeys = new Set(previous?.printedKeys || []);
+
+      items.forEach((item) => printedKeys.add(item.printKey));
+
+      const next = {
+        ...current,
+        [date]: {
+          printedAt,
+          printedKeys: Array.from(printedKeys),
+        },
+      };
+
+      writeMarzipanPhotoPrintHistory(next);
+      return next;
+    });
   }
 
   async function saveRouteDraft(
@@ -8624,7 +8878,7 @@ export default function BakkerijLogistiekDashboard() {
                   : "border-[#e8e4de] bg-white text-[#1a1815] hover:bg-[#faf8f5]"
               }`}
             >
-              Morgen
+              {nextLogisticsDateLabel(dateState)}
             </button>
             <RefreshButton
               disabled={batchLoadState === "loading" || isImporting}
@@ -8641,6 +8895,9 @@ export default function BakkerijLogistiekDashboard() {
                 openMarzipanPrintChoice({
                   arendOrders: arendNumberPrintOrders,
                   marzipanItems: marzipanPrintItems,
+                  newMarzipanItems: newMarzipanPrintItems,
+                  lastPhotoPrintAt: photoPrintHistory?.printedAt,
+                  onPhotoPrint: rememberMarzipanPhotoPrint,
                   plan: selectedPlan,
                 })
               }
