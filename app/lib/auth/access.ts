@@ -334,7 +334,7 @@ export function canAccessWeddingCakes(profile: UserProfile | null | undefined) {
 }
 
 export function canAccessSinterklaas(profile: UserProfile | null | undefined) {
-  return Boolean(profile?.active);
+  return hasFullAccess(profile);
 }
 
 function hasAnyVierdaagseAccess(profile: UserProfile | null | undefined) {
