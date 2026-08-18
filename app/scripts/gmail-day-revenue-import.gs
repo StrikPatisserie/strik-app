@@ -23,6 +23,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
+  SCRIPT_VERSION: 'gmail-archive-v1',
 };
 
 function importDagomzet() {
@@ -80,9 +81,14 @@ function importDagomzet() {
       }
     });
 
-    if (imported) thread.addLabel(processedLabel);
+    if (imported) {
+      thread.addLabel(processedLabel);
+      thread.moveToArchive();
+    }
     if (failed) thread.addLabel(errorLabel);
   });
+
+  verplaatsDagomzetIngelezenThreads_();
 }
 
 function debugDagomzetLaatsteMails() {
@@ -165,6 +171,42 @@ function getDagomzetThreadKey_(thread) {
   } catch (error) {
     const messages = thread.getMessages();
     return messages.length ? messages[0].getId() : Utilities.getUuid();
+  }
+}
+
+function verplaatsDagomzetIngelezenThreads_() {
+  const processedLabel = GmailApp.getUserLabelByName(
+    DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL
+  );
+  if (!processedLabel) return;
+
+  const queries = [
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL}" label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}"`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}" subject:"Dag Rapport ijs"`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}" subject:"Dagafsluiting email-Filiaal" subject:ijs`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}" subject:"Cash-it Filiaal Dag Rapport"`,
+  ];
+  const threadByKey = {};
+  const threads = [];
+
+  queries.forEach((query) => {
+    GmailApp.search(query, 0, 100).forEach((thread) => {
+      const key = getDagomzetThreadKey_(thread);
+      if (threadByKey[key]) return;
+
+      threadByKey[key] = true;
+      threads.push(thread);
+    });
+  });
+
+  threads.forEach((thread) => {
+    thread.moveToArchive();
+  });
+
+  if (threads.length) {
+    Logger.log(
+      `Dagomzet Gmail cleanup: ${threads.length} ingelezen thread(s) uit Inbox gehaald.`
+    );
   }
 }
 

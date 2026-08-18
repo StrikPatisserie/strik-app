@@ -15,6 +15,7 @@ const WEBSHOP_IMAGE_CONFIG = {
   MAX_IMAGE_ATTACHMENTS: 4,
   MAX_IMAGE_ATTACHMENT_BYTES: 1500000,
   IMPORT_VERSION: 'strict-match-v4',
+  SCRIPT_VERSION: 'gmail-archive-v1',
 };
 
 function importWebshopAfbeeldingen() {
@@ -80,13 +81,61 @@ function importWebshopAfbeeldingen() {
       }
     });
 
-    if (imported) thread.addLabel(processedLabel);
+    if (imported) {
+      thread.addLabel(processedLabel);
+      thread.moveToArchive();
+    }
     if (failed) thread.addLabel(errorLabel);
   });
+
+  verplaatsWebshopIngelezenThreads_();
 }
 
 function getOrCreateWebshopLabel_(name) {
   return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
+}
+
+function verplaatsWebshopIngelezenThreads_() {
+  const processedLabel = GmailApp.getUserLabelByName(
+    WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL
+  );
+  if (!processedLabel) return;
+
+  const queries = [
+    `newer_than:45d in:inbox label:"${WEBSHOP_IMAGE_CONFIG.SOURCE_LABEL}" label:"${WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL}"`,
+    `newer_than:45d in:inbox label:"${WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL}" subject:"Bevestiging/factuur van uw bestelling"`,
+  ];
+  const threadByKey = {};
+  const threads = [];
+
+  queries.forEach((query) => {
+    GmailApp.search(query, 0, 100).forEach((thread) => {
+      const key = getWebshopThreadKey_(thread);
+      if (threadByKey[key]) return;
+
+      threadByKey[key] = true;
+      threads.push(thread);
+    });
+  });
+
+  threads.forEach((thread) => {
+    thread.moveToArchive();
+  });
+
+  if (threads.length) {
+    Logger.log(
+      `Webshop afbeeldingen Gmail cleanup: ${threads.length} ingelezen thread(s) uit Inbox gehaald.`
+    );
+  }
+}
+
+function getWebshopThreadKey_(thread) {
+  try {
+    return thread.getId();
+  } catch (error) {
+    const messages = thread.getMessages();
+    return messages.length ? messages[0].getId() : Utilities.getUuid();
+  }
 }
 
 function extractWebshopHtmlLinks_(html) {
