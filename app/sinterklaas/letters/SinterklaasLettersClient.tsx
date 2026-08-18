@@ -302,6 +302,9 @@ function OrderRow({
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            <span className="bg-[#1a1815] px-2 py-0.5 text-[0.68rem] font-black uppercase tracking-[0.12em] text-white">
+              {order.code}
+            </span>
             <h3 className="text-base font-black leading-tight text-[#1a1815]">
               {order.customerName}
             </h3>
@@ -880,7 +883,7 @@ export default function SinterklaasLettersClient({
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Zoek klant, datum of letter"
+            placeholder="Zoek ordernummer, klant, datum of letter"
             className="h-10 border border-[#e4ded5] bg-[#faf8f5] px-3 text-sm font-bold outline-none"
           />
           <input

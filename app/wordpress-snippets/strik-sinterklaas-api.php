@@ -152,6 +152,95 @@ function strik_sinterklaas_create_id($prefix, $customer_name = '') {
 }
 }
 
+if (!function_exists('strik_sinterklaas_normalize_letter_order_number')) {
+function strik_sinterklaas_normalize_letter_order_number($code) {
+    $code = strtoupper(strik_sinterklaas_text($code, 80));
+
+    if (!preg_match('/^CL([0-9]{2})-([0-9]+)$/', $code, $matches)) {
+        return '';
+    }
+
+    return 'CL' . $matches[1] . '-' . str_pad((string) absint($matches[2]), 3, '0', STR_PAD_LEFT);
+}
+}
+
+if (!function_exists('strik_sinterklaas_letter_order_year')) {
+function strik_sinterklaas_letter_order_year($order) {
+    $pickup_date = is_array($order) && isset($order['pickupDate']) ? $order['pickupDate'] : '';
+    $year = is_array($order) && isset($order['year']) ? $order['year'] : '';
+
+    return strik_sinterklaas_year($year, $pickup_date);
+}
+}
+
+if (!function_exists('strik_sinterklaas_next_letter_order_number')) {
+function strik_sinterklaas_next_letter_order_number($orders, $year) {
+    $suffix = substr((string) $year, -2);
+    $highest = 0;
+
+    foreach ($orders as $order) {
+        if (!is_array($order) || empty($order['code'])) continue;
+
+        $code = strik_sinterklaas_normalize_letter_order_number($order['code']);
+        if ($code === '') continue;
+
+        if (preg_match('/^CL' . preg_quote($suffix, '/') . '-([0-9]+)$/', $code, $matches)) {
+            $highest = max($highest, absint($matches[1]));
+        }
+    }
+
+    return 'CL' . $suffix . '-' . str_pad((string) ($highest + 1), 3, '0', STR_PAD_LEFT);
+}
+}
+
+if (!function_exists('strik_sinterklaas_assign_letter_order_number')) {
+function strik_sinterklaas_assign_letter_order_number($order, $orders) {
+    if (!is_array($order)) return $order;
+
+    $normalized_code = strik_sinterklaas_normalize_letter_order_number(
+        isset($order['code']) ? $order['code'] : ''
+    );
+
+    if ($normalized_code !== '') {
+        $order['code'] = $normalized_code;
+        return $order;
+    }
+
+    $year = strik_sinterklaas_letter_order_year($order);
+    $order['year'] = $year;
+    $order['code'] = strik_sinterklaas_next_letter_order_number($orders, $year);
+
+    return $order;
+}
+}
+
+if (!function_exists('strik_sinterklaas_ensure_letter_order_numbers')) {
+function strik_sinterklaas_ensure_letter_order_numbers($orders) {
+    $changed = false;
+
+    foreach ($orders as $key => $order) {
+        if (!is_array($order)) continue;
+
+        $next_order = strik_sinterklaas_assign_letter_order_number($order, $orders);
+        $old_code = isset($order['code']) ? (string) $order['code'] : '';
+        $new_code = isset($next_order['code']) ? (string) $next_order['code'] : '';
+        $old_year = isset($order['year']) ? (string) $order['year'] : '';
+        $new_year = isset($next_order['year']) ? (string) $next_order['year'] : '';
+
+        if ($old_code !== $new_code || $old_year !== $new_year) {
+            $orders[$key] = $next_order;
+            $changed = true;
+        }
+    }
+
+    if ($changed) {
+        strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME, $orders);
+    }
+
+    return $orders;
+}
+}
+
 if (!function_exists('strik_sinterklaas_sanitize_letter_lines')) {
 function strik_sinterklaas_sanitize_letter_lines($lines) {
     if (!is_array($lines)) return array();
@@ -257,7 +346,7 @@ function strik_sinterklaas_create_letter_mail_body($order, $for_customer = false
         $for_customer ? 'Bedankt voor uw chocoladeletter bestelling bij Strik Patisserie.' : 'Nieuwe chocoladeletter bestelling.',
         '',
         'Klant: ' . $order['customerName'],
-        'Code: ' . $order['code'],
+        'Ordernummer: ' . $order['code'],
         'Ophaaldatum: ' . ($order['pickupDate'] ?: '-'),
         'Ophaallocatie: ' . ($order['pickupLocation'] ?: $order['shop'] ?: '-'),
         'Telefoon: ' . ($order['phone'] ?: '-'),
@@ -276,6 +365,8 @@ function strik_sinterklaas_create_letter_mail_body($order, $for_customer = false
 
     if ($for_customer) {
         $lines[] = '';
+        $lines[] = 'Neem dit ordernummer mee bij het ophalen. Dan vinden we uw bestelling sneller.';
+        $lines[] = '';
         $lines[] = 'We nemen contact op als er iets onduidelijk is. Deze bevestiging is automatisch verstuurd.';
     } else {
         $lines[] = '';
@@ -293,7 +384,7 @@ function strik_sinterklaas_send_letter_emails($order, $existing = array()) {
     if (empty($order['bakeryEmailSentAt']) && empty($existing['bakeryEmailSentAt'])) {
         $sent = wp_mail(
             STRIK_SINTERKLAAS_RECIPIENT,
-            'Chocoladeletters - ' . $order['customerName'] . ' - ' . ($order['pickupDate'] ?: 'geen datum'),
+            'Chocoladeletters ' . $order['code'] . ' - ' . $order['customerName'] . ' - ' . ($order['pickupDate'] ?: 'geen datum'),
             strik_sinterklaas_create_letter_mail_body($order, false),
             $headers
         );
@@ -316,7 +407,7 @@ function strik_sinterklaas_send_letter_emails($order, $existing = array()) {
         $customer_headers[] = 'Bcc: ' . STRIK_SINTERKLAAS_RECIPIENT;
         $sent_customer = wp_mail(
             $order['customerEmail'],
-            'Bevestiging chocoladeletter bestelling - Strik Patisserie',
+            'Bevestiging chocoladeletter bestelling ' . $order['code'] . ' - Strik Patisserie',
             strik_sinterklaas_create_letter_mail_body($order, true),
             $customer_headers
         );
@@ -439,6 +530,7 @@ function strik_sinterklaas_filter_orders($orders, $request, $date_key) {
 if (!function_exists('strik_sinterklaas_letter_get')) {
 function strik_sinterklaas_letter_get($request) {
     $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME);
+    $orders = strik_sinterklaas_ensure_letter_order_numbers($orders);
     $filtered = strik_sinterklaas_filter_orders($orders, $request, 'pickupDate');
 
     return rest_ensure_response(array(
@@ -466,6 +558,8 @@ function strik_sinterklaas_letter_save($request, $send_emails = true) {
     if ($order === null) {
         return new WP_Error('strik_sinterklaas_invalid_letter_order', 'Vul minimaal klantnaam en letters in.', array('status' => 400));
     }
+
+    $order = strik_sinterklaas_assign_letter_order_number($order, $orders);
 
     if ($send_emails) {
         $order = strik_sinterklaas_send_letter_emails($order, is_array($existing) ? $existing : array());
