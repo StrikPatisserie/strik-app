@@ -6,7 +6,7 @@ export default function SinterklaasLettersProductiePage() {
     <StrikShell wide>
       <StrikPageHeader
         title="Chocoladeletters productie"
-        icon={strikIcons.sinterklaas}
+        icon={strikIcons.sinterklaasProductie}
       />
       <SinterklaasLettersClient mode="productie" />
     </StrikShell>

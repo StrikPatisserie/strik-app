@@ -9,13 +9,13 @@ const items = [
   {
     href: "/sinterklaas/letters/winkel",
     title: "Winkel",
-    icon: strikIcons.winkel,
+    icon: strikIcons.sinterklaasLetter,
     tone: "green" as const,
   },
   {
     href: "/sinterklaas/letters/productie",
     title: "Productie",
-    icon: strikIcons.ijsChocolade,
+    icon: strikIcons.sinterklaasProductie,
     tone: "yellow" as const,
   },
 ];
@@ -23,7 +23,10 @@ const items = [
 export default function SinterklaasLettersPage() {
   return (
     <StrikShell>
-      <StrikPageHeader title="Chocoladeletters" icon={strikIcons.sinterklaas} />
+      <StrikPageHeader
+        title="Chocoladeletters"
+        icon={strikIcons.sinterklaasLetter}
+      />
 
       <div className="grid gap-2">
         {items.map((item) => (

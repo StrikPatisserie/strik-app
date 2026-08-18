@@ -9,13 +9,13 @@ const items = [
   {
     href: "/sinterklaas/letters",
     title: "Chocoladeletters",
-    icon: strikIcons.sinterklaas,
+    icon: strikIcons.sinterklaasLetter,
     tone: "yellow" as const,
   },
   {
     href: "/sinterklaas/b2b",
     title: "B2B bestellingen",
-    icon: strikIcons.management,
+    icon: strikIcons.sinterklaasB2B,
     tone: "green" as const,
   },
 ];

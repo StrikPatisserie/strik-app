@@ -6,7 +6,7 @@ export default function SinterklaasLettersWinkelPage() {
     <StrikShell wide>
       <StrikPageHeader
         title="Chocoladeletters winkel"
-        icon={strikIcons.sinterklaas}
+        icon={strikIcons.sinterklaasLetter}
       />
       <SinterklaasLettersClient mode="winkel" />
     </StrikShell>
