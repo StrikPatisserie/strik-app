@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  deleteB2BOrder,
   fetchB2BOrders,
   saveB2BOrder,
   updateB2BOrder,
@@ -71,6 +72,29 @@ function createFormState(): B2BFormState {
     deliveryMethod: "",
     deliveryAddress: "",
     invoiceInfo: "",
+  };
+}
+
+function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined) {
+  if (!order) return createFormState();
+
+  return {
+    customerName: order.customerName,
+    contactName: order.contactName,
+    customerEmail: order.customerEmail,
+    phone: order.phone,
+    deliveryDate: order.deliveryDate,
+    productionDate: order.productionDate,
+    department: order.department,
+    orderText: order.orderText,
+    logo: order.logo,
+    packaging: order.packaging,
+    importantNotes: order.importantNotes,
+    priceAgreement: order.priceAgreement,
+    totalExVat: order.totalExVat,
+    deliveryMethod: order.deliveryMethod,
+    deliveryAddress: order.deliveryAddress,
+    invoiceInfo: order.invoiceInfo,
   };
 }
 
@@ -180,17 +204,30 @@ function monthLabel(key: string) {
   }).format(new Date(`${key}-01T12:00:00`));
 }
 
+function compareOrdersByDeliveryDate(
+  a: SinterklaasB2BOrder,
+  b: SinterklaasB2BOrder
+) {
+  if (!a.deliveryDate && b.deliveryDate) return 1;
+  if (a.deliveryDate && !b.deliveryDate) return -1;
+
+  return (
+    a.deliveryDate.localeCompare(b.deliveryDate) ||
+    a.customerName.localeCompare(b.customerName)
+  );
+}
+
 function groupByMonth(orders: SinterklaasB2BOrder[]) {
   const groups = new Map<string, SinterklaasB2BOrder[]>();
 
-  orders.forEach((order) => {
+  [...orders].sort(compareOrdersByDeliveryDate).forEach((order) => {
     const key = monthKey(order.deliveryDate);
     groups.set(key, [...(groups.get(key) || []), order]);
   });
 
   return Array.from(groups.entries()).sort(([a], [b]) => {
-    if (a === "zonder-datum") return -1;
-    if (b === "zonder-datum") return 1;
+    if (a === "zonder-datum") return 1;
+    if (b === "zonder-datum") return -1;
     return a.localeCompare(b);
   });
 }
@@ -200,9 +237,7 @@ function updateOrderList(
   nextOrder: SinterklaasB2BOrder
 ) {
   return [nextOrder, ...orders.filter((order) => order.id !== nextOrder.id)].sort(
-    (a, b) =>
-      a.deliveryDate.localeCompare(b.deliveryDate) ||
-      a.customerName.localeCompare(b.customerName)
+    compareOrdersByDeliveryDate
   );
 }
 
@@ -334,11 +369,23 @@ async function parseB2BExcel(file: File) {
 }
 
 function B2BOrderForm({
+  initialOrder,
   onSaved,
-}: Readonly<{ onSaved: (order: SinterklaasB2BOrder) => void }>) {
-  const [form, setForm] = useState<B2BFormState>(() => createFormState());
+  onCancel,
+}: Readonly<{
+  initialOrder?: SinterklaasB2BOrder | null;
+  onSaved: (order: SinterklaasB2BOrder) => void;
+  onCancel: () => void;
+}>) {
+  const [form, setForm] = useState<B2BFormState>(() =>
+    formStateFromOrder(initialOrder)
+  );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setForm(formStateFromOrder(initialOrder));
+  }, [initialOrder]);
 
   function setField<K extends keyof B2BFormState>(key: K, value: B2BFormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -356,16 +403,18 @@ function B2BOrderForm({
     setSaving(true);
     try {
       const saved = await saveB2BOrder({
+        id: initialOrder?.id,
         ...form,
         customerName: form.customerName.trim(),
         orderText: form.orderText.trim(),
-        year: yearFromDate(form.deliveryDate),
-        season: "sint",
-        source: "handmatig",
+        year: form.deliveryDate
+          ? yearFromDate(form.deliveryDate)
+          : initialOrder?.year || currentYear(),
+        season: initialOrder?.season || "sint",
+        source: initialOrder?.source || "handmatig",
+        sourceSheet: initialOrder?.sourceSheet || "",
       });
       onSaved(saved);
-      setForm(createFormState());
-      setMessage("B2B-bestelling opgeslagen.");
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "B2B-bestelling opslaan is mislukt."
@@ -378,7 +427,7 @@ function B2BOrderForm({
   return (
     <form
       onSubmit={submitOrder}
-      className="space-y-3 border border-[#d6e5d8] bg-[#f6faf4] p-3 shadow-sm"
+      className="space-y-3"
     >
       <div className="grid gap-2 sm:grid-cols-2">
         <input
@@ -524,14 +573,73 @@ function B2BOrderForm({
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="h-11 bg-[#24551d] px-5 text-sm font-black text-white shadow-sm disabled:opacity-60"
-      >
-        {saving ? "Opslaan..." : "B2B-bestelling opslaan"}
-      </button>
+      <div className="flex flex-col gap-2 border-t border-[#e4ded5] pt-3 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="h-10 border border-[#e4ded5] bg-white px-4 text-sm font-black text-[#4d463d]"
+        >
+          Sluiten
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="h-10 bg-[#24551d] px-5 text-sm font-black text-white shadow-sm disabled:opacity-60"
+        >
+          {saving
+            ? "Opslaan..."
+            : initialOrder
+              ? "Wijziging opslaan"
+              : "B2B-bestelling opslaan"}
+        </button>
+      </div>
     </form>
+  );
+}
+
+function B2BOrderDialog({
+  order,
+  onClose,
+  onSaved,
+}: Readonly<{
+  order: SinterklaasB2BOrder | null;
+  onClose: () => void;
+  onSaved: (order: SinterklaasB2BOrder) => void;
+}>) {
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#1a1815]/45 px-3 py-6 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-5xl border border-[#d6e5d8] bg-[#faf8f5] p-3 shadow-2xl sm:p-4">
+        <div className="mb-3 flex items-start justify-between gap-3 border-b border-[#e4ded5] pb-3">
+          <div>
+            <p className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
+              Sinterklaas B2B
+            </p>
+            <h2 className="text-xl font-black text-[#1a1815] sm:text-2xl">
+              {order ? "Bestelling wijzigen" : "Bestelling toevoegen"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center border border-[#e4ded5] bg-white text-xl font-black text-[#1a1815]"
+            aria-label="Sluiten"
+          >
+            ×
+          </button>
+        </div>
+
+        <B2BOrderForm
+          key={order?.id || "new-order"}
+          initialOrder={order}
+          onSaved={onSaved}
+          onCancel={onClose}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -539,6 +647,8 @@ function B2BOrderRow({
   order,
   updatingId,
   onToggle,
+  onEdit,
+  onDelete,
 }: Readonly<{
   order: SinterklaasB2BOrder;
   updatingId: string;
@@ -546,10 +656,27 @@ function B2BOrderRow({
     order: SinterklaasB2BOrder,
     key: "entered" | "productionDone" | "packed" | "delivered"
   ) => void;
+  onEdit: (order: SinterklaasB2BOrder) => void;
+  onDelete: (order: SinterklaasB2BOrder) => void;
 }>) {
+  const extraLines = [
+    order.contactName && `Contact: ${order.contactName}`,
+    order.customerEmail && `E-mail: ${order.customerEmail}`,
+    order.phone && `Telefoon: ${order.phone}`,
+    order.logo && `Logo: ${order.logo}`,
+    order.packaging && `Verpakken: ${order.packaging}`,
+    order.importantNotes && `Belangrijk: ${order.importantNotes}`,
+    order.deliveryAddress && `Adres: ${order.deliveryAddress}`,
+    order.priceAgreement && `Prijsafspraak: ${order.priceAgreement}`,
+    order.totalExVat && `Totaal ex btw: ${order.totalExVat}`,
+    order.invoiceInfo && `Factuur: ${order.invoiceInfo}`,
+    order.reminderEmailedAt &&
+      `Reminder gemaild: ${formatDateTime(order.reminderEmailedAt)}`,
+  ].filter(Boolean);
+
   return (
     <article
-      className={`border px-3 py-2 shadow-sm ${
+      className={`border px-3 py-2 ${
         order.cancelled
           ? "border-[#e4ded5] bg-[#f4f0ea] opacity-70"
           : dueSoon(order)
@@ -557,7 +684,21 @@ function B2BOrderRow({
             : "border-[#e4ded5] bg-white"
       }`}
     >
-      <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_26rem]">
+      <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_18rem]">
+        <div className="border-l-4 border-[#c3d3bc] pl-2">
+          <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
+            Leverdatum
+          </p>
+          <p className="text-base font-black text-[#1a1815]">
+            {formatDate(order.deliveryDate)}
+          </p>
+          {order.productionDate && (
+            <p className="text-xs font-bold text-[#6b645b]">
+              Productie: {formatDate(order.productionDate)}
+            </p>
+          )}
+        </div>
+
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-black leading-tight text-[#1a1815]">
@@ -574,29 +715,25 @@ function B2BOrderRow({
             )}
           </div>
 
-          <p className="mt-1 text-sm font-bold text-[#1a1815]">
-            Leverdatum: {formatDate(order.deliveryDate)}
-            {order.productionDate ? ` · productie: ${formatDate(order.productionDate)}` : ""}
-          </p>
           <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-[#8b8278]">
-            {order.department} · {order.deliveryMethod || "geen levering"}{" "}
-            {order.reminderEmailedAt
-              ? `· reminder ${formatDateTime(order.reminderEmailedAt)}`
-              : ""}
+            {order.department} · {order.deliveryMethod || "geen levering"}
           </p>
-          <p className="mt-2 whitespace-pre-wrap text-sm font-semibold text-[#4d463d]">
+          <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-snug text-[#4d463d]">
             {order.orderText}
           </p>
-          {(order.logo || order.packaging || order.importantNotes) && (
-            <p className="mt-2 whitespace-pre-wrap text-xs font-bold text-[#6b645b]">
-              {[order.logo && `Logo: ${order.logo}`, order.packaging && `Verpakken: ${order.packaging}`, order.importantNotes && `Belangrijk: ${order.importantNotes}`]
-                .filter(Boolean)
-                .join("\n")}
-            </p>
+          {extraLines.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-xs font-black text-[#24551d]">
+                Extra gegevens
+              </summary>
+              <p className="mt-1 whitespace-pre-wrap border border-[#e4ded5] bg-[#faf8f5] px-2 py-1.5 text-xs font-bold leading-snug text-[#6b645b]">
+                {extraLines.join("\n")}
+              </p>
+            </details>
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 self-start sm:grid-cols-4 xl:grid-cols-2">
+        <div className="flex flex-wrap items-start justify-start gap-1.5 lg:justify-end">
           {(
             [
               ["entered", "Ingevoerd"],
@@ -610,7 +747,7 @@ function B2BOrderRow({
               type="button"
               disabled={updatingId === `${order.id}-${key}`}
               onClick={() => onToggle(order, key)}
-              className={`h-9 px-2 text-xs font-black shadow-sm disabled:opacity-60 ${
+              className={`h-8 px-2 text-[0.68rem] font-black shadow-sm disabled:opacity-60 ${
                 order[key]
                   ? "bg-[#24551d] text-white"
                   : "border border-[#e4ded5] bg-white text-[#4d463d]"
@@ -619,6 +756,21 @@ function B2BOrderRow({
               {updatingId === `${order.id}-${key}` ? "..." : label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => onEdit(order)}
+            className="h-8 border border-[#d6e5d8] bg-[#f6faf4] px-2 text-[0.68rem] font-black text-[#24551d] shadow-sm"
+          >
+            Wijzig
+          </button>
+          <button
+            type="button"
+            disabled={updatingId === `${order.id}-delete`}
+            onClick={() => onDelete(order)}
+            className="h-8 border border-[#f1b8a8] bg-white px-2 text-[0.68rem] font-black text-[#9a3412] shadow-sm disabled:opacity-60"
+          >
+            {updatingId === `${order.id}-delete` ? "..." : "Verwijder"}
+          </button>
         </div>
       </div>
     </article>
@@ -634,6 +786,10 @@ export default function SinterklaasB2BClient() {
   const [updatingId, setUpdatingId] = useState("");
   const [importPreview, setImportPreview] = useState<B2BFormState[]>([]);
   const [importing, setImporting] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<SinterklaasB2BOrder | null>(
+    null
+  );
 
   async function loadOrders(nextYear = year, nextSearch = search) {
     setLoading(true);
@@ -706,6 +862,48 @@ export default function SinterklaasB2BClient() {
     }
   }
 
+  function openNewOrderDialog() {
+    setEditingOrder(null);
+    setFormOpen(true);
+  }
+
+  function openEditOrderDialog(order: SinterklaasB2BOrder) {
+    setEditingOrder(order);
+    setFormOpen(true);
+  }
+
+  function closeOrderDialog() {
+    setFormOpen(false);
+    setEditingOrder(null);
+  }
+
+  function handleSavedOrder(order: SinterklaasB2BOrder) {
+    setOrders((current) => updateOrderList(current, order));
+    closeOrderDialog();
+  }
+
+  async function deleteOrder(order: SinterklaasB2BOrder) {
+    const confirmed = window.confirm(
+      `B2B-bestelling van ${order.customerName} verwijderen?`
+    );
+    if (!confirmed) return;
+
+    setUpdatingId(`${order.id}-delete`);
+    setError("");
+    try {
+      await deleteB2BOrder(order.id);
+      setOrders((current) => current.filter((item) => item.id !== order.id));
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "B2B-bestelling verwijderen is mislukt."
+      );
+    } finally {
+      setUpdatingId("");
+    }
+  }
+
   async function handleExcelFile(file: File | undefined) {
     if (!file) return;
     setError("");
@@ -766,7 +964,7 @@ export default function SinterklaasB2BClient() {
   return (
     <div className="space-y-4">
       <section className="border border-[#e4ded5] bg-white p-3 shadow-sm">
-        <div className="grid gap-2 xl:grid-cols-[1fr_8rem_7rem_12rem]">
+        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_12rem]">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -784,6 +982,19 @@ export default function SinterklaasB2BClient() {
             className="h-10 bg-[#f7df83] px-3 text-sm font-black text-[#1a1815]"
           >
             Ververs
+          </button>
+          <button
+            type="button"
+            onClick={openNewOrderDialog}
+            className="flex h-10 items-center justify-center gap-2 bg-[#24551d] px-3 text-sm font-black text-white"
+          >
+            <span
+              className="flex h-6 w-6 items-center justify-center bg-white/20 text-lg leading-none"
+              aria-hidden="true"
+            >
+              +
+            </span>
+            Toevoegen
           </button>
           <label className="flex h-10 cursor-pointer items-center justify-center border border-[#d6e5d8] bg-[#f6faf4] px-3 text-sm font-black text-[#24551d]">
             Excel import
@@ -832,59 +1043,65 @@ export default function SinterklaasB2BClient() {
         </section>
       )}
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-        <div>
-          <h2 className="mb-2 text-lg font-black text-[#1a1815]">
-            Nieuwe B2B-bestelling
-          </h2>
-          <B2BOrderForm
-            onSaved={(order) =>
-              setOrders((current) => updateOrderList(current, order))
-            }
-          />
+      <section className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-[#1a1815]">Bestellingen</h2>
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#8b8278]">
+              Gesorteerd op leverdatum
+            </p>
+          </div>
+          <span className="w-fit rounded-full bg-[#f2eee8] px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#6b645b]">
+            {visibleOrders.length} zichtbaar
+          </span>
         </div>
 
-        <div>
-          <h2 className="mb-2 text-lg font-black text-[#1a1815]">
-            Overzicht
-          </h2>
-          <div className="space-y-3">
-            {loading && (
-              <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-                Laden...
-              </p>
-            )}
-            {!loading &&
-              groupedOrders.map(([key, group]) => (
-                <section key={key} className="border border-[#e4ded5] bg-white/65">
-                  <div className="flex items-center justify-between bg-[#dcebd8] px-3 py-1.5">
-                    <h3 className="text-sm font-black capitalize text-[#1a1815]">
-                      {monthLabel(key)}
-                    </h3>
-                    <span className="rounded-full bg-white/85 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b]">
-                      {group.length} totaal
-                    </span>
-                  </div>
-                  <div className="grid gap-2 p-2">
-                    {group.map((order) => (
-                      <B2BOrderRow
-                        key={order.id}
-                        order={order}
-                        updatingId={updatingId}
-                        onToggle={toggleStatus}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            {!loading && visibleOrders.length < 1 && (
-              <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-                Geen B2B-bestellingen gevonden.
-              </p>
-            )}
-          </div>
+        <div className="space-y-3">
+          {loading && (
+            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
+              Laden...
+            </p>
+          )}
+          {!loading &&
+            groupedOrders.map(([key, group]) => (
+              <section key={key} className="border border-[#e4ded5] bg-white/65">
+                <div className="flex items-center justify-between bg-[#dcebd8] px-3 py-1.5">
+                  <h3 className="text-sm font-black capitalize text-[#1a1815]">
+                    {monthLabel(key)}
+                  </h3>
+                  <span className="rounded-full bg-white/85 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b]">
+                    {group.length} totaal
+                  </span>
+                </div>
+                <div className="grid gap-1.5 p-2">
+                  {group.map((order) => (
+                    <B2BOrderRow
+                      key={order.id}
+                      order={order}
+                      updatingId={updatingId}
+                      onToggle={toggleStatus}
+                      onEdit={openEditOrderDialog}
+                      onDelete={(nextOrder) => void deleteOrder(nextOrder)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          {!loading && visibleOrders.length < 1 && (
+            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
+              Geen B2B-bestellingen gevonden.
+            </p>
+          )}
         </div>
       </section>
+
+      {formOpen && (
+        <B2BOrderDialog
+          order={editingOrder}
+          onClose={closeOrderDialog}
+          onSaved={handleSavedOrder}
+        />
+      )}
     </div>
   );
 }

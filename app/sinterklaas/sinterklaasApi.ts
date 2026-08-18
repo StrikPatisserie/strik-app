@@ -294,3 +294,20 @@ export async function updateB2BOrder(id: string, patch: Partial<SinterklaasB2BOr
 
   return normalized;
 }
+
+export async function deleteB2BOrder(id: string) {
+  const url = new URL(ENDPOINTS.b2b, window.location.origin);
+  url.searchParams.set("id", id);
+
+  const data = await requestJson<unknown>(
+    url.toString(),
+    { method: "DELETE" },
+    "B2B-bestelling verwijderen is mislukt."
+  );
+
+  if (isRecord(data) && data.deleted === false) {
+    throw new Error("B2B-bestelling niet gevonden.");
+  }
+
+  return true;
+}
