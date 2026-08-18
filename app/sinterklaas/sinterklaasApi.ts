@@ -83,6 +83,10 @@ function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | null {
     shop: textFrom(value.shop),
     pickupDate: textFrom(value.pickupDate),
     pickupLocation: textFrom(value.pickupLocation),
+    source: value.source === "online" ? "online" : "winkel",
+    sourceKey: textFrom(value.sourceKey),
+    sourceImportedAt: textFrom(value.sourceImportedAt),
+    sourceBatch: textFrom(value.sourceBatch),
     status:
       value.status === "in-productie" ||
       value.status === "klaar" ||

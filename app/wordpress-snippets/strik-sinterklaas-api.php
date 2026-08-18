@@ -287,6 +287,8 @@ function strik_sinterklaas_sanitize_letter_order($order, $existing = array()) {
     }
 
     $now = wp_date(DATE_ATOM);
+    $source = isset($order['source']) ? strik_sinterklaas_text($order['source'], 40) : 'winkel';
+    $source = $source === 'online' ? 'online' : 'winkel';
 
     return array(
         'id' => $id,
@@ -298,6 +300,10 @@ function strik_sinterklaas_sanitize_letter_order($order, $existing = array()) {
         'shop' => isset($order['shop']) ? strik_sinterklaas_text($order['shop'], 120) : '',
         'pickupDate' => $pickup_date,
         'pickupLocation' => isset($order['pickupLocation']) ? strik_sinterklaas_text($order['pickupLocation'], 120) : '',
+        'source' => $source,
+        'sourceKey' => isset($order['sourceKey']) ? strik_sinterklaas_text($order['sourceKey'], 180) : '',
+        'sourceImportedAt' => isset($order['sourceImportedAt']) ? strik_sinterklaas_text($order['sourceImportedAt'], 80) : '',
+        'sourceBatch' => isset($order['sourceBatch']) ? strik_sinterklaas_text($order['sourceBatch'], 180) : '',
         'status' => isset($order['status']) ? strik_sinterklaas_text($order['status'], 60) : 'besteld',
         'notes' => isset($order['notes']) ? strik_sinterklaas_textarea($order['notes'], 1800) : '',
         'lines' => $lines,
@@ -379,6 +385,10 @@ function strik_sinterklaas_create_letter_mail_body($order, $for_customer = false
 
 if (!function_exists('strik_sinterklaas_send_letter_emails')) {
 function strik_sinterklaas_send_letter_emails($order, $existing = array()) {
+    if (!empty($order['source']) && $order['source'] === 'online') {
+        return $order;
+    }
+
     $headers = array('Content-Type: text/plain; charset=UTF-8');
 
     if (empty($order['bakeryEmailSentAt']) && empty($existing['bakeryEmailSentAt'])) {
@@ -500,6 +510,9 @@ function strik_sinterklaas_filter_orders($orders, $request, $date_key) {
             $haystack = strtolower(implode(' ', array(
                 isset($order['customerName']) ? $order['customerName'] : '',
                 isset($order['code']) ? $order['code'] : '',
+                isset($order['source']) ? $order['source'] : '',
+                isset($order['sourceBatch']) ? $order['sourceBatch'] : '',
+                isset($order['sourceKey']) ? $order['sourceKey'] : '',
                 isset($order['orderText']) ? $order['orderText'] : '',
                 isset($order[$date_key]) ? $order[$date_key] : '',
             )));

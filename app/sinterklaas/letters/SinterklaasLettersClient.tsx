@@ -29,6 +29,21 @@ type LetterFormState = {
   lines: ChocolateLetterLine[];
 };
 
+type OnlineLetterImportRow = {
+  id: string;
+  sourceKey: string;
+  batch: string;
+  articleNumber: string;
+  productName: string;
+  pickupDate: string;
+  letter: string;
+  chocolate: ChocolateLetterChocolate;
+  size: ChocolateLetterSize;
+  style: ChocolateLetterStyle;
+  quantity: number;
+  notes: string;
+};
+
 const CHOCOLATES: { id: ChocolateLetterChocolate; label: string }[] = [
   { id: "melk", label: "Melk" },
   { id: "puur", label: "Puur" },
@@ -55,6 +70,27 @@ function currentYear() {
 
 function yearFromDate(date: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 4) : currentYear();
+}
+
+function isoDateFromParts(day: string, month: string, year: string) {
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+}
+
+function addDays(date: string, days: number) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  const [year, month, day] = date.split("-").map(Number);
+  const nextDate = new Date(year, month - 1, day + days, 12);
+
+  return nextDate.toISOString().slice(0, 10);
+}
+
+function cleanImportKey(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 function createLine(): ChocolateLetterLine {
@@ -132,6 +168,125 @@ function lineLabel(line: ChocolateLetterLine) {
   return `${line.quantity}x ${line.letter.toUpperCase()} ${line.size} ${line.style} ${line.chocolate}${
     line.logo ? " met logo" : ""
   }`;
+}
+
+function parseOnlineLetterProduct(productName: string) {
+  const normalized = productName.toLocaleLowerCase("nl-NL");
+  const chocolate: ChocolateLetterChocolate = normalized.includes("vegan")
+    ? "vegan-puur"
+    : normalized.includes("puur")
+      ? "puur"
+      : normalized.includes("wit")
+        ? "wit"
+        : "melk";
+  const size: ChocolateLetterSize = normalized.includes("klein")
+    ? "klein"
+    : "groot";
+  const style: ChocolateLetterStyle = normalized.includes("vorm")
+    ? "vorm"
+    : "spuit";
+
+  return { chocolate, size, style };
+}
+
+function getOnlineImportWeekDates(text: string, yearOverride: string) {
+  const weekMatch = text.match(
+    /Week\s+([0-9]+)\s*\((\d{2})-(\d{2})-(\d{4})\s+t\/m\s+(\d{2})-(\d{2})-(\d{4})\)/i
+  );
+  const requestedYear = /^\d{4}$/.test(yearOverride.trim())
+    ? yearOverride.trim()
+    : "";
+  const sourceYear = weekMatch?.[4] || currentYear();
+  const importYear = requestedYear || sourceYear;
+  const startDate = weekMatch
+    ? isoDateFromParts(weekMatch[2], weekMatch[3], importYear)
+    : todayIso();
+  const dates = Array.from({ length: 7 }, (_, index) => addDays(startDate, index));
+  const batch = weekMatch
+    ? `Week ${weekMatch[1]} (${dates[0]} t/m ${dates[6]})`
+    : `Online import ${todayIso()}`;
+
+  return { dates, batch };
+}
+
+function parseOnlineLetterImport(text: string, yearOverride: string) {
+  const { dates, batch } = getOnlineImportWeekDates(text, yearOverride);
+  const rows: OnlineLetterImportRow[] = [];
+  const pendingNotes: string[] = [];
+
+  text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      if (
+        /^(Productielijst|Week|Ma\s+Di|Afdrukdatum|Pagina|Totaal:?$|\d+\s+Chocolade)/i.test(
+          line
+        )
+      ) {
+        return;
+      }
+
+      if (/extra omschrijvingen|let op|lactose|noten/i.test(line)) {
+        pendingNotes.push(line.replace(/^\*+/, "").trim());
+        return;
+      }
+
+      const match = line.match(
+        /^(\d{4}\.\d{3})\s+(.+?)\s+online\s+([A-Za-z])\s+(.*)$/i
+      );
+      if (!match) return;
+
+      const dayQuantities = (match[4].match(/\b\d+\b/g) || [])
+        .slice(0, 7)
+        .map(Number);
+      if (dayQuantities.length < 7) return;
+
+      const articleNumber = match[1];
+      const productName = match[2].trim();
+      const letter = match[3].toUpperCase();
+      const { chocolate, size, style } = parseOnlineLetterProduct(productName);
+      const notes = [
+        `Artikel ${articleNumber}`,
+        productName,
+        ...pendingNotes,
+      ].join("\n");
+      pendingNotes.length = 0;
+
+      dayQuantities.forEach((quantity, index) => {
+        if (quantity < 1) return;
+
+        const pickupDate = dates[index];
+        const sourceKey = cleanImportKey(
+          [
+            "online-letter",
+            pickupDate,
+            articleNumber,
+            letter,
+            chocolate,
+            size,
+            style,
+          ].join("-")
+        );
+
+        rows.push({
+          id: sourceKey,
+          sourceKey,
+          batch,
+          articleNumber,
+          productName,
+          pickupDate,
+          letter,
+          chocolate,
+          size,
+          style,
+          quantity,
+          notes,
+        });
+      });
+    });
+
+  return rows;
 }
 
 function monthKey(date: string) {
@@ -275,6 +430,10 @@ function OrderRow({
   productionMode?: boolean;
 }>) {
   const extraLines = [
+    order.source === "online" && "Herkomst: online bestelling",
+    order.sourceBatch && `Import: ${order.sourceBatch}`,
+    order.sourceImportedAt &&
+      `Laatst ingeladen: ${formatDateTime(order.sourceImportedAt)}`,
     order.customerEmail && `E-mail: ${order.customerEmail}`,
     order.phone && `Telefoon: ${order.phone}`,
     order.shop && `Winkel: ${order.shop}`,
@@ -284,6 +443,7 @@ function OrderRow({
       `Bakkerijmail: ${formatDateTime(order.bakeryEmailSentAt)}`,
   ].filter(Boolean);
   const isDone = order.productionDone || order.status === "klaar";
+  const isOnline = order.source === "online";
   const doneAtLabel = order.productionDoneAt
     ? formatDateTime(order.productionDoneAt)
     : "";
@@ -293,13 +453,19 @@ function OrderRow({
       className={`border px-3 py-2 ${
         isDone
           ? "border-[#b7d8ad] bg-[#eef8ea]"
+          : isOnline
+            ? "border-[#b9d8eb] bg-[#f2f8fc]"
           : "border-[#e4ded5] bg-white"
       }`}
     >
       <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_15rem]">
         <div
           className={`border-l-4 pl-2 ${
-            isDone ? "border-[#24551d]" : "border-[#c3d3bc]"
+            isDone
+              ? "border-[#24551d]"
+              : isOnline
+                ? "border-[#2f6f91]"
+                : "border-[#c3d3bc]"
           }`}
         >
           <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
@@ -331,6 +497,11 @@ function OrderRow({
             >
               {statusLabel(order)}
             </span>
+            {isOnline && (
+              <span className="rounded-full bg-[#dceef8] px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2f6f91]">
+                Online
+              </span>
+            )}
             {order.customerConfirmationSentAt && (
               <span className="rounded-full bg-[#edf5fb] px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#31566b]">
                 Bevestigd
@@ -773,6 +944,146 @@ function LetterOrderDialog({
   );
 }
 
+function OnlineImportDialog({
+  text,
+  year,
+  importing,
+  message,
+  onTextChange,
+  onYearChange,
+  onClose,
+  onImport,
+}: Readonly<{
+  text: string;
+  year: string;
+  importing: boolean;
+  message: string;
+  onTextChange: (value: string) => void;
+  onYearChange: (value: string) => void;
+  onClose: () => void;
+  onImport: (rows: OnlineLetterImportRow[]) => void;
+}>) {
+  const rows = useMemo(() => parseOnlineLetterImport(text, year), [text, year]);
+  const totalQuantity = rows.reduce((sum, row) => sum + row.quantity, 0);
+  const previewRows = rows.slice(0, 14);
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#1a1815]/45 px-3 py-6 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-6xl border border-[#b9d8eb] bg-[#faf8f5] p-3 shadow-2xl sm:p-4">
+        <div className="mb-3 flex items-start justify-between gap-3 border-b border-[#e4ded5] pb-3">
+          <div>
+            <p className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
+              Chocoladeletters
+            </p>
+            <h2 className="text-xl font-black text-[#1a1815] sm:text-2xl">
+              Online weeklijst inladen
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center border border-[#e4ded5] bg-white text-xl font-black text-[#1a1815]"
+            aria-label="Sluiten"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="space-y-2">
+            <div className="grid gap-2 sm:grid-cols-[10rem_minmax(0,1fr)]">
+              <input
+                value={year}
+                onChange={(event) => onYearChange(event.target.value)}
+                placeholder="Importjaar"
+                className="h-10 border border-[#e4ded5] bg-white px-3 text-sm font-black outline-none"
+              />
+              <div className="flex items-center border border-[#e4ded5] bg-white px-3 text-sm font-bold text-[#6b645b]">
+                {rows.length} regels · {totalQuantity} stuks
+              </div>
+            </div>
+            <textarea
+              value={text}
+              onChange={(event) => onTextChange(event.target.value)}
+              placeholder="Plak de tekst van Productielijst Week Chocoladeletters"
+              rows={18}
+              className="w-full border border-[#e4ded5] bg-white px-3 py-2 text-sm font-semibold leading-relaxed outline-none"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="border border-[#b9d8eb] bg-[#f2f8fc] px-3 py-2">
+              <p className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#2f6f91]">
+                Preview
+              </p>
+              <p className="text-sm font-bold text-[#4d463d]">
+                Zelfde datum, artikel en letter wordt bij opnieuw importeren bijgewerkt.
+              </p>
+            </div>
+
+            <div className="max-h-[25rem] overflow-auto border border-[#e4ded5] bg-white">
+              {previewRows.length > 0 ? (
+                previewRows.map((row) => (
+                  <div
+                    key={row.sourceKey}
+                    className="border-b border-[#eee7dc] px-3 py-2 last:border-b-0"
+                  >
+                    <p className="text-xs font-black text-[#1a1815]">
+                      {formatDate(row.pickupDate)} · {row.quantity}x{" "}
+                      {row.letter} {row.chocolate} {row.size}
+                    </p>
+                    <p className="text-[0.68rem] font-bold text-[#6b645b]">
+                      {row.articleNumber} · {row.productName}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="px-3 py-2 text-sm font-bold text-[#6b645b]">
+                  Nog geen herkenbare regels.
+                </p>
+              )}
+            </div>
+
+            {rows.length > previewRows.length && (
+              <p className="text-xs font-bold text-[#6b645b]">
+                + {rows.length - previewRows.length} extra regels
+              </p>
+            )}
+          </div>
+        </div>
+
+        {message && (
+          <p className="mt-3 border border-[#e4ded5] bg-white px-3 py-2 text-sm font-black text-[#5f3f00]">
+            {message}
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-col gap-2 border-t border-[#e4ded5] pt-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 border border-[#e4ded5] bg-white px-4 text-sm font-black text-[#4d463d]"
+          >
+            Sluiten
+          </button>
+          <button
+            type="button"
+            disabled={importing || rows.length < 1}
+            onClick={() => onImport(rows)}
+            className="h-10 bg-[#2f6f91] px-5 text-sm font-black text-white shadow-sm disabled:opacity-60"
+          >
+            {importing ? "Inladen..." : "Online orders inladen"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SinterklaasLettersClient({
   mode,
 }: Readonly<{ mode: Mode }>) {
@@ -783,6 +1094,11 @@ export default function SinterklaasLettersClient({
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [onlineImportOpen, setOnlineImportOpen] = useState(false);
+  const [onlineImportText, setOnlineImportText] = useState("");
+  const [onlineImportYear, setOnlineImportYear] = useState(() => currentYear());
+  const [onlineImporting, setOnlineImporting] = useState(false);
+  const [onlineImportMessage, setOnlineImportMessage] = useState("");
   const [editingOrder, setEditingOrder] = useState<ChocolateLetterOrder | null>(
     null
   );
@@ -816,6 +1132,9 @@ export default function SinterklaasLettersClient({
       [
         order.customerName,
         order.code,
+        order.source,
+        order.sourceBatch,
+        order.sourceKey,
         order.pickupDate,
         order.pickupLocation,
         order.shop,
@@ -855,6 +1174,12 @@ export default function SinterklaasLettersClient({
     setFormOpen(true);
   }
 
+  function openOnlineImportDialog() {
+    setOnlineImportYear(year);
+    setOnlineImportMessage("");
+    setOnlineImportOpen(true);
+  }
+
   function openEditOrderDialog(order: ChocolateLetterOrder) {
     setEditingOrder(order);
     setFormOpen(true);
@@ -863,6 +1188,11 @@ export default function SinterklaasLettersClient({
   function closeOrderDialog() {
     setFormOpen(false);
     setEditingOrder(null);
+  }
+
+  function closeOnlineImportDialog() {
+    setOnlineImportOpen(false);
+    setOnlineImportMessage("");
   }
 
   function handleSavedOrder(order: ChocolateLetterOrder) {
@@ -892,12 +1222,105 @@ export default function SinterklaasLettersClient({
     }
   }
 
+  async function importOnlineRows(rows: OnlineLetterImportRow[]) {
+    if (rows.length < 1) {
+      setOnlineImportMessage("Geen herkenbare online regels gevonden.");
+      return;
+    }
+
+    setOnlineImporting(true);
+    setOnlineImportMessage("");
+    setError("");
+
+    const savedOrders: ChocolateLetterOrder[] = [];
+    let reopenedCount = 0;
+    const importedAt = new Date().toISOString();
+
+    try {
+      for (const row of rows) {
+        const existing = orders.find(
+          (order) => order.id === row.id || order.sourceKey === row.sourceKey
+        );
+        const existingQuantity = existing
+          ? existing.lines.reduce((sum, line) => sum + line.quantity, 0)
+          : 0;
+        const quantityChanged = Boolean(existing && existingQuantity !== row.quantity);
+        const targetId = existing?.id || row.id;
+
+        if (quantityChanged && existing?.productionDone) {
+          reopenedCount += 1;
+        }
+
+        const saved = await updateLetterOrder(targetId, {
+          id: targetId,
+          year: yearFromDate(row.pickupDate),
+          code: existing?.code || "",
+          customerName: "Online bestellingen",
+          customerEmail: "",
+          phone: "",
+          shop: "Online",
+          pickupDate: row.pickupDate,
+          pickupLocation: "Online",
+          source: "online",
+          sourceKey: row.sourceKey,
+          sourceImportedAt: importedAt,
+          sourceBatch: row.batch,
+          status: quantityChanged
+            ? "besteld"
+            : existing?.status || "besteld",
+          notes: row.notes,
+          sendCustomerEmail: false,
+          ...(quantityChanged
+            ? {
+                productionDone: false,
+                productionDoneAt: "",
+                productionDoneBy: "",
+              }
+            : {}),
+          lines: [
+            {
+              id: `${row.sourceKey}-line`,
+              letter: row.letter,
+              chocolate: row.chocolate,
+              size: row.size,
+              style: row.style,
+              quantity: row.quantity,
+              logo: false,
+              notes: "",
+            },
+          ],
+        });
+        savedOrders.push(saved);
+      }
+
+      setOrders((current) =>
+        savedOrders.reduce(
+          (nextOrders, order) => updateOrderList(nextOrders, order),
+          current
+        )
+      );
+      setOnlineImportMessage(
+        `${savedOrders.length} online regels ingeladen of bijgewerkt${
+          reopenedCount > 0 ? `, ${reopenedCount} opnieuw opengezet` : ""
+        }.`
+      );
+    } catch (importError) {
+      setOnlineImportMessage(
+        importError instanceof Error
+          ? importError.message
+          : "Online weeklijst inladen is mislukt."
+      );
+    } finally {
+      setOnlineImporting(false);
+    }
+  }
+
   const groupedOrders = groupByMonth(visibleOrders);
 
   return (
     <div className="space-y-4">
       <section className="border border-[#e4ded5] bg-white p-3 shadow-sm">
-        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem]">
+        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_13rem]">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -915,6 +1338,19 @@ export default function SinterklaasLettersClient({
             className="h-10 bg-[#f7df83] px-3 text-sm font-black text-[#1a1815]"
           >
             Ververs
+          </button>
+          <button
+            type="button"
+            onClick={openOnlineImportDialog}
+            className="flex h-10 items-center justify-center gap-2 bg-[#2f6f91] px-3 text-sm font-black text-white"
+          >
+            <span
+              className="flex h-6 w-6 items-center justify-center bg-white/20 text-lg leading-none"
+              aria-hidden="true"
+            >
+              +
+            </span>
+            Online import
           </button>
           <button
             type="button"
@@ -1007,6 +1443,18 @@ export default function SinterklaasLettersClient({
           order={editingOrder}
           onClose={closeOrderDialog}
           onSaved={handleSavedOrder}
+        />
+      )}
+      {onlineImportOpen && (
+        <OnlineImportDialog
+          text={onlineImportText}
+          year={onlineImportYear}
+          importing={onlineImporting}
+          message={onlineImportMessage}
+          onTextChange={setOnlineImportText}
+          onYearChange={setOnlineImportYear}
+          onClose={closeOnlineImportDialog}
+          onImport={(rows) => void importOnlineRows(rows)}
         />
       )}
     </div>
