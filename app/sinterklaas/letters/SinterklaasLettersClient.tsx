@@ -282,13 +282,26 @@ function OrderRow({
       `Bevestiging: ${formatDateTime(order.customerConfirmationSentAt)}`,
     order.bakeryEmailSentAt &&
       `Bakkerijmail: ${formatDateTime(order.bakeryEmailSentAt)}`,
-    order.productionDoneAt && `Klaar: ${formatDateTime(order.productionDoneAt)}`,
   ].filter(Boolean);
+  const isDone = order.productionDone || order.status === "klaar";
+  const doneAtLabel = order.productionDoneAt
+    ? formatDateTime(order.productionDoneAt)
+    : "";
 
   return (
-    <article className="border border-[#e4ded5] bg-white px-3 py-2">
+    <article
+      className={`border px-3 py-2 ${
+        isDone
+          ? "border-[#b7d8ad] bg-[#eef8ea]"
+          : "border-[#e4ded5] bg-white"
+      }`}
+    >
       <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_15rem]">
-        <div className="border-l-4 border-[#c3d3bc] pl-2">
+        <div
+          className={`border-l-4 pl-2 ${
+            isDone ? "border-[#24551d]" : "border-[#c3d3bc]"
+          }`}
+        >
           <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
             Ophaaldatum
           </p>
@@ -298,6 +311,11 @@ function OrderRow({
           <p className="text-xs font-bold text-[#6b645b]">
             {order.pickupLocation || order.shop || "geen locatie"}
           </p>
+          {isDone && (
+            <p className="mt-1 rounded bg-[#dcebd8] px-2 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-[#24551d]">
+              Klaar: {doneAtLabel || "datum onbekend"}
+            </p>
+          )}
         </div>
 
         <div className="min-w-0">
