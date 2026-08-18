@@ -20,13 +20,17 @@ const DAGOMZET_IMPORT_CONFIG = {
   ],
   MAX_THREADS: 10,
   RECOVERY_MAX_THREADS: 30,
+  CLEANUP_MAX_THREADS: 100,
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v1',
+  SCRIPT_VERSION: 'gmail-archive-v2',
 };
 
 function importDagomzet() {
+  const sourceLabel = getOrCreateDagomzetLabel_(
+    DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL
+  );
   const processedLabel = getOrCreateDagomzetLabel_(
     DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL
   );
@@ -82,13 +86,19 @@ function importDagomzet() {
     });
 
     if (imported) {
+      thread.addLabel(sourceLabel);
       thread.addLabel(processedLabel);
       thread.moveToArchive();
     }
-    if (failed) thread.addLabel(errorLabel);
+    if (failed) {
+      thread.addLabel(sourceLabel);
+      thread.addLabel(errorLabel);
+      thread.moveToArchive();
+    }
   });
 
   verplaatsDagomzetIngelezenThreads_();
+  verplaatsDagomzetFoutThreads_();
 }
 
 function debugDagomzetLaatsteMails() {
@@ -175,6 +185,9 @@ function getDagomzetThreadKey_(thread) {
 }
 
 function verplaatsDagomzetIngelezenThreads_() {
+  const sourceLabel = getOrCreateDagomzetLabel_(
+    DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL
+  );
   const processedLabel = GmailApp.getUserLabelByName(
     DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL
   );
@@ -190,7 +203,11 @@ function verplaatsDagomzetIngelezenThreads_() {
   const threads = [];
 
   queries.forEach((query) => {
-    GmailApp.search(query, 0, 100).forEach((thread) => {
+    GmailApp.search(
+      query,
+      0,
+      DAGOMZET_IMPORT_CONFIG.CLEANUP_MAX_THREADS
+    ).forEach((thread) => {
       const key = getDagomzetThreadKey_(thread);
       if (threadByKey[key]) return;
 
@@ -200,12 +217,58 @@ function verplaatsDagomzetIngelezenThreads_() {
   });
 
   threads.forEach((thread) => {
+    thread.addLabel(sourceLabel);
     thread.moveToArchive();
   });
 
   if (threads.length) {
     Logger.log(
       `Dagomzet Gmail cleanup: ${threads.length} ingelezen thread(s) uit Inbox gehaald.`
+    );
+  }
+}
+
+function verplaatsDagomzetFoutThreads_() {
+  const sourceLabel = getOrCreateDagomzetLabel_(
+    DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL
+  );
+  const errorLabel = GmailApp.getUserLabelByName(
+    DAGOMZET_IMPORT_CONFIG.ERROR_LABEL
+  );
+  if (!errorLabel) return;
+
+  const queries = [
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" label:"${DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL}"`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" subject:"Dag Rapport ijs"`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" subject:"Dagafsluiting email-Filiaal" subject:ijs`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" subject:"Cash-it Filiaal Dag Rapport"`,
+  ];
+  const threadByKey = {};
+  const threads = [];
+
+  queries.forEach((query) => {
+    GmailApp.search(
+      query,
+      0,
+      DAGOMZET_IMPORT_CONFIG.CLEANUP_MAX_THREADS
+    ).forEach((thread) => {
+      const key = getDagomzetThreadKey_(thread);
+      if (threadByKey[key]) return;
+
+      threadByKey[key] = true;
+      threads.push(thread);
+    });
+  });
+
+  threads.forEach((thread) => {
+    thread.addLabel(sourceLabel);
+    thread.addLabel(errorLabel);
+    thread.moveToArchive();
+  });
+
+  if (threads.length) {
+    Logger.log(
+      `Dagomzet Gmail cleanup: ${threads.length} fout gelabelde thread(s) uit Inbox gehaald.`
     );
   }
 }
