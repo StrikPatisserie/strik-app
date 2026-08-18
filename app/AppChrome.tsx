@@ -44,6 +44,8 @@ export default function AppChrome({
     pathname === "/vierdaagse" ||
     pathname.startsWith("/vierdaagse/") ||
     pathname === "/kraamrekenaar";
+  const isSinterklaasWorkArea =
+    pathname === "/sinterklaas" || pathname.startsWith("/sinterklaas/");
 
   if (isAuthArea || isPrintArea) {
     return <>{children}</>;
@@ -62,7 +64,7 @@ export default function AppChrome({
 
           <main
             className={`flex-1 overflow-auto ${
-              isWorkArea || isVierdaagseWorkArea
+              isWorkArea || isVierdaagseWorkArea || isSinterklaasWorkArea
                 ? "pb-32 md:pb-0"
                 : "pb-24 md:pb-0"
             }`}

@@ -246,6 +246,10 @@ function isVierdaagsePath(pathname: string) {
   );
 }
 
+function isSinterklaasPath(pathname: string) {
+  return pathname === "/sinterklaas" || pathname.startsWith("/sinterklaas/");
+}
+
 function isBakkerijDataPath(pathname: string) {
   return pathname === "/bakkerij/management" || pathname.startsWith("/bakkerij/management/");
 }
@@ -329,6 +333,10 @@ export function canAccessWeddingCakes(profile: UserProfile | null | undefined) {
   );
 }
 
+export function canAccessSinterklaas(profile: UserProfile | null | undefined) {
+  return Boolean(profile?.active);
+}
+
 function hasAnyVierdaagseAccess(profile: UserProfile | null | undefined) {
   return hasAnyPermission(profile, VIERDAAGSE_PERMISSION_IDS);
 }
@@ -393,6 +401,10 @@ export function canAccessPath(
 
   if (isVierdaagsePath(pathname)) {
     return canAccessVierdaagsePath(profile, pathname);
+  }
+
+  if (isSinterklaasPath(pathname)) {
+    return canAccessSinterklaas(profile);
   }
 
   if (isLogistiekPath(pathname)) {

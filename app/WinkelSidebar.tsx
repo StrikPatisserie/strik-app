@@ -26,6 +26,7 @@ const mainNavItems = [
   { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
+  { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },
 ];
 
 const winkelNavItems = [
@@ -125,6 +126,10 @@ function isVierdaagseWorkArea(pathname: string) {
   );
 }
 
+function isSinterklaasWorkArea(pathname: string) {
+  return pathname === "/sinterklaas" || pathname.startsWith("/sinterklaas/");
+}
+
 export default function WinkelSidebar({
   featureVisibility,
   profile,
@@ -137,6 +142,7 @@ export default function WinkelSidebar({
   const showBakkerijSubNav = isBakkerijWorkArea(pathname);
   const showLogistiekNav = isLogistiekWorkArea(pathname);
   const showVierdaagseNav = isVierdaagseWorkArea(pathname);
+  const showSinterklaasNav = isSinterklaasWorkArea(pathname);
   const mainItems = filterAllowedItems(
     filterVisibleMainNavigationItems(mainNavItems, featureVisibility),
     profile
@@ -163,6 +169,7 @@ export default function WinkelSidebar({
           if (item.href === "/bakkerij") active = showBakkerijSubNav;
           if (item.href === "/bakkerij/logistiek") active = showLogistiekNav;
           if (item.href === "/vierdaagse") active = showVierdaagseNav;
+          if (item.href === "/sinterklaas") active = showSinterklaasNav;
 
           return (
             <Link

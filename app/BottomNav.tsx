@@ -19,6 +19,7 @@ const items = [
   { href: "/bakkerij", label: "Productie", icon: strikIcons.bakkerij },
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
+  { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },
 ];
 
 function isLogistiekPath(pathname: string) {
@@ -43,6 +44,9 @@ function isActivePath(pathname: string, href: string) {
       pathname.startsWith("/vierdaagse/") ||
       pathname === "/kraamrekenaar"
     );
+  }
+  if (href === "/sinterklaas") {
+    return pathname === "/sinterklaas" || pathname.startsWith("/sinterklaas/");
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);

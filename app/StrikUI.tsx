@@ -24,6 +24,8 @@ export const strikIcons = {
   overview: "/APP_iconss__overview.svg",
   photo: "/icons_strik_photo.svg",
   recepturen: "/apps%20strik_recepten.svg",
+  sinterklaas:
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 6 10 48h44L32 6Z' fill='%23000'/%3E%3Cpath d='M29 16h6v24h-6zM20 28h24v6H20z' fill='%23fff'/%3E%3Cpath d='M8 50h48v8H8z' fill='%23000'/%3E%3C/svg%3E",
   strikAgenda: "/icons_strik_strikagenda.svg",
   winkel: "/APP_icons_strikk__winkel.svg",
 };

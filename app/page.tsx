@@ -45,6 +45,13 @@ const baseSections = [
     icon: strikIcons.strikAgenda,
     variant: "vierdaagse" as const,
   },
+  {
+    href: "/sinterklaas",
+    title: "Sinterklaas",
+    subtitle: "Letters en B2B",
+    icon: strikIcons.sinterklaas,
+    variant: "sinterklaas" as const,
+  },
 ];
 
 export const dynamic = "force-dynamic";
@@ -85,6 +92,8 @@ export default async function Home() {
               className={`group flex min-h-20 items-center gap-3 rounded-lg border p-3 transition hover:shadow-sm active:scale-[0.98] sm:min-h-28 sm:p-4 ${
                 section.variant === "vierdaagse"
                   ? "border-[#ef7d0a] bg-[#fff8ef] hover:bg-white"
+                  : section.variant === "sinterklaas"
+                    ? "border-[#eadb8b] bg-[#fff8d8] hover:bg-white"
                   : "border-[#ded8cf] bg-white/82 hover:bg-white"
               }`}
             >
@@ -92,6 +101,8 @@ export default async function Home() {
                 className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md sm:h-12 sm:w-12 ${
                   section.variant === "vierdaagse"
                     ? "bg-[#24551d]"
+                    : section.variant === "sinterklaas"
+                      ? "bg-[#f7df83]"
                     : "bg-[#ecf4ed]"
                 }`}
               >
@@ -108,6 +119,8 @@ export default async function Home() {
                   className={`block text-sm font-bold leading-tight sm:text-base ${
                     section.variant === "vierdaagse"
                       ? "text-[#24551d]"
+                      : section.variant === "sinterklaas"
+                        ? "text-[#5f3f00]"
                       : "text-[#1a1815]"
                   }`}
                 >
@@ -117,6 +130,8 @@ export default async function Home() {
                   className={`mt-0.5 block text-[0.68rem] font-semibold leading-tight sm:text-xs ${
                     section.variant === "vierdaagse"
                       ? "text-[#9d3c24]"
+                      : section.variant === "sinterklaas"
+                        ? "text-[#8a6a19]"
                       : "text-[#6b645b]"
                   }`}
                 >
