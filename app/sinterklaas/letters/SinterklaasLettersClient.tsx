@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  deleteLetterOrder,
   fetchLetterOrders,
   saveLetterOrder,
   updateLetterOrder,
@@ -83,6 +84,25 @@ function createFormState(): LetterFormState {
   };
 }
 
+function formStateFromOrder(order: ChocolateLetterOrder | null | undefined) {
+  if (!order) return createFormState();
+
+  return {
+    customerName: order.customerName,
+    customerEmail: order.customerEmail,
+    phone: order.phone,
+    shop: order.shop || "Ziekerstraat",
+    pickupDate: order.pickupDate || todayIso(),
+    pickupLocation: order.pickupLocation || order.shop || "Ziekerstraat",
+    notes: order.notes,
+    sendCustomerEmail: order.sendCustomerEmail,
+    lines:
+      order.lines.length > 0
+        ? order.lines.map((line) => ({ ...line }))
+        : [createLine()],
+  };
+}
+
 function formatDate(date: string) {
   if (!date) return "geen datum";
 
@@ -114,8 +134,46 @@ function lineLabel(line: ChocolateLetterLine) {
   }`;
 }
 
-function orderMeta(order: ChocolateLetterOrder) {
-  return `${formatDate(order.pickupDate)} · ${order.pickupLocation || order.shop || "geen locatie"} · ${totalPieces(order)} stuks`;
+function monthKey(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "zonder-datum";
+  return date.slice(0, 7);
+}
+
+function monthLabel(key: string) {
+  if (key === "zonder-datum") return "Zonder datum";
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${key}-01T12:00:00`));
+}
+
+function compareOrdersByPickupDate(
+  a: ChocolateLetterOrder,
+  b: ChocolateLetterOrder
+) {
+  if (!a.pickupDate && b.pickupDate) return 1;
+  if (a.pickupDate && !b.pickupDate) return -1;
+
+  return (
+    a.pickupDate.localeCompare(b.pickupDate) ||
+    a.customerName.localeCompare(b.customerName)
+  );
+}
+
+function groupByMonth(orders: ChocolateLetterOrder[]) {
+  const groups = new Map<string, ChocolateLetterOrder[]>();
+
+  [...orders].sort(compareOrdersByPickupDate).forEach((order) => {
+    const key = monthKey(order.pickupDate);
+    groups.set(key, [...(groups.get(key) || []), order]);
+  });
+
+  return Array.from(groups.entries()).sort(([a], [b]) => {
+    if (a === "zonder-datum") return 1;
+    if (b === "zonder-datum") return -1;
+    return a.localeCompare(b);
+  });
 }
 
 function statusClasses(order: ChocolateLetterOrder) {
@@ -145,9 +203,7 @@ function updateOrderList(
   nextOrder: ChocolateLetterOrder
 ) {
   return [nextOrder, ...orders.filter((order) => order.id !== nextOrder.id)].sort(
-    (a, b) =>
-      a.pickupDate.localeCompare(b.pickupDate) ||
-      a.customerName.localeCompare(b.customerName)
+    compareOrdersByPickupDate
   );
 }
 
@@ -206,17 +262,44 @@ function SummaryStrip({ orders }: Readonly<{ orders: ChocolateLetterOrder[] }>) 
 function OrderRow({
   order,
   onToggleDone,
+  onEdit,
+  onDelete,
   updatingId,
   productionMode = false,
 }: Readonly<{
   order: ChocolateLetterOrder;
   onToggleDone: (order: ChocolateLetterOrder) => void;
+  onEdit: (order: ChocolateLetterOrder) => void;
+  onDelete: (order: ChocolateLetterOrder) => void;
   updatingId: string;
   productionMode?: boolean;
 }>) {
+  const extraLines = [
+    order.customerEmail && `E-mail: ${order.customerEmail}`,
+    order.phone && `Telefoon: ${order.phone}`,
+    order.shop && `Winkel: ${order.shop}`,
+    order.customerConfirmationSentAt &&
+      `Bevestiging: ${formatDateTime(order.customerConfirmationSentAt)}`,
+    order.bakeryEmailSentAt &&
+      `Bakkerijmail: ${formatDateTime(order.bakeryEmailSentAt)}`,
+    order.productionDoneAt && `Klaar: ${formatDateTime(order.productionDoneAt)}`,
+  ].filter(Boolean);
+
   return (
-    <article className="border border-[#e4ded5] bg-white px-3 py-2 shadow-sm">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <article className="border border-[#e4ded5] bg-white px-3 py-2">
+      <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_15rem]">
+        <div className="border-l-4 border-[#c3d3bc] pl-2">
+          <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
+            Ophaaldatum
+          </p>
+          <p className="text-base font-black text-[#1a1815]">
+            {formatDate(order.pickupDate)}
+          </p>
+          <p className="text-xs font-bold text-[#6b645b]">
+            {order.pickupLocation || order.shop || "geen locatie"}
+          </p>
+        </div>
+
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-black leading-tight text-[#1a1815]">
@@ -233,10 +316,10 @@ function OrderRow({
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm font-bold text-[#6b645b]">
-            {orderMeta(order)}
+          <p className="mt-1 text-sm font-black text-[#4d463d]">
+            {totalPieces(order)} stuks
           </p>
-          <p className="mt-1 text-xs font-semibold text-[#9b9489]">
+          <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
             {order.lines.map(lineLabel).join(" · ")}
           </p>
           {order.notes && (
@@ -244,37 +327,76 @@ function OrderRow({
               {order.notes}
             </p>
           )}
+          {extraLines.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-xs font-black text-[#24551d]">
+                Extra gegevens
+              </summary>
+              <p className="mt-1 whitespace-pre-wrap border border-[#e4ded5] bg-[#faf8f5] px-2 py-1.5 text-xs font-bold leading-snug text-[#6b645b]">
+                {extraLines.join("\n")}
+              </p>
+            </details>
+          )}
         </div>
 
-        <button
-          type="button"
-          disabled={updatingId === order.id}
-          onClick={() => onToggleDone(order)}
-          className={`h-9 shrink-0 px-3 text-sm font-black shadow-sm disabled:opacity-60 ${
-            order.productionDone
-              ? "border border-[#d9d2c9] bg-white text-[#6b645b]"
-              : "bg-[#24551d] text-white"
-          }`}
-        >
-          {updatingId === order.id
-            ? "Opslaan..."
-            : order.productionDone
-              ? "Zet open"
-              : productionMode
-                ? "Afvinken"
-                : "Klaar"}
-        </button>
+        <div className="flex flex-wrap items-start justify-start gap-1.5 lg:justify-end">
+          <button
+            type="button"
+            disabled={updatingId === order.id}
+            onClick={() => onToggleDone(order)}
+            className={`h-8 px-2 text-[0.68rem] font-black shadow-sm disabled:opacity-60 ${
+              order.productionDone
+                ? "border border-[#d9d2c9] bg-white text-[#6b645b]"
+                : "bg-[#24551d] text-white"
+            }`}
+          >
+            {updatingId === order.id
+              ? "..."
+              : order.productionDone
+                ? "Zet open"
+                : productionMode
+                  ? "Afvinken"
+                  : "Klaar"}
+          </button>
+          <button
+            type="button"
+            onClick={() => onEdit(order)}
+            className="h-8 border border-[#d6e5d8] bg-[#f6faf4] px-2 text-[0.68rem] font-black text-[#24551d] shadow-sm"
+          >
+            Wijzig
+          </button>
+          <button
+            type="button"
+            disabled={updatingId === `${order.id}-delete`}
+            onClick={() => onDelete(order)}
+            className="h-8 border border-[#f1b8a8] bg-white px-2 text-[0.68rem] font-black text-[#9a3412] shadow-sm disabled:opacity-60"
+          >
+            {updatingId === `${order.id}-delete` ? "..." : "Verwijder"}
+          </button>
+        </div>
       </div>
     </article>
   );
 }
 
-function WinkelOrderForm({
+function LetterOrderForm({
+  initialOrder,
   onSaved,
-}: Readonly<{ onSaved: (order: ChocolateLetterOrder) => void }>) {
-  const [form, setForm] = useState<LetterFormState>(() => createFormState());
+  onCancel,
+}: Readonly<{
+  initialOrder?: ChocolateLetterOrder | null;
+  onSaved: (order: ChocolateLetterOrder) => void;
+  onCancel: () => void;
+}>) {
+  const [form, setForm] = useState<LetterFormState>(() =>
+    formStateFromOrder(initialOrder)
+  );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setForm(formStateFromOrder(initialOrder));
+  }, [initialOrder]);
 
   function updateLine(id: string, patch: Partial<ChocolateLetterLine>) {
     setForm((current) => ({
@@ -301,25 +423,24 @@ function WinkelOrderForm({
 
     setSaving(true);
     try {
-      const saved = await saveLetterOrder({
+      const payload = {
         ...form,
         customerName,
-        year: yearFromDate(form.pickupDate),
-        status: "besteld",
+        year: form.pickupDate
+          ? yearFromDate(form.pickupDate)
+          : initialOrder?.year || currentYear(),
+        status: (initialOrder?.status ||
+          "besteld") as ChocolateLetterOrder["status"],
         lines: lines.map((line) => ({
           ...line,
           letter: line.letter.trim().toUpperCase(),
           quantity: Math.max(1, Math.round(line.quantity)),
         })),
-      });
+      };
+      const saved = initialOrder?.id
+        ? await updateLetterOrder(initialOrder.id, payload)
+        : await saveLetterOrder(payload);
       onSaved(saved);
-      setForm({
-        ...createFormState(),
-        shop: form.shop,
-        pickupLocation: form.pickupLocation,
-        pickupDate: form.pickupDate,
-      });
-      setMessage("Bestelling opgeslagen en doorgestuurd.");
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -334,7 +455,7 @@ function WinkelOrderForm({
   return (
     <form
       onSubmit={submitOrder}
-      className="space-y-3 border border-[#d7c168] bg-[#fff8d8] p-3 shadow-sm"
+      className="space-y-3"
     >
       <div className="grid gap-2 sm:grid-cols-2">
         <input
@@ -561,14 +682,73 @@ function WinkelOrderForm({
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="h-11 bg-[#ef5737] px-5 text-sm font-black text-white shadow-sm disabled:opacity-60"
-      >
-        {saving ? "Opslaan..." : "Bestelling opslaan"}
-      </button>
+      <div className="flex flex-col gap-2 border-t border-[#e4ded5] pt-3 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="h-10 border border-[#e4ded5] bg-white px-4 text-sm font-black text-[#4d463d]"
+        >
+          Sluiten
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="h-10 bg-[#24551d] px-5 text-sm font-black text-white shadow-sm disabled:opacity-60"
+        >
+          {saving
+            ? "Opslaan..."
+            : initialOrder
+              ? "Wijziging opslaan"
+              : "Bestelling opslaan"}
+        </button>
+      </div>
     </form>
+  );
+}
+
+function LetterOrderDialog({
+  order,
+  onClose,
+  onSaved,
+}: Readonly<{
+  order: ChocolateLetterOrder | null;
+  onClose: () => void;
+  onSaved: (order: ChocolateLetterOrder) => void;
+}>) {
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#1a1815]/45 px-3 py-6 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-6xl border border-[#d6e5d8] bg-[#faf8f5] p-3 shadow-2xl sm:p-4">
+        <div className="mb-3 flex items-start justify-between gap-3 border-b border-[#e4ded5] pb-3">
+          <div>
+            <p className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
+              Chocoladeletters
+            </p>
+            <h2 className="text-xl font-black text-[#1a1815] sm:text-2xl">
+              {order ? "Bestelling wijzigen" : "Bestelling toevoegen"}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center border border-[#e4ded5] bg-white text-xl font-black text-[#1a1815]"
+            aria-label="Sluiten"
+          >
+            ×
+          </button>
+        </div>
+
+        <LetterOrderForm
+          key={order?.id || "new-letter-order"}
+          initialOrder={order}
+          onSaved={onSaved}
+          onCancel={onClose}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -581,6 +761,10 @@ export default function SinterklaasLettersClient({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<ChocolateLetterOrder | null>(
+    null
+  );
 
   async function loadOrders(nextYear = year, nextSearch = search) {
     setLoading(true);
@@ -645,10 +829,54 @@ export default function SinterklaasLettersClient({
     }
   }
 
+  function openNewOrderDialog() {
+    setEditingOrder(null);
+    setFormOpen(true);
+  }
+
+  function openEditOrderDialog(order: ChocolateLetterOrder) {
+    setEditingOrder(order);
+    setFormOpen(true);
+  }
+
+  function closeOrderDialog() {
+    setFormOpen(false);
+    setEditingOrder(null);
+  }
+
+  function handleSavedOrder(order: ChocolateLetterOrder) {
+    setOrders((current) => updateOrderList(current, order));
+    closeOrderDialog();
+  }
+
+  async function deleteOrder(order: ChocolateLetterOrder) {
+    const confirmed = window.confirm(
+      `Chocoladeletter bestelling van ${order.customerName} verwijderen?`
+    );
+    if (!confirmed) return;
+
+    setUpdatingId(`${order.id}-delete`);
+    setError("");
+    try {
+      await deleteLetterOrder(order.id);
+      setOrders((current) => current.filter((item) => item.id !== order.id));
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Chocoladeletter bestelling verwijderen is mislukt."
+      );
+    } finally {
+      setUpdatingId("");
+    }
+  }
+
+  const groupedOrders = groupByMonth(visibleOrders);
+
   return (
     <div className="space-y-4">
       <section className="border border-[#e4ded5] bg-white p-3 shadow-sm">
-        <div className="grid gap-2 sm:grid-cols-[1fr_8rem_7rem]">
+        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem]">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -667,6 +895,19 @@ export default function SinterklaasLettersClient({
           >
             Ververs
           </button>
+          <button
+            type="button"
+            onClick={openNewOrderDialog}
+            className="flex h-10 items-center justify-center gap-2 bg-[#24551d] px-3 text-sm font-black text-white"
+          >
+            <span
+              className="flex h-6 w-6 items-center justify-center bg-white/20 text-lg leading-none"
+              aria-hidden="true"
+            >
+              +
+            </span>
+            Toevoegen
+          </button>
         </div>
       </section>
 
@@ -676,85 +917,76 @@ export default function SinterklaasLettersClient({
         </p>
       )}
 
-      {mode === "winkel" && (
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(22rem,0.72fr)]">
-          <div>
-            <h2 className="mb-2 text-lg font-black text-[#1a1815]">
-              Nieuwe letterbestelling
-            </h2>
-            <WinkelOrderForm
-              onSaved={(order) =>
-                setOrders((current) => updateOrderList(current, order))
-              }
-            />
-          </div>
-
-          <div>
-            <h2 className="mb-2 text-lg font-black text-[#1a1815]">
-              Bestellingen
-            </h2>
-            <div className="grid gap-2">
-              {loading ? (
-                <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-                  Laden...
-                </p>
-              ) : (
-                visibleOrders.map((order) => (
-                  <OrderRow
-                    key={order.id}
-                    order={order}
-                    onToggleDone={toggleProductionDone}
-                    updatingId={updatingId}
-                  />
-                ))
-              )}
-              {!loading && visibleOrders.length < 1 && (
-                <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-                  Geen letterbestellingen gevonden.
-                </p>
-              )}
-            </div>
-          </div>
+      {mode === "productie" && (
+        <section>
+          <h2 className="mb-2 text-lg font-black text-[#1a1815]">
+            Productietotalen
+          </h2>
+          <SummaryStrip orders={visibleOrders} />
         </section>
       )}
 
-      {mode === "productie" && (
-        <section className="space-y-3">
+      <section className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="mb-2 text-lg font-black text-[#1a1815]">
-              Productietotalen
+            <h2 className="text-2xl font-black text-[#1a1815]">
+              {mode === "productie" ? "Productielijst" : "Bestellingen"}
             </h2>
-            <SummaryStrip orders={visibleOrders} />
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#8b8278]">
+              Gesorteerd op ophaaldatum
+            </p>
           </div>
+          <span className="w-fit rounded-full bg-[#f2eee8] px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#6b645b]">
+            {visibleOrders.length} zichtbaar
+          </span>
+        </div>
 
-          <div>
-            <h2 className="mb-2 text-lg font-black text-[#1a1815]">
-              Orders
-            </h2>
-            <div className="grid gap-2">
-              {loading ? (
-                <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-                  Laden...
-                </p>
-              ) : (
-                visibleOrders.map((order) => (
-                  <OrderRow
-                    key={order.id}
-                    order={order}
-                    onToggleDone={toggleProductionDone}
-                    updatingId={updatingId}
-                    productionMode
-                  />
-                ))
-              )}
-              {!loading && visibleOrders.length < 1 && (
-                <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-                  Geen letterbestellingen gevonden.
-                </p>
-              )}
-            </div>
-          </div>
-        </section>
+        <div className="space-y-3">
+          {loading && (
+            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
+              Laden...
+            </p>
+          )}
+          {!loading &&
+            groupedOrders.map(([key, group]) => (
+              <section key={key} className="border border-[#e4ded5] bg-white/65">
+                <div className="flex items-center justify-between bg-[#dcebd8] px-3 py-1.5">
+                  <h3 className="text-sm font-black capitalize text-[#1a1815]">
+                    {monthLabel(key)}
+                  </h3>
+                  <span className="rounded-full bg-white/85 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b]">
+                    {group.length} totaal
+                  </span>
+                </div>
+                <div className="grid gap-1.5 p-2">
+                  {group.map((order) => (
+                    <OrderRow
+                      key={order.id}
+                      order={order}
+                      onToggleDone={toggleProductionDone}
+                      onEdit={openEditOrderDialog}
+                      onDelete={(nextOrder) => void deleteOrder(nextOrder)}
+                      updatingId={updatingId}
+                      productionMode={mode === "productie"}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          {!loading && visibleOrders.length < 1 && (
+            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
+              Geen letterbestellingen gevonden.
+            </p>
+          )}
+        </div>
+      </section>
+
+      {formOpen && (
+        <LetterOrderDialog
+          order={editingOrder}
+          onClose={closeOrderDialog}
+          onSaved={handleSavedOrder}
+        />
       )}
     </div>
   );

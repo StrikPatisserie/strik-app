@@ -256,6 +256,23 @@ export async function updateLetterOrder(
   return normalized;
 }
 
+export async function deleteLetterOrder(id: string) {
+  const url = new URL(ENDPOINTS.letter, window.location.origin);
+  url.searchParams.set("id", id);
+
+  const data = await requestJson<unknown>(
+    url.toString(),
+    { method: "DELETE" },
+    "Chocoladeletter bestelling verwijderen is mislukt."
+  );
+
+  if (isRecord(data) && data.deleted === false) {
+    throw new Error("Chocoladeletter bestelling niet gevonden.");
+  }
+
+  return true;
+}
+
 export async function saveB2BOrder(
   order: Partial<SinterklaasB2BOrder> & {
     customerName: string;
