@@ -10,35 +10,79 @@ const WEBSHOP_IMAGE_CONFIG = {
   QUERY:
     'label:"Afbeeldingen Webshop" newer_than:7d -label:"Ingelezen" -label:"Fout"',
   RECOVERY_QUERY: 'label:"Afbeeldingen Webshop" newer_than:30d',
-  MAX_THREADS: 10,
+  MAX_THREADS: 4,
   RECOVERY_MAX_THREADS: 30,
+  CLEANUP_MAX_THREADS: 25,
   MAX_IMAGE_ATTACHMENTS: 4,
   MAX_IMAGE_ATTACHMENT_BYTES: 1500000,
   IMPORT_VERSION: 'strict-match-v4',
-  SCRIPT_VERSION: 'gmail-archive-v1',
+  SCRIPT_VERSION: 'gmail-quota-v1',
+  MIN_RUN_INTERVAL_MINUTES: 60,
+  CLEANUP_INTERVAL_HOURS: 12,
+  GMAIL_QUOTA_BACKOFF_HOURS: 12,
 };
 
 function importWebshopAfbeeldingen() {
-  const processedLabel = getOrCreateWebshopLabel_(
-    WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL
-  );
-  const errorLabel = getOrCreateWebshopLabel_(WEBSHOP_IMAGE_CONFIG.ERROR_LABEL);
   const props = PropertiesService.getScriptProperties();
-  const threads = GmailApp.search(
-    WEBSHOP_IMAGE_CONFIG.QUERY,
-    0,
-    WEBSHOP_IMAGE_CONFIG.MAX_THREADS
-  );
+  if (isWebshopGmailBackoffActive_(props) || !claimWebshopImportRun_(props)) {
+    return;
+  }
+
+  let threads = [];
+  try {
+    threads = GmailApp.search(
+      WEBSHOP_IMAGE_CONFIG.QUERY,
+      0,
+      WEBSHOP_IMAGE_CONFIG.MAX_THREADS
+    );
+  } catch (error) {
+    if (handleWebshopGmailQuotaError_(props, error)) return;
+    throw error;
+  }
+
+  if (!threads.length) {
+    verplaatsWebshopIngelezenThreads_(props, false);
+    return;
+  }
+
+  let processedLabel;
+  let errorLabel;
+  try {
+    processedLabel = getOrCreateWebshopLabel_(
+      WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL
+    );
+    errorLabel = getOrCreateWebshopLabel_(WEBSHOP_IMAGE_CONFIG.ERROR_LABEL);
+  } catch (error) {
+    if (handleWebshopGmailQuotaError_(props, error)) return;
+    throw error;
+  }
+  let quotaFailed = false;
 
   threads.forEach((thread) => {
+    if (quotaFailed) return;
+
     let imported = false;
     let failed = false;
+    let messages = [];
 
-    thread.getMessages().forEach((message) => {
-      const importId = `webshop-image:${WEBSHOP_IMAGE_CONFIG.IMPORT_VERSION}:${message.getId()}`;
-      if (props.getProperty(importId)) return;
+    try {
+      messages = thread.getMessages();
+    } catch (error) {
+      if (handleWebshopGmailQuotaError_(props, error)) {
+        quotaFailed = true;
+        return;
+      }
+
+      throw error;
+    }
+
+    messages.forEach((message) => {
+      if (quotaFailed) return;
 
       try {
+        const importId = `webshop-image:${WEBSHOP_IMAGE_CONFIG.IMPORT_VERSION}:${message.getId()}`;
+        if (props.getProperty(importId)) return;
+
         const bodyHtml = message.getBody();
         const bodyText = message.getPlainBody();
         const links = uniqueWebshopLinks_([
@@ -76,51 +120,69 @@ function importWebshopAfbeeldingen() {
         props.setProperty(importId, new Date().toISOString());
         imported = true;
       } catch (error) {
+        if (handleWebshopGmailQuotaError_(props, error)) {
+          quotaFailed = true;
+          return;
+        }
+
         console.error(error);
         failed = true;
       }
     });
 
-    if (imported) {
-      thread.addLabel(processedLabel);
-      thread.moveToArchive();
+    if (quotaFailed) return;
+
+    try {
+      if (imported) {
+        thread.addLabel(processedLabel);
+        thread.moveToArchive();
+      }
+      if (failed) thread.addLabel(errorLabel);
+    } catch (error) {
+      if (handleWebshopGmailQuotaError_(props, error)) {
+        quotaFailed = true;
+        return;
+      }
+
+      throw error;
     }
-    if (failed) thread.addLabel(errorLabel);
   });
 
-  verplaatsWebshopIngelezenThreads_();
+  if (!quotaFailed) {
+    verplaatsWebshopIngelezenThreads_(props, false);
+  }
 }
 
 function getOrCreateWebshopLabel_(name) {
   return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
 }
 
-function verplaatsWebshopIngelezenThreads_() {
-  const processedLabel = GmailApp.getUserLabelByName(
-    WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL
-  );
-  if (!processedLabel) return;
+function verplaatsWebshopIngelezenThreads_(props, force) {
+  props = props || PropertiesService.getScriptProperties();
+  if (!force && !shouldRunWebshopCleanup_(props)) return;
 
-  const queries = [
-    `newer_than:45d in:inbox label:"${WEBSHOP_IMAGE_CONFIG.SOURCE_LABEL}" label:"${WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL}"`,
-    `newer_than:45d in:inbox label:"${WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL}" subject:"Bevestiging/factuur van uw bestelling"`,
-  ];
-  const threadByKey = {};
-  const threads = [];
+  let threads = [];
+  try {
+    threads = GmailApp.search(
+      `newer_than:45d in:inbox label:"${WEBSHOP_IMAGE_CONFIG.SOURCE_LABEL}" label:"${WEBSHOP_IMAGE_CONFIG.PROCESSED_LABEL}"`,
+      0,
+      WEBSHOP_IMAGE_CONFIG.CLEANUP_MAX_THREADS
+    );
+  } catch (error) {
+    if (handleWebshopGmailQuotaError_(props, error)) return;
+    throw error;
+  }
 
-  queries.forEach((query) => {
-    GmailApp.search(query, 0, 100).forEach((thread) => {
-      const key = getWebshopThreadKey_(thread);
-      if (threadByKey[key]) return;
-
-      threadByKey[key] = true;
-      threads.push(thread);
+  try {
+    threads.forEach((thread) => {
+      thread.moveToArchive();
     });
-  });
+  } catch (error) {
+    if (handleWebshopGmailQuotaError_(props, error)) return;
+    throw error;
+  }
 
-  threads.forEach((thread) => {
-    thread.moveToArchive();
-  });
+  props.setProperty('webshop-image:last-cleanup-at', new Date().toISOString());
 
   if (threads.length) {
     Logger.log(
@@ -129,13 +191,68 @@ function verplaatsWebshopIngelezenThreads_() {
   }
 }
 
-function getWebshopThreadKey_(thread) {
-  try {
-    return thread.getId();
-  } catch (error) {
-    const messages = thread.getMessages();
-    return messages.length ? messages[0].getId() : Utilities.getUuid();
+function ruimWebshopIngelezenInboxOp() {
+  const props = PropertiesService.getScriptProperties();
+  props.deleteProperty('webshop-image:gmail-backoff-until');
+  verplaatsWebshopIngelezenThreads_(props, true);
+}
+
+function claimWebshopImportRun_(props) {
+  const key = 'webshop-image:last-run-started-at';
+  const lastRunAt = Date.parse(props.getProperty(key) || '');
+  const minIntervalMs = WEBSHOP_IMAGE_CONFIG.MIN_RUN_INTERVAL_MINUTES * 60 * 1000;
+
+  if (Number.isFinite(lastRunAt) && Date.now() - lastRunAt < minIntervalMs) {
+    Logger.log('Webshop afbeeldingen import overgeslagen: recente run.');
+    return false;
   }
+
+  props.setProperty(key, new Date().toISOString());
+  return true;
+}
+
+function shouldRunWebshopCleanup_(props) {
+  const lastCleanupAt = Date.parse(
+    props.getProperty('webshop-image:last-cleanup-at') || ''
+  );
+  const intervalMs = WEBSHOP_IMAGE_CONFIG.CLEANUP_INTERVAL_HOURS * 60 * 60 * 1000;
+
+  return !Number.isFinite(lastCleanupAt) || Date.now() - lastCleanupAt >= intervalMs;
+}
+
+function isWebshopGmailBackoffActive_(props) {
+  const key = 'webshop-image:gmail-backoff-until';
+  const backoffUntil = Date.parse(props.getProperty(key) || '');
+
+  if (!Number.isFinite(backoffUntil)) return false;
+  if (Date.now() >= backoffUntil) {
+    props.deleteProperty(key);
+    return false;
+  }
+
+  Logger.log(
+    `Webshop afbeeldingen import in Gmail-pauze tot ${new Date(backoffUntil).toISOString()}.`
+  );
+  return true;
+}
+
+function handleWebshopGmailQuotaError_(props, error) {
+  const message = String(error && error.message ? error.message : error);
+  if (
+    message.indexOf('Service invoked too many times') < 0 ||
+    message.toLowerCase().indexOf('gmail') < 0
+  ) {
+    return false;
+  }
+
+  const backoffUntil = new Date(
+    Date.now() + WEBSHOP_IMAGE_CONFIG.GMAIL_QUOTA_BACKOFF_HOURS * 60 * 60 * 1000
+  );
+  props.setProperty('webshop-image:gmail-backoff-until', backoffUntil.toISOString());
+  Logger.log(
+    `Webshop afbeeldingen import gepauzeerd tot ${backoffUntil.toISOString()}: ${message}`
+  );
+  return true;
 }
 
 function extractWebshopHtmlLinks_(html) {
