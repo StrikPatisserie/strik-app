@@ -37,30 +37,23 @@ const seasonalIcons: Record<keyof FeatureVisibilitySettings, string> = {
 
 function SeasonalToggle({
   checked,
-  description,
   icon,
   name,
   title,
 }: Readonly<{
   checked: boolean;
-  description: string;
   icon: string;
   name: keyof FeatureVisibilitySettings;
   title: string;
 }>) {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-lg border border-[#ebe5dc] bg-[#faf8f5] p-3">
+    <label className="flex min-h-16 items-center justify-between gap-3 border-b border-[#eee8df] px-3 py-2 last:border-b-0">
       <span className="flex min-w-0 items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[#ecf4ed]">
-          <img src={icon} alt="" className="h-7 w-7 object-contain" />
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#ecf4ed]">
+          <img src={icon} alt="" className="h-6 w-6 object-contain" />
         </span>
-        <span className="min-w-0">
-          <span className="block text-base font-black text-[#1a1815]">
-            {title}
-          </span>
-          <span className="mt-1 block text-sm font-bold leading-snug text-[#6b645b]">
-            {description}
-          </span>
+        <span className="min-w-0 truncate text-base font-black text-[#1a1815]">
+          {title}
         </span>
       </span>
 
@@ -91,18 +84,22 @@ export default function AppSettingsClient({
       <form action={formAction} className="space-y-4">
         <Message state={state} />
 
-        <div className="grid gap-2">
-          {SEASONAL_NAVIGATION_SETTINGS.map((setting) => (
-            <SeasonalToggle
-              key={setting.key}
-              name={setting.key}
-              title={setting.title}
-              description={setting.description}
-              icon={seasonalIcons[setting.key]}
-              checked={featureVisibility[setting.key]}
-            />
-          ))}
-        </div>
+        <details className="overflow-hidden rounded-lg border border-[#ebe5dc] bg-[#faf8f5]">
+          <summary className="cursor-pointer px-3 py-3 text-base font-black text-[#1a1815] marker:text-[#1f4f35]">
+            Seizoens menu&apos;s
+          </summary>
+          <div className="border-t border-[#ebe5dc] bg-white">
+            {SEASONAL_NAVIGATION_SETTINGS.map((setting) => (
+              <SeasonalToggle
+                key={setting.key}
+                name={setting.key}
+                title={setting.title}
+                icon={seasonalIcons[setting.key]}
+                checked={featureVisibility[setting.key]}
+              />
+            ))}
+          </div>
+        </details>
 
         <button
           type="submit"

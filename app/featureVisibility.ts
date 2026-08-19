@@ -15,21 +15,16 @@ export const SEASONAL_NAVIGATION_SETTINGS = [
     key: "vierdaagseNavigation",
     href: "/vierdaagse",
     title: "Vierdaagse menu",
-    description:
-      "Zet de Vierdaagse ingang aan of uit op de startpagina, desktop-sidebar en mobiele navigatie.",
   },
   {
     key: "sinterklaasNavigation",
     href: "/sinterklaas",
     title: "Sinterklaas menu",
-    description:
-      "Zet de Sinterklaas ingang aan of uit op de startpagina, desktop-sidebar en mobiele navigatie.",
   },
 ] as const satisfies readonly {
   key: keyof FeatureVisibilitySettings;
   href: string;
   title: string;
-  description: string;
 }[];
 
 export function normalizeFeatureVisibilitySettings(
