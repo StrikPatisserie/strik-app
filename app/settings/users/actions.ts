@@ -173,80 +173,119 @@ export async function inviteUserAction(
 
 export async function updateUserProfileAction(
   userId: string,
+  _state: UserAdminActionState,
   formData: FormData
-) {
+): Promise<UserAdminActionState> {
   await requireAdminProfile();
   const payload = getProfilePayload(formData);
 
   if (!payload.email) {
-    throw new Error("E-mail is verplicht.");
+    return { message: "E-mail is verplicht." };
   }
 
-  const admin = createAdminClient();
-  const { error } = await admin.auth.admin.updateUserById(userId, {
-    email: payload.email,
-    user_metadata: {
-      full_name: payload.fullName,
-      role: payload.role,
-      store: payload.store,
-      permissions: payload.permissions,
-      active: payload.active,
-      avatar_url: payload.avatarUrl,
-    },
-  });
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      email: payload.email,
+      user_metadata: {
+        full_name: payload.fullName,
+        role: payload.role,
+        store: payload.store,
+        permissions: payload.permissions,
+        active: payload.active,
+        avatar_url: payload.avatarUrl,
+      },
+    });
 
-  if (error) throw new Error(error.message);
+    if (error) throw new Error(error.message);
 
-  await upsertProfile(userId, payload);
+    await upsertProfile(userId, payload);
+  } catch (error) {
+    return {
+      message:
+        error instanceof Error ? error.message : "Gebruiker opslaan is mislukt.",
+    };
+  }
+
   revalidateUserSettings();
+  return { ok: true, message: "Gebruiker opgeslagen." };
 }
 
-export async function setUserActiveAction(userId: string, active: boolean) {
+export async function setUserActiveAction(
+  userId: string,
+  active: boolean,
+  _state: UserAdminActionState,
+  _formData: FormData
+): Promise<UserAdminActionState> {
+  void _state;
+  void _formData;
+
   await requireAdminProfile();
-  const admin = createAdminClient();
 
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("email,full_name,role,store,permissions,avatar_url")
-    .eq("id", userId)
-    .single();
+  try {
+    const admin = createAdminClient();
 
-  if (profileError) throw new Error(profileError.message);
+    const { data: profile, error: profileError } = await admin
+      .from("profiles")
+      .select("email,full_name,role,store,permissions,avatar_url")
+      .eq("id", userId)
+      .single();
 
-  const { error: metadataError } = await admin.auth.admin.updateUserById(userId, {
-    user_metadata: {
-      full_name: profile.full_name,
-      role: profile.role,
-      store: profile.store,
-      permissions: profile.permissions,
-      active,
-      avatar_url: profile.avatar_url,
-    },
-  });
+    if (profileError) throw new Error(profileError.message);
 
-  if (metadataError) throw new Error(metadataError.message);
+    const { error: metadataError } = await admin.auth.admin.updateUserById(
+      userId,
+      {
+        user_metadata: {
+          full_name: profile.full_name,
+          role: profile.role,
+          store: profile.store,
+          permissions: profile.permissions,
+          active,
+          avatar_url: profile.avatar_url,
+        },
+      }
+    );
 
-  const { error } = await admin
-    .from("profiles")
-    .update({ active })
-    .eq("id", userId);
+    if (metadataError) throw new Error(metadataError.message);
 
-  if (error) throw new Error(error.message);
+    const { error } = await admin
+      .from("profiles")
+      .update({ active })
+      .eq("id", userId);
+
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    return {
+      message:
+        error instanceof Error
+          ? error.message
+          : "Status wijzigen is mislukt.",
+    };
+  }
 
   revalidateUserSettings();
+  return {
+    ok: true,
+    message: active ? "Gebruiker geactiveerd." : "Gebruiker gedeactiveerd.",
+  };
 }
 
-export async function sendUserPasswordResetAction(formData: FormData) {
+export async function sendUserPasswordResetAction(
+  _state: UserAdminActionState,
+  formData: FormData
+): Promise<UserAdminActionState> {
   await requireAdminProfile();
   const email = cleanEmail(formData.get("email"));
 
   if (!email) {
-    throw new Error("E-mail is verplicht.");
+    return { message: "E-mail is verplicht." };
   }
 
   const { error } = await sendPasswordResetEmail(email, getInviteRedirectUrl());
 
-  if (error) throw new Error(error.message);
+  if (error) return { message: error.message };
 
   revalidateUserSettings();
+  return { ok: true, message: "Resetmail verstuurd." };
 }
