@@ -1,7 +1,12 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import { useActionState } from "react";
-import type { FeatureVisibilitySettings } from "../../featureVisibility";
+import {
+  SEASONAL_NAVIGATION_SETTINGS,
+  type FeatureVisibilitySettings,
+} from "../../featureVisibility";
+import { strikIcons } from "../../StrikUI";
 import {
   updateFeatureVisibilityAction,
   type AppSettingsActionState,
@@ -25,6 +30,54 @@ function Message({ state }: Readonly<{ state: AppSettingsActionState }>) {
   );
 }
 
+const seasonalIcons: Record<keyof FeatureVisibilitySettings, string> = {
+  vierdaagseNavigation: strikIcons.strikAgenda,
+  sinterklaasNavigation: strikIcons.sinterklaas,
+};
+
+function SeasonalToggle({
+  checked,
+  description,
+  icon,
+  name,
+  title,
+}: Readonly<{
+  checked: boolean;
+  description: string;
+  icon: string;
+  name: keyof FeatureVisibilitySettings;
+  title: string;
+}>) {
+  return (
+    <label className="flex items-center justify-between gap-3 rounded-lg border border-[#ebe5dc] bg-[#faf8f5] p-3">
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-[#ecf4ed]">
+          <img src={icon} alt="" className="h-7 w-7 object-contain" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-base font-black text-[#1a1815]">
+            {title}
+          </span>
+          <span className="mt-1 block text-sm font-bold leading-snug text-[#6b645b]">
+            {description}
+          </span>
+        </span>
+      </span>
+
+      <span className="relative inline-flex h-8 w-14 shrink-0 items-center">
+        <input
+          name={name}
+          type="checkbox"
+          defaultChecked={checked}
+          className="peer sr-only"
+        />
+        <span className="absolute inset-0 rounded-full bg-[#d8d0c5] transition peer-checked:bg-[#1f4f35]" />
+        <span className="absolute left-1 h-6 w-6 rounded-full bg-white shadow-sm transition peer-checked:translate-x-6" />
+      </span>
+    </label>
+  );
+}
+
 export default function AppSettingsClient({
   featureVisibility,
 }: Readonly<{ featureVisibility: FeatureVisibilitySettings }>) {
@@ -34,32 +87,22 @@ export default function AppSettingsClient({
   );
 
   return (
-    <section className="max-w-2xl rounded-lg border border-[#e4ded5] bg-white/92 p-4 shadow-sm">
+    <section className="max-w-3xl rounded-lg border border-[#e4ded5] bg-white/92 p-4 shadow-sm">
       <form action={formAction} className="space-y-4">
         <Message state={state} />
 
-        <label className="flex items-center justify-between gap-4 rounded-lg border border-[#ebe5dc] bg-[#faf8f5] p-3">
-          <span className="min-w-0">
-            <span className="block text-base font-black text-[#1a1815]">
-              Vierdaagse menu
-            </span>
-            <span className="mt-1 block text-sm font-bold leading-snug text-[#6b645b]">
-              Zet de Vierdaagse ingang aan of uit op de startpagina, desktop-sidebar
-              en mobiele navigatie.
-            </span>
-          </span>
-
-          <span className="relative inline-flex h-8 w-14 shrink-0 items-center">
-            <input
-              name="vierdaagseNavigation"
-              type="checkbox"
-              defaultChecked={featureVisibility.vierdaagseNavigation}
-              className="peer sr-only"
+        <div className="grid gap-2">
+          {SEASONAL_NAVIGATION_SETTINGS.map((setting) => (
+            <SeasonalToggle
+              key={setting.key}
+              name={setting.key}
+              title={setting.title}
+              description={setting.description}
+              icon={seasonalIcons[setting.key]}
+              checked={featureVisibility[setting.key]}
             />
-            <span className="absolute inset-0 rounded-full bg-[#d8d0c5] transition peer-checked:bg-[#1f4f35]" />
-            <span className="absolute left-1 h-6 w-6 rounded-full bg-white shadow-sm transition peer-checked:translate-x-6" />
-          </span>
-        </label>
+          ))}
+        </div>
 
         <button
           type="submit"

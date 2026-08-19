@@ -37,5 +37,8 @@ to authenticated
 using ((select private.is_admin()));
 
 insert into public.app_settings (key, value)
-values ('feature_visibility', '{"vierdaagseNavigation": false}'::jsonb)
+values (
+  'feature_visibility',
+  '{"vierdaagseNavigation": false, "sinterklaasNavigation": true}'::jsonb
+)
 on conflict (key) do nothing;

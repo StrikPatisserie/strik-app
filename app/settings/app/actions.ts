@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   FEATURE_VISIBILITY_SETTING_KEY,
+  SEASONAL_NAVIGATION_SETTINGS,
   normalizeFeatureVisibilitySettings,
 } from "../../featureVisibility";
 import { requireAdminProfile } from "../../lib/auth/session";
@@ -18,18 +19,21 @@ export async function updateFeatureVisibilityAction(
   formData: FormData
 ): Promise<AppSettingsActionState> {
   const profile = await requireAdminProfile();
-  const settings = normalizeFeatureVisibilitySettings({
-    vierdaagseNavigation: formData.get("vierdaagseNavigation") === "on",
-  });
+  const settings = normalizeFeatureVisibilitySettings(
+    Object.fromEntries(
+      SEASONAL_NAVIGATION_SETTINGS.map((setting) => [
+        setting.key,
+        formData.get(setting.key) === "on",
+      ])
+    )
+  );
 
   try {
     const supabase = createAdminClient();
     const { error } = await supabase.from("app_settings").upsert(
       {
         key: FEATURE_VISIBILITY_SETTING_KEY,
-        value: {
-          vierdaagseNavigation: settings.vierdaagseNavigation,
-        },
+        value: settings,
         updated_at: new Date().toISOString(),
         updated_by: profile.id,
       },
@@ -49,11 +53,11 @@ export async function updateFeatureVisibilityAction(
   revalidatePath("/", "layout");
   revalidatePath("/settings");
   revalidatePath("/settings/app");
+  revalidatePath("/sinterklaas");
+  revalidatePath("/vierdaagse");
 
   return {
     ok: true,
-    message: settings.vierdaagseNavigation
-      ? "Vierdaagse staat weer in het menu."
-      : "Vierdaagse is uit het menu gehaald.",
+    message: "App-instellingen opgeslagen.",
   };
 }
