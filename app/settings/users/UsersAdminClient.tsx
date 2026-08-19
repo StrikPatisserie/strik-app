@@ -142,6 +142,7 @@ function PermissionGrid({
 
 const basePermissionOptions = PERMISSION_OPTIONS.filter(
   (permission) =>
+    !["winkel.view", "ijs.view", "bakkerij.view"].includes(permission.id) &&
     !permission.id.startsWith("stores.") &&
     !BAKERY_DEPARTMENT_PERMISSION_OPTIONS.some(
       (option) => option.id === permission.id
@@ -211,7 +212,7 @@ function UserFields({ profile }: Readonly<{ profile?: UserProfile }>) {
           Rechten
         </p>
         <PermissionGrid
-          title="Algemeen"
+          title="Extra toegang"
           options={basePermissionOptions}
           permissions={profile?.permissions}
         />

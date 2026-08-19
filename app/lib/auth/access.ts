@@ -3,9 +3,7 @@ import type { UserProfile } from "../supabase/types";
 export type SignupDepartment =
   | "winkel"
   | "ijs"
-  | "bakkerij-patisserie"
-  | "bakkerij-ijs-chocolade"
-  | "logistiek";
+  | "productie";
 
 export const WINKEL_STORE_IDS = [
   "ziekerstraat",
@@ -71,28 +69,11 @@ export const SIGNUP_DEPARTMENTS: {
     store: "ijs",
   },
   {
-    id: "bakkerij-patisserie",
-    label: "Bakkerij - patisserie",
-    description: "Patisserie, recepten, planning, HACCP en schoonmaak.",
+    id: "productie",
+    label: "Productie",
+    description: "Bakkerij, ijs & chocolade, recepten, planning en HACCP.",
     role: "bakkerij",
     store: "bakkerij",
-    permissions: { "bakkerij.patisserie": true },
-  },
-  {
-    id: "bakkerij-ijs-chocolade",
-    label: "Bakkerij - ijs & chocolade",
-    description: "IJs & chocolade, recepten, bestellen en HACCP.",
-    role: "bakkerij",
-    store: "ijs-chocolade",
-    permissions: { "bakkerij.ijs_chocolade": true },
-  },
-  {
-    id: "logistiek",
-    label: "Logistiek",
-    description: "Ochtendregie, routes, pakbonnen en transport.",
-    role: "logistiek",
-    store: "logistiek",
-    permissions: { "bakkerij.logistiek": true },
   },
 ];
 
