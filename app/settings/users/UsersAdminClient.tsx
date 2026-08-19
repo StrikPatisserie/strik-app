@@ -24,6 +24,7 @@ import {
 import {
   BAKERY_DEPARTMENT_PERMISSION_OPTIONS,
   LOGISTICS_PERMISSION_OPTIONS,
+  SEASONAL_MENU_PERMISSION_OPTIONS,
   VIERDAAGSE_PERMISSION_OPTIONS,
   WINKEL_STORE_PERMISSION_OPTIONS,
 } from "../../lib/auth/access";
@@ -145,6 +146,9 @@ const basePermissionOptions = PERMISSION_OPTIONS.filter(
     !BAKERY_DEPARTMENT_PERMISSION_OPTIONS.some(
       (option) => option.id === permission.id
     ) &&
+    !SEASONAL_MENU_PERMISSION_OPTIONS.some(
+      (option) => option.id === permission.id
+    ) &&
     !VIERDAAGSE_PERMISSION_OPTIONS.some(
       (option) => option.id === permission.id
     ) &&
@@ -212,15 +216,14 @@ function UserFields({ profile }: Readonly<{ profile?: UserProfile }>) {
           permissions={profile?.permissions}
         />
         <PermissionGrid
-          title="Winkels zichtbaar"
-          description="Geen vinkjes betekent: winkel-account ziet standaard alle winkels. Zet je hier vinkjes, dan ziet diegene alleen die winkels."
-          options={WINKEL_STORE_PERMISSION_OPTIONS}
+          title="Seizoens menu"
+          options={SEASONAL_MENU_PERMISSION_OPTIONS}
           permissions={profile?.permissions}
         />
         <PermissionGrid
-          title="Vierdaagse"
-          description="Vierdaagse alles geeft toegang tot alle Vierdaagse kopjes. Anders kun je de kraam, kassa en keuken/bediening los aanvinken."
-          options={VIERDAAGSE_PERMISSION_OPTIONS}
+          title="Winkels zichtbaar"
+          description="Geen vinkjes betekent: winkel-account ziet standaard alle winkels. Zet je hier vinkjes, dan ziet diegene alleen die winkels."
+          options={WINKEL_STORE_PERMISSION_OPTIONS}
           permissions={profile?.permissions}
         />
         <PermissionGrid
