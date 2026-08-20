@@ -44,6 +44,8 @@ type OrderLine = {
   source: "map" | "frequent" | "custom";
 };
 
+type DeliveryOption = "standard" | "urgent";
+
 type Bounds = {
   x: number;
   y: number;
@@ -54,6 +56,8 @@ type Bounds = {
 const MAP_IMAGE =
   "/magazijn/verpakking/strik-magazijn-plattegrond-infographic.svg";
 const HAVELAAR_EMAIL = "verkoop@havelaar-verpakkingen.nl";
+const HAVELAAR_FREE_DELIVERY_THRESHOLD = 450;
+const HAVELAAR_PRODUCT_PRICES: Record<string, number> = {};
 const ZOOM_OPTIONS = [1, 1.25, 1.5, 1.85];
 const STACK_X_TOLERANCE = 4;
 const STACK_WIDTH_TOLERANCE = 8;
@@ -412,16 +416,54 @@ function createCustomLineId(name: string, articleNumber: string) {
   return `custom-${compactCode(articleNumber || name) || normalizeText(name).replace(/[^a-z0-9]+/g, "-")}`;
 }
 
-function getIsoWeekNumber(date = new Date()) {
-  const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNumber = target.getUTCDay() || 7;
-  target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
-  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
-
-  return Math.ceil(((target.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+function formatEuro(value: number) {
+  return new Intl.NumberFormat("nl-NL", {
+    style: "currency",
+    currency: "EUR",
+  }).format(value);
 }
 
-function createMailBody(orderLines: OrderLine[]) {
+function normalizeArticleNumber(value: string) {
+  return compactCode(value);
+}
+
+function getOrderLineUnitPrice(line: OrderLine) {
+  const articleNumber = normalizeArticleNumber(line.articleNumber);
+  if (!articleNumber) return undefined;
+
+  return HAVELAAR_PRODUCT_PRICES[articleNumber];
+}
+
+function getOrderPriceSummary(orderLines: OrderLine[]) {
+  if (!orderLines.length) return { total: 0, hasUnknownPrices: false };
+
+  return orderLines.reduce(
+    (summary, line) => {
+      const unitPrice = getOrderLineUnitPrice(line);
+      if (unitPrice === undefined) {
+        return { ...summary, hasUnknownPrices: true };
+      }
+
+      return {
+        ...summary,
+        total: summary.total + unitPrice * line.quantity,
+      };
+    },
+    { total: 0, hasUnknownPrices: false }
+  );
+}
+
+function getDeliveryLabel(deliveryOption: DeliveryOption) {
+  if (deliveryOption === "urgent") return "Spoed bestelling (z.s.m. geleverd)";
+
+  return "Standaard levering eerstvolgende dinsdag";
+}
+
+function createMailBody(
+  orderLines: OrderLine[],
+  deliveryOption: DeliveryOption,
+  hasSmallOrderDeliveryCost: boolean
+) {
   const lines = orderLines.map((line) => {
     const articleNumber = line.articleNumber.trim();
     const article = [line.name.trim(), articleNumber].filter(Boolean).join(" ");
@@ -434,18 +476,32 @@ function createMailBody(orderLines: OrderLine[]) {
     "",
     "Graag bestellen wij via deze weg voor onze locatie Bakkerij Malden het volgende:",
     "",
+    `Levering: ${getDeliveryLabel(deliveryOption)}`,
+    hasSmallOrderDeliveryCost
+      ? "Inclusief bezorgkosten vanwege kleine order."
+      : "",
+    "",
     ...lines,
     "",
     "Hopelijk is dit in goede orde ontvangen.",
     "Met vriendelijke groeten,",
     "Team Strik Patisserie",
-  ].join("\n");
+  ]
+    .filter((line, index, list) => line || list[index - 1] !== "")
+    .join("\n");
 }
 
-function createMailHref(orderLines: OrderLine[]) {
-  const weekNumber = getIsoWeekNumber();
-  const subject = `Bestelling Bakkerij Malden - week ${weekNumber}`;
-  const body = createMailBody(orderLines);
+function createMailHref(
+  orderLines: OrderLine[],
+  deliveryOption: DeliveryOption,
+  hasSmallOrderDeliveryCost: boolean
+) {
+  const subject = "Bestelling Bakkerij Malden";
+  const body = createMailBody(
+    orderLines,
+    deliveryOption,
+    hasSmallOrderDeliveryCost
+  );
 
   return `mailto:${HAVELAAR_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
@@ -517,6 +573,8 @@ export default function MagazijnVerpakkingClient({
   const [zoom, setZoom] = useState(1);
   const [quantity, setQuantity] = useState(1);
   const [orderLines, setOrderLines] = useState<OrderLine[]>([]);
+  const [deliveryOption, setDeliveryOption] =
+    useState<DeliveryOption>("standard");
   const [customName, setCustomName] = useState("");
   const [customArticleNumber, setCustomArticleNumber] = useState("");
   const [customQuantity, setCustomQuantity] = useState(1);
@@ -561,7 +619,17 @@ export default function MagazijnVerpakkingClient({
     ? Math.max(0, pendingGroup.max - (pendingLine?.quantity || 0))
     : 0;
   const totalQuantity = orderLines.reduce((sum, line) => sum + line.quantity, 0);
-  const mailHref = createMailHref(orderLines);
+  const priceSummary = getOrderPriceSummary(orderLines);
+  const canCheckOrderTotal =
+    orderLines.length > 0 && !priceSummary.hasUnknownPrices;
+  const hasSmallOrderDeliveryCost =
+    canCheckOrderTotal &&
+    priceSummary.total < HAVELAAR_FREE_DELIVERY_THRESHOLD;
+  const mailHref = createMailHref(
+    orderLines,
+    deliveryOption,
+    hasSmallOrderDeliveryCost
+  );
   const zoomedMapWidth = Math.round(1040 * zoom);
 
   function selectGroup(group: ProductGroup) {
@@ -865,6 +933,37 @@ export default function MagazijnVerpakkingClient({
             </div>
 
             <div className="space-y-2 p-3">
+              <div className="grid grid-cols-2 gap-1 border border-[#d8d3ca] bg-[#f8f6f3] p-1">
+                {[
+                  {
+                    value: "standard",
+                    label: "Dinsdag",
+                    title: "Standaard levering eerstvolgende dinsdag",
+                  },
+                  {
+                    value: "urgent",
+                    label: "Spoed",
+                    title: "Spoed bestelling (z.s.m. geleverd)",
+                  },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() =>
+                      setDeliveryOption(option.value as DeliveryOption)
+                    }
+                    className={`h-9 px-2 text-xs font-black ${
+                      deliveryOption === option.value
+                        ? "bg-[#1f4f35] text-white"
+                        : "bg-white text-[#4f4942] hover:bg-[#f2eee8]"
+                    }`}
+                    title={option.title}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
               {orderLines.length === 0 ? (
                 <p className="border border-dashed border-[#d8d3ca] bg-[#faf8f5] p-3 text-sm font-bold text-[#7b7268]">
                   Nog niets toegevoegd.
@@ -936,6 +1035,26 @@ export default function MagazijnVerpakkingClient({
                 ))
               )}
 
+              {canCheckOrderTotal ? (
+                <div
+                  className={`border p-2 text-sm font-black ${
+                    hasSmallOrderDeliveryCost
+                      ? "border-[#e36f4b] bg-[#fff0ea] text-[#a5371e]"
+                      : "border-[#b8d7bf] bg-[#f2faf4] text-[#1f4f35]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Ordertotaal</span>
+                    <span>{formatEuro(priceSummary.total)}</span>
+                  </div>
+                  {hasSmallOrderDeliveryCost ? (
+                    <p className="mt-1 text-xs font-bold">
+                      Let op: bestelling is onder {formatEuro(HAVELAAR_FREE_DELIVERY_THRESHOLD)}.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-[1fr_auto] gap-2 pt-1">
                 <button
                   type="button"
@@ -949,7 +1068,19 @@ export default function MagazijnVerpakkingClient({
                   href={orderLines.length ? mailHref : undefined}
                   aria-disabled={!orderLines.length}
                   onClick={(event) => {
-                    if (!orderLines.length) event.preventDefault();
+                    if (!orderLines.length) {
+                      event.preventDefault();
+                      return;
+                    }
+
+                    if (
+                      hasSmallOrderDeliveryCost &&
+                      !window.confirm(
+                        `Let op: bestelling is onder ${formatEuro(HAVELAAR_FREE_DELIVERY_THRESHOLD)}. Toch doorgaan?`
+                      )
+                    ) {
+                      event.preventDefault();
+                    }
                   }}
                   className={`flex h-10 w-12 items-center justify-center border text-sm font-black ${
                     orderLines.length
