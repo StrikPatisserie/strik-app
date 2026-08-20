@@ -8809,7 +8809,7 @@ export default function BakkerijLogistiekDashboard() {
     <StrikShell wide>
       <StrikPageHeader
         title="Dagstart"
-        icon={strikIcons.logistiek}
+        icon={strikIcons.logistiekDagstart}
         kicker="Bakkerij logistiek"
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />

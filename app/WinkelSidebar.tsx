@@ -57,9 +57,13 @@ const logistiekNavItems = [
   {
     href: "/bakkerij/logistiek/dagstart",
     label: "Dagstart",
+    icon: strikIcons.logistiekDagstart,
+  },
+  {
+    href: "/bakkerij/logistiek/havelaar",
+    label: "Havelaar",
     icon: strikIcons.logistiek,
   },
-  { href: "/bakkerij/logistiek/havelaar", label: "Havelaar", icon: strikIcons.data },
 ];
 
 function isActivePath(pathname: string, href: string) {

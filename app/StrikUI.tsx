@@ -16,6 +16,7 @@ export const strikIcons = {
   ijsChocolade: "/APP_icons_ijsenchoco.svg",
   info: "/icons_strik_info.svg",
   logistiek: "/aoo-logistiek.svg",
+  logistiekDagstart: "/APP_icons_strikdagstart.svg",
   management: "/icons_strik_management.svg",
   news: "/icons_strik_news.svg",
   newsManagement: "/icons_strik_add%20news%20management.svg",

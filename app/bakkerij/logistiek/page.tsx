@@ -17,12 +17,12 @@ export default function BakkerijLogistiekPage() {
         <StrikMenuLink
           href="/bakkerij/logistiek/dagstart"
           title="Dagstart"
-          icon={strikIcons.logistiek}
+          icon={strikIcons.logistiekDagstart}
         />
         <StrikMenuLink
           href="/bakkerij/logistiek/havelaar"
           title="Havelaar"
-          icon={strikIcons.data}
+          icon={strikIcons.logistiek}
         />
       </section>
     </StrikShell>
