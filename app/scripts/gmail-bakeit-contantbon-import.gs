@@ -25,14 +25,14 @@ const BAKEIT_CONTANTBON_CONFIG = {
   MAX_PDF_ATTACHMENT_BYTES: 8000000,
   MIN_MESSAGE_AGE_MS: 60 * 1000,
   SPLIT_PART_WINDOW_MS: 4 * 60 * 60 * 1000,
-  PROGNOSE_MAIL_START_HOUR: 8,
-  PROGNOSE_MAIL_START_MINUTE: 20,
+  PROGNOSE_MAIL_START_HOUR: 6,
+  PROGNOSE_MAIL_START_MINUTE: 45,
   DEFINITIVE_MAIL_START_HOUR: 20,
   DEFINITIVE_MAIL_START_MINUTE: 15,
   TRIGGER_RUNS: [
-    { HOUR: 8, MINUTE: 5 },
-    { HOUR: 8, MINUTE: 20 },
-    { HOUR: 8, MINUTE: 35 },
+    { HOUR: 6, MINUTE: 45 },
+    { HOUR: 7, MINUTE: 0 },
+    { HOUR: 7, MINUTE: 15 },
     { HOUR: 20, MINUTE: 5 },
     { HOUR: 20, MINUTE: 20 },
     { HOUR: 20, MINUTE: 35 },
@@ -748,7 +748,7 @@ function maakBakeItImportTriggerAan() {
   });
 
   logBakeIt_(
-    `Bake-it importtriggers aangemaakt: ${BAKEIT_CONTANTBON_CONFIG.TRIGGER_RUNS.length}x per dag rond 08:00 en 20:00.`
+    `Bake-it importtriggers aangemaakt: ${BAKEIT_CONTANTBON_CONFIG.TRIGGER_RUNS.length}x per dag rond 06:45 en 20:00.`
   );
 }
 

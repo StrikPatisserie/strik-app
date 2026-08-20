@@ -77,7 +77,7 @@ const deliveryAddressActionPattern =
 const dutchPostalCodePattern = /\b\d{4}\s?[A-Z]{2}\b/i;
 const streetAddressWordPattern =
   /\b(?:straat|str\.?|steeg|weg|laan|plein|hof|pad|dijk|singel|kade|markt|boulevard|plantsoen|baan|wal|gracht|hofje|park|allee)\b/i;
-const prognoseMailStartMinutes = 8 * 60 + 20;
+const prognoseMailStartMinutes = 6 * 60 + 45;
 const definitiveMailStartMinutes = 20 * 60 + 15;
 const internalLinePatterns = [
   /kostenpl/i,

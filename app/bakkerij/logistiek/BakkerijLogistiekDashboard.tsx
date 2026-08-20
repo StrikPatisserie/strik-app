@@ -1106,7 +1106,7 @@ function sourceLabelFor(status: BatchStatus) {
 }
 
 function batchLabelFor(status: BatchStatus) {
-  if (status === "prognose") return "Prognose 08:20";
+  if (status === "prognose") return "Prognose 06:45";
   if (status === "definitief") return "Definitief 20:00";
   if (status === "handmatig") return "Upload";
   if (status === "historie") return "Archief";
