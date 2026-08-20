@@ -77,7 +77,7 @@ type CashAmountMatch = {
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
-const DAY_IMPORT_PARSER_VERSION = "cash-vouchers-v4";
+const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v1";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -490,33 +490,7 @@ function extractCashReportSections(text: string) {
 }
 
 function extractCashSectionPaymentTotal(sectionText: string) {
-  const lines = sectionText
-    .split(/\n/)
-    .map((line) => cleanText(line, 2000))
-    .filter(Boolean);
-  const startIndex = lines.findIndex((line) => /\bBetaalvormen\b/i.test(line));
-  if (startIndex < 0) return undefined;
-
-  const endOffset = lines
-    .slice(startIndex + 1)
-    .findIndex((line) =>
-      /\b(?:Sluiten\s+kassa\s+locatie|Start\s+Telling|Pagina)\b/i.test(line)
-    );
-  const endIndex =
-    endOffset >= 0
-      ? startIndex + 1 + endOffset
-      : Math.min(lines.length, startIndex + 40);
-  const totals = lines.slice(startIndex, endIndex).flatMap((line) => {
-    if (!/\bTotaal\s*:/i.test(line)) return [];
-
-    const amounts = extractSignedAmountMatches(line).filter(
-      (match) => match.amount >= 0 && match.amount <= 100000
-    );
-
-    return amounts.length ? [amounts[amounts.length - 1].amount] : [];
-  });
-
-  return totals[totals.length - 1];
+  return extractPaymentFormAmount(sectionText, "Totaal");
 }
 
 function extractShopAmountsFromCashSections(text: string): ShopAmountMatch[] {
@@ -566,12 +540,16 @@ function extractFirstSignedAmount(pattern: RegExp, text: string) {
 }
 
 function extractVoucherPaymentAmount(text: string) {
+  return extractPaymentFormAmount(text, voucherPaymentLabelPattern);
+}
+
+function extractPaymentFormAmount(text: string, labelPattern: string) {
   return firstNumber(
-    extractPaymentFormAmountNearLabel(text, voucherPaymentLabelPattern),
-    extractPaymentFormAmountByTableOrder(text, voucherPaymentLabelPattern),
+    extractPaymentFormAmountNearLabel(text, labelPattern),
+    extractPaymentFormAmountByTableOrder(text, labelPattern),
     extractFirstSignedAmount(
       new RegExp(
-        `\\b${voucherPaymentLabelPattern}\\b[^\\n\\d-]*(?:€|\\bEUR\\b)?\\s*([-\\d.,]+)`,
+        `\\b${labelPattern}\\b[^\\n\\d-]*(?:€|\\bEUR\\b)?\\s*([-\\d.,]+)`,
         "i"
       ),
       text
@@ -608,9 +586,13 @@ function extractPaymentFormAmountNearLabel(text: string, labelPattern: string) {
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
-    if (!labelRegex.test(line)) continue;
+    const labelMatch = line.match(labelRegex);
+    if (!labelMatch) continue;
 
-    const sameLineAmounts = usablePaymentAmounts(line);
+    const labelEndIndex = (labelMatch.index || 0) + labelMatch[0].length;
+    const sameLineAmounts = usablePaymentAmounts(line).filter(
+      (match) => match.index >= labelEndIndex
+    );
     if (sameLineAmounts.length) return sameLineAmounts[0].amount;
 
     const windowLines = [line];
@@ -1381,6 +1363,29 @@ function cashRecordsReceiptDetails(cashRecords: RevenueCashRecord[]) {
   });
 }
 
+function cashRecordsTemplateDetails(
+  cashRecords: RevenueCashRecord[],
+  shopAmounts: ShopAmountMatch[]
+) {
+  return cashRecords.map((record) => {
+    const dayAmount = shopAmounts.find((item) => item.shop === record.shop);
+
+    return {
+      shop: record.shop,
+      dailyRevenue: dayAmount?.amount,
+      startCash: record.startCash,
+      cashRevenue: record.cashRevenue,
+      cashOut: record.cashOut,
+      receipts: record.receipts,
+      countedCash: record.countedCash,
+      expectedCash: record.expectedCash,
+      difference: record.difference,
+      denominationTotal: record.denominationTotal,
+      kind: record.cashImportKind === "ice" ? "ice" : "patisserie",
+    };
+  });
+}
+
 function isPdfAttachment(attachment: PdfAttachmentInput) {
   const fileName = cleanText(attachment.fileName, 240).toLowerCase();
   const contentType = cleanText(attachment.contentType, 120).toLowerCase();
@@ -1548,6 +1553,7 @@ export async function POST(request: Request) {
         cashRecords,
         receiptTotal: cashRecordsReceiptTotal(cashRecords),
         receiptDetails: cashRecordsReceiptDetails(cashRecords),
+        cashTemplateDetails: cashRecordsTemplateDetails(cashRecords, shopAmounts),
         matches: shopAmounts,
         warnings,
       },

@@ -26,7 +26,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v8',
+  SCRIPT_VERSION: 'gmail-archive-v9',
 };
 
 function importDagomzet() {
@@ -372,6 +372,22 @@ function logDagomzetImportResult_(responseText) {
           })
           .filter(Boolean)
       : [];
+    const cashTemplateDetails = Array.isArray(data.cashTemplateDetails)
+      ? data.cashTemplateDetails
+          .map((detail) => {
+            const shop = String(detail.shop || '').trim();
+            if (!shop) return '';
+
+            return [
+              shop,
+              `omzet ${formatDagomzetEuro_(detail.dailyRevenue)}`,
+              `kas ${formatDagomzetEuro_(detail.cashRevenue)}`,
+              `bonnen ${formatDagomzetEuro_(detail.receipts)}`,
+              `geteld ${formatDagomzetEuro_(detail.countedCash)}`,
+            ].join(' ');
+          })
+          .filter(Boolean)
+      : [];
     const summary = [
       `parser: ${data.parserVersion || 'onbekend'}`,
       `datum: ${data.date || '?'}`,
@@ -379,6 +395,9 @@ function logDagomzetImportResult_(responseText) {
       `kasregels: ${cashRecords.length}`,
       `bonnen: ${formatDagomzetEuro_(receiptTotal)}`,
       receiptDetails.length ? `bonnenregels: ${receiptDetails.join(', ')}` : '',
+      cashTemplateDetails.length
+        ? `template: ${cashTemplateDetails.join(' / ')}`
+        : '',
     ]
       .filter(Boolean)
       .join(' | ');
