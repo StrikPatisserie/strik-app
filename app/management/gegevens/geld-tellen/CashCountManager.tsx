@@ -270,6 +270,32 @@ function hasPatisserieCashRecord(
   return Boolean(record && record.cashImportKind !== "ice");
 }
 
+function hasIceCashRecord(
+  record: RevenueCashRecord | undefined
+): record is RevenueCashRecord {
+  return Boolean(
+    record &&
+      (record.cashImportKind === "ice" ||
+        record.iceCash !== undefined ||
+        record.iceStartCash !== undefined ||
+        record.iceCountedCash !== undefined ||
+        record.iceCashRevenue !== undefined ||
+        record.iceExpectedCash !== undefined)
+  );
+}
+
+function iceExpectedCash(record: RevenueCashRecord | undefined) {
+  if (!record) return 0;
+
+  return record.iceExpectedCash ?? record.iceCash ?? record.iceCashRevenue ?? 0;
+}
+
+function iceCountedCash(record: RevenueCashRecord | undefined) {
+  if (!record) return undefined;
+
+  return record.iceCountedCash ?? record.iceCash ?? record.iceExpectedCash;
+}
+
 function checkedCashNoteCount(record: RevenueCashRecord, key: CashDenominationKey) {
   return Math.max(
     0,
@@ -490,6 +516,7 @@ export default function CashCountManager() {
           shop
         ).sort((first, second) => first.date.localeCompare(second.date));
         const patisserieRecords = shopRecords.filter(hasPatisserieCashRecord);
+        const iceRecords = shopRecords.filter(hasIceCashRecord);
         const expectedDates = selectedWeekDates.filter(
           (date) => {
             const record = findCashRecord(shopRecords, date, shop);
@@ -533,6 +560,10 @@ export default function CashCountManager() {
           (total, record) => total + safeDifference(record),
           0
         );
+        const iceCash = iceRecords.reduce(
+          (total, record) => total + iceExpectedCash(record),
+          0
+        );
         const deposit = existingDepositFor(
           cashDeposits,
           selectedWeek.year,
@@ -550,6 +581,8 @@ export default function CashCountManager() {
           includedExpectedSafeCash,
           includedCheckedSafeCash,
           difference,
+          iceCash,
+          iceCount: iceRecords.length,
           checkedCount: checkedRecords.length,
           expectedCount: expectedDates.length,
           missingCount: expectedDates.filter(
@@ -577,6 +610,7 @@ export default function CashCountManager() {
         return {
           date,
           patisserieRecord: hasPatisserieCashRecord(record) ? record : undefined,
+          iceRecord: hasIceCashRecord(record) ? record : undefined,
           isExpected: isCashExpectedForShopDate(selectedShop, date),
         };
       }),
@@ -586,6 +620,7 @@ export default function CashCountManager() {
     selectedShopDays.find((day) => day.date === selectedDate) ||
     selectedShopDays[0];
   const selectedPatisserieCashRecord = selectedShopDay?.patisserieRecord;
+  const selectedIceCashRecord = selectedShopDay?.iceRecord;
   const selectedCashRecord = selectedPatisserieCashRecord;
   const selectedCashWarning = cashWarning(selectedCashRecord);
   const selectedSafeDraftKey = selectedCashRecord
@@ -1175,6 +1210,15 @@ export default function CashCountManager() {
                   {row.checkedCount}/{row.expectedCount} compleet ·{" "}
                   {formatMoney(row.includedCheckedSafeCash)}
                 </span>
+                {row.iceCount > 0 && (
+                  <span
+                    className={`mt-0.5 block text-[0.62rem] font-black uppercase tracking-normal ${
+                      isSelected ? "text-white/70" : "text-[#1f4f35]"
+                    }`}
+                  >
+                    IJs · {formatMoney(row.iceCash)}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1208,7 +1252,7 @@ export default function CashCountManager() {
                 Week {selectedWeek.week} · {weekRangeLabel(selectedWeek.year, selectedWeek.week)}
               </p>
             </div>
-            <div className="grid min-w-[18rem] grid-cols-3 rounded-md bg-[#f8f6f3] text-center">
+            <div className="grid min-w-[18rem] grid-cols-2 rounded-md bg-[#f8f6f3] text-center sm:grid-cols-4">
               <StatBox
                 label="Compleet"
                 value={`${selectedShopRow.checkedCount}/${selectedShopRow.expectedCount}`}
@@ -1216,6 +1260,14 @@ export default function CashCountManager() {
               <StatBox
                 label="Weektotaal"
                 value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
+              />
+              <StatBox
+                label="IJs"
+                value={
+                  selectedShopRow.iceCount > 0
+                    ? formatMoney(selectedShopRow.iceCash)
+                    : "-"
+                }
               />
               <StatBox
                 label="Ontbreekt"
@@ -1226,7 +1278,7 @@ export default function CashCountManager() {
           </div>
 
           <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-7">
-            {selectedShopDays.map(({ date, isExpected, patisserieRecord }) => {
+            {selectedShopDays.map(({ date, iceRecord, isExpected, patisserieRecord }) => {
               const isActive = date === selectedDate;
               const dayRecord = patisserieRecord;
               const warning = cashWarning(dayRecord);
@@ -1256,7 +1308,7 @@ export default function CashCountManager() {
                   key={date}
                   type="button"
                   onClick={() => setSelectedDate(date)}
-                  className={`min-h-[4.35rem] rounded-md border px-2 py-1.5 text-left transition ${tileClass}`}
+                  className={`min-h-[5rem] rounded-md border px-2 py-1.5 text-left transition ${tileClass}`}
                 >
                   <span
                     className={`block text-[0.55rem] font-black uppercase tracking-normal ${
@@ -1286,6 +1338,15 @@ export default function CashCountManager() {
                         ? "geen dienst"
                         : "-"}
                   </span>
+                  {iceRecord && (
+                    <span
+                      className={`mt-0.5 block truncate text-[0.68rem] font-black ${
+                        isActive ? "text-white/88" : "text-[#1f4f35]"
+                      }`}
+                    >
+                      IJs {formatMoney(iceExpectedCash(iceRecord))}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -1503,6 +1564,10 @@ export default function CashCountManager() {
                 </div>
               </article>
             )}
+
+            {selectedIceCashRecord && (
+              <IceCashSummary record={selectedIceCashRecord} />
+            )}
           </div>
         </section>
       )}
@@ -1594,6 +1659,72 @@ export default function CashCountManager() {
         </section>
       )}
     </div>
+  );
+}
+
+function IceCashSummary({
+  record,
+}: Readonly<{
+  record: RevenueCashRecord;
+}>) {
+  const expectedCash = iceExpectedCash(record);
+  const countedCash = iceCountedCash(record);
+  const differenceTone =
+    record.iceDifference !== undefined && Math.abs(record.iceDifference) > 0.05
+      ? "warn"
+      : "normal";
+
+  return (
+    <article className="mt-2 rounded-md border border-[#c8ddd2] bg-[#f6fbf5] px-3 py-2">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#1f4f35]">
+            IJstelling
+          </p>
+          <h3 className="text-sm font-black leading-tight text-[#1a1815]">
+            {dayName(record.date)} · {record.shop}
+          </h3>
+          <p className="mt-0.5 text-[0.62rem] font-bold text-[#6b645b]">
+            {record.iceCountedBy || record.iceClosedAt || "via dagrapport"}
+          </p>
+        </div>
+
+        <div className="grid flex-1 gap-x-4 gap-y-2 sm:min-w-[34rem] sm:grid-cols-3 xl:grid-cols-6">
+          <AmountCell
+            label="Start"
+            value={formatOptionalMoney(record.iceStartCash)}
+          />
+          <AmountCell
+            label="Geteld"
+            value={formatOptionalMoney(countedCash)}
+          />
+          <AmountCell
+            label="Kas-uit"
+            value={formatOptionalMoney(record.iceCashOut)}
+            tone={
+              record.iceCashOut !== undefined && Math.abs(record.iceCashOut) > 0.01
+                ? "warn"
+                : "normal"
+            }
+          />
+          <AmountCell
+            label="Bonnen"
+            value={formatOptionalMoney(record.iceReceipts)}
+            tone={
+              record.iceReceipts !== undefined && Math.abs(record.iceReceipts) > 0.01
+                ? "warn"
+                : "normal"
+            }
+          />
+          <AmountCell label="Naar kluis" value={formatMoney(expectedCash)} />
+          <AmountCell
+            label="Kasverschil"
+            value={formatOptionalMoney(record.iceDifference)}
+            tone={differenceTone}
+          />
+        </div>
+      </div>
+    </article>
   );
 }
 
