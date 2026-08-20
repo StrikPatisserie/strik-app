@@ -182,7 +182,7 @@ export default function ArendPrintPage() {
         </p>
         <button
           type="button"
-          onClick={() => window.location.assign("/bakkerij/logistiek")}
+          onClick={() => window.location.assign("/bakkerij/logistiek/dagstart")}
           className="mt-5 min-h-10 border border-[#1a1815] bg-[#1a1815] px-4 text-sm font-black uppercase tracking-normal text-white"
         >
           Terug
@@ -294,7 +294,7 @@ export default function ArendPrintPage() {
           </span>
           <button
             type="button"
-            onClick={() => window.location.assign("/bakkerij/logistiek")}
+            onClick={() => window.location.assign("/bakkerij/logistiek/dagstart")}
             className="min-h-9 border border-[#313130] bg-transparent px-3 text-xs font-black uppercase tracking-normal text-[#313130]"
           >
             Terug

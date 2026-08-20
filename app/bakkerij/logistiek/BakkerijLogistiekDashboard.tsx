@@ -8808,9 +8808,9 @@ export default function BakkerijLogistiekDashboard() {
   return (
     <StrikShell wide>
       <StrikPageHeader
-        title="Bakkerij logistiek"
+        title="Dagstart"
         icon={strikIcons.logistiek}
-        kicker="Logistiek"
+        kicker="Bakkerij logistiek"
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />
 

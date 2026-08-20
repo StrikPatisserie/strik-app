@@ -54,7 +54,11 @@ const bakkerijNavItems = [
 ];
 
 const logistiekNavItems = [
-  { href: "/bakkerij/logistiek", label: "Overzicht", icon: strikIcons.logistiek },
+  {
+    href: "/bakkerij/logistiek/dagstart",
+    label: "Dagstart",
+    icon: strikIcons.logistiek,
+  },
   { href: "/bakkerij/logistiek/havelaar", label: "Havelaar", icon: strikIcons.data },
 ];
 

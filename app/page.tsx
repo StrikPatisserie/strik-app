@@ -23,7 +23,7 @@ const baseSections = [
   {
     href: "/bakkerij/logistiek",
     title: "Logistiek",
-    subtitle: "Routes en pakbonnen",
+    subtitle: "Dagstart en Havelaar",
     icon: strikIcons.logistiek,
   },
   {
