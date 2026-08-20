@@ -9,25 +9,39 @@ const DAGOMZET_IMPORT_CONFIG = {
   QUERY: 'label:"Dagomzet" newer_than:7d -label:"Ingelezen" -label:"Fout"',
   SEARCH_QUERIES: [
     'label:"Dagomzet" newer_than:7d -label:"Ingelezen" -label:"Fout"',
+    'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Cash-it Filiaal Dag Rapport"',
     'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Dag Rapport ijs"',
     'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Dagafsluiting email-Filiaal" subject:ijs',
   ],
-  RECOVERY_QUERY: 'label:"Dagomzet" newer_than:30d',
+  RECOVERY_QUERY: 'label:"Dagomzet" newer_than:45d',
   RECOVERY_SEARCH_QUERIES: [
-    'label:"Dagomzet" newer_than:30d',
-    'newer_than:30d subject:"Dag Rapport ijs"',
-    'newer_than:30d subject:"Dagafsluiting email-Filiaal" subject:ijs',
+    'label:"Dagomzet" newer_than:45d',
+    'newer_than:45d subject:"Cash-it Filiaal Dag Rapport"',
+    'newer_than:45d subject:"Dag Rapport ijs"',
+    'newer_than:45d subject:"Dagafsluiting email-Filiaal" subject:ijs',
   ],
   MAX_THREADS: 10,
-  RECOVERY_MAX_THREADS: 30,
+  RECOVERY_MAX_THREADS: 80,
   CLEANUP_MAX_THREADS: 100,
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v4',
+  SCRIPT_VERSION: 'gmail-archive-v5',
 };
 
 function importDagomzet() {
+  importDagomzetThreads_(
+    searchDagomzetThreads_(DAGOMZET_IMPORT_CONFIG.MAX_THREADS)
+  );
+}
+
+function importDagomzetHerstel() {
+  importDagomzetThreads_(
+    searchDagomzetRecoveryThreads_(DAGOMZET_IMPORT_CONFIG.RECOVERY_MAX_THREADS)
+  );
+}
+
+function importDagomzetThreads_(threads) {
   const sourceLabel = getOrCreateDagomzetLabel_(
     DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL
   );
@@ -36,7 +50,13 @@ function importDagomzet() {
   );
   const errorLabel = getOrCreateDagomzetLabel_(DAGOMZET_IMPORT_CONFIG.ERROR_LABEL);
   const props = PropertiesService.getScriptProperties();
-  const threads = searchDagomzetThreads_(DAGOMZET_IMPORT_CONFIG.MAX_THREADS);
+
+  console.log(
+    `Dagomzet import ${DAGOMZET_IMPORT_CONFIG.SCRIPT_VERSION}: ${threads.length} thread(s) gevonden.`
+  );
+  Logger.log(
+    `Dagomzet import ${DAGOMZET_IMPORT_CONFIG.SCRIPT_VERSION}: ${threads.length} thread(s) gevonden.`
+  );
 
   threads.forEach((thread) => {
     let imported = false;
@@ -144,6 +164,11 @@ function debugDagomzetLaatsteMails() {
 
 function herimporteerLaatsteDagomzet() {
   herimporteerLaatsteDagomzet_();
+}
+
+function herimporteerEnImporteerLaatsteDagomzet() {
+  herimporteerLaatsteDagomzet_();
+  importDagomzetHerstel();
 }
 
 function herimporteerLaatsteDagomzet_() {
