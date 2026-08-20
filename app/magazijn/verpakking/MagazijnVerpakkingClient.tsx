@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 
 type MagazijnHotspot = {
@@ -440,6 +440,40 @@ function EnvelopeIcon() {
   );
 }
 
+function CollapsibleSidebarSection({
+  title,
+  count,
+  children,
+}: Readonly<{
+  title: string;
+  count?: number;
+  children: ReactNode;
+}>) {
+  return (
+    <details className="group border border-[#d8d3ca] bg-white shadow-sm">
+      <summary className="flex h-11 cursor-pointer list-none items-center justify-between gap-2 bg-[#f8f6f3] px-3 text-left [&::-webkit-details-marker]:hidden">
+        <span className="text-xs font-black uppercase tracking-normal text-[#4f4942]">
+          {title}
+        </span>
+        <span className="flex items-center gap-2">
+          {typeof count === "number" ? (
+            <span className="bg-white px-2 py-0.5 text-[0.7rem] font-black text-[#6b645b]">
+              {count}
+            </span>
+          ) : null}
+          <span
+            aria-hidden="true"
+            className="text-sm font-black text-[#1f4f35] transition group-open:rotate-90"
+          >
+            ›
+          </span>
+        </span>
+      </summary>
+      <div className="border-t border-[#e8e4de]">{children}</div>
+    </details>
+  );
+}
+
 export default function MagazijnVerpakkingClient({
   data,
 }: Readonly<{
@@ -694,9 +728,9 @@ export default function MagazijnVerpakkingClient({
             {selectedGroup ? (
               <div className="mt-2 space-y-3">
                 <div>
-                  <h2 className="text-xl font-black leading-tight text-[#1a1815]">
+                  <p className="text-xl font-black leading-tight text-[#1a1815]">
                     {selectedGroup.name}
-                  </h2>
+                  </p>
                   <p className="mt-1 text-sm font-bold text-[#6b645b]">
                     {selectedGroup.articleNumber || "Artikelnummer invullen"}
                   </p>
@@ -765,9 +799,9 @@ export default function MagazijnVerpakkingClient({
 
           <section className="border border-[#d8d3ca] bg-white shadow-sm">
             <div className="flex items-center justify-between gap-2 border-b border-[#e8e4de] bg-[#f8f6f3] px-3 py-2">
-              <h2 className="text-sm font-black uppercase tracking-normal text-[#4f4942]">
+              <p className="text-sm font-black uppercase tracking-normal text-[#4f4942]">
                 Bestelling
-              </h2>
+              </p>
               <span className="bg-[#ef5737] px-2.5 py-1 text-xs font-black text-white">
                 {totalQuantity}
               </span>
@@ -874,13 +908,11 @@ export default function MagazijnVerpakkingClient({
             </div>
           </section>
 
-          <section className="border border-[#d8d3ca] bg-white shadow-sm">
-            <div className="border-b border-[#e8e4de] bg-[#f8f6f3] px-3 py-2">
-              <h2 className="text-sm font-black uppercase tracking-normal text-[#4f4942]">
-                Overige vaak besteld
-              </h2>
-            </div>
-            <div className="max-h-[18rem] overflow-auto p-2">
+          <CollapsibleSidebarSection
+            title="Overige vaak besteld"
+            count={FREQUENT_PRODUCTS.length}
+          >
+            <div className="max-h-[16rem] overflow-auto p-2">
               {FREQUENT_PRODUCTS.map((product) => (
                 <button
                   key={product.id}
@@ -905,13 +937,10 @@ export default function MagazijnVerpakkingClient({
                 </button>
               ))}
             </div>
-          </section>
+          </CollapsibleSidebarSection>
 
-          <section className="border border-[#d8d3ca] bg-white p-3 shadow-sm">
-            <h2 className="text-sm font-black uppercase tracking-normal text-[#4f4942]">
-              Afwijkend product
-            </h2>
-            <div className="mt-3 space-y-2">
+          <CollapsibleSidebarSection title="Afwijkend product">
+            <div className="space-y-2 p-3">
               <label className="sr-only" htmlFor="havelaar-custom-name">
                 Productomschrijving
               </label>
@@ -957,10 +986,13 @@ export default function MagazijnVerpakkingClient({
                 </button>
               </div>
             </div>
-          </section>
+          </CollapsibleSidebarSection>
 
-          <section className="border border-[#d8d3ca] bg-white shadow-sm">
-            <div className="max-h-[18rem] overflow-auto p-2">
+          <CollapsibleSidebarSection
+            title="Plattegrond artikelen"
+            count={filteredGroups.length}
+          >
+            <div className="max-h-[16rem] overflow-auto p-2">
               {filteredGroups.map((group) => {
                 const isSelected = group.id === selectedGroup?.id;
 
@@ -993,7 +1025,7 @@ export default function MagazijnVerpakkingClient({
                 );
               })}
             </div>
-          </section>
+          </CollapsibleSidebarSection>
         </aside>
       </div>
     </StrikShell>
