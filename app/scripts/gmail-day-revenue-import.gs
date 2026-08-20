@@ -26,7 +26,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v5',
+  SCRIPT_VERSION: 'gmail-archive-v6',
 };
 
 function importDagomzet() {
@@ -164,11 +164,11 @@ function debugDagomzetLaatsteMails() {
 
 function herimporteerLaatsteDagomzet() {
   herimporteerLaatsteDagomzet_();
+  importDagomzetHerstel();
 }
 
 function herimporteerEnImporteerLaatsteDagomzet() {
-  herimporteerLaatsteDagomzet_();
-  importDagomzetHerstel();
+  herimporteerLaatsteDagomzet();
 }
 
 function herimporteerLaatsteDagomzet_() {
@@ -202,10 +202,10 @@ function herimporteerLaatsteDagomzet_() {
   });
 
   console.log(
-    `Dagomzet herimport reset: ${resetCount} bericht(en) opnieuw klaar gezet. Draai nu importDagomzet().`
+    `Dagomzet herimport reset: ${resetCount} bericht(en) opnieuw klaar gezet. Herstelimport start automatisch via herimporteerLaatsteDagomzet().`
   );
   Logger.log(
-    `Dagomzet herimport reset: ${resetCount} bericht(en) opnieuw klaar gezet. Draai nu importDagomzet().`
+    `Dagomzet herimport reset: ${resetCount} bericht(en) opnieuw klaar gezet. Herstelimport start automatisch via herimporteerLaatsteDagomzet().`
   );
 }
 
