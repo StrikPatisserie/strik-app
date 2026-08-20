@@ -40,7 +40,8 @@ type OrderLine = {
   articleNumber: string;
   zoneLabel: string;
   quantity: number;
-  max: number;
+  max: number | null;
+  source: "map" | "frequent" | "custom";
 };
 
 type Bounds = {
@@ -58,6 +59,74 @@ const STACK_X_TOLERANCE = 4;
 const STACK_WIDTH_TOLERANCE = 8;
 const STACK_GAP_TOLERANCE = 7;
 const CONTINUATION_GAP_TOLERANCE = 8;
+const OPEN_ORDER_MAX = 999;
+const FREQUENT_PRODUCTS = [
+  {
+    id: "bak30",
+    name: "Bakvormen papier bruin ø 150x35 mm",
+    articleNumber: "BAK30",
+  },
+  {
+    id: "apr01",
+    name: "Apparaatrollen gebleekt kraft 40 gram 300 mm x500 m",
+    articleNumber: "APR01",
+  },
+  {
+    id: "tas02pc",
+    name: "Taartafsluiters PC rollen OPP 80 (40/40)mµ 50 mm x 250 m ø kern 76 mm Patisserie College neutraal",
+    articleNumber: "TAS02PC",
+  },
+  {
+    id: "ser51pc",
+    name: "Servetten PC 1-laags tissue met 4-vouw 240x240 mm Patisserie College neutraal",
+    articleNumber: "SER51PC",
+  },
+  {
+    id: "slu04",
+    name: "Clipps G 44 0,8 los wit 9010",
+    articleNumber: "SLU04",
+  },
+  {
+    id: "zas34",
+    name: "Inschuifkartons nr. 3A - 1 pond plano 'schuifjes groot (1 pond)' 180x130x80 mm FSC",
+    articleNumber: "ZAS34",
+  },
+  {
+    id: "zas32a",
+    name: "Inschuifkartons nr. 2A - 0,5 pond plano schuifjes middel 150x100x80 mm",
+    articleNumber: "ZAS32A",
+  },
+  {
+    id: "18088kkz13pc",
+    name: "Koekzakken PC 1 pond 140+2x40x320 mm Strik Patisserie",
+    articleNumber: "18088KKZ13PC",
+  },
+  {
+    id: "18088kkz12pc",
+    name: "Koekzakken PC 0,5 pond ersatz 45 gram wit 105+2x42,5x270 mm Strik",
+    articleNumber: "18088KKZ12PC",
+  },
+  {
+    id: "18088cai13pc",
+    name: "Caisses PC ø 110/58 mm Strik Patisserie (MALDEN) FSC",
+    articleNumber: "18088CAI13PC",
+  },
+  {
+    id: "6311602",
+    name: "Vellen ersatz wit 400x600 mm 40grs",
+    articleNumber: "6311602",
+  },
+  {
+    id: "plv02",
+    name: "Vellen LDPE 20 mµ 400x600 mm",
+    articleNumber: "PLV02",
+  },
+  {
+    id: "ers17",
+    name: "Vellen ersatz wit 590x790 mm",
+    articleNumber: "ERS17",
+  },
+];
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase();
@@ -300,6 +369,14 @@ function clampQuantity(value: number, max: number) {
   return Math.max(1, Math.min(max, Math.round(value)));
 }
 
+function clampOrderQuantity(value: number, max: number | null) {
+  return clampQuantity(value, max || OPEN_ORDER_MAX);
+}
+
+function createCustomLineId(name: string, articleNumber: string) {
+  return `custom-${compactCode(articleNumber || name) || normalizeText(name).replace(/[^a-z0-9]+/g, "-")}`;
+}
+
 function getIsoWeekNumber(date = new Date()) {
   const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNumber = target.getUTCDay() || 7;
@@ -310,20 +387,27 @@ function getIsoWeekNumber(date = new Date()) {
 }
 
 function createMailBody(orderLines: OrderLine[]) {
+  const lines = orderLines.map((line) => {
+    const articleNumber =
+      line.articleNumber || (line.source === "custom" ? "afwijkend product" : "artikelnummer invullen");
+
+    return [
+      `- ${line.quantity}x`,
+      articleNumber,
+      "-",
+      line.name,
+      line.zoneLabel ? `(${line.zoneLabel})` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  });
+
   return [
     "Beste Havelaar,",
     "",
     "Graag bestellen voor Bakkerij Malden:",
     "",
-    ...orderLines.map((line) =>
-      [
-        `- ${line.quantity}x`,
-        line.articleNumber || "artikelnummer invullen",
-        "-",
-        line.name,
-        `(${line.zoneLabel})`,
-      ].join(" ")
-    ),
+    ...lines,
     "",
     "Met vriendelijke groet,",
     "Bakkerij Malden",
@@ -370,6 +454,9 @@ export default function MagazijnVerpakkingClient({
   const [zoom, setZoom] = useState(1);
   const [quantity, setQuantity] = useState(1);
   const [orderLines, setOrderLines] = useState<OrderLine[]>([]);
+  const [customName, setCustomName] = useState("");
+  const [customArticleNumber, setCustomArticleNumber] = useState("");
+  const [customQuantity, setCustomQuantity] = useState(1);
   const [viewX, viewY, viewWidth, viewHeight] = data.viewBox;
 
   const filteredGroups = useMemo(() => {
@@ -418,31 +505,71 @@ export default function MagazijnVerpakkingClient({
     if (!selectedGroup || selectedRemaining <= 0) return;
 
     const addQuantity = clampQuantity(quantity, selectedRemaining);
+    addOrderLine({
+      groupId: selectedGroup.id,
+      name: selectedGroup.name,
+      articleNumber: selectedGroup.articleNumber,
+      zoneLabel: selectedGroup.zoneLabel,
+      quantity: addQuantity,
+      max: selectedGroup.max,
+      source: "map",
+    });
+  }
+
+  function addOrderLine(nextLine: OrderLine) {
     setOrderLines((current) => {
-      const existing = current.find((line) => line.groupId === selectedGroup.id);
+      const existing = current.find((line) => line.groupId === nextLine.groupId);
       if (existing) {
         return current.map((line) =>
-          line.groupId === selectedGroup.id
+          line.groupId === nextLine.groupId
             ? {
                 ...line,
-                quantity: Math.min(line.max, line.quantity + addQuantity),
+                quantity: clampOrderQuantity(
+                  line.quantity + nextLine.quantity,
+                  line.max
+                ),
               }
             : line
         );
       }
 
-      return [
-        ...current,
-        {
-          groupId: selectedGroup.id,
-          name: selectedGroup.name,
-          articleNumber: selectedGroup.articleNumber,
-          zoneLabel: selectedGroup.zoneLabel,
-          quantity: addQuantity,
-          max: selectedGroup.max,
-        },
-      ].sort((first, second) => first.name.localeCompare(second.name, "nl"));
+      return [...current, nextLine].sort((first, second) =>
+        first.name.localeCompare(second.name, "nl")
+      );
     });
+  }
+
+  function addFrequentProduct(product: (typeof FREQUENT_PRODUCTS)[number]) {
+    addOrderLine({
+      groupId: `frequent-${product.id}`,
+      name: product.name,
+      articleNumber: product.articleNumber,
+      zoneLabel: "Overige vaak besteld",
+      quantity: 1,
+      max: null,
+      source: "frequent",
+    });
+  }
+
+  function addCustomProduct() {
+    const name = customName.trim();
+    const articleNumber = customArticleNumber.trim();
+
+    if (!name) return;
+
+    addOrderLine({
+      groupId: createCustomLineId(name, articleNumber),
+      name,
+      articleNumber,
+      zoneLabel: "Afwijkend product",
+      quantity: clampOrderQuantity(customQuantity, null),
+      max: null,
+      source: "custom",
+    });
+
+    setCustomName("");
+    setCustomArticleNumber("");
+    setCustomQuantity(1);
   }
 
   function updateLineQuantity(groupId: string, nextQuantity: number) {
@@ -452,7 +579,7 @@ export default function MagazijnVerpakkingClient({
           line.groupId === groupId
             ? {
                 ...line,
-                quantity: clampQuantity(nextQuantity, line.max),
+                quantity: clampOrderQuantity(nextQuantity, line.max),
               }
             : line
         )
@@ -663,8 +790,8 @@ export default function MagazijnVerpakkingClient({
                           {line.name}
                         </p>
                         <p className="text-xs font-bold text-[#6b645b]">
-                          {line.articleNumber || "Geen artikelnummer"} · max{" "}
-                          {line.max}
+                          {line.articleNumber || "Geen artikelnummer"}
+                          {line.max ? ` · max ${line.max}` : ""}
                         </p>
                       </div>
                       <button
@@ -694,7 +821,7 @@ export default function MagazijnVerpakkingClient({
                       <input
                         type="number"
                         min={1}
-                        max={line.max}
+                        max={line.max || undefined}
                         value={line.quantity}
                         onChange={(event) =>
                           updateLineQuantity(
@@ -743,6 +870,91 @@ export default function MagazijnVerpakkingClient({
                   <EnvelopeIcon />
                   <span className="sr-only">Mail bestelling</span>
                 </a>
+              </div>
+            </div>
+          </section>
+
+          <section className="border border-[#d8d3ca] bg-white shadow-sm">
+            <div className="border-b border-[#e8e4de] bg-[#f8f6f3] px-3 py-2">
+              <h2 className="text-sm font-black uppercase tracking-normal text-[#4f4942]">
+                Overige vaak besteld
+              </h2>
+            </div>
+            <div className="max-h-[18rem] overflow-auto p-2">
+              {FREQUENT_PRODUCTS.map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  onClick={() => addFrequentProduct(product)}
+                  className="mb-1 grid w-full grid-cols-[1fr_auto] items-center gap-2 border border-[#e8e4de] bg-[#faf8f5] p-2 text-left hover:bg-white"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black leading-tight text-[#1a1815]">
+                      {product.name}
+                    </span>
+                    <span className="mt-1 block text-xs font-bold text-[#6b645b]">
+                      {product.articleNumber}
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="flex h-8 w-8 items-center justify-center border border-[#1f4f35] bg-white text-lg font-black text-[#1f4f35]"
+                  >
+                    +
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="border border-[#d8d3ca] bg-white p-3 shadow-sm">
+            <h2 className="text-sm font-black uppercase tracking-normal text-[#4f4942]">
+              Afwijkend product
+            </h2>
+            <div className="mt-3 space-y-2">
+              <label className="sr-only" htmlFor="havelaar-custom-name">
+                Productomschrijving
+              </label>
+              <input
+                id="havelaar-custom-name"
+                type="text"
+                value={customName}
+                onChange={(event) => setCustomName(event.target.value)}
+                placeholder="Productomschrijving"
+                className="h-10 w-full border border-[#d8d3ca] bg-white px-3 text-sm font-bold text-[#1a1815] outline-none placeholder:text-[#a39c91] focus:border-[#1f4f35]"
+              />
+              <label className="sr-only" htmlFor="havelaar-custom-code">
+                Artikelnummer
+              </label>
+              <input
+                id="havelaar-custom-code"
+                type="text"
+                value={customArticleNumber}
+                onChange={(event) => setCustomArticleNumber(event.target.value)}
+                placeholder="Artikelnummer"
+                className="h-10 w-full border border-[#d8d3ca] bg-white px-3 text-sm font-bold text-[#1a1815] outline-none placeholder:text-[#a39c91] focus:border-[#1f4f35]"
+              />
+              <div className="grid grid-cols-[auto_1fr] gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={customQuantity}
+                  onChange={(event) =>
+                    setCustomQuantity(
+                      clampOrderQuantity(Number(event.target.value), null)
+                    )
+                  }
+                  className="h-10 w-20 border border-[#d8d3ca] bg-white text-center text-sm font-black outline-none focus:border-[#1f4f35]"
+                  aria-label="Aantal afwijkend product"
+                />
+                <button
+                  type="button"
+                  onClick={addCustomProduct}
+                  disabled={!customName.trim()}
+                  className="h-10 border border-[#1f4f35] bg-[#1f4f35] px-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:border-[#d8d3ca] disabled:bg-[#d8d3ca]"
+                >
+                  Toevoegen
+                </button>
               </div>
             </div>
           </section>
