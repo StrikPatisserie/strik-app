@@ -20,7 +20,7 @@ export default function BakkerijLogistiekPage() {
           icon={strikIcons.logistiekDagstart}
         />
         <StrikMenuLink
-          href="/bakkerij/logistiek/havelaar"
+          href="/magazijn/verpakking"
           title="Havelaar"
           icon={strikIcons.logistiek}
         />

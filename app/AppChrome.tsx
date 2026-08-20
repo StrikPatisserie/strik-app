@@ -26,7 +26,9 @@ export default function AppChrome({
   const isPrintArea = pathname === "/bakkerij/logistiek/arend-print";
   const isLogistiekWorkArea =
     pathname === "/bakkerij/logistiek" ||
-    pathname.startsWith("/bakkerij/logistiek/");
+    pathname.startsWith("/bakkerij/logistiek/") ||
+    pathname === "/magazijn/verpakking" ||
+    pathname.startsWith("/magazijn/verpakking/");
   const isBakeryWorkArea =
     (pathname === "/bakkerij" || pathname.startsWith("/bakkerij/")) &&
     !isLogistiekWorkArea;

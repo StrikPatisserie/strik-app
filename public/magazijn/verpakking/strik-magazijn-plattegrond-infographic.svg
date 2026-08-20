@@ -1,0 +1,2238 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 841.89 595.276" role="img" aria-label="Strik magazijn plattegrond verpakking">
+
+  <defs>
+    <linearGradient id="paperGlow" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fffaf1"/>
+      <stop offset="100%" stop-color="#f4eadb"/>
+    </linearGradient>
+    <linearGradient id="boxFace" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f6d9a9"/>
+      <stop offset="100%" stop-color="#d6a268"/>
+    </linearGradient>
+    <linearGradient id="boxTop" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ffe7bb"/>
+      <stop offset="100%" stop-color="#edc28a"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.1" stdDeviation="1.6" flood-color="#4c3325" flood-opacity="0.18"/>
+    </filter>
+    <pattern id="paperGrid" width="18" height="18" patternUnits="userSpaceOnUse">
+      <path d="M 18 0 L 0 0 0 18" fill="none" stroke="#e8dccb" stroke-width=".35"/>
+    </pattern>
+  </defs>
+  <style>
+    .page-bg { fill: url(#paperGlow); }
+    .grid { fill: url(#paperGrid); opacity: .32; }
+    .bay-fill { opacity: .22; }
+    .rack-outline { fill: none; stroke-linejoin: round; stroke-width: 3.2; }
+    .beam { rx: 1.2; }
+    .slot { cursor: pointer; filter: url(#softShadow); }
+    .slot-face { fill: url(#boxFace); stroke-width: .85; vector-effect: non-scaling-stroke; }
+    .slot-top { fill: url(#boxTop); opacity: .86; }
+    .slot-band { opacity: .95; }
+    .slot-fold { stroke: rgba(92,58,34,.28); stroke-width: .45; }
+    .source-label { font-family: "Arial Narrow", "Roboto Condensed", Arial, sans-serif; fill: #2b211b; paint-order: stroke; stroke: rgba(255,249,239,.84); stroke-width: 1.1px; stroke-linejoin: round; }
+    .source-label.small { stroke-width: .75px; }
+    .source-label.major { font-weight: 700; letter-spacing: .01em; }
+    .legend-title { font-family: "Arial Narrow", Arial, sans-serif; font-weight: 700; fill: #2b211b; }
+    .legend-small { font-family: Arial, sans-serif; fill: #5f5750; }
+    .hotspot:hover .slot-face { stroke-width: 2; }
+    .hotspot:hover .slot-band { opacity: 1; }
+  </style>
+
+  <rect class="page-bg" width="100%" height="100%"/>
+  <rect class="grid" x="0" y="0" width="841.89" height="595.276"/>
+  <rect class="bay-fill" x="42.356" y="195.078" width="236.286" height="377.763" fill="#d7ecf8"/>
+  <rect class="rack-outline" x="42.356" y="195.078" width="236.286" height="377.763" stroke="#1d5e91"/>
+  <rect class="bay-fill" x="278.643" y="195.078" width="236.286" height="377.763" fill="#d7ecf8"/>
+  <rect class="rack-outline" x="278.643" y="195.078" width="236.286" height="377.763" stroke="#1d5e91"/>
+  <rect class="bay-fill" x="514.929" y="195.078" width="283.83" height="377.763" fill="#ffe0cf"/>
+  <rect class="rack-outline" x="514.929" y="195.078" width="283.83" height="377.763" stroke="#f15a24"/>
+<rect class="beam" x="42.356" y="343.877" width="236.286" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="42.356" y="465.525" width="236.286" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="42.356" y="556.222" width="236.286" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="42.356" y="195.078" width="236.286" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="278.643" y="316.727" width="236.286" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="278.643" y="428.369" width="236.286" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="278.643" y="556.222" width="236.286" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="278.643" y="195.078" width="236.286" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="514.929" y="289.577" width="283.83" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="514.929" y="445.316" width="283.83" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="514.929" y="556.222" width="283.83" height="16.619" fill="#241c1b"/>
+<rect class="beam" x="514.929" y="195.078" width="283.83" height="16.619" fill="#241c1b"/>
+  <g id="slot-001" class="hotspot slot" data-slot-index="1" data-zone="links-stelling" data-label="BLI28">
+    <title>BLI28</title>
+    <rect class="slot-face" x="46.975" y="280.509" width="147.217" height="61.53" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 47.975 281.509 H 193.192 V 289.509 H 47.975 Z"/>
+    <path class="slot-band" d="M 48.175 289.509 H 192.992" stroke="#1d5e91" stroke-width="2.4"/>
+    <path class="slot-fold" d="M 120.584 281.709 V 288.909"/>
+  </g>
+  <g id="slot-002" class="hotspot slot" data-slot-index="2" data-zone="links-stelling" data-label="limited / 18088GBD09PCAN">
+    <title>limited / 18088GBD09PCAN</title>
+    <rect class="slot-face" x="46.975" y="422.696" width="50.495" height="40.936" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 47.975 423.696 H 96.47 V 430.064 H 47.975 Z"/>
+    <path class="slot-band" d="M 48.175 430.064 H 96.27" stroke="#1d5e91" stroke-width="1.842"/>
+    <path class="slot-fold" d="M 72.222 423.896 V 429.464"/>
+  </g>
+  <g id="slot-003" class="hotspot slot" data-slot-index="3" data-zone="links-stelling" data-label="19x19x8 / limited">
+    <title>19x19x8 / limited</title>
+    <rect class="slot-face" x="46.975" y="380.178" width="50.495" height="40.936" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 47.975 381.178 H 96.47 V 387.546 H 47.975 Z"/>
+    <path class="slot-band" d="M 48.175 387.546 H 96.27" stroke="#1d5e91" stroke-width="1.842"/>
+    <path class="slot-fold" d="M 72.222 381.378 V 386.946"/>
+  </g>
+  <g id="slot-004" class="hotspot slot" data-slot-index="4" data-zone="links-boven" data-label="18088BLI01">
+    <title>18088BLI01</title>
+    <rect class="slot-face" x="46.976" y="111.229" width="68.642" height="79.722" rx="1.6" fill="#fde8ee" stroke="#d94f70"/>
+    <path class="slot-top" d="M 47.976 112.229 H 114.618 V 120.229 H 47.976 Z"/>
+    <path class="slot-band" d="M 48.176 120.229 H 114.418" stroke="#d94f70" stroke-width="2.4"/>
+    <path class="slot-fold" d="M 81.297 112.429 V 119.629"/>
+  </g>
+  <g id="slot-005" class="hotspot slot" data-slot-index="5" data-zone="links-boven" data-label="GATEAU">
+    <title>GATEAU</title>
+    <rect class="slot-face" x="46.976" y="27.379" width="68.642" height="79.722" rx="1.6" fill="#fde8ee" stroke="#d94f70"/>
+    <path class="slot-top" d="M 47.976 28.379 H 114.618 V 36.379 H 47.976 Z"/>
+    <path class="slot-band" d="M 48.176 36.379 H 114.418" stroke="#d94f70" stroke-width="2.4"/>
+    <path class="slot-fold" d="M 81.297 28.579 V 35.779"/>
+  </g>
+  <g id="slot-006" class="hotspot slot" data-slot-index="6" data-zone="links-boven" data-label="">
+    <title>Voorraadplek 6</title>
+    <rect class="slot-face" x="122.186" y="151.586" width="72.76" height="39.365" rx="1.6" fill="#fde8ee" stroke="#d94f70"/>
+    <path class="slot-top" d="M 123.186 152.586 H 193.946 V 158.672 H 123.186 Z"/>
+    <path class="slot-band" d="M 123.386 158.672 H 193.746" stroke="#d94f70" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 158.566 152.786 V 158.072"/>
+  </g>
+  <g id="slot-007" class="hotspot slot" data-slot-index="7" data-zone="midden-boven" data-label="">
+    <title>Voorraadplek 7</title>
+    <rect class="slot-face" x="280.667" y="164.27" width="59.222" height="26.681" rx="1.6" fill="#ece9ff" stroke="#7467b6"/>
+    <path class="slot-top" d="M 281.667 165.27 H 338.889 V 169.073 H 281.667 Z"/>
+    <path class="slot-band" d="M 281.867 169.073 H 338.689" stroke="#7467b6" stroke-width="1.201"/>
+    <path class="slot-fold" d="M 310.278 165.47 V 168.473"/>
+  </g>
+  <g id="slot-008" class="hotspot slot" data-slot-index="8" data-zone="midden-stelling" data-label="18088CEZ10PC">
+    <title>18088CEZ10PC</title>
+    <rect class="slot-face" x="284.74" y="278.567" width="45.264" height="35.397" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 285.74 279.567 H 329.004 V 284.938 H 285.74 Z"/>
+    <path class="slot-band" d="M 285.94 284.938 H 328.804" stroke="#4cae8a" stroke-width="1.593"/>
+    <path class="slot-fold" d="M 307.372 279.767 V 284.338"/>
+  </g>
+  <g id="slot-009" class="hotspot slot" data-slot-index="9" data-zone="midden-stelling" data-label="26x26x10 / 18088GBD21PCA">
+    <title>26x26x10 / 18088GBD21PCA</title>
+    <rect class="slot-face" x="283.567" y="509.754" width="49.69" height="44.574" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 284.567 510.754 H 332.257 V 517.777 H 284.567 Z"/>
+    <path class="slot-band" d="M 284.767 517.777 H 332.057" stroke="#4cae8a" stroke-width="2.006"/>
+    <path class="slot-fold" d="M 308.412 510.954 V 517.177"/>
+  </g>
+  <g id="slot-010" class="hotspot slot" data-slot-index="10" data-zone="midden-stelling" data-label="HORECA KLEIN">
+    <title>HORECA KLEIN</title>
+    <rect class="slot-face" x="283.567" y="463.287" width="49.69" height="44.574" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 284.567 464.287 H 332.257 V 471.31 H 284.567 Z"/>
+    <path class="slot-band" d="M 284.767 471.31 H 332.057" stroke="#4cae8a" stroke-width="2.006"/>
+    <path class="slot-fold" d="M 308.412 464.487 V 470.71"/>
+  </g>
+  <g id="slot-011" class="hotspot slot" data-slot-index="11" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 11</title>
+    <rect class="slot-face" x="337.141" y="525.026" width="49.69" height="29.302" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 338.141 526.026 H 385.831 V 530.3 H 338.141 Z"/>
+    <path class="slot-band" d="M 338.341 530.3 H 385.631" stroke="#4cae8a" stroke-width="1.319"/>
+    <path class="slot-fold" d="M 361.986 526.226 V 529.7"/>
+  </g>
+  <g id="slot-012" class="hotspot slot" data-slot-index="12" data-zone="midden-stelling" data-label="HORECA MIDDEL / 31x31x10 / 18088GBD22PCA">
+    <title>HORECA MIDDEL / 31x31x10 / 18088GBD22PCA</title>
+    <rect class="slot-face" x="337.141" y="494.157" width="49.69" height="29.302" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 338.141 495.157 H 385.831 V 499.431 H 338.141 Z"/>
+    <path class="slot-band" d="M 338.341 499.431 H 385.631" stroke="#4cae8a" stroke-width="1.319"/>
+    <path class="slot-fold" d="M 361.986 495.357 V 498.831"/>
+  </g>
+  <g id="slot-013" class="hotspot slot" data-slot-index="13" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 13</title>
+    <rect class="slot-face" x="337.141" y="463.287" width="49.69" height="29.302" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 338.141 464.287 H 385.831 V 468.561 H 338.141 Z"/>
+    <path class="slot-band" d="M 338.341 468.561 H 385.631" stroke="#4cae8a" stroke-width="1.319"/>
+    <path class="slot-fold" d="M 361.986 464.487 V 467.961"/>
+  </g>
+  <g id="slot-014" class="hotspot slot" data-slot-index="14" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 14</title>
+    <rect class="slot-face" x="390.715" y="525.026" width="49.69" height="29.302" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 391.715 526.026 H 439.405 V 530.3 H 391.715 Z"/>
+    <path class="slot-band" d="M 391.915 530.3 H 439.205" stroke="#4cae8a" stroke-width="1.319"/>
+    <path class="slot-fold" d="M 415.56 526.226 V 529.7"/>
+  </g>
+  <g id="slot-015" class="hotspot slot" data-slot-index="15" data-zone="midden-stelling" data-label="HORECA GROOT / 35x35x10 / 18088GBD23PCA">
+    <title>HORECA GROOT / 35x35x10 / 18088GBD23PCA</title>
+    <rect class="slot-face" x="390.715" y="494.157" width="49.69" height="29.302" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 391.715 495.157 H 439.405 V 499.431 H 391.715 Z"/>
+    <path class="slot-band" d="M 391.915 499.431 H 439.205" stroke="#4cae8a" stroke-width="1.319"/>
+    <path class="slot-fold" d="M 415.56 495.357 V 498.831"/>
+  </g>
+  <g id="slot-016" class="hotspot slot" data-slot-index="16" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 16</title>
+    <rect class="slot-face" x="390.715" y="463.287" width="49.69" height="29.302" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 391.715 464.287 H 439.405 V 468.561 H 391.715 Z"/>
+    <path class="slot-band" d="M 391.915 468.561 H 439.205" stroke="#4cae8a" stroke-width="1.319"/>
+    <path class="slot-fold" d="M 415.56 464.487 V 467.961"/>
+  </g>
+  <g id="slot-017" class="hotspot slot" data-slot-index="17" data-zone="midden-stelling" data-label="395x395x100 / VDB24PC">
+    <title>395x395x100 / VDB24PC</title>
+    <rect class="slot-face" x="444.289" y="518.931" width="64.107" height="35.397" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 445.289 519.931 H 507.396 V 525.302 H 445.289 Z"/>
+    <path class="slot-band" d="M 445.489 525.302 H 507.196" stroke="#4cae8a" stroke-width="1.593"/>
+    <path class="slot-fold" d="M 476.342 520.131 V 524.702"/>
+  </g>
+  <g id="slot-018" class="hotspot slot" data-slot-index="18" data-zone="rechts-stelling" data-label="VLAAIDOOS DEKSEL / 300x300x60 / VZD10PC">
+    <title>VLAAIDOOS DEKSEL / 300x300x60 / VZD10PC</title>
+    <rect class="slot-face" x="520.629" y="522.464" width="51.304" height="31.864" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 521.629 523.464 H 570.933 V 528.2 H 521.629 Z"/>
+    <path class="slot-band" d="M 521.829 528.2 H 570.733" stroke="#f15a24" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 546.281 523.664 V 527.6"/>
+  </g>
+  <g id="slot-019" class="hotspot slot" data-slot-index="19" data-zone="rechts-stelling" data-label="25x10x9 / 18088GBD52PC">
+    <title>25x10x9 / 18088GBD52PC</title>
+    <rect class="slot-face" x="573.417" y="522.464" width="51.304" height="31.864" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 574.417 523.464 H 623.721 V 528.2 H 574.417 Z"/>
+    <path class="slot-band" d="M 574.617 528.2 H 623.521" stroke="#f15a24" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 599.069 523.664 V 527.6"/>
+  </g>
+  <g id="slot-020" class="hotspot slot" data-slot-index="20" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 20</title>
+    <rect class="slot-face" x="659.633" y="528.076" width="51.304" height="26.252" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 660.633 529.076 H 709.937 V 532.801 H 660.633 Z"/>
+    <path class="slot-band" d="M 660.833 532.801 H 709.737" stroke="#f15a24" stroke-width="1.181"/>
+    <path class="slot-fold" d="M 685.285 529.276 V 532.201"/>
+  </g>
+  <g id="slot-021" class="hotspot slot" data-slot-index="21" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 21</title>
+    <rect class="slot-face" x="714.034" y="528.076" width="51.304" height="26.252" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 715.034 529.076 H 764.338 V 532.801 H 715.034 Z"/>
+    <path class="slot-band" d="M 715.234 532.801 H 764.138" stroke="#f15a24" stroke-width="1.181"/>
+    <path class="slot-fold" d="M 739.686 529.276 V 532.201"/>
+  </g>
+  <g id="slot-022" class="hotspot slot" data-slot-index="22" data-zone="rechts-stelling" data-label="ZOUT/KOE K C O N I S C HE BAKJES / 1 6 5 x 8 5 x 4 5 / B A K 5 4">
+    <title>ZOUT/KOE K C O N I S C HE BAKJES / 1 6 5 x 8 5 x 4 5 / B A K 5 4</title>
+    <rect class="slot-face" x="714.034" y="499.498" width="51.304" height="26.252" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 715.034 500.498 H 764.338 V 504.223 H 715.034 Z"/>
+    <path class="slot-band" d="M 715.234 504.223 H 764.138" stroke="#f15a24" stroke-width="1.181"/>
+    <path class="slot-fold" d="M 739.686 500.698 V 503.623"/>
+  </g>
+  <g id="slot-023" class="hotspot slot" data-slot-index="23" data-zone="rechts-stelling" data-label="KL E IN E V L A A I D O OS / 2 3 x 2 3 x 9 / 1 8 0 8 8 G B D 1 9P C">
+    <title>KL E IN E V L A A I D O OS / 2 3 x 2 3 x 9 / 1 8 0 8 8 G B D 1 9P C</title>
+    <rect class="slot-face" x="659.633" y="499.498" width="51.304" height="26.252" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 660.633 500.498 H 709.937 V 504.223 H 660.633 Z"/>
+    <path class="slot-band" d="M 660.833 504.223 H 709.737" stroke="#f15a24" stroke-width="1.181"/>
+    <path class="slot-fold" d="M 685.285 500.698 V 503.623"/>
+  </g>
+  <g id="slot-024" class="hotspot slot" data-slot-index="24" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 24</title>
+    <rect class="slot-face" x="659.633" y="470.919" width="51.304" height="26.252" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 660.633 471.919 H 709.937 V 475.644 H 660.633 Z"/>
+    <path class="slot-band" d="M 660.833 475.644 H 709.737" stroke="#f15a24" stroke-width="1.181"/>
+    <path class="slot-fold" d="M 685.285 472.119 V 475.044"/>
+  </g>
+  <g id="slot-025" class="hotspot slot" data-slot-index="25" data-zone="rechts-stelling" data-label="SCHNITT DOOS / 25x10x9">
+    <title>SCHNITT DOOS / 25x10x9</title>
+    <rect class="slot-face" x="573.417" y="488.707" width="51.304" height="31.864" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 574.417 489.707 H 623.721 V 494.443 H 574.417 Z"/>
+    <path class="slot-band" d="M 574.617 494.443 H 623.521" stroke="#f15a24" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 599.069 489.907 V 493.843"/>
+  </g>
+  <g id="slot-026" class="hotspot slot" data-slot-index="26" data-zone="rechts-stelling" data-label="VLAAIDOOS BODEM / 295x295x60 / VDB30PC">
+    <title>VLAAIDOOS BODEM / 295x295x60 / VDB30PC</title>
+    <rect class="slot-face" x="520.629" y="506.678" width="51.304" height="13.893" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 521.629 507.678 H 570.933 V 509.678 H 521.629 Z"/>
+    <path class="slot-band" d="M 521.829 509.678 H 570.733" stroke="#f15a24" stroke-width="0.7"/>
+    <path class="slot-fold" d="M 546.281 507.878 V 509.078"/>
+  </g>
+  <g id="slot-027" class="hotspot slot" data-slot-index="27" data-zone="midden-stelling" data-label="HORECA XL BODEM">
+    <title>HORECA XL BODEM</title>
+    <rect class="slot-face" x="444.289" y="481.641" width="64.107" height="35.397" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 445.289 482.641 H 507.396 V 488.012 H 445.289 Z"/>
+    <path class="slot-band" d="M 445.489 488.012 H 507.196" stroke="#4cae8a" stroke-width="1.593"/>
+    <path class="slot-fold" d="M 476.342 482.841 V 487.412"/>
+  </g>
+  <g id="slot-028" class="hotspot slot" data-slot-index="28" data-zone="midden-stelling" data-label="18088CEZ03PC">
+    <title>18088CEZ03PC</title>
+    <rect class="slot-face" x="332.37" y="289.647" width="45.264" height="24.317" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 333.37 290.647 H 376.634 V 294.024 H 333.37 Z"/>
+    <path class="slot-band" d="M 333.57 294.024 H 376.434" stroke="#4cae8a" stroke-width="1.094"/>
+    <path class="slot-fold" d="M 355.002 290.847 V 293.424"/>
+  </g>
+  <g id="slot-029" class="hotspot slot" data-slot-index="29" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 29</title>
+    <rect class="slot-face" x="283.567" y="404.529" width="36.096" height="20.319" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 284.567 405.529 H 318.663 V 408.186 H 284.567 Z"/>
+    <path class="slot-band" d="M 284.767 408.186 H 318.463" stroke="#4cae8a" stroke-width="0.914"/>
+    <path class="slot-fold" d="M 301.615 405.729 V 407.586"/>
+  </g>
+  <g id="slot-030" class="hotspot slot" data-slot-index="30" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 30</title>
+    <rect class="slot-face" x="321.314" y="404.529" width="36.096" height="20.319" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 322.314 405.529 H 356.41 V 408.186 H 322.314 Z"/>
+    <path class="slot-band" d="M 322.514 408.186 H 356.21" stroke="#4cae8a" stroke-width="0.914"/>
+    <path class="slot-fold" d="M 339.362 405.729 V 407.586"/>
+  </g>
+  <g id="slot-031" class="hotspot slot" data-slot-index="31" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 31</title>
+    <rect class="slot-face" x="359.06" y="404.529" width="36.096" height="20.319" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 360.06 405.529 H 394.156 V 408.186 H 360.06 Z"/>
+    <path class="slot-band" d="M 360.26 408.186 H 393.956" stroke="#4cae8a" stroke-width="0.914"/>
+    <path class="slot-fold" d="M 377.108 405.729 V 407.586"/>
+  </g>
+  <g id="slot-032" class="hotspot slot" data-slot-index="32" data-zone="midden-stelling" data-label="BOTERKOEKBLOK / ZAKJES / 18088CEZ02PC">
+    <title>BOTERKOEKBLOK / ZAKJES / 18088CEZ02PC</title>
+    <rect class="slot-face" x="283.567" y="382.246" width="36.096" height="20.319" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 284.567 383.246 H 318.663 V 385.903 H 284.567 Z"/>
+    <path class="slot-band" d="M 284.767 385.903 H 318.463" stroke="#4cae8a" stroke-width="0.914"/>
+    <path class="slot-fold" d="M 301.615 383.446 V 385.303"/>
+  </g>
+  <g id="slot-033" class="hotspot slot" data-slot-index="33" data-zone="midden-stelling" data-label="ZOUT/KOEK / ZAKJES / 18088CEZ01PC">
+    <title>ZOUT/KOEK / ZAKJES / 18088CEZ01PC</title>
+    <rect class="slot-face" x="321.314" y="382.246" width="36.096" height="20.319" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 322.314 383.246 H 356.41 V 385.903 H 322.314 Z"/>
+    <path class="slot-band" d="M 322.514 385.903 H 356.21" stroke="#4cae8a" stroke-width="0.914"/>
+    <path class="slot-fold" d="M 339.362 383.446 V 385.303"/>
+  </g>
+  <g id="slot-034" class="hotspot slot" data-slot-index="34" data-zone="midden-stelling" data-label="CAKE ZAK / STRIK / 18088CEZ04PC">
+    <title>CAKE ZAK / STRIK / 18088CEZ04PC</title>
+    <rect class="slot-face" x="359.06" y="382.246" width="36.096" height="20.319" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 360.06 383.246 H 394.156 V 385.903 H 360.06 Z"/>
+    <path class="slot-band" d="M 360.26 385.903 H 393.956" stroke="#4cae8a" stroke-width="0.914"/>
+    <path class="slot-fold" d="M 377.108 383.446 V 385.303"/>
+  </g>
+  <g id="slot-035" class="hotspot slot" data-slot-index="35" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 35</title>
+    <rect class="slot-face" x="283.567" y="359.963" width="36.096" height="20.319" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 284.567 360.963 H 318.663 V 363.62 H 284.567 Z"/>
+    <path class="slot-band" d="M 284.767 363.62 H 318.463" stroke="#4cae8a" stroke-width="0.914"/>
+    <path class="slot-fold" d="M 301.615 361.163 V 363.02"/>
+  </g>
+  <g id="slot-036" class="hotspot slot" data-slot-index="36" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 36</title>
+    <rect class="slot-face" x="321.314" y="359.963" width="36.096" height="20.319" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 322.314 360.963 H 356.41 V 363.62 H 322.314 Z"/>
+    <path class="slot-band" d="M 322.514 363.62 H 356.21" stroke="#4cae8a" stroke-width="0.914"/>
+    <path class="slot-fold" d="M 339.362 361.163 V 363.02"/>
+  </g>
+  <g id="slot-037" class="hotspot slot" data-slot-index="37" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 37</title>
+    <rect class="slot-face" x="359.06" y="359.963" width="36.096" height="20.319" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 360.06 360.963 H 394.156 V 363.62 H 360.06 Z"/>
+    <path class="slot-band" d="M 360.26 363.62 H 393.956" stroke="#4cae8a" stroke-width="0.914"/>
+    <path class="slot-fold" d="M 377.108 361.163 V 363.02"/>
+  </g>
+  <g id="slot-038" class="hotspot slot" data-slot-index="38" data-zone="rechts-stelling" data-label="KARTON / 185x185 / 18088TAK01">
+    <title>KARTON / 185x185 / 18088TAK01</title>
+    <rect class="slot-face" x="519.384" y="385.198" width="21.33" height="57.851" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 520.384 386.198 H 539.714 V 394.198 H 520.384 Z"/>
+    <path class="slot-band" d="M 520.584 394.198 H 539.514" stroke="#f15a24" stroke-width="2.4"/>
+  </g>
+  <g id="slot-039" class="hotspot slot" data-slot-index="39" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 39</title>
+    <rect class="slot-face" x="519.384" y="325.037" width="21.33" height="57.851" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 520.384 326.037 H 539.714 V 334.037 H 520.384 Z"/>
+    <path class="slot-band" d="M 520.584 334.037 H 539.514" stroke="#f15a24" stroke-width="2.4"/>
+  </g>
+  <g id="slot-040" class="hotspot slot" data-slot-index="40" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 40</title>
+    <rect class="slot-face" x="542.017" y="385.198" width="21.33" height="57.851" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 543.017 386.198 H 562.347 V 394.198 H 543.017 Z"/>
+    <path class="slot-band" d="M 543.217 394.198 H 562.147" stroke="#f15a24" stroke-width="2.4"/>
+  </g>
+  <g id="slot-041" class="hotspot slot" data-slot-index="41" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 41</title>
+    <rect class="slot-face" x="564.651" y="427.275" width="25.913" height="15.774" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 565.651 428.275 H 589.564 V 430.275 H 565.651 Z"/>
+    <path class="slot-band" d="M 565.851 430.275 H 589.364" stroke="#f15a24" stroke-width="0.71"/>
+  </g>
+  <g id="slot-042" class="hotspot slot" data-slot-index="42" data-zone="rechts-stelling" data-label="KARTON / 205x205 / TAK14PC">
+    <title>KARTON / 205x205 / TAK14PC</title>
+    <rect class="slot-face" x="564.651" y="410.667" width="25.913" height="15.774" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 565.651 411.667 H 589.564 V 413.667 H 565.651 Z"/>
+    <path class="slot-band" d="M 565.851 413.667 H 589.364" stroke="#f15a24" stroke-width="0.71"/>
+  </g>
+  <g id="slot-043" class="hotspot slot" data-slot-index="43" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 43</title>
+    <rect class="slot-face" x="564.651" y="394.372" width="25.913" height="15.774" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 565.651 395.372 H 589.564 V 397.372 H 565.651 Z"/>
+    <path class="slot-band" d="M 565.851 397.372 H 589.364" stroke="#f15a24" stroke-width="0.71"/>
+  </g>
+  <g id="slot-044" class="hotspot slot" data-slot-index="44" data-zone="rechts-stelling" data-label="225x225 / 18088TAK02">
+    <title>225x225 / 18088TAK02</title>
+    <rect class="slot-face" x="591.867" y="415.726" width="25.913" height="27.323" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 592.867 416.726 H 616.78 V 420.644 H 592.867 Z"/>
+    <path class="slot-band" d="M 593.067 420.644 H 616.58" stroke="#f15a24" stroke-width="1.23"/>
+  </g>
+  <g id="slot-045" class="hotspot slot" data-slot-index="45" data-zone="rechts-stelling" data-label="KARTON / 225x225">
+    <title>KARTON / 225x225</title>
+    <rect class="slot-face" x="591.867" y="387.108" width="25.913" height="27.323" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 592.867 388.108 H 616.78 V 392.026 H 592.867 Z"/>
+    <path class="slot-band" d="M 593.067 392.026 H 616.58" stroke="#f15a24" stroke-width="1.23"/>
+  </g>
+  <g id="slot-046" class="hotspot slot" data-slot-index="46" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 46</title>
+    <rect class="slot-face" x="619.084" y="404.306" width="25.913" height="38.743" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 620.084 405.306 H 643.997 V 411.28 H 620.084 Z"/>
+    <path class="slot-band" d="M 620.284 411.28 H 643.797" stroke="#f15a24" stroke-width="1.743"/>
+  </g>
+  <g id="slot-047" class="hotspot slot" data-slot-index="47" data-zone="rechts-stelling" data-label="245x95 / 18088TAK04">
+    <title>245x95 / 18088TAK04</title>
+    <rect class="slot-face" x="728.508" y="404.306" width="25.913" height="38.743" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 729.508 405.306 H 753.421 V 411.28 H 729.508 Z"/>
+    <path class="slot-band" d="M 729.708 411.28 H 753.221" stroke="#f15a24" stroke-width="1.743"/>
+  </g>
+  <g id="slot-048" class="hotspot slot" data-slot-index="48" data-zone="rechts-stelling" data-label="SCHNITT / KARTON">
+    <title>SCHNITT / KARTON</title>
+    <rect class="slot-face" x="728.508" y="363.516" width="25.913" height="38.743" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 729.508 364.516 H 753.421 V 370.49 H 729.508 Z"/>
+    <path class="slot-band" d="M 729.708 370.49 H 753.221" stroke="#f15a24" stroke-width="1.743"/>
+  </g>
+  <g id="slot-049" class="hotspot slot" data-slot-index="49" data-zone="rechts-stelling" data-label="KARTON / 255x255 / 18088TAK03">
+    <title>KARTON / 255x255 / 18088TAK03</title>
+    <rect class="slot-face" x="619.084" y="363.516" width="25.913" height="38.743" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 620.084 364.516 H 643.997 V 370.49 H 620.084 Z"/>
+    <path class="slot-band" d="M 620.284 370.49 H 643.797" stroke="#f15a24" stroke-width="1.743"/>
+  </g>
+  <g id="slot-050" class="hotspot slot" data-slot-index="50" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 50</title>
+    <rect class="slot-face" x="646.3" y="418.023" width="25.913" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 647.3 419.023 H 671.213 V 422.528 H 647.3 Z"/>
+    <path class="slot-band" d="M 647.5 422.528 H 671.013" stroke="#f15a24" stroke-width="1.126"/>
+  </g>
+  <g id="slot-051" class="hotspot slot" data-slot-index="51" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 51</title>
+    <rect class="slot-face" x="626.205" y="525.718" width="30.639" height="28.61" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 627.205 526.718 H 655.844 V 530.868 H 627.205 Z"/>
+    <path class="slot-band" d="M 627.405 530.868 H 655.644" stroke="#f15a24" stroke-width="1.287"/>
+  </g>
+  <g id="slot-052" class="hotspot slot" data-slot-index="52" data-zone="rechts-stelling" data-label="MARSEP.TAART / V E N S T E R / 2 1 x2 1 x 9 / G B D 1 8 P C">
+    <title>MARSEP.TAART / V E N S T E R / 2 1 x2 1 x 9 / G B D 1 8 P C</title>
+    <rect class="slot-face" x="626.205" y="495.037" width="30.639" height="28.61" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 627.205 496.037 H 655.844 V 500.187 H 627.205 Z"/>
+    <path class="slot-band" d="M 627.405 500.187 H 655.644" stroke="#f15a24" stroke-width="1.287"/>
+  </g>
+  <g id="slot-053" class="hotspot slot" data-slot-index="53" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 53</title>
+    <rect class="slot-face" x="626.205" y="464.524" width="30.639" height="28.61" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 627.205 465.524 H 655.844 V 469.674 H 627.205 Z"/>
+    <path class="slot-band" d="M 627.405 469.674 H 655.644" stroke="#f15a24" stroke-width="1.287"/>
+  </g>
+  <g id="slot-054" class="hotspot slot" data-slot-index="54" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 54</title>
+    <rect class="slot-face" x="673.516" y="418.023" width="39.214" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 674.516 419.023 H 711.73 V 422.528 H 674.516 Z"/>
+    <path class="slot-band" d="M 674.716 422.528 H 711.53" stroke="#f15a24" stroke-width="1.126"/>
+    <path class="slot-fold" d="M 693.123 419.223 V 421.928"/>
+  </g>
+  <g id="slot-055" class="hotspot slot" data-slot-index="55" data-zone="rechts-stelling" data-label="KARTON / 345x345 / TAK62N">
+    <title>KARTON / 345x345 / TAK62N</title>
+    <rect class="slot-face" x="673.516" y="391.675" width="39.214" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 674.516 392.675 H 711.73 V 396.18 H 674.516 Z"/>
+    <path class="slot-band" d="M 674.716 396.18 H 711.53" stroke="#f15a24" stroke-width="1.126"/>
+    <path class="slot-fold" d="M 693.123 392.875 V 395.58"/>
+  </g>
+  <g id="slot-056" class="hotspot slot" data-slot-index="56" data-zone="rechts-stelling" data-label="KARTON">
+    <title>KARTON</title>
+    <rect class="slot-face" x="673.516" y="365.327" width="39.214" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 674.516 366.327 H 711.73 V 369.832 H 674.516 Z"/>
+    <path class="slot-band" d="M 674.716 369.832 H 711.53" stroke="#f15a24" stroke-width="1.126"/>
+    <path class="slot-fold" d="M 693.123 366.527 V 369.232"/>
+  </g>
+  <g id="slot-057" class="hotspot slot" data-slot-index="57" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 57</title>
+    <rect class="slot-face" x="755.724" y="418.023" width="39.214" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 756.724 419.023 H 793.938 V 422.528 H 756.724 Z"/>
+    <path class="slot-band" d="M 756.924 422.528 H 793.738" stroke="#f15a24" stroke-width="1.126"/>
+    <path class="slot-fold" d="M 775.331 419.223 V 421.928"/>
+  </g>
+  <g id="slot-058" class="hotspot slot" data-slot-index="58" data-zone="rechts-stelling" data-label="18088GBS01">
+    <title>18088GBS01</title>
+    <rect class="slot-face" x="755.724" y="390.301" width="39.214" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 756.724 391.301 H 793.938 V 394.806 H 756.724 Z"/>
+    <path class="slot-band" d="M 756.924 394.806 H 793.738" stroke="#f15a24" stroke-width="1.126"/>
+    <path class="slot-fold" d="M 775.331 391.501 V 394.206"/>
+  </g>
+  <g id="slot-059" class="hotspot slot" data-slot-index="59" data-zone="rechts-stelling" data-label="GEBAKSSCHAALTJE / 88mm">
+    <title>GEBAKSSCHAALTJE / 88mm</title>
+    <rect class="slot-face" x="755.724" y="362.58" width="39.214" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 756.724 363.58 H 793.938 V 367.085 H 756.724 Z"/>
+    <path class="slot-band" d="M 756.924 367.085 H 793.738" stroke="#f15a24" stroke-width="1.126"/>
+    <path class="slot-fold" d="M 775.331 363.78 V 366.485"/>
+  </g>
+  <g id="slot-060" class="hotspot slot" data-slot-index="60" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 60</title>
+    <rect class="slot-face" x="755.724" y="334.858" width="39.214" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 756.724 335.858 H 793.938 V 339.363 H 756.724 Z"/>
+    <path class="slot-band" d="M 756.924 339.363 H 793.738" stroke="#f15a24" stroke-width="1.126"/>
+    <path class="slot-fold" d="M 775.331 336.058 V 338.763"/>
+  </g>
+  <g id="slot-061" class="hotspot slot" data-slot-index="61" data-zone="rechts-stelling" data-label="KARTON / 395x395 / TAK18PC">
+    <title>KARTON / 395x395 / TAK18PC</title>
+    <rect class="slot-face" x="714.034" y="372.512" width="13.171" height="70.537" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+  </g>
+  <g id="slot-062" class="hotspot slot" data-slot-index="62" data-zone="rechts-stelling" data-label="KARTON / 295x295 / TAK15PC">
+    <title>KARTON / 295x295 / TAK15PC</title>
+    <rect class="slot-face" x="646.3" y="391.675" width="25.913" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 647.3 392.675 H 671.213 V 396.18 H 647.3 Z"/>
+    <path class="slot-band" d="M 647.5 396.18 H 671.013" stroke="#f15a24" stroke-width="1.126"/>
+  </g>
+  <g id="slot-063" class="hotspot slot" data-slot-index="63" data-zone="rechts-stelling" data-label="KARTON">
+    <title>KARTON</title>
+    <rect class="slot-face" x="646.3" y="365.327" width="25.913" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 647.3 366.327 H 671.213 V 369.832 H 647.3 Z"/>
+    <path class="slot-band" d="M 647.5 369.832 H 671.013" stroke="#f15a24" stroke-width="1.126"/>
+  </g>
+  <g id="slot-064" class="hotspot slot" data-slot-index="64" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 64</title>
+    <rect class="slot-face" x="646.3" y="338.979" width="25.913" height="25.026" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 647.3 339.979 H 671.213 V 343.484 H 647.3 Z"/>
+    <path class="slot-band" d="M 647.5 343.484 H 671.013" stroke="#f15a24" stroke-width="1.126"/>
+  </g>
+  <g id="slot-065" class="hotspot slot" data-slot-index="65" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 65</title>
+    <rect class="slot-face" x="542.017" y="325.037" width="21.33" height="57.851" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 543.017 326.037 H 562.347 V 334.037 H 543.017 Z"/>
+    <path class="slot-band" d="M 543.217 334.037 H 562.147" stroke="#f15a24" stroke-width="2.4"/>
+  </g>
+  <g id="slot-066" class="hotspot slot" data-slot-index="66" data-zone="midden-stelling" data-label="BROKZAK">
+    <title>BROKZAK</title>
+    <rect class="slot-face" x="332.37" y="263.156" width="45.264" height="24.317" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 333.37 264.156 H 376.634 V 267.533 H 333.37 Z"/>
+    <path class="slot-band" d="M 333.57 267.533 H 376.434" stroke="#4cae8a" stroke-width="1.094"/>
+    <path class="slot-fold" d="M 355.002 264.356 V 266.933"/>
+  </g>
+  <g id="slot-067" class="hotspot slot" data-slot-index="67" data-zone="midden-stelling" data-label="">
+    <title>Voorraadplek 67</title>
+    <rect class="slot-face" x="332.37" y="236.665" width="45.264" height="24.317" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 333.37 237.665 H 376.634 V 241.042 H 333.37 Z"/>
+    <path class="slot-band" d="M 333.57 241.042 H 376.434" stroke="#4cae8a" stroke-width="1.094"/>
+    <path class="slot-fold" d="M 355.002 237.865 V 240.442"/>
+  </g>
+  <g id="slot-068" class="hotspot slot" data-slot-index="68" data-zone="midden-stelling" data-label="STAAFZAK">
+    <title>STAAFZAK</title>
+    <rect class="slot-face" x="284.74" y="240.852" width="45.264" height="35.397" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 285.74 241.852 H 329.004 V 247.223 H 285.74 Z"/>
+    <path class="slot-band" d="M 285.94 247.223 H 328.804" stroke="#4cae8a" stroke-width="1.593"/>
+    <path class="slot-fold" d="M 307.372 242.052 V 246.623"/>
+  </g>
+  <g id="slot-069" class="hotspot slot" data-slot-index="69" data-zone="midden-boven" data-label="MACARON 4 / BLI10">
+    <title>MACARON 4 / BLI10</title>
+    <rect class="slot-face" x="280.667" y="136.208" width="59.222" height="26.681" rx="1.6" fill="#ece9ff" stroke="#7467b6"/>
+    <path class="slot-top" d="M 281.667 137.208 H 338.889 V 141.011 H 281.667 Z"/>
+    <path class="slot-band" d="M 281.867 141.011 H 338.689" stroke="#7467b6" stroke-width="1.201"/>
+    <path class="slot-fold" d="M 310.278 137.408 V 140.411"/>
+  </g>
+  <g id="slot-070" class="hotspot slot" data-slot-index="70" data-zone="midden-boven" data-label="MACARON 4">
+    <title>MACARON 4</title>
+    <rect class="slot-face" x="280.667" y="108.146" width="59.222" height="26.681" rx="1.6" fill="#ece9ff" stroke="#7467b6"/>
+    <path class="slot-top" d="M 281.667 109.146 H 338.889 V 112.949 H 281.667 Z"/>
+    <path class="slot-band" d="M 281.867 112.949 H 338.689" stroke="#7467b6" stroke-width="1.201"/>
+    <path class="slot-fold" d="M 310.278 109.346 V 112.349"/>
+  </g>
+  <g id="slot-071" class="hotspot slot" data-slot-index="71" data-zone="midden-boven" data-label="">
+    <title>Voorraadplek 71</title>
+    <rect class="slot-face" x="280.667" y="80.083" width="59.222" height="26.681" rx="1.6" fill="#ece9ff" stroke="#7467b6"/>
+    <path class="slot-top" d="M 281.667 81.083 H 338.889 V 84.886 H 281.667 Z"/>
+    <path class="slot-band" d="M 281.867 84.886 H 338.689" stroke="#7467b6" stroke-width="1.201"/>
+    <path class="slot-fold" d="M 310.278 81.283 V 84.286"/>
+  </g>
+  <g id="slot-072" class="hotspot slot" data-slot-index="72" data-zone="links-boven" data-label="BLI04">
+    <title>BLI04</title>
+    <rect class="slot-face" x="122.186" y="110.183" width="72.76" height="39.365" rx="1.6" fill="#fde8ee" stroke="#d94f70"/>
+    <path class="slot-top" d="M 123.186 111.183 H 193.946 V 117.269 H 123.186 Z"/>
+    <path class="slot-band" d="M 123.386 117.269 H 193.746" stroke="#d94f70" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 158.566 111.383 V 116.669"/>
+  </g>
+  <g id="slot-073" class="hotspot slot" data-slot-index="73" data-zone="midden-boven" data-label="BLI11">
+    <title>BLI11</title>
+    <rect class="slot-face" x="343.961" y="151.586" width="59.222" height="39.365" rx="1.6" fill="#ece9ff" stroke="#7467b6"/>
+    <path class="slot-top" d="M 344.961 152.586 H 402.183 V 158.672 H 344.961 Z"/>
+    <path class="slot-band" d="M 345.161 158.672 H 401.983" stroke="#7467b6" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 373.572 152.786 V 158.072"/>
+  </g>
+  <g id="slot-074" class="hotspot slot" data-slot-index="74" data-zone="midden-boven" data-label="BLI12">
+    <title>BLI12</title>
+    <rect class="slot-face" x="407.254" y="151.586" width="59.222" height="39.365" rx="1.6" fill="#ece9ff" stroke="#7467b6"/>
+    <path class="slot-top" d="M 408.254 152.586 H 465.476 V 158.672 H 408.254 Z"/>
+    <path class="slot-band" d="M 408.454 158.672 H 465.276" stroke="#7467b6" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 436.865 152.786 V 158.072"/>
+  </g>
+  <g id="slot-075" class="hotspot slot" data-slot-index="75" data-zone="midden-stelling" data-label="BRUIDS / 30x30x30 / GBD99101">
+    <title>BRUIDS / 30x30x30 / GBD99101</title>
+    <rect class="slot-face" x="379.964" y="274.247" width="36.753" height="39.365" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 380.964 275.247 H 415.717 V 281.333 H 380.964 Z"/>
+    <path class="slot-band" d="M 381.164 281.333 H 415.517" stroke="#4cae8a" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 398.341 275.447 V 280.733"/>
+  </g>
+  <g id="slot-076" class="hotspot slot" data-slot-index="76" data-zone="rechts-boven" data-label="WAALKOEK / DEKSEL / 18088GBD53">
+    <title>WAALKOEK / DEKSEL / 18088GBD53</title>
+    <rect class="slot-face" x="519.385" y="157.673" width="22.633" height="32.993" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 520.385 158.673 H 541.018 V 163.612 H 520.385 Z"/>
+    <path class="slot-band" d="M 520.585 163.612 H 540.818" stroke="#f2c84b" stroke-width="1.485"/>
+  </g>
+  <g id="slot-077" class="hotspot slot" data-slot-index="77" data-zone="rechts-boven" data-label="">
+    <title>Voorraadplek 77</title>
+    <rect class="slot-face" x="519.385" y="123.211" width="22.633" height="32.993" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 520.385 124.211 H 541.018 V 129.15 H 520.385 Z"/>
+    <path class="slot-band" d="M 520.585 129.15 H 540.818" stroke="#f2c84b" stroke-width="1.485"/>
+  </g>
+  <g id="slot-078" class="hotspot slot" data-slot-index="78" data-zone="rechts-boven" data-label="">
+    <title>Voorraadplek 78</title>
+    <rect class="slot-face" x="519.385" y="88.748" width="22.633" height="32.993" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 520.385 89.748 H 541.018 V 94.687 H 520.385 Z"/>
+    <path class="slot-band" d="M 520.585 94.687 H 540.818" stroke="#f2c84b" stroke-width="1.485"/>
+  </g>
+  <g id="slot-079" class="hotspot slot" data-slot-index="79" data-zone="rechts-boven" data-label="W A A L K O E K / B A K J E / 1 80 8 8 B A K 0 1">
+    <title>W A A L K O E K / B A K J E / 1 80 8 8 B A K 0 1</title>
+    <rect class="slot-face" x="544.128" y="141.743" width="22.633" height="48.923" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 545.128 142.743 H 565.761 V 150.549 H 545.128 Z"/>
+    <path class="slot-band" d="M 545.328 150.549 H 565.561" stroke="#f2c84b" stroke-width="2.202"/>
+  </g>
+  <g id="slot-080" class="hotspot slot" data-slot-index="80" data-zone="rechts-boven" data-label="M A R IK E N B R O O D / 18 0 8 8 G B D 2 4 PC">
+    <title>M A R IK E N B R O O D / 18 0 8 8 G B D 2 4 PC</title>
+    <rect class="slot-face" x="568.872" y="121.486" width="44.65" height="69.18" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 569.872 122.486 H 612.522 V 130.486 H 569.872 Z"/>
+    <path class="slot-band" d="M 570.072 130.486 H 612.322" stroke="#f2c84b" stroke-width="2.4"/>
+    <path class="slot-fold" d="M 591.197 122.686 V 129.886"/>
+  </g>
+  <g id="slot-081" class="hotspot slot" data-slot-index="81" data-zone="rechts-stelling" data-label="s.v. GEBAK / 9 x9 x 8 / SV D 0 1 PC">
+    <title>s.v. GEBAK / 9 x9 x 8 / SV D 0 1 PC</title>
+    <rect class="slot-face" x="519.384" y="239.398" width="30.668" height="47.516" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 520.384 240.398 H 549.052 V 247.951 H 520.384 Z"/>
+    <path class="slot-band" d="M 520.584 247.951 H 548.852" stroke="#f15a24" stroke-width="2.138"/>
+  </g>
+  <g id="slot-082" class="hotspot slot" data-slot-index="82" data-zone="rechts-stelling" data-label="DO O S K L E IN / 15 x 1 5 x 7 / GBD10PC">
+    <title>DO O S K L E IN / 15 x 1 5 x 7 / GBD10PC</title>
+    <rect class="slot-face" x="573.417" y="259.88" width="30.668" height="27.034" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 574.417 260.88 H 603.085 V 264.746 H 574.417 Z"/>
+    <path class="slot-band" d="M 574.617 264.746 H 602.885" stroke="#f15a24" stroke-width="1.217"/>
+  </g>
+  <g id="slot-083" class="hotspot slot" data-slot-index="83" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 83</title>
+    <rect class="slot-face" x="630.966" y="273.397" width="30.668" height="13.517" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 631.966 274.397 H 660.634 V 276.397 H 631.966 Z"/>
+    <path class="slot-band" d="M 632.166 276.397 H 660.434" stroke="#f15a24" stroke-width="0.7"/>
+  </g>
+  <g id="slot-084" class="hotspot slot" data-slot-index="84" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 84</title>
+    <rect class="slot-face" x="663.942" y="273.397" width="30.668" height="13.517" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 664.942 274.397 H 693.61 V 276.397 H 664.942 Z"/>
+    <path class="slot-band" d="M 665.142 276.397 H 693.41" stroke="#f15a24" stroke-width="0.7"/>
+  </g>
+  <g id="slot-085" class="hotspot slot" data-slot-index="85" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 85</title>
+    <rect class="slot-face" x="696.917" y="273.397" width="30.668" height="13.517" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 697.917 274.397 H 726.585 V 276.397 H 697.917 Z"/>
+    <path class="slot-band" d="M 698.117 276.397 H 726.385" stroke="#f15a24" stroke-width="0.7"/>
+  </g>
+  <g id="slot-086" class="hotspot slot" data-slot-index="86" data-zone="rechts-stelling" data-label="">
+    <title>Voorraadplek 86</title>
+    <rect class="slot-face" x="729.759" y="273.397" width="63.778" height="13.517" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 730.759 274.397 H 792.537 V 276.397 H 730.759 Z"/>
+    <path class="slot-band" d="M 730.959 276.397 H 792.337" stroke="#f15a24" stroke-width="0.7"/>
+    <path class="slot-fold" d="M 761.648 274.597 V 275.797"/>
+  </g>
+  <g id="slot-087" class="hotspot slot" data-slot-index="87" data-zone="rechts-stelling" data-label="TRAPEZIUM / 18088RON04PCA">
+    <title>TRAPEZIUM / 18088RON04PCA</title>
+    <rect class="slot-face" x="551.536" y="266.517" width="20.397" height="20.397" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 552.536 267.517 H 570.933 V 270.188 H 552.536 Z"/>
+    <path class="slot-band" d="M 552.736 270.188 H 570.733" stroke="#f15a24" stroke-width="0.918"/>
+  </g>
+  <g id="slot-088" class="hotspot slot" data-slot-index="88" data-zone="rechts-stelling" data-label="RONDEL ROND / 18088RON02PC">
+    <title>RONDEL ROND / 18088RON02PC</title>
+    <rect class="slot-face" x="551.536" y="244.458" width="20.397" height="20.397" rx="1.6" fill="#fff0e7" stroke="#f15a24"/>
+    <path class="slot-top" d="M 552.536 245.458 H 570.933 V 248.129 H 552.536 Z"/>
+    <path class="slot-band" d="M 552.736 248.129 H 570.733" stroke="#f15a24" stroke-width="0.918"/>
+  </g>
+  <g id="slot-089" class="hotspot slot" data-slot-index="89" data-zone="rechts-boven" data-label="">
+    <title>Voorraadplek 89</title>
+    <rect class="slot-face" x="648.411" y="176.829" width="38.589" height="13.837" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 649.411 177.829 H 686 V 179.829 H 649.411 Z"/>
+    <path class="slot-band" d="M 649.611 179.829 H 685.8" stroke="#f2c84b" stroke-width="0.7"/>
+    <path class="slot-fold" d="M 667.706 178.029 V 179.229"/>
+  </g>
+  <g id="slot-090" class="hotspot slot" data-slot-index="90" data-zone="rechts-boven" data-label="TV DOOS / KARTON / 118x183 / GOU24">
+    <title>TV DOOS / KARTON / 118x183 / GOU24</title>
+    <rect class="slot-face" x="614.81" y="162.455" width="31.767" height="28.211" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 615.81 163.455 H 645.577 V 167.533 H 615.81 Z"/>
+    <path class="slot-band" d="M 616.01 167.533 H 645.377" stroke="#f2c84b" stroke-width="1.269"/>
+  </g>
+  <g id="slot-091" class="hotspot slot" data-slot-index="91" data-zone="rechts-boven" data-label="185x130 / 18088BLIKAR01A">
+    <title>185x130 / 18088BLIKAR01A</title>
+    <rect class="slot-face" x="648.411" y="161.607" width="38.589" height="13.837" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 649.411 162.607 H 686 V 164.607 H 649.411 Z"/>
+    <path class="slot-band" d="M 649.611 164.607 H 685.8" stroke="#f2c84b" stroke-width="0.7"/>
+    <path class="slot-fold" d="M 667.706 162.807 V 164.007"/>
+  </g>
+  <g id="slot-092" class="hotspot slot" data-slot-index="92" data-zone="rechts-boven" data-label="G A T E AU / K A R T O N">
+    <title>G A T E AU / K A R T O N</title>
+    <rect class="slot-face" x="648.411" y="146.384" width="38.589" height="13.837" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 649.411 147.384 H 686 V 149.384 H 649.411 Z"/>
+    <path class="slot-band" d="M 649.611 149.384 H 685.8" stroke="#f2c84b" stroke-width="0.7"/>
+    <path class="slot-fold" d="M 667.706 147.584 V 148.784"/>
+  </g>
+  <g id="slot-093" class="hotspot slot" data-slot-index="93" data-zone="rechts-boven" data-label="">
+    <title>Voorraadplek 93</title>
+    <rect class="slot-face" x="648.411" y="131.162" width="38.589" height="13.837" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 649.411 132.162 H 686 V 134.162 H 649.411 Z"/>
+    <path class="slot-band" d="M 649.611 134.162 H 685.8" stroke="#f2c84b" stroke-width="0.7"/>
+    <path class="slot-fold" d="M 667.706 132.362 V 133.562"/>
+  </g>
+  <g id="slot-094" class="hotspot slot" data-slot-index="94" data-zone="rechts-boven" data-label="">
+    <title>Voorraadplek 94</title>
+    <rect class="slot-face" x="689.111" y="167.87" width="33.634" height="22.796" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 690.111 168.87 H 721.745 V 171.973 H 690.111 Z"/>
+    <path class="slot-band" d="M 690.311 171.973 H 721.545" stroke="#f2c84b" stroke-width="1.026"/>
+  </g>
+  <g id="slot-095" class="hotspot slot" data-slot-index="95" data-zone="rechts-boven" data-label="TRUFFEL / BA K J E / CO N IS C H / BAK05">
+    <title>TRUFFEL / BA K J E / CO N IS C H / BAK05</title>
+    <rect class="slot-face" x="724.856" y="146.384" width="36.275" height="44.282" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 725.856 147.384 H 760.131 V 154.355 H 725.856 Z"/>
+    <path class="slot-band" d="M 726.056 154.355 H 759.931" stroke="#f2c84b" stroke-width="1.993"/>
+    <path class="slot-fold" d="M 742.994 147.584 V 153.755"/>
+  </g>
+  <g id="slot-096" class="hotspot slot" data-slot-index="96" data-zone="rechts-boven" data-label="shopper / 18088DRT11PC">
+    <title>shopper / 18088DRT11PC</title>
+    <rect class="slot-face" x="763.041" y="161.606" width="36.275" height="29.06" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 764.041 162.606 H 798.316 V 166.837 H 764.041 Z"/>
+    <path class="slot-band" d="M 764.241 166.837 H 798.116" stroke="#f2c84b" stroke-width="1.308"/>
+    <path class="slot-fold" d="M 781.178 162.806 V 166.237"/>
+  </g>
+  <g id="slot-097" class="hotspot slot" data-slot-index="97" data-zone="rechts-boven" data-label="hemd / D R T 0 3 P C / D R T 0 4 P C / D R T 0 6 P C">
+    <title>hemd / D R T 0 3 P C / D R T 0 4 P C / D R T 0 6 P C</title>
+    <rect class="slot-face" x="763.041" y="133.521" width="36.275" height="27.393" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 764.041 134.521 H 798.316 V 138.452 H 764.041 Z"/>
+    <path class="slot-band" d="M 764.241 138.452 H 798.116" stroke="#f2c84b" stroke-width="1.233"/>
+    <path class="slot-fold" d="M 781.178 134.721 V 137.852"/>
+  </g>
+  <g id="slot-098" class="hotspot slot" data-slot-index="98" data-zone="rechts-boven" data-label="">
+    <title>Voorraadplek 98</title>
+    <rect class="slot-face" x="689.111" y="142.794" width="33.634" height="22.795" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 690.111 143.794 H 721.745 V 146.897 H 690.111 Z"/>
+    <path class="slot-band" d="M 690.311 146.897 H 721.545" stroke="#f2c84b" stroke-width="1.026"/>
+  </g>
+  <g id="slot-099" class="hotspot slot" data-slot-index="99" data-zone="rechts-boven" data-label="">
+    <title>Voorraadplek 99</title>
+    <rect class="slot-face" x="689.111" y="117.715" width="33.634" height="22.796" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 690.111 118.715 H 721.745 V 121.818 H 690.111 Z"/>
+    <path class="slot-band" d="M 690.311 121.818 H 721.545" stroke="#f2c84b" stroke-width="1.026"/>
+  </g>
+  <g id="slot-100" class="hotspot slot" data-slot-index="100" data-zone="rechts-boven" data-label="">
+    <title>Voorraadplek 100</title>
+    <rect class="slot-face" x="544.128" y="90.642" width="22.633" height="48.923" rx="1.6" fill="#fff3c2" stroke="#f2c84b"/>
+    <path class="slot-top" d="M 545.128 91.642 H 565.761 V 99.448 H 545.128 Z"/>
+    <path class="slot-band" d="M 545.328 99.448 H 565.561" stroke="#f2c84b" stroke-width="2.202"/>
+  </g>
+  <g id="slot-101" class="hotspot slot" data-slot-index="101" data-zone="midden-stelling" data-label="BRUIDS / 35x35x35 / GBD99102">
+    <title>BRUIDS / 35x35x35 / GBD99102</title>
+    <rect class="slot-face" x="419.047" y="274.247" width="41.632" height="39.365" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 420.047 275.247 H 459.679 V 281.333 H 420.047 Z"/>
+    <path class="slot-band" d="M 420.247 281.333 H 459.479" stroke="#4cae8a" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 439.863 275.447 V 280.733"/>
+  </g>
+  <g id="slot-102" class="hotspot slot" data-slot-index="102" data-zone="midden-stelling" data-label="BRUIDS / 40x40x40 / GBD99103">
+    <title>BRUIDS / 40x40x40 / GBD99103</title>
+    <rect class="slot-face" x="463.008" y="274.247" width="45.138" height="39.365" rx="1.6" fill="#e7f7f0" stroke="#4cae8a"/>
+    <path class="slot-top" d="M 464.008 275.247 H 507.146 V 281.333 H 464.008 Z"/>
+    <path class="slot-band" d="M 464.208 281.333 H 506.946" stroke="#4cae8a" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 485.577 275.447 V 280.733"/>
+  </g>
+  <g id="slot-103" class="hotspot slot" data-slot-index="103" data-zone="midden-boven" data-label="PASTICCERIA">
+    <title>PASTICCERIA</title>
+    <rect class="slot-face" x="407.254" y="110.183" width="59.222" height="39.365" rx="1.6" fill="#ece9ff" stroke="#7467b6"/>
+    <path class="slot-top" d="M 408.254 111.183 H 465.476 V 117.269 H 408.254 Z"/>
+    <path class="slot-band" d="M 408.454 117.269 H 465.276" stroke="#7467b6" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 436.865 111.383 V 116.669"/>
+  </g>
+  <g id="slot-104" class="hotspot slot" data-slot-index="104" data-zone="midden-boven" data-label="MACARON 6">
+    <title>MACARON 6</title>
+    <rect class="slot-face" x="343.961" y="110.183" width="59.222" height="39.365" rx="1.6" fill="#ece9ff" stroke="#7467b6"/>
+    <path class="slot-top" d="M 344.961 111.183 H 402.183 V 117.269 H 344.961 Z"/>
+    <path class="slot-band" d="M 345.161 117.269 H 401.983" stroke="#7467b6" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 373.572 111.383 V 116.669"/>
+  </g>
+  <g id="slot-105" class="hotspot slot" data-slot-index="105" data-zone="links-boven" data-label="TRUFFEL">
+    <title>TRUFFEL</title>
+    <rect class="slot-face" x="122.186" y="68.781" width="72.76" height="39.365" rx="1.6" fill="#fde8ee" stroke="#d94f70"/>
+    <path class="slot-top" d="M 123.186 69.781 H 193.946 V 75.867 H 123.186 Z"/>
+    <path class="slot-band" d="M 123.386 75.867 H 193.746" stroke="#d94f70" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 158.566 69.981 V 75.267"/>
+  </g>
+  <g id="slot-106" class="hotspot slot" data-slot-index="106" data-zone="links-boven" data-label="">
+    <title>Voorraadplek 106</title>
+    <rect class="slot-face" x="122.186" y="27.378" width="72.76" height="39.365" rx="1.6" fill="#fde8ee" stroke="#d94f70"/>
+    <path class="slot-top" d="M 123.186 28.378 H 193.946 V 34.464 H 123.186 Z"/>
+    <path class="slot-band" d="M 123.386 34.464 H 193.746" stroke="#d94f70" stroke-width="1.771"/>
+    <path class="slot-fold" d="M 158.566 28.578 V 33.864"/>
+  </g>
+  <g id="slot-107" class="hotspot slot" data-slot-index="107" data-zone="links-boven" data-label="">
+    <title>Voorraadplek 107</title>
+    <rect class="slot-face" x="201.427" y="138.246" width="72.76" height="52.705" rx="1.6" fill="#fde8ee" stroke="#d94f70"/>
+    <path class="slot-top" d="M 202.427 139.246 H 273.187 V 147.246 H 202.427 Z"/>
+    <path class="slot-band" d="M 202.627 147.246 H 272.987" stroke="#d94f70" stroke-width="2.372"/>
+    <path class="slot-fold" d="M 237.807 139.446 V 146.646"/>
+  </g>
+  <g id="slot-108" class="hotspot slot" data-slot-index="108" data-zone="links-boven" data-label="BOTERKOEK / BLI06">
+    <title>BOTERKOEK / BLI06</title>
+    <rect class="slot-face" x="201.427" y="82.812" width="72.76" height="52.705" rx="1.6" fill="#fde8ee" stroke="#d94f70"/>
+    <path class="slot-top" d="M 202.427 83.812 H 273.187 V 91.812 H 202.427 Z"/>
+    <path class="slot-band" d="M 202.627 91.812 H 272.987" stroke="#d94f70" stroke-width="2.372"/>
+    <path class="slot-fold" d="M 237.807 84.012 V 91.212"/>
+  </g>
+  <g id="slot-109" class="hotspot slot" data-slot-index="109" data-zone="links-boven" data-label="">
+    <title>Voorraadplek 109</title>
+    <rect class="slot-face" x="201.427" y="27.379" width="72.76" height="52.705" rx="1.6" fill="#fde8ee" stroke="#d94f70"/>
+    <path class="slot-top" d="M 202.427 28.379 H 273.187 V 36.379 H 202.427 Z"/>
+    <path class="slot-band" d="M 202.627 36.379 H 272.987" stroke="#d94f70" stroke-width="2.372"/>
+    <path class="slot-fold" d="M 237.807 28.579 V 35.779"/>
+  </g>
+  <g id="slot-110" class="hotspot slot" data-slot-index="110" data-zone="links-stelling" data-label="">
+    <title>Voorraadplek 110</title>
+    <rect class="slot-face" x="101.342" y="431.768" width="42.426" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 102.342 432.768 H 142.768 V 437.504 H 102.342 Z"/>
+    <path class="slot-band" d="M 102.542 437.504 H 142.568" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 122.555 432.968 V 436.904"/>
+  </g>
+  <g id="slot-111" class="hotspot slot" data-slot-index="111" data-zone="links-stelling" data-label="">
+    <title>Voorraadplek 111</title>
+    <rect class="slot-face" x="145.932" y="431.768" width="42.587" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 146.932 432.768 H 187.519 V 437.504 H 146.932 Z"/>
+    <path class="slot-band" d="M 147.132 437.504 H 187.319" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 167.226 432.968 V 436.904"/>
+  </g>
+  <g id="slot-112" class="hotspot slot" data-slot-index="112" data-zone="links-stelling" data-label="18088GBD15PC">
+    <title>18088GBD15PC</title>
+    <rect class="slot-face" x="191.336" y="415.874" width="80.289" height="47.758" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 192.336 416.874 H 270.625 V 424.47 H 192.336 Z"/>
+    <path class="slot-band" d="M 192.536 424.47 H 270.425" stroke="#1d5e91" stroke-width="2.149"/>
+    <path class="slot-fold" d="M 231.481 417.074 V 423.87"/>
+  </g>
+  <g id="slot-113" class="hotspot slot" data-slot-index="113" data-zone="links-stelling" data-label="19x19x12">
+    <title>19x19x12</title>
+    <rect class="slot-face" x="191.336" y="366.222" width="80.289" height="47.758" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 192.336 367.222 H 270.625 V 374.818 H 192.336 Z"/>
+    <path class="slot-band" d="M 192.536 374.818 H 270.425" stroke="#1d5e91" stroke-width="2.149"/>
+    <path class="slot-fold" d="M 231.481 367.422 V 374.218"/>
+  </g>
+  <g id="slot-114" class="hotspot slot" data-slot-index="114" data-zone="links-stelling" data-label="19x19x5 / 18088GBD13PC">
+    <title>19x19x5 / 18088GBD13PC</title>
+    <rect class="slot-face" x="145.932" y="397.079" width="42.587" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 146.932 398.079 H 187.519 V 402.815 H 146.932 Z"/>
+    <path class="slot-band" d="M 147.132 402.815 H 187.319" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 167.226 398.279 V 402.215"/>
+  </g>
+  <g id="slot-115" class="hotspot slot" data-slot-index="115" data-zone="links-stelling" data-label="">
+    <title>Voorraadplek 115</title>
+    <rect class="slot-face" x="145.932" y="362.389" width="42.587" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 146.932 363.389 H 187.519 V 368.125 H 146.932 Z"/>
+    <path class="slot-band" d="M 147.132 368.125 H 187.319" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 167.226 363.589 V 367.525"/>
+  </g>
+  <g id="slot-116" class="hotspot slot" data-slot-index="116" data-zone="links-stelling" data-label="19x19x8 / 18088GBD08PC">
+    <title>19x19x8 / 18088GBD08PC</title>
+    <rect class="slot-face" x="101.342" y="397.079" width="42.426" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 102.342 398.079 H 142.768 V 402.815 H 102.342 Z"/>
+    <path class="slot-band" d="M 102.542 402.815 H 142.568" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 122.555 398.279 V 402.215"/>
+  </g>
+  <g id="slot-117" class="hotspot slot" data-slot-index="117" data-zone="links-stelling" data-label="">
+    <title>Voorraadplek 117</title>
+    <rect class="slot-face" x="46.975" y="522.464" width="42.426" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 47.975 523.464 H 88.401 V 528.2 H 47.975 Z"/>
+    <path class="slot-band" d="M 48.175 528.2 H 88.201" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 68.188 523.664 V 527.6"/>
+  </g>
+  <g id="slot-118" class="hotspot slot" data-slot-index="118" data-zone="links-stelling" data-label="beugel heel / 18088DPP06PC">
+    <title>beugel heel / 18088DPP06PC</title>
+    <rect class="slot-face" x="46.975" y="488.707" width="42.426" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 47.975 489.707 H 88.401 V 494.443 H 47.975 Z"/>
+    <path class="slot-band" d="M 48.175 494.443 H 88.201" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 68.188 489.907 V 493.843"/>
+  </g>
+  <g id="slot-119" class="hotspot slot" data-slot-index="119" data-zone="links-stelling" data-label="">
+    <title>Voorraadplek 119</title>
+    <rect class="slot-face" x="91.551" y="522.464" width="42.426" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 92.551 523.464 H 132.977 V 528.2 H 92.551 Z"/>
+    <path class="slot-band" d="M 92.751 528.2 H 132.777" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 112.764 523.664 V 527.6"/>
+  </g>
+  <g id="slot-120" class="hotspot slot" data-slot-index="120" data-zone="links-stelling" data-label="beugel half / 18088DPP05PC">
+    <title>beugel half / 18088DPP05PC</title>
+    <rect class="slot-face" x="91.551" y="488.707" width="42.426" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 92.551 489.707 H 132.977 V 494.443 H 92.551 Z"/>
+    <path class="slot-band" d="M 92.751 494.443 H 132.777" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 112.764 489.907 V 493.843"/>
+  </g>
+  <g id="slot-121" class="hotspot slot" data-slot-index="121" data-zone="links-stelling" data-label="">
+    <title>Voorraadplek 121</title>
+    <rect class="slot-face" x="136.127" y="522.464" width="65.646" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 137.127 523.464 H 200.773 V 528.2 H 137.127 Z"/>
+    <path class="slot-band" d="M 137.327 528.2 H 200.573" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 168.95 523.664 V 527.6"/>
+  </g>
+  <g id="slot-122" class="hotspot slot" data-slot-index="122" data-zone="links-stelling" data-label="3-gebaks doos / GBD01PC">
+    <title>3-gebaks doos / GBD01PC</title>
+    <rect class="slot-face" x="136.127" y="488.707" width="65.646" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 137.127 489.707 H 200.773 V 494.443 H 137.127 Z"/>
+    <path class="slot-band" d="M 137.327 494.443 H 200.573" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 168.95 489.907 V 493.843"/>
+  </g>
+  <g id="slot-123" class="hotspot slot" data-slot-index="123" data-zone="links-stelling" data-label="">
+    <title>Voorraadplek 123</title>
+    <rect class="slot-face" x="203.924" y="522.464" width="70.263" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 204.924 523.464 H 273.187 V 528.2 H 204.924 Z"/>
+    <path class="slot-band" d="M 205.124 528.2 H 272.987" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 239.055 523.664 V 527.6"/>
+  </g>
+  <g id="slot-124" class="hotspot slot" data-slot-index="124" data-zone="links-stelling" data-label="TV petit four doosje / 18088GBD11PC">
+    <title>TV petit four doosje / 18088GBD11PC</title>
+    <rect class="slot-face" x="203.924" y="488.707" width="70.263" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 204.924 489.707 H 273.187 V 494.443 H 204.924 Z"/>
+    <path class="slot-band" d="M 205.124 494.443 H 272.987" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 239.055 489.907 V 493.843"/>
+  </g>
+  <g id="slot-125" class="hotspot slot" data-slot-index="125" data-zone="links-stelling" data-label="">
+    <title>Voorraadplek 125</title>
+    <rect class="slot-face" x="101.342" y="362.389" width="42.426" height="31.864" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 102.342 363.389 H 142.768 V 368.125 H 102.342 Z"/>
+    <path class="slot-band" d="M 102.542 368.125 H 142.568" stroke="#1d5e91" stroke-width="1.434"/>
+    <path class="slot-fold" d="M 122.555 363.589 V 367.525"/>
+  </g>
+  <g id="slot-126" class="hotspot slot" data-slot-index="126" data-zone="links-stelling" data-label="VAANDEL">
+    <title>VAANDEL</title>
+    <rect class="slot-face" x="46.975" y="215.824" width="147.217" height="61.53" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 47.975 216.824 H 193.192 V 224.824 H 47.975 Z"/>
+    <path class="slot-band" d="M 48.175 224.824 H 192.992" stroke="#1d5e91" stroke-width="2.4"/>
+    <path class="slot-fold" d="M 120.584 217.024 V 224.224"/>
+  </g>
+  <g id="slot-127" class="hotspot slot" data-slot-index="127" data-zone="links-stelling" data-label="7">
+    <title>7</title>
+    <rect class="slot-face" x="236.592" y="254.917" width="37.595" height="87.41" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 237.592 255.917 H 273.187 V 263.917 H 237.592 Z"/>
+    <path class="slot-band" d="M 237.792 263.917 H 272.987" stroke="#1d5e91" stroke-width="2.4"/>
+    <path class="slot-fold" d="M 255.389 256.117 V 263.317"/>
+  </g>
+  <g id="slot-128" class="hotspot slot" data-slot-index="128" data-zone="links-stelling" data-label="MACA / BLI22">
+    <title>MACA / BLI22</title>
+    <rect class="slot-face" x="196.472" y="254.917" width="37.595" height="87.41" rx="1.6" fill="#e8f3fb" stroke="#1d5e91"/>
+    <path class="slot-top" d="M 197.472 255.917 H 233.067 V 263.917 H 197.472 Z"/>
+    <path class="slot-band" d="M 197.672 263.917 H 232.867" stroke="#1d5e91" stroke-width="2.4"/>
+    <path class="slot-fold" d="M 215.269 256.117 V 263.317"/>
+  </g>
+  <text class="source-label major" x="217.848" y="297.565" font-size="10">M</text>
+  <text class="source-label major" x="225.788" y="297.565" font-size="10">A</text>
+  <text class="source-label major" x="231.758" y="297.565" font-size="10">C</text>
+  <text class="source-label major" x="237.598" y="297.565" font-size="10">A</text>
+  <text class="source-label major" x="243.718" y="297.565" font-size="10"> </text>
+  <text class="source-label major" x="245.838" y="297.565" font-size="10">7</text>
+  <text class="source-label major" x="223.008" y="309.565" font-size="10">B</text>
+  <text class="source-label major" x="228.428" y="309.565" font-size="10">L</text>
+  <text class="source-label major" x="233.148" y="309.565" font-size="10">I</text>
+  <text class="source-label major" x="235.538" y="309.565" font-size="10">2</text>
+  <text class="source-label major" x="240.668" y="309.565" font-size="10">2</text>
+  <text class="source-label" x="291.874" y="275.199" font-size="7.153">S</text>
+  <text class="source-label" x="295.401" y="275.199" font-size="7.153">T</text>
+  <text class="source-label" x="298.419" y="275.199" font-size="7.153">A</text>
+  <text class="source-label" x="302.797" y="275.199" font-size="7.153">A</text>
+  <text class="source-label" x="307.175" y="275.199" font-size="7.153">F</text>
+  <text class="source-label" x="310.659" y="275.199" font-size="7.153">Z</text>
+  <text class="source-label" x="314.614" y="275.199" font-size="7.153">A</text>
+  <text class="source-label" x="318.992" y="275.199" font-size="7.153">K</text>
+  <text class="source-label" x="284.742" y="283.783" font-size="7.153">1</text>
+  <text class="source-label" x="288.412" y="283.783" font-size="7.153">8</text>
+  <text class="source-label" x="292.081" y="283.783" font-size="7.153">0</text>
+  <text class="source-label" x="295.751" y="283.783" font-size="7.153">8</text>
+  <text class="source-label" x="299.421" y="283.783" font-size="7.153">8</text>
+  <text class="source-label" x="303.09" y="283.783" font-size="7.153">C</text>
+  <text class="source-label" x="307.239" y="283.783" font-size="7.153">E</text>
+  <text class="source-label" x="310.759" y="283.783" font-size="7.153">Z</text>
+  <text class="source-label" x="314.714" y="283.783" font-size="7.153">1</text>
+  <text class="source-label" x="318.384" y="283.783" font-size="7.153">0</text>
+  <text class="source-label" x="322.054" y="283.783" font-size="7.153">P</text>
+  <text class="source-label" x="325.859" y="283.783" font-size="7.153">C</text>
+  <text class="source-label small" x="286.322" y="392.069" font-size="4.256">B</text>
+  <text class="source-label small" x="288.629" y="392.069" font-size="4.256">O</text>
+  <text class="source-label small" x="291.455" y="392.069" font-size="4.256">T</text>
+  <text class="source-label small" x="293.57" y="392.069" font-size="4.256">E</text>
+  <text class="source-label small" x="295.664" y="392.069" font-size="4.256">R</text>
+  <text class="source-label small" x="297.953" y="392.069" font-size="4.256">K</text>
+  <text class="source-label small" x="300.188" y="392.069" font-size="4.256">O</text>
+  <text class="source-label small" x="303.12" y="392.069" font-size="4.256">E</text>
+  <text class="source-label small" x="305.214" y="392.069" font-size="4.256">K</text>
+  <text class="source-label small" x="307.52" y="392.069" font-size="4.256">B</text>
+  <text class="source-label small" x="309.827" y="392.069" font-size="4.256">L</text>
+  <text class="source-label small" x="311.67" y="392.069" font-size="4.256">O</text>
+  <text class="source-label small" x="314.602" y="392.069" font-size="4.256">K</text>
+  <text class="source-label small" x="295.021" y="397.176" font-size="4.256">Z</text>
+  <text class="source-label small" x="297.375" y="397.176" font-size="4.256">A</text>
+  <text class="source-label small" x="299.979" y="397.176" font-size="4.256">K</text>
+  <text class="source-label small" x="302.448" y="397.176" font-size="4.256">J</text>
+  <text class="source-label small" x="304.022" y="397.176" font-size="4.256">E</text>
+  <text class="source-label small" x="306.116" y="397.176" font-size="4.256">S</text>
+  <text class="source-label small" x="288.152" y="402.282" font-size="4.256">1</text>
+  <text class="source-label small" x="290.336" y="402.282" font-size="4.256">8</text>
+  <text class="source-label small" x="292.519" y="402.282" font-size="4.256">0</text>
+  <text class="source-label small" x="294.702" y="402.282" font-size="4.256">8</text>
+  <text class="source-label small" x="296.885" y="402.282" font-size="4.256">8</text>
+  <text class="source-label small" x="299.068" y="402.282" font-size="4.256">C</text>
+  <text class="source-label small" x="301.537" y="402.282" font-size="4.256">E</text>
+  <text class="source-label small" x="303.631" y="402.282" font-size="4.256">Z</text>
+  <text class="source-label small" x="305.984" y="402.282" font-size="4.256">0</text>
+  <text class="source-label small" x="308.167" y="402.282" font-size="4.256">2</text>
+  <text class="source-label small" x="310.351" y="402.282" font-size="4.256">P</text>
+  <text class="source-label small" x="312.615" y="402.282" font-size="4.256">C</text>
+  <text class="source-label small" x="401.059" y="507.486" font-size="4.256">H</text>
+  <text class="source-label small" x="403.833" y="507.486" font-size="4.256">O</text>
+  <text class="source-label small" x="406.766" y="507.486" font-size="4.256">R</text>
+  <text class="source-label small" x="409.055" y="507.486" font-size="4.256">E</text>
+  <text class="source-label small" x="411.149" y="507.486" font-size="4.256">C</text>
+  <text class="source-label small" x="413.635" y="507.486" font-size="4.256">A</text>
+  <text class="source-label small" x="416.239" y="507.486" font-size="4.256"> </text>
+  <text class="source-label small" x="417.141" y="507.486" font-size="4.256">G</text>
+  <text class="source-label small" x="419.891" y="507.486" font-size="4.256">R</text>
+  <text class="source-label small" x="422.193" y="507.486" font-size="4.256">O</text>
+  <text class="source-label small" x="425.125" y="507.486" font-size="4.256">O</text>
+  <text class="source-label small" x="427.951" y="507.486" font-size="4.256">T</text>
+  <text class="source-label small" x="407.042" y="512.593" font-size="4.256">3</text>
+  <text class="source-label small" x="409.226" y="512.593" font-size="4.256">5</text>
+  <text class="source-label small" x="411.409" y="512.593" font-size="4.256">x</text>
+  <text class="source-label small" x="413.379" y="512.593" font-size="4.256">3</text>
+  <text class="source-label small" x="415.562" y="512.593" font-size="4.256">5</text>
+  <text class="source-label small" x="417.746" y="512.593" font-size="4.256">x</text>
+  <text class="source-label small" x="419.716" y="512.593" font-size="4.256">1</text>
+  <text class="source-label small" x="421.899" y="512.593" font-size="4.256">0</text>
+  <text class="source-label small" x="400.301" y="517.7" font-size="4.256">1</text>
+  <text class="source-label small" x="402.484" y="517.7" font-size="4.256">8</text>
+  <text class="source-label small" x="404.668" y="517.7" font-size="4.256">0</text>
+  <text class="source-label small" x="406.851" y="517.7" font-size="4.256">8</text>
+  <text class="source-label small" x="409.034" y="517.7" font-size="4.256">8</text>
+  <text class="source-label small" x="411.217" y="517.7" font-size="4.256">G</text>
+  <text class="source-label small" x="413.967" y="517.7" font-size="4.256">B</text>
+  <text class="source-label small" x="416.273" y="517.7" font-size="4.256">D</text>
+  <text class="source-label small" x="419.108" y="517.7" font-size="4.256">2</text>
+  <text class="source-label small" x="421.291" y="517.7" font-size="4.256">3</text>
+  <text class="source-label small" x="423.474" y="517.7" font-size="4.256">P</text>
+  <text class="source-label small" x="425.738" y="517.7" font-size="4.256">C</text>
+  <text class="source-label small" x="428.223" y="517.7" font-size="4.256">A</text>
+  <text class="source-label small" x="527.456" y="511.256" font-size="4.256">V</text>
+  <text class="source-label small" x="529.831" y="511.256" font-size="4.256">L</text>
+  <text class="source-label small" x="531.839" y="511.256" font-size="4.256">A</text>
+  <text class="source-label small" x="534.444" y="511.256" font-size="4.256">A</text>
+  <text class="source-label small" x="537.049" y="511.256" font-size="4.256">I</text>
+  <text class="source-label small" x="538.066" y="511.256" font-size="4.256">D</text>
+  <text class="source-label small" x="540.9" y="511.256" font-size="4.256">O</text>
+  <text class="source-label small" x="543.832" y="511.256" font-size="4.256">O</text>
+  <text class="source-label small" x="546.764" y="511.256" font-size="4.256">S</text>
+  <text class="source-label small" x="548.863" y="511.256" font-size="4.256"> </text>
+  <text class="source-label small" x="549.765" y="511.256" font-size="4.256">B</text>
+  <text class="source-label small" x="552.071" y="511.256" font-size="4.256">O</text>
+  <text class="source-label small" x="555.004" y="511.256" font-size="4.256">D</text>
+  <text class="source-label small" x="557.838" y="511.256" font-size="4.256">E</text>
+  <text class="source-label small" x="559.932" y="511.256" font-size="4.256">M</text>
+  <text class="source-label small" x="534.699" y="516.363" font-size="4.256">2</text>
+  <text class="source-label small" x="536.883" y="516.363" font-size="4.256">9</text>
+  <text class="source-label small" x="539.066" y="516.363" font-size="4.256">5</text>
+  <text class="source-label small" x="541.249" y="516.363" font-size="4.256">x</text>
+  <text class="source-label small" x="543.219" y="516.363" font-size="4.256">2</text>
+  <text class="source-label small" x="545.403" y="516.363" font-size="4.256">9</text>
+  <text class="source-label small" x="547.586" y="516.363" font-size="4.256">5</text>
+  <text class="source-label small" x="549.769" y="516.363" font-size="4.256">x</text>
+  <text class="source-label small" x="551.74" y="516.363" font-size="4.256">6</text>
+  <text class="source-label small" x="553.923" y="516.363" font-size="4.256">0</text>
+  <text class="source-label small" x="537.095" y="521.47" font-size="4.256">V</text>
+  <text class="source-label small" x="539.47" y="521.47" font-size="4.256">D</text>
+  <text class="source-label small" x="542.304" y="521.47" font-size="4.256">B</text>
+  <text class="source-label small" x="544.611" y="521.47" font-size="4.256">3</text>
+  <text class="source-label small" x="546.794" y="521.47" font-size="4.256">0</text>
+  <text class="source-label small" x="548.978" y="521.47" font-size="4.256">P</text>
+  <text class="source-label small" x="551.242" y="521.47" font-size="4.256">C</text>
+  <text class="source-label small" x="585.45" y="517.593" font-size="4.256">S</text>
+  <text class="source-label small" x="587.548" y="517.593" font-size="4.256">C</text>
+  <text class="source-label small" x="590.016" y="517.593" font-size="4.256">H</text>
+  <text class="source-label small" x="592.791" y="517.593" font-size="4.256">N</text>
+  <text class="source-label small" x="595.591" y="517.593" font-size="4.256">I</text>
+  <text class="source-label small" x="596.608" y="517.593" font-size="4.256">T</text>
+  <text class="source-label small" x="598.885" y="517.593" font-size="4.256">T</text>
+  <text class="source-label small" x="601" y="517.593" font-size="4.256"> </text>
+  <text class="source-label small" x="601.903" y="517.593" font-size="4.256">D</text>
+  <text class="source-label small" x="604.737" y="517.593" font-size="4.256">O</text>
+  <text class="source-label small" x="607.669" y="517.593" font-size="4.256">O</text>
+  <text class="source-label small" x="610.601" y="517.593" font-size="4.256">S</text>
+  <text class="source-label small" x="591.646" y="522.7" font-size="4.256">2</text>
+  <text class="source-label small" x="593.829" y="522.7" font-size="4.256">5</text>
+  <text class="source-label small" x="596.013" y="522.7" font-size="4.256">x</text>
+  <text class="source-label small" x="597.983" y="522.7" font-size="4.256">1</text>
+  <text class="source-label small" x="600.166" y="522.7" font-size="4.256">0</text>
+  <text class="source-label small" x="602.349" y="522.7" font-size="4.256">x</text>
+  <text class="source-label small" x="604.32" y="522.7" font-size="4.256">9</text>
+  <text class="source-label small" x="585.122" y="527.807" font-size="4.256">1</text>
+  <text class="source-label small" x="587.305" y="527.807" font-size="4.256">8</text>
+  <text class="source-label small" x="589.488" y="527.807" font-size="4.256">0</text>
+  <text class="source-label small" x="591.672" y="527.807" font-size="4.256">8</text>
+  <text class="source-label small" x="593.855" y="527.807" font-size="4.256">8</text>
+  <text class="source-label small" x="596.038" y="527.807" font-size="4.256">G</text>
+  <text class="source-label small" x="598.787" y="527.807" font-size="4.256">B</text>
+  <text class="source-label small" x="601.094" y="527.807" font-size="4.256">D</text>
+  <text class="source-label small" x="603.928" y="527.807" font-size="4.256">5</text>
+  <text class="source-label small" x="606.112" y="527.807" font-size="4.256">2</text>
+  <text class="source-label small" x="608.295" y="527.807" font-size="4.256">P</text>
+  <text class="source-label small" x="610.559" y="527.807" font-size="4.256">C</text>
+  <text class="source-label small" x="532.431" y="411.173" font-size="4.256">K</text>
+  <text class="source-label small" x="534.78" y="411.173" font-size="4.256">A</text>
+  <text class="source-label small" x="537.385" y="411.173" font-size="4.256">R</text>
+  <text class="source-label small" x="539.712" y="411.173" font-size="4.256">T</text>
+  <text class="source-label small" x="541.713" y="411.173" font-size="4.256">O</text>
+  <text class="source-label small" x="544.645" y="411.173" font-size="4.256">N</text>
+  <text class="source-label small" x="532.401" y="416.28" font-size="4.256">1</text>
+  <text class="source-label small" x="534.584" y="416.28" font-size="4.256">8</text>
+  <text class="source-label small" x="536.768" y="416.28" font-size="4.256">5</text>
+  <text class="source-label small" x="538.951" y="416.28" font-size="4.256">x</text>
+  <text class="source-label small" x="540.921" y="416.28" font-size="4.256">1</text>
+  <text class="source-label small" x="543.105" y="416.28" font-size="4.256">8</text>
+  <text class="source-label small" x="545.288" y="416.28" font-size="4.256">5</text>
+  <text class="source-label small" x="528.941" y="421.387" font-size="4.256">1</text>
+  <text class="source-label small" x="531.124" y="421.387" font-size="4.256">8</text>
+  <text class="source-label small" x="533.308" y="421.387" font-size="4.256">0</text>
+  <text class="source-label small" x="535.491" y="421.387" font-size="4.256">8</text>
+  <text class="source-label small" x="537.674" y="421.387" font-size="4.256">8</text>
+  <text class="source-label small" x="539.857" y="421.387" font-size="4.256">T</text>
+  <text class="source-label small" x="541.653" y="421.387" font-size="4.256">A</text>
+  <text class="source-label small" x="544.258" y="421.387" font-size="4.256">K</text>
+  <text class="source-label small" x="546.564" y="421.387" font-size="4.256">0</text>
+  <text class="source-label small" x="548.748" y="421.387" font-size="4.256">1</text>
+  <text class="source-label small" x="525.6" y="263.709" font-size="4.256">s</text>
+  <text class="source-label small" x="527.239" y="263.709" font-size="4.256">.</text>
+  <text class="source-label small" x="528.12" y="263.709" font-size="4.256">v</text>
+  <text class="source-label small" x="530.001" y="263.709" font-size="4.256">.</text>
+  <text class="source-label small" x="530.882" y="263.709" font-size="4.256"> </text>
+  <text class="source-label small" x="531.784" y="263.709" font-size="4.256">G</text>
+  <text class="source-label small" x="534.533" y="263.709" font-size="4.256">E</text>
+  <text class="source-label small" x="536.627" y="263.709" font-size="4.256">B</text>
+  <text class="source-label small" x="538.934" y="263.709" font-size="4.256">A</text>
+  <text class="source-label small" x="541.538" y="263.709" font-size="4.256">K</text>
+  <text class="source-label small" x="529.477" y="268.816" font-size="4.256">9</text>
+  <text class="source-label small" x="531.661" y="268.816" font-size="4.256">x</text>
+  <text class="source-label small" x="533.631" y="268.816" font-size="4.256">9</text>
+  <text class="source-label small" x="535.814" y="268.816" font-size="4.256">x</text>
+  <text class="source-label small" x="537.785" y="268.816" font-size="4.256">8</text>
+  <text class="source-label small" x="526.52" y="273.923" font-size="4.256">S</text>
+  <text class="source-label small" x="528.618" y="273.923" font-size="4.256">V</text>
+  <text class="source-label small" x="530.992" y="273.923" font-size="4.256">D</text>
+  <text class="source-label small" x="533.827" y="273.923" font-size="4.256">0</text>
+  <text class="source-label small" x="536.01" y="273.923" font-size="4.256">1</text>
+  <text class="source-label small" x="538.193" y="273.923" font-size="4.256">P</text>
+  <text class="source-label small" x="540.457" y="273.923" font-size="4.256">C</text>
+  <text class="source-label small" x="519.323" y="171.869" font-size="4.256">W</text>
+  <text class="source-label small" x="522.681" y="171.869" font-size="4.256">A</text>
+  <text class="source-label small" x="525.285" y="171.869" font-size="4.256">A</text>
+  <text class="source-label small" x="527.89" y="171.869" font-size="4.256">L</text>
+  <text class="source-label small" x="529.899" y="171.869" font-size="4.256">K</text>
+  <text class="source-label small" x="532.133" y="171.869" font-size="4.256">O</text>
+  <text class="source-label small" x="535.065" y="171.869" font-size="4.256">E</text>
+  <text class="source-label small" x="537.159" y="171.869" font-size="4.256">K</text>
+  <text class="source-label small" x="522.677" y="176.976" font-size="4.256">D</text>
+  <text class="source-label small" x="525.511" y="176.976" font-size="4.256">E</text>
+  <text class="source-label small" x="527.605" y="176.976" font-size="4.256">K</text>
+  <text class="source-label small" x="529.912" y="176.976" font-size="4.256">S</text>
+  <text class="source-label small" x="532.01" y="176.976" font-size="4.256">E</text>
+  <text class="source-label small" x="534.103" y="176.976" font-size="4.256">L</text>
+  <text class="source-label small" x="517.808" y="182.083" font-size="4.256">1</text>
+  <text class="source-label small" x="519.991" y="182.083" font-size="4.256">8</text>
+  <text class="source-label small" x="522.174" y="182.083" font-size="4.256">0</text>
+  <text class="source-label small" x="524.358" y="182.083" font-size="4.256">8</text>
+  <text class="source-label small" x="526.541" y="182.083" font-size="4.256">8</text>
+  <text class="source-label small" x="528.724" y="182.083" font-size="4.256">G</text>
+  <text class="source-label small" x="531.473" y="182.083" font-size="4.256">B</text>
+  <text class="source-label small" x="533.78" y="182.083" font-size="4.256">D</text>
+  <text class="source-label small" x="536.614" y="182.083" font-size="4.256">5</text>
+  <text class="source-label small" x="538.798" y="182.083" font-size="4.256">3</text>
+  <text class="source-label small" x="545.377" y="149.701" font-size="4.256">W</text>
+  <text class="source-label small" x="548.735" y="149.701" font-size="4.256">A</text>
+  <text class="source-label small" x="551.339" y="149.701" font-size="4.256">A</text>
+  <text class="source-label small" x="553.944" y="149.701" font-size="4.256">L</text>
+  <text class="source-label small" x="555.953" y="149.701" font-size="4.256">K</text>
+  <text class="source-label small" x="558.187" y="149.701" font-size="4.256">O</text>
+  <text class="source-label small" x="561.119" y="149.701" font-size="4.256">E</text>
+  <text class="source-label small" x="563.213" y="149.701" font-size="4.256">K</text>
+  <text class="source-label small" x="549.927" y="154.808" font-size="4.256">B</text>
+  <text class="source-label small" x="552.233" y="154.808" font-size="4.256">A</text>
+  <text class="source-label small" x="554.838" y="154.808" font-size="4.256">K</text>
+  <text class="source-label small" x="557.306" y="154.808" font-size="4.256">J</text>
+  <text class="source-label small" x="558.881" y="154.808" font-size="4.256">E</text>
+  <text class="source-label small" x="544.203" y="159.915" font-size="4.256">1</text>
+  <text class="source-label small" x="546.386" y="159.915" font-size="4.256">8</text>
+  <text class="source-label small" x="548.569" y="159.915" font-size="4.256">0</text>
+  <text class="source-label small" x="550.752" y="159.915" font-size="4.256">8</text>
+  <text class="source-label small" x="552.935" y="159.915" font-size="4.256">8</text>
+  <text class="source-label small" x="555.119" y="159.915" font-size="4.256">B</text>
+  <text class="source-label small" x="557.425" y="159.915" font-size="4.256">A</text>
+  <text class="source-label small" x="560.03" y="159.915" font-size="4.256">K</text>
+  <text class="source-label small" x="562.336" y="159.915" font-size="4.256">0</text>
+  <text class="source-label small" x="564.52" y="159.915" font-size="4.256">1</text>
+  <text class="source-label small" x="574.304" y="153.854" font-size="4.256">M</text>
+  <text class="source-label small" x="577.683" y="153.854" font-size="4.256">A</text>
+  <text class="source-label small" x="580.287" y="153.854" font-size="4.256">R</text>
+  <text class="source-label small" x="582.577" y="153.854" font-size="4.256">I</text>
+  <text class="source-label small" x="583.594" y="153.854" font-size="4.256">K</text>
+  <text class="source-label small" x="585.901" y="153.854" font-size="4.256">E</text>
+  <text class="source-label small" x="587.995" y="153.854" font-size="4.256">N</text>
+  <text class="source-label small" x="590.795" y="153.854" font-size="4.256">B</text>
+  <text class="source-label small" x="593.102" y="153.854" font-size="4.256">R</text>
+  <text class="source-label small" x="595.404" y="153.854" font-size="4.256">O</text>
+  <text class="source-label small" x="598.336" y="153.854" font-size="4.256">O</text>
+  <text class="source-label small" x="601.269" y="153.854" font-size="4.256">D</text>
+  <text class="source-label small" x="575.253" y="158.961" font-size="4.256">1</text>
+  <text class="source-label small" x="577.436" y="158.961" font-size="4.256">8</text>
+  <text class="source-label small" x="579.619" y="158.961" font-size="4.256">0</text>
+  <text class="source-label small" x="581.802" y="158.961" font-size="4.256">8</text>
+  <text class="source-label small" x="583.986" y="158.961" font-size="4.256">8</text>
+  <text class="source-label small" x="586.169" y="158.961" font-size="4.256">G</text>
+  <text class="source-label small" x="588.918" y="158.961" font-size="4.256">B</text>
+  <text class="source-label small" x="591.225" y="158.961" font-size="4.256">D</text>
+  <text class="source-label small" x="594.059" y="158.961" font-size="4.256">2</text>
+  <text class="source-label small" x="596.242" y="158.961" font-size="4.256">4</text>
+  <text class="source-label small" x="598.426" y="158.961" font-size="4.256">P</text>
+  <text class="source-label small" x="600.69" y="158.961" font-size="4.256">C</text>
+  <text class="source-label small" x="548.816" y="253.908" font-size="4.256">R</text>
+  <text class="source-label small" x="551.118" y="253.908" font-size="4.256">O</text>
+  <text class="source-label small" x="554.05" y="253.908" font-size="4.256">N</text>
+  <text class="source-label small" x="556.851" y="253.908" font-size="4.256">D</text>
+  <text class="source-label small" x="559.685" y="253.908" font-size="4.256">E</text>
+  <text class="source-label small" x="561.779" y="253.908" font-size="4.256">L</text>
+  <text class="source-label small" x="563.788" y="253.908" font-size="4.256"> </text>
+  <text class="source-label small" x="564.69" y="253.908" font-size="4.256">R</text>
+  <text class="source-label small" x="566.992" y="253.908" font-size="4.256">O</text>
+  <text class="source-label small" x="569.925" y="253.908" font-size="4.256">N</text>
+  <text class="source-label small" x="572.725" y="253.908" font-size="4.256">D</text>
+  <text class="source-label small" x="548.16" y="259.015" font-size="4.256">1</text>
+  <text class="source-label small" x="550.344" y="259.015" font-size="4.256">8</text>
+  <text class="source-label small" x="552.527" y="259.015" font-size="4.256">0</text>
+  <text class="source-label small" x="554.71" y="259.015" font-size="4.256">8</text>
+  <text class="source-label small" x="556.893" y="259.015" font-size="4.256">8</text>
+  <text class="source-label small" x="559.077" y="259.015" font-size="4.256">R</text>
+  <text class="source-label small" x="561.379" y="259.015" font-size="4.256">O</text>
+  <text class="source-label small" x="564.311" y="259.015" font-size="4.256">N</text>
+  <text class="source-label small" x="567.111" y="259.015" font-size="4.256">0</text>
+  <text class="source-label small" x="569.295" y="259.015" font-size="4.256">2</text>
+  <text class="source-label small" x="571.478" y="259.015" font-size="4.256">P</text>
+  <text class="source-label small" x="573.742" y="259.015" font-size="4.256">C</text>
+  <text class="source-label small" x="551.718" y="276.57" font-size="4.256">T</text>
+  <text class="source-label small" x="553.833" y="276.57" font-size="4.256">R</text>
+  <text class="source-label small" x="556.144" y="276.57" font-size="4.256">A</text>
+  <text class="source-label small" x="558.749" y="276.57" font-size="4.256">P</text>
+  <text class="source-label small" x="561.013" y="276.57" font-size="4.256">E</text>
+  <text class="source-label small" x="563.107" y="276.57" font-size="4.256">Z</text>
+  <text class="source-label small" x="565.46" y="276.57" font-size="4.256">I</text>
+  <text class="source-label small" x="566.477" y="276.57" font-size="4.256">U</text>
+  <text class="source-label small" x="569.231" y="276.57" font-size="4.256">M</text>
+  <text class="source-label small" x="546.85" y="281.677" font-size="4.256">1</text>
+  <text class="source-label small" x="549.033" y="281.677" font-size="4.256">8</text>
+  <text class="source-label small" x="551.216" y="281.677" font-size="4.256">0</text>
+  <text class="source-label small" x="553.399" y="281.677" font-size="4.256">8</text>
+  <text class="source-label small" x="555.583" y="281.677" font-size="4.256">8</text>
+  <text class="source-label small" x="557.766" y="281.677" font-size="4.256">R</text>
+  <text class="source-label small" x="560.068" y="281.677" font-size="4.256">O</text>
+  <text class="source-label small" x="563" y="281.677" font-size="4.256">N</text>
+  <text class="source-label small" x="565.801" y="281.677" font-size="4.256">0</text>
+  <text class="source-label small" x="567.984" y="281.677" font-size="4.256">4</text>
+  <text class="source-label small" x="570.167" y="281.677" font-size="4.256">P</text>
+  <text class="source-label small" x="572.431" y="281.677" font-size="4.256">C</text>
+  <text class="source-label small" x="574.917" y="281.677" font-size="4.256">A</text>
+  <text class="source-label small" x="576.453" y="271.055" font-size="4.256">D</text>
+  <text class="source-label small" x="579.287" y="271.055" font-size="4.256">O</text>
+  <text class="source-label small" x="582.22" y="271.055" font-size="4.256">O</text>
+  <text class="source-label small" x="585.152" y="271.055" font-size="4.256">S</text>
+  <text class="source-label small" x="587.25" y="271.055" font-size="4.256"> </text>
+  <text class="source-label small" x="588.152" y="271.055" font-size="4.256">K</text>
+  <text class="source-label small" x="590.459" y="271.055" font-size="4.256">L</text>
+  <text class="source-label small" x="592.468" y="271.055" font-size="4.256">E</text>
+  <text class="source-label small" x="594.561" y="271.055" font-size="4.256">I</text>
+  <text class="source-label small" x="595.579" y="271.055" font-size="4.256">N</text>
+  <text class="source-label small" x="579.985" y="276.162" font-size="4.256">1</text>
+  <text class="source-label small" x="582.168" y="276.162" font-size="4.256">5</text>
+  <text class="source-label small" x="584.352" y="276.162" font-size="4.256">x</text>
+  <text class="source-label small" x="586.322" y="276.162" font-size="4.256">1</text>
+  <text class="source-label small" x="588.505" y="276.162" font-size="4.256">5</text>
+  <text class="source-label small" x="590.689" y="276.162" font-size="4.256">x</text>
+  <text class="source-label small" x="592.659" y="276.162" font-size="4.256">7</text>
+  <text class="source-label small" x="578.921" y="281.269" font-size="4.256">G</text>
+  <text class="source-label small" x="581.671" y="281.269" font-size="4.256">B</text>
+  <text class="source-label small" x="583.977" y="281.269" font-size="4.256">D</text>
+  <text class="source-label small" x="586.812" y="281.269" font-size="4.256">1</text>
+  <text class="source-label small" x="588.995" y="281.269" font-size="4.256">0</text>
+  <text class="source-label small" x="591.178" y="281.269" font-size="4.256">P</text>
+  <text class="source-label small" x="593.442" y="281.269" font-size="4.256">C</text>
+  <text class="source-label small" x="660.96" y="154.242" font-size="4.256">G</text>
+  <text class="source-label small" x="663.71" y="154.242" font-size="4.256">A</text>
+  <text class="source-label small" x="665.986" y="154.242" font-size="4.256">T</text>
+  <text class="source-label small" x="668.102" y="154.242" font-size="4.256">E</text>
+  <text class="source-label small" x="670.195" y="154.242" font-size="4.256">A</text>
+  <text class="source-label small" x="672.681" y="154.242" font-size="4.256">U</text>
+  <text class="source-label small" x="660.692" y="159.349" font-size="4.256">K</text>
+  <text class="source-label small" x="663.041" y="159.349" font-size="4.256">A</text>
+  <text class="source-label small" x="665.646" y="159.349" font-size="4.256">R</text>
+  <text class="source-label small" x="667.974" y="159.349" font-size="4.256">T</text>
+  <text class="source-label small" x="669.974" y="159.349" font-size="4.256">O</text>
+  <text class="source-label small" x="672.906" y="159.349" font-size="4.256">N</text>
+  <text class="source-label small" x="660.662" y="164.456" font-size="4.256">1</text>
+  <text class="source-label small" x="662.846" y="164.456" font-size="4.256">8</text>
+  <text class="source-label small" x="665.029" y="164.456" font-size="4.256">5</text>
+  <text class="source-label small" x="667.212" y="164.456" font-size="4.256">x</text>
+  <text class="source-label small" x="669.183" y="164.456" font-size="4.256">1</text>
+  <text class="source-label small" x="671.366" y="164.456" font-size="4.256">3</text>
+  <text class="source-label small" x="673.549" y="164.456" font-size="4.256">0</text>
+  <text class="source-label small" x="652.968" y="169.563" font-size="4.256">1</text>
+  <text class="source-label small" x="655.151" y="169.563" font-size="4.256">8</text>
+  <text class="source-label small" x="657.334" y="169.563" font-size="4.256">0</text>
+  <text class="source-label small" x="659.518" y="169.563" font-size="4.256">8</text>
+  <text class="source-label small" x="661.701" y="169.563" font-size="4.256">8</text>
+  <text class="source-label small" x="663.884" y="169.563" font-size="4.256">B</text>
+  <text class="source-label small" x="666.191" y="169.563" font-size="4.256">L</text>
+  <text class="source-label small" x="668.199" y="169.563" font-size="4.256">I</text>
+  <text class="source-label small" x="669.217" y="169.563" font-size="4.256">K</text>
+  <text class="source-label small" x="671.566" y="169.563" font-size="4.256">A</text>
+  <text class="source-label small" x="674.17" y="169.563" font-size="4.256">R</text>
+  <text class="source-label small" x="676.46" y="169.563" font-size="4.256">0</text>
+  <text class="source-label small" x="678.643" y="169.563" font-size="4.256">1</text>
+  <text class="source-label small" x="680.826" y="169.563" font-size="4.256">A</text>
+  <text class="source-label small" x="735.301" y="163.004" font-size="4.256">T</text>
+  <text class="source-label small" x="737.416" y="163.004" font-size="4.256">R</text>
+  <text class="source-label small" x="739.705" y="163.004" font-size="4.256">U</text>
+  <text class="source-label small" x="742.459" y="163.004" font-size="4.256">F</text>
+  <text class="source-label small" x="744.532" y="163.004" font-size="4.256">F</text>
+  <text class="source-label small" x="746.604" y="163.004" font-size="4.256">E</text>
+  <text class="source-label small" x="748.698" y="163.004" font-size="4.256">L</text>
+  <text class="source-label small" x="737.48" y="168.111" font-size="4.256">B</text>
+  <text class="source-label small" x="739.786" y="168.111" font-size="4.256">A</text>
+  <text class="source-label small" x="742.391" y="168.111" font-size="4.256">K</text>
+  <text class="source-label small" x="744.859" y="168.111" font-size="4.256">J</text>
+  <text class="source-label small" x="746.434" y="168.111" font-size="4.256">E</text>
+  <text class="source-label small" x="734.769" y="173.218" font-size="4.256">C</text>
+  <text class="source-label small" x="737.148" y="173.218" font-size="4.256">O</text>
+  <text class="source-label small" x="740.08" y="173.218" font-size="4.256">N</text>
+  <text class="source-label small" x="742.88" y="173.218" font-size="4.256">I</text>
+  <text class="source-label small" x="743.897" y="173.218" font-size="4.256">S</text>
+  <text class="source-label small" x="745.996" y="173.218" font-size="4.256">C</text>
+  <text class="source-label small" x="748.464" y="173.218" font-size="4.256">H</text>
+  <text class="source-label small" x="737.212" y="178.325" font-size="4.256">B</text>
+  <text class="source-label small" x="739.518" y="178.325" font-size="4.256">A</text>
+  <text class="source-label small" x="742.123" y="178.325" font-size="4.256">K</text>
+  <text class="source-label small" x="744.429" y="178.325" font-size="4.256">0</text>
+  <text class="source-label small" x="746.613" y="178.325" font-size="4.256">5</text>
+  <text class="source-label small" x="775.058" y="130.928" font-size="4.256">T</text>
+  <text class="source-label small" x="776.854" y="130.928" font-size="4.256">A</text>
+  <text class="source-label small" x="779.459" y="130.928" font-size="4.256">S</text>
+  <text class="source-label small" x="781.557" y="130.928" font-size="4.256">J</text>
+  <text class="source-label small" x="783.132" y="130.928" font-size="4.256">E</text>
+  <text class="source-label small" x="785.225" y="130.928" font-size="4.256">S</text>
+  <text class="source-label small" x="775.969" y="142.121" font-size="4.256">h</text>
+  <text class="source-label small" x="778.331" y="142.121" font-size="4.256">e</text>
+  <text class="source-label small" x="780.463" y="142.121" font-size="4.256">m</text>
+  <text class="source-label small" x="784.013" y="142.121" font-size="4.256">d</text>
+  <text class="source-label small" x="773.003" y="147.228" font-size="4.256">D</text>
+  <text class="source-label small" x="775.837" y="147.228" font-size="4.256">R</text>
+  <text class="source-label small" x="778.165" y="147.228" font-size="4.256">T</text>
+  <text class="source-label small" x="780.28" y="147.228" font-size="4.256">0</text>
+  <text class="source-label small" x="782.463" y="147.228" font-size="4.256">3</text>
+  <text class="source-label small" x="784.647" y="147.228" font-size="4.256">P</text>
+  <text class="source-label small" x="786.911" y="147.228" font-size="4.256">C</text>
+  <text class="source-label small" x="773.003" y="152.335" font-size="4.256">D</text>
+  <text class="source-label small" x="775.837" y="152.335" font-size="4.256">R</text>
+  <text class="source-label small" x="778.165" y="152.335" font-size="4.256">T</text>
+  <text class="source-label small" x="780.28" y="152.335" font-size="4.256">0</text>
+  <text class="source-label small" x="782.463" y="152.335" font-size="4.256">4</text>
+  <text class="source-label small" x="784.647" y="152.335" font-size="4.256">P</text>
+  <text class="source-label small" x="786.911" y="152.335" font-size="4.256">C</text>
+  <text class="source-label small" x="773.003" y="157.442" font-size="4.256">D</text>
+  <text class="source-label small" x="775.837" y="157.442" font-size="4.256">R</text>
+  <text class="source-label small" x="778.165" y="157.442" font-size="4.256">T</text>
+  <text class="source-label small" x="780.28" y="157.442" font-size="4.256">0</text>
+  <text class="source-label small" x="782.463" y="157.442" font-size="4.256">6</text>
+  <text class="source-label small" x="784.647" y="157.442" font-size="4.256">P</text>
+  <text class="source-label small" x="786.911" y="157.442" font-size="4.256">C</text>
+  <text class="source-label small" x="622.526" y="171.418" font-size="4.256">T</text>
+  <text class="source-label small" x="624.812" y="171.418" font-size="4.256">V</text>
+  <text class="source-label small" x="627.186" y="171.418" font-size="4.256"> </text>
+  <text class="source-label small" x="628.089" y="171.418" font-size="4.256">D</text>
+  <text class="source-label small" x="630.923" y="171.418" font-size="4.256">O</text>
+  <text class="source-label small" x="633.855" y="171.418" font-size="4.256">O</text>
+  <text class="source-label small" x="636.787" y="171.418" font-size="4.256">S</text>
+  <text class="source-label small" x="623.199" y="176.525" font-size="4.256">K</text>
+  <text class="source-label small" x="625.548" y="176.525" font-size="4.256">A</text>
+  <text class="source-label small" x="628.152" y="176.525" font-size="4.256">R</text>
+  <text class="source-label small" x="630.48" y="176.525" font-size="4.256">T</text>
+  <text class="source-label small" x="632.481" y="176.525" font-size="4.256">O</text>
+  <text class="source-label small" x="635.413" y="176.525" font-size="4.256">N</text>
+  <text class="source-label small" x="623.169" y="181.632" font-size="4.256">1</text>
+  <text class="source-label small" x="625.352" y="181.632" font-size="4.256">1</text>
+  <text class="source-label small" x="627.535" y="181.632" font-size="4.256">8</text>
+  <text class="source-label small" x="629.719" y="181.632" font-size="4.256">x</text>
+  <text class="source-label small" x="631.689" y="181.632" font-size="4.256">1</text>
+  <text class="source-label small" x="633.872" y="181.632" font-size="4.256">8</text>
+  <text class="source-label small" x="636.055" y="181.632" font-size="4.256">3</text>
+  <text class="source-label small" x="624.305" y="186.739" font-size="4.256">G</text>
+  <text class="source-label small" x="627.054" y="186.739" font-size="4.256">O</text>
+  <text class="source-label small" x="629.987" y="186.739" font-size="4.256">U</text>
+  <text class="source-label small" x="632.74" y="186.739" font-size="4.256">2</text>
+  <text class="source-label small" x="634.923" y="186.739" font-size="4.256">4</text>
+  <text class="source-label small" x="569.205" y="414.216" font-size="4.256">K</text>
+  <text class="source-label small" x="571.555" y="414.216" font-size="4.256">A</text>
+  <text class="source-label small" x="574.159" y="414.216" font-size="4.256">R</text>
+  <text class="source-label small" x="576.487" y="414.216" font-size="4.256">T</text>
+  <text class="source-label small" x="578.487" y="414.216" font-size="4.256">O</text>
+  <text class="source-label small" x="581.419" y="414.216" font-size="4.256">N</text>
+  <text class="source-label small" x="569.176" y="419.323" font-size="4.256">2</text>
+  <text class="source-label small" x="571.359" y="419.323" font-size="4.256">0</text>
+  <text class="source-label small" x="573.542" y="419.323" font-size="4.256">5</text>
+  <text class="source-label small" x="575.725" y="419.323" font-size="4.256">x</text>
+  <text class="source-label small" x="577.696" y="419.323" font-size="4.256">2</text>
+  <text class="source-label small" x="579.879" y="419.323" font-size="4.256">0</text>
+  <text class="source-label small" x="582.062" y="419.323" font-size="4.256">5</text>
+  <text class="source-label small" x="568.805" y="424.43" font-size="4.256">T</text>
+  <text class="source-label small" x="570.601" y="424.43" font-size="4.256">A</text>
+  <text class="source-label small" x="573.206" y="424.43" font-size="4.256">K</text>
+  <text class="source-label small" x="575.512" y="424.43" font-size="4.256">1</text>
+  <text class="source-label small" x="577.696" y="424.43" font-size="4.256">4</text>
+  <text class="source-label small" x="579.879" y="424.43" font-size="4.256">P</text>
+  <text class="source-label small" x="582.143" y="424.43" font-size="4.256">C</text>
+  <text class="source-label small" x="597.323" y="410.696" font-size="4.256">K</text>
+  <text class="source-label small" x="599.673" y="410.696" font-size="4.256">A</text>
+  <text class="source-label small" x="602.277" y="410.696" font-size="4.256">R</text>
+  <text class="source-label small" x="604.605" y="410.696" font-size="4.256">T</text>
+  <text class="source-label small" x="606.605" y="410.696" font-size="4.256">O</text>
+  <text class="source-label small" x="609.538" y="410.696" font-size="4.256">N</text>
+  <text class="source-label small" x="597.294" y="415.803" font-size="4.256">2</text>
+  <text class="source-label small" x="599.477" y="415.803" font-size="4.256">2</text>
+  <text class="source-label small" x="601.66" y="415.803" font-size="4.256">5</text>
+  <text class="source-label small" x="603.843" y="415.803" font-size="4.256">x</text>
+  <text class="source-label small" x="605.814" y="415.803" font-size="4.256">2</text>
+  <text class="source-label small" x="607.997" y="415.803" font-size="4.256">2</text>
+  <text class="source-label small" x="610.18" y="415.803" font-size="4.256">5</text>
+  <text class="source-label small" x="593.834" y="420.91" font-size="4.256">1</text>
+  <text class="source-label small" x="596.017" y="420.91" font-size="4.256">8</text>
+  <text class="source-label small" x="598.2" y="420.91" font-size="4.256">0</text>
+  <text class="source-label small" x="600.383" y="420.91" font-size="4.256">8</text>
+  <text class="source-label small" x="602.567" y="420.91" font-size="4.256">8</text>
+  <text class="source-label small" x="604.75" y="420.91" font-size="4.256">T</text>
+  <text class="source-label small" x="606.546" y="420.91" font-size="4.256">A</text>
+  <text class="source-label small" x="609.15" y="420.91" font-size="4.256">K</text>
+  <text class="source-label small" x="611.457" y="420.91" font-size="4.256">0</text>
+  <text class="source-label small" x="613.64" y="420.91" font-size="4.256">2</text>
+  <text class="source-label small" x="624.539" y="393.473" font-size="4.256">K</text>
+  <text class="source-label small" x="626.888" y="393.473" font-size="4.256">A</text>
+  <text class="source-label small" x="629.493" y="393.473" font-size="4.256">R</text>
+  <text class="source-label small" x="631.82" y="393.473" font-size="4.256">T</text>
+  <text class="source-label small" x="633.821" y="393.473" font-size="4.256">O</text>
+  <text class="source-label small" x="636.753" y="393.473" font-size="4.256">N</text>
+  <text class="source-label small" x="624.509" y="398.58" font-size="4.256">2</text>
+  <text class="source-label small" x="626.693" y="398.58" font-size="4.256">5</text>
+  <text class="source-label small" x="628.876" y="398.58" font-size="4.256">5</text>
+  <text class="source-label small" x="631.059" y="398.58" font-size="4.256">x</text>
+  <text class="source-label small" x="633.03" y="398.58" font-size="4.256">2</text>
+  <text class="source-label small" x="635.213" y="398.58" font-size="4.256">5</text>
+  <text class="source-label small" x="637.396" y="398.58" font-size="4.256">5</text>
+  <text class="source-label small" x="621.049" y="403.687" font-size="4.256">1</text>
+  <text class="source-label small" x="623.233" y="403.687" font-size="4.256">8</text>
+  <text class="source-label small" x="625.416" y="403.687" font-size="4.256">0</text>
+  <text class="source-label small" x="627.599" y="403.687" font-size="4.256">8</text>
+  <text class="source-label small" x="629.782" y="403.687" font-size="4.256">8</text>
+  <text class="source-label small" x="631.966" y="403.687" font-size="4.256">T</text>
+  <text class="source-label small" x="633.762" y="403.687" font-size="4.256">A</text>
+  <text class="source-label small" x="636.366" y="403.687" font-size="4.256">K</text>
+  <text class="source-label small" x="638.673" y="403.687" font-size="4.256">0</text>
+  <text class="source-label small" x="640.856" y="403.687" font-size="4.256">3</text>
+  <text class="source-label small" x="651.755" y="392.226" font-size="4.256">K</text>
+  <text class="source-label small" x="654.104" y="392.226" font-size="4.256">A</text>
+  <text class="source-label small" x="656.709" y="392.226" font-size="4.256">R</text>
+  <text class="source-label small" x="659.036" y="392.226" font-size="4.256">T</text>
+  <text class="source-label small" x="661.037" y="392.226" font-size="4.256">O</text>
+  <text class="source-label small" x="663.969" y="392.226" font-size="4.256">N</text>
+  <text class="source-label small" x="651.725" y="397.333" font-size="4.256">2</text>
+  <text class="source-label small" x="653.909" y="397.333" font-size="4.256">9</text>
+  <text class="source-label small" x="656.092" y="397.333" font-size="4.256">5</text>
+  <text class="source-label small" x="658.275" y="397.333" font-size="4.256">x</text>
+  <text class="source-label small" x="660.245" y="397.333" font-size="4.256">2</text>
+  <text class="source-label small" x="662.429" y="397.333" font-size="4.256">9</text>
+  <text class="source-label small" x="664.612" y="397.333" font-size="4.256">5</text>
+  <text class="source-label small" x="651.355" y="402.44" font-size="4.256">T</text>
+  <text class="source-label small" x="653.151" y="402.44" font-size="4.256">A</text>
+  <text class="source-label small" x="655.756" y="402.44" font-size="4.256">K</text>
+  <text class="source-label small" x="658.062" y="402.44" font-size="4.256">1</text>
+  <text class="source-label small" x="660.245" y="402.44" font-size="4.256">5</text>
+  <text class="source-label small" x="662.429" y="402.44" font-size="4.256">P</text>
+  <text class="source-label small" x="664.693" y="402.44" font-size="4.256">C</text>
+  <text class="source-label small" x="683.001" y="393.473" font-size="4.256">K</text>
+  <text class="source-label small" x="685.35" y="393.473" font-size="4.256">A</text>
+  <text class="source-label small" x="687.955" y="393.473" font-size="4.256">R</text>
+  <text class="source-label small" x="690.282" y="393.473" font-size="4.256">T</text>
+  <text class="source-label small" x="692.283" y="393.473" font-size="4.256">O</text>
+  <text class="source-label small" x="695.215" y="393.473" font-size="4.256">N</text>
+  <text class="source-label small" x="682.971" y="398.58" font-size="4.256">3</text>
+  <text class="source-label small" x="685.155" y="398.58" font-size="4.256">4</text>
+  <text class="source-label small" x="687.338" y="398.58" font-size="4.256">5</text>
+  <text class="source-label small" x="689.521" y="398.58" font-size="4.256">x</text>
+  <text class="source-label small" x="691.491" y="398.58" font-size="4.256">3</text>
+  <text class="source-label small" x="693.675" y="398.58" font-size="4.256">4</text>
+  <text class="source-label small" x="695.858" y="398.58" font-size="4.256">5</text>
+  <text class="source-label small" x="683.567" y="403.687" font-size="4.256">T</text>
+  <text class="source-label small" x="685.363" y="403.687" font-size="4.256">A</text>
+  <text class="source-label small" x="687.968" y="403.687" font-size="4.256">K</text>
+  <text class="source-label small" x="690.274" y="403.687" font-size="4.256">6</text>
+  <text class="source-label small" x="692.458" y="403.687" font-size="4.256">2</text>
+  <text class="source-label small" x="694.641" y="403.687" font-size="4.256">N</text>
+  <text class="source-label small" x="733.688" y="398.627" font-size="4.256">S</text>
+  <text class="source-label small" x="735.786" y="398.627" font-size="4.256">C</text>
+  <text class="source-label small" x="738.254" y="398.627" font-size="4.256">H</text>
+  <text class="source-label small" x="741.029" y="398.627" font-size="4.256">N</text>
+  <text class="source-label small" x="743.829" y="398.627" font-size="4.256">I</text>
+  <text class="source-label small" x="744.846" y="398.627" font-size="4.256">T</text>
+  <text class="source-label small" x="747.123" y="398.627" font-size="4.256">T</text>
+  <text class="source-label small" x="733.956" y="403.734" font-size="4.256">K</text>
+  <text class="source-label small" x="736.305" y="403.734" font-size="4.256">A</text>
+  <text class="source-label small" x="738.91" y="403.734" font-size="4.256">R</text>
+  <text class="source-label small" x="741.237" y="403.734" font-size="4.256">T</text>
+  <text class="source-label small" x="743.238" y="403.734" font-size="4.256">O</text>
+  <text class="source-label small" x="746.17" y="403.734" font-size="4.256">N</text>
+  <text class="source-label small" x="735.02" y="408.841" font-size="4.256">2</text>
+  <text class="source-label small" x="737.203" y="408.841" font-size="4.256">4</text>
+  <text class="source-label small" x="739.386" y="408.841" font-size="4.256">5</text>
+  <text class="source-label small" x="741.569" y="408.841" font-size="4.256">x</text>
+  <text class="source-label small" x="743.54" y="408.841" font-size="4.256">9</text>
+  <text class="source-label small" x="745.723" y="408.841" font-size="4.256">5</text>
+  <text class="source-label small" x="730.466" y="413.948" font-size="4.256">1</text>
+  <text class="source-label small" x="732.649" y="413.948" font-size="4.256">8</text>
+  <text class="source-label small" x="734.833" y="413.948" font-size="4.256">0</text>
+  <text class="source-label small" x="737.016" y="413.948" font-size="4.256">8</text>
+  <text class="source-label small" x="739.199" y="413.948" font-size="4.256">8</text>
+  <text class="source-label small" x="741.382" y="413.948" font-size="4.256">T</text>
+  <text class="source-label small" x="743.178" y="413.948" font-size="4.256">A</text>
+  <text class="source-label small" x="745.783" y="413.948" font-size="4.256">K</text>
+  <text class="source-label small" x="748.089" y="413.948" font-size="4.256">0</text>
+  <text class="source-label small" x="750.273" y="413.948" font-size="4.256">4</text>
+  <text class="source-label small" x="714.805" y="400.489" font-size="3.2">K</text>
+  <text class="source-label small" x="716.539" y="400.489" font-size="3.2">A</text>
+  <text class="source-label small" x="718.462" y="400.489" font-size="3.2">R</text>
+  <text class="source-label small" x="720.181" y="400.489" font-size="3.2">T</text>
+  <text class="source-label small" x="721.658" y="400.489" font-size="3.2">O</text>
+  <text class="source-label small" x="723.822" y="400.489" font-size="3.2">N</text>
+  <text class="source-label small" x="714.783" y="404.26" font-size="3.2">3</text>
+  <text class="source-label small" x="716.395" y="404.26" font-size="3.2">9</text>
+  <text class="source-label small" x="718.007" y="404.26" font-size="3.2">5</text>
+  <text class="source-label small" x="719.619" y="404.26" font-size="3.2">x</text>
+  <text class="source-label small" x="721.073" y="404.26" font-size="3.2">3</text>
+  <text class="source-label small" x="722.685" y="404.26" font-size="3.2">9</text>
+  <text class="source-label small" x="724.297" y="404.26" font-size="3.2">5</text>
+  <text class="source-label small" x="714.512" y="408.031" font-size="3.2">T</text>
+  <text class="source-label small" x="715.839" y="408.031" font-size="3.2">A</text>
+  <text class="source-label small" x="717.762" y="408.031" font-size="3.2">K</text>
+  <text class="source-label small" x="719.465" y="408.031" font-size="3.2">1</text>
+  <text class="source-label small" x="721.077" y="408.031" font-size="3.2">8</text>
+  <text class="source-label small" x="722.689" y="408.031" font-size="3.2">P</text>
+  <text class="source-label small" x="724.36" y="408.031" font-size="3.2">C</text>
+  <text class="source-label small" x="758.359" y="383.441" font-size="4.256">G</text>
+  <text class="source-label small" x="761.109" y="383.441" font-size="4.256">E</text>
+  <text class="source-label small" x="763.203" y="383.441" font-size="4.256">B</text>
+  <text class="source-label small" x="765.509" y="383.441" font-size="4.256">A</text>
+  <text class="source-label small" x="768.114" y="383.441" font-size="4.256">K</text>
+  <text class="source-label small" x="770.42" y="383.441" font-size="4.256">S</text>
+  <text class="source-label small" x="772.518" y="383.441" font-size="4.256">S</text>
+  <text class="source-label small" x="774.617" y="383.441" font-size="4.256">C</text>
+  <text class="source-label small" x="777.085" y="383.441" font-size="4.256">H</text>
+  <text class="source-label small" x="779.86" y="383.441" font-size="4.256">A</text>
+  <text class="source-label small" x="782.464" y="383.441" font-size="4.256">A</text>
+  <text class="source-label small" x="785.069" y="383.441" font-size="4.256">L</text>
+  <text class="source-label small" x="786.703" y="383.441" font-size="4.256">T</text>
+  <text class="source-label small" x="788.635" y="383.441" font-size="4.256">J</text>
+  <text class="source-label small" x="790.209" y="383.441" font-size="4.256">E</text>
+  <text class="source-label small" x="769.599" y="388.548" font-size="4.256">8</text>
+  <text class="source-label small" x="771.782" y="388.548" font-size="4.256">8</text>
+  <text class="source-label small" x="773.965" y="388.548" font-size="4.256">m</text>
+  <text class="source-label small" x="777.515" y="388.548" font-size="4.256">m</text>
+  <text class="source-label small" x="764.113" y="393.654" font-size="4.256">1</text>
+  <text class="source-label small" x="766.296" y="393.654" font-size="4.256">8</text>
+  <text class="source-label small" x="768.48" y="393.654" font-size="4.256">0</text>
+  <text class="source-label small" x="770.663" y="393.654" font-size="4.256">8</text>
+  <text class="source-label small" x="772.846" y="393.654" font-size="4.256">8</text>
+  <text class="source-label small" x="775.029" y="393.654" font-size="4.256">G</text>
+  <text class="source-label small" x="777.779" y="393.654" font-size="4.256">B</text>
+  <text class="source-label small" x="780.085" y="393.654" font-size="4.256">S</text>
+  <text class="source-label small" x="782.183" y="393.654" font-size="4.256">0</text>
+  <text class="source-label small" x="784.367" y="393.654" font-size="4.256">1</text>
+  <text class="source-label small" x="628.294" y="504.527" font-size="4.256">M</text>
+  <text class="source-label small" x="631.673" y="504.527" font-size="4.256">A</text>
+  <text class="source-label small" x="634.277" y="504.527" font-size="4.256">R</text>
+  <text class="source-label small" x="636.567" y="504.527" font-size="4.256">S</text>
+  <text class="source-label small" x="638.665" y="504.527" font-size="4.256">E</text>
+  <text class="source-label small" x="640.759" y="504.527" font-size="4.256">P</text>
+  <text class="source-label small" x="642.428" y="504.527" font-size="4.256">.</text>
+  <text class="source-label small" x="643.309" y="504.527" font-size="4.256">T</text>
+  <text class="source-label small" x="645.104" y="504.527" font-size="4.256">A</text>
+  <text class="source-label small" x="647.709" y="504.527" font-size="4.256">A</text>
+  <text class="source-label small" x="650.313" y="504.527" font-size="4.256">R</text>
+  <text class="source-label small" x="652.641" y="504.527" font-size="4.256">T</text>
+  <text class="source-label small" x="633.592" y="509.634" font-size="4.256">V</text>
+  <text class="source-label small" x="635.967" y="509.634" font-size="4.256">E</text>
+  <text class="source-label small" x="638.061" y="509.634" font-size="4.256">N</text>
+  <text class="source-label small" x="640.861" y="509.634" font-size="4.256">S</text>
+  <text class="source-label small" x="642.959" y="509.634" font-size="4.256">T</text>
+  <text class="source-label small" x="645.074" y="509.634" font-size="4.256">E</text>
+  <text class="source-label small" x="647.168" y="509.634" font-size="4.256">R</text>
+  <text class="source-label small" x="634.099" y="514.74" font-size="4.256">2</text>
+  <text class="source-label small" x="636.282" y="514.74" font-size="4.256">1</text>
+  <text class="source-label small" x="638.465" y="514.74" font-size="4.256">x</text>
+  <text class="source-label small" x="640.435" y="514.74" font-size="4.256">2</text>
+  <text class="source-label small" x="642.619" y="514.74" font-size="4.256">1</text>
+  <text class="source-label small" x="644.802" y="514.74" font-size="4.256">x</text>
+  <text class="source-label small" x="646.772" y="514.74" font-size="4.256">9</text>
+  <text class="source-label small" x="633.035" y="519.847" font-size="4.256">G</text>
+  <text class="source-label small" x="635.784" y="519.847" font-size="4.256">B</text>
+  <text class="source-label small" x="638.09" y="519.847" font-size="4.256">D</text>
+  <text class="source-label small" x="640.925" y="519.847" font-size="4.256">1</text>
+  <text class="source-label small" x="643.108" y="519.847" font-size="4.256">8</text>
+  <text class="source-label small" x="645.291" y="519.847" font-size="4.256">P</text>
+  <text class="source-label small" x="647.555" y="519.847" font-size="4.256">C</text>
+  <text class="source-label small" x="667.6" y="508.34" font-size="4.256">K</text>
+  <text class="source-label small" x="669.907" y="508.34" font-size="4.256">L</text>
+  <text class="source-label small" x="671.916" y="508.34" font-size="4.256">E</text>
+  <text class="source-label small" x="674.009" y="508.34" font-size="4.256">I</text>
+  <text class="source-label small" x="675.027" y="508.34" font-size="4.256">N</text>
+  <text class="source-label small" x="677.827" y="508.34" font-size="4.256">E</text>
+  <text class="source-label small" x="679.921" y="508.34" font-size="4.256"> </text>
+  <text class="source-label small" x="680.67" y="508.34" font-size="4.256">V</text>
+  <text class="source-label small" x="683.045" y="508.34" font-size="4.256">L</text>
+  <text class="source-label small" x="685.053" y="508.34" font-size="4.256">A</text>
+  <text class="source-label small" x="687.658" y="508.34" font-size="4.256">A</text>
+  <text class="source-label small" x="690.262" y="508.34" font-size="4.256">I</text>
+  <text class="source-label small" x="691.279" y="508.34" font-size="4.256"> </text>
+  <text class="source-label small" x="692.182" y="508.34" font-size="4.256">D</text>
+  <text class="source-label small" x="695.016" y="508.34" font-size="4.256">O</text>
+  <text class="source-label small" x="697.948" y="508.34" font-size="4.256">O</text>
+  <text class="source-label small" x="700.881" y="508.34" font-size="4.256">S</text>
+  <text class="source-label small" x="677.861" y="513.447" font-size="4.256">2</text>
+  <text class="source-label small" x="680.044" y="513.447" font-size="4.256">3</text>
+  <text class="source-label small" x="682.227" y="513.447" font-size="4.256">x</text>
+  <text class="source-label small" x="684.198" y="513.447" font-size="4.256">2</text>
+  <text class="source-label small" x="686.381" y="513.447" font-size="4.256">3</text>
+  <text class="source-label small" x="688.564" y="513.447" font-size="4.256">x</text>
+  <text class="source-label small" x="690.535" y="513.447" font-size="4.256">9</text>
+  <text class="source-label small" x="671.337" y="518.554" font-size="4.256">1</text>
+  <text class="source-label small" x="673.52" y="518.554" font-size="4.256">8</text>
+  <text class="source-label small" x="675.703" y="518.554" font-size="4.256">0</text>
+  <text class="source-label small" x="677.886" y="518.554" font-size="4.256">8</text>
+  <text class="source-label small" x="680.07" y="518.554" font-size="4.256">8</text>
+  <text class="source-label small" x="682.253" y="518.554" font-size="4.256">G</text>
+  <text class="source-label small" x="685.002" y="518.554" font-size="4.256">B</text>
+  <text class="source-label small" x="687.309" y="518.554" font-size="4.256">D</text>
+  <text class="source-label small" x="690.143" y="518.554" font-size="4.256">1</text>
+  <text class="source-label small" x="692.326" y="518.554" font-size="4.256">9</text>
+  <text class="source-label small" x="694.51" y="518.554" font-size="4.256">P</text>
+  <text class="source-label small" x="696.774" y="518.554" font-size="4.256">C</text>
+  <text class="source-label small" x="712.388" y="510.634" font-size="4.256">Z</text>
+  <text class="source-label small" x="714.652" y="510.634" font-size="4.256">O</text>
+  <text class="source-label small" x="717.585" y="510.634" font-size="4.256">U</text>
+  <text class="source-label small" x="720.338" y="510.634" font-size="4.256">T</text>
+  <text class="source-label small" x="722.453" y="510.634" font-size="4.256">/</text>
+  <text class="source-label small" x="723.913" y="510.634" font-size="4.256">K</text>
+  <text class="source-label small" x="726.148" y="510.634" font-size="4.256">O</text>
+  <text class="source-label small" x="729.08" y="510.634" font-size="4.256">E</text>
+  <text class="source-label small" x="731.174" y="510.634" font-size="4.256">K</text>
+  <text class="source-label small" x="733.48" y="510.634" font-size="4.256"> </text>
+  <text class="source-label small" x="734.383" y="510.634" font-size="4.256">C</text>
+  <text class="source-label small" x="736.762" y="510.634" font-size="4.256">O</text>
+  <text class="source-label small" x="739.694" y="510.634" font-size="4.256">N</text>
+  <text class="source-label small" x="742.495" y="510.634" font-size="4.256">I</text>
+  <text class="source-label small" x="743.512" y="510.634" font-size="4.256">S</text>
+  <text class="source-label small" x="745.61" y="510.634" font-size="4.256">C</text>
+  <text class="source-label small" x="748.078" y="510.634" font-size="4.256">H</text>
+  <text class="source-label small" x="750.853" y="510.634" font-size="4.256">E</text>
+  <text class="source-label small" x="752.947" y="510.634" font-size="4.256"> </text>
+  <text class="source-label small" x="753.849" y="510.634" font-size="4.256">B</text>
+  <text class="source-label small" x="756.156" y="510.634" font-size="4.256">A</text>
+  <text class="source-label small" x="758.76" y="510.634" font-size="4.256">K</text>
+  <text class="source-label small" x="761.229" y="510.634" font-size="4.256">J</text>
+  <text class="source-label small" x="762.803" y="510.634" font-size="4.256">E</text>
+  <text class="source-label small" x="764.897" y="510.634" font-size="4.256">S</text>
+  <text class="source-label small" x="730.08" y="515.741" font-size="4.256">1</text>
+  <text class="source-label small" x="732.263" y="515.741" font-size="4.256">6</text>
+  <text class="source-label small" x="734.446" y="515.741" font-size="4.256">5</text>
+  <text class="source-label small" x="736.629" y="515.741" font-size="4.256">x</text>
+  <text class="source-label small" x="738.6" y="515.741" font-size="4.256">8</text>
+  <text class="source-label small" x="740.783" y="515.741" font-size="4.256">5</text>
+  <text class="source-label small" x="742.966" y="515.741" font-size="4.256">x</text>
+  <text class="source-label small" x="744.937" y="515.741" font-size="4.256">4</text>
+  <text class="source-label small" x="747.12" y="515.741" font-size="4.256">5</text>
+  <text class="source-label small" x="733.897" y="520.848" font-size="4.256">B</text>
+  <text class="source-label small" x="736.204" y="520.848" font-size="4.256">A</text>
+  <text class="source-label small" x="738.808" y="520.848" font-size="4.256">K</text>
+  <text class="source-label small" x="741.115" y="520.848" font-size="4.256">5</text>
+  <text class="source-label small" x="743.298" y="520.848" font-size="4.256">4</text>
+  <text class="source-label small" x="527.529" y="535.092" font-size="4.256">V</text>
+  <text class="source-label small" x="529.904" y="535.092" font-size="4.256">L</text>
+  <text class="source-label small" x="531.913" y="535.092" font-size="4.256">A</text>
+  <text class="source-label small" x="534.517" y="535.092" font-size="4.256">A</text>
+  <text class="source-label small" x="537.122" y="535.092" font-size="4.256">I</text>
+  <text class="source-label small" x="538.139" y="535.092" font-size="4.256">D</text>
+  <text class="source-label small" x="540.973" y="535.092" font-size="4.256">O</text>
+  <text class="source-label small" x="543.905" y="535.092" font-size="4.256">O</text>
+  <text class="source-label small" x="546.838" y="535.092" font-size="4.256">S</text>
+  <text class="source-label small" x="548.936" y="535.092" font-size="4.256"> </text>
+  <text class="source-label small" x="549.838" y="535.092" font-size="4.256">D</text>
+  <text class="source-label small" x="552.672" y="535.092" font-size="4.256">E</text>
+  <text class="source-label small" x="554.766" y="535.092" font-size="4.256">K</text>
+  <text class="source-label small" x="557.073" y="535.092" font-size="4.256">S</text>
+  <text class="source-label small" x="559.171" y="535.092" font-size="4.256">E</text>
+  <text class="source-label small" x="561.265" y="535.092" font-size="4.256">L</text>
+  <text class="source-label small" x="534.696" y="540.199" font-size="4.256">3</text>
+  <text class="source-label small" x="536.879" y="540.199" font-size="4.256">0</text>
+  <text class="source-label small" x="539.062" y="540.199" font-size="4.256">0</text>
+  <text class="source-label small" x="541.246" y="540.199" font-size="4.256">x</text>
+  <text class="source-label small" x="543.216" y="540.199" font-size="4.256">3</text>
+  <text class="source-label small" x="545.399" y="540.199" font-size="4.256">0</text>
+  <text class="source-label small" x="547.582" y="540.199" font-size="4.256">0</text>
+  <text class="source-label small" x="549.766" y="540.199" font-size="4.256">x</text>
+  <text class="source-label small" x="551.736" y="540.199" font-size="4.256">6</text>
+  <text class="source-label small" x="553.919" y="540.199" font-size="4.256">0</text>
+  <text class="source-label small" x="537.066" y="545.306" font-size="4.256">V</text>
+  <text class="source-label small" x="539.441" y="545.306" font-size="4.256">Z</text>
+  <text class="source-label small" x="541.795" y="545.306" font-size="4.256">D</text>
+  <text class="source-label small" x="544.629" y="545.306" font-size="4.256">1</text>
+  <text class="source-label small" x="546.812" y="545.306" font-size="4.256">0</text>
+  <text class="source-label small" x="548.995" y="545.306" font-size="4.256">P</text>
+  <text class="source-label small" x="551.259" y="545.306" font-size="4.256">C</text>
+  <text class="source-label small" x="458.836" y="516.481" font-size="4.256">H</text>
+  <text class="source-label small" x="461.611" y="516.481" font-size="4.256">O</text>
+  <text class="source-label small" x="464.543" y="516.481" font-size="4.256">R</text>
+  <text class="source-label small" x="466.833" y="516.481" font-size="4.256">E</text>
+  <text class="source-label small" x="468.927" y="516.481" font-size="4.256">C</text>
+  <text class="source-label small" x="471.412" y="516.481" font-size="4.256">A</text>
+  <text class="source-label small" x="474.017" y="516.481" font-size="4.256"> </text>
+  <text class="source-label small" x="474.919" y="516.481" font-size="4.256">X</text>
+  <text class="source-label small" x="477.349" y="516.481" font-size="4.256">L</text>
+  <text class="source-label small" x="479.358" y="516.481" font-size="4.256"> </text>
+  <text class="source-label small" x="480.26" y="516.481" font-size="4.256">B</text>
+  <text class="source-label small" x="482.567" y="516.481" font-size="4.256">O</text>
+  <text class="source-label small" x="485.499" y="516.481" font-size="4.256">D</text>
+  <text class="source-label small" x="488.333" y="516.481" font-size="4.256">E</text>
+  <text class="source-label small" x="490.427" y="516.481" font-size="4.256">M</text>
+  <text class="source-label small" x="464.547" y="521.588" font-size="4.256">3</text>
+  <text class="source-label small" x="466.731" y="521.588" font-size="4.256">9</text>
+  <text class="source-label small" x="468.914" y="521.588" font-size="4.256">5</text>
+  <text class="source-label small" x="471.097" y="521.588" font-size="4.256">x</text>
+  <text class="source-label small" x="473.068" y="521.588" font-size="4.256">3</text>
+  <text class="source-label small" x="475.251" y="521.588" font-size="4.256">9</text>
+  <text class="source-label small" x="477.434" y="521.588" font-size="4.256">5</text>
+  <text class="source-label small" x="479.617" y="521.588" font-size="4.256">x</text>
+  <text class="source-label small" x="481.588" y="521.588" font-size="4.256">1</text>
+  <text class="source-label small" x="483.771" y="521.588" font-size="4.256">0</text>
+  <text class="source-label small" x="485.954" y="521.588" font-size="4.256">0</text>
+  <text class="source-label small" x="468.033" y="526.695" font-size="4.256">V</text>
+  <text class="source-label small" x="470.408" y="526.695" font-size="4.256">D</text>
+  <text class="source-label small" x="473.242" y="526.695" font-size="4.256">B</text>
+  <text class="source-label small" x="475.549" y="526.695" font-size="4.256">2</text>
+  <text class="source-label small" x="477.732" y="526.695" font-size="4.256">4</text>
+  <text class="source-label small" x="479.915" y="526.695" font-size="4.256">P</text>
+  <text class="source-label small" x="482.179" y="526.695" font-size="4.256">C</text>
+  <text class="source-label small" x="346.836" y="507.489" font-size="4.256">H</text>
+  <text class="source-label small" x="349.611" y="507.489" font-size="4.256">O</text>
+  <text class="source-label small" x="352.543" y="507.489" font-size="4.256">R</text>
+  <text class="source-label small" x="354.833" y="507.489" font-size="4.256">E</text>
+  <text class="source-label small" x="356.927" y="507.489" font-size="4.256">C</text>
+  <text class="source-label small" x="359.412" y="507.489" font-size="4.256">A</text>
+  <text class="source-label small" x="362.017" y="507.489" font-size="4.256"> </text>
+  <text class="source-label small" x="362.919" y="507.489" font-size="4.256">M</text>
+  <text class="source-label small" x="366.341" y="507.489" font-size="4.256">I</text>
+  <text class="source-label small" x="367.358" y="507.489" font-size="4.256">D</text>
+  <text class="source-label small" x="370.192" y="507.489" font-size="4.256">D</text>
+  <text class="source-label small" x="373.027" y="507.489" font-size="4.256">E</text>
+  <text class="source-label small" x="375.12" y="507.489" font-size="4.256">L</text>
+  <text class="source-label small" x="353.463" y="512.596" font-size="4.256">3</text>
+  <text class="source-label small" x="355.646" y="512.596" font-size="4.256">1</text>
+  <text class="source-label small" x="357.829" y="512.596" font-size="4.256">x</text>
+  <text class="source-label small" x="359.799" y="512.596" font-size="4.256">3</text>
+  <text class="source-label small" x="361.983" y="512.596" font-size="4.256">1</text>
+  <text class="source-label small" x="364.166" y="512.596" font-size="4.256">x</text>
+  <text class="source-label small" x="366.136" y="512.596" font-size="4.256">1</text>
+  <text class="source-label small" x="368.32" y="512.596" font-size="4.256">0</text>
+  <text class="source-label small" x="346.721" y="517.703" font-size="4.256">1</text>
+  <text class="source-label small" x="348.905" y="517.703" font-size="4.256">8</text>
+  <text class="source-label small" x="351.088" y="517.703" font-size="4.256">0</text>
+  <text class="source-label small" x="353.271" y="517.703" font-size="4.256">8</text>
+  <text class="source-label small" x="355.454" y="517.703" font-size="4.256">8</text>
+  <text class="source-label small" x="357.638" y="517.703" font-size="4.256">G</text>
+  <text class="source-label small" x="360.387" y="517.703" font-size="4.256">B</text>
+  <text class="source-label small" x="362.693" y="517.703" font-size="4.256">D</text>
+  <text class="source-label small" x="365.528" y="517.703" font-size="4.256">2</text>
+  <text class="source-label small" x="367.711" y="517.703" font-size="4.256">2</text>
+  <text class="source-label small" x="369.894" y="517.703" font-size="4.256">P</text>
+  <text class="source-label small" x="372.158" y="517.703" font-size="4.256">C</text>
+  <text class="source-label small" x="374.644" y="517.703" font-size="4.256">A</text>
+  <text class="source-label small" x="294.579" y="507.489" font-size="4.256">H</text>
+  <text class="source-label small" x="297.354" y="507.489" font-size="4.256">O</text>
+  <text class="source-label small" x="300.286" y="507.489" font-size="4.256">R</text>
+  <text class="source-label small" x="302.576" y="507.489" font-size="4.256">E</text>
+  <text class="source-label small" x="304.67" y="507.489" font-size="4.256">C</text>
+  <text class="source-label small" x="307.155" y="507.489" font-size="4.256">A</text>
+  <text class="source-label small" x="309.76" y="507.489" font-size="4.256"> </text>
+  <text class="source-label small" x="310.662" y="507.489" font-size="4.256">K</text>
+  <text class="source-label small" x="312.969" y="507.489" font-size="4.256">L</text>
+  <text class="source-label small" x="314.977" y="507.489" font-size="4.256">E</text>
+  <text class="source-label small" x="317.071" y="507.489" font-size="4.256">I</text>
+  <text class="source-label small" x="318.088" y="507.489" font-size="4.256">N</text>
+  <text class="source-label small" x="299.214" y="512.596" font-size="4.256">2</text>
+  <text class="source-label small" x="301.397" y="512.596" font-size="4.256">6</text>
+  <text class="source-label small" x="303.58" y="512.596" font-size="4.256">x</text>
+  <text class="source-label small" x="305.551" y="512.596" font-size="4.256">2</text>
+  <text class="source-label small" x="307.734" y="512.596" font-size="4.256">6</text>
+  <text class="source-label small" x="309.917" y="512.596" font-size="4.256">x</text>
+  <text class="source-label small" x="311.888" y="512.596" font-size="4.256">1</text>
+  <text class="source-label small" x="314.071" y="512.596" font-size="4.256">0</text>
+  <text class="source-label small" x="292.473" y="517.703" font-size="4.256">1</text>
+  <text class="source-label small" x="294.656" y="517.703" font-size="4.256">8</text>
+  <text class="source-label small" x="296.839" y="517.703" font-size="4.256">0</text>
+  <text class="source-label small" x="299.022" y="517.703" font-size="4.256">8</text>
+  <text class="source-label small" x="301.206" y="517.703" font-size="4.256">8</text>
+  <text class="source-label small" x="303.389" y="517.703" font-size="4.256">G</text>
+  <text class="source-label small" x="306.138" y="517.703" font-size="4.256">B</text>
+  <text class="source-label small" x="308.445" y="517.703" font-size="4.256">D</text>
+  <text class="source-label small" x="311.279" y="517.703" font-size="4.256">2</text>
+  <text class="source-label small" x="313.462" y="517.703" font-size="4.256">1</text>
+  <text class="source-label small" x="315.646" y="517.703" font-size="4.256">P</text>
+  <text class="source-label small" x="317.91" y="517.703" font-size="4.256">C</text>
+  <text class="source-label small" x="320.395" y="517.703" font-size="4.256">A</text>
+  <text class="source-label small" x="327.689" y="392.071" font-size="4.256">Z</text>
+  <text class="source-label small" x="329.954" y="392.071" font-size="4.256">O</text>
+  <text class="source-label small" x="332.886" y="392.071" font-size="4.256">U</text>
+  <text class="source-label small" x="335.639" y="392.071" font-size="4.256">T</text>
+  <text class="source-label small" x="337.754" y="392.071" font-size="4.256">/</text>
+  <text class="source-label small" x="339.214" y="392.071" font-size="4.256">K</text>
+  <text class="source-label small" x="341.448" y="392.071" font-size="4.256">O</text>
+  <text class="source-label small" x="344.381" y="392.071" font-size="4.256">E</text>
+  <text class="source-label small" x="346.475" y="392.071" font-size="4.256">K</text>
+  <text class="source-label small" x="331.639" y="397.178" font-size="4.256">Z</text>
+  <text class="source-label small" x="333.992" y="397.178" font-size="4.256">A</text>
+  <text class="source-label small" x="336.597" y="397.178" font-size="4.256">K</text>
+  <text class="source-label small" x="339.065" y="397.178" font-size="4.256">J</text>
+  <text class="source-label small" x="340.64" y="397.178" font-size="4.256">E</text>
+  <text class="source-label small" x="342.734" y="397.178" font-size="4.256">S</text>
+  <text class="source-label small" x="324.77" y="402.285" font-size="4.256">1</text>
+  <text class="source-label small" x="326.953" y="402.285" font-size="4.256">8</text>
+  <text class="source-label small" x="329.136" y="402.285" font-size="4.256">0</text>
+  <text class="source-label small" x="331.32" y="402.285" font-size="4.256">8</text>
+  <text class="source-label small" x="333.503" y="402.285" font-size="4.256">8</text>
+  <text class="source-label small" x="335.686" y="402.285" font-size="4.256">C</text>
+  <text class="source-label small" x="338.154" y="402.285" font-size="4.256">E</text>
+  <text class="source-label small" x="340.248" y="402.285" font-size="4.256">Z</text>
+  <text class="source-label small" x="342.602" y="402.285" font-size="4.256">0</text>
+  <text class="source-label small" x="344.785" y="402.285" font-size="4.256">1</text>
+  <text class="source-label small" x="346.968" y="402.285" font-size="4.256">P</text>
+  <text class="source-label small" x="349.232" y="402.285" font-size="4.256">C</text>
+  <text class="source-label small" x="368.281" y="392.071" font-size="4.256">C</text>
+  <text class="source-label small" x="370.767" y="392.071" font-size="4.256">A</text>
+  <text class="source-label small" x="373.371" y="392.071" font-size="4.256">K</text>
+  <text class="source-label small" x="375.678" y="392.071" font-size="4.256">E</text>
+  <text class="source-label small" x="377.772" y="392.071" font-size="4.256"> </text>
+  <text class="source-label small" x="378.674" y="392.071" font-size="4.256">Z</text>
+  <text class="source-label small" x="381.027" y="392.071" font-size="4.256">A</text>
+  <text class="source-label small" x="383.632" y="392.071" font-size="4.256">K</text>
+  <text class="source-label small" x="372.197" y="397.178" font-size="4.256">S</text>
+  <text class="source-label small" x="374.295" y="397.178" font-size="4.256">T</text>
+  <text class="source-label small" x="376.41" y="397.178" font-size="4.256">R</text>
+  <text class="source-label small" x="378.699" y="397.178" font-size="4.256">I</text>
+  <text class="source-label small" x="379.717" y="397.178" font-size="4.256">K</text>
+  <text class="source-label small" x="363.647" y="402.285" font-size="4.256">1</text>
+  <text class="source-label small" x="365.83" y="402.285" font-size="4.256">8</text>
+  <text class="source-label small" x="368.013" y="402.285" font-size="4.256">0</text>
+  <text class="source-label small" x="370.196" y="402.285" font-size="4.256">8</text>
+  <text class="source-label small" x="372.38" y="402.285" font-size="4.256">8</text>
+  <text class="source-label small" x="374.563" y="402.285" font-size="4.256">C</text>
+  <text class="source-label small" x="377.031" y="402.285" font-size="4.256">E</text>
+  <text class="source-label small" x="379.125" y="402.285" font-size="4.256">Z</text>
+  <text class="source-label small" x="381.479" y="402.285" font-size="4.256">0</text>
+  <text class="source-label small" x="383.662" y="402.285" font-size="4.256">4</text>
+  <text class="source-label small" x="385.845" y="402.285" font-size="4.256">P</text>
+  <text class="source-label small" x="388.109" y="402.285" font-size="4.256">C</text>
+  <text class="source-label" x="340.549" y="288.403" font-size="7.153">B</text>
+  <text class="source-label" x="344.426" y="288.403" font-size="7.153">R</text>
+  <text class="source-label" x="348.295" y="288.403" font-size="7.153">O</text>
+  <text class="source-label" x="353.224" y="288.403" font-size="7.153">K</text>
+  <text class="source-label" x="357.243" y="288.403" font-size="7.153">Z</text>
+  <text class="source-label" x="361.199" y="288.403" font-size="7.153">A</text>
+  <text class="source-label" x="365.577" y="288.403" font-size="7.153">K</text>
+  <text class="source-label" x="332.373" y="296.987" font-size="7.153">1</text>
+  <text class="source-label" x="336.042" y="296.987" font-size="7.153">8</text>
+  <text class="source-label" x="339.712" y="296.987" font-size="7.153">0</text>
+  <text class="source-label" x="343.382" y="296.987" font-size="7.153">8</text>
+  <text class="source-label" x="347.051" y="296.987" font-size="7.153">8</text>
+  <text class="source-label" x="350.721" y="296.987" font-size="7.153">C</text>
+  <text class="source-label" x="354.87" y="296.987" font-size="7.153">E</text>
+  <text class="source-label" x="358.389" y="296.987" font-size="7.153">Z</text>
+  <text class="source-label" x="362.345" y="296.987" font-size="7.153">0</text>
+  <text class="source-label" x="366.015" y="296.987" font-size="7.153">3</text>
+  <text class="source-label" x="369.684" y="296.987" font-size="7.153">P</text>
+  <text class="source-label" x="373.49" y="296.987" font-size="7.153">C</text>
+  <text class="source-label" x="387.167" y="283.861" font-size="7.153">B</text>
+  <text class="source-label" x="391.044" y="283.861" font-size="7.153">R</text>
+  <text class="source-label" x="394.892" y="283.861" font-size="7.153">U</text>
+  <text class="source-label" x="399.521" y="283.861" font-size="7.153">I</text>
+  <text class="source-label" x="401.23" y="283.861" font-size="7.153">D</text>
+  <text class="source-label" x="405.994" y="283.861" font-size="7.153">S</text>
+  <text class="source-label" x="384.027" y="292.445" font-size="7.153">3</text>
+  <text class="source-label" x="387.696" y="292.445" font-size="7.153">0</text>
+  <text class="source-label" x="391.366" y="292.445" font-size="7.153">x</text>
+  <text class="source-label" x="394.678" y="292.445" font-size="7.153">3</text>
+  <text class="source-label" x="398.347" y="292.445" font-size="7.153">0</text>
+  <text class="source-label" x="402.017" y="292.445" font-size="7.153">x</text>
+  <text class="source-label" x="405.329" y="292.445" font-size="7.153">3</text>
+  <text class="source-label" x="408.999" y="292.445" font-size="7.153">0</text>
+  <text class="source-label" x="382.539" y="301.029" font-size="7.153">G</text>
+  <text class="source-label" x="387.16" y="301.029" font-size="7.153">B</text>
+  <text class="source-label" x="391.037" y="301.029" font-size="7.153">D</text>
+  <text class="source-label" x="395.801" y="301.029" font-size="7.153">9</text>
+  <text class="source-label" x="399.471" y="301.029" font-size="7.153">9</text>
+  <text class="source-label" x="403.14" y="301.029" font-size="7.153">1</text>
+  <text class="source-label" x="406.81" y="301.029" font-size="7.153">0</text>
+  <text class="source-label" x="410.479" y="301.029" font-size="7.153">1</text>
+  <text class="source-label" x="428.692" y="283.861" font-size="7.153">B</text>
+  <text class="source-label" x="432.569" y="283.861" font-size="7.153">R</text>
+  <text class="source-label" x="436.417" y="283.861" font-size="7.153">U</text>
+  <text class="source-label" x="441.046" y="283.861" font-size="7.153">I</text>
+  <text class="source-label" x="442.755" y="283.861" font-size="7.153">D</text>
+  <text class="source-label" x="447.519" y="283.861" font-size="7.153">S</text>
+  <text class="source-label" x="425.551" y="292.445" font-size="7.153">3</text>
+  <text class="source-label" x="429.221" y="292.445" font-size="7.153">5</text>
+  <text class="source-label" x="432.891" y="292.445" font-size="7.153">x</text>
+  <text class="source-label" x="436.203" y="292.445" font-size="7.153">3</text>
+  <text class="source-label" x="439.872" y="292.445" font-size="7.153">5</text>
+  <text class="source-label" x="443.542" y="292.445" font-size="7.153">x</text>
+  <text class="source-label" x="446.854" y="292.445" font-size="7.153">3</text>
+  <text class="source-label" x="450.524" y="292.445" font-size="7.153">5</text>
+  <text class="source-label" x="424.064" y="301.029" font-size="7.153">G</text>
+  <text class="source-label" x="428.685" y="301.029" font-size="7.153">B</text>
+  <text class="source-label" x="432.562" y="301.029" font-size="7.153">D</text>
+  <text class="source-label" x="437.326" y="301.029" font-size="7.153">9</text>
+  <text class="source-label" x="440.995" y="301.029" font-size="7.153">9</text>
+  <text class="source-label" x="444.665" y="301.029" font-size="7.153">1</text>
+  <text class="source-label" x="448.335" y="301.029" font-size="7.153">0</text>
+  <text class="source-label" x="452.004" y="301.029" font-size="7.153">2</text>
+  <text class="source-label" x="474.409" y="283.861" font-size="7.153">B</text>
+  <text class="source-label" x="478.286" y="283.861" font-size="7.153">R</text>
+  <text class="source-label" x="482.134" y="283.861" font-size="7.153">U</text>
+  <text class="source-label" x="486.762" y="283.861" font-size="7.153">I</text>
+  <text class="source-label" x="488.472" y="283.861" font-size="7.153">D</text>
+  <text class="source-label" x="493.236" y="283.861" font-size="7.153">S</text>
+  <text class="source-label" x="471.268" y="292.445" font-size="7.153">4</text>
+  <text class="source-label" x="474.938" y="292.445" font-size="7.153">0</text>
+  <text class="source-label" x="478.607" y="292.445" font-size="7.153">x</text>
+  <text class="source-label" x="481.919" y="292.445" font-size="7.153">4</text>
+  <text class="source-label" x="485.589" y="292.445" font-size="7.153">0</text>
+  <text class="source-label" x="489.259" y="292.445" font-size="7.153">x</text>
+  <text class="source-label" x="492.571" y="292.445" font-size="7.153">4</text>
+  <text class="source-label" x="496.24" y="292.445" font-size="7.153">0</text>
+  <text class="source-label" x="469.78" y="301.029" font-size="7.153">G</text>
+  <text class="source-label" x="474.401" y="301.029" font-size="7.153">B</text>
+  <text class="source-label" x="478.278" y="301.029" font-size="7.153">D</text>
+  <text class="source-label" x="483.043" y="301.029" font-size="7.153">9</text>
+  <text class="source-label" x="486.712" y="301.029" font-size="7.153">9</text>
+  <text class="source-label" x="490.382" y="301.029" font-size="7.153">1</text>
+  <text class="source-label" x="494.051" y="301.029" font-size="7.153">0</text>
+  <text class="source-label" x="497.721" y="301.029" font-size="7.153">3</text>
+  <text class="source-label major" x="95.553" y="277.549" font-size="10">V</text>
+  <text class="source-label major" x="100.563" y="277.549" font-size="10">A</text>
+  <text class="source-label major" x="106.683" y="277.549" font-size="10">A</text>
+  <text class="source-label major" x="112.803" y="277.549" font-size="10">N</text>
+  <text class="source-label major" x="119.383" y="277.549" font-size="10">D</text>
+  <text class="source-label major" x="126.043" y="277.549" font-size="10">E</text>
+  <text class="source-label major" x="130.963" y="277.549" font-size="10">L</text>
+  <text class="source-label major" x="104.223" y="289.549" font-size="10">B</text>
+  <text class="source-label major" x="109.643" y="289.549" font-size="10">L</text>
+  <text class="source-label major" x="114.363" y="289.549" font-size="10">I</text>
+  <text class="source-label major" x="116.753" y="289.549" font-size="10">2</text>
+  <text class="source-label major" x="121.883" y="289.549" font-size="10">8</text>
+  <text class="source-label" x="60.968" y="415.527" font-size="6.448">1</text>
+  <text class="source-label" x="64.276" y="415.527" font-size="6.448">9</text>
+  <text class="source-label" x="67.584" y="415.527" font-size="6.448">x</text>
+  <text class="source-label" x="70.57" y="415.527" font-size="6.448">1</text>
+  <text class="source-label" x="73.878" y="415.527" font-size="6.448">9</text>
+  <text class="source-label" x="77.186" y="415.527" font-size="6.448">x</text>
+  <text class="source-label" x="80.171" y="415.527" font-size="6.448">8</text>
+  <text class="source-label" x="62.78" y="423.265" font-size="6.448">l</text>
+  <text class="source-label" x="64.302" y="423.265" font-size="6.448">i</text>
+  <text class="source-label" x="65.811" y="423.265" font-size="6.448">m</text>
+  <text class="source-label" x="71.189" y="423.265" font-size="6.448">i</text>
+  <text class="source-label" x="72.698" y="423.265" font-size="6.448">t</text>
+  <text class="source-label" x="74.794" y="423.265" font-size="6.448">e</text>
+  <text class="source-label" x="78.024" y="423.265" font-size="6.448">d</text>
+  <text class="source-label" x="46.976" y="431.003" font-size="6.448">1</text>
+  <text class="source-label" x="50.284" y="431.003" font-size="6.448">8</text>
+  <text class="source-label" x="53.592" y="431.003" font-size="6.448">0</text>
+  <text class="source-label" x="56.899" y="431.003" font-size="6.448">8</text>
+  <text class="source-label" x="60.207" y="431.003" font-size="6.448">8</text>
+  <text class="source-label" x="63.515" y="431.003" font-size="6.448">G</text>
+  <text class="source-label" x="67.681" y="431.003" font-size="6.448">B</text>
+  <text class="source-label" x="71.176" y="431.003" font-size="6.448">D</text>
+  <text class="source-label" x="75.47" y="431.003" font-size="6.448">0</text>
+  <text class="source-label" x="78.778" y="431.003" font-size="6.448">9</text>
+  <text class="source-label" x="82.086" y="431.003" font-size="6.448">P</text>
+  <text class="source-label" x="85.517" y="431.003" font-size="6.448">C</text>
+  <text class="source-label" x="89.282" y="431.003" font-size="6.448">A</text>
+  <text class="source-label" x="93.229" y="431.003" font-size="6.448">N</text>
+  <text class="source-label" x="52.321" y="508.697" font-size="6.448">b</text>
+  <text class="source-label" x="55.99" y="508.697" font-size="6.448">e</text>
+  <text class="source-label" x="59.221" y="508.697" font-size="6.448">u</text>
+  <text class="source-label" x="62.774" y="508.697" font-size="6.448">g</text>
+  <text class="source-label" x="66.378" y="508.697" font-size="6.448">e</text>
+  <text class="source-label" x="69.609" y="508.697" font-size="6.448">l</text>
+  <text class="source-label" x="71.131" y="508.697" font-size="6.448"> </text>
+  <text class="source-label" x="72.498" y="508.697" font-size="6.448">h</text>
+  <text class="source-label" x="76.076" y="508.697" font-size="6.448">e</text>
+  <text class="source-label" x="79.307" y="508.697" font-size="6.448">e</text>
+  <text class="source-label" x="82.538" y="508.697" font-size="6.448">l</text>
+  <text class="source-label" x="47.453" y="516.435" font-size="6.448">1</text>
+  <text class="source-label" x="50.761" y="516.435" font-size="6.448">8</text>
+  <text class="source-label" x="54.069" y="516.435" font-size="6.448">0</text>
+  <text class="source-label" x="57.377" y="516.435" font-size="6.448">8</text>
+  <text class="source-label" x="60.685" y="516.435" font-size="6.448">8</text>
+  <text class="source-label" x="63.993" y="516.435" font-size="6.448">D</text>
+  <text class="source-label" x="68.287" y="516.435" font-size="6.448">P</text>
+  <text class="source-label" x="71.717" y="516.435" font-size="6.448">P</text>
+  <text class="source-label" x="75.148" y="516.435" font-size="6.448">0</text>
+  <text class="source-label" x="78.456" y="516.435" font-size="6.448">6</text>
+  <text class="source-label" x="81.764" y="516.435" font-size="6.448">P</text>
+  <text class="source-label" x="85.194" y="516.435" font-size="6.448">C</text>
+  <text class="source-label" x="97.633" y="508.697" font-size="6.448">b</text>
+  <text class="source-label" x="101.302" y="508.697" font-size="6.448">e</text>
+  <text class="source-label" x="104.532" y="508.697" font-size="6.448">u</text>
+  <text class="source-label" x="108.085" y="508.697" font-size="6.448">g</text>
+  <text class="source-label" x="111.69" y="508.697" font-size="6.448">e</text>
+  <text class="source-label" x="114.92" y="508.697" font-size="6.448">l</text>
+  <text class="source-label" x="116.442" y="508.697" font-size="6.448"> </text>
+  <text class="source-label" x="117.809" y="508.697" font-size="6.448">h</text>
+  <text class="source-label" x="121.388" y="508.697" font-size="6.448">a</text>
+  <text class="source-label" x="124.496" y="508.697" font-size="6.448">l</text>
+  <text class="source-label" x="126.018" y="508.697" font-size="6.448">f</text>
+  <text class="source-label" x="92.029" y="516.435" font-size="6.448">1</text>
+  <text class="source-label" x="95.337" y="516.435" font-size="6.448">8</text>
+  <text class="source-label" x="98.645" y="516.435" font-size="6.448">0</text>
+  <text class="source-label" x="101.953" y="516.435" font-size="6.448">8</text>
+  <text class="source-label" x="105.261" y="516.435" font-size="6.448">8</text>
+  <text class="source-label" x="108.569" y="516.435" font-size="6.448">D</text>
+  <text class="source-label" x="112.863" y="516.435" font-size="6.448">P</text>
+  <text class="source-label" x="116.294" y="516.435" font-size="6.448">P</text>
+  <text class="source-label" x="119.724" y="516.435" font-size="6.448">0</text>
+  <text class="source-label" x="123.032" y="516.435" font-size="6.448">5</text>
+  <text class="source-label" x="126.34" y="516.435" font-size="6.448">P</text>
+  <text class="source-label" x="129.771" y="516.435" font-size="6.448">C</text>
+  <text class="source-label" x="147.626" y="508.697" font-size="6.448">3</text>
+  <text class="source-label" x="150.934" y="508.697" font-size="6.448">-</text>
+  <text class="source-label" x="153.003" y="508.697" font-size="6.448">g</text>
+  <text class="source-label" x="156.607" y="508.697" font-size="6.448">e</text>
+  <text class="source-label" x="159.838" y="508.697" font-size="6.448">b</text>
+  <text class="source-label" x="163.507" y="508.697" font-size="6.448">a</text>
+  <text class="source-label" x="166.615" y="508.697" font-size="6.448">k</text>
+  <text class="source-label" x="169.639" y="508.697" font-size="6.448">s</text>
+  <text class="source-label" x="172.193" y="508.697" font-size="6.448"> </text>
+  <text class="source-label" x="173.56" y="508.697" font-size="6.448">d</text>
+  <text class="source-label" x="177.196" y="508.697" font-size="6.448">o</text>
+  <text class="source-label" x="180.737" y="508.697" font-size="6.448">o</text>
+  <text class="source-label" x="184.277" y="508.697" font-size="6.448">s</text>
+  <text class="source-label" x="154.358" y="516.435" font-size="6.448">G</text>
+  <text class="source-label" x="158.523" y="516.435" font-size="6.448">B</text>
+  <text class="source-label" x="162.018" y="516.435" font-size="6.448">D</text>
+  <text class="source-label" x="166.313" y="516.435" font-size="6.448">0</text>
+  <text class="source-label" x="169.62" y="516.435" font-size="6.448">1</text>
+  <text class="source-label" x="172.928" y="516.435" font-size="6.448">P</text>
+  <text class="source-label" x="176.359" y="516.435" font-size="6.448">C</text>
+  <text class="source-label" x="210.412" y="508.697" font-size="6.448">T</text>
+  <text class="source-label" x="213.874" y="508.697" font-size="6.448">V</text>
+  <text class="source-label" x="217.473" y="508.697" font-size="6.448"> </text>
+  <text class="source-label" x="218.84" y="508.697" font-size="6.448">p</text>
+  <text class="source-label" x="222.509" y="508.697" font-size="6.448">e</text>
+  <text class="source-label" x="225.739" y="508.697" font-size="6.448">t</text>
+  <text class="source-label" x="227.874" y="508.697" font-size="6.448">i</text>
+  <text class="source-label" x="229.382" y="508.697" font-size="6.448">t</text>
+  <text class="source-label" x="231.517" y="508.697" font-size="6.448"> </text>
+  <text class="source-label" x="232.884" y="508.697" font-size="6.448">f</text>
+  <text class="source-label" x="234.683" y="508.697" font-size="6.448">o</text>
+  <text class="source-label" x="238.223" y="508.697" font-size="6.448">u</text>
+  <text class="source-label" x="241.776" y="508.697" font-size="6.448">r</text>
+  <text class="source-label" x="243.884" y="508.697" font-size="6.448"> </text>
+  <text class="source-label" x="245.251" y="508.697" font-size="6.448">d</text>
+  <text class="source-label" x="248.888" y="508.697" font-size="6.448">o</text>
+  <text class="source-label" x="252.428" y="508.697" font-size="6.448">o</text>
+  <text class="source-label" x="255.968" y="508.697" font-size="6.448">s</text>
+  <text class="source-label" x="258.522" y="508.697" font-size="6.448">j</text>
+  <text class="source-label" x="260.089" y="508.697" font-size="6.448">e</text>
+  <text class="source-label" x="215.725" y="516.435" font-size="6.448">1</text>
+  <text class="source-label" x="219.033" y="516.435" font-size="6.448">8</text>
+  <text class="source-label" x="222.341" y="516.435" font-size="6.448">0</text>
+  <text class="source-label" x="225.649" y="516.435" font-size="6.448">8</text>
+  <text class="source-label" x="228.957" y="516.435" font-size="6.448">8</text>
+  <text class="source-label" x="232.265" y="516.435" font-size="6.448">G</text>
+  <text class="source-label" x="236.43" y="516.435" font-size="6.448">B</text>
+  <text class="source-label" x="239.925" y="516.435" font-size="6.448">D</text>
+  <text class="source-label" x="244.22" y="516.435" font-size="6.448">1</text>
+  <text class="source-label" x="247.528" y="516.435" font-size="6.448">1</text>
+  <text class="source-label" x="250.836" y="516.435" font-size="6.448">P</text>
+  <text class="source-label" x="254.266" y="516.435" font-size="6.448">C</text>
+  <text class="source-label" x="111.303" y="403.405" font-size="6.448">1</text>
+  <text class="source-label" x="114.611" y="403.405" font-size="6.448">9</text>
+  <text class="source-label" x="117.919" y="403.405" font-size="6.448">x</text>
+  <text class="source-label" x="120.904" y="403.405" font-size="6.448">1</text>
+  <text class="source-label" x="124.212" y="403.405" font-size="6.448">9</text>
+  <text class="source-label" x="127.52" y="403.405" font-size="6.448">x</text>
+  <text class="source-label" x="130.506" y="403.405" font-size="6.448">8</text>
+  <text class="source-label" x="101.418" y="411.143" font-size="6.448">1</text>
+  <text class="source-label" x="104.726" y="411.143" font-size="6.448">8</text>
+  <text class="source-label" x="108.034" y="411.143" font-size="6.448">0</text>
+  <text class="source-label" x="111.342" y="411.143" font-size="6.448">8</text>
+  <text class="source-label" x="114.65" y="411.143" font-size="6.448">8</text>
+  <text class="source-label" x="117.957" y="411.143" font-size="6.448">G</text>
+  <text class="source-label" x="122.123" y="411.143" font-size="6.448">B</text>
+  <text class="source-label" x="125.618" y="411.143" font-size="6.448">D</text>
+  <text class="source-label" x="129.912" y="411.143" font-size="6.448">0</text>
+  <text class="source-label" x="133.22" y="411.143" font-size="6.448">8</text>
+  <text class="source-label" x="136.528" y="411.143" font-size="6.448">P</text>
+  <text class="source-label" x="139.959" y="411.143" font-size="6.448">C</text>
+  <text class="source-label" x="155.976" y="421.376" font-size="6.448">1</text>
+  <text class="source-label" x="159.284" y="421.376" font-size="6.448">9</text>
+  <text class="source-label" x="162.592" y="421.376" font-size="6.448">x</text>
+  <text class="source-label" x="165.577" y="421.376" font-size="6.448">1</text>
+  <text class="source-label" x="168.885" y="421.376" font-size="6.448">9</text>
+  <text class="source-label" x="172.193" y="421.376" font-size="6.448">x</text>
+  <text class="source-label" x="175.179" y="421.376" font-size="6.448">5</text>
+  <text class="source-label" x="146.091" y="429.114" font-size="6.448">1</text>
+  <text class="source-label" x="149.399" y="429.114" font-size="6.448">8</text>
+  <text class="source-label" x="152.707" y="429.114" font-size="6.448">0</text>
+  <text class="source-label" x="156.015" y="429.114" font-size="6.448">8</text>
+  <text class="source-label" x="159.323" y="429.114" font-size="6.448">8</text>
+  <text class="source-label" x="162.631" y="429.114" font-size="6.448">G</text>
+  <text class="source-label" x="166.796" y="429.114" font-size="6.448">B</text>
+  <text class="source-label" x="170.291" y="429.114" font-size="6.448">D</text>
+  <text class="source-label" x="174.586" y="429.114" font-size="6.448">1</text>
+  <text class="source-label" x="177.894" y="429.114" font-size="6.448">3</text>
+  <text class="source-label" x="181.201" y="429.114" font-size="6.448">P</text>
+  <text class="source-label" x="184.632" y="429.114" font-size="6.448">C</text>
+  <text class="source-label" x="216.486" y="413.638" font-size="6.448">1</text>
+  <text class="source-label" x="219.794" y="413.638" font-size="6.448">9</text>
+  <text class="source-label" x="223.102" y="413.638" font-size="6.448">x</text>
+  <text class="source-label" x="226.087" y="413.638" font-size="6.448">1</text>
+  <text class="source-label" x="229.395" y="413.638" font-size="6.448">9</text>
+  <text class="source-label" x="232.703" y="413.638" font-size="6.448">x</text>
+  <text class="source-label" x="235.689" y="413.638" font-size="6.448">1</text>
+  <text class="source-label" x="238.997" y="413.638" font-size="6.448">2</text>
+  <text class="source-label" x="208.258" y="421.376" font-size="6.448">1</text>
+  <text class="source-label" x="211.566" y="421.376" font-size="6.448">8</text>
+  <text class="source-label" x="214.874" y="421.376" font-size="6.448">0</text>
+  <text class="source-label" x="218.182" y="421.376" font-size="6.448">8</text>
+  <text class="source-label" x="221.49" y="421.376" font-size="6.448">8</text>
+  <text class="source-label" x="224.798" y="421.376" font-size="6.448">G</text>
+  <text class="source-label" x="228.963" y="421.376" font-size="6.448">B</text>
+  <text class="source-label" x="232.458" y="421.376" font-size="6.448">D</text>
+  <text class="source-label" x="236.753" y="421.376" font-size="6.448">1</text>
+  <text class="source-label" x="240.061" y="421.376" font-size="6.448">5</text>
+  <text class="source-label" x="243.369" y="421.376" font-size="6.448">P</text>
+  <text class="source-label" x="246.799" y="421.376" font-size="6.448">C</text>
+  <text class="source-label major" x="66.327" y="108.402" font-size="10">G</text>
+  <text class="source-label major" x="72.787" y="108.402" font-size="10">A</text>
+  <text class="source-label major" x="78.137" y="108.402" font-size="10">T</text>
+  <text class="source-label major" x="83.107" y="108.402" font-size="10">E</text>
+  <text class="source-label major" x="88.027" y="108.402" font-size="10">A</text>
+  <text class="source-label major" x="93.867" y="108.402" font-size="10">U</text>
+  <text class="source-label major" x="59.117" y="119.402" font-size="10">1</text>
+  <text class="source-label major" x="64.247" y="119.402" font-size="10">8</text>
+  <text class="source-label major" x="69.377" y="119.402" font-size="10">0</text>
+  <text class="source-label major" x="74.507" y="119.402" font-size="10">8</text>
+  <text class="source-label major" x="79.637" y="119.402" font-size="10">8</text>
+  <text class="source-label major" x="84.767" y="119.402" font-size="10">B</text>
+  <text class="source-label major" x="90.187" y="119.402" font-size="10">L</text>
+  <text class="source-label major" x="94.907" y="119.402" font-size="10">I</text>
+  <text class="source-label major" x="97.297" y="119.402" font-size="10">0</text>
+  <text class="source-label major" x="102.427" y="119.402" font-size="10">1</text>
+  <text class="source-label major" x="140.467" y="108.532" font-size="10">T</text>
+  <text class="source-label major" x="145.437" y="108.532" font-size="10">R</text>
+  <text class="source-label major" x="150.817" y="108.532" font-size="10">U</text>
+  <text class="source-label major" x="157.287" y="108.532" font-size="10">F</text>
+  <text class="source-label major" x="162.157" y="108.532" font-size="10">F</text>
+  <text class="source-label major" x="167.027" y="108.532" font-size="10">E</text>
+  <text class="source-label major" x="171.947" y="108.532" font-size="10">L</text>
+  <text class="source-label major" x="147.177" y="119.532" font-size="10">B</text>
+  <text class="source-label major" x="152.597" y="119.532" font-size="10">L</text>
+  <text class="source-label major" x="157.317" y="119.532" font-size="10">I</text>
+  <text class="source-label major" x="159.707" y="119.532" font-size="10">0</text>
+  <text class="source-label major" x="164.837" y="119.532" font-size="10">4</text>
+  <text class="source-label major" x="212.907" y="108.532" font-size="10">B</text>
+  <text class="source-label major" x="218.327" y="108.532" font-size="10">O</text>
+  <text class="source-label major" x="224.967" y="108.532" font-size="10">T</text>
+  <text class="source-label major" x="229.937" y="108.532" font-size="10">E</text>
+  <text class="source-label major" x="234.857" y="108.532" font-size="10">R</text>
+  <text class="source-label major" x="240.237" y="108.532" font-size="10">K</text>
+  <text class="source-label major" x="245.487" y="108.532" font-size="10">O</text>
+  <text class="source-label major" x="252.377" y="108.532" font-size="10">E</text>
+  <text class="source-label major" x="257.297" y="108.532" font-size="10">K</text>
+  <text class="source-label major" x="226.417" y="119.532" font-size="10">B</text>
+  <text class="source-label major" x="231.837" y="119.532" font-size="10">L</text>
+  <text class="source-label major" x="236.557" y="119.532" font-size="10">I</text>
+  <text class="source-label major" x="238.947" y="119.532" font-size="10">0</text>
+  <text class="source-label major" x="244.077" y="119.532" font-size="10">6</text>
+  <text class="source-label major" x="284.287" y="139.542" font-size="10">M</text>
+  <text class="source-label major" x="292.227" y="139.542" font-size="10">A</text>
+  <text class="source-label major" x="298.197" y="139.542" font-size="10">C</text>
+  <text class="source-label major" x="304.037" y="139.542" font-size="10">A</text>
+  <text class="source-label major" x="310.157" y="139.542" font-size="10">R</text>
+  <text class="source-label major" x="315.567" y="139.542" font-size="10">O</text>
+  <text class="source-label major" x="322.457" y="139.542" font-size="10">N</text>
+  <text class="source-label major" x="329.037" y="139.542" font-size="10"> </text>
+  <text class="source-label major" x="331.157" y="139.542" font-size="10">4</text>
+  <text class="source-label major" x="298.887" y="150.542" font-size="10">B</text>
+  <text class="source-label major" x="304.307" y="150.542" font-size="10">L</text>
+  <text class="source-label major" x="309.027" y="150.542" font-size="10">I</text>
+  <text class="source-label major" x="311.417" y="150.542" font-size="10">1</text>
+  <text class="source-label major" x="316.547" y="150.542" font-size="10">0</text>
+  <text class="source-label major" x="347.577" y="150.542" font-size="10">M</text>
+  <text class="source-label major" x="355.517" y="150.542" font-size="10">A</text>
+  <text class="source-label major" x="361.487" y="150.542" font-size="10">C</text>
+  <text class="source-label major" x="367.327" y="150.542" font-size="10">A</text>
+  <text class="source-label major" x="373.447" y="150.542" font-size="10">R</text>
+  <text class="source-label major" x="378.857" y="150.542" font-size="10">O</text>
+  <text class="source-label major" x="385.747" y="150.542" font-size="10">N</text>
+  <text class="source-label major" x="392.327" y="150.542" font-size="10"> </text>
+  <text class="source-label major" x="394.447" y="150.542" font-size="10">6</text>
+  <text class="source-label major" x="362.177" y="161.542" font-size="10">B</text>
+  <text class="source-label major" x="367.597" y="161.542" font-size="10">L</text>
+  <text class="source-label major" x="372.317" y="161.542" font-size="10">I</text>
+  <text class="source-label major" x="374.707" y="161.542" font-size="10">1</text>
+  <text class="source-label major" x="379.837" y="161.542" font-size="10">1</text>
+  <text class="source-label major" x="410.317" y="150.542" font-size="10">P</text>
+  <text class="source-label major" x="414.797" y="150.542" font-size="10">A</text>
+  <text class="source-label major" x="420.917" y="150.542" font-size="10">S</text>
+  <text class="source-label major" x="425.847" y="150.542" font-size="10">T</text>
+  <text class="source-label major" x="430.817" y="150.542" font-size="10">I</text>
+  <text class="source-label major" x="433.207" y="150.542" font-size="10">C</text>
+  <text class="source-label major" x="438.797" y="150.542" font-size="10">C</text>
+  <text class="source-label major" x="444.597" y="150.542" font-size="10">E</text>
+  <text class="source-label major" x="449.517" y="150.542" font-size="10">R</text>
+  <text class="source-label major" x="454.897" y="150.542" font-size="10">I</text>
+  <text class="source-label major" x="457.287" y="150.542" font-size="10">A</text>
+  <text class="source-label major" x="425.467" y="161.542" font-size="10">B</text>
+  <text class="source-label major" x="430.887" y="161.542" font-size="10">L</text>
+  <text class="source-label major" x="435.607" y="161.542" font-size="10">I</text>
+  <text class="source-label major" x="437.997" y="161.542" font-size="10">1</text>
+  <text class="source-label major" x="443.127" y="161.542" font-size="10">2</text>
+  <text class="source-label small" x="773.803" y="175.439" font-size="4.256">s</text>
+  <text class="source-label small" x="775.488" y="175.439" font-size="4.256">h</text>
+  <text class="source-label small" x="777.85" y="175.439" font-size="4.256">o</text>
+  <text class="source-label small" x="780.187" y="175.439" font-size="4.256">p</text>
+  <text class="source-label small" x="782.608" y="175.439" font-size="4.256">p</text>
+  <text class="source-label small" x="785.03" y="175.439" font-size="4.256">e</text>
+  <text class="source-label small" x="787.162" y="175.439" font-size="4.256">r</text>
+  <text class="source-label small" x="767.534" y="180.546" font-size="4.256">1</text>
+  <text class="source-label small" x="769.718" y="180.546" font-size="4.256">8</text>
+  <text class="source-label small" x="771.901" y="180.546" font-size="4.256">0</text>
+  <text class="source-label small" x="774.084" y="180.546" font-size="4.256">8</text>
+  <text class="source-label small" x="776.267" y="180.546" font-size="4.256">8</text>
+  <text class="source-label small" x="778.451" y="180.546" font-size="4.256">D</text>
+  <text class="source-label small" x="781.285" y="180.546" font-size="4.256">R</text>
+  <text class="source-label small" x="783.613" y="180.546" font-size="4.256">T</text>
+  <text class="source-label small" x="785.728" y="180.546" font-size="4.256">1</text>
+  <text class="source-label small" x="787.912" y="180.546" font-size="4.256">1</text>
+  <text class="source-label small" x="790.095" y="180.546" font-size="4.256">P</text>
+  <text class="source-label small" x="792.359" y="180.546" font-size="4.256">C</text>
+</svg>

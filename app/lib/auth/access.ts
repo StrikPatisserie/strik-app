@@ -215,7 +215,9 @@ function isBakkerijPath(pathname: string) {
 function isLogistiekPath(pathname: string) {
   return (
     pathname === "/bakkerij/logistiek" ||
-    pathname.startsWith("/bakkerij/logistiek/")
+    pathname.startsWith("/bakkerij/logistiek/") ||
+    pathname === "/magazijn/verpakking" ||
+    pathname.startsWith("/magazijn/verpakking/")
   );
 }
 

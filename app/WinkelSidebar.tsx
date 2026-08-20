@@ -60,7 +60,7 @@ const logistiekNavItems = [
     icon: strikIcons.logistiekDagstart,
   },
   {
-    href: "/bakkerij/logistiek/havelaar",
+    href: "/magazijn/verpakking",
     label: "Havelaar",
     icon: strikIcons.logistiek,
   },
@@ -127,7 +127,9 @@ function isBakkerijWorkArea(pathname: string) {
 function isLogistiekWorkArea(pathname: string) {
   return (
     pathname === "/bakkerij/logistiek" ||
-    pathname.startsWith("/bakkerij/logistiek/")
+    pathname.startsWith("/bakkerij/logistiek/") ||
+    pathname === "/magazijn/verpakking" ||
+    pathname.startsWith("/magazijn/verpakking/")
   );
 }
 

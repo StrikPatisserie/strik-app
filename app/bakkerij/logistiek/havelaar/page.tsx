@@ -1,5 +1,5 @@
-import HavelaarPlanner from "./HavelaarPlanner";
+import { redirect } from "next/navigation";
 
 export default function HavelaarPage() {
-  return <HavelaarPlanner />;
+  redirect("/magazijn/verpakking");
 }
