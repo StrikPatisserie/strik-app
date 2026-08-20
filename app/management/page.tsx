@@ -40,15 +40,8 @@ const managementGroups: {
         href: "/management/gegevens",
         label: "Brondata",
         title: "Gegevens",
-        description: "Agenda, aanbiedingen, nieuws en omzet.",
+        description: "Omzet, kasboek, agenda, aanbiedingen en nieuws.",
         icon: strikIcons.info,
-      },
-      {
-        href: "/management/gegevens/geld-tellen",
-        label: "Cash",
-        title: "Geld tellen",
-        description: "Kluiscontrole, weektotalen en stortingen.",
-        icon: strikIcons.management,
       },
       {
         href: "/management/rooster",

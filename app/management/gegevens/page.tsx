@@ -1,77 +1,132 @@
+/* eslint-disable @next/next/no-img-element */
+import Link from "next/link";
 import {
-  StrikActionCard,
   StrikPageHeader,
   StrikShell,
   strikIcons,
 } from "../../StrikUI";
-import ManagementAgendaCard from "../ManagementAgendaCard";
 
-const gegevensItems = [
+type GegevensMenuItem = {
+  href: string;
+  label: string;
+  title: string;
+  description: string;
+  icon: string;
+};
+
+const gegevensGroups: {
+  title: string;
+  items: GegevensMenuItem[];
+}[] = [
   {
-    href: "/management/bakkerij",
-    label: "Aanbieding",
-    title: "Aanbieding",
-    description: "Beheer de voorpagina-aanbieding voor de bakkerij.",
-    icon: strikIcons.bakkerij,
-    tone: "light" as const,
+    title: "Omzet & kas",
+    items: [
+      {
+        href: "/management/gegevens/omzet",
+        label: "Omzet",
+        title: "Omzet",
+        description: "Dag- en weekomzetten per winkel.",
+        icon: strikIcons.management,
+      },
+      {
+        href: "/management/gegevens/geld-tellen",
+        label: "Cash",
+        title: "Geld tellen",
+        description: "Kluiscontrole, weektotalen en stortingen.",
+        icon: strikIcons.management,
+      },
+      {
+        href: "/management/gegevens/kasboek",
+        label: "Kasboek",
+        title: "Maandrapport",
+        description: "Kasboek-export per locatie en maand.",
+        icon: strikIcons.data,
+      },
+    ],
   },
   {
-    href: "/management/nieuws",
-    label: "Nieuws",
-    title: "Nieuws",
-    description: "Plaats, wijzig of verwijder interne nieuwsberichten.",
-    icon: strikIcons.newsManagement,
-    tone: "green" as const,
-  },
-  {
-    href: "/management/gegevens/omzet",
-    label: "Omzet",
-    title: "Omzet",
-    description: "Voer weekomzetten per winkel in en beheer notities.",
-    icon: strikIcons.management,
-    tone: "honey" as const,
-  },
-  {
-    href: "/management/gegevens/geld-tellen",
-    label: "Cash",
-    title: "Geld tellen",
-    description: "Controleer kluisgeld, weektotalen en stortingen.",
-    icon: strikIcons.management,
-    tone: "green" as const,
-  },
-  {
-    href: "/management/gegevens/kasboek",
-    label: "Kasboek",
-    title: "Maandrapport",
-    description: "Exporteer maandtotalen per winkel voor het kasboek.",
-    icon: strikIcons.data,
-    tone: "light" as const,
-  },
-  {
-    href: "/settings",
-    label: "Settings",
-    title: "Gebruikers & app",
-    description: "Beheer accounts, rechten en app-instellingen.",
-    icon: strikIcons.management,
-    tone: "medium" as const,
+    title: "Inhoud",
+    items: [
+      {
+        href: "/management/agenda",
+        label: "Team",
+        title: "Strik Agenda",
+        description: "Agenda, verjaardagen en jubilea.",
+        icon: strikIcons.strikAgenda,
+      },
+      {
+        href: "/management/bakkerij",
+        label: "Bakkerij",
+        title: "Aanbieding",
+        description: "Voorpagina-aanbieding beheren.",
+        icon: strikIcons.bakkerij,
+      },
+      {
+        href: "/management/nieuws",
+        label: "Nieuws",
+        title: "Nieuws",
+        description: "Interne nieuwsberichten beheren.",
+        icon: strikIcons.newsManagement,
+      },
+    ],
   },
 ];
 
+function GegevensMenuLink({ item }: Readonly<{ item: GegevensMenuItem }>) {
+  return (
+    <Link
+      href={item.href}
+      className="group grid min-h-[4.5rem] grid-cols-[2.5rem_1fr_1.75rem] items-center gap-3 rounded-lg border border-[#e5ded5] bg-white/92 px-3 py-2 shadow-sm transition hover:border-[#cbdcc5] hover:bg-white active:scale-[0.99]"
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[#ecf4ed]">
+        <img src={item.icon} alt="" className="h-6 w-6 object-contain" />
+      </span>
+
+      <span className="min-w-0">
+        <span className="block text-[0.62rem] font-black uppercase leading-tight tracking-normal text-[#8b8278]">
+          {item.label}
+        </span>
+        <span className="mt-0.5 block truncate text-sm font-black leading-tight text-[#1a1815] sm:text-base">
+          {item.title}
+        </span>
+        <span className="mt-0.5 block text-xs font-bold leading-snug text-[#6b645b]">
+          {item.description}
+        </span>
+      </span>
+
+      <span
+        className="flex h-7 w-7 items-center justify-center rounded-md bg-[#f4f0ea] text-base font-black text-[#8b8278] transition group-hover:bg-[#ecf4ed] group-hover:text-[#1f4f35]"
+        aria-hidden="true"
+      >
+        &gt;
+      </span>
+    </Link>
+  );
+}
+
 export default function ManagementGegevensPage() {
   return (
-    <StrikShell>
+    <StrikShell wide>
       <StrikPageHeader
         title="Gegevens"
-        description="Brongegevens voor agenda, nieuws, aanbiedingen en dashboard."
+        description="Brondata en invoerschermen voor omzet, kasboek en interne inhoud."
         icon={strikIcons.info}
         kicker="Management"
         tone="light"
       />
 
-      <div className="space-y-3">
-        <ManagementAgendaCard />
-        {gegevensItems.map((item) => (
-          <StrikActionCard key={item.href} {...item} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        {gegevensGroups.map((group) => (
+          <section key={group.title} className="space-y-2">
+            <h2 className="text-[0.72rem] font-black uppercase leading-tight tracking-normal text-[#7b7268]">
+              {group.title}
+            </h2>
+            <div className="grid gap-2">
+              {group.items.map((item) => (
+                <GegevensMenuLink key={item.href} item={item} />
+              ))}
+            </div>
+          </section>
         ))}
       </div>
     </StrikShell>
