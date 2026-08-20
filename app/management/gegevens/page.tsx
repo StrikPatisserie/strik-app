@@ -40,6 +40,14 @@ const gegevensItems = [
     tone: "green" as const,
   },
   {
+    href: "/management/gegevens/kasboek",
+    label: "Kasboek",
+    title: "Maandrapport",
+    description: "Exporteer maandtotalen per winkel voor het kasboek.",
+    icon: strikIcons.data,
+    tone: "light" as const,
+  },
+  {
     href: "/settings",
     label: "Settings",
     title: "Gebruikers & app",
