@@ -53,10 +53,15 @@ const bakkerijNavItems = [
   { href: "/bakkerij/management", label: "Data", icon: strikIcons.data },
 ];
 
+const logistiekNavItems = [
+  { href: "/bakkerij/logistiek", label: "Overzicht", icon: strikIcons.logistiek },
+  { href: "/bakkerij/logistiek/havelaar", label: "Havelaar", icon: strikIcons.data },
+];
+
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/winkel") return pathname === "/winkel";
-  if (href === "/bakkerij/logistiek") return isLogistiekWorkArea(pathname);
+  if (href === "/bakkerij/logistiek") return pathname === "/bakkerij/logistiek";
   if (href === "/bakkerij") {
     return (
       (pathname === "/bakkerij" || pathname.startsWith("/bakkerij/")) &&
@@ -148,10 +153,16 @@ export default function WinkelSidebar({
     profile
   );
   const subNavItems: NavItem[] = filterAllowedItems(
-    showBakkerijSubNav ? bakkerijNavItems : winkelNavItems,
+    showLogistiekNav
+      ? logistiekNavItems
+      : showBakkerijSubNav
+        ? bakkerijNavItems
+        : winkelNavItems,
     profile
   );
-  const showSubNav = (showWinkelSubNav || showBakkerijSubNav) && subNavItems.length > 0;
+  const showSubNav =
+    (showWinkelSubNav || showBakkerijSubNav || showLogistiekNav) &&
+    subNavItems.length > 0;
 
   return (
     <>
