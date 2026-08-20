@@ -26,7 +26,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v6',
+  SCRIPT_VERSION: 'gmail-archive-v7',
 };
 
 function importDagomzet() {
@@ -350,10 +350,21 @@ function logDagomzetImportResult_(responseText) {
     const data = JSON.parse(responseText || '{}');
     const records = data.records || [];
     const cashRecords = data.cashRecords || [];
+    const receiptTotal =
+      typeof data.receiptTotal === 'number'
+        ? data.receiptTotal
+        : cashRecords.reduce((total, record) => {
+            return (
+              total +
+              (Number(record.receipts) || 0) +
+              (Number(record.iceReceipts) || 0)
+            );
+          }, 0);
     const summary = [
       `datum: ${data.date || '?'}`,
       `omzetregels: ${records.length}`,
       `kasregels: ${cashRecords.length}`,
+      `bonnen: ${formatDagomzetEuro_(receiptTotal)}`,
     ].join(' | ');
 
     console.log(`Dagomzet import OK: ${summary}`);
@@ -366,6 +377,12 @@ function logDagomzetImportResult_(responseText) {
       `Dagomzet import OK: ${String(responseText || '').slice(0, 500)}`
     );
   }
+}
+
+function formatDagomzetEuro_(value) {
+  const amount = Number(value) || 0;
+
+  return `€ ${amount.toFixed(2).replace('.', ',')}`;
 }
 
 function extractDagomzetPdfAttachments_(message) {

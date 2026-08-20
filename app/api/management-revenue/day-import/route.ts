@@ -119,6 +119,7 @@ const cashCountParseOrder: CashDenominationKey[] = [
 
 const voucherPaymentLabelPattern =
   "(?:Bonnen|Kasbonnen|Contantbonnen|Waardebonnen?|Waarde\\s*bonnen?|Cadeaubonnen?|Cadeau\\s*bonnen?|Kadobonnen?|Kado\\s*bonnen?|Tegoedbonnen?|Tegoed\\s*bonnen?|Vouchers?)";
+const paymentFormLabelPattern = `(?:Contant|Pin|Chip|Cashless|Ideal|Creditcard|Spaarpunten|${voucherPaymentLabelPattern}|Overig|Totaal|Afronding)`;
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, message }, { status });
@@ -564,13 +565,90 @@ function extractFirstSignedAmount(pattern: RegExp, text: string) {
 }
 
 function extractVoucherPaymentAmount(text: string) {
-  return extractFirstSignedAmount(
-    new RegExp(
-      `\\b${voucherPaymentLabelPattern}\\b[^\\n\\d-]*(?:€|\\bEUR\\b)?\\s*([-\\d.,]+)`,
-      "i"
-    ),
-    text
+  return firstNumber(
+    extractPaymentFormAmountNearLabel(text, voucherPaymentLabelPattern),
+    extractPaymentFormAmountByTableOrder(text, voucherPaymentLabelPattern),
+    extractFirstSignedAmount(
+      new RegExp(
+        `\\b${voucherPaymentLabelPattern}\\b[^\\n\\d-]*(?:€|\\bEUR\\b)?\\s*([-\\d.,]+)`,
+        "i"
+      ),
+      text
+    )
   );
+}
+
+function extractPaymentFormBlock(sectionText: string) {
+  const startIndex = sectionText.search(/\bBetaalvormen\b/i);
+  const source = startIndex >= 0 ? sectionText.slice(startIndex) : sectionText;
+  const endIndex = source.search(
+    /\b(?:Sluiten\s+kassa\s+locatie|Start\s+Telling|Berekening\s+Kas|Pagina)\b/i
+  );
+
+  return endIndex >= 0 ? source.slice(0, endIndex) : source;
+}
+
+function usablePaymentAmounts(text: string) {
+  return extractSignedAmountMatches(text).filter(
+    (match) => match.amount >= 0 && match.amount <= 100000
+  );
+}
+
+function extractPaymentFormAmountNearLabel(text: string, labelPattern: string) {
+  const lines = extractPaymentFormBlock(text)
+    .split(/\n/)
+    .map((line) => cleanText(line, 2000))
+    .filter(Boolean);
+  const labelRegex = new RegExp(`\\b${labelPattern}\\b`, "i");
+  const otherPaymentLabelRegex = new RegExp(
+    `\\b${paymentFormLabelPattern}\\b`,
+    "i"
+  );
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!labelRegex.test(line)) continue;
+
+    const sameLineAmounts = usablePaymentAmounts(line);
+    if (sameLineAmounts.length) return sameLineAmounts[0].amount;
+
+    const windowLines = [line];
+    for (
+      let nextIndex = index + 1;
+      nextIndex < Math.min(lines.length, index + 7);
+      nextIndex += 1
+    ) {
+      const nextLine = lines[nextIndex];
+      if (otherPaymentLabelRegex.test(nextLine) && !labelRegex.test(nextLine)) {
+        break;
+      }
+
+      windowLines.push(nextLine);
+      if (usablePaymentAmounts(nextLine).length) break;
+    }
+
+    const windowAmounts = usablePaymentAmounts(windowLines.join(" "));
+    if (windowAmounts.length) return windowAmounts[0].amount;
+  }
+
+  return undefined;
+}
+
+function extractPaymentFormAmountByTableOrder(
+  text: string,
+  labelPattern: string
+) {
+  const block = extractPaymentFormBlock(text);
+  const labelRegex = new RegExp(`\\b${paymentFormLabelPattern}\\b`, "gi");
+  const targetRegex = new RegExp(`\\b${labelPattern}\\b`, "i");
+  const labels = Array.from(block.matchAll(labelRegex));
+  const targetIndex = labels.findIndex((match) =>
+    targetRegex.test(match[0] || "")
+  );
+  if (targetIndex < 0) return undefined;
+
+  const amounts = usablePaymentAmounts(block);
+  return amounts[targetIndex]?.amount;
 }
 
 function extractCashCalculationBlock(sectionText: string) {
@@ -1273,6 +1351,18 @@ function extractIceCashRecords(
   return [...recordsByKey.values()];
 }
 
+function cashRecordsReceiptTotal(cashRecords: RevenueCashRecord[]) {
+  return Number(
+    cashRecords
+      .reduce(
+        (total, record) =>
+          total + (record.receipts || 0) + (record.iceReceipts || 0),
+        0
+      )
+      .toFixed(2)
+  );
+}
+
 function isPdfAttachment(attachment: PdfAttachmentInput) {
   const fileName = cleanText(attachment.fileName, 240).toLowerCase();
   const contentType = cleanText(attachment.contentType, 120).toLowerCase();
@@ -1437,6 +1527,7 @@ export async function POST(request: Request) {
         date,
         records,
         cashRecords,
+        receiptTotal: cashRecordsReceiptTotal(cashRecords),
         matches: shopAmounts,
         warnings,
       },
