@@ -190,6 +190,15 @@ function formatAmountInput(value: number | undefined) {
   });
 }
 
+function formatOptionalAmountInput(value: number | undefined) {
+  if (value === undefined) return "";
+
+  return value.toLocaleString("nl-NL", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+}
+
 function formatMoney(value: number | undefined) {
   return euroFormatter.format(value || 0);
 }
@@ -208,14 +217,29 @@ function visibleCashNote(value: string | undefined) {
   return isDefaultCashNote(note) ? "" : note;
 }
 
+function appendCashNotes(note: string | undefined, additions: string[]) {
+  const currentNote = visibleCashNote(note);
+  const nextAdditions = additions.filter(
+    (addition) =>
+      addition && !currentNote.toLowerCase().includes(addition.toLowerCase())
+  );
+
+  return [currentNote, ...nextAdditions].filter(Boolean).join(" · ");
+}
+
+function roundedMoney(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function safeExpectedCashFromValues(startCash: number, countedCash: number) {
+  return Math.max(0, roundedMoney((countedCash || 0) - startCash));
+}
+
 function safeExpectedCash(record: RevenueCashRecord | undefined) {
   if (!record) return 0;
 
   if (record.startCash !== undefined) {
-    return Math.max(
-      0,
-      Number(((record.countedCash || 0) - record.startCash).toFixed(2))
-    );
+    return safeExpectedCashFromValues(record.startCash, record.countedCash || 0);
   }
 
   return record.cashRevenue ?? record.countedCash ?? 0;
@@ -306,8 +330,22 @@ function iceSafeDraftKey(record: RevenueCashRecord) {
   return `ice:${record.date}:${record.shop}`;
 }
 
+function iceSourceDraftKey(record: RevenueCashRecord) {
+  return `ice:${record.date}:${record.shop}:source`;
+}
+
 function visibleIceCashNote(value: string | undefined) {
   return String(value || "").trim();
+}
+
+function appendIceCashNotes(note: string | undefined, additions: string[]) {
+  const currentNote = visibleIceCashNote(note);
+  const nextAdditions = additions.filter(
+    (addition) =>
+      addition && !currentNote.toLowerCase().includes(addition.toLowerCase())
+  );
+
+  return [currentNote, ...nextAdditions].filter(Boolean).join(" · ");
 }
 
 function checkedCashNoteCount(record: RevenueCashRecord, key: CashDenominationKey) {
@@ -319,6 +357,27 @@ function checkedCashNoteCount(record: RevenueCashRecord, key: CashDenominationKe
 
 function cashNoteDraftKey(record: RevenueCashRecord, key: CashDenominationKey) {
   return `${record.date}:${record.shop}:${key}`;
+}
+
+function cashSourceDraftKey(record: RevenueCashRecord) {
+  return `${record.date}:${record.shop}:source`;
+}
+
+function parseCorrectionAmount(value: string | undefined, fallback: number) {
+  if (value === undefined || !value.trim()) return fallback;
+
+  return parseAmount(value);
+}
+
+function correctedCashExpectedTotal(record: RevenueCashRecord) {
+  if (record.startCash === undefined || record.cashRevenue === undefined) {
+    return record.expectedCash;
+  }
+
+  return Math.max(
+    0,
+    roundedMoney(record.startCash + record.cashRevenue - (record.cashOut || 0))
+  );
 }
 
 function cashNoteInputValue(
@@ -449,6 +508,9 @@ export default function CashCountManager() {
   const [cashDeposits, setCashDeposits] = useState<RevenueCashDeposit[]>([]);
   const [safeCashDrafts, setSafeCashDrafts] = useState<Record<string, string>>({});
   const [cashNoteDrafts, setCashNoteDrafts] = useState<Record<string, string>>({});
+  const [cashSourceDrafts, setCashSourceDrafts] = useState<
+    Record<string, { startCash?: string; countedCash?: string }>
+  >({});
   const [depositDrafts, setDepositDrafts] = useState<Record<string, string>>({});
   const [depositNotes, setDepositNotes] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
@@ -668,6 +730,38 @@ export default function CashCountManager() {
   const selectedCountedCash = selectedCashRecord
     ? selectedCashRecord.countedCash
     : undefined;
+  const selectedSourceDraftKey = selectedCashRecord
+    ? cashSourceDraftKey(selectedCashRecord)
+    : "";
+  const selectedSourceDraft = selectedSourceDraftKey
+    ? cashSourceDrafts[selectedSourceDraftKey]
+    : undefined;
+  const selectedStartCashInputValue = selectedCashRecord
+    ? selectedSourceDraft?.startCash ??
+      formatOptionalAmountInput(selectedCashRecord.startCash)
+    : "";
+  const selectedCountedCashInputValue = selectedCashRecord
+    ? selectedSourceDraft?.countedCash ??
+      formatOptionalAmountInput(selectedCashRecord.countedCash)
+    : "";
+  const selectedCorrectedStartCash = selectedCashRecord
+    ? parseCorrectionAmount(
+        selectedSourceDraft?.startCash,
+        selectedCashRecord.startCash ?? 0
+      )
+    : 0;
+  const selectedCorrectedCountedCash = selectedCashRecord
+    ? parseCorrectionAmount(
+        selectedSourceDraft?.countedCash,
+        selectedCashRecord.countedCash
+      )
+    : 0;
+  const selectedHasSourceCorrection = selectedCashRecord
+    ? Math.abs(selectedCorrectedStartCash - (selectedCashRecord.startCash ?? 0)) >
+        0.01 ||
+      Math.abs(selectedCorrectedCountedCash - selectedCashRecord.countedCash) >
+        0.01
+    : false;
   const selectedExpectedCash = selectedCashRecord
     ? safeExpectedCash(selectedCashRecord)
     : 0;
@@ -677,10 +771,45 @@ export default function CashCountManager() {
   const selectedIceSafeDraftKey = selectedIceCashRecord
     ? iceSafeDraftKey(selectedIceCashRecord)
     : "";
+  const selectedIceSourceDraftKey = selectedIceCashRecord
+    ? iceSourceDraftKey(selectedIceCashRecord)
+    : "";
   const selectedIceSafeInputValue = selectedIceCashRecord
     ? safeCashDrafts[selectedIceSafeDraftKey] ??
       formatAmountInput(iceCheckedCash(selectedIceCashRecord))
     : "";
+  const selectedIceSourceDraft = selectedIceSourceDraftKey
+    ? cashSourceDrafts[selectedIceSourceDraftKey]
+    : undefined;
+  const selectedIceStartCashInputValue = selectedIceCashRecord
+    ? selectedIceSourceDraft?.startCash ??
+      formatOptionalAmountInput(selectedIceCashRecord.iceStartCash)
+    : "";
+  const selectedIceCountedCashInputValue = selectedIceCashRecord
+    ? selectedIceSourceDraft?.countedCash ??
+      formatOptionalAmountInput(iceReportedCountedCash(selectedIceCashRecord))
+    : "";
+  const selectedCorrectedIceStartCash = selectedIceCashRecord
+    ? parseCorrectionAmount(
+        selectedIceSourceDraft?.startCash,
+        selectedIceCashRecord.iceStartCash ?? 0
+      )
+    : 0;
+  const selectedCorrectedIceCountedCash = selectedIceCashRecord
+    ? parseCorrectionAmount(
+        selectedIceSourceDraft?.countedCash,
+        iceReportedCountedCash(selectedIceCashRecord) ?? 0
+      )
+    : 0;
+  const selectedHasIceSourceCorrection = selectedIceCashRecord
+    ? Math.abs(
+        selectedCorrectedIceStartCash - (selectedIceCashRecord.iceStartCash ?? 0)
+      ) > 0.01 ||
+      Math.abs(
+        selectedCorrectedIceCountedCash -
+          (iceReportedCountedCash(selectedIceCashRecord) ?? 0)
+      ) > 0.01
+    : false;
   const selectedIceSafeDraftDifference = selectedIceCashRecord
     ? Number(
         (
@@ -837,6 +966,143 @@ export default function CashCountManager() {
     }
 
     await markChecked(record);
+  }
+
+  async function saveCashSourceCorrection(record: RevenueCashRecord) {
+    if (record.checkedAt) {
+      setStatus("Heropen de dag eerst om startbedrag of sluitbedrag te wijzigen.");
+      return;
+    }
+
+    const draftKey = cashSourceDraftKey(record);
+    const draft = cashSourceDrafts[draftKey];
+    const startCash = parseCorrectionAmount(draft?.startCash, record.startCash ?? 0);
+    const countedCash = parseCorrectionAmount(draft?.countedCash, record.countedCash);
+    const changedStart = Math.abs(startCash - (record.startCash ?? 0)) > 0.01;
+    const changedCounted = Math.abs(countedCash - record.countedCash) > 0.01;
+    if (!changedStart && !changedCounted) {
+      setStatus("Geen startbedrag of sluitbedrag gewijzigd.");
+      return;
+    }
+
+    const confirmationText =
+      changedStart && changedCounted
+        ? "Let op: wil je het startbedrag en sluitbedrag wijzigen?"
+        : changedStart
+          ? "Let op: wil je het startbedrag wijzigen?"
+          : "Let op: wil je het sluitbedrag wijzigen?";
+    if (!window.confirm(confirmationText)) return;
+
+    const now = new Date().toISOString();
+    const correctionNotes = [
+      changedStart ? "startbedrag gewijzigd" : "",
+      changedCounted ? "sluitbedrag gewijzigd" : "",
+    ].filter(Boolean);
+    const nextCashRecords = buildUpdatedCashRecords(
+      cashRecords,
+      record.date,
+      record.shop,
+      (current) => {
+        const correctedRecord = {
+          ...current,
+          startCash,
+          countedCash,
+        };
+        const expectedCash = correctedCashExpectedTotal(correctedRecord);
+        const expectedSafeCash = safeExpectedCashFromValues(startCash, countedCash);
+
+        return {
+          ...correctedRecord,
+          expectedCash,
+          difference:
+            expectedCash === undefined
+              ? current.difference
+              : roundedMoney(countedCash - expectedCash),
+          safeDifference:
+            current.safeCash === undefined
+              ? current.safeDifference
+              : roundedMoney(current.safeCash - expectedSafeCash),
+          note: appendCashNotes(current.note, correctionNotes),
+          updatedAt: now,
+        };
+      }
+    );
+
+    setCashRecords(nextCashRecords);
+    setCashSourceDrafts((current) => {
+      const next = { ...current };
+      delete next[draftKey];
+
+      return next;
+    });
+    await saveCash(cashDeposits, nextCashRecords);
+  }
+
+  async function saveIceCashSourceCorrection(record: RevenueCashRecord) {
+    if (record.iceCheckedAt) {
+      setStatus("Heropen de ijstelling eerst om startbedrag of sluitbedrag te wijzigen.");
+      return;
+    }
+
+    const draftKey = iceSourceDraftKey(record);
+    const draft = cashSourceDrafts[draftKey];
+    const startCash = parseCorrectionAmount(draft?.startCash, record.iceStartCash ?? 0);
+    const countedCash = parseCorrectionAmount(
+      draft?.countedCash,
+      iceReportedCountedCash(record) ?? 0
+    );
+    const changedStart = Math.abs(startCash - (record.iceStartCash ?? 0)) > 0.01;
+    const changedCounted =
+      Math.abs(countedCash - (iceReportedCountedCash(record) ?? 0)) > 0.01;
+    if (!changedStart && !changedCounted) {
+      setStatus("Geen startbedrag of sluitbedrag gewijzigd.");
+      return;
+    }
+
+    const confirmationText =
+      changedStart && changedCounted
+        ? "Let op: wil je het startbedrag en sluitbedrag wijzigen?"
+        : changedStart
+          ? "Let op: wil je het startbedrag wijzigen?"
+          : "Let op: wil je het sluitbedrag wijzigen?";
+    if (!window.confirm(confirmationText)) return;
+
+    const now = new Date().toISOString();
+    const expectedCash = safeExpectedCashFromValues(startCash, countedCash);
+    const sourceCashRevenue = record.iceCashRevenue ?? expectedCash;
+    const sourceExpectedTotal = startCash + sourceCashRevenue - (record.iceCashOut || 0);
+    const correctionNotes = [
+      changedStart ? "startbedrag gewijzigd" : "",
+      changedCounted ? "sluitbedrag gewijzigd" : "",
+    ].filter(Boolean);
+    const nextCashRecords = buildUpdatedCashRecords(
+      cashRecords,
+      record.date,
+      record.shop,
+      (current) => ({
+        ...current,
+        iceStartCash: startCash,
+        iceCountedCash: countedCash,
+        iceCash: expectedCash,
+        iceExpectedCash: expectedCash,
+        iceDifference: roundedMoney(countedCash - sourceExpectedTotal),
+        iceSafeDifference:
+          current.iceSafeCash === undefined
+            ? current.iceSafeDifference
+            : roundedMoney(current.iceSafeCash - expectedCash),
+        iceNote: appendIceCashNotes(current.iceNote, correctionNotes),
+        updatedAt: now,
+      })
+    );
+
+    setCashRecords(nextCashRecords);
+    setCashSourceDrafts((current) => {
+      const next = { ...current };
+      delete next[draftKey];
+
+      return next;
+    });
+    await saveCash(cashDeposits, nextCashRecords);
   }
 
   async function markIceChecked(record: RevenueCashRecord) {
@@ -1592,6 +1858,69 @@ export default function CashCountManager() {
                   />
 
                   <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
+                    <div className="grid gap-2 rounded-md border border-[#e7e0d8] bg-white/70 p-2 sm:col-span-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                      <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+                        Startbedrag
+                        <input
+                          value={selectedStartCashInputValue}
+                          onChange={(event) =>
+                            setCashSourceDrafts((current) => ({
+                              ...current,
+                              [selectedSourceDraftKey]: {
+                                ...current[selectedSourceDraftKey],
+                                startCash: event.target.value,
+                              },
+                            }))
+                          }
+                          inputMode="decimal"
+                          disabled={
+                            Boolean(selectedCashRecord.checkedAt) ||
+                            state === "saving"
+                          }
+                          placeholder="0,00"
+                          className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                        />
+                      </label>
+
+                      <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+                        Sluitbedrag
+                        <input
+                          value={selectedCountedCashInputValue}
+                          onChange={(event) =>
+                            setCashSourceDrafts((current) => ({
+                              ...current,
+                              [selectedSourceDraftKey]: {
+                                ...current[selectedSourceDraftKey],
+                                countedCash: event.target.value,
+                              },
+                            }))
+                          }
+                          inputMode="decimal"
+                          disabled={
+                            Boolean(selectedCashRecord.checkedAt) ||
+                            state === "saving"
+                          }
+                          placeholder="0,00"
+                          className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void saveCashSourceCorrection(selectedCashRecord)
+                        }
+                        disabled={
+                          Boolean(selectedCashRecord.checkedAt) ||
+                          state === "saving" ||
+                          !selectedHasSourceCorrection
+                        }
+                        className="h-8 rounded-md border border-[#1a1815] bg-[#1a1815] px-2 text-[0.58rem] font-black uppercase tracking-normal text-white disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
+                      >
+                        Corrigeren
+                      </button>
+                    </div>
+
                     <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
                       Controlebedrag
                       <input
@@ -1660,6 +1989,7 @@ export default function CashCountManager() {
               <IceCashSummary
                 disabled={state === "saving"}
                 draftDifference={selectedIceSafeDraftDifference}
+                hasSourceCorrection={selectedHasIceSourceCorrection}
                 inputValue={selectedIceSafeInputValue}
                 onInputChange={(value) =>
                   setSafeCashDrafts((current) => ({
@@ -1678,8 +2008,22 @@ export default function CashCountManager() {
                     })
                   )
                 }
+                onSaveSourceCorrection={() =>
+                  void saveIceCashSourceCorrection(selectedIceCashRecord)
+                }
+                onSourceDraftChange={(field, value) =>
+                  setCashSourceDrafts((current) => ({
+                    ...current,
+                    [selectedIceSourceDraftKey]: {
+                      ...current[selectedIceSourceDraftKey],
+                      [field]: value,
+                    },
+                  }))
+                }
                 onToggleChecked={() => void toggleIceChecked(selectedIceCashRecord)}
                 record={selectedIceCashRecord}
+                sourceCountedInputValue={selectedIceCountedCashInputValue}
+                sourceStartInputValue={selectedIceStartCashInputValue}
               />
             )}
           </div>
@@ -1779,19 +2123,32 @@ export default function CashCountManager() {
 function IceCashSummary({
   disabled,
   draftDifference,
+  hasSourceCorrection,
   inputValue,
   onInputChange,
   onNoteChange,
+  onSaveSourceCorrection,
+  onSourceDraftChange,
   onToggleChecked,
   record,
+  sourceCountedInputValue,
+  sourceStartInputValue,
 }: Readonly<{
   disabled: boolean;
   draftDifference: number;
+  hasSourceCorrection: boolean;
   inputValue: string;
   onInputChange: (value: string) => void;
   onNoteChange: (value: string) => void;
+  onSaveSourceCorrection: () => void;
+  onSourceDraftChange: (
+    field: "startCash" | "countedCash",
+    value: string
+  ) => void;
   onToggleChecked: () => void;
   record: RevenueCashRecord;
+  sourceCountedInputValue: string;
+  sourceStartInputValue: string;
 }>) {
   const expectedCash = iceExpectedCash(record);
   const countedCash = iceReportedCountedCash(record);
@@ -1884,6 +2241,45 @@ function IceCashSummary({
       </div>
 
       <div className="mt-3 grid gap-2 border-t border-[#c8ddd2]/80 pt-2 lg:grid-cols-[12rem_7rem_minmax(14rem,1fr)] lg:items-end">
+        <div className="grid gap-2 rounded-md border border-[#c8ddd2] bg-white/70 p-2 lg:col-span-3 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+          <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Startbedrag
+            <input
+              value={sourceStartInputValue}
+              onChange={(event) =>
+                onSourceDraftChange("startCash", event.target.value)
+              }
+              inputMode="decimal"
+              disabled={isChecked || disabled}
+              placeholder="0,00"
+              className="h-8 rounded-md border border-[#c8ddd2] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+            />
+          </label>
+
+          <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+            Sluitbedrag
+            <input
+              value={sourceCountedInputValue}
+              onChange={(event) =>
+                onSourceDraftChange("countedCash", event.target.value)
+              }
+              inputMode="decimal"
+              disabled={isChecked || disabled}
+              placeholder="0,00"
+              className="h-8 rounded-md border border-[#c8ddd2] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={onSaveSourceCorrection}
+            disabled={isChecked || disabled || !hasSourceCorrection}
+            className="h-8 rounded-md border border-[#1f4f35] bg-[#1f4f35] px-2 text-[0.58rem] font-black uppercase tracking-normal text-white disabled:border-[#c8ddd2] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
+          >
+            Corrigeren
+          </button>
+        </div>
+
         <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
           Controlebedrag
           <input
