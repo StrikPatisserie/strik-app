@@ -26,7 +26,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v9',
+  SCRIPT_VERSION: 'gmail-archive-v10',
 };
 
 function importDagomzet() {
@@ -388,16 +388,22 @@ function logDagomzetImportResult_(responseText) {
           })
           .filter(Boolean)
       : [];
+    const warnings = Array.isArray(data.warnings)
+      ? data.warnings.map((warning) => String(warning || '').trim()).filter(Boolean)
+      : [];
     const summary = [
       `parser: ${data.parserVersion || 'onbekend'}`,
       `datum: ${data.date || '?'}`,
       `omzetregels: ${records.length}`,
       `kasregels: ${cashRecords.length}`,
-      `bonnen: ${formatDagomzetEuro_(receiptTotal)}`,
+      cashRecords.length
+        ? `bonnen: ${formatDagomzetEuro_(receiptTotal)}`
+        : 'bonnen: geen kasblok',
       receiptDetails.length ? `bonnenregels: ${receiptDetails.join(', ')}` : '',
       cashTemplateDetails.length
         ? `template: ${cashTemplateDetails.join(' / ')}`
         : '',
+      warnings.length ? `waarschuwing: ${warnings.join(' / ')}` : '',
     ]
       .filter(Boolean)
       .join(' | ');

@@ -3,6 +3,7 @@ import "server-only";
 import { excelRevenueSeed } from "./revenueSeed";
 import {
   createWeeklyRevenueRecordsFromDays,
+  createRevenueCashKey,
   embedRevenueCashDataInNotes,
   mergeRevenueCashDeposits,
   mergeRevenueCashRecords,
@@ -181,13 +182,62 @@ export async function upsertRevenueCashRecords(cashRecords: RevenueCashRecord[])
   });
   const nextData = normalizeRevenueData({
     ...stored.data,
-    cashRecords: mergeRevenueCashRecords(
+    cashRecords: mergeImportedRevenueCashRecords(
       stored.data.cashRecords || [],
       normalizedCashRecords
     ),
   });
 
   return saveRevenueData(nextData);
+}
+
+function preservePositiveAmountWhenImportReadsZero(
+  incoming: number | undefined,
+  existing: number | undefined
+) {
+  if (incoming === 0 && existing !== undefined && existing > 0) {
+    return existing;
+  }
+
+  return incoming;
+}
+
+function mergeImportedRevenueCashRecords(
+  existingRecords: RevenueCashRecord[],
+  incomingRecords: RevenueCashRecord[]
+) {
+  const merged = mergeRevenueCashRecords(existingRecords, incomingRecords);
+  const existingByKey = new Map(
+    existingRecords.map((record) => [
+      createRevenueCashKey(record.date, record.shop),
+      record,
+    ])
+  );
+  const incomingByKey = new Map(
+    incomingRecords.map((record) => [
+      createRevenueCashKey(record.date, record.shop),
+      record,
+    ])
+  );
+
+  return merged.map((record) => {
+    const key = createRevenueCashKey(record.date, record.shop);
+    const existing = existingByKey.get(key);
+    const incoming = incomingByKey.get(key);
+    if (!existing || !incoming) return record;
+
+    return {
+      ...record,
+      receipts: preservePositiveAmountWhenImportReadsZero(
+        incoming.receipts,
+        existing.receipts
+      ),
+      iceReceipts: preservePositiveAmountWhenImportReadsZero(
+        incoming.iceReceipts,
+        existing.iceReceipts
+      ),
+    };
+  });
 }
 
 export async function upsertRevenueCashDeposits(

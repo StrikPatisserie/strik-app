@@ -1525,6 +1525,12 @@ export async function POST(request: Request) {
         `Niet alle winkels gevonden: ${shopAmounts.length}/${revenueShops.length}.`
       );
     }
+    if (shopAmounts.length > 0 && cashRecords.length === 0) {
+      warnings.push(
+        "Omzet gevonden, maar geen Cash-it kasblok met bonnen/geldtelling in deze mail."
+      );
+    }
+    let responseCashRecords = cashRecords;
 
     if (new URL(request.url).searchParams.get("dryRun") !== "1") {
       if (records.length > 0) {
@@ -1541,6 +1547,12 @@ export async function POST(request: Request) {
             cashResult.status === 403 ? 403 : 502
           );
         }
+        const cashRecordKeys = new Set(
+          cashRecords.map((record) => createRevenueCashKey(record.date, record.shop))
+        );
+        responseCashRecords = (cashResult.data?.cashRecords || []).filter(
+          (record) => cashRecordKeys.has(createRevenueCashKey(record.date, record.shop))
+        );
       }
     }
 
@@ -1550,10 +1562,10 @@ export async function POST(request: Request) {
         parserVersion: DAY_IMPORT_PARSER_VERSION,
         date,
         records,
-        cashRecords,
-        receiptTotal: cashRecordsReceiptTotal(cashRecords),
-        receiptDetails: cashRecordsReceiptDetails(cashRecords),
-        cashTemplateDetails: cashRecordsTemplateDetails(cashRecords, shopAmounts),
+        cashRecords: responseCashRecords,
+        receiptTotal: cashRecordsReceiptTotal(responseCashRecords),
+        receiptDetails: cashRecordsReceiptDetails(responseCashRecords),
+        cashTemplateDetails: cashRecordsTemplateDetails(responseCashRecords, shopAmounts),
         matches: shopAmounts,
         warnings,
       },
