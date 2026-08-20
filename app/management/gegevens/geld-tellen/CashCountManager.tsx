@@ -290,10 +290,24 @@ function iceExpectedCash(record: RevenueCashRecord | undefined) {
   return record.iceExpectedCash ?? record.iceCash ?? record.iceCashRevenue ?? 0;
 }
 
-function iceCountedCash(record: RevenueCashRecord | undefined) {
+function iceReportedCountedCash(record: RevenueCashRecord | undefined) {
   if (!record) return undefined;
 
   return record.iceCountedCash ?? record.iceCash ?? record.iceExpectedCash;
+}
+
+function iceCheckedCash(record: RevenueCashRecord | undefined) {
+  if (!record) return 0;
+
+  return record.iceSafeCash ?? iceExpectedCash(record);
+}
+
+function iceSafeDraftKey(record: RevenueCashRecord) {
+  return `ice:${record.date}:${record.shop}`;
+}
+
+function visibleIceCashNote(value: string | undefined) {
+  return String(value || "").trim();
 }
 
 function checkedCashNoteCount(record: RevenueCashRecord, key: CashDenominationKey) {
@@ -564,6 +578,9 @@ export default function CashCountManager() {
           (total, record) => total + iceExpectedCash(record),
           0
         );
+        const iceCheckedCount = iceRecords.filter(
+          (record) => record.iceCheckedAt
+        ).length;
         const deposit = existingDepositFor(
           cashDeposits,
           selectedWeek.year,
@@ -583,6 +600,7 @@ export default function CashCountManager() {
           difference,
           iceCash,
           iceCount: iceRecords.length,
+          iceCheckedCount,
           checkedCount: checkedRecords.length,
           expectedCount: expectedDates.length,
           missingCount: expectedDates.filter(
@@ -656,6 +674,21 @@ export default function CashCountManager() {
   const selectedDifference = selectedCashRecord
     ? selectedCashRecord.difference
     : undefined;
+  const selectedIceSafeDraftKey = selectedIceCashRecord
+    ? iceSafeDraftKey(selectedIceCashRecord)
+    : "";
+  const selectedIceSafeInputValue = selectedIceCashRecord
+    ? safeCashDrafts[selectedIceSafeDraftKey] ??
+      formatAmountInput(iceCheckedCash(selectedIceCashRecord))
+    : "";
+  const selectedIceSafeDraftDifference = selectedIceCashRecord
+    ? Number(
+        (
+          parseAmount(selectedIceSafeInputValue) -
+          iceExpectedCash(selectedIceCashRecord)
+        ).toFixed(2)
+      )
+    : 0;
   const weekRecords = useMemo(
     () => weekRows.flatMap((row) => row.records).filter(hasPatisserieCashRecord),
     [weekRows]
@@ -787,8 +820,8 @@ export default function CashCountManager() {
       record.shop,
       (current) => ({
         ...current,
-        checkedAt: undefined,
-        checkedBy: undefined,
+        checkedAt: "",
+        checkedBy: "",
         updatedAt: now,
       })
     );
@@ -806,6 +839,61 @@ export default function CashCountManager() {
     await markChecked(record);
   }
 
+  async function markIceChecked(record: RevenueCashRecord) {
+    const key = iceSafeDraftKey(record);
+    const now = new Date().toISOString();
+    const nextCashRecords = buildUpdatedCashRecords(
+      cashRecords,
+      record.date,
+      record.shop,
+      (current) => {
+        const safeCash = parseAmount(
+          safeCashDrafts[key] || formatAmountInput(iceCheckedCash(current))
+        );
+
+        return {
+          ...current,
+          iceSafeCash: safeCash,
+          iceSafeDifference: Number((safeCash - iceExpectedCash(current)).toFixed(2)),
+          iceCheckedAt: now,
+          iceCheckedBy: "Geld teller",
+          iceNote: visibleIceCashNote(current.iceNote),
+          updatedAt: now,
+        };
+      }
+    );
+
+    setCashRecords(nextCashRecords);
+    await saveCash(cashDeposits, nextCashRecords);
+  }
+
+  async function unmarkIceChecked(record: RevenueCashRecord) {
+    const now = new Date().toISOString();
+    const nextCashRecords = buildUpdatedCashRecords(
+      cashRecords,
+      record.date,
+      record.shop,
+      (current) => ({
+        ...current,
+        iceCheckedAt: "",
+        iceCheckedBy: "",
+        updatedAt: now,
+      })
+    );
+
+    setCashRecords(nextCashRecords);
+    await saveCash(cashDeposits, nextCashRecords);
+  }
+
+  async function toggleIceChecked(record: RevenueCashRecord) {
+    if (record.iceCheckedAt) {
+      await unmarkIceChecked(record);
+      return;
+    }
+
+    await markIceChecked(record);
+  }
+
   async function saveCash(
     nextDeposits = cashDeposits,
     nextCashRecords = cashRecords
@@ -813,6 +901,7 @@ export default function CashCountManager() {
     const cleanedCashRecords = nextCashRecords.map((record) => ({
       ...record,
       note: visibleCashNote(record.note),
+      iceNote: visibleIceCashNote(record.iceNote),
     }));
 
     setState("saving");
@@ -1216,7 +1305,8 @@ export default function CashCountManager() {
                       isSelected ? "text-white/70" : "text-[#1f4f35]"
                     }`}
                   >
-                    IJs · {formatMoney(row.iceCash)}
+                    IJs {row.iceCheckedCount}/{row.iceCount} ·{" "}
+                    {formatMoney(row.iceCash)}
                   </span>
                 )}
               </button>
@@ -1265,7 +1355,7 @@ export default function CashCountManager() {
                 label="IJs"
                 value={
                   selectedShopRow.iceCount > 0
-                    ? formatMoney(selectedShopRow.iceCash)
+                    ? `${selectedShopRow.iceCheckedCount}/${selectedShopRow.iceCount} · ${formatMoney(selectedShopRow.iceCash)}`
                     : "-"
                 }
               />
@@ -1344,7 +1434,8 @@ export default function CashCountManager() {
                         isActive ? "text-white/88" : "text-[#1f4f35]"
                       }`}
                     >
-                      IJs {formatMoney(iceExpectedCash(iceRecord))}
+                      IJs {iceRecord.iceCheckedAt ? "compleet" : "open"} ·{" "}
+                      {formatMoney(iceExpectedCash(iceRecord))}
                     </span>
                   )}
                 </button>
@@ -1566,7 +1657,30 @@ export default function CashCountManager() {
             )}
 
             {selectedIceCashRecord && (
-              <IceCashSummary record={selectedIceCashRecord} />
+              <IceCashSummary
+                disabled={state === "saving"}
+                draftDifference={selectedIceSafeDraftDifference}
+                inputValue={selectedIceSafeInputValue}
+                onInputChange={(value) =>
+                  setSafeCashDrafts((current) => ({
+                    ...current,
+                    [selectedIceSafeDraftKey]: value,
+                  }))
+                }
+                onNoteChange={(value) =>
+                  updateCashRecord(
+                    selectedIceCashRecord.date,
+                    selectedIceCashRecord.shop,
+                    (current) => ({
+                      ...current,
+                      iceNote: value,
+                      updatedAt: new Date().toISOString(),
+                    })
+                  )
+                }
+                onToggleChecked={() => void toggleIceChecked(selectedIceCashRecord)}
+                record={selectedIceCashRecord}
+              />
             )}
           </div>
         </section>
@@ -1663,33 +1777,64 @@ export default function CashCountManager() {
 }
 
 function IceCashSummary({
+  disabled,
+  draftDifference,
+  inputValue,
+  onInputChange,
+  onNoteChange,
+  onToggleChecked,
   record,
 }: Readonly<{
+  disabled: boolean;
+  draftDifference: number;
+  inputValue: string;
+  onInputChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
+  onToggleChecked: () => void;
   record: RevenueCashRecord;
 }>) {
   const expectedCash = iceExpectedCash(record);
-  const countedCash = iceCountedCash(record);
+  const countedCash = iceReportedCountedCash(record);
   const differenceTone =
     record.iceDifference !== undefined && Math.abs(record.iceDifference) > 0.05
       ? "warn"
       : "normal";
+  const isChecked = Boolean(record.iceCheckedAt);
 
   return (
     <article className="mt-2 rounded-md border border-[#c8ddd2] bg-[#f6fbf5] px-3 py-2">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#1f4f35]">
-            IJstelling
-          </p>
-          <h3 className="text-sm font-black leading-tight text-[#1a1815]">
-            {dayName(record.date)} · {record.shop}
-          </h3>
-          <p className="mt-0.5 text-[0.62rem] font-bold text-[#6b645b]">
-            {record.iceCountedBy || record.iceClosedAt || "via dagrapport"}
-          </p>
-        </div>
+      <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)_7rem] lg:items-start">
+        <label className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={isChecked}
+            disabled={disabled}
+            onChange={onToggleChecked}
+            className="mt-0.5 h-4 w-4 accent-[#1f4f35]"
+          />
+          <span>
+            <span className="block text-[0.58rem] font-black uppercase tracking-normal text-[#1f4f35]">
+              IJstelling
+            </span>
+            <span className="block text-sm font-black leading-tight text-[#1a1815]">
+              {dayName(record.date)} · {record.shop}
+            </span>
+            <span
+              className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-normal ${
+                isChecked
+                  ? "bg-[#dfeadd] text-[#1f4f35]"
+                  : "bg-[#f5ead6] text-[#7a5417]"
+              }`}
+            >
+              {isChecked ? "compleet" : "open"}
+            </span>
+            <span className="mt-1 block text-[0.62rem] font-bold text-[#6b645b]">
+              {record.iceCountedBy || record.iceClosedAt || "via dagrapport"}
+            </span>
+          </span>
+        </label>
 
-        <div className="grid flex-1 gap-x-4 gap-y-2 sm:min-w-[34rem] sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-x-4 gap-y-2 sm:grid-cols-3 xl:grid-cols-6">
           <AmountCell
             label="Start"
             value={formatOptionalMoney(record.iceStartCash)}
@@ -1723,6 +1868,50 @@ function IceCashSummary({
             tone={differenceTone}
           />
         </div>
+
+        <button
+          type="button"
+          onClick={onToggleChecked}
+          disabled={disabled}
+          className={`h-9 rounded-md border px-2 text-[0.62rem] font-black uppercase tracking-normal disabled:opacity-60 ${
+            isChecked
+              ? "border-[#d9d2c9] bg-white text-[#6b645b]"
+              : "border-[#1f4f35] bg-[#1f4f35] text-white"
+          }`}
+        >
+          {isChecked ? "Heropenen" : "Afvinken"}
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-2 border-t border-[#c8ddd2]/80 pt-2 lg:grid-cols-[12rem_7rem_minmax(14rem,1fr)] lg:items-end">
+        <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+          Controlebedrag
+          <input
+            value={inputValue}
+            onChange={(event) => onInputChange(event.target.value)}
+            inputMode="decimal"
+            disabled={isChecked || disabled}
+            placeholder="0,00"
+            className="h-9 rounded-md border border-[#c8ddd2] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+          />
+        </label>
+
+        <AmountCell
+          label="Verschil"
+          value={formatMoney(draftDifference)}
+          tone={Math.abs(draftDifference) > 0.01 ? "warn" : "normal"}
+        />
+
+        <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+          Controle-notitie
+          <input
+            value={visibleIceCashNote(record.iceNote)}
+            onChange={(event) => onNoteChange(event.target.value)}
+            disabled={isChecked || disabled}
+            placeholder="Bijv. opnieuw geteld of kasverschil verklaard"
+            className="h-9 rounded-md border border-[#c8ddd2] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+          />
+        </label>
       </div>
     </article>
   );

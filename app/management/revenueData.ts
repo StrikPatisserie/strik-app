@@ -79,6 +79,11 @@ export type RevenueCashRecord = {
   iceCountedBy?: string;
   iceOpenedAt?: string;
   iceClosedAt?: string;
+  iceSafeCash?: number;
+  iceSafeDifference?: number;
+  iceCheckedAt?: string;
+  iceCheckedBy?: string;
+  iceNote?: string;
   cashImportKind?: "patisserie" | "ice";
   checkedDenominations?: CashDenominationCounts;
   countedBy?: string;
@@ -212,6 +217,11 @@ function compactCashRecordPayload(record: RevenueCashRecord) {
     icb: record.iceCountedBy,
     ioa: record.iceOpenedAt,
     ica: record.iceClosedAt,
+    isf: record.iceSafeCash,
+    isd: record.iceSafeDifference,
+    icha: record.iceCheckedAt,
+    ichb: record.iceCheckedBy,
+    inote: record.iceNote,
     ck: record.cashImportKind,
     xd: record.checkedDenominations,
     cb: record.countedBy,
@@ -259,6 +269,11 @@ function expandCashRecordPayload(
     iceCountedBy: payload.iceCountedBy ?? payload.icb,
     iceOpenedAt: payload.iceOpenedAt ?? payload.ioa,
     iceClosedAt: payload.iceClosedAt ?? payload.ica,
+    iceSafeCash: payload.iceSafeCash ?? payload.isf,
+    iceSafeDifference: payload.iceSafeDifference ?? payload.isd,
+    iceCheckedAt: payload.iceCheckedAt ?? payload.icha,
+    iceCheckedBy: payload.iceCheckedBy ?? payload.ichb,
+    iceNote: payload.iceNote ?? payload.inote,
     cashImportKind: payload.cashImportKind ?? payload.ck,
     checkedDenominations: payload.checkedDenominations ?? payload.xd,
     countedBy: payload.countedBy ?? payload.cb,
@@ -688,13 +703,26 @@ export function normalizeRevenueCashRecord(
     iceCountedBy: textFrom(value.iceCountedBy) || undefined,
     iceOpenedAt: textFrom(value.iceOpenedAt) || undefined,
     iceClosedAt: textFrom(value.iceClosedAt) || undefined,
+    iceSafeCash:
+      value.iceSafeCash === undefined
+        ? undefined
+        : positiveMoneyFrom(value.iceSafeCash),
+    iceSafeDifference:
+      value.iceSafeDifference === undefined
+        ? undefined
+        : moneyFrom(value.iceSafeDifference),
+    iceCheckedAt:
+      value.iceCheckedAt === "" ? "" : textFrom(value.iceCheckedAt) || undefined,
+    iceCheckedBy:
+      value.iceCheckedBy === "" ? "" : textFrom(value.iceCheckedBy) || undefined,
+    iceNote: textFrom(value.iceNote),
     cashImportKind,
     checkedDenominations,
     countedBy: textFrom(value.countedBy) || undefined,
     openedAt: textFrom(value.openedAt) || undefined,
     closedAt: textFrom(value.closedAt) || undefined,
-    checkedAt: textFrom(value.checkedAt) || undefined,
-    checkedBy: textFrom(value.checkedBy) || undefined,
+    checkedAt: value.checkedAt === "" ? "" : textFrom(value.checkedAt) || undefined,
+    checkedBy: value.checkedBy === "" ? "" : textFrom(value.checkedBy) || undefined,
     note: textFrom(value.note),
     source:
       source === "excel"
@@ -962,6 +990,18 @@ export function mergeRevenueCashRecords(
       iceCountedBy: record.iceCountedBy || existing?.iceCountedBy,
       iceOpenedAt: record.iceOpenedAt || existing?.iceOpenedAt,
       iceClosedAt: record.iceClosedAt || existing?.iceClosedAt,
+      iceSafeCash: record.iceSafeCash ?? existing?.iceSafeCash,
+      iceSafeDifference: record.iceSafeDifference ?? existing?.iceSafeDifference,
+      iceCheckedAt:
+        record.iceCheckedAt !== undefined
+          ? record.iceCheckedAt
+          : existing?.iceCheckedAt,
+      iceCheckedBy:
+        record.iceCheckedBy !== undefined
+          ? record.iceCheckedBy
+          : existing?.iceCheckedBy,
+      iceNote:
+        record.iceNote !== undefined ? record.iceNote : existing?.iceNote,
       checkedDenominations:
         isIceOnly && existing
           ? existing.checkedDenominations
@@ -977,10 +1017,14 @@ export function mergeRevenueCashRecords(
         : record.closedAt || existing?.closedAt,
       checkedAt: isIceOnly && existing
         ? existing.checkedAt
-        : record.checkedAt || existing?.checkedAt,
+        : record.checkedAt !== undefined
+          ? record.checkedAt
+          : existing?.checkedAt,
       checkedBy: isIceOnly && existing
         ? existing.checkedBy
-        : record.checkedBy || existing?.checkedBy,
+        : record.checkedBy !== undefined
+          ? record.checkedBy
+          : existing?.checkedBy,
       note:
         isIceOnly && existingIsPatisserie
           ? existing?.note || ""
