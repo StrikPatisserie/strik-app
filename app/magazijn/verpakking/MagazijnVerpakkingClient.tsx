@@ -288,6 +288,40 @@ function makeProductGroup(slots: MagazijnHotspot[], index: number): ProductGroup
   };
 }
 
+function getSlotArticleNumber(slot: MagazijnHotspot) {
+  const label = getSlotLabel(slot);
+  if (!label) return "";
+
+  return getArticleNumber(splitLabelFragments([label]));
+}
+
+function splitStackByArticleLabels(stack: MagazijnHotspot[]) {
+  const groups: MagazijnHotspot[][] = [];
+  let currentSlots: MagazijnHotspot[] = [];
+  let currentArticleNumber = "";
+
+  stack.forEach((slot) => {
+    const slotArticleNumber = getSlotArticleNumber(slot);
+
+    if (
+      slotArticleNumber &&
+      currentArticleNumber &&
+      currentArticleNumber !== slotArticleNumber &&
+      currentSlots.length
+    ) {
+      groups.push(currentSlots);
+      currentSlots = [];
+    }
+
+    currentSlots.push(slot);
+    if (slotArticleNumber) currentArticleNumber = slotArticleNumber;
+  });
+
+  if (currentSlots.length) groups.push(currentSlots);
+
+  return groups;
+}
+
 function isContinuationOnly(group: ProductGroup) {
   const label = group.labels.join(" ").trim();
 
@@ -358,6 +392,7 @@ function mergeContinuationGroups(groups: ProductGroup[]) {
 
 function buildProductGroups(hotspots: MagazijnHotspot[]) {
   const rawGroups = collectStackGroups(hotspots)
+    .flatMap(splitStackByArticleLabels)
     .map(makeProductGroup)
     .filter((group): group is ProductGroup => Boolean(group));
 
@@ -388,29 +423,22 @@ function getIsoWeekNumber(date = new Date()) {
 
 function createMailBody(orderLines: OrderLine[]) {
   const lines = orderLines.map((line) => {
-    const articleNumber =
-      line.articleNumber || (line.source === "custom" ? "afwijkend product" : "artikelnummer invullen");
+    const articleNumber = line.articleNumber.trim();
+    const article = [line.name.trim(), articleNumber].filter(Boolean).join(" ");
 
-    return [
-      `- ${line.quantity}x`,
-      articleNumber,
-      "-",
-      line.name,
-      line.zoneLabel ? `(${line.zoneLabel})` : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
+    return `- ${line.quantity}x ${article}`;
   });
 
   return [
     "Beste Havelaar,",
     "",
-    "Graag bestellen voor Bakkerij Malden:",
+    "Graag bestellen wij via deze weg voor onze locatie Bakkerij Malden het volgende:",
     "",
     ...lines,
     "",
-    "Met vriendelijke groet,",
-    "Bakkerij Malden",
+    "Hopelijk is dit in goede orde ontvangen.",
+    "Met vriendelijke groeten,",
+    "Team Strik Patisserie",
   ].join("\n");
 }
 
@@ -484,6 +512,7 @@ export default function MagazijnVerpakkingClient({
     [data.hotspots]
   );
   const [selectedId, setSelectedId] = useState(productGroups[0]?.id || "");
+  const [pendingGroupId, setPendingGroupId] = useState("");
   const [query, setQuery] = useState("");
   const [zoom, setZoom] = useState(1);
   const [quantity, setQuantity] = useState(1);
@@ -517,15 +546,23 @@ export default function MagazijnVerpakkingClient({
     productGroups.find((group) => group.id === selectedId) ||
     filteredGroups[0] ||
     null;
+  const pendingGroup =
+    productGroups.find((group) => group.id === pendingGroupId) || null;
   const selectedLine = selectedGroup
     ? orderLines.find((line) => line.groupId === selectedGroup.id)
     : null;
   const selectedRemaining = selectedGroup
     ? Math.max(0, selectedGroup.max - (selectedLine?.quantity || 0))
     : 0;
+  const pendingLine = pendingGroup
+    ? orderLines.find((line) => line.groupId === pendingGroup.id)
+    : null;
+  const pendingRemaining = pendingGroup
+    ? Math.max(0, pendingGroup.max - (pendingLine?.quantity || 0))
+    : 0;
   const totalQuantity = orderLines.reduce((sum, line) => sum + line.quantity, 0);
   const mailHref = createMailHref(orderLines);
-  const mapWidth = Math.round(1040 * zoom);
+  const zoomedMapWidth = Math.round(1040 * zoom);
 
   function selectGroup(group: ProductGroup) {
     const existing = orderLines.find((line) => line.groupId === group.id);
@@ -533,21 +570,37 @@ export default function MagazijnVerpakkingClient({
 
     setSelectedId(group.id);
     setQuantity(remaining > 0 ? 1 : group.max);
+    setPendingGroupId(group.id);
+  }
+
+  function addGroupToOrder(group: ProductGroup, addQuantity: number) {
+    const existing = orderLines.find((line) => line.groupId === group.id);
+    const remaining = Math.max(0, group.max - (existing?.quantity || 0));
+    if (remaining <= 0) return;
+
+    const quantityToAdd = clampQuantity(addQuantity, remaining);
+    addOrderLine({
+      groupId: group.id,
+      name: group.name,
+      articleNumber: group.articleNumber,
+      zoneLabel: group.zoneLabel,
+      quantity: quantityToAdd,
+      max: group.max,
+      source: "map",
+    });
   }
 
   function addSelectedGroup() {
     if (!selectedGroup || selectedRemaining <= 0) return;
 
-    const addQuantity = clampQuantity(quantity, selectedRemaining);
-    addOrderLine({
-      groupId: selectedGroup.id,
-      name: selectedGroup.name,
-      articleNumber: selectedGroup.articleNumber,
-      zoneLabel: selectedGroup.zoneLabel,
-      quantity: addQuantity,
-      max: selectedGroup.max,
-      source: "map",
-    });
+    addGroupToOrder(selectedGroup, quantity);
+  }
+
+  function addPendingGroup() {
+    if (!pendingGroup || pendingRemaining <= 0) return;
+
+    addGroupToOrder(pendingGroup, quantity);
+    setPendingGroupId("");
   }
 
   function addOrderLine(nextLine: OrderLine) {
@@ -630,8 +683,8 @@ export default function MagazijnVerpakkingClient({
         description={`${productGroups.length} artikelen`}
       />
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_21rem]">
-        <section className="overflow-hidden border border-[#d8d3ca] bg-white shadow-sm">
+      <div className="grid min-h-0 gap-3 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_21rem]">
+        <section className="min-w-0 overflow-hidden border border-[#d8d3ca] bg-white shadow-sm">
           <div className="flex flex-col gap-2 border-b border-[#e8e4de] bg-[#f8f6f3] p-3 lg:flex-row lg:items-center lg:justify-between">
             <label className="sr-only" htmlFor="magazijn-verpakking-search">
               Zoek artikel
@@ -665,9 +718,13 @@ export default function MagazijnVerpakkingClient({
 
           <div className="overflow-auto p-2 sm:p-3">
             <div
-              className="relative min-w-[760px] bg-white"
+              className={`relative mx-auto bg-white ${
+                zoom === 1
+                  ? "w-full max-w-[820px] xl:max-w-none"
+                  : "min-w-[760px]"
+              }`}
               style={{
-                width: `${mapWidth}px`,
+                width: zoom === 1 ? undefined : `${zoomedMapWidth}px`,
                 aspectRatio: `${viewWidth} / ${viewHeight}`,
               }}
             >
@@ -720,7 +777,7 @@ export default function MagazijnVerpakkingClient({
           </div>
         </section>
 
-        <aside className="space-y-3">
+        <aside className="space-y-3 lg:max-h-[calc(100dvh-8rem)] lg:overflow-auto">
           <section className="border border-[#d8d3ca] bg-white p-3 shadow-sm">
             <p className="text-[0.7rem] font-black uppercase tracking-normal text-[#8b8278]">
               Artikel
@@ -1028,6 +1085,84 @@ export default function MagazijnVerpakkingClient({
           </CollapsibleSidebarSection>
         </aside>
       </div>
+
+      {pendingGroup ? (
+        <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-md border border-[#1f4f35] bg-white p-3 shadow-xl">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-black uppercase tracking-normal text-[#1f4f35]">
+                Toevoegen aan lijst?
+              </p>
+              <p className="mt-1 truncate text-base font-black text-[#1a1815]">
+                {pendingGroup.name}
+              </p>
+              <p className="text-xs font-bold text-[#6b645b]">
+                {pendingGroup.articleNumber || "Artikelnummer invullen"} · max{" "}
+                {pendingGroup.max}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPendingGroupId("")}
+              className="h-8 w-8 shrink-0 border border-[#d8d3ca] bg-white text-sm font-black text-[#4f4942]"
+              aria-label="Sluiten"
+            >
+              x
+            </button>
+          </div>
+
+          {pendingRemaining > 0 ? (
+            <div className="mt-3 grid grid-cols-[auto_auto_auto_1fr] items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setQuantity((current) =>
+                    clampQuantity(current - 1, Math.max(1, pendingRemaining))
+                  )
+                }
+                className="h-10 w-10 border border-[#d8d3ca] bg-white text-lg font-black"
+              >
+                -
+              </button>
+              <input
+                type="number"
+                min={1}
+                max={pendingRemaining}
+                value={quantity}
+                onChange={(event) =>
+                  setQuantity(
+                    clampQuantity(Number(event.target.value), pendingRemaining)
+                  )
+                }
+                className="h-10 w-16 border border-[#d8d3ca] bg-white text-center text-sm font-black outline-none focus:border-[#1f4f35]"
+                aria-label="Aantal toevoegen"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  setQuantity((current) =>
+                    clampQuantity(current + 1, Math.max(1, pendingRemaining))
+                  )
+                }
+                className="h-10 w-10 border border-[#d8d3ca] bg-white text-lg font-black"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={addPendingGroup}
+                className="h-10 border border-[#1f4f35] bg-[#1f4f35] px-3 text-sm font-black text-white"
+              >
+                Toevoegen aan lijst
+              </button>
+            </div>
+          ) : (
+            <p className="mt-3 border border-[#d8d3ca] bg-[#faf8f5] p-2 text-sm font-bold text-[#6b645b]">
+              Dit artikel staat al maximaal in de bestelling.
+            </p>
+          )}
+        </div>
+      ) : null}
     </StrikShell>
   );
 }

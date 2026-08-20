@@ -49,6 +49,10 @@ type ShopAmountCandidate = {
   line: string;
 };
 
+type ShopAmountMatch = ShopAmountCandidate & {
+  shop: RevenueShop;
+};
+
 type IceCashCandidate = ShopAmountCandidate & {
   startCash?: number;
   countedCash?: number;
@@ -392,7 +396,7 @@ function rememberCandidate(
   }
 }
 
-function extractShopAmounts(text: string) {
+function extractShopAmounts(text: string): ShopAmountMatch[] {
   const lines = text
     .split(/\n/)
     .map((line) => cleanText(line, 2000))
@@ -480,11 +484,88 @@ function extractCashReportSections(text: string) {
   });
 }
 
+function extractCashSectionPaymentTotal(sectionText: string) {
+  const lines = sectionText
+    .split(/\n/)
+    .map((line) => cleanText(line, 2000))
+    .filter(Boolean);
+  const startIndex = lines.findIndex((line) => /\bBetaalvormen\b/i.test(line));
+  if (startIndex < 0) return undefined;
+
+  const endOffset = lines
+    .slice(startIndex + 1)
+    .findIndex((line) =>
+      /\b(?:Sluiten\s+kassa\s+locatie|Start\s+Telling|Pagina)\b/i.test(line)
+    );
+  const endIndex =
+    endOffset >= 0
+      ? startIndex + 1 + endOffset
+      : Math.min(lines.length, startIndex + 40);
+  const totals = lines.slice(startIndex, endIndex).flatMap((line) => {
+    if (!/\bTotaal\s*:/i.test(line)) return [];
+
+    const amounts = extractSignedAmountMatches(line).filter(
+      (match) => match.amount >= 0 && match.amount <= 100000
+    );
+
+    return amounts.length ? [amounts[amounts.length - 1].amount] : [];
+  });
+
+  return totals[totals.length - 1];
+}
+
+function extractShopAmountsFromCashSections(text: string): ShopAmountMatch[] {
+  return extractCashReportSections(text).flatMap((section): ShopAmountMatch[] => {
+    const amount = extractCashSectionPaymentTotal(section.text);
+    if (amount === undefined) return [];
+
+    return [
+      {
+        shop: section.shop,
+        amount,
+        score: 80,
+        line: "Cash-it betaalvormen totaal",
+      },
+    ];
+  });
+}
+
+function mergeShopAmounts(...groups: ShopAmountMatch[][]): ShopAmountMatch[] {
+  const candidates = new Map<RevenueShop, ShopAmountCandidate>();
+
+  groups.flat().forEach((item) => {
+    rememberCandidate(candidates, item.shop, {
+      amount: item.amount,
+      score: item.score,
+      line: item.line,
+    });
+  });
+
+  return [...candidates.entries()]
+    .map(([shop, candidate]) => ({
+      shop,
+      amount: candidate.amount,
+      line: candidate.line,
+      score: candidate.score,
+    }))
+    .sort(
+      (a, b) => revenueShops.indexOf(a.shop) - revenueShops.indexOf(b.shop)
+    );
+}
+
 function extractFirstSignedAmount(pattern: RegExp, text: string) {
   const match = text.match(pattern);
   if (!match) return undefined;
 
   return parseSignedDutchAmount(match[1] || match[0]) ?? undefined;
+}
+
+function extractCashCalculationBlock(sectionText: string) {
+  const startIndex = sectionText.search(/\bBerekening\s+Kas\b/i);
+  const source = startIndex >= 0 ? sectionText.slice(startIndex) : sectionText;
+  const endIndex = source.search(/\bBetaalvormen\b/i);
+
+  return endIndex >= 0 ? source.slice(0, endIndex) : source;
 }
 
 function extractCashCountedBy(text: string) {
@@ -509,28 +590,36 @@ function extractCashDenominations(sectionText: string) {
   if (correctionIndex < 0) return null;
 
   const afterCorrection = sectionText.slice(correctionIndex);
-  const totalMatch = afterCorrection.match(/\bTotaal\s*:\s*([-\d.,]+)/i);
-  if (!totalMatch || totalMatch.index === undefined) return null;
+  const totalMatches = Array.from(
+    afterCorrection.matchAll(/\bTotaal\s*:\s*(?:€|\bEUR\b)?\s*([-\d.,]+)/gi)
+  );
 
-  const countBlock = afterCorrection.slice(0, totalMatch.index);
-  const countMatches = Array.from(
-    countBlock.matchAll(/(?:^|\n)\s*(\d{1,4})\s*(?=\n|X\b)/g)
-  ).map((match) => Number(match[1]));
-  const counts = countMatches.slice(-cashCountParseOrder.length);
-  if (counts.length < cashCountParseOrder.length) return null;
+  for (let index = totalMatches.length - 1; index >= 0; index -= 1) {
+    const totalMatch = totalMatches[index];
+    if (totalMatch.index === undefined) continue;
 
-  const denominations: CashDenominationCounts = {};
-  cashCountParseOrder.forEach((key, index) => {
-    const count = Math.max(0, Math.trunc(counts[index] || 0));
-    if (count > 0) denominations[key] = count;
-  });
+    const countBlock = afterCorrection.slice(0, totalMatch.index);
+    const countMatches = Array.from(
+      countBlock.matchAll(/(?:^|\n)\s*(\d{1,4})\s*(?=\n|X\b)/g)
+    ).map((match) => Number(match[1]));
+    const counts = countMatches.slice(-cashCountParseOrder.length);
+    if (counts.length < cashCountParseOrder.length) continue;
 
-  return {
-    denominations,
-    denominationTotal:
-      parseSignedDutchAmount(totalMatch[1] || "") ??
-      cashDenominationTotal(denominations),
-  };
+    const denominations: CashDenominationCounts = {};
+    cashCountParseOrder.forEach((key, countIndex) => {
+      const count = Math.max(0, Math.trunc(counts[countIndex] || 0));
+      if (count > 0) denominations[key] = count;
+    });
+
+    return {
+      denominations,
+      denominationTotal:
+        parseSignedDutchAmount(totalMatch[1] || "") ??
+        cashDenominationTotal(denominations),
+    };
+  }
+
+  return null;
 }
 
 function extractCashRecordAmounts(sectionText: string) {
@@ -543,27 +632,44 @@ function extractCashRecordAmounts(sectionText: string) {
   const afterCloseAmounts = extractSignedAmountMatches(afterCloseMatch?.[1] || "");
   const beforeCorrectionAmounts = extractSignedAmountMatches(beforeCorrection);
   const tail = beforeCorrectionAmounts.slice(-5);
+  const calculationText = extractCashCalculationBlock(sectionText);
+  const startCash = extractFirstSignedAmount(
+    /\bStartgeld\s*:\s*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    calculationText
+  );
+  const cashRevenue = extractFirstSignedAmount(
+    /\bOmzet\s+kas\s*:\s*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    calculationText
+  );
+  const expectedCash = extractFirstSignedAmount(
+    /\bTotaal\s*:\s*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    calculationText
+  );
+  const difference = extractFirstSignedAmount(
+    /\bVerschil\s*:\s*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+    calculationText
+  );
   const countedCash = extractFirstSignedAmount(
     /\bGeteld\s*:\s*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
     sectionText
   );
   const cashOut = extractFirstSignedAmount(
     /\bKas\s*-?\s*uit\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
-    beforeCorrection
+    sectionText
   );
   const receipts = extractFirstSignedAmount(
     /\b(?:Bonnen|Kasbonnen|Contantbonnen)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
-    beforeCorrection
+    sectionText
   );
 
   return {
     countedCash,
-    startCash: afterCloseAmounts[0]?.amount,
-    cashRevenue: tail.length >= 5 ? tail[2]?.amount : undefined,
+    startCash: startCash ?? afterCloseAmounts[0]?.amount,
+    cashRevenue: cashRevenue ?? (tail.length >= 5 ? tail[2]?.amount : undefined),
     cashOut,
     receipts,
-    expectedCash: tail.length >= 5 ? tail[3]?.amount : undefined,
-    difference: tail.length >= 5 ? tail[4]?.amount : undefined,
+    expectedCash: expectedCash ?? (tail.length >= 5 ? tail[3]?.amount : undefined),
+    difference: difference ?? (tail.length >= 5 ? tail[4]?.amount : undefined),
   };
 }
 
@@ -1264,7 +1370,12 @@ export async function POST(request: Request) {
     const date = extractReportDate(input, fullText, {
       previousAmsterdamDayForNightMail: iceReport,
     });
-    const shopAmounts = iceReport ? [] : extractShopAmounts(fullText);
+    const shopAmounts = iceReport
+      ? []
+      : mergeShopAmounts(
+          extractShopAmounts(fullText),
+          extractShopAmountsFromCashSections(fullText)
+        );
     const cashRecords = iceReport
       ? extractIceCashRecords(input, fullText, date)
       : extractCashRecords(input, fullText, date);

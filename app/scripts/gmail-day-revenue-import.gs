@@ -24,7 +24,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v2',
+  SCRIPT_VERSION: 'gmail-archive-v3',
 };
 
 function importDagomzet() {
@@ -77,6 +77,7 @@ function importDagomzet() {
           throw new Error(response.getContentText());
         }
 
+        logDagomzetImportResult_(response.getContentText());
         props.setProperty(importId, new Date().toISOString());
         imported = true;
       } catch (error) {
@@ -139,6 +140,44 @@ function debugDagomzetLaatsteMails() {
       Logger.log(line);
     });
   });
+}
+
+function herimporteerLaatsteDagomzet_() {
+  const props = PropertiesService.getScriptProperties();
+  const processedLabel = GmailApp.getUserLabelByName(
+    DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL
+  );
+  const errorLabel = GmailApp.getUserLabelByName(
+    DAGOMZET_IMPORT_CONFIG.ERROR_LABEL
+  );
+  const threads = searchDagomzetRecoveryThreads_(
+    DAGOMZET_IMPORT_CONFIG.RECOVERY_MAX_THREADS
+  );
+  let resetCount = 0;
+
+  threads.forEach((thread) => {
+    let threadReset = false;
+
+    thread.getMessages().forEach((message) => {
+      const importId = `dagomzet:${DAGOMZET_IMPORT_CONFIG.IMPORT_VERSION}:${message.getId()}`;
+
+      props.deleteProperty(importId);
+      resetCount += 1;
+      threadReset = true;
+    });
+
+    if (threadReset) {
+      if (processedLabel) thread.removeLabel(processedLabel);
+      if (errorLabel) thread.removeLabel(errorLabel);
+    }
+  });
+
+  console.log(
+    `Dagomzet herimport reset: ${resetCount} bericht(en) opnieuw klaar gezet. Draai nu importDagomzet().`
+  );
+  Logger.log(
+    `Dagomzet herimport reset: ${resetCount} bericht(en) opnieuw klaar gezet. Draai nu importDagomzet().`
+  );
 }
 
 function searchDagomzetThreads_(maxThreads, queriesOverride) {
@@ -275,6 +314,29 @@ function verplaatsDagomzetFoutThreads_() {
 
 function getOrCreateDagomzetLabel_(name) {
   return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name);
+}
+
+function logDagomzetImportResult_(responseText) {
+  try {
+    const data = JSON.parse(responseText || '{}');
+    const records = data.records || [];
+    const cashRecords = data.cashRecords || [];
+    const summary = [
+      `datum: ${data.date || '?'}`,
+      `omzetregels: ${records.length}`,
+      `kasregels: ${cashRecords.length}`,
+    ].join(' | ');
+
+    console.log(`Dagomzet import OK: ${summary}`);
+    Logger.log(`Dagomzet import OK: ${summary}`);
+  } catch (error) {
+    console.log(
+      `Dagomzet import OK: ${String(responseText || '').slice(0, 500)}`
+    );
+    Logger.log(
+      `Dagomzet import OK: ${String(responseText || '').slice(0, 500)}`
+    );
+  }
 }
 
 function extractDagomzetPdfAttachments_(message) {
