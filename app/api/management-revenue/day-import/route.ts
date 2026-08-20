@@ -117,6 +117,9 @@ const cashCountParseOrder: CashDenominationKey[] = [
   "eur500",
 ];
 
+const voucherPaymentLabelPattern =
+  "(?:Bonnen|Kasbonnen|Contantbonnen|Waardebonnen?|Waarde\\s*bonnen?|Cadeaubonnen?|Cadeau\\s*bonnen?|Kadobonnen?|Kado\\s*bonnen?|Tegoedbonnen?|Tegoed\\s*bonnen?|Vouchers?)";
+
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, message }, { status });
 }
@@ -560,6 +563,16 @@ function extractFirstSignedAmount(pattern: RegExp, text: string) {
   return parseSignedDutchAmount(match[1] || match[0]) ?? undefined;
 }
 
+function extractVoucherPaymentAmount(text: string) {
+  return extractFirstSignedAmount(
+    new RegExp(
+      `\\b${voucherPaymentLabelPattern}\\b[^\\n\\d-]*(?:€|\\bEUR\\b)?\\s*([-\\d.,]+)`,
+      "i"
+    ),
+    text
+  );
+}
+
 function extractCashCalculationBlock(sectionText: string) {
   const startIndex = sectionText.search(/\bBerekening\s+Kas\b/i);
   const source = startIndex >= 0 ? sectionText.slice(startIndex) : sectionText;
@@ -657,10 +670,7 @@ function extractCashRecordAmounts(sectionText: string) {
     /\bKas\s*-?\s*uit\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
     sectionText
   );
-  const receipts = extractFirstSignedAmount(
-    /\b(?:Bonnen|Kasbonnen|Contantbonnen)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
-    sectionText
-  );
+  const receipts = extractVoucherPaymentAmount(sectionText);
 
   return {
     countedCash,
@@ -803,12 +813,7 @@ function extractIceCashDetails(text: string): IceCashDetails {
     ],
     text
   );
-  const receipts = extractFirstIceAmount(
-    [
-      /\b(?:Bonnen|Kasbonnen|Contantbonnen)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
-    ],
-    text
-  );
+  const receipts = extractVoucherPaymentAmount(text);
   const explicitExpectedCash = extractFirstIceAmount(
     [
       /\b(?:Naar\s+kluis|Kluis|Afstort(?:ing)?|Afstorten|Stort(?:ing)?|Te\s+storten|Naar\s+bank)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
@@ -930,7 +935,10 @@ function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
     countedCash,
     cashRevenue,
     cashOut,
-    receipts: voucherAmounts[2]?.amount,
+    receipts: firstNumber(
+      extractVoucherPaymentAmount(sectionText),
+      voucherAmounts[2]?.amount
+    ),
     expectedCash,
     difference: closeTableAmounts[2]?.amount,
   };
