@@ -24,7 +24,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v3',
+  SCRIPT_VERSION: 'gmail-archive-v4',
 };
 
 function importDagomzet() {
@@ -140,6 +140,10 @@ function debugDagomzetLaatsteMails() {
       Logger.log(line);
     });
   });
+}
+
+function herimporteerLaatsteDagomzet() {
+  herimporteerLaatsteDagomzet_();
 }
 
 function herimporteerLaatsteDagomzet_() {
