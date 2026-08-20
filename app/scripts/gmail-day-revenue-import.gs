@@ -26,7 +26,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v7',
+  SCRIPT_VERSION: 'gmail-archive-v8',
 };
 
 function importDagomzet() {
@@ -360,12 +360,28 @@ function logDagomzetImportResult_(responseText) {
               (Number(record.iceReceipts) || 0)
             );
           }, 0);
+    const receiptDetails = Array.isArray(data.receiptDetails)
+      ? data.receiptDetails
+          .map((detail) => {
+            const shop = String(detail.shop || '').trim();
+            const amount = Number(detail.amount) || 0;
+
+            return shop && amount
+              ? `${shop} ${formatDagomzetEuro_(amount)}`
+              : '';
+          })
+          .filter(Boolean)
+      : [];
     const summary = [
+      `parser: ${data.parserVersion || 'onbekend'}`,
       `datum: ${data.date || '?'}`,
       `omzetregels: ${records.length}`,
       `kasregels: ${cashRecords.length}`,
       `bonnen: ${formatDagomzetEuro_(receiptTotal)}`,
-    ].join(' | ');
+      receiptDetails.length ? `bonnenregels: ${receiptDetails.join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
 
     console.log(`Dagomzet import OK: ${summary}`);
     Logger.log(`Dagomzet import OK: ${summary}`);

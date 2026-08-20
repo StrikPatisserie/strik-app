@@ -77,6 +77,7 @@ type CashAmountMatch = {
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
+const DAY_IMPORT_PARSER_VERSION = "cash-vouchers-v4";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -118,7 +119,7 @@ const cashCountParseOrder: CashDenominationKey[] = [
 ];
 
 const voucherPaymentLabelPattern =
-  "(?:Bonnen|Kasbonnen|Contantbonnen|Waardebonnen?|Waarde\\s*bonnen?|Cadeaubonnen?|Cadeau\\s*bonnen?|Kadobonnen?|Kado\\s*bonnen?|Tegoedbonnen?|Tegoed\\s*bonnen?|Vouchers?)";
+  "(?:B\\s*o\\s*n\\s*n\\s*e\\s*n|Kasbonnen|Contantbonnen|Waardebonnen?|Waarde\\s*bonnen?|Cadeaubonnen?|Cadeau\\s*bonnen?|Kadobonnen?|Kado\\s*bonnen?|Tegoedbonnen?|Tegoed\\s*bonnen?|Vouchers?)";
 const paymentFormLabelPattern = `(?:Contant|Pin|Chip|Cashless|Ideal|Creditcard|Spaarpunten|${voucherPaymentLabelPattern}|Overig|Totaal|Afronding)`;
 
 function jsonError(message: string, status = 400) {
@@ -329,7 +330,7 @@ function parseSignedDutchAmount(value: string) {
 function extractAmountMatches(line: string) {
   return Array.from(
     line.matchAll(
-      /(?:€|\bEUR\b)?\s*-?\d{1,6}(?:[.\s]\d{3})*(?:,\d{2})|(?:€|\bEUR\b)\s*-?\d+(?:\.\d{2})?/gi
+      /(?:€|\bEUR\b)?\s*-?\d{1,6}(?:[.\s]\d{3})*\s*,\s*\d{2}|(?:€|\bEUR\b)\s*-?\d+(?:\.\d{2})?/gi
     )
   )
     .map((match) => ({
@@ -347,7 +348,7 @@ function extractAmountMatches(line: string) {
 function extractSignedAmountMatches(line: string): CashAmountMatch[] {
   return Array.from(
     line.matchAll(
-      /(?:€|\bEUR\b)?\s*-?\d{1,6}(?:[.\s]\d{3})*(?:,\d{2})|(?:€|\bEUR\b)\s*-?\d+(?:\.\d{2})?/gi
+      /(?:€|\bEUR\b)?\s*-?\d{1,6}(?:[.\s]\d{3})*\s*,\s*\d{2}|(?:€|\bEUR\b)\s*-?\d+(?:\.\d{2})?/gi
     )
   )
     .map((match) => ({
@@ -1363,6 +1364,23 @@ function cashRecordsReceiptTotal(cashRecords: RevenueCashRecord[]) {
   );
 }
 
+function cashRecordsReceiptDetails(cashRecords: RevenueCashRecord[]) {
+  return cashRecords.flatMap((record) => {
+    const amount = Number(
+      ((record.receipts || 0) + (record.iceReceipts || 0)).toFixed(2)
+    );
+    if (!amount) return [];
+
+    return [
+      {
+        shop: record.shop,
+        amount,
+        kind: record.cashImportKind === "ice" ? "ice" : "patisserie",
+      },
+    ];
+  });
+}
+
 function isPdfAttachment(attachment: PdfAttachmentInput) {
   const fileName = cleanText(attachment.fileName, 240).toLowerCase();
   const contentType = cleanText(attachment.contentType, 120).toLowerCase();
@@ -1524,10 +1542,12 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: true,
+        parserVersion: DAY_IMPORT_PARSER_VERSION,
         date,
         records,
         cashRecords,
         receiptTotal: cashRecordsReceiptTotal(cashRecords),
+        receiptDetails: cashRecordsReceiptDetails(cashRecords),
         matches: shopAmounts,
         warnings,
       },
