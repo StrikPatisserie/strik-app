@@ -2689,7 +2689,7 @@ function CashNoteControl({
           </span>
         </div>
       </div>
-      <div className="mt-1 grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="mt-1 grid gap-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
         {banknoteDenominations.map((denomination) => {
           const expected = cashNoteCount(record, denomination.key);
           const inputValue = cashNoteInputValue(record, denomination.key, drafts);
@@ -2702,47 +2702,30 @@ function CashNoteControl({
           return (
             <div
               key={denomination.key}
-              className="grid gap-1 rounded-md border border-[#e7e0d8] bg-white p-1.5"
+              className="grid grid-cols-[2.55rem_1.45rem_2.55rem_minmax(2.9rem,1fr)] items-center gap-1 rounded-md border border-[#e7e0d8] bg-white px-1.5 py-1"
             >
-              <div className="flex items-center justify-between gap-1">
-                <CashNote denomination={denomination} />
-                <span
-                  className={`text-[0.62rem] font-black ${
-                    valueDifference === 0 ? "text-[#6b645b]" : "text-[#7a5417]"
-                  }`}
-                >
-                  {countDifference > 0 ? "+" : ""}
-                  {countDifference}
-                </span>
-              </div>
-              <div className="grid grid-cols-[1fr_3.1rem] items-end gap-1">
-                <div>
-                  <p className="text-[0.5rem] font-black uppercase tracking-normal text-[#8b8278]">
-                    PDF
-                  </p>
-                  <p className="text-sm font-black leading-tight text-[#1a1815]">
-                    {expected}
-                  </p>
-                </div>
-                <label className="grid gap-0.5">
-                  <span className="text-[0.5rem] font-black uppercase tracking-normal text-[#8b8278]">
-                    Tel
-                  </span>
-                  <input
-                    value={inputValue}
-                    onChange={(event) =>
-                      onChange(denomination.key, event.target.value)
-                    }
-                    inputMode="numeric"
-                    disabled={disabled}
-                    className="h-7 w-full rounded-md border border-[#d9d2c9] bg-white px-1.5 text-center text-sm font-black text-[#1a1815] disabled:opacity-60"
-                  />
-                </label>
-              </div>
+              <CashNote denomination={denomination} />
               <span
-                className={`text-[0.6rem] font-black ${
+                title="PDF"
+                className="text-center text-sm font-black leading-none text-[#1a1815]"
+              >
+                {expected}
+              </span>
+              <input
+                aria-label={`${denomination.label} euro geteld`}
+                value={inputValue}
+                onChange={(event) =>
+                  onChange(denomination.key, event.target.value)
+                }
+                inputMode="numeric"
+                disabled={disabled}
+                className="h-7 w-full rounded-md border border-[#d9d2c9] bg-white px-1 text-center text-sm font-black text-[#1a1815] disabled:opacity-60"
+              />
+              <span
+                className={`truncate text-right text-[0.58rem] font-black ${
                   valueDifference === 0 ? "text-[#6b645b]" : "text-[#7a5417]"
                 }`}
+                title={`${countDifference > 0 ? "+" : ""}${countDifference} briefjes, ${formatMoney(valueDifference)}`}
               >
                 {formatMoney(valueDifference)}
               </span>
@@ -2764,16 +2747,16 @@ function CashNote({
   return (
     <span
       aria-hidden="true"
-      className="relative inline-flex h-6 w-14 items-center justify-center overflow-hidden rounded-[3px] border text-[0.58rem] font-black shadow-sm"
+      className="relative inline-flex h-6 w-10 items-center justify-center overflow-hidden rounded-[3px] border text-[0.58rem] font-black shadow-sm"
       style={{
         background: `linear-gradient(135deg, ${style.bg}, #fffdf8 48%, ${style.bg})`,
         borderColor: style.border,
         color: style.text,
       }}
     >
-      <span className="absolute left-1 top-1 h-1.5 w-1.5 rounded-full border border-current opacity-45" />
-      <span>EUR {denomination.label}</span>
-      <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-current opacity-45" />
+      <span className="absolute left-0.5 top-0.5 h-1 w-1 rounded-full border border-current opacity-45" />
+      <span>€{denomination.label}</span>
+      <span className="absolute bottom-0.5 right-0.5 h-1 w-1 rounded-full border border-current opacity-45" />
     </span>
   );
 }
