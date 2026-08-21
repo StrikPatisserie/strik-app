@@ -26,6 +26,8 @@ type RevenueResponse = RevenueData & {
   };
 };
 
+type CashLocationKind = "patisserie" | "ice";
+
 const euroFormatter = new Intl.NumberFormat("nl-NL", {
   currency: "EUR",
   style: "currency",
@@ -446,6 +448,28 @@ function recordsForWeek(
   );
 }
 
+function cashLocationKey(kind: CashLocationKind, shop: RevenueShop) {
+  return `${kind}:${shop}`;
+}
+
+function parseCashLocationKey(
+  value: string
+): { kind: CashLocationKind; shop: RevenueShop } | null {
+  const [kind, shop] = value.split(":");
+
+  if (
+    (kind === "patisserie" || kind === "ice") &&
+    revenueShops.includes(shop as RevenueShop)
+  ) {
+    return {
+      kind: kind as CashLocationKind,
+      shop: shop as RevenueShop,
+    };
+  }
+
+  return null;
+}
+
 function dailyRecordsForWeek(
   records: RevenueDayRecord[],
   year: number,
@@ -531,6 +555,8 @@ function cashWarning(record: RevenueCashRecord | undefined) {
 export default function CashCountManager() {
   const [selectedDate, setSelectedDate] = useState(localIsoDate());
   const [selectedShop, setSelectedShop] = useState<RevenueShop>(revenueShops[0]);
+  const [selectedCashLocationKind, setSelectedCashLocationKind] =
+    useState<CashLocationKind>("patisserie");
   const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
   const [cashRecords, setCashRecords] = useState<RevenueCashRecord[]>([]);
@@ -584,7 +610,14 @@ export default function CashCountManager() {
         );
         setStorage(data.storage);
         setSelectedDate(latestDate);
-        if (latestRecord) setSelectedShop(latestRecord.shop);
+        if (latestRecord) {
+          setSelectedShop(latestRecord.shop);
+          setSelectedCashLocationKind(
+            hasIceCashRecord(latestRecord) && !hasPatisserieCashRecord(latestRecord)
+              ? "ice"
+              : "patisserie"
+          );
+        }
         setState("ready");
       } catch (error) {
         if (!ignoreResult) {
@@ -646,6 +679,9 @@ export default function CashCountManager() {
 
           return hasPatisserieCashRecord(record) && record?.checkedAt ? [record] : [];
         });
+        const checkedIceRecords = iceRecords.filter(
+          (record) => record.iceCheckedAt
+        );
         const cashRevenue = patisserieRecords.reduce(
           (total, record) => total + (record.cashRevenue ?? record.countedCash),
           0
@@ -695,6 +731,27 @@ export default function CashCountManager() {
           (total, record) => total + iceExpectedCash(record),
           0
         );
+        const includedIceCash = checkedIceRecords.reduce(
+          (total, record) => total + iceCheckedCash(record),
+          0
+        );
+        const includedIceCashRevenue = checkedIceRecords.reduce(
+          (total, record) =>
+            total + (record.iceCashRevenue ?? iceExpectedCash(record)),
+          0
+        );
+        const includedIceReceipts = checkedIceRecords.reduce(
+          (total, record) => total + (record.iceReceipts || 0),
+          0
+        );
+        const includedIceCashOut = checkedIceRecords.reduce(
+          (total, record) => total + (record.iceCashOut || 0),
+          0
+        );
+        const includedIceCashDifference = checkedIceRecords.reduce(
+          (total, record) => total + (record.iceDifference || 0),
+          0
+        );
         const iceCheckedCount = iceRecords.filter(
           (record) => record.iceCheckedAt
         ).length;
@@ -720,6 +777,11 @@ export default function CashCountManager() {
           includedCheckedSafeCash,
           difference,
           iceCash,
+          includedIceCash,
+          includedIceCashRevenue,
+          includedIceReceipts,
+          includedIceCashOut,
+          includedIceCashDifference,
           iceCount: iceRecords.length,
           iceCheckedCount,
           checkedCount: checkedRecords.length,
@@ -739,6 +801,36 @@ export default function CashCountManager() {
       selectedWeek.year,
       selectedWeekDates,
     ]
+  );
+  const cashLocationRows = useMemo(
+    () =>
+      weekRows.flatMap((row) => [
+        {
+          key: cashLocationKey("patisserie", row.shop),
+          kind: "patisserie" as const,
+          shop: row.shop,
+          label: `Patisserie ${row.shop}`,
+          checkedCount: row.checkedCount,
+          expectedCount: row.expectedCount,
+          missingCount: row.missingCount,
+          weekTotal: row.includedCheckedSafeCash,
+        },
+        {
+          key: cashLocationKey("ice", row.shop),
+          kind: "ice" as const,
+          shop: row.shop,
+          label: `IJs ${row.shop}`,
+          checkedCount: row.iceCheckedCount,
+          expectedCount: row.iceCount,
+          missingCount: 0,
+          weekTotal: row.includedIceCash,
+        },
+      ]),
+    [weekRows]
+  );
+  const selectedCashLocationKey = cashLocationKey(
+    selectedCashLocationKind,
+    selectedShop
   );
   const selectedShopRow =
     weekRows.find((row) => row.shop === selectedShop) || weekRows[0];
@@ -763,8 +855,12 @@ export default function CashCountManager() {
   const selectedShopDay =
     selectedShopDays.find((day) => day.date === selectedDate) ||
     selectedShopDays[0];
-  const selectedPatisserieCashRecord = selectedShopDay?.patisserieRecord;
-  const selectedIceCashRecord = selectedShopDay?.iceRecord;
+  const selectedPatisserieCashRecord =
+    selectedCashLocationKind === "patisserie"
+      ? selectedShopDay?.patisserieRecord
+      : undefined;
+  const selectedIceCashRecord =
+    selectedCashLocationKind === "ice" ? selectedShopDay?.iceRecord : undefined;
   const selectedCashRecord = selectedPatisserieCashRecord;
   const selectedCashWarning = cashWarning(selectedCashRecord);
   const selectedSafeDraftKey = selectedCashRecord
@@ -1517,23 +1613,25 @@ export default function CashCountManager() {
           </label>
 
           <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
-            Winkel
+            Locatie
             <select
-              value={selectedShop}
+              value={selectedCashLocationKey}
               onChange={(event) => {
-                const nextShop = event.target.value as RevenueShop;
+                const nextLocation = parseCashLocationKey(event.target.value);
+                if (!nextLocation) return;
 
-                setSelectedShop(nextShop);
+                setSelectedShop(nextLocation.shop);
+                setSelectedCashLocationKind(nextLocation.kind);
                 if (!selectedWeekDates.includes(selectedDate)) {
                   setSelectedDate(selectedWeekDates[0] || localIsoDate());
                 }
               }}
               className="h-9 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
             >
-              {weekRows.map((row) => (
-                <option key={row.shop} value={row.shop}>
-                  {row.shop} · {row.checkedCount}/{row.expectedCount} ·{" "}
-                  {formatMoney(row.includedCheckedSafeCash)}
+              {cashLocationRows.map((row) => (
+                <option key={row.key} value={row.key}>
+                  {row.label} · {row.checkedCount}/{row.expectedCount} ·{" "}
+                  {formatMoney(row.weekTotal)}
                 </option>
               ))}
             </select>
@@ -1639,13 +1737,29 @@ export default function CashCountManager() {
                 key={columnIndex === 0 ? "first-days" : "last-days"}
                 className="overflow-hidden rounded-md border border-[#e7e0d8] bg-white"
               >
-                {column.map(({ date, isExpected, patisserieRecord }) => {
+                {column.map(({ date, iceRecord, isExpected, patisserieRecord }) => {
                   const isActive = date === selectedDate;
-                  const dayRecord = patisserieRecord;
-                  const warning = cashWarning(dayRecord);
-                  const isClosed = !isExpected && !dayRecord;
-                  const isMissing = isExpected && !dayRecord;
-                  const isChecked = Boolean(dayRecord?.checkedAt);
+                  const dayRecord =
+                    selectedCashLocationKind === "ice"
+                      ? iceRecord
+                      : patisserieRecord;
+                  const dayIsExpected =
+                    selectedCashLocationKind === "ice"
+                      ? Boolean(iceRecord)
+                      : isExpected;
+                  const warning =
+                    selectedCashLocationKind === "ice"
+                      ? ""
+                      : cashWarning(dayRecord);
+                  const isClosed = !dayIsExpected && !dayRecord;
+                  const isMissing =
+                    selectedCashLocationKind === "patisserie" &&
+                    dayIsExpected &&
+                    !dayRecord;
+                  const isChecked =
+                    selectedCashLocationKind === "ice"
+                      ? Boolean(dayRecord?.iceCheckedAt)
+                      : Boolean(dayRecord?.checkedAt);
                   const rowClass = isMissing
                     ? "border-l-[#d2453d] bg-[#fdeaea] text-[#1a1815]"
                     : isChecked
@@ -1673,9 +1787,15 @@ export default function CashCountManager() {
                       </span>
                       <span className="truncate text-sm font-black leading-none">
                         {dayRecord
-                          ? formatMoney(cashRevenueAmount(dayRecord))
+                          ? formatMoney(
+                              selectedCashLocationKind === "ice"
+                                ? iceExpectedCash(dayRecord)
+                                : cashRevenueAmount(dayRecord)
+                            )
                           : isClosed
-                            ? "gesloten"
+                            ? selectedCashLocationKind === "ice"
+                              ? "geen ijs"
+                              : "gesloten"
                             : "-"}
                       </span>
                       <span
@@ -1697,7 +1817,11 @@ export default function CashCountManager() {
           </div>
 
           <div className="mt-2">
-            {!selectedCashRecord && selectedShopDay && !selectedShopDay.isExpected ? (
+            {selectedCashLocationKind === "patisserie" ? (
+              <>
+                {!selectedCashRecord &&
+                selectedShopDay &&
+                !selectedShopDay.isExpected ? (
               <>
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#e7e0d8] bg-[#f5f2ee] px-3 py-3">
                   <div>
@@ -1970,9 +2094,9 @@ export default function CashCountManager() {
                   )}
                 </div>
               </article>
-            )}
-
-            {selectedIceCashRecord && (
+                )}
+              </>
+            ) : selectedIceCashRecord ? (
               <IceCashSummary
                 disabled={state === "saving"}
                 draftDifference={selectedIceSafeDraftDifference}
@@ -2012,12 +2136,26 @@ export default function CashCountManager() {
                 sourceCountedInputValue={selectedIceCountedCashInputValue}
                 sourceStartInputValue={selectedIceStartCashInputValue}
               />
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#dce8df] bg-[#f6fbf5] px-3 py-3">
+                <div>
+                  <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#1f4f35]">
+                    {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"}
+                  </p>
+                  <p className="text-sm font-black text-[#1a1815]">
+                    Geen ijs dagrapport
+                  </p>
+                </div>
+                <p className="text-sm font-bold text-[#6b645b]">
+                  Voor deze ijsselectie is geen ijstelling gevonden.
+                </p>
+              </div>
             )}
           </div>
         </section>
       )}
 
-      {selectedShopRow && (
+      {selectedShopRow && selectedCashLocationKind === "patisserie" && (
         <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/92 p-3 shadow-sm">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -2137,6 +2275,59 @@ export default function CashCountManager() {
                 ? "Storting bijwerken"
                 : "Storting opslaan"}
             </button>
+          </div>
+        </section>
+      )}
+
+      {selectedShopRow && selectedCashLocationKind === "ice" && (
+        <section className="rounded-lg border border-[#c8ddd2] bg-[#f6fbf5] p-3 shadow-sm">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#1f4f35]">
+                IJs weekoverzicht
+              </p>
+              <h2 className="text-lg font-black leading-tight text-[#1a1815]">
+                IJs {selectedShopRow.shop}
+              </h2>
+            </div>
+            <div className="grid w-full gap-3 sm:grid-cols-3 lg:w-auto lg:min-w-[28rem]">
+              <AmountCell
+                label="Compleet"
+                value={`${selectedShopRow.iceCheckedCount}/${selectedShopRow.iceCount}`}
+              />
+              <AmountCell
+                label="Kasomzet"
+                value={formatMoney(selectedShopRow.includedIceCashRevenue)}
+              />
+              <AmountCell
+                label="Weektotaal"
+                value={formatMoney(selectedShopRow.includedIceCash)}
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 rounded-md border border-[#c8ddd2] bg-white/70 p-2 sm:grid-cols-2 lg:grid-cols-4">
+            <AmountCell
+              label="Bonnen"
+              value={formatMoney(selectedShopRow.includedIceReceipts)}
+            />
+            <AmountCell
+              label="Kas uit"
+              value={formatMoney(selectedShopRow.includedIceCashOut)}
+            />
+            <AmountCell
+              label="Kasverschil"
+              tone={
+                Math.abs(selectedShopRow.includedIceCashDifference) > 5
+                  ? "warn"
+                  : "normal"
+              }
+              value={formatMoney(selectedShopRow.includedIceCashDifference)}
+            />
+            <AmountCell
+              label="Naar kluis"
+              value={formatMoney(selectedShopRow.includedIceCash)}
+            />
           </div>
         </section>
       )}
