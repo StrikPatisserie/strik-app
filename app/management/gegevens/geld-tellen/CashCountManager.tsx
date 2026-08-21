@@ -2689,7 +2689,13 @@ function CashNoteControl({
           </span>
         </div>
       </div>
-      <div className="mt-1 grid gap-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+      <div className="mt-1 overflow-hidden rounded-md border border-[#e7e0d8] bg-white">
+        <div className="grid grid-cols-[2.7rem_3.5rem_4rem_minmax(4.5rem,1fr)] items-center gap-2 border-b border-[#e7e0d8] bg-[#f8f6f3] px-2 py-1 text-[0.52rem] font-black uppercase tracking-normal text-[#8b8278]">
+          <span>Brief</span>
+          <span className="text-center">PDF</span>
+          <span className="text-center">Geteld</span>
+          <span className="text-right">Verschil</span>
+        </div>
         {banknoteDenominations.map((denomination) => {
           const expected = cashNoteCount(record, denomination.key);
           const inputValue = cashNoteInputValue(record, denomination.key, drafts);
@@ -2702,7 +2708,7 @@ function CashNoteControl({
           return (
             <div
               key={denomination.key}
-              className="grid grid-cols-[2.55rem_1.45rem_2.55rem_minmax(2.9rem,1fr)] items-center gap-1 rounded-md border border-[#e7e0d8] bg-white px-1.5 py-1"
+              className="grid grid-cols-[2.7rem_3.5rem_4rem_minmax(4.5rem,1fr)] items-center gap-2 border-b border-[#eee7df] px-2 py-1 last:border-b-0"
             >
               <CashNote denomination={denomination} />
               <span
@@ -2722,7 +2728,7 @@ function CashNoteControl({
                 className="h-7 w-full rounded-md border border-[#d9d2c9] bg-white px-1 text-center text-sm font-black text-[#1a1815] disabled:opacity-60"
               />
               <span
-                className={`truncate text-right text-[0.58rem] font-black ${
+                className={`truncate text-right text-xs font-black ${
                   valueDifference === 0 ? "text-[#6b645b]" : "text-[#7a5417]"
                 }`}
                 title={`${countDifference > 0 ? "+" : ""}${countDifference} briefjes, ${formatMoney(valueDifference)}`}
