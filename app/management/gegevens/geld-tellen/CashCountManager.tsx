@@ -446,6 +446,35 @@ function recordsForWeek(
   );
 }
 
+function dailyRecordsForWeek(
+  records: RevenueDayRecord[],
+  year: number,
+  week: number,
+  shop: RevenueShop
+) {
+  return records.filter(
+    (record) => record.year === year && record.week === week && record.shop === shop
+  );
+}
+
+function cashRevenueAmount(record: RevenueCashRecord) {
+  return record.cashRevenue ?? record.countedCash ?? 0;
+}
+
+function pinRevenueAmount(
+  record: RevenueCashRecord,
+  dayRecord: RevenueDayRecord | undefined
+) {
+  if (!dayRecord) return 0;
+
+  return Math.max(
+    0,
+    roundedMoney(
+      dayRecord.amount - cashRevenueAmount(record) - (receiptAmount(record) || 0)
+    )
+  );
+}
+
 function sortCashRecords(records: RevenueCashRecord[]) {
   return [...records].sort(
     (a, b) =>
@@ -591,6 +620,15 @@ export default function CashCountManager() {
           selectedWeek.week,
           shop
         ).sort((first, second) => first.date.localeCompare(second.date));
+        const shopDayRecords = dailyRecordsForWeek(
+          dailyRecords,
+          selectedWeek.year,
+          selectedWeek.week,
+          shop
+        );
+        const dayRecordByDate = new Map(
+          shopDayRecords.map((record) => [record.date, record])
+        );
         const patisserieRecords = shopRecords.filter(hasPatisserieCashRecord);
         const iceRecords = shopRecords.filter(hasIceCashRecord);
         const expectedDates = selectedWeekDates.filter(
@@ -621,7 +659,24 @@ export default function CashCountManager() {
           0
         );
         const includedCashRevenue = checkedRecords.reduce(
-          (total, record) => total + (record.cashRevenue ?? record.countedCash),
+          (total, record) => total + cashRevenueAmount(record),
+          0
+        );
+        const includedPinRevenue = checkedRecords.reduce(
+          (total, record) =>
+            total + pinRevenueAmount(record, dayRecordByDate.get(record.date)),
+          0
+        );
+        const includedReceipts = checkedRecords.reduce(
+          (total, record) => total + (receiptAmount(record) || 0),
+          0
+        );
+        const includedCashOut = checkedRecords.reduce(
+          (total, record) => total + (cashOutAmount(record) || 0),
+          0
+        );
+        const includedCashDifference = checkedRecords.reduce(
+          (total, record) => total + (record.difference || 0),
           0
         );
         const includedExpectedSafeCash = checkedRecords.reduce(
@@ -657,6 +712,10 @@ export default function CashCountManager() {
           expectedSafeCash,
           checkedSafeCash,
           includedCashRevenue,
+          includedPinRevenue,
+          includedReceipts,
+          includedCashOut,
+          includedCashDifference,
           includedExpectedSafeCash,
           includedCheckedSafeCash,
           difference,
@@ -675,6 +734,7 @@ export default function CashCountManager() {
     [
       cashDeposits,
       cashRecords,
+      dailyRecords,
       selectedWeek.week,
       selectedWeek.year,
       selectedWeekDates,
@@ -695,6 +755,10 @@ export default function CashCountManager() {
         };
       }),
     [cashRecords, selectedShop, selectedWeekDates]
+  );
+  const selectedShopDayColumns = useMemo(
+    () => [selectedShopDays.slice(0, 4), selectedShopDays.slice(4)],
+    [selectedShopDays]
   );
   const selectedShopDay =
     selectedShopDays.find((day) => day.date === selectedDate) ||
@@ -1429,7 +1493,7 @@ export default function CashCountManager() {
   return (
     <div className="space-y-3">
       <section className="rounded-lg border border-[#d9cbb8] bg-[#f7f1e7]/90 p-2 shadow-sm">
-        <div className="grid gap-2 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)_auto] lg:items-end">
+        <div className="grid gap-2 xl:grid-cols-[minmax(13rem,17rem)_minmax(12rem,15rem)_minmax(0,1fr)_auto] xl:items-end">
           <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
             Week
             <select
@@ -1447,6 +1511,29 @@ export default function CashCountManager() {
               {availableWeeks.map((week) => (
                 <option key={week.key} value={week.key}>
                   Week {week.week} - {weekRangeLabel(week.year, week.week)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+            Winkel
+            <select
+              value={selectedShop}
+              onChange={(event) => {
+                const nextShop = event.target.value as RevenueShop;
+
+                setSelectedShop(nextShop);
+                if (!selectedWeekDates.includes(selectedDate)) {
+                  setSelectedDate(selectedWeekDates[0] || localIsoDate());
+                }
+              }}
+              className="h-9 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+            >
+              {weekRows.map((row) => (
+                <option key={row.shop} value={row.shop}>
+                  {row.shop} · {row.checkedCount}/{row.expectedCount} ·{" "}
+                  {formatMoney(row.includedCheckedSafeCash)}
                 </option>
               ))}
             </select>
@@ -1530,56 +1617,6 @@ export default function CashCountManager() {
           </div>
         </div>
 
-        <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-          {weekRows.map((row) => {
-            const isSelected = row.shop === selectedShop;
-
-            return (
-              <button
-                key={row.shop}
-                type="button"
-                onClick={() => {
-                  setSelectedShop(row.shop);
-                }}
-                className={`rounded-md border p-2 text-left shadow-sm transition ${
-                  isSelected
-                    ? "border-[#1a1815] bg-[#1a1815] text-white"
-                    : "border-[#e0d5c8] bg-white/94 text-[#1a1815] hover:border-[#1a1815]/45"
-                }`}
-              >
-                <span
-                  className={`block text-[0.56rem] font-black uppercase tracking-normal ${
-                    isSelected ? "text-white/62" : "text-[#8b8278]"
-                  }`}
-                >
-                  Patisserie
-                </span>
-                <span className="mt-0.5 block text-sm font-black">
-                  {row.shop}
-                </span>
-                <span
-                  className={`mt-1 block text-[0.62rem] font-black uppercase tracking-normal ${
-                    isSelected ? "text-white/70" : "text-[#8b8278]"
-                  }`}
-                >
-                  {row.checkedCount}/{row.expectedCount} compleet ·{" "}
-                  {formatMoney(row.includedCheckedSafeCash)}
-                </span>
-                {row.iceCount > 0 && (
-                  <span
-                    className={`mt-0.5 block text-[0.62rem] font-black uppercase tracking-normal ${
-                      isSelected ? "text-white/70" : "text-[#1f4f35]"
-                    }`}
-                  >
-                    IJs {row.iceCheckedCount}/{row.iceCount} ·{" "}
-                    {formatMoney(row.iceCash)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
         {storage?.status === "seed" && (
           <p className="mt-2 rounded-md border border-[#f3d4a4] bg-[#fef9f3] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
             {storage.message} Nieuwe geldcontroles worden pas blijvend opgeslagen
@@ -1596,117 +1633,67 @@ export default function CashCountManager() {
 
       {selectedShopRow && (
         <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/92 p-2 shadow-sm">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-                Patisserie
-              </p>
-              <h2 className="text-lg font-black leading-tight text-[#1a1815]">
-                {selectedShopRow.shop}
-              </h2>
-              <p className="text-[0.68rem] font-bold text-[#8b8278]">
-                Week {selectedWeek.week} · {weekRangeLabel(selectedWeek.year, selectedWeek.week)}
-              </p>
-            </div>
-            <div className="grid min-w-[18rem] grid-cols-2 rounded-md bg-[#f8f6f3] text-center sm:grid-cols-4">
-              <StatBox
-                label="Compleet"
-                value={`${selectedShopRow.checkedCount}/${selectedShopRow.expectedCount}`}
-              />
-              <StatBox
-                label="Weektotaal"
-                value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
-              />
-              <StatBox
-                label="IJs"
-                value={
-                  selectedShopRow.iceCount > 0
-                    ? `${selectedShopRow.iceCheckedCount}/${selectedShopRow.iceCount} · ${formatMoney(selectedShopRow.iceCash)}`
-                    : "-"
-                }
-              />
-              <StatBox
-                label="Ontbreekt"
-                value={`${selectedShopRow.missingCount}`}
-                tone={selectedShopRow.missingCount > 0 ? "warn" : "normal"}
-              />
-            </div>
-          </div>
-
-          <div className="mt-2 grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-7">
-            {selectedShopDays.map(({ date, iceRecord, isExpected, patisserieRecord }) => {
-              const isActive = date === selectedDate;
-              const dayRecord = patisserieRecord;
-              const warning = cashWarning(dayRecord);
-              const isClosed = !isExpected && !dayRecord;
-              const statusLabel =
-                isClosed
-                  ? "Gesloten"
-                  : !dayRecord
-                    ? "Ontbreekt"
-                    : dayRecord.checkedAt
-                      ? "Compleet"
+          <div className="grid gap-1.5 md:grid-cols-2">
+            {selectedShopDayColumns.map((column, columnIndex) => (
+              <div
+                key={columnIndex === 0 ? "first-days" : "last-days"}
+                className="overflow-hidden rounded-md border border-[#e7e0d8] bg-white"
+              >
+                {column.map(({ date, isExpected, patisserieRecord }) => {
+                  const isActive = date === selectedDate;
+                  const dayRecord = patisserieRecord;
+                  const warning = cashWarning(dayRecord);
+                  const isClosed = !isExpected && !dayRecord;
+                  const isMissing = isExpected && !dayRecord;
+                  const isChecked = Boolean(dayRecord?.checkedAt);
+                  const rowClass = isMissing
+                    ? "border-l-[#d2453d] bg-[#fdeaea] text-[#1a1815]"
+                    : isChecked
+                      ? "border-l-[#2f6f43] bg-[#eef8ef] text-[#1a1815]"
                       : warning
-                        ? "Let op"
-                        : "Open";
-              const tileClass = isActive
-                ? "border-[#1a1815] bg-[#1a1815] text-white shadow-sm"
-                : !dayRecord
-                  ? "border-[#e7e0d8] bg-[#f5f2ee] text-[#8b8278]"
-                  : dayRecord.checkedAt
-                    ? "border-[#cbdcc5] bg-[#f6fbf5] text-[#1a1815]"
-                    : warning
-                      ? "border-[#efd1a1] bg-[#fff8d8] text-[#1a1815]"
-                      : "border-[#e7e0d8] bg-white text-[#1a1815]";
+                        ? "border-l-[#b47a22] bg-[#fff8d8] text-[#1a1815]"
+                        : isClosed
+                          ? "border-l-[#d9d2c9] bg-[#f5f2ee] text-[#8b8278]"
+                          : "border-l-[#d9d2c9] bg-white text-[#1a1815]";
 
-              return (
-                <button
-                  key={date}
-                  type="button"
-                  onClick={() => setSelectedDate(date)}
-                  className={`min-h-[5rem] rounded-md border px-2 py-1.5 text-left transition ${tileClass}`}
-                >
-                  <span
-                    className={`block text-[0.55rem] font-black uppercase tracking-normal ${
-                      isActive ? "text-white/65" : "text-[#8b8278]"
-                    }`}
-                  >
-                    {dayShortName(date)}
-                  </span>
-                  <span className="block text-base font-black leading-tight">
-                    {date.slice(8, 10)}-{date.slice(5, 7)}
-                  </span>
-                  <span
-                    className={`mt-0.5 block text-[0.58rem] font-black uppercase tracking-normal ${
-                      isActive ? "text-white/78" : "text-[#6b645b]"
-                    }`}
-                  >
-                    {statusLabel}
-                  </span>
-                  <span
-                    className={`mt-0.5 block truncate text-xs font-black ${
-                      isActive ? "text-white" : "text-[#1a1815]"
-                    }`}
-                  >
-                    {dayRecord
-                      ? formatMoney(safeExpectedCash(dayRecord))
-                      : isClosed
-                        ? "geen dienst"
-                        : "-"}
-                  </span>
-                  {iceRecord && (
-                    <span
-                      className={`mt-0.5 block truncate text-[0.68rem] font-black ${
-                        isActive ? "text-white/88" : "text-[#1f4f35]"
-                      }`}
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      onClick={() => setSelectedDate(date)}
+                      className={`grid h-11 w-full grid-cols-[2.4rem_4.25rem_minmax(5rem,1fr)_2rem] items-center gap-2 border-l-4 border-t border-t-[#ece5dd] px-2 text-left transition first:border-t-0 ${
+                        isActive ? "ring-2 ring-inset ring-[#1a1815]" : ""
+                      } ${rowClass}`}
                     >
-                      IJs {iceRecord.iceCheckedAt ? "compleet" : "open"} ·{" "}
-                      {formatMoney(iceExpectedCash(iceRecord))}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                      <span className="text-sm font-black uppercase leading-none">
+                        {dayShortName(date).replace(".", "")}
+                      </span>
+                      <span className="text-base font-black leading-none">
+                        {date.slice(8, 10)}-{date.slice(5, 7)}
+                      </span>
+                      <span className="truncate text-sm font-black leading-none">
+                        {dayRecord
+                          ? formatMoney(cashRevenueAmount(dayRecord))
+                          : isClosed
+                            ? "gesloten"
+                            : "-"}
+                      </span>
+                      <span
+                        className={`text-center text-2xl font-black leading-none ${
+                          isMissing
+                            ? "text-[#d21f18]"
+                            : isChecked
+                              ? "text-[#2f6f43]"
+                              : "text-[#8b8278]"
+                        }`}
+                      >
+                        {isMissing ? "×" : isChecked ? "✓" : isClosed ? "" : "•"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
 
           <div className="mt-2">
@@ -2059,6 +2046,43 @@ export default function CashCountManager() {
                 value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
               />
             </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 rounded-md border border-[#ece5dd] bg-[#faf8f5] p-2 sm:grid-cols-2 lg:grid-cols-6">
+            <AmountCell
+              label="Pin"
+              value={formatMoney(selectedShopRow.includedPinRevenue)}
+            />
+            <AmountCell
+              label="Bonnen"
+              value={formatMoney(selectedShopRow.includedReceipts)}
+            />
+            <AmountCell
+              label="Kas uit"
+              value={formatMoney(selectedShopRow.includedCashOut)}
+            />
+            <AmountCell
+              label="Kasverschil"
+              tone={
+                Math.abs(selectedShopRow.includedCashDifference) > 5
+                  ? "warn"
+                  : "normal"
+              }
+              value={formatMoney(selectedShopRow.includedCashDifference)}
+            />
+            <AmountCell
+              label="Kluisverschil"
+              tone={Math.abs(selectedShopRow.difference) > 0.01 ? "warn" : "normal"}
+              value={formatMoney(selectedShopRow.difference)}
+            />
+            <AmountCell
+              label="Gestort"
+              value={
+                selectedShopRow.deposit?.depositedAt
+                  ? formatMoney(selectedShopRow.deposit.amount)
+                  : `${formatMoney(selectedShopRow.includedCheckedSafeCash)} te storten`
+              }
+            />
           </div>
 
           <div className="mt-3 grid gap-2 lg:grid-cols-[12rem_minmax(14rem,1fr)_auto] lg:items-end">
@@ -2456,33 +2480,6 @@ function AmountCell({
         {label}
       </p>
       <p className="whitespace-nowrap text-sm font-black leading-tight">{value}</p>
-    </div>
-  );
-}
-
-function StatBox({
-  label,
-  tone = "normal",
-  value,
-}: Readonly<{
-  label: string;
-  tone?: "normal" | "warn";
-  value: string;
-}>) {
-  return (
-    <div
-      className={`rounded-md border px-2 py-1 ${
-        tone === "warn"
-          ? "border-[#efd1a1] bg-[#fff8d8]"
-          : "border-[#e7e0d8] bg-white"
-      }`}
-    >
-      <p className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
-        {label}
-      </p>
-      <p className="truncate text-sm font-black leading-tight text-[#1a1815]">
-        {value}
-      </p>
     </div>
   );
 }
