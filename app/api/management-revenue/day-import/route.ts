@@ -77,7 +77,7 @@ type CashAmountMatch = {
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
-const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v1";
+const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v2";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -540,7 +540,7 @@ function extractFirstSignedAmount(pattern: RegExp, text: string) {
 }
 
 function extractVoucherPaymentAmount(text: string) {
-  return extractPaymentFormAmount(text, voucherPaymentLabelPattern);
+  return extractPaymentFormAmounts(text).vouchers;
 }
 
 function extractPaymentFormAmount(text: string, labelPattern: string) {
@@ -555,6 +555,72 @@ function extractPaymentFormAmount(text: string, labelPattern: string) {
       text
     )
   );
+}
+
+function roundPaymentAmount(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function deriveVoucherPaymentAmount(input: {
+  cash?: number;
+  pin?: number;
+  chip?: number;
+  cashless?: number;
+  ideal?: number;
+  creditcard?: number;
+  points?: number;
+  other?: number;
+  total?: number;
+}) {
+  if (input.total === undefined) return undefined;
+
+  const knownAmounts = [
+    input.cash,
+    input.pin,
+    input.chip,
+    input.cashless,
+    input.ideal,
+    input.creditcard,
+    input.points,
+    input.other,
+  ].filter((amount): amount is number => amount !== undefined);
+
+  if (knownAmounts.length < 4) return undefined;
+
+  const knownTotal = roundPaymentAmount(
+    knownAmounts.reduce((total, amount) => total + amount, 0)
+  );
+  const residual = roundPaymentAmount(input.total - knownTotal);
+
+  if (residual > 0.005 && residual <= input.total) return residual;
+  if (Math.abs(residual) <= 0.005) return 0;
+
+  return undefined;
+}
+
+function extractPaymentFormAmounts(text: string) {
+  const directVouchers = extractPaymentFormAmount(text, voucherPaymentLabelPattern);
+  const amounts = {
+    cash: extractPaymentFormAmount(text, "Contant"),
+    pin: extractPaymentFormAmount(text, "Pin"),
+    chip: extractPaymentFormAmount(text, "Chip"),
+    cashless: extractPaymentFormAmount(text, "Cashless"),
+    ideal: extractPaymentFormAmount(text, "Ideal"),
+    creditcard: extractPaymentFormAmount(text, "Creditcard"),
+    points: extractPaymentFormAmount(text, "Spaarpunten"),
+    vouchers: directVouchers,
+    other: extractPaymentFormAmount(text, "Overig"),
+    total: extractPaymentFormAmount(text, "Totaal"),
+  };
+  const derivedVouchers = deriveVoucherPaymentAmount(amounts);
+
+  return {
+    ...amounts,
+    vouchers:
+      directVouchers !== undefined && directVouchers > 0
+        ? directVouchers
+        : derivedVouchers ?? directVouchers,
+  };
 }
 
 function extractPaymentFormBlock(sectionText: string) {
