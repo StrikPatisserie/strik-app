@@ -109,6 +109,10 @@ export type RevenueCashDeposit = {
   cashRecordIds: string[];
   depositedAt?: string;
   depositedBy?: string;
+  closedAt?: string;
+  closedBy?: string;
+  cashbookBookedAt?: string;
+  cashbookBookedBy?: string;
   note?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -297,6 +301,10 @@ function compactCashDepositPayload(deposit: RevenueCashDeposit) {
     ids: deposit.cashRecordIds,
     da: deposit.depositedAt,
     db: deposit.depositedBy,
+    cla: deposit.closedAt,
+    clb: deposit.closedBy,
+    cba: deposit.cashbookBookedAt,
+    cbb: deposit.cashbookBookedBy,
     n: deposit.note,
     ca: deposit.createdAt,
     ua: deposit.updatedAt,
@@ -321,6 +329,10 @@ function expandCashDepositPayload(
     cashRecordIds: payload.cashRecordIds ?? payload.ids,
     depositedAt: payload.depositedAt ?? payload.da,
     depositedBy: payload.depositedBy ?? payload.db,
+    closedAt: payload.closedAt ?? payload.cla,
+    closedBy: payload.closedBy ?? payload.clb,
+    cashbookBookedAt: payload.cashbookBookedAt ?? payload.cba,
+    cashbookBookedBy: payload.cashbookBookedBy ?? payload.cbb,
     note: payload.note ?? payload.n,
     createdAt: payload.createdAt ?? payload.ca,
     updatedAt: payload.updatedAt ?? payload.ua,
@@ -762,6 +774,10 @@ export function normalizeRevenueCashDeposit(
     cashRecordIds,
     depositedAt: textFrom(value.depositedAt) || undefined,
     depositedBy: textFrom(value.depositedBy) || undefined,
+    closedAt: textFrom(value.closedAt) || undefined,
+    closedBy: textFrom(value.closedBy) || undefined,
+    cashbookBookedAt: textFrom(value.cashbookBookedAt) || undefined,
+    cashbookBookedBy: textFrom(value.cashbookBookedBy) || undefined,
     note: textFrom(value.note),
     createdAt: textFrom(value.createdAt) || undefined,
     updatedAt: textFrom(value.updatedAt) || undefined,

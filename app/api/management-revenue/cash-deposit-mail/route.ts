@@ -76,13 +76,6 @@ function formatMoney(value: number) {
   return euroFormatter.format(value);
 }
 
-function formatDayLabel(date: string) {
-  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return date;
-
-  return `${match[3]}-${match[2]}`;
-}
-
 function normalizeRows(rows: unknown) {
   if (!Array.isArray(rows)) return [];
 
@@ -130,28 +123,16 @@ function createMailBody(
 ) {
   const totalDeposit = rows.reduce((total, row) => total + row.depositAmount, 0);
   const lines = [
-    `Weekstorting overzicht`,
+    `Weekstorting`,
     `Week ${week} ${year} - ${weekLabel}`,
     "",
   ];
 
   rows.forEach((row) => {
-    lines.push(row.shop || "Onbekende winkel");
-    lines.push(`- Compleet: ${row.checkedCount}/${row.expectedCount}`);
-    lines.push(`- Winkelstorting: ${formatMoney(row.depositAmount)}`);
-    lines.push(`- Kasomzet: ${formatMoney(row.cashRevenue)}`);
-    lines.push(`- Kluis verwacht: ${formatMoney(row.expectedSafeCash)}`);
-    lines.push(`- Kluis geteld: ${formatMoney(row.checkedSafeCash)}`);
-    lines.push(`- Verschil: ${formatMoney(row.difference)}`);
-    if (row.depositNote) lines.push(`- Notitie: ${row.depositNote}`);
-    const daySummary = row.days
-      .filter((day) => day.checked)
-      .map((day) => `${formatDayLabel(day.date)} ${formatMoney(day.safeCash)}`)
-      .join(" | ");
-    if (daySummary) lines.push(`- Dagen: ${daySummary}`);
-    lines.push("");
+    lines.push(`${row.shop || "Onbekende winkel"}: ${formatMoney(row.depositAmount)}`);
   });
 
+  lines.push("");
   lines.push(`Totaal winkelstortingen: ${formatMoney(totalDeposit)}`);
   lines.push("");
   lines.push("Automatisch verstuurd vanuit de Strik Team app.");
@@ -192,7 +173,7 @@ export async function POST(request: Request) {
       .update(JSON.stringify({ year, week, rows }))
       .digest("hex")
       .slice(0, 10);
-    const subject = `Weekstorting week ${week} - ${weekLabel}`;
+    const subject = `Stortingen week ${week} - ${weekLabel}`;
     const order: PersonnelMailOrder = {
       id: `cash-deposit-summary-${year}-W${String(week).padStart(2, "0")}-${hash}`,
       mailType: "cash-deposit-summary",

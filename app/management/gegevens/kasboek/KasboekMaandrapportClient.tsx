@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   revenueShops,
+  type RevenueCashDeposit,
   type RevenueCashRecord,
   type RevenueData,
   type RevenueDayRecord,
+  type RevenueRecord,
   type RevenueShop,
 } from "@/app/management/revenueData";
 
-type LoadState = "loading" | "ready" | "error";
+type LoadState = "loading" | "ready" | "saving" | "error";
 
 type RevenueResponse = RevenueData & {
   storage?: {
@@ -208,6 +210,58 @@ function recordsByDate<T extends { date: string }>(records: T[]) {
 
     return map;
   }, new Map<string, T>());
+}
+
+function cashDepositTouchesMonth(
+  deposit: RevenueCashDeposit,
+  monthKey: string
+) {
+  const monthDates = datesInMonth(monthKey);
+  const monthStart = `${monthKey}-01`;
+  const monthEnd = monthDates.at(-1) || monthStart;
+  const depositStart =
+    deposit.dateFrom || deposit.dateTo || deposit.depositedAt?.slice(0, 10) || "";
+  const depositEnd =
+    deposit.dateTo || deposit.dateFrom || deposit.depositedAt?.slice(0, 10) || "";
+
+  if (!depositStart && !depositEnd) return false;
+
+  return depositStart <= monthEnd && depositEnd >= monthStart;
+}
+
+function buildMonthCashTotals(cashRecords: RevenueCashRecord[], month: string) {
+  const monthRecords = cashRecords.filter((record) => record.date.startsWith(month));
+  const patisserieRecords = monthRecords.filter(hasPatisserieCashRecord);
+  const iceRecords = monthRecords.filter(hasIceCashRecord);
+  const checkedPatisserieRecords = patisserieRecords.filter(
+    (record) => record.checkedAt
+  );
+  const checkedIceRecords = iceRecords.filter((record) => record.iceCheckedAt);
+
+  return {
+    cashRevenue: sumMoney(
+      patisserieRecords,
+      (record) => record.cashRevenue ?? safeExpectedCash(record)
+    ),
+    iceCashRevenue: sumMoney(
+      iceRecords,
+      (record) => record.iceCashRevenue ?? iceExpectedCash(record)
+    ),
+    checkedPatisserieCash: sumMoney(checkedPatisserieRecords, safeCheckedCash),
+    checkedIceCash: sumMoney(checkedIceRecords, iceCheckedCash),
+    receipts: roundMoney(
+      sumMoney(patisserieRecords, receiptAmount) +
+        sumMoney(iceRecords, (record) => record.iceReceipts)
+    ),
+    cashOut: roundMoney(
+      sumMoney(patisserieRecords, cashOutAmount) +
+        sumMoney(iceRecords, (record) => record.iceCashOut)
+    ),
+    cashDifference: roundMoney(
+      sumMoney(patisserieRecords, (record) => record.difference) +
+        sumMoney(iceRecords, (record) => record.iceDifference)
+    ),
+  };
 }
 
 function reportLineStatus(line: ReportLine) {
@@ -568,9 +622,11 @@ function ReportLineRow({ line }: Readonly<{ line: ReportLine }>) {
 }
 
 function ReportTable({ report }: Readonly<{ report: ShopReport }>) {
+  const detailCount = report.comments.length + report.warnings.length;
+
   return (
     <section className="rounded-lg border border-[#e7e0d8] bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-3 border-b border-[#ece5dc] px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ece5dc] px-3 py-2">
         <div>
           <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
             Locatie
@@ -591,7 +647,7 @@ function ReportTable({ report }: Readonly<{ report: ShopReport }>) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[52rem] border-collapse text-left">
+        <table className="w-full min-w-[48rem] border-collapse text-left">
           <thead>
             <tr className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
               <th className="sticky left-0 bg-white px-2 py-2 text-left">Soort</th>
@@ -613,33 +669,38 @@ function ReportTable({ report }: Readonly<{ report: ShopReport }>) {
         </table>
       </div>
 
-      {(report.comments.length > 0 || report.warnings.length > 0) && (
-        <div className="grid gap-2 border-t border-[#ece5dc] bg-[#fbfaf8] px-3 py-2 md:grid-cols-2">
-          {report.comments.length > 0 && (
-            <div>
-              <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                Opmerkingen
-              </p>
-              <ul className="mt-1 space-y-1 text-xs font-bold leading-snug text-[#4a433b]">
-                {report.comments.map((comment) => (
-                  <li key={comment}>{comment}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {report.warnings.length > 0 && (
-            <div>
-              <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                Datachecks
-              </p>
-              <ul className="mt-1 space-y-1 text-xs font-bold leading-snug text-[#8a5a10]">
-                {report.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+      {detailCount > 0 && (
+        <details className="border-t border-[#ece5dc] bg-[#fbfaf8] px-3 py-2">
+          <summary className="cursor-pointer text-xs font-black text-[#1a1815]">
+            Kasverschillen en datachecks ({detailCount})
+          </summary>
+          <div className="mt-2 grid gap-2 md:grid-cols-2">
+            {report.comments.length > 0 && (
+              <div>
+                <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+                  Herleiding
+                </p>
+                <ul className="mt-1 space-y-1 text-xs font-bold leading-snug text-[#4a433b]">
+                  {report.comments.map((comment) => (
+                    <li key={comment}>{comment}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {report.warnings.length > 0 && (
+              <div>
+                <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+                  Datachecks
+                </p>
+                <ul className="mt-1 space-y-1 text-xs font-bold leading-snug text-[#8a5a10]">
+                  {report.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </details>
       )}
     </section>
   );
@@ -647,8 +708,11 @@ function ReportTable({ report }: Readonly<{ report: ShopReport }>) {
 
 export default function KasboekMaandrapportClient() {
   const [month, setMonth] = useState(localMonthKey());
+  const [selectedShop, setSelectedShop] = useState<RevenueShop>(revenueShops[0]);
+  const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
   const [cashRecords, setCashRecords] = useState<RevenueCashRecord[]>([]);
+  const [cashDeposits, setCashDeposits] = useState<RevenueCashDeposit[]>([]);
   const [state, setState] = useState<LoadState>("loading");
   const [status, setStatus] = useState("");
   const [storage, setStorage] = useState<RevenueResponse["storage"]>();
@@ -676,14 +740,19 @@ export default function KasboekMaandrapportClient() {
         const nextCashRecords = Array.isArray(data.cashRecords)
           ? data.cashRecords
           : [];
+        const nextCashDeposits = Array.isArray(data.cashDeposits)
+          ? data.cashDeposits
+          : [];
         const latestDate =
           [...nextDailyRecords, ...nextCashRecords]
             .map((record) => record.date)
             .sort()
             .at(-1) || localIsoDate();
 
+        setRecords(Array.isArray(data.records) ? data.records : []);
         setDailyRecords(nextDailyRecords);
         setCashRecords(nextCashRecords);
+        setCashDeposits(nextCashDeposits);
         setStorage(data.storage);
         setMonth(latestDate.slice(0, 7));
         setState("ready");
@@ -718,10 +787,108 @@ export default function KasboekMaandrapportClient() {
     () => totalReportLine("IJs", reports.map((report) => report.ijs)),
     [reports]
   );
+  const selectedReport =
+    reports.find((report) => report.shop === selectedShop) || reports[0];
+  const monthCashTotals = useMemo(
+    () => buildMonthCashTotals(cashRecords, month),
+    [cashRecords, month]
+  );
+  const monthCashDeposits = useMemo(
+    () =>
+      cashDeposits.filter((deposit) => cashDepositTouchesMonth(deposit, month)),
+    [cashDeposits, month]
+  );
+  const monthDepositTotal = useMemo(
+    () => sumMoney(monthCashDeposits, (deposit) => deposit.amount),
+    [monthCashDeposits]
+  );
+  const isMonthCashbookBooked =
+    monthCashDeposits.length > 0 &&
+    monthCashDeposits.every((deposit) => deposit.cashbookBookedAt);
   const warningCount = reports.reduce(
     (total, report) => total + report.warnings.length,
     0
   );
+
+  async function markCashbookBooked() {
+    if (isMonthCashbookBooked) {
+      setStatus("Dit kasboek is al geboekt.");
+      return;
+    }
+    if (!monthCashDeposits.length) {
+      setStatus("Er zijn nog geen weekstortingen voor deze maand gevonden.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      [
+        `Wil je het kasboek van ${monthLabel(month)} als geboekt markeren?`,
+        "",
+        "Let op: hierna is dit kasboek gesloten.",
+      ].join("\n")
+    );
+    if (!confirmed) return;
+
+    const now = new Date().toISOString();
+    const nextCashDeposits = cashDeposits.map((deposit) => {
+      if (!cashDepositTouchesMonth(deposit, month)) return deposit;
+
+      return {
+        ...deposit,
+        cashbookBookedAt: deposit.cashbookBookedAt || now,
+        cashbookBookedBy: deposit.cashbookBookedBy || "Strik app",
+        updatedAt: now,
+      };
+    });
+
+    setState("saving");
+    setStatus("Kasboek boeken...");
+
+    try {
+      const response = await fetch("/api/management-revenue", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          records,
+          dailyRecords,
+          cashRecords,
+          cashDeposits: nextCashDeposits,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | RevenueResponse
+        | { message?: string }
+        | null;
+
+      if (!response.ok || !data || !("records" in data)) {
+        throw new Error(
+          (data && "message" in data && data.message) ||
+            "Kasboek boeken is mislukt."
+        );
+      }
+
+      setRecords(Array.isArray(data.records) ? data.records : records);
+      setDailyRecords(
+        Array.isArray(data.dailyRecords) ? data.dailyRecords : dailyRecords
+      );
+      setCashRecords(
+        Array.isArray(data.cashRecords) ? data.cashRecords : cashRecords
+      );
+      setCashDeposits(
+        Array.isArray(data.cashDeposits) ? data.cashDeposits : nextCashDeposits
+      );
+      setStorage(data.storage);
+      setStatus("Kasboek geboekt.");
+      setState("ready");
+    } catch (error) {
+      setStatus(
+        error instanceof Error ? error.message : "Kasboek boeken is mislukt."
+      );
+      setState("ready");
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -748,6 +915,24 @@ export default function KasboekMaandrapportClient() {
             </label>
             <button
               type="button"
+              onClick={() => void markCashbookBooked()}
+              disabled={state !== "ready" || isMonthCashbookBooked}
+              className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-black uppercase tracking-normal disabled:opacity-60 ${
+                isMonthCashbookBooked
+                  ? "border-[#cbdcc5] bg-[#edf7ec] text-[#1f4f35]"
+                  : "border-[#1a1815] bg-[#1a1815] text-white"
+              }`}
+              title={
+                isMonthCashbookBooked
+                  ? "Kasboek is geboekt"
+                  : "Kasboek boeken en sluiten"
+              }
+            >
+              <CashbookIcon />
+              {isMonthCashbookBooked ? "Kas geboekt" : "Kas boeken"}
+            </button>
+            <button
+              type="button"
               onClick={() => downloadCsv(month, reports)}
               disabled={state !== "ready"}
               className="rounded-md border border-[#24543a] bg-[#24543a] px-3 py-2 text-xs font-black uppercase tracking-normal text-white disabled:opacity-50"
@@ -765,6 +950,30 @@ export default function KasboekMaandrapportClient() {
           </div>
         </div>
 
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-[#f8f6f3] p-2">
+          <label className="text-xs font-black uppercase tracking-normal text-[#8b8278]">
+            Locatie
+            <select
+              value={selectedShop}
+              onChange={(event) =>
+                setSelectedShop(event.target.value as RevenueShop)
+              }
+              className="ml-2 min-w-[12rem] rounded-md border border-[#d8d0c7] bg-white px-2 py-1.5 text-sm font-black normal-case text-[#1a1815]"
+            >
+              {revenueShops.map((shop) => (
+                <option key={shop} value={shop}>
+                  {shop}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="text-xs font-bold text-[#6b645b]">
+            {isMonthCashbookBooked
+              ? "Deze maand is geboekt en gesloten."
+              : "Boek pas wanneer alle weekstortingen kloppen."}
+          </span>
+        </div>
+
         {storage?.status === "seed" && (
           <p className="mt-2 rounded-md border border-[#f3d4a4] bg-[#fef9f3] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
             {storage.message} Het rapport gebruikt dan mogelijk alleen seeddata.
@@ -778,24 +987,43 @@ export default function KasboekMaandrapportClient() {
       </section>
 
       <section className="rounded-lg border border-[#e7e0d8] bg-white/95 p-2 shadow-sm">
-        <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCell label="Winkel omzet" value={formatMoney(totalWinkel.revenue)} />
-          <MetricCell label="Winkel gestort" value={formatMoney(totalWinkel.deposited)} />
-          <MetricCell label="Pin betaald" value={formatMoney(totalWinkel.pinPaid)} />
+        <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+          <MetricCell label="Omzet winkel" value={formatMoney(totalWinkel.revenue)} />
+          <MetricCell
+            label="Contant winkel"
+            value={formatMoney(monthCashTotals.cashRevenue)}
+          />
+          <MetricCell label="Pin winkel" value={formatMoney(totalWinkel.pinPaid)} />
+          <MetricCell
+            label="Kadobonnen"
+            value={formatMoney(monthCashTotals.receipts)}
+          />
+          <MetricCell
+            label="Weekstortingen"
+            value={formatMoney(monthDepositTotal)}
+          />
           <MetricCell
             label="Open checks"
             value={String(warningCount)}
             warn={warningCount > 0}
           />
-        </div>
-        <div className="mt-1 grid gap-1 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCell label="IJs gestort" value={formatMoney(totalIjs.deposited)} />
-          <MetricCell label="Kadobonnen" value={formatMoney(totalWinkel.giftCards)} />
-          <MetricCell label="Kas-uit" value={formatMoney(totalWinkel.cashOut)} />
+          <MetricCell
+            label="Contant ijs"
+            value={formatMoney(monthCashTotals.iceCashRevenue)}
+          />
+          <MetricCell
+            label="Gestort winkel"
+            value={formatMoney(totalWinkel.deposited)}
+          />
+          <MetricCell label="Gestort ijs" value={formatMoney(totalIjs.deposited)} />
+          <MetricCell label="Kas-uit" value={formatMoney(monthCashTotals.cashOut)} />
           <MetricCell
             label="Kasverschil"
-            value={formatMoney(totalWinkel.cashDifference)}
-            warn={Boolean(totalWinkel.cashDifference && Math.abs(totalWinkel.cashDifference) > 0.01)}
+            value={formatMoney(monthCashTotals.cashDifference)}
+            warn={Boolean(
+              monthCashTotals.cashDifference &&
+                Math.abs(monthCashTotals.cashDifference) > 0.01
+            )}
           />
         </div>
       </section>
@@ -806,11 +1034,34 @@ export default function KasboekMaandrapportClient() {
         </section>
       ) : (
         <div className="grid gap-3 print:block print:space-y-3">
-          {reports.map((report) => (
-            <ReportTable key={report.shop} report={report} />
-          ))}
+          {selectedReport && <ReportTable report={selectedReport} />}
         </div>
       )}
     </div>
+  );
+}
+
+function CashbookIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M4 6.5h16v11H4z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path
+        d="M7 10h10M7 14h5M15.5 13.5l1.5 1.5 3-3"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
   );
 }

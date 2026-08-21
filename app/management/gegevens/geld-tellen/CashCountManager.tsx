@@ -50,6 +50,14 @@ const banknoteStyles: Record<string, { bg: string; border: string; text: string 
     eur5: { bg: "#c9c7c3", border: "#8d8881", text: "#22201d" },
   };
 
+function isCashDepositLocked(deposit: RevenueCashDeposit) {
+  return Boolean(deposit.closedAt || deposit.cashbookBookedAt);
+}
+
+function cashDepositLockedAt(deposit: RevenueCashDeposit) {
+  return deposit.closedAt || deposit.cashbookBookedAt || "";
+}
+
 function localIsoDate(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1018,6 +1026,23 @@ export default function CashCountManager() {
     weekExpectedCount > 0 &&
     weekMissingCount === 0 &&
     weekRows.every((row) => row.checkedCount >= row.expectedCount);
+  const selectedWeekDeposits = cashDeposits.filter(
+    (deposit) =>
+      deposit.year === selectedWeek.year && deposit.week === selectedWeek.week
+  );
+  const isSelectedWeekClosed =
+    selectedWeekDeposits.length >= revenueShops.length &&
+    revenueShops.every((shop) =>
+      selectedWeekDeposits.some(
+        (deposit) => deposit.shop === shop && isCashDepositLocked(deposit)
+      )
+    );
+  const selectedWeekClosedAt = selectedWeekDeposits.find(
+    (deposit) => cashDepositLockedAt(deposit)
+  );
+  const selectedWeekClosedAtLabel = selectedWeekClosedAt
+    ? cashDepositLockedAt(selectedWeekClosedAt)
+    : "";
   const availableWeeks = useMemo(() => {
     const byKey = new Map<string, { key: string; year: number; week: number }>();
 
@@ -1058,6 +1083,21 @@ export default function CashCountManager() {
     );
   }
 
+  function isCashRecordInClosedWeek(record: RevenueCashRecord) {
+    const depositsForWeek = cashDeposits.filter(
+      (deposit) => deposit.year === record.year && deposit.week === record.week
+    );
+
+    return (
+      depositsForWeek.length >= revenueShops.length &&
+      revenueShops.every((shop) =>
+        depositsForWeek.some(
+          (deposit) => deposit.shop === shop && isCashDepositLocked(deposit)
+        )
+      )
+    );
+  }
+
   function updateCashRecord(
     date: string,
     shop: RevenueShop,
@@ -1069,6 +1109,11 @@ export default function CashCountManager() {
   }
 
   async function markChecked(record: RevenueCashRecord) {
+    if (isCashRecordInClosedWeek(record)) {
+      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+      return;
+    }
+
     const key = `${record.date}:${record.shop}`;
     const now = new Date().toISOString();
     const nextCashRecords = buildUpdatedCashRecords(
@@ -1102,6 +1147,11 @@ export default function CashCountManager() {
   }
 
   async function unmarkChecked(record: RevenueCashRecord) {
+    if (isCashRecordInClosedWeek(record)) {
+      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+      return;
+    }
+
     const now = new Date().toISOString();
     const nextCashRecords = buildUpdatedCashRecords(
       cashRecords,
@@ -1129,6 +1179,11 @@ export default function CashCountManager() {
   }
 
   async function saveCashSourceCorrection(record: RevenueCashRecord) {
+    if (isCashRecordInClosedWeek(record)) {
+      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+      return;
+    }
+
     if (record.checkedAt) {
       setStatus("Heropen de dag eerst om startbedrag of sluitbedrag te wijzigen.");
       return;
@@ -1199,6 +1254,11 @@ export default function CashCountManager() {
   }
 
   async function saveIceCashSourceCorrection(record: RevenueCashRecord) {
+    if (isCashRecordInClosedWeek(record)) {
+      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+      return;
+    }
+
     if (record.iceCheckedAt) {
       setStatus("Heropen de ijstelling eerst om startbedrag of sluitbedrag te wijzigen.");
       return;
@@ -1266,6 +1326,11 @@ export default function CashCountManager() {
   }
 
   async function markIceChecked(record: RevenueCashRecord) {
+    if (isCashRecordInClosedWeek(record)) {
+      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+      return;
+    }
+
     const key = iceSafeDraftKey(record);
     const now = new Date().toISOString();
     const nextCashRecords = buildUpdatedCashRecords(
@@ -1294,6 +1359,11 @@ export default function CashCountManager() {
   }
 
   async function unmarkIceChecked(record: RevenueCashRecord) {
+    if (isCashRecordInClosedWeek(record)) {
+      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+      return;
+    }
+
     const now = new Date().toISOString();
     const nextCashRecords = buildUpdatedCashRecords(
       cashRecords,
@@ -1380,6 +1450,11 @@ export default function CashCountManager() {
   }
 
   async function saveDeposit(row: (typeof weekRows)[number]) {
+    if (isSelectedWeekClosed) {
+      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+      return;
+    }
+
     const now = new Date().toISOString();
     const draftKey = `${depositWeekKey}:${row.shop}`;
     const amount = parseAmount(
@@ -1401,6 +1476,10 @@ export default function CashCountManager() {
       cashRecordIds: checkedRecords.map((record) => record.id),
       depositedAt: now,
       depositedBy: "Strik app",
+      closedAt: row.deposit?.closedAt,
+      closedBy: row.deposit?.closedBy,
+      cashbookBookedAt: row.deposit?.cashbookBookedAt,
+      cashbookBookedBy: row.deposit?.cashbookBookedBy,
       note: depositNotes[draftKey] || row.deposit?.note || "",
       createdAt: row.deposit?.createdAt || now,
       updatedAt: now,
@@ -1414,7 +1493,7 @@ export default function CashCountManager() {
     await saveCash(nextDeposits);
   }
 
-  function buildWeekCashDeposits(sourceRecords = cashRecords) {
+  function buildWeekCashDeposits(sourceRecords = cashRecords, closeWeek = false) {
     const now = new Date().toISOString();
     const weekShops = new Set(weekRows.map((row) => row.shop));
     const deposits = weekRows.map((row) => {
@@ -1451,6 +1530,10 @@ export default function CashCountManager() {
         cashRecordIds: checkedRecords.map((record) => record.id),
         depositedAt: row.deposit?.depositedAt || now,
         depositedBy: row.deposit?.depositedBy || "Strik app",
+        closedAt: closeWeek ? row.deposit?.closedAt || now : row.deposit?.closedAt,
+        closedBy: closeWeek ? row.deposit?.closedBy || "Strik app" : row.deposit?.closedBy,
+        cashbookBookedAt: row.deposit?.cashbookBookedAt,
+        cashbookBookedBy: row.deposit?.cashbookBookedBy,
         note: depositNotes[draftKey] || row.deposit?.note || "",
         createdAt: row.deposit?.createdAt || now,
         updatedAt: now,
@@ -1538,12 +1621,26 @@ export default function CashCountManager() {
   }
 
   async function sendWeekDepositMail() {
+    if (isSelectedWeekClosed) {
+      setStatus("Deze weekstorting is al definitief gesloten.");
+      return;
+    }
+
     if (!isSelectedWeekComplete) {
       setStatus("Weekstorting kan pas worden gemaild als alle verwachte dagen compleet zijn.");
       return;
     }
 
-    const nextDeposits = buildWeekCashDeposits(cashRecords);
+    const confirmed = window.confirm(
+      [
+        "Wil je de storting bevestigen en mailen naar administratie?",
+        "",
+        "Let op: hierna kun je niets meer wijzigen in deze week.",
+      ].join("\n")
+    );
+    if (!confirmed) return;
+
+    const nextDeposits = buildWeekCashDeposits(cashRecords, true);
     setCashDeposits(nextDeposits);
     setMailState("sending");
 
@@ -1697,23 +1794,41 @@ export default function CashCountManager() {
             <button
               type="button"
               onClick={() => void sendWeekDepositMail()}
-              aria-label="Mail weekstorting naar administratie"
+              aria-label="Storting bevestigen en mailen naar administratie"
               disabled={
+                isSelectedWeekClosed ||
                 !isSelectedWeekComplete ||
                 state === "saving" ||
                 mailState === "sending"
               }
               title={
-                isSelectedWeekComplete
-                  ? "Mail weekstorting naar administratie"
+                isSelectedWeekClosed
+                  ? "Week is definitief gesloten"
+                  : isSelectedWeekComplete
+                    ? "Storting bevestigen en mailen naar administratie"
                   : "Alle verwachte dagen eerst afvinken"
               }
               className="flex h-9 items-center justify-center rounded-md border border-[#1a1815] bg-[#1a1815] px-2 text-white disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
             >
-              <MailIcon />
+              <BankIcon />
             </button>
           </div>
         </div>
+
+        {isSelectedWeekClosed ? (
+          <p className="mt-2 rounded-md border border-[#cbdcc5] bg-[#f6fbf5] px-2 py-1.5 text-xs font-bold text-[#1f4f35]">
+            Week definitief gesloten
+            {selectedWeekClosedAtLabel
+              ? ` op ${selectedWeekClosedAtLabel.slice(0, 10)}`
+              : ""}
+            . Deze week kan niet meer worden gewijzigd.
+          </p>
+        ) : isSelectedWeekComplete ? (
+          <p className="mt-2 rounded-md border border-[#efd1a1] bg-[#fff8d8] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
+            Let op: na storting bevestigen en mailen naar administratie kun je
+            niets meer wijzigen in deze week.
+          </p>
+        ) : null}
 
         {storage?.status === "seed" && (
           <p className="mt-2 rounded-md border border-[#f3d4a4] bg-[#fef9f3] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
@@ -1869,7 +1984,7 @@ export default function CashCountManager() {
                     <input
                       type="checkbox"
                       checked={Boolean(selectedCashRecord.checkedAt)}
-                      disabled={state === "saving"}
+                      disabled={state === "saving" || isSelectedWeekClosed}
                       onChange={() => void toggleChecked(selectedCashRecord)}
                       className="mt-0.5 h-4 w-4 accent-[#1f4f35]"
                     />
@@ -1941,7 +2056,7 @@ export default function CashCountManager() {
                   <button
                     type="button"
                     onClick={() => void toggleChecked(selectedCashRecord)}
-                    disabled={state === "saving"}
+                    disabled={state === "saving" || isSelectedWeekClosed}
                     className={`h-9 rounded-md border px-2 text-[0.62rem] font-black uppercase tracking-normal disabled:opacity-60 ${
                       selectedCashRecord.checkedAt
                         ? "border-[#d9d2c9] bg-white text-[#6b645b]"
@@ -1956,7 +2071,8 @@ export default function CashCountManager() {
                   <CashNoteControl
                     disabled={
                       Boolean(selectedCashRecord.checkedAt) ||
-                      state === "saving"
+                      state === "saving" ||
+                      isSelectedWeekClosed
                     }
                     drafts={cashNoteDrafts}
                     onChange={(key, value) =>
@@ -1986,7 +2102,8 @@ export default function CashCountManager() {
                           inputMode="decimal"
                           disabled={
                             Boolean(selectedCashRecord.checkedAt) ||
-                            state === "saving"
+                            state === "saving" ||
+                            isSelectedWeekClosed
                           }
                           placeholder="0,00"
                           className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
@@ -2009,7 +2126,8 @@ export default function CashCountManager() {
                           inputMode="decimal"
                           disabled={
                             Boolean(selectedCashRecord.checkedAt) ||
-                            state === "saving"
+                            state === "saving" ||
+                            isSelectedWeekClosed
                           }
                           placeholder="0,00"
                           className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
@@ -2024,6 +2142,7 @@ export default function CashCountManager() {
                         disabled={
                           Boolean(selectedCashRecord.checkedAt) ||
                           state === "saving" ||
+                          isSelectedWeekClosed ||
                           !selectedHasSourceCorrection
                         }
                         className="h-8 rounded-md border border-[#1a1815] bg-[#1a1815] px-2 text-[0.58rem] font-black uppercase tracking-normal text-white disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
@@ -2045,7 +2164,8 @@ export default function CashCountManager() {
                         inputMode="decimal"
                         disabled={
                           Boolean(selectedCashRecord.checkedAt) ||
-                          state === "saving"
+                          state === "saving" ||
+                          isSelectedWeekClosed
                         }
                         placeholder="0,00"
                         className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
@@ -2079,7 +2199,8 @@ export default function CashCountManager() {
                         }
                         disabled={
                           Boolean(selectedCashRecord.checkedAt) ||
-                          state === "saving"
+                          state === "saving" ||
+                          isSelectedWeekClosed
                         }
                         placeholder="Bijv. kas-uitbon ontbreekt of bedrag gecorrigeerd"
                         className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
@@ -2098,7 +2219,7 @@ export default function CashCountManager() {
               </>
             ) : selectedIceCashRecord ? (
               <IceCashSummary
-                disabled={state === "saving"}
+                disabled={state === "saving" || isSelectedWeekClosed}
                 draftDifference={selectedIceSafeDraftDifference}
                 hasSourceCorrection={selectedHasIceSourceCorrection}
                 inputValue={selectedIceSafeInputValue}
@@ -2241,6 +2362,7 @@ export default function CashCountManager() {
                   }))
                 }
                 inputMode="decimal"
+                disabled={isSelectedWeekClosed}
                 placeholder="0,00"
                 className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
               />
@@ -2262,18 +2384,25 @@ export default function CashCountManager() {
                 placeholder={
                   selectedShopRow.deposit?.depositedAt ? "al gestort" : "optioneel"
                 }
+                disabled={isSelectedWeekClosed}
                 className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
               />
             </label>
             <button
               type="button"
               onClick={() => void saveDeposit(selectedShopRow)}
-              disabled={state === "saving" || selectedShopRow.checkedCount === 0}
+              disabled={
+                isSelectedWeekClosed ||
+                state === "saving" ||
+                selectedShopRow.checkedCount === 0
+              }
               className="h-9 rounded-md bg-[#c3d3bc] px-3 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815] disabled:opacity-50"
             >
-              {selectedShopRow.deposit?.depositedAt
-                ? "Storting bijwerken"
-                : "Storting opslaan"}
+              {isSelectedWeekClosed
+                ? "Week gesloten"
+                : selectedShopRow.deposit?.depositedAt
+                  ? "Storting bijwerken"
+                  : "Storting opslaan"}
             </button>
           </div>
         </section>
@@ -2543,21 +2672,24 @@ function CashNoteControl({
 
   return (
     <div className="min-w-0">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
           Briefjescontrole
         </p>
-        <p className="truncate text-[0.58rem] font-bold text-[#8b8278]">
-          {record.countedBy || "teller onbekend"}
-        </p>
-      </div>
-      <div className="mt-1 overflow-hidden rounded-md border border-[#e7e0d8] bg-white">
-        <div className="grid grid-cols-[4.6rem_4.5rem_5rem_minmax(5.5rem,1fr)] border-b border-[#e7e0d8] bg-[#f8f6f3] px-2 py-1 text-[0.54rem] font-black uppercase tracking-normal text-[#8b8278]">
-          <span>Briefje</span>
-          <span>Geteld</span>
-          <span>Werkelijk</span>
-          <span>Verschil</span>
+        <div className="flex flex-wrap items-center gap-2 text-[0.58rem] font-bold text-[#8b8278]">
+          <span>{record.countedBy || "teller onbekend"}</span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[0.56rem] font-black ${
+              totalDifference === 0
+                ? "bg-[#edf7ec] text-[#1f4f35]"
+                : "bg-[#fff8d8] text-[#7a5417]"
+            }`}
+          >
+            Verschil {formatMoney(totalDifference)}
+          </span>
         </div>
+      </div>
+      <div className="mt-1 grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {banknoteDenominations.map((denomination) => {
           const expected = cashNoteCount(record, denomination.key);
           const inputValue = cashNoteInputValue(record, denomination.key, drafts);
@@ -2570,37 +2702,53 @@ function CashNoteControl({
           return (
             <div
               key={denomination.key}
-              className="grid grid-cols-[4.6rem_4.5rem_5rem_minmax(5.5rem,1fr)] items-center border-b border-[#eee7df] px-2 py-1 last:border-b-0"
+              className="grid gap-1 rounded-md border border-[#e7e0d8] bg-white p-1.5"
             >
-              <CashNote denomination={denomination} />
-              <span className="text-xs font-black text-[#1a1815]">
-                {expected}
-              </span>
-              <input
-                value={inputValue}
-                onChange={(event) => onChange(denomination.key, event.target.value)}
-                inputMode="numeric"
-                disabled={disabled}
-                className="h-7 w-14 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black text-[#1a1815] disabled:opacity-60"
-              />
+              <div className="flex items-center justify-between gap-1">
+                <CashNote denomination={denomination} />
+                <span
+                  className={`text-[0.62rem] font-black ${
+                    valueDifference === 0 ? "text-[#6b645b]" : "text-[#7a5417]"
+                  }`}
+                >
+                  {countDifference > 0 ? "+" : ""}
+                  {countDifference}
+                </span>
+              </div>
+              <div className="grid grid-cols-[1fr_3.1rem] items-end gap-1">
+                <div>
+                  <p className="text-[0.5rem] font-black uppercase tracking-normal text-[#8b8278]">
+                    PDF
+                  </p>
+                  <p className="text-sm font-black leading-tight text-[#1a1815]">
+                    {expected}
+                  </p>
+                </div>
+                <label className="grid gap-0.5">
+                  <span className="text-[0.5rem] font-black uppercase tracking-normal text-[#8b8278]">
+                    Tel
+                  </span>
+                  <input
+                    value={inputValue}
+                    onChange={(event) =>
+                      onChange(denomination.key, event.target.value)
+                    }
+                    inputMode="numeric"
+                    disabled={disabled}
+                    className="h-7 w-full rounded-md border border-[#d9d2c9] bg-white px-1.5 text-center text-sm font-black text-[#1a1815] disabled:opacity-60"
+                  />
+                </label>
+              </div>
               <span
-                className={`text-xs font-black ${
+                className={`text-[0.6rem] font-black ${
                   valueDifference === 0 ? "text-[#6b645b]" : "text-[#7a5417]"
                 }`}
               >
-                {countDifference > 0 ? "+" : ""}
-                {countDifference} · {formatMoney(valueDifference)}
+                {formatMoney(valueDifference)}
               </span>
             </div>
           );
         })}
-      </div>
-      <div
-        className={`mt-1 text-right text-xs font-black ${
-          totalDifference === 0 ? "text-[#6b645b]" : "text-[#7a5417]"
-        }`}
-      >
-        Briefjesverschil: {formatMoney(totalDifference)}
       </div>
     </div>
   );
@@ -2630,7 +2778,7 @@ function CashNote({
   );
 }
 
-function MailIcon() {
+function BankIcon() {
   return (
     <svg
       aria-hidden="true"
@@ -2639,14 +2787,14 @@ function MailIcon() {
       viewBox="0 0 24 24"
     >
       <path
-        d="M4 6.5h16v11H4z"
+        d="m3 9 9-5 9 5"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="2"
       />
       <path
-        d="m5 7 7 6 7-6"
+        d="M5 9h14M6.5 9v8M11 9v8M15.5 9v8M4 17h16M3 20h18"
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
