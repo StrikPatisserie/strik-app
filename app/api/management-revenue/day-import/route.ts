@@ -74,10 +74,28 @@ type CashAmountMatch = {
   raw: string;
 };
 
+type CashItTemplateAmounts = {
+  startCash?: number;
+  cash?: number;
+  pin?: number;
+  chip?: number;
+  cashless?: number;
+  ideal?: number;
+  creditcard?: number;
+  points?: number;
+  vouchers?: number;
+  other?: number;
+  total?: number;
+  rounding?: number;
+  cashRevenue?: number;
+  expectedCash?: number;
+  difference?: number;
+};
+
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
-const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v2";
+const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v3";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -490,7 +508,7 @@ function extractCashReportSections(text: string) {
 }
 
 function extractCashSectionPaymentTotal(sectionText: string) {
-  return extractPaymentFormAmount(sectionText, "Totaal");
+  return extractPaymentFormAmounts(sectionText).total;
 }
 
 function extractShopAmountsFromCashSections(text: string): ShopAmountMatch[] {
@@ -557,6 +575,82 @@ function extractPaymentFormAmount(text: string, labelPattern: string) {
   );
 }
 
+function sliceCashItTemplateBlock(
+  text: string,
+  startPattern: RegExp,
+  endPattern?: RegExp
+) {
+  const match = text.match(startPattern);
+  if (!match || match.index === undefined) return "";
+
+  const startIndex = match.index + match[0].length;
+  const source = text.slice(startIndex);
+  const endIndex = endPattern ? source.search(endPattern) : -1;
+
+  return endIndex >= 0 ? source.slice(0, endIndex) : source;
+}
+
+function extractCashItAfterCloseBlock(text: string) {
+  return sliceCashItTemplateBlock(
+    text,
+    /Sluiten\s+kassa\s+locatie[^\n]*/i,
+    /\b(?:Correctie|Artikelgroep\s+totalen|Pagina)\b/i
+  );
+}
+
+function templateAmountAt(matches: CashAmountMatch[], index: number) {
+  return matches[index]?.amount;
+}
+
+function extractCashItTemplateAmounts(text: string): CashItTemplateAmounts {
+  const afterClose = extractCashItAfterCloseBlock(text);
+  if (!afterClose) return {};
+
+  const headerAmounts = usablePaymentAmounts(
+    sliceCashItTemplateBlock(afterClose, /^/i, /\bKas\s*-?\s*uit\b/i)
+  );
+  const creditAmounts = usablePaymentAmounts(
+    sliceCashItTemplateBlock(
+      afterClose,
+      /\bCreditcard\s*:/i,
+      /\bIdeal\s*:/i
+    )
+  );
+  const idealAmounts = usablePaymentAmounts(
+    sliceCashItTemplateBlock(
+      afterClose,
+      /\bIdeal\s*:/i,
+      /\bNiet\s+gekoppeld\b/i
+    )
+  );
+  const linkedAmounts = usablePaymentAmounts(
+    sliceCashItTemplateBlock(
+      afterClose,
+      /\bNiet\s+gekoppeld\b/i,
+      /\b(?:Correctie|Artikelgroep\s+totalen|Pagina)\b/i
+    )
+  );
+
+  return {
+    startCash: templateAmountAt(headerAmounts, 0),
+    total: templateAmountAt(headerAmounts, 1),
+    chip: templateAmountAt(headerAmounts, 2),
+    other: templateAmountAt(headerAmounts, 3),
+    rounding: templateAmountAt(headerAmounts, 4),
+    creditcard: templateAmountAt(creditAmounts, 0),
+    vouchers: templateAmountAt(creditAmounts, 1),
+    points: templateAmountAt(creditAmounts, 2),
+    cashless: templateAmountAt(idealAmounts, 0),
+    ideal: templateAmountAt(idealAmounts, 1),
+    pin: templateAmountAt(linkedAmounts, 0),
+    cash: templateAmountAt(linkedAmounts, 1),
+    cashRevenue:
+      templateAmountAt(linkedAmounts, 2) ?? templateAmountAt(linkedAmounts, 1),
+    expectedCash: templateAmountAt(linkedAmounts, 3),
+    difference: templateAmountAt(linkedAmounts, 4),
+  };
+}
+
 function roundPaymentAmount(value: number) {
   return Number(value.toFixed(2));
 }
@@ -599,18 +693,31 @@ function deriveVoucherPaymentAmount(input: {
 }
 
 function extractPaymentFormAmounts(text: string) {
-  const directVouchers = extractPaymentFormAmount(text, voucherPaymentLabelPattern);
+  const templateAmounts = extractCashItTemplateAmounts(text);
+  const directVouchers = firstNumber(
+    templateAmounts.vouchers,
+    extractPaymentFormAmount(text, voucherPaymentLabelPattern)
+  );
   const amounts = {
-    cash: extractPaymentFormAmount(text, "Contant"),
-    pin: extractPaymentFormAmount(text, "Pin"),
-    chip: extractPaymentFormAmount(text, "Chip"),
-    cashless: extractPaymentFormAmount(text, "Cashless"),
-    ideal: extractPaymentFormAmount(text, "Ideal"),
-    creditcard: extractPaymentFormAmount(text, "Creditcard"),
-    points: extractPaymentFormAmount(text, "Spaarpunten"),
+    cash: firstNumber(templateAmounts.cash, extractPaymentFormAmount(text, "Contant")),
+    pin: firstNumber(templateAmounts.pin, extractPaymentFormAmount(text, "Pin")),
+    chip: firstNumber(templateAmounts.chip, extractPaymentFormAmount(text, "Chip")),
+    cashless: firstNumber(
+      templateAmounts.cashless,
+      extractPaymentFormAmount(text, "Cashless")
+    ),
+    ideal: firstNumber(templateAmounts.ideal, extractPaymentFormAmount(text, "Ideal")),
+    creditcard: firstNumber(
+      templateAmounts.creditcard,
+      extractPaymentFormAmount(text, "Creditcard")
+    ),
+    points: firstNumber(
+      templateAmounts.points,
+      extractPaymentFormAmount(text, "Spaarpunten")
+    ),
     vouchers: directVouchers,
-    other: extractPaymentFormAmount(text, "Overig"),
-    total: extractPaymentFormAmount(text, "Totaal"),
+    other: firstNumber(templateAmounts.other, extractPaymentFormAmount(text, "Overig")),
+    total: firstNumber(templateAmounts.total, extractPaymentFormAmount(text, "Totaal")),
   };
   const derivedVouchers = deriveVoucherPaymentAmount(amounts);
 
@@ -763,6 +870,8 @@ function extractCashDenominations(sectionText: string) {
 }
 
 function extractCashRecordAmounts(sectionText: string) {
+  const templateAmounts = extractCashItTemplateAmounts(sectionText);
+  const paymentAmounts = extractPaymentFormAmounts(sectionText);
   const correctionIndex = sectionText.search(/\bCorrectie\b/i);
   const beforeCorrection =
     correctionIndex >= 0 ? sectionText.slice(0, correctionIndex) : sectionText;
@@ -797,16 +906,25 @@ function extractCashRecordAmounts(sectionText: string) {
     /\bKas\s*-?\s*uit\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
     sectionText
   );
-  const receipts = extractVoucherPaymentAmount(sectionText);
 
   return {
     countedCash,
-    startCash: startCash ?? afterCloseAmounts[0]?.amount,
-    cashRevenue: cashRevenue ?? (tail.length >= 5 ? tail[2]?.amount : undefined),
+    startCash: templateAmounts.startCash ?? startCash ?? afterCloseAmounts[0]?.amount,
+    cashRevenue:
+      templateAmounts.cashRevenue ??
+      paymentAmounts.cash ??
+      cashRevenue ??
+      (tail.length >= 5 ? tail[2]?.amount : undefined),
     cashOut,
-    receipts,
-    expectedCash: expectedCash ?? (tail.length >= 5 ? tail[3]?.amount : undefined),
-    difference: difference ?? (tail.length >= 5 ? tail[4]?.amount : undefined),
+    receipts: paymentAmounts.vouchers,
+    expectedCash:
+      templateAmounts.expectedCash ??
+      expectedCash ??
+      (tail.length >= 5 ? tail[3]?.amount : undefined),
+    difference:
+      templateAmounts.difference ??
+      difference ??
+      (tail.length >= 5 ? tail[4]?.amount : undefined),
   };
 }
 
