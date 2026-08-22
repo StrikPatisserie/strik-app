@@ -65,25 +65,37 @@ function ArendNumberValue({
 }>) {
   const chars = Array.from(displayNumber);
   const hasZero = chars.includes("O");
+  const isTightNumber = chars.length >= 3;
 
   return (
     <div
       className={`arend-number mt-[-0.7mm] flex items-center justify-center text-center leading-none ${
-        hasZero ? "gap-[0.4mm]" : ""
+        isTightNumber ? "gap-0" : hasZero ? "gap-[0.4mm]" : ""
       } ${isDark ? "text-[#f7f4f1]" : "text-[#313130]"}`}
     >
-      {chars.map((char, index) => (
-        <span
-          key={`${displayNumber}-${index}`}
-          className={
-            char === "O"
-              ? "arend-number-zero inline-block origin-center scale-x-[0.82] text-[15.1mm]"
-              : "inline-block text-[15.6mm]"
-          }
-        >
-          {char}
-        </span>
-      ))}
+      {chars.map((char, index) => {
+        const isZero = char === "O";
+
+        return (
+          <span
+            key={`${displayNumber}-${index}`}
+            className={
+              isTightNumber
+                ? isZero
+                  ? "arend-number-zero inline-block origin-center scale-x-[0.72] text-[12.7mm]"
+                  : "inline-block text-[13.2mm]"
+                : isZero
+                  ? "arend-number-zero inline-block origin-center scale-x-[0.82] text-[15.1mm]"
+                  : "inline-block text-[15.6mm]"
+            }
+            style={
+              isTightNumber && index > 0 ? { marginLeft: "-2mm" } : undefined
+            }
+          >
+            {char}
+          </span>
+        );
+      })}
     </div>
   );
 }
