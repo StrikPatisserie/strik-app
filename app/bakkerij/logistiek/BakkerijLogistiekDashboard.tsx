@@ -639,12 +639,11 @@ function createDateState(): DateState {
   const now = new Date();
   const today = toInputDate(now);
   const nextLogisticsDate = toInputDate(nextLogisticsDateFor(now));
-  const isWeekend = now.getDay() === 0 || now.getDay() === 6;
 
   return {
     today,
     tomorrow: nextLogisticsDate,
-    selectedDate: isWeekend ? nextLogisticsDate : today,
+    selectedDate: today,
     hour: now.getHours(),
     minute: now.getMinutes(),
   };
@@ -654,11 +653,8 @@ function syncDateState(current: DateState): DateState {
   const next = createDateState();
   let selectedDate = current.selectedDate;
 
-  if (
-    current.selectedDate === current.today ||
-    (current.selectedDate === current.tomorrow && current.selectedDate < next.today)
-  ) {
-    selectedDate = next.selectedDate;
+  if (current.today !== next.today && current.selectedDate === current.today) {
+    selectedDate = next.today;
   }
 
   if (
