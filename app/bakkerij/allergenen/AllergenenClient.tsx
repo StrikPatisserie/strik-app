@@ -76,6 +76,27 @@ function sourcesForIngredient(allergen: AllergenName, ingredientName: string) {
   return matches.length ? Array.from(new Set(matches)) : [fallback];
 }
 
+const specifiedAllergens: AllergenName[] = ["Gluten", "Noten"];
+
+function allergenSpecification(allergen: AllergenName, value = "") {
+  if (!specifiedAllergens.includes(allergen)) return "";
+  const options = allergen === "Gluten"
+    ? ["tarwe", "rogge", "gerst", "haver", "spelt", "khorasan", "durum"]
+    : ["amandel", "hazelnoot", "walnoot", "cashewnoot", "pecannoot", "paranoot", "pistache", "macadamianoot"];
+  return options.filter((option) => new RegExp(`\\b${option}\\b`, "i").test(value)).join(", ");
+}
+
+function formatSpecifications(line: Pick<AllergenListLine, "allergens" | "origins">) {
+  return specifiedAllergens
+    .filter((allergen) => line.allergens.includes(allergen))
+    .map((allergen) => {
+      const value = allergenSpecification(allergen, line.origins[allergen]);
+      return value ? `${allergen}: ${value}` : "";
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
 function normalizeAllergen(value: string): AllergenName | null {
   const key = value.toLocaleLowerCase("nl-NL").replace(/[^a-z]+/g, "_").replace(/^_|_$/g, "");
   return allergenAliases[key] ?? null;
@@ -340,13 +361,13 @@ export default function AllergenenClient() {
         {!draft && !archiveOpen && (
           <section className="rounded-xl border border-[#d6e5d8] bg-white p-3 shadow-sm">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div><h2 className="text-lg font-black">Alle producten uit recepturen</h2><p className="text-xs text-[#6f685f]">Allergenen en oorsprong worden uit grondstoffen en halffabricaten opgebouwd.</p></div>
+              <div><h2 className="text-lg font-black">Alle producten uit recepturen</h2><p className="text-xs text-[#6f685f]">Allergenen en de specifieke graan- en nootsoorten worden uit grondstoffen en halffabricaten opgebouwd.</p></div>
               <input className="allergen-input max-w-xs" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zoek product..." />
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[680px] border-collapse text-sm">
-                <thead><tr className="border-b-2 border-[#c3d3bc] text-left"><th className="p-2">Artikel</th><th className="p-2">Aanwezige allergenen</th><th className="p-2">Oorsprong</th></tr></thead>
-                <tbody>{products.map(({ recipe, allergens, origins }) => <tr key={recipe.id} className="border-b border-[#ece8e2] align-top"><td className="p-2 font-bold">{recipe.name}</td><td className="p-2"><div className="flex flex-wrap gap-1">{allergens.length ? allergens.map((item) => <AllergenIcon key={item} allergen={item} small />) : <span className="text-[#8b8278]">Geen geregistreerd</span>}</div></td><td className="p-2 text-xs text-[#5f5952]">{allergens.map((item) => origins[item]).filter(Boolean).join("; ") || "-"}</td></tr>)}</tbody>
+                <thead><tr className="border-b-2 border-[#c3d3bc] text-left"><th className="p-2">Artikel</th><th className="p-2">Aanwezige allergenen</th><th className="p-2">Specificatie</th></tr></thead>
+                <tbody>{products.map(({ recipe, allergens, origins }) => <tr key={recipe.id} className="border-b border-[#ece8e2] align-top"><td className="p-2 font-bold">{recipe.name}</td><td className="p-2"><div className="flex flex-wrap gap-1">{allergens.length ? allergens.map((item) => <AllergenIcon key={item} allergen={item} small />) : <span className="text-[#8b8278]">Geen geregistreerd</span>}</div></td><td className="p-2 text-xs text-[#5f5952]">{formatSpecifications({ allergens, origins }) || "-"}</td></tr>)}</tbody>
               </table>
             </div>
           </section>
@@ -364,7 +385,7 @@ export default function AllergenenClient() {
             <section className="allergen-editor rounded-xl border border-[#d6e5d8] bg-white p-3 shadow-sm">
               <div className="grid gap-2 sm:grid-cols-3"><label className="text-xs font-black">Voor klant<input className="allergen-input mt-1" value={draft.customerName} onChange={(event) => updateDraft({ customerName: event.target.value })} placeholder="Bijv. Radboud" /></label><label className="text-xs font-black">Contactpersoon<input className="allergen-input mt-1" value={draft.contactName} onChange={(event) => updateDraft({ contactName: event.target.value })} /></label><label className="text-xs font-black">Referentie / assortiment<input className="allergen-input mt-1" value={draft.reference} onChange={(event) => updateDraft({ reference: event.target.value })} /></label></div>
               <div className="mt-3 flex flex-wrap gap-2"><select className="allergen-input min-w-[260px] flex-1" value={recipeChoice} onChange={(event) => setRecipeChoice(event.target.value)}><option value="">Kies een gekoppeld recept...</option>{data.recipes.filter((recipe) => recipe.type === "finalProduct" && recipe.status !== "old").sort((a,b) => a.name.localeCompare(b.name,"nl")).map((recipe) => <option key={recipe.id} value={recipe.id}>{recipe.name}</option>)}</select><button className="allergen-small-button" onClick={addRecipe}>Recept toevoegen</button><button className="allergen-small-button" onClick={addTemporaryProduct}>Tijdelijk product toevoegen</button></div>
-              <div className="mt-4 grid gap-3">{draft.lines.map((line, index) => <article key={line.id} className="rounded-lg border border-[#ddd7cf] p-3"><div className="flex items-center gap-2"><span className="text-xs font-black text-[#8b8278]">{index + 1}</span><input className="allergen-input font-black" value={line.productName} onChange={(event) => updateLine(line.id, { productName: event.target.value })} /><button className="px-2 text-xl text-red-700" aria-label="Product verwijderen" onClick={() => updateDraft({ lines: draft.lines.filter((item) => item.id !== line.id) })}>×</button></div><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">{ALLERGENS.map((allergen) => { const selected = line.allergens.includes(allergen); return <button key={allergen} type="button" className={`relative flex min-h-20 flex-col items-center justify-center rounded-lg border p-1 text-[0.62rem] font-bold ${selected ? "border-[#496b3f] bg-[#edf5ea]" : "border-[#e5e0d9] bg-white opacity-65"}`} onClick={() => toggleAllergen(line, allergen)}><AllergenIcon allergen={allergen} />{selected && <span className="absolute right-1 top-0 text-lg font-black text-[#31552a]">×</span>}<span>{allergen}</span></button>; })}</div>{line.allergens.length > 0 && <div className="mt-3 grid gap-2 sm:grid-cols-2">{line.allergens.map((allergen) => <label key={allergen} className="text-xs font-bold">Oorsprong {allergen}<input className="allergen-input mt-1" value={line.origins[allergen] ?? ""} onChange={(event) => updateLine(line.id, { origins: { ...line.origins, [allergen]: event.target.value } })} placeholder="Bijv. tarwe, amandel" /></label>)}</div>}</article>)}</div>
+              <div className="mt-4 grid gap-3">{draft.lines.map((line, index) => <article key={line.id} className="rounded-lg border border-[#ddd7cf] p-3"><div className="flex items-center gap-2"><span className="text-xs font-black text-[#8b8278]">{index + 1}</span><input className="allergen-input font-black" value={line.productName} onChange={(event) => updateLine(line.id, { productName: event.target.value })} /><button className="px-2 text-xl text-red-700" aria-label="Product verwijderen" onClick={() => updateDraft({ lines: draft.lines.filter((item) => item.id !== line.id) })}>×</button></div><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">{ALLERGENS.map((allergen) => { const selected = line.allergens.includes(allergen); return <button key={allergen} type="button" className={`relative flex min-h-20 flex-col items-center justify-center rounded-lg border p-1 text-[0.62rem] font-bold ${selected ? "border-[#496b3f] bg-[#edf5ea]" : "border-[#e5e0d9] bg-white opacity-65"}`} onClick={() => toggleAllergen(line, allergen)}><AllergenIcon allergen={allergen} />{selected && <span className="absolute right-1 top-0 text-lg font-black text-[#31552a]">×</span>}<span>{allergen}</span></button>; })}</div>{line.allergens.some((allergen) => specifiedAllergens.includes(allergen)) && <div className="mt-3 grid gap-2 sm:grid-cols-2">{line.allergens.filter((allergen) => specifiedAllergens.includes(allergen)).map((allergen) => <label key={allergen} className="text-xs font-bold">Specificatie {allergen}<input className="allergen-input mt-1" value={line.origins[allergen] ?? ""} onChange={(event) => updateLine(line.id, { origins: { ...line.origins, [allergen]: event.target.value } })} placeholder={allergen === "Gluten" ? "Bijv. tarwe, rogge" : "Bijv. amandel, hazelnoot"} /></label>)}</div>}</article>)}</div>
               <div className="mt-4 flex flex-wrap justify-end gap-2"><button className="allergen-small-button" onClick={() => setDraft(null)}>Sluiten</button><button className="allergen-small-button bg-[#edf5ea]" disabled={saving} onClick={() => void saveDraft(false)}>{saving ? "Opslaan..." : "Opslaan"}</button><button className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={() => void saveDraft(true)}>Opslaan & printen</button></div>
             </section>
             <PrintSheet list={draft} />
@@ -379,7 +400,7 @@ function PrintSheet({ list }: { list: CustomerAllergenList }) {
   return (
     <section className="allergen-print-sheet">
       <header><h1>ALLERGENENLIJST</h1><p>STRIK PATISSERIE</p><div className="customer"><strong>{list.customerName || "Klant"}</strong>{list.contactName && <span>t.a.v. {list.contactName}</span>}{list.reference && <span>{list.reference}</span>}</div></header>
-      <table><thead><tr><th>artikel</th><th>aanwezige allergenen</th><th>oorsprong</th></tr></thead><tbody>{list.lines.map((line) => <tr key={line.id}><td>{line.productName}</td><td><div className="print-icons">{line.allergens.map((allergen) => <AllergenIcon key={allergen} allergen={allergen} small />)}</div></td><td>{line.allergens.map((allergen) => line.origins[allergen] ? `${allergen}: ${line.origins[allergen]}` : allergen).join("; ")}</td></tr>)}</tbody></table>
+      <table><thead><tr><th>artikel</th><th>aanwezige allergenen</th><th>specificatie</th></tr></thead><tbody>{list.lines.map((line) => <tr key={line.id}><td>{line.productName}</td><td><div className="print-icons">{line.allergens.map((allergen) => <AllergenIcon key={allergen} allergen={allergen} small />)}</div></td><td>{formatSpecifications(line) || "–"}</td></tr>)}</tbody></table>
       <footer>Strik Patisserie · allergeneninformatie · gegenereerd {new Date().toLocaleDateString("nl-NL")}</footer>
     </section>
   );
