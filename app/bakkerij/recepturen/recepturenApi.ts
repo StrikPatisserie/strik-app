@@ -10,6 +10,7 @@ import type {
   Recipe,
 } from "./types";
 import { removeLegacyHalfFabricateIngredients } from "./legacyHalfFabricates";
+import type { CustomerAllergenList } from "../allergenen/types";
 
 export type RecepturenData = {
   ingredients: Ingredient[];
@@ -19,6 +20,7 @@ export type RecepturenData = {
   hefeOrderHistory?: HefeOrderHistoryEntry[];
   bakeryHome?: BakeryHomeData;
   manualProductionPlanningItems?: ManualProductionPlanningItem[];
+  allergenLists?: CustomerAllergenList[];
   updatedAt?: string;
 };
 
@@ -97,6 +99,9 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
     manualProductionPlanningItems: normalizeManualProductionPlanningItems(
       record.manualProductionPlanningItems
     ),
+    allergenLists: Array.isArray(record.allergenLists)
+      ? record.allergenLists as CustomerAllergenList[]
+      : [],
     updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : "",
   });
 }

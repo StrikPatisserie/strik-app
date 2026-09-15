@@ -484,3 +484,68 @@ select:focus {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* Allergenenregister */
+.allergen-action {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  gap: .65rem;
+  border: 1px solid #cbdcc5;
+  border-radius: .7rem;
+  background: #f6faf4;
+  padding: .55rem .9rem;
+  color: #1a1815;
+  font-size: .82rem;
+  font-weight: 800;
+}
+.allergen-action:hover, .allergen-small-button:hover { background: #e8f1e5; }
+.allergen-input {
+  width: 100%;
+  min-height: 2.55rem;
+  border: 1px solid #d9d3cb;
+  border-radius: .55rem;
+  background: #fff;
+  padding: .55rem .7rem;
+  color: #1a1815;
+  font-size: .82rem;
+  font-weight: 600;
+}
+.allergen-input:focus { border-color: #6f8d65; outline: 2px solid #dce9d8; }
+.allergen-small-button {
+  min-height: 2.55rem;
+  border: 1px solid #cbdcc5;
+  border-radius: .55rem;
+  padding: .5rem .75rem;
+  font-size: .75rem;
+  font-weight: 800;
+}
+.allergen-print-sheet { display: none; }
+
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  body * { visibility: hidden !important; }
+  .allergen-print-sheet, .allergen-print-sheet * { visibility: visible !important; }
+  .allergen-print-sheet {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    color: #1a1815;
+    background: white;
+    font-family: Arial, sans-serif;
+  }
+  .allergen-print-sheet header { position: relative; margin: 7mm 0 11mm; text-align: center; }
+  .allergen-print-sheet h1 { margin: 0; font-size: 25pt; font-weight: 900; letter-spacing: .04em; }
+  .allergen-print-sheet header > p { margin: 1mm 0 0; font-size: 12pt; font-weight: 800; letter-spacing: .12em; }
+  .allergen-print-sheet .customer { margin-top: 6mm; display: flex; justify-content: center; gap: 4mm; font-size: 9pt; }
+  .allergen-print-sheet table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.5pt; }
+  .allergen-print-sheet th { border-bottom: 1.5pt solid #222; padding: 2.5mm 2mm; text-align: left; font-size: 8pt; }
+  .allergen-print-sheet th:nth-child(1) { width: 24%; }
+  .allergen-print-sheet th:nth-child(2) { width: 39%; }
+  .allergen-print-sheet th:nth-child(3) { width: 37%; }
+  .allergen-print-sheet td { min-height: 13mm; border-bottom: .5pt solid #777; border-right: .5pt solid #aaa; padding: 3mm 2mm; vertical-align: top; font-weight: 700; overflow-wrap: anywhere; }
+  .allergen-print-sheet td:last-child { border-right: 0; font-weight: 500; }
+  .allergen-print-sheet tr { break-inside: avoid; }
+  .allergen-print-sheet .print-icons { display: flex; flex-wrap: wrap; gap: 1mm; }
+  .allergen-print-sheet footer { position: fixed; bottom: 0; width: 100%; border-top: .5pt solid #aaa; padding-top: 2mm; text-align: center; font-size: 7pt; color: #666; }
+}

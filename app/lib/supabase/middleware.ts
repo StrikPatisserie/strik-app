@@ -13,6 +13,13 @@ const PUBLIC_PATHS = new Set([
   "/auth/signout",
 ]);
 
+// These endpoints either contain no private data or perform their own
+// request authentication. Every other API route requires a Supabase session.
+const PUBLIC_API_PATHS = new Set([
+  "/api/app-version",
+  "/api/personnel-mail-orders/cron",
+]);
+
 function isPublicPath(pathname: string) {
   return (
     PUBLIC_PATHS.has(pathname) ||
@@ -38,6 +45,13 @@ export async function updateSession(request: NextRequest) {
   });
 
   if (!config.isConfigured) {
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { message: "Authenticatie is niet geconfigureerd." },
+        { status: 503 }
+      );
+    }
+
     return response;
   }
 
@@ -69,13 +83,18 @@ export async function updateSession(request: NextRequest) {
   );
 
   const pathname = request.nextUrl.pathname;
-  const isPublic = isPublicPath(pathname);
+  const isApi = pathname.startsWith("/api/");
+  const isPublic = isPublicPath(pathname) || PUBLIC_API_PATHS.has(pathname);
   const { data, error } = await supabase.auth.getClaims();
   const claims = data?.claims;
   const isAuthenticated = Boolean(claims && !error);
 
   if (!isAuthenticated) {
-    return isPublic ? response : redirectToLogin(request);
+    if (isPublic) return response;
+
+    return isApi
+      ? NextResponse.json({ message: "Niet ingelogd." }, { status: 401 })
+      : redirectToLogin(request);
   }
 
   if (isPublic && pathname === "/login") {
@@ -96,7 +115,7 @@ export async function updateSession(request: NextRequest) {
     }
 
     const currentProfile = profile as UserProfile | null;
-    if (!canAccessPath(currentProfile, pathname)) {
+    if (!isApi && !canAccessPath(currentProfile, pathname)) {
       const fallbackPath = getDefaultPathForProfile(currentProfile);
       const fallbackUrl = new URL(fallbackPath, request.url);
 

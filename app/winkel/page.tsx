@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import CompactAgendaPanel from "../CompactAgendaPanel";
 import CompactLatestNewsPanel from "../CompactLatestNewsPanel";
 import CompactStaffOverview from "../CompactStaffOverview";

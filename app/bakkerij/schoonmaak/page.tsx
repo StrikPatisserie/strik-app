@@ -7,6 +7,12 @@ import {
 
 const bakkerijHaccpLinks = [
   {
+    href: "/bakkerij/allergenen",
+    title: "Allergenen",
+    icon: strikIcons.recepturen,
+    tone: "green" as const,
+  },
+  {
     href: "/bakkerij/schoonmaak/schoonmaakrooster",
     title: "Schoonmaakrooster",
     icon: strikIcons.cleaning,
@@ -30,7 +36,7 @@ export default function BakkerijSchoonmaakPage() {
   return (
     <StrikShell>
       <StrikPageHeader
-        title="HACCP"
+        title="HACCP & registraties"
         icon={strikIcons.cleaning}
       />
 

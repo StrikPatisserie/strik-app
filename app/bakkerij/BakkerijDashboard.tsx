@@ -17,7 +17,7 @@ const bakerySections = [
     links: [
       { href: "/bakkerij/recepten", label: "Recepten" },
       { href: "/bakkerij/productieplanning", label: "Productieplanning" },
-      { href: "/bakkerij/haccp", label: "HACCP" },
+      { href: "/bakkerij/haccp", label: "HACCP & registraties" },
     ],
   },
   {

@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
 
 export default function BakkerijSchoonmaakroosterPage() {

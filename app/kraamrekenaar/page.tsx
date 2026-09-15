@@ -347,7 +347,7 @@ export default function KraamrekenaarPage() {
     { id: 3, entries: [] },
   ]);
   const [cashGivenCents, setCashGivenCents] = useState<number | null>(null);
-  const [lastActivityAt, setLastActivityAt] = useState(Date.now());
+  const [lastActivityAt, setLastActivityAt] = useState(0);
   const [showIdlePrompt, setShowIdlePrompt] = useState(false);
   const [isProductsLoaded, setIsProductsLoaded] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -388,6 +388,8 @@ export default function KraamrekenaarPage() {
     : null;
 
   function markActivity() {
+    // This runs from user-event handlers, not while rendering.
+    // eslint-disable-next-line react-hooks/purity
     setLastActivityAt(Date.now());
     setShowIdlePrompt(false);
   }

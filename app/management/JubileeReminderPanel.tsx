@@ -229,7 +229,6 @@ export default function JubileeReminderPanel({
 
     const seenKey = window.localStorage.getItem(seenStorageKey);
     // Local storage is the acknowledgement source for these browser-only reminders.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAcknowledgedKey(
       window.localStorage.getItem(acknowledgedStorageKey) || ""
     );
