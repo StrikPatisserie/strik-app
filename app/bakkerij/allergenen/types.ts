@@ -22,6 +22,7 @@ export type AllergenListLine = {
   id: string;
   recipeId?: string;
   productName: string;
+  note?: string;
   allergens: AllergenName[];
   origins: Partial<Record<AllergenName, string>>;
 };
