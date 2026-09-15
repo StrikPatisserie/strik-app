@@ -7807,6 +7807,13 @@ export default function BakkerijLogistiekDashboard() {
   const [importMessage, setImportMessage] = useState("");
   const [overrideMessage, setOverrideMessage] = useState("");
   const [photoLinkMessage, setPhotoLinkMessage] = useState("");
+  const [advancePhotoOpen, setAdvancePhotoOpen] = useState(false);
+  const [advancePhotoDate, setAdvancePhotoDate] = useState(() =>
+    toInputDate(addDays(new Date(), 14))
+  );
+  const [advancePhotoCustomer, setAdvancePhotoCustomer] = useState("");
+  const [advancePhotoFile, setAdvancePhotoFile] = useState<File | null>(null);
+  const [isUploadingAdvancePhoto, setIsUploadingAdvancePhoto] = useState(false);
   const [feedbackByDate, setFeedbackByDate] = useState<Record<string, string>>(
     {}
   );
@@ -8566,6 +8573,55 @@ export default function BakkerijLogistiekDashboard() {
     }
   }
 
+  async function uploadAdvanceWebshopImage() {
+    if (!advancePhotoDate || !advancePhotoCustomer.trim() || !advancePhotoFile) {
+      setPhotoLinkMessage("Vul leverdatum en klantnaam in en kies een afbeelding.");
+      return;
+    }
+
+    setIsUploadingAdvancePhoto(true);
+    setPhotoLinkMessage("Afbeelding vooruit opslaan...");
+    try {
+      const uploadFile = await prepareManualPhotoUploadFile(advancePhotoFile);
+      const formData = new FormData();
+      formData.set("file", uploadFile);
+      formData.set("date", advancePhotoDate);
+      formData.set("receiptCustomer", advancePhotoCustomer.trim());
+      formData.set("productSummary", "Vooruit ontvangen klantlogo of klantfoto");
+
+      const response = await fetch(
+        "/api/bakkerij-logistiek/webshop-images/manual",
+        { method: "POST", body: formData }
+      );
+      const data = (await response.json()) as {
+        image?: WebshopImageSummary;
+        message?: string;
+      };
+      if (!response.ok || !data.image) {
+        throw new Error(data.message || "Afbeelding opslaan is niet gelukt.");
+      }
+
+      if (advancePhotoDate === selectedPlan.date) {
+        setWebshopImages((current) => [
+          data.image!,
+          ...current.filter((item) => item.id !== data.image!.id),
+        ]);
+      }
+      setPhotoLinkMessage(
+        `Afbeelding bewaard voor ${advancePhotoCustomer.trim()} op ${formatReceiptDateLabel(advancePhotoDate)}.`
+      );
+      setAdvancePhotoOpen(false);
+      setAdvancePhotoCustomer("");
+      setAdvancePhotoFile(null);
+    } catch (error) {
+      setPhotoLinkMessage(
+        error instanceof Error ? error.message : "Afbeelding opslaan is niet gelukt."
+      );
+    } finally {
+      setIsUploadingAdvancePhoto(false);
+    }
+  }
+
   async function linkWebshopImageToReceipt(
     image: WebshopImageSummary,
     receipt: ReceiptSummary
@@ -8871,6 +8927,13 @@ export default function BakkerijLogistiekDashboard() {
             >
               {nextLogisticsDateLabel(dateState)}
             </button>
+            <button
+              type="button"
+              onClick={() => setAdvancePhotoOpen(true)}
+              className="min-h-10 border border-[#6f5212] bg-[#fff8d8] px-3 text-sm font-black tracking-normal text-[#6f5212] transition hover:bg-[#ffefae]"
+            >
+              Foto vooruit opslaan
+            </button>
             <RefreshButton
               disabled={batchLoadState === "loading" || isImporting}
               loading={batchLoadState === "loading"}
@@ -9041,6 +9104,74 @@ export default function BakkerijLogistiekDashboard() {
             recentDayFeedback={recentDayFeedback}
             selectedPlan={selectedPlan}
           />
+        )}
+        {advancePhotoOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+            <section className="w-full max-w-lg border border-[#d7cec4] bg-white p-5 shadow-2xl">
+              <h2 className="text-xl font-black text-[#1a1815]">
+                Foto of logo vooruit opslaan
+              </h2>
+              <p className="mt-1 text-sm font-bold text-[#6b645b]">
+                Nog geen bon nodig. De app koppelt later op leverdatum en klantnaam.
+              </p>
+              <label className="mt-4 block text-xs font-black uppercase text-[#4a4540]">
+                Leverdatum
+                <input
+                  type="date"
+                  value={advancePhotoDate}
+                  onChange={(event) => setAdvancePhotoDate(event.target.value)}
+                  className="mt-1 h-11 w-full border border-[#d7cec4] px-3 text-sm font-bold"
+                />
+              </label>
+              <label className="mt-3 block text-xs font-black uppercase text-[#4a4540]">
+                Klantnaam of achternaam
+                <input
+                  value={advancePhotoCustomer}
+                  onChange={(event) => setAdvancePhotoCustomer(event.target.value)}
+                  placeholder="Bijvoorbeeld Kemp"
+                  className="mt-1 h-11 w-full border border-[#d7cec4] px-3 text-sm font-bold"
+                />
+              </label>
+              <label className="mt-3 block text-xs font-black uppercase text-[#4a4540]">
+                Afbeelding
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/*"
+                  onChange={(event) =>
+                    setAdvancePhotoFile(event.target.files?.[0] || null)
+                  }
+                  className="mt-1 block w-full border border-[#d7cec4] bg-[#faf8f5] p-2 text-sm font-bold"
+                />
+              </label>
+              {photoLinkMessage && (
+                <p className="mt-3 text-sm font-bold text-[#6f5212]">
+                  {photoLinkMessage}
+                </p>
+              )}
+              <div className="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAdvancePhotoOpen(false)}
+                  className="min-h-10 border border-[#d7cec4] bg-white px-4 text-sm font-black"
+                >
+                  Annuleren
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    isUploadingAdvancePhoto ||
+                    !advancePhotoDate ||
+                    !advancePhotoCustomer.trim() ||
+                    !advancePhotoFile
+                  }
+                  onClick={() => void uploadAdvanceWebshopImage()}
+                  className="min-h-10 bg-[#1a1815] px-4 text-sm font-black text-white disabled:opacity-40"
+                >
+                  {isUploadingAdvancePhoto ? "Opslaan..." : "In archief opslaan"}
+                </button>
+              </div>
+            </section>
+          </div>
         )}
       </div>
     </StrikShell>

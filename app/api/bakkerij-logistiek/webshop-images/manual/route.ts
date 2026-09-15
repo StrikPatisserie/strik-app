@@ -46,7 +46,7 @@ function cleanImageContentType(value: unknown) {
 }
 
 function imageIdFor(input: {
-  receiptId: string;
+  matchKey: string;
   deliveryDate: string;
   fileName: string;
   dataUrl: string;
@@ -54,7 +54,7 @@ function imageIdFor(input: {
   const hash = createHash("sha1")
     .update(
       [
-        input.receiptId,
+        input.matchKey,
         input.deliveryDate,
         input.fileName,
         input.dataUrl.slice(0, 4000),
@@ -93,8 +93,8 @@ export async function POST(request: Request) {
     const receiptCustomer = cleanText(formData.get("receiptCustomer"), 180);
     const productSummary = cleanText(formData.get("productSummary"), 500);
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate) || !receiptId) {
-      return jsonError("Geen geldige bon ontvangen.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate) || !receiptCustomer) {
+      return jsonError("Vul een geldige leverdatum en klantnaam in.");
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -102,12 +102,12 @@ export async function POST(request: Request) {
     const importedAt = new Date().toISOString();
     const image: LogisticsWebshopImage = {
       id: imageIdFor({
-        receiptId,
+        matchKey: receiptId || receiptCustomer,
         deliveryDate,
         fileName: file.name,
         dataUrl,
       }),
-      messageId: `manual-mail-photo:${receiptId}`,
+      messageId: `manual-mail-photo:${receiptId || `${deliveryDate}:${receiptCustomer}`}`,
       orderNumber: receiptNumber,
       deliveryDate,
       customerName: receiptCustomer,
@@ -115,17 +115,21 @@ export async function POST(request: Request) {
       sourceUrl: "",
       fileName: cleanText(file.name, 240) || "handmatige-mailfoto.jpg",
       productSummary,
-      matchedReceiptId: receiptId,
-      matchedReceiptNumber: receiptNumber,
-      matchedReceiptCustomer: receiptCustomer,
-      matchedAt: importedAt,
+      matchedReceiptId: receiptId || undefined,
+      matchedReceiptNumber: receiptNumber || undefined,
+      matchedReceiptCustomer: receiptId ? receiptCustomer : undefined,
+      matchedAt: receiptId ? importedAt : undefined,
       matchSource: "manual",
       subject: "Handmatige mailfoto",
       from: "",
       receivedAt: importedAt,
       importedAt,
       confidence: "hoog",
-      notes: ["Handmatig geupload bij contantbon."],
+      notes: [
+        receiptId
+          ? "Handmatig geupload bij contantbon."
+          : "Vooruit geupload; koppelen op leverdatum en klantnaam.",
+      ],
     };
 
     const savedImage = await upsertLogisticsWebshopImage(image);
