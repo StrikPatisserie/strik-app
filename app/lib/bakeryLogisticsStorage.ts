@@ -377,6 +377,14 @@ function todayAmsterdamIsoDate() {
 }
 
 function isWebshopImageWithinRetention(image: LogisticsWebshopImage) {
+  if (
+    image.matchSource === "manual" ||
+    image.messageId.startsWith("manual-mail-photo:") ||
+    image.id.startsWith("manual-mail-photo-")
+  ) {
+    return true;
+  }
+
   const todayStamp = dateStamp(todayAmsterdamIsoDate());
   const deliveryStamp = dateStamp(image.deliveryDate);
 

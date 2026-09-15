@@ -8834,16 +8834,11 @@ export default function BakkerijLogistiekDashboard() {
                   : "border-[#e8e4de] bg-white/70 text-[#8b8278] hover:bg-white"
               }`}
             >
-              Eerder
+              Andere datum
               <input
                 type="date"
-                value={
-                  selectedPlan.date <= dateState.today
-                    ? selectedPlan.date
-                    : dateState.today
-                }
-                max={dateState.today}
-                aria-label="Eerdere datum kiezen"
+                value={selectedPlan.date}
+                aria-label="Andere leverdatum kiezen"
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                 onChange={(event) => selectDate(event.target.value)}
               />
