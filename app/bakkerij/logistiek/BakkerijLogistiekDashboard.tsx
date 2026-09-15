@@ -3402,6 +3402,9 @@ function marzipanPrintSizeLabel(
   printSizeCm = item.sizeCm
 ) {
   if (item.shape === "square") return "ca. 3,8 cm vierkant";
+  if (item.photoUrl.includes("douglas-60716")) {
+    return `${formatPrintCm(printSizeCm)} cm rechthoekig`;
+  }
 
   const printLabel = `${formatPrintCm(printSizeCm)} cm rond`;
   if (printSizeCm < item.sizeCm) {
@@ -3480,9 +3483,10 @@ function createMarzipanPhotoPrintHtml(input: {
       item.shape === "round"
         ? diagonalRoundLayout?.itemStyleById.get(item.id) || ""
         : "";
+    const preserveRectangle = item.photoUrl.includes("douglas-60716");
 
     return `
-      <article class="print-item ${item.shape} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${printSizeCm}cm;${layoutStyle}">
+      <article class="print-item ${item.shape} ${preserveRectangle ? "keep-rectangular" : ""} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${printSizeCm}cm;${layoutStyle}">
         <div class="photo-frame">
           <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}">
         </div>
@@ -3665,6 +3669,12 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .round .photo-frame {
         border-radius: 999px;
+      }
+      .round.keep-rectangular .photo-frame {
+        border-radius: 0;
+      }
+      .round.keep-rectangular .photo-frame img {
+        object-fit: contain;
       }
       .round-grid.diagonal .round {
         position: absolute;
