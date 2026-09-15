@@ -520,6 +520,30 @@ select:focus {
   font-weight: 800;
 }
 .allergen-print-sheet { display: none; }
+.allergen-code-icon {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 2.25rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 2px solid #1a1815;
+  border-radius: 9999px;
+  background: #fff;
+  color: #1a1815;
+  font-family: Arial, sans-serif;
+  font-size: .55rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.allergen-code-icon-small {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-basis: 1.75rem;
+  border-width: 1.5px;
+  font-size: .45rem;
+}
 
 @media print {
   @page { size: A4 portrait; margin: 12mm; }
@@ -547,5 +571,13 @@ select:focus {
   .allergen-print-sheet td:last-child { border-right: 0; font-weight: 500; }
   .allergen-print-sheet tr { break-inside: avoid; }
   .allergen-print-sheet .print-icons { display: flex; flex-wrap: wrap; gap: 1mm; }
+  .allergen-print-sheet .allergen-code-icon {
+    display: inline-flex !important;
+    border: 1.2pt solid #1a1815 !important;
+    background: #fff !important;
+    color: #1a1815 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
   .allergen-print-sheet footer { position: fixed; bottom: 0; width: 100%; border-top: .5pt solid #aaa; padding-top: 2mm; text-align: center; font-size: 7pt; color: #666; }
 }

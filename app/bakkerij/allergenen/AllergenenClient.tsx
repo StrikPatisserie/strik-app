@@ -169,30 +169,32 @@ function lineFromRecipe(recipe: Recipe, recipes: Recipe[], ingredients: Ingredie
 }
 
 function AllergenIcon({ allergen, small = false }: { allergen: AllergenName; small?: boolean }) {
-  const size = small ? 28 : 36;
   return (
-    <svg
+    <span
       aria-label={allergen}
-      className="inline-block shrink-0 overflow-visible"
-      width={size}
-      height={size}
-      viewBox="0 0 40 40"
-      role="img"
+      title={allergen}
+      className={`allergen-code-icon ${small ? "allergen-code-icon-small" : ""}`}
     >
-      <title>{allergen}</title>
-      <circle cx="20" cy="20" r="18" fill="#fff" stroke="#1a1815" strokeWidth="2" />
-      <text
-        x="20"
-        y="23"
-        textAnchor="middle"
-        fontSize={allergenCodes[allergen].length > 3 ? "7" : "9"}
-        fontWeight="900"
-        fill="#1a1815"
-      >
-        {allergenCodes[allergen]}
-      </text>
-    </svg>
+      {allergenCodes[allergen]}
+    </span>
   );
+}
+
+function refreshListFromRecipes(
+  list: CustomerAllergenList,
+  recipes: Recipe[],
+  ingredients: Ingredient[]
+) {
+  return {
+    ...list,
+    lines: list.lines.map((line) => {
+      if (!line.recipeId) return line;
+      const recipe = recipes.find((item) => item.id === line.recipeId);
+      return recipe
+        ? { ...line, ...lineFromRecipe(recipe, recipes, ingredients), id: line.id }
+        : line;
+    }),
+  };
 }
 
 const emptyList = (): CustomerAllergenList => ({
@@ -299,6 +301,18 @@ export default function AllergenenClient() {
     await persist(archives.filter((item) => item.id !== id));
   }
 
+  function openArchive(item: CustomerAllergenList, printAfter = false) {
+    if (!data) return;
+    const refreshed = refreshListFromRecipes(
+      structuredClone(item),
+      data.recipes,
+      data.ingredients
+    );
+    setDraft(refreshed);
+    setArchiveOpen(false);
+    if (printAfter) window.setTimeout(() => window.print(), 150);
+  }
+
   return (
     <StrikShell>
       <div className="allergen-screen">
@@ -335,7 +349,7 @@ export default function AllergenenClient() {
         {archiveOpen && (
           <section className="rounded-xl border border-[#d6e5d8] bg-white p-3 shadow-sm">
             <h2 className="mb-3 text-lg font-black">Archief per klant</h2>
-            <div className="grid gap-2">{archives.length ? archives.map((item) => <article key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e5e0d9] p-3"><div><p className="font-black">{item.customerName}</p><p className="text-xs text-[#777067]">{item.lines.length} producten · bijgewerkt {new Date(item.updatedAt).toLocaleDateString("nl-NL")}</p></div><div className="flex gap-2"><button className="allergen-small-button" onClick={() => { setDraft(structuredClone(item)); setArchiveOpen(false); }}>Openen / aanpassen</button><button className="allergen-small-button" onClick={() => { setDraft(structuredClone(item)); setArchiveOpen(false); window.setTimeout(() => window.print(), 100); }}>Afdrukken</button><button className="allergen-small-button text-red-700" onClick={() => void removeArchive(item.id)}>Verwijderen</button></div></article>) : <p className="text-sm text-[#777067]">Er zijn nog geen klantlijsten opgeslagen.</p>}</div>
+            <div className="grid gap-2">{archives.length ? archives.map((item) => <article key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e5e0d9] p-3"><div><p className="font-black">{item.customerName}</p><p className="text-xs text-[#777067]">{item.lines.length} producten · bijgewerkt {new Date(item.updatedAt).toLocaleDateString("nl-NL")}</p></div><div className="flex gap-2"><button className="allergen-small-button" onClick={() => openArchive(item)}>Openen / aanpassen</button><button className="allergen-small-button" onClick={() => openArchive(item, true)}>Afdrukken</button><button className="allergen-small-button text-red-700" onClick={() => void removeArchive(item.id)}>Verwijderen</button></div></article>) : <p className="text-sm text-[#777067]">Er zijn nog geen klantlijsten opgeslagen.</p>}</div>
           </section>
         )}
 
