@@ -18,6 +18,12 @@ const items = [
     icon: strikIcons.sinterklaasB2B,
     tone: "green" as const,
   },
+  {
+    href: "/sinterklaas/mailing",
+    title: "B2B mailing",
+    icon: strikIcons.newsManagement,
+    tone: "green" as const,
+  },
 ];
 
 export default function SinterklaasPage() {
