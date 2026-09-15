@@ -8866,6 +8866,16 @@ export default function BakkerijLogistiekDashboard() {
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />
 
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setAdvancePhotoOpen(true)}
+          className="px-1 text-xs font-semibold italic text-[#7b746c] underline decoration-[#b9b1a8] underline-offset-4 transition hover:text-[#1a1815]"
+        >
+          Foto of logo vooruit opslaan
+        </button>
+      </div>
+
       <section className={`relative border p-2.5 shadow-sm sm:p-3 ${headerTone}`}>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
@@ -8926,13 +8936,6 @@ export default function BakkerijLogistiekDashboard() {
               }`}
             >
               {nextLogisticsDateLabel(dateState)}
-            </button>
-            <button
-              type="button"
-              onClick={() => setAdvancePhotoOpen(true)}
-              className="min-h-10 border border-[#6f5212] bg-[#fff8d8] px-3 text-sm font-black tracking-normal text-[#6f5212] transition hover:bg-[#ffefae]"
-            >
-              Foto vooruit opslaan
             </button>
             <RefreshButton
               disabled={batchLoadState === "loading" || isImporting}
