@@ -24,6 +24,12 @@ const items = [
     icon: strikIcons.newsManagement,
     tone: "green" as const,
   },
+  {
+    href: "/sint-voor-bedrijven",
+    title: "B2B folder 2026 · concept",
+    icon: strikIcons.sinterklaasB2B,
+    tone: "yellow" as const,
+  },
 ];
 
 export default function SinterklaasPage() {

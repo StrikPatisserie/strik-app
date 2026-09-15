@@ -11,6 +11,7 @@ const PUBLIC_PATHS = new Set([
   "/update-password",
   "/auth/callback",
   "/auth/signout",
+  "/sint-voor-bedrijven",
 ]);
 
 // These endpoints either contain no private data or perform their own
