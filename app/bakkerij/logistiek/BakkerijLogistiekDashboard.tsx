@@ -2493,6 +2493,12 @@ function photoProductSummaryForReceipt(receipt: ReceiptSummary) {
     .slice(0, 500);
 }
 
+function receiptNeedsManualPhotoUpload(receipt: ReceiptSummary) {
+  return (
+    photoProductPlansForReceipt(receipt, { requirePhotoSignal: true }).length > 0
+  );
+}
+
 function isManualUploadedWebshopImage(image: WebshopImageSummary) {
   return (
     image.messageId.startsWith("manual-mail-photo:") ||
@@ -10423,6 +10429,7 @@ function ReceiptDetail({
     .filter((line) => !shouldDropReceiptLine(line));
   const visibleNotes = visibleReceiptNotes(receipt, displayLines);
   const internalRouteNotes = receiptInternalRouteNotes(receipt);
+  const showManualPhotoUpload = receiptNeedsManualPhotoUpload(receipt);
   return (
     <article className="h-[30rem] overflow-y-auto rounded-sm border border-[#111] bg-[#f3f1ed] p-2 text-[#000] shadow-sm">
       <div className="min-h-full bg-white px-2 py-2 font-sans text-[#000] sm:px-3">
@@ -10555,7 +10562,8 @@ function ReceiptDetail({
             onUnlink={onUnlinkWebshopImageFromReceipt}
             receipt={receipt}
           />
-          <div className="border-b border-dashed border-[#d7d7d7] bg-[#fff8d8] p-3">
+          {showManualPhotoUpload && (
+            <div className="border-b border-dashed border-[#d7d7d7] bg-[#fff8d8] p-3">
               <input
                 ref={manualPhotoInputRef}
                 type="file"
@@ -10587,6 +10595,7 @@ function ReceiptDetail({
                 </p>
               )}
             </div>
+          )}
         </div>
       </div>
     </article>
