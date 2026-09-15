@@ -2707,6 +2707,41 @@ function addMarzipanPrintItemsForReceipt(input: {
   });
 }
 
+function douglasDefaultLogoForReceipt(
+  receipt: ReceiptSummary
+): WebshopImageSummary | null {
+  const text = normalizeMatchText(receiptSearchText(receipt));
+  const isDouglas = /\b60716\b/.test(text) || /\bparfumerie\s+douglas\b/.test(text);
+  const hasLogoCake =
+    /marsepein\s*-?\s*taart/.test(text) &&
+    /foto|photo|afbeeld|print|logo|plaatje|opdruk/.test(text);
+
+  if (!isDouglas || !hasLogoCake) return null;
+
+  return {
+    id: `vaste-klantfoto-douglas-60716-${receipt.id}`,
+    messageId: "vaste-klantfoto:douglas-60716",
+    orderNumber: receipt.receiptNumber,
+    deliveryDate: "",
+    customerName: receipt.customer || "Parfumerie Douglas",
+    photoUrl: "/klantlogos/douglas-60716.jpg",
+    sourceUrl: "",
+    fileName: "douglas-60716.jpg",
+    productSummary: "Vaste afbeelding voor marsepeintaart met logo",
+    matchedReceiptId: receipt.id,
+    matchedReceiptNumber: receipt.receiptNumber,
+    matchedReceiptCustomer: receipt.customer,
+    matchedAt: "vast klantprofiel",
+    matchSource: "auto",
+    subject: "Vaste klantafbeelding Parfumerie Douglas",
+    from: "",
+    receivedAt: "",
+    importedAt: "",
+    confidence: "hoog",
+    notes: ["Vaste klantafbeelding voor debiteur 60716."],
+  };
+}
+
 function buildMarzipanPrintItems(
   receipts: ReceiptSummary[],
   webshopImages: WebshopImageSummary[]
@@ -2715,9 +2750,16 @@ function buildMarzipanPrintItems(
   const claimedImageIds = new Set<string>();
 
   receipts.forEach((receipt) => {
-    const matchedImages = imageMatchesForReceipt(receipt, webshopImages).filter(
+    let matchedImages = imageMatchesForReceipt(receipt, webshopImages).filter(
       (image) => !claimedImageIds.has(image.id)
     );
+    const douglasDefaultLogo = douglasDefaultLogoForReceipt(receipt);
+    const manuallyMatchedImages = matchedImages.filter(
+      (image) => image.matchSource === "manual"
+    );
+    if (douglasDefaultLogo && manuallyMatchedImages.length === 0) {
+      matchedImages = [douglasDefaultLogo];
+    }
     if (matchedImages.length === 0) return;
 
     addMarzipanPrintItemsForReceipt({
