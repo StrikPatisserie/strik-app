@@ -8918,7 +8918,15 @@ export default function BakkerijLogistiekDashboard() {
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-4">
+        <button
+          type="button"
+          disabled={isImporting}
+          onClick={() => fileInputRef.current?.click()}
+          className="px-1 text-xs font-semibold italic text-[#7b746c] underline decoration-[#b9b1a8] underline-offset-4 transition hover:text-[#1a1815] disabled:opacity-50"
+        >
+          {isImporting ? "PDF inladen..." : "Bon-PDF handmatig inladen"}
+        </button>
         <button
           type="button"
           onClick={() => setAdvancePhotoOpen(true)}
@@ -8994,14 +9002,6 @@ export default function BakkerijLogistiekDashboard() {
               loading={batchLoadState === "loading"}
               onClick={refreshBatch}
             />
-            <button
-              type="button"
-              disabled={isImporting}
-              onClick={() => fileInputRef.current?.click()}
-              className="min-h-10 border border-[#1a1815] bg-white px-3 text-xs font-black text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:opacity-50"
-            >
-              {isImporting ? "PDF inladen..." : "PDF handmatig"}
-            </button>
             <MarzipanPhotoPrintButton
               count={marzipanPrintItems.length + arendNumberPrintCount}
               disabled={
