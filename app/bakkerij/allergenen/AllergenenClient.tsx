@@ -38,23 +38,61 @@ const allergenAliases: Record<string, AllergenName> = {
   zwaveldioxide: "Zwaveldioxide en sulfieten",
 };
 
-const iconCenters: Record<AllergenName, number> = {
-  Selderij: 53,
-  Vis: 160,
-  Schaaldieren: 267,
-  Mosterd: 373,
-  "Zwaveldioxide en sulfieten": 480,
-  Weekdieren: 587,
-  Lupine: 693,
-  Pinda: 800,
-  Soja: 907,
-  Noten: 1013,
-  Sesam: 1120,
-  "Melk (lactose)": 1227,
-  Gluten: 1333,
-  Alcohol: 1440,
-  Ei: 1547,
+const allergenCodes: Record<AllergenName, string> = {
+  Selderij: "SE",
+  Vis: "VIS",
+  Schaaldieren: "SCH",
+  Mosterd: "MO",
+  "Zwaveldioxide en sulfieten": "SO₂",
+  Weekdieren: "WE",
+  Lupine: "LU",
+  Pinda: "PI",
+  Soja: "SO",
+  Noten: "NO",
+  Sesam: "SES",
+  "Melk (lactose)": "MELK",
+  Gluten: "GLU",
+  Alcohol: "ALC",
+  Ei: "EI",
 };
+
+const sourceMatchers: Record<AllergenName, Array<[RegExp, string]>> = {
+  Gluten: [
+    [/\brogge\b/i, "rogge"], [/\bspelt\b/i, "spelt"],
+    [/\b(gerst|mout)\b/i, "gerst"], [/\bhaver\b/i, "haver"],
+    [/\b(kamut|khorasan)\b/i, "khorasan"],
+    [/\b(tarwe|bloem|meel|deeg|brood|biscuit)\b/i, "tarwe"],
+  ],
+  Noten: [
+    [/amandel/i, "amandel"], [/hazelnoot/i, "hazelnoot"],
+    [/walnoot/i, "walnoot"], [/pecan/i, "pecannoot"],
+    [/pistache/i, "pistache"], [/cashew/i, "cashewnoot"],
+    [/macadamia/i, "macadamianoot"], [/paranoot/i, "paranoot"],
+  ],
+  "Melk (lactose)": [[/melk|room|boter|lactose|wei|whey|kaas/i, "melk"]],
+  Ei: [[/\bei\b|eigeel|eiwit|heelei|eipoeder/i, "ei"]],
+  Soja: [[/soja|lecithine/i, "soja"]],
+  Pinda: [[/pinda/i, "pinda"]],
+  Sesam: [[/sesam/i, "sesam"]],
+  Selderij: [[/selder/i, "selderij"]],
+  Mosterd: [[/mosterd/i, "mosterd"]],
+  Vis: [[/vis|ansjovis/i, "vis"]],
+  Schaaldieren: [[/garnaal|kreeft|krab|schaaldier/i, "schaaldieren"]],
+  Weekdieren: [[/weekdier|mossel|oester|inktvis|slak/i, "weekdieren"]],
+  Lupine: [[/lupine/i, "lupine"]],
+  "Zwaveldioxide en sulfieten": [[/sulfiet|zwaveldioxide/i, "sulfiet"]],
+  Alcohol: [[/alcohol|amaretto|rum|kirsch|cognac|likeur|wijn|bier/i, "alcohol"]],
+};
+
+function sourcesForIngredient(allergen: AllergenName, ingredientName: string) {
+  const matches = sourceMatchers[allergen]
+    .filter(([pattern]) => pattern.test(ingredientName))
+    .map(([, label]) => label);
+  const fallback = allergen === "Melk (lactose)"
+    ? "melk"
+    : allergen.toLocaleLowerCase("nl-NL");
+  return matches.length ? Array.from(new Set(matches)) : [fallback];
+}
 
 function normalizeAllergen(value: string): AllergenName | null {
   const key = value.toLocaleLowerCase("nl-NL").replace(/[^a-z]+/g, "_").replace(/^_|_$/g, "");
@@ -75,20 +113,26 @@ function collectRecipeDetails(
   visited.add(recipe.id);
 
   const origins: Partial<Record<AllergenName, string[]>> = {};
+  const declared = new Set<AllergenName>();
   const add = (allergen: AllergenName, source: string) => {
     origins[allergen] = Array.from(new Set([...(origins[allergen] ?? []), source]));
   };
 
   for (const value of recipe.allergens ?? []) {
     const allergen = normalizeAllergen(value);
-    if (allergen) add(allergen, recipe.name);
+    if (allergen) declared.add(allergen);
   }
   for (const line of recipe.ingredients ?? []) {
     const ingredient = ingredients.find((item) => item.id === line.ingredientId);
     if (!ingredient) continue;
     for (const value of ingredient.allergens ?? []) {
       const allergen = normalizeAllergen(value);
-      if (allergen) add(allergen, ingredient.name);
+      if (allergen) {
+        declared.add(allergen);
+        for (const source of sourcesForIngredient(allergen, ingredient.name)) {
+          add(allergen, source);
+        }
+      }
     }
   }
   for (const line of recipe.semiFinishedItems ?? []) {
@@ -96,6 +140,12 @@ function collectRecipeDetails(
     if (!semi) continue;
     const nested = collectRecipeDetails(semi, recipes, ingredients, new Set(visited));
     for (const allergen of nested.allergens) add(allergen, nested.origins[allergen] || semi.name);
+  }
+
+  for (const allergen of declared) {
+    if (!origins[allergen]?.length) {
+      add(allergen, allergen === "Melk (lactose)" ? "melk" : allergen.toLocaleLowerCase("nl-NL"));
+    }
   }
 
   const allergens = ALLERGENS.filter((allergen) => origins[allergen]?.length);
@@ -120,21 +170,28 @@ function lineFromRecipe(recipe: Recipe, recipes: Recipe[], ingredients: Ingredie
 
 function AllergenIcon({ allergen, small = false }: { allergen: AllergenName; small?: boolean }) {
   const size = small ? 28 : 36;
-  const scale = size / 107;
-  const left = iconCenters[allergen] * scale - size / 2;
   return (
-    <span
+    <svg
       aria-label={allergen}
-      title={allergen}
-      className="inline-block shrink-0 bg-no-repeat"
-      style={{
-        width: size,
-        height: size,
-        backgroundImage: "url('/allergenen-icons.png')",
-        backgroundSize: `${1706 * scale}px ${size}px`,
-        backgroundPosition: `${-left}px 0`,
-      }}
-    />
+      className="inline-block shrink-0 overflow-visible"
+      width={size}
+      height={size}
+      viewBox="0 0 40 40"
+      role="img"
+    >
+      <title>{allergen}</title>
+      <circle cx="20" cy="20" r="18" fill="#fff" stroke="#1a1815" strokeWidth="2" />
+      <text
+        x="20"
+        y="23"
+        textAnchor="middle"
+        fontSize={allergenCodes[allergen].length > 3 ? "7" : "9"}
+        fontWeight="900"
+        fill="#1a1815"
+      >
+        {allergenCodes[allergen]}
+      </text>
+    </svg>
   );
 }
 
