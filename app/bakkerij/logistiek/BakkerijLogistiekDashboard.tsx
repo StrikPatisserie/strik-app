@@ -2493,12 +2493,6 @@ function photoProductSummaryForReceipt(receipt: ReceiptSummary) {
     .slice(0, 500);
 }
 
-function receiptNeedsManualPhotoUpload(receipt: ReceiptSummary) {
-  return (
-    photoProductPlansForReceipt(receipt, { requirePhotoSignal: true }).length > 0
-  );
-}
-
 function isManualUploadedWebshopImage(image: WebshopImageSummary) {
   return (
     image.messageId.startsWith("manual-mail-photo:") ||
@@ -10434,9 +10428,6 @@ function ReceiptDetail({
     .filter((line) => !shouldDropReceiptLine(line));
   const visibleNotes = visibleReceiptNotes(receipt, displayLines);
   const internalRouteNotes = receiptInternalRouteNotes(receipt);
-  const showManualPhotoUpload =
-    receiptNeedsManualPhotoUpload(receipt) && imageMatches.length === 0;
-
   return (
     <article className="h-[30rem] overflow-y-auto rounded-sm border border-[#111] bg-[#f3f1ed] p-2 text-[#000] shadow-sm">
       <div className="min-h-full bg-white px-2 py-2 font-sans text-[#000] sm:px-3">
@@ -10569,8 +10560,7 @@ function ReceiptDetail({
             onUnlink={onUnlinkWebshopImageFromReceipt}
             receipt={receipt}
           />
-          {showManualPhotoUpload && (
-            <div className="border-b border-dashed border-[#d7d7d7] bg-[#fff8d8] p-3">
+          <div className="border-b border-dashed border-[#d7d7d7] bg-[#fff8d8] p-3">
               <input
                 ref={manualPhotoInputRef}
                 type="file"
@@ -10579,16 +10569,21 @@ function ReceiptDetail({
                 onChange={(event) => void handleManualPhotoChange(event)}
               />
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-black uppercase tracking-normal text-[#6f5212]">
-                  Marsepeinfoto ontbreekt
-                </p>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-normal text-[#6f5212]">
+                    Logo of foto uit e-mail
+                  </p>
+                  <p className="mt-0.5 text-[0.65rem] font-bold tracking-normal text-[#6f5212]">
+                    Wordt gekoppeld aan {receipt.customer} · levering {formatReceiptDateLabel(selectedPlan.date)}
+                  </p>
+                </div>
                 <button
                   type="button"
                   disabled={isUploadingManualPhoto}
                   onClick={() => manualPhotoInputRef.current?.click()}
                   className="min-h-8 border border-[#1a1815] bg-[#1a1815] px-2.5 text-[0.62rem] font-black uppercase tracking-normal text-white transition hover:bg-[#3b352f] disabled:cursor-wait disabled:opacity-60"
                 >
-                  {isUploadingManualPhoto ? "Uploaden" : "Foto uploaden"}
+                  {isUploadingManualPhoto ? "Uploaden" : "Handmatig uploaden"}
                 </button>
               </div>
               {photoLinkMessage && (
@@ -10597,12 +10592,6 @@ function ReceiptDetail({
                 </p>
               )}
             </div>
-          )}
-          {!showManualPhotoUpload && photoLinkMessage && (
-            <p className="border-b border-dashed border-[#d7d7d7] bg-white px-3 py-2 text-[0.65rem] font-bold tracking-normal text-[#315641]">
-              {photoLinkMessage}
-            </p>
-          )}
         </div>
       </div>
     </article>
