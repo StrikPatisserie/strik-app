@@ -8485,15 +8485,15 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
 
     setIsImporting(true);
     setImportMessage("PDF wordt gelezen...");
 
     try {
       const formData = new FormData();
-      formData.set("file", file);
+      files.forEach((file) => formData.append("file", file));
       formData.set("source", "manual");
       formData.set("status", defaultManualUploadStatus(dateState, activeImportedBatch));
 
@@ -8515,8 +8515,8 @@ export default function BakkerijLogistiekDashboard() {
       setRouteHasUnsavedChanges(false);
       setDateState((current) => ({ ...current, selectedDate: data.batch!.date }));
       setFileSnapshot({
-        name: file.name,
-        size: file.size,
+        name: files.length === 1 ? files[0].name : `${files.length} PDF-delen`,
+        size: files.reduce((total, file) => total + file.size, 0),
         status: data.batch.status,
         uploadedAt: getUploadTime(),
       });
@@ -8994,6 +8994,14 @@ export default function BakkerijLogistiekDashboard() {
               loading={batchLoadState === "loading"}
               onClick={refreshBatch}
             />
+            <button
+              type="button"
+              disabled={isImporting}
+              onClick={() => fileInputRef.current?.click()}
+              className="min-h-10 border border-[#1a1815] bg-white px-3 text-xs font-black text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:opacity-50"
+            >
+              {isImporting ? "PDF inladen..." : "PDF handmatig"}
+            </button>
             <MarzipanPhotoPrintButton
               count={marzipanPrintItems.length + arendNumberPrintCount}
               disabled={
@@ -9028,6 +9036,7 @@ export default function BakkerijLogistiekDashboard() {
               ref={fileInputRef}
               type="file"
               accept=".pdf,.xls,.xlsx,.csv"
+              multiple
               className="sr-only"
               onChange={handleFileChange}
             />
