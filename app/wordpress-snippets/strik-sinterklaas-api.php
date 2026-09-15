@@ -834,7 +834,9 @@ function strik_sinterklaas_mailing_send($request) {
         $subject_key = $kind === 'folder' ? 'subject' : ($kind === 'reminder1' ? 'reminder1Subject' : 'reminder2Subject');
         $body_key = $kind === 'folder' ? 'body' : ($kind === 'reminder1' ? 'reminder1Body' : 'reminder2Body');
         $name = $contact['contactName'] !== '' ? $contact['contactName'] : 'heer/mevrouw';
-        $body = str_replace('{{contactpersoon}}', $name, $campaign[$body_key]);
+        $subject = isset($input['subject']) ? strik_sinterklaas_text($input['subject'], 240) : $campaign[$subject_key];
+        $mail_body = isset($input['body']) ? strik_sinterklaas_textarea($input['body'], 12000) : $campaign[$body_key];
+        $body = str_replace('{{contactpersoon}}', $name, $mail_body);
         if ($kind === 'folder' && $campaign['folderUrl'] !== '') $body .= "\n\nBekijk de folder: " . $campaign['folderUrl'];
         $headers = array('Content-Type: text/plain; charset=UTF-8', 'From: Strik Patisserie <info@strik-patisserie.nl>', 'Reply-To: info@strik-patisserie.nl');
         $attachments = array();
@@ -843,7 +845,7 @@ function strik_sinterklaas_mailing_send($request) {
             $file = $attachment_id ? get_attached_file($attachment_id) : '';
             if ($file && file_exists($file)) $attachments[] = $file;
         }
-        if (!wp_mail($contact['email'], $campaign[$subject_key], $body, $headers, $attachments)) return new WP_Error('mail_failed', 'WordPress kon de e-mail niet versturen.', array('status' => 502));
+        if (!wp_mail($contact['email'], $subject, $body, $headers, $attachments)) return new WP_Error('mail_failed', 'WordPress kon de e-mail niet versturen.', array('status' => 502));
         $campaign['customers'][$customer_index]['recipients'][$recipient_index]['sent'][] = array('kind' => $kind, 'sentAt' => wp_date(DATE_ATOM));
         $campaign['updatedAt'] = wp_date(DATE_ATOM);
         $campaigns[$year] = $campaign;

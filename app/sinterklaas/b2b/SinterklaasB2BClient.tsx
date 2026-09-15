@@ -673,6 +673,7 @@ function B2BOrderRow({
     order.reminderEmailedAt &&
       `Reminder gemaild: ${formatDateTime(order.reminderEmailedAt)}`,
   ].filter(Boolean);
+  const archived = order.id.startsWith("historie-");
 
   return (
     <article
@@ -734,6 +735,11 @@ function B2BOrderRow({
         </div>
 
         <div className="flex flex-wrap items-start justify-start gap-1.5 lg:justify-end">
+          {archived ? (
+            <span className="rounded-full bg-[#f2eee8] px-3 py-1 text-xs font-black text-[#6b645b]">
+              Archief · alleen lezen
+            </span>
+          ) : <>
           {(
             [
               ["entered", "Ingevoerd"],
@@ -771,6 +777,7 @@ function B2BOrderRow({
           >
             {updatingId === `${order.id}-delete` ? "..." : "Verwijder"}
           </button>
+          </>}
         </div>
       </div>
     </article>
@@ -971,11 +978,21 @@ export default function SinterklaasB2BClient() {
             placeholder="Zoek klant, datum, product"
             className="h-10 border border-[#e4ded5] bg-[#faf8f5] px-3 text-sm font-bold outline-none"
           />
-          <input
+          <select
+            aria-label="Besteljaar"
             value={year}
             onChange={(event) => setYear(event.target.value)}
             className="h-10 border border-[#e4ded5] bg-[#faf8f5] px-3 text-sm font-black outline-none"
-          />
+          >
+            {Array.from(
+              { length: Number(currentYear()) - 2018 },
+              (_, index) => String(Number(currentYear()) - index)
+            ).map((optionYear) => (
+              <option key={optionYear} value={optionYear}>
+                {optionYear} · {optionYear === currentYear() ? "huidig" : "archief"}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={() => void loadOrders(year, search)}
