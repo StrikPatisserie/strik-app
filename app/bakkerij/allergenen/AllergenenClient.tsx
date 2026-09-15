@@ -38,24 +38,6 @@ const allergenAliases: Record<string, AllergenName> = {
   zwaveldioxide: "Zwaveldioxide en sulfieten",
 };
 
-const iconCenters: Record<AllergenName, number> = {
-  Selderij: 53,
-  Vis: 160,
-  Schaaldieren: 267,
-  Mosterd: 373,
-  "Zwaveldioxide en sulfieten": 480,
-  Weekdieren: 587,
-  Lupine: 693,
-  Pinda: 800,
-  Soja: 907,
-  Noten: 1013,
-  Sesam: 1120,
-  "Melk (lactose)": 1227,
-  Gluten: 1333,
-  Alcohol: 1440,
-  Ei: 1547,
-};
-
 const sourceMatchers: Record<AllergenName, Array<[RegExp, string]>> = {
   Gluten: [
     [/\brogge\b/i, "rogge"], [/\bspelt\b/i, "spelt"],
@@ -169,24 +151,32 @@ function lineFromRecipe(recipe: Recipe, recipes: Recipe[], ingredients: Ingredie
 }
 
 function AllergenIcon({ allergen, small = false }: { allergen: AllergenName; small?: boolean }) {
-  const size = small ? 28 : 36;
-  const scale = size / 82;
-  const imageHeight = 107 * scale;
-  const imageWidth = 1706 * scale;
-  const imageLeft = -(iconCenters[allergen] * scale - size / 2);
+  const pictograms: Record<AllergenName, React.ReactNode> = {
+    Gluten: <><path d="M8 20V7m0 3L4.5 7.5M8 14l-3.5-2.5M8 18l-3-2"/><path d="M16 20V4m0 5l3.5-3M16 13l3.5-2.5M16 17l3-2"/></>,
+    "Melk (lactose)": <><path d="M9 3h6v4l2 3v10H7V10l2-3Z"/><path d="M9 7h6M8 12h8"/></>,
+    Ei: <path d="M17.5 15.5a5.5 5.5 0 0 1-11 0C6.5 11 9 4 12 4s5.5 7 5.5 11.5Z"/>,
+    Noten: <><path d="M8 8c2-3 7-2 8 1 3 1 3 5 .5 6.5-2 3-7 4-9.5 1.5C4 14 5 10 8 8Z"/><path d="m9 9 6 6M8 14l4-4"/></>,
+    Pinda: <path d="M8 4c3-1 4 2 4 4 0-2 2-4 4-3 3 1 2 5 0 7 2 3 0 7-3 7-2 0-2-2-2-4 0 2-2 4-4 3-4-1-3-5-1-7-2-2-2-6 0-7Z"/>,
+    Soja: <><path d="M4 15c4-9 12-10 16-6-1 7-8 11-16 6Z"/><circle cx="9" cy="13" r="1"/><circle cx="14" cy="10" r="1"/></>,
+    Sesam: <><ellipse cx="8" cy="9" rx="2" ry="3"/><ellipse cx="15.5" cy="8" rx="2" ry="3"/><ellipse cx="12" cy="16" rx="2" ry="3"/></>,
+    Selderij: <><path d="M8 20c1-6 1-11 0-16m4 16c0-6 1-11 3-16m-5 8c-3-2-5-2-6-1m8-3c3-2 5-2 7-1m-8 9c-3-2-5-2-7-1m8-3c3-2 5-2 7-1"/></>,
+    Mosterd: <><path d="M8 8h8l1 12H7L8 8Z"/><path d="M9 4h6v4H9zM9 13h6"/></>,
+    Vis: <><path d="M4 12c4-5 10-5 14 0-4 5-10 5-14 0Z"/><path d="m18 12 3-3v6l-3-3Z"/><circle cx="8" cy="11" r=".6" fill="currentColor"/></>,
+    Schaaldieren: <><path d="M8 9a4 4 0 0 1 8 0v7a4 4 0 0 1-8 0V9Z"/><path d="M8 11 4 8m12 3 4-3M8 15l-4 2m12-2 4 2M10 7V4m4 3V4"/></>,
+    Weekdieren: <><path d="M5 18c1-8 4-12 7-12s6 4 7 12H5Z"/><path d="M8 18c0-5 2-9 4-12m4 12c0-5-2-9-4-12"/></>,
+    Lupine: <><path d="M12 21V8"/><path d="M12 9c-4 0-5-5-1-6 2 0 2 2 1 3 1-3 5-2 5 1 0 2-3 3-5 2ZM12 13c-4 0-5 4-2 5m2-2c4-2 6 1 4 3"/></>,
+    "Zwaveldioxide en sulfieten": <><path d="M9 3h6m-5 0v6l-4 9c-.5 1 .2 2 1.5 2h9c1.3 0 2-1 1.5-2l-4-9V3"/><path d="M8 15h8"/></>,
+    Alcohol: <><path d="M7 4h10l-1 6a4 4 0 0 1-8 0L7 4Z"/><path d="M12 14v6m-3 0h6"/></>,
+  };
   return (
     <span
       aria-label={allergen}
       title={allergen}
       className={`allergen-code-icon ${small ? "allergen-code-icon-small" : ""}`}
     >
-      <img
-        src="/allergenen-icons.png"
-        alt=""
-        aria-hidden="true"
-        className="allergen-symbol-sprite"
-        style={{ width: imageWidth, height: imageHeight, left: imageLeft }}
-      />
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        {pictograms[allergen]}
+      </svg>
     </span>
   );
 }

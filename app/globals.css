@@ -531,8 +531,10 @@ select:focus {
   overflow: hidden;
   border: 2px solid #1a1815;
   border-radius: 9999px;
-  background: #fff;
+  background: #1a1815;
   color: #fff;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 .allergen-code-icon-small {
   width: 1.75rem;
@@ -540,13 +542,15 @@ select:focus {
   flex-basis: 1.75rem;
   border-width: 1.5px;
 }
-.allergen-symbol-sprite {
-  position: absolute;
-  top: 0;
-  max-width: none !important;
-  filter: invert(1) grayscale(1) contrast(2);
-  print-color-adjust: exact;
-  -webkit-print-color-adjust: exact;
+.allergen-code-icon svg {
+  display: block;
+  width: 72%;
+  height: 72%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 @media print {
@@ -582,6 +586,10 @@ select:focus {
     color: #fff !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+  .allergen-print-sheet .allergen-code-icon svg,
+  .allergen-print-sheet .allergen-code-icon svg * {
+    visibility: visible !important;
   }
   .allergen-print-sheet footer { position: fixed; bottom: 0; width: 100%; border-top: .5pt solid #aaa; padding-top: 2mm; text-align: center; font-size: 7pt; color: #666; }
 }
