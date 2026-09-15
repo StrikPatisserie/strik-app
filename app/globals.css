@@ -555,11 +555,34 @@ select:focus {
 
 @media print {
   @page { size: A4 portrait; margin: 12mm; }
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
   body * { visibility: hidden !important; }
+  main {
+    min-height: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+  main > div {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+  main > div > :not(.allergen-screen),
+  .allergen-screen > :not(.allergen-print-sheet) {
+    display: none !important;
+  }
+  .allergen-screen {
+    display: block !important;
+    min-height: 0 !important;
+  }
   .allergen-print-sheet, .allergen-print-sheet * { visibility: visible !important; }
   .allergen-print-sheet {
-    position: absolute;
-    inset: 0;
+    position: static;
     display: block;
     width: 100%;
     color: #1a1815;
