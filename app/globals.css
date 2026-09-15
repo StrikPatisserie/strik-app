@@ -504,7 +504,7 @@ select:focus {
   min-height: 2.55rem;
   border: 1px solid #d9d3cb;
   border-radius: .55rem;
-  background: #1a1815;
+  background: #fff;
   padding: .55rem .7rem;
   color: #1a1815;
   font-size: .82rem;
