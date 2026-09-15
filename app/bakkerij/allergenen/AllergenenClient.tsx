@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import {
   fetchRecepturenData,
-  saveRecepturenData,
   type RecepturenData,
 } from "../recepturen/recepturenApi";
+import { fetchAllergenLists, saveAllergenLists } from "./allergenApi";
 import type { Ingredient, Recipe } from "../recepturen/types";
 import {
   ALLERGENS,
@@ -38,22 +38,22 @@ const allergenAliases: Record<string, AllergenName> = {
   zwaveldioxide: "Zwaveldioxide en sulfieten",
 };
 
-const allergenCodes: Record<AllergenName, string> = {
-  Selderij: "SE",
-  Vis: "VIS",
-  Schaaldieren: "SCH",
-  Mosterd: "MO",
-  "Zwaveldioxide en sulfieten": "SO₂",
-  Weekdieren: "WE",
-  Lupine: "LU",
-  Pinda: "PI",
-  Soja: "SO",
-  Noten: "NO",
-  Sesam: "SES",
-  "Melk (lactose)": "MELK",
-  Gluten: "GLU",
-  Alcohol: "ALC",
-  Ei: "EI",
+const iconCenters: Record<AllergenName, number> = {
+  Selderij: 53,
+  Vis: 160,
+  Schaaldieren: 267,
+  Mosterd: 373,
+  "Zwaveldioxide en sulfieten": 480,
+  Weekdieren: 587,
+  Lupine: 693,
+  Pinda: 800,
+  Soja: 907,
+  Noten: 1013,
+  Sesam: 1120,
+  "Melk (lactose)": 1227,
+  Gluten: 1333,
+  Alcohol: 1440,
+  Ei: 1547,
 };
 
 const sourceMatchers: Record<AllergenName, Array<[RegExp, string]>> = {
@@ -169,13 +169,24 @@ function lineFromRecipe(recipe: Recipe, recipes: Recipe[], ingredients: Ingredie
 }
 
 function AllergenIcon({ allergen, small = false }: { allergen: AllergenName; small?: boolean }) {
+  const size = small ? 28 : 36;
+  const scale = size / 82;
+  const imageHeight = 107 * scale;
+  const imageWidth = 1706 * scale;
+  const imageLeft = -(iconCenters[allergen] * scale - size / 2);
   return (
     <span
       aria-label={allergen}
       title={allergen}
       className={`allergen-code-icon ${small ? "allergen-code-icon-small" : ""}`}
     >
-      {allergenCodes[allergen]}
+      <img
+        src="/allergenen-icons.png"
+        alt=""
+        aria-hidden="true"
+        className="allergen-symbol-sprite"
+        style={{ width: imageWidth, height: imageHeight, left: imageLeft }}
+      />
     </span>
   );
 }
@@ -215,6 +226,7 @@ export default function AllergenenClient() {
   const [recipeChoice, setRecipeChoice] = useState("");
   const [message, setMessage] = useState("Recepturen laden...");
   const [saving, setSaving] = useState(false);
+  const [archiveLists, setArchiveLists] = useState<CustomerAllergenList[]>([]);
 
   useEffect(() => {
     void fetchRecepturenData().then((result) => {
@@ -225,6 +237,9 @@ export default function AllergenenClient() {
       setData(result.data);
       setMessage("");
     });
+    void fetchAllergenLists()
+      .then(setArchiveLists)
+      .catch((error) => setMessage(error instanceof Error ? error.message : "Allergenenarchief kon niet geladen worden."));
   }, []);
 
   const products = useMemo(
@@ -236,7 +251,7 @@ export default function AllergenenClient() {
     [data, search]
   );
 
-  const archives = [...(data?.allergenLists ?? [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const archives = [...archiveLists].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   function updateDraft(patch: Partial<CustomerAllergenList>) {
     setDraft((current) => current ? { ...current, ...patch, updatedAt: new Date().toISOString() } : current);
@@ -270,17 +285,18 @@ export default function AllergenenClient() {
   }
 
   async function persist(nextArchives: CustomerAllergenList[]) {
-    if (!data) return false;
     setSaving(true);
-    const result = await saveRecepturenData({ ...data, allergenLists: nextArchives });
-    setSaving(false);
-    if (!result.ok) {
-      setMessage(result.message);
+    try {
+      const storedLists = await saveAllergenLists(nextArchives);
+      setArchiveLists(storedLists);
+      setMessage("Allergenenlijst opgeslagen in WordPress.");
+      return true;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Allergenenlijst kon niet opgeslagen worden.");
       return false;
+    } finally {
+      setSaving(false);
     }
-    setData(result.data);
-    setMessage("Allergenenlijst opgeslagen.");
-    return true;
   }
 
   async function saveDraft(printAfter = false) {

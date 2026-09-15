@@ -28,6 +28,10 @@ if (!defined('STRIK_RECEPTUREN_OPTION_NAME')) {
     define('STRIK_RECEPTUREN_OPTION_NAME', 'strik_recepturen_data');
 }
 
+if (!defined('STRIK_RECEPTUREN_ALLERGEN_LISTS_OPTION_NAME')) {
+    define('STRIK_RECEPTUREN_ALLERGEN_LISTS_OPTION_NAME', 'strik_recepturen_allergen_lists');
+}
+
 if (!defined('STRIK_RECEPTUREN_MAX_JSON_BYTES')) {
     define('STRIK_RECEPTUREN_MAX_JSON_BYTES', 4500000);
 }
@@ -85,6 +89,7 @@ function strik_recepturen_v1_defaults() {
         'packagingItems' => array(),
         'invoiceImports' => array(),
         'manualProductionPlanningItems' => array(),
+        'allergenLists' => array(),
         'bakeryHome' => array(
             'notes' => array(),
             'offers' => array(),
@@ -373,6 +378,10 @@ function strik_recepturen_v1_normalize_data($data) {
         'manualProductionPlanningItems' => strik_recepturen_v1_normalize_manual_planning_items(
             isset($data['manualProductionPlanningItems']) ? $data['manualProductionPlanningItems'] : array()
         ),
+        'allergenLists' => strik_recepturen_v1_limit_list(
+            isset($data['allergenLists']) ? $data['allergenLists'] : array(),
+            250
+        ),
         'bakeryHome' => strik_recepturen_v1_normalize_bakery_home(
             isset($data['bakeryHome']) ? $data['bakeryHome'] : array()
         ),
@@ -501,6 +510,33 @@ function strik_recepturen_v1_create_revision($data, $reason = 'before_save') {
 if (!function_exists('strik_recepturen_v1_get')) {
 function strik_recepturen_v1_get() {
     return rest_ensure_response(strik_recepturen_v1_get_data());
+}
+}
+
+if (!function_exists('strik_recepturen_v1_allergen_lists_get')) {
+function strik_recepturen_v1_allergen_lists_get() {
+    $lists = get_option(STRIK_RECEPTUREN_ALLERGEN_LISTS_OPTION_NAME, array());
+    return rest_ensure_response(array(
+        'lists' => strik_recepturen_v1_limit_list($lists, 250),
+    ));
+}
+}
+
+if (!function_exists('strik_recepturen_v1_allergen_lists_save')) {
+function strik_recepturen_v1_allergen_lists_save($request) {
+    $params = $request->get_json_params();
+    $lists = is_array($params) && isset($params['lists']) && is_array($params['lists'])
+        ? $params['lists']
+        : null;
+    if ($lists === null) {
+        return new WP_Error('strik_allergen_lists_invalid', 'Geen geldige allergenenlijsten ontvangen.', array('status' => 400));
+    }
+    $clean = strik_recepturen_v1_limit_list(
+        strik_recepturen_v1_sanitize_deep($lists),
+        250
+    );
+    update_option(STRIK_RECEPTUREN_ALLERGEN_LISTS_OPTION_NAME, $clean, false);
+    return rest_ensure_response(array('lists' => $clean));
 }
 }
 
@@ -962,6 +998,19 @@ function strik_recepturen_v1_admin_create_backup() {
 add_action('admin_post_strik_recepturen_create_backup', 'strik_recepturen_v1_admin_create_backup');
 
 add_action('rest_api_init', function () {
+    register_rest_route('strik/v1', '/recepturen-allergen-lists', array(
+        array(
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'strik_recepturen_v1_allergen_lists_get',
+            'permission_callback' => 'strik_recepturen_v1_permission',
+        ),
+        array(
+            'methods' => WP_REST_Server::EDITABLE,
+            'callback' => 'strik_recepturen_v1_allergen_lists_save',
+            'permission_callback' => 'strik_recepturen_v1_permission',
+        ),
+    ));
+
     register_rest_route('strik/v1', '/recepturen', array(
         array(
             'methods' => WP_REST_Server::READABLE,
