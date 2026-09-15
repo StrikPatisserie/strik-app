@@ -310,7 +310,19 @@ export default function AllergenenClient() {
     }
   }
 
-  async function saveDraft(printAfter = false) {
+  function openPrintDialog(list: CustomerAllergenList, asPdf = false) {
+    window.setTimeout(() => {
+      const originalTitle = document.title;
+      if (asPdf) {
+        const customer = list.customerName.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+        document.title = `Allergenenlijst-${customer || "klant"}`;
+      }
+      window.print();
+      document.title = originalTitle;
+    }, 150);
+  }
+
+  async function saveDraft(output?: "print" | "pdf") {
     if (!draft || !draft.customerName.trim() || !draft.lines.length) {
       setMessage("Vul een klantnaam in en voeg minimaal één product toe.");
       return;
@@ -319,7 +331,7 @@ export default function AllergenenClient() {
     const next = [...archives.filter((item) => item.id !== saved.id), saved];
     if (await persist(next)) {
       setDraft(saved);
-      if (printAfter) window.setTimeout(() => window.print(), 80);
+      if (output) openPrintDialog(saved, output === "pdf");
     }
   }
 
@@ -328,7 +340,7 @@ export default function AllergenenClient() {
     await persist(archives.filter((item) => item.id !== id));
   }
 
-  function openArchive(item: CustomerAllergenList, printAfter = false) {
+  function openArchive(item: CustomerAllergenList, output?: "print" | "pdf") {
     if (!data) return;
     const refreshed = refreshListFromRecipes(
       structuredClone(item),
@@ -337,7 +349,7 @@ export default function AllergenenClient() {
     );
     setDraft(refreshed);
     setArchiveOpen(false);
-    if (printAfter) window.setTimeout(() => window.print(), 150);
+    if (output) openPrintDialog(refreshed, output === "pdf");
   }
 
   return (
@@ -376,7 +388,7 @@ export default function AllergenenClient() {
         {archiveOpen && (
           <section className="rounded-xl border border-[#d6e5d8] bg-white p-3 shadow-sm">
             <h2 className="mb-3 text-lg font-black">Archief per klant</h2>
-            <div className="grid gap-2">{archives.length ? archives.map((item) => <article key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e5e0d9] p-3"><div><p className="font-black">{item.customerName}</p><p className="text-xs text-[#777067]">{item.lines.length} producten · bijgewerkt {new Date(item.updatedAt).toLocaleDateString("nl-NL")}</p></div><div className="flex gap-2"><button className="allergen-small-button" onClick={() => openArchive(item)}>Openen / aanpassen</button><button className="allergen-small-button" onClick={() => openArchive(item, true)}>Afdrukken</button><button className="allergen-small-button text-red-700" onClick={() => void removeArchive(item.id)}>Verwijderen</button></div></article>) : <p className="text-sm text-[#777067]">Er zijn nog geen klantlijsten opgeslagen.</p>}</div>
+            <div className="grid gap-2">{archives.length ? archives.map((item) => <article key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#e5e0d9] p-3"><div><p className="font-black">{item.customerName}</p><p className="text-xs text-[#777067]">{item.lines.length} producten · bijgewerkt {new Date(item.updatedAt).toLocaleDateString("nl-NL")}</p></div><div className="flex flex-wrap gap-2"><button className="allergen-small-button" onClick={() => openArchive(item)}>Openen / aanpassen</button><button className="allergen-small-button" onClick={() => openArchive(item, "print")}>Printen</button><button className="allergen-small-button" onClick={() => openArchive(item, "pdf")}>PDF opslaan</button><button className="allergen-small-button text-red-700" onClick={() => void removeArchive(item.id)}>Verwijderen</button></div></article>) : <p className="text-sm text-[#777067]">Er zijn nog geen klantlijsten opgeslagen.</p>}</div>
           </section>
         )}
 
@@ -386,7 +398,7 @@ export default function AllergenenClient() {
               <div className="grid gap-2 sm:grid-cols-3"><label className="text-xs font-black">Voor klant<input className="allergen-input mt-1" value={draft.customerName} onChange={(event) => updateDraft({ customerName: event.target.value })} placeholder="Bijv. Radboud" /></label><label className="text-xs font-black">Contactpersoon<input className="allergen-input mt-1" value={draft.contactName} onChange={(event) => updateDraft({ contactName: event.target.value })} /></label><label className="text-xs font-black">Referentie / assortiment<input className="allergen-input mt-1" value={draft.reference} onChange={(event) => updateDraft({ reference: event.target.value })} /></label></div>
               <div className="mt-3 flex flex-wrap gap-2"><select className="allergen-input min-w-[260px] flex-1" value={recipeChoice} onChange={(event) => setRecipeChoice(event.target.value)}><option value="">Kies een gekoppeld recept...</option>{data.recipes.filter((recipe) => recipe.type === "finalProduct" && recipe.status !== "old").sort((a,b) => a.name.localeCompare(b.name,"nl")).map((recipe) => <option key={recipe.id} value={recipe.id}>{recipe.name}</option>)}</select><button className="allergen-small-button" onClick={addRecipe}>Recept toevoegen</button><button className="allergen-small-button" onClick={addTemporaryProduct}>Tijdelijk product toevoegen</button></div>
               <div className="mt-4 grid gap-3">{draft.lines.map((line, index) => <article key={line.id} className="rounded-lg border border-[#ddd7cf] p-3"><div className="flex items-center gap-2"><span className="text-xs font-black text-[#8b8278]">{index + 1}</span><input className="allergen-input font-black" value={line.productName} onChange={(event) => updateLine(line.id, { productName: event.target.value })} /><button className="px-2 text-xl text-red-700" aria-label="Product verwijderen" onClick={() => updateDraft({ lines: draft.lines.filter((item) => item.id !== line.id) })}>×</button></div><label className="mt-2 block text-xs font-bold">Opmerking (optioneel)<textarea className="allergen-input mt-1 min-h-16 resize-y" value={line.note ?? ""} onChange={(event) => updateLine(line.id, { note: event.target.value })} placeholder="Bijv. Let op: de allergenen kunnen verschillen per seizoensuitvoering." /></label><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">{ALLERGENS.map((allergen) => { const selected = line.allergens.includes(allergen); return <button key={allergen} type="button" className={`relative flex min-h-20 flex-col items-center justify-center rounded-lg border p-1 text-[0.62rem] font-bold ${selected ? "border-[#496b3f] bg-[#edf5ea]" : "border-[#e5e0d9] bg-white opacity-65"}`} onClick={() => toggleAllergen(line, allergen)}><AllergenIcon allergen={allergen} />{selected && <span className="absolute right-1 top-0 text-lg font-black text-[#31552a]">×</span>}<span>{allergen}</span></button>; })}</div>{line.allergens.some((allergen) => specifiedAllergens.includes(allergen)) && <div className="mt-3 grid gap-2 sm:grid-cols-2">{line.allergens.filter((allergen) => specifiedAllergens.includes(allergen)).map((allergen) => <label key={allergen} className="text-xs font-bold">Specificatie {allergen}<input className="allergen-input mt-1" value={line.origins[allergen] ?? ""} onChange={(event) => updateLine(line.id, { origins: { ...line.origins, [allergen]: event.target.value } })} placeholder={allergen === "Gluten" ? "Bijv. tarwe, rogge" : "Bijv. amandel, hazelnoot"} /></label>)}</div>}</article>)}</div>
-              <div className="mt-4 flex flex-wrap justify-end gap-2"><button className="allergen-small-button" onClick={() => setDraft(null)}>Sluiten</button><button className="allergen-small-button bg-[#edf5ea]" disabled={saving} onClick={() => void saveDraft(false)}>{saving ? "Opslaan..." : "Opslaan"}</button><button className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={() => void saveDraft(true)}>Opslaan & printen</button></div>
+              <div className="mt-4 flex flex-wrap justify-end gap-2"><button className="allergen-small-button" onClick={() => setDraft(null)}>Sluiten</button><button className="allergen-small-button bg-[#edf5ea]" disabled={saving} onClick={() => void saveDraft()}>{saving ? "Opslaan..." : "Opslaan"}</button><button className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={() => void saveDraft("print")}>Printen</button><button className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={() => void saveDraft("pdf")}>PDF opslaan</button></div>
             </section>
             <PrintSheet list={draft} />
           </>
