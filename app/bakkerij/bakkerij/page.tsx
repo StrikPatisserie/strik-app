@@ -20,7 +20,7 @@ const bakkerijLinks = [
   },
   {
     href: "/bakkerij/haccp",
-    label: "HACCP",
+    label: "HACCP & registraties",
     icon: strikIcons.cleaning,
     tone: "green" as const,
   },
