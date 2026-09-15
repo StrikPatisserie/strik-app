@@ -754,35 +754,29 @@ add_action('init', 'strik_sinterklaas_maybe_send_b2b_reminders');
 if (!function_exists('strik_sinterklaas_mailing_clean')) {
 function strik_sinterklaas_mailing_clean($input, $existing = array()) {
     $year = strik_sinterklaas_year(isset($input['year']) ? $input['year'] : '');
-    $contacts = array();
-    $raw_contacts = isset($input['contacts']) && is_array($input['contacts']) ? $input['contacts'] : array();
-    $existing_contacts = array();
-    foreach ((isset($existing['contacts']) && is_array($existing['contacts']) ? $existing['contacts'] : array()) as $item) {
-        if (is_array($item) && !empty($item['id'])) $existing_contacts[(string) $item['id']] = $item;
-    }
-    foreach (array_slice($raw_contacts, 0, 3000) as $index => $contact) {
-        if (!is_array($contact)) continue;
-        $id = strik_sinterklaas_text(isset($contact['id']) ? $contact['id'] : '', 100);
-        if ($id === '') $id = strik_sinterklaas_create_id('mailcontact', isset($contact['company']) ? $contact['company'] : '');
-        $old = isset($existing_contacts[$id]) ? $existing_contacts[$id] : array();
-        $sent = isset($old['sent']) && is_array($old['sent']) ? $old['sent'] : array();
-        if (isset($contact['sent']) && is_array($contact['sent'])) $sent = $contact['sent'];
-        $clean_sent = array();
-        foreach (array_slice($sent, 0, 10) as $event) {
-            if (!is_array($event)) continue;
-            $kind = isset($event['kind']) ? strik_sinterklaas_text($event['kind'], 20) : '';
-            if (!in_array($kind, array('folder', 'reminder1', 'reminder2'), true)) continue;
-            $clean_sent[] = array('kind' => $kind, 'sentAt' => strik_sinterklaas_text(isset($event['sentAt']) ? $event['sentAt'] : '', 80));
+    $customers = array();
+    $raw_customers = isset($input['customers']) && is_array($input['customers']) ? $input['customers'] : array();
+    foreach (array_slice($raw_customers, 0, 2000) as $customer) {
+        if (!is_array($customer)) continue;
+        $customer_id = strik_sinterklaas_text(isset($customer['id']) ? $customer['id'] : '', 100);
+        if ($customer_id === '') $customer_id = strik_sinterklaas_create_id('mailcustomer', isset($customer['company']) ? $customer['company'] : '');
+        $recipients = array();
+        $raw_recipients = isset($customer['recipients']) && is_array($customer['recipients']) ? $customer['recipients'] : array();
+        foreach (array_slice($raw_recipients, 0, 30) as $recipient) {
+            if (!is_array($recipient)) continue;
+            $email = strik_sinterklaas_email(isset($recipient['email']) ? $recipient['email'] : '');
+            if ($email === '') continue;
+            $recipient_id = strik_sinterklaas_text(isset($recipient['id']) ? $recipient['id'] : '', 100);
+            if ($recipient_id === '') $recipient_id = strik_sinterklaas_create_id('mailaddress', $email);
+            $sent = array();
+            foreach ((isset($recipient['sent']) && is_array($recipient['sent']) ? array_slice($recipient['sent'], 0, 10) : array()) as $event) {
+                if (!is_array($event)) continue;
+                $kind = strik_sinterklaas_text(isset($event['kind']) ? $event['kind'] : '', 20);
+                if (in_array($kind, array('folder', 'reminder1', 'reminder2'), true)) $sent[] = array('kind' => $kind, 'sentAt' => strik_sinterklaas_text(isset($event['sentAt']) ? $event['sentAt'] : '', 80));
+            }
+            $recipients[] = array('id' => $recipient_id, 'contactName' => strik_sinterklaas_text(isset($recipient['contactName']) ? $recipient['contactName'] : '', 160), 'email' => $email, 'doNotEmail' => !empty($recipient['doNotEmail']), 'sent' => $sent);
         }
-        $contacts[] = array(
-            'id' => $id,
-            'company' => strik_sinterklaas_text(isset($contact['company']) ? $contact['company'] : '', 180),
-            'contactName' => strik_sinterklaas_text(isset($contact['contactName']) ? $contact['contactName'] : '', 160),
-            'email' => strik_sinterklaas_email(isset($contact['email']) ? $contact['email'] : ''),
-            'notes' => strik_sinterklaas_textarea(isset($contact['notes']) ? $contact['notes'] : '', 1600),
-            'doNotEmail' => !empty($contact['doNotEmail']),
-            'sent' => $clean_sent,
-        );
+        $customers[] = array('id' => $customer_id, 'company' => strik_sinterklaas_text(isset($customer['company']) ? $customer['company'] : '', 180), 'notes' => strik_sinterklaas_textarea(isset($customer['notes']) ? $customer['notes'] : '', 1600), 'recipients' => $recipients);
     }
     return array(
         'year' => $year,
@@ -793,7 +787,7 @@ function strik_sinterklaas_mailing_clean($input, $existing = array()) {
         'reminder2Subject' => strik_sinterklaas_text(isset($input['reminder2Subject']) ? $input['reminder2Subject'] : '', 240),
         'reminder2Body' => strik_sinterklaas_textarea(isset($input['reminder2Body']) ? $input['reminder2Body'] : '', 12000),
         'folderUrl' => esc_url_raw(isset($input['folderUrl']) ? $input['folderUrl'] : ''),
-        'contacts' => $contacts,
+        'customers' => $customers,
         'updatedAt' => wp_date(DATE_ATOM),
     );
 }
@@ -803,7 +797,7 @@ if (!function_exists('strik_sinterklaas_mailing_get')) {
 function strik_sinterklaas_mailing_get($request) {
     $year = strik_sinterklaas_year($request->get_param('year'));
     $campaigns = get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, array());
-    return rest_ensure_response(isset($campaigns[$year]) ? $campaigns[$year] : array('year' => $year, 'contacts' => array()));
+    return rest_ensure_response(isset($campaigns[$year]) ? $campaigns[$year] : array('year' => $year, 'customers' => array()));
 }
 }
 
@@ -828,11 +822,14 @@ function strik_sinterklaas_mailing_send($request) {
     if (!is_array($campaigns)) $campaigns = array();
     $year = strik_sinterklaas_year(isset($input['year']) ? $input['year'] : '');
     $campaign = strik_sinterklaas_mailing_clean($input['campaign'], isset($campaigns[$year]) ? $campaigns[$year] : array());
-    $id = strik_sinterklaas_text(isset($input['id']) ? $input['id'] : '', 100);
+    $customer_id = strik_sinterklaas_text(isset($input['customerId']) ? $input['customerId'] : '', 100);
+    $recipient_id = strik_sinterklaas_text(isset($input['recipientId']) ? $input['recipientId'] : '', 100);
     $kind = strik_sinterklaas_text(isset($input['kind']) ? $input['kind'] : '', 20);
     if (!in_array($kind, array('folder', 'reminder1', 'reminder2'), true)) return new WP_Error('invalid_kind', 'Onbekend mailingtype.', array('status' => 400));
-    foreach ($campaign['contacts'] as $index => $contact) {
-        if ($contact['id'] !== $id) continue;
+    foreach ($campaign['customers'] as $customer_index => $customer) {
+      if ($customer['id'] !== $customer_id) continue;
+      foreach ($customer['recipients'] as $recipient_index => $contact) {
+        if ($contact['id'] !== $recipient_id) continue;
         if ($contact['doNotEmail'] || $contact['email'] === '') return new WP_Error('invalid_recipient', 'Dit contact mag niet worden gemaild.', array('status' => 400));
         $subject_key = $kind === 'folder' ? 'subject' : ($kind === 'reminder1' ? 'reminder1Subject' : 'reminder2Subject');
         $body_key = $kind === 'folder' ? 'body' : ($kind === 'reminder1' ? 'reminder1Body' : 'reminder2Body');
@@ -847,11 +844,12 @@ function strik_sinterklaas_mailing_send($request) {
             if ($file && file_exists($file)) $attachments[] = $file;
         }
         if (!wp_mail($contact['email'], $campaign[$subject_key], $body, $headers, $attachments)) return new WP_Error('mail_failed', 'WordPress kon de e-mail niet versturen.', array('status' => 502));
-        $campaign['contacts'][$index]['sent'][] = array('kind' => $kind, 'sentAt' => wp_date(DATE_ATOM));
+        $campaign['customers'][$customer_index]['recipients'][$recipient_index]['sent'][] = array('kind' => $kind, 'sentAt' => wp_date(DATE_ATOM));
         $campaign['updatedAt'] = wp_date(DATE_ATOM);
         $campaigns[$year] = $campaign;
         update_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, $campaigns, false);
         return rest_ensure_response($campaign);
+      }
     }
     return new WP_Error('contact_missing', 'Contact niet gevonden.', array('status' => 404));
 }
