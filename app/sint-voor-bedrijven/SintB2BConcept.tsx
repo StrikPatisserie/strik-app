@@ -10,6 +10,7 @@ type Product = {
   eyebrow: string;
   description: string;
   image: string;
+  gallery?: { src: string; label: string }[];
   shelfLife: string;
   tiers: PriceTier[];
   accent: string;
@@ -23,6 +24,10 @@ const products: Product[] = [
     eyebrow: "De klassieker",
     description: "Luxe chocoladeletter van circa 230 gram in melk, puur of wit.",
     image: "/sinterklaas/b2b-concept/product-1.png",
+    gallery: [
+      { src: "/sinterklaas/b2b-concept/product-1.png", label: "Chocoladeletters" },
+      { src: "/sinterklaas/b2b-concept/product-11.png", label: "Voorbeeld in een samengesteld pakket" },
+    ],
     shelfLife: "ca. 1 maand",
     accent: "#b9dddf",
     options: ["Melk", "Puur", "Wit", "Assorti"],
@@ -40,6 +45,11 @@ const products: Product[] = [
     eyebrow: "Meesterlijk gevuld",
     description: "Luxe staaf gevuld met 100% meesterlijk amandelspijs.",
     image: "/sinterklaas/b2b-concept/product-2.png",
+    gallery: [
+      { src: "/sinterklaas/b2b-concept/product-2.png", label: "Amandel- en speculaasstaven" },
+      { src: "/sinterklaas/b2b-concept/product-8.png", label: "Feestelijk verpakt in het Stafwerk pakket" },
+      { src: "/sinterklaas/b2b-concept/product-11.png", label: "Inspiratie voor een pakket op maat" },
+    ],
     shelfLife: "ca. 1 week",
     accent: "#f3c4ac",
     options: ["Amandelstaaf", "Speculaasstaaf", "Assorti"],
@@ -57,6 +67,11 @@ const products: Product[] = [
     eyebrow: "Met eigen boodschap",
     description: "Brosse speculaasplak met amandelen en optioneel een foto- of videoboodschap.",
     image: "/sinterklaas/b2b-concept/product-3.png",
+    gallery: [
+      { src: "/sinterklaas/b2b-concept/product-3.png", label: "Naturel en luxe speculaasbrok" },
+      { src: "/sinterklaas/b2b-concept/product-7.png", label: "Voorbeeld met een persoonlijke boodschap" },
+      { src: "/sinterklaas/b2b-concept/product-11.png", label: "Gecombineerd in een relatiegeschenk" },
+    ],
     shelfLife: "ca. 2 weken",
     accent: "#d79a6d",
     tiers: [
@@ -73,6 +88,11 @@ const products: Product[] = [
     eyebrow: "Favoriet",
     description: "Drie heerlijke stafjes van roomchocolade, marsepein en gevuld speculaas.",
     image: "/sinterklaas/b2b-concept/product-8.png",
+    gallery: [
+      { src: "/sinterklaas/b2b-concept/product-8.png", label: "Stafwerk pakket" },
+      { src: "/sinterklaas/b2b-concept/product-2.png", label: "Detail van de verschillende staven" },
+      { src: "/sinterklaas/b2b-concept/product-11.png", label: "Sfeervoorbeeld" },
+    ],
     shelfLife: "feestelijk verpakt",
     accent: "#f7c8aa",
     tiers: [
@@ -87,6 +107,10 @@ const products: Product[] = [
     eyebrow: "Alles wat lekker is",
     description: "Een complete giftbox met letter, taaitaai, kruidnoten, amandelstaaf en marsepein.",
     image: "/sinterklaas/b2b-concept/product-9.png",
+    gallery: [
+      { src: "/sinterklaas/b2b-concept/product-9.png", label: "De complete Sint Box" },
+      { src: "/sinterklaas/b2b-concept/product-11.png", label: "Inspiratie voor de inhoud" },
+    ],
     shelfLife: "luxe cadeauverpakking",
     accent: "#b9dddf",
     tiers: [
@@ -101,6 +125,10 @@ const products: Product[] = [
     eyebrow: "Klaar om te geven",
     description: "Speculaaspopje, marsepein aardappeltjes en chocoladeletter in feestelijke zak.",
     image: "/sinterklaas/b2b-concept/product-10.png",
+    gallery: [
+      { src: "/sinterklaas/b2b-concept/product-10.png", label: "Pakjesavond feestelijk verpakt" },
+      { src: "/sinterklaas/b2b-concept/product-11.png", label: "Sfeer- en assortimentsvoorbeeld" },
+    ],
     shelfLife: "feestelijk verpakt",
     accent: "#f3c4ac",
     tiers: [
@@ -127,6 +155,7 @@ export default function SintB2BConcept() {
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [logo, setLogo] = useState<Record<string, boolean>>({});
   const [quoteOpen, setQuoteOpen] = useState(false);
+  const [gallery, setGallery] = useState<{ product: Product; index: number } | null>(null);
 
   const selected = useMemo(
     () =>
@@ -168,7 +197,7 @@ export default function SintB2BConcept() {
             const quantity = quantities[product.id] || 0;
             const tier = tierFor(product, Math.max(1, quantity));
             return <article key={product.id} className="overflow-hidden rounded-[2rem] bg-[#fff3cf] shadow-[0_18px_55px_rgba(107,35,12,.16)]">
-              <div className="relative aspect-[4/3] overflow-hidden" style={{backgroundColor:product.accent}}><Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 hover:scale-105"/><span className="absolute left-4 top-4 rounded-full bg-[#d62d1d] px-3 py-1 text-xs font-black uppercase tracking-wider text-white">{product.eyebrow}</span><span className="absolute bottom-4 right-4 rounded-full bg-white px-3 py-1 text-xs font-black text-[#8a2d1c]">t.h.t. {product.shelfLife}</span></div>
+              <div className="relative aspect-[4/3] overflow-hidden" style={{backgroundColor:product.accent}}><Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 hover:scale-105"/><span className="absolute left-4 top-4 rounded-full bg-[#d62d1d] px-3 py-1 text-xs font-black uppercase tracking-wider text-white">{product.eyebrow}</span>{product.gallery&&product.gallery.length>1&&<button type="button" onClick={()=>setGallery({product,index:0})} className="absolute right-4 top-4 rounded-full bg-white/95 px-3 py-1.5 text-[.68rem] font-black text-[#60190f] shadow-md backdrop-blur transition hover:bg-white">▧ Meer foto&apos;s</button>}<span className="absolute bottom-4 right-4 rounded-full bg-white px-3 py-1 text-xs font-black text-[#8a2d1c]">t.h.t. {product.shelfLife}</span></div>
               <div className="p-5 sm:p-6"><h3 className="text-2xl font-black text-[#60190f]">{product.name}</h3><p className="mt-2 min-h-12 text-sm font-semibold leading-relaxed text-[#7e493c]">{product.description}</p>
                 <div className="mt-5 flex flex-wrap gap-1.5">{product.tiers.map((item)=><span key={item.label} className={`rounded-full px-2.5 py-1 text-[.68rem] font-black ${tier.label===item.label&&quantity>0?"bg-[#d62d1d] text-white":"bg-white text-[#7e493c]"}`}>{item.label} · {money(item.price)}</span>)}</div>
                 {product.options&&<select value={choices[product.id]||product.options[0]} onChange={(event)=>setChoices(current=>({...current,[product.id]:event.target.value}))} className="mt-5 h-11 w-full rounded-xl border border-[#e2c99c] bg-white px-3 text-sm font-black text-[#5a170f]">{product.options.map(option=><option key={option}>{option}</option>)}</select>}
@@ -186,6 +215,7 @@ export default function SintB2BConcept() {
       <div className="sticky bottom-0 z-30 border-t border-[#e6d7bf] bg-white/95 px-4 py-3 shadow-[0_-12px_35px_rgba(64,20,10,.14)] backdrop-blur sm:px-8"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><p className="text-xs font-bold text-[#7e493c]">{selected.reduce((sum,line)=>sum+line.quantity,0)} producten · excl. btw</p><p className="text-xl font-black text-[#60190f]">{money(total)}</p></div><button type="button" disabled={!selected.length} onClick={()=>setQuoteOpen(true)} className="rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40 sm:px-8">Bekijk offerteaanvraag</button></div></div>
 
       {quoteOpen&&<div className="fixed inset-0 z-50 flex items-end justify-center bg-[#391008]/55 p-0 sm:items-center sm:p-5"><section className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#d62d1d]">Concept</p><h2 className="mt-1 text-3xl font-black text-[#60190f]">Jouw offerteaanvraag</h2></div><button type="button" onClick={()=>setQuoteOpen(false)} className="h-10 w-10 rounded-full bg-white text-lg font-black">×</button></div><div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({product,quantity,tier,logoPrice,total:lineTotal})=><div key={product.id} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choices[product.id]||product.options?.[0]||"Standaard"}{logo[product.id]?" · met eigen logo":""} · {money(tier.price+logoPrice)} p.s.</p></div><strong>{money(lineTotal)}</strong></div>)}</div><div className="mt-4 flex justify-between border-t-2 border-[#60190f] pt-4 text-xl font-black"><span>Totaal excl. btw</span><span>{money(total)}</span></div><div className="mt-6 grid gap-3 sm:grid-cols-2"><input placeholder="Bedrijfsnaam" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input placeholder="Contactpersoon" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input type="email" placeholder="E-mailadres" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input type="tel" placeholder="Telefoonnummer" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><textarea placeholder="Gewenste leverdatum, verpakking of andere wensen" className="min-h-28 rounded-xl border border-[#dfd0b7] bg-white p-4 font-bold sm:col-span-2"/></div><button type="button" onClick={()=>alert("Dit is het eerste concept. Er wordt nog geen aanvraag verstuurd.")} className="mt-5 w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white">Offerte aanvragen · demo</button><p className="mt-3 text-center text-xs font-bold text-[#8b7669]">In deze conceptversie wordt nog niets verzonden.</p></section></div>}
+      {gallery&&gallery.product.gallery&&<div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2d0b06]/85 p-4" onClick={()=>setGallery(null)}><section className="w-full max-w-4xl" onClick={(event)=>event.stopPropagation()}><div className="mb-3 flex items-center justify-between text-white"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#efb800]">Meer foto&apos;s</p><h2 className="text-2xl font-black">{gallery.product.name}</h2></div><button type="button" onClick={()=>setGallery(null)} className="h-11 w-11 rounded-full bg-white text-xl font-black text-[#60190f]">×</button></div><div className="relative aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-[#fff3cf] sm:aspect-[16/10]"><Image src={gallery.product.gallery[gallery.index].src} alt={gallery.product.gallery[gallery.index].label} fill sizes="100vw" className="object-contain"/></div><p className="mt-3 text-center text-sm font-bold text-white">{gallery.product.gallery[gallery.index].label}</p><div className="mt-4 flex justify-center gap-2">{gallery.product.gallery.map((photo,index)=><button key={photo.src} type="button" aria-label={photo.label} onClick={()=>setGallery({...gallery,index})} className={`relative h-16 w-16 overflow-hidden rounded-xl border-2 sm:h-20 sm:w-20 ${index===gallery.index?"border-[#efb800]":"border-white/40"}`}><Image src={photo.src} alt="" fill sizes="80px" className="object-cover"/></button>)}</div></section></div>}
     </main>
   );
 }
