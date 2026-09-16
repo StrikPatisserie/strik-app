@@ -102,9 +102,9 @@ export async function POST(request: Request) {
       return Response.json({ orderNumber: existing.order_number });
     }
 
-    const { data: batchId, error: batchError } = await supabase.rpc("letter_suggest_batch", { p_requested_date: payload.pickupDate });
+    const { data: batchId, error: batchError } = await supabase.rpc("lettershop_suggest_open_batch", { p_requested_date: payload.pickupDate });
     if (batchError) return error("Beschikbare afhaaldatums konden niet worden gecontroleerd.", 503);
-    if (!batchId) return error("Voor deze afhaaldatum is nog geen productiedag beschikbaar. Kies een latere datum.");
+    if (!batchId) return error("Deze afhaaldatum is niet meer beschikbaar. Kies een andere datum of neem contact met ons op.");
 
     const clientIp = request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
     const clientHash = createHash("sha256").update(`${process.env.LETTERSHOP_RATE_SALT}:${clientIp}`).digest("hex");
