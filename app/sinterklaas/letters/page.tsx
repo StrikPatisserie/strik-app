@@ -22,6 +22,12 @@ const items = [
     icon: strikIcons.sinterklaasProductie,
     tone: "yellow" as const,
   },
+  {
+    href: "/lettershop",
+    title: "Lettershop · concept",
+    icon: strikIcons.sinterklaasLetter,
+    tone: "yellow" as const,
+  },
 ];
 
 export default async function SinterklaasLettersPage() {
