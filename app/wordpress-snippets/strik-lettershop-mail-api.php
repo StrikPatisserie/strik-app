@@ -101,7 +101,10 @@ function strik_lettershop_send_mail($request) {
             if (!preg_match('/\.(jpg|jpeg|png|webp|heic|heif)$/i', $name)) continue;
             $path = wp_tempnam($name);
             if (!$path || file_put_contents($path, $bytes) === false) continue;
-            $attachments[] = $path;
+            // wp_tempnam() creates a .tmp path. Give wp_mail() the actual
+            // image filename so mail clients recognize/download the attachment.
+            $mail_name = sanitize_file_name($number . '-foto-' . (count($attachments) + 1) . '-' . $name);
+            $attachments[$mail_name] = $path;
             $total_size += strlen($bytes);
         }
     }
