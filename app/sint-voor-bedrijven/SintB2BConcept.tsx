@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type PriceTier = { min: number; label: string; price?: number; discountPercent?: number };
 type Product = {
@@ -21,6 +21,7 @@ type Product = {
 
 // Conceptbedragen: vervang deze zodra de B2B-prijslijst voor 2026 definitief is.
 const NIJMEGEN_DELIVERY_FEE = 15;
+const GIFT_INTRO_SESSION_KEY = "strik-sint-gift-intro-2026-seen";
 const FOOD_VAT_FACTOR = 1.09;
 const logoPriceFor = (quantity: number) => quantity > 100 ? 0.35 : quantity > 50 ? 0.38 : 0.4;
 const roundCents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -214,6 +215,17 @@ export default function SintB2BConcept() {
   const [phone, setPhone] = useState("");
   const [wishes, setWishes] = useState("");
 
+  useEffect(() => {
+    if (window.sessionStorage.getItem(GIFT_INTRO_SESSION_KEY)) return;
+    const frame = window.requestAnimationFrame(() => setGiftOpen(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  function closeGiftIntro() {
+    window.sessionStorage.setItem(GIFT_INTRO_SESSION_KEY, "1");
+    setGiftOpen(false);
+  }
+
   const selected = useMemo(
     () =>
       products
@@ -293,10 +305,8 @@ export default function SintB2BConcept() {
           <p className="-mt-1 font-[Butterscotch] text-[clamp(2.8rem,8vw,6.5rem)] leading-none text-[#d62d1d]">Met een Strik</p>
           <p className="mt-7 max-w-2xl text-lg font-bold leading-relaxed text-[#6d2417] sm:text-xl">Verras collega’s en relaties met ambachtelijke Sinterklaascadeaus. Kies je producten, zie direct je staffel en stel vrijblijvend een offerteaanvraag samen.</p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
-            <button type="button" onClick={() => setGiftOpen(true)} className="group inline-flex items-center gap-3 rounded-full bg-[#d62d1d] px-6 py-4 text-sm font-black text-white shadow-[0_12px_30px_rgba(92,24,12,.2)] transition hover:-translate-y-1 hover:shadow-xl">
-              <span aria-hidden="true" className="text-xl transition group-hover:rotate-12">🎁</span> Open het cadeau
-            </button>
-            <button type="button" onClick={() => { setFinderOpen(true); window.setTimeout(() => document.getElementById("cadeaukeuzehulp")?.scrollIntoView({ behavior: "smooth" }), 0); }} className="rounded-full border-2 border-[#6d2417] px-6 py-3.5 text-sm font-black text-[#6d2417] transition hover:bg-white/20">Help me kiezen →</button>
+            <button type="button" onClick={() => { setFinderOpen(true); window.setTimeout(() => document.getElementById("cadeaukeuzehulp")?.scrollIntoView({ behavior: "smooth" }), 0); }} className="rounded-full bg-[#d62d1d] px-6 py-4 text-sm font-black text-white shadow-[0_12px_30px_rgba(92,24,12,.2)] transition hover:-translate-y-1 hover:shadow-xl">Vind jouw cadeau →</button>
+            <button type="button" onClick={() => document.getElementById("assortiment")?.scrollIntoView({ behavior: "smooth" })} className="rounded-full border-2 border-[#6d2417] px-6 py-3.5 text-sm font-black text-[#6d2417] transition hover:bg-white/20">Bekijk assortiment ↓</button>
           </div>
         </div>
       </header>
@@ -317,7 +327,7 @@ export default function SintB2BConcept() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl scroll-mt-6 px-4 py-10 sm:px-8 lg:px-12 lg:py-16">
+      <section id="assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 py-10 sm:px-8 lg:px-12 lg:py-16">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div><p className="text-xs font-black uppercase tracking-[.2em] text-white">Zakelijk assortiment</p><h2 className="mt-1 text-3xl font-black text-[#65180f] sm:text-5xl">Kies iets lekkers</h2></div>
           <div className="max-w-md"><div className="inline-flex rounded-full border border-[#a24629] bg-[#fff7df] p-1 text-xs font-black"><button type="button" aria-pressed={includeVat} onClick={() => setIncludeVat(true)} className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Incl. btw</button><button type="button" aria-pressed={!includeVat} onClick={() => setIncludeVat(false)} className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Excl. btw</button></div><p className="mt-2 text-xs font-bold text-[#7e2b1c]">Chocoladeletters: winkelprijzen en kortingen volgens jouw staffel. Overige producten zijn nog conceptprijzen. 9% btw voor voedingsmiddelen.</p></div>
@@ -347,7 +357,7 @@ export default function SintB2BConcept() {
 
       <div className="sticky bottom-0 z-30 border-t border-[#e6d7bf] bg-white/95 px-4 py-3 shadow-[0_-12px_35px_rgba(64,20,10,.14)] backdrop-blur sm:px-8"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><p className="text-xs font-bold text-[#7e493c]">{selected.reduce((sum,line)=>sum+line.quantity,0)} producten · {includeVat ? "incl." : "excl."} btw{delivery === "custom" ? " · bezorging op aanvraag" : ""}</p><p className="text-xl font-black text-[#60190f]">{money(total)}{delivery === "custom" ? " + bezorging" : ""}</p></div><button type="button" disabled={!selected.length} onClick={()=>setQuoteOpen(true)} className="rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40 sm:px-8">Bekijk offerteaanvraag</button></div></div>
 
-      {giftOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#60190f]/90 p-4" onClick={() => setGiftOpen(false)}><div className="w-full max-w-lg text-center" onClick={(event) => event.stopPropagation()}><button type="button" aria-label="Sluiten" onClick={() => setGiftOpen(false)} className="ml-auto block h-10 w-10 rounded-full bg-white text-xl font-black text-[#60190f]">×</button><div className="gift-reveal mx-auto mt-4 flex h-56 w-56 items-center justify-center rounded-[3rem] bg-[#efb800] text-9xl shadow-2xl sm:h-64 sm:w-64">🎁</div><p className="mt-8 font-[Butterscotch] text-5xl text-[#efb800] sm:text-7xl">Voor jou, met een Strik</p><p className="mt-4 text-base font-semibold text-white">Het perfecte zakelijk cadeau begint met een goed idee.</p><button type="button" onClick={() => { setGiftOpen(false); setFinderOpen(true); window.setTimeout(() => document.getElementById("cadeaukeuzehulp")?.scrollIntoView({ behavior: "smooth" }), 0); }} className="mt-6 rounded-full bg-white px-7 py-4 text-sm font-black text-[#60190f]">Ontdek jouw cadeau →</button></div></div>}
+      {giftOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#60190f]/90 p-4" onClick={closeGiftIntro}><div role="dialog" aria-modal="true" aria-label="Welkom bij de Sinterklaasfolder" className="w-full max-w-lg text-center" onClick={(event) => event.stopPropagation()}><button type="button" aria-label="Sluiten" onClick={closeGiftIntro} className="ml-auto block h-10 w-10 rounded-full bg-white text-xl font-black text-[#60190f]">×</button><div className="gift-reveal mx-auto mt-4 flex h-56 w-56 items-center justify-center rounded-[3rem] bg-[#efb800] text-9xl shadow-2xl sm:h-64 sm:w-64">🎁</div><p className="mt-8 font-[Butterscotch] text-5xl text-[#efb800] sm:text-7xl">Voor jou, met een Strik</p><p className="mt-4 text-base font-semibold text-white">Vind in een paar stappen een Sinterklaascadeau dat bij jouw team past.</p><div className="mt-6 flex flex-col items-center gap-3"><button type="button" onClick={() => { closeGiftIntro(); setFinderOpen(true); window.setTimeout(() => document.getElementById("cadeaukeuzehulp")?.scrollIntoView({ behavior: "smooth" }), 0); }} className="rounded-full bg-white px-7 py-4 text-sm font-black text-[#60190f]">Ontdek jouw cadeau →</button><button type="button" onClick={() => { closeGiftIntro(); window.setTimeout(() => document.getElementById("assortiment")?.scrollIntoView({ behavior: "smooth" }), 0); }} className="px-4 py-2 text-sm font-bold text-white underline underline-offset-4">Direct naar assortiment</button></div></div></div>}
 
       {quoteOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#391008]/55 p-0 sm:items-center sm:p-5"><section role="dialog" aria-modal="true" aria-labelledby="quote-title" className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#d62d1d]">Live prijsindicatie</p><h2 id="quote-title" className="mt-1 text-3xl font-black text-[#60190f]">Jouw offerteaanvraag</h2></div><button type="button" aria-label="Sluiten" onClick={() => setQuoteOpen(false)} className="h-10 w-10 rounded-full bg-white text-lg font-black">×</button></div>
         <div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({product,quantity,tier,logoPriceEx,logoPriceIncl,totalEx:lineTotalEx,totalIncl:lineTotalIncl})=><div key={product.id} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choices[product.id]||product.options?.[0]||"Standaard"} · {money(productUnitPrice(product,tier,includeVat))} p.s. · staffel {tier.label}{tier.discountPercent ? ` · ${tier.discountPercent}% korting` : ""}</p>{logo[product.id] && <p className="mt-1 font-bold text-[#d62d1d]">Eigen logo: +{money(includeVat ? logoPriceIncl : logoPriceEx)} p.s. ({money(quantity * (includeVat ? logoPriceIncl : logoPriceEx))} totaal)</p>}</div><strong>{money(includeVat ? lineTotalIncl : lineTotalEx)}</strong></div>)}</div>
