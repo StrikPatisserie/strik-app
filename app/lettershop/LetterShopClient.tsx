@@ -27,6 +27,26 @@ function money(amount: number) {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(amount);
 }
 
+function OrderingSteps() {
+  const steps = [
+    { label: "Stel je letter samen", icon: <><path d="M9 8h30v32H9z"/><path d="M19 31l5-15 5 15M21 26h6"/><path d="M36 5v6M33 8h6"/></> },
+    { label: "Kies je winkel", icon: <><path d="M7 20h34l-3-10H10L7 20Z"/><path d="M10 20v20h28V20M18 40V28h12v12"/><path d="M7 20c0 4 6 5 8 1 2 4 7 4 9 0 2 4 7 4 9 0 2 4 8 3 8-1"/></> },
+    { label: "Betaal bij afhalen", icon: <><path d="M9 15h30v24H9zM9 22h30M14 10h20M17 28h8"/><path d="m30 32 3 3 5-6"/></> },
+  ];
+  return <aside aria-label="Zo eenvoudig bestel je" className="w-full rounded-2xl border border-[#e7e6d9] bg-[#fffdf5] px-4 py-5 text-[#547762] sm:px-6">
+    <p className="text-center text-[.65rem] font-medium uppercase tracking-[.25em]">Binnen 1 minuut besteld</p>
+    <div className="mt-4 flex items-start justify-between gap-1">
+      {steps.map((step, index) => <div key={step.label} className="contents">
+        {index > 0 && <span aria-hidden="true" className="mt-4 min-w-3 flex-1 text-center text-sm text-[#9fb5a3]">→</span>}
+        <div className="flex w-[5.5rem] shrink-0 flex-col items-center text-center sm:w-28">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full border border-[#c9d8ca]"><svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">{step.icon}</svg></span>
+          <span className="mt-2 text-[.65rem] font-medium leading-tight text-[#61504a] sm:text-[.7rem]">{step.label}</span>
+        </div>
+      </div>)}
+    </div>
+  </aside>;
+}
+
 function ProductCard({ product, onAdd }: { product: (typeof PRODUCTS)[number]; onAdd: (line: CartLine) => void }) {
   const [letter, setLetter] = useState("S");
   const [size, setSize] = useState<Size>("groot");
@@ -128,26 +148,11 @@ export default function LetterShopClient() {
     <header className="relative overflow-hidden border-b border-white/30 px-4 pb-7 pt-3 sm:px-8 lg:px-12 lg:pb-9">
       <div aria-hidden="true" className="absolute -right-20 top-10 h-48 w-48 rotate-12 rounded-[4rem] bg-[#547762]/15 sm:h-64 sm:w-64" />
       <nav className="relative mx-auto flex max-w-7xl items-center justify-between gap-4"><Image src="/strik-logo.png" alt="Strik Patisserie" width={112} height={72} className="h-12 w-auto object-contain sm:h-14" priority /><button type="button" onClick={() => setCheckoutOpen(true)} className="rounded-full bg-white px-4 py-3 text-sm font-black text-[#3e312c] shadow-lg">Winkelmand <span className="ml-1 rounded-full bg-[#547762] px-2 py-1 text-xs text-white">{totalQuantity}</span></button></nav>
-      <div className="relative mx-auto mt-5 max-w-7xl sm:mt-7"><p className="text-xs font-black uppercase tracking-[.22em] text-[#547762]">Sinds 1937 · ambacht uit Nijmegen</p><h1 className="mt-2 text-[clamp(2.9rem,8vw,6.2rem)] font-black leading-[.86] tracking-[-.07em] text-[#3e312c]">LETTERSHOP</h1><p className="mt-1 font-[Butterscotch] text-[clamp(2.3rem,5vw,4.2rem)] leading-none text-[#a6684b]">Met een Strik</p><p className="mt-4 max-w-xl text-sm font-bold leading-relaxed text-[#61504a] sm:text-base">Kies jouw letter, chocolade en formaat. Wij maken hem met liefde; jij haalt hem op in één van onze vier winkels.</p><button type="button" onClick={() => document.getElementById("letter-assortiment")?.scrollIntoView({ behavior: "smooth" })} className="mt-4 rounded-full bg-[#547762] px-5 py-3 text-sm font-black text-white shadow-lg">Ontdek de letters ↓</button></div>
-    </header>
-
-    <section aria-label="Zo eenvoudig bestel je" className="mx-auto max-w-2xl px-4 py-4 sm:py-5">
-      <p className="text-center text-[.65rem] font-bold uppercase tracking-[.16em] text-[#547762]">Binnen 1 minuut besteld</p>
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center sm:gap-6">
-        <div className="flex flex-col items-center">
-          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-[#547762]"><path d="M9 8h30v32H9z"/><path d="M19 31l5-15 5 15M21 26h6"/><path d="M36 5v6M33 8h6"/></svg>
-          <p className="mt-1.5 text-[.65rem] font-semibold leading-tight text-[#61504a] sm:text-xs">Stel je letter samen</p>
-        </div>
-        <div className="flex flex-col items-center">
-          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-[#547762]"><path d="M7 20h34l-3-10H10L7 20Z"/><path d="M10 20v20h28V20M18 40V28h12v12"/><path d="M7 20c0 4 6 5 8 1 2 4 7 4 9 0 2 4 7 4 9 0 2 4 8 3 8-1"/></svg>
-          <p className="mt-1.5 text-[.65rem] font-semibold leading-tight text-[#61504a] sm:text-xs">Kies je winkel</p>
-        </div>
-        <div className="flex flex-col items-center">
-          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-[#547762]"><path d="M9 15h30v24H9zM9 22h30M14 10h20M17 28h8"/><path d="m30 32 3 3 5-6"/></svg>
-          <p className="mt-1.5 text-[.65rem] font-semibold leading-tight text-[#61504a] sm:text-xs">Betaal bij afhalen</p>
-        </div>
+      <div className="relative mx-auto mt-5 grid max-w-7xl items-center gap-7 sm:mt-7 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)] lg:gap-12">
+        <div><p className="text-xs font-black uppercase tracking-[.22em] text-[#547762]">Sinds 1937 · ambacht uit Nijmegen</p><h1 className="mt-2 text-[clamp(2.9rem,8vw,6.2rem)] font-black leading-[.86] tracking-[-.07em] text-[#3e312c]">LETTERSHOP</h1><p className="mt-1 font-[Butterscotch] text-[clamp(2.3rem,5vw,4.2rem)] leading-none text-[#a6684b]">Met een Strik</p><p className="mt-4 max-w-xl text-sm font-bold leading-relaxed text-[#61504a] sm:text-base">Kies jouw letter, chocolade en formaat. Wij maken hem met liefde; jij haalt hem op in één van onze vier winkels.</p><button type="button" onClick={() => document.getElementById("letter-assortiment")?.scrollIntoView({ behavior: "smooth" })} className="mt-4 rounded-full bg-[#547762] px-5 py-3 text-sm font-black text-white shadow-lg">Ontdek de letters ↓</button></div>
+        <OrderingSteps />
       </div>
-    </section>
+    </header>
 
     <section id="letter-assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 pb-24 sm:px-8 lg:px-12"><div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-[#547762]">Het assortiment</p><h2 className="mt-1 text-3xl font-black sm:text-5xl">Kies jouw chocoladeletter</h2></div><p className="max-w-sm text-sm font-bold text-[#61504a]">Voorbeeldprijzen incl. 9% btw. Definitieve prijzen en beschikbaarheid volgen voordat bestellen actief wordt.</p></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{PRODUCTS.map((product) => <ProductCard key={product.id} product={product} onAdd={addToCart}/>)}</div></section>
 
