@@ -1,4 +1,4 @@
--- Run only AFTER the chocolate-letter migration. This test is transactional:
+-- Run only AFTER both chocolate-letter migrations. This test is transactional:
 -- ROLLBACK removes all test products, orders, allocations and stock movements.
 begin;
 
@@ -15,6 +15,8 @@ declare
   v_batch_24 uuid;
   v_request_key uuid := gen_random_uuid();
   v_registration_id uuid;
+  v_online_key uuid := gen_random_uuid();
+  v_online_order_id uuid;
   v_count integer;
 begin
   insert into public.letter_products (code, letter, flavour, size, style)
@@ -81,6 +83,30 @@ begin
   select count(*) into v_count from public.letter_production_registrations
     where request_key = v_request_key;
   if v_count <> 1 then raise exception 'Duplicate production registration'; end if;
+
+  v_online_order_id := public.letter_create_order(
+    p_request_key => v_online_key,
+    p_channel => 'ONLINE',
+    p_customer_name => 'Testklant',
+    p_customer_email => 'test@example.invalid',
+    p_phone => '0612345678',
+    p_requested_date => '2099-11-28',
+    p_pickup_location => 'lent',
+    p_lines => jsonb_build_array(jsonb_build_object('product_id', v_melk_s, 'quantity', 2))
+  );
+  if public.letter_create_order(
+    p_request_key => v_online_key,
+    p_channel => 'ONLINE',
+    p_customer_name => 'Testklant',
+    p_customer_email => 'test@example.invalid',
+    p_phone => '0612345678',
+    p_requested_date => '2099-11-28',
+    p_pickup_location => 'lent',
+    p_lines => jsonb_build_array(jsonb_build_object('product_id', v_melk_s, 'quantity', 2))
+  ) <> v_online_order_id then raise exception 'Duplicate online order was created'; end if;
+  select count(*) into v_count from public.letter_mail_outbox
+    where order_id = v_online_order_id and template = 'ONLINE_CONFIRMATION';
+  if v_count <> 1 then raise exception 'Online confirmation was not queued exactly once'; end if;
 end;
 $$;
 
