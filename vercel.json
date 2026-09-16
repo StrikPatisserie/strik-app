@@ -4,6 +4,10 @@
     {
       "path": "/api/personnel-mail-orders/cron",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/lettershop/mail-retry",
+      "schedule": "30 5 * * *"
     }
   ]
 }

@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function LetterShopPage() {
-  return <LetterShopClient />;
+  return <LetterShopClient checkoutEnabled={process.env.LETTERSHOP_CHECKOUT_ENABLED === "true"} />;
 }

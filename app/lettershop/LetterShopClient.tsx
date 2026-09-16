@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Flavour = "melk" | "puur" | "wit";
 type Size = "groot" | "klein";
@@ -93,8 +93,8 @@ function LogoUpload({ file, onChange }: { file?: File; onChange: (file?: File) =
       setError("Kies een JPG, PNG, WEBP of HEIC-afbeelding.");
       return;
     }
-    if (nextFile.size > 10 * 1024 * 1024) {
-      setError("Dit bestand is groter dan 10 MB. Kies een kleinere foto.");
+    if (nextFile.size > 3_000_000) {
+      setError("Dit bestand is groter dan 3 MB. Kies een kleinere foto.");
       return;
     }
     setError("");
@@ -102,14 +102,14 @@ function LogoUpload({ file, onChange }: { file?: File; onChange: (file?: File) =
   }
 
   return <div className="mt-3 rounded-xl border border-dashed border-[#b9cbb6] bg-[#f7f9f4] p-3">
-    <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black">Eigen logo of foto op deze letters?</p><p className="mt-1 text-xs font-semibold text-[#74695e]">Eén afbeelding voor alle {file ? "gekozen" : "letters"} van deze regel. JPG, PNG, WEBP of HEIC · max. 10 MB.</p></div>{file && <button type="button" onClick={() => { onChange(undefined); setError(""); }} className="shrink-0 text-xs font-black text-[#8d4d3d] underline">Verwijderen</button>}</div>
+    <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-black">Eigen logo of foto op deze letters?</p><p className="mt-1 text-xs font-semibold text-[#74695e]">Eén afbeelding voor alle letters van deze regel. JPG, PNG, WEBP of HEIC · max. 3 MB.</p></div>{file && <button type="button" onClick={() => { onChange(undefined); setError(""); }} className="shrink-0 text-xs font-black text-[#8d4d3d] underline">Verwijderen</button>}</div>
     <label className="mt-3 inline-flex cursor-pointer items-center rounded-lg border border-[#9eb79f] bg-white px-3 py-2 text-xs font-black text-[#3e5e4b]">{file ? "Andere afbeelding kiezen" : "+ Logo/foto kiezen"}<input key={file?.name || "geen-bestand"} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" onChange={(event) => handleFile(event.target.files?.[0])} className="sr-only" /></label>
     {error && <p role="alert" className="mt-2 text-xs font-bold text-red-700">{error}</p>}
     {file && <div className="mt-3 flex items-center gap-3"><div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white">{previewUrl ? <img src={previewUrl} alt="Voorbeeld van jouw gekozen logo of foto" className="h-full w-full object-contain" /> : <span className="text-xs font-black text-[#547762]">FOTO</span>}</div><div className="min-w-0"><p className="truncate text-xs font-black">{file.name}</p><p className="mt-1 text-xs text-[#74695e]">{money(LOGO_PRICE)} per letter incl. btw · nog niet verzonden</p></div></div>}
   </div>;
 }
 
-export default function LetterShopClient() {
+export default function LetterShopClient({ checkoutEnabled }: { checkoutEnabled: boolean }) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [shop, setShop] = useState("");
@@ -119,8 +119,13 @@ export default function LetterShopClient() {
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
   const [showReview, setShowReview] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [placedOrderNumber, setPlacedOrderNumber] = useState("");
+  const requestKey = useRef<string | null>(null);
 
   const totalQuantity = cart.reduce((sum, line) => sum + line.quantity, 0);
+  const photoBytes = cart.reduce((sum, line) => sum + (line.logoFile?.size || 0), 0);
   const logoTotal = useMemo(() => cart.reduce((sum, line) => sum + (line.withLogo ? line.quantity * LOGO_PRICE : 0), 0), [cart]);
   const total = useMemo(() => cart.reduce((sum, line) => sum + line.quantity * PRICES[line.size], logoTotal), [cart, logoTotal]);
   const vat = Math.round((total * 9 / 109) * 100) / 100;
@@ -143,10 +148,38 @@ export default function LetterShopClient() {
     setShowReview(false);
   }
 
-  const canReview = cart.length > 0 && customerName.trim().length >= 2 && customerEmail.includes("@") && phone.trim().length >= 6 && Boolean(shop) && Boolean(pickupDate) && cart.every((line) => !line.withLogo || Boolean(line.logoFile));
+  const canReview = cart.length > 0 && customerName.trim().length >= 2 && customerEmail.includes("@") && phone.trim().length >= 6 && Boolean(shop) && Boolean(pickupDate) && photoBytes <= 5_000_000 && cart.every((line) => !line.withLogo || Boolean(line.logoFile));
+
+  async function placeOrder() {
+    if (!checkoutEnabled || !canReview || submitting) return;
+    requestKey.current ??= crypto.randomUUID();
+    setSubmitting(true);
+    setSubmitError("");
+    const form = new FormData();
+    form.set("order", JSON.stringify({
+      requestKey: requestKey.current,
+      customerName, customerEmail, phone,
+      pickupDate, pickupLocation: shop, notes,
+      lines: cart.map(({ letter, flavour, size, quantity, withLogo }) => ({ letter, flavour, size, quantity, withLogo })),
+    }));
+    cart.forEach((line, index) => { if (line.logoFile) form.set(`logo_${index}`, line.logoFile); });
+    try {
+      const response = await fetch("/api/lettershop/checkout", { method: "POST", body: form });
+      const result = await response.json() as { orderNumber?: string; message?: string };
+      if (!response.ok || !result.orderNumber) throw new Error(result.message || "Bestelling plaatsen is niet gelukt.");
+      setPlacedOrderNumber(result.orderNumber);
+      setCheckoutOpen(false);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Bestelling plaatsen is niet gelukt.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (placedOrderNumber) return <main className="flex min-h-dvh items-center justify-center bg-[#dbe8d7] px-5 text-[#3e312c]"><div className="max-w-lg rounded-3xl bg-[#fffdf8] p-8 text-center shadow-xl"><Image src="/strik-logo.png" alt="Strik Patisserie" width={90} height={70} className="mx-auto h-16 w-auto object-contain" /><h1 className="mt-6 text-3xl font-black">Bedankt voor je bestelling!</h1><p className="mt-3 text-sm leading-relaxed">Je ordernummer is <strong>{placedOrderNumber}</strong>. Je haalt je letters op bij {SHOPS.find((item) => item.id === shop)?.name} op {pickupDate} en betaalt bij afhalen. Een bevestiging volgt per e-mail.</p><p className="mt-4 text-sm">Annuleren? Mail naar <a href="mailto:info@strik-patisserie.nl" className="underline">info@strik-patisserie.nl</a> en vermeld je ordernummer.</p></div></main>;
 
   return <main className="min-h-dvh bg-[#dbe8d7] text-[#3e312c]">
-    <div className="bg-[#3e312c] px-4 py-2 text-center text-xs font-black uppercase tracking-[.12em] text-white">Conceptpreview · bestellen is nog niet actief</div>
+    {!checkoutEnabled && <div className="bg-[#3e312c] px-4 py-2 text-center text-xs font-black uppercase tracking-[.12em] text-white">Conceptpreview · bestellen is nog niet actief</div>}
     <header className="relative overflow-hidden border-b border-white/30 px-4 pb-7 pt-3 sm:px-8 lg:px-12 lg:pb-9">
       <div aria-hidden="true" className="absolute -right-20 top-10 h-48 w-48 rotate-12 rounded-[4rem] bg-[#547762]/15 sm:h-64 sm:w-64" />
       <nav className="relative mx-auto flex max-w-7xl items-center justify-between gap-4"><Image src="/strik-logo.png" alt="Strik Patisserie" width={112} height={72} className="h-12 w-auto object-contain sm:h-14" priority /><button type="button" onClick={() => setCheckoutOpen(true)} className="rounded-full bg-white px-4 py-3 text-sm font-black text-[#3e312c] shadow-lg">Winkelmand <span className="ml-1 rounded-full bg-[#547762] px-2 py-1 text-xs text-white">{totalQuantity}</span></button></nav>
@@ -167,8 +200,9 @@ export default function LetterShopClient() {
         <div className="mt-6 border-t border-[#eadfce] pt-4 text-sm"><div className="flex justify-between"><span>Chocoladeletters incl. btw</span><strong>{money(total - logoTotal)}</strong></div>{hasLogo && <div className="mt-2 flex justify-between gap-3 text-[#8d4d3d]"><span>Foto/logo · {money(LOGO_PRICE)} per letter</span><strong>{money(logoTotal)}</strong></div>}<div className="mt-2 flex justify-between"><span>Afhalen</span><strong>Gratis</strong></div><div className="mt-4 flex justify-between border-t border-[#eadfce] pt-4 text-lg font-black"><span>Te betalen bij afhalen</span><span>{money(total)}</span></div><p className="mt-2 text-xs text-[#74695e]">Inclusief {money(vat)} btw (9%).</p></div>
         <div className="mt-8"><p className="text-xs font-black uppercase tracking-[.18em] text-[#547762]">Afhalen & contact</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="grid gap-1 text-xs font-black">Naam<input value={customerName} onChange={(event) => setCustomerName(event.target.value)} autoComplete="name" className="h-12 rounded-xl border border-[#e4d5c1] bg-white px-3 text-sm" placeholder="Voor- en achternaam" /></label><label className="grid gap-1 text-xs font-black">E-mailadres<input value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} type="email" autoComplete="email" className="h-12 rounded-xl border border-[#e4d5c1] bg-white px-3 text-sm" placeholder="naam@voorbeeld.nl" /></label><label className="grid gap-1 text-xs font-black">Telefoonnummer<input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" autoComplete="tel" className="h-12 rounded-xl border border-[#e4d5c1] bg-white px-3 text-sm" placeholder="06…" /></label><label className="grid gap-1 text-xs font-black">Afhaallocatie<select value={shop} onChange={(event) => setShop(event.target.value)} className="h-12 rounded-xl border border-[#e4d5c1] bg-white px-3 text-sm"><option value="">Kies een winkel</option>{SHOPS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="grid gap-1 text-xs font-black sm:col-span-2">Gewenste afhaaldatum<input value={pickupDate} onChange={(event) => setPickupDate(event.target.value)} type="date" className="h-12 rounded-xl border border-[#e4d5c1] bg-white px-3 text-sm" /></label><label className="grid gap-1 text-xs font-black sm:col-span-2">Opmerking <span className="font-semibold">(optioneel)</span><textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} className="rounded-xl border border-[#e4d5c1] bg-white p-3 text-sm" placeholder="Bijvoorbeeld een bijzonder verzoek" /></label></div></div>
         <div className="mt-7 rounded-2xl border-2 border-[#b9cbb6] bg-[#f3f0e3] p-4"><p className="text-xs font-black uppercase tracking-widest text-[#9b6548]">Betaalwijze</p><label className="mt-2 flex items-center gap-3 text-sm font-black"><input type="radio" checked readOnly className="accent-[#547762]" /> Betalen bij afhalen in de winkel</label><p className="mt-2 text-xs font-semibold text-[#765d4e]">Je ontvangt straks een bevestiging per e-mail. Annuleren? Neem contact op met Strik en vermeld je ordernummer.</p></div>
+        {photoBytes > 5_000_000 && <p role="alert" className="mt-4 text-sm font-bold text-red-700">De foto&apos;s zijn samen groter dan 5 MB. Kies kleinere afbeeldingen.</p>}
         <button type="button" disabled={!canReview} onClick={() => setShowReview(true)} className="mt-6 min-h-12 w-full rounded-xl bg-[#547762] px-5 font-black text-white disabled:cursor-not-allowed disabled:opacity-45">Controleer bestelling →</button>
-        {showReview && <div className="mt-4 rounded-2xl border border-[#dfc995] bg-white p-4 text-sm"><p className="font-black">Alles klopt? Dan is dit straks de laatste stap.</p><p className="mt-1 text-[#74695e]">{customerName} · {SHOPS.find((item) => item.id === shop)?.name} · {pickupDate} · {money(total)} bij afhalen</p>{hasLogo && <p className="mt-2 text-xs font-semibold text-[#74695e]">Gekozen afbeelding: {cart.filter((line) => line.logoFile).map((line) => `${line.letter} ${line.flavour}: ${line.logoFile?.name}`).join(" · ")}</p>}<p className="mt-3 rounded-xl bg-[#f2eddd] p-3 font-bold text-[#6c5c42]">Deze lettershop is nog een concept. Bestellingen en afbeeldingen kunnen nu nog niet worden verzonden; je ontvangt ook nog geen bevestigingsmail.</p><button type="button" disabled className="mt-3 min-h-12 w-full cursor-not-allowed rounded-xl bg-[#b6aaa0] px-5 font-black text-white">Bestelling plaatsen · binnenkort</button></div>}
+        {showReview && <div className="mt-4 rounded-2xl border border-[#dfc995] bg-white p-4 text-sm"><p className="font-black">Controleer je bestelling</p><p className="mt-1 text-[#74695e]">{customerName} · {SHOPS.find((item) => item.id === shop)?.name} · {pickupDate} · {money(total)} bij afhalen</p>{hasLogo && <p className="mt-2 text-xs font-semibold text-[#74695e]">Gekozen afbeelding: {cart.filter((line) => line.logoFile).map((line) => `${line.letter} ${line.flavour}: ${line.logoFile?.name}`).join(" · ")}</p>}{!checkoutEnabled && <p className="mt-3 rounded-xl bg-[#f2eddd] p-3 font-bold text-[#6c5c42]">Deze lettershop is nog een concept. Bestellingen en afbeeldingen kunnen nu nog niet worden verzonden; je ontvangt ook nog geen bevestigingsmail.</p>}{submitError && <p role="alert" className="mt-3 text-sm font-bold text-red-700">{submitError}</p>}<button type="button" disabled={!checkoutEnabled || submitting} onClick={placeOrder} className="mt-3 min-h-12 w-full rounded-xl bg-[#547762] px-5 font-black text-white disabled:cursor-not-allowed disabled:bg-[#b6aaa0]">{submitting ? "Bestelling wordt geplaatst…" : checkoutEnabled ? "Bestelling plaatsen" : "Bestelling plaatsen · binnenkort"}</button></div>}
       </>}
     </section></div>}
   </main>;
