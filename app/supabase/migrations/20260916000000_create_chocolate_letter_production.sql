@@ -175,7 +175,7 @@ begin
   select * into strict v_order from public.letter_orders where id = v_item.order_id for update;
   select * into strict v_batch from public.letter_production_batches where id = p_batch_id for update;
   if v_order.fulfillment_status = 'CANCELLED' then raise exception 'Geannuleerde order kan niet gepland worden'; end if;
-  if v_batch.status = 'CLOSED' then raise exception 'Productiedag is afgesloten'; end if;
+  if v_batch.status in ('COMPLETED', 'CLOSED') then raise exception 'Productiedag is gereed of afgesloten'; end if;
   select * into v_existing from public.letter_production_allocations
     where batch_id = p_batch_id and order_item_id = p_order_item_id for update;
   select coalesce(sum(quantity), 0) into v_produced
@@ -214,12 +214,20 @@ declare
   v_allocation record;
   v_stock record;
   v_part_id uuid;
+  v_existing_registration public.letter_production_registrations%rowtype;
 begin
   if p_quantity <= 0 then raise exception 'Productieaantal moet positief zijn'; end if;
   -- This lock also serializes registrations for the same production day.
   select * into strict v_batch from public.letter_production_batches where id = p_batch_id for update;
-  select id into v_registration_id from public.letter_production_registrations where request_key = p_request_key;
-  if v_registration_id is not null then return v_registration_id; end if;
+  select * into v_existing_registration from public.letter_production_registrations where request_key = p_request_key;
+  if v_existing_registration.id is not null then
+    if v_existing_registration.batch_id <> p_batch_id
+      or v_existing_registration.product_id <> p_product_id
+      or v_existing_registration.quantity <> p_quantity then
+      raise exception 'Verzoek-ID is al gebruikt voor een andere productieboeking';
+    end if;
+    return v_existing_registration.id;
+  end if;
   if v_batch.status not in ('OPEN', 'PLANNED', 'IN_PRODUCTION') then
     raise exception 'Op deze productiedag kan niet geproduceerd worden';
   end if;
