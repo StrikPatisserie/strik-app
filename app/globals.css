@@ -3,6 +3,7 @@
 @font-face {
   font-family: "Butterscotch";
   src:
+    url("/fonts/Butterscotch.woff2") format("woff2"),
     url("/fonts/Butterscotch.otf") format("opentype"),
     url("/fonts/Butterscotch.ttf") format("truetype");
   font-weight: 400;
