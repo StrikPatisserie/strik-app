@@ -42,6 +42,7 @@ export default async function SinterklaasLettersPage() {
       <div className="grid gap-2">
         {hasFullAccess(profile) && <StrikMenuLink href="/sinterklaas/letters/management" title="Management · nieuwe opzet" icon={strikIcons.management} tone="green" />}
         {hasFullAccess(profile) && <StrikMenuLink href="/sinterklaas/letters/online" title="Online bestellingen · centrale database" icon={strikIcons.sinterklaasLetter} tone="green" />}
+        {hasFullAccess(profile) && <StrikMenuLink href="/sinterklaas/letters/centrale-productie" title="Centrale productie · nieuwe bestellingen" icon={strikIcons.sinterklaasProductie} tone="yellow" />}
         {items.map((item) => (
           <StrikMenuLink key={item.href} {...item} />
         ))}
