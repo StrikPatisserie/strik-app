@@ -128,23 +128,20 @@ export default function LetterShopClient() {
       <div className="relative mx-auto mt-5 max-w-7xl sm:mt-7"><p className="text-xs font-black uppercase tracking-[.22em] text-[#547762]">Sinds 1937 · ambacht uit Nijmegen</p><h1 className="mt-2 text-[clamp(2.9rem,8vw,6.2rem)] font-black leading-[.86] tracking-[-.07em] text-[#3e312c]">LETTERSHOP</h1><p className="mt-1 font-[Butterscotch] text-[clamp(2.3rem,5vw,4.2rem)] leading-none text-[#a6684b]">Met een Strik</p><p className="mt-4 max-w-xl text-sm font-bold leading-relaxed text-[#61504a] sm:text-base">Kies jouw letter, chocolade en formaat. Wij maken hem met liefde; jij haalt hem op in één van onze vier winkels.</p><button type="button" onClick={() => document.getElementById("letter-assortiment")?.scrollIntoView({ behavior: "smooth" })} className="mt-4 rounded-full bg-[#547762] px-5 py-3 text-sm font-black text-white shadow-lg">Ontdek de letters ↓</button></div>
     </header>
 
-    <section aria-label="Zo eenvoudig bestel je" className="mx-auto max-w-7xl px-4 py-6 sm:px-8 lg:px-12">
-      <p className="text-center text-xs font-black uppercase tracking-[.2em] text-[#547762]">Besteld binnen 1 minuut</p>
-      <div className="mt-5 grid grid-cols-3 gap-3 text-center sm:gap-8">
+    <section aria-label="Zo eenvoudig bestel je" className="mx-auto max-w-2xl px-4 py-4 sm:py-5">
+      <p className="text-center text-[.65rem] font-bold uppercase tracking-[.16em] text-[#547762]">Binnen 1 minuut besteld</p>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-center sm:gap-6">
         <div className="flex flex-col items-center">
-          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-9 w-9 text-[#547762] sm:h-11 sm:w-11"><path d="M9 8h30v32H9z"/><path d="M19 31l5-15 5 15M21 26h6"/><path d="M36 5v6M33 8h6"/></svg>
-          <h2 className="mt-2 text-sm font-black sm:text-base">Stel samen</h2>
-          <p className="mt-1 text-[.7rem] font-semibold leading-snug text-[#73584e] sm:text-xs">Kies letter, smaak en formaat</p>
+          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-[#547762]"><path d="M9 8h30v32H9z"/><path d="M19 31l5-15 5 15M21 26h6"/><path d="M36 5v6M33 8h6"/></svg>
+          <p className="mt-1.5 text-[.65rem] font-semibold leading-tight text-[#61504a] sm:text-xs">Stel je letter samen</p>
         </div>
         <div className="flex flex-col items-center">
-          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-9 w-9 text-[#547762] sm:h-11 sm:w-11"><path d="M7 20h34l-3-10H10L7 20Z"/><path d="M10 20v20h28V20M18 40V28h12v12"/><path d="M7 20c0 4 6 5 8 1 2 4 7 4 9 0 2 4 7 4 9 0 2 4 8 3 8-1"/></svg>
-          <h2 className="mt-2 text-sm font-black sm:text-base">Kies je winkel</h2>
-          <p className="mt-1 text-[.7rem] font-semibold leading-snug text-[#73584e] sm:text-xs">Haal op in een van onze winkels</p>
+          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-[#547762]"><path d="M7 20h34l-3-10H10L7 20Z"/><path d="M10 20v20h28V20M18 40V28h12v12"/><path d="M7 20c0 4 6 5 8 1 2 4 7 4 9 0 2 4 7 4 9 0 2 4 8 3 8-1"/></svg>
+          <p className="mt-1.5 text-[.65rem] font-semibold leading-tight text-[#61504a] sm:text-xs">Kies je winkel</p>
         </div>
         <div className="flex flex-col items-center">
-          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-9 w-9 text-[#547762] sm:h-11 sm:w-11"><path d="M9 15h30v24H9zM9 22h30M14 10h20M17 28h8"/><path d="m30 32 3 3 5-6"/></svg>
-          <h2 className="mt-2 text-sm font-black sm:text-base">Betaal bij afhalen</h2>
-          <p className="mt-1 text-[.7rem] font-semibold leading-snug text-[#73584e] sm:text-xs">Geen online betaling nodig</p>
+          <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-[#547762]"><path d="M9 15h30v24H9zM9 22h30M14 10h20M17 28h8"/><path d="m30 32 3 3 5-6"/></svg>
+          <p className="mt-1.5 text-[.65rem] font-semibold leading-tight text-[#61504a] sm:text-xs">Betaal bij afhalen</p>
         </div>
       </div>
     </section>
