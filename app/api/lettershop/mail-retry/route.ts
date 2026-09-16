@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabasePublicConfig, requireSupabaseServiceRoleKey } from "@/app/lib/supabase/config";
-import { sendLettershopOrderMails } from "@/app/lettershop/sendOrderMail";
+import { sendLettershopCancellationMail, sendLettershopOrderMails } from "@/app/lettershop/sendOrderMail";
 
 export const runtime = "nodejs";
 
@@ -24,7 +24,13 @@ export async function GET(request: Request) {
     if (error) throw error;
     const orderIds = [...new Set((jobs || []).map((job) => job.order_id))];
     for (const orderId of orderIds) await sendLettershopOrderMails(orderId);
-    return Response.json({ checkedOrders: orderIds.length });
+    const { data: cancellations, error: cancellationError } = await supabase.from("letter_mail_outbox")
+      .select("id").in("status", ["PENDING", "FAILED"])
+      .eq("template", "ORDER_CANCELLATION")
+      .order("created_at").limit(100);
+    if (cancellationError) throw cancellationError;
+    for (const job of cancellations || []) await sendLettershopCancellationMail(job.id);
+    return Response.json({ checkedOrders: orderIds.length, checkedCancellations: cancellations?.length || 0 });
   } catch {
     return Response.json({ message: "E-mails opnieuw proberen is mislukt." }, { status: 502 });
   }

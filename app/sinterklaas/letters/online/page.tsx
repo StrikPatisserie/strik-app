@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { requireAdminProfile } from "@/app/lib/auth/session";
 import { requireSupabasePublicConfig, requireSupabaseServiceRoleKey } from "@/app/lib/supabase/config";
 import { StrikPageHeader, StrikShell, strikIcons } from "@/app/StrikUI";
+import DeleteOnlineLetterOrderButton from "./DeleteOnlineLetterOrderButton";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,7 @@ export default async function OnlineLetterOrdersPage() {
           const product = Array.isArray(item.letter_products) ? item.letter_products[0] : item.letter_products;
           return <li key={index}>{item.quantity} × {product?.letter} · {product?.flavour} · {product?.size}{item.logo ? " · foto/logo" : ""}{item.logo_storage_path && photoUrls.has(item.logo_storage_path) && <> · <a href={photoUrls.get(item.logo_storage_path)} target="_blank" rel="noreferrer" className="font-bold text-[#547762] underline">Bekijk afbeelding</a></>}</li>;
         })}</ul>
+        {order.fulfillment_status === "NEW" && <DeleteOnlineLetterOrderButton orderId={order.id} orderNumber={order.order_number} />}
       </article>;
     })}</div>
   </StrikShell>;

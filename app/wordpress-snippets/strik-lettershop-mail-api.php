@@ -72,23 +72,26 @@ function strik_lettershop_send_mail($request) {
         return new WP_Error('invalid_id', 'Ongeldig mail-ID.', array('status' => 400));
     }
     $template = (string) ($params['template'] ?? '');
-    if (!in_array($template, array('ONLINE_CONFIRMATION', 'INTERNAL_ORDER_BACKUP'), true)) {
+    if (!in_array($template, array('ONLINE_CONFIRMATION', 'INTERNAL_ORDER_BACKUP', 'ORDER_CANCELLATION'), true)) {
         return new WP_Error('invalid_template', 'Onbekend mailtype.', array('status' => 400));
     }
     $payload = $params['payload'];
     $number = sanitize_text_field((string) ($payload['order_number'] ?? ''));
-    if ($number === '' || empty($payload['items'])) {
+    if ($number === '' || ($template !== 'ORDER_CANCELLATION' && empty($payload['items']))) {
         return new WP_Error('invalid_order', 'Bestelgegevens ontbreken.', array('status' => 400));
     }
     $option = 'strik_lettershop_mail_' . $id;
     if (get_option($option) === 'sent') return rest_ensure_response(array('sent' => true, 'alreadySent' => true));
 
     $for_customer = $template === 'ONLINE_CONFIRMATION';
-    $recipient = $for_customer ? sanitize_email((string) ($payload['customer_email'] ?? '')) : 'info@strik-patisserie.nl';
+    $recipient = ($for_customer || $template === 'ORDER_CANCELLATION') ? sanitize_email((string) ($payload['customer_email'] ?? '')) : 'info@strik-patisserie.nl';
     if (!is_email($recipient)) return new WP_Error('invalid_recipient', 'Ongeldig e-mailadres.', array('status' => 400));
-    $subject = ($for_customer ? 'Bevestiging chocoladeletterbestelling ' : 'Back-up chocoladeletterbestelling ') . $number;
+    $subject = $template === 'ORDER_CANCELLATION' ? 'Chocoladeletterbestelling geannuleerd ' . $number
+        : ($for_customer ? 'Bevestiging chocoladeletterbestelling ' : 'Back-up chocoladeletterbestelling ') . $number;
     $headers = array('Content-Type: text/plain; charset=UTF-8', 'Reply-To: Strik Patisserie <info@strik-patisserie.nl>');
-    $body = implode("\n", strik_lettershop_mail_lines($payload, $for_customer));
+    $body = $template === 'ORDER_CANCELLATION'
+        ? "Beste " . sanitize_text_field((string) ($payload['customer_name'] ?? 'klant')) . ",\n\nJe chocoladeletterbestelling " . $number . " is geannuleerd. Je hoeft hiervoor niets te betalen of af te halen.\n\nHeb je vragen? Antwoord gerust op deze e-mail.\n\nStrik Patisserie"
+        : implode("\n", strik_lettershop_mail_lines($payload, $for_customer));
 
     $attachments = array();
     if (!$for_customer && !empty($params['attachments']) && is_array($params['attachments'])) {
@@ -101,7 +104,10 @@ function strik_lettershop_send_mail($request) {
             if (!preg_match('/\.(jpg|jpeg|png|webp|heic|heif)$/i', $name)) continue;
             $path = wp_tempnam($name);
             if (!$path || file_put_contents($path, $bytes) === false) continue;
-            $attachments[] = $path;
+            // wp_tempnam() creates a .tmp path. Give wp_mail() the actual
+            // image filename so mail clients recognize/download the attachment.
+            $mail_name = sanitize_file_name($number . '-foto-' . (count($attachments) + 1) . '-' . $name);
+            $attachments[$mail_name] = $path;
             $total_size += strlen($bytes);
         }
     }

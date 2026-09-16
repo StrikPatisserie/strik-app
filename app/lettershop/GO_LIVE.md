@@ -11,4 +11,16 @@ De pagina blijft dan een concept en de API geeft 503. Zet de vlag pas aan na all
 6. Integreer centrale online orders in de productie- en klaarzetoverzichten voordat de shop voor klanten opengaat. `/sinterklaas/letters/centrale-productie` toont al een eerste read-only overzicht; productie registreren en klaarzetten ontbreken daar nog. De bestaande productiepagina leest nog de oudere WordPress-orders.
 7. Pas daarna de vlag op productie aan en herbouw/deploy de app.
 
+Online testorders kunnen door management definitief worden verwijderd via
+`/sinterklaas/letters/online`, maar uitsluitend zolang er geen productie of
+voorraadboeking aan hangt. Hiervoor moeten eerst
+`20260916050000_delete_unproduced_online_orders.sql` en de vernieuwde
+WordPress-snippet zijn geïnstalleerd. De order, regels, planning en oude
+mailkopieën worden in één database-transactie gewist. Een tijdelijke
+annuleringsmail blijft in de outbox totdat de klantmail is verstuurd en de
+privéfoto's zijn opgeruimd. Voor betrouwbaar opnieuw proberen moeten de
+WordPress-mailvariabelen en `CRON_SECRET` ook in Production staan voordat
+management op Production orders verwijdert; dit schakelt de publieke
+checkout niet in.
+
 Bij een tijdelijke mailfout blijft de order opgeslagen en staat de mail in `letter_mail_outbox` op `FAILED`. De retry-route wordt dagelijks via Vercel Cron aangeroepen; op Vercel Hobby zijn cronjobs maximaal dagelijks beschikbaar. Controleer die wachtrij actief tijdens de eerste live-dagen.

@@ -84,3 +84,45 @@ export async function sendLettershopOrderMails(orderId: string) {
     }
   }
 }
+
+export async function sendLettershopCancellationMail(jobId: string): Promise<"SENT" | "FAILED" | "SKIPPED"> {
+  if (!lettershopMailIsConfigured()) throw new Error("WordPress-mail is niet ingesteld.");
+  const username = process.env.WORDPRESS_MEDIA_USERNAME || process.env.WORDPRESS_USERNAME || "";
+  const password = process.env.WORDPRESS_MEDIA_APPLICATION_PASSWORD || process.env.WORDPRESS_APPLICATION_PASSWORD || "";
+  const supabase = adminClient();
+  const { data: job, error: readError } = await supabase.from("letter_mail_outbox")
+    .select("id,template,payload,status,attempts")
+    .eq("id", jobId).eq("template", "ORDER_CANCELLATION").maybeSingle();
+  if (readError) throw readError;
+  if (!job || !["PENDING", "FAILED"].includes(job.status)) return "SKIPPED";
+  const { data: claimed, error: claimError } = await supabase.from("letter_mail_outbox")
+    .update({ status: "SENDING", attempts: job.attempts + 1, last_attempt_at: new Date().toISOString(), last_error: null })
+    .eq("id", job.id).eq("status", job.status).select("id").maybeSingle();
+  if (claimError || !claimed) return "SKIPPED";
+  try {
+    const payload = job.payload as Record<string, unknown>;
+    const response = await fetch(MAIL_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
+      },
+      body: JSON.stringify({ id: job.id, template: job.template, payload, attachments: [] }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok) throw new Error(`WordPress-mail gaf status ${response.status}.`);
+    const paths = Array.isArray(payload.photo_paths)
+      ? payload.photo_paths.filter((path): path is string => typeof path === "string" && path.length > 0) : [];
+    if (paths.length > 0) {
+      const { error: storageError } = await supabase.storage.from(BUCKET).remove(paths);
+      if (storageError) throw storageError;
+    }
+    const { error: deleteError } = await supabase.from("letter_mail_outbox").delete().eq("id", job.id);
+    if (deleteError) throw deleteError;
+    return "SENT";
+  } catch (error) {
+    await supabase.from("letter_mail_outbox").update({ status: "FAILED", last_error: error instanceof Error ? error.message.slice(0, 240) : "Verzenden of opruimen mislukt" })
+      .eq("id", job.id);
+    return "FAILED";
+  }
+}
