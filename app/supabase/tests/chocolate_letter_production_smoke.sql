@@ -17,6 +17,8 @@ declare
   v_registration_id uuid;
   v_online_key uuid := gen_random_uuid();
   v_online_order_id uuid;
+  v_store_order_id uuid;
+  v_b2b_order_id uuid;
   v_count integer;
 begin
   insert into public.letter_products (code, letter, flavour, size, style)
@@ -107,6 +109,35 @@ begin
   select count(*) into v_count from public.letter_mail_outbox
     where order_id = v_online_order_id and template = 'ONLINE_CONFIRMATION';
   if v_count <> 1 then raise exception 'Online confirmation was not queued exactly once'; end if;
+  select count(*) into v_count from public.letter_mail_outbox
+    where order_id = v_online_order_id and template = 'INTERNAL_ORDER_BACKUP'
+      and payload ->> 'customer_email' = 'test@example.invalid'
+      and jsonb_array_length(payload -> 'items') = 1
+      and (payload -> 'items' -> 0 ->> 'quantity')::integer = 2;
+  if v_count <> 1 then raise exception 'Online backup snapshot was not queued exactly once'; end if;
+
+  v_store_order_id := public.letter_create_order(
+    p_request_key => gen_random_uuid(), p_channel => 'STORE',
+    p_customer_name => 'Winkelklant', p_customer_email => null,
+    p_phone => '0612345678', p_requested_date => '2099-11-28',
+    p_pickup_location => 'lent', p_entered_store => 'lent',
+    p_lines => jsonb_build_array(jsonb_build_object('product_id', v_melk_s, 'quantity', 3))
+  );
+  select count(*) into v_count from public.letter_mail_outbox where order_id = v_store_order_id;
+  if v_count <> 1 then raise exception 'Store order should queue one internal backup'; end if;
+
+  v_b2b_order_id := public.letter_create_order(
+    p_request_key => gen_random_uuid(), p_channel => 'B2B',
+    p_customer_name => 'Bedrijf Y', p_customer_email => 'inkoop@example.invalid',
+    p_phone => '0612345678', p_requested_date => '2099-11-28',
+    p_pickup_location => null, p_fulfillment_method => 'DELIVERY',
+    p_delivery_address => 'Teststraat 1',
+    p_lines => jsonb_build_array(jsonb_build_object('product_id', v_puur_a, 'quantity', 5))
+  );
+  select count(*) into v_count from public.letter_mail_outbox
+    where order_id = v_b2b_order_id and template = 'INTERNAL_ORDER_BACKUP'
+      and payload ->> 'delivery_address' = 'Teststraat 1';
+  if v_count <> 1 then raise exception 'B2B delivery backup was not queued'; end if;
 end;
 $$;
 

@@ -10,7 +10,9 @@ alter table public.letter_orders add column request_key uuid unique;
 create table public.letter_mail_outbox (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.letter_orders(id) on delete restrict,
-  template text not null check (template in ('ONLINE_CONFIRMATION', 'ORDER_CHANGE', 'ORDER_CANCELLATION')),
+  template text not null check (template in ('ONLINE_CONFIRMATION', 'INTERNAL_ORDER_BACKUP', 'ORDER_CHANGE', 'ORDER_CANCELLATION')),
+  -- Immutable order details: a later edit must not silently change the original mail.
+  payload jsonb not null,
   status text not null default 'PENDING' check (status in ('PENDING', 'SENDING', 'SENT', 'FAILED')),
   attempts integer not null default 0 check (attempts >= 0),
   last_error text,
@@ -51,6 +53,7 @@ declare
   v_line jsonb;
   v_item_id uuid;
   v_quantity integer;
+  v_mail_payload jsonb;
 begin
   if p_request_key is null then raise exception 'Verzoek-ID ontbreekt'; end if;
   perform pg_advisory_xact_lock(hashtextextended(p_request_key::text, 0));
@@ -114,9 +117,42 @@ begin
     end if;
   end loop;
 
+  select jsonb_build_object(
+    'order_number', o.order_number,
+    'created_at', o.created_at,
+    'channel', o.channel,
+    'customer_name', o.customer_name,
+    'company_name', o.company_name,
+    'contact_name', o.contact_name,
+    'customer_email', o.customer_email,
+    'phone', o.phone,
+    'requested_date', o.requested_date,
+    'fulfillment_method', o.fulfillment_method,
+    'pickup_location', o.pickup_location,
+    'entered_store', o.entered_store,
+    'delivery_address', o.delivery_address,
+    'notes', o.notes,
+    'source_system', o.source_system,
+    'source_id', o.source_id,
+    'payment_method', case when o.channel = 'ONLINE' then 'PAY_ON_PICKUP' else null end,
+    'items', (
+      select jsonb_agg(jsonb_build_object(
+        'letter', p.letter, 'flavour', p.flavour, 'size', p.size,
+        'style', p.style, 'product_code', p.code, 'quantity', i.quantity,
+        'logo', i.logo, 'notes', i.notes
+      ) order by i.created_at, i.id)
+      from public.letter_order_items i
+      join public.letter_products p on p.id = i.product_id
+      where i.order_id = o.id
+    )
+  ) into v_mail_payload
+  from public.letter_orders o where o.id = v_order_id;
+
+  insert into public.letter_mail_outbox (order_id, template, payload)
+    values (v_order_id, 'INTERNAL_ORDER_BACKUP', v_mail_payload);
   if p_channel = 'ONLINE' then
-    insert into public.letter_mail_outbox (order_id, template)
-      values (v_order_id, 'ONLINE_CONFIRMATION');
+    insert into public.letter_mail_outbox (order_id, template, payload)
+      values (v_order_id, 'ONLINE_CONFIRMATION', v_mail_payload);
   end if;
   insert into public.letter_audit_events (entity_type, entity_id, action, details, actor_id)
     values ('order', v_order_id, 'created',
