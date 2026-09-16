@@ -244,24 +244,40 @@ export default function SintB2BConcept() {
     productUnitPrice(product, tierFor(product, Math.max(1, recipientCount)), includeVat) +
       (wantsLogo ? productLogoPrice(recipientCount, includeVat) : 0) <= budget
   ), [budget, recipientCount, wantsLogo, includeVat]);
+  const canOpenEmail = Boolean(company.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
   const offerText = [
-    "Offerteaanvraag Sinterklaas 2026 · concept",
-    `Bedrijf: ${company || "-"}`,
-    `Contactpersoon: ${contact || "-"}`,
-    `E-mail: ${email || "-"}`,
-    `Telefoon: ${phone || "-"}`,
+    "Beste Strik Patisserie,",
     "",
-    ...selected.map(({ product, quantity, tier, logoPriceEx, totalEx: lineTotalEx }) =>
-      `${quantity} × ${product.name} (${choices[product.id] || product.options?.[0] || "Standaard"}${logo[product.id] ? `, eigen logo +${money(logoPriceEx)} p.s. excl. btw` : ""}) · ${money(productUnitPrice(product, tier, false) + logoPriceEx)} p.s. excl. btw · ${money(lineTotalEx)}`
-    ),
+    "Graag ontvang ik een vrijblijvende offerte voor onderstaande Sinterklaasproducten.",
     "",
-    `Producten: ${money(subtotalEx)} excl. btw / ${money(subtotalIncl)} incl. btw`,
-    `Levering: ${delivery === "pickup" ? "Ophalen (gratis)" : delivery === "nijmegen" ? `Bezorgen in Nijmegen (${money(deliveryFeeEx)} excl. btw; indicatie)` : "Bezorgen buiten Nijmegen (prijs op aanvraag)"}`,
-    delivery !== "pickup" ? `Afleveradres: ${deliveryAddress || "nog af te stemmen"}` : "",
-    `Totaalindicatie: ${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw${delivery === "custom" ? " + bezorgkosten op aanvraag" : ""}`,
-    wishes ? `Overige wensen: ${wishes}` : "",
-    "Definitieve prijzen en beschikbaarheid worden bevestigd door Strik Patisserie.",
-  ].filter(Boolean).join("\n");
+    "BEDRIJF EN CONTACT",
+    `Bedrijf: ${company.trim() || "nog niet ingevuld"}`,
+    ...(contact.trim() ? [`Contactpersoon: ${contact.trim()}`] : []),
+    `E-mail: ${email.trim() || "nog niet ingevuld"}`,
+    ...(phone.trim() ? [`Telefoon: ${phone.trim()}`] : []),
+    "",
+    "GEKOZEN PRODUCTEN",
+    ...selected.flatMap(({ product, quantity, tier, logoPriceEx, totalEx: lineTotalEx }, index) => [
+      `${index + 1}. ${quantity} x ${product.name} - ${choices[product.id] || product.options?.[0] || "Standaard"}`,
+      `   Prijs per stuk: ${money(productUnitPrice(product, tier, false))} excl. btw${tier.discountPercent ? ` (${tier.discountPercent}% staffelkorting)` : ""}`,
+      ...(logo[product.id] ? [`   Eigen logo: +${money(logoPriceEx)} per stuk excl. btw`] : []),
+      `   Regeltotaal: ${money(lineTotalEx)} excl. btw`,
+      "",
+    ]),
+    "LEVERING",
+    delivery === "pickup" ? "Ophalen bij Strik - gratis" : delivery === "nijmegen" ? `Bezorgen in Nijmegen - ${money(deliveryFeeEx)} excl. btw (indicatie)` : "Bezorgen buiten Nijmegen - prijs op aanvraag",
+    ...(delivery !== "pickup" ? [`Afleveradres: ${deliveryAddress.trim() || "nog af te stemmen"}`] : []),
+    "",
+    "PRIJSINDICATIE",
+    `Producten: ${money(subtotalEx)} excl. btw`,
+    `Totaal: ${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw${delivery === "custom" ? " (+ bezorgkosten op aanvraag)" : ""}`,
+    ...(wishes.trim() ? ["", "OVERIGE WENSEN", wishes.trim()] : []),
+    "",
+    "Dit is een aanvraag, nog geen bestelling. Graag ontvang ik jullie bevestiging van de definitieve prijzen, beschikbaarheid en leverdatum.",
+    "",
+    "Met vriendelijke groet,",
+    contact.trim() || company.trim() || "Zakelijke klant",
+  ].join("\r\n");
 
   return (
     <main className="min-h-dvh bg-[#efb800] text-[#5a170f]">
@@ -341,7 +357,9 @@ export default function SintB2BConcept() {
         <div className="mt-4 flex justify-between gap-3 border-t-2 border-[#60190f] pt-4 text-xl font-black"><span>Totaalindicatie {includeVat ? "incl." : "excl."} btw</span><span className="text-right">{money(total)}{delivery === "custom" && <small className="block text-xs">+ bezorgkosten</small>}</span></div>
         <p className="mt-1 text-right text-xs font-bold text-[#8b7669]">Ook {includeVat ? `${money(totalEx)} excl. btw` : `${money(totalIncl)} incl. btw`}</p>
         <div className="mt-6 grid gap-3 sm:grid-cols-2"><input aria-label="Bedrijfsnaam" value={company} onChange={(event) => setCompany(event.target.value)} placeholder="Bedrijfsnaam" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Contactpersoon" value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Contactpersoon" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="E-mailadres" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="E-mailadres" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Telefoonnummer" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="Telefoonnummer" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><textarea aria-label="Overige wensen" value={wishes} onChange={(event) => setWishes(event.target.value)} placeholder="Gewenste leverdatum, verpakking of andere wensen" className="min-h-28 rounded-xl border border-[#dfd0b7] bg-white p-4 font-bold sm:col-span-2"/></div>
-        <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sint 2026 · ${company || "zakelijke klant"}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a><p className="mt-3 text-center text-xs font-bold text-[#8b7669]">Je e-mailapp opent met de aanvraag ingevuld. Je verstuurt hem zelf; er gaat niet automatisch iets weg. Alle bedragen zijn conceptprijzen.</p>
+        <details className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><summary className="cursor-pointer text-sm font-black text-[#60190f]">Bekijk eerst de e-mailtekst</summary><pre className="mt-4 whitespace-pre-wrap break-words border-t border-[#eadbc3] pt-4 font-sans text-xs leading-relaxed text-[#5a4038]">{offerText}</pre></details>
+        {canOpenEmail ? <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sinterklaas 2026 - ${company.trim()}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a> : <div className="mt-5"><button type="button" disabled className="w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white opacity-45">Open aanvraag in mijn e-mailapp →</button><p className="mt-2 text-center text-xs font-bold text-[#9a3d21]">Vul eerst de bedrijfsnaam en een geldig e-mailadres in.</p></div>}
+        <p className="mt-3 text-center text-xs font-bold text-[#8b7669]">Je e-mailapp opent met een overzichtelijke aanvraag. Je verstuurt hem zelf; er gaat niet automatisch iets weg. De overige producten en bezorgkosten zijn nog conceptprijzen.</p>
       </section></div>}
       {gallery&&gallery.product.gallery&&<div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2d0b06]/85 p-4" onClick={()=>setGallery(null)}><section className="w-full max-w-4xl" onClick={(event)=>event.stopPropagation()}><div className="mb-3 flex items-center justify-between text-white"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#efb800]">Meer foto&apos;s</p><h2 className="text-2xl font-black">{gallery.product.name}</h2></div><button type="button" onClick={()=>setGallery(null)} className="h-11 w-11 rounded-full bg-white text-xl font-black text-[#60190f]">×</button></div><div className="relative aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-[#fff3cf] sm:aspect-[16/10]"><Image src={gallery.product.gallery[gallery.index].src} alt={gallery.product.gallery[gallery.index].label} fill sizes="100vw" className="object-contain"/></div><p className="mt-3 text-center text-sm font-bold text-white">{gallery.product.gallery[gallery.index].label}</p><div className="mt-4 flex justify-center gap-2">{gallery.product.gallery.map((photo,index)=><button key={photo.src} type="button" aria-label={photo.label} onClick={()=>setGallery({...gallery,index})} className={`relative h-16 w-16 overflow-hidden rounded-xl border-2 sm:h-20 sm:w-20 ${index===gallery.index?"border-[#efb800]":"border-white/40"}`}><Image src={photo.src} alt="" fill sizes="80px" className="object-cover"/></button>)}</div></section></div>}
     </main>
