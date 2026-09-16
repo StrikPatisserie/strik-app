@@ -17,6 +17,11 @@ type Product = {
   options?: string[];
 };
 
+// Conceptbedragen: vervang deze zodra de B2B-prijslijst voor 2026 definitief is.
+const NIJMEGEN_DELIVERY_FEE = 15;
+const logoPriceFor = (quantity: number) => quantity > 100 ? 0.35 : quantity > 50 ? 0.38 : 0.4;
+type Delivery = "pickup" | "nijmegen" | "custom";
+
 const products: Product[] = [
   {
     id: "chocoladeletter",
@@ -156,6 +161,18 @@ export default function SintB2BConcept() {
   const [logo, setLogo] = useState<Record<string, boolean>>({});
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [gallery, setGallery] = useState<{ product: Product; index: number } | null>(null);
+  const [giftOpen, setGiftOpen] = useState(false);
+  const [finderOpen, setFinderOpen] = useState(false);
+  const [budget, setBudget] = useState(20);
+  const [recipientCount, setRecipientCount] = useState(25);
+  const [wantsLogo, setWantsLogo] = useState(false);
+  const [delivery, setDelivery] = useState<Delivery>("pickup");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [company, setCompany] = useState("");
+  const [contact, setContact] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [wishes, setWishes] = useState("");
 
   const selected = useMemo(
     () =>
@@ -163,13 +180,36 @@ export default function SintB2BConcept() {
         .map((product) => {
           const quantity = quantities[product.id] || 0;
           const tier = tierFor(product, Math.max(1, quantity));
-          const logoPrice = logo[product.id] ? (quantity > 100 ? 0.35 : quantity > 50 ? 0.38 : 0.4) : 0;
+          const logoPrice = logo[product.id] ? logoPriceFor(quantity) : 0;
           return { product, quantity, tier, logoPrice, total: quantity * (tier.price + logoPrice) };
         })
         .filter((line) => line.quantity > 0),
     [logo, quantities]
   );
-  const total = selected.reduce((sum, line) => sum + line.total, 0);
+  const subtotal = selected.reduce((sum, line) => sum + line.total, 0);
+  const deliveryFee = delivery === "nijmegen" && selected.length ? NIJMEGEN_DELIVERY_FEE : 0;
+  const total = subtotal + deliveryFee;
+  const suggestions = useMemo(() => products.filter((product) =>
+    tierFor(product, Math.max(1, recipientCount)).price + (wantsLogo ? logoPriceFor(recipientCount) : 0) <= budget
+  ), [budget, recipientCount, wantsLogo]);
+  const offerText = [
+    "Offerteaanvraag Sinterklaas 2026 · concept",
+    `Bedrijf: ${company || "-"}`,
+    `Contactpersoon: ${contact || "-"}`,
+    `E-mail: ${email || "-"}`,
+    `Telefoon: ${phone || "-"}`,
+    "",
+    ...selected.map(({ product, quantity, tier, logoPrice, total: lineTotal }) =>
+      `${quantity} × ${product.name} (${choices[product.id] || product.options?.[0] || "Standaard"}${logo[product.id] ? `, eigen logo +${money(logoPrice)} p.s.` : ""}) · ${money(tier.price + logoPrice)} p.s. · ${money(lineTotal)}`
+    ),
+    "",
+    `Producten: ${money(subtotal)} excl. btw`,
+    `Levering: ${delivery === "pickup" ? "Ophalen (gratis)" : delivery === "nijmegen" ? `Bezorgen in Nijmegen (${money(deliveryFee)} indicatie)` : "Bezorgen buiten Nijmegen (prijs op aanvraag)"}`,
+    delivery !== "pickup" ? `Afleveradres: ${deliveryAddress || "nog af te stemmen"}` : "",
+    `Totaalindicatie: ${delivery === "custom" ? `${money(subtotal)} + bezorgkosten op aanvraag` : money(total)} excl. btw`,
+    wishes ? `Overige wensen: ${wishes}` : "",
+    "Definitieve prijzen en beschikbaarheid worden bevestigd door Strik Patisserie.",
+  ].filter(Boolean).join("\n");
 
   return (
     <main className="min-h-dvh bg-[#efb800] text-[#5a170f]">
@@ -184,10 +224,31 @@ export default function SintB2BConcept() {
           <h1 className="mt-2 max-w-5xl text-[clamp(4rem,13vw,10rem)] font-black leading-[.76] tracking-[-.08em] text-white">SINT</h1>
           <p className="-mt-1 font-[Butterscotch] text-[clamp(2.8rem,8vw,6.5rem)] leading-none text-[#d62d1d]">Met een Strik</p>
           <p className="mt-7 max-w-2xl text-lg font-bold leading-relaxed text-[#6d2417] sm:text-xl">Verras collega’s en relaties met ambachtelijke Sinterklaascadeaus. Kies je producten, zie direct je staffel en stel vrijblijvend een offerteaanvraag samen.</p>
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <button type="button" onClick={() => setGiftOpen(true)} className="group inline-flex items-center gap-3 rounded-full bg-[#d62d1d] px-6 py-4 text-sm font-black text-white shadow-[0_12px_30px_rgba(92,24,12,.2)] transition hover:-translate-y-1 hover:shadow-xl">
+              <span aria-hidden="true" className="text-xl transition group-hover:rotate-12">🎁</span> Open het cadeau
+            </button>
+            <button type="button" onClick={() => { setFinderOpen(true); window.setTimeout(() => document.getElementById("cadeaukeuzehulp")?.scrollIntoView({ behavior: "smooth" }), 0); }} className="rounded-full border-2 border-[#6d2417] px-6 py-3.5 text-sm font-black text-[#6d2417] transition hover:bg-white/20">Help me kiezen →</button>
+          </div>
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-4 py-10 sm:px-8 lg:px-12 lg:py-16">
+      <section id="cadeaukeuzehulp" className="mx-auto max-w-7xl scroll-mt-6 px-4 pt-10 sm:px-8 lg:px-12 lg:pt-16">
+        <div className="overflow-hidden rounded-[2rem] bg-[#fff7df] shadow-[0_18px_55px_rgba(107,35,12,.12)]">
+          <button type="button" aria-expanded={finderOpen} onClick={() => setFinderOpen(!finderOpen)} className="flex w-full items-center justify-between gap-4 p-6 text-left sm:p-8">
+            <span><span className="text-xs font-black uppercase tracking-[.2em] text-[#d62d1d]">Interactieve keuzehulp</span><span className="mt-1 block text-2xl font-black text-[#60190f] sm:text-3xl">Welk cadeau past bij jouw team?</span><span className="mt-2 block text-sm font-semibold text-[#7e493c]">Vul drie dingen in en bekijk meteen passende ideeën.</span></span>
+            <span className="shrink-0 rounded-full bg-[#d62d1d] px-4 py-3 text-sm font-black text-white">{finderOpen ? "Sluiten −" : "Start →"}</span>
+          </button>
+          {finderOpen && <div className="grid gap-6 border-t border-[#ecd8b7] p-6 sm:p-8 lg:grid-cols-3">
+            <label className="grid gap-2 text-sm font-black text-[#60190f]">1. Hoeveel ontvangers?<input type="number" min="1" value={recipientCount} onChange={(event) => setRecipientCount(Math.max(1, Number(event.target.value) || 1))} className="h-12 rounded-xl border border-[#dfc699] bg-white px-4 text-lg" /></label>
+            <label className="grid gap-2 text-sm font-black text-[#60190f]">2. Budget per persoon, excl. btw<input type="number" min="1" value={budget} onChange={(event) => setBudget(Math.max(1, Number(event.target.value) || 1))} className="h-12 rounded-xl border border-[#dfc699] bg-white px-4 text-lg" /></label>
+            <div className="grid content-end gap-2 text-sm font-black text-[#60190f]">3. Met eigen logo?<button type="button" aria-pressed={wantsLogo} onClick={() => setWantsLogo(!wantsLogo)} className={`h-12 rounded-xl border px-4 text-left ${wantsLogo ? "border-[#d62d1d] bg-[#d62d1d] text-white" : "border-[#dfc699] bg-white"}`}>{wantsLogo ? "Ja, met logo ✓" : "Nee, zonder logo"}</button></div>
+            <div className="rounded-2xl bg-[#f8e5ba] p-5 lg:col-span-3"><p className="text-xs font-black uppercase tracking-[.16em] text-[#9a3d21]">Jouw selectie</p><p className="mt-1 font-bold text-[#60190f]">{suggestions.length ? `${suggestions.length} cadeau-ideeën passen binnen je budget. Tik op een product om ${recipientCount} stuks aan je aanvraag toe te voegen.` : "Er past nog geen product binnen dit budget. Verhoog het bedrag of vraag een pakket op maat aan."}</p><div className="mt-4 flex flex-wrap gap-2">{suggestions.map((product) => <button key={product.id} type="button" onClick={() => { setQuantities((current) => ({ ...current, [product.id]: recipientCount })); setLogo((current) => ({ ...current, [product.id]: wantsLogo })); document.getElementById(`product-${product.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }); }} className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#60190f] transition hover:bg-[#d62d1d] hover:text-white">+ {product.name} · {money(tierFor(product, recipientCount).price + (wantsLogo ? logoPriceFor(recipientCount) : 0))} p.s.</button>)}</div></div>
+          </div>}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl scroll-mt-6 px-4 py-10 sm:px-8 lg:px-12 lg:py-16">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div><p className="text-xs font-black uppercase tracking-[.2em] text-white">Zakelijk assortiment</p><h2 className="mt-1 text-3xl font-black text-[#65180f] sm:text-5xl">Kies iets lekkers</h2></div>
           <p className="max-w-md text-sm font-bold text-[#7e2b1c]">Conceptprijzen gebaseerd op de folder van 2025, exclusief 9% btw. Definitieve prijzen volgen.</p>
@@ -196,14 +257,14 @@ export default function SintB2BConcept() {
           {products.map((product) => {
             const quantity = quantities[product.id] || 0;
             const tier = tierFor(product, Math.max(1, quantity));
-            return <article key={product.id} className="overflow-hidden rounded-[2rem] bg-[#fff3cf] shadow-[0_18px_55px_rgba(107,35,12,.16)]">
+            return <article id={`product-${product.id}`} key={product.id} className="overflow-hidden rounded-[2rem] bg-[#fff3cf] shadow-[0_18px_55px_rgba(107,35,12,.16)]">
               <div className="relative aspect-[4/3] overflow-hidden" style={{backgroundColor:product.accent}}><Image src={product.image} alt={product.name} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 hover:scale-105"/><span className="absolute left-4 top-4 rounded-full bg-[#d62d1d] px-3 py-1 text-xs font-black uppercase tracking-wider text-white">{product.eyebrow}</span>{product.gallery&&product.gallery.length>1&&<button type="button" onClick={()=>setGallery({product,index:0})} className="absolute right-4 top-4 rounded-full bg-white/95 px-3 py-1.5 text-[.68rem] font-black text-[#60190f] shadow-md backdrop-blur transition hover:bg-white">▧ Meer foto&apos;s</button>}<span className="absolute bottom-4 right-4 rounded-full bg-white px-3 py-1 text-xs font-black text-[#8a2d1c]">t.h.t. {product.shelfLife}</span></div>
               <div className="p-5 sm:p-6"><h3 className="text-2xl font-black text-[#60190f]">{product.name}</h3><p className="mt-2 min-h-12 text-sm font-semibold leading-relaxed text-[#7e493c]">{product.description}</p>
                 <div className="mt-5 flex flex-wrap gap-1.5">{product.tiers.map((item)=><span key={item.label} className={`rounded-full px-2.5 py-1 text-[.68rem] font-black ${tier.label===item.label&&quantity>0?"bg-[#d62d1d] text-white":"bg-white text-[#7e493c]"}`}>{item.label} · {money(item.price)}</span>)}</div>
                 {product.options&&<select value={choices[product.id]||product.options[0]} onChange={(event)=>setChoices(current=>({...current,[product.id]:event.target.value}))} className="mt-5 h-11 w-full rounded-xl border border-[#e2c99c] bg-white px-3 text-sm font-black text-[#5a170f]">{product.options.map(option=><option key={option}>{option}</option>)}</select>}
                 <label className="mt-3 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={!!logo[product.id]} onChange={(event)=>setLogo(current=>({...current,[product.id]:event.target.checked}))} className="h-4 w-4"/> Eigen logo op marsepein (+ vanaf € 0,35)</label>
                 <div className="mt-5 flex items-center gap-3"><button type="button" aria-label={`Minder ${product.name}`} onClick={()=>setQuantities(current=>({...current,[product.id]:Math.max(0,(current[product.id]||0)-1)}))} className="h-11 w-11 rounded-full border-2 border-[#d62d1d] text-xl font-black">−</button><input aria-label={`Aantal ${product.name}`} type="number" min="0" value={quantity} onChange={(event)=>setQuantities(current=>({...current,[product.id]:Math.max(0,Number(event.target.value)||0)}))} className="h-11 min-w-0 flex-1 rounded-xl border border-[#e2c99c] bg-white text-center text-lg font-black"/><button type="button" aria-label={`Meer ${product.name}`} onClick={()=>setQuantities(current=>({...current,[product.id]:(current[product.id]||0)+1}))} className="h-11 w-11 rounded-full bg-[#d62d1d] text-xl font-black text-white">+</button></div>
-                <div className="mt-3 flex items-center justify-between text-sm"><span className="font-bold text-[#7e493c]">{quantity?`${tier.label} stuks`:`vanaf ${money(product.tiers.at(-1)?.price||0)}`}</span><strong className="text-lg text-[#60190f]">{quantity?money(quantity*(tier.price+(logo[product.id]?(quantity>100?.35:quantity>50?.38:.4):0))):"Kies aantal"}</strong></div>
+                <div className="mt-3 flex items-center justify-between text-sm"><span className="font-bold text-[#7e493c]">{quantity?`${tier.label} stuks`:`vanaf ${money(product.tiers.at(-1)?.price||0)}`}</span><strong className="text-lg text-[#60190f]">{quantity?money(quantity*(tier.price+(logo[product.id]?logoPriceFor(quantity):0))):"Kies aantal"}</strong></div>
               </div>
             </article>;
           })}
@@ -212,9 +273,19 @@ export default function SintB2BConcept() {
 
       <section className="bg-[#b9dddf] px-4 py-12 sm:px-8 lg:px-12"><div className="mx-auto grid max-w-7xl items-center gap-8 lg:grid-cols-[1fr_.8fr]"><div><p className="font-[Butterscotch] text-5xl text-[#d62d1d] sm:text-7xl">Stel zelf samen!</p><h2 className="mt-2 text-3xl font-black text-[#60190f]">Een pakket passend bij ieder budget</h2><p className="mt-4 max-w-xl text-lg font-semibold leading-relaxed text-[#6d4035]">Liever een unieke combinatie, eigen verpakking of bezorging op meerdere locaties? Zet je wensen in de aanvraag; ons team denkt mee.</p></div><Image src="/sinterklaas/b2b-concept/product-11.png" alt="Sinterklaasproducten van Strik" width={760} height={520} className="w-full rounded-[50%] object-cover shadow-xl"/></div></section>
 
-      <div className="sticky bottom-0 z-30 border-t border-[#e6d7bf] bg-white/95 px-4 py-3 shadow-[0_-12px_35px_rgba(64,20,10,.14)] backdrop-blur sm:px-8"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><p className="text-xs font-bold text-[#7e493c]">{selected.reduce((sum,line)=>sum+line.quantity,0)} producten · excl. btw</p><p className="text-xl font-black text-[#60190f]">{money(total)}</p></div><button type="button" disabled={!selected.length} onClick={()=>setQuoteOpen(true)} className="rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40 sm:px-8">Bekijk offerteaanvraag</button></div></div>
+      <div className="sticky bottom-0 z-30 border-t border-[#e6d7bf] bg-white/95 px-4 py-3 shadow-[0_-12px_35px_rgba(64,20,10,.14)] backdrop-blur sm:px-8"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><p className="text-xs font-bold text-[#7e493c]">{selected.reduce((sum,line)=>sum+line.quantity,0)} producten · excl. btw{delivery === "custom" ? " · bezorging op aanvraag" : ""}</p><p className="text-xl font-black text-[#60190f]">{money(total)}{delivery === "custom" ? " + bezorging" : ""}</p></div><button type="button" disabled={!selected.length} onClick={()=>setQuoteOpen(true)} className="rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40 sm:px-8">Bekijk offerteaanvraag</button></div></div>
 
-      {quoteOpen&&<div className="fixed inset-0 z-50 flex items-end justify-center bg-[#391008]/55 p-0 sm:items-center sm:p-5"><section className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#d62d1d]">Concept</p><h2 className="mt-1 text-3xl font-black text-[#60190f]">Jouw offerteaanvraag</h2></div><button type="button" onClick={()=>setQuoteOpen(false)} className="h-10 w-10 rounded-full bg-white text-lg font-black">×</button></div><div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({product,quantity,tier,logoPrice,total:lineTotal})=><div key={product.id} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choices[product.id]||product.options?.[0]||"Standaard"}{logo[product.id]?" · met eigen logo":""} · {money(tier.price+logoPrice)} p.s.</p></div><strong>{money(lineTotal)}</strong></div>)}</div><div className="mt-4 flex justify-between border-t-2 border-[#60190f] pt-4 text-xl font-black"><span>Totaal excl. btw</span><span>{money(total)}</span></div><div className="mt-6 grid gap-3 sm:grid-cols-2"><input placeholder="Bedrijfsnaam" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input placeholder="Contactpersoon" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input type="email" placeholder="E-mailadres" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input type="tel" placeholder="Telefoonnummer" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><textarea placeholder="Gewenste leverdatum, verpakking of andere wensen" className="min-h-28 rounded-xl border border-[#dfd0b7] bg-white p-4 font-bold sm:col-span-2"/></div><button type="button" onClick={()=>alert("Dit is het eerste concept. Er wordt nog geen aanvraag verstuurd.")} className="mt-5 w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white">Offerte aanvragen · demo</button><p className="mt-3 text-center text-xs font-bold text-[#8b7669]">In deze conceptversie wordt nog niets verzonden.</p></section></div>}
+      {giftOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#60190f]/90 p-4" onClick={() => setGiftOpen(false)}><div className="w-full max-w-lg text-center" onClick={(event) => event.stopPropagation()}><button type="button" aria-label="Sluiten" onClick={() => setGiftOpen(false)} className="ml-auto block h-10 w-10 rounded-full bg-white text-xl font-black text-[#60190f]">×</button><div className="gift-reveal mx-auto mt-4 flex h-56 w-56 items-center justify-center rounded-[3rem] bg-[#efb800] text-9xl shadow-2xl sm:h-64 sm:w-64">🎁</div><p className="mt-8 font-[Butterscotch] text-5xl text-[#efb800] sm:text-7xl">Voor jou, met een Strik</p><p className="mt-4 text-base font-semibold text-white">Het perfecte zakelijk cadeau begint met een goed idee.</p><button type="button" onClick={() => { setGiftOpen(false); setFinderOpen(true); window.setTimeout(() => document.getElementById("cadeaukeuzehulp")?.scrollIntoView({ behavior: "smooth" }), 0); }} className="mt-6 rounded-full bg-white px-7 py-4 text-sm font-black text-[#60190f]">Ontdek jouw cadeau →</button></div></div>}
+
+      {quoteOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#391008]/55 p-0 sm:items-center sm:p-5"><section role="dialog" aria-modal="true" aria-labelledby="quote-title" className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#d62d1d]">Live prijsindicatie</p><h2 id="quote-title" className="mt-1 text-3xl font-black text-[#60190f]">Jouw offerteaanvraag</h2></div><button type="button" aria-label="Sluiten" onClick={() => setQuoteOpen(false)} className="h-10 w-10 rounded-full bg-white text-lg font-black">×</button></div>
+        <div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({product,quantity,tier,logoPrice,total:lineTotal})=><div key={product.id} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choices[product.id]||product.options?.[0]||"Standaard"} · {money(tier.price)} p.s. · staffel {tier.label}</p>{logo[product.id] && <p className="mt-1 font-bold text-[#d62d1d]">Eigen logo: +{money(logoPrice)} p.s. ({money(quantity * logoPrice)} totaal)</p>}</div><strong>{money(lineTotal)}</strong></div>)}</div>
+        <fieldset className="mt-5"><legend className="text-sm font-black text-[#60190f]">Hoe wil je jouw cadeaus ontvangen?</legend><div className="mt-2 grid gap-2 sm:grid-cols-3">{([{value:"pickup", label:"Ophalen", detail:"Gratis"},{value:"nijmegen", label:"Bezorgen Nijmegen", detail:`+ ${money(NIJMEGEN_DELIVERY_FEE)} indicatie`},{value:"custom", label:"Overig adres", detail:"Prijs op aanvraag"}] as const).map((option) => <label key={option.value} className={`cursor-pointer rounded-xl border p-3 text-sm ${delivery === option.value ? "border-[#d62d1d] bg-[#fff0e8]" : "border-[#dfd0b7] bg-white"}`}><input type="radio" name="delivery" value={option.value} checked={delivery === option.value} onChange={() => setDelivery(option.value)} className="mr-2 accent-[#d62d1d]"/><strong>{option.label}</strong><span className="mt-1 block pl-5 text-xs text-[#7e493c]">{option.detail}</span></label>)}</div></fieldset>
+        {delivery !== "pickup" && <label className="mt-3 block text-sm font-bold text-[#60190f]">Afleveradres<input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Straat, huisnummer, postcode en plaats" className="mt-2 h-12 w-full rounded-xl border border-[#dfd0b7] bg-white px-4"/></label>}
+        <div className="mt-5 space-y-2 border-t border-[#eadbc3] pt-4 text-sm"><div className="flex justify-between"><span>Producten incl. gekozen logo&apos;s</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Bezorgen</span><strong>{delivery === "pickup" ? "Gratis" : delivery === "nijmegen" ? money(deliveryFee) : "Op aanvraag"}</strong></div></div>
+        <div className="mt-4 flex justify-between gap-3 border-t-2 border-[#60190f] pt-4 text-xl font-black"><span>Totaalindicatie excl. btw</span><span className="text-right">{money(total)}{delivery === "custom" && <small className="block text-xs">+ bezorgkosten</small>}</span></div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2"><input aria-label="Bedrijfsnaam" value={company} onChange={(event) => setCompany(event.target.value)} placeholder="Bedrijfsnaam" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Contactpersoon" value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Contactpersoon" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="E-mailadres" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="E-mailadres" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Telefoonnummer" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="Telefoonnummer" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><textarea aria-label="Overige wensen" value={wishes} onChange={(event) => setWishes(event.target.value)} placeholder="Gewenste leverdatum, verpakking of andere wensen" className="min-h-28 rounded-xl border border-[#dfd0b7] bg-white p-4 font-bold sm:col-span-2"/></div>
+        <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sint 2026 · ${company || "zakelijke klant"}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a><p className="mt-3 text-center text-xs font-bold text-[#8b7669]">Je e-mailapp opent met de aanvraag ingevuld. Je verstuurt hem zelf; er gaat niet automatisch iets weg. Alle bedragen zijn conceptprijzen.</p>
+      </section></div>}
       {gallery&&gallery.product.gallery&&<div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2d0b06]/85 p-4" onClick={()=>setGallery(null)}><section className="w-full max-w-4xl" onClick={(event)=>event.stopPropagation()}><div className="mb-3 flex items-center justify-between text-white"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#efb800]">Meer foto&apos;s</p><h2 className="text-2xl font-black">{gallery.product.name}</h2></div><button type="button" onClick={()=>setGallery(null)} className="h-11 w-11 rounded-full bg-white text-xl font-black text-[#60190f]">×</button></div><div className="relative aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-[#fff3cf] sm:aspect-[16/10]"><Image src={gallery.product.gallery[gallery.index].src} alt={gallery.product.gallery[gallery.index].label} fill sizes="100vw" className="object-contain"/></div><p className="mt-3 text-center text-sm font-bold text-white">{gallery.product.gallery[gallery.index].label}</p><div className="mt-4 flex justify-center gap-2">{gallery.product.gallery.map((photo,index)=><button key={photo.src} type="button" aria-label={photo.label} onClick={()=>setGallery({...gallery,index})} className={`relative h-16 w-16 overflow-hidden rounded-xl border-2 sm:h-20 sm:w-20 ${index===gallery.index?"border-[#efb800]":"border-white/40"}`}><Image src={photo.src} alt="" fill sizes="80px" className="object-cover"/></button>)}</div></section></div>}
     </main>
   );

@@ -11,6 +11,18 @@
   font-display: swap;
 }
 
+@keyframes gift-reveal {
+  from { opacity: 0; transform: translateY(28px) scale(.55) rotate(-12deg); }
+  65% { opacity: 1; transform: translateY(-10px) scale(1.08) rotate(5deg); }
+  to { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+}
+
+.gift-reveal { animation: gift-reveal .8s cubic-bezier(.2,.8,.2,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gift-reveal { animation: none; }
+}
+
 @font-face {
   font-family: "StrikGotham";
   src: url("/fonts/GothamLight.otf") format("opentype");
