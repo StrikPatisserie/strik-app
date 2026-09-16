@@ -29,6 +29,7 @@ function isPublicPath(pathname: string) {
   return (
     PUBLIC_PATHS.has(pathname) ||
     pathname.startsWith("/auth/callback/") ||
+    pathname.startsWith("/fonts/") ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico"
   );
