@@ -3,7 +3,7 @@
 De publieke checkout staat standaard uit (`LETTERSHOP_CHECKOUT_ENABLED` is niet `true`).
 De pagina blijft dan een concept en de API geeft 503. Zet de vlag pas aan na alle controles.
 
-1. Voer `app/supabase/migrations/20260916030000_create_lettershop_checkout_function.sql` uit na de drie eerdere chocoladeletter-migraties. Draai daarna `app/supabase/tests/lettershop_checkout_smoke.sql`; de test eindigt met `ROLLBACK`.
+1. Voer `app/supabase/migrations/20260916030000_create_lettershop_checkout_function.sql` uit na de drie eerdere chocoladeletter-migraties. Draai daarna `app/supabase/tests/lettershop_checkout_smoke.sql`; de test eindigt met `ROLLBACK`. Voer daarna `20260916040000_seed_letter_production_days_2026.sql` uit voor de voorlopige datums 10/24 november en 1 december (afhalen vanaf 12/26 november en 3 december).
 2. Installeer `app/wordpress-snippets/strik-lettershop-mail-api.php` als aparte WordPress Code Snippet. De route vereist een WordPress-administrator met een Application Password.
 3. Configureer op Vercel (alleen serverzijde): `WORDPRESS_MEDIA_USERNAME` en `WORDPRESS_MEDIA_APPLICATION_PASSWORD` (of bestaande `WORDPRESS_USERNAME` / `WORDPRESS_APPLICATION_PASSWORD`), `SUPABASE_SERVICE_ROLE_KEY`, een willekeurige `LETTERSHOP_RATE_SALT` en `CRON_SECRET`. Deel deze waarden niet in chat of broncode.
 4. Zet `LETTERSHOP_CHECKOUT_ENABLED=true` eerst uitsluitend op een Vercel Preview-deployment. Bestel één letter met foto/logo op een geldige afhaaldatum. Controleer de order op `/sinterklaas/letters/online`, de privéafbeelding, de klantmail en de back-upmail aan `info@strik-patisserie.nl` inclusief afbeelding.
