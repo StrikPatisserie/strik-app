@@ -4,6 +4,10 @@ import {
   StrikShell,
   strikIcons,
 } from "../../StrikUI";
+import { getCurrentProfile } from "@/app/lib/auth/session";
+import { hasFullAccess } from "@/app/lib/auth/access";
+
+export const dynamic = "force-dynamic";
 
 const items = [
   {
@@ -20,7 +24,8 @@ const items = [
   },
 ];
 
-export default function SinterklaasLettersPage() {
+export default async function SinterklaasLettersPage() {
+  const profile = await getCurrentProfile();
   return (
     <StrikShell>
       <StrikPageHeader
@@ -29,6 +34,7 @@ export default function SinterklaasLettersPage() {
       />
 
       <div className="grid gap-2">
+        {hasFullAccess(profile) && <StrikMenuLink href="/sinterklaas/letters/management" title="Management · nieuwe opzet" icon={strikIcons.management} tone="green" />}
         {items.map((item) => (
           <StrikMenuLink key={item.href} {...item} />
         ))}
