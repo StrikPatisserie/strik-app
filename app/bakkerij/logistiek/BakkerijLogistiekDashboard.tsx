@@ -8217,6 +8217,9 @@ export default function BakkerijLogistiekDashboard() {
   }, [dateState.selectedDate, batchReloadCounter]);
 
   function selectDate(date: string) {
+    const { today, tomorrow } = dateStateRef.current;
+    if (!date || (date > today && date !== tomorrow)) return;
+
     setDateState((current) => ({ ...current, selectedDate: date }));
     setFileSnapshot(null);
     setImportMessage("");
@@ -8978,11 +8981,12 @@ export default function BakkerijLogistiekDashboard() {
           </p>
           <div className="mt-5 flex flex-wrap items-end justify-center gap-2">
             <label className="text-left text-xs font-black text-[#4a4540]">
-              Andere datum
+              Eerdere datum
               <input
                 type="date"
-                value={dateState.selectedDate}
-                aria-label="Andere leverdatum kiezen"
+                value={dateState.selectedDate > dateState.today ? dateState.today : dateState.selectedDate}
+                max={dateState.today}
+                aria-label="Eerdere leverdatum kiezen"
                 onChange={(event) => selectDate(event.target.value)}
                 className="mt-1 block min-h-10 border border-[#d7cec4] bg-white px-2 text-sm font-bold text-[#1a1815]"
               />
@@ -9055,11 +9059,12 @@ export default function BakkerijLogistiekDashboard() {
                   : "border-[#e8e4de] bg-white/70 text-[#8b8278] hover:bg-white"
               }`}
             >
-              Andere datum
+              Eerdere datum
               <input
                 type="date"
-                value={selectedPlan.date}
-                aria-label="Andere leverdatum kiezen"
+                value={selectedPlan.date > dateState.today ? dateState.today : selectedPlan.date}
+                max={dateState.today}
+                aria-label="Eerdere leverdatum kiezen"
                 className="min-h-8 border border-[#d7cec4] bg-white px-1 text-xs font-bold text-[#1a1815]"
                 onChange={(event) => selectDate(event.target.value)}
               />
