@@ -799,7 +799,10 @@ export default function KasboekMaandrapportClient() {
     [cashDeposits, month]
   );
   const monthDepositTotal = useMemo(
-    () => sumMoney(monthCashDeposits, (deposit) => deposit.actualAmount ?? deposit.amount),
+    () => sumMoney(monthCashDeposits, (deposit) =>
+      (deposit.depositedAt ? deposit.actualAmount ?? deposit.amount : 0) +
+      (deposit.iceDepositedAt ? deposit.iceDepositAmount ?? 0 : 0)
+    ),
     [monthCashDeposits]
   );
   const isMonthCashbookBooked =

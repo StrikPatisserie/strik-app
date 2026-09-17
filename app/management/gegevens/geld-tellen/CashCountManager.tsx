@@ -252,6 +252,9 @@ function depositedTotalForWeek(
         total +
         (deposit.year === year && deposit.week === week && deposit.depositedAt
           ? deposit.actualAmount ?? deposit.amount
+          : 0) +
+        (deposit.year === year && deposit.week === week && deposit.iceDepositedAt
+          ? deposit.iceDepositAmount || 0
           : 0),
       0
     )
@@ -595,6 +598,8 @@ export default function CashCountManager() {
   const [depositNotes, setDepositNotes] = useState<Record<string, string>>({});
   const [actualDepositDrafts, setActualDepositDrafts] = useState<Record<string, string>>({});
   const [differenceNotes, setDifferenceNotes] = useState<Record<string, string>>({});
+  const [iceDepositDrafts, setIceDepositDrafts] = useState<Record<string, string>>({});
+  const [iceDepositNotes, setIceDepositNotes] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
   const [mailState, setMailState] = useState<"idle" | "sending">("idle");
   const [status, setStatus] = useState("");
@@ -854,7 +859,9 @@ export default function CashCountManager() {
           expectedCount: row.iceCount,
           missingCount: 0,
           weekTotal: row.includedIceCash,
-          depositedAmount: null,
+          depositedAmount: row.deposit?.iceDepositedAt
+            ? row.deposit.iceDepositAmount ?? 0
+            : null,
         },
       ]),
     [weekRows]
@@ -1529,6 +1536,56 @@ export default function CashCountManager() {
     }
   }
 
+  async function saveIceDeposit(row: (typeof weekRows)[number]) {
+    if (isSelectedWeekClosed || state === "saving") {
+      setStatus("Deze week is gesloten. Heropen de week eerst om een ijsstorting te wijzigen.");
+      return;
+    }
+    if (row.deposit?.cashbookBookedAt) {
+      setStatus("Deze week is al in het kasboek geboekt. De ijsstorting kan niet worden gewijzigd.");
+      return;
+    }
+    const draftKey = `${depositWeekKey}:ice:${row.shop}`;
+    const raw = iceDepositDrafts[draftKey] ?? formatOptionalAmountInput(row.deposit?.iceDepositAmount);
+    if (!/^\d+(?:[.,]\d{1,2})?$/.test(raw.trim())) {
+      setStatus("Vul een geldig ijsstortingsbedrag in.");
+      return;
+    }
+    const note = (iceDepositNotes[draftKey] ?? row.deposit?.iceDepositNote ?? "").trim();
+    if (row.iceCount === 0 && !note) {
+      setStatus("Vul een reden in wanneer er geen ijs-dagrapport is.");
+      return;
+    }
+    const amount = parseAmount(raw);
+    if (!window.confirm(`IJs ${row.shop}: ${formatMoney(amount)} als weekstorting opslaan${row.iceCount === 0 ? " zonder dagrapport" : ""}?`)) return;
+
+    const now = new Date().toISOString();
+    const existing = row.deposit;
+    const deposit: RevenueCashDeposit = {
+      id: createRevenueCashDepositKey(selectedWeek.year, selectedWeek.week, row.shop),
+      year: selectedWeek.year,
+      week: selectedWeek.week,
+      shop: row.shop,
+      amount: existing?.amount ?? 0,
+      cashRecordIds: existing?.cashRecordIds ?? [],
+      ...existing,
+      dateFrom: existing?.dateFrom || selectedWeekDates[0],
+      dateTo: existing?.dateTo || selectedWeekDates.at(-1),
+      iceDepositAmount: amount,
+      iceDepositedAt: now,
+      iceDepositNote: note,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+    const nextDeposits = mergeRevenueCashDeposits(
+      cashDeposits.filter((item) => item.id !== deposit.id),
+      [deposit]
+    );
+    if (await saveCash(nextDeposits)) {
+      setStatus(`Ijsstorting voor ${row.shop} opgeslagen; overige kasgegevens zijn niet gewijzigd.`);
+    }
+  }
+
   async function saveDeposit(row: (typeof weekRows)[number]) {
     if (isSelectedWeekClosed) {
       setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
@@ -1553,6 +1610,9 @@ export default function CashCountManager() {
       amount,
       actualAmount: row.deposit?.actualAmount,
       differenceNote: row.deposit?.differenceNote,
+      iceDepositAmount: row.deposit?.iceDepositAmount,
+      iceDepositedAt: row.deposit?.iceDepositedAt,
+      iceDepositNote: row.deposit?.iceDepositNote,
       dateFrom: dateRange[0],
       dateTo: dateRange.at(-1),
       cashRecordIds: checkedRecords.map((record) => record.id),
@@ -1609,6 +1669,9 @@ export default function CashCountManager() {
         amount,
         actualAmount: row.deposit?.actualAmount,
         differenceNote: row.deposit?.differenceNote,
+        iceDepositAmount: row.deposit?.iceDepositAmount,
+        iceDepositedAt: row.deposit?.iceDepositedAt,
+        iceDepositNote: row.deposit?.iceDepositNote,
         dateFrom: dateRange[0],
         dateTo: dateRange.at(-1),
         cashRecordIds: checkedRecords.map((record) => record.id),
@@ -1766,6 +1829,9 @@ export default function CashCountManager() {
   const selectedDepositDraftKey = selectedShopRow
     ? `${depositWeekKey}:${selectedShopRow.shop}`
     : "";
+  const selectedIceDepositDraftKey = selectedShopRow
+    ? `${depositWeekKey}:ice:${selectedShopRow.shop}`
+    : "";
 
   return (
     <div className="space-y-2">
@@ -1814,7 +1880,7 @@ export default function CashCountManager() {
                   {row.kind === "patisserie" ? `P. ${row.shop}` : row.label} ·{" "}
                   {row.kind === "patisserie"
                     ? `gestort ${row.depositedAmount === null ? "—" : formatMoney(row.depositedAmount)}`
-                    : `geteld ${formatMoney(row.weekTotal)}`}
+                    : `gestort ${row.depositedAmount === null ? "—" : formatMoney(row.depositedAmount)}`}
                 </option>
               ))}
             </select>
@@ -2598,6 +2664,42 @@ export default function CashCountManager() {
               value={formatMoney(selectedShopRow.includedIceCash)}
             />
           </div>
+          <div className="mt-2 grid gap-1.5 rounded-md border border-[#c8ddd2] bg-white/70 p-2 lg:grid-cols-[12rem_minmax(14rem,1fr)_auto] lg:items-end">
+            <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#1f4f35]">
+              Gestort voor ijs
+              <input
+                value={iceDepositDrafts[selectedIceDepositDraftKey] ?? formatOptionalAmountInput(selectedShopRow.deposit?.iceDepositAmount)}
+                onChange={(event) => setIceDepositDrafts((current) => ({ ...current, [selectedIceDepositDraftKey]: event.target.value }))}
+                inputMode="decimal"
+                disabled={isSelectedWeekClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
+                placeholder="0,00"
+                className="h-8 rounded-md border border-[#c8ddd2] bg-white px-2 text-sm font-bold normal-case text-[#1a1815] disabled:opacity-50"
+              />
+            </label>
+            <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#1f4f35]">
+              Toelichting {selectedShopRow.iceCount === 0 ? "(verplicht zonder dagrapport)" : "(optioneel)"}
+              <input
+                value={iceDepositNotes[selectedIceDepositDraftKey] ?? selectedShopRow.deposit?.iceDepositNote ?? ""}
+                onChange={(event) => setIceDepositNotes((current) => ({ ...current, [selectedIceDepositDraftKey]: event.target.value }))}
+                disabled={isSelectedWeekClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
+                placeholder="Bijv. kassa tijdelijk uitgeschakeld"
+                className="h-8 rounded-md border border-[#c8ddd2] bg-white px-2 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => void saveIceDeposit(selectedShopRow)}
+              disabled={state === "saving" || isSelectedWeekClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
+              className="h-8 rounded-md bg-[#c3d3bc] px-3 text-[0.62rem] font-black uppercase text-[#1a1815] disabled:opacity-50"
+            >
+              {selectedShopRow.deposit?.iceDepositedAt ? "Ijsstorting bijwerken" : "Ijsstorting opslaan"}
+            </button>
+          </div>
+          {selectedShopRow.iceCount === 0 && (
+            <p className="mt-1 text-xs text-[#1f4f35]">
+              Geen ijs-dagrapport gevonden; je kunt de storting toch apart registreren.
+            </p>
+          )}
         </section>
       )}
     </div>

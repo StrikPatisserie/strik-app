@@ -106,6 +106,9 @@ export type RevenueCashDeposit = {
   amount: number;
   actualAmount?: number;
   differenceNote?: string;
+  iceDepositAmount?: number;
+  iceDepositedAt?: string;
+  iceDepositNote?: string;
   dateFrom?: string;
   dateTo?: string;
   cashRecordIds: string[];
@@ -300,6 +303,9 @@ function compactCashDepositPayload(deposit: RevenueCashDeposit) {
     a: deposit.amount,
     aa: deposit.actualAmount,
     dn: deposit.differenceNote,
+    ia: deposit.iceDepositAmount,
+    ida: deposit.iceDepositedAt,
+    in: deposit.iceDepositNote,
     df: deposit.dateFrom,
     dt: deposit.dateTo,
     ids: deposit.cashRecordIds,
@@ -330,6 +336,9 @@ function expandCashDepositPayload(
     amount: payload.amount ?? payload.a,
     actualAmount: payload.actualAmount ?? payload.aa,
     differenceNote: payload.differenceNote ?? payload.dn,
+    iceDepositAmount: payload.iceDepositAmount ?? payload.ia,
+    iceDepositedAt: payload.iceDepositedAt ?? payload.ida,
+    iceDepositNote: payload.iceDepositNote ?? payload.in,
     dateFrom: payload.dateFrom ?? payload.df,
     dateTo: payload.dateTo ?? payload.dt,
     cashRecordIds: payload.cashRecordIds ?? payload.ids,
@@ -780,6 +789,12 @@ export function normalizeRevenueCashDeposit(
         ? undefined
         : positiveMoneyFrom(value.actualAmount),
     differenceNote: textFrom(value.differenceNote) || undefined,
+    iceDepositAmount:
+      value.iceDepositAmount === undefined || value.iceDepositAmount === null
+        ? undefined
+        : positiveMoneyFrom(value.iceDepositAmount),
+    iceDepositedAt: textFrom(value.iceDepositedAt) || undefined,
+    iceDepositNote: textFrom(value.iceDepositNote) || undefined,
     dateFrom: parseIsoDate(value.dateFrom)?.toISOString().slice(0, 10),
     dateTo: parseIsoDate(value.dateTo)?.toISOString().slice(0, 10),
     cashRecordIds,
