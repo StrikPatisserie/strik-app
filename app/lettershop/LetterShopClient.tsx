@@ -123,6 +123,11 @@ export default function LetterShopClient({ checkoutEnabled, pickupDates }: { che
   const [submitError, setSubmitError] = useState("");
   const [placedOrderNumber, setPlacedOrderNumber] = useState("");
   const requestKey = useRef<string | null>(null);
+  const reviewRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (showReview) reviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [showReview]);
 
   const totalQuantity = cart.reduce((sum, line) => sum + line.quantity, 0);
   const photoBytes = cart.reduce((sum, line) => sum + (line.logoFile?.size || 0), 0);
@@ -206,7 +211,22 @@ export default function LetterShopClient({ checkoutEnabled, pickupDates }: { che
         {photoBytes > 5_000_000 && <p role="alert" className="mt-4 text-sm font-bold text-red-700">De foto&apos;s zijn samen groter dan 5 MB. Kies kleinere afbeeldingen.</p>}
         {missingRequiredDetails && <p role="status" aria-live="polite" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">Zorg dat alle gegevens ingevuld zijn.</p>}
         <button type="button" disabled={!canReview} onClick={() => setShowReview(true)} className="mt-6 min-h-12 w-full rounded-xl bg-[#547762] px-5 font-black text-white disabled:cursor-not-allowed disabled:opacity-45">Controleer bestelling →</button>
-        {showReview && <div className="mt-4 rounded-2xl border border-[#dfc995] bg-white p-4 text-sm"><p className="font-black">Controleer je bestelling</p><p className="mt-1 text-[#74695e]">{customerName} · {SHOPS.find((item) => item.id === shop)?.name} · {pickupDate} · {money(total)} bij afhalen</p>{hasLogo && <p className="mt-2 text-xs font-semibold text-[#74695e]">Gekozen afbeelding: {cart.filter((line) => line.logoFile).map((line) => `${line.letter} ${line.flavour}: ${line.logoFile?.name}`).join(" · ")}</p>}{!checkoutEnabled && <p className="mt-3 rounded-xl bg-[#f2eddd] p-3 font-bold text-[#6c5c42]">Deze lettershop is nog een concept. Bestellingen en afbeeldingen kunnen nu nog niet worden verzonden; je ontvangt ook nog geen bevestigingsmail.</p>}{submitError && <p role="alert" className="mt-3 text-sm font-bold text-red-700">{submitError}</p>}<button type="button" disabled={!checkoutEnabled || !canReview || submitting} onClick={placeOrder} className="mt-3 min-h-12 w-full rounded-xl bg-[#547762] px-5 font-black text-white disabled:cursor-not-allowed disabled:bg-[#b6aaa0]">{submitting ? "Bestelling wordt geplaatst…" : checkoutEnabled ? "Bestelling plaatsen" : "Bestelling plaatsen · binnenkort"}</button>{submitting && <p role="status" aria-live="polite" className="mt-2 text-center text-xs font-semibold text-[#765d4e]">Dit kan ongeveer 15–30 seconden duren. Sluit dit venster niet en klik niet opnieuw.</p>}</div>}
+        {showReview && <div ref={reviewRef} className="mt-4 scroll-mt-4 rounded-2xl border border-[#dfc995] bg-white p-4 text-sm">
+          <p className="font-black">Controleer je bestelling</p>
+          <p className="mt-1 text-[#74695e]">{customerName} · {SHOPS.find((item) => item.id === shop)?.name} · {pickupDate}</p>
+          <ul className="mt-4 divide-y divide-[#eee1cf] border-y border-[#eee1cf]">
+            {cart.map((line, index) => <li key={`${line.flavour}-${line.letter}-${index}`} className="flex justify-between gap-3 py-2">
+              <span>{line.quantity} × Spuitletter {line.flavour} · {line.letter} · {line.size}{line.withLogo ? " · met foto/logo" : ""}</span>
+              <strong className="shrink-0">{money(line.quantity * (PRICES[line.size] + (line.withLogo ? LOGO_PRICE : 0)))}</strong>
+            </li>)}
+          </ul>
+          <p className="mt-3 flex justify-between gap-3 font-black"><span>Totaal bij afhalen</span><span>{money(total)}</span></p>
+          {hasLogo && <p className="mt-2 text-xs font-semibold text-[#74695e]">Gekozen afbeelding: {cart.filter((line) => line.logoFile).map((line) => `${line.letter} ${line.flavour}: ${line.logoFile?.name}`).join(" · ")}</p>}
+          {!checkoutEnabled && <p className="mt-3 rounded-xl bg-[#f2eddd] p-3 font-bold text-[#6c5c42]">Deze lettershop is nog een concept. Bestellingen en afbeeldingen kunnen nu nog niet worden verzonden; je ontvangt ook nog geen bevestigingsmail.</p>}
+          {submitError && <p role="alert" className="mt-3 text-sm font-bold text-red-700">{submitError}</p>}
+          <button type="button" disabled={!checkoutEnabled || !canReview || submitting} onClick={placeOrder} className="mt-3 min-h-12 w-full rounded-xl bg-[#547762] px-5 font-black text-white disabled:cursor-not-allowed disabled:bg-[#b6aaa0]">{submitting ? "Bestelling wordt geplaatst…" : checkoutEnabled ? "Bestelling plaatsen" : "Bestelling plaatsen · binnenkort"}</button>
+          {submitting && <p role="status" aria-live="polite" className="mt-2 text-center text-xs font-semibold text-[#765d4e]">Dit kan ongeveer 15–30 seconden duren. Sluit dit venster niet en klik niet opnieuw.</p>}
+        </div>}
       </>}
     </section></div>}
   </main>;
