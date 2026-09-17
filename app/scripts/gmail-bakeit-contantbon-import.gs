@@ -30,9 +30,9 @@ const BAKEIT_CONTANTBON_CONFIG = {
   DEFINITIVE_MAIL_START_HOUR: 20,
   DEFINITIVE_MAIL_START_MINUTE: 15,
   TRIGGER_RUNS: [
-    { HOUR: 6, MINUTE: 45 },
-    { HOUR: 7, MINUTE: 0 },
-    { HOUR: 7, MINUTE: 15 },
+    { HOUR: 12, MINUTE: 0 },
+    { HOUR: 12, MINUTE: 15 },
+    { HOUR: 12, MINUTE: 30 },
     { HOUR: 20, MINUTE: 5 },
     { HOUR: 20, MINUTE: 20 },
     { HOUR: 20, MINUTE: 35 },
@@ -748,7 +748,7 @@ function maakBakeItImportTriggerAan() {
   });
 
   logBakeIt_(
-    `Bake-it importtriggers aangemaakt: ${BAKEIT_CONTANTBON_CONFIG.TRIGGER_RUNS.length}x per dag rond 06:45 en 20:00.`
+    `Bake-it importtriggers aangemaakt: ${BAKEIT_CONTANTBON_CONFIG.TRIGGER_RUNS.length}x per dag rond 12:00 en 20:00.`
   );
 }
 
