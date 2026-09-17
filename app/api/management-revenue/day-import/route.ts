@@ -1665,6 +1665,13 @@ export async function POST(request: Request) {
       return jsonError("Geen toegang tot omzetimport.", 403);
     }
 
+    const url = new URL(request.url);
+    const requestedShop = url.searchParams.get("onlyShop");
+    const onlyShop = requestedShop ? normalizeRevenueShop(requestedShop) : null;
+    if (requestedShop && !onlyShop) {
+      return jsonError("Onbekende winkel voor gerichte herstelimport.");
+    }
+
     const bodyText = cleanText(input.bodyText, 50000);
     const bodyHtmlText = htmlToText(String(input.bodyHtml || ""));
     const pdfTexts = await extractPdfTexts(input.attachments);
@@ -1675,15 +1682,21 @@ export async function POST(request: Request) {
     const date = extractReportDate(input, fullText, {
       previousAmsterdamDayForNightMail: iceReport,
     });
-    const shopAmounts = iceReport
+    const parsedShopAmounts = iceReport
       ? []
       : mergeShopAmounts(
           extractShopAmounts(fullText),
           extractShopAmountsFromCashSections(fullText)
         );
-    const cashRecords = iceReport
+    const parsedCashRecords = iceReport
       ? extractIceCashRecords(input, fullText, date)
       : extractCashRecords(input, fullText, date);
+    const shopAmounts = onlyShop
+      ? parsedShopAmounts.filter((item) => item.shop === onlyShop)
+      : parsedShopAmounts;
+    const cashRecords = onlyShop
+      ? parsedCashRecords.filter((record) => record.shop === onlyShop)
+      : parsedCashRecords;
 
     if (!shopAmounts.length && !cashRecords.length) {
       return jsonError(
@@ -1716,7 +1729,7 @@ export async function POST(request: Request) {
     }
     let responseCashRecords = cashRecords;
 
-    if (new URL(request.url).searchParams.get("dryRun") !== "1") {
+    if (url.searchParams.get("dryRun") !== "1") {
       if (records.length > 0) {
         const result = await upsertRevenueDayRecords(records);
         if (!result.ok) {

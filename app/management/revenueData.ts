@@ -877,9 +877,49 @@ export function embedRevenueCashDataInNotes(data: RevenueData): RevenueData {
     ])
   );
 
+  // WordPress persists cash details inside the corresponding revenue notes.
+  // An ice cash report can exist without a revenue row for that shop/date, so
+  // add a zero-value carrier instead of silently dropping the cash record.
+  const dailyRecords = [...(data.dailyRecords || [])];
+  const dayKeys = new Set(dailyRecords.map((record) => createRevenueDayKey(record.date, record.shop)));
+  for (const cashRecord of data.cashRecords || []) {
+    const key = createRevenueDayKey(cashRecord.date, cashRecord.shop);
+    if (dayKeys.has(key)) continue;
+    dayKeys.add(key);
+    dailyRecords.push({
+      id: key,
+      date: cashRecord.date,
+      year: cashRecord.year,
+      week: cashRecord.week,
+      shop: cashRecord.shop,
+      amount: 0,
+      source: "dagafsluiting",
+      messageId: cashRecord.messageId,
+      importedAt: cashRecord.importedAt,
+      updatedAt: cashRecord.updatedAt,
+    });
+  }
+
+  const records = [...data.records];
+  const weekKeys = new Set(records.map((record) => createRevenueKey(record.year, record.week, record.shop)));
+  for (const deposit of data.cashDeposits || []) {
+    const key = createRevenueKey(deposit.year, deposit.week, deposit.shop);
+    if (weekKeys.has(key)) continue;
+    weekKeys.add(key);
+    records.push({
+      id: key,
+      year: deposit.year,
+      week: deposit.week,
+      shop: deposit.shop,
+      amount: 0,
+      source: "dagafsluiting",
+      updatedAt: deposit.updatedAt,
+    });
+  }
+
   return {
     ...data,
-    records: data.records.map((record) => {
+    records: records.map((record) => {
       const deposit = cashDepositByKey.get(
         createRevenueCashDepositKey(record.year, record.week, record.shop)
       );
@@ -900,7 +940,7 @@ export function embedRevenueCashDataInNotes(data: RevenueData): RevenueData {
         ),
       };
     }),
-    dailyRecords: (data.dailyRecords || []).map((record) => {
+    dailyRecords: dailyRecords.map((record) => {
       const cashRecord = cashRecordByKey.get(
         createRevenueCashKey(record.date, record.shop)
       );
