@@ -10,7 +10,12 @@ import UsersAdminClient from "./users/UsersAdminClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ user?: string }>;
+}) {
+  const { user } = await searchParams;
   const [featureVisibility, profiles] = await Promise.all([
     getFeatureVisibilitySettings(),
     getAllProfilesForAdmin(),
@@ -29,16 +34,16 @@ export default async function SettingsPage() {
       <div className="space-y-6">
         <section className="space-y-3">
           <h2 className="text-[0.72rem] font-black uppercase leading-tight tracking-normal text-[#7b7268]">
-            App instellingen
+            Gebruikers
           </h2>
-          <AppSettingsClient featureVisibility={featureVisibility} />
+          <UsersAdminClient profiles={profiles} initialProfileId={user} />
         </section>
 
         <section className="space-y-3">
           <h2 className="text-[0.72rem] font-black uppercase leading-tight tracking-normal text-[#7b7268]">
-            Gebruikers
+            App instellingen
           </h2>
-          <UsersAdminClient profiles={profiles} />
+          <AppSettingsClient featureVisibility={featureVisibility} />
         </section>
       </div>
     </StrikShell>

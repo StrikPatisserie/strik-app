@@ -45,7 +45,7 @@ function strik_send_account_request_mail($request) {
         'Winkel: ' . ($store_label ?: 'Niet van toepassing'),
         '',
         'Beoordeel de aanvraag via Gebruikers & app in de Strik Team App:',
-        'https://strik-app.vercel.app/settings',
+        'https://strik-app.vercel.app/settings?user=' . rawurlencode($id),
         'Activeer het account pas als je de aanvrager en de gewenste toegang hebt gecontroleerd.',
     ));
     $headers = array('Content-Type: text/plain; charset=UTF-8', 'Reply-To: Strik Patisserie <info@strik-patisserie.nl>');

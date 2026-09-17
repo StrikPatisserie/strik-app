@@ -432,6 +432,14 @@ function EditUserModal({
           <Message state={activeState} />
           <Message state={resetState} />
         </div>
+        {!profile.active && (
+          <form action={activeFormAction} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#c8dbc2] bg-[#f3faf0] p-3">
+            <p className="text-sm font-bold text-[#1f4f35]">Controleer naam, e-mail, afdeling en winkel voordat je toegang geeft.</p>
+            <button type="submit" disabled={activePending || activeState.ok} className="h-10 rounded-md bg-[#1f4f35] px-4 text-sm font-black text-white disabled:opacity-60">
+              {activePending ? "Activeren..." : activeState.ok ? "Geactiveerd" : "Toegang activeren"}
+            </button>
+          </form>
+        )}
         <form action={updateFormAction} className="space-y-4">
           <UserFields profile={profile} />
           <div className="flex justify-end gap-2 border-t border-[#eee8df] pt-3">
@@ -452,7 +460,7 @@ function EditUserModal({
           </div>
         </form>
         <div className="flex flex-wrap gap-2 border-t border-[#eee8df] pt-3">
-          <form action={activeFormAction}>
+          {profile.active && <form action={activeFormAction}>
             <button
               type="submit"
               disabled={activePending}
@@ -464,7 +472,7 @@ function EditUserModal({
                   ? "Deactiveren"
                   : "Activeren"}
             </button>
-          </form>
+          </form>}
           <form action={resetFormAction}>
             <input type="hidden" name="email" value={profile.email} />
             <button
@@ -513,6 +521,7 @@ function matchesSearch(profile: UserProfile, search: string) {
 
 function sortProfiles(profiles: UserProfile[]) {
   return [...profiles].sort((a, b) => {
+    if (a.active !== b.active) return a.active ? 1 : -1;
     const nameCompare = userSorter.compare(
       getProfileDisplayName(a),
       getProfileDisplayName(b)
@@ -533,54 +542,30 @@ function UserListRow({
     <button
       type="button"
       onClick={onOpen}
-      className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-b border-[#eee8df] px-3 py-3 text-left transition last:border-b-0 hover:bg-[#faf8f5]"
+      className="flex w-full items-center gap-3 border-b border-[#eee8df] px-3 py-2 text-left transition last:border-b-0 hover:bg-[#faf8f5]"
     >
-      <span className="min-w-0">
-        <span className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="truncate text-base font-black text-[#1a1815]">
-            {getProfileDisplayName(profile)}
-          </span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[0.65rem] font-black uppercase ${
-              profile.active
-                ? "bg-[#ecf4ed] text-[#1f4f35]"
-                : "bg-[#f2eee8] text-[#8b8278]"
-            }`}
-          >
-            {profile.active ? "Actief" : "Uit"}
-          </span>
+      <span className="min-w-0 flex-1 sm:flex sm:items-center sm:gap-4">
+        <span className="block truncate text-sm font-black text-[#1a1815] sm:w-44 sm:shrink-0">
+          {getProfileDisplayName(profile)}
         </span>
-        <span className="mt-0.5 block truncate text-xs font-bold text-[#7b7268]">
-          {profile.email}
-        </span>
-        <span className="mt-1 flex flex-wrap gap-1.5 text-[0.68rem] font-black uppercase text-[#6f665c]">
-          <span className="rounded-full bg-[#f4f0ea] px-2 py-0.5">
-            {getRoleLabel(profile.role)}
-          </span>
-          {storeLabel && (
-            <span className="rounded-full bg-[#f4f0ea] px-2 py-0.5">
-              {storeLabel}
-            </span>
-          )}
-        </span>
+        <span className="block truncate text-xs font-semibold text-[#7b7268] sm:flex-1">{profile.email}</span>
       </span>
-      <span
-        className="flex h-9 w-9 items-center justify-center rounded-md bg-[#ecf4ed] text-[#1f4f35]"
-        aria-hidden="true"
-      >
-        <PencilIcon />
-      </span>
+      <span className="hidden w-36 shrink-0 truncate text-xs font-bold text-[#6f665c] md:block">{getRoleLabel(profile.role)}{storeLabel ? ` · ${storeLabel}` : ""}</span>
+      {!profile.active && <span className="shrink-0 rounded-full bg-[#fff3d7] px-2 py-1 text-[0.65rem] font-black text-[#805f16]">Niet actief</span>}
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#ecf4ed] text-[#1f4f35]" aria-hidden="true"><PencilIcon /></span>
     </button>
   );
 }
 
 export default function UsersAdminClient({
   profiles,
-}: Readonly<{ profiles: UserProfile[] }>) {
+  initialProfileId,
+}: Readonly<{ profiles: UserProfile[]; initialProfileId?: string }>) {
   const [search, setSearch] = useState("");
+  const [showAll, setShowAll] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
-    null
+    profiles.some((profile) => profile.id === initialProfileId) ? initialProfileId || null : null
   );
   const normalizedSearch = normalizeSearch(search);
   const selectedProfile =
@@ -592,6 +577,8 @@ export default function UsersAdminClient({
       ),
     [profiles, normalizedSearch]
   );
+  const listedProfiles = search || showAll ? visibleProfiles : visibleProfiles.slice(0, 20);
+  const inactiveCount = profiles.filter((profile) => !profile.active).length;
 
   return (
     <div className="space-y-3">
@@ -600,7 +587,7 @@ export default function UsersAdminClient({
           <div>
             <h2 className="text-lg font-black text-[#1a1815]">Gebruikers</h2>
             <p className="text-xs font-bold text-[#7b7268]">
-              {profiles.length} totaal
+              {profiles.length} totaal{inactiveCount ? ` · ${inactiveCount} niet actief` : ""}
             </p>
           </div>
           <button
@@ -629,8 +616,8 @@ export default function UsersAdminClient({
         </div>
 
         <div>
-          {visibleProfiles.length ? (
-            visibleProfiles.map((profile) => (
+          {listedProfiles.length ? (
+            listedProfiles.map((profile) => (
               <UserListRow
                 key={profile.id}
                 profile={profile}
@@ -643,6 +630,11 @@ export default function UsersAdminClient({
             </p>
           )}
         </div>
+        {!search && visibleProfiles.length > 20 && (
+          <button type="button" onClick={() => setShowAll((value) => !value)} className="w-full border-t border-[#eee8df] px-3 py-2 text-sm font-black text-[#1f4f35] hover:bg-[#faf8f5]">
+            {showAll ? "Toon minder" : `Toon alle ${visibleProfiles.length} gebruikers`}
+          </button>
+        )}
       </section>
 
       {createOpen && <CreateUserModal onClose={() => setCreateOpen(false)} />}
