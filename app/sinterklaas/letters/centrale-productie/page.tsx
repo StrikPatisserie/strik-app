@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdminProfile } from "@/app/lib/auth/session";
 import { createAdminClient } from "@/app/lib/supabase/admin";
 import { StrikPageHeader, StrikShell, strikIcons } from "@/app/StrikUI";
+import { formatPickupDate } from "@/app/lettershop/formatPickupDate";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,7 @@ export default async function CentralLetterProductionPage() {
         }
         const totals = [...rows.values()].reduce((sum, row) => ({ orders: sum.orders + row.orders, stock: sum.stock + row.stock, producedOrders: sum.producedOrders + row.producedOrders, producedStock: sum.producedStock + row.producedStock }), { orders: 0, stock: 0, producedOrders: 0, producedStock: 0 });
         return <section key={batch.id} className="overflow-hidden rounded-2xl border border-[#e9ddd1] bg-white shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eee3d8] p-4"><h2 className="text-xl font-black">{batch.production_date}</h2><span className="rounded-full bg-[#edf4ec] px-3 py-1 text-xs font-black">{batch.status}</span></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eee3d8] p-4"><h2 className="text-xl font-black">{formatPickupDate(batch.production_date)}</h2><span className="rounded-full bg-[#edf4ec] px-3 py-1 text-xs font-black">{batch.status}</span></div>
           <div className="grid gap-2 p-4 text-sm sm:grid-cols-4"><p>Besteld <strong>{totals.orders}</strong></p><p>Extra voorraad <strong>{totals.stock}</strong></p><p>Totaal te maken <strong>{totals.orders + totals.stock}</strong></p><p>Gemaakt <strong>{totals.producedOrders + totals.producedStock}</strong></p></div>
           <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead className="bg-[#faf5ee]"><tr><th className="p-3">Letter</th><th className="p-3">Orders</th><th className="p-3">Voorraad</th><th className="p-3">Totaal</th><th className="p-3">Gemaakt</th></tr></thead><tbody>{[...rows.entries()].sort(([a], [b]) => a.localeCompare(b, "nl")).map(([key, row]) => <tr key={key} className="border-t border-[#eee3d8]"><td className="p-3 font-bold">{key}</td><td className="p-3">{row.orders}</td><td className="p-3">{row.stock}</td><td className="p-3 font-black">{row.orders + row.stock}</td><td className="p-3">{row.producedOrders + row.producedStock}</td></tr>)}</tbody></table></div>
           {batchAllocations.length > 0 && <details className="border-t border-[#eee3d8] p-4 text-sm"><summary className="cursor-pointer font-bold">Onderliggende orders ({batchAllocations.length} regels)</summary><div className="mt-2 space-y-1">{batchAllocations.map((allocation) => <p key={allocation.id}>{allocation.letter_order_items?.letter_orders?.order_number} · {allocation.letter_order_items?.letter_orders?.channel} · {allocation.letter_order_items?.letter_orders?.customer_name} · {productKey(productOf(allocation.letter_order_items?.letter_products || null))}: {producedForAllocation.get(allocation.id) || 0}/{allocation.planned_quantity}</p>)}</div></details>}

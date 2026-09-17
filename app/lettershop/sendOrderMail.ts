@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabasePublicConfig, requireSupabaseServiceRoleKey } from "@/app/lib/supabase/config";
+import { formatPickupDate } from "./formatPickupDate";
 
 const MAIL_URL = process.env.WORDPRESS_LETTERSHOP_MAIL_URL ||
   "https://strik-patisserie.nl/wp-json/strik/v1/lettershop-mail";
@@ -64,6 +65,12 @@ export async function sendLettershopOrderMails(orderId: string) {
     if (claimError || !claimed) continue;
     try {
       const payload = job.payload as Record<string, unknown>;
+      const mailPayload = {
+        ...payload,
+        requested_date: typeof payload.requested_date === "string"
+          ? formatPickupDate(payload.requested_date)
+          : payload.requested_date,
+      };
       const attachments = job.template === "INTERNAL_ORDER_BACKUP"
         ? await attachmentsForBackup(supabase, payload) : [];
       const response = await fetch(MAIL_URL, {
@@ -72,7 +79,7 @@ export async function sendLettershopOrderMails(orderId: string) {
           "Content-Type": "application/json",
           Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`,
         },
-        body: JSON.stringify({ id: job.id, template: job.template, payload, attachments }),
+        body: JSON.stringify({ id: job.id, template: job.template, payload: mailPayload, attachments }),
         signal: AbortSignal.timeout(20000),
       });
       if (!response.ok) throw new Error(`WordPress-mail gaf status ${response.status}.`);
