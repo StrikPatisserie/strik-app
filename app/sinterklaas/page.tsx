@@ -26,9 +26,11 @@ const items = [
   },
   {
     href: "/sint-voor-bedrijven",
-    title: "B2B folder 2026 · concept",
+    title: "Open de B2B-folder ↗",
     icon: strikIcons.sinterklaasB2B,
     tone: "yellow" as const,
+    target: "_blank" as const,
+    rel: "noopener noreferrer",
   },
 ];
 

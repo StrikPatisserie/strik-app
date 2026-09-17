@@ -100,9 +100,9 @@ export async function loginAction(
         .eq("id", userId)
         .maybeSingle();
 
-      if (profile && !profile.active) {
+      if (!profile || !profile.active) {
         await supabase.auth.signOut();
-        return { message: "Dit account is gedeactiveerd." };
+        return { message: "Dit account wacht nog op goedkeuring of is gedeactiveerd. Neem contact op met de beheerder." };
       }
     }
   } catch (error) {
@@ -182,7 +182,7 @@ export async function signupAction(
           role: department.role,
           store: department.store,
           permissions: department.permissions || {},
-          active: true,
+          active: false,
         },
       },
     });
@@ -200,7 +200,7 @@ export async function signupAction(
       return {
         ok: true,
         message:
-          "Je account is aangemaakt. Controleer eventueel je mailbox en log daarna in.",
+          "Je aanvraag is ontvangen. Controleer eventueel je mailbox. Je kunt inloggen zodra een beheerder je account heeft goedgekeurd.",
       };
     }
   } catch (error) {
@@ -212,8 +212,12 @@ export async function signupAction(
     };
   }
 
-  revalidatePath("/", "layout");
-  redirect(getDefaultPathForRole(department.role));
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  return {
+    ok: true,
+    message: "Je aanvraag is ontvangen. Een beheerder moet je account eerst goedkeuren.",
+  };
 }
 
 export async function updatePasswordAction(

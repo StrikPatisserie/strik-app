@@ -74,7 +74,7 @@ export default function LoginPanel({
               : "text-[#7b7268]"
           }`}
         >
-          Aanmelden
+          Toegang aanvragen
         </button>
         <button
           type="button"
@@ -91,7 +91,7 @@ export default function LoginPanel({
 
       {status === "inactive" && (
         <p className="mb-3 border border-[#f1b8a8] bg-[#fff4ef] px-3 py-2 text-sm font-bold text-[#bf3d26]">
-          Dit account is gedeactiveerd.
+          Dit account wacht nog op goedkeuring of is gedeactiveerd. Neem contact op met de beheerder.
         </p>
       )}
 
@@ -217,7 +217,7 @@ export default function LoginPanel({
               ))}
             </div>
           </div>
-          <SubmitButton pending={signupPending}>Account aanmaken</SubmitButton>
+          <SubmitButton pending={signupPending}>Toegang aanvragen</SubmitButton>
         </form>
       ) : (
         <form action={resetFormAction} className="space-y-3">

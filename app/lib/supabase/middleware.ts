@@ -118,7 +118,7 @@ export async function updateSession(request: NextRequest) {
       .eq("id", userId)
       .maybeSingle();
 
-    if (profile && !profile.active) {
+    if (!profile || !profile.active) {
       await supabase.auth.signOut();
       return redirectToLogin(request, "inactive");
     }
