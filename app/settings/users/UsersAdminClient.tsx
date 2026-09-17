@@ -559,21 +559,24 @@ function UserListRow({
   const storeLabel = getStoreLabel(profile.store);
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-full items-center gap-3 border-b border-[#eee8df] px-3 py-2 text-left transition last:border-b-0 hover:bg-[#faf8f5]"
-    >
-      <span className="min-w-0 flex-1 sm:flex sm:items-center sm:gap-4">
-        <span className="block truncate text-sm font-black text-[#1a1815] sm:w-44 sm:shrink-0">
+    <tr className="h-8 border-b border-[#eee8df] last:border-b-0 even:bg-[#fcfaf7] hover:bg-[#ecf4ed]">
+      <td className="max-w-0 px-2 py-1">
+        <button type="button" onClick={onOpen} title={getProfileDisplayName(profile)} className="block w-full truncate text-left text-xs font-bold text-[#1a1815] hover:underline">
           {getProfileDisplayName(profile)}
-        </span>
-        <span className="block truncate text-xs font-semibold text-[#7b7268] sm:flex-1">{profile.email}</span>
-      </span>
-      <span className="hidden w-36 shrink-0 truncate text-xs font-bold text-[#6f665c] md:block">{getRoleLabel(profile.role)}{storeLabel ? ` · ${storeLabel}` : ""}</span>
-      {!profile.active && <span className="shrink-0 rounded-full bg-[#fff3d7] px-2 py-1 text-[0.65rem] font-black text-[#805f16]">Niet actief</span>}
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#ecf4ed] text-[#1f4f35]" aria-hidden="true"><PencilIcon /></span>
-    </button>
+        </button>
+      </td>
+      <td className="max-w-0 truncate px-2 py-1 text-xs text-[#6f665c]" title={profile.email}>{profile.email}</td>
+      <td className="max-w-0 truncate px-2 py-1 text-xs text-[#6f665c]" title={getRoleLabel(profile.role)}>{getRoleLabel(profile.role)}</td>
+      <td className="max-w-0 truncate px-2 py-1 text-xs text-[#6f665c]" title={storeLabel || "Alle winkels"}>{storeLabel || "—"}</td>
+      <td className="px-2 py-1 text-xs">
+        <span className={`font-bold ${profile.active ? "text-[#52715b]" : "text-[#a25c19]"}`}>{profile.active ? "Actief" : "Niet actief"}</span>
+      </td>
+      <td className="px-1 py-0.5 text-right">
+        <button type="button" onClick={onOpen} title={`Bewerk ${getProfileDisplayName(profile)}`} className="inline-flex h-6 w-6 items-center justify-center rounded text-[#1f4f35] hover:bg-[#dbe8d7]">
+          <PencilIcon />
+        </button>
+      </td>
+    </tr>
   );
 }
 
@@ -582,7 +585,6 @@ export default function UsersAdminClient({
   initialProfileId,
 }: Readonly<{ profiles: UserProfile[]; initialProfileId?: string }>) {
   const [search, setSearch] = useState("");
-  const [showAll, setShowAll] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     profiles.some((profile) => profile.id === initialProfileId) ? initialProfileId || null : null
@@ -597,64 +599,66 @@ export default function UsersAdminClient({
       ),
     [profiles, normalizedSearch]
   );
-  const listedProfiles = search || showAll ? visibleProfiles : visibleProfiles.slice(0, 20);
   const inactiveCount = profiles.filter((profile) => !profile.active).length;
 
   return (
-    <div className="space-y-3">
-      <section className="rounded-lg border border-[#e4ded5] bg-white/92 shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-[#eee8df] p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-black text-[#1a1815]">Gebruikers</h2>
-            <p className="text-xs font-bold text-[#7b7268]">
-              {profiles.length} totaal{inactiveCount ? ` · ${inactiveCount} niet actief` : ""}
-            </p>
-          </div>
+    <div>
+      <section className="overflow-hidden rounded-lg border border-[#e4ded5] bg-white/92 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#eee8df] px-3 py-2">
+          <p className="text-sm font-black text-[#1a1815]">Gebruikers <span className="ml-1 text-xs font-semibold text-[#7b7268]">{profiles.length} totaal{inactiveCount ? ` · ${inactiveCount} niet actief` : ""}</span></p>
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
             title="Gebruiker aanmaken"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#1f4f35] px-3 text-sm font-black text-white"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-[#1f4f35] px-3 text-xs font-black text-white"
           >
             <PlusIcon />
             Gebruiker aanmaken
           </button>
         </div>
 
-        <div className="border-b border-[#eee8df] p-3">
+        <div className="border-b border-[#eee8df] px-3 py-2">
           <label className="relative block">
-            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7b7268]">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[#7b7268]">
               <SearchIcon />
             </span>
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Zoek op naam, mail, rol of winkel"
-              className="h-10 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] pl-9 pr-3 text-sm font-bold outline-none placeholder:text-[#a39c91] focus:border-[#1f4f35]"
+              className="h-8 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] pl-8 pr-3 text-xs font-semibold outline-none placeholder:text-[#a39c91] focus:border-[#1f4f35]"
             />
           </label>
         </div>
 
-        <div>
-          {listedProfiles.length ? (
-            listedProfiles.map((profile) => (
-              <UserListRow
-                key={profile.id}
-                profile={profile}
-                onOpen={() => setSelectedProfileId(profile.id)}
-              />
-            ))
-          ) : (
-            <p className="p-4 text-sm font-bold text-[#7b7268]">
-              Geen gebruikers gevonden.
-            </p>
-          )}
+        <div className="max-h-[34rem] overflow-auto">
+          <table className="w-full min-w-[760px] table-fixed border-collapse text-left">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[31%]" />
+              <col className="w-[14%]" />
+              <col className="w-[16%]" />
+              <col className="w-[12%]" />
+              <col className="w-[5%]" />
+            </colgroup>
+            <thead className="sticky top-0 z-10 bg-[#f4f0ea] text-[0.65rem] font-black uppercase tracking-wide text-[#6f665c]">
+              <tr className="h-7 border-b border-[#ded8cf]">
+                <th scope="col" className="px-2">Naam</th>
+                <th scope="col" className="px-2">E-mail</th>
+                <th scope="col" className="px-2">Rol</th>
+                <th scope="col" className="px-2">Winkel</th>
+                <th scope="col" className="px-2">Status</th>
+                <th scope="col" className="px-1 text-right">&nbsp;</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleProfiles.map((profile) => (
+                <UserListRow key={profile.id} profile={profile} onOpen={() => setSelectedProfileId(profile.id)} />
+              ))}
+            </tbody>
+          </table>
+          {!visibleProfiles.length && <p className="p-3 text-xs font-semibold text-[#7b7268]">Geen gebruikers gevonden.</p>}
         </div>
-        {!search && visibleProfiles.length > 20 && (
-          <button type="button" onClick={() => setShowAll((value) => !value)} className="w-full border-t border-[#eee8df] px-3 py-2 text-sm font-black text-[#1f4f35] hover:bg-[#faf8f5]">
-            {showAll ? "Toon minder" : `Toon alle ${visibleProfiles.length} gebruikers`}
-          </button>
-        )}
       </section>
 
       {createOpen && <CreateUserModal onClose={() => setCreateOpen(false)} />}

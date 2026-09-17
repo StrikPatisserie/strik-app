@@ -33,9 +33,6 @@ export default async function SettingsPage({
 
       <div className="space-y-6">
         <section className="space-y-3">
-          <h2 className="text-[0.72rem] font-black uppercase leading-tight tracking-normal text-[#7b7268]">
-            Gebruikers
-          </h2>
           <UsersAdminClient profiles={profiles} initialProfileId={user} />
         </section>
 
