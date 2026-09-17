@@ -630,6 +630,8 @@ function operationsDraftToPayload(
 }
 
 const DEFINITIVE_BATCH_START_MINUTE_OF_DAY = 20 * 60;
+const TOMORROW_PROGNOSE_START_MINUTE_OF_DAY = 12 * 60 + 15;
+const SATURDAY_MONDAY_PROGNOSE_START_MINUTE_OF_DAY = 7 * 60 + 15;
 
 function minuteOfDay(hour: number, minute: number) {
   return hour * 60 + minute;
@@ -706,6 +708,24 @@ function isNextLogisticsDateCalendarTomorrow(dateState: DateState) {
     : "";
 
   return dateState.tomorrow === calendarTomorrow;
+}
+
+function tomorrowPrognoseGate(dateState: DateState) {
+  if (dateState.selectedDate !== dateState.tomorrow) return null;
+
+  const weekday = dayOfWeekForDate(dateState.today);
+  if (weekday === 0) return null;
+
+  const saturday = weekday === 6;
+  const releaseMinute = saturday
+    ? SATURDAY_MONDAY_PROGNOSE_START_MINUTE_OF_DAY
+    : TOMORROW_PROGNOSE_START_MINUTE_OF_DAY;
+
+  if (minuteOfDay(dateState.hour, dateState.minute) >= releaseMinute) return null;
+
+  return saturday
+    ? "De voorlopige prognose voor maandag is zaterdag vanaf 07:15 beschikbaar."
+    : "De voorlopige prognose voor morgen is vanaf 12:15 beschikbaar.";
 }
 
 function planTitleForDate(dateState: DateState) {
@@ -1075,7 +1095,10 @@ function buildDayPlan(
     title: planTitleForDate(dateState),
     status,
     sourceLabel: sourceLabelFor(status),
-    batchLabel: batchLabelFor(status),
+    batchLabel:
+      status === "prognose" && dayOfWeekForDate(selectedDate) === 1
+        ? "Prognose zaterdag 07:00"
+        : batchLabelFor(status),
     orderCount: importedBatch ? importedBatch.orderCount : 0,
     orderValue,
     orderPressure,
@@ -7886,6 +7909,7 @@ export default function BakkerijLogistiekDashboard() {
   const dateStateRef = useRef(dateState);
   const activeImportedBatch =
     importedBatch?.date === dateState.selectedDate ? importedBatch : null;
+  const tomorrowGateMessage = tomorrowPrognoseGate(dateState);
 
   const selectedPlan = useMemo(
     () => buildDayPlan(dateState, fileSnapshot, activeImportedBatch),
@@ -8041,7 +8065,10 @@ export default function BakkerijLogistiekDashboard() {
         setDeletedRouteStopSnapshot(null);
       }
 
-      if (calendarChanged || definitiveWindowStarted) {
+      const forecastWindowOpened =
+        Boolean(tomorrowPrognoseGate(current)) && !tomorrowPrognoseGate(next);
+
+      if (calendarChanged || definitiveWindowStarted || forecastWindowOpened) {
         setImportMessage("");
         setBatchReloadCounter((value) => value + 1);
       }
@@ -8919,6 +8946,33 @@ export default function BakkerijLogistiekDashboard() {
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />
 
+      {tomorrowGateMessage ? (
+        <section
+          role="alertdialog"
+          aria-labelledby="tomorrow-prognose-title"
+          aria-describedby="tomorrow-prognose-message"
+          className="mx-auto mt-6 max-w-xl border border-[#d7cec4] bg-[#fbf7ef] p-6 text-center shadow-sm"
+        >
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#a85a3f]">
+            Let op
+          </p>
+          <h2 id="tomorrow-prognose-title" className="mt-2 text-xl font-black text-[#1a1815]">
+            De planning voor {nextLogisticsDateLabel(dateState).toLowerCase()} is nog niet beschikbaar
+          </h2>
+          <p id="tomorrow-prognose-message" className="mt-3 text-sm font-semibold text-[#6b645b]">
+            {tomorrowGateMessage}
+          </p>
+          <button
+            type="button"
+            onClick={() => selectDate(dateState.today)}
+            className="mt-5 min-h-10 bg-[#1a1815] px-5 text-sm font-black text-white"
+          >
+            Terug naar vandaag
+          </button>
+        </section>
+      ) : (
+      <>
+
       <div className="flex flex-wrap justify-end gap-4">
         <button
           type="button"
@@ -9239,6 +9293,8 @@ export default function BakkerijLogistiekDashboard() {
           </div>
         )}
       </div>
+      </>
+      )}
     </StrikShell>
   );
 }

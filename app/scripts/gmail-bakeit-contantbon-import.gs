@@ -37,6 +37,11 @@ const BAKEIT_CONTANTBON_CONFIG = {
     { HOUR: 20, MINUTE: 20 },
     { HOUR: 20, MINUTE: 35 },
   ],
+  SATURDAY_PROGNOSE_TRIGGER_RUNS: [
+    { HOUR: 7, MINUTE: 0 },
+    { HOUR: 7, MINUTE: 15 },
+    { HOUR: 7, MINUTE: 30 },
+  ],
   IMPORT_VERSION: 'split-mails-v1',
   SCRIPT_VERSION: 'gmail-archive-v7',
 };
@@ -747,8 +752,17 @@ function maakBakeItImportTriggerAan() {
       .create();
   });
 
+  BAKEIT_CONTANTBON_CONFIG.SATURDAY_PROGNOSE_TRIGGER_RUNS.forEach((run) => {
+    ScriptApp.newTrigger(functionName)
+      .timeBased()
+      .onWeekDay(ScriptApp.WeekDay.SATURDAY)
+      .atHour(run.HOUR)
+      .nearMinute(run.MINUTE)
+      .create();
+  });
+
   logBakeIt_(
-    `Bake-it importtriggers aangemaakt: ${BAKEIT_CONTANTBON_CONFIG.TRIGGER_RUNS.length}x per dag rond 12:00 en 20:00.`
+    `Bake-it importtriggers aangemaakt: ${BAKEIT_CONTANTBON_CONFIG.TRIGGER_RUNS.length}x per dag rond 12:00 en 20:00, plus ${BAKEIT_CONTANTBON_CONFIG.SATURDAY_PROGNOSE_TRIGGER_RUNS.length}x op zaterdag rond 07:00.`
   );
 }
 
