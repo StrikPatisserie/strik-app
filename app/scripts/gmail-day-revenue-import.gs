@@ -171,6 +171,78 @@ function herimporteerEnImporteerLaatsteDagomzet() {
   herimporteerLaatsteDagomzet();
 }
 
+// Eenmalig herstel voor het ontbrekende ijs-kasrapport van Daalseweg op 16-08-2026.
+// Alleen het exacte PDF-bestand hieronder mag deze gerichte import activeren.
+function herstelDaalsewegIjs16Augustus2026() {
+  const expectedHash = '5da75c07835874485ea4d9e48be773e7c203a4eeb241af99f7f035f1547f73cb';
+  const threads = GmailApp.search(
+    'newer_than:7d has:attachment filename:pdf subject:"Dag Rapport ijs"',
+    0,
+    40
+  );
+  const matches = [];
+
+  threads.forEach((thread) => thread.getMessages().forEach((message) => {
+    message.getAttachments({ includeInlineImages: false, includeAttachments: true })
+      .forEach((attachment) => {
+        const bytes = attachment.getBytes();
+        const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, bytes)
+          .map((byte) => ('0' + ((byte + 256) % 256).toString(16)).slice(-2))
+          .join('');
+        if (hash === expectedHash) matches.push({ message, attachment, bytes });
+      });
+  }));
+
+  if (matches.length !== 1) {
+    throw new Error(`Exacte Daalseweg-PDF niet uniek gevonden (${matches.length}). Niets geïmporteerd.`);
+  }
+
+  const { message, attachment, bytes } = matches[0];
+  const payload = JSON.stringify({
+    key: DAGOMZET_IMPORT_CONFIG.IMPORT_KEY,
+    messageId: message.getId(),
+    subject: message.getSubject(),
+    from: message.getFrom(),
+    receivedAt: message.getDate().toISOString(),
+    bodyText: message.getPlainBody(),
+    bodyHtml: message.getBody(),
+    attachments: [{
+      fileName: attachment.getName() || 'dagomzet.pdf',
+      contentType: attachment.getContentType() || 'application/pdf',
+      attachmentBase64: Utilities.base64Encode(bytes),
+    }],
+    labels: ['Dagomzet'],
+  });
+  const url = `${DAGOMZET_IMPORT_CONFIG.IMPORT_URL}?onlyShop=Daalseweg&expectedDate=2026-08-16`;
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    headers: { 'x-strik-logistics-key': DAGOMZET_IMPORT_CONFIG.IMPORT_KEY },
+    payload,
+  };
+  const preview = UrlFetchApp.fetch(`${url}&dryRun=1`, options);
+  const previewData = JSON.parse(preview.getContentText() || '{}');
+  const cashRows = previewData.cashRecords || [];
+  if (
+    preview.getResponseCode() !== 200 ||
+    previewData.date !== '2026-08-16' ||
+    (previewData.records || []).length !== 0 ||
+    cashRows.length !== 1 ||
+    cashRows[0].shop !== 'Daalseweg' ||
+    Math.abs(Number(cashRows[0].iceCash) - 2.3) > 0.001
+  ) {
+    throw new Error('Proefimport komt niet exact overeen met Daalseweg ijs 16-08-2026. Niets opgeslagen.');
+  }
+
+  const result = UrlFetchApp.fetch(url, options);
+  const resultData = JSON.parse(result.getContentText() || '{}');
+  if (result.getResponseCode() !== 200 || resultData.cashRecords?.length !== 1) {
+    throw new Error(`Gerichte herstelimport mislukt: ${result.getContentText().slice(0, 500)}`);
+  }
+  Logger.log('Daalseweg ijs 16-08-2026 gericht hersteld: € 2,30 kasbedrag. Andere winkels niet bijgewerkt.');
+}
+
 function herimporteerLaatsteDagomzet_() {
   const props = PropertiesService.getScriptProperties();
   const processedLabel = GmailApp.getUserLabelByName(

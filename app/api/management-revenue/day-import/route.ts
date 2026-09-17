@@ -1671,6 +1671,10 @@ export async function POST(request: Request) {
     if (requestedShop && !onlyShop) {
       return jsonError("Onbekende winkel voor gerichte herstelimport.");
     }
+    const expectedDate = url.searchParams.get("expectedDate");
+    if (onlyShop && !/^20\d{2}-\d{2}-\d{2}$/.test(expectedDate || "")) {
+      return jsonError("Geef een rapportdatum op voor gerichte herstelimport.");
+    }
 
     const bodyText = cleanText(input.bodyText, 50000);
     const bodyHtmlText = htmlToText(String(input.bodyHtml || ""));
@@ -1682,6 +1686,9 @@ export async function POST(request: Request) {
     const date = extractReportDate(input, fullText, {
       previousAmsterdamDayForNightMail: iceReport,
     });
+    if (expectedDate && date !== expectedDate) {
+      return jsonError(`Rapportdatum ${date} wijkt af van verwachte datum ${expectedDate}.`, 409);
+    }
     const parsedShopAmounts = iceReport
       ? []
       : mergeShopAmounts(
