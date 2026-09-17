@@ -8,7 +8,8 @@ import {
   getPasswordUpdateUrl,
   sendPasswordResetEmail,
 } from "../supabase/passwordReset";
-import { getDefaultPathForRole, getSignupDepartment } from "./access";
+import { getDefaultPathForRole, getSignupDepartment, WINKEL_STORE_IDS } from "./access";
+import { notifyNewSignup } from "./signupNotification";
 
 export type AuthActionState = {
   ok?: boolean;
@@ -161,10 +162,17 @@ export async function signupAction(
   const email = cleanEmail(formData.get("email"));
   const password = cleanText(formData.get("password"));
   const department = getSignupDepartment(cleanText(formData.get("department")));
+  const requestedStore = cleanText(formData.get("store"));
 
   if (!fullName || !email || !password || !department) {
     return { message: "Vul je naam, e-mail, wachtwoord en afdeling in." };
   }
+
+  if (department.id === "winkel" && !WINKEL_STORE_IDS.includes(requestedStore as (typeof WINKEL_STORE_IDS)[number])) {
+    return { message: "Kies de winkel waarvoor je toegang aanvraagt." };
+  }
+
+  const store = department.id === "winkel" ? requestedStore : department.store;
 
   if (password.length < 8) {
     return { message: "Gebruik minimaal 8 tekens voor je wachtwoord." };
@@ -180,7 +188,7 @@ export async function signupAction(
         data: {
           full_name: fullName,
           role: department.role,
-          store: department.store,
+          store,
           permissions: department.permissions || {},
           active: false,
         },
@@ -194,6 +202,16 @@ export async function signupAction(
           "Aanmelden lukt niet. Probeer het nog een keer."
         ),
       };
+    }
+
+    if (data.user?.identities?.length) {
+      await notifyNewSignup({
+        id: data.user.id,
+        fullName,
+        email,
+        department: department.label,
+        store,
+      });
     }
 
     if (!data.session) {

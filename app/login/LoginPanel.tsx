@@ -7,7 +7,7 @@ import {
   signupAction,
   type AuthActionState,
 } from "../lib/auth/actions";
-import { SIGNUP_DEPARTMENTS } from "../lib/auth/access";
+import { SIGNUP_DEPARTMENTS, WINKEL_STORE_IDS } from "../lib/auth/access";
 
 const initialState: AuthActionState = {};
 
@@ -36,6 +36,7 @@ export default function LoginPanel({
   initialMode?: "login" | "signup" | "reset";
 }>) {
   const [mode, setMode] = useState<"login" | "signup" | "reset">(initialMode);
+  const [signupDepartment, setSignupDepartment] = useState("winkel");
   const [loginState, loginFormAction, loginPending] = useActionState(
     loginAction,
     initialState
@@ -189,7 +190,7 @@ export default function LoginPanel({
           </label>
           <div>
             <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
-              Afdeling
+              Gewenste afdeling
             </span>
             <div className="grid gap-2">
               {SIGNUP_DEPARTMENTS.map((department) => (
@@ -203,6 +204,7 @@ export default function LoginPanel({
                     value={department.id}
                     required
                     defaultChecked={department.id === "winkel"}
+                    onChange={() => setSignupDepartment(department.id)}
                     className="mt-1 h-4 w-4 accent-[#1f4f35]"
                   />
                   <span>
@@ -217,6 +219,22 @@ export default function LoginPanel({
               ))}
             </div>
           </div>
+          {signupDepartment === "winkel" && (
+            <label className="block">
+              <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+                Gewenste winkel
+              </span>
+              <select name="store" required defaultValue="" className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]">
+                <option value="" disabled>Kies je winkel</option>
+                {WINKEL_STORE_IDS.map((store) => (
+                  <option key={store} value={store}>
+                    {store === "ziekerstraat" ? "Ziekerstraat" : store === "heyendaal" ? "Heyendaal" : store === "daalseweg" ? "Daalseweg" : "Lent"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <p className="text-xs font-semibold text-[#7b7268]">Je account wordt pas actief nadat een beheerder je aanvraag heeft goedgekeurd.</p>
           <SubmitButton pending={signupPending}>Toegang aanvragen</SubmitButton>
         </form>
       ) : (
