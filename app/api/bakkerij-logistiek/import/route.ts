@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseBakeItContantbonPdf } from "@/app/bakkerij/logistiek/bakeItContantbonParser";
+import { withCatalogArticleNumbers } from "@/app/bakkerij/logistiek/catalogMatching";
 import type {
   LogisticsBatch,
   LogisticsBatchSource,
@@ -246,10 +247,10 @@ export async function POST(request: Request) {
         status: input.status,
       });
 
-      batches.push({
+      batches.push(withCatalogArticleNumbers({
         ...batch,
         importWaveId: input.importWaveId,
-      });
+      }));
     }
 
     const groupedBatches = batches.reduce<LogisticsBatch[]>((groups, batch) => {

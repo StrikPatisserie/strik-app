@@ -11,6 +11,7 @@ import type {
 } from "./types";
 import { removeLegacyHalfFabricateIngredients } from "./legacyHalfFabricates";
 import type { CustomerAllergenList } from "../allergenen/types";
+import { canonicalStrikArticleNumber } from "@/app/lib/strikArticles";
 
 export type RecepturenData = {
   ingredients: Ingredient[];
@@ -162,9 +163,10 @@ function cleanStoredText(value: unknown, maxLength = 600) {
 }
 
 function normalizeStoredRecipe(value: Recipe): Recipe {
+  const storedNumber = cleanStoredText(value.strikArticleNumber, 80).trim();
   return {
     ...value,
-    strikArticleNumber: cleanStoredText(value.strikArticleNumber, 80).trim(),
+    strikArticleNumber: canonicalStrikArticleNumber(storedNumber, value.name) || storedNumber,
   };
 }
 

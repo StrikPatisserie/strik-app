@@ -25,6 +25,7 @@ export type LogisticsDayOperations = {
 
 export type LogisticsReceiptLine = {
   articleNumber?: string;
+  catalogArticleNumber?: string;
   quantity: string;
   description: string;
   note?: string;

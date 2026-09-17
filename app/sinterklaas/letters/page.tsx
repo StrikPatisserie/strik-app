@@ -24,9 +24,11 @@ const items = [
   },
   {
     href: "/lettershop",
-    title: "Lettershop · concept",
+    title: "Open de chocoladelettershop ↗",
     icon: strikIcons.sinterklaasLetter,
-    tone: "yellow" as const,
+    tone: "green" as const,
+    target: "_blank" as const,
+    rel: "noopener noreferrer",
   },
 ];
 

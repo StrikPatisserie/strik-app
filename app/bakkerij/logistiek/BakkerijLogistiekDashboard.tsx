@@ -4227,6 +4227,7 @@ function preparationRuleMatchesText(rule: PreparationRule, line: ReceiptLine) {
 
 function preparationRuleMatchesLine(rule: PreparationRule, line: ReceiptLine) {
   const { articleNumber, subcode } = receiptLineArticleParts(line);
+  const catalogArticle = normalizePreparationCode(line.catalogArticleNumber || "");
   const ruleArticle = normalizePreparationCode(rule.articleNumber || "");
   const ruleSubcode = normalizePreparationCode(rule.subcode || "");
   const textMatched = preparationRuleMatchesText(rule, line);
@@ -4238,7 +4239,7 @@ function preparationRuleMatchesLine(rule: PreparationRule, line: ReceiptLine) {
       textMatched
     );
   }
-  if (ruleArticle) return articleNumber === ruleArticle || textMatched;
+  if (ruleArticle) return articleNumber === ruleArticle || catalogArticle === ruleArticle || textMatched;
   if (ruleSubcode) return subcode === ruleSubcode || textMatched;
 
   return textMatched;
@@ -4295,7 +4296,7 @@ function buildPreparationItems(
           id: key,
           category,
           rule,
-          articleNumber,
+          articleNumber: line.catalogArticleNumber || articleNumber,
           subcode,
           description:
             cleanProductLabel(cleanReceiptLineDescription(line.description)) ||
@@ -10699,7 +10700,7 @@ function ReceiptDetail({
                       {line.quantity}
                     </td>
                     <td className="py-0.5 pr-2 font-normal tabular-nums text-[#333]">
-                      {line.articleNumber || ""}
+                      {line.catalogArticleNumber || line.articleNumber || ""}
                     </td>
                     <td className="py-0.5 pr-2">
                       <span>{line.description}</span>
