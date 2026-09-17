@@ -728,6 +728,17 @@ function tomorrowPrognoseGate(dateState: DateState) {
     : "De voorlopige prognose voor morgen is vanaf 12:15 beschikbaar.";
 }
 
+function futurePlanGateMessage(dateState: DateState, hasBatch: boolean) {
+  if (dateState.selectedDate <= dateState.today || hasBatch) return null;
+
+  if (dateState.selectedDate === dateState.tomorrow) {
+    return tomorrowPrognoseGate(dateState) ||
+      "Voor deze datum is nog geen prognose ingeladen. Probeer het straks opnieuw.";
+  }
+
+  return "Voor deze toekomstige datum is nog geen prognose ingeladen. De planning verschijnt zodra de bonnen binnen zijn.";
+}
+
 function planTitleForDate(dateState: DateState) {
   if (dateState.selectedDate === dateState.today) return "Vandaag";
   if (dateState.selectedDate === dateState.tomorrow) {
@@ -7909,7 +7920,10 @@ export default function BakkerijLogistiekDashboard() {
   const dateStateRef = useRef(dateState);
   const activeImportedBatch =
     importedBatch?.date === dateState.selectedDate ? importedBatch : null;
-  const tomorrowGateMessage = tomorrowPrognoseGate(dateState);
+  const futureGateMessage = futurePlanGateMessage(
+    dateState,
+    Boolean(activeImportedBatch || fileSnapshot)
+  );
 
   const selectedPlan = useMemo(
     () => buildDayPlan(dateState, fileSnapshot, activeImportedBatch),
@@ -8946,9 +8960,9 @@ export default function BakkerijLogistiekDashboard() {
         description="Ochtendregie, pakbonnen, routes en tweede rondes."
       />
 
-      {tomorrowGateMessage ? (
+      {futureGateMessage ? (
         <section
-          role="alertdialog"
+          role="status"
           aria-labelledby="tomorrow-prognose-title"
           aria-describedby="tomorrow-prognose-message"
           className="mx-auto mt-6 max-w-xl border border-[#d7cec4] bg-[#fbf7ef] p-6 text-center shadow-sm"
@@ -8957,18 +8971,38 @@ export default function BakkerijLogistiekDashboard() {
             Let op
           </p>
           <h2 id="tomorrow-prognose-title" className="mt-2 text-xl font-black text-[#1a1815]">
-            De planning voor {nextLogisticsDateLabel(dateState).toLowerCase()} is nog niet beschikbaar
+            De planning voor {planTitleForDate(dateState).toLowerCase()} is nog niet beschikbaar
           </h2>
           <p id="tomorrow-prognose-message" className="mt-3 text-sm font-semibold text-[#6b645b]">
-            {tomorrowGateMessage}
+            {futureGateMessage}
           </p>
-          <button
-            type="button"
-            onClick={() => selectDate(dateState.today)}
-            className="mt-5 min-h-10 bg-[#1a1815] px-5 text-sm font-black text-white"
-          >
-            Terug naar vandaag
-          </button>
+          <div className="mt-5 flex flex-wrap items-end justify-center gap-2">
+            <label className="text-left text-xs font-black text-[#4a4540]">
+              Andere datum
+              <input
+                type="date"
+                value={dateState.selectedDate}
+                aria-label="Andere leverdatum kiezen"
+                onChange={(event) => selectDate(event.target.value)}
+                className="mt-1 block min-h-10 border border-[#d7cec4] bg-white px-2 text-sm font-bold text-[#1a1815]"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => selectDate(dateState.today)}
+              className="min-h-10 bg-[#1a1815] px-4 text-sm font-black text-white"
+            >
+              Terug naar vandaag
+            </button>
+            <button
+              type="button"
+              disabled={batchLoadState === "loading"}
+              onClick={refreshBatch}
+              className="min-h-10 border border-[#d7cec4] bg-white px-4 text-sm font-black text-[#1a1815] disabled:opacity-50"
+            >
+              Opnieuw controleren
+            </button>
+          </div>
         </section>
       ) : (
       <>
@@ -9014,7 +9048,7 @@ export default function BakkerijLogistiekDashboard() {
 
           <div className="flex flex-wrap items-center gap-2">
             <label
-              className={`relative flex min-h-8 cursor-pointer items-center border px-2 text-[0.68rem] font-black tracking-normal transition ${
+              className={`flex items-center gap-2 border px-2 text-[0.68rem] font-black tracking-normal transition ${
                 selectedPlan.date !== dateState.today &&
                 selectedPlan.date !== dateState.tomorrow
                   ? "border-[#1a1815] bg-[#1a1815] text-white"
@@ -9026,7 +9060,7 @@ export default function BakkerijLogistiekDashboard() {
                 type="date"
                 value={selectedPlan.date}
                 aria-label="Andere leverdatum kiezen"
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                className="min-h-8 border border-[#d7cec4] bg-white px-1 text-xs font-bold text-[#1a1815]"
                 onChange={(event) => selectDate(event.target.value)}
               />
             </label>
