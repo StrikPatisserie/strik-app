@@ -7924,6 +7924,8 @@ export default function BakkerijLogistiekDashboard() {
     dateState,
     Boolean(activeImportedBatch || fileSnapshot)
   );
+  const futureGateLoading = Boolean(futureGateMessage && batchLoadState === "loading");
+  const futureGateError = Boolean(futureGateMessage && batchLoadState === "error");
 
   const selectedPlan = useMemo(
     () => buildDayPlan(dateState, fileSnapshot, activeImportedBatch),
@@ -8220,6 +8222,7 @@ export default function BakkerijLogistiekDashboard() {
     const { today, tomorrow } = dateStateRef.current;
     if (!date || (date > today && date !== tomorrow)) return;
 
+    if (date !== dateStateRef.current.selectedDate) setBatchLoadState("loading");
     setDateState((current) => ({ ...current, selectedDate: date }));
     setFileSnapshot(null);
     setImportMessage("");
@@ -8234,6 +8237,7 @@ export default function BakkerijLogistiekDashboard() {
 
   function refreshBatch() {
     manualBatchRefreshRef.current = true;
+    setBatchLoadState("loading");
     setFileSnapshot(null);
     setImportMessage("bonnen opnieuw ophalen...");
     setDeletedRouteStopSnapshot(null);
@@ -8971,13 +8975,19 @@ export default function BakkerijLogistiekDashboard() {
           className="mx-auto mt-6 max-w-xl border border-[#d7cec4] bg-[#fbf7ef] p-6 text-center shadow-sm"
         >
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#a85a3f]">
-            Let op
+            {futureGateLoading ? "Even geduld" : "Let op"}
           </p>
           <h2 id="tomorrow-prognose-title" className="mt-2 text-xl font-black text-[#1a1815]">
-            De planning voor {planTitleForDate(dateState).toLowerCase()} is nog niet beschikbaar
+            {futureGateLoading
+              ? `Planning voor ${planTitleForDate(dateState).toLowerCase()} laden...`
+              : `De planning voor ${planTitleForDate(dateState).toLowerCase()} is nog niet beschikbaar`}
           </h2>
           <p id="tomorrow-prognose-message" className="mt-3 text-sm font-semibold text-[#6b645b]">
-            {futureGateMessage}
+            {futureGateLoading
+              ? "We controleren of de prognose al is ingeladen."
+              : futureGateError
+                ? "Ophalen is niet gelukt. Probeer het opnieuw."
+                : futureGateMessage}
           </p>
           <div className="mt-5 flex flex-wrap items-end justify-center gap-2">
             <label className="text-left text-xs font-black text-[#4a4540]">
