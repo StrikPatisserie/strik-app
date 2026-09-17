@@ -7891,6 +7891,7 @@ export default function BakkerijLogistiekDashboard() {
   const [routeSaveState, setRouteSaveState] = useState<RouteSaveState>("idle");
   const [routeSaveMessage, setRouteSaveMessage] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  const [isOpeningTomorrow, setIsOpeningTomorrow] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [overrideMessage, setOverrideMessage] = useState("");
   const [photoLinkMessage, setPhotoLinkMessage] = useState("");
@@ -7918,6 +7919,10 @@ export default function BakkerijLogistiekDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const manualBatchRefreshRef = useRef(false);
   const dateStateRef = useRef(dateState);
+  const tomorrowPrefetchRef = useRef<{
+    date: string;
+    promise: Promise<LogisticsBatch | null>;
+  } | null>(null);
   const activeImportedBatch =
     importedBatch?.date === dateState.selectedDate ? importedBatch : null;
   const futureGateMessage = futurePlanGateMessage(
@@ -8057,6 +8062,29 @@ export default function BakkerijLogistiekDashboard() {
   useEffect(() => {
     setPhotoPrintHistoryByDate(readMarzipanPhotoPrintHistory());
   }, []);
+
+  useEffect(() => {
+    const date = dateState.tomorrow;
+    const controller = new AbortController();
+    const promise = fetch(
+      `/api/bakkerij-logistiek?date=${encodeURIComponent(date)}`,
+      { cache: "no-store", signal: controller.signal }
+    )
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const data = (await response.json()) as { batch?: LogisticsBatch | null };
+        return data.batch || null;
+      })
+      .catch(() => null);
+
+    tomorrowPrefetchRef.current = { date, promise };
+    return () => {
+      controller.abort();
+      if (tomorrowPrefetchRef.current?.date === date) {
+        tomorrowPrefetchRef.current = null;
+      }
+    };
+  }, [dateState.tomorrow]);
 
   useEffect(() => {
     function syncOpenAppDate() {
@@ -8233,6 +8261,33 @@ export default function BakkerijLogistiekDashboard() {
     setRouteSaveState("idle");
     setRouteHasUnsavedChanges(false);
     setDeletedRouteStopSnapshot(null);
+  }
+
+  async function openTomorrow() {
+    const date = dateStateRef.current.tomorrow;
+    if (dateStateRef.current.selectedDate === date || isOpeningTomorrow) return;
+
+    setIsOpeningTomorrow(true);
+    try {
+      const prefetch = tomorrowPrefetchRef.current;
+      const prefetchedBatch = prefetch?.date === date
+        ? await prefetch.promise
+        : null;
+      const batch = prefetchedBatch || await fetch(`/api/bakkerij-logistiek?date=${encodeURIComponent(date)}`, {
+            cache: "no-store",
+          })
+            .then(async (response) => {
+              if (!response.ok) return null;
+              const data = (await response.json()) as { batch?: LogisticsBatch | null };
+              return data.batch || null;
+            })
+            .catch(() => null);
+
+      setImportedBatch(batch);
+      selectDate(date);
+    } finally {
+      setIsOpeningTomorrow(false);
+    }
   }
 
   function refreshBatch() {
@@ -9092,14 +9147,15 @@ export default function BakkerijLogistiekDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => selectDate(dateState.tomorrow)}
+              disabled={isOpeningTomorrow}
+              onClick={() => void openTomorrow()}
               className={`min-h-10 border px-3 text-sm font-black tracking-normal transition ${
                 selectedPlan.date === dateState.tomorrow
                   ? "border-[#1a1815] bg-[#1a1815] text-white"
                   : "border-[#e8e4de] bg-white text-[#1a1815] hover:bg-[#faf8f5]"
               }`}
             >
-              {nextLogisticsDateLabel(dateState)}
+              {isOpeningTomorrow ? "Morgen ophalen..." : nextLogisticsDateLabel(dateState)}
             </button>
             <RefreshButton
               disabled={batchLoadState === "loading" || isImporting}
