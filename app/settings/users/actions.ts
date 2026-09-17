@@ -176,11 +176,15 @@ export async function updateUserProfileAction(
   _state: UserAdminActionState,
   formData: FormData
 ): Promise<UserAdminActionState> {
-  await requireAdminProfile();
+  const actor = await requireAdminProfile();
   const payload = getProfilePayload(formData);
 
   if (!payload.email) {
     return { message: "E-mail is verplicht." };
+  }
+
+  if (actor.id === userId && !payload.active) {
+    return { message: "Je kunt je eigen beheerdersaccount niet deactiveren." };
   }
 
   try {
@@ -220,7 +224,11 @@ export async function setUserActiveAction(
   void _state;
   void _formData;
 
-  await requireAdminProfile();
+  const actor = await requireAdminProfile();
+
+  if (!active && actor.id === userId) {
+    return { message: "Je kunt je eigen beheerdersaccount niet deactiveren." };
+  }
 
   try {
     const admin = createAdminClient();
@@ -269,6 +277,45 @@ export async function setUserActiveAction(
     ok: true,
     message: active ? "Gebruiker geactiveerd." : "Gebruiker gedeactiveerd.",
   };
+}
+
+export async function deleteUserAction(
+  userId: string,
+  _state: UserAdminActionState,
+  formData: FormData
+): Promise<UserAdminActionState> {
+  const actor = await requireAdminProfile();
+  if (actor.id === userId) {
+    return { message: "Je kunt je eigen beheerdersaccount niet verwijderen." };
+  }
+
+  const confirmation = cleanEmail(formData.get("confirm_email"));
+  try {
+    const admin = createAdminClient();
+    const { data: target, error: lookupError } = await admin
+      .from("profiles")
+      .select("email,role")
+      .eq("id", userId)
+      .single();
+
+    if (lookupError || !target) throw new Error("Dit account bestaat niet meer.");
+    if (confirmation !== target.email.toLowerCase()) {
+      return { message: "Typ het volledige e-mailadres van dit account ter bevestiging." };
+    }
+    if (["admin", "manager", "management"].includes(target.role) && actor.role !== "admin") {
+      return { message: "Alleen een admin kan een ander beheerdersaccount verwijderen." };
+    }
+
+    const { error } = await admin.auth.admin.deleteUser(userId);
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : "Account verwijderen is mislukt.",
+    };
+  }
+
+  revalidateUserSettings();
+  return { ok: true, message: "Account definitief verwijderd." };
 }
 
 export async function sendUserPasswordResetAction(

@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   createUserAction,
+  deleteUserAction,
   sendUserPasswordResetAction,
   setUserActiveAction,
   updateUserProfileAction,
@@ -423,6 +424,16 @@ function EditUserModal({
     sendUserPasswordResetAction,
     initialState
   );
+  const [deleteState, deleteFormAction, deletePending] = useActionState(
+    deleteUserAction.bind(null, profile.id),
+    initialState
+  );
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState("");
+
+  useEffect(() => {
+    if (deleteState.ok) onClose();
+  }, [deleteState.ok, onClose]);
 
   return (
     <Modal title={getProfileDisplayName(profile)} onClose={onClose}>
@@ -431,15 +442,16 @@ function EditUserModal({
           <Message state={updateState} />
           <Message state={activeState} />
           <Message state={resetState} />
+          <Message state={deleteState} />
         </div>
-        {!profile.active && (
-          <form action={activeFormAction} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#c8dbc2] bg-[#f3faf0] p-3">
-            <p className="text-sm font-bold text-[#1f4f35]">Controleer naam, e-mail, afdeling en winkel voordat je toegang geeft.</p>
-            <button type="submit" disabled={activePending || activeState.ok} className="h-10 rounded-md bg-[#1f4f35] px-4 text-sm font-black text-white disabled:opacity-60">
-              {activePending ? "Activeren..." : activeState.ok ? "Geactiveerd" : "Toegang activeren"}
+        <form action={activeFormAction} className={`flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 ${profile.active ? "border-[#f1b8a8] bg-[#fff4ef]" : "border-[#c8dbc2] bg-[#f3faf0]"}`}>
+          <p className={`text-sm font-bold ${profile.active ? "text-[#9d332b]" : "text-[#1f4f35]"}`}>
+            {profile.active ? "Deactiveren blokkeert meteen de toegang; het account en de gegevens blijven bewaard." : "Controleer naam, e-mail, afdeling en winkel voordat je toegang geeft."}
+          </p>
+          <button type="submit" disabled={activePending || activeState.ok} className={`h-10 rounded-md px-4 text-sm font-black text-white disabled:opacity-60 ${profile.active ? "bg-[#a6332a]" : "bg-[#1f4f35]"}`}>
+              {activePending ? "Wijzigen..." : activeState.ok ? "Status gewijzigd" : profile.active ? "Gebruiker deactiveren" : "Toegang activeren"}
             </button>
-          </form>
-        )}
+        </form>
         <form action={updateFormAction} className="space-y-4">
           <UserFields profile={profile} />
           <div className="flex justify-end gap-2 border-t border-[#eee8df] pt-3">
@@ -460,19 +472,6 @@ function EditUserModal({
           </div>
         </form>
         <div className="flex flex-wrap gap-2 border-t border-[#eee8df] pt-3">
-          {profile.active && <form action={activeFormAction}>
-            <button
-              type="submit"
-              disabled={activePending}
-              className="h-10 rounded-md bg-[#f4f0ea] px-4 text-sm font-black text-[#1a1815] disabled:opacity-60"
-            >
-              {activePending
-                ? "Wijzigen..."
-                : profile.active
-                  ? "Deactiveren"
-                  : "Activeren"}
-            </button>
-          </form>}
           <form action={resetFormAction}>
             <input type="hidden" name="email" value={profile.email} />
             <button
@@ -483,6 +482,27 @@ function EditUserModal({
               {resetPending ? "Versturen..." : "Reset wachtwoord"}
             </button>
           </form>
+        </div>
+        <div className="border-t border-[#eee8df] pt-4">
+          {!deleteOpen ? (
+            <button type="button" onClick={() => setDeleteOpen(true)} className="text-sm font-black text-[#a6332a] underline underline-offset-2">
+              Account definitief verwijderen
+            </button>
+          ) : (
+            <form action={deleteFormAction} className="space-y-3 rounded-md border border-[#f1b8a8] bg-[#fff4ef] p-3">
+              <p className="text-sm font-black text-[#9d332b]">Dit verwijdert het inlogaccount definitief. Dit kun je niet ongedaan maken.</p>
+              <label className="block text-xs font-bold text-[#9d332b]">
+                Typ {profile.email} om te bevestigen
+                <input name="confirm_email" type="email" autoComplete="off" value={confirmEmail} onChange={(event) => setConfirmEmail(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-[#f1b8a8] bg-white px-3 text-sm text-[#1a1815]" />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" disabled={deletePending || deleteState.ok || confirmEmail.trim().toLowerCase() !== profile.email.toLowerCase()} className="h-10 rounded-md bg-[#a6332a] px-4 text-sm font-black text-white disabled:opacity-50">
+                  {deletePending ? "Verwijderen..." : "Ja, account definitief verwijderen"}
+                </button>
+                <button type="button" onClick={() => { setDeleteOpen(false); setConfirmEmail(""); }} className="h-10 rounded-md bg-white px-4 text-sm font-black text-[#4f4942]">Annuleren</button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </Modal>
