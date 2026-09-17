@@ -251,7 +251,7 @@ function depositedTotalForWeek(
       (total, deposit) =>
         total +
         (deposit.year === year && deposit.week === week && deposit.depositedAt
-          ? deposit.amount
+          ? deposit.actualAmount ?? deposit.amount
           : 0),
       0
     )
@@ -593,6 +593,8 @@ export default function CashCountManager() {
   >({});
   const [depositDrafts, setDepositDrafts] = useState<Record<string, string>>({});
   const [depositNotes, setDepositNotes] = useState<Record<string, string>>({});
+  const [actualDepositDrafts, setActualDepositDrafts] = useState<Record<string, string>>({});
+  const [differenceNotes, setDifferenceNotes] = useState<Record<string, string>>({});
   const [state, setState] = useState<LoadState>("loading");
   const [mailState, setMailState] = useState<"idle" | "sending">("idle");
   const [status, setStatus] = useState("");
@@ -839,7 +841,9 @@ export default function CashCountManager() {
           expectedCount: row.expectedCount,
           missingCount: row.missingCount,
           weekTotal: row.includedCheckedSafeCash,
-          depositedAmount: row.deposit?.depositedAt ? row.deposit.amount : null,
+          depositedAmount: row.deposit?.depositedAt
+            ? row.deposit.actualAmount ?? row.deposit.amount
+            : null,
         },
         {
           key: cashLocationKey("ice", row.shop),
@@ -1053,6 +1057,9 @@ export default function CashCountManager() {
         (deposit) => deposit.shop === shop && isCashDepositLocked(deposit)
       )
     );
+  const isSelectedWeekCashbookBooked = selectedWeekDeposits.some(
+    (deposit) => Boolean(deposit.cashbookBookedAt)
+  );
   const selectedWeekClosedAt = selectedWeekDeposits.find(
     (deposit) => cashDepositLockedAt(deposit)
   );
@@ -1461,11 +1468,64 @@ export default function CashCountManager() {
       setStorage(data.storage);
       setStatus("Geldcontrole opgeslagen.");
       setState("ready");
+      return true;
     } catch (error) {
       setStatus(
         error instanceof Error ? error.message : "Geldcontrole opslaan is mislukt."
       );
       setState("ready");
+      return false;
+    }
+  }
+
+  async function reopenWeek() {
+    if (!isSelectedWeekClosed || state === "saving" || mailState === "sending") return;
+    if (isSelectedWeekCashbookBooked) {
+      setStatus("Deze week is al in het kasboek geboekt. Heropenen is niet mogelijk.");
+      return;
+    }
+    if (!window.confirm(`Weet je zeker dat je week ${selectedWeek.week} ${selectedWeek.year} wilt heropenen?`)) return;
+    if (!window.confirm("Tweede controle: de eerder verstuurde mail aan administratie blijft bestaan. Wil je de week echt heropenen?")) return;
+
+    const now = new Date().toISOString();
+    const nextDeposits = cashDeposits.map((deposit) =>
+      deposit.year === selectedWeek.year && deposit.week === selectedWeek.week
+        ? { ...deposit, closedAt: undefined, closedBy: undefined, updatedAt: now }
+        : deposit
+    );
+    if (await saveCash(nextDeposits)) {
+      setStatus("Week heropend. De eerdere mail aan administratie blijft bestaan.");
+    }
+  }
+
+  async function saveActualDeposit(row: (typeof weekRows)[number]) {
+    const deposit = row.deposit;
+    if (!deposit?.depositedAt || state === "saving") return;
+    if (deposit.cashbookBookedAt) {
+      setStatus("Deze storting is al in het kasboek geboekt. Wijzigen is niet mogelijk.");
+      return;
+    }
+    const draftKey = `${depositWeekKey}:${row.shop}`;
+    const raw = actualDepositDrafts[draftKey] ?? formatAmountInput(deposit.actualAmount ?? deposit.amount);
+    if (!/^\d+(?:[.,]\d{1,2})?$/.test(raw.trim())) {
+      setStatus("Vul een geldig werkelijk gestort bedrag in.");
+      return;
+    }
+    const actualAmount = parseAmount(raw);
+    const differenceNote = (differenceNotes[draftKey] ?? deposit.differenceNote ?? "").trim();
+    if (Math.abs(actualAmount - deposit.amount) > 0.009 && !differenceNote) {
+      setStatus("Geef bij een stortverschil ook een toelichting op.");
+      return;
+    }
+    if (!window.confirm(`Storting ${row.shop}: opgegeven ${formatMoney(deposit.amount)}, werkelijk ${formatMoney(actualAmount)}. Verschil ${formatMoney(actualAmount - deposit.amount)}. Opslaan?`)) return;
+
+    const nextDeposits = cashDeposits.map((item) =>
+      item.id === deposit.id
+        ? { ...item, actualAmount, differenceNote, updatedAt: new Date().toISOString() }
+        : item
+    );
+    if (await saveCash(nextDeposits)) {
+      setStatus(`Werkelijke storting voor ${row.shop} opgeslagen; oorspronkelijke storting blijft bewaard.`);
     }
   }
 
@@ -1491,6 +1551,8 @@ export default function CashCountManager() {
       week: selectedWeek.week,
       shop: row.shop,
       amount,
+      actualAmount: row.deposit?.actualAmount,
+      differenceNote: row.deposit?.differenceNote,
       dateFrom: dateRange[0],
       dateTo: dateRange.at(-1),
       cashRecordIds: checkedRecords.map((record) => record.id),
@@ -1545,6 +1607,8 @@ export default function CashCountManager() {
         week: selectedWeek.week,
         shop: row.shop,
         amount,
+        actualAmount: row.deposit?.actualAmount,
+        differenceNote: row.deposit?.differenceNote,
         dateFrom: dateRange[0],
         dateTo: dateRange.at(-1),
         cashRecordIds: checkedRecords.map((record) => record.id),
@@ -1838,13 +1902,24 @@ export default function CashCountManager() {
         </div>
 
         {isSelectedWeekClosed ? (
-          <p className="mt-2 rounded-md border border-[#cbdcc5] bg-[#f6fbf5] px-2 py-1.5 text-xs font-bold text-[#1f4f35]">
-            Week definitief gesloten
-            {selectedWeekClosedAtLabel
-              ? ` op ${selectedWeekClosedAtLabel.slice(0, 10)}`
-              : ""}
-            . Deze week kan niet meer worden gewijzigd.
-          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#cbdcc5] bg-[#f6fbf5] px-2 py-1.5 text-xs font-bold text-[#1f4f35]">
+            <span>
+              Week definitief gesloten
+              {selectedWeekClosedAtLabel
+                ? ` op ${selectedWeekClosedAtLabel.slice(0, 10)}`
+                : ""}
+              . De oorspronkelijke kasgegevens blijven bewaard.
+            </span>
+            <button
+              type="button"
+              onClick={() => void reopenWeek()}
+              disabled={state === "saving" || mailState === "sending" || isSelectedWeekCashbookBooked}
+              title={isSelectedWeekCashbookBooked ? "Deze week is al in het kasboek geboekt" : "Week na twee bevestigingen heropenen"}
+              className="rounded-md border border-[#1f4f35] bg-white px-2 py-1 text-[0.62rem] font-black uppercase disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Week heropenen
+            </button>
+          </div>
         ) : isSelectedWeekComplete ? (
           <p className="mt-2 rounded-md border border-[#efd1a1] bg-[#fff8d8] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
             Let op: na storting bevestigen en mailen naar administratie kun je
@@ -2360,7 +2435,7 @@ export default function CashCountManager() {
               label="Gestort"
               value={
                 selectedShopRow.deposit?.depositedAt
-                  ? formatMoney(selectedShopRow.deposit.amount)
+                  ? formatMoney(selectedShopRow.deposit.actualAmount ?? selectedShopRow.deposit.amount)
                   : `${formatMoney(selectedShopRow.includedCheckedSafeCash)} te storten`
               }
             />
@@ -2427,6 +2502,49 @@ export default function CashCountManager() {
                   : "Storting opslaan"}
             </button>
           </div>
+          {selectedShopRow.deposit?.depositedAt && (
+            <div className="mt-2 rounded-md border border-[#efd1a1] bg-[#fffaf0] p-2">
+              <div className="flex flex-wrap items-center justify-between gap-1">
+                <p className="text-xs font-black text-[#493c2d]">Werkelijke bankstorting en stortverschil</p>
+                <p className="text-xs font-bold text-[#6b645b]">
+                  Oorspronkelijk opgegeven: {formatMoney(selectedShopRow.deposit.amount)}
+                  {selectedShopRow.deposit.actualAmount !== undefined && (
+                    <> · Verschil: {formatMoney(selectedShopRow.deposit.actualAmount - selectedShopRow.deposit.amount)}</>
+                  )}
+                </p>
+              </div>
+              <div className="mt-1.5 grid gap-1.5 lg:grid-cols-[12rem_minmax(14rem,1fr)_auto] lg:items-end">
+                <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#8b8278]">
+                  Werkelijk gestort
+                  <input
+                    value={actualDepositDrafts[selectedDepositDraftKey] ?? formatAmountInput(selectedShopRow.deposit.actualAmount ?? selectedShopRow.deposit.amount)}
+                    onChange={(event) => setActualDepositDrafts((current) => ({ ...current, [selectedDepositDraftKey]: event.target.value }))}
+                    inputMode="decimal"
+                    disabled={Boolean(selectedShopRow.deposit.cashbookBookedAt)}
+                    className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-bold normal-case text-[#1a1815] disabled:opacity-50"
+                  />
+                </label>
+                <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#8b8278]">
+                  Toelichting bij verschil
+                  <input
+                    value={differenceNotes[selectedDepositDraftKey] ?? selectedShopRow.deposit.differenceNote ?? ""}
+                    onChange={(event) => setDifferenceNotes((current) => ({ ...current, [selectedDepositDraftKey]: event.target.value }))}
+                    disabled={Boolean(selectedShopRow.deposit.cashbookBookedAt)}
+                    placeholder="Bijv. € 15 minder door banktelling"
+                    className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void saveActualDeposit(selectedShopRow)}
+                  disabled={state === "saving" || Boolean(selectedShopRow.deposit.cashbookBookedAt)}
+                  className="h-8 rounded-md bg-[#c3d3bc] px-3 text-[0.62rem] font-black uppercase text-[#1a1815] disabled:opacity-50"
+                >
+                  Verschil opslaan
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       )}
 

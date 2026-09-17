@@ -104,6 +104,8 @@ export type RevenueCashDeposit = {
   week: number;
   shop: RevenueShop;
   amount: number;
+  actualAmount?: number;
+  differenceNote?: string;
   dateFrom?: string;
   dateTo?: string;
   cashRecordIds: string[];
@@ -296,6 +298,8 @@ function expandCashRecordPayload(
 function compactCashDepositPayload(deposit: RevenueCashDeposit) {
   return {
     a: deposit.amount,
+    aa: deposit.actualAmount,
+    dn: deposit.differenceNote,
     df: deposit.dateFrom,
     dt: deposit.dateTo,
     ids: deposit.cashRecordIds,
@@ -324,6 +328,8 @@ function expandCashDepositPayload(
     week,
     shop,
     amount: payload.amount ?? payload.a,
+    actualAmount: payload.actualAmount ?? payload.aa,
+    differenceNote: payload.differenceNote ?? payload.dn,
     dateFrom: payload.dateFrom ?? payload.df,
     dateTo: payload.dateTo ?? payload.dt,
     cashRecordIds: payload.cashRecordIds ?? payload.ids,
@@ -769,6 +775,11 @@ export function normalizeRevenueCashDeposit(
     week,
     shop,
     amount,
+    actualAmount:
+      value.actualAmount === undefined || value.actualAmount === null
+        ? undefined
+        : positiveMoneyFrom(value.actualAmount),
+    differenceNote: textFrom(value.differenceNote) || undefined,
     dateFrom: parseIsoDate(value.dateFrom)?.toISOString().slice(0, 10),
     dateTo: parseIsoDate(value.dateTo)?.toISOString().slice(0, 10),
     cashRecordIds,
