@@ -138,6 +138,7 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
         ? value.department
         : "chocolade",
     orderText,
+    letterOrderText: textFrom(value.letterOrderText),
     logo: textFrom(value.logo),
     packaging: textFrom(value.packaging),
     importantNotes: textFrom(value.importantNotes),
@@ -159,6 +160,9 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     textChecked: boolFrom(value.textChecked),
     textInstructions: textFrom(value.textInstructions),
     productionDone: boolFrom(value.productionDone),
+    letterProductionDone: value.letterProductionDone === undefined
+      ? boolFrom(value.productionDone)
+      : boolFrom(value.letterProductionDone),
     packed: boolFrom(value.packed),
     delivered: boolFrom(value.delivered),
     cancelled: boolFrom(value.cancelled),

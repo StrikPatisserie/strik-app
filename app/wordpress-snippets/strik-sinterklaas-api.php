@@ -471,6 +471,7 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
         'productionDate' => isset($order['productionDate']) ? strik_sinterklaas_date($order['productionDate']) : '',
         'department' => isset($order['department']) ? strik_sinterklaas_text($order['department'], 80) : 'chocolade',
         'orderText' => $order_text,
+        'letterOrderText' => isset($order['letterOrderText']) ? strik_sinterklaas_textarea($order['letterOrderText'], 5000) : '',
         'logo' => isset($order['logo']) ? strik_sinterklaas_textarea($order['logo'], 1000) : '',
         'packaging' => isset($order['packaging']) ? strik_sinterklaas_textarea($order['packaging'], 1000) : '',
         'importantNotes' => isset($order['importantNotes']) ? strik_sinterklaas_textarea($order['importantNotes'], 2000) : '',
@@ -489,6 +490,7 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
         'textChecked' => !empty($order['textChecked']),
         'textInstructions' => isset($order['textInstructions']) ? strik_sinterklaas_textarea($order['textInstructions'], 1200) : '',
         'productionDone' => !empty($order['productionDone']),
+        'letterProductionDone' => array_key_exists('letterProductionDone', $order) ? !empty($order['letterProductionDone']) : !empty($order['productionDone']),
         'packed' => !empty($order['packed']),
         'delivered' => !empty($order['delivered']),
         'cancelled' => !empty($order['cancelled']),
@@ -644,7 +646,7 @@ function strik_sinterklaas_b2b_save($request) {
 
     $became_confirmed = $order['status'] === 'akkoord'
         && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'));
-    $mail_fields = array('customerName', 'contactName', 'customerEmail', 'phone', 'deliveryDate', 'productionDate', 'department', 'orderText', 'logo', 'textInstructions', 'packaging', 'importantNotes', 'deliveryMethod', 'deliveryAddress', 'priceAgreement', 'totalExVat', 'invoiceInfo');
+    $mail_fields = array('customerName', 'contactName', 'customerEmail', 'phone', 'deliveryDate', 'productionDate', 'department', 'orderText', 'letterOrderText', 'logo', 'textInstructions', 'packaging', 'importantNotes', 'deliveryMethod', 'deliveryAddress', 'priceAgreement', 'totalExVat', 'invoiceInfo');
     $details_changed = false;
     if ($order['status'] === 'akkoord' && !empty($existing)) {
         foreach ($mail_fields as $field) {
@@ -688,6 +690,7 @@ function strik_sinterklaas_create_b2b_confirmation_body($order, $is_new_confirma
         'Productiedatum' => $order['productionDate'],
         'Afdeling' => $order['department'],
         'Bestelling' => $order['orderText'],
+        'Alleen chocoladeletters' => $order['letterOrderText'],
         'Logo' => $order['logo'],
         'Tekst' => $order['textInstructions'],
         'Verpakking' => $order['packaging'],
@@ -764,6 +767,7 @@ function strik_sinterklaas_b2b_delete($request) {
             'Klant: ' . $order['customerName'],
             'Leverdatum: ' . $order['deliveryDate'],
             'Bestelling: ' . $order['orderText'],
+            'Alleen chocoladeletters: ' . (isset($order['letterOrderText']) ? $order['letterOrderText'] : ''),
             'Order-id: ' . $order['id'],
             '',
             'Controleer Bake-it en de productieplanning; daar wordt niets automatisch verwijderd.',

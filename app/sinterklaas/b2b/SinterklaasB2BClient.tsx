@@ -19,6 +19,7 @@ type B2BFormState = {
   productionDate: string;
   department: SinterklaasB2BOrder["department"];
   orderText: string;
+  letterOrderText: string;
   logo: string;
   packaging: string;
   importantNotes: string;
@@ -32,8 +33,8 @@ type B2BFormState = {
 };
 
 const DEPARTMENTS: { id: SinterklaasB2BOrder["department"]; label: string }[] = [
-  { id: "chocolade", label: "Chocolade" },
-  { id: "bakkerij", label: "Bakkerij" },
+  { id: "chocolade", label: "Chocoladeletters" },
+  { id: "bakkerij", label: "Overig" },
   { id: "beide", label: "Beide" },
 ];
 
@@ -66,6 +67,7 @@ function createFormState(): B2BFormState {
     productionDate: "",
     department: "chocolade",
     orderText: "",
+    letterOrderText: "",
     logo: "",
     packaging: "",
     importantNotes: "",
@@ -91,6 +93,7 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined) {
     productionDate: order.productionDate,
     department: order.department,
     orderText: order.orderText,
+    letterOrderText: order.letterOrderText,
     logo: order.logo,
     packaging: order.packaging,
     importantNotes: order.importantNotes,
@@ -267,57 +270,19 @@ function dueSoon(order: SinterklaasB2BOrder) {
   return days >= 0 && days <= 2;
 }
 
+function isProductionDone(order: SinterklaasB2BOrder) {
+  return order.productionDone && (order.department !== "beide" || order.letterProductionDone);
+}
+
 function orderWarnings(order: SinterklaasB2BOrder) {
   if (order.status !== "akkoord" || order.cancelled || order.delivered || (order.deliveryDate && order.deliveryDate < addDays(todayIso(), -7))) return [];
   return [
     !order.entered && "Nog niet in Bake-it ingevoerd",
-    !order.productionScheduled && !order.productionDone && "Productie nog niet ingepland",
+    order.department === "beide" && !order.letterOrderText.trim() && "Letterdeel nog niet apart beschreven",
     Boolean(order.logo) && !order.logoChecked && "Logo nog niet gecontroleerd",
     Boolean(order.textInstructions) && !order.textChecked && "Tekst nog niet gecontroleerd",
     Boolean(order.packaging) && !order.packagingChecked && "Verpakking nog niet gecontroleerd",
   ].filter((warning): warning is string => Boolean(warning));
-}
-
-function estimatedUnits(order: SinterklaasB2BOrder) {
-  const quantities = Array.from(order.orderText.matchAll(/\b(\d{1,4})\s*(?:x|stuks?|letters?)\b/gi), (match) => Number(match[1]));
-  return Math.min(2000, Math.max(1, quantities.reduce((sum, quantity) => sum + quantity, 0)));
-}
-
-function productionLoadKey(date: string, department: SinterklaasB2BOrder["department"]) {
-  return `${date}:${department}`;
-}
-
-function proposeProductionDates(orders: SinterklaasB2BOrder[]) {
-  const today = todayIso();
-  const load = new Map<string, number>();
-  const proposals = new Map<string, string>();
-  const addLoad = (date: string, order: SinterklaasB2BOrder) => {
-    for (const department of order.department === "beide" ? ["chocolade", "bakkerij"] as const : [order.department]) {
-      const key = productionLoadKey(date, department);
-      load.set(key, (load.get(key) || 0) + estimatedUnits(order));
-    }
-  };
-
-  orders.filter((order) => order.status === "akkoord" && !order.cancelled && !order.delivered && order.productionDate).forEach((order) => addLoad(order.productionDate, order));
-  const unplanned = orders.filter((order) => order.status === "akkoord" && !order.cancelled && !order.delivered && !order.productionDate && order.deliveryDate >= today);
-  unplanned.sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate) || estimatedUnits(b) - estimatedUnits(a));
-
-  for (const order of unplanned) {
-    const units = estimatedUnits(order);
-    const preferredDaysAhead = units >= 200 ? 7 : units >= 50 ? 4 : 2;
-    let bestDate = "";
-    let bestScore = Infinity;
-    for (let daysBefore = 1; daysBefore <= 14; daysBefore += 1) {
-      const date = addDays(order.deliveryDate, -daysBefore);
-      if (date < today || new Date(`${date}T12:00:00`).getDay() === 0) continue;
-      const departments = order.department === "beide" ? ["chocolade", "bakkerij"] as const : [order.department];
-      const existingUnits = Math.max(...departments.map((department) => load.get(productionLoadKey(date, department)) || 0));
-      const score = Math.abs(daysBefore - preferredDaysAhead) * 12 + existingUnits / 25 + (new Date(`${date}T12:00:00`).getDay() === 6 ? 2 : 0);
-      if (score < bestScore) { bestDate = date; bestScore = score; }
-    }
-    if (bestDate) { proposals.set(order.id, bestDate); addLoad(bestDate, order); }
-  }
-  return proposals;
 }
 
 async function parseB2BExcel(file: File) {
@@ -396,7 +361,7 @@ async function parseB2BExcel(file: File) {
           ...createFormState(),
           customerName,
           deliveryDate,
-          productionDate: deliveryDate ? addDays(deliveryDate, -2) : "",
+          productionDate: "",
           department,
           orderText,
           logo,
@@ -463,6 +428,10 @@ function B2BOrderForm({
       setMessage("Voor definitief zijn de bestelling en leverdatum nodig.");
       return;
     }
+    if (form.status === "akkoord" && form.department === "beide" && !form.letterOrderText.trim()) {
+      setMessage("Schrijf bij 'Beide' apart op welk deel chocoladeletters is. Alleen dat deel verschijnt in de letterproductie.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -481,6 +450,8 @@ function B2BOrderForm({
         ...(initialOrder?.logo !== form.logo ? { logoChecked: false } : {}),
         ...(initialOrder?.packaging !== form.packaging ? { packagingChecked: false } : {}),
         ...(initialOrder?.textInstructions !== form.textInstructions ? { textChecked: false } : {}),
+        ...(initialOrder && (initialOrder.letterOrderText !== form.letterOrderText || initialOrder.department !== form.department) ? { letterProductionDone: false } : {}),
+        ...(initialOrder && form.department === "chocolade" && initialOrder.orderText !== form.orderText ? { productionDone: false, productionDoneAt: "" } : {}),
         ...(initialOrder && initialOrder.deliveryDate !== form.deliveryDate ? { productionScheduled: false } : {}),
         year: form.deliveryDate
           ? yearFromDate(form.deliveryDate)
@@ -581,6 +552,20 @@ function B2BOrderForm({
         rows={4}
         className="w-full border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none"
       />
+
+      {form.department === "beide" && (
+        <label className="grid gap-1">
+          <span className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">Alleen het chocoladeletterdeel · nodig voor definitief</span>
+          <textarea
+            value={form.letterOrderText}
+            onChange={(event) => setField("letterOrderText", event.target.value)}
+            placeholder="Bijvoorbeeld: 225 x letter F, 180 melk, 30 puur, 15 wit; met logo"
+            rows={3}
+            className="w-full border border-[#d6e5d8] bg-[#fffdf4] px-3 py-2 text-sm font-bold outline-none"
+          />
+          <span className="text-xs text-[#6b645b]">Dit verschijnt als B2B-bron in de chocoladeletterproductie; overige producten blijven erbuiten.</span>
+        </label>
+      )}
 
       <div className="grid gap-2 sm:grid-cols-2">
         <textarea
@@ -728,7 +713,7 @@ function B2BOrderRow({
   updatingId: string;
   onToggle: (
     order: SinterklaasB2BOrder,
-    key: "entered" | "productionScheduled" | "productionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked"
+    key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked"
   ) => void;
   onEdit: (order: SinterklaasB2BOrder) => void;
   onDelete: (order: SinterklaasB2BOrder) => void;
@@ -789,7 +774,7 @@ function B2BOrderRow({
               {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
             </span>
             {order.status === "akkoord" && statusBadge(order.entered ? "Bake-it ✓" : "Bake-it open", order.entered)}
-            {order.status === "akkoord" && statusBadge(order.productionDone ? "Productie klaar" : "Productie open", order.productionDone)}
+            {order.status === "akkoord" && statusBadge(isProductionDone(order) ? "Productie klaar" : "Productie open", isProductionDone(order))}
             {dueSoon(order) && (
               <span className="rounded-full bg-[#fff3c4] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#705000]">
                 Binnen 2 dagen
@@ -798,7 +783,7 @@ function B2BOrderRow({
           </div>
 
           <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-[#8b8278]">
-            {order.department} · {order.deliveryMethod || "geen levering"}
+            {DEPARTMENTS.find((department) => department.id === order.department)?.label} · {order.deliveryMethod || "geen levering"}
           </p>
           <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-snug text-[#4d463d]">
             {order.orderText}
@@ -835,7 +820,8 @@ function B2BOrderRow({
             <div className="absolute right-0 z-20 mt-1 grid min-w-56 gap-1 border border-[#e4ded5] bg-white p-2 shadow-lg">
               {order.status === "akkoord" && ([
                 ["entered", "In Bake-it ingevoerd", true],
-                ["productionDone", "Productie klaar", true],
+                ["productionDone", order.department === "beide" ? "Overig geproduceerd" : "Geproduceerd", true],
+                ["letterProductionDone", "Letters geproduceerd", order.department === "beide"],
                 ["packed", "Ingepakt", true],
                 ["delivered", "Geleverd", true],
                 ["logoChecked", "Logo gecontroleerd", Boolean(order.logo)],
@@ -914,7 +900,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
 
   async function toggleStatus(
     order: SinterklaasB2BOrder,
-    key: "entered" | "productionScheduled" | "productionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked"
+    key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked"
   ) {
     if (order.status !== "akkoord") return;
     const value = !order[key];
@@ -945,8 +931,8 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
     }
   }
 
-  async function saveProductionPlan(order: SinterklaasB2BOrder, proposedDate: string) {
-    const productionDate = planDrafts[order.id] ?? order.productionDate ?? proposedDate;
+  async function saveProductionPlan(order: SinterklaasB2BOrder) {
+    const productionDate = planDrafts[order.id] ?? order.productionDate;
     if (!productionDate || productionDate > order.deliveryDate) {
       setError("Kies een productiedatum uiterlijk op de leverdatum.");
       return;
@@ -1078,21 +1064,20 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
 
   const groupedOrders = groupByMonth(visibleOrders);
   const activeOrders = visibleOrders.filter((order) => order.status === "akkoord" && !order.cancelled && !order.delivered && order.deliveryDate >= addDays(todayIso(), -7));
-  const proposedDates = proposeProductionDates(activeOrders);
   const unenteredCount = activeOrders.filter((order) => !order.entered).length;
-  const unscheduledCount = activeOrders.filter((order) => !order.productionScheduled && !order.productionDone).length;
+  const unfinishedCount = activeOrders.filter((order) => !isProductionDone(order)).length;
   const extrasOpenCount = activeOrders.filter((order) =>
     (order.logo && !order.logoChecked) ||
     (order.textInstructions && !order.textChecked) ||
     (order.packaging && !order.packagingChecked)
   ).length;
-  const productionByDate = Array.from(
+  const productionGroups = Array.from(
     activeOrders.reduce((groups, order) => {
-      const date = order.productionDate || proposedDates.get(order.id) || "zonder-datum";
-      groups.set(date, [...(groups.get(date) || []), order]);
+      const key = `${order.deliveryDate}|${order.department}`;
+      groups.set(key, [...(groups.get(key) || []), order]);
       return groups;
     }, new Map<string, SinterklaasB2BOrder[]>()).entries()
-  ).sort(([a], [b]) => a.localeCompare(b));
+  ).sort(([a], [b]) => a.localeCompare(b)).map(([key, group]) => [key, group.sort((a, b) => Number(isProductionDone(a)) - Number(isProductionDone(b)))] as const);
 
   if (mode === "production") return (
     <div className="space-y-3">
@@ -1104,27 +1089,32 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
         <button type="button" onClick={() => void loadOrders(year)} className="h-9 border border-[#d6e5d8] bg-white px-3 text-sm font-bold">Ververs</button>
       </div>
       {error && <p className="border border-[#f1b8a8] bg-[#fff4ef] p-2 text-sm font-bold text-[#9a3412]">{error}</p>}
-      <p className="border border-[#e5d28a] bg-[#fffdf4] p-2 text-xs text-[#6b645b]">Voorgestelde dagen zijn voorlopig. De app spreidt alleen bekende B2B-bestellingen op basis van leverdatum, afdeling en geschat aantal; overige drukte in de bakkerij is hierin niet zichtbaar. Sla de gekozen dag op om hem vast te leggen.</p>
-      {loading ? <p>Laden...</p> : productionByDate.length === 0 ? <p className="border border-[#e4ded5] bg-white p-3 text-sm">Geen bevestigde B2B-productie in deze periode.</p> : productionByDate.map(([date, group]) => (
-        <section key={date} className="border border-[#d6e5d8] bg-white">
-          <h2 className="bg-[#dcebd8] px-3 py-2 text-sm font-black">Productie {formatDate(date)} · {group.length} bestellingen</h2>
+      <p className="border border-[#d6e5d8] bg-[#f6faf4] p-2 text-xs text-[#6b645b]">Gesorteerd op leverdatum en soort. De chef kiest zelf wanneer hij produceert; een productiedag vastleggen is optioneel. Vink vooral af wat klaar is.</p>
+      {!loading && <p className="text-sm font-black text-[#24551d]">{unfinishedCount} nog te produceren · {activeOrders.length - unfinishedCount} geproduceerd</p>}
+      {loading ? <p>Laden...</p> : productionGroups.length === 0 ? <p className="border border-[#e4ded5] bg-white p-3 text-sm">Geen bevestigde B2B-productie in deze periode.</p> : productionGroups.map(([key, group]) => (
+        <section key={key} className="border border-[#d6e5d8] bg-white">
+          <h2 className="bg-[#dcebd8] px-3 py-2 text-sm font-black">Leveren {formatDate(group[0].deliveryDate)} · {DEPARTMENTS.find((department) => department.id === group[0].department)?.label} · {group.filter((order) => !isProductionDone(order)).length} nog te maken</h2>
           <div className="divide-y divide-[#e4ded5]">
-            {group.map((order) => <article key={order.id} className="space-y-2 p-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{order.customerName} · leveren {formatDate(order.deliveryDate)}</h3><span>{order.department} · circa {estimatedUnits(order)} stuks uit omschrijving</span></div>
+            {group.map((order) => <article key={order.id} className={`space-y-2 p-3 text-sm ${isProductionDone(order) ? "bg-[#f6faf4]" : ""}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{order.customerName}</h3><span className={isProductionDone(order) ? "font-black text-[#24551d]" : "font-black text-[#9a3412]"}>{isProductionDone(order) ? "Geproduceerd" : "Nog te maken"}</span></div>
               <p className="whitespace-pre-wrap">{order.orderText}</p>
+              {order.department === "beide" && <p className="whitespace-pre-wrap"><strong>Letterdeel:</strong> {order.letterOrderText || "Nog invullen via Wijzig"}</p>}
               {order.logo && <p><strong>Logo:</strong> {order.logo} {!order.logoChecked && "· NOG CONTROLEREN"}</p>}
               {order.textInstructions && <p><strong>Tekst:</strong> {order.textInstructions} {!order.textChecked && "· NOG CONTROLEREN"}</p>}
               {order.packaging && <p><strong>Verpakking:</strong> {order.packaging} {!order.packagingChecked && "· NOG CONTROLEREN"}</p>}
               {order.importantNotes && <p><strong>Belangrijk:</strong> {order.importantNotes}</p>}
-              <div className="flex flex-wrap items-end gap-2 border-t border-[#e4ded5] pt-2">
-                <label className="grid gap-1 text-xs font-black">Productiedag {order.productionScheduled ? "· vastgelegd" : "· voorstel"}
-                  <input type="date" value={planDrafts[order.id] ?? order.productionDate ?? proposedDates.get(order.id) ?? ""} max={order.deliveryDate} onChange={(event) => setPlanDrafts((current) => ({ ...current, [order.id]: event.target.value }))} className="h-9 border border-[#d6e5d8] bg-white px-2" />
-                </label>
-                <button type="button" disabled={updatingId === `${order.id}-plan` || !(planDrafts[order.id] ?? order.productionDate ?? proposedDates.get(order.id))} onClick={() => void saveProductionPlan(order, proposedDates.get(order.id) || "")} className="h-9 bg-[#24551d] px-3 text-xs font-black text-white disabled:opacity-50">{updatingId === `${order.id}-plan` ? "Opslaan..." : "Planning vastleggen"}</button>
-              </div>
               <div className="flex flex-wrap gap-2">
-                {([ ["productionDone", "Productie klaar"], ["packed", "Ingepakt"] ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => void toggleStatus(order, key)} />{label}</label>)}
+                {([ ["productionDone", order.department === "beide" ? "Overig geproduceerd" : "Geproduceerd"], ...(order.department === "beide" ? [["letterProductionDone", "Letters geproduceerd"]] as const : []), ["packed", "Ingepakt"] ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => void toggleStatus(order, key)} />{label}</label>)}
               </div>
+              <details className="border-t border-[#e4ded5] pt-2 text-xs">
+                <summary className="cursor-pointer font-bold text-[#6b645b]">Optioneel: productiedag {order.productionDate ? `· ${formatDate(order.productionDate)}` : "vastleggen"}</summary>
+                <div className="mt-2 flex flex-wrap items-end gap-2">
+                  <label className="grid gap-1 font-bold">Productiedag
+                    <input type="date" value={planDrafts[order.id] ?? order.productionDate ?? ""} max={order.deliveryDate} onChange={(event) => setPlanDrafts((current) => ({ ...current, [order.id]: event.target.value }))} className="h-9 border border-[#d6e5d8] bg-white px-2" />
+                  </label>
+                  <button type="button" disabled={updatingId === `${order.id}-plan` || !(planDrafts[order.id] ?? order.productionDate)} onClick={() => void saveProductionPlan(order)} className="h-9 bg-[#24551d] px-3 font-black text-white disabled:opacity-50">{updatingId === `${order.id}-plan` ? "Opslaan..." : "Datum opslaan"}</button>
+                </div>
+              </details>
             </article>)}
           </div>
         </section>
@@ -1197,15 +1187,15 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
 
       {!loading && <section className="grid gap-2 sm:grid-cols-3" aria-label="Openstaande controles">
         <div className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-black">{unenteredCount} akkoord, nog niet in Bake-it</div>
-        <div className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-black">{unscheduledCount} nog niet ingepland</div>
+        <div className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-black">{unfinishedCount} nog te produceren</div>
         <div className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-black">{extrasOpenCount} met open extra controle</div>
       </section>}
 
-      {!loading && productionByDate.length > 0 && <details className="border border-[#d6e5d8] bg-[#f6faf4] p-3">
-        <summary className="cursor-pointer text-sm font-black text-[#24551d]">Productieoverzicht per datum · {activeOrders.length} bevestigde bestellingen</summary>
+      {!loading && productionGroups.length > 0 && <details className="border border-[#d6e5d8] bg-[#f6faf4] p-3">
+        <summary className="cursor-pointer text-sm font-black text-[#24551d]">Wat moet nog gemaakt worden · {unfinishedCount} open</summary>
         <div className="mt-2 space-y-2">
-          {productionByDate.map(([date, group]) => <div key={date} className="border border-[#d6e5d8] bg-white p-2">
-            <h3 className="text-sm font-black">{date === "zonder-datum" ? "Geen productiedatum" : formatDate(date)} · {group.length} bestellingen</h3>
+          {productionGroups.map(([key, group]) => <div key={key} className="border border-[#d6e5d8] bg-white p-2">
+            <h3 className="text-sm font-black">Levering {formatDate(group[0].deliveryDate)} · {DEPARTMENTS.find((department) => department.id === group[0].department)?.label} · {group.filter((order) => !isProductionDone(order)).length} open</h3>
             {group.map((order) => <p key={order.id} className="mt-1 whitespace-pre-wrap border-t border-[#eee8df] pt-1 text-xs"><strong>{order.customerName}</strong> · {order.orderText}{orderWarnings(order).length > 0 ? ` · Let op: ${orderWarnings(order).join(", ")}` : ""}</p>)}
           </div>)}
         </div>

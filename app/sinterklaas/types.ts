@@ -57,6 +57,7 @@ export type SinterklaasB2BOrder = {
   productionDate: string;
   department: "chocolade" | "bakkerij" | "beide";
   orderText: string;
+  letterOrderText: string;
   logo: string;
   packaging: string;
   importantNotes: string;
@@ -75,6 +76,7 @@ export type SinterklaasB2BOrder = {
   textChecked: boolean;
   textInstructions: string;
   productionDone: boolean;
+  letterProductionDone: boolean;
   packed: boolean;
   delivered: boolean;
   cancelled: boolean;
