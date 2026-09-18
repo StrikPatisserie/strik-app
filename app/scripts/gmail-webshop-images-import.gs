@@ -16,11 +16,33 @@ const WEBSHOP_IMAGE_CONFIG = {
   MAX_IMAGE_ATTACHMENTS: 4,
   MAX_IMAGE_ATTACHMENT_BYTES: 1500000,
   IMPORT_VERSION: 'strict-match-v4',
-  SCRIPT_VERSION: 'gmail-quota-v1',
+  SCRIPT_VERSION: 'gmail-window-v2',
   MIN_RUN_INTERVAL_MINUTES: 60,
-  CLEANUP_INTERVAL_HOURS: 12,
+  CLEANUP_INTERVAL_HOURS: 24,
   GMAIL_QUOTA_BACKOFF_HOURS: 12,
 };
+
+// Twee controles per bonnenmoment zijn voldoende; de directe functie blijft
+// beschikbaar voor een handmatige import buiten deze vensters.
+function importWebshopAfbeeldingenTijdvensters() {
+  const hour = Number(Utilities.formatDate(new Date(), 'Europe/Amsterdam', 'H'));
+  if (hour !== 7 && hour !== 8 && hour !== 12 && hour !== 13 && hour !== 20 && hour !== 21) return;
+
+  importWebshopAfbeeldingen();
+}
+
+// Eén keer handmatig uitvoeren na het bijwerken van het Apps Script.
+function maakWebshopAfbeeldingenTriggerAan() {
+  const functionName = 'importWebshopAfbeeldingenTijdvensters';
+  const existingTriggers = ScriptApp.getProjectTriggers().filter((trigger) =>
+    trigger.getHandlerFunction() === functionName ||
+    trigger.getHandlerFunction() === 'importWebshopAfbeeldingen'
+  );
+
+  ScriptApp.newTrigger(functionName).timeBased().everyMinutes(30).create();
+  existingTriggers.forEach((trigger) => ScriptApp.deleteTrigger(trigger));
+  Logger.log('Webshopafbeeldingen: één 30-minutentrigger, Gmail-controle 07:00–09:00, 12:00–14:00 en 20:00–22:00 (Europe/Amsterdam).');
+}
 
 function importWebshopAfbeeldingen() {
   const props = PropertiesService.getScriptProperties();

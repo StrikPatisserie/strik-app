@@ -23,16 +23,46 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_THREADS: 10,
   RECOVERY_MAX_THREADS: 80,
   CLEANUP_MAX_THREADS: 100,
+  CLEANUP_INTERVAL_HOURS: 24,
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-archive-v10',
+  SCRIPT_VERSION: 'gmail-window-v11',
 };
 
 function importDagomzet() {
   importDagomzetThreads_(
     searchDagomzetThreads_(DAGOMZET_IMPORT_CONFIG.MAX_THREADS)
   );
+}
+
+// Koppel alleen deze functie aan een tijdtrigger "elke 10 minuten".
+// De trigger wordt de hele dag gewekt, maar raakt Gmail alleen rond de mails.
+function importDagomzetTijdvensters() {
+  const now = new Date();
+  const hour = Number(Utilities.formatDate(now, 'Europe/Amsterdam', 'H'));
+  const minute = Number(Utilities.formatDate(now, 'Europe/Amsterdam', 'm'));
+  const time = hour * 60 + minute;
+  const aroundIceReport = time >= 3 * 60 + 45 && time < 5 * 60 + 30;
+  const aroundCashItReport = time >= 18 * 60 + 45 && time < 20 * 60 + 30;
+  if (!aroundIceReport && !aroundCashItReport) return;
+
+  importDagomzet();
+}
+
+// Eén keer handmatig uitvoeren na het bijwerken van het Apps Script.
+// Vervangt alleen de oude dagomzettriggers; herstel blijft handmatig beschikbaar.
+function maakDagomzetImportTriggerAan() {
+  const functionName = 'importDagomzetTijdvensters';
+  const oldFunctionNames = ['importDagomzet'];
+  const existingTriggers = ScriptApp.getProjectTriggers().filter((trigger) =>
+    trigger.getHandlerFunction() === functionName ||
+    oldFunctionNames.indexOf(trigger.getHandlerFunction()) >= 0
+  );
+
+  ScriptApp.newTrigger(functionName).timeBased().everyMinutes(10).create();
+  existingTriggers.forEach((trigger) => ScriptApp.deleteTrigger(trigger));
+  Logger.log('Dagomzet: één 10-minutentrigger, Gmail-controle 03:45–05:30 en 18:45–20:30 (Europe/Amsterdam).');
 }
 
 function importDagomzetHerstel() {
@@ -42,13 +72,6 @@ function importDagomzetHerstel() {
 }
 
 function importDagomzetThreads_(threads) {
-  const sourceLabel = getOrCreateDagomzetLabel_(
-    DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL
-  );
-  const processedLabel = getOrCreateDagomzetLabel_(
-    DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL
-  );
-  const errorLabel = getOrCreateDagomzetLabel_(DAGOMZET_IMPORT_CONFIG.ERROR_LABEL);
   const props = PropertiesService.getScriptProperties();
 
   console.log(
@@ -57,6 +80,19 @@ function importDagomzetThreads_(threads) {
   Logger.log(
     `Dagomzet import ${DAGOMZET_IMPORT_CONFIG.SCRIPT_VERSION}: ${threads.length} thread(s) gevonden.`
   );
+
+  if (!threads.length) {
+    ruimDagomzetInboxOpIndienNodig_(props, false);
+    return;
+  }
+
+  const sourceLabel = getOrCreateDagomzetLabel_(
+    DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL
+  );
+  const processedLabel = getOrCreateDagomzetLabel_(
+    DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL
+  );
+  const errorLabel = getOrCreateDagomzetLabel_(DAGOMZET_IMPORT_CONFIG.ERROR_LABEL);
 
   threads.forEach((thread) => {
     let imported = false;
@@ -118,8 +154,22 @@ function importDagomzetThreads_(threads) {
     }
   });
 
+  ruimDagomzetInboxOpIndienNodig_(props, false);
+}
+
+function ruimDagomzetInboxOpIndienNodig_(props, force) {
+  const key = 'dagomzet:last-cleanup-at';
+  const lastCleanupAt = Date.parse(props.getProperty(key) || '');
+  const intervalMs = DAGOMZET_IMPORT_CONFIG.CLEANUP_INTERVAL_HOURS * 60 * 60 * 1000;
+  if (!force && Number.isFinite(lastCleanupAt) && Date.now() - lastCleanupAt < intervalMs) return;
+
   verplaatsDagomzetIngelezenThreads_();
   verplaatsDagomzetFoutThreads_();
+  props.setProperty(key, new Date().toISOString());
+}
+
+function ruimDagomzetInboxOp() {
+  ruimDagomzetInboxOpIndienNodig_(PropertiesService.getScriptProperties(), true);
 }
 
 function debugDagomzetLaatsteMails() {
