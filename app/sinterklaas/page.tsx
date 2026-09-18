@@ -13,24 +13,10 @@ const items = [
     tone: "yellow" as const,
   },
   {
-    href: "/sinterklaas/b2b",
-    title: "B2B bestellingen",
+    href: "/sinterklaas/bedrijven",
+    title: "Bedrijfsfolder",
     icon: strikIcons.sinterklaasB2B,
     tone: "green" as const,
-  },
-  {
-    href: "/sinterklaas/mailing",
-    title: "B2B mailing",
-    icon: strikIcons.newsManagement,
-    tone: "green" as const,
-  },
-  {
-    href: "/sint-voor-bedrijven",
-    title: "Open de B2B-folder ↗",
-    icon: strikIcons.sinterklaasB2B,
-    tone: "yellow" as const,
-    target: "_blank" as const,
-    rel: "noopener noreferrer",
   },
 ];
 
