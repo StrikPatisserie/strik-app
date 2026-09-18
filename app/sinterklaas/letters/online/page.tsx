@@ -5,6 +5,7 @@ import { requireSupabasePublicConfig, requireSupabaseServiceRoleKey } from "@/ap
 import { StrikPageHeader, StrikShell, strikIcons } from "@/app/StrikUI";
 import DeleteOnlineLetterOrderButton from "./DeleteOnlineLetterOrderButton";
 import { formatPickupDate } from "@/app/lettershop/formatPickupDate";
+import { lettershopShopLabel } from "@/app/lettershop/shops";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export default async function OnlineLetterOrdersPage() {
     <div className="space-y-3">{orders.map((order) => {
       const total = order.letter_order_items.reduce((sum, item) => sum + item.quantity * ((item.unit_price_cents || 0) + item.logo_price_cents + (order.gift_wrap ? 100 : 0)), 0);
       return <article key={order.id} className="rounded-2xl border border-[#e9ddd1] bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-black">{order.order_number} · {order.customer_name}</h2><p className="text-sm">{formatPickupDate(order.requested_date)} · {order.pickup_location} · {order.fulfillment_status}</p><p className="text-xs text-[#776a5f]">{order.customer_email} · {order.phone}</p></div><strong>{money(total)}</strong></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-black">{order.order_number} · {order.customer_name}</h2><p className="text-sm">{formatPickupDate(order.requested_date)} · {lettershopShopLabel(order.pickup_location)} · {order.fulfillment_status}</p><p className="text-xs text-[#776a5f]">{order.customer_email} · {order.phone}</p></div><strong>{money(total)}</strong></div>
         <ul className="mt-3 space-y-1 border-t border-[#eee3d8] pt-3 text-sm">{order.letter_order_items.map((item, index) => {
           const product = Array.isArray(item.letter_products) ? item.letter_products[0] : item.letter_products;
           return <li key={index}>{item.quantity} × {product?.style === "vorm" ? "vormletter" : "spuitletter"} {product?.letter} · {product?.flavour} · {product?.size}{item.logo ? " · foto/logo" : ""}{item.logo_storage_path && photoUrls.has(item.logo_storage_path) && <> · <a href={photoUrls.get(item.logo_storage_path)} target="_blank" rel="noreferrer" className="font-bold text-[#547762] underline">Bekijk afbeelding</a></>}</li>;

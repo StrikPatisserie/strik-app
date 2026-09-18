@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabasePublicConfig, requireSupabaseServiceRoleKey } from "@/app/lib/supabase/config";
 import { formatPickupDate } from "./formatPickupDate";
+import { lettershopMailLocation } from "./shops";
 
 const MAIL_URL = process.env.WORDPRESS_LETTERSHOP_MAIL_URL ||
   "https://strik-patisserie.nl/wp-json/strik/v1/lettershop-mail";
@@ -70,6 +71,9 @@ export async function sendLettershopOrderMails(orderId: string) {
         requested_date: typeof payload.requested_date === "string"
           ? formatPickupDate(payload.requested_date)
           : payload.requested_date,
+        pickup_location: typeof payload.pickup_location === "string"
+          ? lettershopMailLocation(payload.pickup_location)
+          : payload.pickup_location,
       };
       const attachments = job.template === "INTERNAL_ORDER_BACKUP"
         ? await attachmentsForBackup(supabase, payload) : [];
