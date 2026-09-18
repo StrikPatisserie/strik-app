@@ -17,6 +17,7 @@ import type {
   ChocolateLetterStyle,
   SinterklaasB2BOrder,
 } from "../types";
+import { b2bLetterLineLabel, b2bLetterTotal } from "../b2bLetterLines";
 
 type Mode = "winkel" | "productie";
 
@@ -365,7 +366,7 @@ function updateOrderList(
   );
 }
 
-function SummaryStrip({ orders }: Readonly<{ orders: ChocolateLetterOrder[] }>) {
+function SummaryStrip({ orders, b2bOrders }: Readonly<{ orders: ChocolateLetterOrder[]; b2bOrders: SinterklaasB2BOrder[] }>) {
   const totals = useMemo(() => {
     const map = new Map<string, { label: string; quantity: number }>();
 
@@ -391,8 +392,19 @@ function SummaryStrip({ orders }: Readonly<{ orders: ChocolateLetterOrder[] }>) 
         });
       });
 
+    b2bOrders.filter((order) => !(order.department === "beide" ? order.letterProductionDone : order.productionDone)).forEach((order) => {
+      order.letterLines.forEach((line) => {
+        const key = [line.chocolate, line.size, line.style, line.letter, order.logo ? "logo" : "zonder-logo"].join("-");
+        const existing = map.get(key);
+        map.set(key, {
+          label: `${line.letter} · ${line.chocolate} · ${line.size} · ${line.style}${order.logo ? " · logo" : ""}`,
+          quantity: (existing?.quantity || 0) + line.quantity,
+        });
+      });
+    });
+
     return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [orders]);
+  }, [orders, b2bOrders]);
 
   if (totals.length < 1) {
     return (
@@ -1419,7 +1431,7 @@ export default function SinterklaasLettersClient({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-lg font-black text-[#24551d]">B2B · chocoladeletters</h2>
-              <p className="text-xs font-semibold text-[#6b645b]">Rechtstreeks uit B2B, geen gekopieerde winkelbestellingen. Deze regels staan niet nog eens in de productietotalen hieronder.</p>
+              <p className="text-xs font-semibold text-[#6b645b]">Rechtstreeks uit B2B, geen gekopieerde winkelbestellingen. Ingevulde letterregels tellen mee in de productietotalen.</p>
             </div>
             <a href="/sinterklaas/b2b" className="text-xs font-black text-[#24551d] underline">Open B2B-bestellingen</a>
           </div>
@@ -1431,11 +1443,7 @@ export default function SinterklaasLettersClient({
                 <span className="text-[#6b645b]">Levering {formatDate(order.deliveryDate)}{order.productionDate ? ` · geplande productiedag ${formatDate(order.productionDate)}` : ""}</span>
                 {(order.department === "beide" ? order.letterProductionDone : order.productionDone) && <span className="bg-[#dcebd8] px-2 py-0.5 text-xs font-black text-[#24551d]">Letters geproduceerd</span>}
               </div>
-              {order.department === "beide" && !order.letterOrderText ? (
-                <p className="mt-2 font-black text-[#9a3412]">Letterdeel nog niet apart beschreven. Controleer de B2B-bestelling vóór productie.</p>
-              ) : (
-                <p className="mt-2 whitespace-pre-wrap font-semibold">{order.department === "beide" ? order.letterOrderText : order.orderText}</p>
-              )}
+              {order.letterLines.length > 0 ? <p className="mt-2 font-semibold">{b2bLetterTotal(order.letterLines)} letters · {order.letterLines.map(b2bLetterLineLabel).join(" · ")}</p> : <p className="mt-2 font-black text-[#9a3412]">Letterregels nog niet ingevuld; deze bestelling telt nog niet mee in de totalen. {order.letterOrderText || order.orderText}</p>}
               {order.logo && <p className="mt-1"><strong>Logo:</strong> {order.logo}{!order.logoChecked && " · nog controleren"}</p>}
               {order.packaging && <p className="mt-1"><strong>Verpakking:</strong> {order.packaging}{!order.packagingChecked && " · nog controleren"}</p>}
               {order.textInstructions && <p className="mt-1"><strong>Tekst:</strong> {order.textInstructions}{!order.textChecked && " · nog controleren"}</p>}
@@ -1451,7 +1459,7 @@ export default function SinterklaasLettersClient({
           <h2 className="mb-2 text-lg font-black text-[#1a1815]">
             Productietotalen
           </h2>
-          <SummaryStrip orders={visibleOrders} />
+          <SummaryStrip orders={visibleOrders} b2bOrders={visibleB2BOrders} />
         </section>
       )}
 

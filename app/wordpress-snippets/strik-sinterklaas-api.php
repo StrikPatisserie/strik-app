@@ -440,12 +440,39 @@ function strik_sinterklaas_send_letter_emails($order, $existing = array()) {
 }
 
 if (!function_exists('strik_sinterklaas_sanitize_b2b_order')) {
+function strik_sinterklaas_sanitize_b2b_letter_lines($lines) {
+    if (!is_array($lines) || count($lines) > 120) return array();
+    $clean = array();
+    foreach ($lines as $index => $line) {
+        if (!is_array($line)) continue;
+        $letter = isset($line['letter']) ? strtoupper(strik_sinterklaas_text($line['letter'], 12)) : '';
+        $style = isset($line['style']) ? strik_sinterklaas_text($line['style'], 12) : '';
+        $chocolate = isset($line['chocolate']) ? strik_sinterklaas_text($line['chocolate'], 12) : '';
+        $size = isset($line['size']) ? strik_sinterklaas_text($line['size'], 12) : '';
+        $quantity = isset($line['quantity']) ? intval($line['quantity']) : 0;
+        if (!preg_match('/^[A-Z]$/', $letter) || !in_array($chocolate, array('melk', 'puur', 'wit'), true) || !in_array($style, array('spuit', 'vorm'), true) || !in_array($size, array('groot', 'klein'), true) || $quantity < 1 || $quantity > 10000) continue;
+        if ($style === 'vorm' && ($size !== 'groot' || !in_array($letter, array('A', 'B', 'S', 'P', 'M', 'Q'), true))) continue;
+        $clean[] = array(
+            'id' => isset($line['id']) ? strik_sinterklaas_text($line['id'], 80) : 'b2b-line-' . ($index + 1),
+            'letter' => $letter,
+            'chocolate' => $chocolate,
+            'style' => $style,
+            'size' => $size,
+            'quantity' => $quantity,
+        );
+    }
+    return $clean;
+}
+
 function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     if (!is_array($order)) return null;
 
     $customer_name = isset($order['customerName']) ? strik_sinterklaas_text($order['customerName'], 180) : '';
     $order_text = isset($order['orderText']) ? strik_sinterklaas_textarea($order['orderText'], 5000) : '';
     $delivery_date = isset($order['deliveryDate']) ? strik_sinterklaas_date($order['deliveryDate']) : '';
+    $letter_lines = isset($order['letterLines']) ? strik_sinterklaas_sanitize_b2b_letter_lines($order['letterLines']) : array();
+
+    if (isset($order['letterLines']) && (!is_array($order['letterLines']) || count($letter_lines) !== count($order['letterLines']))) return null;
 
     if ($customer_name === '') return null;
 
@@ -458,6 +485,8 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     $status = isset($order['status']) ? strik_sinterklaas_text($order['status'], 20) : 'akkoord';
     if (!in_array($status, array('aanvraag', 'offerte', 'akkoord', 'afgewezen'), true)) $status = 'aanvraag';
     if ($status === 'akkoord' && ($delivery_date === '' || $order_text === '') && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'))) return null;
+    $department = isset($order['department']) ? strik_sinterklaas_text($order['department'], 80) : 'chocolade';
+    if ($status === 'akkoord' && $department !== 'bakkerij' && empty($letter_lines) && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord')) && (!isset($order['source']) || $order['source'] !== 'excel')) return null;
 
     return array(
         'id' => $id,
@@ -469,9 +498,10 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
         'phone' => isset($order['phone']) ? strik_sinterklaas_text($order['phone'], 80) : '',
         'deliveryDate' => $delivery_date,
         'productionDate' => isset($order['productionDate']) ? strik_sinterklaas_date($order['productionDate']) : '',
-        'department' => isset($order['department']) ? strik_sinterklaas_text($order['department'], 80) : 'chocolade',
+        'department' => $department,
         'orderText' => $order_text,
         'letterOrderText' => isset($order['letterOrderText']) ? strik_sinterklaas_textarea($order['letterOrderText'], 5000) : '',
+        'letterLines' => $letter_lines,
         'logo' => isset($order['logo']) ? strik_sinterklaas_textarea($order['logo'], 1000) : '',
         'packaging' => isset($order['packaging']) ? strik_sinterklaas_textarea($order['packaging'], 1000) : '',
         'importantNotes' => isset($order['importantNotes']) ? strik_sinterklaas_textarea($order['importantNotes'], 2000) : '',
@@ -638,7 +668,7 @@ function strik_sinterklaas_b2b_save($request) {
     $order = strik_sinterklaas_sanitize_b2b_order(array_merge(is_array($existing) ? $existing : array(), $params), is_array($existing) ? $existing : array());
 
     if ($order === null) {
-        return new WP_Error('strik_sinterklaas_invalid_b2b_order', 'Vul een klantnaam in; voor akkoord zijn ook bestelling en leverdatum nodig.', array('status' => 400));
+        return new WP_Error('strik_sinterklaas_invalid_b2b_order', 'Controleer klantnaam, bestelling, leverdatum en chocoladeletterregels (soort, formaat, letter en aantal).', array('status' => 400));
     }
 
     $orders[strik_sinterklaas_order_key($order['id'])] = $order;
@@ -646,11 +676,11 @@ function strik_sinterklaas_b2b_save($request) {
 
     $became_confirmed = $order['status'] === 'akkoord'
         && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'));
-    $mail_fields = array('customerName', 'contactName', 'customerEmail', 'phone', 'deliveryDate', 'productionDate', 'department', 'orderText', 'letterOrderText', 'logo', 'textInstructions', 'packaging', 'importantNotes', 'deliveryMethod', 'deliveryAddress', 'priceAgreement', 'totalExVat', 'invoiceInfo');
+    $mail_fields = array('customerName', 'contactName', 'customerEmail', 'phone', 'deliveryDate', 'productionDate', 'department', 'orderText', 'letterOrderText', 'letterLines', 'logo', 'textInstructions', 'packaging', 'importantNotes', 'deliveryMethod', 'deliveryAddress', 'priceAgreement', 'totalExVat', 'invoiceInfo');
     $details_changed = false;
     if ($order['status'] === 'akkoord' && !empty($existing)) {
         foreach ($mail_fields as $field) {
-            if ((isset($existing[$field]) ? $existing[$field] : '') !== $order[$field]) {
+            if ((isset($existing[$field]) ? $existing[$field] : ($field === 'letterLines' ? array() : '')) !== $order[$field]) {
                 $details_changed = true;
                 break;
             }
@@ -687,10 +717,8 @@ function strik_sinterklaas_create_b2b_confirmation_body($order, $is_new_confirma
         'E-mail klant' => $order['customerEmail'],
         'Telefoon' => $order['phone'],
         'Leverdatum' => $order['deliveryDate'],
-        'Productiedatum' => $order['productionDate'],
         'Afdeling' => $order['department'],
         'Bestelling' => $order['orderText'],
-        'Alleen chocoladeletters' => $order['letterOrderText'],
         'Logo' => $order['logo'],
         'Tekst' => $order['textInstructions'],
         'Verpakking' => $order['packaging'],
@@ -704,6 +732,12 @@ function strik_sinterklaas_create_b2b_confirmation_body($order, $is_new_confirma
     $lines = array($is_new_confirmation ? 'Nieuwe definitieve B2B-bestelling.' : 'Bijgewerkte definitieve B2B-bestelling: gebruik deze versie.', 'Zet deze bestelling in Bake-it en controleer de productieplanning.', '');
     foreach ($fields as $label => $value) {
         $lines[] = $label . ': ' . ($value !== '' ? $value : 'nog niet ingevuld');
+    }
+    if (!empty($order['productionDate'])) $lines[] = 'Optioneel geplande productiedag: ' . $order['productionDate'];
+    if (!empty($order['letterOrderText'])) $lines[] = 'Oude vrije letteromschrijving: ' . $order['letterOrderText'];
+    if (!empty($order['letterLines'])) {
+        $lines[] = 'Chocoladeletterregels:';
+        foreach ($order['letterLines'] as $line) $lines[] = sprintf('%d x %s - %s %s - %s', $line['quantity'], $line['letter'], $line['chocolate'], $line['style'], $line['size']);
     }
     $lines[] = '';
     $lines[] = 'Order-id: ' . $order['id'];
@@ -768,6 +802,7 @@ function strik_sinterklaas_b2b_delete($request) {
             'Leverdatum: ' . $order['deliveryDate'],
             'Bestelling: ' . $order['orderText'],
             'Alleen chocoladeletters: ' . (isset($order['letterOrderText']) ? $order['letterOrderText'] : ''),
+            'Letterregels: ' . wp_json_encode(isset($order['letterLines']) ? $order['letterLines'] : array()),
             'Order-id: ' . $order['id'],
             '',
             'Controleer Bake-it en de productieplanning; daar wordt niets automatisch verwijderd.',

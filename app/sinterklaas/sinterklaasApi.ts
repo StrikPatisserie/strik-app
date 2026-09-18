@@ -1,4 +1,5 @@
 import type {
+  B2BLetterLine,
   ChocolateLetterChocolate,
   ChocolateLetterOrder,
   ChocolateLetterSize,
@@ -6,6 +7,7 @@ import type {
   SinterklaasB2BOrder,
   SinterklaasListResponse,
 } from "./types";
+import { B2B_SPUIT_LETTERS, B2B_VORM_LETTERS } from "./b2bLetterLines";
 
 type OrderKind = "letter" | "b2b";
 
@@ -120,6 +122,23 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
 
   if (!id || !customerName || (!orderText && value.status !== "aanvraag" && value.status !== "offerte" && value.status !== "afgewezen")) return null;
 
+  const letterLines: B2BLetterLine[] = (Array.isArray(value.letterLines) ? value.letterLines : []).flatMap((rawLine, index) => {
+    if (!isRecord(rawLine)) return [];
+    const letter = textFrom(rawLine.letter).toUpperCase();
+    const style = rawLine.style === "vorm" ? "vorm" : "spuit";
+    if (!(style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).includes(letter)) return [];
+    const quantity = numberFrom(rawLine.quantity);
+    if (quantity < 1) return [];
+    return [{
+      id: textFrom(rawLine.id) || `b2b-line-${index}`,
+      letter,
+      chocolate: rawLine.chocolate === "puur" || rawLine.chocolate === "wit" ? rawLine.chocolate : "melk",
+      style,
+      size: style === "vorm" ? "groot" : rawLine.size === "klein" ? "klein" : "groot",
+      quantity,
+    }];
+  });
+
   return {
     id,
     year: textFrom(value.year) || currentYear(),
@@ -139,6 +158,7 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
         : "chocolade",
     orderText,
     letterOrderText: textFrom(value.letterOrderText),
+    letterLines,
     logo: textFrom(value.logo),
     packaging: textFrom(value.packaging),
     importantNotes: textFrom(value.importantNotes),

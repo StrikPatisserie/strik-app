@@ -58,6 +58,7 @@ export type SinterklaasB2BOrder = {
   department: "chocolade" | "bakkerij" | "beide";
   orderText: string;
   letterOrderText: string;
+  letterLines: B2BLetterLine[];
   logo: string;
   packaging: string;
   importantNotes: string;
@@ -89,6 +90,15 @@ export type SinterklaasB2BOrder = {
   confirmationEmailError: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type B2BLetterLine = {
+  id: string;
+  letter: string;
+  chocolate: "melk" | "puur" | "wit";
+  style: "spuit" | "vorm";
+  size: "klein" | "groot";
+  quantity: number;
 };
 
 export type SinterklaasListResponse<T> = {

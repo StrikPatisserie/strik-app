@@ -9,6 +9,8 @@ import {
   updateB2BOrder,
 } from "../sinterklaasApi";
 import type { SinterklaasB2BOrder } from "../types";
+import type { B2BLetterLine } from "../types";
+import { B2B_SPUIT_LETTERS, B2B_VORM_LETTERS, b2bLetterLineLabel, b2bLetterTotal, newB2BLetterLine } from "../b2bLetterLines";
 
 type B2BFormState = {
   customerName: string;
@@ -20,6 +22,7 @@ type B2BFormState = {
   department: SinterklaasB2BOrder["department"];
   orderText: string;
   letterOrderText: string;
+  letterLines: B2BLetterLine[];
   logo: string;
   packaging: string;
   importantNotes: string;
@@ -68,6 +71,7 @@ function createFormState(): B2BFormState {
     department: "chocolade",
     orderText: "",
     letterOrderText: "",
+    letterLines: [],
     logo: "",
     packaging: "",
     importantNotes: "",
@@ -94,6 +98,7 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined) {
     department: order.department,
     orderText: order.orderText,
     letterOrderText: order.letterOrderText,
+    letterLines: order.letterLines.map((line) => ({ ...line })),
     logo: order.logo,
     packaging: order.packaging,
     importantNotes: order.importantNotes,
@@ -277,8 +282,7 @@ function isProductionDone(order: SinterklaasB2BOrder) {
 function orderWarnings(order: SinterklaasB2BOrder) {
   if (order.status !== "akkoord" || order.cancelled || order.delivered || (order.deliveryDate && order.deliveryDate < addDays(todayIso(), -7))) return [];
   return [
-    !order.entered && "Nog niet in Bake-it ingevoerd",
-    order.department === "beide" && !order.letterOrderText.trim() && "Letterdeel nog niet apart beschreven",
+    order.department !== "bakkerij" && order.letterLines.length === 0 && "Letterregels nog uitsplitsen",
     Boolean(order.logo) && !order.logoChecked && "Logo nog niet gecontroleerd",
     Boolean(order.textInstructions) && !order.textChecked && "Tekst nog niet gecontroleerd",
     Boolean(order.packaging) && !order.packagingChecked && "Verpakking nog niet gecontroleerd",
@@ -416,6 +420,21 @@ function B2BOrderForm({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function updateLetterLine(id: string, patch: Partial<B2BLetterLine>) {
+    setForm((current) => ({
+      ...current,
+      letterLines: current.letterLines.map((line) => {
+        if (line.id !== id) return line;
+        const next = { ...line, ...patch };
+        if (next.style === "vorm") {
+          next.size = "groot";
+          if (!B2B_VORM_LETTERS.includes(next.letter)) next.letter = "A";
+        }
+        return next;
+      }),
+    }));
+  }
+
   async function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -428,8 +447,12 @@ function B2BOrderForm({
       setMessage("Voor definitief zijn de bestelling en leverdatum nodig.");
       return;
     }
-    if (form.status === "akkoord" && form.department === "beide" && !form.letterOrderText.trim()) {
-      setMessage("Schrijf bij 'Beide' apart op welk deel chocoladeletters is. Alleen dat deel verschijnt in de letterproductie.");
+    if (form.status === "akkoord" && form.department !== "bakkerij" && form.letterLines.length === 0 && initialOrder?.status !== "akkoord") {
+      setMessage("Voeg voor een definitieve chocoladeletterbestelling minimaal één letterregel toe.");
+      return;
+    }
+    if (form.letterLines.some((line) => !Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > 10000)) {
+      setMessage("Vul per letterregel een aantal tussen 1 en 10.000 in.");
       return;
     }
 
@@ -450,8 +473,7 @@ function B2BOrderForm({
         ...(initialOrder?.logo !== form.logo ? { logoChecked: false } : {}),
         ...(initialOrder?.packaging !== form.packaging ? { packagingChecked: false } : {}),
         ...(initialOrder?.textInstructions !== form.textInstructions ? { textChecked: false } : {}),
-        ...(initialOrder && (initialOrder.letterOrderText !== form.letterOrderText || initialOrder.department !== form.department) ? { letterProductionDone: false } : {}),
-        ...(initialOrder && form.department === "chocolade" && initialOrder.orderText !== form.orderText ? { productionDone: false, productionDoneAt: "" } : {}),
+        ...(initialOrder && (JSON.stringify(initialOrder.letterLines) !== JSON.stringify(form.letterLines) || initialOrder.department !== form.department) ? { letterProductionDone: false, ...(form.department === "chocolade" ? { productionDone: false, productionDoneAt: "" } : {}) } : {}),
         ...(initialOrder && initialOrder.deliveryDate !== form.deliveryDate ? { productionScheduled: false } : {}),
         year: form.deliveryDate
           ? yearFromDate(form.deliveryDate)
@@ -553,18 +575,23 @@ function B2BOrderForm({
         className="w-full border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none"
       />
 
-      {form.department === "beide" && (
-        <label className="grid gap-1">
-          <span className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">Alleen het chocoladeletterdeel · nodig voor definitief</span>
-          <textarea
-            value={form.letterOrderText}
-            onChange={(event) => setField("letterOrderText", event.target.value)}
-            placeholder="Bijvoorbeeld: 225 x letter F, 180 melk, 30 puur, 15 wit; met logo"
-            rows={3}
-            className="w-full border border-[#d6e5d8] bg-[#fffdf4] px-3 py-2 text-sm font-bold outline-none"
-          />
-          <span className="text-xs text-[#6b645b]">Dit verschijnt als B2B-bron in de chocoladeletterproductie; overige producten blijven erbuiten.</span>
-        </label>
+      {form.department !== "bakkerij" && (
+        <section className="space-y-2 border border-[#d6e5d8] bg-[#f6faf4] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><h3 className="text-sm font-black">Chocoladeletters · {b2bLetterTotal(form.letterLines)} stuks</h3><p className="text-xs text-[#6b645b]">Kies per regel letter, chocolade, spuit/vorm, formaat en aantal.</p></div>
+            <button type="button" onClick={() => setField("letterLines", [...form.letterLines, newB2BLetterLine()])} className="h-8 bg-[#24551d] px-3 text-xs font-black text-white">+ Letterregel</button>
+          </div>
+          {form.letterLines.map((line) => <div key={line.id} className="grid grid-cols-[repeat(2,minmax(0,1fr))_4rem] gap-1 border-t border-[#d6e5d8] pt-2 sm:grid-cols-[4.5rem_minmax(0,1fr)_6rem_5rem_5rem_2rem]">
+            <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Letter<select aria-label="Letter" value={line.letter} onChange={(event) => updateLetterLine(line.id, { letter: event.target.value })} className="h-8 border border-[#d6e5d8] bg-white px-1 text-xs"><option value={line.letter} hidden={!((line.style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).includes(line.letter))}>{line.letter}</option>{(line.style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).filter((letter) => letter !== line.letter).map((letter) => <option key={letter} value={letter}>{letter}</option>)}</select></label>
+            <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Chocolade<select aria-label="Chocolade" value={line.chocolate} onChange={(event) => updateLetterLine(line.id, { chocolate: event.target.value as B2BLetterLine["chocolate"] })} className="h-8 border border-[#d6e5d8] bg-white px-1 text-xs"><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option></select></label>
+            <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Soort<select aria-label="Soort" value={line.style} onChange={(event) => updateLetterLine(line.id, { style: event.target.value as B2BLetterLine["style"] })} className="h-8 border border-[#d6e5d8] bg-white px-1 text-xs"><option value="spuit">Spuit</option><option value="vorm">Vorm</option></select></label>
+            <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Formaat<select aria-label="Formaat" value={line.size} disabled={line.style === "vorm"} onChange={(event) => updateLetterLine(line.id, { size: event.target.value as B2BLetterLine["size"] })} className="h-8 border border-[#d6e5d8] bg-white px-1 text-xs disabled:bg-[#f2eee8]"><option value="groot">Groot</option><option value="klein">Klein</option></select></label>
+            <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Aantal<input aria-label="Aantal" type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateLetterLine(line.id, { quantity: Number(event.target.value) })} className="h-8 w-full border border-[#d6e5d8] bg-white px-1 text-xs" /></label>
+            <button type="button" aria-label="Letterregel verwijderen" onClick={() => setField("letterLines", form.letterLines.filter((item) => item.id !== line.id))} className="self-end text-lg font-black text-[#9a3412]">×</button>
+          </div>)}
+          {form.letterLines.length === 0 && <p className="text-xs font-bold text-[#9a3412]">Nog geen letterregels. Voeg ze toe voordat een nieuwe letterbestelling definitief wordt.</p>}
+          {form.letterOrderText && <details className="text-xs"><summary className="cursor-pointer font-bold text-[#6b645b]">Oude vrije letteromschrijving bekijken</summary><p className="mt-1 whitespace-pre-wrap">{form.letterOrderText}</p></details>}
+        </section>
       )}
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -730,7 +757,6 @@ function B2BOrderRow({
     order.deliveryAddress && `Adres: ${order.deliveryAddress}`,
     order.priceAgreement && `Prijsafspraak: ${order.priceAgreement}`,
     order.totalExVat && `Totaal ex btw: ${order.totalExVat}`,
-    order.invoiceInfo && `Factuur: ${order.invoiceInfo}`,
     order.reminderEmailedAt &&
       `Reminder gemaild: ${formatDateTime(order.reminderEmailedAt)}`,
     order.confirmationEmailedAt &&
@@ -755,25 +781,19 @@ function B2BOrderRow({
           <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
             Leverdatum
           </p>
-          <p className="text-base font-black text-[#1a1815]">
+          <p className="text-lg font-black text-[#1a1815]">
             {formatDate(order.deliveryDate)}
           </p>
-          {order.productionDate && (
-            <p className="text-xs font-bold text-[#6b645b]">
-              Productie: {formatDate(order.productionDate)}
-            </p>
-          )}
         </div>
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-black leading-tight text-[#1a1815]">
+            <h3 className="text-lg font-black leading-tight text-[#1a1815]">
               {order.customerName}
             </h3>
             <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
               {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
             </span>
-            {order.status === "akkoord" && statusBadge(order.entered ? "Bake-it ✓" : "Bake-it open", order.entered)}
             {order.status === "akkoord" && statusBadge(isProductionDone(order) ? "Productie klaar" : "Productie open", isProductionDone(order))}
             {dueSoon(order) && (
               <span className="rounded-full bg-[#fff3c4] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#705000]">
@@ -782,12 +802,14 @@ function B2BOrderRow({
             )}
           </div>
 
-          <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-[#8b8278]">
-            {DEPARTMENTS.find((department) => department.id === order.department)?.label} · {order.deliveryMethod || "geen levering"}
-          </p>
-          <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-snug text-[#4d463d]">
-            {order.orderText}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-bold text-[#6b645b]">
+            <span>{DEPARTMENTS.find((department) => department.id === order.department)?.label}</span>
+            <span aria-label={order.deliveryMethod || "Leverwijze niet ingevuld"} title={order.deliveryMethod || "Leverwijze niet ingevuld"}>{/bezorg|lever/i.test(order.deliveryMethod) ? "🚚" : /afhaal|ophal/i.test(order.deliveryMethod) ? "🏬" : "○"}</span>
+            {order.logo && <span aria-label="Logo nodig" title="Logo nodig">🖼️</span>}
+            {order.status === "akkoord" && <span className={`italic ${order.entered ? "text-[#24551d]" : "text-[#b42318]"}`}>{order.entered ? "Ingevoerd" : "Niet ingevoerd"}</span>}
+          </div>
+          {order.orderText.length > 120 ? <details className="mt-1 text-xs text-[#4d463d]"><summary className="cursor-pointer font-semibold">{order.orderText.slice(0, 120)}… <span className="text-[#24551d]">meer</span></summary><p className="mt-1 whitespace-pre-wrap border-l-2 border-[#c3d3bc] pl-2">{order.orderText}</p></details> : <p className="mt-1 whitespace-pre-wrap text-xs font-semibold leading-snug text-[#4d463d]">{order.orderText}</p>}
+          {order.department !== "bakkerij" && <p className="mt-1 text-xs font-bold text-[#24551d]">{order.letterLines.length > 0 ? `${b2bLetterTotal(order.letterLines)} letters · ${order.letterLines.slice(0, 3).map(b2bLetterLineLabel).join(" · ")}${order.letterLines.length > 3 ? ` · +${order.letterLines.length - 3} regels` : ""}` : "Letterregels nog invullen"}</p>}
           {warnings.length > 0 && <p className="mt-1 text-xs font-black text-[#9a3412]">Let op: {warnings.join(" · ")}</p>}
           {confirmationNeedsAttention && <p className="mt-1 text-xs font-black text-[#9a3412]">{order.confirmationEmailError || "Nog geen bevestigingsmail als back-up geregistreerd."}</p>}
           {extraLines.length > 0 && (
@@ -800,6 +822,7 @@ function B2BOrderRow({
               </p>
             </details>
           )}
+          {order.invoiceInfo && <details className="mt-1"><summary className="cursor-pointer text-xs font-black text-[#24551d]">Factuurgegevens</summary><p className="mt-1 whitespace-pre-wrap border border-[#e4ded5] bg-[#faf8f5] px-2 py-1.5 text-xs text-[#6b645b]">{order.invoiceInfo}</p></details>}
         </div>
 
         <div className="flex flex-wrap items-start justify-start gap-1.5 lg:justify-end">
@@ -888,6 +911,8 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
       [
         order.customerName,
         order.orderText,
+        order.letterOrderText,
+        order.letterLines.map(b2bLetterLineLabel).join(" "),
         order.deliveryDate,
         order.deliveryMethod,
         order.department,
@@ -1097,8 +1122,8 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
           <div className="divide-y divide-[#e4ded5]">
             {group.map((order) => <article key={order.id} className={`space-y-2 p-3 text-sm ${isProductionDone(order) ? "bg-[#f6faf4]" : ""}`}>
               <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{order.customerName}</h3><span className={isProductionDone(order) ? "font-black text-[#24551d]" : "font-black text-[#9a3412]"}>{isProductionDone(order) ? "Geproduceerd" : "Nog te maken"}</span></div>
-              <p className="whitespace-pre-wrap">{order.orderText}</p>
-              {order.department === "beide" && <p className="whitespace-pre-wrap"><strong>Letterdeel:</strong> {order.letterOrderText || "Nog invullen via Wijzig"}</p>}
+              <p className="whitespace-pre-wrap text-xs">{order.orderText}</p>
+              {order.department !== "bakkerij" && <p className="text-xs font-black text-[#24551d]">{order.letterLines.length > 0 ? `${b2bLetterTotal(order.letterLines)} letters · ${order.letterLines.map(b2bLetterLineLabel).join(" · ")}` : `Letterregels nog invullen${order.letterOrderText ? ` · oude omschrijving: ${order.letterOrderText}` : ""}`}</p>}
               {order.logo && <p><strong>Logo:</strong> {order.logo} {!order.logoChecked && "· NOG CONTROLEREN"}</p>}
               {order.textInstructions && <p><strong>Tekst:</strong> {order.textInstructions} {!order.textChecked && "· NOG CONTROLEREN"}</p>}
               {order.packaging && <p><strong>Verpakking:</strong> {order.packaging} {!order.packagingChecked && "· NOG CONTROLEREN"}</p>}
