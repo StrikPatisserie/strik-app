@@ -246,13 +246,15 @@ export function StrikMenuButton({
 export function StrikShell({
   children,
   wide = false,
+  extraWide = false,
 }: Readonly<{
   children: React.ReactNode;
   wide?: boolean;
+  extraWide?: boolean;
 }>) {
   return (
     <main className="min-h-screen bg-[#faf8f5] px-4 py-5 pb-24 text-[#1a1815] sm:px-6 lg:px-7">
-      <div className={`mx-auto w-full ${wide ? "max-w-6xl" : "max-w-4xl"}`}>
+      <div className={`mx-auto w-full ${extraWide ? "max-w-[96rem]" : wide ? "max-w-6xl" : "max-w-4xl"}`}>
         <StrikBackButton />
         {children}
       </div>

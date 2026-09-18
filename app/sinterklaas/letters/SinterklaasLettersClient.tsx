@@ -393,7 +393,7 @@ function SummaryStrip({ orders, b2bOrders }: Readonly<{ orders: ChocolateLetterO
         });
       });
 
-    b2bOrders.filter((order) => !(order.department === "beide" ? order.letterProductionDone : order.productionDone)).forEach((order) => {
+    b2bOrders.filter((order) => !((order.department === "beide" || order.department === "bakkerij") ? order.letterProductionDone : order.productionDone)).forEach((order) => {
       order.letterLines.forEach((line) => {
         const key = [line.chocolate, line.size, line.style, line.letter, order.logo ? "logo" : "zonder-logo", ...line.exceptions].join("-");
         const existing = map.get(key);
@@ -1175,14 +1175,14 @@ export default function SinterklaasLettersClient({
         order.status === "akkoord" &&
         !order.cancelled &&
         !order.delivered &&
-        (order.department === "chocolade" || order.department === "beide")
+        (order.letterLines.length > 0 || order.department === "chocolade" || order.department === "beide")
       )
       .filter((order) => !term || [order.customerName, order.orderText, order.letterOrderText, order.deliveryDate].join(" ").toLocaleLowerCase("nl-NL").includes(term))
-      .sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate) || Number(a.department === "beide" ? a.letterProductionDone : a.productionDone) - Number(b.department === "beide" ? b.letterProductionDone : b.productionDone));
+      .sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate) || Number((a.department === "beide" || a.department === "bakkerij") ? a.letterProductionDone : a.productionDone) - Number((b.department === "beide" || b.department === "bakkerij") ? b.letterProductionDone : b.productionDone));
   }, [b2bOrders, search]);
 
   async function toggleB2BLetterDone(order: SinterklaasB2BOrder) {
-    const key = order.department === "beide" ? "letterProductionDone" : "productionDone";
+    const key = order.department === "beide" || order.department === "bakkerij" ? "letterProductionDone" : "productionDone";
     setUpdatingId(`b2b-${order.id}`);
     setError("");
     try {
@@ -1439,17 +1439,17 @@ export default function SinterklaasLettersClient({
           {visibleB2BOrders.length === 0 ? <p className="text-sm text-[#6b645b]">Geen bevestigde B2B-letterbestellingen.</p> : visibleB2BOrders.map((order) => (
             <article key={order.id} className="border border-[#d6e5d8] bg-white p-3 text-sm">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="bg-[#24551d] px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-wider text-white">B2B · {order.department === "beide" ? "letterdeel" : "alleen letters"}</span>
+                <span className="bg-[#24551d] px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-wider text-white">B2B · {order.department === "chocolade" ? "alleen letters" : "letterdeel"}</span>
                 <strong>{order.customerName}</strong>
                 <span className="text-[#6b645b]">Levering {formatDate(order.deliveryDate)}{order.productionDate ? ` · geplande productiedag ${formatDate(order.productionDate)}` : ""}</span>
-                {(order.department === "beide" ? order.letterProductionDone : order.productionDone) && <span className="bg-[#dcebd8] px-2 py-0.5 text-xs font-black text-[#24551d]">Letters geproduceerd</span>}
+                {(order.department === "beide" || order.department === "bakkerij" ? order.letterProductionDone : order.productionDone) && <span className="bg-[#dcebd8] px-2 py-0.5 text-xs font-black text-[#24551d]">Letters geproduceerd</span>}
               </div>
               {order.letterLines.length > 0 ? <div className="mt-2"><p className="mb-1 text-xs font-black text-[#24551d]">{b2bLetterTotal(order.letterLines)} letters</p><B2BLetterLineBadges lines={order.letterLines} /></div> : <p className="mt-2 font-black text-[#9a3412]">Letterregels nog niet ingevuld; deze bestelling telt nog niet mee in de totalen. {order.letterOrderText || order.orderText}</p>}
               {order.logo && <p className="mt-1"><strong>Logo:</strong> {order.logo}{!order.logoChecked && " · nog controleren"}</p>}
               {order.packaging && <p className="mt-1"><strong>Verpakking:</strong> {order.packaging}{!order.packagingChecked && " · nog controleren"}</p>}
               {order.textInstructions && <p className="mt-1"><strong>Tekst:</strong> {order.textInstructions}{!order.textChecked && " · nog controleren"}</p>}
               {order.importantNotes && <p className="mt-1"><strong>Belangrijk:</strong> {order.importantNotes}</p>}
-              <label className="mt-2 flex items-center gap-2 border-t border-[#e4ded5] pt-2 text-xs font-black text-[#24551d]"><input type="checkbox" checked={order.department === "beide" ? order.letterProductionDone : order.productionDone} disabled={updatingId === `b2b-${order.id}`} onChange={() => void toggleB2BLetterDone(order)} />Chocoladeletters geproduceerd</label>
+              <label className="mt-2 flex items-center gap-2 border-t border-[#e4ded5] pt-2 text-xs font-black text-[#24551d]"><input type="checkbox" checked={order.department === "beide" || order.department === "bakkerij" ? order.letterProductionDone : order.productionDone} disabled={updatingId === `b2b-${order.id}`} onChange={() => void toggleB2BLetterDone(order)} />Chocoladeletters geproduceerd</label>
             </article>
           ))}
         </section>

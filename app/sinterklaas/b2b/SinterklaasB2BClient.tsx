@@ -277,7 +277,8 @@ function dueSoon(order: SinterklaasB2BOrder) {
 }
 
 function isProductionDone(order: SinterklaasB2BOrder) {
-  return order.productionDone && (order.department !== "beide" || order.letterProductionDone);
+  const hasSeparateLetterPart = order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0);
+  return order.productionDone && (!hasSeparateLetterPart || order.letterProductionDone);
 }
 
 function orderWarnings(order: SinterklaasB2BOrder) {
@@ -774,7 +775,7 @@ function B2BOrderRow({
 
   return (
     <article
-      className={`border px-3 py-2 ${
+      className={`border px-2.5 py-1.5 ${
         order.cancelled
           ? "border-[#e4ded5] bg-[#f4f0ea] opacity-70"
           : dueSoon(order)
@@ -782,19 +783,19 @@ function B2BOrderRow({
             : "border-[#e4ded5] bg-white"
       }`}
     >
-      <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_10rem]">
+      <div className="grid gap-2 lg:grid-cols-[6.5rem_minmax(0,1fr)_10.5rem]">
         <div className="border-l-4 border-[#c3d3bc] pl-2">
           <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
             Leverdatum
           </p>
-          <p className="text-lg font-black text-[#1a1815]">
+          <p className="whitespace-nowrap text-base font-black text-[#1a1815]">
             {formatDate(order.deliveryDate)}
           </p>
         </div>
 
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-black leading-tight text-[#1a1815]">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h3 className="text-base font-black leading-tight text-[#1a1815]">
               {order.customerName}
             </h3>
             <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
@@ -808,36 +809,27 @@ function B2BOrderRow({
             )}
           </div>
 
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-bold text-[#6b645b]">
-            <span>{DEPARTMENTS.find((department) => department.id === order.department)?.label}</span>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs font-bold text-[#6b645b]">
             <span aria-label={order.deliveryMethod || "Leverwijze niet ingevuld"} title={order.deliveryMethod || "Leverwijze niet ingevuld"}>{/bezorg|lever/i.test(order.deliveryMethod) ? "🚚" : /afhaal|ophal/i.test(order.deliveryMethod) ? "🏬" : "○"}</span>
             {order.logo && <span aria-label="Logo nodig" title="Logo nodig">🖼️</span>}
             {order.status === "akkoord" && <span className={`italic ${order.entered ? "text-[#24551d]" : "text-[#b42318]"}`}>{order.entered ? "Ingevoerd" : "Niet ingevoerd"}</span>}
           </div>
-          <div className="mt-2 rounded-xl border border-[#e4ded5] bg-white p-2.5 shadow-sm">
-            <p className="text-[0.62rem] font-black uppercase tracking-wide text-[#8b8278]">Bestelling</p>
-            {order.orderText.length > 120 ? <details className="mt-1 text-xs text-[#4d463d]"><summary className="cursor-pointer font-semibold">{order.orderText.slice(0, 120)}… <span className="text-[#24551d]">meer</span></summary><p className="mt-1 whitespace-pre-wrap border-l-2 border-[#c3d3bc] pl-2">{order.orderText}</p></details> : <p className="mt-1 whitespace-pre-wrap text-xs font-semibold leading-snug text-[#4d463d]">{order.orderText}</p>}
-            {order.department !== "bakkerij" && <div className="mt-2 border-t border-[#eee8df] pt-2">
-              <p className="mb-1 text-xs font-black text-[#24551d]">Chocoladeletters · {b2bLetterTotal(order.letterLines)} stuks</p>
-              {order.letterLines.length > 0 ? <><B2BLetterLineBadges lines={order.letterLines.slice(0, 4)} />{order.letterLines.length > 4 && <details className="mt-1 text-xs"><summary className="cursor-pointer font-black text-[#24551d]">+{order.letterLines.length - 4} letterregels tonen</summary><div className="mt-1"><B2BLetterLineBadges lines={order.letterLines.slice(4)} /></div></details>}</> : <p className="text-xs font-bold text-[#9a3412]">Letterregels nog invullen</p>}
+          <div className={`mt-1.5 grid gap-2 rounded-xl border border-[#e4ded5] bg-white px-2.5 py-2 shadow-sm ${order.department !== "bakkerij" || order.letterLines.length > 0 ? "xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]" : ""}`}>
+            <div className="min-w-0">
+              <p className="text-[0.62rem] font-black uppercase tracking-wide text-[#6b645b]">Bestelling · algemeen</p>
+              {order.orderText.length > 120 ? <details className="mt-0.5 text-xs text-[#2e2a26]"><summary className="cursor-pointer font-bold">{order.orderText.slice(0, 120)}… <span className="text-[#24551d]">meer</span></summary><p className="mt-1 whitespace-pre-wrap border-l-2 border-[#c3d3bc] pl-2">{order.orderText}</p></details> : <p className="mt-0.5 whitespace-pre-wrap text-xs font-bold leading-snug text-[#2e2a26]">{order.orderText}</p>}
+            </div>
+            {(order.department !== "bakkerij" || order.letterLines.length > 0) && <div className="min-w-0 border-t border-[#eee8df] pt-1.5 xl:border-l xl:border-t-0 xl:pl-2 xl:pt-0">
+              <p className="mb-1 text-[0.62rem] font-black uppercase tracking-wide text-[#24551d]">Bestelling · letters {order.letterLines.length > 0 ? `(${b2bLetterTotal(order.letterLines)})` : ""}</p>
+              {order.letterLines.length > 0 ? <><B2BLetterLineBadges lines={order.letterLines.slice(0, 4)} />{order.letterLines.length > 4 && <details className="mt-1 text-xs"><summary className="cursor-pointer font-black text-[#24551d]">+{order.letterLines.length - 4} letterregels</summary><div className="mt-1"><B2BLetterLineBadges lines={order.letterLines.slice(4)} /></div></details>}</> : <p className="text-xs font-bold text-[#9a3412]">Letterregels nog invullen</p>}
             </div>}
           </div>
           {warnings.length > 0 && <p className="mt-1 text-xs font-black text-[#9a3412]">Let op: {warnings.join(" · ")}</p>}
           {confirmationNeedsAttention && <p className="mt-1 text-xs font-black text-[#9a3412]">{order.confirmationEmailError || "Nog geen bevestigingsmail als back-up geregistreerd."}</p>}
-          {extraLines.length > 0 && (
-            <details className="mt-1">
-              <summary className="cursor-pointer text-xs font-black text-[#24551d]">
-                Extra gegevens
-              </summary>
-              <p className="mt-1 whitespace-pre-wrap border border-[#e4ded5] bg-[#faf8f5] px-2 py-1.5 text-xs font-bold leading-snug text-[#6b645b]">
-                {extraLines.join("\n")}
-              </p>
-            </details>
-          )}
-          {order.invoiceInfo && <details className="mt-1"><summary className="cursor-pointer text-xs font-black text-[#24551d]">Factuurgegevens</summary><p className="mt-1 whitespace-pre-wrap border border-[#e4ded5] bg-[#faf8f5] px-2 py-1.5 text-xs text-[#6b645b]">{order.invoiceInfo}</p></details>}
         </div>
 
-        <div className="flex flex-wrap items-start justify-start gap-1.5 lg:justify-end">
+        <div className="flex flex-col items-start gap-1 lg:items-end">
+          <div className="flex flex-wrap items-start gap-1">
           {archived ? (
             <span className="rounded-full bg-[#f2eee8] px-3 py-1 text-xs font-black text-[#6b645b]">
               Archief · alleen lezen
@@ -855,8 +847,8 @@ function B2BOrderRow({
             <div className="absolute right-0 z-20 mt-1 grid min-w-56 gap-1 border border-[#e4ded5] bg-white p-2 shadow-lg">
               {order.status === "akkoord" && ([
                 ["entered", "In Bake-it ingevoerd", true],
-                ["productionDone", order.department === "beide" ? "Overig geproduceerd" : "Geproduceerd", true],
-                ["letterProductionDone", "Letters geproduceerd", order.department === "beide"],
+                ["productionDone", order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0) ? "Overig geproduceerd" : "Geproduceerd", true],
+                ["letterProductionDone", "Letters geproduceerd", order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0)],
                 ["packed", "Ingepakt", true],
                 ["delivered", "Geleverd", true],
                 ["logoChecked", "Logo gecontroleerd", Boolean(order.logo)],
@@ -870,6 +862,9 @@ function B2BOrderRow({
             </div>
           </details>
           </>}
+          </div>
+          {extraLines.length > 0 && <details className="relative w-full text-xs lg:text-right"><summary className="cursor-pointer font-black text-[#24551d]">Extra gegevens</summary><div className="absolute right-0 z-30 mt-1 max-h-72 w-[min(20rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-[#e4ded5] bg-white p-2 text-left font-semibold leading-snug text-[#4d463d] shadow-lg"><p className="whitespace-pre-wrap">{extraLines.join("\n")}</p></div></details>}
+          {order.invoiceInfo && <details className="relative w-full text-xs lg:text-right"><summary className="cursor-pointer font-black text-[#24551d]">Factuurgegevens</summary><div className="absolute right-0 z-30 mt-1 max-h-72 w-[min(20rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-[#e4ded5] bg-white p-2 text-left text-[#4d463d] shadow-lg"><p className="whitespace-pre-wrap">{order.invoiceInfo}</p></div></details>}
         </div>
       </div>
     </article>
@@ -1141,7 +1136,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
               {order.packaging && <p><strong>Verpakking:</strong> {order.packaging} {!order.packagingChecked && "· NOG CONTROLEREN"}</p>}
               {order.importantNotes && <p><strong>Belangrijk:</strong> {order.importantNotes}</p>}
               <div className="flex flex-wrap gap-2">
-                {([ ["productionDone", order.department === "beide" ? "Overig geproduceerd" : "Geproduceerd"], ...(order.department === "beide" ? [["letterProductionDone", "Letters geproduceerd"]] as const : []), ["packed", "Ingepakt"] ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => void toggleStatus(order, key)} />{label}</label>)}
+                {([ ["productionDone", order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0) ? "Overig geproduceerd" : "Geproduceerd"], ...(order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0) ? [["letterProductionDone", "Letters geproduceerd"]] as const : []), ["packed", "Ingepakt"] ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => void toggleStatus(order, key)} />{label}</label>)}
               </div>
               <details className="border-t border-[#e4ded5] pt-2 text-xs">
                 <summary className="cursor-pointer font-bold text-[#6b645b]">Optioneel: productiedag {order.productionDate ? `· ${formatDate(order.productionDate)}` : "vastleggen"}</summary>
