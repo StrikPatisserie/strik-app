@@ -70,7 +70,7 @@ function ProductCard({ product, onAdd }: { product: (typeof PRODUCTS)[number]; o
   const [added, setAdded] = useState(false);
 
   return <article className="overflow-hidden rounded-[1.8rem] bg-[#fffdf8] shadow-[0_18px_40px_rgba(82,29,18,.13)]">
-    <div className="relative aspect-[2/3] overflow-hidden" style={{ backgroundColor: product.background }}>
+    <div className="relative aspect-[4/5] overflow-hidden md:aspect-[2/3]" style={{ backgroundColor: product.background }}>
       <Image src={product.image} alt={`Voorbeeld van een Strik chocoladeletter in ${product.title.toLowerCase()}`} fill sizes="(max-width: 768px) 90vw, (max-width: 1280px) 44vw, 25vw" className="object-contain" />
     </div>
     <div className="p-4 sm:p-5">
@@ -125,6 +125,7 @@ function LogoUpload({ file, onChange }: { file?: File; onChange: (file?: File) =
 
 export default function LetterShopClient({ checkoutEnabled, pickupDates }: { checkoutEnabled: boolean; pickupDates: string[] }) {
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [selectedMobileProductId, setSelectedMobileProductId] = useState<string | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [shop, setShop] = useState("");
   const [pickupDate, setPickupDate] = useState("");
@@ -138,10 +139,16 @@ export default function LetterShopClient({ checkoutEnabled, pickupDates }: { che
   const [placedOrderNumber, setPlacedOrderNumber] = useState("");
   const requestKey = useRef<string | null>(null);
   const reviewRef = useRef<HTMLDivElement>(null);
+  const mobileOverviewRef = useRef<HTMLDivElement>(null);
+  const mobileProductRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (showReview) reviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [showReview]);
+
+  useEffect(() => {
+    if (selectedMobileProductId) mobileProductRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedMobileProductId]);
 
   const totalQuantity = cart.reduce((sum, line) => sum + line.quantity, 0);
   const photoBytes = cart.reduce((sum, line) => sum + (line.logoFile?.size || 0), 0);
@@ -150,6 +157,7 @@ export default function LetterShopClient({ checkoutEnabled, pickupDates }: { che
   const total = useMemo(() => cart.reduce((sum, line) => sum + line.quantity * PRICES[line.size], logoTotal + giftWrapTotal), [cart, logoTotal, giftWrapTotal]);
   const vat = Math.round((total * 9 / 109) * 100) / 100;
   const hasLogo = cart.some((line) => line.withLogo);
+  const selectedMobileProduct = PRODUCTS.find((product) => product.id === selectedMobileProductId);
 
   function addToCart(newLine: CartLine) {
     setCart((current) => {
@@ -210,7 +218,23 @@ export default function LetterShopClient({ checkoutEnabled, pickupDates }: { che
       </div>
     </header>
 
-    <section id="letter-assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 pb-24 sm:px-8 lg:px-12"><div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-[#547762]">Het assortiment</p><h2 className="mt-1 text-3xl font-black sm:text-5xl">Kies jouw chocoladeletter</h2></div><p className="max-w-sm text-[0.7rem] italic text-[#74695e]">Prijzen incl. 9% btw · betalen bij afhalen.</p></div><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">{PRODUCTS.map((product) => <ProductCard key={product.id} product={product} onAdd={addToCart}/>)}</div></section>
+    <section id="letter-assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 pb-24 sm:px-8 lg:px-12">
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.2em] text-[#547762]">Het assortiment</p><h2 className="mt-1 text-3xl font-black sm:text-5xl">Kies jouw chocoladeletter</h2></div><p className="max-w-sm text-[0.7rem] italic text-[#74695e]">Prijzen incl. 9% btw · betalen bij afhalen.</p></div>
+      <div className="md:hidden">
+        <div ref={mobileOverviewRef} role="group" className="grid scroll-mt-4 grid-cols-2 gap-3" aria-label="Kies een soort chocoladeletter">
+          {PRODUCTS.map((product) => <button key={product.id} type="button" aria-label={`${product.title} bekijken`} aria-pressed={selectedMobileProductId === product.id} onClick={() => { if (selectedMobileProductId === product.id) mobileProductRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); else setSelectedMobileProductId(product.id); }} className={`overflow-hidden rounded-2xl bg-[#fffdf8] text-left shadow-[0_8px_20px_rgba(82,29,18,.1)] outline-none transition focus-visible:ring-4 focus-visible:ring-[#547762]/40 ${selectedMobileProductId === product.id ? "ring-2 ring-[#547762]" : ""}`}>
+            <span className="relative block aspect-square" style={{ backgroundColor: product.background }}><Image src={product.image} alt="" fill sizes="(max-width: 768px) 45vw, 1px" className="object-contain" /></span>
+            <span className="block min-h-12 px-3 py-2.5 text-sm font-black leading-tight text-[#3e312c]">{product.title}</span>
+          </button>)}
+        </div>
+        <p className="mt-3 text-center text-xs font-semibold text-[#547762]">Tik op een letter om hem samen te stellen ↓</p>
+        {selectedMobileProduct && <div ref={mobileProductRef} className="mt-5 scroll-mt-4">
+          <div className="mb-3 flex items-center justify-between gap-3"><button type="button" onClick={() => { setSelectedMobileProductId(null); window.requestAnimationFrame(() => mobileOverviewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })); }} className="text-sm font-black text-[#547762] underline underline-offset-4">← Alle letters</button><span className="text-xs font-bold text-[#74695e]">{PRODUCTS.findIndex((product) => product.id === selectedMobileProductId) + 1} van {PRODUCTS.length}</span></div>
+          <ProductCard key={selectedMobileProduct.id} product={selectedMobileProduct} onAdd={addToCart} />
+        </div>}
+      </div>
+      <div className="hidden gap-5 md:grid md:grid-cols-2 xl:grid-cols-4">{PRODUCTS.map((product) => <ProductCard key={product.id} product={product} onAdd={addToCart}/>)}</div>
+    </section>
 
     <footer className="bg-[#3e312c] px-4 py-8 text-center text-sm font-semibold text-[#fff4df]">Strik Patisserie · met aandacht gemaakt in Nijmegen</footer>
 
