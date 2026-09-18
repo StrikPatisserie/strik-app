@@ -63,7 +63,8 @@ const STYLES: { id: ChocolateLetterStyle; label: string }[] = [
   { id: "spuit", label: "Spuit" },
   { id: "vorm", label: "Vorm" },
 ];
-const SHOPS = ["Ziekerstraat", "Heyendaal", "Daalseweg", "Lent", "Malden"];
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const SHOPS = ["Ziekerstraat", "Heyendaal", "Daalseweg", "Lent"];
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -116,11 +117,11 @@ function createFormState(): LetterFormState {
     customerName: "",
     customerEmail: "",
     phone: "",
-    shop: "Ziekerstraat",
-    pickupDate: todayIso(),
-    pickupLocation: "Ziekerstraat",
+    shop: "",
+    pickupDate: "",
+    pickupLocation: "",
     notes: "",
-    sendCustomerEmail: true,
+    sendCustomerEmail: false,
     lines: [createLine()],
   };
 }
@@ -132,9 +133,9 @@ function formStateFromOrder(order: ChocolateLetterOrder | null | undefined) {
     customerName: order.customerName,
     customerEmail: order.customerEmail,
     phone: order.phone,
-    shop: order.shop || "Ziekerstraat",
-    pickupDate: order.pickupDate || todayIso(),
-    pickupLocation: order.pickupLocation || order.shop || "Ziekerstraat",
+    shop: order.shop || order.pickupLocation || "",
+    pickupDate: order.pickupDate || "",
+    pickupLocation: order.pickupLocation || order.shop || "",
     notes: order.notes,
     sendCustomerEmail: order.sendCustomerEmail,
     lines:
@@ -530,9 +531,19 @@ function OrderRow({
           <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
             {order.lines.map(lineLabel).join(" · ")}
           </p>
+          {order.lines.some((line) => line.notes.trim()) && (
+            <p className="mt-1 rounded-lg bg-[#fff3dc] px-2 py-1.5 text-xs font-bold text-[#70460e]">
+              Let op: {order.lines.filter((line) => line.notes.trim()).map((line) => `${line.letter.toUpperCase()}: ${line.notes}`).join(" · ")}
+            </p>
+          )}
           {order.notes && (
             <p className="mt-2 whitespace-pre-wrap text-sm font-semibold text-[#4d463d]">
               {order.notes}
+            </p>
+          )}
+          {order.bakeryEmailError && (
+            <p className="mt-2 rounded-lg bg-[#fff0ea] px-2 py-1.5 text-xs font-black text-[#9a3412]">
+              Interne mail niet verstuurd: {order.bakeryEmailError}
             </p>
           )}
           {extraLines.length > 0 && (
@@ -548,7 +559,7 @@ function OrderRow({
         </div>
 
         <div className="flex flex-wrap items-start justify-start gap-1.5 lg:justify-end">
-          <button
+          {productionMode && <button
             type="button"
             disabled={updatingId === order.id}
             onClick={() => onToggleDone(order)}
@@ -565,7 +576,7 @@ function OrderRow({
                 : productionMode
                   ? "Afvinken"
                   : "Klaar"}
-          </button>
+          </button>}
           <button
             type="button"
             onClick={() => onEdit(order)}
@@ -589,10 +600,12 @@ function OrderRow({
 
 function LetterOrderForm({
   initialOrder,
+  mode,
   onSaved,
   onCancel,
 }: Readonly<{
   initialOrder?: ChocolateLetterOrder | null;
+  mode: Mode;
   onSaved: (order: ChocolateLetterOrder) => void;
   onCancel: () => void;
 }>) {
@@ -601,16 +614,22 @@ function LetterOrderForm({
   );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [generalNotesOpen, setGeneralNotesOpen] = useState(Boolean(initialOrder?.notes));
+  const legacyShop = form.shop && !SHOPS.includes(form.shop) ? form.shop : "";
 
   useEffect(() => {
     setForm(formStateFromOrder(initialOrder));
+    setGeneralNotesOpen(Boolean(initialOrder?.notes));
   }, [initialOrder]);
 
   function updateLine(id: string, patch: Partial<ChocolateLetterLine>) {
+    const nextPatch = mode === "winkel" && patch.style === "vorm"
+      ? { ...patch, letter: "S", size: "groot" as const }
+      : patch;
     setForm((current) => ({
       ...current,
       lines: current.lines.map((line) =>
-        line.id === id ? { ...line, ...patch } : line
+        line.id === id ? { ...line, ...nextPatch } : line
       ),
     }));
   }
@@ -620,12 +639,20 @@ function LetterOrderForm({
     setMessage("");
 
     const customerName = form.customerName.trim();
-    const lines = form.lines.filter(
-      (line) => line.letter.trim() && line.quantity > 0
-    );
+    const lines = form.lines;
 
-    if (!customerName || lines.length < 1) {
-      setMessage("Vul minimaal klantnaam en één letter in.");
+    if (!customerName || !form.pickupDate || !form.shop || lines.length < 1) {
+      setMessage("Vul klantnaam, ophaaldatum, winkel en minimaal één letter in.");
+      return;
+    }
+
+    if (lines.some((line) => !line.letter.trim() || !Number.isFinite(line.quantity) || line.quantity < 1)) {
+      setMessage("Controleer de letter en het aantal op iedere regel.");
+      return;
+    }
+
+    if (mode === "winkel" && lines.some((line) => !/^[A-Z]$/.test(line.letter.trim().toUpperCase()))) {
+      setMessage("Kies per regel één letter van A t/m Z.");
       return;
     }
 
@@ -634,6 +661,8 @@ function LetterOrderForm({
       const payload = {
         ...form,
         customerName,
+        pickupLocation: form.pickupLocation || form.shop,
+        source: initialOrder?.source || "winkel",
         year: form.pickupDate
           ? yearFromDate(form.pickupDate)
           : initialOrder?.year || currentYear(),
@@ -665,150 +694,67 @@ function LetterOrderForm({
       onSubmit={submitOrder}
       className="space-y-3"
     >
-      <div className="grid gap-2 sm:grid-cols-2">
-        <input
-          value={form.customerName}
-          onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              customerName: event.target.value,
-            }))
-          }
-          placeholder="Klantnaam"
-          className="h-11 border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none"
-        />
-        <input
-          value={form.customerEmail}
-          onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              customerEmail: event.target.value,
-            }))
-          }
-          placeholder="E-mail klant"
-          type="email"
-          className="h-11 border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none"
-        />
-        <input
-          value={form.phone}
-          onChange={(event) =>
-            setForm((current) => ({ ...current, phone: event.target.value }))
-          }
-          placeholder="Telefoon"
-          className="h-11 border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none"
-        />
-        <input
-          value={form.pickupDate}
-          onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              pickupDate: event.target.value,
-            }))
-          }
-          type="date"
-          className="h-11 border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none"
-        />
-        <select
-          value={form.shop}
-          onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              shop: event.target.value,
-              pickupLocation: event.target.value,
-            }))
-          }
-          className="h-11 border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none"
-        >
-          {SHOPS.map((shop) => (
-            <option key={shop} value={shop}>
-              {shop}
-            </option>
-          ))}
-        </select>
-        <input
-          value={form.pickupLocation}
-          onChange={(event) =>
-            setForm((current) => ({
-              ...current,
-              pickupLocation: event.target.value,
-            }))
-          }
-          placeholder="Ophaallocatie"
-          className="h-11 border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none"
-        />
-      </div>
+      <section className="rounded-xl border border-[#d6e5d8] bg-[#f6faf4] p-3">
+        <h3 className="text-sm font-black text-[#24551d]">Klant en afhalen</h3>
+        <p className="mt-0.5 text-xs text-[#6b645b]">Kies de ophaaldatum en winkel bewust; deze bestelling komt daarmee op de productielijst.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="grid gap-1 text-xs font-black text-[#4d463d]">Klantnaam *
+            <input value={form.customerName} onChange={(event) => setForm((current) => ({ ...current, customerName: event.target.value }))} required placeholder="Naam op de bestelling" className="h-11 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none" />
+          </label>
+          <label className="grid gap-1 text-xs font-black text-[#4d463d]">Ophaaldatum *
+            <input value={form.pickupDate} onChange={(event) => setForm((current) => ({ ...current, pickupDate: event.target.value }))} required type="date" className="h-11 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none" />
+          </label>
+          <label className="grid gap-1 text-xs font-black text-[#4d463d]">Ophaalwinkel *
+            <select value={form.shop} onChange={(event) => setForm((current) => ({ ...current, shop: event.target.value, pickupLocation: event.target.value }))} required className="h-11 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none">
+              <option value="">Kies een winkel</option>
+              {legacyShop && <option value={legacyShop}>{legacyShop} (bestaande bestelling)</option>}
+              {SHOPS.map((shop) => <option key={shop} value={shop}>{shop}</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs font-black text-[#4d463d]">Telefoon <span className="font-normal">(optioneel)</span>
+            <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} type="tel" placeholder="Voor vragen over de bestelling" className="h-11 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none" />
+          </label>
+          <label className="grid gap-1 text-xs font-black text-[#4d463d]">E-mail klant <span className="font-normal">(optioneel)</span>
+            <input value={form.customerEmail} onChange={(event) => setForm((current) => ({ ...current, customerEmail: event.target.value, sendCustomerEmail: event.target.value ? current.sendCustomerEmail : false }))} type="email" placeholder="Alleen nodig voor een klantbevestiging" className="h-11 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none" />
+          </label>
+          <label className="flex items-center gap-2 self-end rounded-lg border border-[#e4ded5] bg-white px-3 py-3 text-xs font-bold text-[#4d463d]">
+            <input checked={form.sendCustomerEmail} disabled={!form.customerEmail.trim()} onChange={(event) => setForm((current) => ({ ...current, sendCustomerEmail: event.target.checked }))} type="checkbox" className="h-4 w-4 accent-[#24551d]" />
+            Bevestiging naar klant mailen
+          </label>
+        </div>
+      </section>
 
-      <div className="space-y-2">
+      <section className="space-y-2 rounded-xl border border-[#eadb8b] bg-[#fffdf3] p-3">
+        <div><h3 className="text-sm font-black text-[#5f3f00]">Letters</h3><p className="text-xs text-[#6b645b]">Voeg per soort, chocolade en formaat een regel toe.</p></div>
         {form.lines.map((line, index) => (
           <div
             key={line.id}
-            className="grid gap-2 border border-[#eadb8b] bg-white/75 p-2 sm:grid-cols-[4.5rem_6rem_6rem_6rem_5rem_1fr_2.5rem]"
+            className="grid gap-2 rounded-lg border border-[#eadb8b] bg-white p-3 sm:grid-cols-2 lg:grid-cols-[7rem_5rem_7rem_7rem_5rem_minmax(0,1fr)_2.5rem]"
           >
-            <input
-              value={line.letter}
-              onChange={(event) =>
-                updateLine(line.id, {
-                  letter: event.target.value.toUpperCase().slice(0, 8),
-                })
-              }
-              placeholder="Letter"
-              className="h-10 border border-[#e4ded5] bg-white px-2 text-sm font-black uppercase outline-none"
-            />
-            <select
-              value={line.chocolate}
-              onChange={(event) =>
-                updateLine(line.id, {
-                  chocolate: event.target.value as ChocolateLetterChocolate,
-                })
-              }
-              className="h-10 border border-[#e4ded5] bg-white px-2 text-sm font-bold outline-none"
-            >
-              {CHOCOLATES.map((chocolate) => (
-                <option key={chocolate.id} value={chocolate.id}>
-                  {chocolate.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={line.size}
-              onChange={(event) =>
-                updateLine(line.id, {
-                  size: event.target.value as ChocolateLetterSize,
-                })
-              }
-              className="h-10 border border-[#e4ded5] bg-white px-2 text-sm font-bold outline-none"
-            >
-              {SIZES.map((size) => (
-                <option key={size.id} value={size.id}>
-                  {size.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={line.style}
-              onChange={(event) =>
-                updateLine(line.id, {
-                  style: event.target.value as ChocolateLetterStyle,
-                })
-              }
-              className="h-10 border border-[#e4ded5] bg-white px-2 text-sm font-bold outline-none"
-            >
-              {STYLES.map((style) => (
-                <option key={style.id} value={style.id}>
-                  {style.label}
-                </option>
-              ))}
-            </select>
-            <input
-              value={line.quantity}
-              onChange={(event) =>
-                updateLine(line.id, { quantity: Number(event.target.value) })
-              }
-              type="number"
-              min={1}
-              className="h-10 border border-[#e4ded5] bg-white px-2 text-sm font-black outline-none"
-            />
-            <label className="flex min-h-10 items-center gap-2 text-sm font-bold text-[#4d463d]">
+            <label className="grid gap-1 text-[0.68rem] font-black text-[#6b645b]">Soort
+              <select value={line.style} onChange={(event) => updateLine(line.id, { style: event.target.value as ChocolateLetterStyle })} className="h-10 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-2 text-sm font-bold text-[#1a1815]">
+                {STYLES.map((style) => <option key={style.id} value={style.id}>{style.label}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-[0.68rem] font-black text-[#6b645b]">Letter
+              {mode === "winkel" ? <select value={line.letter} onChange={(event) => updateLine(line.id, { letter: event.target.value })} className="h-10 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-2 text-sm font-black text-[#1a1815]">
+                {line.style === "vorm" ? <>{line.letter !== "S" && <option value={line.letter}>{line.letter} (bestaand)</option>}<option value="S">S</option></> : <>{!LETTERS.includes(line.letter) && <option value={line.letter}>{line.letter} (bestaand)</option>}{LETTERS.map((letter) => <option key={letter} value={letter}>{letter}</option>)}</>}
+              </select> : <input value={line.letter} onChange={(event) => updateLine(line.id, { letter: event.target.value.toUpperCase().slice(0, 8) })} className="h-10 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-2 text-sm font-black uppercase" />}
+            </label>
+            <label className="grid gap-1 text-[0.68rem] font-black text-[#6b645b]">Chocolade
+              <select value={line.chocolate} onChange={(event) => updateLine(line.id, { chocolate: event.target.value as ChocolateLetterChocolate })} className="h-10 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-2 text-sm font-bold text-[#1a1815]">
+                {CHOCOLATES.map((chocolate) => <option key={chocolate.id} value={chocolate.id}>{chocolate.label}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-[0.68rem] font-black text-[#6b645b]">Formaat
+              <select value={line.size} onChange={(event) => updateLine(line.id, { size: event.target.value as ChocolateLetterSize })} className="h-10 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-2 text-sm font-bold text-[#1a1815]">
+                {mode === "winkel" && line.style === "vorm" ? <>{line.size !== "groot" && <option value={line.size}>{line.size} (bestaand)</option>}<option value="groot">Groot</option></> : SIZES.map((size) => <option key={size.id} value={size.id}>{size.label}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-[0.68rem] font-black text-[#6b645b]">Aantal
+              <input value={line.quantity} onChange={(event) => updateLine(line.id, { quantity: Number(event.target.value) })} type="number" min={1} required className="h-10 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-2 text-sm font-black text-[#1a1815]" />
+            </label>
+            <label className="flex min-h-10 items-end gap-2 pb-2 text-xs font-bold text-[#4d463d]">
               <input
                 checked={line.logo}
                 onChange={(event) =>
@@ -817,7 +763,7 @@ function LetterOrderForm({
                 type="checkbox"
                 className="h-4 w-4"
               />
-              Logo
+              Foto/logo
             </label>
             <button
               type="button"
@@ -828,22 +774,17 @@ function LetterOrderForm({
                   lines: current.lines.filter((item) => item.id !== line.id),
                 }))
               }
-              className="h-10 border border-[#e4ded5] bg-white text-sm font-black disabled:opacity-40"
+              className="h-10 self-end rounded-lg border border-[#e4ded5] bg-white text-sm font-black disabled:opacity-40"
               aria-label={`Regel ${index + 1} verwijderen`}
             >
               x
             </button>
-            <input
-              value={line.notes}
-              onChange={(event) =>
-                updateLine(line.id, { notes: event.target.value })
-              }
-              placeholder="Opmerking bij deze regel"
-              className="h-10 border border-[#e4ded5] bg-white px-2 text-sm font-bold outline-none sm:col-span-7"
-            />
+            <label className="grid gap-1 text-[0.68rem] font-black text-[#6b645b] sm:col-span-2 lg:col-span-7">Bijzonderheden voor deze letters <span className="font-normal">(optioneel)</span>
+              <input value={line.notes} onChange={(event) => updateLine(line.id, { notes: event.target.value })} placeholder="Bijv. allergenen, logo of verpakking" className="h-10 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-2 text-sm font-bold text-[#1a1815]" />
+            </label>
           </div>
         ))}
-      </div>
+      </section>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <button
@@ -854,35 +795,19 @@ function LetterOrderForm({
               lines: [...current.lines, createLine()],
             }))
           }
-          className="h-10 border border-[#d7c168] bg-white px-3 text-sm font-black"
+          className="h-10 rounded-lg border border-[#d7c168] bg-white px-3 text-sm font-black"
         >
-          Regel toevoegen
+          + Letterregel toevoegen
         </button>
-        <label className="flex items-center gap-2 text-sm font-bold text-[#4d463d]">
-          <input
-            checked={form.sendCustomerEmail}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                sendCustomerEmail: event.target.checked,
-              }))
-            }
-            type="checkbox"
-            className="h-4 w-4"
-          />
-          Bevestiging naar klant mailen
-        </label>
+        <p className="text-xs font-semibold text-[#6b645b]">{form.lines.reduce((sum, line) => sum + (Number.isFinite(line.quantity) ? line.quantity : 0), 0)} letters in deze bestelling</p>
       </div>
 
-      <textarea
-        value={form.notes}
-        onChange={(event) =>
-          setForm((current) => ({ ...current, notes: event.target.value }))
-        }
-        placeholder="Algemene opmerkingen"
-        rows={3}
-        className="w-full border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold outline-none"
-      />
+      <details className="rounded-lg border border-[#e4ded5] bg-white p-3" open={generalNotesOpen} onToggle={(event) => setGeneralNotesOpen(event.currentTarget.open)}>
+        <summary className="cursor-pointer text-sm font-black text-[#4d463d]">Algemene instructies (optioneel)</summary>
+        <textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Alleen informatie die voor de hele bestelling geldt" rows={3} className="mt-2 w-full rounded-lg border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold outline-none" />
+      </details>
+
+      <p className="text-xs font-semibold text-[#6b645b]">{initialOrder ? "Wijzigingen worden opgeslagen; er gaat niet opnieuw een e-mail uit." : "Een nieuwe winkelbestelling wordt intern doorgemaild. Een klantbevestiging alleen als je die hierboven aanvinkt."}</p>
 
       {message && (
         <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#5f3f00]">
@@ -916,10 +841,12 @@ function LetterOrderForm({
 
 function LetterOrderDialog({
   order,
+  mode,
   onClose,
   onSaved,
 }: Readonly<{
   order: ChocolateLetterOrder | null;
+  mode: Mode;
   onClose: () => void;
   onSaved: (order: ChocolateLetterOrder) => void;
 }>) {
@@ -952,6 +879,7 @@ function LetterOrderDialog({
         <LetterOrderForm
           key={order?.id || "new-letter-order"}
           initialOrder={order}
+          mode={mode}
           onSaved={onSaved}
           onCancel={onClose}
         />
@@ -1147,10 +1075,13 @@ export default function SinterklaasLettersClient({
   }, [year]);
 
   const visibleOrders = useMemo(() => {
+    const sourceOrders = mode === "winkel"
+      ? orders.filter((order) => order.source === "winkel")
+      : orders;
     const term = search.trim().toLocaleLowerCase("nl-NL");
-    if (!term) return orders;
+    if (!term) return sourceOrders;
 
-    return orders.filter((order) =>
+    return sourceOrders.filter((order) =>
       [
         order.customerName,
         order.code,
@@ -1166,7 +1097,7 @@ export default function SinterklaasLettersClient({
         .toLocaleLowerCase("nl-NL")
         .includes(term)
     );
-  }, [orders, search]);
+  }, [mode, orders, search]);
 
   const visibleB2BOrders = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("nl-NL");
@@ -1250,6 +1181,8 @@ export default function SinterklaasLettersClient({
 
   function handleSavedOrder(order: ChocolateLetterOrder) {
     setOrders((current) => updateOrderList(current, order));
+    const mailErrors = [order.bakeryEmailError, order.customerConfirmationError].filter(Boolean);
+    setError(mailErrors.length ? `Bestelling ${order.code} is opgeslagen, maar let op: ${mailErrors.join(" ")}` : "");
     closeOrderDialog();
   }
 
@@ -1373,7 +1306,7 @@ export default function SinterklaasLettersClient({
   return (
     <div className="space-y-4">
       <section className="border border-[#e4ded5] bg-white p-3 shadow-sm">
-        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_13rem]">
+        <div className={`grid gap-2 ${mode === "winkel" ? "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem]" : "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_13rem]"}`}>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -1392,19 +1325,16 @@ export default function SinterklaasLettersClient({
           >
             Ververs
           </button>
-          <button
-            type="button"
-            onClick={openOnlineImportDialog}
-            className="flex h-10 items-center justify-center gap-2 bg-[#2f6f91] px-3 text-sm font-black text-white"
-          >
-            <span
-              className="flex h-6 w-6 items-center justify-center bg-white/20 text-lg leading-none"
-              aria-hidden="true"
+          {mode === "productie" && (
+            <button
+              type="button"
+              onClick={openOnlineImportDialog}
+              className="flex h-10 items-center justify-center gap-2 bg-[#2f6f91] px-3 text-sm font-black text-white"
             >
-              +
-            </span>
-            Online import
-          </button>
+              <span className="flex h-6 w-6 items-center justify-center bg-white/20 text-lg leading-none" aria-hidden="true">+</span>
+              Online import
+            </button>
+          )}
           <button
             type="button"
             onClick={openNewOrderDialog}
@@ -1416,7 +1346,7 @@ export default function SinterklaasLettersClient({
             >
               +
             </span>
-            Toevoegen
+            {mode === "winkel" ? "Winkelbestelling toevoegen" : "Toevoegen"}
           </button>
         </div>
       </section>
@@ -1522,6 +1452,7 @@ export default function SinterklaasLettersClient({
       {formOpen && (
         <LetterOrderDialog
           order={editingOrder}
+          mode={mode}
           onClose={closeOrderDialog}
           onSaved={handleSavedOrder}
         />

@@ -17,20 +17,20 @@ export default async function ChocolateLetterSalesPage() {
     <StrikShell>
       <StrikPageHeader title="Chocoladeletters · verkoop" icon={strikIcons.sinterklaasLetter} />
       <div className="grid gap-2">
-        <StrikMenuLink
-          href="/sinterklaas/letters/winkel"
-          title="Winkelbestellingen toevoegen"
-          icon={strikIcons.sinterklaasLetter}
-          tone="green"
-        />
         {hasFullAccess(profile) && (
           <StrikMenuLink
             href="/sinterklaas/letters/online"
-            title="Online bestellingen beheren"
+            title="Online bestellingen"
             icon={strikIcons.sinterklaasLetter}
             tone="green"
           />
         )}
+        <StrikMenuLink
+          href="/sinterklaas/letters/winkel"
+          title="Winkelbestellingen"
+          icon={strikIcons.sinterklaasLetter}
+          tone="green"
+        />
       </div>
       <ExternalCampaignLink href="/lettershop" title="Bekijk de chocoladelettershop" />
     </StrikShell>
