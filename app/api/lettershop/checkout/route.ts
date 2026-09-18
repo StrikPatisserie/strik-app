@@ -35,6 +35,7 @@ type CheckoutPayload = {
   pickupDate: string;
   pickupLocation: string;
   notes?: string;
+  giftWrap?: boolean;
   lines: CheckoutLine[];
 };
 
@@ -53,6 +54,7 @@ function isCheckoutPayload(value: unknown): value is CheckoutPayload {
     && typeof data.pickupDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data.pickupDate)
     && typeof data.pickupLocation === "string" && SHOPS.has(data.pickupLocation)
     && (data.notes === undefined || typeof data.notes === "string" && data.notes.length <= 1800)
+    && (data.giftWrap === undefined || typeof data.giftWrap === "boolean")
     && Array.isArray(lines) && lines.length >= 1 && lines.length <= 30
     && lines.every((line) => line && typeof line === "object"
       && (line.style === undefined || line.style === "spuit" || line.style === "vorm")
@@ -167,6 +169,7 @@ export async function POST(request: Request) {
       p_pickup_location: payload.pickupLocation,
       p_lines: lines,
       p_notes: combinedNotes.slice(0, 1800),
+      p_gift_wrap: payload.giftWrap === true,
     });
     if (orderError || !orderId) {
       return error("Bestelling opslaan is niet gelukt. Probeer het opnieuw.", 502);

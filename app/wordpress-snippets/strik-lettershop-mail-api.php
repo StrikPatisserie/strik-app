@@ -45,15 +45,20 @@ function strik_lettershop_mail_lines($payload, $for_customer) {
         }
     }
     $lines[] = '';
+    if (!empty($payload['gift_wrap'])) {
+        $lines[] = 'Cadeaupapier: alle letters ingepakt - EUR 1,00 per letter';
+        $lines[] = 'Toeslag cadeaupapier: EUR ' . number_format(((int) ($payload['gift_wrap_total_cents'] ?? 0)) / 100, 2, ',', '.');
+    }
     $lines[] = 'Totaal inclusief 9% btw: EUR ' . number_format(((int) ($payload['total_cents'] ?? 0)) / 100, 2, ',', '.');
     if (!empty($payload['notes'])) {
         $lines[] = '';
-        $lines[] = 'Opmerking: ' . sanitize_textarea_field((string) $payload['notes']);
+        $lines[] = 'Speciale verzoeken: ' . sanitize_textarea_field((string) $payload['notes']);
     }
     $lines[] = '';
     if ($for_customer) {
         $lines[] = 'Je betaalt bij het afhalen in de winkel.';
-        $lines[] = 'Wil je annuleren? Mail dan naar info@strik-patisserie.nl en vermeld je ordernummer.';
+        $lines[] = 'We maken je letters met de hand. Wil je annuleren? Laat het ons uiterlijk 2 dagen voor het afhalen weten via info@strik-patisserie.nl en vermeld je ordernummer.';
+        $lines[] = 'Haal je de bestelling zonder annulering niet op, dan kunnen we het bestelbedrag alsnog in rekening brengen.';
         $lines[] = 'Vragen? Je kunt op deze e-mail antwoorden.';
     } else {
         $lines[] = 'Automatische back-upkopie uit de Strik lettershop.';
