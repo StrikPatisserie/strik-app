@@ -872,12 +872,14 @@ function LetterOrderDialog({
   order,
   mode,
   defaultShop,
+  pickupDates,
   onClose,
   onSaved,
 }: Readonly<{
   order: ChocolateLetterOrder | null;
   mode: Mode;
   defaultShop?: string;
+  pickupDates?: string[];
   onClose: () => void;
   onSaved: (order: ChocolateLetterOrder) => void;
 }>) {
@@ -907,7 +909,7 @@ function LetterOrderDialog({
           </button>
         </div>
 
-        {mode === "winkel" ? <StoreLetterShopForm key={order?.id || "new-store-order"} initialOrder={order} defaultShop={defaultShop} onSaved={onSaved} onCancel={onClose} /> : <LetterOrderForm key={order?.id || "new-letter-order"} initialOrder={order} mode={mode} onSaved={onSaved} onCancel={onClose} />}
+        {mode === "winkel" ? <StoreLetterShopForm key={order?.id || "new-store-order"} initialOrder={order} defaultShop={defaultShop} pickupDates={pickupDates || []} onSaved={onSaved} onCancel={onClose} /> : <LetterOrderForm key={order?.id || "new-letter-order"} initialOrder={order} mode={mode} onSaved={onSaved} onCancel={onClose} />}
       </div>
     </div>
   );
@@ -1056,7 +1058,8 @@ function OnlineImportDialog({
 export default function SinterklaasLettersClient({
   mode,
   defaultShop,
-}: Readonly<{ mode: Mode; defaultShop?: string }>) {
+  pickupDates,
+}: Readonly<{ mode: Mode; defaultShop?: string; pickupDates?: string[] }>) {
   const [year, setYear] = useState(() => currentYear());
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<ChocolateLetterOrder[]>([]);
@@ -1513,6 +1516,7 @@ export default function SinterklaasLettersClient({
           order={editingOrder}
           mode={mode}
           defaultShop={defaultShop}
+          pickupDates={pickupDates}
           onClose={closeOrderDialog}
           onSaved={handleSavedOrder}
         />

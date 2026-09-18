@@ -2,6 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { formatPickupDate } from "@/app/lettershop/formatPickupDate";
+import { lettershopShopLabel } from "@/app/lettershop/shops";
 import { saveLetterOrder, updateLetterOrder } from "../sinterklaasApi";
 import type { ChocolateLetterChocolate, ChocolateLetterLine, ChocolateLetterOrder, ChocolateLetterSize, ChocolateLetterStyle } from "../types";
 
@@ -14,7 +16,12 @@ const PRODUCTS: Product[] = [
   { id: "wit", name: "Spuit · wit", image: "/sinterklaas/Wit spuitletter 2026.png", style: "spuit", chocolate: "wit" },
   { id: "vorm", name: "Vorm · S", image: "/sinterklaas/vormletters S 2026.png", style: "vorm", chocolate: "melk" },
 ];
-const SHOPS = ["Ziekerstraat", "Heyendaal", "Daalseweg", "Lent"];
+const SHOPS = [
+  { value: "Ziekerstraat", label: lettershopShopLabel("ziekerstraat") },
+  { value: "Heyendaal", label: lettershopShopLabel("heyendaal") },
+  { value: "Daalseweg", label: lettershopShopLabel("daalseweg") },
+  { value: "Lent", label: lettershopShopLabel("lent") },
+];
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const REQUESTS: { id: SpecialRequest; label: string }[] = [
   { id: "glutenvrij", label: "Glutenvrij" },
@@ -54,9 +61,10 @@ function makeLine(product: Product, letter: string, size: ChocolateLetterSize, q
   };
 }
 
-export default function StoreLetterShopForm({ initialOrder, defaultShop = "", onSaved, onCancel }: Readonly<{
+export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pickupDates, onSaved, onCancel }: Readonly<{
   initialOrder?: ChocolateLetterOrder | null;
   defaultShop?: string;
+  pickupDates: string[];
   onSaved: (order: ChocolateLetterOrder) => void;
   onCancel: () => void;
 }>) {
@@ -73,6 +81,8 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", on
   const [phone, setPhone] = useState(initialOrder?.phone || "");
   const [email, setEmail] = useState(initialOrder?.customerEmail || "");
   const [pickupDate, setPickupDate] = useState(initialOrder?.pickupDate || "");
+  const [availableDates, setAvailableDates] = useState(pickupDates);
+  const [refreshingDates, setRefreshingDates] = useState(false);
   const [shop, setShop] = useState(initialOrder?.shop || defaultShop);
   const [giftWrap, setGiftWrap] = useState(initialOrder?.giftWrap || false);
   const [paid, setPaid] = useState(initialOrder?.paid || false);
@@ -91,8 +101,21 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", on
   const linesChanged = Boolean(initialOrder && JSON.stringify(initialOrder.lines) !== JSON.stringify(lines));
   const customerLinesChanged = Boolean(initialOrder && JSON.stringify(initialOrder.lines.map(customerLineSignature)) !== JSON.stringify(lines.map(customerLineSignature)));
   const reopenProduction = Boolean((initialOrder?.productionDone || initialOrder?.status === "klaar") && !initialOrder?.pickedUp && linesChanged);
-  const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const inputClass = "h-12 w-full rounded-xl border border-[#d5ddd0] bg-white px-3 text-base font-semibold text-[#263b2b] outline-none focus:border-[#547762]";
+
+  async function refreshAvailableDates() {
+    setRefreshingDates(true);
+    try {
+      const response = await fetch("/api/lettershop/pickup-dates", { cache: "no-store" });
+      if (!response.ok) throw new Error("Beschikbare datums konden niet worden geladen. Probeer opnieuw.");
+      const data = await response.json() as { dates?: string[] };
+      const dates = Array.isArray(data.dates) ? data.dates : [];
+      setAvailableDates(dates);
+      return dates;
+    } finally {
+      setRefreshingDates(false);
+    }
+  }
 
   function selectProduct(product: Product) {
     setSelected(product);
@@ -122,7 +145,9 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", on
     if (name.trim().length < 2) return "Vul de naam van de klant in.";
     if (phone.trim().length < 6) return "Vul een telefoonnummer in.";
     if (!pickupDate || !shop) return "Kies de afhaaldatum en de winkel.";
-    if (!initialOrder && pickupDate < today) return "Kies vandaag of een latere afhaaldatum.";
+    if (pickupDate !== initialOrder?.pickupDate && !availableDates.includes(pickupDate)) {
+      return "Deze afhaaldatum is niet beschikbaar. Kies een datum uit de lijst.";
+    }
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return "Controleer het e-mailadres.";
     return "";
   }
@@ -134,6 +159,13 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", on
     setSaving(true);
     setError("");
     try {
+      if (pickupDate !== initialOrder?.pickupDate) {
+        const latestDates = await refreshAvailableDates();
+        if (!latestDates.includes(pickupDate)) {
+          setReview(false);
+          throw new Error("De deadline voor deze afhaaldatum is verstreken. Kies een andere datum.");
+        }
+      }
       const sendCustomerEmail = Boolean(email.trim());
       const payload: Partial<ChocolateLetterOrder> & { customerName: string; lines: ChocolateLetterLine[] } = {
         id: initialOrder?.id || draftId,
@@ -187,7 +219,30 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", on
       {lines.length > 0 && <div className="mt-4 rounded-xl bg-white p-3"><div className="mb-2 flex items-center justify-between"><h4 className="font-black">Bestelling · {count} {count === 1 ? "letter" : "letters"}</h4><strong>{money(totalCents)}</strong></div><div className="space-y-2">{lines.map((line) => <div key={line.id} className="flex items-center gap-2 rounded-lg border border-[#e4ded5] p-2"><div className="min-w-0 flex-1"><p className="font-black">{lineName(line)}</p><p className="text-xs text-[#6b645b]">{[line.logo && "logo", ...(line.specialRequests || []), line.notes].filter(Boolean).join(" · ") || money(PRICE_CENTS[line.size])}</p></div><div className="flex items-center"><button type="button" onClick={() => setLines((current) => current.flatMap((item) => item.id === line.id ? item.quantity > 1 ? [{ ...item, quantity: item.quantity - 1 }] : [] : [item]))} aria-label={`${lineName(line)} aantal verminderen`} className="h-10 w-8 text-lg font-black">−</button><span className="w-6 text-center font-black">{line.quantity}</span><button type="button" onClick={() => setLines((current) => current.map((item) => item.id === line.id ? { ...item, quantity: Math.min(999, item.quantity + 1) } : item))} aria-label={`${lineName(line)} aantal verhogen`} className="h-10 w-8 text-lg font-black">+</button></div><button type="button" onClick={() => setLines((current) => current.filter((item) => item.id !== line.id))} aria-label={`${lineName(line)} verwijderen`} className="h-10 w-8 text-lg font-bold text-[#a63f2b]">×</button></div>)}</div></div>}
     </section>
 
-    <section className="rounded-2xl border border-[#e4ded5] bg-white p-4"><div className="mb-3 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#547762] text-sm font-black text-white">2</span><h3 className="text-lg font-black">Klant en afhalen</h3></div><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-black">Naam klant *<input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" className={`${inputClass} mt-1`} /></label><label className="text-sm font-black">Telefoonnummer *<input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" autoComplete="tel" className={`${inputClass} mt-1`} /></label><label className="text-sm font-black">Afhaaldatum *<input value={pickupDate} onChange={(event) => setPickupDate(event.target.value)} type="date" min={initialOrder ? undefined : today} className={`${inputClass} mt-1`} /></label><label className="text-sm font-black">Afhaalwinkel *<select value={shop} onChange={(event) => setShop(event.target.value)} className={`${inputClass} mt-1`}><option value="">Kies winkel</option>{shop && !SHOPS.includes(shop) && <option value={shop}>{shop} (bestaand)</option>}{SHOPS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label><label className="text-sm font-black sm:col-span-2">E-mailadres <span className="font-normal">(optioneel)</span><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="klant@voorbeeld.nl" className={`${inputClass} mt-1`} /><span className="mt-1 block text-xs font-medium text-[#6b645b]">Met e-mailadres sturen we een mooie bestelbevestiging en de dag vóór afhalen een herinnering. Zonder e-mailadres sturen we niets naar de klant.</span></label></div><div className="mt-4 flex flex-wrap gap-3"><label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={giftWrap} onChange={(event) => setGiftWrap(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Alles in cadeaupapier · + € 1 per letter</label><label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Al afgerekend in Bake-it</label></div></section>
+    <section className="rounded-2xl border border-[#e4ded5] bg-white p-4">
+      <div className="mb-3 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#547762] text-sm font-black text-white">2</span><h3 className="text-lg font-black">Klant en afhalen</h3></div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm font-black">Naam klant *<input value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" className={`${inputClass} mt-1`} /></label>
+        <label className="text-sm font-black">Telefoonnummer *<input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" autoComplete="tel" className={`${inputClass} mt-1`} /></label>
+        <div className="text-sm font-black">
+          <label htmlFor="store-letter-pickup-date">Afhaaldatum *</label>
+          <select id="store-letter-pickup-date" value={pickupDate} onChange={(event) => setPickupDate(event.target.value)} className={`${inputClass} mt-1`}>
+            <option value="">Kies beschikbare datum</option>
+            {initialOrder?.pickupDate && !availableDates.includes(initialOrder.pickupDate) && (
+              <option value={initialOrder.pickupDate}>{formatPickupDate(initialOrder.pickupDate)} (bestaande bestelling)</option>
+            )}
+            {availableDates.map((date) => <option key={date} value={date}>{formatPickupDate(date)}</option>)}
+          </select>
+          <div className="mt-1 flex items-center justify-between gap-2 text-xs font-medium text-[#6b645b]">
+            <span>{availableDates.length ? "Zelfde beschikbare dagen en besteldeadlines als online." : "Geen nieuwe afhaaldatums beschikbaar."}</span>
+            <button type="button" disabled={refreshingDates} onClick={() => void refreshAvailableDates().catch((refreshError) => setError(refreshError instanceof Error ? refreshError.message : "Datums verversen is mislukt."))} className="shrink-0 font-bold text-[#547762] underline disabled:opacity-50">{refreshingDates ? "Laden..." : "Ververs"}</button>
+          </div>
+        </div>
+        <label className="text-sm font-black">Afhaalwinkel *<select value={shop} onChange={(event) => setShop(event.target.value)} className={`${inputClass} mt-1`}><option value="">Kies winkel</option>{shop && !SHOPS.some((item) => item.value === shop) && <option value={shop}>{shop} (bestaand)</option>}{SHOPS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+        <label className="text-sm font-black sm:col-span-2">E-mailadres <span className="font-normal">(optioneel)</span><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="klant@voorbeeld.nl" className={`${inputClass} mt-1`} /><span className="mt-1 block text-xs font-medium text-[#6b645b]">Met e-mailadres sturen we een mooie bestelbevestiging en de dag vóór afhalen een herinnering. Zonder e-mailadres sturen we niets naar de klant.</span></label>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-3"><label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={giftWrap} onChange={(event) => setGiftWrap(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Alles in cadeaupapier · + € 1 per letter</label><label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Al afgerekend in Bake-it</label></div>
+    </section>
 
     <section className="rounded-2xl border border-[#d1dfcb] bg-[#f8fbf5] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#547762] text-sm font-black text-white">3</span><h3 className="text-lg font-black">Controleer en sla op</h3></div><strong className="text-xl">{money(totalCents)}</strong></div>{error && <p role="alert" className="mt-3 rounded-lg bg-[#fff1e9] p-3 text-sm font-bold text-[#a63f2b]">{error}</p>}{review ? <div className="mt-3 space-y-2 rounded-xl bg-white p-3 text-sm"><p><strong>{name}</strong> · {phone}{email ? ` · ${email}` : ""}</p><p>Afhalen: <strong>{friendlyDate(pickupDate)}</strong> · {shop}</p><ul className="border-y border-[#e4ded5] py-2">{lines.map((line) => <li key={line.id}><strong>{line.quantity}×</strong> {lineName(line)}{line.logo ? " · logo" : ""}{line.specialRequests?.length ? ` · ${line.specialRequests.join(", ")}` : ""}</li>)}</ul><p>{count} letters · {giftWrap ? "cadeaupapier" : "niet ingepakt"} · {paid ? "al betaald" : "betalen bij afhalen"}</p>{reopenProduction && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">De letters zijn gewijzigd; de productie wordt opnieuw opengezet.</p>}{initialOrder?.paid && initialOrder.totalCents !== totalCents && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">De prijs is gewijzigd. Controleer de betaling ook in Bake-it; de app past die niet aan.</p>}<p className="text-xs text-[#6b645b]">Na opslaan staat de bestelling in de productielijst. Schrijf het ordernummer op de papieren bon en vink ‘ingevoerd’ aan.</p><button type="button" onClick={() => void save()} disabled={saving} className="mt-2 h-12 w-full rounded-xl bg-[#24551d] px-5 text-base font-black text-white disabled:opacity-60">{saving ? "Opslaan..." : initialOrder ? "Wijziging opslaan" : "Bestelling definitief opslaan"}</button><button type="button" onClick={() => setReview(false)} className="w-full py-2 text-sm font-bold text-[#547762] underline">Terug naar gegevens</button></div> : <button type="button" onClick={() => { const validationError = validate(); setError(validationError); if (!validationError) setReview(true); }} className="mt-3 h-12 w-full rounded-xl bg-[#547762] px-5 text-base font-black text-white">Bestelling controleren →</button>}</section>
     <button type="button" onClick={onCancel} className="text-sm font-bold text-[#6b645b] underline">Sluiten zonder opslaan</button>
