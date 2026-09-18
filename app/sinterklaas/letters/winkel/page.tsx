@@ -6,7 +6,7 @@ export default function SinterklaasLettersWinkelPage() {
     <StrikShell wide>
       <StrikPageHeader
         title="Winkelbestellingen"
-        description="Chocoladeletters die in de winkel zijn aangenomen."
+        description="Winkelbestellingen blijven met hun bon in de winkel. Reken bij ophalen af in Bake-it en markeer ze daarna hier als opgehaald."
         icon={strikIcons.sinterklaasLetter}
       />
       <SinterklaasLettersClient mode="winkel" />

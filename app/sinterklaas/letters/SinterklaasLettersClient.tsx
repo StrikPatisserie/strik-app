@@ -373,7 +373,7 @@ function SummaryStrip({ orders, b2bOrders }: Readonly<{ orders: ChocolateLetterO
     const map = new Map<string, { label: string; quantity: number }>();
 
     orders
-      .filter((order) => !order.productionDone && order.status !== "geannuleerd")
+      .filter((order) => !order.productionDone && !order.pickedUp && order.status !== "opgehaald" && order.status !== "geannuleerd")
       .forEach((order) => {
         order.lines.forEach((line) => {
           const key = [
@@ -434,6 +434,7 @@ function SummaryStrip({ orders, b2bOrders }: Readonly<{ orders: ChocolateLetterO
 function OrderRow({
   order,
   onToggleDone,
+  onTogglePickedUp,
   onEdit,
   onDelete,
   updatingId,
@@ -441,6 +442,7 @@ function OrderRow({
 }: Readonly<{
   order: ChocolateLetterOrder;
   onToggleDone: (order: ChocolateLetterOrder) => void;
+  onTogglePickedUp: (order: ChocolateLetterOrder) => void;
   onEdit: (order: ChocolateLetterOrder) => void;
   onDelete: (order: ChocolateLetterOrder) => void;
   updatingId: string;
@@ -458,9 +460,11 @@ function OrderRow({
       `Bevestiging: ${formatDateTime(order.customerConfirmationSentAt)}`,
     order.bakeryEmailSentAt &&
       `Bakkerijmail: ${formatDateTime(order.bakeryEmailSentAt)}`,
+    order.pickedUpAt && `Opgehaald: ${formatDateTime(order.pickedUpAt)}`,
   ].filter(Boolean);
   const isDone = order.productionDone || order.status === "klaar";
   const isOnline = order.source === "online";
+  const isPickedUp = order.pickedUp || order.status === "opgehaald";
   const doneAtLabel = order.productionDoneAt
     ? formatDateTime(order.productionDoneAt)
     : "";
@@ -559,7 +563,7 @@ function OrderRow({
         </div>
 
         <div className="flex flex-wrap items-start justify-start gap-1.5 lg:justify-end">
-          {productionMode && <button
+          {productionMode && !isPickedUp && <button
             type="button"
             disabled={updatingId === order.id}
             onClick={() => onToggleDone(order)}
@@ -576,6 +580,18 @@ function OrderRow({
                 : productionMode
                   ? "Afvinken"
                   : "Klaar"}
+          </button>}
+          {!productionMode && order.status !== "geannuleerd" && <button
+            type="button"
+            disabled={updatingId === order.id}
+            onClick={() => onTogglePickedUp(order)}
+            className={`h-8 px-2 text-[0.68rem] font-black shadow-sm disabled:opacity-60 ${
+              isPickedUp
+                ? "border border-[#d9d2c9] bg-white text-[#6b645b]"
+                : "bg-[#24551d] text-white"
+            }`}
+          >
+            {updatingId === order.id ? "..." : isPickedUp ? "Ophalen terugdraaien" : "Afgerekend & opgehaald"}
           </button>}
           <button
             type="button"
@@ -1131,6 +1147,7 @@ export default function SinterklaasLettersClient({
   }
 
   async function toggleProductionDone(order: ChocolateLetterOrder) {
+    if (order.pickedUp || order.status === "opgehaald") return;
     const done = !order.productionDone;
     const nextStatus: ChocolateLetterOrder["status"] = done ? "klaar" : "besteld";
     setUpdatingId(order.id);
@@ -1148,6 +1165,29 @@ export default function SinterklaasLettersClient({
           ? updateError.message
           : "Status bijwerken is mislukt."
       );
+    } finally {
+      setUpdatingId("");
+    }
+  }
+
+  async function togglePickedUp(order: ChocolateLetterOrder) {
+    const pickedUp = order.pickedUp || order.status === "opgehaald";
+    const confirmed = window.confirm(pickedUp
+      ? `Ophalen van ${order.customerName} terugdraaien? De betaling in Bake-it wordt hierdoor niet aangepast.`
+      : `Is bestelling ${order.code} van ${order.customerName} in Bake-it afgerekend én aan de klant meegegeven?`);
+    if (!confirmed) return;
+
+    setUpdatingId(order.id);
+    setError("");
+    try {
+      const saved = await updateLetterOrder(order.id, {
+        pickedUp: !pickedUp,
+        pickedUpAt: pickedUp ? "" : new Date().toISOString(),
+        status: pickedUp ? (order.productionDone ? "klaar" : "besteld") : "opgehaald",
+      });
+      setOrders((current) => updateOrderList(current, saved));
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Ophaalstatus bijwerken is mislukt.");
     } finally {
       setUpdatingId("");
     }
@@ -1432,6 +1472,7 @@ export default function SinterklaasLettersClient({
                       key={order.id}
                       order={order}
                       onToggleDone={toggleProductionDone}
+                      onTogglePickedUp={togglePickedUp}
                       onEdit={openEditOrderDialog}
                       onDelete={(nextOrder) => void deleteOrder(nextOrder)}
                       updatingId={updatingId}
