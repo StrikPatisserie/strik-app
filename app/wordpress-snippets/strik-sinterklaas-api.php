@@ -457,7 +457,7 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     $now = wp_date(DATE_ATOM);
     $status = isset($order['status']) ? strik_sinterklaas_text($order['status'], 20) : 'akkoord';
     if (!in_array($status, array('aanvraag', 'offerte', 'akkoord', 'afgewezen'), true)) $status = 'aanvraag';
-    if ($status === 'akkoord' && ($delivery_date === '' || empty($order['productionDate']) || $order_text === '') && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'))) return null;
+    if ($status === 'akkoord' && ($delivery_date === '' || $order_text === '') && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'))) return null;
 
     return array(
         'id' => $id,
@@ -636,7 +636,7 @@ function strik_sinterklaas_b2b_save($request) {
     $order = strik_sinterklaas_sanitize_b2b_order(array_merge(is_array($existing) ? $existing : array(), $params), is_array($existing) ? $existing : array());
 
     if ($order === null) {
-        return new WP_Error('strik_sinterklaas_invalid_b2b_order', 'Vul een klantnaam in; voor akkoord zijn ook bestelling, leverdatum en productiedatum nodig.', array('status' => 400));
+        return new WP_Error('strik_sinterklaas_invalid_b2b_order', 'Vul een klantnaam in; voor akkoord zijn ook bestelling en leverdatum nodig.', array('status' => 400));
     }
 
     $orders[strik_sinterklaas_order_key($order['id'])] = $order;
@@ -738,7 +738,48 @@ function strik_sinterklaas_letter_delete($request) {
 
 if (!function_exists('strik_sinterklaas_b2b_delete')) {
 function strik_sinterklaas_b2b_delete($request) {
-    return strik_sinterklaas_delete_order($request, STRIK_SINTERKLAAS_B2B_OPTION_NAME);
+    $id = strik_sinterklaas_request_id($request);
+    $params = $request->get_json_params();
+    $reason = is_array($params) && isset($params['reason']) ? strik_sinterklaas_text($params['reason'], 40) : '';
+    $reason_note = is_array($params) && isset($params['reasonNote']) ? strik_sinterklaas_textarea($params['reasonNote'], 500) : '';
+    $reason_labels = array(
+        'geannuleerd_door_klant' => 'Geannuleerd door klant',
+        'verkeerd_ingevoerd' => 'Verkeerd ingevoerd',
+        'anders' => 'Anders',
+    );
+    if ($id === '' || !isset($reason_labels[$reason]) || ($reason === 'anders' && $reason_note === '')) {
+        return new WP_Error('strik_sinterklaas_invalid_delete', 'Kies een reden voor het verwijderen en licht Anders toe.', array('status' => 400));
+    }
+
+    $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
+    $key = strik_sinterklaas_order_key($id);
+    if (!isset($orders[$key])) return rest_ensure_response(array('deleted' => false, 'id' => $id));
+
+    $order = $orders[$key];
+    if (!isset($order['status']) || $order['status'] === 'akkoord') {
+        $lines = array(
+            'LET OP: deze definitieve B2B-bestelling is verwijderd uit de Strik Team app.',
+            'Reden: ' . $reason_labels[$reason] . ($reason_note !== '' ? ' - ' . $reason_note : ''),
+            '',
+            'Klant: ' . $order['customerName'],
+            'Leverdatum: ' . $order['deliveryDate'],
+            'Bestelling: ' . $order['orderText'],
+            'Order-id: ' . $order['id'],
+            '',
+            'Controleer Bake-it en de productieplanning; daar wordt niets automatisch verwijderd.',
+        );
+        $sent = wp_mail(
+            STRIK_SINTERKLAAS_RECIPIENT,
+            'LET OP: DEFINITIEVE B2B-BESTELLING VERWIJDERD - ' . $order['customerName'],
+            implode("\n", $lines),
+            array('Content-Type: text/plain; charset=UTF-8')
+        );
+        if (!$sent) return new WP_Error('strik_sinterklaas_delete_mail_failed', 'Verwijderen gestopt: de waarschuwingsmail kon niet worden verstuurd.', array('status' => 503));
+    }
+
+    unset($orders[$key]);
+    strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
+    return rest_ensure_response(array('deleted' => true, 'id' => $id));
 }
 }
 

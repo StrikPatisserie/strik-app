@@ -344,13 +344,17 @@ export async function retryB2BConfirmation(id: string) {
   return normalized;
 }
 
-export async function deleteB2BOrder(id: string) {
+export async function deleteB2BOrder(id: string, reason: string, reasonNote: string) {
   const url = new URL(ENDPOINTS.b2b, window.location.origin);
   url.searchParams.set("id", id);
 
   const data = await requestJson<unknown>(
     url.toString(),
-    { method: "DELETE" },
+    {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, reason, reasonNote }),
+    },
     "B2B-bestelling verwijderen is mislukt."
   );
 

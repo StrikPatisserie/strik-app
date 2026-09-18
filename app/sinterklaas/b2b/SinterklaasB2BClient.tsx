@@ -278,6 +278,48 @@ function orderWarnings(order: SinterklaasB2BOrder) {
   ].filter((warning): warning is string => Boolean(warning));
 }
 
+function estimatedUnits(order: SinterklaasB2BOrder) {
+  const quantities = Array.from(order.orderText.matchAll(/\b(\d{1,4})\s*(?:x|stuks?|letters?)\b/gi), (match) => Number(match[1]));
+  return Math.min(2000, Math.max(1, quantities.reduce((sum, quantity) => sum + quantity, 0)));
+}
+
+function productionLoadKey(date: string, department: SinterklaasB2BOrder["department"]) {
+  return `${date}:${department}`;
+}
+
+function proposeProductionDates(orders: SinterklaasB2BOrder[]) {
+  const today = todayIso();
+  const load = new Map<string, number>();
+  const proposals = new Map<string, string>();
+  const addLoad = (date: string, order: SinterklaasB2BOrder) => {
+    for (const department of order.department === "beide" ? ["chocolade", "bakkerij"] as const : [order.department]) {
+      const key = productionLoadKey(date, department);
+      load.set(key, (load.get(key) || 0) + estimatedUnits(order));
+    }
+  };
+
+  orders.filter((order) => order.status === "akkoord" && !order.cancelled && !order.delivered && order.productionDate).forEach((order) => addLoad(order.productionDate, order));
+  const unplanned = orders.filter((order) => order.status === "akkoord" && !order.cancelled && !order.delivered && !order.productionDate && order.deliveryDate >= today);
+  unplanned.sort((a, b) => a.deliveryDate.localeCompare(b.deliveryDate) || estimatedUnits(b) - estimatedUnits(a));
+
+  for (const order of unplanned) {
+    const units = estimatedUnits(order);
+    const preferredDaysAhead = units >= 200 ? 7 : units >= 50 ? 4 : 2;
+    let bestDate = "";
+    let bestScore = Infinity;
+    for (let daysBefore = 1; daysBefore <= 14; daysBefore += 1) {
+      const date = addDays(order.deliveryDate, -daysBefore);
+      if (date < today || new Date(`${date}T12:00:00`).getDay() === 0) continue;
+      const departments = order.department === "beide" ? ["chocolade", "bakkerij"] as const : [order.department];
+      const existingUnits = Math.max(...departments.map((department) => load.get(productionLoadKey(date, department)) || 0));
+      const score = Math.abs(daysBefore - preferredDaysAhead) * 12 + existingUnits / 25 + (new Date(`${date}T12:00:00`).getDay() === 6 ? 2 : 0);
+      if (score < bestScore) { bestDate = date; bestScore = score; }
+    }
+    if (bestDate) { proposals.set(order.id, bestDate); addLoad(bestDate, order); }
+  }
+  return proposals;
+}
+
 async function parseB2BExcel(file: File) {
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(await file.arrayBuffer(), {
@@ -417,8 +459,8 @@ function B2BOrderForm({
       setMessage("Vul minimaal de klantnaam in.");
       return;
     }
-    if (form.status === "akkoord" && (!form.deliveryDate || !form.productionDate || !form.orderText.trim())) {
-      setMessage("Voor akkoord zijn de bestelling, leverdatum en productiedatum nodig.");
+    if (form.status === "akkoord" && (!form.deliveryDate || !form.orderText.trim())) {
+      setMessage("Voor definitief zijn de bestelling en leverdatum nodig.");
       return;
     }
 
@@ -439,6 +481,7 @@ function B2BOrderForm({
         ...(initialOrder?.logo !== form.logo ? { logoChecked: false } : {}),
         ...(initialOrder?.packaging !== form.packaging ? { packagingChecked: false } : {}),
         ...(initialOrder?.textInstructions !== form.textInstructions ? { textChecked: false } : {}),
+        ...(initialOrder && initialOrder.deliveryDate !== form.deliveryDate ? { productionScheduled: false } : {}),
         year: form.deliveryDate
           ? yearFromDate(form.deliveryDate)
           : initialOrder?.year || currentYear(),
@@ -502,18 +545,7 @@ function B2BOrderForm({
           </span>
           <input
             value={form.deliveryDate}
-            onChange={(event) => setField("deliveryDate", event.target.value)}
-            type="date"
-            className="h-10 border border-[#d6e5d8] bg-white px-3 text-sm font-black outline-none"
-          />
-        </label>
-        <label className="grid gap-1">
-          <span className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
-            Productiedatum · bewust kiezen
-          </span>
-          <input
-            value={form.productionDate}
-            onChange={(event) => setField("productionDate", event.target.value)}
+            onChange={(event) => setForm((current) => ({ ...current, deliveryDate: event.target.value, productionDate: "" }))}
             type="date"
             className="h-10 border border-[#d6e5d8] bg-white px-3 text-sm font-black outline-none"
           />
@@ -733,7 +765,7 @@ function B2BOrderRow({
             : "border-[#e4ded5] bg-white"
       }`}
     >
-      <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_18rem]">
+      <div className="grid gap-3 lg:grid-cols-[9rem_minmax(0,1fr)_10rem]">
         <div className="border-l-4 border-[#c3d3bc] pl-2">
           <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
             Leverdatum
@@ -756,11 +788,8 @@ function B2BOrderRow({
             <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
               {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
             </span>
-            {statusBadge("Bake-it", order.entered)}
-            {statusBadge("Ingepland", order.productionScheduled)}
-            {statusBadge("Productie", order.productionDone)}
-            {statusBadge("Ingepakt", order.packed)}
-            {statusBadge("Geleverd", order.delivered)}
+            {order.status === "akkoord" && statusBadge(order.entered ? "Bake-it ✓" : "Bake-it open", order.entered)}
+            {order.status === "akkoord" && statusBadge(order.productionDone ? "Productie klaar" : "Productie open", order.productionDone)}
             {dueSoon(order) && (
               <span className="rounded-full bg-[#fff3c4] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#705000]">
                 Binnen 2 dagen
@@ -794,61 +823,31 @@ function B2BOrderRow({
               Archief · alleen lezen
             </span>
           ) : <>
-          {(
-            [
-              ["entered", "Ingevoerd"],
-              ["productionScheduled", "Ingepland"],
-              ["productionDone", "Productie klaar"],
-              ["packed", "Ingepakt"],
-              ["delivered", "Geleverd"],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              disabled={updatingId === `${order.id}-${key}` || order.status !== "akkoord"}
-              onClick={() => onToggle(order, key)}
-              className={`h-8 px-2 text-[0.68rem] font-black shadow-sm disabled:opacity-60 ${
-                order[key]
-                  ? "bg-[#24551d] text-white"
-                  : "border border-[#e4ded5] bg-white text-[#4d463d]"
-              }`}
-            >
-              {updatingId === `${order.id}-${key}` ? "..." : label}
-            </button>
-          ))}
-          {([
-            ["logoChecked", "Logo gecontroleerd", order.logo],
-            ["textChecked", "Tekst gecontroleerd", order.textInstructions],
-            ["packagingChecked", "Verpakking gecontroleerd", order.packaging],
-          ] as const).filter(([, , detail]) => Boolean(detail)).map(([key, label]) => (
-            <button key={key} type="button" disabled={updatingId === `${order.id}-${key}` || order.status !== "akkoord"} onClick={() => onToggle(order, key)} className={`h-8 px-2 text-[0.68rem] font-black shadow-sm disabled:opacity-60 ${order[key] ? "bg-[#24551d] text-white" : "border border-[#e5d28a] bg-[#fffdf4] text-[#705000]"}`}>
-              {updatingId === `${order.id}-${key}` ? "..." : label}
-            </button>
-          ))}
           <button
             type="button"
             onClick={() => onEdit(order)}
-            className="h-8 border border-[#d6e5d8] bg-[#f6faf4] px-2 text-[0.68rem] font-black text-[#24551d] shadow-sm"
+            className="h-8 border border-[#d6e5d8] bg-[#f6faf4] px-3 text-xs font-black text-[#24551d] shadow-sm"
           >
             Wijzig
           </button>
-          {confirmationNeedsAttention && <button
-            type="button"
-            disabled={updatingId === `${order.id}-confirmation`}
-            onClick={() => onRetryConfirmation(order)}
-            className="h-8 border border-[#e5d28a] bg-[#fffdf4] px-2 text-[0.68rem] font-black text-[#705000] disabled:opacity-60"
-          >
-            {updatingId === `${order.id}-confirmation` ? "Versturen..." : "Mail opnieuw"}
-          </button>}
-          <button
-            type="button"
-            disabled={updatingId === `${order.id}-delete`}
-            onClick={() => onDelete(order)}
-            className="h-8 border border-[#f1b8a8] bg-white px-2 text-[0.68rem] font-black text-[#9a3412] shadow-sm disabled:opacity-60"
-          >
-            {updatingId === `${order.id}-delete` ? "..." : "Verwijder"}
-          </button>
+          <details className="relative">
+            <summary className="flex h-8 cursor-pointer items-center border border-[#e4ded5] bg-white px-3 text-xs font-black text-[#4d463d]">Acties ▾</summary>
+            <div className="absolute right-0 z-20 mt-1 grid min-w-56 gap-1 border border-[#e4ded5] bg-white p-2 shadow-lg">
+              {order.status === "akkoord" && ([
+                ["entered", "In Bake-it ingevoerd", true],
+                ["productionDone", "Productie klaar", true],
+                ["packed", "Ingepakt", true],
+                ["delivered", "Geleverd", true],
+                ["logoChecked", "Logo gecontroleerd", Boolean(order.logo)],
+                ["textChecked", "Tekst gecontroleerd", Boolean(order.textInstructions)],
+                ["packagingChecked", "Verpakking gecontroleerd", Boolean(order.packaging)],
+              ] as const).filter(([, , visible]) => visible).map(([key, label]) => <label key={key} className="flex cursor-pointer items-center gap-2 px-1 py-1 text-xs font-bold">
+                <input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => onToggle(order, key)} />{label}
+              </label>)}
+              {confirmationNeedsAttention && <button type="button" disabled={updatingId === `${order.id}-confirmation`} onClick={() => onRetryConfirmation(order)} className="border-t border-[#e4ded5] px-1 py-2 text-left text-xs font-black text-[#705000]">Mail opnieuw versturen</button>}
+              <button type="button" disabled={updatingId === `${order.id}-delete`} onClick={() => onDelete(order)} className="border-t border-[#e4ded5] px-1 py-2 text-left text-xs font-black text-[#9a3412]">Verwijderen...</button>
+            </div>
+          </details>
           </>}
         </div>
       </div>
@@ -869,6 +868,10 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   const [editingOrder, setEditingOrder] = useState<SinterklaasB2BOrder | null>(
     null
   );
+  const [deleteTarget, setDeleteTarget] = useState<SinterklaasB2BOrder | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteReasonNote, setDeleteReasonNote] = useState("");
+  const [planDrafts, setPlanDrafts] = useState<Record<string, string>>({});
 
   async function loadOrders(nextYear = year, nextSearch = search) {
     setLoading(true);
@@ -942,6 +945,26 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
     }
   }
 
+  async function saveProductionPlan(order: SinterklaasB2BOrder, proposedDate: string) {
+    const productionDate = planDrafts[order.id] ?? order.productionDate ?? proposedDate;
+    if (!productionDate || productionDate > order.deliveryDate) {
+      setError("Kies een productiedatum uiterlijk op de leverdatum.");
+      return;
+    }
+    setUpdatingId(`${order.id}-plan`);
+    setError("");
+    try {
+      const saved = await updateB2BOrder(order.id, { productionDate, productionScheduled: true });
+      setOrders((current) => updateOrderList(current, saved));
+      setPlanDrafts((current) => { const next = { ...current }; delete next[order.id]; return next; });
+      if (saved.confirmationEmailError) setError(saved.confirmationEmailError);
+    } catch (planError) {
+      setError(planError instanceof Error ? planError.message : "Productieplanning opslaan is mislukt.");
+    } finally {
+      setUpdatingId("");
+    }
+  }
+
   function openNewOrderDialog() {
     setEditingOrder(null);
     setFormOpen(true);
@@ -978,16 +1001,15 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   }
 
   async function deleteOrder(order: SinterklaasB2BOrder) {
-    const confirmed = window.confirm(
-      `B2B-bestelling van ${order.customerName} verwijderen?`
-    );
-    if (!confirmed) return;
-
+    if (!deleteReason || (deleteReason === "anders" && !deleteReasonNote.trim())) return;
     setUpdatingId(`${order.id}-delete`);
     setError("");
     try {
-      await deleteB2BOrder(order.id);
+      await deleteB2BOrder(order.id, deleteReason, deleteReasonNote.trim());
       setOrders((current) => current.filter((item) => item.id !== order.id));
+      setDeleteTarget(null);
+      setDeleteReason("");
+      setDeleteReasonNote("");
     } catch (deleteError) {
       setError(
         deleteError instanceof Error
@@ -1056,6 +1078,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
 
   const groupedOrders = groupByMonth(visibleOrders);
   const activeOrders = visibleOrders.filter((order) => order.status === "akkoord" && !order.cancelled && !order.delivered && order.deliveryDate >= addDays(todayIso(), -7));
+  const proposedDates = proposeProductionDates(activeOrders);
   const unenteredCount = activeOrders.filter((order) => !order.entered).length;
   const unscheduledCount = activeOrders.filter((order) => !order.productionScheduled && !order.productionDone).length;
   const extrasOpenCount = activeOrders.filter((order) =>
@@ -1065,7 +1088,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   ).length;
   const productionByDate = Array.from(
     activeOrders.reduce((groups, order) => {
-      const date = order.productionDate || "zonder-datum";
+      const date = order.productionDate || proposedDates.get(order.id) || "zonder-datum";
       groups.set(date, [...(groups.get(date) || []), order]);
       return groups;
     }, new Map<string, SinterklaasB2BOrder[]>()).entries()
@@ -1081,19 +1104,26 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
         <button type="button" onClick={() => void loadOrders(year)} className="h-9 border border-[#d6e5d8] bg-white px-3 text-sm font-bold">Ververs</button>
       </div>
       {error && <p className="border border-[#f1b8a8] bg-[#fff4ef] p-2 text-sm font-bold text-[#9a3412]">{error}</p>}
+      <p className="border border-[#e5d28a] bg-[#fffdf4] p-2 text-xs text-[#6b645b]">Voorgestelde dagen zijn voorlopig. De app spreidt alleen bekende B2B-bestellingen op basis van leverdatum, afdeling en geschat aantal; overige drukte in de bakkerij is hierin niet zichtbaar. Sla de gekozen dag op om hem vast te leggen.</p>
       {loading ? <p>Laden...</p> : productionByDate.length === 0 ? <p className="border border-[#e4ded5] bg-white p-3 text-sm">Geen bevestigde B2B-productie in deze periode.</p> : productionByDate.map(([date, group]) => (
         <section key={date} className="border border-[#d6e5d8] bg-white">
           <h2 className="bg-[#dcebd8] px-3 py-2 text-sm font-black">Productie {formatDate(date)} · {group.length} bestellingen</h2>
           <div className="divide-y divide-[#e4ded5]">
             {group.map((order) => <article key={order.id} className="space-y-2 p-3 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{order.customerName} · leveren {formatDate(order.deliveryDate)}</h3><span>{order.department}</span></div>
+              <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{order.customerName} · leveren {formatDate(order.deliveryDate)}</h3><span>{order.department} · circa {estimatedUnits(order)} stuks uit omschrijving</span></div>
               <p className="whitespace-pre-wrap">{order.orderText}</p>
               {order.logo && <p><strong>Logo:</strong> {order.logo} {!order.logoChecked && "· NOG CONTROLEREN"}</p>}
               {order.textInstructions && <p><strong>Tekst:</strong> {order.textInstructions} {!order.textChecked && "· NOG CONTROLEREN"}</p>}
               {order.packaging && <p><strong>Verpakking:</strong> {order.packaging} {!order.packagingChecked && "· NOG CONTROLEREN"}</p>}
               {order.importantNotes && <p><strong>Belangrijk:</strong> {order.importantNotes}</p>}
+              <div className="flex flex-wrap items-end gap-2 border-t border-[#e4ded5] pt-2">
+                <label className="grid gap-1 text-xs font-black">Productiedag {order.productionScheduled ? "· vastgelegd" : "· voorstel"}
+                  <input type="date" value={planDrafts[order.id] ?? order.productionDate ?? proposedDates.get(order.id) ?? ""} max={order.deliveryDate} onChange={(event) => setPlanDrafts((current) => ({ ...current, [order.id]: event.target.value }))} className="h-9 border border-[#d6e5d8] bg-white px-2" />
+                </label>
+                <button type="button" disabled={updatingId === `${order.id}-plan` || !(planDrafts[order.id] ?? order.productionDate ?? proposedDates.get(order.id))} onClick={() => void saveProductionPlan(order, proposedDates.get(order.id) || "")} className="h-9 bg-[#24551d] px-3 text-xs font-black text-white disabled:opacity-50">{updatingId === `${order.id}-plan` ? "Opslaan..." : "Planning vastleggen"}</button>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {([ ["productionScheduled", "Ingepland"], ["productionDone", "Productie klaar"], ["packed", "Ingepakt"] ] as const).map(([key, label]) => <button key={key} type="button" disabled={updatingId === `${order.id}-${key}`} onClick={() => void toggleStatus(order, key)} className={`h-8 px-2 text-xs font-black disabled:opacity-60 ${order[key] ? "bg-[#24551d] text-white" : "border border-[#e4ded5] bg-white"}`}>{label}</button>)}
+                {([ ["productionDone", "Productie klaar"], ["packed", "Ingepakt"] ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => void toggleStatus(order, key)} />{label}</label>)}
               </div>
             </article>)}
           </div>
@@ -1248,7 +1278,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
                       updatingId={updatingId}
                       onToggle={toggleStatus}
                       onEdit={openEditOrderDialog}
-                      onDelete={(nextOrder) => void deleteOrder(nextOrder)}
+                      onDelete={(nextOrder) => { setError(""); setDeleteTarget(nextOrder); setDeleteReason(""); setDeleteReasonNote(""); }}
                       onRetryConfirmation={(nextOrder) => void resendConfirmation(nextOrder)}
                     />
                   ))}
@@ -1270,6 +1300,28 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
           onSaved={handleSavedOrder}
         />
       )}
+      {deleteTarget && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#1a1815]/50 p-4" role="dialog" aria-modal="true" aria-label="Bestelling verwijderen">
+        <div className="w-full max-w-lg space-y-3 border border-[#e4ded5] bg-white p-4 shadow-2xl">
+          <h2 className="text-lg font-black">Bestelling van {deleteTarget.customerName} verwijderen?</h2>
+          <p className="text-sm text-[#6b645b]">{deleteTarget.status === "akkoord" ? "Deze definitieve bestelling wordt verwijderd. Info@strik-patisserie.nl ontvangt eerst een waarschuwing; de klant krijgt geen mail." : "Deze aanvraag wordt verwijderd; de klant krijgt geen mail."}</p>
+          <label className="grid gap-1 text-sm font-bold">Reden
+            <select value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} className="h-10 border border-[#e4ded5] bg-white px-2">
+              <option value="">Kies een reden</option>
+              <option value="geannuleerd_door_klant">Geannuleerd door klant</option>
+              <option value="verkeerd_ingevoerd">Verkeerd ingevoerd</option>
+              <option value="anders">Anders</option>
+            </select>
+          </label>
+          {deleteReason === "anders" && <label className="grid gap-1 text-sm font-bold">Toelichting
+            <textarea value={deleteReasonNote} onChange={(event) => setDeleteReasonNote(event.target.value)} rows={2} className="border border-[#e4ded5] p-2" />
+          </label>}
+          {error && <p className="border border-[#f1b8a8] bg-[#fff4ef] p-2 text-sm font-bold text-[#9a3412]">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setDeleteTarget(null)} className="h-9 border border-[#e4ded5] px-3 text-sm font-bold">Terug</button>
+            <button type="button" disabled={!deleteReason || (deleteReason === "anders" && !deleteReasonNote.trim()) || updatingId === `${deleteTarget.id}-delete`} onClick={() => void deleteOrder(deleteTarget)} className="h-9 bg-[#9a3412] px-3 text-sm font-black text-white disabled:opacity-50">{updatingId === `${deleteTarget.id}-delete` ? "Verwijderen..." : "Definitief verwijderen"}</button>
+          </div>
+        </div>
+      </div>}
     </div>
   );
 }
