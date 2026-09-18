@@ -21,6 +21,13 @@ const parentRoutes: Record<string, string> = {
   "/schoonmaak": "/ijs",
   "/schoonmaak/overzicht": "/management",
   "/management/personeelsagenda": "/management",
+  "/sinterklaas/letters/winkel": "/sinterklaas/letters/verkoop",
+  "/sinterklaas/letters/online": "/sinterklaas/letters/verkoop",
+  "/sinterklaas/letters/productie": "/sinterklaas/letters/productie-overzicht",
+  "/sinterklaas/letters/centrale-productie": "/sinterklaas/letters/productie-overzicht",
+  "/sinterklaas/letters/management": "/sinterklaas/letters/productie-overzicht",
+  "/sinterklaas/b2b": "/sinterklaas/bedrijven/verkoop",
+  "/sinterklaas/mailing": "/sinterklaas/bedrijven/verkoop",
 };
 
 const topLevelRoutes = new Set([
