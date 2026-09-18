@@ -630,7 +630,7 @@ function operationsDraftToPayload(
 }
 
 const DEFINITIVE_BATCH_START_MINUTE_OF_DAY = 20 * 60;
-const TOMORROW_PROGNOSE_START_MINUTE_OF_DAY = 12 * 60 + 15;
+const TOMORROW_PROGNOSE_START_MINUTE_OF_DAY = 12 * 60 + 30;
 const SATURDAY_MONDAY_PROGNOSE_START_MINUTE_OF_DAY = 7 * 60 + 15;
 
 function minuteOfDay(hour: number, minute: number) {
@@ -725,7 +725,7 @@ function tomorrowPrognoseGate(dateState: DateState) {
 
   return saturday
     ? "De voorlopige prognose voor maandag is zaterdag vanaf 07:15 beschikbaar."
-    : "De voorlopige prognose voor morgen is vanaf 12:15 beschikbaar.";
+    : "De voorlopige prognose voor morgen wordt rond 12:30 verwacht.";
 }
 
 function futurePlanGateMessage(dateState: DateState, hasBatch: boolean) {
@@ -737,6 +737,17 @@ function futurePlanGateMessage(dateState: DateState, hasBatch: boolean) {
   }
 
   return "Voor deze toekomstige datum is nog geen prognose ingeladen. De planning verschijnt zodra de bonnen binnen zijn.";
+}
+
+function WaitingPlanBackdrop() {
+  return <div aria-hidden="true" className="pointer-events-none select-none space-y-3 opacity-30 blur-[1px]">
+    <div className="flex flex-wrap items-center justify-between gap-3 border border-[#e8e4de] bg-[#faf8f5] p-3">
+      <div className="space-y-2"><div className="h-3 w-28 rounded bg-[#8d968b]" /><div className="h-5 w-44 rounded bg-[#8d968b]" /></div>
+      <div className="flex gap-2"><div className="h-9 w-20 rounded bg-white" /><div className="h-9 w-20 rounded bg-white" /><div className="h-9 w-20 rounded bg-white" /></div>
+    </div>
+    <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">{Array.from({ length: 5 }, (_, index) => <div key={index} className="h-20 border border-[#e8e4de] bg-white p-3"><div className="h-2 w-16 rounded bg-[#b5c2b3]" /><div className="mt-4 h-5 w-24 max-w-full rounded bg-[#8d968b]" /></div>)}</div>
+    <div className="grid gap-3 lg:grid-cols-2">{[0, 1].map((column) => <div key={column} className="min-h-72 border border-[#e8e4de] bg-white p-4"><div className="h-5 w-36 rounded bg-[#8d968b]" />{[0, 1, 2, 3].map((row) => <div key={row} className="mt-4 flex items-center gap-3 border-b border-[#e8e4de] pb-3"><div className="h-8 w-8 rounded-full bg-[#b5c2b3]" /><div className="h-3 flex-1 rounded bg-[#d5ded3]" /><div className="h-3 w-12 rounded bg-[#d5ded3]" /></div>)}</div>)}</div>
+  </div>;
 }
 
 function planTitleForDate(dateState: DateState) {
@@ -1136,7 +1147,7 @@ function sourceLabelFor(status: BatchStatus) {
 }
 
 function batchLabelFor(status: BatchStatus) {
-  if (status === "prognose") return "Prognose 12:00";
+  if (status === "prognose") return "Prognose 12:30";
   if (status === "definitief") return "Definitief 20:00";
   if (status === "handmatig") return "Upload";
   if (status === "historie") return "Archief";
@@ -9023,19 +9034,23 @@ export default function BakkerijLogistiekDashboard() {
       />
 
       {futureGateMessage ? (
-        <section
-          role="status"
-          aria-labelledby="tomorrow-prognose-title"
-          aria-describedby="tomorrow-prognose-message"
-          className="mx-auto mt-6 max-w-xl border border-[#d7cec4] bg-[#fbf7ef] p-6 text-center shadow-sm"
-        >
+        <div className="relative mt-5 min-h-[35rem]">
+          <WaitingPlanBackdrop />
+          <section
+            role="status"
+            aria-labelledby="tomorrow-prognose-title"
+            aria-describedby="tomorrow-prognose-message"
+            className="absolute left-1/2 top-10 z-10 w-[min(100%,36rem)] -translate-x-1/2 border border-[#d7cec4] bg-[#fbf7ef] p-6 text-center shadow-lg"
+          >
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#a85a3f]">
             {futureGateLoading ? "Even geduld" : "Let op"}
           </p>
           <h2 id="tomorrow-prognose-title" className="mt-2 text-xl font-black text-[#1a1815]">
             {futureGateLoading
               ? `Planning voor ${planTitleForDate(dateState).toLowerCase()} laden...`
-              : `De planning voor ${planTitleForDate(dateState).toLowerCase()} is nog niet beschikbaar`}
+              : tomorrowPrognoseGate(dateState)
+                ? `Planning voor ${planTitleForDate(dateState).toLowerCase()} verwacht vanaf ${dayOfWeekForDate(dateState.today) === 6 ? "07:15" : "circa 12:30"}`
+                : `De planning voor ${planTitleForDate(dateState).toLowerCase()} is nog niet beschikbaar`}
           </h2>
           <p id="tomorrow-prognose-message" className="mt-3 text-sm font-semibold text-[#6b645b]">
             {futureGateLoading
@@ -9072,7 +9087,8 @@ export default function BakkerijLogistiekDashboard() {
               Opnieuw controleren
             </button>
           </div>
-        </section>
+          </section>
+        </div>
       ) : (
       <>
 
