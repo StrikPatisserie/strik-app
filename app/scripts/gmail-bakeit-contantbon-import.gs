@@ -29,24 +29,25 @@ const BAKEIT_CONTANTBON_CONFIG = {
   PROGNOSE_MAIL_START_MINUTE: 45,
   DEFINITIVE_MAIL_START_HOUR: 20,
   DEFINITIVE_MAIL_START_MINUTE: 15,
-  TRIGGER_RUNS: [
-    { HOUR: 12, MINUTE: 0 },
-    { HOUR: 12, MINUTE: 15 },
-    { HOUR: 12, MINUTE: 30 },
-    { HOUR: 20, MINUTE: 5 },
-    { HOUR: 20, MINUTE: 20 },
-    { HOUR: 20, MINUTE: 35 },
-  ],
-  SATURDAY_PROGNOSE_TRIGGER_RUNS: [
-    { HOUR: 7, MINUTE: 0 },
-    { HOUR: 7, MINUTE: 15 },
-    { HOUR: 7, MINUTE: 30 },
-  ],
   IMPORT_VERSION: 'split-mails-v1',
-  SCRIPT_VERSION: 'gmail-archive-v7',
+  SCRIPT_VERSION: 'gmail-archive-v8-timewindows',
 };
 
 function importBakeItContantbonnen() {
+  // Een handmatige run en een tijdtrigger mogen dezelfde bonnen niet tegelijk verzenden.
+  const importLock = LockService.getScriptLock();
+  if (!importLock.tryLock(1000)) {
+    logBakeIt_('Bake-it import is al bezig; volgende controle probeert opnieuw.');
+    return;
+  }
+  try {
+    importBakeItContantbonnenUitvoeren_();
+  } finally {
+    importLock.releaseLock();
+  }
+}
+
+function importBakeItContantbonnenUitvoeren_() {
   const props = PropertiesService.getScriptProperties();
   const labelCache = {};
   const threads = searchBakeItThreads_(BAKEIT_CONTANTBON_CONFIG.MAX_THREADS);
@@ -134,13 +135,17 @@ function importBakeItContantbonnen() {
   verplaatsBakeItIngelezenThreads_(labelCache);
 }
 
-// Koppel alleen deze functie aan een Apps Script-trigger "elke 5 minuten".
-// Buiten het middagvenster doet hij geen Gmail- of API-aanroepen.
+// Bestaande 5-minutentriggers blijven werken totdat de instelfunctie is gedraaid.
 function importBakeItContantbonnenMiddagCheck() {
+  importBakeItContantbonnenTijdvensters();
+}
+
+// Koppel alleen deze functie aan een Apps Script-trigger "elke 5 minuten".
+// Buiten 07:00-08:00, 12:00-13:00 en 20:00-21:00 (Amsterdam) geen Gmail/API.
+function importBakeItContantbonnenTijdvensters() {
   const now = new Date();
   const hour = Number(Utilities.formatDate(now, 'Europe/Amsterdam', 'H'));
-  const minute = Number(Utilities.formatDate(now, 'Europe/Amsterdam', 'm'));
-  if (hour !== 12 || minute < 17 || minute > 35) return;
+  if (hour !== 7 && hour !== 12 && hour !== 20) return;
   importBakeItContantbonnen();
 }
 
@@ -741,8 +746,12 @@ function isBakeItOrdersEmailContantbonMail_(message) {
 }
 
 function maakBakeItImportTriggerAan() {
-  const functionName = 'importBakeItContantbonnen';
-  const legacyFunctionNames = ['importBakeItBonnen'];
+  const functionName = 'importBakeItContantbonnenTijdvensters';
+  const legacyFunctionNames = [
+    'importBakeItBonnen',
+    'importBakeItContantbonnen',
+    'importBakeItContantbonnenMiddagCheck',
+  ];
   const existingTriggers = ScriptApp.getProjectTriggers().filter(
     (trigger) =>
       trigger.getHandlerFunction() === functionName ||
@@ -753,26 +762,13 @@ function maakBakeItImportTriggerAan() {
     ScriptApp.deleteTrigger(trigger);
   });
 
-  BAKEIT_CONTANTBON_CONFIG.TRIGGER_RUNS.forEach((run) => {
-    ScriptApp.newTrigger(functionName)
-      .timeBased()
-      .atHour(run.HOUR)
-      .nearMinute(run.MINUTE)
-      .everyDays(1)
-      .create();
-  });
-
-  BAKEIT_CONTANTBON_CONFIG.SATURDAY_PROGNOSE_TRIGGER_RUNS.forEach((run) => {
-    ScriptApp.newTrigger(functionName)
-      .timeBased()
-      .onWeekDay(ScriptApp.WeekDay.SATURDAY)
-      .atHour(run.HOUR)
-      .nearMinute(run.MINUTE)
-      .create();
-  });
+  ScriptApp.newTrigger(functionName)
+    .timeBased()
+    .everyMinutes(5)
+    .create();
 
   logBakeIt_(
-    `Bake-it importtriggers aangemaakt: ${BAKEIT_CONTANTBON_CONFIG.TRIGGER_RUNS.length}x per dag rond 12:00 en 20:00, plus ${BAKEIT_CONTANTBON_CONFIG.SATURDAY_PROGNOSE_TRIGGER_RUNS.length}x op zaterdag rond 07:00.`
+    'Bake-it importtrigger aangemaakt: elke 5 minuten; importeert alleen tussen 07:00-08:00, 12:00-13:00 en 20:00-21:00 (Europe/Amsterdam).'
   );
 }
 
