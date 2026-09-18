@@ -17,7 +17,8 @@ import type {
   ChocolateLetterStyle,
   SinterklaasB2BOrder,
 } from "../types";
-import { b2bLetterLineLabel, b2bLetterTotal } from "../b2bLetterLines";
+import { b2bLetterTotal } from "../b2bLetterLines";
+import B2BLetterLineBadges from "../B2BLetterLineBadges";
 
 type Mode = "winkel" | "productie";
 
@@ -394,10 +395,10 @@ function SummaryStrip({ orders, b2bOrders }: Readonly<{ orders: ChocolateLetterO
 
     b2bOrders.filter((order) => !(order.department === "beide" ? order.letterProductionDone : order.productionDone)).forEach((order) => {
       order.letterLines.forEach((line) => {
-        const key = [line.chocolate, line.size, line.style, line.letter, order.logo ? "logo" : "zonder-logo"].join("-");
+        const key = [line.chocolate, line.size, line.style, line.letter, order.logo ? "logo" : "zonder-logo", ...line.exceptions].join("-");
         const existing = map.get(key);
         map.set(key, {
-          label: `${line.letter} · ${line.chocolate} · ${line.size} · ${line.style}${order.logo ? " · logo" : ""}`,
+          label: `${line.letter} · ${line.chocolate} · ${line.size} · ${line.style}${order.logo ? " · logo" : ""}${line.exceptions.length ? ` · ${line.exceptions.join(", ")}` : ""}`,
           quantity: (existing?.quantity || 0) + line.quantity,
         });
       });
@@ -1443,7 +1444,7 @@ export default function SinterklaasLettersClient({
                 <span className="text-[#6b645b]">Levering {formatDate(order.deliveryDate)}{order.productionDate ? ` · geplande productiedag ${formatDate(order.productionDate)}` : ""}</span>
                 {(order.department === "beide" ? order.letterProductionDone : order.productionDone) && <span className="bg-[#dcebd8] px-2 py-0.5 text-xs font-black text-[#24551d]">Letters geproduceerd</span>}
               </div>
-              {order.letterLines.length > 0 ? <p className="mt-2 font-semibold">{b2bLetterTotal(order.letterLines)} letters · {order.letterLines.map(b2bLetterLineLabel).join(" · ")}</p> : <p className="mt-2 font-black text-[#9a3412]">Letterregels nog niet ingevuld; deze bestelling telt nog niet mee in de totalen. {order.letterOrderText || order.orderText}</p>}
+              {order.letterLines.length > 0 ? <div className="mt-2"><p className="mb-1 text-xs font-black text-[#24551d]">{b2bLetterTotal(order.letterLines)} letters</p><B2BLetterLineBadges lines={order.letterLines} /></div> : <p className="mt-2 font-black text-[#9a3412]">Letterregels nog niet ingevuld; deze bestelling telt nog niet mee in de totalen. {order.letterOrderText || order.orderText}</p>}
               {order.logo && <p className="mt-1"><strong>Logo:</strong> {order.logo}{!order.logoChecked && " · nog controleren"}</p>}
               {order.packaging && <p className="mt-1"><strong>Verpakking:</strong> {order.packaging}{!order.packagingChecked && " · nog controleren"}</p>}
               {order.textInstructions && <p className="mt-1"><strong>Tekst:</strong> {order.textInstructions}{!order.textChecked && " · nog controleren"}</p>}

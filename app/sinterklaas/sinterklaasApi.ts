@@ -7,7 +7,7 @@ import type {
   SinterklaasB2BOrder,
   SinterklaasListResponse,
 } from "./types";
-import { B2B_SPUIT_LETTERS, B2B_VORM_LETTERS } from "./b2bLetterLines";
+import { B2B_LETTER_EXCEPTIONS, B2B_SPUIT_LETTERS, B2B_VORM_LETTERS } from "./b2bLetterLines";
 
 type OrderKind = "letter" | "b2b";
 
@@ -136,6 +136,7 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
       style,
       size: style === "vorm" ? "groot" : rawLine.size === "klein" ? "klein" : "groot",
       quantity,
+      exceptions: B2B_LETTER_EXCEPTIONS.filter(({ id }) => Array.isArray(rawLine.exceptions) && rawLine.exceptions.includes(id)).map(({ id }) => id),
     }];
   });
 

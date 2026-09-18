@@ -10,7 +10,8 @@ import {
 } from "../sinterklaasApi";
 import type { SinterklaasB2BOrder } from "../types";
 import type { B2BLetterLine } from "../types";
-import { B2B_SPUIT_LETTERS, B2B_VORM_LETTERS, b2bLetterLineLabel, b2bLetterTotal, newB2BLetterLine } from "../b2bLetterLines";
+import { B2B_LETTER_EXCEPTIONS, B2B_SPUIT_LETTERS, B2B_VORM_LETTERS, b2bLetterLineLabel, b2bLetterTotal, newB2BLetterLine } from "../b2bLetterLines";
+import B2BLetterLineBadges from "../B2BLetterLineBadges";
 
 type B2BFormState = {
   customerName: string;
@@ -588,7 +589,12 @@ function B2BOrderForm({
             <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Formaat<select aria-label="Formaat" value={line.size} disabled={line.style === "vorm"} onChange={(event) => updateLetterLine(line.id, { size: event.target.value as B2BLetterLine["size"] })} className="h-8 border border-[#d6e5d8] bg-white px-1 text-xs disabled:bg-[#f2eee8]"><option value="groot">Groot</option><option value="klein">Klein</option></select></label>
             <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Aantal<input aria-label="Aantal" type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateLetterLine(line.id, { quantity: Number(event.target.value) })} className="h-8 w-full border border-[#d6e5d8] bg-white px-1 text-xs" /></label>
             <button type="button" aria-label="Letterregel verwijderen" onClick={() => setField("letterLines", form.letterLines.filter((item) => item.id !== line.id))} className="self-end text-lg font-black text-[#9a3412]">×</button>
+            <div className="col-span-full flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.65rem] font-bold text-[#705000]">
+              <span className="uppercase tracking-wide">Speciale vereisten:</span>
+              {B2B_LETTER_EXCEPTIONS.map(({ id, label }) => <label key={id} className="inline-flex cursor-pointer items-center gap-1"><input type="checkbox" checked={line.exceptions.includes(id)} onChange={(event) => updateLetterLine(line.id, { exceptions: event.target.checked ? [...line.exceptions, id] : line.exceptions.filter((value) => value !== id) })} />{label}</label>)}
+            </div>
           </div>)}
+          <p className="text-[0.68rem] text-[#6b645b]">Vink speciale vereisten alleen aan na controle van ingrediënten en mogelijke kruisbesmetting; de app bevestigt niet automatisch dat een product vrij van allergenen is.</p>
           {form.letterLines.length === 0 && <p className="text-xs font-bold text-[#9a3412]">Nog geen letterregels. Voeg ze toe voordat een nieuwe letterbestelling definitief wordt.</p>}
           {form.letterOrderText && <details className="text-xs"><summary className="cursor-pointer font-bold text-[#6b645b]">Oude vrije letteromschrijving bekijken</summary><p className="mt-1 whitespace-pre-wrap">{form.letterOrderText}</p></details>}
         </section>
@@ -808,8 +814,14 @@ function B2BOrderRow({
             {order.logo && <span aria-label="Logo nodig" title="Logo nodig">🖼️</span>}
             {order.status === "akkoord" && <span className={`italic ${order.entered ? "text-[#24551d]" : "text-[#b42318]"}`}>{order.entered ? "Ingevoerd" : "Niet ingevoerd"}</span>}
           </div>
-          {order.orderText.length > 120 ? <details className="mt-1 text-xs text-[#4d463d]"><summary className="cursor-pointer font-semibold">{order.orderText.slice(0, 120)}… <span className="text-[#24551d]">meer</span></summary><p className="mt-1 whitespace-pre-wrap border-l-2 border-[#c3d3bc] pl-2">{order.orderText}</p></details> : <p className="mt-1 whitespace-pre-wrap text-xs font-semibold leading-snug text-[#4d463d]">{order.orderText}</p>}
-          {order.department !== "bakkerij" && <p className="mt-1 text-xs font-bold text-[#24551d]">{order.letterLines.length > 0 ? `${b2bLetterTotal(order.letterLines)} letters · ${order.letterLines.slice(0, 3).map(b2bLetterLineLabel).join(" · ")}${order.letterLines.length > 3 ? ` · +${order.letterLines.length - 3} regels` : ""}` : "Letterregels nog invullen"}</p>}
+          <div className="mt-2 rounded-xl border border-[#e4ded5] bg-white p-2.5 shadow-sm">
+            <p className="text-[0.62rem] font-black uppercase tracking-wide text-[#8b8278]">Bestelling</p>
+            {order.orderText.length > 120 ? <details className="mt-1 text-xs text-[#4d463d]"><summary className="cursor-pointer font-semibold">{order.orderText.slice(0, 120)}… <span className="text-[#24551d]">meer</span></summary><p className="mt-1 whitespace-pre-wrap border-l-2 border-[#c3d3bc] pl-2">{order.orderText}</p></details> : <p className="mt-1 whitespace-pre-wrap text-xs font-semibold leading-snug text-[#4d463d]">{order.orderText}</p>}
+            {order.department !== "bakkerij" && <div className="mt-2 border-t border-[#eee8df] pt-2">
+              <p className="mb-1 text-xs font-black text-[#24551d]">Chocoladeletters · {b2bLetterTotal(order.letterLines)} stuks</p>
+              {order.letterLines.length > 0 ? <><B2BLetterLineBadges lines={order.letterLines.slice(0, 4)} />{order.letterLines.length > 4 && <details className="mt-1 text-xs"><summary className="cursor-pointer font-black text-[#24551d]">+{order.letterLines.length - 4} letterregels tonen</summary><div className="mt-1"><B2BLetterLineBadges lines={order.letterLines.slice(4)} /></div></details>}</> : <p className="text-xs font-bold text-[#9a3412]">Letterregels nog invullen</p>}
+            </div>}
+          </div>
           {warnings.length > 0 && <p className="mt-1 text-xs font-black text-[#9a3412]">Let op: {warnings.join(" · ")}</p>}
           {confirmationNeedsAttention && <p className="mt-1 text-xs font-black text-[#9a3412]">{order.confirmationEmailError || "Nog geen bevestigingsmail als back-up geregistreerd."}</p>}
           {extraLines.length > 0 && (
@@ -1123,7 +1135,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
             {group.map((order) => <article key={order.id} className={`space-y-2 p-3 text-sm ${isProductionDone(order) ? "bg-[#f6faf4]" : ""}`}>
               <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{order.customerName}</h3><span className={isProductionDone(order) ? "font-black text-[#24551d]" : "font-black text-[#9a3412]"}>{isProductionDone(order) ? "Geproduceerd" : "Nog te maken"}</span></div>
               <p className="whitespace-pre-wrap text-xs">{order.orderText}</p>
-              {order.department !== "bakkerij" && <p className="text-xs font-black text-[#24551d]">{order.letterLines.length > 0 ? `${b2bLetterTotal(order.letterLines)} letters · ${order.letterLines.map(b2bLetterLineLabel).join(" · ")}` : `Letterregels nog invullen${order.letterOrderText ? ` · oude omschrijving: ${order.letterOrderText}` : ""}`}</p>}
+              {order.department !== "bakkerij" && <div><p className="mb-1 text-xs font-black text-[#24551d]">Chocoladeletters · {b2bLetterTotal(order.letterLines)} stuks</p>{order.letterLines.length > 0 ? <B2BLetterLineBadges lines={order.letterLines} /> : <p className="text-xs font-bold text-[#9a3412]">Letterregels nog invullen{order.letterOrderText ? ` · oude omschrijving: ${order.letterOrderText}` : ""}</p>}</div>}
               {order.logo && <p><strong>Logo:</strong> {order.logo} {!order.logoChecked && "· NOG CONTROLEREN"}</p>}
               {order.textInstructions && <p><strong>Tekst:</strong> {order.textInstructions} {!order.textChecked && "· NOG CONTROLEREN"}</p>}
               {order.packaging && <p><strong>Verpakking:</strong> {order.packaging} {!order.packagingChecked && "· NOG CONTROLEREN"}</p>}

@@ -99,7 +99,10 @@ export type B2BLetterLine = {
   style: "spuit" | "vorm";
   size: "klein" | "groot";
   quantity: number;
+  exceptions: B2BLetterException[];
 };
+
+export type B2BLetterException = "notenvrij" | "vegan" | "glutenvrij" | "lactosevrij";
 
 export type SinterklaasListResponse<T> = {
   orders: T[];

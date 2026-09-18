@@ -450,6 +450,11 @@ function strik_sinterklaas_sanitize_b2b_letter_lines($lines) {
         $chocolate = isset($line['chocolate']) ? strik_sinterklaas_text($line['chocolate'], 12) : '';
         $size = isset($line['size']) ? strik_sinterklaas_text($line['size'], 12) : '';
         $quantity = isset($line['quantity']) ? intval($line['quantity']) : 0;
+        $exceptions = isset($line['exceptions']) ? $line['exceptions'] : array();
+        if (!is_array($exceptions)) continue;
+        foreach ($exceptions as $exception) {
+            if (!is_string($exception) || !in_array($exception, array('notenvrij', 'vegan', 'glutenvrij', 'lactosevrij'), true)) continue 2;
+        }
         if (!preg_match('/^[A-Z]$/', $letter) || !in_array($chocolate, array('melk', 'puur', 'wit'), true) || !in_array($style, array('spuit', 'vorm'), true) || !in_array($size, array('groot', 'klein'), true) || $quantity < 1 || $quantity > 10000) continue;
         if ($style === 'vorm' && ($size !== 'groot' || !in_array($letter, array('A', 'B', 'S', 'P', 'M', 'Q'), true))) continue;
         $clean[] = array(
@@ -459,6 +464,7 @@ function strik_sinterklaas_sanitize_b2b_letter_lines($lines) {
             'style' => $style,
             'size' => $size,
             'quantity' => $quantity,
+            'exceptions' => array_values(array_unique($exceptions)),
         );
     }
     return $clean;
@@ -737,7 +743,7 @@ function strik_sinterklaas_create_b2b_confirmation_body($order, $is_new_confirma
     if (!empty($order['letterOrderText'])) $lines[] = 'Oude vrije letteromschrijving: ' . $order['letterOrderText'];
     if (!empty($order['letterLines'])) {
         $lines[] = 'Chocoladeletterregels:';
-        foreach ($order['letterLines'] as $line) $lines[] = sprintf('%d x %s - %s %s - %s', $line['quantity'], $line['letter'], $line['chocolate'], $line['style'], $line['size']);
+        foreach ($order['letterLines'] as $line) $lines[] = sprintf('%d x %s - %s %s - %s%s', $line['quantity'], $line['letter'], $line['chocolate'], $line['style'], $line['size'], !empty($line['exceptions']) ? ' - VEREIST: ' . implode(', ', $line['exceptions']) : '');
     }
     $lines[] = '';
     $lines[] = 'Order-id: ' . $order['id'];
