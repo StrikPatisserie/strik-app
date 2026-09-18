@@ -67,7 +67,13 @@ export type SinterklaasB2BOrder = {
   invoiceInfo: string;
   source: "handmatig" | "excel";
   sourceSheet: string;
+  status: "aanvraag" | "offerte" | "akkoord" | "afgewezen";
   entered: boolean;
+  productionScheduled: boolean;
+  logoChecked: boolean;
+  packagingChecked: boolean;
+  textChecked: boolean;
+  textInstructions: string;
   productionDone: boolean;
   packed: boolean;
   delivered: boolean;
@@ -77,6 +83,8 @@ export type SinterklaasB2BOrder = {
   deliveredAt: string;
   reminderEmailedAt: string;
   reminderEmailError: string;
+  confirmationEmailedAt: string;
+  confirmationEmailError: string;
   createdAt: string;
   updatedAt: string;
 };

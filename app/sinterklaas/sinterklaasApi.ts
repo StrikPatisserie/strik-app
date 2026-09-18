@@ -118,7 +118,7 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
   const customerName = textFrom(value.customerName);
   const orderText = textFrom(value.orderText);
 
-  if (!id || !customerName || !orderText) return null;
+  if (!id || !customerName || (!orderText && value.status !== "aanvraag" && value.status !== "offerte" && value.status !== "afgewezen")) return null;
 
   return {
     id,
@@ -148,7 +148,16 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     invoiceInfo: textFrom(value.invoiceInfo),
     source: value.source === "excel" ? "excel" : "handmatig",
     sourceSheet: textFrom(value.sourceSheet),
+    status:
+      value.status === "aanvraag" || value.status === "offerte" || value.status === "afgewezen"
+        ? value.status
+        : "akkoord",
     entered: boolFrom(value.entered),
+    productionScheduled: boolFrom(value.productionScheduled),
+    logoChecked: boolFrom(value.logoChecked),
+    packagingChecked: boolFrom(value.packagingChecked),
+    textChecked: boolFrom(value.textChecked),
+    textInstructions: textFrom(value.textInstructions),
     productionDone: boolFrom(value.productionDone),
     packed: boolFrom(value.packed),
     delivered: boolFrom(value.delivered),
@@ -158,6 +167,8 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     deliveredAt: textFrom(value.deliveredAt),
     reminderEmailedAt: textFrom(value.reminderEmailedAt),
     reminderEmailError: textFrom(value.reminderEmailError),
+    confirmationEmailedAt: textFrom(value.confirmationEmailedAt),
+    confirmationEmailError: textFrom(value.confirmationEmailError),
     createdAt: textFrom(value.createdAt),
     updatedAt: textFrom(value.updatedAt),
   };
@@ -313,6 +324,23 @@ export async function updateB2BOrder(id: string, patch: Partial<SinterklaasB2BOr
   const normalized = normalizeB2BOrder(data);
   if (!normalized) throw new Error("WordPress gaf geen geldige B2B-bestelling terug.");
 
+  return normalized;
+}
+
+export async function retryB2BConfirmation(id: string) {
+  const url = new URL(ENDPOINTS.b2b, window.location.origin);
+  url.searchParams.set("id", id);
+  const data = await requestJson<unknown>(
+    url.toString(),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, resendConfirmation: true }),
+    },
+    "Bevestigingsmail opnieuw versturen is mislukt."
+  );
+  const normalized = normalizeB2BOrder(data);
+  if (!normalized) throw new Error("WordPress gaf geen geldige B2B-bestelling terug.");
   return normalized;
 }
 

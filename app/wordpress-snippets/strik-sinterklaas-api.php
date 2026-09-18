@@ -291,6 +291,7 @@ function strik_sinterklaas_sanitize_letter_order($order, $existing = array()) {
     }
 
     $now = wp_date(DATE_ATOM);
+
     $source = isset($order['source']) ? strik_sinterklaas_text($order['source'], 40) : 'winkel';
     $source = $source === 'online' ? 'online' : 'winkel';
 
@@ -446,7 +447,7 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     $order_text = isset($order['orderText']) ? strik_sinterklaas_textarea($order['orderText'], 5000) : '';
     $delivery_date = isset($order['deliveryDate']) ? strik_sinterklaas_date($order['deliveryDate']) : '';
 
-    if ($customer_name === '' || $order_text === '') return null;
+    if ($customer_name === '') return null;
 
     $id = isset($order['id']) ? strik_sinterklaas_text($order['id'], 120) : '';
     if ($id === '') {
@@ -454,6 +455,9 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     }
 
     $now = wp_date(DATE_ATOM);
+    $status = isset($order['status']) ? strik_sinterklaas_text($order['status'], 20) : 'akkoord';
+    if (!in_array($status, array('aanvraag', 'offerte', 'akkoord', 'afgewezen'), true)) $status = 'aanvraag';
+    if ($status === 'akkoord' && ($delivery_date === '' || empty($order['productionDate']) || $order_text === '') && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'))) return null;
 
     return array(
         'id' => $id,
@@ -477,7 +481,13 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
         'invoiceInfo' => isset($order['invoiceInfo']) ? strik_sinterklaas_textarea($order['invoiceInfo'], 2200) : '',
         'source' => isset($order['source']) ? strik_sinterklaas_text($order['source'], 80) : 'handmatig',
         'sourceSheet' => isset($order['sourceSheet']) ? strik_sinterklaas_text($order['sourceSheet'], 120) : '',
+        'status' => $status,
         'entered' => !empty($order['entered']),
+        'productionScheduled' => !empty($order['productionScheduled']),
+        'logoChecked' => !empty($order['logoChecked']),
+        'packagingChecked' => !empty($order['packagingChecked']),
+        'textChecked' => !empty($order['textChecked']),
+        'textInstructions' => isset($order['textInstructions']) ? strik_sinterklaas_textarea($order['textInstructions'], 1200) : '',
         'productionDone' => !empty($order['productionDone']),
         'packed' => !empty($order['packed']),
         'delivered' => !empty($order['delivered']),
@@ -485,8 +495,10 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
         'productionDoneAt' => isset($order['productionDoneAt']) ? strik_sinterklaas_text($order['productionDoneAt'], 80) : '',
         'packedAt' => isset($order['packedAt']) ? strik_sinterklaas_text($order['packedAt'], 80) : '',
         'deliveredAt' => isset($order['deliveredAt']) ? strik_sinterklaas_text($order['deliveredAt'], 80) : '',
-        'reminderEmailedAt' => isset($order['reminderEmailedAt']) ? strik_sinterklaas_text($order['reminderEmailedAt'], 80) : '',
+        'reminderEmailedAt' => (isset($existing['deliveryDate']) && $existing['deliveryDate'] !== $delivery_date) || (isset($existing['status']) && $existing['status'] !== 'akkoord' && $status === 'akkoord') ? '' : (isset($order['reminderEmailedAt']) ? strik_sinterklaas_text($order['reminderEmailedAt'], 80) : ''),
         'reminderEmailError' => isset($order['reminderEmailError']) ? strik_sinterklaas_text($order['reminderEmailError'], 240) : '',
+        'confirmationEmailedAt' => isset($order['confirmationEmailedAt']) ? strik_sinterklaas_text($order['confirmationEmailedAt'], 80) : '',
+        'confirmationEmailError' => isset($order['confirmationEmailError']) ? strik_sinterklaas_text($order['confirmationEmailError'], 240) : '',
         'createdAt' => isset($existing['createdAt']) ? $existing['createdAt'] : $now,
         'updatedAt' => $now,
     );
@@ -624,13 +636,76 @@ function strik_sinterklaas_b2b_save($request) {
     $order = strik_sinterklaas_sanitize_b2b_order(array_merge(is_array($existing) ? $existing : array(), $params), is_array($existing) ? $existing : array());
 
     if ($order === null) {
-        return new WP_Error('strik_sinterklaas_invalid_b2b_order', 'Vul minimaal klantnaam en bestelling in.', array('status' => 400));
+        return new WP_Error('strik_sinterklaas_invalid_b2b_order', 'Vul een klantnaam in; voor akkoord zijn ook bestelling, leverdatum en productiedatum nodig.', array('status' => 400));
     }
 
     $orders[strik_sinterklaas_order_key($order['id'])] = $order;
     strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
 
+    $became_confirmed = $order['status'] === 'akkoord'
+        && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'));
+    $mail_fields = array('customerName', 'contactName', 'customerEmail', 'phone', 'deliveryDate', 'productionDate', 'department', 'orderText', 'logo', 'textInstructions', 'packaging', 'importantNotes', 'deliveryMethod', 'deliveryAddress', 'priceAgreement', 'totalExVat', 'invoiceInfo');
+    $details_changed = false;
+    if ($order['status'] === 'akkoord' && !empty($existing)) {
+        foreach ($mail_fields as $field) {
+            if ((isset($existing[$field]) ? $existing[$field] : '') !== $order[$field]) {
+                $details_changed = true;
+                break;
+            }
+        }
+    }
+    $retry_requested = !empty($params['resendConfirmation']) && $order['status'] === 'akkoord';
+    $skip_historical_import = empty($existing) && $order['source'] === 'excel';
+    if ($order['status'] === 'akkoord' && !$skip_historical_import && ($became_confirmed || $details_changed || $retry_requested)) {
+        $sent = wp_mail(
+            STRIK_SINTERKLAAS_RECIPIENT,
+            ($became_confirmed ? 'DEFINITIEVE B2B-BESTELLING' : 'GEWIJZIGDE B2B-BESTELLING') . ' - ' . $order['customerName'] . ' - ' . $order['deliveryDate'],
+            strik_sinterklaas_create_b2b_confirmation_body($order, $became_confirmed),
+            array('Content-Type: text/plain; charset=UTF-8')
+        );
+        if ($sent) {
+            $order['confirmationEmailedAt'] = wp_date(DATE_ATOM);
+            $order['confirmationEmailError'] = '';
+        } else {
+            $order['confirmationEmailError'] = 'Bestelling opgeslagen, maar de bevestigingsmail is niet verstuurd. Probeer opnieuw.';
+        }
+        $orders[strik_sinterklaas_order_key($order['id'])] = $order;
+        strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME, $orders);
+    }
+
     return rest_ensure_response($order);
+}
+}
+
+if (!function_exists('strik_sinterklaas_create_b2b_confirmation_body')) {
+function strik_sinterklaas_create_b2b_confirmation_body($order, $is_new_confirmation = true) {
+    $fields = array(
+        'Klant' => $order['customerName'],
+        'Contactpersoon' => $order['contactName'],
+        'E-mail klant' => $order['customerEmail'],
+        'Telefoon' => $order['phone'],
+        'Leverdatum' => $order['deliveryDate'],
+        'Productiedatum' => $order['productionDate'],
+        'Afdeling' => $order['department'],
+        'Bestelling' => $order['orderText'],
+        'Logo' => $order['logo'],
+        'Tekst' => $order['textInstructions'],
+        'Verpakking' => $order['packaging'],
+        'Belangrijke opmerkingen' => $order['importantNotes'],
+        'Levering / afhalen' => $order['deliveryMethod'],
+        'Bezorgadres' => $order['deliveryAddress'],
+        'Prijsafspraak' => $order['priceAgreement'],
+        'Totaal ex btw' => $order['totalExVat'],
+        'Factuurgegevens' => $order['invoiceInfo'],
+    );
+    $lines = array($is_new_confirmation ? 'Nieuwe definitieve B2B-bestelling.' : 'Bijgewerkte definitieve B2B-bestelling: gebruik deze versie.', 'Zet deze bestelling in Bake-it en controleer de productieplanning.', '');
+    foreach ($fields as $label => $value) {
+        $lines[] = $label . ': ' . ($value !== '' ? $value : 'nog niet ingevuld');
+    }
+    $lines[] = '';
+    $lines[] = 'Order-id: ' . $order['id'];
+    $lines[] = 'Dit is de back-upkopie van de bestelling uit de Strik Team app.';
+    return implode("\n", $lines);
 }
 }
 
@@ -669,22 +744,43 @@ function strik_sinterklaas_b2b_delete($request) {
 
 if (!function_exists('strik_sinterklaas_create_b2b_reminder_body')) {
 function strik_sinterklaas_create_b2b_reminder_body($order) {
+    $entered = !empty($order['entered']);
     $lines = array(
-        'Sinterklaas B2B-bestelling over 2 dagen.',
+        'Let op: deze B2B-bestelling moet over 2 dagen geleverd worden.',
         '',
         'Klant: ' . $order['customerName'],
         'Leverdatum: ' . ($order['deliveryDate'] ?: '-'),
         'Productiedatum: ' . ($order['productionDate'] ?: '-'),
         'Afdeling: ' . ($order['department'] ?: '-'),
         'Levering: ' . ($order['deliveryMethod'] ?: '-'),
+        'Bake-it: ' . ($entered ? 'gemarkeerd als ingevoerd' : 'NOG NIET gemarkeerd als ingevoerd'),
+        'In planning: ' . (!empty($order['productionScheduled']) || !empty($order['productionDone']) ? 'ja' : 'NOG NIET gemarkeerd als ingepland'),
+        'Productie: ' . (!empty($order['productionDone']) ? 'klaar' : 'nog niet als klaar gemarkeerd'),
+        'Verpakking: ' . (!empty($order['packed']) ? 'klaar' : 'nog niet als klaar gemarkeerd'),
+        '',
+        $entered
+            ? 'Controleer of de bestelling klaarstaat en of de Bake-it bon klopt.'
+            : 'Voer de bestelling in Bake-it in en controleer de bon en productieplanning.',
         '',
         'Bestelling:',
         $order['orderText'],
     );
 
+    if (!empty($order['logo'])) {
+        $lines[] = '';
+        $lines[] = 'Logo (' . (!empty($order['logoChecked']) ? 'gecontroleerd' : 'NOG TE CONTROLEREN') . '):';
+        $lines[] = $order['logo'];
+    }
+
+    if (!empty($order['textInstructions'])) {
+        $lines[] = '';
+        $lines[] = 'Tekst (' . (!empty($order['textChecked']) ? 'gecontroleerd' : 'NOG TE CONTROLEREN') . '):';
+        $lines[] = $order['textInstructions'];
+    }
+
     if (!empty($order['packaging'])) {
         $lines[] = '';
-        $lines[] = 'Verpakken:';
+        $lines[] = 'Verpakken (' . (!empty($order['packagingChecked']) ? 'gecontroleerd' : 'NOG TE CONTROLEREN') . '):';
         $lines[] = $order['packaging'];
     }
 
@@ -716,19 +812,20 @@ function strik_sinterklaas_maybe_send_b2b_reminders() {
 
     set_transient('strik_sinterklaas_b2b_reminder_check', '1', HOUR_IN_SECONDS);
 
-    $target_date = wp_date('Y-m-d', current_time('timestamp') + (2 * DAY_IN_SECONDS));
+    $target_date = (new DateTimeImmutable('today', wp_timezone()))->modify('+2 days')->format('Y-m-d');
     $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_B2B_OPTION_NAME);
     $changed = false;
 
     foreach ($orders as $key => $order) {
         if (!is_array($order)) continue;
-        if (!empty($order['cancelled']) || !empty($order['productionDone'])) continue;
+        if (!empty($order['cancelled']) || !empty($order['delivered'])) continue;
+        if (isset($order['status']) && $order['status'] !== 'akkoord') continue;
         if (!empty($order['reminderEmailedAt'])) continue;
         if (empty($order['deliveryDate']) || $order['deliveryDate'] !== $target_date) continue;
 
         $sent = wp_mail(
             STRIK_SINTERKLAAS_RECIPIENT,
-            'Reminder Sinterklaas B2B - ' . $order['customerName'] . ' - ' . $order['deliveryDate'],
+            'Over 2 dagen leveren - ' . $order['customerName'] . (!empty($order['entered']) ? ' - Bake-it ingevoerd' : ' - NIET in Bake-it'),
             strik_sinterklaas_create_b2b_reminder_body($order),
             array('Content-Type: text/plain; charset=UTF-8')
         );
