@@ -50,12 +50,13 @@ function OrderingSteps() {
     { label: "Kies je winkel", icon: <><path d="M7 20h34l-3-10H10L7 20Z"/><path d="M10 20v20h28V20M18 40V28h12v12"/><path d="M7 20c0 4 6 5 8 1 2 4 7 4 9 0 2 4 7 4 9 0 2 4 8 3 8-1"/></> },
     { label: "Betaal bij afhalen", icon: <><path d="M9 15h30v24H9zM9 22h30M14 10h20M17 28h8"/><path d="m30 32 3 3 5-6"/></> },
   ];
-  return <aside aria-label="Zo eenvoudig bestel je" className="w-full px-1 py-2 text-[#547762]">
-    <p className="text-center font-[Butterscotch] text-2xl leading-tight text-[#a6684b] sm:text-3xl">Binnen 1 minuut besteld</p>
-    <div className="mt-4 flex items-start justify-between gap-1">
+  return <aside aria-label="Zo eenvoudig bestel je" className="relative mx-auto w-full max-w-[27rem] px-5 py-6 text-[#547762]">
+    <svg aria-hidden="true" viewBox="0 0 440 220" preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full overflow-visible text-[#a9bfa9]"><path d="M55 35 C125 5 325 7 388 45 C448 83 421 179 341 200 C257 222 103 213 48 182 C-5 152 5 67 55 35Z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity=".75" /><path d="M51 42 C127 8 323 10 382 48 C436 84 419 174 342 196" fill="none" stroke="currentColor" strokeWidth=".7" strokeLinecap="round" opacity=".45" /></svg>
+    <p className="relative text-center font-[Butterscotch] text-2xl leading-tight text-[#a6684b] sm:text-3xl">Binnen 1 minuut besteld</p>
+    <div className="relative mt-3 flex items-start justify-center gap-1.5">
       {steps.map((step, index) => <div key={step.label} className="contents">
-        {index > 0 && <span aria-hidden="true" className="mt-4 min-w-3 flex-1 text-center text-sm text-[#8daa91]">→</span>}
-        <div className="flex w-[5.5rem] shrink-0 flex-col items-center text-center sm:w-28">
+        {index > 0 && <span aria-hidden="true" className="mt-4 w-4 shrink-0 text-center text-sm text-[#8daa91]">→</span>}
+        <div className="flex w-[4.8rem] shrink-0 flex-col items-center text-center sm:w-24">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#547762] text-white shadow-sm"><svg aria-hidden="true" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">{step.icon}</svg></span>
           <span className="mt-2 text-[.65rem] font-medium leading-tight text-[#61504a] sm:text-[.7rem]">{step.label}</span>
         </div>
@@ -208,7 +209,7 @@ export default function LetterShopClient({ checkoutEnabled, pickupDates }: { che
       <div aria-hidden="true" className="absolute -right-20 top-10 h-48 w-48 rotate-12 rounded-[4rem] bg-[#547762]/15 sm:h-64 sm:w-64" />
       <nav className="relative mx-auto flex max-w-7xl items-center justify-between gap-4"><Image src="/strik-logo.png" alt="Strik Patisserie" width={112} height={72} className="h-12 w-auto object-contain sm:h-14" priority /><button type="button" onClick={() => setCheckoutOpen(true)} className="rounded-full bg-white px-4 py-3 text-sm font-black text-[#3e312c] shadow-lg">Winkelmand <span className="ml-1 rounded-full bg-[#547762] px-2 py-1 text-xs text-white">{totalQuantity}</span></button></nav>
       <div className="relative mx-auto mt-5 grid max-w-7xl items-center gap-7 sm:mt-7 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)] lg:gap-12">
-        <div><h1 className="text-[#3e312c]"><span className="block text-[clamp(2rem,5vw,3.4rem)] font-black leading-tight tracking-[-.05em]">Strik&apos;s chocolade</span><span className="block font-[Butterscotch] text-[clamp(4rem,9vw,7rem)] leading-[.82] text-[#a6684b]">Lettershop</span></h1><p className="mt-5 max-w-xl text-sm font-bold leading-relaxed text-[#61504a] sm:text-base">Kies jouw letter, chocolade en formaat. Wij maken hem met liefde; jij haalt hem op in één van onze vier winkels.</p><button type="button" onClick={() => document.getElementById("letter-assortiment")?.scrollIntoView({ behavior: "smooth" })} className="mt-4 rounded-full bg-[#547762] px-5 py-3 text-sm font-black text-white shadow-lg">Ontdek de letters ↓</button></div>
+        <div><h1 className="text-[#3e312c]"><span className="block text-[clamp(1.9rem,4vw,2.9rem)] font-black leading-tight tracking-[-.05em]">Strik&apos;s chocolade</span><span className="mt-1 block font-[Butterscotch] text-[clamp(3.3rem,6vw,4.8rem)] font-normal leading-[1.08] text-[#a6684b]">Lettershop</span></h1><p className="mt-3 max-w-xl text-sm font-bold leading-relaxed text-[#61504a] sm:text-base">Kies jouw letter, chocolade en formaat. Wij maken hem met liefde; jij haalt hem op in één van onze vier winkels.</p><button type="button" onClick={() => document.getElementById("letter-assortiment")?.scrollIntoView({ behavior: "smooth" })} className="mt-4 rounded-full bg-[#547762] px-5 py-3 text-sm font-black text-white shadow-lg">Ontdek de letters ↓</button></div>
         <OrderingSteps />
       </div>
     </header>
