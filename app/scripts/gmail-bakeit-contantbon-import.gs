@@ -134,6 +134,16 @@ function importBakeItContantbonnen() {
   verplaatsBakeItIngelezenThreads_(labelCache);
 }
 
+// Koppel alleen deze functie aan een Apps Script-trigger "elke 5 minuten".
+// Buiten het middagvenster doet hij geen Gmail- of API-aanroepen.
+function importBakeItContantbonnenMiddagCheck() {
+  const now = new Date();
+  const hour = Number(Utilities.formatDate(now, 'Europe/Amsterdam', 'H'));
+  const minute = Number(Utilities.formatDate(now, 'Europe/Amsterdam', 'm'));
+  if (hour !== 12 || minute < 17 || minute > 35) return;
+  importBakeItContantbonnen();
+}
+
 function markBakeItThreadProcessed_(thread, labelCache) {
   const bakeItLabel = getBakeItLabelForRun_(
     labelCache,
