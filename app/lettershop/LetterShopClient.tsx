@@ -17,11 +17,11 @@ const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const PRICES: Record<Size, number> = { groot: 13.95, klein: 8.95 };
 const LOGO_PRICE = 0.50;
 const GIFT_WRAP_PRICE = 1;
-const PRODUCTS: { id: string; style: Style; defaultFlavour: Flavour; title: string; description: string; image: string; background: string }[] = [
-  { id: "spuit-melk", style: "spuit", defaultFlavour: "melk", title: "Spuitletter Melk", description: "Fluweelzacht en romig, met een rijke chocoladesmaak.", image: "/sinterklaas/Melk spuitletter 2026.png", background: "#eac6aa" },
-  { id: "spuit-puur", style: "spuit", defaultFlavour: "puur", title: "Spuitletter Puur", description: "Fluweelzacht en romig, met een rijke chocoladesmaak.", image: "/sinterklaas/Puur spuitletter 2026.png", background: "#d4dfdf" },
-  { id: "spuit-wit", style: "spuit", defaultFlavour: "wit", title: "Spuitletter Wit", description: "Fluweelzacht en romig, met een rijke chocoladesmaak.", image: "/sinterklaas/Wit spuitletter 2026.png", background: "#f4e8d7" },
-  { id: "vorm-s", style: "vorm", defaultFlavour: "melk", title: "Vormletter S", description: "Vol van chocoladesmaak, met een verfijnde, stevige bite.", image: "/sinterklaas/vormletters S 2026.png", background: "#efe2ce" },
+const PRODUCTS: { id: string; style: Style; defaultFlavour: Flavour; title: string; description: string; image: string }[] = [
+  { id: "spuit-melk", style: "spuit", defaultFlavour: "melk", title: "Spuitletter Melk", description: "Fluweelzacht en romig, met een rijke chocoladesmaak.", image: "/sinterklaas/Melk spuitletter 2026.png" },
+  { id: "spuit-puur", style: "spuit", defaultFlavour: "puur", title: "Spuitletter Puur", description: "Fluweelzacht en romig, met een rijke chocoladesmaak.", image: "/sinterklaas/Puur spuitletter 2026.png" },
+  { id: "spuit-wit", style: "spuit", defaultFlavour: "wit", title: "Spuitletter Wit", description: "Fluweelzacht en romig, met een rijke chocoladesmaak.", image: "/sinterklaas/Wit spuitletter 2026.png" },
+  { id: "vorm-s", style: "vorm", defaultFlavour: "melk", title: "Vormletter S", description: "Vol van chocoladesmaak, met een verfijnde, stevige bite.", image: "/sinterklaas/vormletters S 2026.png" },
 ];
 const SPECIAL_REQUESTS: { id: SpecialRequest; label: string }[] = [
   { id: "glutenvrij", label: "Glutenvrij" }, { id: "notenvrij", label: "Notenvrij" },
@@ -70,8 +70,8 @@ function ProductCard({ product, onAdd }: { product: (typeof PRODUCTS)[number]; o
   const [added, setAdded] = useState(false);
 
   return <article className="overflow-hidden rounded-[1.8rem] bg-[#fffdf8] shadow-[0_18px_40px_rgba(82,29,18,.13)]">
-    <div className="relative aspect-[4/5] overflow-hidden md:aspect-[2/3]" style={{ backgroundColor: product.background }}>
-      <Image src={product.image} alt={`Voorbeeld van een Strik chocoladeletter in ${product.title.toLowerCase()}`} fill sizes="(max-width: 768px) 90vw, (max-width: 1280px) 44vw, 25vw" className="object-contain" />
+    <div className="overflow-hidden">
+      <Image src={product.image} alt={`Voorbeeld van een Strik chocoladeletter in ${product.title.toLowerCase()}`} width={1025} height={1535} sizes="(max-width: 768px) 90vw, (max-width: 1280px) 44vw, 25vw" className="block h-auto w-full" />
     </div>
     <div className="p-4 sm:p-5">
       <h3 className="text-2xl font-black text-[#3e312c]">{product.title}</h3>
@@ -223,7 +223,7 @@ export default function LetterShopClient({ checkoutEnabled, pickupDates }: { che
       <div className="md:hidden">
         <div ref={mobileOverviewRef} role="group" className="grid scroll-mt-4 grid-cols-2 gap-3" aria-label="Kies een soort chocoladeletter">
           {PRODUCTS.map((product) => <button key={product.id} type="button" aria-label={`${product.title} bekijken`} aria-pressed={selectedMobileProductId === product.id} onClick={() => { if (selectedMobileProductId === product.id) mobileProductRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); else setSelectedMobileProductId(product.id); }} className={`overflow-hidden rounded-2xl bg-[#fffdf8] text-left shadow-[0_8px_20px_rgba(82,29,18,.1)] outline-none transition focus-visible:ring-4 focus-visible:ring-[#547762]/40 ${selectedMobileProductId === product.id ? "ring-2 ring-[#547762]" : ""}`}>
-            <span className="relative block aspect-square" style={{ backgroundColor: product.background }}><Image src={product.image} alt="" fill sizes="(max-width: 768px) 45vw, 1px" className="object-contain" /></span>
+            <span className="block"><Image src={product.image} alt="" width={1025} height={1535} sizes="(max-width: 768px) 45vw, 1px" className="block h-auto w-full" /></span>
             <span className="block min-h-12 px-3 py-2.5 text-sm font-black leading-tight text-[#3e312c]">{product.title}</span>
           </button>)}
         </div>
