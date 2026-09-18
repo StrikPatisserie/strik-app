@@ -5078,7 +5078,9 @@ export default function BruidstaartStudioConfigurator() {
 
       const savedDraft = normalizeDraft(await res.json()) || draft;
       saveLocalDraft(savedDraft);
-      setDraftResults([savedDraft]);
+      // The saved order is already refreshed in the year overview below.
+      // Keep this separate list for actual search results or local-only saves.
+      setDraftResults([]);
       mergeDraftIntoAllOverview(savedDraft);
       setDraftStatus(options.successStatus || "Bestelling opgeslagen in WordPress.");
       showSaveFeedback();
@@ -5090,7 +5092,7 @@ export default function BruidstaartStudioConfigurator() {
       mergeDraftIntoAllOverview(draft);
       setDraftStatus(
         options.localStatus ||
-          "WordPress-opslag is nog niet actief; bestelling is lokaal opgeslagen."
+          "Opslaan in WordPress is mislukt; deze bestelling staat alleen op dit apparaat. Probeer opnieuw."
       );
       showSaveFeedback();
       markFinalOrderProtected(Boolean(draft.config.completed));
