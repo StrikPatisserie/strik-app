@@ -10,6 +10,7 @@ import {
 } from "./data";
 import {
   CakeLayer,
+  ContactDetails,
   Price,
   PriceLine,
   PriceSummary,
@@ -626,6 +627,22 @@ export function getDeliveryMethodLabel(
   return "afhalen";
 }
 
+export function getDeliveryTimeLabel(contact: ContactDetails) {
+  if (contact.deliveryMethod === "pickup") return "";
+  if (contact.deliveryTimeType === "latest" && contact.deliveryTimeEnd) {
+    return `uiterlijk ${contact.deliveryTimeEnd}`;
+  }
+  if (
+    contact.deliveryTimeType === "range" &&
+    contact.deliveryTimeStart &&
+    contact.deliveryTimeEnd
+  ) {
+    return `${contact.deliveryTimeStart}–${contact.deliveryTimeEnd}`;
+  }
+
+  return "";
+}
+
 export function createProductionForm(config: WeddingCakeConfig) {
   const labels = getSelectedWeddingCakeLabels(config);
   const price = calculateWeddingCakePrice(config);
@@ -657,6 +674,9 @@ export function createProductionForm(config: WeddingCakeConfig) {
     `Factuurnaam: ${config.contact.invoiceName || "-"}`,
     `Factuur e-mail: ${config.contact.invoiceEmail || "-"}`,
     `Levering: ${getDeliveryMethodLabel(config.contact.deliveryMethod)}`,
+    ...(config.contact.deliveryMethod === "pickup"
+      ? []
+      : [`Bezorgtijd: ${getDeliveryTimeLabel(config.contact) || "niet opgegeven"}`]),
     `Adres: ${config.contact.deliveryAddress || "-"}`,
     "",
     "Taart",

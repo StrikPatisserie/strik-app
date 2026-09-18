@@ -27,6 +27,7 @@ import {
   getDecorationQuantity,
   getDecorationSurcharges,
   getDeliveryMethodLabel,
+  getDeliveryTimeLabel,
   getTopperNoteTexts,
   getTopperSurcharges,
   getDesignGroupsForLayers,
@@ -1299,6 +1300,88 @@ function RestartIcon() {
       <path d="M3 12a9 9 0 1 0 3-6.7" />
       <path d="M3 4v6h6" />
     </svg>
+  );
+}
+
+function DeliveryVanIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-4 w-4 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+    >
+      <path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z" />
+      <circle cx="7" cy="18" r="2" />
+      <circle cx="18" cy="18" r="2" />
+    </svg>
+  );
+}
+
+function DeliveryOverviewLine({ contact }: { contact: ContactDetails }) {
+  if (contact.deliveryMethod === "pickup") return null;
+
+  const time = getDeliveryTimeLabel(contact);
+  const address = contact.deliveryAddress.trim() || "adres nog niet ingevuld";
+
+  return (
+    <p
+      className="mt-0.5 flex min-w-0 items-center gap-1 text-xs font-semibold text-[#4e6c74]"
+      title={`Bezorging${time ? ` · ${time}` : ""} · ${address}`}
+    >
+      <DeliveryVanIcon />
+      <span className="sr-only">Bezorging: </span>
+      <span className="min-w-0 truncate">
+        {time ? `${time} · ` : ""}
+        {address}
+      </span>
+    </p>
+  );
+}
+
+function PaymentOverviewBadge({ config }: { config: WeddingCakeConfig }) {
+  if (
+    !config.completed &&
+    !config.paid &&
+    !config.paidInStoreAt &&
+    !config.paymentRequestPaidAt &&
+    !config.paymentRequestEmailedAt
+  ) {
+    return null;
+  }
+
+  const paid = Boolean(
+    config.paid || config.paymentRequestPaidAt || config.paidInStoreAt
+  );
+  const label = config.paymentRequestPaidAt
+    ? "Betaald · Mollie"
+    : config.paidInStoreAt
+    ? "Betaald · winkel"
+    : paid
+    ? "Betaald"
+    : config.paymentRequestEmailedAt
+    ? "Niet betaald · verzoek verstuurd"
+    : "Niet betaald";
+
+  return (
+    <span
+      className={`rounded-sm px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] ${
+        paid
+          ? "bg-[#e5f4e7] text-[#275d35]"
+          : "bg-[#fff4d1] text-[#765819]"
+      }`}
+      title={
+        config.paymentRequestEmailedAt
+          ? `Betaalverzoek verstuurd op ${formatDutchDateTime(config.paymentRequestEmailedAt)}`
+          : undefined
+      }
+    >
+      {label}
+    </span>
   );
 }
 
@@ -4462,6 +4545,9 @@ export default function BruidstaartStudioConfigurator() {
       `Factuurnaam: ${config.contact.invoiceName || "-"}`,
       `Factuur e-mail: ${config.contact.invoiceEmail || "-"}`,
       `Levering: ${getDeliveryMethodLabel(config.contact.deliveryMethod)}`,
+      ...(config.contact.deliveryMethod === "pickup"
+        ? []
+        : [`Bezorgtijd: ${getDeliveryTimeLabel(config.contact) || "niet opgegeven"}`]),
       `Adres: ${config.contact.deliveryAddress || "-"}`,
       "",
       "Taart",
@@ -5475,6 +5561,19 @@ export default function BruidstaartStudioConfigurator() {
     if (!current.contact.deliveryAddress.trim()) {
       missing.push("leveradres/afhaallocatie");
     }
+    if (current.contact.deliveryMethod !== "pickup") {
+      const { deliveryTimeType, deliveryTimeStart, deliveryTimeEnd } =
+        current.contact;
+      if (deliveryTimeType === "latest" && !deliveryTimeEnd) {
+        missing.push("uiterste bezorgtijd");
+      }
+      if (
+        deliveryTimeType === "range" &&
+        (!deliveryTimeStart || !deliveryTimeEnd || deliveryTimeStart >= deliveryTimeEnd)
+      ) {
+        missing.push("geldig bezorgtijdvak");
+      }
+    }
 
     return Array.from(new Set(missing));
   }
@@ -6097,6 +6196,7 @@ export default function BruidstaartStudioConfigurator() {
                                               )}`
                                             : ""}
                                         </p>
+                                        <DeliveryOverviewLine contact={draft.config.contact} />
                                       </div>
                                       <div className="flex flex-wrap items-center gap-1 sm:justify-end">
                                         <span
@@ -6108,35 +6208,7 @@ export default function BruidstaartStudioConfigurator() {
                                         >
                                           {orderStatus}
                                         </span>
-                                        {draft.config.paid && (
-                                          <span className="rounded-sm bg-[#e8f0f2] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
-                                            betaald
-                                          </span>
-                                        )}
-                                        {draft.config.paymentRequestEmailedAt && (
-                                          <span className="rounded-sm bg-[#f3faf0] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
-                                            betaalverzoek{" "}
-                                            {formatDutchShortDate(
-                                              draft.config.paymentRequestEmailedAt.slice(
-                                                0,
-                                                10
-                                              ),
-                                              ""
-                                            )}
-                                          </span>
-                                        )}
-                                        {draft.config.paymentRequestPaidAt && (
-                                          <span className="rounded-sm bg-[#e5f4e7] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
-                                            Mollie betaald{" "}
-                                            {formatDutchShortDate(
-                                              draft.config.paymentRequestPaidAt.slice(
-                                                0,
-                                                10
-                                              ),
-                                              ""
-                                            )}
-                                          </span>
-                                        )}
+                                        <PaymentOverviewBadge config={draft.config} />
                                       </div>
                                     </button>
                                   );
@@ -6183,40 +6255,13 @@ export default function BruidstaartStudioConfigurator() {
                               >
                                 {orderStatus}
                               </span>
-                              {draft.config.paid && (
-                                <span className="rounded-sm bg-[#e8f0f2] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4e6c74]">
-                                  betaald
-                                </span>
-                              )}
-                              {draft.config.paymentRequestEmailedAt && (
-                                <span className="rounded-sm bg-[#f3faf0] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#4c6842]">
-                                  betaalverzoek{" "}
-                                  {formatDutchShortDate(
-                                    draft.config.paymentRequestEmailedAt.slice(
-                                      0,
-                                      10
-                                    ),
-                                    ""
-                                  )}
-                                </span>
-                              )}
-                              {draft.config.paymentRequestPaidAt && (
-                                <span className="rounded-sm bg-[#e5f4e7] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#275d35]">
-                                  Mollie betaald{" "}
-                                  {formatDutchShortDate(
-                                    draft.config.paymentRequestPaidAt.slice(
-                                      0,
-                                      10
-                                    ),
-                                    ""
-                                  )}
-                                </span>
-                              )}
+                              <PaymentOverviewBadge config={draft.config} />
                             </div>
                             <p className="mt-0.5 text-xs font-semibold text-[#2d2a26]/55">
                               {draft.surname || draft.names || "Geen naam"} ·
                               Leverdatum: {formatDutchShortDate(deliveryDate)}
                             </p>
+                            <DeliveryOverviewLine contact={draft.config.contact} />
                           </button>
                           <button
                             type="button"
@@ -7035,6 +7080,69 @@ export default function BruidstaartStudioConfigurator() {
                 placeholder="Leveringsadres of afhaallocatie"
                 className="min-h-16 rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm"
               />
+              {config.contact.deliveryMethod !== "pickup" && (
+                <div className="grid gap-2 rounded-xl border border-[#e7e0d8] bg-[#faf8f5] p-3">
+                  <p className="text-xs font-black text-[#2d2a26]/70">
+                    Wanneer moet de taart bezorgd zijn? <span className="font-normal">(optioneel)</span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      { value: "unspecified", label: "Nog niet bekend" },
+                      { value: "latest", label: "Uiterlijk om" },
+                      { value: "range", label: "Tussen twee tijden" },
+                    ] as const).map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          setConfig((current) =>
+                            updateContact(current, "deliveryTimeType", option.value)
+                          )
+                        }
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${
+                          config.contact.deliveryTimeType === option.value
+                            ? "border-[#8fb184] bg-[#dce8d6] text-[#275d35]"
+                            : "border-[#e7e0d8] bg-white text-[#2d2a26]/70"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {config.contact.deliveryTimeType !== "unspecified" && (
+                    <div className="flex flex-wrap gap-2">
+                      {config.contact.deliveryTimeType === "range" && (
+                        <label className="grid gap-1 text-xs font-bold text-[#2d2a26]/60">
+                          Vanaf
+                          <input
+                            type="time"
+                            value={config.contact.deliveryTimeStart}
+                            onChange={(event) =>
+                              setConfig((current) =>
+                                updateContact(current, "deliveryTimeStart", event.target.value)
+                              )
+                            }
+                            className="rounded-lg border border-[#e7e0d8] bg-white p-2 text-sm text-[#2d2a26]"
+                          />
+                        </label>
+                      )}
+                      <label className="grid gap-1 text-xs font-bold text-[#2d2a26]/60">
+                        {config.contact.deliveryTimeType === "latest" ? "Uiterlijk" : "Tot"}
+                        <input
+                          type="time"
+                          value={config.contact.deliveryTimeEnd}
+                          onChange={(event) =>
+                            setConfig((current) =>
+                              updateContact(current, "deliveryTimeEnd", event.target.value)
+                            )
+                          }
+                          className="rounded-lg border border-[#e7e0d8] bg-white p-2 text-sm text-[#2d2a26]"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
                 <input
                   value={config.contact.invoiceName}

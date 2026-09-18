@@ -63,6 +63,9 @@ export type ContactDetails = {
   deliveryDate: string;
   deliveryMethod: "pickup" | "delivery" | "delivery_far";
   deliveryAddress: string;
+  deliveryTimeType: "unspecified" | "latest" | "range";
+  deliveryTimeStart: string;
+  deliveryTimeEnd: string;
   invoiceName: string;
   invoiceEmail: string;
   notes: string;

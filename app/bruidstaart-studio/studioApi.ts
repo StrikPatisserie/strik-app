@@ -135,6 +135,14 @@ function deliveryMethodFrom(
   return "pickup";
 }
 
+function deliveryTimeTypeFrom(
+  value: unknown
+): WeddingCakeConfig["contact"]["deliveryTimeType"] {
+  if (value === "latest" || value === "range") return value;
+
+  return "unspecified";
+}
+
 function normalizedTopperInitialsText(value: unknown, topperIds: string[]) {
   if (!topperIds.includes(CHOCOLATE_INITIALS_TOPPER_ID)) return "";
 
@@ -228,6 +236,9 @@ export function normalizeDraft(value: unknown): WeddingCakeDraft | null {
         deliveryDate:
           textFrom(contact.deliveryDate) || textFrom(contact.weddingDate),
         deliveryMethod: deliveryMethodFrom(contact.deliveryMethod),
+        deliveryTimeType: deliveryTimeTypeFrom(contact.deliveryTimeType),
+        deliveryTimeStart: textFrom(contact.deliveryTimeStart),
+        deliveryTimeEnd: textFrom(contact.deliveryTimeEnd),
       },
     },
     createdAt: textFrom(value.createdAt) || now,
