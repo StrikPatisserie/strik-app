@@ -19,11 +19,13 @@ const MIME_EXTENSIONS: Record<string, string> = {
 };
 
 type CheckoutLine = {
+  style?: string;
   letter: string;
   flavour: string;
   size: string;
   quantity: number;
   withLogo: boolean;
+  specialRequests?: string[];
 };
 type CheckoutPayload = {
   requestKey: string;
@@ -53,11 +55,18 @@ function isCheckoutPayload(value: unknown): value is CheckoutPayload {
     && (data.notes === undefined || typeof data.notes === "string" && data.notes.length <= 1800)
     && Array.isArray(lines) && lines.length >= 1 && lines.length <= 30
     && lines.every((line) => line && typeof line === "object"
+      && (line.style === undefined || line.style === "spuit" || line.style === "vorm")
       && typeof line.letter === "string" && /^[A-Z]$/.test(line.letter)
       && typeof line.flavour === "string" && FLAVOURS.has(line.flavour)
       && typeof line.size === "string" && SIZES.has(line.size)
       && Number.isInteger(line.quantity) && line.quantity >= 1 && line.quantity <= 999
-      && typeof line.withLogo === "boolean");
+      && typeof line.withLogo === "boolean"
+      && (line.style !== "vorm" || line.letter === "S" && line.size === "groot")
+      && (line.specialRequests === undefined || Array.isArray(line.specialRequests)
+        && line.specialRequests.length <= 4
+        && new Set(line.specialRequests).size === line.specialRequests.length
+        && line.specialRequests.every((item: unknown) => typeof item === "string" && ["glutenvrij", "notenvrij", "vegan", "lactosevrij"].includes(item)))
+      && (line.flavour === "puur" || !line.specialRequests?.some((item: string) => item === "vegan" || item === "lactosevrij")));
 }
 
 export async function POST(request: Request) {
@@ -120,7 +129,7 @@ export async function POST(request: Request) {
 
     const lines = [];
     for (const [index, line] of payload.lines.entries()) {
-      const code = `SPUIT-${line.flavour.toUpperCase()}-${line.size.toUpperCase()}-${line.letter}`;
+      const code = `${line.style === "vorm" ? "VORM" : "SPUIT"}-${line.flavour.toUpperCase()}-${line.size.toUpperCase()}-${line.letter}`;
       const { data: product, error: productError } = await supabase.from("letter_products")
         .select("id").eq("code", code).eq("active", true).single();
       if (productError || !product) return error("Een gekozen letter is niet beschikbaar.");
@@ -143,6 +152,12 @@ export async function POST(request: Request) {
       lines.push({ product_id: product.id, quantity: line.quantity, logo: line.withLogo, logo_path: logoPath });
     }
 
+    const specialNotes = payload.lines.flatMap((line) => line.specialRequests?.length
+      ? [`${line.quantity} × ${line.style === "vorm" ? "vormletter" : "spuitletter"} ${line.letter} ${line.flavour} ${line.size}: speciaal verzoek ${line.specialRequests.join(", ")}.`]
+      : []);
+    const combinedNotes = [payload.notes?.trim(), ...specialNotes,
+      ...(specialNotes.length ? ["Let op: producten kunnen altijd sporen van allergenen bevatten; niet geschikt bij ernstige allergieën."] : [])]
+      .filter(Boolean).join("\n");
     const { data: orderId, error: orderError } = await supabase.rpc("letter_create_online_checkout", {
       p_request_key: payload.requestKey,
       p_customer_name: payload.customerName.trim(),
@@ -151,7 +166,7 @@ export async function POST(request: Request) {
       p_requested_date: payload.pickupDate,
       p_pickup_location: payload.pickupLocation,
       p_lines: lines,
-      p_notes: payload.notes || "",
+      p_notes: combinedNotes.slice(0, 1800),
     });
     if (orderError || !orderId) {
       return error("Bestelling opslaan is niet gelukt. Probeer het opnieuw.", 502);

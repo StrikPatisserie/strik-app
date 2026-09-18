@@ -7,7 +7,7 @@ import { formatPickupDate } from "@/app/lettershop/formatPickupDate";
 export const dynamic = "force-dynamic";
 
 type Product = { letter: string; flavour: string; size: string; style: string };
-type Item = { id: string; quantity: number; letter_products: Product | Product[] | null; letter_orders: { order_number: string; channel: string; customer_name: string; requested_date: string; fulfillment_status: string } | null };
+type Item = { id: string; quantity: number; letter_products: Product | Product[] | null; letter_orders: { order_number: string; channel: string; customer_name: string; requested_date: string; fulfillment_status: string; notes: string } | null };
 type Allocation = { id: string; batch_id: string; planned_quantity: number; letter_order_items: Item | null };
 type StockTarget = { id: string; batch_id: string; planned_quantity: number; letter_products: Product | Product[] | null };
 type Part = { allocation_id: string | null; stock_target_id: string | null; quantity: number };
@@ -26,10 +26,10 @@ export default async function CentralLetterProductionPage() {
   const db = createAdminClient();
   const [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult] = await Promise.all([
     db.from("letter_production_batches").select("id,production_date,status").order("production_date"),
-    db.from("letter_production_allocations").select("id,batch_id,planned_quantity,letter_order_items(id,quantity,letter_products(letter,flavour,size,style),letter_orders(order_number,channel,customer_name,requested_date,fulfillment_status))"),
+    db.from("letter_production_allocations").select("id,batch_id,planned_quantity,letter_order_items(id,quantity,letter_products(letter,flavour,size,style),letter_orders(order_number,channel,customer_name,requested_date,fulfillment_status,notes))"),
     db.from("letter_stock_targets").select("id,batch_id,planned_quantity,letter_products(letter,flavour,size,style)"),
     db.from("letter_production_registration_parts").select("allocation_id,stock_target_id,quantity"),
-    db.from("letter_order_items").select("id,quantity,letter_orders(order_number,channel,customer_name,requested_date,fulfillment_status)").order("created_at", { ascending: false }),
+    db.from("letter_order_items").select("id,quantity,letter_orders(order_number,channel,customer_name,requested_date,fulfillment_status,notes)").order("created_at", { ascending: false }),
   ]);
   const error = [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult].find((result) => result.error)?.error;
   const batches = (batchesResult.data || []) as Batch[];
@@ -80,7 +80,7 @@ export default async function CentralLetterProductionPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#eee3d8] p-4"><h2 className="text-xl font-black">{formatPickupDate(batch.production_date)}</h2><span className="rounded-full bg-[#edf4ec] px-3 py-1 text-xs font-black">{batch.status}</span></div>
           <div className="grid gap-2 p-4 text-sm sm:grid-cols-4"><p>Besteld <strong>{totals.orders}</strong></p><p>Extra voorraad <strong>{totals.stock}</strong></p><p>Totaal te maken <strong>{totals.orders + totals.stock}</strong></p><p>Gemaakt <strong>{totals.producedOrders + totals.producedStock}</strong></p></div>
           <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead className="bg-[#faf5ee]"><tr><th className="p-3">Letter</th><th className="p-3">Orders</th><th className="p-3">Voorraad</th><th className="p-3">Totaal</th><th className="p-3">Gemaakt</th></tr></thead><tbody>{[...rows.entries()].sort(([a], [b]) => a.localeCompare(b, "nl")).map(([key, row]) => <tr key={key} className="border-t border-[#eee3d8]"><td className="p-3 font-bold">{key}</td><td className="p-3">{row.orders}</td><td className="p-3">{row.stock}</td><td className="p-3 font-black">{row.orders + row.stock}</td><td className="p-3">{row.producedOrders + row.producedStock}</td></tr>)}</tbody></table></div>
-          {batchAllocations.length > 0 && <details className="border-t border-[#eee3d8] p-4 text-sm"><summary className="cursor-pointer font-bold">Onderliggende orders ({batchAllocations.length} regels)</summary><div className="mt-2 space-y-1">{batchAllocations.map((allocation) => <p key={allocation.id}>{allocation.letter_order_items?.letter_orders?.order_number} · {allocation.letter_order_items?.letter_orders?.channel} · {allocation.letter_order_items?.letter_orders?.customer_name} · {productKey(productOf(allocation.letter_order_items?.letter_products || null))}: {producedForAllocation.get(allocation.id) || 0}/{allocation.planned_quantity}</p>)}</div></details>}
+          {batchAllocations.length > 0 && <details className="border-t border-[#eee3d8] p-4 text-sm"><summary className="cursor-pointer font-bold">Onderliggende orders ({batchAllocations.length} regels)</summary><div className="mt-2 space-y-1">{batchAllocations.map((allocation) => <p key={allocation.id}>{allocation.letter_order_items?.letter_orders?.order_number} · {allocation.letter_order_items?.letter_orders?.channel} · {allocation.letter_order_items?.letter_orders?.customer_name} · {productKey(productOf(allocation.letter_order_items?.letter_products || null))}: {producedForAllocation.get(allocation.id) || 0}/{allocation.planned_quantity}{allocation.letter_order_items?.letter_orders?.notes && <span className="ml-2 font-bold text-amber-800">Let op: {allocation.letter_order_items.letter_orders.notes}</span>}</p>)}</div></details>}
         </section>;
       })}</div>
     </>}

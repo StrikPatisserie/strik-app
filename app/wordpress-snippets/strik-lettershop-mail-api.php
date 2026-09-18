@@ -33,7 +33,8 @@ function strik_lettershop_mail_lines($payload, $for_customer) {
         $quantity = max(0, (int) ($item['quantity'] ?? 0));
         $unit_cents = (int) ($item['unit_price_cents'] ?? 0);
         $logo_cents = (int) ($item['logo_price_cents'] ?? 0);
-        $description = $quantity . ' x spuitletter ' . strtoupper(sanitize_text_field((string) ($item['letter'] ?? '')))
+        $style = ($item['style'] ?? '') === 'vorm' ? 'vormletter' : 'spuitletter';
+        $description = $quantity . ' x ' . $style . ' ' . strtoupper(sanitize_text_field((string) ($item['letter'] ?? '')))
             . ' - ' . sanitize_text_field((string) ($item['flavour'] ?? ''))
             . ' - ' . sanitize_text_field((string) ($item['size'] ?? ''));
         if (!empty($item['logo'])) $description .= ' met foto/logo';

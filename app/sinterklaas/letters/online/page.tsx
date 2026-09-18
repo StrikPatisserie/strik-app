@@ -14,7 +14,7 @@ type OrderItem = {
   logo_storage_path: string | null;
   unit_price_cents: number | null;
   logo_price_cents: number;
-  letter_products: { letter: string; flavour: string; size: string } | { letter: string; flavour: string; size: string }[] | null;
+  letter_products: { letter: string; flavour: string; size: string; style: string } | { letter: string; flavour: string; size: string; style: string }[] | null;
 };
 type OnlineOrder = {
   id: string;
@@ -22,6 +22,7 @@ type OnlineOrder = {
   customer_name: string;
   customer_email: string;
   phone: string;
+  notes: string;
   requested_date: string;
   pickup_location: string;
   fulfillment_status: string;
@@ -40,7 +41,7 @@ export default async function OnlineLetterOrdersPage() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const { data, error } = await supabase.from("letter_orders")
-    .select("id,order_number,customer_name,customer_email,phone,requested_date,pickup_location,fulfillment_status,created_at,letter_order_items(quantity,logo,logo_storage_path,unit_price_cents,logo_price_cents,letter_products(letter,flavour,size))")
+    .select("id,order_number,customer_name,customer_email,phone,notes,requested_date,pickup_location,fulfillment_status,created_at,letter_order_items(quantity,logo,logo_storage_path,unit_price_cents,logo_price_cents,letter_products(letter,flavour,size,style))")
     .eq("channel", "ONLINE").order("created_at", { ascending: false }).limit(100);
   const orders = (data || []) as unknown as OnlineOrder[];
   const photoUrls = new Map<string, string>();
@@ -64,8 +65,9 @@ export default async function OnlineLetterOrdersPage() {
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-black">{order.order_number} · {order.customer_name}</h2><p className="text-sm">{formatPickupDate(order.requested_date)} · {order.pickup_location} · {order.fulfillment_status}</p><p className="text-xs text-[#776a5f]">{order.customer_email} · {order.phone}</p></div><strong>{money(total)}</strong></div>
         <ul className="mt-3 space-y-1 border-t border-[#eee3d8] pt-3 text-sm">{order.letter_order_items.map((item, index) => {
           const product = Array.isArray(item.letter_products) ? item.letter_products[0] : item.letter_products;
-          return <li key={index}>{item.quantity} × {product?.letter} · {product?.flavour} · {product?.size}{item.logo ? " · foto/logo" : ""}{item.logo_storage_path && photoUrls.has(item.logo_storage_path) && <> · <a href={photoUrls.get(item.logo_storage_path)} target="_blank" rel="noreferrer" className="font-bold text-[#547762] underline">Bekijk afbeelding</a></>}</li>;
+          return <li key={index}>{item.quantity} × {product?.style === "vorm" ? "vormletter" : "spuitletter"} {product?.letter} · {product?.flavour} · {product?.size}{item.logo ? " · foto/logo" : ""}{item.logo_storage_path && photoUrls.has(item.logo_storage_path) && <> · <a href={photoUrls.get(item.logo_storage_path)} target="_blank" rel="noreferrer" className="font-bold text-[#547762] underline">Bekijk afbeelding</a></>}</li>;
         })}</ul>
+        {order.notes && <p className="mt-3 whitespace-pre-wrap rounded-lg bg-amber-50 p-2 text-sm font-bold text-[#6f4b16]">{order.notes}</p>}
         {order.fulfillment_status === "NEW" && <DeleteOnlineLetterOrderButton orderId={order.id} orderNumber={order.order_number} />}
       </article>;
     })}</div>
