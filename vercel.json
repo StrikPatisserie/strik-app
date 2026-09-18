@@ -8,6 +8,10 @@
     {
       "path": "/api/lettershop/mail-retry",
       "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/sinterklaas-letter-reminders",
+      "schedule": "0 8 * * *"
     }
   ]
 }

@@ -19,6 +19,7 @@ import type {
 } from "../types";
 import { b2bLetterTotal } from "../b2bLetterLines";
 import B2BLetterLineBadges from "../B2BLetterLineBadges";
+import StoreLetterShopForm from "./StoreLetterShopForm";
 
 type Mode = "winkel" | "productie";
 
@@ -173,7 +174,7 @@ function totalPieces(order: ChocolateLetterOrder) {
 function lineLabel(line: ChocolateLetterLine) {
   return `${line.quantity}x ${line.letter.toUpperCase()} ${line.size} ${line.style} ${line.chocolate}${
     line.logo ? " met logo" : ""
-  }`;
+  }${line.specialRequests?.length ? ` · ${line.specialRequests.join(", ")}` : ""}`;
 }
 
 function parseOnlineLetterProduct(productName: string) {
@@ -382,11 +383,12 @@ function SummaryStrip({ orders, b2bOrders }: Readonly<{ orders: ChocolateLetterO
             line.style,
             line.letter.toUpperCase(),
             line.logo ? "logo" : "zonder-logo",
+            ...(line.specialRequests || []),
           ].join("-");
           const existing = map.get(key);
           const label = `${line.letter.toUpperCase()} · ${line.chocolate} · ${line.size} · ${line.style}${
             line.logo ? " · logo" : ""
-          }`;
+          }${line.specialRequests?.length ? ` · ${line.specialRequests.join(", ")}` : ""}`;
           map.set(key, {
             label,
             quantity: (existing?.quantity || 0) + line.quantity,
@@ -461,6 +463,7 @@ function OrderRow({
     order.bakeryEmailSentAt &&
       `Bakkerijmail: ${formatDateTime(order.bakeryEmailSentAt)}`,
     order.pickedUpAt && `Opgehaald: ${formatDateTime(order.pickedUpAt)}`,
+    order.customerReminderSentForDate && `Ophaalherinnering: ${order.customerReminderSentForDate}`,
   ].filter(Boolean);
   const isDone = order.productionDone || order.status === "klaar";
   const isOnline = order.source === "online";
@@ -535,6 +538,11 @@ function OrderRow({
           <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
             {order.lines.map(lineLabel).join(" · ")}
           </p>
+          {order.source === "winkel" && (order.giftWrap || order.totalCents > 0 || order.paid) && (
+            <p className="mt-1 text-xs font-bold text-[#547762]">
+              {[order.giftWrap && "Cadeaupapier", order.totalCents > 0 && `Prijs € ${(order.totalCents / 100).toFixed(2).replace(".", ",")}`, order.paid ? "Al betaald" : "Betalen bij afhalen"].filter(Boolean).join(" · ")}
+            </p>
+          )}
           {order.lines.some((line) => line.notes.trim()) && (
             <p className="mt-1 rounded-lg bg-[#fff3dc] px-2 py-1.5 text-xs font-bold text-[#70460e]">
               Let op: {order.lines.filter((line) => line.notes.trim()).map((line) => `${line.letter.toUpperCase()}: ${line.notes}`).join(" · ")}
@@ -548,6 +556,11 @@ function OrderRow({
           {order.bakeryEmailError && (
             <p className="mt-2 rounded-lg bg-[#fff0ea] px-2 py-1.5 text-xs font-black text-[#9a3412]">
               Interne mail niet verstuurd: {order.bakeryEmailError}
+            </p>
+          )}
+          {order.customerReminderError && (
+            <p className="mt-2 rounded-lg bg-[#fff0ea] px-2 py-1.5 text-xs font-black text-[#9a3412]">
+              Ophaalherinnering niet verstuurd: {order.customerReminderError}
             </p>
           )}
           {extraLines.length > 0 && (
@@ -591,7 +604,7 @@ function OrderRow({
                 : "bg-[#24551d] text-white"
             }`}
           >
-            {updatingId === order.id ? "..." : isPickedUp ? "Ophalen terugdraaien" : "Afgerekend & opgehaald"}
+            {updatingId === order.id ? "..." : isPickedUp ? "Ophalen terugdraaien" : order.paid ? "Meegegeven" : "Afgerekend & opgehaald"}
           </button>}
           <button
             type="button"
@@ -858,11 +871,13 @@ function LetterOrderForm({
 function LetterOrderDialog({
   order,
   mode,
+  defaultShop,
   onClose,
   onSaved,
 }: Readonly<{
   order: ChocolateLetterOrder | null;
   mode: Mode;
+  defaultShop?: string;
   onClose: () => void;
   onSaved: (order: ChocolateLetterOrder) => void;
 }>) {
@@ -879,7 +894,7 @@ function LetterOrderDialog({
               Chocoladeletters
             </p>
             <h2 className="text-xl font-black text-[#1a1815] sm:text-2xl">
-              {order ? "Bestelling wijzigen" : "Bestelling toevoegen"}
+              {order ? "Bestelling wijzigen" : mode === "winkel" ? "Winkelbestelling maken" : "Bestelling toevoegen"}
             </h2>
           </div>
           <button
@@ -892,13 +907,7 @@ function LetterOrderDialog({
           </button>
         </div>
 
-        <LetterOrderForm
-          key={order?.id || "new-letter-order"}
-          initialOrder={order}
-          mode={mode}
-          onSaved={onSaved}
-          onCancel={onClose}
-        />
+        {mode === "winkel" ? <StoreLetterShopForm key={order?.id || "new-store-order"} initialOrder={order} defaultShop={defaultShop} onSaved={onSaved} onCancel={onClose} /> : <LetterOrderForm key={order?.id || "new-letter-order"} initialOrder={order} mode={mode} onSaved={onSaved} onCancel={onClose} />}
       </div>
     </div>
   );
@@ -1046,13 +1055,15 @@ function OnlineImportDialog({
 
 export default function SinterklaasLettersClient({
   mode,
-}: Readonly<{ mode: Mode }>) {
+  defaultShop,
+}: Readonly<{ mode: Mode; defaultShop?: string }>) {
   const [year, setYear] = useState(() => currentYear());
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<ChocolateLetterOrder[]>([]);
   const [b2bOrders, setB2BOrders] = useState<SinterklaasB2BOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [updatingId, setUpdatingId] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [onlineImportOpen, setOnlineImportOpen] = useState(false);
@@ -1174,7 +1185,9 @@ export default function SinterklaasLettersClient({
     const pickedUp = order.pickedUp || order.status === "opgehaald";
     const confirmed = window.confirm(pickedUp
       ? `Ophalen van ${order.customerName} terugdraaien? De betaling in Bake-it wordt hierdoor niet aangepast.`
-      : `Is bestelling ${order.code} van ${order.customerName} in Bake-it afgerekend én aan de klant meegegeven?`);
+      : order.paid
+        ? `Is bestelling ${order.code} van ${order.customerName} aan de klant meegegeven? De betaling staat al als gedaan gemarkeerd.`
+        : `Is bestelling ${order.code} van ${order.customerName} in Bake-it afgerekend én aan de klant meegegeven?`);
     if (!confirmed) return;
 
     setUpdatingId(order.id);
@@ -1183,6 +1196,8 @@ export default function SinterklaasLettersClient({
       const saved = await updateLetterOrder(order.id, {
         pickedUp: !pickedUp,
         pickedUpAt: pickedUp ? "" : new Date().toISOString(),
+        paid: pickedUp ? order.paid : true,
+        paidAt: pickedUp ? order.paidAt : (order.paidAt || new Date().toISOString()),
         status: pickedUp ? (order.productionDone ? "klaar" : "besteld") : "opgehaald",
       });
       setOrders((current) => updateOrderList(current, saved));
@@ -1194,6 +1209,7 @@ export default function SinterklaasLettersClient({
   }
 
   function openNewOrderDialog() {
+    setNotice("");
     setEditingOrder(null);
     setFormOpen(true);
   }
@@ -1221,6 +1237,7 @@ export default function SinterklaasLettersClient({
 
   function handleSavedOrder(order: ChocolateLetterOrder) {
     setOrders((current) => updateOrderList(current, order));
+    setNotice(mode === "winkel" ? `Bestelling ${order.code} opgeslagen. Schrijf dit nummer op de papieren bon en vink ‘ingevoerd’ aan.` : "");
     const mailErrors = [order.bakeryEmailError, order.customerConfirmationError].filter(Boolean);
     setError(mailErrors.length ? `Bestelling ${order.code} is opgeslagen, maar let op: ${mailErrors.join(" ")}` : "");
     closeOrderDialog();
@@ -1386,7 +1403,7 @@ export default function SinterklaasLettersClient({
             >
               +
             </span>
-            {mode === "winkel" ? "Winkelbestelling toevoegen" : "Toevoegen"}
+            {mode === "winkel" ? "Nieuwe winkelbestelling" : "Toevoegen"}
           </button>
         </div>
       </section>
@@ -1396,6 +1413,7 @@ export default function SinterklaasLettersClient({
           {error}
         </p>
       )}
+      {notice && <p role="status" className="border border-[#b7d8ad] bg-[#eef8ea] px-3 py-2 text-sm font-black text-[#24551d]">{notice}</p>}
 
       {mode === "productie" && (
         <section className="space-y-2 border border-[#b9d0bd] bg-[#f6faf4] p-3">
@@ -1494,6 +1512,7 @@ export default function SinterklaasLettersClient({
         <LetterOrderDialog
           order={editingOrder}
           mode={mode}
+          defaultShop={defaultShop}
           onClose={closeOrderDialog}
           onSaved={handleSavedOrder}
         />

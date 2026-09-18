@@ -12,6 +12,7 @@ export type ChocolateLetterLine = {
   quantity: number;
   logo: boolean;
   notes: string;
+  specialRequests?: ("glutenvrij" | "notenvrij" | "vegan" | "lactosevrij")[];
 };
 
 export type ChocolateLetterOrder = {
@@ -32,6 +33,10 @@ export type ChocolateLetterOrder = {
   notes: string;
   lines: ChocolateLetterLine[];
   sendCustomerEmail: boolean;
+  giftWrap: boolean;
+  paid: boolean;
+  paidAt: string;
+  totalCents: number;
   productionDone: boolean;
   productionDoneAt: string;
   productionDoneBy: string;
@@ -41,6 +46,8 @@ export type ChocolateLetterOrder = {
   bakeryEmailError: string;
   customerConfirmationSentAt: string;
   customerConfirmationError: string;
+  customerReminderSentForDate: string;
+  customerReminderError: string;
   createdAt: string;
   updatedAt: string;
 };

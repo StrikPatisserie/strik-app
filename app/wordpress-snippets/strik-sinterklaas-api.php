@@ -268,6 +268,9 @@ function strik_sinterklaas_sanitize_letter_lines($lines) {
             'quantity' => $quantity,
             'logo' => !empty($line['logo']),
             'notes' => isset($line['notes']) ? strik_sinterklaas_text($line['notes'], 300) : '',
+            'specialRequests' => isset($line['specialRequests']) && is_array($line['specialRequests'])
+                ? array_values(array_intersect(array('glutenvrij', 'notenvrij', 'vegan', 'lactosevrij'), $line['specialRequests']))
+                : array(),
         );
     }
 
@@ -313,6 +316,10 @@ function strik_sinterklaas_sanitize_letter_order($order, $existing = array()) {
         'notes' => isset($order['notes']) ? strik_sinterklaas_textarea($order['notes'], 1800) : '',
         'lines' => $lines,
         'sendCustomerEmail' => !empty($order['sendCustomerEmail']),
+        'giftWrap' => !empty($order['giftWrap']),
+        'paid' => !empty($order['paid']),
+        'paidAt' => isset($order['paidAt']) ? strik_sinterklaas_text($order['paidAt'], 80) : '',
+        'totalCents' => isset($order['totalCents']) ? absint($order['totalCents']) : 0,
         'productionDone' => !empty($order['productionDone']),
         'productionDoneAt' => isset($order['productionDoneAt']) ? strik_sinterklaas_text($order['productionDoneAt'], 80) : '',
         'productionDoneBy' => isset($order['productionDoneBy']) ? strik_sinterklaas_text($order['productionDoneBy'], 120) : '',
@@ -322,6 +329,8 @@ function strik_sinterklaas_sanitize_letter_order($order, $existing = array()) {
         'bakeryEmailError' => isset($order['bakeryEmailError']) ? strik_sinterklaas_text($order['bakeryEmailError'], 240) : '',
         'customerConfirmationSentAt' => isset($order['customerConfirmationSentAt']) ? strik_sinterklaas_text($order['customerConfirmationSentAt'], 80) : '',
         'customerConfirmationError' => isset($order['customerConfirmationError']) ? strik_sinterklaas_text($order['customerConfirmationError'], 240) : '',
+        'customerReminderSentForDate' => isset($order['customerReminderSentForDate']) ? strik_sinterklaas_date($order['customerReminderSentForDate']) : '',
+        'customerReminderError' => isset($order['customerReminderError']) ? strik_sinterklaas_text($order['customerReminderError'], 240) : '',
         'createdAt' => isset($existing['createdAt']) ? $existing['createdAt'] : $now,
         'updatedAt' => $now,
     );
@@ -344,6 +353,9 @@ function strik_sinterklaas_letter_summary_lines($order) {
 
         if (!empty($line['notes'])) {
             $lines[] = '  Opmerking: ' . $line['notes'];
+        }
+        if (!empty($line['specialRequests'])) {
+            $lines[] = '  Speciaal: ' . implode(', ', $line['specialRequests']);
         }
     }
 
@@ -374,6 +386,10 @@ function strik_sinterklaas_create_letter_mail_body($order, $for_customer = false
         $lines[] = $order['notes'];
     }
 
+    if (!empty($order['giftWrap'])) $lines[] = 'Alles in cadeaupapier';
+    if (!empty($order['totalCents'])) $lines[] = 'Prijs: € ' . number_format($order['totalCents'] / 100, 2, ',', '.');
+    if (!empty($order['paid'])) $lines[] = 'Al afgerekend in Bake-it';
+
     if ($for_customer) {
         $lines[] = '';
         $lines[] = 'Neem dit ordernummer mee bij het ophalen. Dan vinden we uw bestelling sneller.';
@@ -385,6 +401,54 @@ function strik_sinterklaas_create_letter_mail_body($order, $for_customer = false
     }
 
     return implode("\n", $lines);
+}
+}
+
+if (!function_exists('strik_sinterklaas_letter_customer_mail_html')) {
+function strik_sinterklaas_letter_customer_mail_html($order, $reminder = false, $updated = false) {
+    $name = esc_html($order['customerName']);
+    $code = esc_html($order['code']);
+    $date = !empty($order['pickupDate']) ? esc_html(date('d-m-Y', strtotime($order['pickupDate']))) : '-';
+    $shops = array(
+        'Ziekerstraat' => 'Strik Centrum · Ziekerstraat 124',
+        'Heyendaal' => 'Strik Brakkenstein · Heyendaalseweg 217',
+        'Daalseweg' => 'Strik Nijmegen-Oost · Daalseweg 254',
+        'Lent' => 'Strik Lent · Oranje Marieplein 11',
+    );
+    $shop_key = !empty($order['pickupLocation']) ? $order['pickupLocation'] : $order['shop'];
+    $shop = esc_html(isset($shops[$shop_key]) ? $shops[$shop_key] : $shop_key);
+    $title = $reminder ? 'Morgen is het zover!' : ($updated ? 'Uw bestelling is aangepast' : 'Uw chocoladeletters zijn besteld!');
+    $intro = $reminder
+        ? 'Morgen liggen uw chocoladeletters voor u klaar. We zien u graag in de winkel!'
+        : ($updated ? 'Hieronder vindt u de nieuwste gegevens van uw chocoladeletterbestelling.' : 'Wat leuk dat u chocoladeletters bij Strik heeft besteld. Wij maken ze met zorg voor u klaar.');
+    $items = '';
+    $has_special_request = false;
+    foreach ($order['lines'] as $line) {
+        $description = strtoupper($line['letter']) . ' · ' . $line['chocolate'] . ' · ' . $line['style'] . ' · ' . $line['size'];
+        if (!empty($line['logo'])) $description .= ' · met logo';
+        if (!empty($line['specialRequests'])) {
+            $description .= ' · ' . implode(', ', $line['specialRequests']);
+            $has_special_request = true;
+        }
+        $items .= '<tr><td style="padding:9px 0;border-bottom:1px solid #edf0e9;font-size:14px;color:#293c2e;"><strong>' . absint($line['quantity']) . '×</strong> ' . esc_html($description) . '</td></tr>';
+    }
+    $wrap = !empty($order['giftWrap']) ? '<p style="margin:12px 0 0;font-size:14px;color:#536b57;">🎁 Alles feestelijk ingepakt in cadeaupapier.</p>' : '';
+    $allergen_note = $has_special_request ? '<p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#755b4f;">Let op: chocoladeletters kunnen altijd sporen van allergenen bevatten. Bij een ernstige allergie raden we consumptie af.</p>' : '';
+    $price = !empty($order['totalCents']) ? '<p style="margin:12px 0 0;font-size:16px;color:#263b2b;"><strong>Totaal: € ' . esc_html(number_format($order['totalCents'] / 100, 2, ',', '.')) . '</strong></p>' : '';
+    $payment = !empty($order['paid']) ? 'Deze bestelling is al afgerekend.' : 'U betaalt bij het afhalen in de winkel.';
+    $heading = $reminder ? 'Ophaalherinnering' : ($updated ? 'Gewijzigde bestelling' : 'Bestelbevestiging');
+
+    return '<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:24px 12px;background:#edf4ec;font-family:Arial,Helvetica,sans-serif;color:#263b2b;">'
+        . '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:580px;margin:0 auto;border-collapse:collapse;"><tr><td style="padding:25px 28px;background:#244b37;color:#fff;border-radius:16px 16px 0 0;">'
+        . '<div style="font-size:12px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#e8cf90;">Strik Patisserie</div><h1 style="margin:10px 0 0;font-size:27px;line-height:1.2;color:#fff;">' . esc_html($title) . '</h1></td></tr>'
+        . '<tr><td style="padding:25px 28px;background:#fffdf8;border-radius:0 0 16px 16px;">'
+        . '<p style="margin:0 0 14px;font-size:16px;line-height:1.55;">Beste ' . $name . ',</p><p style="margin:0 0 22px;font-size:16px;line-height:1.55;">' . esc_html($intro) . '</p>'
+        . '<div style="padding:18px;background:#f1f7ef;border-radius:12px;"><p style="margin:0 0 10px;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#547762;">' . esc_html($heading) . ' · ' . $code . '</p>'
+        . '<p style="margin:0 0 7px;font-size:16px;"><strong>Afhalen:</strong> ' . $date . '</p><p style="margin:0;font-size:15px;"><strong>Winkel:</strong> ' . $shop . '</p></div>'
+        . '<h2 style="margin:22px 0 7px;font-size:17px;">Uw bestelling</h2><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">' . $items . '</table>'
+        . $wrap . $allergen_note . $price . '<p style="margin:20px 0 0;font-size:14px;line-height:1.5;color:#536b57;">' . esc_html($payment) . ' Neem bij het afhalen gerust dit ordernummer mee: <strong>' . $code . '</strong>.</p>'
+        . '<p style="margin:24px 0 0;font-size:14px;line-height:1.5;">Vragen of verhinderd? Neem dan even contact met ons op.<br><strong>Tot snel bij Strik!</strong></p>'
+        . '</td></tr><tr><td style="padding:16px;text-align:center;font-size:12px;color:#65806a;">Met liefde gemaakt door Strik Patisserie</td></tr></table></body></html>';
 }
 }
 
@@ -416,14 +480,18 @@ function strik_sinterklaas_send_letter_emails($order, $existing = array()) {
         !empty($order['sendCustomerEmail'])
         && $order['customerEmail'] !== ''
         && empty($order['customerConfirmationSentAt'])
-        && empty($existing['customerConfirmationSentAt'])
     ) {
-        $customer_headers = $headers;
+        $updated = !empty($existing['customerConfirmationSentAt']);
+        $customer_headers = array(
+            'Content-Type: text/html; charset=UTF-8',
+            'From: Strik Patisserie <info@strik-patisserie.nl>',
+            'Reply-To: info@strik-patisserie.nl',
+        );
         $customer_headers[] = 'Bcc: ' . STRIK_SINTERKLAAS_RECIPIENT;
         $sent_customer = wp_mail(
             $order['customerEmail'],
-            'Bevestiging chocoladeletter bestelling ' . $order['code'] . ' - Strik Patisserie',
-            strik_sinterklaas_create_letter_mail_body($order, true),
+            ($updated ? 'Uw chocoladeletterbestelling is aangepast: ' : 'Bevestiging chocoladeletter bestelling ') . $order['code'] . ' - Strik Patisserie',
+            strik_sinterklaas_letter_customer_mail_html($order, false, $updated),
             $customer_headers
         );
 
@@ -436,6 +504,47 @@ function strik_sinterklaas_send_letter_emails($order, $existing = array()) {
     }
 
     return $order;
+}
+}
+
+if (!function_exists('strik_sinterklaas_send_letter_reminders')) {
+function strik_sinterklaas_send_letter_reminders($request) {
+    $tomorrow = (new DateTimeImmutable('now', new DateTimeZone('Europe/Amsterdam')))->modify('+1 day')->format('Y-m-d');
+    $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME);
+    $sent = 0;
+    $failed = 0;
+
+    foreach ($orders as $key => $order) {
+        if (!is_array($order)) continue;
+        if (isset($order['source']) && $order['source'] !== 'winkel') continue;
+        if (empty($order['sendCustomerEmail']) || empty($order['customerEmail']) || !is_email($order['customerEmail'])) continue;
+        if (!isset($order['pickupDate']) || $order['pickupDate'] !== $tomorrow) continue;
+        if (!empty($order['pickedUp']) || (isset($order['status']) && in_array($order['status'], array('opgehaald', 'geannuleerd'), true))) continue;
+        if (isset($order['customerReminderSentForDate']) && $order['customerReminderSentForDate'] === $tomorrow) continue;
+
+        $ok = wp_mail(
+            $order['customerEmail'],
+            'Morgen liggen uw chocoladeletters klaar - Strik Patisserie',
+            strik_sinterklaas_letter_customer_mail_html($order, true),
+            array(
+                'Content-Type: text/html; charset=UTF-8',
+                'From: Strik Patisserie <info@strik-patisserie.nl>',
+                'Reply-To: info@strik-patisserie.nl',
+            )
+        );
+        if ($ok) {
+            $order['customerReminderSentForDate'] = $tomorrow;
+            $order['customerReminderError'] = '';
+            $sent++;
+        } else {
+            $order['customerReminderError'] = 'WordPress kon de e-mail niet versturen.';
+            $failed++;
+        }
+        $orders[$key] = $order;
+        strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME, $orders);
+    }
+
+    return rest_ensure_response(array('date' => $tomorrow, 'sent' => $sent, 'failed' => $failed));
 }
 }
 
@@ -608,6 +717,26 @@ function strik_sinterklaas_letter_get($request) {
 }
 }
 
+if (!function_exists('strik_sinterklaas_letter_customer_lines')) {
+function strik_sinterklaas_letter_customer_lines($lines) {
+    $result = array();
+    if (!is_array($lines)) return $result;
+    foreach ($lines as $line) {
+        if (!is_array($line)) continue;
+        $result[] = array(
+            'letter' => isset($line['letter']) ? $line['letter'] : '',
+            'chocolate' => isset($line['chocolate']) ? $line['chocolate'] : '',
+            'size' => isset($line['size']) ? $line['size'] : '',
+            'style' => isset($line['style']) ? $line['style'] : '',
+            'quantity' => isset($line['quantity']) ? absint($line['quantity']) : 0,
+            'logo' => !empty($line['logo']),
+            'specialRequests' => isset($line['specialRequests']) && is_array($line['specialRequests']) ? $line['specialRequests'] : array(),
+        );
+    }
+    return $result;
+}
+}
+
 if (!function_exists('strik_sinterklaas_letter_save')) {
 function strik_sinterklaas_letter_save($request, $send_emails = true) {
     $params = $request->get_json_params();
@@ -624,6 +753,23 @@ function strik_sinterklaas_letter_save($request, $send_emails = true) {
 
     if ($order === null) {
         return new WP_Error('strik_sinterklaas_invalid_letter_order', 'Vul minimaal klantnaam en letters in.', array('status' => 400));
+    }
+
+    $email_changed = !empty($existing) && isset($existing['customerEmail']) && $existing['customerEmail'] !== $order['customerEmail'];
+    $details_changed = !empty($existing) && (
+        $email_changed
+        || (isset($existing['pickupDate']) ? $existing['pickupDate'] : '') !== $order['pickupDate']
+        || (isset($existing['shop']) ? $existing['shop'] : '') !== $order['shop']
+        || strik_sinterklaas_letter_customer_lines(isset($existing['lines']) ? $existing['lines'] : array()) !== strik_sinterklaas_letter_customer_lines($order['lines'])
+        || !empty($existing['giftWrap']) !== !empty($order['giftWrap'])
+    );
+    if ($details_changed) {
+        $order['customerConfirmationSentAt'] = '';
+        $order['customerConfirmationError'] = '';
+    }
+    if ($email_changed) {
+        $order['customerReminderSentForDate'] = '';
+        $order['customerReminderError'] = '';
     }
 
     $order = strik_sinterklaas_assign_letter_order_number($order, $orders);
@@ -1070,6 +1216,12 @@ add_action('rest_api_init', function () {
             'callback' => 'strik_sinterklaas_letter_delete',
             'permission_callback' => 'strik_sinterklaas_permission',
         ),
+    ));
+
+    register_rest_route('strik/v1', '/sinterklaas-letter-reminders', array(
+        'methods' => WP_REST_Server::CREATABLE,
+        'callback' => 'strik_sinterklaas_send_letter_reminders',
+        'permission_callback' => 'strik_sinterklaas_permission',
     ));
 
     register_rest_route('strik/v1', '/sinterklaas-b2b-orders', array(

@@ -15,6 +15,7 @@ const ENDPOINTS: Record<OrderKind, string> = {
   letter: "/api/sinterklaas-letter-orders",
   b2b: "/api/sinterklaas-b2b-orders",
 };
+const LETTER_SPECIAL_REQUESTS = ["glutenvrij", "notenvrij", "vegan", "lactosevrij"] as const;
 
 function currentYear() {
   return String(new Date().getFullYear());
@@ -71,6 +72,7 @@ function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | null {
         quantity,
         logo: boolFrom(line.logo),
         notes: textFrom(line.notes),
+        specialRequests: LETTER_SPECIAL_REQUESTS.filter((request) => Array.isArray(line.specialRequests) && line.specialRequests.includes(request)),
       },
     ];
   });
@@ -99,6 +101,10 @@ function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | null {
     notes: textFrom(value.notes),
     lines,
     sendCustomerEmail: boolFrom(value.sendCustomerEmail),
+    giftWrap: boolFrom(value.giftWrap),
+    paid: boolFrom(value.paid),
+    paidAt: textFrom(value.paidAt),
+    totalCents: numberFrom(value.totalCents),
     productionDone: boolFrom(value.productionDone),
     productionDoneAt: textFrom(value.productionDoneAt),
     productionDoneBy: textFrom(value.productionDoneBy),
@@ -108,6 +114,8 @@ function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | null {
     bakeryEmailError: textFrom(value.bakeryEmailError),
     customerConfirmationSentAt: textFrom(value.customerConfirmationSentAt),
     customerConfirmationError: textFrom(value.customerConfirmationError),
+    customerReminderSentForDate: textFrom(value.customerReminderSentForDate),
+    customerReminderError: textFrom(value.customerReminderError),
     createdAt: textFrom(value.createdAt),
     updatedAt: textFrom(value.updatedAt),
   };
