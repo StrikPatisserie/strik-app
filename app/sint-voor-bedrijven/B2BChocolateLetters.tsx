@@ -122,12 +122,12 @@ export default function B2BChocolateLetters({
   }
 
   return (
-    <article id="product-chocoladeletter" className="self-start overflow-hidden rounded-[2rem] bg-[#fff3cf] shadow-[0_18px_55px_rgba(107,35,12,.16)]">
-      <div className="relative aspect-[4/5] overflow-hidden bg-[#f7f0e5] sm:aspect-[3/4]">
+    <article id="product-chocoladeletter" className="flex h-full flex-col overflow-hidden rounded-[2rem] bg-[#fff3cf] shadow-[0_18px_55px_rgba(107,35,12,.16)]">
+      <div className="relative aspect-[4/5] shrink-0 overflow-hidden bg-[#f7f0e5] sm:aspect-[3/4]">
         <Image src={selectedPhoto.src} alt={`Voorbeeld ${selectedPhoto.label.toLowerCase()}`} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw" className="object-cover object-center" />
         <span className="absolute left-4 top-4 rounded-full bg-[#d62d1d] px-3 py-1 text-xs font-black uppercase tracking-wider text-white">De klassieker</span>
       </div>
-      <div className="p-5 sm:p-6">
+      <div className="flex flex-1 flex-col p-5 sm:p-6">
         <h3 className="text-2xl font-black text-[#60190f]">Chocoladeletters</h3>
         <p className="mt-2 text-sm font-semibold leading-relaxed text-[#7e493c]">Spuitletters A–Z, klein of groot. Vormletter S alleen groot. Melk, puur of wit.</p>
         <div className="mt-4 grid grid-cols-4 gap-1.5">
