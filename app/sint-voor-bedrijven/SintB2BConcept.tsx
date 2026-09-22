@@ -93,6 +93,16 @@ const products: Product[] = [
     tiers: chocolateLetterTiers,
   },
   {
+    id: "gevuld-speculaasbites",
+    name: "Gevuld speculaas in popcornbakje",
+    eyebrow: "Ca. 10 bites",
+    description: "Ca. 10 ambachtelijke bites van ons gevuld speculaas, feestelijk verpakt voor Sinterklaas. Winkelprijs € 14,95 incl. btw.",
+    image: "/sinterklaas/popcorn bites.png",
+    accent: "#d79a6d",
+    retailPriceIncl: 14.95,
+    tiers: chocolateLetterTiers,
+  },
+  {
     id: "staaf",
     name: "Amandel-/speculaasstaaf",
     eyebrow: "Meesterlijk gevuld",
