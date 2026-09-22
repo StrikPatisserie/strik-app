@@ -132,6 +132,17 @@ const products: Product[] = [
       { min: 51, price: 15.3, label: ">50" },
     ],
   },
+  {
+    id: "staaf-stoomboot",
+    name: "Staaf Stoomboot",
+    eyebrow: "Twee staven cadeau",
+    description: "Een gevulde speculaasstaaf en een gevulde amandelstaaf in een feestelijke stoombootverpakking.",
+    image: "/sinterklaas/staaf stoomboot.png",
+    shelfLife: "ca. 1 week",
+    accent: "#d62d1d",
+    retailPriceIncl: 17.95,
+    tiers: chocolateLetterTiers,
+  },
 ];
 const chocolateLetterProduct = products[0];
 
