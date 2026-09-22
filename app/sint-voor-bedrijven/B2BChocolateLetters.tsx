@@ -114,7 +114,7 @@ export default function B2BChocolateLetters({
   }
 
   return (
-    <article id="product-chocoladeletter" className="overflow-hidden rounded-[2rem] bg-[#fff3cf] shadow-[0_18px_55px_rgba(107,35,12,.16)] md:col-span-2">
+    <article id="product-chocoladeletter" className="self-start overflow-hidden rounded-[2rem] bg-[#fff3cf] shadow-[0_18px_55px_rgba(107,35,12,.16)] md:col-span-2">
       <div className="grid md:grid-cols-[minmax(0,.8fr)_minmax(0,1fr)]">
         <div className="bg-[#f7f0e5]">
           <div className="relative mx-auto aspect-[2/3] max-h-[31rem] w-full">
