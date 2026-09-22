@@ -123,12 +123,7 @@ const products: Product[] = [
     name: "Stafwerk pakket",
     eyebrow: "Favoriet",
     description: "Drie heerlijke stafjes van roomchocolade, marsepein en gevuld speculaas.",
-    image: "/sinterklaas/b2b-concept/product-8.png",
-    gallery: [
-      { src: "/sinterklaas/b2b-concept/product-8.png", label: "Stafwerk pakket" },
-      { src: "/sinterklaas/b2b-concept/product-2.png", label: "Detail van de verschillende staven" },
-      { src: "/sinterklaas/b2b-concept/product-11.png", label: "Sfeervoorbeeld" },
-    ],
+    image: "/sinterklaas/Stafwerk.png",
     shelfLife: "feestelijk verpakt",
     accent: "#f7c8aa",
     tiers: [
