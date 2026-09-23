@@ -48,8 +48,7 @@ type ProductSuggestion = {
   logoIncluded: boolean;
 };
 
-// Conceptbedragen: vervang deze zodra de B2B-prijslijst voor 2026 definitief is.
-const NIJMEGEN_DELIVERY_FEE = 15;
+const NIJMEGEN_DELIVERY_FEE_LABEL = "€ 10–15";
 const FOOD_VAT_FACTOR = 1.09;
 const logoPriceFor = (quantity: number) => quantity > 100 ? 0.35 : quantity > 50 ? 0.38 : 0.4;
 const roundCents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -557,12 +556,9 @@ export default function SintB2BConcept() {
   const shapeLetterTotalEx = roundCents(selected.filter((line) => line.product.id === shapeLetterProduct.id).reduce((sum, line) => sum + line.totalEx, 0));
   const subtotalEx = roundCents(selected.reduce((sum, line) => sum + line.totalEx, 0));
   const subtotalIncl = roundCents(selected.reduce((sum, line) => sum + line.totalIncl, 0));
-  const deliveryFeeEx = delivery === "nijmegen" && selected.length ? NIJMEGEN_DELIVERY_FEE : 0;
-  const deliveryFeeIncl = roundCents(deliveryFeeEx * FOOD_VAT_FACTOR);
-  const totalEx = roundCents(subtotalEx + deliveryFeeEx);
-  const totalIncl = roundCents(subtotalIncl + deliveryFeeIncl);
+  const totalEx = subtotalEx;
+  const totalIncl = subtotalIncl;
   const subtotal = includeVat ? subtotalIncl : subtotalEx;
-  const deliveryFee = includeVat ? deliveryFeeIncl : deliveryFeeEx;
   const total = includeVat ? totalIncl : totalEx;
   const suggestions = useMemo(() => products
     .map((product) => bestProductSuggestion(product, Math.max(1, recipientCount), includeVat, wantsLogo))
@@ -589,12 +585,12 @@ export default function SintB2BConcept() {
       "",
     ]),
     "LEVERING",
-    delivery === "pickup" ? "Ophalen bij Strik - gratis" : delivery === "nijmegen" ? `Bezorgen in Nijmegen - ${money(deliveryFeeEx)} excl. btw (indicatie)` : "Bezorgen buiten Nijmegen - prijs op aanvraag",
+    delivery === "pickup" ? "Ophalen bij Strik - gratis" : delivery === "nijmegen" ? `Bezorgen in/rondom Nijmegen - ${NIJMEGEN_DELIVERY_FEE_LABEL} (afhankelijk van het afleveradres)` : "Bezorgen buiten Nijmegen - prijs op aanvraag",
     ...(delivery !== "pickup" ? [`Afleveradres: ${deliveryAddress.trim() || "nog af te stemmen"}`] : []),
     "",
     "PRIJSINDICATIE",
-    `Producten: ${money(subtotalEx)} excl. btw`,
-    `Totaal: ${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw${delivery === "custom" ? " (+ bezorgkosten op aanvraag)" : ""}`,
+    `Producttotaal: ${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw`,
+    ...(delivery === "nijmegen" ? [`Bezorgkosten: ${NIJMEGEN_DELIVERY_FEE_LABEL}, afhankelijk van het afleveradres`] : delivery === "custom" ? ["Bezorgkosten: op aanvraag"] : []),
     ...(wishes.trim() ? ["", "OVERIGE WENSEN", wishes.trim()] : []),
     "",
     "Dit is een aanvraag, nog geen bestelling. Graag ontvang ik jullie bevestiging van de definitieve prijzen, beschikbaarheid en leverdatum.",
@@ -737,16 +733,16 @@ export default function SintB2BConcept() {
 
       <section className="bg-[#b9dddf] px-4 py-12 sm:px-8 lg:px-12"><div className="mx-auto grid max-w-7xl items-center gap-8 lg:grid-cols-[1fr_.8fr]"><div><p className="font-[Butterscotch] text-5xl text-[#d62d1d] sm:text-7xl">Stel zelf samen!</p><h2 className="mt-2 text-3xl font-black text-[#60190f]">Een pakket passend bij ieder budget</h2><p className="mt-4 max-w-xl text-lg font-semibold leading-relaxed text-[#6d4035]">Liever een unieke combinatie, eigen verpakking of bezorging op meerdere locaties? Zet je wensen in de aanvraag; ons team denkt mee.</p></div><Image src="/sinterklaas/Pakket op maat.jpg" alt="Voorbeeld van een Sinterklaaspakket op maat van Strik" width={900} height={675} className="aspect-[4/3] w-full rounded-[2rem] object-cover object-[center_70%] shadow-xl"/></div></section>
 
-      <div className="sticky bottom-0 z-30 border-t border-[#e6d7bf] bg-white/95 px-4 py-3 shadow-[0_-12px_35px_rgba(64,20,10,.14)] backdrop-blur sm:px-8"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><p className="text-xs font-bold text-[#7e493c]">{selected.reduce((sum,line)=>sum+line.quantity,0)} producten · {includeVat ? "incl." : "excl."} btw{delivery === "custom" ? " · bezorging op aanvraag" : ""}</p><p className="text-xl font-black text-[#60190f]">{money(total)}{delivery === "custom" ? " + bezorging" : ""}</p></div><button type="button" disabled={!selected.length} onClick={()=>setQuoteOpen(true)} className="rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40 sm:px-8">Bekijk offerteaanvraag</button></div></div>
+      <div className="sticky bottom-0 z-30 border-t border-[#e6d7bf] bg-white/95 px-4 py-3 shadow-[0_-12px_35px_rgba(64,20,10,.14)] backdrop-blur sm:px-8"><div className="mx-auto flex max-w-7xl items-center justify-between gap-3"><div><p className="text-xs font-bold text-[#7e493c]">{selected.reduce((sum,line)=>sum+line.quantity,0)} producten · {includeVat ? "incl." : "excl."} btw{delivery === "nijmegen" ? ` · ${NIJMEGEN_DELIVERY_FEE_LABEL} bezorging` : delivery === "custom" ? " · bezorging op aanvraag" : ""}</p><p className="text-xl font-black text-[#60190f]">{money(total)}{delivery !== "pickup" ? " + bezorging" : ""}</p></div><button type="button" disabled={!selected.length} onClick={()=>setQuoteOpen(true)} className="rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-lg disabled:opacity-40 sm:px-8">Bekijk offerteaanvraag</button></div></div>
 
       <BusinessFolderSeasonIntro />
 
       {quoteOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#391008]/55 p-0 sm:items-center sm:p-5"><section role="dialog" aria-modal="true" aria-labelledby="quote-title" className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#d62d1d]">Live prijsindicatie</p><h2 id="quote-title" className="mt-1 text-3xl font-black text-[#60190f]">Jouw offerteaanvraag</h2></div><button type="button" aria-label="Sluiten" onClick={() => setQuoteOpen(false)} className="h-10 w-10 rounded-full bg-white text-lg font-black">×</button></div>
         <div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({key,product,quantity,tier,choiceLabel,withLogo,logoPriceEx,logoPriceIncl,totalEx:lineTotalEx,totalIncl:lineTotalIncl})=><div key={key} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choiceLabel} · {money(productUnitPrice(product,tier,includeVat))} p.s. · {productPricingDescription(product,tier)}</p>{withLogo && <p className="mt-1 font-bold text-[#d62d1d]">Eigen logo: +{money(includeVat ? logoPriceIncl : logoPriceEx)} p.s. ({money(quantity * (includeVat ? logoPriceIncl : logoPriceEx))} totaal)</p>}</div><strong>{money(includeVat ? lineTotalIncl : lineTotalEx)}</strong></div>)}</div>
-        <fieldset className="mt-5"><legend className="text-sm font-black text-[#60190f]">Hoe wil je jouw cadeaus ontvangen?</legend><div className="mt-2 grid gap-2 sm:grid-cols-3">{([{value:"pickup", label:"Ophalen", detail:"Gratis"},{value:"nijmegen", label:"Bezorgen Nijmegen", detail:`+ ${money(NIJMEGEN_DELIVERY_FEE)} indicatie`},{value:"custom", label:"Overig adres", detail:"Prijs op aanvraag"}] as const).map((option) => <label key={option.value} className={`cursor-pointer rounded-xl border p-3 text-sm ${delivery === option.value ? "border-[#d62d1d] bg-[#fff0e8]" : "border-[#dfd0b7] bg-white"}`}><input type="radio" name="delivery" value={option.value} checked={delivery === option.value} onChange={() => setDelivery(option.value)} className="mr-2 accent-[#d62d1d]"/><strong>{option.label}</strong><span className="mt-1 block pl-5 text-xs text-[#7e493c]">{option.detail}</span></label>)}</div></fieldset>
+        <fieldset className="mt-5"><legend className="text-sm font-black text-[#60190f]">Hoe wil je jouw cadeaus ontvangen?</legend><div className="mt-2 grid gap-2 sm:grid-cols-3">{([{value:"pickup", label:"Ophalen", detail:"Gratis"},{value:"nijmegen", label:"Bezorgen Nijmegen e.o.", detail:`+ ${NIJMEGEN_DELIVERY_FEE_LABEL} · afhankelijk van adres`},{value:"custom", label:"Overig adres", detail:"Prijs op aanvraag"}] as const).map((option) => <label key={option.value} className={`cursor-pointer rounded-xl border p-3 text-sm ${delivery === option.value ? "border-[#d62d1d] bg-[#fff0e8]" : "border-[#dfd0b7] bg-white"}`}><input type="radio" name="delivery" value={option.value} checked={delivery === option.value} onChange={() => setDelivery(option.value)} className="mr-2 accent-[#d62d1d]"/><strong>{option.label}</strong><span className="mt-1 block pl-5 text-xs text-[#7e493c]">{option.detail}</span></label>)}</div></fieldset>
         {delivery !== "pickup" && <label className="mt-3 block text-sm font-bold text-[#60190f]">Afleveradres<input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Straat, huisnummer, postcode en plaats" className="mt-2 h-12 w-full rounded-xl border border-[#dfd0b7] bg-white px-4"/></label>}
-        <div className="mt-5 space-y-2 border-t border-[#eadbc3] pt-4 text-sm"><div className="flex justify-between"><span>Producten incl. gekozen logo&apos;s</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Bezorgen</span><strong>{delivery === "pickup" ? "Gratis" : delivery === "nijmegen" ? money(deliveryFee) : "Op aanvraag"}</strong></div></div>
-        <div className="mt-4 flex justify-between gap-3 border-t-2 border-[#60190f] pt-4 text-xl font-black"><span>Totaalindicatie {includeVat ? "incl." : "excl."} btw</span><span className="text-right">{money(total)}{delivery === "custom" && <small className="block text-xs">+ bezorgkosten</small>}</span></div>
+        <div className="mt-5 space-y-2 border-t border-[#eadbc3] pt-4 text-sm"><div className="flex justify-between"><span>Producten incl. gekozen logo&apos;s</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Bezorgen</span><strong>{delivery === "pickup" ? "Gratis" : delivery === "nijmegen" ? NIJMEGEN_DELIVERY_FEE_LABEL : "Op aanvraag"}</strong></div></div>
+        <div className="mt-4 flex justify-between gap-3 border-t-2 border-[#60190f] pt-4 text-xl font-black"><span>Producttotaal {includeVat ? "incl." : "excl."} btw</span><span className="text-right">{money(total)}{delivery !== "pickup" && <small className="block text-xs">+ bezorgkosten</small>}</span></div>
         <p className="mt-1 text-right text-xs font-bold text-[#8b7669]">Ook {includeVat ? `${money(totalEx)} excl. btw` : `${money(totalIncl)} incl. btw`}</p>
         <div className="mt-6 grid gap-3 sm:grid-cols-2"><input aria-label="Bedrijfsnaam" value={company} onChange={(event) => setCompany(event.target.value)} placeholder="Bedrijfsnaam" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Contactpersoon" value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Contactpersoon" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="E-mailadres" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="E-mailadres" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Telefoonnummer" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="Telefoonnummer" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><textarea aria-label="Overige wensen" value={wishes} onChange={(event) => setWishes(event.target.value)} placeholder="Gewenste leverdatum, verpakking of andere wensen" className="min-h-28 rounded-xl border border-[#dfd0b7] bg-white p-4 font-bold sm:col-span-2"/></div>
         <details className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><summary className="cursor-pointer text-sm font-black text-[#60190f]">Bekijk eerst de e-mailtekst</summary><pre className="mt-4 whitespace-pre-wrap break-words border-t border-[#eadbc3] pt-4 font-sans text-xs leading-relaxed text-[#5a4038]">{offerText}</pre></details>
