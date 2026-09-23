@@ -12,7 +12,7 @@ type ProductInfoSection = "shelfLife" | "allergens";
 type Product = {
   id: string;
   name: string;
-  eyebrow: string;
+  eyebrow?: string;
   description: string;
   image: string;
   gallery?: { src: string; label: string }[];
@@ -73,7 +73,7 @@ const products: Product[] = [
   {
     id: "chocoladeletter",
     name: "Chocoladeletters",
-    eyebrow: "De klassieker",
+    eyebrow: "Klassieker",
     description: "Spuitletters A–Z en vormletter S in melk, puur of wit.",
     image: "/sinterklaas/Melk spuitletter 2026.png",
     shelfLifeInfo: ["Chocolade · t.g.t. ca. 30 dagen"],
@@ -85,7 +85,6 @@ const products: Product[] = [
   {
     id: "speculaasplak-gedicht",
     name: "Speculaasplak met gedicht/logo",
-    eyebrow: "Persoonlijk cadeau",
     description: "Speculaasplak met gedicht- of logo-opdruk. Opdruk inbegrepen; het gedicht lever je zelf aan. Winkelprijs € 7,00 incl. btw.",
     image: "/sinterklaas/Speculaasplak met gedicht.png",
     shelfLifeInfo: ["Massief speculaas · t.g.t. ca. 30 dagen"],
@@ -98,7 +97,6 @@ const products: Product[] = [
   {
     id: "klein-sintpakket",
     name: "Klein Sintpakket",
-    eyebrow: "Drie keer lekker",
     description: "Kleine speculaaspop, kleine chocoladeletter en ca. 150 gram gevuld speculaas. Kies met of zonder amandel.",
     image: "/sinterklaas/Pakketje 1 pop-gevuld-letter.png",
     shelfLifeInfo: [
@@ -118,7 +116,6 @@ const products: Product[] = [
   {
     id: "speculaasbrok-met-letter",
     name: "Speculaasbrok met letter",
-    eyebrow: "Feestelijk duo",
     description: "Speculaasbrok met een kleine of grote chocoladeletter. Kies de brok met of zonder amandel.",
     image: "/sinterklaas/Pakketje 2 brok letter.jpg",
     shelfLifeInfo: [
@@ -139,7 +136,7 @@ const products: Product[] = [
   {
     id: "gevuld-speculaasbites",
     name: "Speculaas bites Snackbox",
-    eyebrow: "Ca. 30 bites",
+    eyebrow: "Nieuw",
     description: "Ca. 30 ambachtelijke speculaasbites, feestelijk verpakt voor Sinterklaas. Winkelprijs € 14,95 incl. btw.",
     image: "/sinterklaas/popcorn bites2.png",
     shelfLifeInfo: ["Speculaasbites · t.h.t. ca. 21 dagen"],
@@ -152,7 +149,6 @@ const products: Product[] = [
   {
     id: "staaf",
     name: "Amandelletter & gevulde staven",
-    eyebrow: "Meesterlijk gevuld",
     description: "Kies een amandelletter of een gevulde staaf. De amandelletter is standaard een S; een andere letter maken we op aanvraag.",
     image: "/sinterklaas/banketletter speculaasstaaf amandelstaaf.png",
     shelfLifeInfo: [
@@ -191,7 +187,7 @@ const products: Product[] = [
   {
     id: "staaf-stoomboot",
     name: "Staaf Stoomboot",
-    eyebrow: "Twee staven cadeau",
+    eyebrow: "Nieuw",
     description: "Een gevulde speculaasstaaf en een gevulde amandelstaaf in een feestelijke stoombootverpakking.",
     image: "/sinterklaas/staaf stoomboot2.png",
     shelfLifeInfo: [
@@ -584,7 +580,7 @@ export default function SintB2BConcept() {
             return <article id={`product-${product.id}`} key={product.id} className="flex h-full flex-col overflow-hidden rounded-[1.35rem] bg-[#fff3cf] shadow-[0_12px_34px_rgba(107,35,12,.14)]">
               <div className="relative aspect-[3/4] shrink-0 overflow-hidden">
                 <Image src={selectedImage} alt={`${product.name}${selectedChoiceLabel ? ` · ${selectedChoiceLabel}` : ""}`} fill sizes="(max-width: 640px) 90vw, (max-width: 1280px) 45vw, (max-width: 1536px) 23vw, 18vw" className="object-cover object-center"/>
-                <span className="absolute left-2.5 top-2.5 rounded-full bg-[#d62d1d] px-2 py-0.5 text-[.56rem] font-black uppercase tracking-wider text-white">{product.eyebrow}</span>
+                {product.eyebrow && <span className="absolute left-2.5 top-2.5 rounded-full bg-[#d62d1d] px-2 py-0.5 text-[.56rem] font-black uppercase tracking-wider text-white">{product.eyebrow}</span>}
                 <div className="absolute right-2.5 top-2.5 flex gap-1">
                   <button type="button" onClick={()=>setProductInfo({product,section:"shelfLife"})} aria-label={`Bekijk houdbaarheid van ${product.name}`} title="Houdbaarheid" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#557965] shadow-md backdrop-blur transition hover:bg-white"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></button>
                   <button type="button" onClick={()=>setProductInfo({product,section:"allergens"})} aria-label={`Bekijk allergenen van ${product.name}`} title="Allergenen" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#6e7858] shadow-md backdrop-blur transition hover:bg-white"><WheatIcon /></button>
