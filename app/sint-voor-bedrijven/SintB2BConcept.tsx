@@ -7,6 +7,8 @@ import B2BChocolateLetters, { describeB2BLetter, type B2BLetterLine } from "./B2
 type PriceTier = { min: number; label: string; price?: number; discountPercent?: number };
 type ProductVariant = { label: string; retailPriceIncl: number };
 type DuoImage = { options: [string, string]; src: string };
+type Allergen = "gluten" | "lactose" | "amandel" | "soja";
+type ProductInfoSection = "shelfLife" | "allergens";
 type Product = {
   id: string;
   name: string;
@@ -15,7 +17,9 @@ type Product = {
   image: string;
   gallery?: { src: string; label: string }[];
   optionImages?: Record<string, string>;
-  shelfLife?: string;
+  shelfLifeInfo: string[];
+  allergens: Allergen[];
+  allergenNote?: string;
   tiers: PriceTier[];
   retailPriceIncl?: number;
   personalizationIncluded?: boolean;
@@ -51,6 +55,12 @@ const DUO_SINT_CHOCO = "Gesorteerde Sint-chocolade · ca. 200 g";
 const DUO_MARSEPEIN = "Marsepein aardappeltjes · ca. 275 g";
 const DUO_SPECULAASBROK = "Speculaasbrokstukken · ca. ⅔ brok";
 const DUO_BORSTPLAAT = "Roomborstplaat · ca. 8 rondjes";
+const ALLERGEN_LABELS: Record<Allergen, string> = {
+  gluten: "Gluten",
+  lactose: "Lactose",
+  amandel: "Amandel / noten",
+  soja: "Soja",
+};
 const chocolateLetterTiers: PriceTier[] = [
   { min: 1, label: "1–24", discountPercent: 0 },
   { min: 25, label: "25–50", discountPercent: 5 },
@@ -67,7 +77,9 @@ const products: Product[] = [
     eyebrow: "De klassieker",
     description: "Spuitletters A–Z en vormletter S in melk, puur of wit.",
     image: "/sinterklaas/Melk spuitletter 2026.png",
-    shelfLife: "ca. 1 maand",
+    shelfLifeInfo: ["Chocolade · t.g.t. ca. 30 dagen"],
+    allergens: ["gluten", "lactose", "soja"],
+    allergenNote: "Soja is aanwezig door de decoratie met witte chocolade.",
     accent: "#b9dddf",
     retailPriceIncl: 8.95,
     tiers: chocolateLetterTiers,
@@ -78,6 +90,9 @@ const products: Product[] = [
     eyebrow: "Persoonlijk cadeau",
     description: "Speculaasplak met gedicht- of logo-opdruk. Opdruk inbegrepen; het gedicht lever je zelf aan. Winkelprijs € 7,00 incl. btw.",
     image: "/sinterklaas/Speculaasplak met gedicht.png",
+    shelfLifeInfo: ["Massief speculaas · t.g.t. ca. 30 dagen"],
+    allergens: ["gluten", "lactose", "soja"],
+    allergenNote: "Soja is aanwezig door de decoratie met witte chocolade.",
     accent: "#d79a6d",
     retailPriceIncl: 7,
     personalizationIncluded: true,
@@ -89,6 +104,13 @@ const products: Product[] = [
     eyebrow: "Drie keer lekker",
     description: "Kleine speculaaspop, kleine chocoladeletter en ca. 150 gram gevuld speculaas. Kies met of zonder amandel.",
     image: "/sinterklaas/Pakketje 1 pop-gevuld-letter.png",
+    shelfLifeInfo: [
+      "Speculaaspop · t.g.t. ca. 30 dagen",
+      "Chocoladeletter · t.g.t. ca. 30 dagen",
+      "Gevuld speculaas · t.h.t. ca. 21 dagen",
+    ],
+    allergens: ["gluten", "lactose", "amandel", "soja"],
+    allergenNote: "Amandel zit in het gevulde speculaas; soja in de decoratie van de chocoladeletter.",
     accent: "#d79a6d",
     retailPriceIncl: 18.35,
     variants: [
@@ -103,6 +125,12 @@ const products: Product[] = [
     eyebrow: "Feestelijk duo",
     description: "Speculaasbrok met een kleine of grote chocoladeletter. Kies de brok met of zonder amandel.",
     image: "/sinterklaas/Pakketje 2 brok letter.jpg",
+    shelfLifeInfo: [
+      "Speculaasbrok · t.g.t. ca. 30 dagen",
+      "Chocoladeletter · t.g.t. ca. 30 dagen",
+    ],
+    allergens: ["gluten", "lactose", "amandel", "soja"],
+    allergenNote: "Amandel is afhankelijk van de gekozen brok; soja zit in de decoratie van de chocoladeletter.",
     accent: "#b9dddf",
     retailPriceIncl: 13.9,
     variants: [
@@ -119,6 +147,9 @@ const products: Product[] = [
     eyebrow: "Ca. 30 bites",
     description: "Ca. 30 ambachtelijke speculaasbites, feestelijk verpakt voor Sinterklaas. Winkelprijs € 14,95 incl. btw.",
     image: "/sinterklaas/popcorn bites2.png",
+    shelfLifeInfo: ["Speculaasbites · t.h.t. ca. 21 dagen"],
+    allergens: ["gluten", "lactose", "amandel"],
+    allergenNote: "De speculaasbites zijn gevuld met amandelspijs.",
     accent: "#d79a6d",
     logoAvailable: false,
     retailPriceIncl: 14.95,
@@ -126,15 +157,20 @@ const products: Product[] = [
   },
   {
     id: "staaf",
-    name: "Banketletter & gevulde staven",
+    name: "Amandelletter & gevulde staven",
     eyebrow: "Meesterlijk gevuld",
-    description: "Kies een banketletter of een gevulde staaf. De banketletter is standaard een S; een andere letter maken we op aanvraag.",
+    description: "Kies een amandelletter of een gevulde staaf. De amandelletter is standaard een S; een andere letter maken we op aanvraag.",
     image: "/sinterklaas/banketletter speculaasstaaf amandelstaaf.png",
-    shelfLife: "ca. 1 week",
+    shelfLifeInfo: [
+      "Amandelletter of amandelstaaf · t.h.t. 7 dagen",
+      "Gevulde speculaasstaaf · t.h.t. ca. 21 dagen",
+    ],
+    allergens: ["gluten", "lactose", "amandel"],
+    allergenNote: "Alle uitvoeringen bevatten amandelspijs.",
     accent: "#f3c4ac",
     retailPriceIncl: 12.95,
     variants: [
-      { label: "Banketletter · standaard S / andere letter op aanvraag", retailPriceIncl: 12.95 },
+      { label: "Amandelletter · standaard S / andere letter op aanvraag", retailPriceIncl: 12.95 },
       { label: "Gevulde amandelstaaf", retailPriceIncl: 7.95 },
       { label: "Gevulde speculaasstaaf", retailPriceIncl: 7.95 },
     ],
@@ -146,7 +182,13 @@ const products: Product[] = [
     eyebrow: "Favoriet",
     description: "Drie heerlijke stafjes van roomchocolade, marsepein en gevuld speculaas.",
     image: "/sinterklaas/Stafwerk.png",
-    shelfLife: "feestelijk verpakt",
+    shelfLifeInfo: [
+      "Roomchocolade · t.g.t. ca. 30 dagen",
+      "Marsepein · t.g.t. ca. 30 dagen",
+      "Gevuld speculaas · t.h.t. ca. 21 dagen",
+    ],
+    allergens: ["gluten", "lactose", "amandel", "soja"],
+    allergenNote: "Marsepein bevat zelf geen gluten of lactose, maar wel amandel. Soja zit in de decoratie.",
     accent: "#f7c8aa",
     tiers: [
       { min: 1, price: 16.95, label: "<15" },
@@ -160,7 +202,12 @@ const products: Product[] = [
     eyebrow: "Twee staven cadeau",
     description: "Een gevulde speculaasstaaf en een gevulde amandelstaaf in een feestelijke stoombootverpakking.",
     image: "/sinterklaas/staaf stoomboot2.png",
-    shelfLife: "ca. 1 week",
+    shelfLifeInfo: [
+      "Amandelstaaf · t.h.t. 7 dagen",
+      "Gevulde speculaasstaaf · t.h.t. ca. 21 dagen",
+    ],
+    allergens: ["gluten", "lactose", "amandel"],
+    allergenNote: "Beide staven bevatten amandelspijs.",
     accent: "#d62d1d",
     logoAvailable: false,
     retailPriceIncl: 17.95,
@@ -172,6 +219,14 @@ const products: Product[] = [
     eyebrow: "Zelf samenstellen",
     description: "Twee feestelijke zakjes in één kartonnen sleeve. Kies zelf twee verschillende of juist dezelfde lekkernijen.",
     image: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png",
+    shelfLifeInfo: [
+      "Chocolade en kruidnoten · t.g.t. ca. 30 dagen",
+      "Speculaasbites · t.h.t. ca. 21 dagen",
+      "Massief speculaas · t.g.t. ca. 30 dagen",
+      "Marsepein en roomborstplaat · t.g.t. ca. 30 dagen",
+    ],
+    allergens: ["gluten", "lactose", "amandel", "soja"],
+    allergenNote: "De aanwezige allergenen hangen af van de twee gekozen vullingen. Marsepein bevat zelf alleen amandel.",
     gallery: [
       { src: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png", label: "Chocolade kruidnoten met speculaasbites" },
       { src: "/sinterklaas/Sint DUO  marsepein aard + speculaasbrok.png", label: "Marsepein aardappeltjes met speculaasbrok" },
@@ -315,6 +370,13 @@ function bestProductSuggestion(product: Product, quantity: number, includeVat: b
   return candidates.sort((first, second) => first.unitPrice - second.unitPrice)[0] || null;
 }
 
+function AllergenSymbol({ allergen }: Readonly<{ allergen: Allergen }>) {
+  if (allergen === "gluten") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18M12 7c-3 0-4-2-4-3 2.5 0 4 1 4 3ZM12 11c-3 0-5-2-5-4 3 0 5 1.5 5 4ZM12 15c-3 0-5-2-5-4 3 0 5 1.5 5 4ZM12 7c3 0 4-2 4-3-2.5 0-4 1-4 3ZM12 11c3 0 5-2 5-4-3 0-5 1.5-5 4ZM12 15c3 0 5-2 5-4-3 0-5 1.5-5 4Z"/></svg>;
+  if (allergen === "lactose") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3S6.5 9.5 6.5 14A5.5 5.5 0 0 0 17.5 14C17.5 9.5 12 3 12 3Z"/><path d="M9.5 15.5c.7 1.2 1.6 1.8 2.8 1.8"/></svg>;
+  if (allergen === "amandel") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5c4.2 2.3 6.5 5.3 6.5 8.5s-2.3 6.2-6.5 8.5C7.8 18.2 5.5 15.2 5.5 12S7.8 5.8 12 3.5Z"/><path d="M12 6.5c1.8 1.5 3 3.4 3 5.5s-1.2 4-3 5.5"/></svg>;
+  return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 18c5-1 8-4 9-9-5 1-8 4-9 9ZM12 18c4-.5 6.5-2.7 7-6.5-3.8.5-6 2.8-7 6.5Z"/><path d="M5 18h14"/></svg>;
+}
+
 export default function SintB2BConcept() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>({});
@@ -323,6 +385,7 @@ export default function SintB2BConcept() {
   const [logo, setLogo] = useState<Record<string, boolean>>({});
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [gallery, setGallery] = useState<{ product: Product; index: number } | null>(null);
+  const [productInfo, setProductInfo] = useState<{ product: Product; section: ProductInfoSection } | null>(null);
   const [giftOpen, setGiftOpen] = useState(false);
   const [finderOpen, setFinderOpen] = useState(false);
   const [budget, setBudget] = useState(20);
@@ -510,7 +573,7 @@ export default function SintB2BConcept() {
           <div className="max-w-md"><div className="inline-flex rounded-full border border-[#a24629] bg-[#fff7df] p-1 text-xs font-black"><button type="button" aria-pressed={includeVat} onClick={() => setIncludeVat(true)} className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Incl. btw</button><button type="button" aria-pressed={!includeVat} onClick={() => setIncludeVat(false)} className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Excl. btw</button></div><p className="mt-2 text-xs font-bold text-[#7e2b1c]">De winkelprijzen van de nieuw ingevulde producten zijn bekend; de staffels zijn voorstellen. Overige producten hebben nog conceptprijzen. 9% btw voor voedingsmiddelen.</p></div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <B2BChocolateLetters lines={letterLines} onChange={setLetterLines} withLogo={!!logo[chocolateLetterProduct.id]} onLogoChange={(value) => setLogo((current) => ({ ...current, [chocolateLetterProduct.id]: value }))} tiers={chocolateLetterTiers} includeVat={includeVat} activeTierLabel={letterTier.label} total={includeVat ? letterTotalIncl : letterTotalEx} />
+          <B2BChocolateLetters lines={letterLines} onChange={setLetterLines} withLogo={!!logo[chocolateLetterProduct.id]} onLogoChange={(value) => setLogo((current) => ({ ...current, [chocolateLetterProduct.id]: value }))} onOpenShelfLife={() => setProductInfo({ product: chocolateLetterProduct, section: "shelfLife" })} onOpenAllergens={() => setProductInfo({ product: chocolateLetterProduct, section: "allergens" })} tiers={chocolateLetterTiers} includeVat={includeVat} activeTierLabel={letterTier.label} total={includeVat ? letterTotalIncl : letterTotalEx} />
           {products.slice(1).map((product) => {
             const cartQuantity = quantities[product.id] || 0;
             const quantity = draftQuantities[product.id] ?? cartQuantity;
@@ -522,7 +585,12 @@ export default function SintB2BConcept() {
             const [duoFirst, duoSecond] = product.duoOptions?.length ? selectedDuoOptions(product, selectedOption) : [undefined, undefined];
             const selectedGalleryIndex = Math.max(0, product.gallery?.findIndex((photo) => photo.src === selectedImage) ?? 0);
             return <article id={`product-${product.id}`} key={product.id} className="flex h-full flex-col overflow-hidden rounded-[1.5rem] bg-[#fff3cf] shadow-[0_14px_40px_rgba(107,35,12,.14)]">
-              <div className="relative aspect-square shrink-0 overflow-hidden" style={{backgroundColor:product.accent}}><Image src={selectedImage} alt={`${product.name}${selectedChoiceLabel ? ` · ${selectedChoiceLabel}` : ""}`} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 25vw, 20vw" className="object-cover object-center transition duration-500 hover:scale-105"/><span className="absolute left-3 top-3 rounded-full bg-[#d62d1d] px-2.5 py-1 text-[.62rem] font-black uppercase tracking-wider text-white">{product.eyebrow}</span>{product.gallery&&product.gallery.length>1&&<button type="button" onClick={()=>setGallery({product,index:selectedGalleryIndex})} className="absolute right-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[.62rem] font-black text-[#60190f] shadow-md backdrop-blur transition hover:bg-white">▧ Meer foto&apos;s</button>}{product.shelfLife&&<span className="absolute bottom-3 right-3 rounded-full bg-white px-2.5 py-1 text-[.62rem] font-black text-[#8a2d1c]">t.h.t. {product.shelfLife}</span>}</div>
+              <div className="relative aspect-square shrink-0 overflow-hidden" style={{backgroundColor:product.accent}}>
+                <Image src={selectedImage} alt={`${product.name}${selectedChoiceLabel ? ` · ${selectedChoiceLabel}` : ""}`} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 25vw, 20vw" className="object-cover object-center transition duration-500 hover:scale-105"/>
+                <span className="absolute left-3 top-3 rounded-full bg-[#d62d1d] px-2.5 py-1 text-[.62rem] font-black uppercase tracking-wider text-white">{product.eyebrow}</span>
+                <div className="absolute right-3 top-3 flex gap-1.5"><button type="button" onClick={()=>setProductInfo({product,section:"shelfLife"})} aria-label={`Bekijk houdbaarheid van ${product.name}`} title="Houdbaarheid" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#557965] shadow-md backdrop-blur transition hover:bg-white"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></button><button type="button" onClick={()=>setProductInfo({product,section:"allergens"})} aria-label={`Bekijk allergenen van ${product.name}`} title="Allergenen" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#9a3d21] shadow-md backdrop-blur transition hover:bg-white"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.5h.01"/></svg></button></div>
+                {product.gallery&&product.gallery.length>1&&<button type="button" onClick={()=>setGallery({product,index:selectedGalleryIndex})} className="absolute bottom-3 left-3 rounded-full bg-white/95 px-2.5 py-1 text-[.62rem] font-black text-[#60190f] shadow-md backdrop-blur transition hover:bg-white">▧ Meer foto&apos;s</button>}
+              </div>
               <div className="flex flex-1 flex-col p-4"><h3 className="text-xl font-black leading-tight text-[#60190f]">{product.name}</h3><p className="mt-2 min-h-10 text-xs font-semibold leading-relaxed text-[#7e493c]">{product.description}</p>
                 {product.variants&&<select value={selectedOption} onChange={(event)=>setChoices(current=>({...current,[product.id]:event.target.value}))} aria-label={`Uitvoering ${product.name}`} className="mt-3 h-10 w-full rounded-xl border border-[#e2c99c] bg-white px-3 text-xs font-black text-[#5a170f]">{product.variants.map(variant=><option key={variant.label} value={variant.label}>{variant.label}</option>)}</select>}
                 {product.options&&<select value={choices[product.id]||product.options[0]} onChange={(event)=>setChoices(current=>({...current,[product.id]:event.target.value}))} className="mt-3 h-10 w-full rounded-xl border border-[#e2c99c] bg-white px-3 text-xs font-black text-[#5a170f]">{product.options.map(option=><option key={option}>{option}</option>)}</select>}
@@ -556,6 +624,7 @@ export default function SintB2BConcept() {
         {canOpenEmail ? <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sinterklaas 2026 - ${company.trim()}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a> : <div className="mt-5"><button type="button" disabled className="w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white opacity-45">Open aanvraag in mijn e-mailapp →</button><p className="mt-2 text-center text-xs font-bold text-[#9a3d21]">Vul eerst de bedrijfsnaam en een geldig e-mailadres in.</p></div>}
         <p className="mt-3 text-center text-xs font-bold text-[#8b7669]">Je e-mailapp opent met een overzichtelijke aanvraag. Je verstuurt hem zelf; er gaat niet automatisch iets weg. De overige producten en bezorgkosten zijn nog conceptprijzen.</p>
       </section></div>}
+      {productInfo&&<div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#391008]/60 p-0 sm:items-center sm:p-5" onClick={()=>setProductInfo(null)}><section role="dialog" aria-modal="true" aria-labelledby="product-info-title" className="w-full max-w-lg rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-7" onClick={(event)=>event.stopPropagation()}><div className="flex items-start justify-between gap-4"><div><p className="text-[.65rem] font-black uppercase tracking-[.18em] text-[#d62d1d]">Productinformatie</p><h2 id="product-info-title" className="mt-1 text-2xl font-black text-[#60190f]">{productInfo.product.name}</h2></div><button type="button" aria-label="Sluiten" onClick={()=>setProductInfo(null)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl font-black text-[#60190f] shadow-sm">×</button></div><div className="mt-5 grid grid-cols-2 gap-2 rounded-2xl bg-[#f5e8cc] p-1.5"><button type="button" onClick={()=>setProductInfo((current)=>current?{...current,section:"shelfLife"}:current)} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black ${productInfo.section==="shelfLife"?"bg-white text-[#557965] shadow-sm":"text-[#7e493c]"}`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Houdbaarheid</button><button type="button" onClick={()=>setProductInfo((current)=>current?{...current,section:"allergens"}:current)} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black ${productInfo.section==="allergens"?"bg-white text-[#9a3d21] shadow-sm":"text-[#7e493c]"}`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.5h.01"/></svg>Allergenen</button></div>{productInfo.section==="shelfLife"?<div className="mt-5"><p className="text-xs font-bold text-[#7e493c]">Indicatieve houdbaarheid per onderdeel:</p><ul className="mt-3 space-y-2">{productInfo.product.shelfLifeInfo.map((item)=><li key={item} className="flex items-start gap-3 rounded-xl bg-white px-4 py-3 text-sm font-bold text-[#60190f]"><span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#dce9d8] text-[#557965]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 12 3 3 7-7"/></svg></span><span>{item}</span></li>)}</ul></div>:<div className="mt-5"><ul className="grid grid-cols-2 gap-2">{productInfo.product.allergens.map((allergen)=><li key={allergen} className="flex items-center gap-3 rounded-xl bg-white p-3 text-sm font-black text-[#60190f]"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f6e4db] text-[#9a3d21]"><AllergenSymbol allergen={allergen}/></span>{ALLERGEN_LABELS[allergen]}</li>)}</ul>{productInfo.product.allergenNote&&<p className="mt-3 rounded-xl bg-[#f8e5ba] px-4 py-3 text-xs font-bold leading-relaxed text-[#7e493c]">{productInfo.product.allergenNote}</p>}<p className="mt-3 text-[.68rem] font-semibold leading-relaxed text-[#8b7669]">Bij een ernstige allergie of kruisbesmettingsrisico stemmen we de mogelijkheden graag vooraf persoonlijk af.</p></div>}</section></div>}
       {gallery&&gallery.product.gallery&&<div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2d0b06]/85 p-4" onClick={()=>setGallery(null)}><section className="w-full max-w-4xl" onClick={(event)=>event.stopPropagation()}><div className="mb-3 flex items-center justify-between text-white"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#efb800]">Meer foto&apos;s</p><h2 className="text-2xl font-black">{gallery.product.name}</h2></div><button type="button" onClick={()=>setGallery(null)} className="h-11 w-11 rounded-full bg-white text-xl font-black text-[#60190f]">×</button></div><div className="relative aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-[#fff3cf] sm:aspect-[16/10]"><Image src={gallery.product.gallery[gallery.index].src} alt={gallery.product.gallery[gallery.index].label} fill sizes="100vw" className="object-contain"/></div><p className="mt-3 text-center text-sm font-bold text-white">{gallery.product.gallery[gallery.index].label}</p><div className="mt-4 flex justify-center gap-2">{gallery.product.gallery.map((photo,index)=><button key={photo.src} type="button" aria-label={photo.label} onClick={()=>setGallery({...gallery,index})} className={`relative h-16 w-16 overflow-hidden rounded-xl border-2 sm:h-20 sm:w-20 ${index===gallery.index?"border-[#efb800]":"border-white/40"}`}><Image src={photo.src} alt="" fill sizes="80px" className="object-cover"/></button>)}</div></section></div>}
     </main>
   );

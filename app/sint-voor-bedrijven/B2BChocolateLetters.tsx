@@ -55,6 +55,8 @@ export default function B2BChocolateLetters({
   onChange,
   withLogo,
   onLogoChange,
+  onOpenShelfLife,
+  onOpenAllergens,
   tiers,
   includeVat,
   activeTierLabel,
@@ -64,6 +66,8 @@ export default function B2BChocolateLetters({
   onChange: (lines: B2BLetterLine[]) => void;
   withLogo: boolean;
   onLogoChange: (value: boolean) => void;
+  onOpenShelfLife: () => void;
+  onOpenAllergens: () => void;
   tiers: Tier[];
   includeVat: boolean;
   activeTierLabel: string;
@@ -113,6 +117,10 @@ export default function B2BChocolateLetters({
       <div className="relative aspect-square shrink-0 overflow-hidden bg-[#f7f0e5]">
         <Image src={selectedPhoto.src} alt={`Voorbeeld ${selectedPhoto.label.toLowerCase()}`} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 25vw, 20vw" className="object-cover object-center" />
         <span className="absolute left-3 top-3 rounded-full bg-[#d62d1d] px-2.5 py-1 text-[.62rem] font-black uppercase tracking-wider text-white">De klassieker</span>
+        <div className="absolute right-3 top-3 flex gap-1.5">
+          <button type="button" onClick={onOpenShelfLife} aria-label="Bekijk houdbaarheid van chocoladeletters" title="Houdbaarheid" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#557965] shadow-md backdrop-blur transition hover:bg-white"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></button>
+          <button type="button" onClick={onOpenAllergens} aria-label="Bekijk allergenen van chocoladeletters" title="Allergenen" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#9a3d21] shadow-md backdrop-blur transition hover:bg-white"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.5h.01"/></svg></button>
+        </div>
       </div>
       <div className="flex flex-1 flex-col p-4">
         <h3 className="text-xl font-black leading-tight text-[#60190f]">Chocoladeletters</h3>
