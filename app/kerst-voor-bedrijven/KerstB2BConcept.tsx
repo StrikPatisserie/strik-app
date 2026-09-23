@@ -1,8 +1,12 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import {
   BusinessFolderSeasonIntro,
   BusinessFolderSeasonNav,
+  BusinessGiftFinderButton,
 } from "@/app/BusinessFolderSeasonControls";
 
 function ChristmasGiftIcon() {
@@ -25,6 +29,12 @@ function ChristmasGiftIcon() {
 }
 
 export default function KerstB2BConcept() {
+  const [finderOpen, setFinderOpen] = useState(false);
+  const [recipientCount, setRecipientCount] = useState(25);
+  const [budget, setBudget] = useState(20);
+  const [wantsLogo, setWantsLogo] = useState(false);
+  const [includeVat, setIncludeVat] = useState(true);
+
   return (
     <main className="min-h-dvh overflow-hidden bg-[#171b38] text-[#f8f0df]">
       <header className="relative overflow-hidden border-b border-[#d8b56d]/30 px-4 py-4 sm:px-8 lg:px-12 lg:py-5">
@@ -57,29 +67,18 @@ export default function KerstB2BConcept() {
             Sinds 1937 · ambacht uit Nijmegen
           </p>
           <div className="mt-1 grid items-center gap-6 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="inline-flex min-w-0 flex-col">
+            <div className="relative w-fit justify-self-start pb-8 sm:pb-10">
               <h1 className="text-[clamp(5rem,11vw,9.5rem)] font-black leading-[.7] tracking-[-.075em] text-white">
                 KERST
               </h1>
-              <p className="-mt-1 self-end pr-2 font-[Butterscotch] text-[clamp(2rem,3.2vw,3.5rem)] leading-none text-[#d8b56d]">
+              <p className="absolute bottom-0 right-0 whitespace-nowrap pr-1 font-[Butterscotch] text-[clamp(2rem,3.2vw,3.5rem)] leading-none text-[#d8b56d]">
                 Met een Strik
               </p>
             </div>
-            <div className="relative mx-auto flex w-full max-w-md items-center gap-4 rounded-[50%] px-10 py-7 sm:mx-0 sm:w-[26rem]">
-              <span aria-hidden="true" className="pointer-events-none absolute inset-0 rotate-[1.5deg] rounded-[50%] border border-[#d8b56d]/60" />
-              <span aria-hidden="true" className="pointer-events-none absolute inset-x-2 inset-y-1 -rotate-[1deg] rounded-[50%] border border-[#d8b56d]/35" />
-              <span className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#741f3b] text-[#d8b56d] shadow-lg">
-                <ChristmasGiftIcon />
-              </span>
-              <div className="relative">
-                <p className="text-[.58rem] font-black uppercase tracking-[.18em] text-[#d8b56d]">
-                  Feestelijk vooruitzicht
-                </p>
-                <p className="mt-0.5 font-[Butterscotch] text-3xl leading-none text-white">
-                  Kerstcadeaus met smaak
-                </p>
-              </div>
-            </div>
+            <BusinessGiftFinderButton
+              season="kerst"
+              onClick={() => setFinderOpen(true)}
+            />
           </div>
           <p className="mt-3 max-w-2xl text-xs font-semibold leading-relaxed text-[#ddd5dc] sm:text-sm">
             <span className="block">Ambachtelijke kerstcadeaus voor collega&apos;s en relaties.</span>
@@ -87,6 +86,115 @@ export default function KerstB2BConcept() {
           </p>
         </div>
       </header>
+
+      {finderOpen && (
+        <div
+          className="fixed inset-0 z-[65] flex items-end justify-center bg-[#090c21]/80 p-0 sm:items-center sm:p-5"
+          onClick={() => setFinderOpen(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="kerst-finder-title"
+            className="max-h-[92dvh] w-full max-w-4xl overflow-auto rounded-t-[2rem] border border-[#d8b56d]/45 bg-[#202542] p-5 shadow-2xl sm:rounded-[2rem] sm:p-7"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[.2em] text-[#d8b56d]">
+                  Interactieve keuzehulp
+                </p>
+                <h2 id="kerst-finder-title" className="mt-1 text-2xl font-black text-white sm:text-3xl">
+                  Welk kerstcadeau past bij jouw team?
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-[#ddd5dc]">
+                  Vul drie dingen in; zodra het assortiment er staat rekenen we meteen met je mee.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Sluiten"
+                onClick={() => setFinderOpen(false)}
+                className="h-10 w-10 shrink-0 rounded-full bg-white text-xl font-black text-[#202542]"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-5 border-t border-[#d8b56d]/30 pt-5 lg:grid-cols-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 lg:col-span-3">
+                <p className="text-xs font-bold text-[#ddd5dc]">
+                  De keuzehulp gebruikt straks dezelfde btw-weergave als de folder.
+                </p>
+                <div className="inline-flex rounded-full border border-[#d8b56d]/60 bg-[#f8f0df] p-1 text-xs font-black">
+                  <button
+                    type="button"
+                    aria-pressed={includeVat}
+                    onClick={() => setIncludeVat(true)}
+                    className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#741f3b] text-white" : "text-[#202542]"}`}
+                  >
+                    Incl. btw
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={!includeVat}
+                    onClick={() => setIncludeVat(false)}
+                    className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#741f3b] text-white" : "text-[#202542]"}`}
+                  >
+                    Excl. btw
+                  </button>
+                </div>
+              </div>
+
+              <label className="grid gap-2 text-sm font-black text-white">
+                1. Hoeveel ontvangers?
+                <input
+                  type="number"
+                  min="1"
+                  value={recipientCount}
+                  onChange={(event) => setRecipientCount(Math.max(1, Number(event.target.value) || 1))}
+                  className="h-11 rounded-xl border border-[#d8b56d]/50 bg-[#f8f0df] px-4 text-lg text-[#202542]"
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-black text-white">
+                2. Budget per persoon, {includeVat ? "incl." : "excl."} btw
+                <input
+                  type="number"
+                  min="1"
+                  value={budget}
+                  onChange={(event) => setBudget(Math.max(1, Number(event.target.value) || 1))}
+                  className="h-11 rounded-xl border border-[#d8b56d]/50 bg-[#f8f0df] px-4 text-lg text-[#202542]"
+                />
+              </label>
+              <div className="grid content-end gap-2 text-sm font-black text-white">
+                3. Met eigen logo?
+                <button
+                  type="button"
+                  aria-pressed={wantsLogo}
+                  onClick={() => setWantsLogo(!wantsLogo)}
+                  className={`h-11 rounded-xl border px-4 text-left ${
+                    wantsLogo
+                      ? "border-[#d8b56d] bg-[#741f3b] text-white"
+                      : "border-[#d8b56d]/50 bg-[#f8f0df] text-[#202542]"
+                  }`}
+                >
+                  {wantsLogo ? "Ja, met logo ✓" : "Nee, zonder logo"}
+                </button>
+              </div>
+
+              <div className="relative overflow-hidden rounded-2xl border border-[#d8b56d]/35 bg-gradient-to-r from-[#351f42] to-[#741f3b] p-5 lg:col-span-3">
+                <span className="pointer-events-none absolute -right-3 -top-8 text-8xl text-[#d8b56d]/10">✦</span>
+                <p className="relative text-xs font-black uppercase tracking-[.16em] text-[#d8b56d]">
+                  Jouw passende kerstcadeaus
+                </p>
+                <p className="relative mt-2 max-w-2xl text-sm font-bold leading-relaxed text-white">
+                  De kerstkeuzehulp staat klaar voor {recipientCount} ontvangers met een budget van maximaal € {budget.toLocaleString("nl-NL", { minimumFractionDigits: 2 })} per persoon{wantsLogo ? " en een eigen logo" : ""}. Zodra de producten zijn toegevoegd, verschijnen hier automatisch alle passende opties.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       <section className="relative mx-auto max-w-7xl px-4 py-10 sm:px-8 lg:px-12 lg:py-14">
         <div className="pointer-events-none absolute -left-32 top-20 h-72 w-72 rounded-full bg-[#741f3b]/30 blur-3xl" />

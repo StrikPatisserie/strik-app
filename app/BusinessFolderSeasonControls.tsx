@@ -62,6 +62,76 @@ export function BusinessFolderSeasonNav({
   );
 }
 
+export function BusinessGiftFinderButton({
+  season,
+  onClick,
+}: Readonly<{
+  season: BusinessFolderSeason;
+  onClick: () => void;
+}>) {
+  const isChristmas = season === "kerst";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Open de interactieve ${isChristmas ? "kerst" : "Sint"}cadeaukeuzehulp`}
+      className="group relative mx-auto flex w-full max-w-md items-center gap-4 rounded-[50%] px-9 py-7 text-left transition hover:-translate-y-0.5 sm:mx-0 sm:w-[26rem] sm:px-10"
+    >
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-0 rotate-[1.5deg] rounded-[50%] border ${
+          isChristmas ? "border-[#d8b56d]/60" : "border-[#d62d1d]/60"
+        }`}
+      />
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-x-2 inset-y-1 -rotate-[1deg] rounded-[50%] border ${
+          isChristmas ? "border-[#d8b56d]/35" : "border-[#d62d1d]/35"
+        }`}
+      />
+      <span
+        className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full shadow-lg transition group-hover:scale-105 ${
+          isChristmas
+            ? "bg-[#741f3b] text-[#d8b56d]"
+            : "bg-[#d62d1d] text-white"
+        }`}
+      >
+        <GiftIcon className="h-8 w-8" />
+        <span
+          aria-hidden="true"
+          className={`absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[.65rem] font-black ${
+            isChristmas
+              ? "bg-[#d8b56d] text-[#222849]"
+              : "bg-white text-[#d62d1d]"
+          }`}
+        >
+          ?
+        </span>
+      </span>
+      <span className="relative min-w-0">
+        <span
+          className={`block text-[.58rem] font-black uppercase tracking-[.18em] ${
+            isChristmas ? "text-[#d8b56d]" : "text-white"
+          }`}
+        >
+          Interactieve keuzehulp
+        </span>
+        <span className="mt-0.5 block font-[Butterscotch] text-[1.85rem] leading-none text-white sm:text-3xl">
+          {isChristmas ? "Vind jouw kerstcadeau" : "Vind jouw passende cadeau"}
+        </span>
+        <span
+          className={`mt-1 block text-[.62rem] font-bold ${
+            isChristmas ? "text-[#ddd5dc]" : "text-white"
+          }`}
+        >
+          Aantal, budget en logo — wij rekenen mee.
+        </span>
+      </span>
+    </button>
+  );
+}
+
 export function BusinessFolderSeasonIntro() {
   const [open, setOpen] = useState(false);
 
