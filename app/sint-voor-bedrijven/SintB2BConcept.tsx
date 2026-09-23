@@ -288,6 +288,21 @@ const products: Product[] = [
 ];
 const chocolateLetterProduct = products[0];
 const shapeLetterProduct = products[1];
+const folderProductOrder = [
+  "staaf-stoomboot",
+  "strik-duo",
+  "klein-sintpakket",
+  "speculaasbrok-met-letter",
+  "gevuld-speculaasbites",
+  "stafwerk",
+  "speculaas-kruidcake",
+  "staaf",
+  "speculaasplak-gedicht",
+  "marsepein-letter",
+];
+const folderProducts = [...products.slice(2)].sort(
+  (first, second) => folderProductOrder.indexOf(first.id) - folderProductOrder.indexOf(second.id)
+);
 
 function money(value: number) {
   return new Intl.NumberFormat("nl-NL", {
@@ -501,7 +516,7 @@ export default function SintB2BConcept() {
         };
       });
     });
-    const otherProducts = products.slice(2)
+    const otherProducts = folderProducts
         .map((product) => {
           const quantity = quantities[product.id] || 0;
           const choice = choices[product.id] || defaultProductChoice(product);
@@ -680,7 +695,7 @@ export default function SintB2BConcept() {
             activeTierLabel={shapeLetterTier.label}
             total={includeVat ? shapeLetterTotalIncl : shapeLetterTotalEx}
           />
-          {products.slice(2).map((product) => {
+          {folderProducts.map((product) => {
             const cartQuantity = quantities[product.id] || 0;
             const quantity = draftQuantities[product.id] ?? cartQuantity;
             const selectedOption = choices[product.id] || defaultProductChoice(product);
