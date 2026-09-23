@@ -1724,6 +1724,18 @@ function receiptSearchText(receipt: ReceiptSummary) {
     .toLowerCase();
 }
 
+function receiptRouteIdentityText(receipt: ReceiptSummary) {
+  return normalizeMatchText(
+    [
+      receipt.customer,
+      receipt.address,
+      receipt.deliveryAddress,
+      receipt.alternativeAddress || "",
+      receipt.pickupLocation || "",
+    ].join(" ")
+  );
+}
+
 function numericQuantity(value: string) {
   if (isArticleSubcodeQuantity(value)) return 0;
 
@@ -5789,21 +5801,49 @@ function fixedShopIceStop(input: {
 }
 
 function isVermaatReceipt(receipt: ReceiptSummary) {
-  return /\bvermaat\b/i.test(receiptSearchText(receipt));
+  return /(?:^| )vermaat(?: |$)/.test(receiptRouteIdentityText(receipt));
 }
 
 function isRadboudUniversityReceipt(receipt: ReceiptSummary) {
-  return /radboud\s+universiteit|universiteit\s+radboud|\bru\b|\baula\b|\brefter\b/i.test(
-    receiptSearchText(receipt)
+  return /(?:^| )(?:radboud universiteit|universiteit radboud|ru|aula|berchmanianum|catering refter|refter|coffeecorner ub|coffee corner ub|cultuur cafe|giga bite|grand cafe de iris|de iris|het gerecht|huize heyendael|panama|sportsbar the yard|the yard)(?: |$)/.test(
+    receiptRouteIdentityText(receipt)
   );
 }
 
 function isRadboudUmcReceipt(receipt: ReceiptSummary) {
+  const text = receiptRouteIdentityText(receipt);
+
   return (
-    isRadboudReceipt(receipt) &&
     !isVermaatReceipt(receipt) &&
-    !isRadboudUniversityReceipt(receipt)
+    !isRadboudUniversityReceipt(receipt) &&
+    /(?:^| )(?:radboud umc|raboud umc|umc radboud|umc)(?: |$)/.test(text)
   );
+}
+
+function isHanReceipt(receipt: ReceiptSummary) {
+  return /(?:^| )(?:hogeschool arnhem nijmegen|hoge school arnhem nijmegen|han|academie paramedische studies)(?: |$)/.test(
+    receiptRouteIdentityText(receipt)
+  );
+}
+
+function routeStopForRadboudUniversity(
+  receipt: ReceiptSummary,
+  prefix = ""
+): RouteStop {
+  const stop = routeStopForReceipt(receipt, prefix);
+  const fixedRouteHint = receiptFixedRouteHint(receipt);
+
+  return {
+    ...stop,
+    detail: [
+      "voor 09:30",
+      receiptTargetLine(receipt),
+      fixedRouteHint ? `vast: ${fixedRouteHint}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    badges: Array.from(new Set(["vroeg", "tijd", ...stop.badges])).slice(0, 3),
+  };
 }
 
 function isWeekdayOutsideSecondRoundReceipt(receipt: ReceiptSummary) {
@@ -5961,21 +6001,27 @@ function receiptRoutePoint(receipt: ReceiptSummary): RoutePoint {
 }
 
 function isRadboudReceipt(receipt: ReceiptSummary) {
-  return /radboud|vermaat|umc|kapittelweg|geert groote/i.test(
-    receiptSearchText(receipt)
+  return (
+    isVermaatReceipt(receipt) ||
+    isRadboudUniversityReceipt(receipt) ||
+    isRadboudUmcReceipt(receipt)
   );
 }
 
 function isSintMaartenskliniekReceipt(receipt: ReceiptSummary) {
-  return /maartenskliniek|sint\s+maartens/i.test(receiptSearchText(receipt));
+  return /(?:^| )(?:maartenskliniek|sint maartens)(?: |$)/.test(
+    receiptRouteIdentityText(receipt)
+  );
 }
 
 function isDriesElstReceipt(receipt: ReceiptSummary) {
-  return /dries\s*(?:en|&)\s*co|dries|elst/i.test(receiptSearchText(receipt));
+  return /(?:^| )(?:dries en co|dries co|dries|elst)(?: |$)/.test(
+    receiptRouteIdentityText(receipt)
+  );
 }
 
 function isSanadomeReceipt(receipt: ReceiptSummary) {
-  return /sanadome/i.test(receiptSearchText(receipt));
+  return /(?:^| )sanadome(?: |$)/.test(receiptRouteIdentityText(receipt));
 }
 
 function isGennepRouteReceipt(receipt: ReceiptSummary) {
@@ -6901,13 +6947,14 @@ function buildWeekdayFixedRouteRounds(
     items.map((receipt) => routeStopForReceipt(receipt, prefix));
 
   const vermaatReceipts = takeReceipts(isVermaatReceipt);
-  const radboudUmcReceipts = takeReceipts(isRadboudUmcReceipt);
   const sintMaartenskliniekReceipts = takeReceipts(
     isSintMaartenskliniekReceipt
   );
   const radboudUniversityReceipts = takeReceipts(
     isRadboudUniversityReceipt
   );
+  const radboudUmcReceipts = takeReceipts(isRadboudUmcReceipt);
+  const hanReceipts = takeReceipts(isHanReceipt);
   const driesReceipts = takeReceipts(isDriesElstReceipt);
   const sanadomeReceipts = takeReceipts(isSanadomeReceipt);
   const cityReceipts = takeReceipts(
@@ -6953,16 +7000,19 @@ function buildWeekdayFixedRouteRounds(
       load: "fresh",
       label: "Winkel Heyendaalseweg vers",
     }),
+    ...asStops(vermaatReceipts, "A-vermaat-"),
     fixedShopStop({
       receipts,
       shopKey: "daalseweg",
       load: "fresh",
       label: "Winkel Daalseweg vers",
     }),
-    ...asStops(vermaatReceipts, "A-vermaat-"),
-    ...asStops(radboudUmcReceipts, "A-umc-"),
     ...asStops(sintMaartenskliniekReceipts, "A-maartens-"),
-    ...asStops(radboudUniversityReceipts, "A-ru-"),
+    ...radboudUniversityReceipts.map((receipt) =>
+      routeStopForRadboudUniversity(receipt, "A-ru-")
+    ),
+    ...asStops(radboudUmcReceipts, "A-umc-"),
+    ...asStops(hanReceipts, "A-han-"),
   ];
   const busASecondStops: RouteStop[] = [
     fixedShopStop({
