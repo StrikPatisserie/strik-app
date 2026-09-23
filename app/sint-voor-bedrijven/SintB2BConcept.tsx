@@ -35,6 +35,7 @@ type Product = {
   duoImages?: DuoImage[];
   fixedOffer?: boolean;
   customColorMinimum?: number;
+  defaultColors?: string;
 };
 type ProductSuggestion = {
   product: Product;
@@ -271,7 +272,7 @@ const products: Product[] = [
   {
     id: "marsepein-letter",
     name: "Marsepein letter",
-    description: "Een handgevormde marsepeinletter: glutenvrij, lactosevrij en vegan. Kies ca. 150 of 300 gram. Eigen kleuren zijn mogelijk vanaf 10 stuks.",
+    description: "Een handgevormde marsepeinletter: glutenvrij, lactosevrij en vegan. Standaard rood/beige; eigen kleuren zijn mogelijk vanaf 5 stuks.",
     image: "/sinterklaas/marsepein letter.png",
     shelfLifeInfo: ["Marsepein · t.h.t. ca. 1 maand"],
     allergens: ["amandel"],
@@ -282,7 +283,8 @@ const products: Product[] = [
       { label: "Ca. 150 gram", retailPriceIncl: 6.5 },
       { label: "Ca. 300 gram", retailPriceIncl: 12 },
     ],
-    customColorMinimum: 10,
+    customColorMinimum: 5,
+    defaultColors: "rood/beige",
     tiers: chocolateLetterTiers,
   },
 ];
@@ -526,7 +528,9 @@ export default function SintB2BConcept() {
             : "";
           const choiceLabel = requestedColors
             ? `${baseChoiceLabel} · eigen kleuren: ${requestedColors}`
-            : baseChoiceLabel;
+            : product.defaultColors
+              ? `${baseChoiceLabel} · standaard ${product.defaultColors}`
+              : baseChoiceLabel;
           const configuredProduct = pricedProduct(product, choice);
           const tier = tierFor(configuredProduct, Math.max(1, quantity));
           const withLogo = Boolean(logo[product.id] && productSupportsLogo(product));
