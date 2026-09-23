@@ -4640,7 +4640,7 @@ function createBusRoutePrintHtml(input: {
     (total, route) => total + route.stops.length,
     0
   );
-  const title = `${input.routeGroup.vehicle} route ${formatDateLabel(
+  const title = `${routeGroupDisplayTitle(input.routeGroup.vehicle)} · ${formatDateLabel(
     input.plan.date
   )}`;
   const routesHtml = printableRoutes
@@ -5679,6 +5679,137 @@ function groupShopStops(
         ],
       };
     });
+}
+
+type FixedShopLoad = "fresh" | "shelf";
+
+function isFreshShopLine(line: ReceiptLine) {
+  if (isProductOptionLine(line) || isIceTubLineDescription(line.description)) {
+    return false;
+  }
+
+  const description = lineSearchDescription(line);
+
+  return (
+    isAssortedPastryLine(line) ||
+    isPetitFourLine(line) ||
+    isMarzipanOrCreamCakeProductLine(line) ||
+    /\b(?:gebak|taart|vlaai|tompouce|soes|slof|tartelette|bavarois|mousse|slagroom|creme|cupcake|cakepop|macaron|croissant|broodje|worstenbrood|saucijzen|appelflap|appelbol)\b/.test(
+      description
+    )
+  );
+}
+
+function fixedShopStop(input: {
+  receipts: ReceiptSummary[];
+  shopKey: ShopKey;
+  load: FixedShopLoad;
+  label: string;
+}): RouteStop {
+  const shopMeta = shopRouteMeta[input.shopKey];
+  const lines = input.receipts
+    .filter(
+      (receipt) =>
+        isShopReceipt(receipt) &&
+        !isIceReceiptSummary(receipt) &&
+        shopKeyForReceipt(receipt) === input.shopKey
+    )
+    .flatMap((receipt) => receipt.lines)
+    .filter(
+      (line) =>
+        !isProductOptionLine(line) &&
+        !isIceTubLineDescription(line.description) &&
+        (input.load === "fresh" ? isFreshShopLine(line) : !isFreshShopLine(line))
+    );
+  const units = lines.reduce(
+    (total, line) => total + numericQuantity(line.quantity),
+    0
+  );
+  const loadLabel = input.load === "fresh" ? "vers" : "houdbaar";
+  const detailParts = [shopMeta.address];
+
+  if (lines.length) {
+    detailParts.push(
+      units > 0
+        ? `${formatCompactNumber(units)} ${loadLabel}`
+        : `${lines.length} regels ${loadLabel}`
+    );
+  } else {
+    detailParts.push(
+      input.load === "fresh" ? "vaste verse stop" : "vaste houdbare stop"
+    );
+  }
+
+  return {
+    id: `shop-${input.shopKey}-${input.load}`,
+    sourceId:
+      input.load === "fresh"
+        ? `shop:${input.shopKey}`
+        : `shop:${input.shopKey}:shelf`,
+    learningKey: `shop:${input.shopKey}:${input.load}`,
+    learningLabel: input.label,
+    learningTarget: shopMeta.address,
+    learningKind: "shop",
+    label: input.label,
+    detail: detailParts.join(" · "),
+    badges: ["winkel", loadLabel],
+  };
+}
+
+function fixedShopIceStop(input: {
+  receipts: ReceiptSummary[];
+  shopKey: ShopKey;
+  label: string;
+}): RouteStop {
+  const shopMeta = shopRouteMeta[input.shopKey];
+  const iceReceipts = input.receipts.filter(
+    (receipt) =>
+      isIceReceiptSummary(receipt) &&
+      shopKeyForReceipt(receipt) === input.shopKey
+  );
+  const iceTubs = iceReceipts.reduce(
+    (total, receipt) => total + iceTubCountForReceipt(receipt),
+    0
+  );
+  const detail = iceTubs
+    ? `${shopMeta.address} · ${iceTubs} ijs / ${Math.ceil(iceTubs / 3)} tempex`
+    : `${shopMeta.address} · vaste ijsstop`;
+
+  return {
+    id: `shop-${input.shopKey}-ice`,
+    sourceId: `shop:${input.shopKey}:ice`,
+    learningKey: `shop:${input.shopKey}:ice`,
+    learningLabel: input.label,
+    learningTarget: shopMeta.address,
+    learningKind: "ice",
+    label: input.label,
+    detail,
+    badges: ["winkel", "ijs", ...(iceTubs ? [`${iceTubs} ijs`] : [])],
+  };
+}
+
+function isVermaatReceipt(receipt: ReceiptSummary) {
+  return /\bvermaat\b/i.test(receiptSearchText(receipt));
+}
+
+function isRadboudUniversityReceipt(receipt: ReceiptSummary) {
+  return /radboud\s+universiteit|universiteit\s+radboud|\bru\b|\baula\b|\brefter\b/i.test(
+    receiptSearchText(receipt)
+  );
+}
+
+function isRadboudUmcReceipt(receipt: ReceiptSummary) {
+  return (
+    isRadboudReceipt(receipt) &&
+    !isVermaatReceipt(receipt) &&
+    !isRadboudUniversityReceipt(receipt)
+  );
+}
+
+function isWeekdayOutsideSecondRoundReceipt(receipt: ReceiptSummary) {
+  const cluster = outsideClusterKeyForReceipt(receipt);
+
+  return Boolean(cluster && cluster !== "jonkerbos" && cluster !== "noord-buiten");
 }
 
 function busForShopKey(key: string): BusId | "" {
@@ -6752,6 +6883,195 @@ function isSaturdayDate(date: string) {
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay() === 6;
 }
 
+function buildWeekdayFixedRouteRounds(
+  plan: DayPlan,
+  receipts: ReceiptSummary[],
+  loadProfile: DayLoadProfile
+): RouteRound[] {
+  const deliveryReceipts = sortDeliveryReceipts(receipts.filter(isRouteDelivery));
+  const assignedReceiptIds = new Set<string>();
+  const takeReceipts = (predicate: (receipt: ReceiptSummary) => boolean) =>
+    deliveryReceipts.filter((receipt) => {
+      if (assignedReceiptIds.has(receipt.id) || !predicate(receipt)) return false;
+
+      assignedReceiptIds.add(receipt.id);
+      return true;
+    });
+  const asStops = (items: ReceiptSummary[], prefix: string) =>
+    items.map((receipt) => routeStopForReceipt(receipt, prefix));
+
+  const vermaatReceipts = takeReceipts(isVermaatReceipt);
+  const radboudUmcReceipts = takeReceipts(isRadboudUmcReceipt);
+  const sintMaartenskliniekReceipts = takeReceipts(
+    isSintMaartenskliniekReceipt
+  );
+  const radboudUniversityReceipts = takeReceipts(
+    isRadboudUniversityReceipt
+  );
+  const driesReceipts = takeReceipts(isDriesElstReceipt);
+  const sanadomeReceipts = takeReceipts(isSanadomeReceipt);
+  const cityReceipts = takeReceipts(
+    (receipt) => !isOutsideRouteReceipt(receipt)
+  );
+  const outsideSecondRoundReceipts = takeReceipts(
+    isWeekdayOutsideSecondRoundReceipt
+  );
+  const remainingOutsideReceipts = takeReceipts(() => true);
+
+  const looseIceReceipts = sortDeliveryReceipts(
+    receipts.filter(
+      (receipt) =>
+        isIceReceiptSummary(receipt) &&
+        !(["heyendaalseweg", "daalseweg", "lent"] as ShopKey[]).includes(
+          shopKeyForReceipt(receipt) as ShopKey
+        )
+    )
+  );
+  const busBSecondIceReceipts = looseIceReceipts.filter(
+    isWeekdayOutsideSecondRoundReceipt
+  );
+  const busBFirstIceReceipts = looseIceReceipts.filter((receipt) => {
+    const cluster = outsideClusterKeyForReceipt(receipt);
+
+    return (
+      !busBSecondIceReceipts.includes(receipt) &&
+      (shopKeyForReceipt(receipt) === "ziekerstraat" ||
+        cluster === "jonkerbos" ||
+        cluster === "noord-buiten")
+    );
+  });
+  const busACityIceReceipts = looseIceReceipts.filter(
+    (receipt) =>
+      !busBSecondIceReceipts.includes(receipt) &&
+      !busBFirstIceReceipts.includes(receipt)
+  );
+
+  const busAFirstStops: RouteStop[] = [
+    fixedShopStop({
+      receipts,
+      shopKey: "heyendaalseweg",
+      load: "fresh",
+      label: "Winkel Heyendaalseweg vers",
+    }),
+    fixedShopStop({
+      receipts,
+      shopKey: "daalseweg",
+      load: "fresh",
+      label: "Winkel Daalseweg vers",
+    }),
+    ...asStops(vermaatReceipts, "A-vermaat-"),
+    ...asStops(radboudUmcReceipts, "A-umc-"),
+    ...asStops(sintMaartenskliniekReceipts, "A-maartens-"),
+    ...asStops(radboudUniversityReceipts, "A-ru-"),
+  ];
+  const busASecondStops: RouteStop[] = [
+    fixedShopStop({
+      receipts,
+      shopKey: "heyendaalseweg",
+      load: "shelf",
+      label: "Winkel Heyendaalseweg houdbaar",
+    }),
+    fixedShopIceStop({
+      receipts,
+      shopKey: "heyendaalseweg",
+      label: "IJs Heyendaal",
+    }),
+    fixedShopStop({
+      receipts,
+      shopKey: "daalseweg",
+      load: "shelf",
+      label: "Winkel Daalseweg houdbaar",
+    }),
+    fixedShopIceStop({
+      receipts,
+      shopKey: "daalseweg",
+      label: "IJs Daalseweg",
+    }),
+    ...asStops(cityReceipts, "A-city-"),
+    ...busACityIceReceipts.map(iceStopForReceipt),
+  ];
+  const busBFirstStops: RouteStop[] = [
+    fixedShopStop({
+      receipts,
+      shopKey: "ziekerstraat",
+      load: "fresh",
+      label: "Winkel Ziekerstraat vers",
+    }),
+    fixedShopStop({
+      receipts,
+      shopKey: "lent",
+      load: "fresh",
+      label: "Winkel Lent vers",
+    }),
+    fixedShopStop({
+      receipts,
+      shopKey: "lent",
+      load: "shelf",
+      label: "Winkel Lent houdbaar",
+    }),
+    fixedShopIceStop({
+      receipts,
+      shopKey: "lent",
+      label: "Winkel Lent ijs",
+    }),
+    ...asStops(driesReceipts, "B-dries-"),
+    ...asStops(sanadomeReceipts, "B-sanadome-"),
+    ...asStops(remainingOutsideReceipts, "B-rest-"),
+    ...busBFirstIceReceipts.map(iceStopForReceipt),
+  ];
+  const busBSecondStops: RouteStop[] = [
+    ...asStops(outsideSecondRoundReceipts, "B-outside-"),
+    ...busBSecondIceReceipts.map(iceStopForReceipt),
+  ];
+
+  return [
+    buildRouteRound({
+      id: "bus-A-1",
+      title: "Ronde 1",
+      vehicle: "Bus A",
+      departure: plan.isFuture ? "advies 08:00" : "08:00",
+      tone: busRouteMeta.A.tone,
+      stops: busAFirstStops,
+      reason: "Vaste stadroute: verse winkels en vroege vaste adressen.",
+      load: routeLoadLineForStops(busAFirstStops),
+      loadProfile,
+    }),
+    buildRouteRound({
+      id: "bus-A-2",
+      title: "Ronde 2",
+      vehicle: "Bus A",
+      departure: "na ronde 1",
+      tone: "border-[#efc7b8] bg-[#fff3ed]",
+      stops: busASecondStops,
+      reason: "Vaste stadroute: houdbaar, winkelijs en resterende stadsbonnen.",
+      load: routeLoadLineForStops(busASecondStops),
+      loadProfile,
+    }),
+    buildRouteRound({
+      id: "bus-B-1",
+      title: "Ronde 1",
+      vehicle: "Bus B",
+      departure: plan.isFuture ? "advies 08:00" : "08:00",
+      tone: busRouteMeta.B.tone,
+      stops: busBFirstStops,
+      reason: "Vaste buitenroute: Ziekerstraat, Lent en vaste adressen onderweg.",
+      load: routeLoadLineForStops(busBFirstStops),
+      loadProfile,
+    }),
+    buildRouteRound({
+      id: "bus-B-2",
+      title: "Ronde 2",
+      vehicle: "Bus B",
+      departure: "na ronde 1",
+      tone: "border-[#efc7b8] bg-[#fff3ed]",
+      stops: busBSecondStops,
+      reason: "Buitenronde voor Malden, Molenhoek, Grave, Groesbeek, Gennep en vergelijkbare adressen.",
+      load: routeLoadLineForStops(busBSecondStops),
+      loadProfile,
+    }),
+  ];
+}
+
 function buildRouteRounds(
   plan: DayPlan,
   receipts: ReceiptSummary[],
@@ -6760,6 +7080,11 @@ function buildRouteRounds(
 ): RouteRound[] {
   if (isSaturdayDate(plan.date)) {
     return buildSaturdayRouteRounds(plan, receipts, loadProfile, routeLearning);
+  }
+
+  const weekday = dayOfWeekForDate(plan.date);
+  if (weekday >= 1 && weekday <= 5) {
+    return buildWeekdayFixedRouteRounds(plan, receipts, loadProfile);
   }
 
   const shopAssignment = chooseShopAssignment(
@@ -7150,13 +7475,17 @@ function isPrimaryRouteRound(route: RouteRound) {
   return routeRoundNumber(route) === 1;
 }
 
+function isStandardRouteRound(route: RouteRound) {
+  return /^bus-[ab]-[12](?:-saturday)?$/i.test(route.id);
+}
+
 function isUserAddedRouteRound(route: RouteRound) {
   return /-extra-\d+/i.test(route.id);
 }
 
 function shouldShowRouteRound(route: RouteRound) {
   return (
-    isPrimaryRouteRound(route) ||
+    isStandardRouteRound(route) ||
     route.stops.length > 0 ||
     isUserAddedRouteRound(route)
   );
@@ -7236,7 +7565,7 @@ function deleteRouteRoundFromRounds(
   loadProfile: DayLoadProfile
 ) {
   const routeToDelete = routeRounds.find((route) => route.id === routeId);
-  if (!routeToDelete || isPrimaryRouteRound(routeToDelete)) return routeRounds;
+  if (!routeToDelete || isStandardRouteRound(routeToDelete)) return routeRounds;
 
   const primaryRoute = routeRounds.find(
     (route) =>
@@ -8511,7 +8840,7 @@ export default function BakkerijLogistiekDashboard() {
   function deleteRouteRound(routeId: string) {
     const currentRoutes = manualRouteRounds || automaticRouteRounds;
     const route = currentRoutes.find((item) => item.id === routeId);
-    if (!route || isPrimaryRouteRound(route)) return;
+    if (!route || isStandardRouteRound(route)) return;
 
     const nextRoutes = deleteRouteRoundFromRounds(
       currentRoutes,
@@ -9439,6 +9768,13 @@ function routeGroupsFor(routeRounds: RouteRound[]): RouteGroup[] {
     }));
 }
 
+function routeGroupDisplayTitle(vehicle: string) {
+  if (vehicle === "Bus A") return "Bus A · Stadroute";
+  if (vehicle === "Bus B") return "Bus B · Buitenroute";
+
+  return vehicle;
+}
+
 const routeDragMimeType = "application/x-strik-route-stop";
 
 function isRouteDragState(value: unknown): value is RouteDragState {
@@ -9674,7 +10010,7 @@ function RoutesPanel({
             >
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-base font-black tracking-normal text-[#1a1815]">
-                  {group.vehicle}
+                  {routeGroupDisplayTitle(group.vehicle)}
                 </h2>
                 <div className="flex items-center gap-2">
                   <button
@@ -9716,17 +10052,8 @@ function RoutesPanel({
                         <h3 className="text-xs font-black uppercase tracking-normal text-[#1a1815]">
                           {route.title}
                         </h3>
-                        <p className="mt-0.5 text-[0.68rem] font-bold tracking-normal text-[#6b645b]">
-                          {route.departure} · {route.badge}
-                        </p>
-                        <p className="mt-0.5 text-[0.62rem] font-bold tracking-normal text-[#7a736c]">
-                          Start/eind: {routeDepot.address}
-                        </p>
                       </div>
-                      <span className="shrink-0 border border-white/80 bg-white px-1.5 py-0.5 text-[0.62rem] font-black tracking-normal text-[#6b645b]">
-                        {route.load}
-                      </span>
-                      {!isPrimaryRouteRound(route) && (
+                      {!isStandardRouteRound(route) && (
                         <button
                           type="button"
                           aria-label={`${route.title} verwijderen`}
@@ -9837,9 +10164,6 @@ function RoutesPanel({
                           </li>
                         )}
                     </ol>
-                    <p className="mt-2 text-[0.68rem] font-normal leading-snug tracking-normal text-[#4a4540]">
-                      {route.reason}
-                    </p>
                   </section>
                 ))}
               </div>
