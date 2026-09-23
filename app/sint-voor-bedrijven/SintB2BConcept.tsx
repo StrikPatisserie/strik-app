@@ -19,7 +19,6 @@ type Product = {
   optionImages?: Record<string, string>;
   shelfLifeInfo: string[];
   allergens: Allergen[];
-  allergenNote?: string;
   tiers: PriceTier[];
   retailPriceIncl?: number;
   personalizationIncluded?: boolean;
@@ -79,7 +78,6 @@ const products: Product[] = [
     image: "/sinterklaas/Melk spuitletter 2026.png",
     shelfLifeInfo: ["Chocolade · t.g.t. ca. 30 dagen"],
     allergens: ["gluten", "lactose", "soja"],
-    allergenNote: "Soja is aanwezig door de decoratie met witte chocolade.",
     accent: "#b9dddf",
     retailPriceIncl: 8.95,
     tiers: chocolateLetterTiers,
@@ -92,7 +90,6 @@ const products: Product[] = [
     image: "/sinterklaas/Speculaasplak met gedicht.png",
     shelfLifeInfo: ["Massief speculaas · t.g.t. ca. 30 dagen"],
     allergens: ["gluten", "lactose", "soja"],
-    allergenNote: "Soja is aanwezig door de decoratie met witte chocolade.",
     accent: "#d79a6d",
     retailPriceIncl: 7,
     personalizationIncluded: true,
@@ -110,7 +107,6 @@ const products: Product[] = [
       "Gevuld speculaas · t.h.t. ca. 21 dagen",
     ],
     allergens: ["gluten", "lactose", "amandel", "soja"],
-    allergenNote: "Amandel zit in het gevulde speculaas; soja in de decoratie van de chocoladeletter.",
     accent: "#d79a6d",
     retailPriceIncl: 18.35,
     variants: [
@@ -130,7 +126,6 @@ const products: Product[] = [
       "Chocoladeletter · t.g.t. ca. 30 dagen",
     ],
     allergens: ["gluten", "lactose", "amandel", "soja"],
-    allergenNote: "Amandel is afhankelijk van de gekozen brok; soja zit in de decoratie van de chocoladeletter.",
     accent: "#b9dddf",
     retailPriceIncl: 13.9,
     variants: [
@@ -149,7 +144,6 @@ const products: Product[] = [
     image: "/sinterklaas/popcorn bites2.png",
     shelfLifeInfo: ["Speculaasbites · t.h.t. ca. 21 dagen"],
     allergens: ["gluten", "lactose", "amandel"],
-    allergenNote: "De speculaasbites zijn gevuld met amandelspijs.",
     accent: "#d79a6d",
     logoAvailable: false,
     retailPriceIncl: 14.95,
@@ -166,7 +160,6 @@ const products: Product[] = [
       "Gevulde speculaasstaaf · t.h.t. ca. 21 dagen",
     ],
     allergens: ["gluten", "lactose", "amandel"],
-    allergenNote: "Alle uitvoeringen bevatten amandelspijs.",
     accent: "#f3c4ac",
     retailPriceIncl: 12.95,
     variants: [
@@ -188,7 +181,6 @@ const products: Product[] = [
       "Gevuld speculaas · t.h.t. ca. 21 dagen",
     ],
     allergens: ["gluten", "lactose", "amandel", "soja"],
-    allergenNote: "Marsepein bevat zelf geen gluten of lactose, maar wel amandel. Soja zit in de decoratie.",
     accent: "#f7c8aa",
     tiers: [
       { min: 1, price: 16.95, label: "<15" },
@@ -207,7 +199,6 @@ const products: Product[] = [
       "Gevulde speculaasstaaf · t.h.t. ca. 21 dagen",
     ],
     allergens: ["gluten", "lactose", "amandel"],
-    allergenNote: "Beide staven bevatten amandelspijs.",
     accent: "#d62d1d",
     logoAvailable: false,
     retailPriceIncl: 17.95,
@@ -226,7 +217,6 @@ const products: Product[] = [
       "Marsepein en roomborstplaat · t.g.t. ca. 30 dagen",
     ],
     allergens: ["gluten", "lactose", "amandel", "soja"],
-    allergenNote: "De aanwezige allergenen hangen af van de twee gekozen vullingen. Marsepein bevat zelf alleen amandel.",
     gallery: [
       { src: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png", label: "Chocolade kruidnoten met speculaasbites" },
       { src: "/sinterklaas/Sint DUO  marsepein aard + speculaasbrok.png", label: "Marsepein aardappeltjes met speculaasbrok" },
@@ -370,11 +360,15 @@ function bestProductSuggestion(product: Product, quantity: number, includeVat: b
   return candidates.sort((first, second) => first.unitPrice - second.unitPrice)[0] || null;
 }
 
+function WheatIcon({ className = "h-4 w-4" }: Readonly<{ className?: string }>) {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18M12 7c-3 0-4-2-4-3 2.5 0 4 1 4 3ZM12 11c-3 0-5-2-5-4 3 0 5 1.5 5 4ZM12 15c-3 0-5-2-5-4 3 0 5 1.5 5 4ZM12 7c3 0 4-2 4-3-2.5 0-4 1-4 3ZM12 11c3 0 5-2 5-4-3 0-5 1.5-5 4ZM12 15c3 0 5-2 5-4-3 0-5 1.5-5 4Z"/></svg>;
+}
+
 function AllergenSymbol({ allergen }: Readonly<{ allergen: Allergen }>) {
-  if (allergen === "gluten") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18M12 7c-3 0-4-2-4-3 2.5 0 4 1 4 3ZM12 11c-3 0-5-2-5-4 3 0 5 1.5 5 4ZM12 15c-3 0-5-2-5-4 3 0 5 1.5 5 4ZM12 7c3 0 4-2 4-3-2.5 0-4 1-4 3ZM12 11c3 0 5-2 5-4-3 0-5 1.5-5 4ZM12 15c3 0 5-2 5-4-3 0-5 1.5-5 4Z"/></svg>;
-  if (allergen === "lactose") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3S6.5 9.5 6.5 14A5.5 5.5 0 0 0 17.5 14C17.5 9.5 12 3 12 3Z"/><path d="M9.5 15.5c.7 1.2 1.6 1.8 2.8 1.8"/></svg>;
-  if (allergen === "amandel") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5c4.2 2.3 6.5 5.3 6.5 8.5s-2.3 6.2-6.5 8.5C7.8 18.2 5.5 15.2 5.5 12S7.8 5.8 12 3.5Z"/><path d="M12 6.5c1.8 1.5 3 3.4 3 5.5s-1.2 4-3 5.5"/></svg>;
-  return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 18c5-1 8-4 9-9-5 1-8 4-9 9ZM12 18c4-.5 6.5-2.7 7-6.5-3.8.5-6 2.8-7 6.5Z"/><path d="M5 18h14"/></svg>;
+  if (allergen === "gluten") return <WheatIcon className="h-5 w-5" />;
+  if (allergen === "lactose") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3S6.5 9.5 6.5 14A5.5 5.5 0 0 0 17.5 14C17.5 9.5 12 3 12 3Z"/><path d="M9.5 15.5c.7 1.2 1.6 1.8 2.8 1.8"/></svg>;
+  if (allergen === "amandel") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5c4.2 2.3 6.5 5.3 6.5 8.5s-2.3 6.2-6.5 8.5C7.8 18.2 5.5 15.2 5.5 12S7.8 5.8 12 3.5Z"/><path d="M12 6.5c1.8 1.5 3 3.4 3 5.5s-1.2 4-3 5.5"/></svg>;
+  return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 18c5-1 8-4 9-9-5 1-8 4-9 9ZM12 18c4-.5 6.5-2.7 7-6.5-3.8.5-6 2.8-7 6.5Z"/><path d="M5 18h14"/></svg>;
 }
 
 export default function SintB2BConcept() {
@@ -543,9 +537,9 @@ export default function SintB2BConcept() {
               <h1 className="text-[clamp(6.5rem,12vw,10.5rem)] font-black leading-[.68] tracking-[-.08em] text-white">SINT</h1>
               <p className="-mt-1 self-end pr-2 font-[Butterscotch] text-[clamp(2rem,3.2vw,3.5rem)] leading-none text-[#d62d1d]">Met een Strik</p>
             </div>
-            <div className="relative w-full max-w-sm self-end rounded-[50%] bg-[#fff7df]/75 px-7 py-5 sm:w-[23rem]">
-              <span aria-hidden="true" className="pointer-events-none absolute inset-0 rotate-[1.5deg] rounded-[50%] border border-[#749178]/55" />
-              <span aria-hidden="true" className="pointer-events-none absolute inset-[5px] -rotate-[1deg] rounded-[50%] border border-[#749178]/35" />
+            <div className="relative w-full self-end rounded-[50%] px-8 py-4 sm:w-[52%] sm:max-w-none lg:w-[40rem] lg:px-10">
+              <span aria-hidden="true" className="pointer-events-none absolute -inset-x-2 inset-y-0 rotate-[1.25deg] rounded-[50%] border border-[#749178]/55" />
+              <span aria-hidden="true" className="pointer-events-none absolute -inset-x-0.5 inset-y-[5px] -rotate-[.75deg] rounded-[50%] border border-[#749178]/35" />
               <div className="relative flex items-center justify-between gap-4">
                 <div><p className="text-[.58rem] font-black uppercase tracking-[.18em] text-[#55725f]">Interactieve keuzehulp</p><p className="mt-0.5 font-[Butterscotch] text-3xl leading-none text-[#b65e3e]">Vind jouw passende cadeau</p><p className="mt-1 text-[.65rem] font-bold text-[#765449]">Aantal, budget en logo — wij rekenen mee.</p></div>
                 <button type="button" onClick={() => setFinderOpen(true)} aria-label="Open de interactieve cadeaukeuzehulp" className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#557965] text-white shadow-[0_8px_20px_rgba(60,91,70,.25)] transition hover:-translate-y-0.5 hover:bg-[#466956]">
@@ -555,7 +549,10 @@ export default function SintB2BConcept() {
               </div>
             </div>
           </div>
-          <p className="mt-3 max-w-4xl text-sm font-bold leading-relaxed text-[#6d2417] sm:text-base">Ambachtelijke Sinterklaascadeaus voor collega’s en relaties. Kies, bekijk direct je staffel en stel vrijblijvend een offerteaanvraag samen.</p>
+          <p className="mt-2 max-w-3xl text-xs font-bold leading-snug text-[#6d2417] sm:text-sm">
+            <span className="block">Ambachtelijke Sinterklaascadeaus voor collega’s en relaties.</span>
+            <span className="block">Kies je product, bekijk direct de staffel en stel vrijblijvend een offerteaanvraag samen.</span>
+          </p>
         </div>
       </header>
 
@@ -570,7 +567,7 @@ export default function SintB2BConcept() {
       <section id="assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 py-6 sm:px-8 lg:px-12 lg:py-8">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div><p className="text-[.65rem] font-black uppercase tracking-[.2em] text-white sm:text-xs">Zakelijk assortiment</p><h2 className="mt-1 text-3xl font-black text-[#65180f] sm:text-4xl">Kies iets lekkers</h2></div>
-          <div className="max-w-md"><div className="inline-flex rounded-full border border-[#a24629] bg-[#fff7df] p-1 text-xs font-black"><button type="button" aria-pressed={includeVat} onClick={() => setIncludeVat(true)} className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Incl. btw</button><button type="button" aria-pressed={!includeVat} onClick={() => setIncludeVat(false)} className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Excl. btw</button></div><p className="mt-2 text-xs font-bold text-[#7e2b1c]">De winkelprijzen van de nieuw ingevulde producten zijn bekend; de staffels zijn voorstellen. Overige producten hebben nog conceptprijzen. 9% btw voor voedingsmiddelen.</p></div>
+          <div className="max-w-sm"><div className="inline-flex rounded-full border border-[#a24629] bg-[#fff7df] p-1 text-xs font-black"><button type="button" aria-pressed={includeVat} onClick={() => setIncludeVat(true)} className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Incl. btw</button><button type="button" aria-pressed={!includeVat} onClick={() => setIncludeVat(false)} className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Excl. btw</button></div><p className="mt-1 max-w-xs text-[.58rem] font-semibold italic leading-snug text-[#7e2b1c] sm:text-[.62rem]">De bekende winkelprijzen zijn definitief; staffels en overige prijzen zijn voorstellen. Voor voedingsmiddelen geldt 9% btw.</p></div>
         </div>
         <div className="mx-auto grid w-[90%] gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
           <B2BChocolateLetters lines={letterLines} onChange={setLetterLines} withLogo={!!logo[chocolateLetterProduct.id]} onLogoChange={(value) => setLogo((current) => ({ ...current, [chocolateLetterProduct.id]: value }))} onOpenShelfLife={() => setProductInfo({ product: chocolateLetterProduct, section: "shelfLife" })} onOpenAllergens={() => setProductInfo({ product: chocolateLetterProduct, section: "allergens" })} tiers={chocolateLetterTiers} includeVat={includeVat} activeTierLabel={letterTier.label} total={includeVat ? letterTotalIncl : letterTotalEx} />
@@ -588,7 +585,10 @@ export default function SintB2BConcept() {
               <div className="relative aspect-[3/4] shrink-0 overflow-hidden">
                 <Image src={selectedImage} alt={`${product.name}${selectedChoiceLabel ? ` · ${selectedChoiceLabel}` : ""}`} fill sizes="(max-width: 640px) 90vw, (max-width: 1280px) 45vw, (max-width: 1536px) 23vw, 18vw" className="object-cover object-center"/>
                 <span className="absolute left-2.5 top-2.5 rounded-full bg-[#d62d1d] px-2 py-0.5 text-[.56rem] font-black uppercase tracking-wider text-white">{product.eyebrow}</span>
-                <div className="absolute right-2.5 top-2.5 flex gap-1"><button type="button" onClick={()=>setProductInfo({product,section:"shelfLife"})} aria-label={`Bekijk houdbaarheid van ${product.name}`} title="Houdbaarheid" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#557965] shadow-md backdrop-blur transition hover:bg-white"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></button><button type="button" onClick={()=>setProductInfo({product,section:"allergens"})} aria-label={`Bekijk allergenen van ${product.name}`} title="Allergenen" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#9a3d21] shadow-md backdrop-blur transition hover:bg-white"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.5h.01"/></svg></button></div>
+                <div className="absolute right-2.5 top-2.5 flex gap-1">
+                  <button type="button" onClick={()=>setProductInfo({product,section:"shelfLife"})} aria-label={`Bekijk houdbaarheid van ${product.name}`} title="Houdbaarheid" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#557965] shadow-md backdrop-blur transition hover:bg-white"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></button>
+                  <button type="button" onClick={()=>setProductInfo({product,section:"allergens"})} aria-label={`Bekijk allergenen van ${product.name}`} title="Allergenen" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#6e7858] shadow-md backdrop-blur transition hover:bg-white"><WheatIcon /></button>
+                </div>
                 {product.gallery&&product.gallery.length>1&&<button type="button" onClick={()=>setGallery({product,index:selectedGalleryIndex})} className="absolute bottom-2.5 left-2.5 rounded-full bg-white/95 px-2 py-0.5 text-[.56rem] font-black text-[#60190f] shadow-md backdrop-blur transition hover:bg-white">▧ Meer foto&apos;s</button>}
               </div>
               <div className="flex flex-1 flex-col p-[.9rem]"><h3 className="text-lg font-black leading-tight text-[#60190f]">{product.name}</h3><p className="mt-1.5 min-h-9 text-[.68rem] font-semibold leading-relaxed text-[#7e493c]">{product.description}</p>
@@ -624,7 +624,25 @@ export default function SintB2BConcept() {
         {canOpenEmail ? <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sinterklaas 2026 - ${company.trim()}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a> : <div className="mt-5"><button type="button" disabled className="w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white opacity-45">Open aanvraag in mijn e-mailapp →</button><p className="mt-2 text-center text-xs font-bold text-[#9a3d21]">Vul eerst de bedrijfsnaam en een geldig e-mailadres in.</p></div>}
         <p className="mt-3 text-center text-xs font-bold text-[#8b7669]">Je e-mailapp opent met een overzichtelijke aanvraag. Je verstuurt hem zelf; er gaat niet automatisch iets weg. De overige producten en bezorgkosten zijn nog conceptprijzen.</p>
       </section></div>}
-      {productInfo&&<div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#391008]/60 p-0 sm:items-center sm:p-5" onClick={()=>setProductInfo(null)}><section role="dialog" aria-modal="true" aria-labelledby="product-info-title" className="w-full max-w-lg rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-7" onClick={(event)=>event.stopPropagation()}><div className="flex items-start justify-between gap-4"><div><p className="text-[.65rem] font-black uppercase tracking-[.18em] text-[#d62d1d]">Productinformatie</p><h2 id="product-info-title" className="mt-1 text-2xl font-black text-[#60190f]">{productInfo.product.name}</h2></div><button type="button" aria-label="Sluiten" onClick={()=>setProductInfo(null)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl font-black text-[#60190f] shadow-sm">×</button></div><div className="mt-5 grid grid-cols-2 gap-2 rounded-2xl bg-[#f5e8cc] p-1.5"><button type="button" onClick={()=>setProductInfo((current)=>current?{...current,section:"shelfLife"}:current)} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black ${productInfo.section==="shelfLife"?"bg-white text-[#557965] shadow-sm":"text-[#7e493c]"}`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Houdbaarheid</button><button type="button" onClick={()=>setProductInfo((current)=>current?{...current,section:"allergens"}:current)} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-black ${productInfo.section==="allergens"?"bg-white text-[#9a3d21] shadow-sm":"text-[#7e493c]"}`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5 21 20H3L12 3.5Z"/><path d="M12 9v5M12 17.5h.01"/></svg>Allergenen</button></div>{productInfo.section==="shelfLife"?<div className="mt-5"><p className="text-xs font-bold text-[#7e493c]">Indicatieve houdbaarheid per onderdeel:</p><ul className="mt-3 space-y-2">{productInfo.product.shelfLifeInfo.map((item)=><li key={item} className="flex items-start gap-3 rounded-xl bg-white px-4 py-3 text-sm font-bold text-[#60190f]"><span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#dce9d8] text-[#557965]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 12 3 3 7-7"/></svg></span><span>{item}</span></li>)}</ul></div>:<div className="mt-5"><ul className="grid grid-cols-2 gap-2">{productInfo.product.allergens.map((allergen)=><li key={allergen} className="flex items-center gap-3 rounded-xl bg-white p-3 text-sm font-black text-[#60190f]"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f6e4db] text-[#9a3d21]"><AllergenSymbol allergen={allergen}/></span>{ALLERGEN_LABELS[allergen]}</li>)}</ul>{productInfo.product.allergenNote&&<p className="mt-3 rounded-xl bg-[#f8e5ba] px-4 py-3 text-xs font-bold leading-relaxed text-[#7e493c]">{productInfo.product.allergenNote}</p>}<p className="mt-3 text-[.68rem] font-semibold leading-relaxed text-[#8b7669]">Bij een ernstige allergie of kruisbesmettingsrisico stemmen we de mogelijkheden graag vooraf persoonlijk af.</p></div>}</section></div>}
+      {productInfo && <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#391008]/60 p-0 sm:items-center sm:p-5" onClick={() => setProductInfo(null)}>
+        <section role="dialog" aria-modal="true" aria-labelledby="product-info-title" className="w-full max-w-sm rounded-t-[1.5rem] bg-[#fffaf0] p-4 shadow-2xl sm:rounded-[1.5rem] sm:p-5" onClick={(event) => event.stopPropagation()}>
+          <div className="flex items-start justify-between gap-3">
+            <div><p className="text-[.56rem] font-black uppercase tracking-[.16em] text-[#d62d1d]">Productinformatie</p><h2 id="product-info-title" className="mt-0.5 text-xl font-black leading-tight text-[#60190f]">{productInfo.product.name}</h2></div>
+            <button type="button" aria-label="Sluiten" onClick={() => setProductInfo(null)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-lg font-black text-[#60190f] shadow-sm">×</button>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-[#f5e8cc] p-1">
+            <button type="button" onClick={() => setProductInfo((current) => current ? { ...current, section: "shelfLife" } : current)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[.66rem] font-black ${productInfo.section === "shelfLife" ? "bg-white text-[#557965] shadow-sm" : "text-[#7e493c]"}`}><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>Houdbaarheid</button>
+            <button type="button" onClick={() => setProductInfo((current) => current ? { ...current, section: "allergens" } : current)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[.66rem] font-black ${productInfo.section === "allergens" ? "bg-white text-[#6e7858] shadow-sm" : "text-[#7e493c]"}`}><WheatIcon />Allergenen</button>
+          </div>
+          {productInfo.section === "shelfLife" ? <div className="mt-4">
+            <p className="text-[.66rem] font-bold text-[#7e493c]">Indicatieve houdbaarheid per onderdeel:</p>
+            <ul className="mt-2 space-y-1.5">{productInfo.product.shelfLifeInfo.map((item) => <li key={item} className="flex items-start gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-[#60190f]"><span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#dce9d8] text-[#557965]"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7 12 3 3 7-7"/></svg></span><span>{item}</span></li>)}</ul>
+          </div> : <div className="mt-4">
+            <ul className="grid grid-cols-2 gap-1.5">{productInfo.product.allergens.map((allergen) => <li key={allergen} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 text-xs font-black text-[#60190f]"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e9eddc] text-[#6e7858]"><AllergenSymbol allergen={allergen}/></span>{ALLERGEN_LABELS[allergen]}</li>)}</ul>
+            <p className="mt-2 text-[.58rem] font-semibold leading-snug text-[#8b7669]">Bij een ernstige allergie of risico op kruisbesmetting stemmen we de mogelijkheden graag persoonlijk af.</p>
+          </div>}
+        </section>
+      </div>}
       {gallery&&gallery.product.gallery&&<div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#2d0b06]/85 p-4" onClick={()=>setGallery(null)}><section className="w-full max-w-4xl" onClick={(event)=>event.stopPropagation()}><div className="mb-3 flex items-center justify-between text-white"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#efb800]">Meer foto&apos;s</p><h2 className="text-2xl font-black">{gallery.product.name}</h2></div><button type="button" onClick={()=>setGallery(null)} className="h-11 w-11 rounded-full bg-white text-xl font-black text-[#60190f]">×</button></div><div className="relative aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-[#fff3cf] sm:aspect-[16/10]"><Image src={gallery.product.gallery[gallery.index].src} alt={gallery.product.gallery[gallery.index].label} fill sizes="100vw" className="object-contain"/></div><p className="mt-3 text-center text-sm font-bold text-white">{gallery.product.gallery[gallery.index].label}</p><div className="mt-4 flex justify-center gap-2">{gallery.product.gallery.map((photo,index)=><button key={photo.src} type="button" aria-label={photo.label} onClick={()=>setGallery({...gallery,index})} className={`relative h-16 w-16 overflow-hidden rounded-xl border-2 sm:h-20 sm:w-20 ${index===gallery.index?"border-[#efb800]":"border-white/40"}`}><Image src={photo.src} alt="" fill sizes="80px" className="object-cover"/></button>)}</div></section></div>}
     </main>
   );
