@@ -26,6 +26,15 @@ type Product = {
   duoOptions?: ProductVariant[];
   duoImages?: DuoImage[];
 };
+type ProductSuggestion = {
+  product: Product;
+  choice: string;
+  choiceLabel: string;
+  image: string;
+  tier: PriceTier;
+  unitPrice: number;
+  logoIncluded: boolean;
+};
 
 // Conceptbedragen: vervang deze zodra de B2B-prijslijst voor 2026 definitief is.
 const NIJMEGEN_DELIVERY_FEE = 15;
@@ -271,6 +280,41 @@ function productSupportsLogo(product: Product) {
   return !product.personalizationIncluded && product.logoAvailable !== false;
 }
 
+function productChoiceCandidates(product: Product) {
+  if (product.duoOptions?.length) {
+    return product.duoOptions.flatMap((first, firstIndex) =>
+      product.duoOptions!.slice(firstIndex).map((second) => duoChoice(first.label, second.label))
+    );
+  }
+  if (product.variants?.length) return product.variants.map((variant) => variant.label);
+  if (product.options?.length) return product.options;
+  return [""];
+}
+
+function bestProductSuggestion(product: Product, quantity: number, includeVat: boolean, wantsLogo: boolean): ProductSuggestion | null {
+  const supportsRequestedLogo = product.personalizationIncluded || productSupportsLogo(product);
+  if (wantsLogo && !supportsRequestedLogo) return null;
+
+  const logoIncluded = wantsLogo && productSupportsLogo(product);
+  const logoUnitPrice = logoIncluded ? productLogoPrice(quantity, includeVat) : 0;
+  const candidates = productChoiceCandidates(product).map((choice) => {
+    const configuredProduct = pricedProduct(product, choice);
+    const tier = tierFor(configuredProduct, quantity);
+    const unitPrice = roundCents(productUnitPrice(configuredProduct, tier, includeVat) + logoUnitPrice);
+    return {
+      product,
+      choice,
+      choiceLabel: product.id === chocolateLetterProduct.id ? "Spuitletter S klein · melk" : productChoiceLabel(product, choice),
+      image: productImage(product, choice),
+      tier,
+      unitPrice,
+      logoIncluded,
+    };
+  });
+
+  return candidates.sort((first, second) => first.unitPrice - second.unitPrice)[0] || null;
+}
+
 export default function SintB2BConcept() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>({});
@@ -359,11 +403,10 @@ export default function SintB2BConcept() {
   const subtotal = includeVat ? subtotalIncl : subtotalEx;
   const deliveryFee = includeVat ? deliveryFeeIncl : deliveryFeeEx;
   const total = includeVat ? totalIncl : totalEx;
-  const suggestions = useMemo(() => products.filter((product) => {
-    const configuredProduct = pricedProduct(product, choices[product.id]);
-    return productUnitPrice(configuredProduct, tierFor(configuredProduct, Math.max(1, recipientCount)), includeVat) +
-      (wantsLogo && productSupportsLogo(product) ? productLogoPrice(recipientCount, includeVat) : 0) <= budget
-  }), [budget, choices, recipientCount, wantsLogo, includeVat]);
+  const suggestions = useMemo(() => products
+    .map((product) => bestProductSuggestion(product, Math.max(1, recipientCount), includeVat, wantsLogo))
+    .filter((suggestion): suggestion is ProductSuggestion => Boolean(suggestion && suggestion.unitPrice <= budget))
+    .sort((first, second) => first.unitPrice - second.unitPrice), [budget, recipientCount, wantsLogo, includeVat]);
   const canOpenEmail = Boolean(company.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
   const offerText = [
     "Beste Strik Patisserie,",
@@ -399,7 +442,7 @@ export default function SintB2BConcept() {
     contact.trim() || company.trim() || "Zakelijke klant",
   ].join("\r\n");
 
-  function addSuggestedProduct(product: Product) {
+  function addSuggestedProduct(product: Product, suggestedChoice: string) {
     if (product.id === chocolateLetterProduct.id) {
       setLetterLines((current) => [...current, {
         id: `letter-suggested-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -413,9 +456,8 @@ export default function SintB2BConcept() {
     } else {
       setQuantities((current) => ({ ...current, [product.id]: recipientCount }));
       setDraftQuantities((current) => ({ ...current, [product.id]: recipientCount }));
-      const defaultChoice = defaultProductChoice(product);
-      if (defaultChoice) {
-        setChoices((current) => ({ ...current, [product.id]: current[product.id] || defaultChoice }));
+      if (suggestedChoice) {
+        setChoices((current) => ({ ...current, [product.id]: suggestedChoice }));
       }
     }
     if (productSupportsLogo(product)) setLogo((current) => ({ ...current, [product.id]: wantsLogo }));
@@ -433,15 +475,22 @@ export default function SintB2BConcept() {
         </nav>
         <div className="relative mx-auto mt-3 max-w-7xl">
           <p className="text-[.65rem] font-black uppercase tracking-[.24em] text-white sm:text-xs">Sinds 1937 · ambacht uit Nijmegen</p>
-          <div className="mt-1 flex items-center justify-between gap-5">
+          <div className="mt-1 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="inline-flex min-w-0 flex-col">
               <h1 className="text-[clamp(6.5rem,12vw,10.5rem)] font-black leading-[.68] tracking-[-.08em] text-white">SINT</h1>
               <p className="-mt-1 self-end pr-2 font-[Butterscotch] text-[clamp(2rem,3.2vw,3.5rem)] leading-none text-[#d62d1d]">Met een Strik</p>
             </div>
-            <button type="button" onClick={() => setFinderOpen(true)} aria-label="Welk cadeau past bij jouw team?" title="Welk cadeau past bij jouw team?" className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#fff7df] text-[#60190f] shadow-[0_10px_28px_rgba(92,24,12,.18)] transition hover:-translate-y-0.5 hover:bg-white sm:h-20 sm:w-20">
-              <svg aria-hidden="true" viewBox="0 0 48 48" className="h-9 w-9 sm:h-11 sm:w-11" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h27v20H8z"/><path d="M5 14h33v8H5zM21.5 14v27"/><path d="M21 14c-5 0-9-2-9-5 0-2 1.7-3.5 4-3.5 3.7 0 5.5 5.2 5.5 8.5ZM22 14c5 0 9-2 9-5 0-2-1.7-3.5-4-3.5-3.7 0-5.5 5.2-5.5 8.5Z"/></svg>
-              <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#d62d1d] text-sm font-black text-white">?</span>
-            </button>
+            <div className="relative w-full max-w-sm self-end rounded-[50%] bg-[#fff7df]/75 px-7 py-5 sm:w-[23rem]">
+              <span aria-hidden="true" className="pointer-events-none absolute inset-0 rotate-[1.5deg] rounded-[50%] border border-[#749178]/55" />
+              <span aria-hidden="true" className="pointer-events-none absolute inset-[5px] -rotate-[1deg] rounded-[50%] border border-[#749178]/35" />
+              <div className="relative flex items-center justify-between gap-4">
+                <div><p className="text-[.58rem] font-black uppercase tracking-[.18em] text-[#55725f]">Interactieve keuzehulp</p><p className="mt-0.5 font-[Butterscotch] text-3xl leading-none text-[#b65e3e]">Vind jouw passende cadeau</p><p className="mt-1 text-[.65rem] font-bold text-[#765449]">Aantal, budget en logo — wij rekenen mee.</p></div>
+                <button type="button" onClick={() => setFinderOpen(true)} aria-label="Open de interactieve cadeaukeuzehulp" className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#557965] text-white shadow-[0_8px_20px_rgba(60,91,70,.25)] transition hover:-translate-y-0.5 hover:bg-[#466956]">
+                  <svg aria-hidden="true" viewBox="0 0 48 48" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h27v20H8z"/><path d="M5 14h33v8H5zM21.5 14v27"/><path d="M21 14c-5 0-9-2-9-5 0-2 1.7-3.5 4-3.5 3.7 0 5.5 5.2 5.5 8.5ZM22 14c5 0 9-2 9-5 0-2-1.7-3.5-4-3.5-3.7 0-5.5 5.2-5.5 8.5Z"/></svg>
+                  <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#d62d1d] text-[.65rem] font-black">?</span>
+                </button>
+              </div>
+            </div>
           </div>
           <p className="mt-3 max-w-4xl text-sm font-bold leading-relaxed text-[#6d2417] sm:text-base">Ambachtelijke Sinterklaascadeaus voor collega’s en relaties. Kies, bekijk direct je staffel en stel vrijblijvend een offerteaanvraag samen.</p>
         </div>
@@ -452,7 +501,7 @@ export default function SintB2BConcept() {
         <label className="grid gap-2 text-sm font-black text-[#60190f]">1. Hoeveel ontvangers?<input type="number" min="1" value={recipientCount} onChange={(event) => setRecipientCount(Math.max(1, Number(event.target.value) || 1))} className="h-11 rounded-xl border border-[#dfc699] bg-white px-4 text-lg" /></label>
         <label className="grid gap-2 text-sm font-black text-[#60190f]">2. Budget per persoon, {includeVat ? "incl." : "excl."} btw<input type="number" min="1" value={budget} onChange={(event) => setBudget(Math.max(1, Number(event.target.value) || 1))} className="h-11 rounded-xl border border-[#dfc699] bg-white px-4 text-lg" /></label>
         <div className="grid content-end gap-2 text-sm font-black text-[#60190f]">3. Met eigen logo?<button type="button" aria-pressed={wantsLogo} onClick={() => setWantsLogo(!wantsLogo)} className={`h-11 rounded-xl border px-4 text-left ${wantsLogo ? "border-[#d62d1d] bg-[#d62d1d] text-white" : "border-[#dfc699] bg-white"}`}>{wantsLogo ? "Ja, met logo ✓" : "Nee, zonder logo"}</button></div>
-        <div className="rounded-2xl bg-[#f8e5ba] p-4 lg:col-span-3"><p className="text-xs font-black uppercase tracking-[.16em] text-[#9a3d21]">Jouw selectie</p><p className="mt-1 text-sm font-bold text-[#60190f]">{suggestions.length ? `${suggestions.length} voorbeeldproducten passen binnen je budget. Tik op een product om ${recipientCount} stuks aan je aanvraag toe te voegen.` : "Er past nog geen voorbeeldproduct binnen dit budget. Het volledige assortiment en combinaties volgen nog."}</p><div className="mt-3 flex flex-wrap gap-2">{suggestions.map((product) => { const configuredProduct = pricedProduct(product, choices[product.id]); return <button key={product.id} type="button" onClick={() => addSuggestedProduct(product)} className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#60190f] transition hover:bg-[#d62d1d] hover:text-white">+ {product.name}{product.id === chocolateLetterProduct.id ? " · S klein melk" : ""} · {money(productUnitPrice(configuredProduct, tierFor(configuredProduct, recipientCount), includeVat) + (wantsLogo && productSupportsLogo(product) ? productLogoPrice(recipientCount, includeVat) : 0))} p.s.</button>; })}</div></div>
+        <div className="rounded-2xl bg-[#f8e5ba] p-4 lg:col-span-3"><p className="text-xs font-black uppercase tracking-[.16em] text-[#9a3d21]">Dit past binnen jouw budget</p><p className="mt-1 text-sm font-bold text-[#60190f]">{suggestions.length ? `${suggestions.length} producten passen bij ${recipientCount} ontvangers en maximaal ${money(budget)} per persoon. De getoonde prijs bevat de juiste staffel${wantsLogo ? " en de gekozen logowens" : ""}.` : `Er past nog geen product binnen dit budget en deze wensen. Probeer een iets hoger budget${wantsLogo ? " of kies zonder logo" : ""}.`}</p><div className="mt-4 grid gap-3 sm:grid-cols-2">{suggestions.map((suggestion) => <button key={suggestion.product.id} type="button" onClick={() => addSuggestedProduct(suggestion.product, suggestion.choice)} className="group flex min-w-0 gap-3 rounded-2xl bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[#f1e5d5]"><Image src={suggestion.image} alt="" fill sizes="80px" className="object-cover" /></span><span className="flex min-w-0 flex-1 flex-col"><strong className="text-sm leading-tight text-[#60190f]">{suggestion.product.name}</strong><span className="mt-1 line-clamp-2 text-[.66rem] font-semibold leading-relaxed text-[#7e493c]">{suggestion.product.description}</span><span className="mt-1 line-clamp-2 text-[.65rem] font-black leading-snug text-[#9a3d21]">{suggestion.choiceLabel}</span><span className="mt-auto flex items-end justify-between gap-2 pt-2"><small className="text-[.6rem] font-bold text-[#7e493c]">Staffel {suggestion.tier.label}{suggestion.logoIncluded ? " · incl. logo" : suggestion.product.personalizationIncluded && wantsLogo ? " · opdruk inbegrepen" : ""}</small><strong className="whitespace-nowrap text-sm text-[#d62d1d]">{money(suggestion.unitPrice)} p.p. <span aria-hidden="true">→</span></strong></span></span></button>)}</div></div>
       </div></section></div>}
 
       <section id="assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 py-6 sm:px-8 lg:px-12 lg:py-8">
