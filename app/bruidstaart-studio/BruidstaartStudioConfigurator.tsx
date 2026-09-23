@@ -3872,6 +3872,7 @@ export default function BruidstaartStudioConfigurator() {
   >([]);
   const [allOverviewLoading, setAllOverviewLoading] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState("");
+  const [mailPreparing, setMailPreparing] = useState(false);
   const [paymentRequestOpen, setPaymentRequestOpen] = useState(false);
   const [paymentRequestEmail, setPaymentRequestEmail] = useState("");
   const [paymentRequestAmount, setPaymentRequestAmount] = useState("");
@@ -5045,6 +5046,7 @@ export default function BruidstaartStudioConfigurator() {
       silentMissingCode?: boolean;
       successStatus?: string;
       localStatus?: string;
+      requireWordPress?: boolean;
     } = {}
   ) {
     const code = nextConfig.contact.recognitionCode.trim();
@@ -5094,14 +5096,40 @@ export default function BruidstaartStudioConfigurator() {
         options.localStatus ||
           "Opslaan in WordPress is mislukt; deze bestelling staat alleen op dit apparaat. Probeer opnieuw."
       );
-      showSaveFeedback();
+      showSaveFeedback("alleen lokaal");
       markFinalOrderProtected(Boolean(draft.config.completed));
-      return true;
+      return !options.requireWordPress;
     }
   }
 
   async function saveDraft(silentMissingCode = false) {
     return saveConfigDraft(config, { silentMissingCode });
+  }
+
+  async function saveAndOpenMail() {
+    if (config.completed) {
+      const missing = getCompletionWarnings(config);
+
+      if (missing.length) {
+        showMissingFieldsMessage(missing);
+        return;
+      }
+    }
+
+    setMailPreparing(true);
+    const savedInWordPress = await saveConfigDraft(config, {
+      successStatus: config.completed
+        ? "Definitieve bestelling opgeslagen in WordPress. De e-mail wordt geopend."
+        : "Bestelling opgeslagen in WordPress. De e-mail wordt geopend.",
+      localStatus:
+        "De e-mail is niet geopend: opslaan in WordPress is mislukt. Er staat wel een lokale noodkopie op dit apparaat. Probeer opnieuw.",
+      requireWordPress: true,
+    });
+    setMailPreparing(false);
+
+    if (!savedInWordPress) return;
+
+    openMail(config.contact.email, STRIK_STUDIO_EMAIL);
   }
 
   async function searchDrafts() {
@@ -7221,7 +7249,7 @@ export default function BruidstaartStudioConfigurator() {
                     <input
                       type="checkbox"
                       checked={config.completed}
-                      onChange={(event) => {
+                      onChange={async (event) => {
                         const checked = event.target.checked;
 
                         if (checked) {
@@ -7237,12 +7265,38 @@ export default function BruidstaartStudioConfigurator() {
                           }
                         }
 
-                        const updated = setConfig((current) => ({
-                          ...current,
+                        const nextConfig = {
+                          ...config,
                           completed: checked,
-                        }));
+                        };
+                        const updated = setConfig(nextConfig);
                         if (updated) {
                           markFinalOrderProtected(false);
+                        }
+
+                        if (updated && checked) {
+                          const savedInWordPress = await saveConfigDraft(
+                            nextConfig,
+                            {
+                              successStatus:
+                                "Bestelling definitief opgeslagen in WordPress.",
+                              localStatus:
+                                "Definitief maken is niet gelukt in WordPress. Alle gegevens zijn als concept op dit apparaat bewaard; probeer opnieuw.",
+                              requireWordPress: true,
+                            }
+                          );
+
+                          if (!savedInWordPress) {
+                            const localConcept = {
+                              ...nextConfig,
+                              completed: false,
+                            };
+                            setConfigState(localConcept);
+                            const localDraft = createDraftFromConfig(localConcept);
+                            saveLocalDraft(localDraft);
+                            mergeDraftIntoAllOverview(localDraft);
+                            markFinalOrderProtected(false);
+                          }
                         }
                       }}
                       className="h-4 w-4 accent-[#8fb184]"
@@ -7324,12 +7378,11 @@ export default function BruidstaartStudioConfigurator() {
                 {!isFinalOrderReadOnly && (
                   <button
                     type="button"
-                    onClick={() =>
-                      openMail(config.contact.email, STRIK_STUDIO_EMAIL)
-                    }
-                    className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
+                    onClick={() => void saveAndOpenMail()}
+                    disabled={mailPreparing}
+                    className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm disabled:cursor-wait disabled:opacity-60"
                   >
-                    Mail bestelling
+                    {mailPreparing ? "Opslaan..." : "Opslaan + mail bestelling"}
                   </button>
                 )}
                 {canManagePaymentFromFinalOrder && (
