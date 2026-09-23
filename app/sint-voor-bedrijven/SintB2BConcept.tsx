@@ -34,6 +34,7 @@ type Product = {
   duoOptions?: ProductVariant[];
   duoImages?: DuoImage[];
   fixedOffer?: boolean;
+  customColorMinimum?: number;
 };
 type ProductSuggestion = {
   product: Product;
@@ -267,6 +268,23 @@ const products: Product[] = [
     retailPriceIncl: 10.85,
     tiers: chocolateLetterTiers,
   },
+  {
+    id: "marsepein-letter",
+    name: "Marsepein letter",
+    description: "Een handgevormde marsepeinletter: glutenvrij, lactosevrij en vegan. Kies ca. 150 of 300 gram. Eigen kleuren zijn mogelijk vanaf 10 stuks.",
+    image: "/sinterklaas/marsepein letter.png",
+    shelfLifeInfo: ["Marsepein · t.h.t. ca. 1 maand"],
+    allergens: ["amandel"],
+    accent: "#728f28",
+    logoAvailable: false,
+    retailPriceIncl: 6.5,
+    variants: [
+      { label: "Ca. 150 gram", retailPriceIncl: 6.5 },
+      { label: "Ca. 300 gram", retailPriceIncl: 12 },
+    ],
+    customColorMinimum: 10,
+    tiers: chocolateLetterTiers,
+  },
 ];
 const chocolateLetterProduct = products[0];
 const shapeLetterProduct = products[1];
@@ -432,6 +450,7 @@ export default function SintB2BConcept() {
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>({});
   const [letterLines, setLetterLines] = useState<B2BLetterLine[]>([]);
   const [choices, setChoices] = useState<Record<string, string>>({});
+  const [customColors, setCustomColors] = useState<Record<string, string>>({});
   const [logo, setLogo] = useState<Record<string, boolean>>({});
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [gallery, setGallery] = useState<{ product: Product; index: number } | null>(null);
@@ -486,7 +505,13 @@ export default function SintB2BConcept() {
         .map((product) => {
           const quantity = quantities[product.id] || 0;
           const choice = choices[product.id] || defaultProductChoice(product);
-          const choiceLabel = productChoiceLabel(product, choice);
+          const baseChoiceLabel = productChoiceLabel(product, choice);
+          const requestedColors = product.customColorMinimum && quantity >= product.customColorMinimum
+            ? customColors[product.id]?.trim()
+            : "";
+          const choiceLabel = requestedColors
+            ? `${baseChoiceLabel} · eigen kleuren: ${requestedColors}`
+            : baseChoiceLabel;
           const configuredProduct = pricedProduct(product, choice);
           const tier = tierFor(configuredProduct, Math.max(1, quantity));
           const withLogo = Boolean(logo[product.id] && productSupportsLogo(product));
@@ -503,7 +528,7 @@ export default function SintB2BConcept() {
         })
         .filter((line) => line.quantity > 0);
     return [...letters, ...otherProducts];
-  }, [choices, letterLines, logo, quantities]);
+  }, [choices, customColors, letterLines, logo, quantities]);
   const letterTotalIncl = roundCents(selected.filter((line) => line.product.id === chocolateLetterProduct.id).reduce((sum, line) => sum + line.totalIncl, 0));
   const letterTotalEx = roundCents(selected.filter((line) => line.product.id === chocolateLetterProduct.id).reduce((sum, line) => sum + line.totalEx, 0));
   const shapeLetterTotalIncl = roundCents(selected.filter((line) => line.product.id === shapeLetterProduct.id).reduce((sum, line) => sum + line.totalIncl, 0));
@@ -679,6 +704,7 @@ export default function SintB2BConcept() {
                 {product.variants&&<select value={selectedOption} onChange={(event)=>setChoices(current=>({...current,[product.id]:event.target.value}))} aria-label={`Uitvoering ${product.name}`} className="mt-2.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-black text-[#5a170f]">{product.variants.map(variant=><option key={variant.label} value={variant.label}>{variant.label}</option>)}</select>}
                 {product.options&&<select value={choices[product.id]||product.options[0]} onChange={(event)=>setChoices(current=>({...current,[product.id]:event.target.value}))} className="mt-2.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-black text-[#5a170f]">{product.options.map(option=><option key={option}>{option}</option>)}</select>}
                 {product.duoOptions&&duoFirst&&duoSecond&&<div className="mt-2.5 grid gap-1.5"><label className="text-[.62rem] font-black text-[#60190f]">Zakje 1<select value={duoFirst.label} onChange={(event)=>setChoices(current=>({...current,[product.id]:duoChoice(event.target.value,duoSecond.label)}))} className="mt-0.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-black text-[#5a170f]">{product.duoOptions.map(option=><option key={option.label} value={option.label}>{option.label} · {money(option.retailPriceIncl)}</option>)}</select></label><label className="text-[.62rem] font-black text-[#60190f]">Zakje 2<select value={duoSecond.label} onChange={(event)=>setChoices(current=>({...current,[product.id]:duoChoice(duoFirst.label,event.target.value)}))} className="mt-0.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-black text-[#5a170f]">{product.duoOptions.map(option=><option key={option.label} value={option.label}>{option.label} · {money(option.retailPriceIncl)}</option>)}</select></label></div>}
+                {product.customColorMinimum&&<label className="mt-2.5 block text-[.62rem] font-black text-[#60190f]">Eigen kleurcombinatie · vanaf {product.customColorMinimum} stuks<input type="text" value={customColors[product.id]||""} onChange={(event)=>setCustomColors(current=>({...current,[product.id]:event.target.value}))} disabled={quantity<product.customColorMinimum} placeholder={quantity<product.customColorMinimum?`Kies minimaal ${product.customColorMinimum} stuks`:"Bijv. rood/wit of bedrijfskleuren"} className="mt-0.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-semibold text-[#5a170f] disabled:cursor-not-allowed disabled:bg-[#f2e7cb] disabled:text-[#9a8175]"/><small className="mt-1 block text-[.56rem] font-semibold leading-snug text-[#8c665d]">{quantity<product.customColorMinimum?`Vanaf ${product.customColorMinimum} stuks kun je hier jouw kleuren invullen.`:"De kleurwens wordt meegenomen in de offerteaanvraag."}</small></label>}
                 {product.personalizationIncluded ? <p className="mt-2 text-[.68rem] font-bold text-[#7e493c]">Gedicht-/logo-opdruk inbegrepen · gedicht zelf aanleveren</p> : productSupportsLogo(product) ? <label className="mt-2 flex items-start gap-1.5 text-[.68rem] font-bold"><input type="checkbox" checked={!!logo[product.id]} onChange={(event)=>setLogo(current=>({...current,[product.id]:event.target.checked}))} className="mt-0.5 h-3.5 w-3.5 shrink-0"/> Eigen logo toevoegen (+ vanaf {money(productLogoPrice(201, includeVat))} p.s.; mogelijkheden op aanvraag)</label> : null}
                 <div className="mt-auto flex items-center gap-1.5 pt-3"><button type="button" aria-label={`Minder ${product.name}`} onClick={()=>setDraftQuantities(current=>({...current,[product.id]:Math.max(0,(current[product.id]??cartQuantity)-1)}))} className="h-9 w-9 rounded-full border-2 border-[#d62d1d] text-base font-black">−</button><input aria-label={`Aantal ${product.name}`} type="number" min="0" value={quantity} onChange={(event)=>setDraftQuantities(current=>({...current,[product.id]:Math.max(0,Number(event.target.value)||0)}))} className="h-9 min-w-0 flex-1 rounded-xl border border-[#e2c99c] bg-white text-center text-sm font-black"/><button type="button" aria-label={`Meer ${product.name}`} onClick={()=>setDraftQuantities(current=>({...current,[product.id]:(current[product.id]??cartQuantity)+1}))} className="h-9 w-9 rounded-full bg-[#d62d1d] text-base font-black text-white">+</button></div>
                 <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[.68rem]"><div className="flex items-center justify-between gap-2"><span className="font-bold text-[#7e493c]">{productPricingLabel(configuredProduct, tier, quantity)}</span><strong className="text-sm text-[#60190f]">{money(productUnitPrice(configuredProduct, tier, includeVat))}</strong></div>{quantity>0&&<div className="mt-1 flex items-center justify-between border-t border-[#eee0c4] pt-1 font-black text-[#60190f]"><span>Totaal</span><span>{money(quantity*(productUnitPrice(configuredProduct, tier, includeVat)+(logo[product.id]&&productSupportsLogo(product)?productLogoPrice(quantity, includeVat):0)))}</span></div>}</div>
