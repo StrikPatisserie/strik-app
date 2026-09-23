@@ -77,14 +77,25 @@ type Delivery = "pickup" | "nijmegen" | "custom";
 const products: Product[] = [
   {
     id: "chocoladeletter",
-    name: "Chocoladeletters",
+    name: "Chocolade spuitletters",
     eyebrow: "Klassieker",
-    description: "Spuitletters A–Z en vormletter S in melk, puur of wit.",
+    description: "Spuitletters A–Z in melk, puur of wit. Kies klein of groot.",
     image: "/sinterklaas/Melk spuitletter 2026.png",
     shelfLifeInfo: ["Chocolade · t.g.t. ca. 30 dagen"],
     allergens: ["gluten", "lactose", "soja"],
     accent: "#b9dddf",
     retailPriceIncl: 8.95,
+    tiers: chocolateLetterTiers,
+  },
+  {
+    id: "chocolade-vormletter",
+    name: "Chocolade vormletter S",
+    description: "Grote vormletter S in melk, puur of wit.",
+    image: "/sinterklaas/vormletters S 2026.png",
+    shelfLifeInfo: ["Chocolade · t.g.t. ca. 30 dagen"],
+    allergens: ["gluten", "lactose", "soja"],
+    accent: "#b9dddf",
+    retailPriceIncl: 13.95,
     tiers: chocolateLetterTiers,
   },
   {
@@ -258,6 +269,7 @@ const products: Product[] = [
   },
 ];
 const chocolateLetterProduct = products[0];
+const shapeLetterProduct = products[1];
 
 function money(value: number) {
   return new Intl.NumberFormat("nl-NL", {
@@ -389,7 +401,11 @@ function bestProductSuggestion(product: Product, quantity: number, includeVat: b
     return {
       product,
       choice,
-      choiceLabel: product.id === chocolateLetterProduct.id ? "Spuitletter S klein · melk" : productChoiceLabel(product, choice),
+      choiceLabel: product.id === chocolateLetterProduct.id
+        ? "Spuitletter S klein · melk"
+        : product.id === shapeLetterProduct.id
+          ? "Vormletter S groot · melk"
+          : productChoiceLabel(product, choice),
       image: productImage(product, choice),
       tier,
       unitPrice,
@@ -433,29 +449,40 @@ export default function SintB2BConcept() {
   const [phone, setPhone] = useState("");
   const [wishes, setWishes] = useState("");
 
-  const letterQuantity = letterLines.reduce((sum, line) => sum + line.quantity, 0);
+  const spoutLetterLines = letterLines.filter((line) => line.style === "spuit");
+  const shapeLetterLines = letterLines.filter((line) => line.style === "vorm");
+  const letterQuantity = spoutLetterLines.reduce((sum, line) => sum + line.quantity, 0);
+  const shapeLetterQuantity = shapeLetterLines.reduce((sum, line) => sum + line.quantity, 0);
   const letterTier = tierFor(chocolateLetterProduct, Math.max(1, letterQuantity));
+  const shapeLetterTier = tierFor(shapeLetterProduct, Math.max(1, shapeLetterQuantity));
   const selected = useMemo(() => {
-    const totalLetters = letterLines.reduce((sum, line) => sum + line.quantity, 0);
-    const sharedLetterTier = tierFor(chocolateLetterProduct, Math.max(1, totalLetters));
-    const letterLogoPriceEx = logo[chocolateLetterProduct.id] ? productLogoPrice(totalLetters, false) : 0;
-    const letterLogoPriceIncl = logo[chocolateLetterProduct.id] ? productLogoPrice(totalLetters, true) : 0;
-    const letters = letterLines.map((line) => {
-      const product = { ...chocolateLetterProduct, retailPriceIncl: line.size === "klein" ? 8.95 : 13.95 };
-      return {
-        key: line.id,
-        product,
-        quantity: line.quantity,
-        tier: sharedLetterTier,
-        choiceLabel: describeB2BLetter(line),
-        withLogo: Boolean(logo[chocolateLetterProduct.id]),
-        logoPriceEx: letterLogoPriceEx,
-        logoPriceIncl: letterLogoPriceIncl,
-        totalEx: roundCents(line.quantity * (productUnitPrice(product, sharedLetterTier, false) + letterLogoPriceEx)),
-        totalIncl: roundCents(line.quantity * (productUnitPrice(product, sharedLetterTier, true) + letterLogoPriceIncl)),
-      };
+    const letters = ([
+      { product: chocolateLetterProduct, style: "spuit" as const },
+      { product: shapeLetterProduct, style: "vorm" as const },
+    ]).flatMap(({ product: baseProduct, style }) => {
+      const matchingLines = letterLines.filter((line) => line.style === style);
+      const totalLetters = matchingLines.reduce((sum, line) => sum + line.quantity, 0);
+      const sharedLetterTier = tierFor(baseProduct, Math.max(1, totalLetters));
+      const letterLogoPriceEx = logo[baseProduct.id] ? productLogoPrice(totalLetters, false) : 0;
+      const letterLogoPriceIncl = logo[baseProduct.id] ? productLogoPrice(totalLetters, true) : 0;
+
+      return matchingLines.map((line) => {
+        const product = { ...baseProduct, retailPriceIncl: line.size === "klein" ? 8.95 : 13.95 };
+        return {
+          key: line.id,
+          product,
+          quantity: line.quantity,
+          tier: sharedLetterTier,
+          choiceLabel: describeB2BLetter(line),
+          withLogo: Boolean(logo[baseProduct.id]),
+          logoPriceEx: letterLogoPriceEx,
+          logoPriceIncl: letterLogoPriceIncl,
+          totalEx: roundCents(line.quantity * (productUnitPrice(product, sharedLetterTier, false) + letterLogoPriceEx)),
+          totalIncl: roundCents(line.quantity * (productUnitPrice(product, sharedLetterTier, true) + letterLogoPriceIncl)),
+        };
+      });
     });
-    const otherProducts = products.slice(1)
+    const otherProducts = products.slice(2)
         .map((product) => {
           const quantity = quantities[product.id] || 0;
           const choice = choices[product.id] || defaultProductChoice(product);
@@ -479,6 +506,8 @@ export default function SintB2BConcept() {
   }, [choices, letterLines, logo, quantities]);
   const letterTotalIncl = roundCents(selected.filter((line) => line.product.id === chocolateLetterProduct.id).reduce((sum, line) => sum + line.totalIncl, 0));
   const letterTotalEx = roundCents(selected.filter((line) => line.product.id === chocolateLetterProduct.id).reduce((sum, line) => sum + line.totalEx, 0));
+  const shapeLetterTotalIncl = roundCents(selected.filter((line) => line.product.id === shapeLetterProduct.id).reduce((sum, line) => sum + line.totalIncl, 0));
+  const shapeLetterTotalEx = roundCents(selected.filter((line) => line.product.id === shapeLetterProduct.id).reduce((sum, line) => sum + line.totalEx, 0));
   const subtotalEx = roundCents(selected.reduce((sum, line) => sum + line.totalEx, 0));
   const subtotalIncl = roundCents(selected.reduce((sum, line) => sum + line.totalIncl, 0));
   const deliveryFeeEx = delivery === "nijmegen" && selected.length ? NIJMEGEN_DELIVERY_FEE : 0;
@@ -528,13 +557,14 @@ export default function SintB2BConcept() {
   ].join("\r\n");
 
   function addSuggestedProduct(product: Product, suggestedChoice: string) {
-    if (product.id === chocolateLetterProduct.id) {
+    if (product.id === chocolateLetterProduct.id || product.id === shapeLetterProduct.id) {
+      const isShapeLetter = product.id === shapeLetterProduct.id;
       setLetterLines((current) => [...current, {
         id: `letter-suggested-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        style: "spuit",
+        style: isShapeLetter ? "vorm" : "spuit",
         chocolate: "melk",
         letter: "S",
-        size: "klein",
+        size: isShapeLetter ? "groot" : "klein",
         quantity: recipientCount,
         specialRequests: [],
       }]);
@@ -594,8 +624,38 @@ export default function SintB2BConcept() {
           <div className="max-w-sm"><div className="inline-flex rounded-full border border-[#a24629] bg-[#fff7df] p-1 text-xs font-black"><button type="button" aria-pressed={includeVat} onClick={() => setIncludeVat(true)} className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Incl. btw</button><button type="button" aria-pressed={!includeVat} onClick={() => setIncludeVat(false)} className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Excl. btw</button></div><p className="mt-1 max-w-xs text-[.58rem] font-semibold italic leading-snug text-[#7e2b1c] sm:text-[.62rem]">De bekende winkelprijzen zijn definitief; staffels en overige prijzen zijn voorstellen. Voor voedingsmiddelen geldt 9% btw.</p></div>
         </div>
         <div className="mx-auto grid w-[90%] gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-          <B2BChocolateLetters lines={letterLines} onChange={setLetterLines} withLogo={!!logo[chocolateLetterProduct.id]} onLogoChange={(value) => setLogo((current) => ({ ...current, [chocolateLetterProduct.id]: value }))} onOpenShelfLife={() => setProductInfo({ product: chocolateLetterProduct, section: "shelfLife" })} onOpenAllergens={() => setProductInfo({ product: chocolateLetterProduct, section: "allergens" })} tiers={chocolateLetterTiers} includeVat={includeVat} activeTierLabel={letterTier.label} total={includeVat ? letterTotalIncl : letterTotalEx} />
-          {products.slice(1).map((product) => {
+          <B2BChocolateLetters
+            productId={chocolateLetterProduct.id}
+            productName={chocolateLetterProduct.name}
+            eyebrow={chocolateLetterProduct.eyebrow}
+            style="spuit"
+            lines={spoutLetterLines}
+            onChange={(nextLines) => setLetterLines((current) => [...nextLines, ...current.filter((line) => line.style !== "spuit")])}
+            withLogo={!!logo[chocolateLetterProduct.id]}
+            onLogoChange={(value) => setLogo((current) => ({ ...current, [chocolateLetterProduct.id]: value }))}
+            onOpenShelfLife={() => setProductInfo({ product: chocolateLetterProduct, section: "shelfLife" })}
+            onOpenAllergens={() => setProductInfo({ product: chocolateLetterProduct, section: "allergens" })}
+            tiers={chocolateLetterTiers}
+            includeVat={includeVat}
+            activeTierLabel={letterTier.label}
+            total={includeVat ? letterTotalIncl : letterTotalEx}
+          />
+          <B2BChocolateLetters
+            productId={shapeLetterProduct.id}
+            productName={shapeLetterProduct.name}
+            style="vorm"
+            lines={shapeLetterLines}
+            onChange={(nextLines) => setLetterLines((current) => [...current.filter((line) => line.style !== "vorm"), ...nextLines])}
+            withLogo={!!logo[shapeLetterProduct.id]}
+            onLogoChange={(value) => setLogo((current) => ({ ...current, [shapeLetterProduct.id]: value }))}
+            onOpenShelfLife={() => setProductInfo({ product: shapeLetterProduct, section: "shelfLife" })}
+            onOpenAllergens={() => setProductInfo({ product: shapeLetterProduct, section: "allergens" })}
+            tiers={chocolateLetterTiers}
+            includeVat={includeVat}
+            activeTierLabel={shapeLetterTier.label}
+            total={includeVat ? shapeLetterTotalIncl : shapeLetterTotalEx}
+          />
+          {products.slice(2).map((product) => {
             const cartQuantity = quantities[product.id] || 0;
             const quantity = draftQuantities[product.id] ?? cartQuantity;
             const selectedOption = choices[product.id] || defaultProductChoice(product);
