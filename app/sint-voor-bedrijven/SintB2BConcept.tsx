@@ -537,11 +537,11 @@ export default function SintB2BConcept() {
               <h1 className="text-[clamp(6.5rem,12vw,10.5rem)] font-black leading-[.68] tracking-[-.08em] text-white">SINT</h1>
               <p className="-mt-1 self-end pr-2 font-[Butterscotch] text-[clamp(2rem,3.2vw,3.5rem)] leading-none text-[#d62d1d]">Met een Strik</p>
             </div>
-            <div className="relative w-full self-end rounded-[50%] px-8 py-4 sm:w-[52%] sm:max-w-none lg:w-[40rem] lg:px-10">
-              <span aria-hidden="true" className="pointer-events-none absolute -inset-x-2 inset-y-0 rotate-[1.25deg] rounded-[50%] border border-[#749178]/55" />
-              <span aria-hidden="true" className="pointer-events-none absolute -inset-x-0.5 inset-y-[5px] -rotate-[.75deg] rounded-[50%] border border-[#749178]/35" />
-              <div className="relative flex items-center justify-between gap-4">
-                <div><p className="text-[.58rem] font-black uppercase tracking-[.18em] text-[#55725f]">Interactieve keuzehulp</p><p className="mt-0.5 font-[Butterscotch] text-3xl leading-none text-[#b65e3e]">Vind jouw passende cadeau</p><p className="mt-1 text-[.65rem] font-bold text-[#765449]">Aantal, budget en logo — wij rekenen mee.</p></div>
+            <div className="relative w-full self-end rounded-[50%] px-7 py-6 sm:w-[58%] sm:max-w-none sm:px-8 lg:w-[44rem] lg:px-10">
+              <span aria-hidden="true" className="pointer-events-none absolute -inset-x-5 -inset-y-3 rotate-[1.25deg] rounded-[50%] border border-[#749178]/55" />
+              <span aria-hidden="true" className="pointer-events-none absolute -inset-x-3 -inset-y-1 -rotate-[.75deg] rounded-[50%] border border-[#749178]/35" />
+              <div className="relative flex items-center justify-center gap-5">
+                <div><p className="text-[.58rem] font-black uppercase tracking-[.18em] text-white">Interactieve keuzehulp</p><p className="mt-0.5 font-[Butterscotch] text-3xl leading-none text-white">Vind jouw passende cadeau</p><p className="mt-1 text-[.65rem] font-bold text-white">Aantal, budget en logo — wij rekenen mee.</p></div>
                 <button type="button" onClick={() => setFinderOpen(true)} aria-label="Open de interactieve cadeaukeuzehulp" className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#557965] text-white shadow-[0_8px_20px_rgba(60,91,70,.25)] transition hover:-translate-y-0.5 hover:bg-[#466956]">
                   <svg aria-hidden="true" viewBox="0 0 48 48" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h27v20H8z"/><path d="M5 14h33v8H5zM21.5 14v27"/><path d="M21 14c-5 0-9-2-9-5 0-2 1.7-3.5 4-3.5 3.7 0 5.5 5.2 5.5 8.5ZM22 14c5 0 9-2 9-5 0-2-1.7-3.5-4-3.5-3.7 0-5.5 5.2-5.5 8.5Z"/></svg>
                   <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#d62d1d] text-[.65rem] font-black">?</span>
