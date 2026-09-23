@@ -36,6 +36,7 @@ type Product = {
   fixedOffer?: boolean;
   customColorMinimum?: number;
   defaultColors?: string;
+  vegan?: boolean;
 };
 type ProductSuggestion = {
   product: Product;
@@ -285,6 +286,7 @@ const products: Product[] = [
     ],
     customColorMinimum: 5,
     defaultColors: "rood/beige",
+    vegan: true,
     tiers: chocolateLetterTiers,
   },
 ];
@@ -717,6 +719,7 @@ export default function SintB2BConcept() {
                   <button type="button" onClick={()=>setProductInfo({product,section:"shelfLife"})} aria-label={`Bekijk houdbaarheid van ${product.name}`} title="Houdbaarheid" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#557965] shadow-md backdrop-blur transition hover:bg-white"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></button>
                   <button type="button" onClick={()=>setProductInfo({product,section:"allergens"})} aria-label={`Bekijk allergenen van ${product.name}`} title="Allergenen" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#6e7858] shadow-md backdrop-blur transition hover:bg-white"><WheatIcon /></button>
                 </div>
+                {product.vegan&&<span aria-label="Vegan product" title="Vegan" className="absolute bottom-2.5 right-2.5 flex items-center gap-1 rounded-full bg-[#68872d] px-2 py-1 text-[.56rem] font-black uppercase tracking-wider text-white shadow-md"><svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M19.5 4.5C12 4.8 7.2 8.2 6.2 14.7c4.8.8 10.8-1.6 13.3-10.2Z"/><path d="M4.5 19.5c2.7-5.2 6.5-8.5 11.5-10.5"/></svg>Vegan</span>}
                 {product.gallery&&product.gallery.length>1&&<button type="button" onClick={()=>setGallery({product,index:selectedGalleryIndex})} className="absolute bottom-2.5 left-2.5 rounded-full bg-white/95 px-2 py-0.5 text-[.56rem] font-black text-[#60190f] shadow-md backdrop-blur transition hover:bg-white">▧ Meer foto&apos;s</button>}
               </div>
               <div className="flex flex-1 flex-col p-[.9rem]"><h3 className="text-lg font-black leading-tight text-[#60190f]">{product.name}</h3><p className="mt-1.5 min-h-9 text-[.68rem] font-semibold leading-relaxed text-[#7e493c]">{product.description}</p>
