@@ -24,7 +24,7 @@ export default function BusinessSalesPage() {
           tone="green"
         />
       </div>
-      <ExternalCampaignLink href="/sint-voor-bedrijven" title="Bekijk de bedrijfsfolder" />
+      <ExternalCampaignLink href="/sint-voor-bedrijven" title="Bekijk de Sint- en kerstfolders" />
     </StrikShell>
   );
 }

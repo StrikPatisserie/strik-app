@@ -24,7 +24,10 @@ export default function AppChrome({
     pathname === "/update-password" ||
     pathname.startsWith("/auth/");
   const isPrintArea = pathname === "/bakkerij/logistiek/arend-print";
-  const isPublicCampaign = pathname === "/sint-voor-bedrijven" || pathname === "/lettershop";
+  const isPublicCampaign =
+    pathname === "/sint-voor-bedrijven" ||
+    pathname === "/kerst-voor-bedrijven" ||
+    pathname === "/lettershop";
   const isLogistiekWorkArea =
     pathname === "/bakkerij/logistiek" ||
     pathname.startsWith("/bakkerij/logistiek/") ||

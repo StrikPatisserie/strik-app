@@ -12,6 +12,7 @@ const PUBLIC_PATHS = new Set([
   "/auth/callback",
   "/auth/signout",
   "/sint-voor-bedrijven",
+  "/kerst-voor-bedrijven",
   "/lettershop",
 ]);
 
