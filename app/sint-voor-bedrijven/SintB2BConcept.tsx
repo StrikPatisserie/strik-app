@@ -75,6 +75,31 @@ const chocolateLetterTiers: PriceTier[] = [
   { min: 201, label: ">200", discountPercent: 20 },
 ];
 type Delivery = "pickup" | "nijmegen" | "custom";
+type DeliveryMomentType = "date" | "week";
+
+const DUTCH_DELIVERY_DATE_FORMATTER = new Intl.DateTimeFormat("nl-NL", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+function formatDeliveryDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return "nog niet gekozen";
+  return DUTCH_DELIVERY_DATE_FORMATTER.format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+const DELIVERY_WEEK_OPTIONS = Array.from({ length: 14 }, (_, index) => {
+  const monday = new Date(Date.UTC(2026, 8, 21 + index * 7));
+  const value = monday.toISOString().slice(0, 10);
+  return {
+    value,
+    weekNumber: 39 + index,
+    label: `Week ${39 + index} · maandag ${formatDeliveryDate(value).replace(/^maandag /, "")}`,
+  };
+});
 
 const products: Product[] = [
   {
@@ -481,6 +506,9 @@ export default function SintB2BConcept() {
   const [includeVat, setIncludeVat] = useState(true);
   const [delivery, setDelivery] = useState<Delivery>("pickup");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryMomentType, setDeliveryMomentType] = useState<DeliveryMomentType>("date");
+  const [requestedDeliveryDate, setRequestedDeliveryDate] = useState("");
+  const [requestedDeliveryWeek, setRequestedDeliveryWeek] = useState("");
   const [company, setCompany] = useState("");
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
@@ -564,7 +592,22 @@ export default function SintB2BConcept() {
     .map((product) => bestProductSuggestion(product, Math.max(1, recipientCount), includeVat, wantsLogo))
     .filter((suggestion): suggestion is ProductSuggestion => Boolean(suggestion && suggestion.unitPrice <= budget))
     .sort((first, second) => first.unitPrice - second.unitPrice), [budget, recipientCount, wantsLogo, includeVat]);
-  const canOpenEmail = Boolean(company.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
+  const selectedDeliveryWeek = DELIVERY_WEEK_OPTIONS.find((option) => option.value === requestedDeliveryWeek);
+  const requestedDeliveryMoment = deliveryMomentType === "date"
+    ? requestedDeliveryDate
+      ? `Specifieke gewenste leverdag: ${formatDeliveryDate(requestedDeliveryDate)}`
+      : "Specifieke gewenste leverdag: nog niet gekozen"
+    : selectedDeliveryWeek
+      ? `Gewenste leverweek: week ${selectedDeliveryWeek.weekNumber}, vanaf maandag ${formatDeliveryDate(selectedDeliveryWeek.value).replace(/^maandag /, "")}`
+      : "Gewenste leverweek: nog niet gekozen";
+  const hasRequestedDeliveryMoment = deliveryMomentType === "date" ? Boolean(requestedDeliveryDate) : Boolean(selectedDeliveryWeek);
+  const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const canOpenEmail = Boolean(company.trim() && hasValidEmail && hasRequestedDeliveryMoment);
+  const missingQuoteDetails = [
+    !company.trim() ? "de bedrijfsnaam" : "",
+    !hasValidEmail ? "een geldig e-mailadres" : "",
+    !hasRequestedDeliveryMoment ? "een gewenst levermoment" : "",
+  ].filter(Boolean).join(", ");
   const offerText = [
     "Beste Strik Patisserie,",
     "",
@@ -584,6 +627,10 @@ export default function SintB2BConcept() {
       `   Regeltotaal: ${money(lineTotalEx)} excl. btw`,
       "",
     ]),
+    "GEWENST LEVERMOMENT",
+    requestedDeliveryMoment,
+    "Onder voorbehoud: het levermoment is pas definitief nadat Strik Patisserie de aanvraag heeft goedgekeurd.",
+    "",
     "LEVERING",
     delivery === "pickup" ? "Ophalen bij Strik - gratis" : delivery === "nijmegen" ? `Bezorgen in/rondom Nijmegen - ${NIJMEGEN_DELIVERY_FEE_LABEL} (afhankelijk van het afleveradres)` : "Bezorgen buiten Nijmegen - prijs op aanvraag",
     ...(delivery !== "pickup" ? [`Afleveradres: ${deliveryAddress.trim() || "nog af te stemmen"}`] : []),
@@ -739,14 +786,15 @@ export default function SintB2BConcept() {
 
       {quoteOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#391008]/55 p-0 sm:items-center sm:p-5"><section role="dialog" aria-modal="true" aria-labelledby="quote-title" className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#d62d1d]">Live prijsindicatie</p><h2 id="quote-title" className="mt-1 text-3xl font-black text-[#60190f]">Jouw offerteaanvraag</h2></div><button type="button" aria-label="Sluiten" onClick={() => setQuoteOpen(false)} className="h-10 w-10 rounded-full bg-white text-lg font-black">×</button></div>
         <div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({key,product,quantity,tier,choiceLabel,withLogo,logoPriceEx,logoPriceIncl,totalEx:lineTotalEx,totalIncl:lineTotalIncl})=><div key={key} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choiceLabel} · {money(productUnitPrice(product,tier,includeVat))} p.s. · {productPricingDescription(product,tier)}</p>{withLogo && <p className="mt-1 font-bold text-[#d62d1d]">Eigen logo: +{money(includeVat ? logoPriceIncl : logoPriceEx)} p.s. ({money(quantity * (includeVat ? logoPriceIncl : logoPriceEx))} totaal)</p>}</div><strong>{money(includeVat ? lineTotalIncl : lineTotalEx)}</strong></div>)}</div>
+        <fieldset className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><legend className="px-1 text-sm font-black text-[#60190f]">Gewenst levermoment <span className="text-[#d62d1d]">*</span></legend><div className="grid gap-2 sm:grid-cols-2">{([{value:"date",label:"Specifieke dag"},{value:"week",label:"Leverweek"}] as const).map((option)=><label key={option.value} className={`cursor-pointer rounded-xl border px-3 py-2 text-sm font-black ${deliveryMomentType===option.value?"border-[#d62d1d] bg-[#fff0e8]":"border-[#dfd0b7] bg-[#fffaf0]"}`}><input type="radio" name="deliveryMomentType" value={option.value} checked={deliveryMomentType===option.value} onChange={()=>setDeliveryMomentType(option.value)} className="mr-2 accent-[#d62d1d]"/>{option.label}</label>)}</div>{deliveryMomentType==="date"?<label className="mt-3 block text-xs font-black text-[#60190f]">Kies je gewenste leverdag<input type="date" value={requestedDeliveryDate} onChange={(event)=>setRequestedDeliveryDate(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-[#dfd0b7] bg-white px-3 text-sm font-bold"/></label>:<label className="mt-3 block text-xs font-black text-[#60190f]">Kies je gewenste leverweek<select value={requestedDeliveryWeek} onChange={(event)=>setRequestedDeliveryWeek(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-[#dfd0b7] bg-white px-3 text-sm font-bold"><option value="">Kies een week</option>{DELIVERY_WEEK_OPTIONS.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}<p className="mt-3 rounded-lg bg-[#fff0e8] px-3 py-2 text-[.68rem] font-bold leading-snug text-[#8a3928]">Dit is een voorkeur. Het levermoment is pas definitief nadat Strik Patisserie je aanvraag heeft goedgekeurd.</p></fieldset>
         <fieldset className="mt-5"><legend className="text-sm font-black text-[#60190f]">Hoe wil je jouw cadeaus ontvangen?</legend><div className="mt-2 grid gap-2 sm:grid-cols-3">{([{value:"pickup", label:"Ophalen", detail:"Gratis"},{value:"nijmegen", label:"Bezorgen Nijmegen e.o.", detail:`+ ${NIJMEGEN_DELIVERY_FEE_LABEL} · afhankelijk van adres`},{value:"custom", label:"Overig adres", detail:"Prijs op aanvraag"}] as const).map((option) => <label key={option.value} className={`cursor-pointer rounded-xl border p-3 text-sm ${delivery === option.value ? "border-[#d62d1d] bg-[#fff0e8]" : "border-[#dfd0b7] bg-white"}`}><input type="radio" name="delivery" value={option.value} checked={delivery === option.value} onChange={() => setDelivery(option.value)} className="mr-2 accent-[#d62d1d]"/><strong>{option.label}</strong><span className="mt-1 block pl-5 text-xs text-[#7e493c]">{option.detail}</span></label>)}</div></fieldset>
         {delivery !== "pickup" && <label className="mt-3 block text-sm font-bold text-[#60190f]">Afleveradres<input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Straat, huisnummer, postcode en plaats" className="mt-2 h-12 w-full rounded-xl border border-[#dfd0b7] bg-white px-4"/></label>}
         <div className="mt-5 space-y-2 border-t border-[#eadbc3] pt-4 text-sm"><div className="flex justify-between"><span>Producten incl. gekozen logo&apos;s</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Bezorgen</span><strong>{delivery === "pickup" ? "Gratis" : delivery === "nijmegen" ? NIJMEGEN_DELIVERY_FEE_LABEL : "Op aanvraag"}</strong></div></div>
         <div className="mt-4 flex justify-between gap-3 border-t-2 border-[#60190f] pt-4 text-xl font-black"><span>Producttotaal {includeVat ? "incl." : "excl."} btw</span><span className="text-right">{money(total)}{delivery !== "pickup" && <small className="block text-xs">+ bezorgkosten</small>}</span></div>
         <p className="mt-1 text-right text-xs font-bold text-[#8b7669]">Ook {includeVat ? `${money(totalEx)} excl. btw` : `${money(totalIncl)} incl. btw`}</p>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2"><input aria-label="Bedrijfsnaam" value={company} onChange={(event) => setCompany(event.target.value)} placeholder="Bedrijfsnaam" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Contactpersoon" value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Contactpersoon" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="E-mailadres" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="E-mailadres" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Telefoonnummer" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="Telefoonnummer" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><textarea aria-label="Overige wensen" value={wishes} onChange={(event) => setWishes(event.target.value)} placeholder="Gewenste leverdatum, verpakking of andere wensen" className="min-h-28 rounded-xl border border-[#dfd0b7] bg-white p-4 font-bold sm:col-span-2"/></div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2"><input aria-label="Bedrijfsnaam" value={company} onChange={(event) => setCompany(event.target.value)} placeholder="Bedrijfsnaam" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Contactpersoon" value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Contactpersoon" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="E-mailadres" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="E-mailadres" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Telefoonnummer" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="Telefoonnummer" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><textarea aria-label="Overige wensen" value={wishes} onChange={(event) => setWishes(event.target.value)} placeholder="Verpakking, personalisatie of andere wensen" className="min-h-28 rounded-xl border border-[#dfd0b7] bg-white p-4 font-bold sm:col-span-2"/></div>
         <details className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><summary className="cursor-pointer text-sm font-black text-[#60190f]">Bekijk eerst de e-mailtekst</summary><pre className="mt-4 whitespace-pre-wrap break-words border-t border-[#eadbc3] pt-4 font-sans text-xs leading-relaxed text-[#5a4038]">{offerText}</pre></details>
-        {canOpenEmail ? <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sinterklaas 2026 - ${company.trim()}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a> : <div className="mt-5"><button type="button" disabled className="w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white opacity-45">Open aanvraag in mijn e-mailapp →</button><p className="mt-2 text-center text-xs font-bold text-[#9a3d21]">Vul eerst de bedrijfsnaam en een geldig e-mailadres in.</p></div>}
+        {canOpenEmail ? <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sinterklaas 2026 - ${company.trim()}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a> : <div className="mt-5"><button type="button" disabled className="w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white opacity-45">Open aanvraag in mijn e-mailapp →</button><p className="mt-2 text-center text-xs font-bold text-[#9a3d21]">Vul eerst {missingQuoteDetails} in.</p></div>}
         <p className="mt-3 text-center text-xs font-bold text-[#8b7669]">Je e-mailapp opent met een overzichtelijke aanvraag. Je verstuurt hem zelf; er gaat niet automatisch iets weg. De overige producten en bezorgkosten zijn nog conceptprijzen.</p>
       </section></div>}
       {productInfo && <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#391008]/60 p-0 sm:items-center sm:p-5" onClick={() => setProductInfo(null)}>
