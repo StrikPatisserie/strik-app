@@ -156,7 +156,7 @@ const products: Product[] = [
     id: "klein-sintpakket",
     name: "Klein Sintpakket",
     description: "Kleine speculaaspop, kleine chocoladeletter en ca. 150 gram gevuld speculaas. Kies met of zonder amandel.",
-    image: "/sinterklaas/Pakketje 1 pop-gevuld-letter.png",
+    image: "/sinterklaas/Pakketje 1 pop-gevuld-letter2.png",
     shelfLifeInfo: [
       "Speculaaspop · t.g.t. ca. 30 dagen",
       "Chocoladeletter · t.g.t. ca. 30 dagen",
