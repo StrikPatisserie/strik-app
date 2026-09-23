@@ -67,11 +67,11 @@ export default function KerstB2BConcept() {
             Sinds 1937 · ambacht uit Nijmegen
           </p>
           <div className="mt-1 grid items-center gap-6 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="relative w-fit justify-self-start pb-8 sm:pb-10">
+            <div className="w-fit justify-self-start">
               <h1 className="text-[clamp(5rem,11vw,9.5rem)] font-black leading-[.7] tracking-[-.075em] text-white">
                 KERST
               </h1>
-              <p className="absolute bottom-0 right-0 whitespace-nowrap pr-1 font-[Butterscotch] text-[clamp(2rem,3.2vw,3.5rem)] leading-none text-[#d8b56d]">
+              <p className="-mt-1 whitespace-nowrap pl-1 font-[Butterscotch] text-[clamp(1.8rem,2.8vw,3rem)] leading-none text-[#d8b56d] sm:-mt-2 sm:pl-2">
                 Met een Strik
               </p>
             </div>
