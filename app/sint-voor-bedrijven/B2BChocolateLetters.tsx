@@ -55,8 +55,6 @@ export default function B2BChocolateLetters({
   onChange,
   withLogo,
   onLogoChange,
-  giftWrap,
-  onGiftWrapChange,
   tiers,
   includeVat,
   activeTierLabel,
@@ -66,8 +64,6 @@ export default function B2BChocolateLetters({
   onChange: (lines: B2BLetterLine[]) => void;
   withLogo: boolean;
   onLogoChange: (value: boolean) => void;
-  giftWrap: boolean;
-  onGiftWrapChange: (value: boolean) => void;
   tiers: Tier[];
   includeVat: boolean;
   activeTierLabel: string;
@@ -88,15 +84,6 @@ export default function B2BChocolateLetters({
     setChocolate(value);
     if (value !== "puur") {
       setSpecialRequests((current) => current.filter((request) => request !== "vegan" && request !== "lactosevrij"));
-    }
-  }
-
-  function choosePhoto(photo: (typeof PHOTOS)[number]) {
-    setStyle(photo.style);
-    if (photo.style === "spuit") chooseChocolate(photo.chocolate);
-    if (photo.style === "vorm") {
-      setLetter("S");
-      setSize("groot");
     }
   }
 
@@ -129,20 +116,16 @@ export default function B2BChocolateLetters({
       </div>
       <div className="flex flex-1 flex-col p-4">
         <h3 className="text-xl font-black leading-tight text-[#60190f]">Chocoladeletters</h3>
-        <p className="mt-2 text-xs font-semibold leading-relaxed text-[#7e493c]">Spuitletters A–Z, klein of groot. Vormletter S alleen groot. Melk, puur of wit.</p>
-        <div className="mt-3 grid grid-cols-4 gap-1">
-          {PHOTOS.map((photo) => <button key={photo.id} type="button" onClick={() => choosePhoto(photo)} aria-label={photo.label} aria-pressed={photo.id === selectedPhoto.id} className={`overflow-hidden rounded-lg border-2 bg-white ${photo.id === selectedPhoto.id ? "border-[#d62d1d]" : "border-transparent"}`}><Image src={photo.src} alt="" width={100} height={100} className="h-9 w-full object-cover" /><span className="block truncate px-1 py-1 text-center text-[.5rem] font-bold">{photo.label}</span></button>)}
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-1.5">
-          <label className="text-[.68rem] font-black">Soort<select value={style} onChange={(event) => { const next = event.target.value as B2BLetterLine["style"]; setStyle(next); if (next === "vorm") { setLetter("S"); setSize("groot"); } }} className="mt-1 h-9 w-full rounded-lg border border-[#e2c99c] bg-white px-2 text-xs"><option value="spuit">Spuit</option><option value="vorm">Vorm</option></select></label>
-          <label className="text-[.68rem] font-black">Chocolade<select value={chocolate} onChange={(event) => chooseChocolate(event.target.value as B2BLetterLine["chocolate"])} className="mt-1 h-9 w-full rounded-lg border border-[#e2c99c] bg-white px-2 text-xs"><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option></select></label>
-          <label className="text-[.68rem] font-black">Letter{style === "vorm" ? <span className="mt-1 flex h-9 items-center rounded-lg border border-[#e2c99c] bg-white px-3 text-xs">S</span> : <select value={letter} onChange={(event) => setLetter(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-[#e2c99c] bg-white px-2 text-xs">{LETTERS.map((item) => <option key={item}>{item}</option>)}</select>}</label>
-          <label className="text-[.68rem] font-black">Formaat{style === "vorm" ? <span className="mt-1 flex h-9 items-center rounded-lg border border-[#e2c99c] bg-white px-3 text-xs">Groot</span> : <select value={size} onChange={(event) => setSize(event.target.value as B2BLetterLine["size"])} className="mt-1 h-9 w-full rounded-lg border border-[#e2c99c] bg-white px-2 text-xs"><option value="klein">Klein</option><option value="groot">Groot</option></select>}</label>
+        <div className="mt-2 grid grid-cols-2 gap-1">
+          <label className="text-[.65rem] font-black">Soort<select value={style} onChange={(event) => { const next = event.target.value as B2BLetterLine["style"]; setStyle(next); if (next === "vorm") { setLetter("S"); setSize("groot"); } }} className="mt-0.5 h-8 w-full rounded-lg border border-[#e2c99c] bg-white px-2 text-xs"><option value="spuit">Spuit</option><option value="vorm">Vorm</option></select></label>
+          <label className="text-[.65rem] font-black">Chocolade<select value={chocolate} onChange={(event) => chooseChocolate(event.target.value as B2BLetterLine["chocolate"])} className="mt-0.5 h-8 w-full rounded-lg border border-[#e2c99c] bg-white px-2 text-xs"><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option></select></label>
+          <label className="text-[.65rem] font-black">Letter{style === "vorm" ? <span className="mt-0.5 flex h-8 items-center rounded-lg border border-[#e2c99c] bg-white px-3 text-xs">S</span> : <select value={letter} onChange={(event) => setLetter(event.target.value)} className="mt-0.5 h-8 w-full rounded-lg border border-[#e2c99c] bg-white px-2 text-xs">{LETTERS.map((item) => <option key={item}>{item}</option>)}</select>}</label>
+          <label className="text-[.65rem] font-black">Formaat{style === "vorm" ? <span className="mt-0.5 flex h-8 items-center rounded-lg border border-[#e2c99c] bg-white px-3 text-xs">Groot</span> : <select value={size} onChange={(event) => setSize(event.target.value as B2BLetterLine["size"])} className="mt-0.5 h-8 w-full rounded-lg border border-[#e2c99c] bg-white px-2 text-xs"><option value="klein">Klein</option><option value="groot">Groot</option></select>}</label>
         </div>
         <details className="mt-2 rounded-xl border border-[#e2c99c] bg-white/70 p-2 text-xs"><summary className="cursor-pointer font-black">Speciaal verzoek</summary><div className="mt-2 flex flex-wrap gap-2">{REQUESTS.map((request) => <label key={request.id} className="flex items-center gap-1 text-[.68rem] font-bold"><input type="checkbox" checked={specialRequests.includes(request.id)} disabled={(request.id === "vegan" || request.id === "lactosevrij") && chocolate !== "puur"} onChange={(event) => setSpecialRequests((current) => event.target.checked ? [...current, request.id] : current.filter((item) => item !== request.id))} />{request.label}</label>)}</div><p className="mt-2 text-[.68rem] text-[#7e493c]">Vegan en lactosevrij alleen bij puur. Kan sporen van allergenen bevatten.</p></details>
-        <div className="mt-2 flex items-end gap-2"><label className="text-[.68rem] font-black">Aantal<input type="number" min="1" max="10000" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(10000, Number(event.target.value) || 1)))} className="mt-1 h-10 w-16 rounded-lg border border-[#e2c99c] bg-white text-center text-xs" /></label><button type="button" onClick={addLine} className="h-10 flex-1 rounded-lg bg-[#d62d1d] px-3 text-xs font-black text-white">+ Voeg toe</button></div>
+        <div className="mt-2 flex items-end gap-2"><label className="text-[.68rem] font-black">Aantal<input type="number" min="1" max="10000" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(10000, Number(event.target.value) || 1)))} className="mt-1 h-10 w-16 rounded-lg border border-[#e2c99c] bg-white text-center text-xs" /></label><button type="button" onClick={addLine} className="h-10 flex-1 rounded-lg bg-[#d62d1d] px-3 text-xs font-black text-white">In mandje</button></div>
         {lines.length > 0 && <div className="mt-4 rounded-xl bg-white p-3"><p className="mb-2 text-sm font-black">Jouw letters · {totalQuantity} stuks</p><div className="space-y-1">{lines.map((line) => <div key={line.id} className="flex items-center gap-2 border-t border-[#eee0c4] py-1.5 text-xs"><span className="min-w-0 flex-1 font-bold">{describeB2BLetter(line)}</span><input aria-label={`Aantal ${describeB2BLetter(line)}`} type="number" min="1" max="10000" value={line.quantity} onChange={(event) => onChange(lines.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, Math.min(10000, Number(event.target.value) || 1)) } : item))} className="w-14 rounded-md border border-[#e2c99c] p-1 text-center" /><button type="button" aria-label={`${describeB2BLetter(line)} verwijderen`} onClick={() => onChange(lines.filter((item) => item.id !== line.id))} className="px-1 text-lg font-black text-[#a32b1c]">×</button></div>)}</div></div>}
-        <div className="mt-3 grid gap-1.5 text-[.68rem] font-bold text-[#60190f]"><label className="flex items-center gap-2"><input type="checkbox" checked={withLogo} onChange={(event) => onLogoChange(event.target.checked)} />Eigen logo · +{money(logoPrice(priceQuantity, includeVat))} p.s.</label><label className="flex items-center gap-2"><input type="checkbox" checked={giftWrap} onChange={(event) => onGiftWrapChange(event.target.checked)} />Cadeaupapier · +{money(includeVat ? 1 : tierPrice(1, 0, false))} p.s.</label></div>
+        <label className="mt-3 flex items-center gap-2 text-[.68rem] font-bold text-[#60190f]"><input type="checkbox" checked={withLogo} onChange={(event) => onLogoChange(event.target.checked)} />Eigen logo · +{money(logoPrice(priceQuantity, includeVat))} p.s.</label>
         <div className="mt-3 rounded-xl bg-white px-3 py-2 text-xs text-[#60190f]"><div className="flex items-center justify-between gap-2"><span><strong>{totalQuantity ? `${totalQuantity} letters` : `Prijs bij ${quantity} ${quantity === 1 ? "letter" : "letters"}`}</strong><small className="block text-[.62rem] font-semibold text-[#8c665d]">Staffel {currentTier.label}{currentTier.discountPercent ? ` · ${currentTier.discountPercent}% korting` : " · winkelprijs"}</small></span><strong className="text-right">Klein {money(tierPrice(8.95, currentTier.discountPercent || 0, includeVat))}<small className="block">Groot {money(tierPrice(13.95, currentTier.discountPercent || 0, includeVat))}</small></strong></div>{totalQuantity > 0 && <p className="mt-2 border-t border-[#eee0c4] pt-2 text-right font-black">Totaal {money(total)}</p>}</div>
         <details className="mt-2 text-xs text-[#7e493c]"><summary className="cursor-pointer font-bold underline underline-offset-2">Alle staffelprijzen bekijken</summary><div className="mt-2 overflow-hidden rounded-lg border border-[#eadbc3] bg-white"><div className="grid grid-cols-3 bg-[#f8edd1] px-2 py-1.5 font-black"><span>Aantal</span><span>Klein</span><span>Groot/vorm</span></div>{tiers.map((tier) => <div key={tier.label} className={`grid grid-cols-3 border-t border-[#eee0c4] px-2 py-1.5 ${totalQuantity > 0 && activeTierLabel === tier.label ? "font-black text-[#d62d1d]" : ""}`}><span>{tier.label}</span><span>{money(tierPrice(8.95, tier.discountPercent || 0, includeVat))}</span><span>{money(tierPrice(13.95, tier.discountPercent || 0, includeVat))}</span></div>)}</div></details>
       </div>
