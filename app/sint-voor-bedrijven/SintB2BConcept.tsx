@@ -19,6 +19,7 @@ type Product = {
   tiers: PriceTier[];
   retailPriceIncl?: number;
   personalizationIncluded?: boolean;
+  logoAvailable?: boolean;
   accent: string;
   options?: string[];
   variants?: ProductVariant[];
@@ -180,6 +181,7 @@ const products: Product[] = [
       { options: [DUO_NATUREL_KRUIDNOTEN, DUO_BORSTPLAAT], src: "/sinterklaas/Sint DUO  kruinoten + borstplaat.png" },
     ],
     accent: "#d62d1d",
+    logoAvailable: false,
     retailPriceIncl: 10.85,
     tiers: chocolateLetterTiers,
   },
@@ -263,6 +265,10 @@ function productLogoPrice(quantity: number, includeVat: boolean) {
   return includeVat ? roundUpFiveCents(priceEx * FOOD_VAT_FACTOR) : priceEx;
 }
 
+function productSupportsLogo(product: Product) {
+  return !product.personalizationIncluded && product.logoAvailable !== false;
+}
+
 export default function SintB2BConcept() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [letterLines, setLetterLines] = useState<B2BLetterLine[]>([]);
@@ -330,7 +336,7 @@ export default function SintB2BConcept() {
           const choiceLabel = productChoiceLabel(product, choice);
           const configuredProduct = pricedProduct(product, choice);
           const tier = tierFor(configuredProduct, Math.max(1, quantity));
-          const withLogo = Boolean(logo[product.id] && !product.personalizationIncluded);
+          const withLogo = Boolean(logo[product.id] && productSupportsLogo(product));
           const logoPriceEx = withLogo ? productLogoPrice(quantity, false) : 0;
           const logoPriceIncl = withLogo ? productLogoPrice(quantity, true) : 0;
           return {
@@ -362,7 +368,7 @@ export default function SintB2BConcept() {
   const suggestions = useMemo(() => products.filter((product) => {
     const configuredProduct = pricedProduct(product, choices[product.id]);
     return productUnitPrice(configuredProduct, tierFor(configuredProduct, Math.max(1, recipientCount)), includeVat) +
-      (wantsLogo && !product.personalizationIncluded ? productLogoPrice(recipientCount, includeVat) : 0) <= budget
+      (wantsLogo && productSupportsLogo(product) ? productLogoPrice(recipientCount, includeVat) : 0) <= budget
   }), [budget, choices, recipientCount, wantsLogo, includeVat]);
   const canOpenEmail = Boolean(company.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()));
   const offerText = [
@@ -418,7 +424,7 @@ export default function SintB2BConcept() {
         setChoices((current) => ({ ...current, [product.id]: current[product.id] || defaultChoice }));
       }
     }
-    if (!product.personalizationIncluded) setLogo((current) => ({ ...current, [product.id]: wantsLogo }));
+    if (productSupportsLogo(product)) setLogo((current) => ({ ...current, [product.id]: wantsLogo }));
     setFinderOpen(false);
     document.getElementById(`product-${product.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -452,7 +458,7 @@ export default function SintB2BConcept() {
         <label className="grid gap-2 text-sm font-black text-[#60190f]">1. Hoeveel ontvangers?<input type="number" min="1" value={recipientCount} onChange={(event) => setRecipientCount(Math.max(1, Number(event.target.value) || 1))} className="h-11 rounded-xl border border-[#dfc699] bg-white px-4 text-lg" /></label>
         <label className="grid gap-2 text-sm font-black text-[#60190f]">2. Budget per persoon, {includeVat ? "incl." : "excl."} btw<input type="number" min="1" value={budget} onChange={(event) => setBudget(Math.max(1, Number(event.target.value) || 1))} className="h-11 rounded-xl border border-[#dfc699] bg-white px-4 text-lg" /></label>
         <div className="grid content-end gap-2 text-sm font-black text-[#60190f]">3. Met eigen logo?<button type="button" aria-pressed={wantsLogo} onClick={() => setWantsLogo(!wantsLogo)} className={`h-11 rounded-xl border px-4 text-left ${wantsLogo ? "border-[#d62d1d] bg-[#d62d1d] text-white" : "border-[#dfc699] bg-white"}`}>{wantsLogo ? "Ja, met logo ✓" : "Nee, zonder logo"}</button></div>
-        <div className="rounded-2xl bg-[#f8e5ba] p-4 lg:col-span-3"><p className="text-xs font-black uppercase tracking-[.16em] text-[#9a3d21]">Jouw selectie</p><p className="mt-1 text-sm font-bold text-[#60190f]">{suggestions.length ? `${suggestions.length} voorbeeldproducten passen binnen je budget. Tik op een product om ${recipientCount} stuks aan je aanvraag toe te voegen.` : "Er past nog geen voorbeeldproduct binnen dit budget. Het volledige assortiment en combinaties volgen nog."}</p><div className="mt-3 flex flex-wrap gap-2">{suggestions.map((product) => { const configuredProduct = pricedProduct(product, choices[product.id]); return <button key={product.id} type="button" onClick={() => addSuggestedProduct(product)} className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#60190f] transition hover:bg-[#d62d1d] hover:text-white">+ {product.name}{product.id === chocolateLetterProduct.id ? " · S klein melk" : ""} · {money(productUnitPrice(configuredProduct, tierFor(configuredProduct, recipientCount), includeVat) + (wantsLogo && !product.personalizationIncluded ? productLogoPrice(recipientCount, includeVat) : 0))} p.s.</button>; })}</div></div>
+        <div className="rounded-2xl bg-[#f8e5ba] p-4 lg:col-span-3"><p className="text-xs font-black uppercase tracking-[.16em] text-[#9a3d21]">Jouw selectie</p><p className="mt-1 text-sm font-bold text-[#60190f]">{suggestions.length ? `${suggestions.length} voorbeeldproducten passen binnen je budget. Tik op een product om ${recipientCount} stuks aan je aanvraag toe te voegen.` : "Er past nog geen voorbeeldproduct binnen dit budget. Het volledige assortiment en combinaties volgen nog."}</p><div className="mt-3 flex flex-wrap gap-2">{suggestions.map((product) => { const configuredProduct = pricedProduct(product, choices[product.id]); return <button key={product.id} type="button" onClick={() => addSuggestedProduct(product)} className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#60190f] transition hover:bg-[#d62d1d] hover:text-white">+ {product.name}{product.id === chocolateLetterProduct.id ? " · S klein melk" : ""} · {money(productUnitPrice(configuredProduct, tierFor(configuredProduct, recipientCount), includeVat) + (wantsLogo && productSupportsLogo(product) ? productLogoPrice(recipientCount, includeVat) : 0))} p.s.</button>; })}</div></div>
       </div></section></div>}
 
       <section id="assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 py-6 sm:px-8 lg:px-12 lg:py-8">
@@ -472,14 +478,14 @@ export default function SintB2BConcept() {
             const [duoFirst, duoSecond] = product.duoOptions?.length ? selectedDuoOptions(product, selectedOption) : [undefined, undefined];
             const selectedGalleryIndex = Math.max(0, product.gallery?.findIndex((photo) => photo.src === selectedImage) ?? 0);
             return <article id={`product-${product.id}`} key={product.id} className="flex h-full flex-col overflow-hidden rounded-[1.5rem] bg-[#fff3cf] shadow-[0_14px_40px_rgba(107,35,12,.14)]">
-              <div className="relative aspect-square shrink-0 overflow-hidden" style={{backgroundColor:product.accent}}><Image src={selectedImage} alt={`${product.name}${selectedChoiceLabel ? ` · ${selectedChoiceLabel}` : ""}`} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 25vw, 20vw" className={`${product.duoOptions ? "object-contain p-2" : "object-cover"} object-center transition duration-500 hover:scale-105`}/><span className="absolute left-3 top-3 rounded-full bg-[#d62d1d] px-2.5 py-1 text-[.62rem] font-black uppercase tracking-wider text-white">{product.eyebrow}</span>{product.gallery&&product.gallery.length>1&&<button type="button" onClick={()=>setGallery({product,index:selectedGalleryIndex})} className="absolute right-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[.62rem] font-black text-[#60190f] shadow-md backdrop-blur transition hover:bg-white">▧ Meer foto&apos;s</button>}{product.shelfLife&&<span className="absolute bottom-3 right-3 rounded-full bg-white px-2.5 py-1 text-[.62rem] font-black text-[#8a2d1c]">t.h.t. {product.shelfLife}</span>}</div>
+              <div className="relative aspect-square shrink-0 overflow-hidden" style={{backgroundColor:product.accent}}><Image src={selectedImage} alt={`${product.name}${selectedChoiceLabel ? ` · ${selectedChoiceLabel}` : ""}`} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, (max-width: 1536px) 25vw, 20vw" className="object-cover object-center transition duration-500 hover:scale-105"/><span className="absolute left-3 top-3 rounded-full bg-[#d62d1d] px-2.5 py-1 text-[.62rem] font-black uppercase tracking-wider text-white">{product.eyebrow}</span>{product.gallery&&product.gallery.length>1&&<button type="button" onClick={()=>setGallery({product,index:selectedGalleryIndex})} className="absolute right-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[.62rem] font-black text-[#60190f] shadow-md backdrop-blur transition hover:bg-white">▧ Meer foto&apos;s</button>}{product.shelfLife&&<span className="absolute bottom-3 right-3 rounded-full bg-white px-2.5 py-1 text-[.62rem] font-black text-[#8a2d1c]">t.h.t. {product.shelfLife}</span>}</div>
               <div className="flex flex-1 flex-col p-4"><h3 className="text-xl font-black leading-tight text-[#60190f]">{product.name}</h3><p className="mt-2 min-h-10 text-xs font-semibold leading-relaxed text-[#7e493c]">{product.description}</p>
                 {product.variants&&<select value={selectedOption} onChange={(event)=>setChoices(current=>({...current,[product.id]:event.target.value}))} aria-label={`Uitvoering ${product.name}`} className="mt-3 h-10 w-full rounded-xl border border-[#e2c99c] bg-white px-3 text-xs font-black text-[#5a170f]">{product.variants.map(variant=><option key={variant.label} value={variant.label}>{variant.label}</option>)}</select>}
                 {product.options&&<select value={choices[product.id]||product.options[0]} onChange={(event)=>setChoices(current=>({...current,[product.id]:event.target.value}))} className="mt-3 h-10 w-full rounded-xl border border-[#e2c99c] bg-white px-3 text-xs font-black text-[#5a170f]">{product.options.map(option=><option key={option}>{option}</option>)}</select>}
                 {product.duoOptions&&duoFirst&&duoSecond&&<div className="mt-3 grid gap-2"><label className="text-[.68rem] font-black text-[#60190f]">Zakje 1<select value={duoFirst.label} onChange={(event)=>setChoices(current=>({...current,[product.id]:duoChoice(event.target.value,duoSecond.label)}))} className="mt-1 h-10 w-full rounded-xl border border-[#e2c99c] bg-white px-3 text-xs font-black text-[#5a170f]">{product.duoOptions.map(option=><option key={option.label} value={option.label}>{option.label} · {money(option.retailPriceIncl)}</option>)}</select></label><label className="text-[.68rem] font-black text-[#60190f]">Zakje 2<select value={duoSecond.label} onChange={(event)=>setChoices(current=>({...current,[product.id]:duoChoice(duoFirst.label,event.target.value)}))} className="mt-1 h-10 w-full rounded-xl border border-[#e2c99c] bg-white px-3 text-xs font-black text-[#5a170f]">{product.duoOptions.map(option=><option key={option.label} value={option.label}>{option.label} · {money(option.retailPriceIncl)}</option>)}</select></label></div>}
-                {product.personalizationIncluded ? <p className="mt-2 text-xs font-bold text-[#7e493c]">Gedicht-/logo-opdruk inbegrepen · gedicht zelf aanleveren</p> : <label className="mt-2 flex items-start gap-2 text-xs font-bold"><input type="checkbox" checked={!!logo[product.id]} onChange={(event)=>setLogo(current=>({...current,[product.id]:event.target.checked}))} className="mt-0.5 h-4 w-4 shrink-0"/> Eigen logo toevoegen (+ vanaf {money(productLogoPrice(201, includeVat))} p.s.; mogelijkheden op aanvraag)</label>}
+                {product.personalizationIncluded ? <p className="mt-2 text-xs font-bold text-[#7e493c]">Gedicht-/logo-opdruk inbegrepen · gedicht zelf aanleveren</p> : productSupportsLogo(product) ? <label className="mt-2 flex items-start gap-2 text-xs font-bold"><input type="checkbox" checked={!!logo[product.id]} onChange={(event)=>setLogo(current=>({...current,[product.id]:event.target.checked}))} className="mt-0.5 h-4 w-4 shrink-0"/> Eigen logo toevoegen (+ vanaf {money(productLogoPrice(201, includeVat))} p.s.; mogelijkheden op aanvraag)</label> : null}
                 <div className="mt-auto flex items-center gap-2 pt-4"><button type="button" aria-label={`Minder ${product.name}`} onClick={()=>setQuantities(current=>({...current,[product.id]:Math.max(0,(current[product.id]||0)-1)}))} className="h-10 w-10 rounded-full border-2 border-[#d62d1d] text-lg font-black">−</button><input aria-label={`Aantal ${product.name}`} type="number" min="0" value={quantity} onChange={(event)=>setQuantities(current=>({...current,[product.id]:Math.max(0,Number(event.target.value)||0)}))} className="h-10 min-w-0 flex-1 rounded-xl border border-[#e2c99c] bg-white text-center text-base font-black"/><button type="button" aria-label={`Meer ${product.name}`} onClick={()=>setQuantities(current=>({...current,[product.id]:(current[product.id]||0)+1}))} className="h-10 w-10 rounded-full bg-[#d62d1d] text-lg font-black text-white">+</button></div>
-                <div className="mt-2 rounded-xl bg-white px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-bold text-[#7e493c]">{quantity?`${tier.label} stuks${tier.discountPercent ? ` · ${tier.discountPercent}% korting` : " · winkelprijs"}`:"Winkelprijs per stuk"}</span><strong className="text-base text-[#60190f]">{money(productUnitPrice(configuredProduct, tier, includeVat))}</strong></div>{quantity>0&&<div className="mt-1 flex items-center justify-between border-t border-[#eee0c4] pt-1 font-black text-[#60190f]"><span>Totaal</span><span>{money(quantity*(productUnitPrice(configuredProduct, tier, includeVat)+(logo[product.id]&&!product.personalizationIncluded?productLogoPrice(quantity, includeVat):0)))}</span></div>}</div>
+                <div className="mt-2 rounded-xl bg-white px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-bold text-[#7e493c]">{quantity?`${tier.label} stuks${tier.discountPercent ? ` · ${tier.discountPercent}% korting` : " · winkelprijs"}`:"Winkelprijs per stuk"}</span><strong className="text-base text-[#60190f]">{money(productUnitPrice(configuredProduct, tier, includeVat))}</strong></div>{quantity>0&&<div className="mt-1 flex items-center justify-between border-t border-[#eee0c4] pt-1 font-black text-[#60190f]"><span>Totaal</span><span>{money(quantity*(productUnitPrice(configuredProduct, tier, includeVat)+(logo[product.id]&&productSupportsLogo(product)?productLogoPrice(quantity, includeVat):0)))}</span></div>}</div>
                 <details className="mt-2 text-xs text-[#7e493c]"><summary className="cursor-pointer font-bold underline underline-offset-2">Alle staffelprijzen bekijken</summary><div className="mt-2 overflow-hidden rounded-lg border border-[#eadbc3] bg-white">{product.tiers.map((item)=><div key={item.label} className={`flex items-center justify-between border-t border-[#eee0c4] px-2 py-1.5 first:border-t-0 ${quantity>0&&tier.label===item.label?"font-black text-[#d62d1d]":""}`}><span>{item.label} st.{item.discountPercent ? ` · ${item.discountPercent}%` : ""}</span><span>{money(productUnitPrice(configuredProduct,item,includeVat))}</span></div>)}</div></details>
               </div>
             </article>;
