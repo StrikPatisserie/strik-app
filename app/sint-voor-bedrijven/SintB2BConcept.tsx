@@ -343,20 +343,23 @@ export default function SintB2BConcept() {
     <main className="min-h-dvh bg-[#efb800] text-[#5a170f]">
       <header className="relative overflow-hidden border-b border-white/30 px-4 py-4 sm:px-8 lg:px-12 lg:py-5">
         <div className="absolute -right-20 top-10 h-44 w-44 rotate-12 rounded-[3rem] bg-[#d92f1f]/12" />
-        <nav className="relative mx-auto flex max-w-[1800px] items-center justify-between">
+        <nav className="relative mx-auto flex max-w-7xl items-center justify-between">
           <Image src="/strik-logo.png" alt="Strik Patisserie" width={112} height={72} className="h-11 w-auto object-contain sm:h-12" priority />
           <span className="rounded-full bg-[#d62d1d] px-3 py-1.5 text-[.65rem] font-black uppercase tracking-[.14em] text-white sm:text-xs">B2B Sint 2026 · concept</span>
         </nav>
-        <div className="relative mx-auto mt-3 grid max-w-[1800px] items-end gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-8">
-          <div>
-            <p className="text-[.65rem] font-black uppercase tracking-[.24em] text-white sm:text-xs">Sinds 1937 · ambacht uit Nijmegen</p>
-            <div className="mt-1 flex flex-wrap items-end gap-x-4 gap-y-0">
-              <h1 className="text-[clamp(5rem,10vw,9rem)] font-black leading-[.7] tracking-[-.08em] text-white">SINT</h1>
-              <p className="pb-1 font-[Butterscotch] text-[clamp(2.5rem,5vw,4.75rem)] leading-none text-[#d62d1d]">Met een Strik</p>
+        <div className="relative mx-auto mt-3 max-w-7xl">
+          <p className="text-[.65rem] font-black uppercase tracking-[.24em] text-white sm:text-xs">Sinds 1937 · ambacht uit Nijmegen</p>
+          <div className="mt-1 flex items-center justify-between gap-5">
+            <div className="inline-flex min-w-0 flex-col">
+              <h1 className="text-[clamp(6.5rem,12vw,10.5rem)] font-black leading-[.68] tracking-[-.08em] text-white">SINT</h1>
+              <p className="-mt-1 self-end pr-2 font-[Butterscotch] text-[clamp(2rem,3.2vw,3.5rem)] leading-none text-[#d62d1d]">Met een Strik</p>
             </div>
-            <p className="mt-3 max-w-4xl text-sm font-bold leading-relaxed text-[#6d2417] sm:text-base">Ambachtelijke Sinterklaascadeaus voor collega’s en relaties. Kies, bekijk direct je staffel en stel vrijblijvend een offerteaanvraag samen.</p>
+            <button type="button" onClick={() => setFinderOpen(true)} aria-label="Welk cadeau past bij jouw team?" title="Welk cadeau past bij jouw team?" className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#fff7df] text-[#60190f] shadow-[0_10px_28px_rgba(92,24,12,.18)] transition hover:-translate-y-0.5 hover:bg-white sm:h-20 sm:w-20">
+              <svg aria-hidden="true" viewBox="0 0 48 48" className="h-9 w-9 sm:h-11 sm:w-11" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 21h27v20H8z"/><path d="M5 14h33v8H5zM21.5 14v27"/><path d="M21 14c-5 0-9-2-9-5 0-2 1.7-3.5 4-3.5 3.7 0 5.5 5.2 5.5 8.5ZM22 14c5 0 9-2 9-5 0-2-1.7-3.5-4-3.5-3.7 0-5.5 5.2-5.5 8.5Z"/></svg>
+              <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#d62d1d] text-sm font-black text-white">?</span>
+            </button>
           </div>
-          <button type="button" onClick={() => setFinderOpen(true)} className="w-full rounded-full bg-[#fff7df] px-5 py-3 text-sm font-black text-[#60190f] shadow-[0_10px_28px_rgba(92,24,12,.16)] transition hover:-translate-y-0.5 hover:bg-white lg:mb-2 lg:w-auto">Welk cadeau past bij jouw team? →</button>
+          <p className="mt-3 max-w-4xl text-sm font-bold leading-relaxed text-[#6d2417] sm:text-base">Ambachtelijke Sinterklaascadeaus voor collega’s en relaties. Kies, bekijk direct je staffel en stel vrijblijvend een offerteaanvraag samen.</p>
         </div>
       </header>
 
@@ -368,12 +371,12 @@ export default function SintB2BConcept() {
         <div className="rounded-2xl bg-[#f8e5ba] p-4 lg:col-span-3"><p className="text-xs font-black uppercase tracking-[.16em] text-[#9a3d21]">Jouw selectie</p><p className="mt-1 text-sm font-bold text-[#60190f]">{suggestions.length ? `${suggestions.length} voorbeeldproducten passen binnen je budget. Tik op een product om ${recipientCount} stuks aan je aanvraag toe te voegen.` : "Er past nog geen voorbeeldproduct binnen dit budget. Het volledige assortiment en combinaties volgen nog."}</p><div className="mt-3 flex flex-wrap gap-2">{suggestions.map((product) => { const configuredProduct = pricedProduct(product, choices[product.id]); return <button key={product.id} type="button" onClick={() => addSuggestedProduct(product)} className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#60190f] transition hover:bg-[#d62d1d] hover:text-white">+ {product.name}{product.id === chocolateLetterProduct.id ? " · S klein melk" : ""} · {money(productUnitPrice(configuredProduct, tierFor(configuredProduct, recipientCount), includeVat) + (wantsLogo && !product.personalizationIncluded ? productLogoPrice(recipientCount, includeVat) : 0))} p.s.</button>; })}</div></div>
       </div></section></div>}
 
-      <section id="assortiment" className="mx-auto max-w-[1800px] scroll-mt-6 px-4 py-6 sm:px-8 lg:px-12 lg:py-8">
+      <section id="assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 py-6 sm:px-8 lg:px-12 lg:py-8">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
           <div><p className="text-[.65rem] font-black uppercase tracking-[.2em] text-white sm:text-xs">Zakelijk assortiment</p><h2 className="mt-1 text-3xl font-black text-[#65180f] sm:text-4xl">Kies iets lekkers</h2></div>
           <div className="max-w-md"><div className="inline-flex rounded-full border border-[#a24629] bg-[#fff7df] p-1 text-xs font-black"><button type="button" aria-pressed={includeVat} onClick={() => setIncludeVat(true)} className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Incl. btw</button><button type="button" aria-pressed={!includeVat} onClick={() => setIncludeVat(false)} className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Excl. btw</button></div><p className="mt-2 text-xs font-bold text-[#7e2b1c]">De winkelprijzen van de nieuw ingevulde producten zijn bekend; de staffels zijn voorstellen. Overige producten hebben nog conceptprijzen. 9% btw voor voedingsmiddelen.</p></div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <B2BChocolateLetters lines={letterLines} onChange={setLetterLines} withLogo={!!logo[chocolateLetterProduct.id]} onLogoChange={(value) => setLogo((current) => ({ ...current, [chocolateLetterProduct.id]: value }))} giftWrap={letterGiftWrap} onGiftWrapChange={setLetterGiftWrap} tiers={chocolateLetterTiers} includeVat={includeVat} activeTierLabel={letterTier.label} total={includeVat ? letterTotalIncl : letterTotalEx} />
           {products.slice(1).map((product) => {
             const quantity = quantities[product.id] || 0;
