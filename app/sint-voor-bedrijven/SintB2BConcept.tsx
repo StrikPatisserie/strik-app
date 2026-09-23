@@ -35,11 +35,11 @@ const logoPriceFor = (quantity: number) => quantity > 100 ? 0.35 : quantity > 50
 const roundCents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const roundUpFiveCents = (value: number) => Math.ceil((value - Number.EPSILON) * 20) / 20;
 const DUO_SEPARATOR = "|||";
-const DUO_CHOCOLATE_KRUIDNOTEN = "Chocolade kruidnoten · ±250 g";
-const DUO_NATUREL_KRUIDNOTEN = "Naturel kruidnoten · ±200 g";
-const DUO_GEVULD_SPECULAAS = "Gevuld speculaas zonder amandel · ±200 g";
-const DUO_SINT_CHOCO = "Gesorteerde Sint-chocolade · ±200 g";
-const DUO_MARSEPEIN = "Marsepein aardappeltjes · ±275 g";
+const DUO_CHOCOLATE_KRUIDNOTEN = "Chocolade kruidnoten · ca. 250 g";
+const DUO_NATUREL_KRUIDNOTEN = "Naturel kruidnoten · ca. 200 g";
+const DUO_GEVULD_SPECULAAS = "Speculaasbites · ca. 200 g";
+const DUO_SINT_CHOCO = "Gesorteerde Sint-chocolade · ca. 200 g";
+const DUO_MARSEPEIN = "Marsepein aardappeltjes · ca. 275 g";
 const DUO_SPECULAASBROK = "Speculaasbrokstukken · ca. ⅔ brok";
 const DUO_BORSTPLAAT = "Roomborstplaat · ca. 8 rondjes";
 const chocolateLetterTiers: PriceTier[] = [
@@ -162,7 +162,7 @@ const products: Product[] = [
     description: "Twee feestelijke zakjes in één kartonnen sleeve. Kies zelf twee verschillende of juist dezelfde lekkernijen.",
     image: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png",
     gallery: [
-      { src: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png", label: "Chocolade kruidnoten met gevuld speculaas" },
+      { src: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png", label: "Chocolade kruidnoten met speculaasbites" },
       { src: "/sinterklaas/Sint DUO  marsepein aard + speculaasbrok.png", label: "Marsepein aardappeltjes met speculaasbrok" },
       { src: "/sinterklaas/Sint DUO  kruinoten + borstplaat.png", label: "Naturel kruidnoten met roomborstplaat" },
     ],
