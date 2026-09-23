@@ -118,7 +118,7 @@ export function BusinessGiftFinderButton({
           Interactieve keuzehulp
         </span>
         <span className="mt-0.5 block font-[Butterscotch] text-[1.85rem] leading-none text-white sm:text-3xl">
-          {isChristmas ? "Vind jouw kerstcadeau" : "Vind jouw passende cadeau"}
+          Vind jouw cadeau
         </span>
         <span
           className={`mt-1 block text-[.62rem] font-bold ${
