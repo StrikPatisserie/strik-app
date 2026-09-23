@@ -55,16 +55,16 @@ export default function KerstB2BConcept() {
           <BusinessFolderSeasonNav active="kerst" />
         </nav>
 
-        <div className="relative mx-auto mt-4 max-w-7xl">
+        <div className="relative mx-auto mt-3 max-w-7xl">
           <p className="text-[.65rem] font-black uppercase tracking-[.24em] text-[#d8b56d] sm:text-xs">
             Sinds 1937 · ambacht uit Nijmegen
           </p>
-          <div className="mt-1 grid items-center gap-6 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <div className="w-fit justify-self-start">
-              <h1 className="text-[clamp(5rem,11vw,9.5rem)] font-black leading-[.7] tracking-[-.075em] text-white">
+          <div className="mt-1 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="inline-flex min-w-0 flex-col">
+              <h1 className="text-[clamp(6.5rem,12vw,10.5rem)] font-black leading-[.68] tracking-[-.08em] text-white">
                 KERST
               </h1>
-              <p className="-mt-1 whitespace-nowrap pl-1 font-[Butterscotch] text-[clamp(1.8rem,2.8vw,3rem)] leading-none text-[#d8b56d] sm:-mt-2 sm:pl-2">
+              <p className="-mt-1 self-end whitespace-nowrap pr-2 font-[Butterscotch] text-[clamp(2rem,3.2vw,3.5rem)] leading-none text-[#d8b56d]">
                 Met een Strik
               </p>
             </div>
@@ -73,7 +73,7 @@ export default function KerstB2BConcept() {
               onClick={() => setFinderOpen(true)}
             />
           </div>
-          <p className="mt-3 max-w-2xl text-xs font-semibold leading-relaxed text-[#ddd5dc] sm:text-sm">
+          <p className="mt-2 max-w-3xl text-xs font-bold leading-snug text-[#ddd5dc] sm:text-sm">
             <span className="block">Ambachtelijke kerstcadeaus voor collega&apos;s en relaties.</span>
             <span className="block">De feestelijke invulling wordt momenteel met zorg samengesteld.</span>
           </p>
