@@ -52,12 +52,7 @@ export default function KerstB2BConcept() {
             className="h-11 w-auto object-contain brightness-0 invert sm:h-12"
             priority
           />
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <BusinessFolderSeasonNav active="kerst" />
-            <span className="rounded-full border border-[#d8b56d]/55 bg-[#741f3b] px-3 py-1.5 text-[.62rem] font-black uppercase tracking-[.14em] text-white sm:text-xs">
-              B2B Kerst 2026 · binnenkort
-            </span>
-          </div>
+          <BusinessFolderSeasonNav active="kerst" />
         </nav>
 
         <div className="relative mx-auto mt-4 max-w-7xl">
@@ -194,18 +189,9 @@ export default function KerstB2BConcept() {
         </div>
       )}
 
-      <section className="relative mx-auto max-w-7xl px-4 py-10 sm:px-8 lg:px-12 lg:py-14">
+      <section className="relative mx-auto max-w-7xl px-4 pb-6 pt-4 sm:px-8 lg:px-12 lg:pb-8 lg:pt-5">
         <div className="pointer-events-none absolute -left-32 top-20 h-72 w-72 rounded-full bg-[#741f3b]/30 blur-3xl" />
-        <div className="relative">
-          <p className="text-[.65rem] font-black uppercase tracking-[.2em] text-[#d8b56d] sm:text-xs">
-            Zakelijk kerstassortiment
-          </p>
-          <h2 className="mt-1 text-3xl font-black text-white sm:text-4xl">
-            Iets moois is in de maak
-          </h2>
-        </div>
-
-        <div className="relative mt-6 overflow-hidden rounded-[2rem] border border-[#d8b56d]/45 bg-gradient-to-br from-[#222849] via-[#351f42] to-[#621f3d] p-6 shadow-[0_24px_70px_rgba(4,7,24,.45)] sm:p-10 lg:p-14">
+        <div className="relative overflow-hidden rounded-[2rem] border border-[#d8b56d]/45 bg-gradient-to-br from-[#222849] via-[#351f42] to-[#621f3d] p-6 shadow-[0_24px_70px_rgba(4,7,24,.45)] sm:p-10 lg:p-14">
           <span className="pointer-events-none absolute -right-10 -top-16 text-[12rem] leading-none text-[#d8b56d]/10">✦</span>
           <div className="grid items-center gap-8 lg:grid-cols-[auto_minmax(0,1fr)]">
             <div className="mx-auto flex h-36 w-36 items-center justify-center rounded-[2.5rem] border border-[#d8b56d]/55 bg-[#171b38]/65 text-[#d8b56d] shadow-2xl sm:h-44 sm:w-44">

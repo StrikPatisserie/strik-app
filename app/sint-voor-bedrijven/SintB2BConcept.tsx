@@ -633,10 +633,7 @@ export default function SintB2BConcept() {
         <div className="absolute -right-20 top-10 h-44 w-44 rotate-12 rounded-[3rem] bg-[#d92f1f]/12" />
         <nav className="relative mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
           <Image src="/strik-logo.png" alt="Strik Patisserie" width={112} height={72} className="h-11 w-auto object-contain sm:h-12" priority />
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <BusinessFolderSeasonNav active="sint" />
-            <span className="rounded-full bg-[#d62d1d] px-3 py-1.5 text-[.65rem] font-black uppercase tracking-[.14em] text-white sm:text-xs">B2B Sint 2026 · concept</span>
-          </div>
+          <BusinessFolderSeasonNav active="sint" />
         </nav>
         <div className="relative mx-auto mt-3 max-w-7xl">
           <p className="text-[.65rem] font-black uppercase tracking-[.24em] text-white sm:text-xs">Sinds 1937 · ambacht uit Nijmegen</p>
@@ -665,10 +662,9 @@ export default function SintB2BConcept() {
         <div className="rounded-2xl bg-[#f8e5ba] p-4 lg:col-span-3"><p className="text-xs font-black uppercase tracking-[.16em] text-[#9a3d21]">Dit past binnen jouw budget</p><p className="mt-1 text-sm font-bold text-[#60190f]">{suggestions.length ? `${suggestions.length} producten passen bij ${recipientCount} ontvangers en maximaal ${money(budget)} per persoon. De getoonde prijs bevat de juiste staffel of vaste aanbieding${wantsLogo ? " en de gekozen logowens" : ""}.` : `Er past nog geen product binnen dit budget en deze wensen. Probeer een iets hoger budget${wantsLogo ? " of kies zonder logo" : ""}.`}</p><div className="mt-4 grid gap-3 sm:grid-cols-2">{suggestions.map((suggestion) => <button key={suggestion.product.id} type="button" onClick={() => addSuggestedProduct(suggestion.product, suggestion.choice)} className="group flex min-w-0 gap-3 rounded-2xl bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[#f1e5d5]"><Image src={suggestion.image} alt="" fill sizes="80px" className="object-cover" /></span><span className="flex min-w-0 flex-1 flex-col"><strong className="text-sm leading-tight text-[#60190f]">{suggestion.product.name}</strong><span className="mt-1 line-clamp-2 text-[.66rem] font-semibold leading-relaxed text-[#7e493c]">{suggestion.product.description}</span><span className="mt-1 line-clamp-2 text-[.65rem] font-black leading-snug text-[#9a3d21]">{suggestion.choiceLabel}</span><span className="mt-auto flex items-end justify-between gap-2 pt-2"><small className="text-[.6rem] font-bold text-[#7e493c]">{suggestion.product.fixedOffer ? "Vaste aanbieding · 15% korting" : `Staffel ${suggestion.tier.label}`}{suggestion.logoIncluded ? " · incl. logo" : ""}</small><strong className="whitespace-nowrap text-sm text-[#d62d1d]">{money(suggestion.unitPrice)} p.p. <span aria-hidden="true">→</span></strong></span></span></button>)}</div></div>
       </div></section></div>}
 
-      <section id="assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 py-6 sm:px-8 lg:px-12 lg:py-8">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
-          <div><p className="text-[.65rem] font-black uppercase tracking-[.2em] text-white sm:text-xs">Zakelijk assortiment</p><h2 className="mt-1 text-3xl font-black text-[#65180f] sm:text-4xl">Kies iets lekkers</h2></div>
-          <div className="max-w-sm"><div className="inline-flex rounded-full border border-[#a24629] bg-[#fff7df] p-1 text-xs font-black"><button type="button" aria-pressed={includeVat} onClick={() => setIncludeVat(true)} className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Incl. btw</button><button type="button" aria-pressed={!includeVat} onClick={() => setIncludeVat(false)} className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Excl. btw</button></div><p className="mt-1 max-w-xs text-[.58rem] font-semibold italic leading-snug text-[#7e2b1c] sm:text-[.62rem]">De bekende winkelprijzen zijn definitief; staffels en overige prijzen zijn voorstellen. Voor voedingsmiddelen geldt 9% btw.</p></div>
+      <section id="assortiment" className="mx-auto max-w-7xl scroll-mt-6 px-4 pb-6 pt-4 sm:px-8 lg:px-12 lg:pb-8 lg:pt-5">
+        <div className="mb-3 flex justify-end">
+          <div className="inline-flex rounded-full border border-[#a24629] bg-[#fff7df] p-1 text-xs font-black"><button type="button" aria-pressed={includeVat} onClick={() => setIncludeVat(true)} className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Incl. btw</button><button type="button" aria-pressed={!includeVat} onClick={() => setIncludeVat(false)} className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Excl. btw</button></div>
         </div>
         <div className="mx-auto grid w-[90%] gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
           <B2BChocolateLetters
