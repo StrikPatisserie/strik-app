@@ -44,16 +44,14 @@ export default function KerstB2BConcept() {
         <span className="pointer-events-none absolute right-[28%] top-[18%] text-xl text-[#d8b56d]/45">✦</span>
 
         <nav className="relative mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-          <span className="rounded-xl bg-[#f8f0df] px-3 py-1.5 shadow-lg">
-            <Image
-              src="/strik-logo.png"
-              alt="Strik Patisserie"
-              width={112}
-              height={72}
-              className="h-9 w-auto object-contain sm:h-10"
-              priority
-            />
-          </span>
+          <Image
+            src="/strik-logo.png"
+            alt="Strik Patisserie"
+            width={112}
+            height={72}
+            className="h-11 w-auto object-contain brightness-0 invert sm:h-12"
+            priority
+          />
           <div className="flex flex-wrap items-center justify-end gap-2">
             <BusinessFolderSeasonNav active="kerst" />
             <span className="rounded-full border border-[#d8b56d]/55 bg-[#741f3b] px-3 py-1.5 text-[.62rem] font-black uppercase tracking-[.14em] text-white sm:text-xs">
