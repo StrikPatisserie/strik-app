@@ -5659,8 +5659,11 @@ export default function BruidstaartStudioConfigurator() {
     }
   }
 
-  async function saveAndGoNext() {
-    if (!canGoNext) return;
+  async function saveAndGoToStep(nextIndex: number) {
+    if (nextIndex <= currentStepIndex) {
+      goToStep(nextIndex);
+      return;
+    }
 
     const missing = getStepMissingFields();
     if (missing.length) {
@@ -5668,13 +5671,23 @@ export default function BruidstaartStudioConfigurator() {
       return;
     }
 
-    const saved = await saveDraft(true);
-    if (!saved) {
-      setDraftStatus("Je bestelling is nog niet opgeslagen.");
-      return;
-    }
+    const savedInWordPress = await saveConfigDraft(config, {
+      successStatus: config.completed
+        ? "Wijzigingen aan de definitieve bestelling centraal opgeslagen."
+        : "Concept automatisch centraal opgeslagen.",
+      localStatus:
+        "Niet verder gegaan: centraal opslaan is mislukt. De invoer staat wel als noodkopie op dit apparaat; probeer opnieuw.",
+      requireWordPress: true,
+    });
+    if (!savedInWordPress) return;
 
-    goToStep(currentStepIndex + 1);
+    goToStep(nextIndex);
+  }
+
+  async function saveAndGoNext() {
+    if (!canGoNext) return;
+
+    await saveAndGoToStep(currentStepIndex + 1);
   }
 
   const currentStepMissingFields = getStepMissingFields();
@@ -5757,8 +5770,9 @@ export default function BruidstaartStudioConfigurator() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => goToStep(index)}
-                className={`min-w-0 rounded-lg px-1.5 py-1.5 text-[0.62rem] font-black leading-tight transition sm:text-[0.68rem] ${
+                onClick={() => void saveAndGoToStep(index)}
+                disabled={saveFeedback === "opslaan..."}
+                className={`min-w-0 rounded-lg px-1.5 py-1.5 text-[0.62rem] font-black leading-tight transition disabled:cursor-wait disabled:opacity-60 sm:text-[0.68rem] ${
                   currentStepIndex === index
                     ? "bg-[#c3d3bc] text-[#2d2a26]"
                     : "bg-[#f8f6f3] text-[#2d2a26]/55"
@@ -5899,7 +5913,8 @@ export default function BruidstaartStudioConfigurator() {
                 <button
                   type="button"
                   onClick={() => void saveAndGoNext()}
-                  className="rounded-full bg-[#ef5737] px-3.5 py-2 text-[0.68rem] font-black text-white shadow-sm sm:text-xs"
+                  disabled={saveFeedback === "opslaan..."}
+                  className="rounded-full bg-[#ef5737] px-3.5 py-2 text-[0.68rem] font-black text-white shadow-sm disabled:cursor-wait disabled:opacity-60 sm:text-xs"
                 >
                   {saveFeedback === "opslaan..."
                     ? "Opslaan..."
@@ -6009,8 +6024,8 @@ export default function BruidstaartStudioConfigurator() {
                       Start nieuwe bruidstaart
                     </h3>
                     <p className="mt-0.5 text-[0.68rem] font-semibold leading-snug text-[#6b645b]">
-                      Vul eerst de basis in. Daarna wordt elke stap automatisch
-                      opgeslagen.
+                      Vul eerst de basis in. Daarna wordt iedere volgende stap
+                      centraal als concept opgeslagen.
                     </p>
                   </div>
                   <button
@@ -6060,7 +6075,8 @@ export default function BruidstaartStudioConfigurator() {
                 <button
                   type="button"
                   onClick={() => void saveAndGoNext()}
-                  className="mt-2.5 w-full rounded-full bg-[#ef5737] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.08em] text-white shadow-sm sm:w-auto"
+                  disabled={saveFeedback === "opslaan..."}
+                  className="mt-2.5 w-full rounded-full bg-[#ef5737] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.08em] text-white shadow-sm disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                 >
                   {saveFeedback === "opslaan..."
                     ? "Opslaan..."
