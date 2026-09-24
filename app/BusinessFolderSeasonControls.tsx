@@ -76,7 +76,7 @@ export function BusinessGiftFinderButton({
       type="button"
       onClick={onClick}
       aria-label={`Open de interactieve ${isChristmas ? "kerst" : "Sint"}cadeaukeuzehulp`}
-      className="group relative mx-auto flex w-full max-w-md items-center gap-4 rounded-[50%] px-9 py-7 text-left transition hover:-translate-y-0.5 sm:mx-0 sm:w-[26rem] sm:px-10"
+      className="group relative mx-auto flex w-full max-w-md items-center gap-3 rounded-[50%] px-5 py-5 text-left transition hover:-translate-y-0.5 sm:mx-0 sm:w-[26rem] sm:gap-4 sm:px-10 sm:py-7"
     >
       <span
         aria-hidden="true"
@@ -91,13 +91,13 @@ export function BusinessGiftFinderButton({
         }`}
       />
       <span
-        className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full shadow-lg transition group-hover:scale-105 ${
+        className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full shadow-lg transition group-hover:scale-105 sm:h-14 sm:w-14 ${
           isChristmas
             ? "bg-[#741f3b] text-[#d8b56d]"
             : "bg-[#d62d1d] text-white"
         }`}
       >
-        <GiftIcon className="h-8 w-8" />
+        <GiftIcon className="h-7 w-7 sm:h-8 sm:w-8" />
         <span
           aria-hidden="true"
           className={`absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full text-[.65rem] font-black ${
@@ -111,17 +111,17 @@ export function BusinessGiftFinderButton({
       </span>
       <span className="relative min-w-0">
         <span
-          className={`block text-[.58rem] font-black uppercase tracking-[.18em] ${
+          className={`block text-[.52rem] font-black uppercase tracking-[.16em] sm:text-[.58rem] sm:tracking-[.18em] ${
             isChristmas ? "text-[#d8b56d]" : "text-white"
           }`}
         >
           Interactieve keuzehulp
         </span>
-        <span className="mt-0.5 block font-[Butterscotch] text-[1.85rem] leading-none text-white sm:text-3xl">
+        <span className="mt-0.5 block font-[Butterscotch] text-[1.55rem] leading-none text-white sm:text-3xl">
           Vind jouw cadeau
         </span>
         <span
-          className={`mt-1 block text-[.62rem] font-bold ${
+          className={`mt-1 block text-[.54rem] font-bold sm:text-[.62rem] ${
             isChristmas ? "text-[#ddd5dc]" : "text-white"
           }`}
         >
