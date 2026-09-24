@@ -82,7 +82,7 @@ export default function B2BChocolateLetters({
   const [chocolate, setChocolate] = useState<B2BLetterLine["chocolate"]>("melk");
   const [letter, setLetter] = useState("S");
   const [size, setSize] = useState<B2BLetterLine["size"]>("groot");
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(0);
   const [specialRequests, setSpecialRequests] = useState<B2BLetterLine["specialRequests"]>([]);
   const selectedPhoto = PHOTOS.find((photo) => photo.style === style && (style === "vorm" || photo.chocolate === chocolate)) || PHOTOS[0];
   const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
@@ -105,6 +105,7 @@ export default function B2BChocolateLetters({
   }
 
   function addLine() {
+    if (quantity < 1) return;
     const line: B2BLetterLine = {
       id: `letter-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       style,
@@ -122,7 +123,7 @@ export default function B2BChocolateLetters({
     onChange(existing
       ? lines.map((item) => item.id === existing.id ? { ...item, quantity: item.quantity + line.quantity } : item)
       : [...lines, line]);
-    setQuantity(1);
+    setQuantity(0);
   }
 
   return (
@@ -139,17 +140,17 @@ export default function B2BChocolateLetters({
         <h3 className="pr-2 text-[.74rem] font-black leading-tight text-[#60190f] sm:pr-0 sm:text-lg">{productName}</h3>
         <p className="mt-1 min-h-10 text-[.55rem] font-semibold leading-relaxed text-[#7e493c] sm:min-h-9 sm:text-[.68rem]">{style === "vorm" ? "Grote vormletter S in melk, puur of wit." : "Spuitletters A–Z in melk, puur of wit. Kies klein of groot."}</p>
         <div className={`mt-1.5 grid gap-1 ${style === "spuit" ? "grid-cols-3" : "grid-cols-1"}`}>
-          <label className="text-[.48rem] font-black sm:text-[.62rem]">Chocolade<select value={chocolate} onChange={(event) => chooseChocolate(event.target.value as B2BLetterLine["chocolate"])} className="mt-0.5 h-7 w-full rounded-md border border-[#e2c99c] bg-white px-1 text-[.52rem] sm:h-8 sm:rounded-lg sm:px-2 sm:text-[.68rem]"><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option></select></label>
-          {style === "spuit" && <label className="text-[.48rem] font-black sm:text-[.62rem]">Letter<select value={letter} onChange={(event) => setLetter(event.target.value)} className="mt-0.5 h-7 w-full rounded-md border border-[#e2c99c] bg-white px-1 text-[.52rem] sm:h-8 sm:rounded-lg sm:px-2 sm:text-[.68rem]">{LETTERS.map((item) => <option key={item}>{item}</option>)}</select></label>}
-          {style === "spuit" && <label className="text-[.48rem] font-black sm:text-[.62rem]">Formaat<select value={size} onChange={(event) => setSize(event.target.value as B2BLetterLine["size"])} className="mt-0.5 h-7 w-full rounded-md border border-[#e2c99c] bg-white px-1 text-[.52rem] sm:h-8 sm:rounded-lg sm:px-2 sm:text-[.68rem]"><option value="klein">Klein</option><option value="groot">Groot</option></select></label>}
+          <label className="text-[.48rem] font-black sm:text-[.62rem]">Chocolade<select value={chocolate} onChange={(event) => chooseChocolate(event.target.value as B2BLetterLine["chocolate"])} className="mt-0.5 h-7 w-full rounded-md border border-[#e2c99c] bg-white px-1 text-[.42rem] sm:h-8 sm:rounded-lg sm:px-2 sm:text-[.54rem]"><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option></select></label>
+          {style === "spuit" && <label className="text-[.48rem] font-black sm:text-[.62rem]">Letter<select value={letter} onChange={(event) => setLetter(event.target.value)} className="mt-0.5 h-7 w-full rounded-md border border-[#e2c99c] bg-white px-1 text-[.42rem] sm:h-8 sm:rounded-lg sm:px-2 sm:text-[.54rem]">{LETTERS.map((item) => <option key={item}>{item}</option>)}</select></label>}
+          {style === "spuit" && <label className="text-[.48rem] font-black sm:text-[.62rem]">Formaat<select value={size} onChange={(event) => setSize(event.target.value as B2BLetterLine["size"])} className="mt-0.5 h-7 w-full rounded-md border border-[#e2c99c] bg-white px-1 text-[.42rem] sm:h-8 sm:rounded-lg sm:px-2 sm:text-[.54rem]"><option value="klein">Klein</option><option value="groot">Groot</option></select></label>}
         </div>
         <details className="mt-2 rounded-lg border border-[#e2c99c] bg-white/70 p-1.5 text-[.54rem] sm:rounded-xl sm:p-2 sm:text-[.68rem]"><summary className="cursor-pointer font-black">Speciaal verzoek</summary><div className="mt-2 flex flex-wrap gap-1.5">{REQUESTS.map((request) => <label key={request.id} className="flex items-center gap-1 text-[.52rem] font-bold sm:text-[.62rem]"><input type="checkbox" checked={specialRequests.includes(request.id)} disabled={(request.id === "vegan" || request.id === "lactosevrij") && chocolate !== "puur"} onChange={(event) => setSpecialRequests((current) => event.target.checked ? [...current, request.id] : current.filter((item) => item !== request.id))} />{request.label}</label>)}</div><p className="mt-1.5 text-[.52rem] text-[#7e493c] sm:text-[.62rem]">Vegan en lactosevrij alleen bij puur. Kan sporen van allergenen bevatten.</p></details>
         <div className="mt-2 flex items-center gap-1 sm:gap-1.5">
-          <button type="button" aria-label={`Minder ${productName}`} onClick={() => setQuantity((current) => Math.max(1, current - 1))} className="h-8 w-8 shrink-0 rounded-full border-2 border-[#d62d1d] text-sm font-black text-[#60190f] sm:h-9 sm:w-9 sm:text-base">−</button>
-          <input id={`${productId}-quantity`} aria-label={`Aantal ${productName}`} type="number" inputMode="numeric" min="1" max="10000" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(10000, Number(event.target.value) || 1)))} className="h-8 min-w-0 flex-1 appearance-none rounded-lg border border-[#e2c99c] bg-white text-center text-xs font-black text-[#60190f] sm:h-9 sm:rounded-xl sm:text-sm" />
+          <button type="button" aria-label={`Minder ${productName}`} onClick={() => setQuantity((current) => Math.max(0, current - 1))} className="h-8 w-8 shrink-0 rounded-full border-2 border-[#d62d1d] text-sm font-black text-[#60190f] sm:h-9 sm:w-9 sm:text-base">−</button>
+          <input id={`${productId}-quantity`} aria-label={`Aantal ${productName}`} type="number" inputMode="numeric" min="0" max="10000" value={quantity} onChange={(event) => setQuantity(Math.max(0, Math.min(10000, Number(event.target.value) || 0)))} className="h-8 min-w-0 flex-1 appearance-none rounded-lg border border-[#e2c99c] bg-white text-center text-xs font-black text-[#60190f] sm:h-9 sm:rounded-xl sm:text-sm" />
           <button type="button" aria-label={`Meer ${productName}`} onClick={() => setQuantity((current) => Math.min(10000, current + 1))} className="h-8 w-8 shrink-0 rounded-full bg-[#d62d1d] text-sm font-black text-white sm:h-9 sm:w-9 sm:text-base">+</button>
         </div>
-        <button type="button" onClick={addLine} className="mt-2 h-8 w-full rounded-lg bg-[#d62d1d] px-2 text-[.56rem] font-black text-white sm:h-9 sm:rounded-xl sm:px-3 sm:text-[.68rem]">In mandje</button>
+        <button type="button" disabled={quantity === 0} onClick={addLine} className="mt-2 h-8 w-full rounded-lg bg-[#d62d1d] px-2 text-[.56rem] font-black text-white disabled:cursor-not-allowed disabled:bg-[#efa189] sm:h-9 sm:rounded-xl sm:px-3 sm:text-[.68rem]">{quantity === 0 ? "Kies eerst een aantal" : "In mandje"}</button>
         {lines.length > 0 && <div className="mt-3 rounded-xl bg-white p-2.5"><p className="mb-1.5 text-xs font-black">Jouw letters · {totalQuantity} stuks</p><div className="space-y-1">{lines.map((line) => <div key={line.id} className="border-t border-[#eee0c4] py-1 text-[.68rem]"><div className="flex items-start gap-1"><span className="min-w-0 flex-1 font-bold">{describeB2BLetter(line)}</span><button type="button" aria-label={`${describeB2BLetter(line)} verwijderen`} onClick={() => onChange(lines.filter((item) => item.id !== line.id))} className="px-1 text-base font-black leading-none text-[#a32b1c]">×</button></div><div className="mt-1 flex items-center gap-1"><button type="button" aria-label={`Minder ${describeB2BLetter(line)}`} onClick={() => onChange(lines.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))} className="h-6 w-6 shrink-0 rounded-full border border-[#d62d1d] font-black text-[#60190f]">−</button><input aria-label={`Aantal ${describeB2BLetter(line)}`} type="number" inputMode="numeric" min="1" max="10000" value={line.quantity} onChange={(event) => onChange(lines.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, Math.min(10000, Number(event.target.value) || 1)) } : item))} className="h-7 min-w-0 flex-1 appearance-none rounded-md border border-[#e2c99c] text-center text-xs font-black text-[#60190f]" /><button type="button" aria-label={`Meer ${describeB2BLetter(line)}`} onClick={() => onChange(lines.map((item) => item.id === line.id ? { ...item, quantity: Math.min(10000, item.quantity + 1) } : item))} className="h-6 w-6 shrink-0 rounded-full bg-[#d62d1d] font-black text-white">+</button></div></div>)}</div></div>}
         <label className="mt-2 flex items-start gap-1 text-[.5rem] font-bold leading-snug text-[#60190f] sm:mt-2.5 sm:items-center sm:gap-1.5 sm:text-[.62rem]"><input type="checkbox" checked={withLogo} onChange={(event) => onLogoChange(event.target.checked)} />Eigen logo · +{money(BUSINESS_FOLDER_LOGO_PRICE_INCL)} p.s. incl. btw</label>
         <B2BPriceSummary
