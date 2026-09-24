@@ -2933,6 +2933,51 @@ function BakkerijWeddingCakeDetail({
   const customerName = weddingCakeCustomerName(draft) || draft.code;
   const deliveryDate = getWeddingCakeDeliveryDate(draft);
 
+  function printProductionInfo() {
+    const printWindow = window.open("", "_blank", "width=900,height=760");
+
+    if (!printWindow) return;
+
+    printWindow.document.write(`<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <title>Bruidstaart productie ${escapeWeddingCakePrintHtml(draft.code)}</title>
+  <style>
+    @page { size: A4; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #171513; font-family: Arial, sans-serif; }
+    header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #171513; padding-bottom: 14px; }
+    .eyebrow { margin: 0 0 5px; color: #666; font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 25px; }
+    .subtitle { margin: 6px 0 0; font-size: 13px; font-weight: 700; }
+    .code { text-align: right; }
+    .code span { display: block; color: #666; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .code strong { display: block; margin-top: 4px; font-size: 21px; }
+    pre { margin: 18px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 700 10.5pt/1.45 Arial, sans-serif; }
+    .screen-actions { margin-bottom: 16px; }
+    .screen-actions button { border: 0; border-radius: 999px; background: #ef5737; padding: 10px 16px; color: white; font-weight: 700; }
+    @media print { .screen-actions { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="screen-actions"><button type="button" onclick="window.print()">Print</button></div>
+  <header>
+    <div>
+      <p class="eyebrow">Strik Patisserie · bakkerij</p>
+      <h1>Bruidstaart productie</h1>
+      <p class="subtitle">${escapeWeddingCakePrintHtml(formatBakeryDate(deliveryDate))} · ${escapeWeddingCakePrintHtml(customerName)}</p>
+    </div>
+    <div class="code"><span>Code</span><strong>${escapeWeddingCakePrintHtml(draft.code)}</strong></div>
+  </header>
+  <pre>${escapeWeddingCakePrintHtml(productionForm)}</pre>
+</body>
+</html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 150);
+  }
+
   return (
     <article className="min-w-0">
       <div className="studio-no-print mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -2949,7 +2994,7 @@ function BakkerijWeddingCakeDetail({
         </div>
         <button
           type="button"
-          onClick={() => window.print()}
+          onClick={printProductionInfo}
           className="rounded-full bg-[#ef5737] px-5 py-3 text-sm font-black text-white shadow-sm"
         >
           Print
@@ -2957,7 +3002,9 @@ function BakkerijWeddingCakeDetail({
       </div>
 
       <div className="studio-no-print grid gap-4">
-        <CakeVisualizer config={config} />
+        <div className="mx-auto w-full max-w-[15rem]">
+          <CakeVisualizer config={config} compact showDownload={false} />
+        </div>
 
         <div className="grid gap-2 text-sm text-[#2d2a26]">
           <BakkerijWeddingCakeRow label="Formaat">
@@ -3046,33 +3093,17 @@ function BakkerijWeddingCakeDetail({
         </p>
       </div>
 
-      <section className="studio-print-report hidden bg-white text-black">
-        <div className="mb-5 flex items-start justify-between gap-6 border-b border-black/20 pb-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em]">
-              Strik Team app
-            </p>
-            <h1 className="mt-2 text-3xl font-black">
-              Bruidstaart productie
-            </h1>
-            <p className="mt-1 text-sm">
-              {formatBakeryDate(deliveryDate)} · {customerName}
-            </p>
-          </div>
-          <div className="text-right text-sm">
-            <p className="font-bold">Code</p>
-            <p className="text-2xl font-black">{draft.code}</p>
-          </div>
-        </div>
-        <div className="grid gap-5 print:grid-cols-[15rem_minmax(0,1fr)]">
-          <CakeVisualizer config={config} />
-          <pre className="whitespace-pre-wrap rounded-none border-0 bg-white p-0 text-[11px] leading-relaxed">
-            {productionForm}
-          </pre>
-        </div>
-      </section>
     </article>
   );
+}
+
+function escapeWeddingCakePrintHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function BakkerijWeddingCakeRow({

@@ -1411,9 +1411,11 @@ function CustomCakePlaceholder({ compact = false }: { compact?: boolean }) {
 export function CakeVisualizer({
   config,
   compact = false,
+  showDownload = true,
 }: {
   config: WeddingCakeConfig;
   compact?: boolean;
+  showDownload?: boolean;
 }) {
   const visualizerId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -3345,17 +3347,19 @@ export function CakeVisualizer({
               ))}
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => void downloadVisualizerImage()}
-            className={
-              compact
-                ? "rounded-full bg-[#c3d3bc] px-2.5 py-1.5 text-[0.65rem] font-black shadow-sm transition active:scale-[0.98]"
-                : "rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm transition active:scale-[0.98]"
-            }
-          >
-            Download
-          </button>
+          {showDownload && (
+            <button
+              type="button"
+              onClick={() => void downloadVisualizerImage()}
+              className={
+                compact
+                  ? "rounded-full bg-[#c3d3bc] px-2.5 py-1.5 text-[0.65rem] font-black shadow-sm transition active:scale-[0.98]"
+                  : "rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm transition active:scale-[0.98]"
+              }
+            >
+              Download
+            </button>
+          )}
         </div>
       </div>
       <svg
@@ -3704,7 +3708,7 @@ export function CakeVisualizer({
         {config.styleId === "naked" ? "" : "kleur, "}layout, decoratie en
         toppers. De echte afwerking blijft maatwerk.
       </p>
-      {downloadStatus && (
+      {showDownload && downloadStatus && (
         <p
           className={
             compact

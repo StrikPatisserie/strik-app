@@ -323,7 +323,7 @@ export const fillingOptions: StudioOption[] = [
   },
   {
     id: "slagroom",
-    label: "Slagroom",
+    label: "Slagroom/kers",
     price: { mode: "included", amount: 0 },
   },
   {
