@@ -5,7 +5,7 @@ export default function SinterklaasB2BPage() {
   return (
     <StrikShell extraWide>
       <StrikPageHeader
-        title="Sinterklaas B2B"
+        title="B2B bestellingen · verkoop"
         icon={strikIcons.sinterklaasB2B}
       />
       <SinterklaasB2BClient />

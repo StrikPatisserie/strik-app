@@ -14,7 +14,7 @@ const items = [
   },
   {
     href: "/sinterklaas/bedrijven",
-    title: "Bedrijfsfolder",
+    title: "B2B bestellingen",
     icon: strikIcons.sinterklaasB2B,
     tone: "green" as const,
   },

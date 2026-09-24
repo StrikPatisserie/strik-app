@@ -26,8 +26,8 @@ const parentRoutes: Record<string, string> = {
   "/sinterklaas/letters/productie": "/sinterklaas/letters/productie-overzicht",
   "/sinterklaas/letters/centrale-productie": "/sinterklaas/letters/productie-overzicht",
   "/sinterklaas/letters/management": "/sinterklaas/letters/productie-overzicht",
-  "/sinterklaas/b2b": "/sinterklaas/bedrijven/verkoop",
-  "/sinterklaas/mailing": "/sinterklaas/bedrijven/verkoop",
+  "/sinterklaas/b2b": "/sinterklaas/bedrijven",
+  "/sinterklaas/mailing": "/sinterklaas/bedrijven",
 };
 
 const topLevelRoutes = new Set([
