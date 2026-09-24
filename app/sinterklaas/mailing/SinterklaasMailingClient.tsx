@@ -1,40 +1,435 @@
 "use client";
+
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
-type SendKind="folder"|"reminder1"|"reminder2";
-type Recipient={id:string;contactName:string;email:string;doNotEmail:boolean;sent:{kind:SendKind;sentAt:string}[]};
-type Customer={id:string;company:string;notes:string;recipients:Recipient[];ordered?:boolean;orderedAt?:string};
-type Campaign={year:string;subject:string;body:string;reminder1Subject:string;reminder1Body:string;reminder2Subject:string;reminder2Body:string;folderUrl:string;customers:Customer[]};
-type PendingMail={customerIds:string[];kind:SendKind;subject:string;body:string;phase:"choice"|"edit"|"confirm"};
-const year=String(new Date().getFullYear());
-const defaults:Campaign={year,subject:"Sinterklaas voor bedrijven bij Strik Patisserie",body:"Beste {{contactpersoon}},\n\nGraag delen wij onze Sinterklaasfolder voor bedrijven. In de bijlage vindt u ons assortiment.\n\nHeeft u vragen of wilt u bestellen? Reageer gerust op deze e-mail.\n\nMet vriendelijke groet,\nStrik Patisserie",reminder1Subject:"Herinnering: Sinterklaas voor bedrijven",reminder1Body:"Beste {{contactpersoon}},\n\nHeeft u onze Sinterklaasfolder al kunnen bekijken? We denken graag mee over een passende bestelling.\n\nMet vriendelijke groet,\nStrik Patisserie",reminder2Subject:"Laatste herinnering: Sinterklaas voor bedrijven",reminder2Body:"Beste {{contactpersoon}},\n\nDit is onze laatste herinnering voor het zakelijke Sinterklaasassortiment. Neem gerust contact met ons op als we iets kunnen betekenen.\n\nMet vriendelijke groet,\nStrik Patisserie",folderUrl:"",customers:[]};
-async function api(method="GET",body?:unknown){const response=await fetch(`/api/sinterklaas-mailing?year=${year}`,{method,headers:body?{"Content-Type":"application/json"}:undefined,body:body?JSON.stringify(body):undefined,cache:"no-store"});const data=await response.json().catch(()=>null);if(!response.ok)throw new Error(data?.message||"Mailing kon niet worden verwerkt.");return data as Partial<Campaign>&{needsImport?:boolean}}
-const stamp=(r:Recipient,k:SendKind)=>r.sent.find(e=>e.kind===k)?.sentAt||"";
-const forStorage=(campaign:Campaign)=>campaign;
+type SendKind = "folder" | "reminder1" | "reminder2";
+type Recipient = {
+  id: string;
+  contactName: string;
+  email: string;
+  doNotEmail: boolean;
+  sent: { kind: SendKind; sentAt: string }[];
+};
+type Customer = {
+  id: string;
+  company: string;
+  notes: string;
+  recipients: Recipient[];
+  ordered?: boolean;
+  orderedAt?: string;
+};
+type Campaign = {
+  year: string;
+  subject: string;
+  body: string;
+  reminder1Subject: string;
+  reminder1Body: string;
+  reminder2Subject: string;
+  reminder2Body: string;
+  folderUrl: string;
+  customers: Customer[];
+};
+type PendingMail = {
+  customerIds: string[];
+  kind: SendKind;
+  subject: string;
+  body: string;
+  phase: "choice" | "edit" | "confirm";
+};
+type TemplateConfig = {
+  label: string;
+  shortLabel: string;
+  subjectKey: "subject" | "reminder1Subject" | "reminder2Subject";
+  bodyKey: "body" | "reminder1Body" | "reminder2Body";
+};
 
-export default function SinterklaasMailingClient(){
- const [campaign,setCampaign]=useState<Campaign>(defaults),[message,setMessage]=useState("Mailing laden..."),[saving,setSaving]=useState(false),[search,setSearch]=useState(""),[expanded,setExpanded]=useState(""),[selected,setSelected]=useState<string[]>([]),[pending,setPending]=useState<PendingMail|null>(null);
- const shown=useMemo(()=>campaign.customers.filter(c=>`${c.company} ${c.notes} ${c.recipients.map(r=>`${r.contactName} ${r.email}`).join(" ")}`.toLowerCase().includes(search.toLowerCase())),[campaign.customers,search]);
- useEffect(()=>{void api().then(async data=>{const loaded={...defaults,...data,customers:Array.isArray(data.customers)?data.customers:[]};setCampaign(loaded);if(!data.needsImport){setMessage("");return}setMessage("Klantenlijst uit 2024 centraal opslaan...");const saved=await api("POST",loaded);setCampaign({...loaded,...saved} as Campaign);setMessage("141 klanten en 175 e-mailadressen uit 2024 zijn geïmporteerd.")}).catch(e=>setMessage(e.message))},[]);
- const patch=(v:Partial<Campaign>)=>setCampaign(c=>({...c,...v}));
- const patchCustomer=(id:string,v:Partial<Customer>)=>patch({customers:campaign.customers.map(c=>c.id===id?{...c,...v}:c)});
- const patchRecipient=(cid:string,rid:string,v:Partial<Recipient>)=>patch({customers:campaign.customers.map(c=>c.id===cid?{...c,recipients:c.recipients.map(r=>r.id===rid?{...r,...v}:r)}:c)});
- async function save(closeAfter=""){setSaving(true);try{const data=await api("POST",forStorage(campaign));setCampaign({...campaign,...data} as Campaign);if(closeAfter)setExpanded("");setMessage("Klantenlijst en mailing opgeslagen in WordPress.")}catch(e){setMessage(e instanceof Error?e.message:"Opslaan mislukt.")}finally{setSaving(false)}}
- function addCustomer(){const id=`klant-${Date.now()}`;patch({customers:[{id,company:"",notes:"",recipients:[{id:`adres-${Date.now()}`,contactName:"",email:"",doNotEmail:false,sent:[]}]},...campaign.customers]});setExpanded(id)}
- function addRecipient(c:Customer){patchCustomer(c.id,{recipients:[...c.recipients,{id:`adres-${Date.now()}`,contactName:"",email:"",doNotEmail:false,sent:[]}]})}
- function recipientsFor(c:Customer,k:SendKind){return c.recipients.filter(r=>r.email&&!r.doNotEmail&&!stamp(r,k)&&(k==="folder"||!!stamp(r,k==="reminder1"?"folder":"reminder1")))}
- function beginMail(customerIds:string[],k:SendKind){const subject=k==="folder"?campaign.subject:k==="reminder1"?campaign.reminder1Subject:campaign.reminder2Subject;const body=k==="folder"?campaign.body:k==="reminder1"?campaign.reminder1Body:campaign.reminder2Body;setPending({customerIds,kind:k,subject,body,phase:"choice"})}
- async function sendPending(){if(!pending)return;const customers=campaign.customers.filter(c=>pending.customerIds.includes(c.id)&&recipientsFor(c,pending.kind).length);const addressCount=customers.reduce((total,c)=>total+recipientsFor(c,pending.kind).length,0);if(!addressCount){setPending(null);return}setSaving(true);try{let current=campaign;for(const customer of customers){for(const recipient of recipientsFor(customer,pending.kind)){const data=await api("PATCH",{year,customerId:customer.id,recipientId:recipient.id,kind:pending.kind,subject:pending.subject,body:pending.body,campaign:forStorage(current)});current={...current,...data} as Campaign}}setCampaign(current);setSelected([]);setMessage(`Mail verstuurd naar ${addressCount} adres${addressCount===1?"":"sen"} van ${customers.length} klant${customers.length===1?"":"en"}.`);setPending(null)}catch(e){setMessage(e instanceof Error?e.message:"Versturen mislukt.")}finally{setSaving(false)}}
- const pendingCustomers=pending?campaign.customers.filter(c=>pending.customerIds.includes(c.id)&&recipientsFor(c,pending.kind).length):[];
- const pendingAddressCount=pending?pendingCustomers.reduce((total,c)=>total+recipientsFor(c,pending.kind).length,0):0;
- return <div className="space-y-4">
-  {message&&<p className="rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-3 text-sm font-bold">{message}</p>}
-  <div className="grid grid-cols-3 gap-2">{[["Klanten",campaign.customers.length],["Folder verstuurd",campaign.customers.filter(c=>c.recipients.some(r=>stamp(r,"folder"))).length],["Besteld",campaign.customers.filter(c=>c.ordered).length]].map(([label,value])=><div key={label} className="rounded-xl border border-[#d6e5d8] bg-white p-3"><p className="text-xs font-bold text-[#716a62]">{label}</p><p className="text-2xl font-black">{value}</p></div>)}</div>
-  <section className="rounded-xl border border-[#d6e5d8] bg-white p-4 shadow-sm"><div className="mb-3 flex items-center justify-between"><div><h2 className="text-xl font-black">Campagne {campaign.year}</h2><p className="text-sm text-[#716a62]">Afzender en reply-to: info@strik-patisserie.nl</p></div><button className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={()=>void save()}>{saving?"Bezig...":"Campagne opslaan"}</button></div><label className="block text-xs font-black">Link naar B2B-folder (PDF)<input className="allergen-input mt-1" value={campaign.folderUrl} onChange={e=>patch({folderUrl:e.target.value})} placeholder="https://strik-patisserie.nl/.../folder.pdf"/></label><div className="mt-3 grid gap-3 lg:grid-cols-3">{([['subject','body','Eerste foldermail'],['reminder1Subject','reminder1Body','Reminder 1'],['reminder2Subject','reminder2Body','Reminder 2']] as const).map(([s,b,l])=><div key={l} className="rounded-lg border border-[#e5e0d9] p-3"><h3 className="mb-2 font-black">{l}</h3><input className="allergen-input" value={campaign[s]} onChange={e=>patch({[s]:e.target.value})}/><textarea className="allergen-input mt-2 min-h-48 resize-y" value={campaign[b]} onChange={e=>patch({[b]:e.target.value})}/><p className="mt-1 text-[.68rem] text-[#777067]">Gebruik {'{{contactpersoon}}'} voor de aanhef.</p></div>)}</div></section>
-  <section className="rounded-xl border border-[#d6e5d8] bg-white p-4 shadow-sm"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-xl font-black">Klanten en e-mailadressen</h2><p className="text-sm text-[#716a62]">{campaign.customers.length} klanten · {campaign.customers.reduce((n,c)=>n+c.recipients.length,0)} adressen</p></div><div className="flex flex-wrap gap-2"><input className="allergen-input max-w-xs" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Zoeken..."/><button className="allergen-small-button" onClick={addCustomer}>+ Klant toevoegen</button><button className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={()=>void save()}>{saving?"Opslaan...":"Wijzigingen opslaan"}</button></div></div>
-   <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-2"><label className="flex items-center gap-2 px-2 text-sm font-black"><input type="checkbox" checked={shown.length>0&&shown.every(c=>selected.includes(c.id))} onChange={e=>setSelected(e.target.checked?Array.from(new Set([...selected,...shown.map(c=>c.id)])):selected.filter(id=>!shown.some(c=>c.id===id)))}/> Alles selecteren</label><span className="text-sm font-bold text-[#716a62]">{selected.length} geselecteerd</span><button className="allergen-small-button bg-[#31552a] text-white" disabled={!campaign.customers.some(c=>selected.includes(c.id)&&recipientsFor(c,"folder").length)} onClick={()=>beginMail(selected,"folder")}>Foldermail versturen</button><button className="allergen-small-button" disabled={!campaign.customers.some(c=>selected.includes(c.id)&&recipientsFor(c,"reminder1").length)} onClick={()=>beginMail(selected,"reminder1")}>Reminder 1 versturen</button><button className="allergen-small-button" disabled={!campaign.customers.some(c=>selected.includes(c.id)&&recipientsFor(c,"reminder2").length)} onClick={()=>beginMail(selected,"reminder2")}>Reminder 2 versturen</button></div>
-   <div className="overflow-x-auto"><div className="min-w-[1050px] border-t border-[#e5e0d9]">{shown.map(c=>{const folder=recipientsFor(c,"folder"),r1=recipientsFor(c,"reminder1"),r2=recipientsFor(c,"reminder2");return <article key={c.id} className="border-b border-[#e5e0d9]"><div className="grid grid-cols-[auto_1.2fr_2fr_.8fr_2.2fr_auto] items-center gap-2 px-2 py-2 text-sm"><input aria-label={`${c.company} selecteren`} type="checkbox" checked={selected.includes(c.id)} onChange={e=>setSelected(current=>e.target.checked?Array.from(new Set([...current,c.id])):current.filter(id=>id!==c.id))}/><strong>{c.company||"Nieuwe klant"}</strong><span className="truncate text-[#625c54]">{c.recipients.map(r=>r.email).filter(Boolean).join(", ")||"Nog geen e-mailadres"}</span><label className="flex items-center gap-1 font-bold"><input type="checkbox" checked={!!c.ordered} onChange={e=>patchCustomer(c.id,{ordered:e.target.checked,orderedAt:e.target.checked?new Date().toISOString():""})}/> Besteld</label><div className="flex gap-1"><button className="allergen-small-button" disabled={!folder.length} onClick={()=>beginMail([c.id],"folder")}>Folder Sint versturen</button><button className="allergen-small-button" disabled={!r1.length} onClick={()=>beginMail([c.id],"reminder1")}>Reminder 1</button><button className="allergen-small-button" disabled={!r2.length} onClick={()=>beginMail([c.id],"reminder2")}>Reminder 2</button></div><button className="allergen-small-button" onClick={()=>setExpanded(expanded===c.id?"":c.id)}>{expanded===c.id?"Sluiten":"Bewerken"}</button></div>{expanded===c.id&&<div className="border-t border-[#eee9e2] bg-[#faf8f5] p-3"><div className="flex gap-2"><input className="allergen-input font-black" value={c.company} onChange={e=>patchCustomer(c.id,{company:e.target.value})}/><button className="allergen-small-button" onClick={()=>addRecipient(c)}>+ E-mailadres</button><button className="px-2 text-sm font-bold text-red-700" onClick={()=>patch({customers:campaign.customers.filter(x=>x.id!==c.id)})}>Klant verwijderen</button></div>{c.recipients.map(r=><div key={r.id} className="mt-2 grid grid-cols-[1fr_1.2fr_auto_auto] gap-2"><input className="allergen-input" value={r.contactName} onChange={e=>patchRecipient(c.id,r.id,{contactName:e.target.value})} placeholder="Contactpersoon"/><input className="allergen-input" type="email" value={r.email} onChange={e=>patchRecipient(c.id,r.id,{email:e.target.value})}/><label className="flex items-center gap-1 text-xs font-bold"><input type="checkbox" checked={r.doNotEmail} onChange={e=>patchRecipient(c.id,r.id,{doNotEmail:e.target.checked})}/> Niet mailen</label><button className="text-sm font-bold text-red-700" onClick={()=>patchCustomer(c.id,{recipients:c.recipients.filter(x=>x.id!==r.id)})}>Verwijder</button></div>)}<div className="mt-2 flex items-center gap-2"><input className="allergen-input" value={c.notes} onChange={e=>patchCustomer(c.id,{notes:e.target.value})} placeholder="Notities"/><button className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={()=>void save(c.id)}>{saving?"Opslaan...":"Klant opslaan"}</button></div></div>}</article>})}{!shown.length&&<p className="p-3 text-sm text-[#777067]">Geen klanten gevonden.</p>}</div></div>
-  </section>
-  {pending&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><section className="w-full max-w-2xl rounded-xl bg-white p-5 shadow-xl"><h2 className="text-xl font-black">{pending.kind==="folder"?"Folder Sint":pending.kind==="reminder1"?"Reminder 1":"Reminder 2"}</h2><p className="mt-1 text-sm font-bold text-[#716a62]">{pendingCustomers.length} klant{pendingCustomers.length===1?"":"en"} · {pendingAddressCount} e-mailadres{pendingAddressCount===1?"":"sen"}</p>{pending.phase==="choice"&&<><p className="my-5 font-bold">Wil je de mail voor deze selectie nog bewerken?</p><div className="flex justify-end gap-2"><button className="allergen-small-button" onClick={()=>setPending(null)}>Annuleren</button><button className="allergen-small-button" onClick={()=>setPending({...pending,phase:"confirm"})}>Nee, doorgaan</button><button className="allergen-small-button bg-[#31552a] text-white" onClick={()=>setPending({...pending,phase:"edit"})}>Ja, mail bewerken</button></div></>}{pending.phase==="edit"&&<><label className="mt-3 block text-xs font-black">Onderwerp<input className="allergen-input mt-1" value={pending.subject} onChange={e=>setPending({...pending,subject:e.target.value})}/></label><label className="mt-3 block text-xs font-black">Mailtekst<textarea className="allergen-input mt-1 min-h-64 resize-y" value={pending.body} onChange={e=>setPending({...pending,body:e.target.value})}/></label><div className="mt-4 flex justify-end gap-2"><button className="allergen-small-button" onClick={()=>setPending(null)}>Annuleren</button><button className="allergen-small-button bg-[#31552a] text-white" onClick={()=>setPending({...pending,phase:"confirm"})}>Naar laatste controle</button></div></>}{pending.phase==="confirm"&&<><div className="my-4 rounded-lg bg-[#fff8d8] p-3"><p className="font-black">Laatste controle</p><p className="text-sm">Je verstuurt deze mail naar {pendingAddressCount} adres{pendingAddressCount===1?"":"sen"} van {pendingCustomers.length} klant{pendingCustomers.length===1?"":"en"}.</p><p className="mt-2 max-h-24 overflow-auto text-xs text-[#716a62]">{pendingCustomers.map(c=>c.company).join(", ")}</p><p className="mt-2 text-sm font-bold">{pending.subject}</p></div><div className="flex justify-end gap-2"><button className="allergen-small-button" onClick={()=>setPending(null)}>Annuleren</button><button className="allergen-small-button bg-[#31552a] text-white" disabled={saving||!pendingAddressCount} onClick={()=>void sendPending()}>{saving?"Versturen...":"Definitief versturen"}</button></div></>}</section></div>}
- </div>
+const year = String(new Date().getFullYear());
+const DIGITAL_FOLDER_URL = "https://strik-app.vercel.app/sint-voor-bedrijven";
+const defaults: Campaign = {
+  year,
+  subject: "De digitale Sinterklaasfolder voor bedrijven | Strik Patisserie",
+  body: "Beste {{contactpersoon}},\n\nOnze zakelijke Sinterklaasfolder staat online. Bekijk op één plek het assortiment, de actuele prijzen en staffels en stel gemakkelijk een vrijblijvende offerteaanvraag samen.\n\nGeen PDF of bijlage: via de knop in deze e-mail open je rechtstreeks onze interactieve folder.\n\nHeb je een vraag of wil je samen iets passends samenstellen? Antwoord gerust op deze e-mail; we denken graag met je mee.\n\nMet vriendelijke groet,\nTeam Strik Patisserie",
+  reminder1Subject: "Al een Sinterklaascadeau voor je team gevonden? | Strik Patisserie",
+  reminder1Body: "Beste {{contactpersoon}},\n\nHeb je onze digitale Sinterklaasfolder al kunnen bekijken? Je ziet er direct welke cadeaus binnen je budget passen, inclusief staffels en personalisatiemogelijkheden.\n\nVia de folder stel je vrijblijvend een offerteaanvraag samen. Natuurlijk kun je ook op deze e-mail antwoorden als je liever persoonlijk overlegt.\n\nMet vriendelijke groet,\nTeam Strik Patisserie",
+  reminder2Subject: "Laatste moment voor zakelijke Sinterklaasbestellingen | Strik Patisserie",
+  reminder2Body: "Beste {{contactpersoon}},\n\nEen vriendelijke laatste herinnering voor onze zakelijke Sinterklaascadeaus. Wil je nog iets bestellen voor collega’s of relaties? Bekijk dan de digitale folder en stuur tijdig je vrijblijvende aanvraag in.\n\nWe bevestigen beschikbaarheid en het gewenste levermoment altijd persoonlijk.\n\nMet vriendelijke groet,\nTeam Strik Patisserie",
+  folderUrl: DIGITAL_FOLDER_URL,
+  customers: [],
+};
+const templateConfig: Record<SendKind, TemplateConfig> = {
+  folder: {
+    label: "Eerste nieuwsbrief",
+    shortLabel: "Nieuwsbrief",
+    subjectKey: "subject",
+    bodyKey: "body",
+  },
+  reminder1: {
+    label: "Eerste herinnering",
+    shortLabel: "Reminder 1",
+    subjectKey: "reminder1Subject",
+    bodyKey: "reminder1Body",
+  },
+  reminder2: {
+    label: "Laatste herinnering",
+    shortLabel: "Reminder 2",
+    subjectKey: "reminder2Subject",
+    bodyKey: "reminder2Body",
+  },
+};
+
+async function api(method = "GET", body?: unknown) {
+  const response = await fetch(`/api/sinterklaas-mailing?year=${year}`, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.message || "Mailing kon niet worden verwerkt.");
+  return data as Partial<Campaign> & { needsImport?: boolean };
+}
+
+function stamp(recipient: Recipient, kind: SendKind) {
+  return recipient.sent.find((event) => event.kind === kind)?.sentAt || "";
+}
+
+function validFolderUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function folderHost(value: string) {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return "ongeldige link";
+  }
+}
+
+function migrateCampaign(data: Partial<Campaign>) {
+  const customers = Array.isArray(data.customers) ? data.customers : [];
+  const hasLegacyPdf = !data.folderUrl || /\.pdf(?:$|[?#])/i.test(data.folderUrl);
+  const mentionsAttachment = /\bbijlage\b/i.test(data.body || "");
+  if (hasLegacyPdf || mentionsAttachment) {
+    return { campaign: { ...defaults, customers }, migrated: true };
+  }
+  return { campaign: { ...defaults, ...data, customers } as Campaign, migrated: false };
+}
+
+function MailIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>;
+}
+
+function ShieldIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-5"/></svg>;
+}
+
+function LinkIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1"/></svg>;
+}
+
+function EmailPreview({ subject, body, folderUrl }: Readonly<{ subject: string; body: string; folderUrl: string }>) {
+  const previewBody = body.replaceAll("{{contactpersoon}}", "Sanne");
+  return (
+    <div className="overflow-hidden rounded-[1.6rem] border border-[#e6d6b7] bg-[#f5f1e9] shadow-sm">
+      <div className="border-b border-[#ddd3c5] bg-white px-4 py-3 text-[.68rem] leading-relaxed text-[#6e665e]">
+        <p><strong className="text-[#2b2723]">Van:</strong> Strik Patisserie &lt;info@strik-patisserie.nl&gt;</p>
+        <p><strong className="text-[#2b2723]">Aan:</strong> iedere ontvanger afzonderlijk</p>
+        <p className="truncate"><strong className="text-[#2b2723]">Onderwerp:</strong> {subject || "Nog geen onderwerp"}</p>
+      </div>
+      <div className="bg-[#efb800] px-5 py-5 text-[#5a170f]">
+        <div className="flex items-center gap-3">
+          <Image src="/strik-logo.png" alt="" width={72} height={48} className="h-9 w-auto object-contain" />
+          <div>
+            <p className="text-[.58rem] font-black uppercase tracking-[.2em] text-white">Zakelijk Sinterklaas 2026</p>
+            <p className="font-[Butterscotch] text-3xl leading-none text-[#d62d1d]">Met een Strik</p>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white px-5 py-6">
+        <div className="space-y-3 text-sm font-medium leading-relaxed text-[#4d4039]">
+          {previewBody.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => (
+            <p key={`${paragraph.slice(0, 18)}-${index}`} className="whitespace-pre-line">{paragraph}</p>
+          ))}
+        </div>
+        <a href={validFolderUrl(folderUrl) ? folderUrl : undefined} target="_blank" rel="noreferrer" className="mt-6 inline-flex rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-md">
+          Bekijk de interactieve folder →
+        </a>
+        <div className="mt-5 rounded-xl border border-[#ead7b4] bg-[#fff8e5] p-3 text-[.66rem] font-bold leading-relaxed text-[#755143]">
+          <p className="flex items-center gap-1.5 text-[#31552a]"><ShieldIcon /> Geen bijlage of download nodig</p>
+          <p className="mt-1 break-all">De knop opent: {folderUrl || "vul eerst de folderlink in"}</p>
+        </div>
+      </div>
+      <div className="bg-[#5a170f] px-5 py-4 text-[.62rem] leading-relaxed text-[#f9e7cd]">
+        Strik Patisserie · Nijmegen · info@strik-patisserie.nl<br />Geen zakelijke Sinterklaasmail meer? Antwoord met ‘afmelden’.
+      </div>
+    </div>
+  );
+}
+
+export default function SinterklaasMailingClient() {
+  const [campaign, setCampaign] = useState<Campaign>(defaults);
+  const [message, setMessage] = useState("Mailing laden...");
+  const [saving, setSaving] = useState(false);
+  const [sendProgress, setSendProgress] = useState(0);
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [pending, setPending] = useState<PendingMail | null>(null);
+  const [activeTemplate, setActiveTemplate] = useState<SendKind>("folder");
+  const [importOpen, setImportOpen] = useState(false);
+  const [bulkAddresses, setBulkAddresses] = useState("");
+
+  const shown = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return campaign.customers.filter((customer) =>
+      `${customer.company} ${customer.notes} ${customer.recipients.map((recipient) => `${recipient.contactName} ${recipient.email}`).join(" ")}`
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [campaign.customers, search]);
+
+  useEffect(() => {
+    void api()
+      .then(async (data) => {
+        const { campaign: loaded, migrated } = migrateCampaign(data);
+        setCampaign(loaded);
+        if (!data.needsImport && !migrated) {
+          setMessage("");
+          return;
+        }
+        setMessage(data.needsImport ? "Klantenlijst centraal opslaan..." : "Oude PDF-campagne omzetten naar de digitale folder...");
+        const saved = await api("POST", loaded);
+        setCampaign({ ...loaded, ...saved } as Campaign);
+        setMessage(migrated ? "Campagne is omgezet: geen PDF meer, de interactieve folderlink staat klaar." : `${loaded.customers.length} klanten zijn centraal opgeslagen.`);
+      })
+      .catch((error) => setMessage(error instanceof Error ? error.message : "Mailing laden mislukt."));
+  }, []);
+
+  const patch = (value: Partial<Campaign>) => setCampaign((current) => ({ ...current, ...value }));
+  const patchCustomer = (id: string, value: Partial<Customer>) => patch({ customers: campaign.customers.map((customer) => customer.id === id ? { ...customer, ...value } : customer) });
+  const patchRecipient = (customerId: string, recipientId: string, value: Partial<Recipient>) => patch({ customers: campaign.customers.map((customer) => customer.id === customerId ? { ...customer, recipients: customer.recipients.map((recipient) => recipient.id === recipientId ? { ...recipient, ...value } : recipient) } : customer) });
+
+  async function save(closeAfter = "") {
+    if (!validFolderUrl(campaign.folderUrl)) {
+      setMessage("Vul eerst een geldige https-link naar de digitale folder in.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const data = await api("POST", campaign);
+      setCampaign({ ...campaign, ...data } as Campaign);
+      if (closeAfter) setExpanded("");
+      setMessage("Klantenlijst en digitale mailing zijn opgeslagen in WordPress.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Opslaan mislukt.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function addCustomer() {
+    const id = `klant-${Date.now()}`;
+    patch({ customers: [{ id, company: "", notes: "", recipients: [{ id: `adres-${Date.now()}`, contactName: "", email: "", doNotEmail: false, sent: [] }] }, ...campaign.customers] });
+    setExpanded(id);
+  }
+
+  function addRecipient(customer: Customer) {
+    patchCustomer(customer.id, { recipients: [...customer.recipients, { id: `adres-${Date.now()}`, contactName: "", email: "", doNotEmail: false, sent: [] }] });
+  }
+
+  function recipientsFor(customer: Customer, kind: SendKind) {
+    if (customer.ordered) return [];
+    return customer.recipients.filter((recipient) =>
+      recipient.email &&
+      !recipient.doNotEmail &&
+      !stamp(recipient, kind) &&
+      (kind === "folder" || Boolean(stamp(recipient, kind === "reminder1" ? "folder" : "reminder1")))
+    );
+  }
+
+  function beginMail(customerIds: string[], kind: SendKind) {
+    if (!validFolderUrl(campaign.folderUrl)) {
+      setMessage("De digitale folderlink is ongeldig. Controleer de link voordat je verstuurt.");
+      return;
+    }
+    const config = templateConfig[kind];
+    setPending({ customerIds, kind, subject: campaign[config.subjectKey], body: campaign[config.bodyKey], phase: "choice" });
+  }
+
+  async function sendPending() {
+    if (!pending) return;
+    const customers = campaign.customers.filter((customer) => pending.customerIds.includes(customer.id) && recipientsFor(customer, pending.kind).length);
+    const jobs = customers.flatMap((customer) => recipientsFor(customer, pending.kind).map((recipient) => ({ customer, recipient })));
+    if (!jobs.length) {
+      setPending(null);
+      return;
+    }
+    setSaving(true);
+    setSendProgress(0);
+    let current = campaign;
+    let completed = 0;
+    try {
+      for (const job of jobs) {
+        const data = await api("PATCH", {
+          year,
+          customerId: job.customer.id,
+          recipientId: job.recipient.id,
+          kind: pending.kind,
+          subject: pending.subject,
+          body: pending.body,
+          campaign: current,
+        });
+        current = { ...current, ...data } as Campaign;
+        completed += 1;
+        setCampaign(current);
+        setSendProgress(completed);
+      }
+      setSelected([]);
+      setMessage(`${templateConfig[pending.kind].shortLabel} privé verstuurd naar ${jobs.length} adres${jobs.length === 1 ? "" : "sen"} van ${customers.length} klant${customers.length === 1 ? "" : "en"}.`);
+      setPending(null);
+    } catch (error) {
+      setMessage(`${completed} van ${jobs.length} mails verstuurd. ${error instanceof Error ? error.message : "Versturen mislukt."}`);
+    } finally {
+      setSaving(false);
+      setSendProgress(0);
+    }
+  }
+
+  function importBulkAddresses() {
+    const existing = new Set(campaign.customers.flatMap((customer) => customer.recipients.map((recipient) => recipient.email.trim().toLowerCase())).filter(Boolean));
+    const created: Customer[] = [];
+    let skipped = 0;
+    for (const [index, rawLine] of bulkAddresses.split(/\r?\n/).entries()) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const email = line.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]?.toLowerCase() || "";
+      if (!email || existing.has(email)) {
+        skipped += 1;
+        continue;
+      }
+      const parts = line.replace(email, "").split(/[;\t,]/).map((part) => part.trim()).filter(Boolean);
+      const id = `import-${Date.now()}-${index}`;
+      created.push({
+        id,
+        company: parts[0] || email.split("@")[1],
+        notes: "Toegevoegd via snelle invoer",
+        recipients: [{ id: `${id}-adres`, contactName: parts[1] || "", email, doNotEmail: false, sent: [] }],
+      });
+      existing.add(email);
+    }
+    if (!created.length) {
+      setMessage("Geen nieuwe geldige e-mailadressen gevonden.");
+      return;
+    }
+    patch({ customers: [...created, ...campaign.customers] });
+    setSelected((current) => Array.from(new Set([...current, ...created.map((customer) => customer.id)])));
+    setBulkAddresses("");
+    setImportOpen(false);
+    setMessage(`${created.length} nieuw${created.length === 1 ? "" : "e"} adres${created.length === 1 ? "" : "sen"} toegevoegd en geselecteerd${skipped ? `; ${skipped} dubbel of ongeldig overgeslagen` : ""}. Sla de wijzigingen nog op.`);
+  }
+
+  const activeConfig = templateConfig[activeTemplate];
+  const activeSubject = campaign[activeConfig.subjectKey];
+  const activeBody = campaign[activeConfig.bodyKey];
+  const pendingCustomers = pending ? campaign.customers.filter((customer) => pending.customerIds.includes(customer.id) && recipientsFor(customer, pending.kind).length) : [];
+  const pendingAddressCount = pending ? pendingCustomers.reduce((total, customer) => total + recipientsFor(customer, pending.kind).length, 0) : 0;
+  const addressCount = campaign.customers.reduce((total, customer) => total + customer.recipients.length, 0);
+  const allowedAddressCount = campaign.customers.reduce((total, customer) => total + customer.recipients.filter((recipient) => recipient.email && !recipient.doNotEmail).length, 0);
+  const sentAddressCount = campaign.customers.reduce((total, customer) => total + customer.recipients.filter((recipient) => stamp(recipient, "folder")).length, 0);
+  const allShownSelected = shown.length > 0 && shown.every((customer) => selected.includes(customer.id));
+
+  return (
+    <div className="space-y-5">
+      {message && <div role="status" className="rounded-xl border border-[#e7c978] bg-[#fff8df] px-4 py-3 text-sm font-bold text-[#692115]">{message}</div>}
+
+      <section className="relative overflow-hidden rounded-[2rem] bg-[#efb800] p-5 text-[#5a170f] shadow-[0_18px_50px_rgba(94,47,7,.13)] sm:p-7">
+        <span className="pointer-events-none absolute -right-16 -top-20 h-60 w-60 rounded-full bg-[#d62d1d]/15" />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/90 shadow-sm"><Image src="/strik-logo.png" alt="Strik Patisserie" width={84} height={58} className="h-12 w-auto object-contain" /></div>
+            <div>
+              <p className="text-[.62rem] font-black uppercase tracking-[.2em] text-white">Digitale B2B-campagne {campaign.year}</p>
+              <h2 className="mt-1 text-2xl font-black sm:text-3xl">Van nieuwsbrief naar interactieve folder</h2>
+              <p className="mt-1 max-w-2xl text-sm font-bold leading-relaxed text-[#7b2b1b]">Geen PDF of onbekende bijlage. Ontvangers openen de actuele folder via één herkenbare knop en kunnen direct reageren op Strik.</p>
+            </div>
+          </div>
+          <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
+            {[["Klanten", campaign.customers.length], ["Mailbaar", allowedAddressCount], ["Verstuurd", sentAddressCount]].map(([label, value]) => <div key={label} className="min-w-20 rounded-2xl bg-white/90 px-3 py-3 shadow-sm"><p className="text-[.58rem] font-black uppercase tracking-wider text-[#9a4d35]">{label}</p><p className="mt-0.5 text-2xl font-black">{value}</p></div>)}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        <div className="flex gap-3 rounded-2xl border border-[#d9e6da] bg-white p-4 shadow-sm"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#edf5ea] text-[#31552a]"><ShieldIcon /></span><div><h3 className="text-sm font-black">BCC-veilig verzenden</h3><p className="mt-1 text-xs leading-relaxed text-[#716a62]">Nog veiliger dan één BCC-mail: iedere ontvanger krijgt afzonderlijk een persoonlijke mail. Andere adressen zijn nooit zichtbaar.</p></div></div>
+        <div className="flex gap-3 rounded-2xl border border-[#ead7b4] bg-white p-4 shadow-sm"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fff4d1] text-[#b14925]"><LinkIcon /></span><div><h3 className="text-sm font-black">Eén actuele folderlink</h3><p className="mt-1 text-xs leading-relaxed text-[#716a62]">Geen bestanden of oude versies; wijzigingen in de folder zijn direct zichtbaar.</p></div></div>
+        <div className="flex gap-3 rounded-2xl border border-[#eed8d2] bg-white p-4 shadow-sm"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fff0ec] text-[#d62d1d]"><MailIcon /></span><div><h3 className="text-sm font-black">Herkenbaar van Strik</h3><p className="mt-1 text-xs leading-relaxed text-[#716a62]">Afzender en reply-to zijn info@strik-patisserie.nl; zonder externe afbeeldingen.</p></div></div>
+      </section>
+
+      <section className="rounded-[1.6rem] border border-[#e5ddd1] bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><p className="text-[.62rem] font-black uppercase tracking-[.16em] text-[#d62d1d]">Campagne-instellingen</p><h2 className="mt-0.5 text-xl font-black">Digitale nieuwsbrief</h2></div>
+          <button type="button" className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={() => void save()}>{saving ? "Opslaan..." : "Campagne opslaan"}</button>
+        </div>
+        <div className="mt-4 rounded-2xl border border-[#ead7b4] bg-[#fffaf0] p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <label className="min-w-0 flex-1 text-xs font-black text-[#5a170f]">Link naar interactieve B2B-folder<input className={`allergen-input mt-1 ${validFolderUrl(campaign.folderUrl) ? "border-[#9bc2a2]" : "border-red-400"}`} value={campaign.folderUrl} onChange={(event) => patch({ folderUrl: event.target.value })} placeholder={DIGITAL_FOLDER_URL} /></label>
+            <a href={validFolderUrl(campaign.folderUrl) ? campaign.folderUrl : undefined} target="_blank" rel="noreferrer" aria-disabled={!validFolderUrl(campaign.folderUrl)} className={`allergen-small-button text-center ${validFolderUrl(campaign.folderUrl) ? "bg-[#d62d1d] text-white" : "pointer-events-none opacity-40"}`}>Folder controleren ↗</a>
+          </div>
+          <p className="mt-2 flex items-center gap-1.5 text-[.68rem] font-bold text-[#55715c]"><ShieldIcon /> Veilige https-link naar {folderHost(campaign.folderUrl)} · geen PDF-bijlage</p>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2" role="tablist" aria-label="Mailtype kiezen">
+          {(Object.keys(templateConfig) as SendKind[]).map((kind) => <button key={kind} type="button" role="tab" aria-selected={activeTemplate === kind} onClick={() => setActiveTemplate(kind)} className={`rounded-full px-4 py-2 text-xs font-black transition ${activeTemplate === kind ? "bg-[#d62d1d] text-white shadow-sm" : "bg-[#f4eee5] text-[#6b4d43] hover:bg-[#eee4d7]"}`}>{templateConfig[kind].label}</button>)}
+        </div>
+
+        <div className="mt-4 grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(23rem,.78fr)]">
+          <div>
+            <label className="block text-xs font-black">Onderwerp<input className="allergen-input mt-1" value={activeSubject} onChange={(event) => patch({ [activeConfig.subjectKey]: event.target.value })} /></label>
+            <label className="mt-3 block text-xs font-black">Mailtekst<textarea className="allergen-input mt-1 min-h-72 resize-y leading-relaxed" value={activeBody} onChange={(event) => patch({ [activeConfig.bodyKey]: event.target.value })} /></label>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[.68rem] text-[#716a62]"><p>Gebruik <strong>{"{{contactpersoon}}"}</strong> voor een persoonlijke aanhef.</p><p>Knop, betrouwbare link en afmeldtekst worden automatisch toegevoegd.</p></div>
+          </div>
+          <div><p className="mb-2 text-[.62rem] font-black uppercase tracking-[.15em] text-[#8b7164]">Inboxvoorbeeld</p><EmailPreview subject={activeSubject} body={activeBody} folderUrl={campaign.folderUrl} /></div>
+        </div>
+      </section>
+
+      <section className="rounded-[1.6rem] border border-[#e5ddd1] bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><p className="text-[.62rem] font-black uppercase tracking-[.16em] text-[#31552a]">Verzendlijst</p><h2 className="mt-0.5 text-xl font-black">Klanten en e-mailadressen</h2><p className="mt-1 text-sm text-[#716a62]">{campaign.customers.length} klanten · {addressCount} adressen · bestelde klanten worden automatisch overgeslagen</p></div>
+          <div className="flex flex-wrap gap-2"><button type="button" className="allergen-small-button" onClick={() => setImportOpen((open) => !open)}>+ Meerdere adressen</button><button type="button" className="allergen-small-button" onClick={addCustomer}>+ Klant</button><button type="button" className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={() => void save()}>{saving ? "Opslaan..." : "Wijzigingen opslaan"}</button></div>
+        </div>
+
+        {importOpen && <div className="mt-4 rounded-2xl border border-[#d6e5d8] bg-[#f6faf4] p-4"><div className="flex flex-col gap-3 lg:flex-row"><label className="min-w-0 flex-1 text-xs font-black">Plak meerdere adressen<textarea value={bulkAddresses} onChange={(event) => setBulkAddresses(event.target.value)} className="allergen-input mt-1 min-h-28 resize-y" placeholder={"Bedrijfsnaam; Contactpersoon; mail@bedrijf.nl\nAnder bedrijf; Naam; ander@bedrijf.nl\nof alleen: mail@bedrijf.nl"} /></label><div className="flex shrink-0 items-end gap-2"><button type="button" className="allergen-small-button" onClick={() => { setImportOpen(false); setBulkAddresses(""); }}>Annuleren</button><button type="button" className="allergen-small-button bg-[#31552a] text-white" onClick={importBulkAddresses}>Toevoegen en selecteren</button></div></div><p className="mt-2 text-[.68rem] text-[#647068]">Dubbele en ongeldige adressen worden automatisch overgeslagen.</p></div>}
+
+        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#d6e5d8] bg-[#f6faf4] p-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-2"><label className="flex items-center gap-2 px-1 text-sm font-black"><input type="checkbox" checked={allShownSelected} onChange={(event) => setSelected(event.target.checked
+            ? Array.from(new Set([...selected, ...shown.map((customer) => customer.id)]))
+            : selected.filter((id) => !shown.some((customer) => customer.id === id))
+          )} /> Alles in beeld</label><span className="rounded-full bg-white px-3 py-1 text-xs font-black text-[#31552a]">{selected.length} geselecteerd</span>{selected.length > 0 && <button type="button" className="text-xs font-bold text-[#716a62] underline" onClick={() => setSelected([])}>Selectie wissen</button>}</div>
+          <div className="flex flex-wrap gap-2"><button type="button" className="allergen-small-button bg-[#d62d1d] text-white" disabled={!campaign.customers.some((customer) => selected.includes(customer.id) && recipientsFor(customer, "folder").length)} onClick={() => beginMail(selected, "folder")}>Nieuwsbrief versturen</button><button type="button" className="allergen-small-button" disabled={!campaign.customers.some((customer) => selected.includes(customer.id) && recipientsFor(customer, "reminder1").length)} onClick={() => beginMail(selected, "reminder1")}>Reminder 1</button><button type="button" className="allergen-small-button" disabled={!campaign.customers.some((customer) => selected.includes(customer.id) && recipientsFor(customer, "reminder2").length)} onClick={() => beginMail(selected, "reminder2")}>Reminder 2</button></div>
+        </div>
+
+        <div className="mt-3 flex justify-end"><input className="allergen-input w-full sm:max-w-sm" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zoek bedrijf, contactpersoon of e-mail..." /></div>
+
+        <div className="mt-3 overflow-x-auto"><div className="min-w-[1080px] border-t border-[#e5e0d9]">{shown.map((customer) => {
+          const folderRecipients = recipientsFor(customer, "folder");
+          const reminder1Recipients = recipientsFor(customer, "reminder1");
+          const reminder2Recipients = recipientsFor(customer, "reminder2");
+          return <article key={customer.id} className={`border-b border-[#e5e0d9] ${customer.ordered ? "bg-[#f5f7f3]" : ""}`}><div className="grid grid-cols-[auto_1.2fr_2fr_.8fr_2.2fr_auto] items-center gap-2 px-2 py-2 text-sm"><input aria-label={`${customer.company} selecteren`} type="checkbox" checked={selected.includes(customer.id)} onChange={(event) => setSelected((current) => event.target.checked ? Array.from(new Set([...current, customer.id])) : current.filter((id) => id !== customer.id))} /><strong>{customer.company || "Nieuwe klant"}</strong><span className="truncate text-[#625c54]">{customer.recipients.map((recipient) => recipient.email).filter(Boolean).join(", ") || "Nog geen e-mailadres"}</span><label className="flex items-center gap-1 font-bold"><input type="checkbox" checked={Boolean(customer.ordered)} onChange={(event) => patchCustomer(customer.id, { ordered: event.target.checked, orderedAt: event.target.checked ? new Date().toISOString() : "" })} /> Besteld</label><div className="flex gap-1"><button type="button" className="allergen-small-button" disabled={!folderRecipients.length} onClick={() => beginMail([customer.id], "folder")}>Nieuwsbrief</button><button type="button" className="allergen-small-button" disabled={!reminder1Recipients.length} onClick={() => beginMail([customer.id], "reminder1")}>Reminder 1</button><button type="button" className="allergen-small-button" disabled={!reminder2Recipients.length} onClick={() => beginMail([customer.id], "reminder2")}>Reminder 2</button></div><button type="button" className="allergen-small-button" onClick={() => setExpanded(expanded === customer.id ? "" : customer.id)}>{expanded === customer.id ? "Sluiten" : "Bewerken"}</button></div>{expanded === customer.id && <div className="border-t border-[#eee9e2] bg-[#faf8f5] p-3"><div className="flex gap-2"><input className="allergen-input font-black" value={customer.company} onChange={(event) => patchCustomer(customer.id, { company: event.target.value })} placeholder="Bedrijfsnaam" /><button type="button" className="allergen-small-button" onClick={() => addRecipient(customer)}>+ E-mailadres</button><button type="button" className="px-2 text-sm font-bold text-red-700" onClick={() => patch({ customers: campaign.customers.filter((item) => item.id !== customer.id) })}>Klant verwijderen</button></div>{customer.recipients.map((recipient) => <div key={recipient.id} className="mt-2 grid grid-cols-[1fr_1.2fr_auto_auto] gap-2"><input className="allergen-input" value={recipient.contactName} onChange={(event) => patchRecipient(customer.id, recipient.id, { contactName: event.target.value })} placeholder="Contactpersoon" /><input className="allergen-input" type="email" value={recipient.email} onChange={(event) => patchRecipient(customer.id, recipient.id, { email: event.target.value })} placeholder="E-mailadres" /><label className="flex items-center gap-1 text-xs font-bold"><input type="checkbox" checked={recipient.doNotEmail} onChange={(event) => patchRecipient(customer.id, recipient.id, { doNotEmail: event.target.checked })} /> Niet mailen</label><button type="button" className="text-sm font-bold text-red-700" onClick={() => patchCustomer(customer.id, { recipients: customer.recipients.filter((item) => item.id !== recipient.id) })}>Verwijder</button></div>)}<div className="mt-2 flex items-center gap-2"><input className="allergen-input" value={customer.notes} onChange={(event) => patchCustomer(customer.id, { notes: event.target.value })} placeholder="Notities" /><button type="button" className="allergen-small-button bg-[#31552a] text-white" disabled={saving} onClick={() => void save(customer.id)}>{saving ? "Opslaan..." : "Klant opslaan"}</button></div></div>}</article>;
+        })}{!shown.length && <p className="p-4 text-sm text-[#777067]">Geen klanten gevonden.</p>}</div></div>
+      </section>
+
+      {pending && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#2d140d]/60 p-0 backdrop-blur-sm sm:items-center sm:p-5"><section role="dialog" aria-modal="true" aria-labelledby="mail-dialog-title" className="max-h-[94dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-white p-5 shadow-2xl sm:rounded-[2rem] sm:p-7"><div className="flex items-start justify-between gap-4"><div><p className="text-[.62rem] font-black uppercase tracking-[.16em] text-[#d62d1d]">Privé verzenden</p><h2 id="mail-dialog-title" className="mt-1 text-2xl font-black">{templateConfig[pending.kind].label}</h2><p className="mt-1 text-sm font-bold text-[#716a62]">{pendingCustomers.length} klant{pendingCustomers.length === 1 ? "" : "en"} · {pendingAddressCount} afzonderlijke e-mail{pendingAddressCount === 1 ? "" : "s"}</p></div><button type="button" aria-label="Sluiten" onClick={() => setPending(null)} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f4eee5] text-lg font-black">×</button></div>
+        <div className="mt-4 flex items-start gap-2 rounded-xl bg-[#edf5ea] p-3 text-xs font-bold leading-relaxed text-[#31552a]"><ShieldIcon /><p>Elk adres ontvangt een eigen mail met persoonlijke aanhef. Ontvangers kunnen elkaars e-mailadres niet zien.</p></div>
+        {pending.phase === "choice" && <><p className="my-5 font-bold">Wil je de standaardmail gebruiken of deze alleen voor deze verzending aanpassen?</p><div className="flex flex-wrap justify-end gap-2"><button type="button" className="allergen-small-button" onClick={() => setPending(null)}>Annuleren</button><button type="button" className="allergen-small-button" onClick={() => setPending({ ...pending, phase: "edit" })}>Mail aanpassen</button><button type="button" className="allergen-small-button bg-[#d62d1d] text-white" onClick={() => setPending({ ...pending, phase: "confirm" })}>Standaardmail gebruiken</button></div></>}
+        {pending.phase === "edit" && <><label className="mt-4 block text-xs font-black">Onderwerp<input className="allergen-input mt-1" value={pending.subject} onChange={(event) => setPending({ ...pending, subject: event.target.value })} /></label><label className="mt-3 block text-xs font-black">Mailtekst<textarea className="allergen-input mt-1 min-h-64 resize-y" value={pending.body} onChange={(event) => setPending({ ...pending, body: event.target.value })} /></label><div className="mt-4 flex justify-end gap-2"><button type="button" className="allergen-small-button" onClick={() => setPending(null)}>Annuleren</button><button type="button" className="allergen-small-button bg-[#d62d1d] text-white" onClick={() => setPending({ ...pending, phase: "confirm" })}>Naar laatste controle</button></div></>}
+        {pending.phase === "confirm" && <><div className="my-4 rounded-2xl border border-[#ead7b4] bg-[#fff8df] p-4"><p className="font-black">Laatste controle</p><p className="mt-1 text-sm">Je verstuurt {pendingAddressCount} persoonlijke mail{pendingAddressCount === 1 ? "" : "s"}. De digitale folderknop en afmeldtekst worden automatisch toegevoegd.</p><p className="mt-3 max-h-24 overflow-auto text-xs leading-relaxed text-[#716a62]">{pendingCustomers.map((customer) => customer.company).join(", ")}</p><p className="mt-3 border-t border-[#ead7b4] pt-3 text-sm font-black">{pending.subject}</p></div><div className="flex justify-end gap-2"><button type="button" className="allergen-small-button" disabled={saving} onClick={() => setPending(null)}>Annuleren</button><button type="button" className="allergen-small-button bg-[#d62d1d] text-white" disabled={saving || !pendingAddressCount} onClick={() => void sendPending()}>{saving ? `Versturen ${sendProgress}/${pendingAddressCount}...` : `Definitief naar ${pendingAddressCount} adres${pendingAddressCount === 1 ? "" : "sen"}`}</button></div></>}
+      </section></div>}
+    </div>
+  );
 }
