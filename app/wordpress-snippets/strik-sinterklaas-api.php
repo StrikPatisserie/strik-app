@@ -33,7 +33,7 @@ if (!defined('STRIK_SINTERKLAAS_MAILING_OPTION_NAME')) {
 }
 
 if (!defined('STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION')) {
-    define('STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION', 'strik-html-v2');
+    define('STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION', 'strik-html-v3');
 }
 
 if (!defined('STRIK_SINTERKLAAS_RECIPIENT')) {
@@ -1169,8 +1169,6 @@ function strik_sinterklaas_mailing_paragraphs($body) {
 
 function strik_sinterklaas_mailing_html($body, $folder_url, $kind, $year) {
     $safe_url = esc_url($folder_url);
-    $host = wp_parse_url($folder_url, PHP_URL_HOST);
-    if (!is_string($host) || $host === '') $host = 'de beveiligde Strik-folder';
     $button_label = $kind === 'folder' ? 'Bekijk de interactieve folder' : 'Open de digitale folder';
     $preheader = $kind === 'folder'
         ? 'Bekijk het zakelijke Sinterklaasassortiment, actuele prijzen en staffels van Strik Patisserie.'
@@ -1178,10 +1176,6 @@ function strik_sinterklaas_mailing_html($body, $folder_url, $kind, $year) {
     $cta = $safe_url !== ''
         ? '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0 20px;"><tr><td bgcolor="#d62d1d" style="border-radius:999px;"><a href="' . $safe_url . '" style="display:inline-block;padding:14px 24px;font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:999px;">' . esc_html($button_label) . ' &rarr;</a></td></tr></table>'
         : '';
-    $trust_box = $safe_url !== ''
-        ? '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:22px;background:#fff8e5;border:1px solid #ead7b4;border-radius:12px;"><tr><td style="padding:14px 16px;font-family:Arial,sans-serif;font-size:12px;line-height:1.55;color:#755143;"><strong style="color:#31552a;">Geen bijlage of download nodig</strong><br>De knop opent onze interactieve folder op <strong>' . esc_html($host) . '</strong>.<br><a href="' . $safe_url . '" style="color:#8d2f1f;word-break:break-all;">' . esc_html($folder_url) . '</a></td></tr></table>'
-        : '';
-
     return '<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
         . '<body style="margin:0;padding:0;background:#f4f0e9;">'
         . '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">' . esc_html($preheader) . '</div>'
@@ -1194,7 +1188,7 @@ function strik_sinterklaas_mailing_html($body, $folder_url, $kind, $year) {
         . '<div style="font-family:Arial,sans-serif;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#ffffff;">Zakelijk Sinterklaas ' . esc_html($year) . '</div>'
         . '<div style="margin-top:3px;font-family:Georgia,serif;font-size:28px;font-style:italic;color:#d62d1d;">Met een Strik</div>'
         . '</td></tr></table></td></tr>'
-        . '<tr><td style="padding:30px;">' . strik_sinterklaas_mailing_paragraphs($body) . $cta . $trust_box . '</td></tr>'
+        . '<tr><td style="padding:30px;">' . strik_sinterklaas_mailing_paragraphs($body) . $cta . '</td></tr>'
         . '<tr><td bgcolor="#5a170f" style="padding:20px 30px;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#f9e7cd;">'
         . '<strong style="color:#ffffff;">Strik Patisserie</strong> &middot; Nijmegen &middot; <a href="mailto:info@strik-patisserie.nl" style="color:#ffffff;">info@strik-patisserie.nl</a><br>'
         . 'Je ontvangt deze zakelijke Sinterklaasmail omdat je contact hebt gehad met Strik Patisserie. Geen mails meer ontvangen? Antwoord op deze e-mail met <strong style="color:#ffffff;">afmelden</strong>.'

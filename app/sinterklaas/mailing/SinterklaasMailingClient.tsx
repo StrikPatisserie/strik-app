@@ -174,10 +174,6 @@ function EmailPreview({ subject, body, folderUrl }: Readonly<{ subject: string; 
         <a href={validFolderUrl(folderUrl) ? folderUrl : undefined} target="_blank" rel="noreferrer" className="mt-6 inline-flex rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-md">
           Bekijk de interactieve folder →
         </a>
-        <div className="mt-5 rounded-xl border border-[#ead7b4] bg-[#fff8e5] p-3 text-[.66rem] font-bold leading-relaxed text-[#755143]">
-          <p className="flex items-center gap-1.5 text-[#31552a]"><ShieldIcon /> Geen bijlage of download nodig</p>
-          <p className="mt-1 break-all">De knop opent: {folderUrl || "vul eerst de folderlink in"}</p>
-        </div>
       </div>
       <div className="bg-[#5a170f] px-5 py-4 text-[.62rem] leading-relaxed text-[#f9e7cd]">
         Strik Patisserie · Nijmegen · info@strik-patisserie.nl<br />Geen zakelijke Sinterklaasmail meer? Antwoord met ‘afmelden’.
@@ -399,7 +395,7 @@ export default function SinterklaasMailingClient() {
       <section className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-[#e5ddd1] bg-white px-3 py-2.5 text-[.68rem] font-black text-[#635a52] shadow-sm">
         <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#edf5ea] text-[#31552a]"><ShieldIcon /></span>Privé per adres</span>
         <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fff4d1] text-[#b14925]"><LinkIcon /></span>Actuele folderlink</span>
-        <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fff0ec] text-[#d62d1d]"><MailIcon /></span>Herkenbare Strik-afzender</span>
+        <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fff0ec] text-[#d62d1d]"><MailIcon /></span>Antwoorden naar info@strik-patisserie.nl</span>
         <span className="ml-auto text-[#857a70]">{allowedAddressCount} mailbaar</span>
       </section>
 
@@ -429,8 +425,8 @@ export default function SinterklaasMailingClient() {
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-[.62rem] font-black uppercase tracking-[.15em] text-[#8b7164]">Inboxvoorbeeld</p>
-              <span className={`rounded-full px-2.5 py-1 text-[.58rem] font-black ${campaign.mailTemplateVersion === "strik-html-v2" ? "bg-[#e9f4e6] text-[#31552a]" : "bg-[#fff1d1] text-[#8a4d14]"}`}>
-                {campaign.mailTemplateVersion === "strik-html-v2" ? "Opgemaakte mail actief" : "Mailtemplate nog activeren in WordPress"}
+              <span className={`rounded-full px-2.5 py-1 text-[.58rem] font-black ${campaign.mailTemplateVersion === "strik-html-v3" ? "bg-[#e9f4e6] text-[#31552a]" : "bg-[#fff1d1] text-[#8a4d14]"}`}>
+                {campaign.mailTemplateVersion === "strik-html-v3" ? "Opgemaakte mail actief" : "Mailtemplate nog bijwerken in WordPress"}
               </span>
             </div>
             <EmailPreview subject={activeSubject} body={activeBody} folderUrl={campaign.folderUrl} />
