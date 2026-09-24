@@ -32,6 +32,10 @@ if (!defined('STRIK_SINTERKLAAS_MAILING_OPTION_NAME')) {
     define('STRIK_SINTERKLAAS_MAILING_OPTION_NAME', 'strik_sinterklaas_mailing_campaigns');
 }
 
+if (!defined('STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION')) {
+    define('STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION', 'strik-html-v2');
+}
+
 if (!defined('STRIK_SINTERKLAAS_RECIPIENT')) {
     define('STRIK_SINTERKLAAS_RECIPIENT', 'info@strik-patisserie.nl');
 }
@@ -1122,11 +1126,19 @@ function strik_sinterklaas_mailing_clean($input, $existing = array()) {
 }
 }
 
+if (!function_exists('strik_sinterklaas_mailing_response')) {
+function strik_sinterklaas_mailing_response($campaign) {
+    if (!is_array($campaign)) $campaign = array();
+    $campaign['mailTemplateVersion'] = STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION;
+    return rest_ensure_response($campaign);
+}
+}
+
 if (!function_exists('strik_sinterklaas_mailing_get')) {
 function strik_sinterklaas_mailing_get($request) {
     $year = strik_sinterklaas_year($request->get_param('year'));
     $campaigns = get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, array());
-    return rest_ensure_response(isset($campaigns[$year]) ? $campaigns[$year] : array('year' => $year, 'customers' => array()));
+    return strik_sinterklaas_mailing_response(isset($campaigns[$year]) ? $campaigns[$year] : array('year' => $year, 'customers' => array()));
 }
 }
 
@@ -1139,7 +1151,7 @@ function strik_sinterklaas_mailing_save($request) {
     $year = strik_sinterklaas_year(isset($input['year']) ? $input['year'] : '');
     $campaigns[$year] = strik_sinterklaas_mailing_clean($input, isset($campaigns[$year]) ? $campaigns[$year] : array());
     update_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, $campaigns, false);
-    return rest_ensure_response($campaigns[$year]);
+    return strik_sinterklaas_mailing_response($campaigns[$year]);
 }
 }
 
@@ -1176,8 +1188,8 @@ function strik_sinterklaas_mailing_html($body, $folder_url, $kind, $year) {
         . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f0e9;"><tr><td align="center" style="padding:24px 12px;">'
         . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 12px 35px rgba(75,45,24,.10);">'
         . '<tr><td bgcolor="#efb800" style="padding:26px 30px;">'
-        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td style="vertical-align:middle;">'
-        . '<div style="display:inline-block;padding:9px 10px;background:#ffffff;border-radius:12px;font-family:Arial,sans-serif;font-size:11px;line-height:1.05;font-weight:800;letter-spacing:.08em;color:#211b18;text-align:center;">STRIK<br><span style="font-size:7px;letter-spacing:.12em;">PATISSERIE</span></div>'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td width="58" style="width:58px;vertical-align:middle;">'
+        . '<img src="https://strik-app.vercel.app/strik-logo.png" width="52" height="52" alt="Strik Patisserie" style="display:block;width:52px;height:52px;object-fit:contain;border:0;">'
         . '</td><td style="padding-left:16px;vertical-align:middle;">'
         . '<div style="font-family:Arial,sans-serif;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#ffffff;">Zakelijk Sinterklaas ' . esc_html($year) . '</div>'
         . '<div style="margin-top:3px;font-family:Georgia,serif;font-size:28px;font-style:italic;color:#d62d1d;">Met een Strik</div>'
@@ -1225,7 +1237,7 @@ function strik_sinterklaas_mailing_send($request) {
         $campaign['updatedAt'] = wp_date(DATE_ATOM);
         $campaigns[$year] = $campaign;
         update_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, $campaigns, false);
-        return rest_ensure_response($campaign);
+        return strik_sinterklaas_mailing_response($campaign);
       }
     }
     return new WP_Error('contact_missing', 'Contact niet gevonden.', array('status' => 404));

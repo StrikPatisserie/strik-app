@@ -29,6 +29,7 @@ type Campaign = {
   reminder2Body: string;
   folderUrl: string;
   customers: Customer[];
+  mailTemplateVersion?: string;
 };
 type PendingMail = {
   customerIds: string[];
@@ -114,8 +115,8 @@ function folderHost(value: string) {
 function migrateCampaign(data: Partial<Campaign>) {
   const customers = Array.isArray(data.customers) ? data.customers : [];
   const hasLegacyPdf = !data.folderUrl || /\.pdf(?:$|[?#])/i.test(data.folderUrl);
-  const mentionsAttachment = /\bbijlage\b/i.test(data.body || "");
-  if (hasLegacyPdf || mentionsAttachment) {
+  const mentionsLegacyAttachment = /\bin de bijlage\b|\b(?:pdf|folder) als bijlage\b/i.test(data.body || "");
+  if (hasLegacyPdf || mentionsLegacyAttachment) {
     return { campaign: { ...defaults, customers }, migrated: true };
   }
   return { campaign: { ...defaults, ...data, customers } as Campaign, migrated: false };
@@ -203,10 +204,10 @@ export default function SinterklaasMailingClient() {
           setMessage("");
           return;
         }
-        setMessage(data.needsImport ? "Klantenlijst centraal opslaan..." : "Oude PDF-campagne omzetten naar de digitale folder...");
+        setMessage(data.needsImport ? "Klantenlijst centraal opslaan..." : "");
         const saved = await api("POST", loaded);
         setCampaign({ ...loaded, ...saved } as Campaign);
-        setMessage(migrated ? "Campagne is omgezet: geen PDF meer, de interactieve folderlink staat klaar." : `${loaded.customers.length} klanten zijn centraal opgeslagen.`);
+        setMessage(data.needsImport ? `${loaded.customers.length} klanten zijn centraal opgeslagen.` : "");
       })
       .catch((error) => setMessage(error instanceof Error ? error.message : "Mailing laden mislukt."));
   }, []);
@@ -348,27 +349,27 @@ export default function SinterklaasMailingClient() {
     <div className="space-y-5">
       {message && <div role="status" className="rounded-xl border border-[#e7c978] bg-[#fff8df] px-4 py-3 text-sm font-bold text-[#692115]">{message}</div>}
 
-      <section className="relative overflow-hidden rounded-[2rem] bg-[#efb800] p-5 text-[#5a170f] shadow-[0_18px_50px_rgba(94,47,7,.13)] sm:p-7">
-        <span className="pointer-events-none absolute -right-16 -top-20 h-60 w-60 rounded-full bg-[#d62d1d]/15" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="relative overflow-hidden rounded-[1.6rem] bg-[#efb800] p-4 text-[#5a170f] shadow-[0_12px_35px_rgba(94,47,7,.12)] sm:px-5">
+        <span className="pointer-events-none absolute -right-12 -top-20 h-48 w-48 rounded-full bg-[#d62d1d]/14" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/90 shadow-sm"><Image src="/strik-logo.png" alt="Strik Patisserie" width={84} height={58} className="h-12 w-auto object-contain" /></div>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/90 shadow-sm"><Image src="/strik-logo.png" alt="Strik Patisserie" width={72} height={48} className="h-9 w-auto object-contain" /></div>
             <div>
-              <p className="text-[.62rem] font-black uppercase tracking-[.2em] text-white">Digitale B2B-campagne {campaign.year}</p>
-              <h2 className="mt-1 text-2xl font-black sm:text-3xl">Van nieuwsbrief naar interactieve folder</h2>
-              <p className="mt-1 max-w-2xl text-sm font-bold leading-relaxed text-[#7b2b1b]">Geen PDF of onbekende bijlage. Ontvangers openen de actuele folder via één herkenbare knop en kunnen direct reageren op Strik.</p>
+              <p className="text-[.58rem] font-black uppercase tracking-[.2em] text-white">B2B-mailing {campaign.year}</p>
+              <h2 className="mt-0.5 text-xl font-black sm:text-2xl">Sinterklaasnieuwsbrief</h2>
             </div>
           </div>
-          <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
-            {[["Klanten", campaign.customers.length], ["Mailbaar", allowedAddressCount], ["Verstuurd", sentAddressCount]].map(([label, value]) => <div key={label} className="min-w-20 rounded-2xl bg-white/90 px-3 py-3 shadow-sm"><p className="text-[.58rem] font-black uppercase tracking-wider text-[#9a4d35]">{label}</p><p className="mt-0.5 text-2xl font-black">{value}</p></div>)}
+          <div className="grid shrink-0 grid-cols-2 gap-2 text-center">
+            {[["Klanten", campaign.customers.length], ["Verstuurd", sentAddressCount]].map(([label, value]) => <div key={label} className="min-w-24 rounded-xl bg-white/92 px-3 py-2 shadow-sm"><p className="text-[.54rem] font-black uppercase tracking-wider text-[#9a4d35]">{label}</p><p className="text-xl font-black leading-tight">{value}</p></div>)}
           </div>
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-3">
-        <div className="flex gap-3 rounded-2xl border border-[#d9e6da] bg-white p-4 shadow-sm"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#edf5ea] text-[#31552a]"><ShieldIcon /></span><div><h3 className="text-sm font-black">BCC-veilig verzenden</h3><p className="mt-1 text-xs leading-relaxed text-[#716a62]">Nog veiliger dan één BCC-mail: iedere ontvanger krijgt afzonderlijk een persoonlijke mail. Andere adressen zijn nooit zichtbaar.</p></div></div>
-        <div className="flex gap-3 rounded-2xl border border-[#ead7b4] bg-white p-4 shadow-sm"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fff4d1] text-[#b14925]"><LinkIcon /></span><div><h3 className="text-sm font-black">Eén actuele folderlink</h3><p className="mt-1 text-xs leading-relaxed text-[#716a62]">Geen bestanden of oude versies; wijzigingen in de folder zijn direct zichtbaar.</p></div></div>
-        <div className="flex gap-3 rounded-2xl border border-[#eed8d2] bg-white p-4 shadow-sm"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fff0ec] text-[#d62d1d]"><MailIcon /></span><div><h3 className="text-sm font-black">Herkenbaar van Strik</h3><p className="mt-1 text-xs leading-relaxed text-[#716a62]">Afzender en reply-to zijn info@strik-patisserie.nl; zonder externe afbeeldingen.</p></div></div>
+      <section className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-[#e5ddd1] bg-white px-3 py-2.5 text-[.68rem] font-black text-[#635a52] shadow-sm">
+        <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#edf5ea] text-[#31552a]"><ShieldIcon /></span>Privé per adres</span>
+        <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fff4d1] text-[#b14925]"><LinkIcon /></span>Actuele folderlink</span>
+        <span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fff0ec] text-[#d62d1d]"><MailIcon /></span>Herkenbare Strik-afzender</span>
+        <span className="ml-auto text-[#857a70]">{allowedAddressCount} mailbaar</span>
       </section>
 
       <section className="rounded-[1.6rem] border border-[#e5ddd1] bg-white p-4 shadow-sm sm:p-5">
@@ -394,7 +395,15 @@ export default function SinterklaasMailingClient() {
             <label className="mt-3 block text-xs font-black">Mailtekst<textarea className="allergen-input mt-1 min-h-72 resize-y leading-relaxed" value={activeBody} onChange={(event) => patch({ [activeConfig.bodyKey]: event.target.value })} /></label>
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[.68rem] text-[#716a62]"><p>Gebruik <strong>{"{{contactpersoon}}"}</strong> voor een persoonlijke aanhef.</p><p>Knop, betrouwbare link en afmeldtekst worden automatisch toegevoegd.</p></div>
           </div>
-          <div><p className="mb-2 text-[.62rem] font-black uppercase tracking-[.15em] text-[#8b7164]">Inboxvoorbeeld</p><EmailPreview subject={activeSubject} body={activeBody} folderUrl={campaign.folderUrl} /></div>
+          <div>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[.62rem] font-black uppercase tracking-[.15em] text-[#8b7164]">Inboxvoorbeeld</p>
+              <span className={`rounded-full px-2.5 py-1 text-[.58rem] font-black ${campaign.mailTemplateVersion === "strik-html-v2" ? "bg-[#e9f4e6] text-[#31552a]" : "bg-[#fff1d1] text-[#8a4d14]"}`}>
+                {campaign.mailTemplateVersion === "strik-html-v2" ? "Opgemaakte mail actief" : "Mailtemplate nog activeren in WordPress"}
+              </span>
+            </div>
+            <EmailPreview subject={activeSubject} body={activeBody} folderUrl={campaign.folderUrl} />
+          </div>
         </div>
       </section>
 
