@@ -12,6 +12,7 @@ import {
   businessFolderLogoPrice,
 } from "@/app/lib/business-folder-pricing";
 import B2BChocolateLetters, { describeB2BLetter, type B2BLetterLine } from "./B2BChocolateLetters";
+import B2BPriceSummary from "./B2BPriceSummary";
 
 type PriceTier = { min: number; label: string; price?: number; discountPercent?: number };
 type ProductVariant = { label: string; retailPriceIncl: number };
@@ -240,9 +241,9 @@ const products: Product[] = [
     allergens: ["gluten", "lactose", "amandel", "soja"],
     accent: "#f7c8aa",
     tiers: [
-      { min: 1, price: 16.95, label: "<15" },
-      { min: 15, price: 16.15, label: "15-50" },
-      { min: 51, price: 15.3, label: ">50" },
+      { min: 1, price: 16.95, label: "<15", discountPercent: 0 },
+      { min: 15, price: 16.15, label: "15–50", discountPercent: 5 },
+      { min: 51, price: 15.3, label: ">50", discountPercent: 10 },
     ],
   },
   {
@@ -416,21 +417,6 @@ function productSupportsLogo(product: Product) {
   return product.logoAvailable !== false;
 }
 
-function productPricingLabel(
-  product: Product,
-  tier: PriceTier,
-  quantity: number
-) {
-  if (product.fixedOffer) {
-    return `Vaste aanbieding · ${tier.discountPercent || 0}% korting`;
-  }
-  if (!quantity) return "Winkelprijs per stuk";
-
-  return `${tier.label} stuks${
-    tier.discountPercent ? ` · ${tier.discountPercent}% korting` : " · winkelprijs"
-  }`;
-}
-
 function productPricingDescription(product: Product, tier: PriceTier) {
   if (product.fixedOffer) {
     return `vaste aanbieding · ${tier.discountPercent || 0}% korting`;
@@ -519,10 +505,6 @@ export default function SintB2BConcept() {
 
   const spoutLetterLines = letterLines.filter((line) => line.style === "spuit");
   const shapeLetterLines = letterLines.filter((line) => line.style === "vorm");
-  const letterQuantity = spoutLetterLines.reduce((sum, line) => sum + line.quantity, 0);
-  const shapeLetterQuantity = shapeLetterLines.reduce((sum, line) => sum + line.quantity, 0);
-  const letterTier = tierFor(chocolateLetterProduct, Math.max(1, letterQuantity));
-  const shapeLetterTier = tierFor(shapeLetterProduct, Math.max(1, shapeLetterQuantity));
   const selected = useMemo(() => {
     const letters = ([
       { product: chocolateLetterProduct, style: "spuit" as const },
@@ -725,7 +707,6 @@ export default function SintB2BConcept() {
             onOpenAllergens={() => setProductInfo({ product: chocolateLetterProduct, section: "allergens" })}
             tiers={chocolateLetterTiers}
             includeVat={includeVat}
-            activeTierLabel={letterTier.label}
             total={includeVat ? letterTotalIncl : letterTotalEx}
           />
           <B2BChocolateLetters
@@ -740,7 +721,6 @@ export default function SintB2BConcept() {
             onOpenAllergens={() => setProductInfo({ product: shapeLetterProduct, section: "allergens" })}
             tiers={chocolateLetterTiers}
             includeVat={includeVat}
-            activeTierLabel={shapeLetterTier.label}
             total={includeVat ? shapeLetterTotalIncl : shapeLetterTotalEx}
           />
           {folderProducts.map((product) => {
@@ -753,6 +733,11 @@ export default function SintB2BConcept() {
             const selectedChoiceLabel = productChoiceLabel(product, selectedOption);
             const [duoFirst, duoSecond] = product.duoOptions?.length ? selectedDuoOptions(product, selectedOption) : [undefined, undefined];
             const selectedGalleryIndex = Math.max(0, product.gallery?.findIndex((photo) => photo.src === selectedImage) ?? 0);
+            const displayedUnitPrice = roundCents(
+              productUnitPrice(configuredProduct, tier, includeVat) +
+              (logo[product.id] && productSupportsLogo(product) ? productLogoPrice(includeVat) : 0)
+            );
+            const displayedTotalPrice = roundCents(quantity * displayedUnitPrice);
             return <article id={`product-${product.id}`} key={product.id} className="flex h-full flex-col overflow-hidden rounded-[1.35rem] bg-[#fff3cf] shadow-[0_12px_34px_rgba(107,35,12,.14)]">
               <div className="relative aspect-[3/4] shrink-0 overflow-hidden">
                 <Image src={selectedImage} alt={`${product.name}${selectedChoiceLabel ? ` · ${selectedChoiceLabel}` : ""}`} fill sizes="(max-width: 640px) 90vw, (max-width: 1280px) 45vw, (max-width: 1536px) 23vw, 18vw" className="object-cover object-center"/>
@@ -771,7 +756,14 @@ export default function SintB2BConcept() {
                 {product.customColorMinimum&&<label className="mt-2.5 block text-[.62rem] font-black text-[#60190f]">Eigen kleurcombinatie · vanaf {product.customColorMinimum} stuks<input type="text" value={customColors[product.id]||""} onChange={(event)=>setCustomColors(current=>({...current,[product.id]:event.target.value}))} disabled={quantity<product.customColorMinimum} placeholder={quantity<product.customColorMinimum?`Kies minimaal ${product.customColorMinimum} stuks`:"Bijv. rood/wit of bedrijfskleuren"} className="mt-0.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-semibold text-[#5a170f] disabled:cursor-not-allowed disabled:bg-[#f2e7cb] disabled:text-[#9a8175]"/><small className="mt-1 block text-[.56rem] font-semibold leading-snug text-[#8c665d]">{quantity<product.customColorMinimum?`Vanaf ${product.customColorMinimum} stuks kun je hier jouw kleuren invullen.`:"De kleurwens wordt meegenomen in de offerteaanvraag."}</small></label>}
                 {product.personalizationText ? <p className="mt-2 text-[.68rem] font-bold text-[#7e493c]">{product.personalizationText}</p> : productSupportsLogo(product) ? <label className="mt-2 flex items-start gap-1.5 text-[.68rem] font-bold"><input type="checkbox" checked={!!logo[product.id]} onChange={(event)=>setLogo(current=>({...current,[product.id]:event.target.checked}))} className="mt-0.5 h-3.5 w-3.5 shrink-0"/> Eigen logo toevoegen (+ {money(BUSINESS_FOLDER_LOGO_PRICE_INCL)} p.s. incl. btw; mogelijkheden op aanvraag)</label> : null}
                 <div className="mt-auto flex items-center gap-1.5 pt-3"><button type="button" aria-label={`Minder ${product.name}`} onClick={()=>setDraftQuantities(current=>({...current,[product.id]:Math.max(0,(current[product.id]??cartQuantity)-1)}))} className="h-9 w-9 rounded-full border-2 border-[#d62d1d] text-base font-black">−</button><input aria-label={`Aantal ${product.name}`} type="number" min="0" value={quantity} onChange={(event)=>setDraftQuantities(current=>({...current,[product.id]:Math.max(0,Number(event.target.value)||0)}))} className="h-9 min-w-0 flex-1 rounded-xl border border-[#e2c99c] bg-white text-center text-sm font-black"/><button type="button" aria-label={`Meer ${product.name}`} onClick={()=>setDraftQuantities(current=>({...current,[product.id]:(current[product.id]??cartQuantity)+1}))} className="h-9 w-9 rounded-full bg-[#d62d1d] text-base font-black text-white">+</button></div>
-                <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[.68rem]"><div className="flex items-center justify-between gap-2"><span className="font-bold text-[#7e493c]">{productPricingLabel(configuredProduct, tier, quantity)}</span><strong className="text-sm text-[#60190f]">{money(productUnitPrice(configuredProduct, tier, includeVat))}</strong></div>{quantity>0&&<div className="mt-1 flex items-center justify-between border-t border-[#eee0c4] pt-1 font-black text-[#60190f]"><span>Totaal</span><span>{money(quantity*(productUnitPrice(configuredProduct, tier, includeVat)+(logo[product.id]&&productSupportsLogo(product)?productLogoPrice(includeVat):0)))}</span></div>}</div>
+                <B2BPriceSummary
+                  unitPrice={displayedUnitPrice}
+                  quantity={quantity}
+                  totalPrice={displayedTotalPrice}
+                  tierLabel={tier.label}
+                  discountPercent={tier.discountPercent}
+                  fixedOffer={product.fixedOffer}
+                />
                 <button type="button" disabled={quantity === 0 && cartQuantity === 0} onClick={()=>setQuantities(current=>({...current,[product.id]:quantity}))} className={`mt-2 h-9 w-full rounded-xl px-3 text-[.68rem] font-black text-white transition disabled:cursor-not-allowed disabled:opacity-40 ${quantity > 0 && quantity === cartQuantity ? "bg-[#5d7f68]" : "bg-[#d62d1d] hover:bg-[#b82417]"}`}>{quantity === 0 && cartQuantity === 0 ? "Kies eerst een aantal" : quantity === 0 ? "Uit mandje" : quantity === cartQuantity ? "✓ In mandje" : cartQuantity > 0 ? "Mandje bijwerken" : "In mandje"}</button>
                 {!product.fixedOffer&&<details className="mt-2 text-[.68rem] text-[#7e493c]"><summary className="cursor-pointer font-bold underline underline-offset-2">Alle staffelprijzen bekijken</summary><div className="mt-2 overflow-hidden rounded-lg border border-[#eadbc3] bg-white">{product.tiers.map((item)=><div key={item.label} className={`flex items-center justify-between border-t border-[#eee0c4] px-2 py-1 first:border-t-0 ${quantity>0&&tier.label===item.label?"font-black text-[#d62d1d]":""}`}><span>{item.label} st.{item.discountPercent ? ` · ${item.discountPercent}%` : ""}</span><span>{money(productUnitPrice(configuredProduct,item,includeVat))}</span></div>)}</div></details>}
               </div>

@@ -4,7 +4,9 @@ import Image from "next/image";
 import { useState } from "react";
 import {
   BUSINESS_FOLDER_LOGO_PRICE_INCL,
+  businessFolderLogoPrice,
 } from "@/app/lib/business-folder-pricing";
+import B2BPriceSummary from "./B2BPriceSummary";
 
 export type B2BLetterLine = {
   id: string;
@@ -60,7 +62,6 @@ export default function B2BChocolateLetters({
   onOpenAllergens,
   tiers,
   includeVat,
-  activeTierLabel,
   total,
 }: Readonly<{
   productId: string;
@@ -75,7 +76,6 @@ export default function B2BChocolateLetters({
   onOpenAllergens: () => void;
   tiers: Tier[];
   includeVat: boolean;
-  activeTierLabel: string;
   total: number;
 }>) {
   const [chocolate, setChocolate] = useState<B2BLetterLine["chocolate"]>("melk");
@@ -87,6 +87,14 @@ export default function B2BChocolateLetters({
   const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
   const priceQuantity = totalQuantity || quantity;
   const currentTier = [...tiers].reverse().find((tier) => priceQuantity >= tier.min) || tiers[0];
+  const selectedRetailPrice = style === "vorm" || size === "groot" ? 13.95 : 8.95;
+  const selectedUnitPrice = Math.round((
+    tierPrice(selectedRetailPrice, currentTier.discountPercent || 0, includeVat) +
+    (withLogo ? businessFolderLogoPrice(includeVat) : 0)
+  ) * 100) / 100;
+  const displayedTotal = totalQuantity > 0
+    ? total
+    : Math.round(quantity * selectedUnitPrice * 100) / 100;
 
   function chooseChocolate(value: B2BLetterLine["chocolate"]) {
     setChocolate(value);
@@ -138,8 +146,14 @@ export default function B2BChocolateLetters({
         <div className="mt-2 grid grid-cols-[auto_4rem_minmax(0,1fr)] items-center gap-2"><label htmlFor={`${productId}-quantity`} className="text-[.62rem] font-black">Aantal</label><input id={`${productId}-quantity`} type="number" min="1" max="10000" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(10000, Number(event.target.value) || 1)))} className="h-9 w-full rounded-xl border border-[#e2c99c] bg-white text-center text-sm font-black text-[#60190f]" /><button type="button" onClick={addLine} className="h-9 min-w-0 rounded-lg bg-[#d62d1d] px-3 text-[.68rem] font-black text-white">In mandje</button></div>
         {lines.length > 0 && <div className="mt-3 rounded-xl bg-white p-2.5"><p className="mb-1.5 text-xs font-black">Jouw letters · {totalQuantity} stuks</p><div className="space-y-1">{lines.map((line) => <div key={line.id} className="flex items-center gap-1.5 border-t border-[#eee0c4] py-1 text-[.68rem]"><span className="min-w-0 flex-1 font-bold">{describeB2BLetter(line)}</span><input aria-label={`Aantal ${describeB2BLetter(line)}`} type="number" min="1" max="10000" value={line.quantity} onChange={(event) => onChange(lines.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, Math.min(10000, Number(event.target.value) || 1)) } : item))} className="w-12 rounded-md border border-[#e2c99c] p-1 text-center text-sm font-black text-[#60190f]" /><button type="button" aria-label={`${describeB2BLetter(line)} verwijderen`} onClick={() => onChange(lines.filter((item) => item.id !== line.id))} className="px-1 text-base font-black text-[#a32b1c]">×</button></div>)}</div></div>}
         <label className="mt-2.5 flex items-center gap-1.5 text-[.62rem] font-bold text-[#60190f]"><input type="checkbox" checked={withLogo} onChange={(event) => onLogoChange(event.target.checked)} />Eigen logo · +{money(BUSINESS_FOLDER_LOGO_PRICE_INCL)} p.s. incl. btw</label>
-        <div className="mt-2.5 rounded-xl bg-white px-2.5 py-2 text-[.68rem] text-[#60190f]"><div className="flex items-center justify-between gap-2"><span><strong>{totalQuantity ? `${totalQuantity} letters` : `Prijs bij ${quantity} ${quantity === 1 ? "letter" : "letters"}`}</strong><small className="block text-[.56rem] font-semibold text-[#8c665d]">Staffel {currentTier.label}{currentTier.discountPercent ? ` · ${currentTier.discountPercent}% korting` : " · winkelprijs"}</small></span>{style === "vorm" ? <strong className="text-right">Groot {money(tierPrice(13.95, currentTier.discountPercent || 0, includeVat))}</strong> : <strong className="text-right">Klein {money(tierPrice(8.95, currentTier.discountPercent || 0, includeVat))}<small className="block">Groot {money(tierPrice(13.95, currentTier.discountPercent || 0, includeVat))}</small></strong>}</div>{totalQuantity > 0 && <p className="mt-1.5 border-t border-[#eee0c4] pt-1.5 text-right font-black">Totaal {money(total)}</p>}</div>
-        <details className="mt-2 text-[.68rem] text-[#7e493c]"><summary className="cursor-pointer font-bold underline underline-offset-2">Alle staffelprijzen bekijken</summary><div className="mt-2 overflow-hidden rounded-lg border border-[#eadbc3] bg-white"><div className={`grid bg-[#f8edd1] px-2 py-1 font-black ${style === "vorm" ? "grid-cols-2" : "grid-cols-3"}`}><span>Aantal</span>{style === "spuit" && <span>Klein</span>}<span>Groot</span></div>{tiers.map((tier) => <div key={tier.label} className={`grid border-t border-[#eee0c4] px-2 py-1 ${style === "vorm" ? "grid-cols-2" : "grid-cols-3"} ${totalQuantity > 0 && activeTierLabel === tier.label ? "font-black text-[#d62d1d]" : ""}`}><span>{tier.label}</span>{style === "spuit" && <span>{money(tierPrice(8.95, tier.discountPercent || 0, includeVat))}</span>}<span>{money(tierPrice(13.95, tier.discountPercent || 0, includeVat))}</span></div>)}</div></details>
+        <B2BPriceSummary
+          unitPrice={selectedUnitPrice}
+          quantity={priceQuantity}
+          totalPrice={displayedTotal}
+          tierLabel={currentTier.label}
+          discountPercent={currentTier.discountPercent}
+        />
+        <details className="mt-2 text-[.68rem] text-[#7e493c]"><summary className="cursor-pointer font-bold underline underline-offset-2">Alle staffelprijzen bekijken</summary><div className="mt-2 overflow-hidden rounded-lg border border-[#eadbc3] bg-white"><div className={`grid bg-[#f8edd1] px-2 py-1 font-black ${style === "vorm" ? "grid-cols-2" : "grid-cols-3"}`}><span>Aantal</span>{style === "spuit" && <span>Klein</span>}<span>Groot</span></div>{tiers.map((tier) => <div key={tier.label} className={`grid border-t border-[#eee0c4] px-2 py-1 ${style === "vorm" ? "grid-cols-2" : "grid-cols-3"} ${currentTier.label === tier.label ? "font-black text-[#d62d1d]" : ""}`}><span>{tier.label}</span>{style === "spuit" && <span>{money(tierPrice(8.95, tier.discountPercent || 0, includeVat))}</span>}<span>{money(tierPrice(13.95, tier.discountPercent || 0, includeVat))}</span></div>)}</div></details>
       </div>
     </article>
   );
