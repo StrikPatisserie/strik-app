@@ -17,7 +17,7 @@ import B2BPriceSummary from "./B2BPriceSummary";
 type PriceTier = { min: number; label: string; price?: number; discountPercent?: number };
 type ProductVariant = { label: string; retailPriceIncl: number };
 type DuoImage = { options: [string, string]; src: string };
-type Allergen = "gluten" | "lactose" | "amandel" | "soja";
+type Allergen = "gluten" | "lactose" | "amandel" | "soja" | "ei";
 type ProductInfoSection = "shelfLife" | "allergens";
 type Product = {
   id: string;
@@ -70,6 +70,7 @@ const ALLERGEN_LABELS: Record<Allergen, string> = {
   lactose: "Lactose",
   amandel: "Amandel / noten",
   soja: "Soja",
+  ei: "Ei",
 };
 const chocolateLetterTiers: PriceTier[] = [
   { min: 1, label: "1–24", discountPercent: 0 },
@@ -135,7 +136,7 @@ const products: Product[] = [
     description: "Speculaasplak met gedicht via QR-code. Winkelprijs € 7,00 incl. btw.",
     image: "/sinterklaas/Speculaasplak met gedicht.png",
     shelfLifeInfo: ["Massief speculaas · t.g.t. ca. 30 dagen"],
-    allergens: ["gluten", "lactose", "soja"],
+    allergens: ["gluten", "lactose", "soja", "ei"],
     accent: "#d79a6d",
     retailPriceIncl: 7,
     logoAvailable: false,
@@ -150,7 +151,7 @@ const products: Product[] = [
       "Een rijk gekruide, smeuïge speculaas-kruidcake. Winkelprijs € 7,95 incl. btw; voor iedere afname geldt 15% korting. Eventuele logokosten worden apart berekend.",
     image: "/sinterklaas/speculaas kruidcake.png",
     shelfLifeInfo: ["Speculaas kruidcake · t.h.t. ca. 7 dagen"],
-    allergens: ["gluten", "lactose", "soja"],
+    allergens: ["gluten", "lactose", "soja", "ei"],
     accent: "#8f563d",
     retailPriceIncl: 7.95,
     fixedOffer: true,
@@ -166,7 +167,7 @@ const products: Product[] = [
       "Chocoladeletter · t.g.t. ca. 30 dagen",
       "Gevuld speculaas · t.h.t. ca. 21 dagen",
     ],
-    allergens: ["gluten", "lactose", "amandel", "soja"],
+    allergens: ["gluten", "lactose", "amandel", "soja", "ei"],
     accent: "#d79a6d",
     retailPriceIncl: 18.35,
     variants: [
@@ -184,7 +185,7 @@ const products: Product[] = [
       "Speculaasbrok · t.g.t. ca. 30 dagen",
       "Chocoladeletter · t.g.t. ca. 30 dagen",
     ],
-    allergens: ["gluten", "lactose", "amandel", "soja"],
+    allergens: ["gluten", "lactose", "amandel", "soja", "ei"],
     accent: "#b9dddf",
     retailPriceIncl: 13.9,
     variants: [
@@ -202,7 +203,7 @@ const products: Product[] = [
     description: "Ca. 30 ambachtelijke speculaasbites, feestelijk verpakt voor Sinterklaas. Winkelprijs € 14,95 incl. btw.",
     image: "/sinterklaas/popcorn bites2.png",
     shelfLifeInfo: ["Speculaasbites · t.h.t. ca. 21 dagen"],
-    allergens: ["gluten", "lactose", "amandel"],
+    allergens: ["gluten", "lactose", "amandel", "ei"],
     accent: "#d79a6d",
     logoAvailable: false,
     retailPriceIncl: 14.95,
@@ -217,7 +218,7 @@ const products: Product[] = [
       "Amandelletter of amandelstaaf · t.h.t. 7 dagen",
       "Gevulde speculaasstaaf · t.h.t. ca. 21 dagen",
     ],
-    allergens: ["gluten", "lactose", "amandel"],
+    allergens: ["gluten", "lactose", "amandel", "ei"],
     accent: "#f3c4ac",
     retailPriceIncl: 12.95,
     variants: [
@@ -238,7 +239,7 @@ const products: Product[] = [
       "Marsepein · t.g.t. ca. 30 dagen",
       "Gevuld speculaas · t.h.t. ca. 21 dagen",
     ],
-    allergens: ["gluten", "lactose", "amandel", "soja"],
+    allergens: ["gluten", "lactose", "amandel", "soja", "ei"],
     accent: "#f7c8aa",
     tiers: [
       { min: 1, price: 16.95, label: "<15", discountPercent: 0 },
@@ -256,7 +257,7 @@ const products: Product[] = [
       "Amandelstaaf · t.h.t. 7 dagen",
       "Gevulde speculaasstaaf · t.h.t. ca. 21 dagen",
     ],
-    allergens: ["gluten", "lactose", "amandel"],
+    allergens: ["gluten", "lactose", "amandel", "ei"],
     accent: "#d62d1d",
     logoAvailable: false,
     retailPriceIncl: 17.95,
@@ -274,7 +275,7 @@ const products: Product[] = [
       "Massief speculaas · t.g.t. ca. 30 dagen",
       "Marsepein en roomborstplaat · t.g.t. ca. 30 dagen",
     ],
-    allergens: ["gluten", "lactose", "amandel", "soja"],
+    allergens: ["gluten", "lactose", "amandel", "soja", "ei"],
     gallery: [
       { src: "/sinterklaas/Sint DUO choco kruinoten + gevuld speculaas.png", label: "Chocolade kruidnoten met speculaasbites" },
       { src: "/sinterklaas/Sint DUO  marsepein aard + speculaasbrok.png", label: "Marsepein aardappeltjes met speculaasbrok" },
@@ -474,6 +475,7 @@ function AllergenSymbol({ allergen }: Readonly<{ allergen: Allergen }>) {
   if (allergen === "gluten") return <WheatIcon className="h-5 w-5" />;
   if (allergen === "lactose") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3S6.5 9.5 6.5 14A5.5 5.5 0 0 0 17.5 14C17.5 9.5 12 3 12 3Z"/><path d="M9.5 15.5c.7 1.2 1.6 1.8 2.8 1.8"/></svg>;
   if (allergen === "amandel") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5c4.2 2.3 6.5 5.3 6.5 8.5s-2.3 6.2-6.5 8.5C7.8 18.2 5.5 15.2 5.5 12S7.8 5.8 12 3.5Z"/><path d="M12 6.5c1.8 1.5 3 3.4 3 5.5s-1.2 4-3 5.5"/></svg>;
+  if (allergen === "ei") return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5c-3.4 0-6.5 6.3-6.5 10.5a6.5 6.5 0 0 0 13 0C18.5 9.8 15.4 3.5 12 3.5Z"/><path d="M9.5 15.5c.7 1.1 1.6 1.7 2.8 1.7"/></svg>;
   return <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M5 18c5-1 8-4 9-9-5 1-8 4-9 9ZM12 18c4-.5 6.5-2.7 7-6.5-3.8.5-6 2.8-7 6.5Z"/><path d="M5 18h14"/></svg>;
 }
 
