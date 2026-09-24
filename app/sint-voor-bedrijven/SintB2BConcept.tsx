@@ -7,6 +7,10 @@ import {
   BusinessFolderSeasonNav,
   BusinessGiftFinderButton,
 } from "@/app/BusinessFolderSeasonControls";
+import {
+  BUSINESS_FOLDER_LOGO_PRICE_INCL,
+  businessFolderLogoPrice,
+} from "@/app/lib/business-folder-pricing";
 import B2BChocolateLetters, { describeB2BLetter, type B2BLetterLine } from "./B2BChocolateLetters";
 
 type PriceTier = { min: number; label: string; price?: number; discountPercent?: number };
@@ -50,7 +54,6 @@ type ProductSuggestion = {
 
 const NIJMEGEN_DELIVERY_FEE_LABEL = "€ 10–15";
 const FOOD_VAT_FACTOR = 1.09;
-const logoPriceFor = (quantity: number) => quantity > 100 ? 0.35 : quantity > 50 ? 0.38 : 0.4;
 const roundCents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const roundUpFiveCents = (value: number) => Math.ceil((value - Number.EPSILON) * 20) / 20;
 const DUO_SEPARATOR = "|||";
@@ -405,9 +408,8 @@ function productImage(product: Product, choice?: string) {
   return product.optionImages?.[choice || ""] || product.image;
 }
 
-function productLogoPrice(quantity: number, includeVat: boolean) {
-  const priceEx = roundUpFiveCents(logoPriceFor(quantity));
-  return includeVat ? roundUpFiveCents(priceEx * FOOD_VAT_FACTOR) : priceEx;
+function productLogoPrice(includeVat: boolean) {
+  return businessFolderLogoPrice(includeVat);
 }
 
 function productSupportsLogo(product: Product) {
@@ -455,7 +457,7 @@ function bestProductSuggestion(product: Product, quantity: number, includeVat: b
   if (wantsLogo && !supportsRequestedLogo) return null;
 
   const logoIncluded = wantsLogo && productSupportsLogo(product);
-  const logoUnitPrice = logoIncluded ? productLogoPrice(quantity, includeVat) : 0;
+  const logoUnitPrice = logoIncluded ? productLogoPrice(includeVat) : 0;
   const candidates = productChoiceCandidates(product).map((choice) => {
     const configuredProduct = pricedProduct(product, choice);
     const tier = tierFor(configuredProduct, quantity);
@@ -529,8 +531,8 @@ export default function SintB2BConcept() {
       const matchingLines = letterLines.filter((line) => line.style === style);
       const totalLetters = matchingLines.reduce((sum, line) => sum + line.quantity, 0);
       const sharedLetterTier = tierFor(baseProduct, Math.max(1, totalLetters));
-      const letterLogoPriceEx = logo[baseProduct.id] ? productLogoPrice(totalLetters, false) : 0;
-      const letterLogoPriceIncl = logo[baseProduct.id] ? productLogoPrice(totalLetters, true) : 0;
+      const letterLogoPriceEx = logo[baseProduct.id] ? productLogoPrice(false) : 0;
+      const letterLogoPriceIncl = logo[baseProduct.id] ? productLogoPrice(true) : 0;
 
       return matchingLines.map((line) => {
         const product = { ...baseProduct, retailPriceIncl: line.size === "klein" ? 8.95 : 13.95 };
@@ -564,8 +566,8 @@ export default function SintB2BConcept() {
           const configuredProduct = pricedProduct(product, choice);
           const tier = tierFor(configuredProduct, Math.max(1, quantity));
           const withLogo = Boolean(logo[product.id] && productSupportsLogo(product));
-          const logoPriceEx = withLogo ? productLogoPrice(quantity, false) : 0;
-          const logoPriceIncl = withLogo ? productLogoPrice(quantity, true) : 0;
+          const logoPriceEx = withLogo ? productLogoPrice(false) : 0;
+          const logoPriceIncl = withLogo ? productLogoPrice(true) : 0;
           return {
             key: product.id,
             product: configuredProduct, quantity, tier, logoPriceEx, logoPriceIncl,
@@ -701,7 +703,7 @@ export default function SintB2BConcept() {
         <div className="flex flex-wrap items-center justify-between gap-3 lg:col-span-3"><p className="text-xs font-bold text-[#7e493c]">De keuzehulp gebruikt dezelfde btw-weergave als de folder.</p><div className="inline-flex rounded-full border border-[#dfc699] bg-white p-1 text-xs font-black"><button type="button" aria-pressed={includeVat} onClick={() => setIncludeVat(true)} className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Incl. btw</button><button type="button" aria-pressed={!includeVat} onClick={() => setIncludeVat(false)} className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#d62d1d] text-white" : "text-[#60190f]"}`}>Excl. btw</button></div></div>
         <label className="grid gap-2 text-sm font-black text-[#60190f]">1. Hoeveel ontvangers?<input type="number" min="1" value={recipientCount} onChange={(event) => setRecipientCount(Math.max(1, Number(event.target.value) || 1))} className="h-11 rounded-xl border border-[#dfc699] bg-white px-4 text-lg" /></label>
         <label className="grid gap-2 text-sm font-black text-[#60190f]">2. Budget per persoon, {includeVat ? "incl." : "excl."} btw<input type="number" min="1" value={budget} onChange={(event) => setBudget(Math.max(1, Number(event.target.value) || 1))} className="h-11 rounded-xl border border-[#dfc699] bg-white px-4 text-lg" /></label>
-        <div className="grid content-end gap-2 text-sm font-black text-[#60190f]">3. Met eigen logo?<button type="button" aria-pressed={wantsLogo} onClick={() => setWantsLogo(!wantsLogo)} className={`h-11 rounded-xl border px-4 text-left ${wantsLogo ? "border-[#d62d1d] bg-[#d62d1d] text-white" : "border-[#dfc699] bg-white"}`}>{wantsLogo ? "Ja, met logo ✓" : "Nee, zonder logo"}</button></div>
+        <div className="grid content-end gap-2 text-sm font-black text-[#60190f]">3. Met eigen logo?<button type="button" aria-pressed={wantsLogo} onClick={() => setWantsLogo(!wantsLogo)} className={`h-11 rounded-xl border px-4 text-left ${wantsLogo ? "border-[#d62d1d] bg-[#d62d1d] text-white" : "border-[#dfc699] bg-white"}`}>{wantsLogo ? `Ja, + ${money(BUSINESS_FOLDER_LOGO_PRICE_INCL)} p.s. ✓` : "Nee, zonder logo"}</button></div>
         <div className="rounded-2xl bg-[#f8e5ba] p-4 lg:col-span-3"><p className="text-xs font-black uppercase tracking-[.16em] text-[#9a3d21]">Dit past binnen jouw budget</p><p className="mt-1 text-sm font-bold text-[#60190f]">{suggestions.length ? `${suggestions.length} producten passen bij ${recipientCount} ontvangers en maximaal ${money(budget)} per persoon. De getoonde prijs bevat de juiste staffel of vaste aanbieding${wantsLogo ? " en de gekozen logowens" : ""}.` : `Er past nog geen product binnen dit budget en deze wensen. Probeer een iets hoger budget${wantsLogo ? " of kies zonder logo" : ""}.`}</p><div className="mt-4 grid gap-3 sm:grid-cols-2">{suggestions.map((suggestion) => <button key={suggestion.product.id} type="button" onClick={() => addSuggestedProduct(suggestion.product, suggestion.choice)} className="group flex min-w-0 gap-3 rounded-2xl bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"><span className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[#f1e5d5]"><Image src={suggestion.image} alt="" fill sizes="80px" className="object-cover" /></span><span className="flex min-w-0 flex-1 flex-col"><strong className="text-sm leading-tight text-[#60190f]">{suggestion.product.name}</strong><span className="mt-1 line-clamp-2 text-[.66rem] font-semibold leading-relaxed text-[#7e493c]">{suggestion.product.description}</span><span className="mt-1 line-clamp-2 text-[.65rem] font-black leading-snug text-[#9a3d21]">{suggestion.choiceLabel}</span><span className="mt-auto flex items-end justify-between gap-2 pt-2"><small className="text-[.6rem] font-bold text-[#7e493c]">{suggestion.product.fixedOffer ? "Vaste aanbieding · 15% korting" : `Staffel ${suggestion.tier.label}`}{suggestion.logoIncluded ? " · incl. logo" : ""}</small><strong className="whitespace-nowrap text-sm text-[#d62d1d]">{money(suggestion.unitPrice)} p.p. <span aria-hidden="true">→</span></strong></span></span></button>)}</div></div>
       </div></section></div>}
 
@@ -767,9 +769,9 @@ export default function SintB2BConcept() {
                 {product.options&&<select value={choices[product.id]||product.options[0]} onChange={(event)=>setChoices(current=>({...current,[product.id]:event.target.value}))} className="mt-2.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-black text-[#5a170f]">{product.options.map(option=><option key={option}>{option}</option>)}</select>}
                 {product.duoOptions&&duoFirst&&duoSecond&&<div className="mt-2.5 grid gap-1.5"><label className="text-[.62rem] font-black text-[#60190f]">Zakje 1<select value={duoFirst.label} onChange={(event)=>setChoices(current=>({...current,[product.id]:duoChoice(event.target.value,duoSecond.label)}))} className="mt-0.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-black text-[#5a170f]">{product.duoOptions.map(option=><option key={option.label} value={option.label}>{option.label} · {money(option.retailPriceIncl)}</option>)}</select></label><label className="text-[.62rem] font-black text-[#60190f]">Zakje 2<select value={duoSecond.label} onChange={(event)=>setChoices(current=>({...current,[product.id]:duoChoice(duoFirst.label,event.target.value)}))} className="mt-0.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-black text-[#5a170f]">{product.duoOptions.map(option=><option key={option.label} value={option.label}>{option.label} · {money(option.retailPriceIncl)}</option>)}</select></label></div>}
                 {product.customColorMinimum&&<label className="mt-2.5 block text-[.62rem] font-black text-[#60190f]">Eigen kleurcombinatie · vanaf {product.customColorMinimum} stuks<input type="text" value={customColors[product.id]||""} onChange={(event)=>setCustomColors(current=>({...current,[product.id]:event.target.value}))} disabled={quantity<product.customColorMinimum} placeholder={quantity<product.customColorMinimum?`Kies minimaal ${product.customColorMinimum} stuks`:"Bijv. rood/wit of bedrijfskleuren"} className="mt-0.5 h-9 w-full rounded-xl border border-[#e2c99c] bg-white px-2.5 text-[.68rem] font-semibold text-[#5a170f] disabled:cursor-not-allowed disabled:bg-[#f2e7cb] disabled:text-[#9a8175]"/><small className="mt-1 block text-[.56rem] font-semibold leading-snug text-[#8c665d]">{quantity<product.customColorMinimum?`Vanaf ${product.customColorMinimum} stuks kun je hier jouw kleuren invullen.`:"De kleurwens wordt meegenomen in de offerteaanvraag."}</small></label>}
-                {product.personalizationText ? <p className="mt-2 text-[.68rem] font-bold text-[#7e493c]">{product.personalizationText}</p> : productSupportsLogo(product) ? <label className="mt-2 flex items-start gap-1.5 text-[.68rem] font-bold"><input type="checkbox" checked={!!logo[product.id]} onChange={(event)=>setLogo(current=>({...current,[product.id]:event.target.checked}))} className="mt-0.5 h-3.5 w-3.5 shrink-0"/> Eigen logo toevoegen (+ vanaf {money(productLogoPrice(201, includeVat))} p.s.; mogelijkheden op aanvraag)</label> : null}
+                {product.personalizationText ? <p className="mt-2 text-[.68rem] font-bold text-[#7e493c]">{product.personalizationText}</p> : productSupportsLogo(product) ? <label className="mt-2 flex items-start gap-1.5 text-[.68rem] font-bold"><input type="checkbox" checked={!!logo[product.id]} onChange={(event)=>setLogo(current=>({...current,[product.id]:event.target.checked}))} className="mt-0.5 h-3.5 w-3.5 shrink-0"/> Eigen logo toevoegen (+ {money(BUSINESS_FOLDER_LOGO_PRICE_INCL)} p.s. incl. btw; mogelijkheden op aanvraag)</label> : null}
                 <div className="mt-auto flex items-center gap-1.5 pt-3"><button type="button" aria-label={`Minder ${product.name}`} onClick={()=>setDraftQuantities(current=>({...current,[product.id]:Math.max(0,(current[product.id]??cartQuantity)-1)}))} className="h-9 w-9 rounded-full border-2 border-[#d62d1d] text-base font-black">−</button><input aria-label={`Aantal ${product.name}`} type="number" min="0" value={quantity} onChange={(event)=>setDraftQuantities(current=>({...current,[product.id]:Math.max(0,Number(event.target.value)||0)}))} className="h-9 min-w-0 flex-1 rounded-xl border border-[#e2c99c] bg-white text-center text-sm font-black"/><button type="button" aria-label={`Meer ${product.name}`} onClick={()=>setDraftQuantities(current=>({...current,[product.id]:(current[product.id]??cartQuantity)+1}))} className="h-9 w-9 rounded-full bg-[#d62d1d] text-base font-black text-white">+</button></div>
-                <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[.68rem]"><div className="flex items-center justify-between gap-2"><span className="font-bold text-[#7e493c]">{productPricingLabel(configuredProduct, tier, quantity)}</span><strong className="text-sm text-[#60190f]">{money(productUnitPrice(configuredProduct, tier, includeVat))}</strong></div>{quantity>0&&<div className="mt-1 flex items-center justify-between border-t border-[#eee0c4] pt-1 font-black text-[#60190f]"><span>Totaal</span><span>{money(quantity*(productUnitPrice(configuredProduct, tier, includeVat)+(logo[product.id]&&productSupportsLogo(product)?productLogoPrice(quantity, includeVat):0)))}</span></div>}</div>
+                <div className="mt-2 rounded-xl bg-white px-2.5 py-2 text-[.68rem]"><div className="flex items-center justify-between gap-2"><span className="font-bold text-[#7e493c]">{productPricingLabel(configuredProduct, tier, quantity)}</span><strong className="text-sm text-[#60190f]">{money(productUnitPrice(configuredProduct, tier, includeVat))}</strong></div>{quantity>0&&<div className="mt-1 flex items-center justify-between border-t border-[#eee0c4] pt-1 font-black text-[#60190f]"><span>Totaal</span><span>{money(quantity*(productUnitPrice(configuredProduct, tier, includeVat)+(logo[product.id]&&productSupportsLogo(product)?productLogoPrice(includeVat):0)))}</span></div>}</div>
                 <button type="button" disabled={quantity === 0 && cartQuantity === 0} onClick={()=>setQuantities(current=>({...current,[product.id]:quantity}))} className={`mt-2 h-9 w-full rounded-xl px-3 text-[.68rem] font-black text-white transition disabled:cursor-not-allowed disabled:opacity-40 ${quantity > 0 && quantity === cartQuantity ? "bg-[#5d7f68]" : "bg-[#d62d1d] hover:bg-[#b82417]"}`}>{quantity === 0 && cartQuantity === 0 ? "Kies eerst een aantal" : quantity === 0 ? "Uit mandje" : quantity === cartQuantity ? "✓ In mandje" : cartQuantity > 0 ? "Mandje bijwerken" : "In mandje"}</button>
                 {!product.fixedOffer&&<details className="mt-2 text-[.68rem] text-[#7e493c]"><summary className="cursor-pointer font-bold underline underline-offset-2">Alle staffelprijzen bekijken</summary><div className="mt-2 overflow-hidden rounded-lg border border-[#eadbc3] bg-white">{product.tiers.map((item)=><div key={item.label} className={`flex items-center justify-between border-t border-[#eee0c4] px-2 py-1 first:border-t-0 ${quantity>0&&tier.label===item.label?"font-black text-[#d62d1d]":""}`}><span>{item.label} st.{item.discountPercent ? ` · ${item.discountPercent}%` : ""}</span><span>{money(productUnitPrice(configuredProduct,item,includeVat))}</span></div>)}</div></details>}
               </div>

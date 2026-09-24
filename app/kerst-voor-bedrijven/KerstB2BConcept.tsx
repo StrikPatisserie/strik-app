@@ -8,6 +8,12 @@ import {
   BusinessFolderSeasonNav,
   BusinessGiftFinderButton,
 } from "@/app/BusinessFolderSeasonControls";
+import { BUSINESS_FOLDER_LOGO_PRICE_INCL } from "@/app/lib/business-folder-pricing";
+
+const LOGO_PRICE_LABEL = BUSINESS_FOLDER_LOGO_PRICE_INCL.toLocaleString("nl-NL", {
+  style: "currency",
+  currency: "EUR",
+});
 
 function ChristmasGiftIcon() {
   return (
@@ -171,7 +177,7 @@ export default function KerstB2BConcept() {
                       : "border-[#d8b56d]/50 bg-[#f8f0df] text-[#202542]"
                   }`}
                 >
-                  {wantsLogo ? "Ja, met logo ✓" : "Nee, zonder logo"}
+                  {wantsLogo ? `Ja, + ${LOGO_PRICE_LABEL} p.s. ✓` : "Nee, zonder logo"}
                 </button>
               </div>
 
@@ -181,7 +187,7 @@ export default function KerstB2BConcept() {
                   Jouw passende kerstcadeaus
                 </p>
                 <p className="relative mt-2 max-w-2xl text-sm font-bold leading-relaxed text-white">
-                  De kerstkeuzehulp staat klaar voor {recipientCount} ontvangers met een budget van maximaal € {budget.toLocaleString("nl-NL", { minimumFractionDigits: 2 })} per persoon{wantsLogo ? " en een eigen logo" : ""}. Zodra de producten zijn toegevoegd, verschijnen hier automatisch alle passende opties.
+                  De kerstkeuzehulp staat klaar voor {recipientCount} ontvangers met een budget van maximaal € {budget.toLocaleString("nl-NL", { minimumFractionDigits: 2 })} per persoon{wantsLogo ? ` en een eigen logo van ${LOGO_PRICE_LABEL} p.s. incl. btw` : ""}. Zodra de producten zijn toegevoegd, verschijnen hier automatisch alle passende opties.
                 </p>
               </div>
             </div>

@@ -2,6 +2,9 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import {
+  BUSINESS_FOLDER_LOGO_PRICE_INCL,
+} from "@/app/lib/business-folder-pricing";
 
 export type B2BLetterLine = {
   id: string;
@@ -37,12 +40,6 @@ function tierPrice(priceIncl: number, discountPercent: number, includeVat: boole
   const roundUpFiveCents = (value: number) => Math.ceil((value - Number.EPSILON) * 20) / 20;
   const discountedIncl = roundUpFiveCents(priceIncl * (1 - discountPercent / 100));
   return includeVat ? discountedIncl : roundUpFiveCents(discountedIncl / 1.09);
-}
-
-function logoPrice(quantity: number, includeVat: boolean) {
-  const roundUpFiveCents = (value: number) => Math.ceil((value - Number.EPSILON) * 20) / 20;
-  const priceEx = roundUpFiveCents(quantity > 100 ? 0.35 : quantity > 50 ? 0.38 : 0.4);
-  return includeVat ? roundUpFiveCents(priceEx * 1.09) : priceEx;
 }
 
 export function describeB2BLetter(line: B2BLetterLine) {
@@ -140,7 +137,7 @@ export default function B2BChocolateLetters({
         <details className="mt-2 rounded-xl border border-[#e2c99c] bg-white/70 p-2 text-[.68rem]"><summary className="cursor-pointer font-black">Speciaal verzoek</summary><div className="mt-2 flex flex-wrap gap-1.5">{REQUESTS.map((request) => <label key={request.id} className="flex items-center gap-1 text-[.62rem] font-bold"><input type="checkbox" checked={specialRequests.includes(request.id)} disabled={(request.id === "vegan" || request.id === "lactosevrij") && chocolate !== "puur"} onChange={(event) => setSpecialRequests((current) => event.target.checked ? [...current, request.id] : current.filter((item) => item !== request.id))} />{request.label}</label>)}</div><p className="mt-1.5 text-[.62rem] text-[#7e493c]">Vegan en lactosevrij alleen bij puur. Kan sporen van allergenen bevatten.</p></details>
         <div className="mt-2 grid grid-cols-[auto_4rem_minmax(0,1fr)] items-center gap-2"><label htmlFor={`${productId}-quantity`} className="text-[.62rem] font-black">Aantal</label><input id={`${productId}-quantity`} type="number" min="1" max="10000" value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(10000, Number(event.target.value) || 1)))} className="h-9 w-full rounded-xl border border-[#e2c99c] bg-white text-center text-sm font-black text-[#60190f]" /><button type="button" onClick={addLine} className="h-9 min-w-0 rounded-lg bg-[#d62d1d] px-3 text-[.68rem] font-black text-white">In mandje</button></div>
         {lines.length > 0 && <div className="mt-3 rounded-xl bg-white p-2.5"><p className="mb-1.5 text-xs font-black">Jouw letters · {totalQuantity} stuks</p><div className="space-y-1">{lines.map((line) => <div key={line.id} className="flex items-center gap-1.5 border-t border-[#eee0c4] py-1 text-[.68rem]"><span className="min-w-0 flex-1 font-bold">{describeB2BLetter(line)}</span><input aria-label={`Aantal ${describeB2BLetter(line)}`} type="number" min="1" max="10000" value={line.quantity} onChange={(event) => onChange(lines.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, Math.min(10000, Number(event.target.value) || 1)) } : item))} className="w-12 rounded-md border border-[#e2c99c] p-1 text-center text-sm font-black text-[#60190f]" /><button type="button" aria-label={`${describeB2BLetter(line)} verwijderen`} onClick={() => onChange(lines.filter((item) => item.id !== line.id))} className="px-1 text-base font-black text-[#a32b1c]">×</button></div>)}</div></div>}
-        <label className="mt-2.5 flex items-center gap-1.5 text-[.62rem] font-bold text-[#60190f]"><input type="checkbox" checked={withLogo} onChange={(event) => onLogoChange(event.target.checked)} />Eigen logo · +{money(logoPrice(priceQuantity, includeVat))} p.s.</label>
+        <label className="mt-2.5 flex items-center gap-1.5 text-[.62rem] font-bold text-[#60190f]"><input type="checkbox" checked={withLogo} onChange={(event) => onLogoChange(event.target.checked)} />Eigen logo · +{money(BUSINESS_FOLDER_LOGO_PRICE_INCL)} p.s. incl. btw</label>
         <div className="mt-2.5 rounded-xl bg-white px-2.5 py-2 text-[.68rem] text-[#60190f]"><div className="flex items-center justify-between gap-2"><span><strong>{totalQuantity ? `${totalQuantity} letters` : `Prijs bij ${quantity} ${quantity === 1 ? "letter" : "letters"}`}</strong><small className="block text-[.56rem] font-semibold text-[#8c665d]">Staffel {currentTier.label}{currentTier.discountPercent ? ` · ${currentTier.discountPercent}% korting` : " · winkelprijs"}</small></span>{style === "vorm" ? <strong className="text-right">Groot {money(tierPrice(13.95, currentTier.discountPercent || 0, includeVat))}</strong> : <strong className="text-right">Klein {money(tierPrice(8.95, currentTier.discountPercent || 0, includeVat))}<small className="block">Groot {money(tierPrice(13.95, currentTier.discountPercent || 0, includeVat))}</small></strong>}</div>{totalQuantity > 0 && <p className="mt-1.5 border-t border-[#eee0c4] pt-1.5 text-right font-black">Totaal {money(total)}</p>}</div>
         <details className="mt-2 text-[.68rem] text-[#7e493c]"><summary className="cursor-pointer font-bold underline underline-offset-2">Alle staffelprijzen bekijken</summary><div className="mt-2 overflow-hidden rounded-lg border border-[#eadbc3] bg-white"><div className={`grid bg-[#f8edd1] px-2 py-1 font-black ${style === "vorm" ? "grid-cols-2" : "grid-cols-3"}`}><span>Aantal</span>{style === "spuit" && <span>Klein</span>}<span>Groot</span></div>{tiers.map((tier) => <div key={tier.label} className={`grid border-t border-[#eee0c4] px-2 py-1 ${style === "vorm" ? "grid-cols-2" : "grid-cols-3"} ${totalQuantity > 0 && activeTierLabel === tier.label ? "font-black text-[#d62d1d]" : ""}`}><span>{tier.label}</span>{style === "spuit" && <span>{money(tierPrice(8.95, tier.discountPercent || 0, includeVat))}</span>}<span>{money(tierPrice(13.95, tier.discountPercent || 0, includeVat))}</span></div>)}</div></details>
       </div>
