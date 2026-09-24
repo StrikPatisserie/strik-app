@@ -51,11 +51,11 @@ const DIGITAL_FOLDER_URL = "https://strik-app.vercel.app/sint-voor-bedrijven";
 const defaults: Campaign = {
   year,
   subject: "De digitale Sinterklaasfolder voor bedrijven | Strik Patisserie",
-  body: "Beste {{contactpersoon}},\n\nOnze zakelijke Sinterklaasfolder staat online. Bekijk op één plek het assortiment, de actuele prijzen en staffels en stel gemakkelijk een vrijblijvende offerteaanvraag samen.\n\nGeen PDF of bijlage: via de knop in deze e-mail open je rechtstreeks onze interactieve folder.\n\nHeb je een vraag of wil je samen iets passends samenstellen? Antwoord gerust op deze e-mail; we denken graag met je mee.\n\nMet vriendelijke groet,\nTeam Strik Patisserie",
+  body: "Beste {{contactpersoon}},\n\nOnze zakelijke Sinterklaasfolder staat online. Bekijk op één plek het assortiment, de actuele prijzen en staffels en stel gemakkelijk een vrijblijvende offerteaanvraag samen.\n\nGeen PDF of bijlage: via de knop in deze e-mail open je rechtstreeks onze folder.\n\nHeb je een vraag of wil je samen iets passends samenstellen? Antwoord gerust op deze e-mail; we denken graag met je mee.\n\nMet feestelijke groet,\nTeam Strik Patisserie",
   reminder1Subject: "Al een Sinterklaascadeau voor je team gevonden? | Strik Patisserie",
-  reminder1Body: "Beste {{contactpersoon}},\n\nHeb je onze digitale Sinterklaasfolder al kunnen bekijken? Je ziet er direct welke cadeaus binnen je budget passen, inclusief staffels en personalisatiemogelijkheden.\n\nVia de folder stel je vrijblijvend een offerteaanvraag samen. Natuurlijk kun je ook op deze e-mail antwoorden als je liever persoonlijk overlegt.\n\nMet vriendelijke groet,\nTeam Strik Patisserie",
+  reminder1Body: "Beste {{contactpersoon}},\n\nHeb je onze digitale Sinterklaasfolder al kunnen bekijken? Je ziet er direct welke cadeaus binnen je budget passen, inclusief staffels en personalisatiemogelijkheden.\n\nVia de folder stel je vrijblijvend een offerteaanvraag samen. Natuurlijk kun je ook op deze e-mail antwoorden als je liever persoonlijk overlegt.\n\nMet feestelijke groet,\nTeam Strik Patisserie",
   reminder2Subject: "Laatste moment voor zakelijke Sinterklaasbestellingen | Strik Patisserie",
-  reminder2Body: "Beste {{contactpersoon}},\n\nEen vriendelijke laatste herinnering voor onze zakelijke Sinterklaascadeaus. Wil je nog iets bestellen voor collega’s of relaties? Bekijk dan de digitale folder en stuur tijdig je vrijblijvende aanvraag in.\n\nWe bevestigen beschikbaarheid en het gewenste levermoment altijd persoonlijk.\n\nMet vriendelijke groet,\nTeam Strik Patisserie",
+  reminder2Body: "Beste {{contactpersoon}},\n\nEen vriendelijke laatste herinnering voor onze zakelijke Sinterklaascadeaus. Wil je nog iets bestellen voor collega’s of relaties? Bekijk dan de digitale folder en stuur tijdig je vrijblijvende aanvraag in.\n\nWe bevestigen beschikbaarheid en het gewenste levermoment altijd persoonlijk.\n\nMet feestelijke groet,\nTeam Strik Patisserie",
   folderUrl: DIGITAL_FOLDER_URL,
   customers: [],
 };
@@ -129,10 +129,23 @@ function migrateCampaign(data: Partial<Campaign>) {
   const customers = Array.isArray(data.customers) ? data.customers : [];
   const hasLegacyPdf = !data.folderUrl || /\.pdf(?:$|[?#])/i.test(data.folderUrl);
   const mentionsLegacyAttachment = /\bin de bijlage\b|\b(?:pdf|folder) als bijlage\b/i.test(data.body || "");
+  const modernizeBody = (value: string) => value
+    .replaceAll("onze interactieve folder", "onze folder")
+    .replaceAll("Met vriendelijke groet,", "Met feestelijke groet,");
   if (hasLegacyPdf || mentionsLegacyAttachment) {
     return { campaign: { ...defaults, customers }, migrated: true };
   }
-  return { campaign: { ...defaults, ...data, customers } as Campaign, migrated: false };
+  const loaded = { ...defaults, ...data, customers } as Campaign;
+  const campaign = {
+    ...loaded,
+    body: modernizeBody(loaded.body),
+    reminder1Body: modernizeBody(loaded.reminder1Body),
+    reminder2Body: modernizeBody(loaded.reminder2Body),
+  };
+  return {
+    campaign,
+    migrated: campaign.body !== loaded.body || campaign.reminder1Body !== loaded.reminder1Body || campaign.reminder2Body !== loaded.reminder2Body,
+  };
 }
 
 function MailIcon() {
@@ -172,7 +185,7 @@ function EmailPreview({ subject, body, folderUrl }: Readonly<{ subject: string; 
           ))}
         </div>
         <a href={validFolderUrl(folderUrl) ? folderUrl : undefined} target="_blank" rel="noreferrer" className="mt-6 inline-flex rounded-full bg-[#d62d1d] px-5 py-3 text-sm font-black text-white shadow-md">
-          Bekijk de interactieve folder →
+          Bekijk de folder →
         </a>
       </div>
       <div className="bg-[#5a170f] px-5 py-4 text-[.62rem] leading-relaxed text-[#f9e7cd]">
@@ -425,8 +438,8 @@ export default function SinterklaasMailingClient() {
           <div>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-[.62rem] font-black uppercase tracking-[.15em] text-[#8b7164]">Inboxvoorbeeld</p>
-              <span className={`rounded-full px-2.5 py-1 text-[.58rem] font-black ${campaign.mailTemplateVersion === "strik-html-v3" ? "bg-[#e9f4e6] text-[#31552a]" : "bg-[#fff1d1] text-[#8a4d14]"}`}>
-                {campaign.mailTemplateVersion === "strik-html-v3" ? "Opgemaakte mail actief" : "Mailtemplate nog bijwerken in WordPress"}
+              <span className={`rounded-full px-2.5 py-1 text-[.58rem] font-black ${campaign.mailTemplateVersion === "strik-html-v4" ? "bg-[#e9f4e6] text-[#31552a]" : "bg-[#fff1d1] text-[#8a4d14]"}`}>
+                {campaign.mailTemplateVersion === "strik-html-v4" ? "Opgemaakte mail actief" : "Mailtemplate nog bijwerken in WordPress"}
               </span>
             </div>
             <EmailPreview subject={activeSubject} body={activeBody} folderUrl={campaign.folderUrl} />

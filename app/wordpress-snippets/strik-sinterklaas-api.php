@@ -33,7 +33,7 @@ if (!defined('STRIK_SINTERKLAAS_MAILING_OPTION_NAME')) {
 }
 
 if (!defined('STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION')) {
-    define('STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION', 'strik-html-v3');
+    define('STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION', 'strik-html-v4');
 }
 
 if (!defined('STRIK_SINTERKLAAS_RECIPIENT')) {
@@ -1169,7 +1169,7 @@ function strik_sinterklaas_mailing_paragraphs($body) {
 
 function strik_sinterklaas_mailing_html($body, $folder_url, $kind, $year) {
     $safe_url = esc_url($folder_url);
-    $button_label = $kind === 'folder' ? 'Bekijk de interactieve folder' : 'Open de digitale folder';
+    $button_label = 'Bekijk de folder';
     $preheader = $kind === 'folder'
         ? 'Bekijk het zakelijke Sinterklaasassortiment, actuele prijzen en staffels van Strik Patisserie.'
         : 'Bekijk de digitale zakelijke Sinterklaasfolder van Strik Patisserie.';
