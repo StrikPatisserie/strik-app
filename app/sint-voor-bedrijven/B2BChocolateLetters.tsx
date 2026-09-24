@@ -40,8 +40,9 @@ function money(value: number) {
 
 function tierPrice(priceIncl: number, discountPercent: number, includeVat: boolean) {
   const roundUpFiveCents = (value: number) => Math.ceil((value - Number.EPSILON) * 20) / 20;
+  const roundCents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
   const discountedIncl = roundUpFiveCents(priceIncl * (1 - discountPercent / 100));
-  return includeVat ? discountedIncl : roundUpFiveCents(discountedIncl / 1.09);
+  return includeVat ? discountedIncl : roundCents(discountedIncl / 1.09);
 }
 
 export function describeB2BLetter(line: B2BLetterLine) {

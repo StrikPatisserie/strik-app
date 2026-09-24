@@ -352,10 +352,10 @@ function tierFor(product: Product, quantity: number) {
 function productUnitPrice(product: Product, tier: PriceTier, includeVat: boolean) {
   if (product.retailPriceIncl !== undefined && tier.discountPercent !== undefined) {
     const discountedIncl = roundUpFiveCents(product.retailPriceIncl * (1 - tier.discountPercent / 100));
-    return includeVat ? discountedIncl : roundUpFiveCents(discountedIncl / FOOD_VAT_FACTOR);
+    return includeVat ? discountedIncl : roundCents(discountedIncl / FOOD_VAT_FACTOR);
   }
   const priceEx = tier.price || 0;
-  return includeVat ? roundUpFiveCents(priceEx * FOOD_VAT_FACTOR) : roundUpFiveCents(priceEx);
+  return includeVat ? roundUpFiveCents(priceEx * FOOD_VAT_FACTOR) : roundCents(priceEx);
 }
 
 function selectedProductVariant(product: Product, choice?: string) {
