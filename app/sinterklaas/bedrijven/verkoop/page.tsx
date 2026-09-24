@@ -13,13 +13,13 @@ export default function BusinessSalesPage() {
       <div className="grid gap-2">
         <StrikMenuLink
           href="/sinterklaas/b2b"
-          title="B2B-bestellingen · overzicht en toevoegen"
+          title="B2B bestellingen"
           icon={strikIcons.sinterklaasB2B}
           tone="green"
         />
         <StrikMenuLink
           href="/sinterklaas/mailing"
-          title="Mailing en opvolging"
+          title="B2B folder & mailing"
           icon={strikIcons.newsManagement}
           tone="green"
         />
