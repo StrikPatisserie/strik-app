@@ -61,28 +61,28 @@ export default function KerstB2BConcept() {
           <BusinessFolderSeasonNav active="kerst" />
         </nav>
 
-        <div className="relative mx-auto mt-3 max-w-7xl">
-          <p className="text-[.65rem] font-black uppercase tracking-[.24em] text-[#d8b56d] sm:text-xs">
-            Sinds 1937 · ambacht uit Nijmegen
-          </p>
-          <div className="mt-1 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="inline-flex min-w-0 flex-col">
-              <h1 className="text-[clamp(6.5rem,12vw,10.5rem)] font-black leading-[.68] tracking-[-.08em] text-white">
+        <div className="relative mx-auto mt-3 grid max-w-7xl items-center gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-8">
+          <div className="min-w-0">
+            <p className="text-[.6rem] font-black uppercase tracking-[.2em] text-[#d8b56d] sm:text-xs sm:tracking-[.24em]">
+              Sinds 1937 · ambacht uit Nijmegen
+            </p>
+            <div className="mt-2 inline-flex min-w-0 flex-col sm:mt-1">
+              <h1 className="text-[clamp(4.5rem,20vw,6.5rem)] font-black leading-[.7] tracking-[-.08em] text-white lg:text-[clamp(6.5rem,12vw,10.5rem)]">
                 KERST
               </h1>
-              <p className="-mt-1 self-end whitespace-nowrap pr-2 font-[Butterscotch] text-[clamp(2rem,3.2vw,3.5rem)] leading-none text-[#d8b56d]">
+              <p className="mt-1 whitespace-nowrap font-[Butterscotch] text-[clamp(2.35rem,10vw,3.2rem)] leading-none text-[#d8b56d] sm:self-end sm:pr-2 lg:text-[clamp(2rem,3.2vw,3.5rem)]">
                 Met een Strik
               </p>
             </div>
-            <BusinessGiftFinderButton
-              season="kerst"
-              onClick={() => setFinderOpen(true)}
-            />
+            <p className="mt-3 max-w-3xl text-[.72rem] font-bold leading-snug text-[#ddd5dc] sm:text-sm">
+              <span className="block">Ambachtelijke kerstcadeaus voor collega&apos;s en relaties.</span>
+              <span className="block">De feestelijke invulling wordt momenteel met zorg samengesteld.</span>
+            </p>
           </div>
-          <p className="mt-2 max-w-3xl text-xs font-bold leading-snug text-[#ddd5dc] sm:text-sm">
-            <span className="block">Ambachtelijke kerstcadeaus voor collega&apos;s en relaties.</span>
-            <span className="block">De feestelijke invulling wordt momenteel met zorg samengesteld.</span>
-          </p>
+          <BusinessGiftFinderButton
+            season="kerst"
+            onClick={() => setFinderOpen(true)}
+          />
         </div>
       </header>
 
