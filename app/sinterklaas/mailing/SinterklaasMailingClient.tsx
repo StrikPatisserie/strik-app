@@ -47,7 +47,8 @@ type TemplateConfig = {
 };
 
 const year = String(new Date().getFullYear());
-const DIGITAL_FOLDER_URL = "https://strik-app.vercel.app/sint-voor-bedrijven";
+const LEGACY_DIGITAL_FOLDER_URL = "https://strik-app.vercel.app/sint-voor-bedrijven";
+const DIGITAL_FOLDER_URL = "https://app.strik-patisserie.nl/sint-voor-bedrijven";
 const defaults: Campaign = {
   year,
   subject: "De digitale Sinterklaasfolder voor bedrijven | Strik Patisserie",
@@ -129,6 +130,7 @@ function migrateCampaign(data: Partial<Campaign>) {
   const customers = Array.isArray(data.customers) ? data.customers : [];
   const hasLegacyPdf = !data.folderUrl || /\.pdf(?:$|[?#])/i.test(data.folderUrl);
   const mentionsLegacyAttachment = /\bin de bijlage\b|\b(?:pdf|folder) als bijlage\b/i.test(data.body || "");
+  const hasLegacyVercelUrl = data.folderUrl?.replace(/\/+$/, "") === LEGACY_DIGITAL_FOLDER_URL;
   const modernizeBody = (value: string) => value
     .replaceAll("onze interactieve folder", "onze folder")
     .replaceAll("Met vriendelijke groet,", "Met feestelijke groet,");
@@ -138,13 +140,14 @@ function migrateCampaign(data: Partial<Campaign>) {
   const loaded = { ...defaults, ...data, customers } as Campaign;
   const campaign = {
     ...loaded,
+    folderUrl: hasLegacyVercelUrl ? DIGITAL_FOLDER_URL : loaded.folderUrl,
     body: modernizeBody(loaded.body),
     reminder1Body: modernizeBody(loaded.reminder1Body),
     reminder2Body: modernizeBody(loaded.reminder2Body),
   };
   return {
     campaign,
-    migrated: campaign.body !== loaded.body || campaign.reminder1Body !== loaded.reminder1Body || campaign.reminder2Body !== loaded.reminder2Body,
+    migrated: campaign.folderUrl !== loaded.folderUrl || campaign.body !== loaded.body || campaign.reminder1Body !== loaded.reminder1Body || campaign.reminder2Body !== loaded.reminder2Body,
   };
 }
 
