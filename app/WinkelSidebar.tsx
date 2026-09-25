@@ -179,10 +179,13 @@ export default function WinkelSidebar({
       <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-[7rem] md:shrink-0 md:flex-col md:items-center md:gap-5 md:rounded-r-[4rem] md:border-r md:border-[#c6d8bf] md:bg-[#c3d3bc] md:px-4 md:py-6">
         <Link
           href="/"
-          className="mb-7 flex h-14 w-14 items-center justify-center rounded-3xl bg-white/80 shadow-sm"
-          title="Strik"
+          aria-label="Home"
+          className="group relative mb-7 flex h-14 w-14 items-center justify-center rounded-3xl bg-white/80 shadow-sm"
         >
           <img src="/strik-logo.png" alt="Strik" className="h-9 w-9 object-contain" />
+          <span className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-[70] -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-lg bg-[#183d29] px-3 py-2 text-xs font-black text-white opacity-0 shadow-lg transition group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
+            Home
+          </span>
         </Link>
         {mainItems.map((item) => {
           let active = isActivePath(pathname, item.href);
@@ -196,12 +199,12 @@ export default function WinkelSidebar({
             <Link
               key={item.href}
               href={item.href}
-              className={`flex h-14 w-14 items-center justify-center rounded-3xl transition ${
+              aria-label={item.label}
+              className={`group relative flex h-14 w-14 items-center justify-center rounded-3xl transition ${
                 active
                   ? "bg-white text-[#ef5737] shadow-sm ring-1 ring-white/80"
                   : "hover:bg-white/45"
               }`}
-              title={item.label}
             >
               <img
                 src={item.icon}
@@ -209,6 +212,9 @@ export default function WinkelSidebar({
                 className="h-9 w-9 object-contain"
               />
               <span className="sr-only">{item.label}</span>
+              <span className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-[70] -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-lg bg-[#183d29] px-3 py-2 text-xs font-black text-white opacity-0 shadow-lg transition group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
+                {item.label}
+              </span>
             </Link>
           );
         })}
@@ -223,12 +229,12 @@ export default function WinkelSidebar({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`relative flex h-14 w-14 items-center justify-center rounded-2xl transition ${
+                aria-label={item.label}
+                className={`group relative flex h-14 w-14 items-center justify-center rounded-2xl transition ${
                   active
                     ? "bg-[#ef5737] shadow-sm"
                     : "hover:bg-[#f8f6f3]"
                 }`}
-                title={item.label}
               >
                 <img
                   src={item.icon}
@@ -236,6 +242,9 @@ export default function WinkelSidebar({
                   className={`${item.desktopIconClass ?? "h-8 w-8"} object-contain ${active ? "brightness-0 invert" : ""}`}
                 />
                 <span className="sr-only">{item.label}</span>
+                <span className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-[70] -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-lg bg-[#183d29] px-3 py-2 text-xs font-black text-white opacity-0 shadow-lg transition group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
+                  {item.label}
+                </span>
               </Link>
             );
           })}

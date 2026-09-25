@@ -6,6 +6,7 @@ import { filterVisibleMainNavigationItems } from "./featureVisibility";
 import { getFeatureVisibilitySettings } from "./lib/appSettings";
 import { filterAllowedItems } from "./lib/auth/access";
 import { getCurrentProfile } from "./lib/auth/session";
+import type { UserProfile } from "./lib/supabase/types";
 
 const baseSections = [
   {
@@ -56,6 +57,32 @@ const baseSections = [
 
 export const dynamic = "force-dynamic";
 
+function getFirstName(profile: UserProfile | null) {
+  const fullName = profile?.full_name.trim();
+  if (fullName) return fullName.split(/\s+/)[0];
+
+  const emailName = profile?.email.split("@")[0]?.trim();
+  return emailName || "daar";
+}
+
+function getPersonalGreeting(profile: UserProfile | null) {
+  const currentHour = Number(
+    new Intl.DateTimeFormat("nl-NL", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Amsterdam",
+    }).format(new Date())
+  );
+  const greeting =
+    currentHour < 12
+      ? "Goedemorgen"
+      : currentHour < 18
+        ? "Goedemiddag"
+        : "Goedenavond";
+
+  return `${greeting}, ${getFirstName(profile)}`;
+}
+
 export default async function Home() {
   const [profile, featureVisibility] = await Promise.all([
     getCurrentProfile(),
@@ -68,20 +95,27 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-[#faf8f5] px-4 py-5 text-[#1a1815] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-4 sm:space-y-5">
-        <header className="flex min-w-0 flex-col gap-3 pb-1 sm:flex-row sm:items-center sm:gap-4">
-          <div className="flex min-w-0 items-center gap-3">
+      <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
+        <header className="min-w-0 border-b border-[#e6dfd5] pb-5 pr-12 sm:pb-6">
+          <div className="flex min-w-0 items-center gap-2 text-[#ef5737]">
             <span
               aria-hidden="true"
-              className="block h-[clamp(1rem,4.4vw,1.8rem)] w-[clamp(1rem,4.4vw,1.8rem)] shrink-0 bg-[#ef5737]"
+              className="block h-4 w-4 shrink-0 bg-[#ef5737]"
               style={{
                 WebkitMask: `url("${strikIcons.management}") center / contain no-repeat`,
                 mask: `url("${strikIcons.management}") center / contain no-repeat`,
               }}
             />
-            <StrikPageTitle title="Strik Team App" />
+            <span className="text-[0.67rem] font-black uppercase tracking-[0.28em] sm:text-xs">
+              Strik Team App
+            </span>
           </div>
-
+          <div className="mt-2">
+            <StrikPageTitle title={getPersonalGreeting(profile)} />
+          </div>
+          <p className="mt-1 text-sm font-semibold text-[#766f66] sm:text-base">
+            Fijn dat je er bent. Waar wil je beginnen?
+          </p>
         </header>
 
         <section className="mx-auto grid w-full max-w-[calc(100vw-3.5rem)] grid-cols-1 gap-2 sm:max-w-none sm:grid-cols-2 sm:gap-3 xl:grid-cols-6">

@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { strikIcons } from "./StrikUI";
 import {
   filterVisibleMainNavigationItems,
@@ -62,14 +63,33 @@ export default function BottomNav({
   profile: UserProfile | null;
 }>) {
   const pathname = usePathname();
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const visibleItems = filterAllowedItems(
     filterVisibleMainNavigationItems(items, featureVisibility),
     profile
   );
 
+  useEffect(() => {
+    const activeItem = scrollContainerRef.current?.querySelector<HTMLElement>(
+      '[data-active="true"]'
+    );
+
+    activeItem?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [pathname]);
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#e8e4de] bg-white/95 px-4 py-3 backdrop-blur-md md:hidden">
-      <div className="mx-auto flex max-w-lg items-center justify-between gap-2">
+    <nav
+      aria-label="Hoofdnavigatie"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#e8e4de] bg-white/95 px-2 pt-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] backdrop-blur-md md:hidden"
+    >
+      <div
+        ref={scrollContainerRef}
+        className="mx-auto flex max-w-full snap-x snap-proximity items-center gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {visibleItems.map((item) => {
           const active = isActivePath(pathname, item.href);
 
@@ -77,14 +97,19 @@ export default function BottomNav({
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 text-center text-[0.7rem] font-semibold transition ${
+              data-active={active ? "true" : undefined}
+              className={`flex h-[4.25rem] min-w-[4.45rem] shrink-0 snap-start flex-col items-center justify-center gap-0.5 rounded-2xl px-1.5 py-1 text-center text-[0.6rem] font-bold transition ${
                 active
                   ? "bg-[#ecf4ed] text-[#214456] shadow-sm"
                   : "text-[#6b645b] hover:bg-[#f6faf4] hover:text-[#4a6d5a]"
               }`}
             >
-              <img src={item.icon} alt="" className="h-5 w-5 object-contain" />
-              <span className="leading-tight">{item.label}</span>
+              <img
+                src={item.icon}
+                alt=""
+                className={`${item.href === "/" ? "h-9 w-9" : "h-5 w-5"} shrink-0 object-contain`}
+              />
+              <span className="whitespace-nowrap leading-none">{item.label}</span>
             </Link>
           );
         })}
