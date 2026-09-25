@@ -13,26 +13,20 @@ export const dynamic = "force-dynamic";
 export default async function SinterklaasLettersPage() {
   const profile = await getCurrentProfile();
   const items = [
-    ...(hasFullAccess(profile)
-      ? [{
-          href: "/sinterklaas/letters/online",
-          title: "Online",
-          icon: strikIcons.sinterklaasLetter,
-          tone: "green" as const,
-        }]
-      : []),
     {
       href: "/sinterklaas/letters/winkel",
       title: "Winkel",
       icon: strikIcons.sinterklaasLetter,
       tone: "green" as const,
     },
-    {
-      href: "/sinterklaas/letters/b2b-lijst",
-      title: "B2B lijst",
-      icon: strikIcons.sinterklaasLetter,
-      tone: "green" as const,
-    },
+    ...(hasFullAccess(profile)
+      ? [{
+          href: "/sinterklaas/letters/online",
+          title: "Webshop",
+          icon: strikIcons.sinterklaasLetter,
+          tone: "green" as const,
+        }]
+      : []),
     {
       href: "/sinterklaas/letters/productie",
       title: "Productie",

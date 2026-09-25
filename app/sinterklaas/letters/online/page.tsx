@@ -57,7 +57,7 @@ export default async function OnlineLetterOrdersPage() {
   }
 
   return <StrikShell wide>
-    <StrikPageHeader title="Online chocoladeletterbestellingen" icon={strikIcons.sinterklaasLetter} />
+    <StrikPageHeader title="Webshopbestellingen chocoladeletters" icon={strikIcons.sinterklaasLetter} />
     <p className="mb-5 text-sm text-[#776a5f]">Nieuwste 100 bestellingen uit de centrale database. <Link href="/sinterklaas/letters" className="underline">Terug naar chocoladeletters</Link></p>
     {error && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">Bestellingen laden is mislukt: {error.message}</p>}
     {!error && orders.length === 0 && <p className="rounded-xl bg-white p-5">Er zijn nog geen online letterbestellingen.</p>}
