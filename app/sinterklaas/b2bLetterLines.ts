@@ -1,7 +1,7 @@
 import type { B2BLetterException, B2BLetterLine } from "./types";
 
 export const B2B_SPUIT_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-export const B2B_VORM_LETTERS = ["A", "B", "S", "P", "M", "Q"];
+export const B2B_VORM_LETTERS = ["S"];
 export const B2B_LETTER_EXCEPTIONS: { id: B2BLetterException; label: string }[] = [
   { id: "notenvrij", label: "Notenvrij" },
   { id: "vegan", label: "Vegan" },

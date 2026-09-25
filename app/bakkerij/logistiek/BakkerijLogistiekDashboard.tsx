@@ -3577,7 +3577,7 @@ function createMarzipanPhotoPrintHtml(input: {
     .join("");
   const roundHtml =
     roundItems.length > 0
-      ? `<section class="round-grid ${diagonalRoundLayout?.className || ""}" style="${diagonalRoundLayout?.sectionStyle || ""}">
+      ? `<section class="round-grid ${diagonalRoundLayout?.className || ""} ${diagonalRoundLayout && squareGroups.length > 0 ? "new-print-page" : ""}" style="${diagonalRoundLayout?.sectionStyle || ""}">
           ${roundItems.map((item) => printItemHtmlFor(item, true)).join("")}
         </section>`
       : "";
@@ -3589,7 +3589,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <meta charset="utf-8">
     <title>${escapeHtml(title)}</title>
     <style>
-      @page { margin: 5mm; size: A4 portrait; }
+      @page { margin: 3mm 3mm 60mm; size: A4 portrait; }
       * { box-sizing: border-box; }
       :root {
         --petit-four-size: 37.8mm;
@@ -3692,7 +3692,9 @@ function createMarzipanPhotoPrintHtml(input: {
         margin-top: 4mm;
       }
       .round-grid.diagonal {
+        break-inside: avoid-page;
         display: block;
+        page-break-inside: avoid;
         position: relative;
         width: 200mm;
       }
@@ -3781,6 +3783,21 @@ function createMarzipanPhotoPrintHtml(input: {
           max-width: none;
           padding: 0;
           width: 200mm;
+        }
+        .sheet-header {
+          display: none;
+        }
+        .round-grid {
+          margin-top: 1mm;
+          row-gap: 1mm;
+        }
+        .round-grid.diagonal {
+          break-inside: avoid-page !important;
+          page-break-inside: avoid !important;
+        }
+        .round-grid.diagonal.new-print-page {
+          break-before: page !important;
+          page-break-before: always !important;
         }
         .square-grid {
           gap: 0 !important;
