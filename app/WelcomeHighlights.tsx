@@ -260,7 +260,7 @@ export default function WelcomeHighlights() {
   }
 
   return (
-    <section className="relative z-20 mt-7 grid items-start gap-2.5 sm:grid-cols-3 lg:mt-4">
+    <section className="relative z-20 mt-7 grid items-start gap-2.5 sm:grid-cols-2 lg:mt-4 lg:grid-cols-3">
       <article className="flex flex-col self-start rounded-[1.25rem] border border-[#a27a8e]/30 bg-[#fffaf0]/85 p-4 text-[#49342d] shadow-sm backdrop-blur transition hover:bg-[#fffaf0]">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -384,7 +384,7 @@ export default function WelcomeHighlights() {
 
       <Link
         href="/nieuws"
-        className="group flex min-h-[17rem] flex-col overflow-hidden rounded-[1.25rem] border border-[#a27a8e]/25 bg-[#f3eadc] p-3 text-[#49342d] shadow-sm transition hover:-translate-y-0.5"
+        className="group flex min-h-[17rem] flex-col overflow-hidden rounded-[1.25rem] border border-[#a27a8e]/25 bg-[#f3eadc] p-3 text-[#49342d] shadow-sm transition hover:-translate-y-0.5 sm:col-span-2 lg:col-span-1"
       >
         <div className="h-36 shrink-0 overflow-hidden rounded-[0.9rem] bg-[#ece7df] sm:h-40">
           {news ? (

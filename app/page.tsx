@@ -118,13 +118,13 @@ export default async function Home() {
 
   return (
     <main className="min-h-dvh overflow-hidden bg-[#c3d3bc] text-[#49342d]">
-      <section className="relative flex min-h-dvh flex-col overflow-hidden bg-[#c3d3bc] p-5 sm:p-8 lg:p-11">
+      <section className="relative flex min-h-dvh flex-col overflow-hidden bg-[#c3d3bc] p-5 sm:p-8 lg:p-8 xl:p-11">
         <div className="pointer-events-none absolute -right-24 -top-28 h-80 w-80 rounded-full bg-[#fed500] sm:h-[28rem] sm:w-[28rem]" />
         <div className="pointer-events-none absolute -bottom-44 left-[7%] h-72 w-[80%] rotate-[-7deg] rounded-[50%] border-2 border-[#d75a48]/75 sm:-bottom-52 sm:h-96" />
         <div className="pointer-events-none absolute -bottom-36 left-[11%] h-64 w-[72%] rotate-[-4deg] rounded-[50%] border border-[#a27a8e]/65 sm:-bottom-44 sm:h-80" />
         <div className="pointer-events-none absolute right-[32%] top-[17%] hidden h-16 w-16 rotate-12 rounded-[1.4rem] bg-[#a27a8e] sm:block" />
 
-        <div className="relative z-10 grid flex-1 items-center gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(16rem,.75fr)] lg:gap-12">
+        <div className="relative z-10 grid flex-1 items-center gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(13rem,.6fr)] lg:gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(16rem,.75fr)] xl:gap-12">
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/55 bg-[#fffaf0]/55 px-3 py-1.5 text-[0.64rem] font-black uppercase tracking-[0.15em] text-[#49342d] backdrop-blur sm:text-xs">
               <span className="h-2 w-2 rounded-full bg-[#d75a48]" />
@@ -132,25 +132,25 @@ export default async function Home() {
             </div>
 
             <h1 className="mt-5 text-[#49342d]">
-              <span className="block text-[clamp(2.6rem,8vw,5.7rem)] font-black uppercase leading-[0.82] tracking-[-0.055em]">
+              <span className="block text-[2.6rem] font-black uppercase leading-[0.82] tracking-[-0.055em] sm:text-[3.5rem] lg:text-[4rem] xl:text-[clamp(4.6rem,5vw,5.7rem)]">
                 {greeting},
               </span>
-              <span className="mt-1 block font-[Butterscotch] text-[clamp(3.6rem,9vw,6.6rem)] font-normal leading-[0.78] text-[#d75a48]">
+              <span className="mt-1 block font-[Butterscotch] text-[3.6rem] font-normal leading-[0.78] text-[#d75a48] sm:text-[4.5rem] lg:text-[4.7rem] xl:text-[clamp(5.2rem,6vw,6.6rem)]">
                 {firstName}
               </span>
             </h1>
 
-            <p className="mt-7 max-w-lg text-sm font-bold leading-relaxed text-[#49342d]/75 sm:text-base">
+            <p className="mt-6 max-w-lg text-sm font-bold leading-relaxed text-[#49342d]/75 sm:text-base xl:mt-7">
               Fijn dat je er bent. Alles wat je vandaag nodig hebt, vind je vanuit hier.
             </p>
           </div>
 
           <div className="relative hidden justify-center lg:flex">
-            <div className="relative flex aspect-square w-full max-w-[19rem] rotate-3 flex-col items-center justify-center rounded-[3.5rem] bg-[#fed500] p-7 text-center shadow-[0_22px_55px_rgba(73,52,45,.2)]">
-              <span className="absolute -left-5 -top-5 flex h-16 w-16 -rotate-6 items-center justify-center rounded-[1.4rem] bg-[#d75a48] shadow-lg">
+            <div className="relative flex aspect-square w-full max-w-[14rem] rotate-3 flex-col items-center justify-center rounded-[2.5rem] bg-[#fed500] p-5 text-center shadow-[0_22px_55px_rgba(73,52,45,.2)] xl:max-w-[19rem] xl:rounded-[3.5rem] xl:p-7">
+              <span className="absolute -left-4 -top-4 flex h-14 w-14 -rotate-6 items-center justify-center rounded-[1.2rem] bg-[#d75a48] shadow-lg xl:-left-5 xl:-top-5 xl:h-16 xl:w-16 xl:rounded-[1.4rem]">
                 <span
                   aria-hidden="true"
-                  className="block h-8 w-8 bg-white"
+                  className="block h-7 w-7 bg-white xl:h-8 xl:w-8"
                   style={{
                     WebkitMask: `url("${strikIcons.management}") center / contain no-repeat`,
                     mask: `url("${strikIcons.management}") center / contain no-repeat`,
@@ -160,13 +160,13 @@ export default async function Home() {
               <span className="text-[0.68rem] font-black uppercase tracking-[0.24em] text-[#725b00]">
                 Vandaag
               </span>
-              <span className="mt-1 text-[8rem] font-black leading-[0.82] tracking-[-0.09em] text-[#49342d]">
+              <span className="mt-1 text-[5.5rem] font-black leading-[0.82] tracking-[-0.09em] text-[#49342d] xl:text-[8rem]">
                 {currentDate.day}
               </span>
-              <span className="mt-3 text-xl font-black uppercase tracking-[0.12em] text-[#49342d]">
+              <span className="mt-2 text-base font-black uppercase tracking-[0.12em] text-[#49342d] xl:mt-3 xl:text-xl">
                 {currentDate.month}
               </span>
-              <span className="mt-4 rounded-full bg-[#fffaf0] px-5 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#d75a48]">
+              <span className="mt-3 rounded-full bg-[#fffaf0] px-4 py-1.5 text-[0.65rem] font-black uppercase tracking-[0.18em] text-[#d75a48] xl:mt-4 xl:px-5 xl:py-2 xl:text-xs">
                 {currentDate.weekday}
               </span>
             </div>
