@@ -4,22 +4,43 @@ import {
   StrikShell,
   strikIcons,
 } from "../../StrikUI";
-const items = [
-  {
-    href: "/sinterklaas/letters/verkoop",
-    title: "Verkoop",
-    icon: strikIcons.sinterklaasLetter,
-    tone: "green" as const,
-  },
-  {
-    href: "/sinterklaas/letters/productie-overzicht",
-    title: "Productie",
-    icon: strikIcons.sinterklaasProductie,
-    tone: "yellow" as const,
-  },
-];
+import { getCurrentProfile } from "@/app/lib/auth/session";
+import { hasFullAccess } from "@/app/lib/auth/access";
+import ExternalCampaignLink from "../ExternalCampaignLink";
 
-export default function SinterklaasLettersPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SinterklaasLettersPage() {
+  const profile = await getCurrentProfile();
+  const items = [
+    ...(hasFullAccess(profile)
+      ? [{
+          href: "/sinterklaas/letters/online",
+          title: "Online",
+          icon: strikIcons.sinterklaasLetter,
+          tone: "green" as const,
+        }]
+      : []),
+    {
+      href: "/sinterklaas/letters/winkel",
+      title: "Winkel",
+      icon: strikIcons.sinterklaasLetter,
+      tone: "green" as const,
+    },
+    {
+      href: "/sinterklaas/letters/b2b-lijst",
+      title: "B2B lijst",
+      icon: strikIcons.sinterklaasLetter,
+      tone: "green" as const,
+    },
+    {
+      href: "/sinterklaas/letters/productie",
+      title: "Productie",
+      icon: strikIcons.sinterklaasProductie,
+      tone: "yellow" as const,
+    },
+  ];
+
   return (
     <StrikShell>
       <StrikPageHeader
@@ -32,6 +53,7 @@ export default function SinterklaasLettersPage() {
           <StrikMenuLink key={item.href} {...item} />
         ))}
       </div>
+      <ExternalCampaignLink href="/lettershop" title="Bekijk de chocoladelettershop" />
     </StrikShell>
   );
 }

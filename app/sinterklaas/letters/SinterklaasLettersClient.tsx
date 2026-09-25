@@ -21,7 +21,7 @@ import { b2bLetterTotal } from "../b2bLetterLines";
 import B2BLetterLineBadges from "../B2BLetterLineBadges";
 import StoreLetterShopForm from "./StoreLetterShopForm";
 
-type Mode = "winkel" | "productie";
+type Mode = "winkel" | "productie" | "b2b";
 
 type LetterFormState = {
   customerName: string;
@@ -627,6 +627,73 @@ function OrderRow({
   );
 }
 
+function CompactB2BOrderRow({
+  order,
+  onEdit,
+  onDelete,
+  updatingId,
+}: Readonly<{
+  order: ChocolateLetterOrder;
+  onEdit: (order: ChocolateLetterOrder) => void;
+  onDelete: (order: ChocolateLetterOrder) => void;
+  updatingId: string;
+}>) {
+  const location = order.pickupLocation || order.shop || "—";
+  const specification = order.lines.map(lineLabel).join(" · ");
+
+  return (
+    <tr className="border-t border-[#e4ded5] bg-white align-top hover:bg-[#fbfaf7]">
+      <td className="whitespace-nowrap px-2 py-2 text-xs font-black text-[#1a1815]">
+        {formatDate(order.pickupDate)}
+        <span className="mt-0.5 block font-semibold text-[#776f66]">{location}</span>
+      </td>
+      <td className="whitespace-nowrap px-2 py-2 text-xs font-black text-[#1a1815]">
+        {order.code}
+        <span className="mt-0.5 block font-semibold capitalize text-[#776f66]">{order.source}</span>
+      </td>
+      <td className="px-2 py-2 text-xs font-black text-[#1a1815]">
+        {order.customerName}
+        {(order.customerEmail || order.phone) && (
+          <span className="mt-0.5 block max-w-[15rem] truncate font-semibold text-[#776f66]">
+            {[order.customerEmail, order.phone].filter(Boolean).join(" · ")}
+          </span>
+        )}
+      </td>
+      <td className="px-2 py-2 text-center text-sm font-black text-[#1a1815]">
+        {totalPieces(order)}
+      </td>
+      <td className="min-w-[19rem] px-2 py-2 text-xs font-semibold leading-snug text-[#4d463d]">
+        {specification}
+        {order.notes && (
+          <span className="mt-1 block font-bold text-[#8a5b13]">Let op: {order.notes}</span>
+        )}
+      </td>
+      <td className="whitespace-nowrap px-2 py-2">
+        <span className={`rounded-full px-2 py-1 text-[0.62rem] font-black uppercase tracking-[0.08em] ${statusClasses(order)}`}>
+          {statusLabel(order)}
+        </span>
+      </td>
+      <td className="whitespace-nowrap px-2 py-1.5 text-right">
+        <button
+          type="button"
+          onClick={() => onEdit(order)}
+          className="h-8 border border-[#bfd2bd] bg-[#f3f8f1] px-2 text-[0.68rem] font-black text-[#24551d]"
+        >
+          Wijzig
+        </button>
+        <button
+          type="button"
+          disabled={updatingId === `${order.id}-delete`}
+          onClick={() => onDelete(order)}
+          className="ml-1 h-8 border border-[#efb8aa] bg-white px-2 text-[0.68rem] font-black text-[#9a3412] disabled:opacity-60"
+        >
+          {updatingId === `${order.id}-delete` ? "..." : "Verwijder"}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 function LetterOrderForm({
   initialOrder,
   mode,
@@ -724,16 +791,16 @@ function LetterOrderForm({
       className="space-y-3"
     >
       <section className="rounded-xl border border-[#d6e5d8] bg-[#f6faf4] p-3">
-        <h3 className="text-sm font-black text-[#24551d]">Klant en afhalen</h3>
-        <p className="mt-0.5 text-xs text-[#6b645b]">Kies de ophaaldatum en winkel bewust; deze bestelling komt daarmee op de productielijst.</p>
+        <h3 className="text-sm font-black text-[#24551d]">{mode === "b2b" ? "Klant en planning" : "Klant en afhalen"}</h3>
+        <p className="mt-0.5 text-xs text-[#6b645b]">{mode === "b2b" ? "Leg de afgesproken datum en de verantwoordelijke locatie vast." : "Kies de ophaaldatum en winkel bewust; deze bestelling komt daarmee op de productielijst."}</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="grid gap-1 text-xs font-black text-[#4d463d]">Klantnaam *
             <input value={form.customerName} onChange={(event) => setForm((current) => ({ ...current, customerName: event.target.value }))} required placeholder="Naam op de bestelling" className="h-11 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none" />
           </label>
-          <label className="grid gap-1 text-xs font-black text-[#4d463d]">Ophaaldatum *
+          <label className="grid gap-1 text-xs font-black text-[#4d463d]">{mode === "b2b" ? "Lever-/ophaaldatum" : "Ophaaldatum"} *
             <input value={form.pickupDate} onChange={(event) => setForm((current) => ({ ...current, pickupDate: event.target.value }))} required type="date" className="h-11 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none" />
           </label>
-          <label className="grid gap-1 text-xs font-black text-[#4d463d]">Ophaalwinkel *
+          <label className="grid gap-1 text-xs font-black text-[#4d463d]">{mode === "b2b" ? "Locatie" : "Ophaalwinkel"} *
             <select value={form.shop} onChange={(event) => setForm((current) => ({ ...current, shop: event.target.value, pickupLocation: event.target.value }))} required className="h-11 min-w-0 rounded-lg border border-[#e4ded5] bg-white px-3 text-sm font-bold outline-none">
               <option value="">Kies een winkel</option>
               {legacyShop && <option value={legacyShop}>{legacyShop} (bestaande bestelling)</option>}
@@ -836,7 +903,7 @@ function LetterOrderForm({
         <textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Alleen informatie die voor de hele bestelling geldt" rows={3} className="mt-2 w-full rounded-lg border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold outline-none" />
       </details>
 
-      <p className="text-xs font-semibold text-[#6b645b]">{initialOrder ? "Wijzigingen worden opgeslagen; er gaat niet opnieuw een e-mail uit." : "Een nieuwe winkelbestelling wordt intern doorgemaild. Een klantbevestiging alleen als je die hierboven aanvinkt."}</p>
+      <p className="text-xs font-semibold text-[#6b645b]">{initialOrder ? "Wijzigingen worden opgeslagen; er gaat niet opnieuw een e-mail uit." : mode === "b2b" ? "De bestelling wordt direct in de B2B-lijst opgeslagen." : "Een nieuwe winkelbestelling wordt intern doorgemaild. Een klantbevestiging alleen als je die hierboven aanvinkt."}</p>
 
       {message && (
         <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#5f3f00]">
@@ -896,7 +963,7 @@ function LetterOrderDialog({
               Chocoladeletters
             </p>
             <h2 className="text-xl font-black text-[#1a1815] sm:text-2xl">
-              {order ? "Bestelling wijzigen" : mode === "winkel" ? "Winkelbestelling maken" : "Bestelling toevoegen"}
+              {order ? "Bestelling wijzigen" : mode === "winkel" ? "Winkelbestelling maken" : mode === "b2b" ? "B2B-bestelling toevoegen" : "Bestelling toevoegen"}
             </h2>
           </div>
           <button
@@ -1365,8 +1432,21 @@ export default function SinterklaasLettersClient({
 
   return (
     <div className="space-y-4">
+      {mode === "b2b" && (
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-2xl font-black text-[#1a1815]">B2B lijst</h2>
+            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#8b8278]">
+              Compact invoeroverzicht · gesorteerd op datum
+            </p>
+          </div>
+          <span className="bg-[#f2eee8] px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-[#6b645b]">
+            {visibleOrders.length} bestellingen
+          </span>
+        </div>
+      )}
       <section className="border border-[#e4ded5] bg-white p-3 shadow-sm">
-        <div className={`grid gap-2 ${mode === "winkel" ? "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem]" : "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_13rem]"}`}>
+        <div className={`grid gap-2 ${mode === "productie" ? "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_13rem]" : "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem]"}`}>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -1406,7 +1486,7 @@ export default function SinterklaasLettersClient({
             >
               +
             </span>
-            {mode === "winkel" ? "Nieuwe winkelbestelling" : "Toevoegen"}
+            {mode === "winkel" ? "Nieuwe winkelbestelling" : mode === "b2b" ? "Nieuwe B2B-bestelling" : "Toevoegen"}
           </button>
         </div>
       </section>
@@ -1455,6 +1535,49 @@ export default function SinterklaasLettersClient({
         </section>
       )}
 
+      {mode === "b2b" ? (
+        <section className="space-y-2">
+          {loading ? (
+            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">Laden...</p>
+          ) : visibleOrders.length < 1 ? (
+            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">Geen letterbestellingen gevonden.</p>
+          ) : (
+            <div className="overflow-x-auto border border-[#d8d1c8] bg-white shadow-sm">
+              <table className="w-full min-w-[980px] border-collapse text-left">
+                <thead className="bg-[#eee9e2] text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#6b645b]">
+                  <tr>
+                    <th className="px-2 py-2">Datum / locatie</th>
+                    <th className="px-2 py-2">Bestelling</th>
+                    <th className="px-2 py-2">Klant</th>
+                    <th className="px-2 py-2 text-center">Aantal</th>
+                    <th className="px-2 py-2">Letters</th>
+                    <th className="px-2 py-2">Status</th>
+                    <th className="px-2 py-2 text-right">Acties</th>
+                  </tr>
+                </thead>
+                {groupedOrders.map(([key, group]) => (
+                  <tbody key={key}>
+                    <tr className="border-t border-[#c8d8c4] bg-[#dcebd8]">
+                      <th colSpan={7} className="px-2 py-1 text-xs font-black capitalize text-[#24551d]">
+                        {monthLabel(key)} · {group.length}
+                      </th>
+                    </tr>
+                    {group.map((order) => (
+                      <CompactB2BOrderRow
+                        key={order.id}
+                        order={order}
+                        onEdit={openEditOrderDialog}
+                        onDelete={(nextOrder) => void deleteOrder(nextOrder)}
+                        updatingId={updatingId}
+                      />
+                    ))}
+                  </tbody>
+                ))}
+              </table>
+            </div>
+          )}
+        </section>
+      ) : (
       <section className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -1510,6 +1633,7 @@ export default function SinterklaasLettersClient({
           )}
         </div>
       </section>
+      )}
 
       {formOpen && (
         <LetterOrderDialog
