@@ -1,6 +1,8 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
+import { strikIcons } from "./StrikUI";
 import type { TodayStaffSchedule } from "./tamigoApi";
 
 type LoadState = "loading" | "ready" | "error";
@@ -54,19 +56,26 @@ export default function CompactStaffOverview() {
 
   return (
     <details
-      className="group rounded-[0.9rem] border border-[#e1ded8] bg-white/85 shadow-sm sm:rounded-[1.15rem]"
+      className="group overflow-hidden rounded-[1.15rem] border border-white/90 bg-white/95 shadow-[0_7px_18px_rgba(73,52,45,.08)]"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[0.9rem] bg-[#f0f1ee] px-3 py-2.5 [&::-webkit-details-marker]:hidden sm:rounded-[1.15rem] sm:px-5 sm:py-3">
-        <h2 className="winkel-section-heading text-[#2d2a26]/70">
-          wie werkt er vandaag
+      <summary className="grid min-h-[4rem] cursor-pointer list-none grid-cols-[2.75rem_minmax(0,1fr)_2rem] items-center gap-2.5 p-2 [&::-webkit-details-marker]:hidden sm:min-h-[4.5rem] sm:grid-cols-[3rem_minmax(0,1fr)_2rem] sm:p-2.5">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#c3d3bc] sm:h-12 sm:w-12">
+          <img
+            src={strikIcons.winkel}
+            alt=""
+            className="h-6 w-6 object-contain sm:h-7 sm:w-7"
+          />
+        </span>
+        <h2 className="min-w-0 text-sm font-black leading-tight text-[#49342d] sm:text-base">
+          Wie werkt er vandaag?
         </h2>
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ef5737] text-base font-black leading-none text-white transition group-open:rotate-180 sm:h-8 sm:w-8 sm:text-lg">
-          ⌄
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f1e9df] text-base font-black leading-none text-[#49342d] transition group-open:rotate-90">
+          &gt;
         </span>
       </summary>
 
       {state === "loading" && (
-        <div className="space-y-2 p-3 animate-pulse sm:p-5">
+        <div className="animate-pulse space-y-2 border-t border-[#ece6dc] p-3 sm:p-5">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-10 bg-[#f0ead0] rounded-lg" />
           ))}
@@ -74,13 +83,13 @@ export default function CompactStaffOverview() {
       )}
 
       {state === "error" && (
-        <p className="p-3 text-sm font-bold text-[#2d2a26]/55 sm:p-5">
+        <p className="border-t border-[#ece6dc] p-3 text-sm font-bold text-[#2d2a26]/55 sm:p-5">
           Rooster niet beschikbaar
         </p>
       )}
 
       {state === "ready" && schedule && (
-        <div className="px-4 py-2 sm:px-5 sm:py-4">
+        <div className="border-t border-[#ece6dc] px-4 py-2 sm:px-5 sm:py-4">
           {schedule.shops.map((shop) => {
             const iceEmployees = shop.iceEmployees || [];
 

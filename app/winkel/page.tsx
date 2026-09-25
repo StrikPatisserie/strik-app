@@ -42,10 +42,7 @@ export default async function WinkelPage() {
       icon={strikIcons.winkel}
       items={visibleItems}
     >
-      <section className="rounded-[1.4rem] border border-[#d9d2c9] bg-[#efe9e1] p-3 sm:p-4">
-        <p className="mb-3 px-1 text-[0.64rem] font-black uppercase tracking-[0.18em] text-[#756d64]">
-          Vandaag in de winkels
-        </p>
+      <section>
         <CompactStaffOverview />
       </section>
     </DepartmentHub>

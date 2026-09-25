@@ -109,7 +109,7 @@ export default function DepartmentHub({
                 </span>
               </>
             );
-            const className = `group grid min-h-[4rem] grid-cols-[2.75rem_minmax(0,1fr)_2rem] items-center gap-2.5 rounded-[1.15rem] border bg-[#fffaf0]/95 p-2 shadow-[0_7px_18px_rgba(73,52,45,.08)] backdrop-blur transition hover:-translate-y-px hover:shadow-[0_10px_24px_rgba(73,52,45,.13)] active:scale-[0.995] sm:min-h-[4.5rem] sm:grid-cols-[3rem_minmax(0,1fr)_2rem] sm:p-2.5 ${accentClass.border}`;
+            const className = `group grid min-h-[4rem] min-w-0 grid-cols-[2.75rem_minmax(0,1fr)_2rem] items-center gap-2.5 rounded-[1.15rem] border bg-white/95 p-2 shadow-[0_7px_18px_rgba(73,52,45,.08)] backdrop-blur transition hover:-translate-y-px hover:shadow-[0_10px_24px_rgba(73,52,45,.13)] active:scale-[0.995] sm:min-h-[4.5rem] sm:grid-cols-[3rem_minmax(0,1fr)_2rem] sm:p-2.5 ${accentClass.border}`;
 
             return linksEnabled ? (
               <Link

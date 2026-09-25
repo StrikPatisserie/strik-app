@@ -39,7 +39,7 @@ export default function AppChrome({
     <>
       <NotificationMonitor />
       <LogoutButton profile={profile} />
-      <div className={`min-h-dvh ${isWelcomeArea ? "bg-[#24553d]" : "bg-[#faf8f5]"}`}>
+      <div className={`min-h-dvh ${isWelcomeArea ? "bg-[#24553d]" : "bg-[#c3d3bc]"}`}>
         <div className="flex min-h-dvh flex-row">
           <WinkelSidebar
             profile={profile}
@@ -47,7 +47,7 @@ export default function AppChrome({
           />
 
           <main
-            className={`flex-1 overflow-auto pb-24 md:pb-0 ${isWelcomeArea ? "bg-[#24553d]" : ""}`}
+            className={`relative z-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pb-24 md:pb-0 ${isWelcomeArea ? "bg-[#24553d]" : ""}`}
           >
             {children}
           </main>
