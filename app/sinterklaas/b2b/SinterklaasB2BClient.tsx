@@ -12,6 +12,34 @@ import type { SinterklaasB2BOrder } from "../types";
 import type { B2BLetterLine } from "../types";
 import { B2B_LETTER_EXCEPTIONS, B2B_SPUIT_LETTERS, B2B_VORM_LETTERS, b2bLetterLineLabel, b2bLetterTotal, newB2BLetterLine } from "../b2bLetterLines";
 import B2BLetterLineBadges from "../B2BLetterLineBadges";
+import {
+  defaultProductChoice,
+  folderProducts,
+  productChoiceCandidates,
+  productChoiceLabel,
+  productLogoPrice,
+  productSupportsLogo,
+  productUnitPrice,
+  products,
+  pricedProduct,
+  tierFor,
+  type Product,
+} from "../../sint-voor-bedrijven/SintB2BConcept";
+
+const CUSTOM_PRODUCT_ID = "anders";
+const PRODUCT_SECTION_HEADING = "PRODUCTEN EN PRIJS";
+const OTHER_ORDER_HEADING = "OVERIGE ORDERAFSPRAKEN";
+
+type B2BProductLine = {
+  id: string;
+  productId: string;
+  choice: string;
+  description: string;
+  quantity: number;
+  unitPriceEx: string;
+  manualPrice: boolean;
+  withLogo: boolean;
+};
 
 type B2BFormState = {
   customerName: string;
@@ -34,7 +62,208 @@ type B2BFormState = {
   invoiceInfo: string;
   status: SinterklaasB2BOrder["status"];
   textInstructions: string;
+  productLines: B2BProductLine[];
 };
+
+const PRODUCT_CATALOG = [products[0], products[1], ...folderProducts];
+
+function roundCents(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function money(value: number) {
+  return new Intl.NumberFormat("nl-NL", {
+    style: "currency",
+    currency: "EUR",
+  }).format(value);
+}
+
+function decimalInput(value: number) {
+  return roundCents(value).toFixed(2);
+}
+
+function moneyNumber(value: string) {
+  const normalized = value
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function catalogProduct(productId: string) {
+  return PRODUCT_CATALOG.find((product) => product.id === productId);
+}
+
+function choicesForProduct(product: Product) {
+  if (product.id === "chocoladeletter") return ["Klein", "Groot"];
+  return productChoiceCandidates(product);
+}
+
+function configuredProduct(product: Product, choice: string) {
+  if (product.id === "chocoladeletter") {
+    return { ...product, retailPriceIncl: choice === "Groot" ? 13.95 : 8.95 };
+  }
+  return pricedProduct(product, choice);
+}
+
+function visibleChoiceLabel(product: Product, choice: string) {
+  if (product.id === "chocoladeletter") return choice || "Klein";
+  return productChoiceLabel(product, choice);
+}
+
+function lineDescription(line: B2BProductLine) {
+  if (line.productId === CUSTOM_PRODUCT_ID) return line.description.trim();
+  const product = catalogProduct(line.productId);
+  if (!product) return line.description.trim();
+  const choice = visibleChoiceLabel(product, line.choice);
+  const includeChoice = choice && choice !== "Standaard";
+  return `${product.name}${includeChoice ? ` · ${choice}` : ""}${line.withLogo ? " · eigen logo" : ""}`;
+}
+
+function repriceProductLines(lines: B2BProductLine[]) {
+  const quantities = lines.reduce((totals, line) => {
+    if (line.productId !== CUSTOM_PRODUCT_ID) {
+      totals.set(line.productId, (totals.get(line.productId) || 0) + Math.max(0, line.quantity));
+    }
+    return totals;
+  }, new Map<string, number>());
+
+  return lines.map((line) => {
+    if (line.manualPrice || line.productId === CUSTOM_PRODUCT_ID) return line;
+    const product = catalogProduct(line.productId);
+    if (!product) return line;
+    const configured = configuredProduct(product, line.choice);
+    const tier = tierFor(configured, Math.max(1, quantities.get(line.productId) || line.quantity));
+    const unitPrice = productUnitPrice(configured, tier, false) +
+      (line.withLogo && productSupportsLogo(product) ? productLogoPrice(false) : 0);
+    return { ...line, unitPriceEx: decimalInput(unitPrice) };
+  });
+}
+
+function newProductLine(productId = folderProducts[0]?.id || PRODUCT_CATALOG[0]?.id || CUSTOM_PRODUCT_ID): B2BProductLine {
+  const product = catalogProduct(productId);
+  const choice = product ? (product.id === "chocoladeletter" ? "Klein" : defaultProductChoice(product)) : "";
+  return repriceProductLines([{
+    id: `product-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    productId,
+    choice,
+    description: product?.name || "",
+    quantity: 1,
+    unitPriceEx: "0.00",
+    manualPrice: productId === CUSTOM_PRODUCT_ID,
+    withLogo: false,
+  }])[0];
+}
+
+function productLinesTotal(lines: B2BProductLine[]) {
+  return roundCents(lines.reduce(
+    (total, line) => total + Math.max(0, line.quantity) * moneyNumber(line.unitPriceEx),
+    0
+  ));
+}
+
+function serializeOrderText(lines: B2BProductLine[], otherText: string) {
+  const orderLines = lines
+    .filter((line) => line.quantity > 0 && lineDescription(line))
+    .map((line) => `${line.quantity} × ${lineDescription(line)} · ${money(moneyNumber(line.unitPriceEx))} p.s. ex btw · ${money(roundCents(line.quantity * moneyNumber(line.unitPriceEx)))}`);
+
+  return [
+    ...(orderLines.length ? [PRODUCT_SECTION_HEADING, ...orderLines] : []),
+    ...(otherText.trim() ? [OTHER_ORDER_HEADING, otherText.trim()] : []),
+  ].join("\n");
+}
+
+function matchCatalogDescription(description: string) {
+  const withLogo = / · eigen logo$/i.test(description);
+  const cleanDescription = description.replace(/ · eigen logo$/i, "");
+  for (const product of PRODUCT_CATALOG) {
+    for (const choice of choicesForProduct(product)) {
+      const label = visibleChoiceLabel(product, choice);
+      const candidate = `${product.name}${label && label !== "Standaard" ? ` · ${label}` : ""}`;
+      if (candidate === cleanDescription) return { product, choice, withLogo };
+    }
+  }
+  return null;
+}
+
+function parseOrderText(value: string) {
+  if (!value.startsWith(`${PRODUCT_SECTION_HEADING}\n`)) {
+    return { productLines: [] as B2BProductLine[], otherText: value };
+  }
+
+  const [productPart, ...otherParts] = value.split(`\n${OTHER_ORDER_HEADING}\n`);
+  const unparsedRows: string[] = [];
+  const productLines = productPart.split("\n").slice(1).flatMap((row, index) => {
+    const match = row.match(/^(\d+) × (.+) · €\s?([\d.,]+) p\.s\. ex btw · €\s?[\d.,]+$/);
+    if (!match) {
+      if (row.trim()) unparsedRows.push(row);
+      return [];
+    }
+    const catalogMatch = matchCatalogDescription(match[2]);
+    return [{
+      id: `saved-product-${index}`,
+      productId: catalogMatch?.product.id || CUSTOM_PRODUCT_ID,
+      choice: catalogMatch?.choice || "",
+      description: catalogMatch?.product.name || match[2],
+      quantity: Number(match[1]),
+      unitPriceEx: decimalInput(moneyNumber(match[3])),
+      manualPrice: true,
+      withLogo: Boolean(catalogMatch?.withLogo),
+    }];
+  });
+
+  return {
+    productLines,
+    otherText: [...unparsedRows, otherParts.join(`\n${OTHER_ORDER_HEADING}\n`)].filter(Boolean).join("\n"),
+  };
+}
+
+function compactOrderText(value: string) {
+  const parsed = parseOrderText(value);
+  if (parsed.productLines.length === 0) return value;
+  return [
+    ...parsed.productLines.map((line) => `${line.quantity}× ${lineDescription(line)} · ${money(moneyNumber(line.unitPriceEx))} p.s.`),
+    parsed.otherText,
+  ].filter(Boolean).join("\n");
+}
+
+function usesManualTotal(order: SinterklaasB2BOrder | null | undefined) {
+  if (!order?.totalExVat) return false;
+  const parsed = parseOrderText(order.orderText);
+  if (parsed.productLines.length === 0) return true;
+  return Math.abs(moneyNumber(order.totalExVat) - productLinesTotal(parsed.productLines)) > 0.011;
+}
+
+function syncLetterProductLines(productLines: B2BProductLine[], letterLines: B2BLetterLine[]) {
+  const unrelated = productLines.filter((line) =>
+    line.productId !== "chocoladeletter" && line.productId !== "chocolade-vormletter"
+  );
+  const groups = [
+    {
+      productId: "chocoladeletter",
+      choice: "Klein",
+      quantity: letterLines.filter((line) => line.style === "spuit" && line.size === "klein").reduce((sum, line) => sum + line.quantity, 0),
+    },
+    {
+      productId: "chocoladeletter",
+      choice: "Groot",
+      quantity: letterLines.filter((line) => line.style === "spuit" && line.size === "groot").reduce((sum, line) => sum + line.quantity, 0),
+    },
+    {
+      productId: "chocolade-vormletter",
+      choice: "",
+      quantity: letterLines.filter((line) => line.style === "vorm").reduce((sum, line) => sum + line.quantity, 0),
+    },
+  ];
+  const letterPrices = groups.flatMap((group) => {
+    if (group.quantity < 1) return [];
+    const existing = productLines.find((line) => line.productId === group.productId && line.choice === group.choice);
+    const base = existing || newProductLine(group.productId);
+    return [{ ...base, choice: group.choice, quantity: group.quantity }];
+  });
+  return repriceProductLines([...letterPrices, ...unrelated]);
+}
 
 const DEPARTMENTS: { id: SinterklaasB2BOrder["department"]; label: string }[] = [
   { id: "chocolade", label: "Chocoladeletters" },
@@ -83,11 +312,13 @@ function createFormState(): B2BFormState {
     invoiceInfo: "",
     status: "aanvraag",
     textInstructions: "",
+    productLines: [],
   };
 }
 
 function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined) {
   if (!order) return createFormState();
+  const parsedOrder = parseOrderText(order.orderText);
 
   return {
     customerName: order.customerName,
@@ -97,7 +328,7 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined) {
     deliveryDate: order.deliveryDate,
     productionDate: order.productionDate,
     department: order.department,
-    orderText: order.orderText,
+    orderText: parsedOrder.otherText,
     letterOrderText: order.letterOrderText,
     letterLines: order.letterLines.map((line) => ({ ...line })),
     logo: order.logo,
@@ -110,6 +341,7 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined) {
     invoiceInfo: order.invoiceInfo,
     status: order.status,
     textInstructions: order.textInstructions,
+    productLines: parsedOrder.productLines,
   };
 }
 
@@ -253,18 +485,6 @@ function updateOrderList(
 ) {
   return [nextOrder, ...orders.filter((order) => order.id !== nextOrder.id)].sort(
     compareOrdersByDeliveryDate
-  );
-}
-
-function statusBadge(label: string, active: boolean) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${
-        active ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#f2eee8] text-[#8b8278]"
-      }`}
-    >
-      {label}
-    </span>
   );
 }
 
@@ -413,9 +633,11 @@ function B2BOrderForm({
   );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [manualTotal, setManualTotal] = useState(() => usesManualTotal(initialOrder));
 
   useEffect(() => {
     setForm(formStateFromOrder(initialOrder));
+    setManualTotal(usesManualTotal(initialOrder));
   }, [initialOrder]);
 
   function setField<K extends keyof B2BFormState>(key: K, value: B2BFormState[K]) {
@@ -423,9 +645,8 @@ function B2BOrderForm({
   }
 
   function updateLetterLine(id: string, patch: Partial<B2BLetterLine>) {
-    setForm((current) => ({
-      ...current,
-      letterLines: current.letterLines.map((line) => {
+    setForm((current) => {
+      const letterLines = current.letterLines.map((line) => {
         if (line.id !== id) return line;
         const next = { ...line, ...patch };
         if (next.style === "vorm") {
@@ -433,19 +654,54 @@ function B2BOrderForm({
           if (!B2B_VORM_LETTERS.includes(next.letter)) next.letter = "A";
         }
         return next;
-      }),
+      });
+      return {
+        ...current,
+        letterLines,
+        productLines: syncLetterProductLines(current.productLines, letterLines),
+      };
+    });
+  }
+
+  function setLetterLines(letterLines: B2BLetterLine[]) {
+    setForm((current) => ({
+      ...current,
+      letterLines,
+      productLines: syncLetterProductLines(current.productLines, letterLines),
     }));
   }
+
+  function setProductLines(productLines: B2BProductLine[]) {
+    setField("productLines", repriceProductLines(productLines));
+  }
+
+  function updateProductLine(id: string, patch: Partial<B2BProductLine>) {
+    setForm((current) => ({
+      ...current,
+      productLines: repriceProductLines(current.productLines.map((line) =>
+        line.id === id ? { ...line, ...patch } : line
+      )),
+    }));
+  }
+
+  const calculatedTotalEx = productLinesTotal(form.productLines);
+  const displayedTotalEx = manualTotal
+    ? form.totalExVat
+    : form.productLines.length > 0
+      ? decimalInput(calculatedTotalEx)
+      : "";
 
   async function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
 
+    const orderText = serializeOrderText(form.productLines, form.orderText);
+
     if (!form.customerName.trim()) {
       setMessage("Vul minimaal de klantnaam in.");
       return;
     }
-    if (form.status === "akkoord" && (!form.deliveryDate || !form.orderText.trim())) {
+    if (form.status === "akkoord" && (!form.deliveryDate || !orderText.trim())) {
       setMessage("Voor definitief zijn de bestelling en leverdatum nodig.");
       return;
     }
@@ -460,11 +716,20 @@ function B2BOrderForm({
 
     setSaving(true);
     try {
+      const { productLines, ...storedForm } = form;
       const saved = await saveB2BOrder({
         id: initialOrder?.id,
-        ...form,
+        ...storedForm,
         customerName: form.customerName.trim(),
-        orderText: form.orderText.trim(),
+        orderText,
+        totalExVat: manualTotal
+          ? form.totalExVat.trim()
+          : productLines.length > 0
+            ? money(calculatedTotalEx)
+            : "",
+        logo: productLines.some((line) => line.withLogo) && !form.logo.trim()
+          ? "Eigen logo volgens orderregels"
+          : form.logo,
         ...(initialOrder ? {} : {
           entered: false,
           productionScheduled: false,
@@ -569,19 +834,110 @@ function B2BOrderForm({
         />
       </div>
 
-      <textarea
-        value={form.orderText}
-        onChange={(event) => setField("orderText", event.target.value)}
-        placeholder="Aanvraag / bestelling · noteer wat nu al bekend is"
-        rows={4}
-        className="w-full border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none"
-      />
+      <section className="border border-[#d6e5d8] bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#d6e5d8] bg-[#f6faf4] px-3 py-2">
+          <div>
+            <h3 className="text-sm font-black">Producten & prijs</h3>
+            <p className="text-[0.68rem] font-bold text-[#6b645b]">Folderprijs wordt automatisch berekend; iedere stukprijs blijft aanpasbaar.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setProductLines([...form.productLines, newProductLine()])}
+            className="h-8 bg-[#24551d] px-3 text-xs font-black text-white"
+          >
+            + Product
+          </button>
+        </div>
+
+        <div className="divide-y divide-[#e4ded5]">
+          {form.productLines.map((line) => {
+            const product = catalogProduct(line.productId);
+            const choices = product ? choicesForProduct(product) : [];
+            return (
+              <div key={line.id} className="grid gap-1.5 px-3 py-2 md:grid-cols-[minmax(12rem,1.8fr)_minmax(8rem,1.2fr)_5rem_7rem_7rem_2rem] md:items-end">
+                <label className="grid gap-0.5 text-[0.6rem] font-black uppercase tracking-wide text-[#6b645b]">
+                  Product
+                  <select
+                    value={line.productId}
+                    onChange={(event) => {
+                      const productId = event.target.value;
+                      const nextProduct = catalogProduct(productId);
+                      updateProductLine(line.id, {
+                        productId,
+                        choice: nextProduct ? (nextProduct.id === "chocoladeletter" ? "Klein" : defaultProductChoice(nextProduct)) : "",
+                        description: nextProduct?.name || "",
+                        unitPriceEx: nextProduct ? "0.00" : line.unitPriceEx,
+                        manualPrice: !nextProduct,
+                        withLogo: false,
+                      });
+                    }}
+                    className="h-9 min-w-0 border border-[#d6e5d8] bg-white px-2 text-xs font-black normal-case tracking-normal text-[#1a1815]"
+                  >
+                    {PRODUCT_CATALOG.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    <option value={CUSTOM_PRODUCT_ID}>Anders / niet in folder</option>
+                  </select>
+                </label>
+
+                {line.productId === CUSTOM_PRODUCT_ID ? (
+                  <label className="grid gap-0.5 text-[0.6rem] font-black uppercase tracking-wide text-[#6b645b]">
+                    Omschrijving
+                    <input value={line.description} onChange={(event) => updateProductLine(line.id, { description: event.target.value })} placeholder="Vrij product" className="h-9 min-w-0 border border-[#d6e5d8] px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]" />
+                  </label>
+                ) : choices.length > 1 || choices[0] ? (
+                  <label className="grid gap-0.5 text-[0.6rem] font-black uppercase tracking-wide text-[#6b645b]">
+                    Variant
+                    <select value={line.choice} onChange={(event) => updateProductLine(line.id, { choice: event.target.value })} className="h-9 min-w-0 border border-[#d6e5d8] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]">
+                      {choices.map((choice) => <option key={choice} value={choice}>{visibleChoiceLabel(product!, choice)}</option>)}
+                    </select>
+                  </label>
+                ) : <div />}
+
+                <label className="grid gap-0.5 text-[0.6rem] font-black uppercase tracking-wide text-[#6b645b]">
+                  Aantal
+                  <input type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateProductLine(line.id, { quantity: Math.max(1, Math.min(10000, Number(event.target.value) || 1)) })} className="h-9 min-w-0 border border-[#d6e5d8] px-2 text-right text-xs font-black text-[#1a1815]" />
+                </label>
+
+                <label className="grid gap-0.5 text-[0.6rem] font-black uppercase tracking-wide text-[#6b645b]">
+                  Prijs p.s. ex
+                  <input type="number" min="0" step="0.01" value={line.unitPriceEx} onChange={(event) => updateProductLine(line.id, { unitPriceEx: event.target.value, manualPrice: true })} className="h-9 min-w-0 border border-[#d6e5d8] px-2 text-right text-xs font-black text-[#1a1815]" />
+                </label>
+
+                <div className="flex min-h-9 items-center justify-between gap-1 text-xs font-black">
+                  <span>{money(line.quantity * moneyNumber(line.unitPriceEx))}</span>
+                  {line.manualPrice && product && <button type="button" onClick={() => updateProductLine(line.id, { manualPrice: false })} className="text-[0.62rem] font-black text-[#24551d] underline">Folderprijs</button>}
+                  {product && productSupportsLogo(product) && <label className="flex items-center gap-1 text-[0.62rem] font-bold"><input type="checkbox" checked={line.withLogo} onChange={(event) => updateProductLine(line.id, { withLogo: event.target.checked })} />Logo</label>}
+                </div>
+
+                <button type="button" aria-label={`${lineDescription(line) || "Product"} verwijderen`} onClick={() => setProductLines(form.productLines.filter((item) => item.id !== line.id))} className="h-9 text-xl font-black text-[#9a3412]">×</button>
+              </div>
+            );
+          })}
+          {form.productLines.length === 0 && <p className="px-3 py-3 text-xs font-bold text-[#6b645b]">Nog geen productregels. Voeg een folderproduct of een vrij product toe.</p>}
+        </div>
+
+        <div className="grid gap-2 border-t border-[#d6e5d8] bg-[#fffdf4] px-3 py-2 sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-end">
+          <label className="grid gap-0.5 text-[0.6rem] font-black uppercase tracking-wide text-[#6b645b]">
+            Aanvullende orderafspraken
+            <textarea value={form.orderText} onChange={(event) => setField("orderText", event.target.value)} placeholder="Alleen wat niet al in de productregels staat" rows={2} className="min-h-14 border border-[#d6e5d8] bg-white px-2 py-1.5 text-xs font-bold normal-case tracking-normal text-[#1a1815]" />
+          </label>
+          <label className="grid gap-0.5 text-[0.6rem] font-black uppercase tracking-wide text-[#6b645b]">
+            Totaal ex btw
+            <input
+              value={displayedTotalEx}
+              onChange={(event) => { setManualTotal(true); setField("totalExVat", event.target.value); }}
+              placeholder="0,00"
+              className="h-9 border border-[#d6e5d8] bg-white px-2 text-right text-sm font-black normal-case tracking-normal text-[#1a1815]"
+            />
+            {form.productLines.length > 0 && manualTotal && <button type="button" onClick={() => setManualTotal(false)} className="text-right text-[0.62rem] font-black normal-case tracking-normal text-[#24551d] underline">Gebruik berekend totaal {money(calculatedTotalEx)}</button>}
+          </label>
+        </div>
+      </section>
 
       {form.department !== "bakkerij" && (
         <section className="space-y-2 border border-[#d6e5d8] bg-[#f6faf4] p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div><h3 className="text-sm font-black">Chocoladeletters · {b2bLetterTotal(form.letterLines)} stuks</h3><p className="text-xs text-[#6b645b]">Kies per regel letter, chocolade, spuit/vorm, formaat en aantal.</p></div>
-            <button type="button" onClick={() => setField("letterLines", [...form.letterLines, newB2BLetterLine()])} className="h-8 bg-[#24551d] px-3 text-xs font-black text-white">+ Letterregel</button>
+            <h3 className="text-sm font-black">Chocoladeletters · {b2bLetterTotal(form.letterLines)} stuks</h3>
+            <button type="button" onClick={() => setLetterLines([...form.letterLines, newB2BLetterLine()])} className="h-8 bg-[#24551d] px-3 text-xs font-black text-white">+ Letterregel</button>
           </div>
           {form.letterLines.map((line) => <div key={line.id} className="grid grid-cols-[repeat(2,minmax(0,1fr))_4rem] gap-1 border-t border-[#d6e5d8] pt-2 sm:grid-cols-[4.5rem_minmax(0,1fr)_6rem_5rem_5rem_2rem]">
             <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Letter<select aria-label="Letter" value={line.letter} onChange={(event) => updateLetterLine(line.id, { letter: event.target.value })} className="h-8 border border-[#d6e5d8] bg-white px-1 text-xs"><option value={line.letter} hidden={!((line.style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).includes(line.letter))}>{line.letter}</option>{(line.style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).filter((letter) => letter !== line.letter).map((letter) => <option key={letter} value={letter}>{letter}</option>)}</select></label>
@@ -589,75 +945,29 @@ function B2BOrderForm({
             <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Soort<select aria-label="Soort" value={line.style} onChange={(event) => updateLetterLine(line.id, { style: event.target.value as B2BLetterLine["style"] })} className="h-8 border border-[#d6e5d8] bg-white px-1 text-xs"><option value="spuit">Spuit</option><option value="vorm">Vorm</option></select></label>
             <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Formaat<select aria-label="Formaat" value={line.size} disabled={line.style === "vorm"} onChange={(event) => updateLetterLine(line.id, { size: event.target.value as B2BLetterLine["size"] })} className="h-8 border border-[#d6e5d8] bg-white px-1 text-xs disabled:bg-[#f2eee8]"><option value="groot">Groot</option><option value="klein">Klein</option></select></label>
             <label className="grid gap-0.5 text-[0.6rem] font-black uppercase">Aantal<input aria-label="Aantal" type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateLetterLine(line.id, { quantity: Number(event.target.value) })} className="h-8 w-full border border-[#d6e5d8] bg-white px-1 text-xs" /></label>
-            <button type="button" aria-label="Letterregel verwijderen" onClick={() => setField("letterLines", form.letterLines.filter((item) => item.id !== line.id))} className="self-end text-lg font-black text-[#9a3412]">×</button>
+            <button type="button" aria-label="Letterregel verwijderen" onClick={() => setLetterLines(form.letterLines.filter((item) => item.id !== line.id))} className="self-end text-lg font-black text-[#9a3412]">×</button>
             <div className="col-span-full flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.65rem] font-bold text-[#705000]">
               <span className="uppercase tracking-wide">Speciale vereisten:</span>
               {B2B_LETTER_EXCEPTIONS.map(({ id, label }) => <label key={id} className="inline-flex cursor-pointer items-center gap-1"><input type="checkbox" checked={line.exceptions.includes(id)} onChange={(event) => updateLetterLine(line.id, { exceptions: event.target.checked ? [...line.exceptions, id] : line.exceptions.filter((value) => value !== id) })} />{label}</label>)}
             </div>
           </div>)}
-          <p className="text-[0.68rem] text-[#6b645b]">Vink speciale vereisten alleen aan na controle van ingrediënten en mogelijke kruisbesmetting; de app bevestigt niet automatisch dat een product vrij van allergenen is.</p>
           {form.letterLines.length === 0 && <p className="text-xs font-bold text-[#9a3412]">Nog geen letterregels. Voeg ze toe voordat een nieuwe letterbestelling definitief wordt.</p>}
           {form.letterOrderText && <details className="text-xs"><summary className="cursor-pointer font-bold text-[#6b645b]">Oude vrije letteromschrijving bekijken</summary><p className="mt-1 whitespace-pre-wrap">{form.letterOrderText}</p></details>}
         </section>
       )}
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        <textarea
-          value={form.logo}
-          onChange={(event) => setField("logo", event.target.value)}
-          placeholder="Logo"
-          rows={2}
-          className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none"
-        />
-        <textarea
-          value={form.packaging}
-          onChange={(event) => setField("packaging", event.target.value)}
-          placeholder="Verpakken"
-          rows={2}
-          className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none"
-        />
-        <textarea
-          value={form.textInstructions}
-          onChange={(event) => setField("textInstructions", event.target.value)}
-          placeholder="Tekst op product of kaartje"
-          rows={2}
-          className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none"
-        />
-        <textarea
-          value={form.importantNotes}
-          onChange={(event) => setField("importantNotes", event.target.value)}
-          placeholder="Belangrijk"
-          rows={2}
-          className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none"
-        />
-        <textarea
-          value={form.deliveryAddress}
-          onChange={(event) => setField("deliveryAddress", event.target.value)}
-          placeholder="Bezorgadres"
-          rows={2}
-          className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none"
-        />
-        <input
-          value={form.priceAgreement}
-          onChange={(event) => setField("priceAgreement", event.target.value)}
-          placeholder="Afgesproken prijs"
-          className="h-10 border border-[#d6e5d8] bg-white px-3 text-sm font-bold outline-none"
-        />
-        <input
-          value={form.totalExVat}
-          onChange={(event) => setField("totalExVat", event.target.value)}
-          placeholder="Totaal ex btw"
-          className="h-10 border border-[#d6e5d8] bg-white px-3 text-sm font-bold outline-none"
-        />
-      </div>
-
-      <textarea
-        value={form.invoiceInfo}
-        onChange={(event) => setField("invoiceInfo", event.target.value)}
-        placeholder="Factuurgegevens"
-        rows={2}
-        className="w-full border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none"
-      />
+      <details className="border border-[#d6e5d8] bg-[#faf8f5]">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-black text-[#24551d]">Extra gegevens · logo, verpakking, adres en factuur</summary>
+        <div className="grid gap-2 border-t border-[#d6e5d8] p-3 sm:grid-cols-2">
+          <textarea value={form.logo} onChange={(event) => setField("logo", event.target.value)} placeholder="Logo" rows={2} className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none" />
+          <textarea value={form.packaging} onChange={(event) => setField("packaging", event.target.value)} placeholder="Verpakken" rows={2} className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none" />
+          <textarea value={form.textInstructions} onChange={(event) => setField("textInstructions", event.target.value)} placeholder="Tekst op product of kaartje" rows={2} className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none" />
+          <textarea value={form.importantNotes} onChange={(event) => setField("importantNotes", event.target.value)} placeholder="Belangrijk" rows={2} className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none" />
+          <textarea value={form.deliveryAddress} onChange={(event) => setField("deliveryAddress", event.target.value)} placeholder="Bezorgadres" rows={2} className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none" />
+          <input value={form.priceAgreement} onChange={(event) => setField("priceAgreement", event.target.value)} placeholder="Prijsafspraak / toelichting" className="h-10 border border-[#d6e5d8] bg-white px-3 text-sm font-bold outline-none" />
+          <textarea value={form.invoiceInfo} onChange={(event) => setField("invoiceInfo", event.target.value)} placeholder="Factuurgegevens" rows={2} className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold outline-none sm:col-span-2" />
+        </div>
+      </details>
 
       {message && (
         <p className="border border-[#d6e5d8] bg-white px-3 py-2 text-sm font-bold text-[#24551d]">
@@ -704,7 +1014,7 @@ function B2BOrderDialog({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-5xl border border-[#d6e5d8] bg-[#faf8f5] p-3 shadow-2xl sm:p-4">
+      <div className="w-full max-w-6xl border border-[#d6e5d8] bg-[#faf8f5] p-3 shadow-2xl sm:p-4">
         <div className="mb-3 flex items-start justify-between gap-3 border-b border-[#e4ded5] pb-3">
           <div>
             <p className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
@@ -772,6 +1082,7 @@ function B2BOrderRow({
   const archived = order.id.startsWith("historie-");
   const warnings = orderWarnings(order);
   const confirmationNeedsAttention = order.status === "akkoord" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
+  const orderSummary = compactOrderText(order.orderText);
 
   return (
     <article
@@ -801,7 +1112,6 @@ function B2BOrderRow({
             <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
               {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
             </span>
-            {order.status === "akkoord" && statusBadge(isProductionDone(order) ? "Productie klaar" : "Productie open", isProductionDone(order))}
             {dueSoon(order) && (
               <span className="rounded-full bg-[#fff3c4] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#705000]">
                 Binnen 2 dagen
@@ -814,10 +1124,9 @@ function B2BOrderRow({
             {order.logo && <span aria-label="Logo nodig" title="Logo nodig">🖼️</span>}
             {order.status === "akkoord" && <span className={`italic ${order.entered ? "text-[#24551d]" : "text-[#b42318]"}`}>{order.entered ? "Ingevoerd" : "Niet ingevoerd"}</span>}
           </div>
-          <div className={`mt-1.5 grid gap-2 rounded-xl border border-[#e4ded5] bg-white px-2.5 py-2 shadow-sm ${order.department !== "bakkerij" || order.letterLines.length > 0 ? "xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]" : ""}`}>
+          <div className={`mt-1 grid gap-2 border-t border-[#eee8df] pt-1.5 ${order.department !== "bakkerij" || order.letterLines.length > 0 ? "xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]" : ""}`}>
             <div className="min-w-0">
-              <p className="text-[0.62rem] font-black uppercase tracking-wide text-[#6b645b]">Bestelling · algemeen</p>
-              {order.orderText.length > 120 ? <details className="mt-0.5 text-xs text-[#2e2a26]"><summary className="cursor-pointer font-bold">{order.orderText.slice(0, 120)}… <span className="text-[#24551d]">meer</span></summary><p className="mt-1 whitespace-pre-wrap border-l-2 border-[#c3d3bc] pl-2">{order.orderText}</p></details> : <p className="mt-0.5 whitespace-pre-wrap text-xs font-bold leading-snug text-[#2e2a26]">{order.orderText}</p>}
+              {orderSummary.length > 150 ? <details className="text-xs text-[#2e2a26]"><summary className="cursor-pointer font-bold">{orderSummary.slice(0, 150)}… <span className="text-[#24551d]">meer</span></summary><p className="mt-1 whitespace-pre-wrap border-l-2 border-[#c3d3bc] pl-2">{orderSummary}</p></details> : <p className="whitespace-pre-wrap text-xs font-bold leading-snug text-[#2e2a26]">{orderSummary}</p>}
             </div>
             {(order.department !== "bakkerij" || order.letterLines.length > 0) && <div className="min-w-0 border-t border-[#eee8df] pt-1.5 xl:border-l xl:border-t-0 xl:pl-2 xl:pt-0">
               <p className="mb-1 text-[0.62rem] font-black uppercase tracking-wide text-[#24551d]">Bestelling · letters {order.letterLines.length > 0 ? `(${b2bLetterTotal(order.letterLines)})` : ""}</p>
@@ -1096,13 +1405,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
 
   const groupedOrders = groupByMonth(visibleOrders);
   const activeOrders = visibleOrders.filter((order) => order.status === "akkoord" && !order.cancelled && !order.delivered && order.deliveryDate >= addDays(todayIso(), -7));
-  const unenteredCount = activeOrders.filter((order) => !order.entered).length;
   const unfinishedCount = activeOrders.filter((order) => !isProductionDone(order)).length;
-  const extrasOpenCount = activeOrders.filter((order) =>
-    (order.logo && !order.logoChecked) ||
-    (order.textInstructions && !order.textChecked) ||
-    (order.packaging && !order.packagingChecked)
-  ).length;
   const productionGroups = Array.from(
     activeOrders.reduce((groups, order) => {
       const key = `${order.deliveryDate}|${order.department}`;
@@ -1216,22 +1519,6 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
           {error}
         </p>
       )}
-
-      {!loading && <section className="grid gap-2 sm:grid-cols-3" aria-label="Openstaande controles">
-        <div className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-black">{unenteredCount} akkoord, nog niet in Bake-it</div>
-        <div className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-black">{unfinishedCount} nog te produceren</div>
-        <div className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-black">{extrasOpenCount} met open extra controle</div>
-      </section>}
-
-      {!loading && productionGroups.length > 0 && <details className="border border-[#d6e5d8] bg-[#f6faf4] p-3">
-        <summary className="cursor-pointer text-sm font-black text-[#24551d]">Wat moet nog gemaakt worden · {unfinishedCount} open</summary>
-        <div className="mt-2 space-y-2">
-          {productionGroups.map(([key, group]) => <div key={key} className="border border-[#d6e5d8] bg-white p-2">
-            <h3 className="text-sm font-black">Levering {formatDate(group[0].deliveryDate)} · {DEPARTMENTS.find((department) => department.id === group[0].department)?.label} · {group.filter((order) => !isProductionDone(order)).length} open</h3>
-            {group.map((order) => <p key={order.id} className="mt-1 whitespace-pre-wrap border-t border-[#eee8df] pt-1 text-xs"><strong>{order.customerName}</strong> · {order.orderText}{orderWarnings(order).length > 0 ? ` · Let op: ${orderWarnings(order).join(", ")}` : ""}</p>)}
-          </div>)}
-        </div>
-      </details>}
 
       {importPreview.length > 0 && (
         <section className="border border-[#e5d28a] bg-[#fff8d8] p-3 shadow-sm">

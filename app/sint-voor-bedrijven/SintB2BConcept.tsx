@@ -14,12 +14,12 @@ import {
 import B2BChocolateLetters, { describeB2BLetter, type B2BLetterLine } from "./B2BChocolateLetters";
 import B2BPriceSummary from "./B2BPriceSummary";
 
-type PriceTier = { min: number; label: string; price?: number; discountPercent?: number };
+export type PriceTier = { min: number; label: string; price?: number; discountPercent?: number };
 type ProductVariant = { label: string; retailPriceIncl: number };
 type DuoImage = { options: [string, string]; src: string };
 type Allergen = "gluten" | "lactose" | "amandel" | "soja" | "ei";
 type ProductInfoSection = "shelfLife" | "allergens";
-type Product = {
+export type Product = {
   id: string;
   name: string;
   eyebrow?: string;
@@ -107,7 +107,7 @@ const DELIVERY_WEEK_OPTIONS = Array.from({ length: 14 }, (_, index) => {
   };
 });
 
-const products: Product[] = [
+export const products: Product[] = [
   {
     id: "chocoladeletter",
     name: "Chocolade spuitletters",
@@ -335,7 +335,7 @@ const folderProductOrder = [
   "speculaasplak-gedicht",
   "marsepein-letter",
 ];
-const folderProducts = [...products.slice(2)].sort(
+export const folderProducts = [...products.slice(2)].sort(
   (first, second) => folderProductOrder.indexOf(first.id) - folderProductOrder.indexOf(second.id)
 );
 
@@ -346,11 +346,11 @@ function money(value: number) {
   }).format(value);
 }
 
-function tierFor(product: Product, quantity: number) {
+export function tierFor(product: Product, quantity: number) {
   return [...product.tiers].reverse().find((tier) => quantity >= tier.min) || product.tiers[0];
 }
 
-function productUnitPrice(product: Product, tier: PriceTier, includeVat: boolean) {
+export function productUnitPrice(product: Product, tier: PriceTier, includeVat: boolean) {
   if (product.retailPriceIncl !== undefined && tier.discountPercent !== undefined) {
     const discountedIncl = roundUpFiveCents(product.retailPriceIncl * (1 - tier.discountPercent / 100));
     return includeVat ? discountedIncl : roundCents(discountedIncl / FOOD_VAT_FACTOR);
@@ -375,7 +375,7 @@ function selectedDuoOptions(product: Product, choice?: string) {
   return [first, second] as const;
 }
 
-function defaultProductChoice(product: Product) {
+export function defaultProductChoice(product: Product) {
   if (product.duoOptions?.length) {
     const [first, second] = selectedDuoOptions(product);
     return duoChoice(first.label, second.label);
@@ -383,7 +383,7 @@ function defaultProductChoice(product: Product) {
   return product.variants?.[0]?.label || product.options?.[0] || "";
 }
 
-function productChoiceLabel(product: Product, choice?: string) {
+export function productChoiceLabel(product: Product, choice?: string) {
   if (product.duoOptions?.length) {
     const [first, second] = selectedDuoOptions(product, choice);
     return `${first.label} + ${second.label}`;
@@ -391,7 +391,7 @@ function productChoiceLabel(product: Product, choice?: string) {
   return choice || product.variants?.[0]?.label || product.options?.[0] || "Standaard";
 }
 
-function pricedProduct(product: Product, choice?: string): Product {
+export function pricedProduct(product: Product, choice?: string): Product {
   if (product.duoOptions?.length) {
     const [first, second] = selectedDuoOptions(product, choice);
     return { ...product, retailPriceIncl: roundUpFiveCents(first.retailPriceIncl + second.retailPriceIncl) };
@@ -411,11 +411,11 @@ function productImage(product: Product, choice?: string) {
   return product.optionImages?.[choice || ""] || product.image;
 }
 
-function productLogoPrice(includeVat: boolean) {
+export function productLogoPrice(includeVat: boolean) {
   return businessFolderLogoPrice(includeVat);
 }
 
-function productSupportsLogo(product: Product) {
+export function productSupportsLogo(product: Product) {
   return product.logoAvailable !== false;
 }
 
@@ -429,7 +429,7 @@ function productPricingDescription(product: Product, tier: PriceTier) {
   }`;
 }
 
-function productChoiceCandidates(product: Product) {
+export function productChoiceCandidates(product: Product) {
   if (product.duoOptions?.length) {
     return product.duoOptions.flatMap((first, firstIndex) =>
       product.duoOptions!.slice(firstIndex).map((second) => duoChoice(first.label, second.label))
