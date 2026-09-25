@@ -136,7 +136,7 @@ export default function WinkelSidebar({
     profile
   );
   return (
-    <aside className="hidden md:sticky md:top-0 md:z-50 md:flex md:h-dvh md:w-[7rem] md:shrink-0 md:flex-col md:items-center md:gap-5 md:overflow-visible md:rounded-r-[4rem] md:border-r md:border-[#c6d8bf] md:bg-[#c3d3bc] md:px-4 md:py-6">
+    <aside className="hidden md:sticky md:top-0 md:z-50 md:flex md:h-dvh md:w-[7rem] md:shrink-0 md:flex-col md:items-center md:gap-5 md:overflow-visible md:rounded-r-[4rem] md:border-r md:border-[#c7d5c1] md:bg-[#d8e2d4] md:px-4 md:py-6">
         <Link
           href="/"
           aria-label="Home"

@@ -6,6 +6,7 @@ import {
   sendPersonnelMailOrders,
   type PersonnelMailOrder,
 } from "@/app/strik-agenda/personnelMailOrders";
+import { getMollieWebhookUrl } from "./mollieServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -156,6 +157,7 @@ async function createMolliePaymentLink(input: {
       },
       description: input.description,
       redirectUrl: MOLLIE_REDIRECT_URL,
+      webhookUrl: getMollieWebhookUrl(),
     }),
   });
   const data = (await readJson(response)) as MolliePaymentLinkResponse | null;

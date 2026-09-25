@@ -100,6 +100,80 @@ function updatedLabel(value: string) {
   return Number.isNaN(date.getTime()) ? "recent" : updatedFormatter.format(date);
 }
 
+type PaymentSyncResult = {
+  code: string;
+  paymentLinkId: string;
+  paid: boolean;
+  paidAt: string;
+  amount: number;
+  changed: boolean;
+};
+
+async function reconcilePayments(drafts: WeddingCakeDraft[]) {
+  const orders = drafts
+    .filter(
+      (draft) =>
+        !isPaid(draft) && Boolean(draft.config.paymentRequestLinkId?.trim()),
+    )
+    .slice(0, 40)
+    .map((draft) => ({
+      code: draft.code,
+      paymentLinkId: draft.config.paymentRequestLinkId,
+    }));
+
+  if (!orders.length) return [];
+
+  const response = await fetch(
+    "/api/bruidstaart-payment-request/reconcile",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orders }),
+    },
+  );
+  const data = (await response.json().catch(() => ({}))) as {
+    message?: string;
+    results?: PaymentSyncResult[];
+  };
+
+  if (!response.ok) {
+    throw new Error(data.message || "Betaalstatus controleren is mislukt.");
+  }
+
+  return data.results || [];
+}
+
+function applyPaymentSyncResults(
+  drafts: WeddingCakeDraft[],
+  results: PaymentSyncResult[],
+) {
+  const paidByCode = new Map(
+    results
+      .filter((result) => result.paid && result.paidAt)
+      .map((result) => [result.code.toLowerCase(), result]),
+  );
+  if (!paidByCode.size) return drafts;
+
+  return drafts.map((draft) => {
+    const result = paidByCode.get(draft.code.toLowerCase());
+    if (!result) return draft;
+
+    return {
+      ...draft,
+      config: {
+        ...draft.config,
+        paid: true,
+        paidInStoreAt: "",
+        paymentRequestPaidAt: result.paidAt,
+        paymentRequestAmount:
+          result.amount > 0
+            ? result.amount
+            : draft.config.paymentRequestAmount,
+      },
+    };
+  });
+}
+
 export default function BruidstaartenOverzichtClient() {
   const today = useMemo(() => new Date(), []);
   const [visibleMonth, setVisibleMonth] = useState(
@@ -114,6 +188,7 @@ export default function BruidstaartenOverzichtClient() {
   const [saving, setSaving] = useState(false);
   const [reminderDraft, setReminderDraft] = useState<WeddingCakeDraft | null>(null);
   const [reminderSending, setReminderSending] = useState(false);
+  const [paymentCheckingCode, setPaymentCheckingCode] = useState("");
   const year = String(visibleMonth.getFullYear());
 
   useEffect(() => {
@@ -129,8 +204,22 @@ export default function BruidstaartenOverzichtClient() {
         });
         if (!response.ok) throw new Error("overzicht niet beschikbaar");
         const remote = normalizeDraftList(await response.json());
+        const definitiveDrafts = mergeDrafts(remote, local).filter(
+          (draft) => draft.config.completed,
+        );
         if (!cancelled) {
-          setDrafts(mergeDrafts(remote, local).filter((draft) => draft.config.completed));
+          setDrafts(definitiveDrafts);
+          void reconcilePayments(definitiveDrafts)
+            .then((results) => {
+              if (!cancelled && results.length) {
+                setDrafts((current) =>
+                  applyPaymentSyncResults(current, results),
+                );
+              }
+            })
+            .catch(() => {
+              // Het overzicht blijft bruikbaar; per rij is een handmatige retry.
+            });
         }
       } catch {
         if (!cancelled) {
@@ -282,6 +371,31 @@ export default function BruidstaartenOverzichtClient() {
     }
   }
 
+  async function checkPaymentNow(draft: WeddingCakeDraft) {
+    setPaymentCheckingCode(draft.code);
+    setStatus("");
+
+    try {
+      const results = await reconcilePayments([draft]);
+      const result = results[0];
+      if (!result?.paid) {
+        setStatus(`Betaalverzoek ${draft.code} staat bij Mollie nog open.`);
+        return;
+      }
+
+      setDrafts((current) => applyPaymentSyncResults(current, results));
+      setStatus(`Betaling van ${draft.code} is gecontroleerd en opgeslagen.`);
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? error.message
+          : "Betaalstatus controleren is mislukt.",
+      );
+    } finally {
+      setPaymentCheckingCode("");
+    }
+  }
+
   return (
     <main className="relative min-h-dvh overflow-hidden bg-[#c3d3bc] px-3 py-4 pb-24 text-[#49342d] sm:px-6 sm:py-6 lg:px-8">
       <span aria-hidden="true" className="pointer-events-none absolute -right-[22rem] top-12 h-[34rem] w-[46rem] rotate-[-9deg] bg-[#dce6d8] opacity-[0.55] sm:-right-[28rem] sm:-top-40 sm:h-[68rem] sm:w-[90rem]" style={{ WebkitMask: 'url("/strik%20logo%20icon.svg") center / contain no-repeat', mask: 'url("/strik%20logo%20icon.svg") center / contain no-repeat' }} />
@@ -328,7 +442,7 @@ export default function BruidstaartenOverzichtClient() {
                   <div><p className="text-xs font-black">{draft.code} · {contact.names || draft.surname}</p><p className="mt-0.5 text-[0.56rem] font-bold text-[#49342d]/45">{cakeDescription(draft)} · bijgewerkt {updatedLabel(draft.updatedAt)}</p></div>
                   <p className="text-xs font-black">{deliveryTime}</p>
                   <div><p className="text-xs font-black capitalize">{getDeliveryMethodLabel(contact.deliveryMethod)}</p><p className="mt-0.5 truncate text-[0.58rem] font-bold text-[#49342d]/45">{contact.deliveryMethod === "pickup" ? "Strik Ziekerstraat" : contact.deliveryAddress || "Adres niet ingevuld"}</p></div>
-                  <span className="flex flex-wrap gap-1"><span className="w-fit rounded-full bg-[#e3eee0] px-2.5 py-1 text-[0.5rem] font-black uppercase tracking-[0.06em] text-[#45663b]">Definitief</span><span className={`w-fit rounded-full px-2.5 py-1 text-[0.5rem] font-black uppercase tracking-[0.04em] ${paid ? "bg-[#e3eee0] text-[#45663b]" : "bg-[#fff0bb] text-[#765c00]"}`}>{paymentLabel(draft)}</span>{urgent ? <button type="button" aria-label={`Betaalherinnering voor ${contact.names || draft.surname}`} title="Binnen 7 dagen en nog niet betaald" onClick={(event) => { event.stopPropagation(); setReminderDraft(draft); }} className="flex h-6 w-6 items-center justify-center rounded-full bg-[#d75a48] text-xs font-black text-white">!</button> : null}</span>
+                  <span className="flex flex-wrap gap-1"><span className="w-fit rounded-full bg-[#e3eee0] px-2.5 py-1 text-[0.5rem] font-black uppercase tracking-[0.06em] text-[#45663b]">Definitief</span><span className={`w-fit rounded-full px-2.5 py-1 text-[0.5rem] font-black uppercase tracking-[0.04em] ${paid ? "bg-[#e3eee0] text-[#45663b]" : "bg-[#fff0bb] text-[#765c00]"}`}>{paymentLabel(draft)}</span>{!paid && draft.config.paymentRequestLinkId ? <button type="button" aria-label={`Betaalstatus van ${contact.names || draft.surname} opnieuw controleren`} title="Status opnieuw controleren" disabled={paymentCheckingCode === draft.code} onClick={(event) => { event.stopPropagation(); void checkPaymentNow(draft); }} className="flex h-6 w-6 items-center justify-center rounded-full bg-[#eadfe5] text-xs font-black text-[#765a68] disabled:animate-pulse">↻</button> : null}{urgent ? <button type="button" aria-label={`Betaalherinnering voor ${contact.names || draft.surname}`} title="Binnen 7 dagen en nog niet betaald" onClick={(event) => { event.stopPropagation(); setReminderDraft(draft); }} className="flex h-6 w-6 items-center justify-center rounded-full bg-[#d75a48] text-xs font-black text-white">!</button> : null}</span>
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f1e9df] text-sm font-black">›</span>
                 </article>
               );
