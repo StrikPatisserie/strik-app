@@ -151,16 +151,17 @@ export function BusinessFolderSeasonIntro() {
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center overflow-auto bg-[#11152c]/95 p-4 sm:p-7"
+      className="fixed inset-0 z-[90] h-[100dvh] overflow-y-auto overscroll-contain bg-[#11152c]/95"
       onClick={close}
     >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="season-intro-title"
-        className="relative w-full max-w-4xl overflow-hidden rounded-[2rem] border border-[#d8b56d]/45 bg-[#171b38] p-5 text-center shadow-2xl sm:p-8"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className="flex min-h-full items-start justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)] sm:p-7">
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="season-intro-title"
+          className="relative my-auto w-full max-w-4xl overflow-hidden rounded-[2rem] border border-[#d8b56d]/45 bg-[#171b38] p-5 text-center shadow-2xl sm:p-8"
+          onClick={(event) => event.stopPropagation()}
+        >
         <span className="pointer-events-none absolute -left-16 -top-20 h-52 w-52 rounded-full bg-[#741f3b]/50 blur-3xl" />
         <span className="pointer-events-none absolute -bottom-24 -right-10 h-64 w-64 rounded-full bg-[#d59c38]/25 blur-3xl" />
         <button
@@ -229,7 +230,8 @@ export function BusinessFolderSeasonIntro() {
             </span>
           </Link>
         </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }
