@@ -104,7 +104,7 @@ export default function BruidstaartAgendaPage() {
   return (
     <StrikShell>
       <StrikPageHeader
-        title="Bruidstaart agenda"
+        title="Geplande afspraken"
         description="Bruidstaartafspraken voor Ziekerstraat."
         icon={strikIcons.bruidstaart}
       />

@@ -3889,6 +3889,7 @@ export default function BruidstaartStudioConfigurator() {
   >("choice");
   const [paymentRequestSending, setPaymentRequestSending] = useState(false);
   const [paymentStatusChecking, setPaymentStatusChecking] = useState(false);
+  const directFinalOpenHandledRef = useRef(false);
 
   useEffect(() => {
     configRef.current = config;
@@ -3930,6 +3931,56 @@ export default function BruidstaartStudioConfigurator() {
     }, 0);
 
     return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
+    if (directFinalOpenHandledRef.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const code = (params.get("openFinal") || "").trim();
+    if (!code) return;
+
+    directFinalOpenHandledRef.current = true;
+    let cancelled = false;
+
+    async function openFinalOrder() {
+      let draft: WeddingCakeDraft | undefined;
+
+      try {
+        const response = await fetch(getWeddingCakeStudioUrl(code), {
+          cache: "no-store",
+        });
+        if (response.ok) {
+          draft = normalizeDraftList(await response.json()).find(
+            (item) => item.code.toLowerCase() === code.toLowerCase(),
+          );
+        }
+      } catch {
+        // A local copy below remains available when WordPress is offline.
+      }
+
+      draft ||= searchLocalDrafts(code).find(
+        (item) => item.code.toLowerCase() === code.toLowerCase(),
+      );
+
+      if (cancelled) return;
+      if (!draft?.config.completed) {
+        setDraftStatus(`Definitieve bestelling ${code} kon niet worden geladen.`);
+        setStudioMode("manage");
+        return;
+      }
+
+      loadDraft(draft, {
+        action: params.get("editCake") === "1" ? "edit" : undefined,
+      });
+    }
+
+    void openFinalOrder();
+    return () => {
+      cancelled = true;
+    };
+    // This deep link is intentionally handled once; loadDraft is recreated per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const visibleSteps = useMemo(
@@ -3994,10 +4045,12 @@ export default function BruidstaartStudioConfigurator() {
   const allOverviewGroups = useMemo(() => {
     const groups = new Map<string, WeddingCakeDraft[]>();
 
-    allOverviewResults.forEach((draft) => {
-      const monthKey = getDraftOverviewMonthKey(draft);
-      groups.set(monthKey, [...(groups.get(monthKey) || []), draft]);
-    });
+    allOverviewResults
+      .filter((draft) => !draft.config.completed)
+      .forEach((draft) => {
+        const monthKey = getDraftOverviewMonthKey(draft);
+        groups.set(monthKey, [...(groups.get(monthKey) || []), draft]);
+      });
 
     return Array.from(groups.entries())
       .sort(([firstMonthKey], [secondMonthKey]) => {
@@ -5041,7 +5094,13 @@ export default function BruidstaartStudioConfigurator() {
 
     if (!allOverviewOpen || year !== allOverviewYear) return;
 
-    setAllOverviewResults((current) => uniqueDrafts([...current, draft]));
+    setAllOverviewResults((current) =>
+      draft.config.completed
+        ? current.filter(
+            (item) => item.code.toLowerCase() !== draft.code.toLowerCase(),
+          )
+        : uniqueDrafts([...current, draft]),
+    );
   }
 
   async function saveConfigDraft(
@@ -5152,24 +5211,28 @@ export default function BruidstaartStudioConfigurator() {
 
       if (!res.ok) throw new Error("WordPress niet beschikbaar.");
 
-      const drafts = normalizeDraftList(await res.json());
+      const drafts = normalizeDraftList(await res.json()).filter(
+        (draft) => !draft.config.completed,
+      );
       setDraftResults(drafts);
       setDraftStatus(
         drafts.length
-          ? `${drafts.length} bestelling${
+          ? `${drafts.length} concept${
               drafts.length === 1 ? "" : "en"
             } gevonden.`
-          : "Geen bestelling gevonden."
+          : "Geen concept gevonden."
       );
     } catch {
-      const drafts = searchLocalDrafts(search, deliveryDate);
+      const drafts = searchLocalDrafts(search, deliveryDate).filter(
+        (draft) => !draft.config.completed,
+      );
       setDraftResults(drafts);
       setDraftStatus(
         drafts.length
-          ? `Lokaal ${drafts.length} bestelling${
+          ? `Lokaal ${drafts.length} concept${
               drafts.length === 1 ? "" : "en"
             } gevonden.`
-          : "Geen lokale bestelling gevonden. Activeer de WordPress snippet voor zoeken op elk device."
+          : "Geen lokaal concept gevonden. Activeer de WordPress snippet voor zoeken op elk device."
       );
     }
   }
@@ -5202,11 +5265,15 @@ export default function BruidstaartStudioConfigurator() {
 
       const wordpressDrafts = normalizeDraftList(data);
       const localDrafts = searchLocalDraftsByYear(normalizedYear);
-      const drafts = uniqueDrafts([...wordpressDrafts, ...localDrafts]);
+      const drafts = uniqueDrafts([...wordpressDrafts, ...localDrafts]).filter(
+        (draft) => !draft.config.completed,
+      );
 
       setAllOverviewResults(drafts);
     } catch {
-      const drafts = uniqueDrafts(searchLocalDraftsByYear(normalizedYear));
+      const drafts = uniqueDrafts(
+        searchLocalDraftsByYear(normalizedYear),
+      ).filter((draft) => !draft.config.completed);
 
       setAllOverviewResults(drafts);
     } finally {
@@ -5694,6 +5761,16 @@ export default function BruidstaartStudioConfigurator() {
     await saveAndGoToStep(currentStepIndex + 1);
   }
 
+  function printWeddingCakeOrder() {
+    const body = document.body;
+    const cleanup = () => body.classList.remove("studio-printing");
+
+    body.classList.add("studio-printing");
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.requestAnimationFrame(() => window.print());
+    window.setTimeout(cleanup, 60000);
+  }
+
   const currentStepMissingFields = getStepMissingFields();
   const finalRequiredMissingFields = getFinalRequiredMissingFields();
   const visibleWarningFields =
@@ -5725,7 +5802,7 @@ export default function BruidstaartStudioConfigurator() {
             <div className="min-w-0">
               <p className="truncate text-sm font-black text-[#111111]">
                 {studioMode === "manage"
-                  ? "Bruidstaarten beheren"
+                  ? "Concepten beheren"
                   : isFinalOrderReadOnly
                   ? "Bestelling bekijken of betaling beheren"
                   : "Nieuwe bruidstaart"}
@@ -5751,7 +5828,7 @@ export default function BruidstaartStudioConfigurator() {
                 onClick={openManageMode}
                 className="rounded-full bg-[#f7df83] px-3 py-2 text-xs font-black text-[#1a1815] shadow-sm"
               >
-                Beheren
+                Concepten
               </button>
             )}
             {studioMode === "manage" && (
@@ -5992,7 +6069,7 @@ export default function BruidstaartStudioConfigurator() {
               </span>
               <span className="min-w-0">
                 <span className="block text-[clamp(1.25rem,3.6vw,2rem)] font-black leading-none text-[#111111]">
-                  Bruidstaarten beheren
+                  Concepten beheren
                 </span>
               </span>
             </span>
@@ -6099,7 +6176,7 @@ export default function BruidstaartStudioConfigurator() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ece6dc] pb-2">
                   <div>
                     <h3 className="text-base font-black leading-tight text-[#1a1815]">
-                      Bruidstaarten beheren
+                      Concepten beheren
                     </h3>
                   </div>
                 </div>
@@ -6179,10 +6256,6 @@ export default function BruidstaartStudioConfigurator() {
                     {allOverviewGroups.length > 0 && (
                       <div className="grid gap-1.5">
                         {allOverviewGroups.map((group) => {
-                          const definitiveCount = group.drafts.filter(
-                            (draft) => draft.config.completed
-                          ).length;
-
                           return (
                             <div
                               key={group.monthKey}
@@ -6199,7 +6272,7 @@ export default function BruidstaartStudioConfigurator() {
                                   {formatMonthYearLabel(group.monthKey)}
                                 </p>
                                 <span className="rounded-sm bg-white/70 px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/55">
-                                  {group.drafts.length} totaal · {definitiveCount} definitief
+                                  {group.drafts.length} {group.drafts.length === 1 ? "concept" : "concepten"}
                                 </span>
                               </div>
                               <div className="mt-1.5 grid gap-1">
@@ -7390,7 +7463,7 @@ export default function BruidstaartStudioConfigurator() {
               >
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={printWeddingCakeOrder}
                   className="rounded-full bg-[#f1d28f] px-3 py-2 text-xs font-black shadow-sm"
                 >
                   Printen

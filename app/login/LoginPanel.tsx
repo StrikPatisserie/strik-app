@@ -11,6 +11,12 @@ import { SIGNUP_DEPARTMENTS, WINKEL_STORE_IDS } from "../lib/auth/access";
 
 const initialState: AuthActionState = {};
 
+const fieldClassName =
+  "h-11 w-full rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-bold text-[#1a1815] outline-none transition placeholder:text-[#9b948b] focus:border-[#24553d] focus:ring-2 focus:ring-[#c3d3bc]/70";
+
+const fieldLabelClassName =
+  "mb-1 block text-[0.65rem] font-black uppercase tracking-[0.13em] text-[#6b645b]";
+
 function SubmitButton({
   pending,
   children,
@@ -19,7 +25,7 @@ function SubmitButton({
     <button
       type="submit"
       disabled={pending}
-      className="mt-2 flex h-12 w-full items-center justify-center rounded-md bg-[#1f4f35] px-4 text-sm font-black text-white shadow-sm transition active:scale-[0.98] disabled:cursor-wait disabled:opacity-65"
+      className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-[#24553d] px-4 text-sm font-black text-white shadow-[0_8px_18px_rgba(24,61,41,.18)] transition hover:bg-[#183d29] active:scale-[0.98] disabled:cursor-wait disabled:opacity-65"
     >
       {pending ? "Even bezig..." : children}
     </button>
@@ -51,17 +57,49 @@ export default function LoginPanel({
   );
   const activeState =
     mode === "login" ? loginState : mode === "signup" ? signupState : resetState;
+  const panelCopy =
+    mode === "login"
+      ? {
+          eyebrow: "Fijn dat je er bent",
+          title: "Inloggen",
+          description: "Vul je gegevens in om de Team App te openen.",
+        }
+      : mode === "signup"
+        ? {
+            eyebrow: "Nieuw bij Strik",
+            title: "Toegang aanvragen",
+            description: "Maak een account aan; een beheerder keurt je aanvraag goed.",
+          }
+        : {
+            eyebrow: "Geen probleem",
+            title: "Wachtwoord herstellen",
+            description: "Je ontvangt per e-mail een veilige resetlink.",
+          };
 
   return (
-    <section className="w-full max-w-md border border-[#e4ded5] bg-white/92 p-4 shadow-sm sm:p-5">
-      <div className="mb-4 grid grid-cols-3 gap-2 rounded-md bg-[#f4f0ea] p-1">
+    <section className="relative w-full overflow-hidden rounded-[1.75rem] border border-white/70 bg-[#fffaf0] p-4 shadow-[0_24px_65px_rgba(24,61,41,.2)] sm:p-6">
+      <div className="absolute right-0 top-0 h-2 w-24 rounded-bl-full bg-[#f3d875]" />
+
+      <header className="mb-5 pr-8">
+        <p className="text-[0.62rem] font-black uppercase tracking-[0.2em] text-[#ef7555]">
+          {panelCopy.eyebrow}
+        </p>
+        <h2 className="mt-1 text-2xl font-black tracking-[-0.035em] text-[#183d29] sm:text-3xl">
+          {panelCopy.title}
+        </h2>
+        <p className="mt-1 text-xs font-bold leading-relaxed text-[#6b645b] sm:text-sm">
+          {panelCopy.description}
+        </p>
+      </header>
+
+      <div className="mb-5 grid grid-cols-3 gap-1 rounded-xl bg-[#e7eee3] p-1">
         <button
           type="button"
           onClick={() => setMode("login")}
-          className={`h-10 rounded text-sm font-black ${
+          className={`min-h-9 rounded-lg px-1 text-[0.68rem] font-black transition sm:text-xs ${
             mode === "login"
-              ? "bg-white text-[#1f4f35] shadow-sm"
-              : "text-[#7b7268]"
+              ? "bg-[#24553d] text-white shadow-sm"
+              : "text-[#54705e] hover:bg-white/55"
           }`}
         >
           Inloggen
@@ -69,21 +107,21 @@ export default function LoginPanel({
         <button
           type="button"
           onClick={() => setMode("signup")}
-          className={`h-10 rounded text-sm font-black ${
+          className={`min-h-9 rounded-lg px-1 text-[0.68rem] font-black transition sm:text-xs ${
             mode === "signup"
-              ? "bg-white text-[#1f4f35] shadow-sm"
-              : "text-[#7b7268]"
+              ? "bg-[#24553d] text-white shadow-sm"
+              : "text-[#54705e] hover:bg-white/55"
           }`}
         >
-          Toegang aanvragen
+          Aanvragen
         </button>
         <button
           type="button"
           onClick={() => setMode("reset")}
-          className={`h-10 rounded text-sm font-black ${
+          className={`min-h-9 rounded-lg px-1 text-[0.68rem] font-black transition sm:text-xs ${
             mode === "reset"
-              ? "bg-white text-[#1f4f35] shadow-sm"
-              : "text-[#7b7268]"
+              ? "bg-[#24553d] text-white shadow-sm"
+              : "text-[#54705e] hover:bg-white/55"
           }`}
         >
           Wachtwoord
@@ -112,7 +150,7 @@ export default function LoginPanel({
         <form action={loginFormAction} className="space-y-3">
           <input type="hidden" name="next" value={next} />
           <label className="block">
-            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+            <span className={fieldLabelClassName}>
               E-mail
             </span>
             <input
@@ -120,11 +158,11 @@ export default function LoginPanel({
               type="email"
               autoComplete="email"
               required
-              className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
+              className={fieldClassName}
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+            <span className={fieldLabelClassName}>
               Wachtwoord
             </span>
             <input
@@ -132,10 +170,10 @@ export default function LoginPanel({
               type="password"
               autoComplete="current-password"
               required
-              className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
+              className={fieldClassName}
             />
           </label>
-          <label className="flex items-center gap-2 text-sm font-bold text-[#5f574f]">
+          <label className="flex items-center gap-2 text-xs font-bold text-[#5f574f] sm:text-sm">
             <input
               name="remember"
               type="checkbox"
@@ -149,18 +187,18 @@ export default function LoginPanel({
       ) : mode === "signup" ? (
         <form action={signupFormAction} className="space-y-3">
           <label className="block">
-            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+            <span className={fieldLabelClassName}>
               Naam
             </span>
             <input
               name="full_name"
               autoComplete="name"
               required
-              className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
+              className={fieldClassName}
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+            <span className={fieldLabelClassName}>
               E-mail
             </span>
             <input
@@ -168,11 +206,11 @@ export default function LoginPanel({
               type="email"
               autoComplete="email"
               required
-              className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
+              className={fieldClassName}
             />
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+            <span className={fieldLabelClassName}>
               Wachtwoord
             </span>
             <input
@@ -181,7 +219,7 @@ export default function LoginPanel({
               autoComplete="new-password"
               minLength={8}
               required
-              className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
+              className={fieldClassName}
             />
             <span className="mt-1 block text-xs font-semibold text-[#7b7268]">
               Minimaal 8 tekens. Werkt het niet? Gebruik een hoofdletter,
@@ -189,14 +227,14 @@ export default function LoginPanel({
             </span>
           </label>
           <div>
-            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+            <span className={fieldLabelClassName}>
               Gewenste afdeling
             </span>
             <div className="grid gap-2">
               {SIGNUP_DEPARTMENTS.map((department) => (
                 <label
                   key={department.id}
-                  className="flex cursor-pointer items-start gap-2 rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 py-2 text-sm font-bold text-[#4f4942]"
+                  className="flex cursor-pointer items-start gap-2 rounded-xl border border-[#d9d2c9] bg-white px-3 py-2 text-sm font-bold text-[#4f4942] transition hover:border-[#9eb497]"
                 >
                   <input
                     name="department"
@@ -221,10 +259,10 @@ export default function LoginPanel({
           </div>
           {signupDepartment === "winkel" && (
             <label className="block">
-              <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+              <span className={fieldLabelClassName}>
                 Gewenste winkel
               </span>
-              <select name="store" required defaultValue="" className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]">
+              <select name="store" required defaultValue="" className={fieldClassName}>
                 <option value="" disabled>Kies je winkel</option>
                 {WINKEL_STORE_IDS.map((store) => (
                   <option key={store} value={store}>
@@ -240,7 +278,7 @@ export default function LoginPanel({
       ) : (
         <form action={resetFormAction} className="space-y-3">
           <label className="block">
-            <span className="mb-1 block text-xs font-black uppercase text-[#7b7268]">
+            <span className={fieldLabelClassName}>
               E-mail
             </span>
             <input
@@ -248,7 +286,7 @@ export default function LoginPanel({
               type="email"
               autoComplete="email"
               required
-              className="h-12 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] px-3 text-base font-semibold outline-none focus:border-[#1f4f35]"
+              className={fieldClassName}
             />
           </label>
           <SubmitButton pending={resetPending}>Stuur resetlink</SubmitButton>

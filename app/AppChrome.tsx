@@ -27,31 +27,9 @@ export default function AppChrome({
   const isPublicCampaign =
     pathname === "/sint-voor-bedrijven" ||
     pathname === "/kerst-voor-bedrijven" ||
-    pathname === "/lettershop";
-  const isLogistiekWorkArea =
-    pathname === "/bakkerij/logistiek" ||
-    pathname.startsWith("/bakkerij/logistiek/") ||
-    pathname === "/magazijn/verpakking" ||
-    pathname.startsWith("/magazijn/verpakking/");
-  const isBakeryWorkArea =
-    (pathname === "/bakkerij" || pathname.startsWith("/bakkerij/")) &&
-    !isLogistiekWorkArea;
-  const isWinkelWorkArea =
-    pathname === "/winkel" ||
-    pathname.startsWith("/winkel/") ||
-    pathname.startsWith("/nieuws") ||
-    pathname.startsWith("/strik-agenda") ||
-    pathname.startsWith("/info") ||
-    pathname.startsWith("/bruidstaarten") ||
-    pathname === "/schoonmaak" ||
-    pathname.startsWith("/schoonmaak/");
-  const isWorkArea = isWinkelWorkArea || isBakeryWorkArea || isLogistiekWorkArea;
-  const isVierdaagseWorkArea =
-    pathname === "/vierdaagse" ||
-    pathname.startsWith("/vierdaagse/") ||
-    pathname === "/kraamrekenaar";
-  const isSinterklaasWorkArea =
-    pathname === "/sinterklaas" || pathname.startsWith("/sinterklaas/");
+    pathname === "/lettershop" ||
+    pathname === "/menu-preview";
+  const isWelcomeArea = pathname === "/";
 
   if (isAuthArea || isPrintArea || isPublicCampaign) {
     return <>{children}</>;
@@ -61,7 +39,7 @@ export default function AppChrome({
     <>
       <NotificationMonitor />
       <LogoutButton profile={profile} />
-      <div className="min-h-dvh bg-[#faf8f5]">
+      <div className={`min-h-dvh ${isWelcomeArea ? "bg-[#24553d]" : "bg-[#faf8f5]"}`}>
         <div className="flex min-h-dvh flex-row">
           <WinkelSidebar
             profile={profile}
@@ -69,11 +47,7 @@ export default function AppChrome({
           />
 
           <main
-            className={`flex-1 overflow-auto ${
-              isWorkArea || isVierdaagseWorkArea || isSinterklaasWorkArea
-                ? "pb-32 md:pb-0"
-                : "pb-24 md:pb-0"
-            }`}
+            className={`flex-1 overflow-auto pb-24 md:pb-0 ${isWelcomeArea ? "bg-[#24553d]" : ""}`}
           >
             {children}
           </main>

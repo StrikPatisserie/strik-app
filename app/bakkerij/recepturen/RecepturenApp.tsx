@@ -2683,14 +2683,18 @@ function BakkerijTeamAgendaPanel() {
   );
 }
 
-function BakkerijWeddingCakeAgendaPanel({
+export function BakkerijWeddingCakeAgendaPanel({
   canOpenWeddingCakeAgenda,
   compact = false,
+  defaultOpen = false,
+  title = "Geplande afspraken",
 }: Readonly<{
   canOpenWeddingCakeAgenda: boolean;
   compact?: boolean;
+  defaultOpen?: boolean;
+  title?: string;
 }>) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const [weekStart, setWeekStart] = useState(weekStartForDate);
   const [drafts, setDrafts] = useState<WeddingCakeDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState<WeddingCakeDraft | null>(null);
@@ -2707,7 +2711,7 @@ function BakkerijWeddingCakeAgendaPanel({
       const agendaDates = weekDatesFor(weekStart);
 
       setIsLoading(true);
-      setStatus("Bruidstaart agenda laden...");
+      setStatus("Geplande afspraken laden...");
 
       try {
         const results = await Promise.all(
@@ -2749,8 +2753,8 @@ function BakkerijWeddingCakeAgendaPanel({
         setSelectedDraft(null);
         setStatus(
           error instanceof Error
-            ? `Bruidstaart agenda niet beschikbaar. ${error.message}`
-            : "Bruidstaart agenda niet beschikbaar."
+            ? `Geplande afspraken niet beschikbaar. ${error.message}`
+            : "Geplande afspraken niet beschikbaar."
         );
       } finally {
         if (!ignoreResult) setIsLoading(false);
@@ -2796,7 +2800,7 @@ function BakkerijWeddingCakeAgendaPanel({
               bruidstaarten
             </span>
             <span className="block text-[clamp(1.05rem,2.2vw,1.55rem)] font-black leading-tight text-[#111111]">
-              Bruidstaart agenda
+              {title}
             </span>
             <span className="mt-0.5 block text-xs font-bold italic text-[#30462f]/60">
               {isOpen ? formatWeekRange(weekStart) : "uitklappen voor weekoverzicht"}

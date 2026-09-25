@@ -191,12 +191,17 @@ function isWinkelPath(pathname: string) {
   return (
     pathname === "/winkel" ||
     pathname.startsWith("/winkel/") ||
+    pathname === "/info" ||
+    pathname.startsWith("/info/")
+  );
+}
+
+function isUniversalTeamPath(pathname: string) {
+  return (
     pathname === "/nieuws" ||
     pathname.startsWith("/nieuws/") ||
     pathname === "/strik-agenda" ||
-    pathname.startsWith("/strik-agenda/") ||
-    pathname === "/info" ||
-    pathname.startsWith("/info/")
+    pathname.startsWith("/strik-agenda/")
   );
 }
 
@@ -338,6 +343,7 @@ export function canAccessPath(
   if (!profile?.active) return false;
   if (pathname === "/") return true;
   if (pathname === "/profiel" || pathname.startsWith("/profiel/")) return true;
+  if (isUniversalTeamPath(pathname)) return true;
 
   const role = normalizeRole(profile.role);
 

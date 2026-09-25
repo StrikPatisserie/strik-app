@@ -1,53 +1,24 @@
-import {
-  StrikMenuLink,
-  StrikPageHeader,
-  StrikShell,
-  strikIcons,
-} from "../../StrikUI";
+import DepartmentHub from "../../DepartmentHub";
+import SecondaryResourceLink from "../../SecondaryResourceLink";
+import { strikIcons } from "../../StrikUI";
 import { getCurrentProfile } from "@/app/lib/auth/session";
 import { hasFullAccess } from "@/app/lib/auth/access";
-import ExternalCampaignLink from "../ExternalCampaignLink";
 
 export const dynamic = "force-dynamic";
 
 export default async function SinterklaasLettersPage() {
   const profile = await getCurrentProfile();
   const items = [
-    {
-      href: "/sinterklaas/letters/winkel",
-      title: "Winkel",
-      icon: strikIcons.sinterklaasLetter,
-      tone: "green" as const,
-    },
-    ...(hasFullAccess(profile)
-      ? [{
-          href: "/sinterklaas/letters/online",
-          title: "Webshop",
-          icon: strikIcons.sinterklaasLetter,
-          tone: "green" as const,
-        }]
-      : []),
-    {
-      href: "/sinterklaas/letters/productie",
-      title: "Productie",
-      icon: strikIcons.sinterklaasProductie,
-      tone: "yellow" as const,
-    },
+    { href: "/sinterklaas/letters/winkel", title: "Winkel", description: "", icon: strikIcons.sinterklaasLetter, accent: "green" as const },
+    ...(hasFullAccess(profile) ? [{ href: "/sinterklaas/letters/online", title: "Webshop", description: "", icon: strikIcons.sinterklaasLetter, accent: "blue" as const }] : []),
+    { href: "/sinterklaas/letters/productie", title: "Productie", description: "", icon: strikIcons.sinterklaasProductie, accent: "yellow" as const },
   ];
 
   return (
-    <StrikShell>
-      <StrikPageHeader
-        title="Chocoladeletters"
-        icon={strikIcons.sinterklaasLetter}
-      />
-
-      <div className="grid gap-2">
-        {items.map((item) => (
-          <StrikMenuLink key={item.href} {...item} />
-        ))}
+    <DepartmentHub title="Chocoladeletters" description="" icon={strikIcons.sinterklaasLetter} items={items}>
+      <div className="flex justify-end">
+        <SecondaryResourceLink href="/lettershop" title="Bekijk de chocoladelettershop" label="Openbare pagina" icon={strikIcons.info} newTab />
       </div>
-      <ExternalCampaignLink href="/lettershop" title="Bekijk de chocoladelettershop" />
-    </StrikShell>
+    </DepartmentHub>
   );
 }

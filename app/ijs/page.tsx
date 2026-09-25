@@ -1,50 +1,46 @@
-import {
-  StrikMenuLink,
-  StrikPageHeader,
-  StrikShell,
-  strikIcons,
-} from "../StrikUI";
+import DepartmentHub from "../DepartmentHub";
+import { strikIcons } from "../StrikUI";
 
 const ijsLinks = [
   {
     href: "/ijs/bestellen",
     title: "IJs bestellen",
+    description: "Maak en verstuur de bestelling voor de ijssalon.",
     icon: strikIcons.ijs,
-    tone: "green" as const,
+    accent: "green" as const,
   },
   {
     href: "/schoonmaak?plan=opstart",
     title: "Opstartplan",
+    description: "Open de dagelijkse opstarttaken en registratie.",
     icon: strikIcons.opstartplan,
-    tone: "yellow" as const,
+    accent: "yellow" as const,
   },
   {
     href: "/schoonmaak?plan=afsluit",
     title: "Afsluitplan",
+    description: "Rond de dag af met de juiste schoonmaaktaken.",
     icon: strikIcons.afsluitplan,
-    tone: "yellow" as const,
+    accent: "coral" as const,
   },
   {
     href: "/ijs/info",
-    title: "Info",
+    title: "Informatie",
+    description: "Werkwijzen en documenten voor de ijssalons.",
     icon: strikIcons.info,
-    tone: "neutral" as const,
+    accent: "blue" as const,
   },
 ];
 
 export default function IJsPage() {
   return (
-    <StrikShell>
-      <StrikPageHeader
-        title="IJssalons"
-        icon={strikIcons.ijs}
-      />
-
-      <div className="grid gap-2">
-        {ijsLinks.map((item) => (
-          <StrikMenuLink key={item.href} {...item} />
-        ))}
-      </div>
-    </StrikShell>
+    <DepartmentHub
+      eyebrow="Strik ijssalons"
+      title="IJssalons"
+      description="Bestellen, openen, afsluiten en alle praktische informatie."
+      icon={strikIcons.ijs}
+      items={ijsLinks}
+      tone="coral"
+    />
   );
 }

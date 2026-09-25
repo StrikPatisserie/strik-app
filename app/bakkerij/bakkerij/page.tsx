@@ -1,50 +1,45 @@
-import {
-  StrikMenuLink,
-  StrikPageHeader,
-  StrikShell,
-  strikIcons,
-} from "../../StrikUI";
+import DepartmentHub from "../../DepartmentHub";
+import { strikIcons } from "../../StrikUI";
 
 const bakkerijLinks = [
   {
     href: "/bakkerij/recepten",
-    label: "Recepten",
+    title: "Recepten",
+    description: "Bekijk recepturen en werk met de actuele productinformatie.",
     icon: strikIcons.recepturen,
-    tone: "green" as const,
+    accent: "green" as const,
   },
   {
     href: "/bakkerij/productieplanning",
-    label: "Productieplanning",
+    title: "Productieplanning",
+    description: "Plan de productie en bekijk wat er gemaakt moet worden.",
     icon: strikIcons.bakkerij,
-    tone: "green" as const,
+    accent: "yellow" as const,
+  },
+  {
+    href: "/bakkerij/bakkerij/bruidstaart-productie",
+    title: "Bruidstaart productie",
+    description: "Weekoverzicht met definitieve taarten en productiekaarten.",
+    icon: strikIcons.bruidstaart,
+    accent: "coral" as const,
   },
   {
     href: "/bakkerij/haccp",
-    label: "HACCP & registraties",
+    title: "HACCP & registraties",
+    description: "Schoonmaak, temperaturen en goederenregistraties.",
     icon: strikIcons.cleaning,
-    tone: "green" as const,
+    accent: "blue" as const,
   },
 ];
 
 export default function ProductieBakkerijPage() {
   return (
-    <StrikShell>
-      <StrikPageHeader
-        title="Bakkerij"
-        icon={strikIcons.gebak}
-      />
-
-      <div className="grid gap-2">
-        {bakkerijLinks.map((item) => (
-          <StrikMenuLink
-            key={item.href}
-            href={item.href}
-            title={item.label}
-            icon={item.icon}
-            tone={item.tone}
-          />
-        ))}
-      </div>
-    </StrikShell>
+    <DepartmentHub
+      eyebrow="Productie"
+      title="Bakkerij"
+      description="Recepturen, planning en registraties voor de bakkerij."
+      icon={strikIcons.gebak}
+      items={bakkerijLinks}
+    />
   );
 }

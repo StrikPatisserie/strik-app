@@ -11,14 +11,6 @@ import {
 import { filterAllowedItems } from "./lib/auth/access";
 import type { UserProfile } from "./lib/supabase/types";
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: string;
-  desktopIconClass?: string;
-  mobileIconClass?: string;
-};
-
 const mainNavItems = [
   { href: "/winkel", label: "Winkel", icon: strikIcons.winkel },
   { href: "/ijs", label: "IJssalons", icon: strikIcons.ijs },
@@ -27,43 +19,6 @@ const mainNavItems = [
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
   { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },
-];
-
-const winkelNavItems = [
-  { href: "/winkel", label: "Overzicht", icon: strikIcons.overview },
-  { href: "/winkel/haccp", label: "HACCP & werkplannen", icon: strikIcons.cleaning },
-  { href: "/bruidstaarten", label: "Bruidstaarten", icon: strikIcons.bruidstaart },
-  { href: "/info", label: "Documenten", icon: strikIcons.info },
-];
-
-const bakkerijNavItems = [
-  { href: "/bakkerij/overzicht", label: "Overzicht", icon: strikIcons.overview },
-  {
-    href: "/bakkerij/bakkerij",
-    label: "Bakkerij",
-    icon: strikIcons.gebak,
-    desktopIconClass: "h-10 w-10",
-    mobileIconClass: "h-4 w-4",
-  },
-  {
-    href: "/bakkerij/ijs-chocolade",
-    label: "IJs & chocolade",
-    icon: strikIcons.ijsChocolade,
-  },
-  { href: "/bakkerij/management", label: "Data", icon: strikIcons.data },
-];
-
-const logistiekNavItems = [
-  {
-    href: "/bakkerij/logistiek/dagstart",
-    label: "Dagstart",
-    icon: strikIcons.logistiekDagstart,
-  },
-  {
-    href: "/magazijn/verpakking",
-    label: "Havelaar",
-    icon: strikIcons.logistiek,
-  },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -108,12 +63,28 @@ function isWinkelWorkArea(pathname: string) {
   return (
     pathname === "/winkel" ||
     pathname.startsWith("/winkel/") ||
-    pathname.startsWith("/nieuws") ||
-    pathname.startsWith("/strik-agenda") ||
     pathname.startsWith("/info") ||
-    pathname.startsWith("/bruidstaarten") ||
+    pathname.startsWith("/bruidstaarten")
+  );
+}
+
+function isIjsWorkArea(pathname: string) {
+  return (
+    pathname === "/ijs" ||
+    pathname.startsWith("/ijs/") ||
     pathname === "/schoonmaak" ||
-    pathname.startsWith("/schoonmaak/")
+    (pathname.startsWith("/schoonmaak/") &&
+      !pathname.startsWith("/schoonmaak/overzicht"))
+  );
+}
+
+function isManagementWorkArea(pathname: string) {
+  return (
+    pathname === "/management" ||
+    pathname.startsWith("/management/") ||
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/schoonmaak/overzicht"
   );
 }
 
@@ -153,30 +124,19 @@ export default function WinkelSidebar({
   profile: UserProfile | null;
 }>) {
   const pathname = usePathname();
-  const showWinkelSubNav = isWinkelWorkArea(pathname);
-  const showBakkerijSubNav = isBakkerijWorkArea(pathname);
-  const showLogistiekNav = isLogistiekWorkArea(pathname);
-  const showVierdaagseNav = isVierdaagseWorkArea(pathname);
-  const showSinterklaasNav = isSinterklaasWorkArea(pathname);
+  const inWinkelArea = isWinkelWorkArea(pathname);
+  const inIjsArea = isIjsWorkArea(pathname);
+  const inBakkerijArea = isBakkerijWorkArea(pathname);
+  const inLogistiekArea = isLogistiekWorkArea(pathname);
+  const inManagementArea = isManagementWorkArea(pathname);
+  const inVierdaagseArea = isVierdaagseWorkArea(pathname);
+  const inSinterklaasArea = isSinterklaasWorkArea(pathname);
   const mainItems = filterAllowedItems(
     filterVisibleMainNavigationItems(mainNavItems, featureVisibility),
     profile
   );
-  const subNavItems: NavItem[] = filterAllowedItems(
-    showLogistiekNav
-      ? logistiekNavItems
-      : showBakkerijSubNav
-        ? bakkerijNavItems
-        : winkelNavItems,
-    profile
-  );
-  const showSubNav =
-    (showWinkelSubNav || showBakkerijSubNav || showLogistiekNav) &&
-    subNavItems.length > 0;
-
   return (
-    <>
-      <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-[7rem] md:shrink-0 md:flex-col md:items-center md:gap-5 md:rounded-r-[4rem] md:border-r md:border-[#c6d8bf] md:bg-[#c3d3bc] md:px-4 md:py-6">
+    <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-[7rem] md:shrink-0 md:flex-col md:items-center md:gap-5 md:rounded-r-[4rem] md:border-r md:border-[#c6d8bf] md:bg-[#c3d3bc] md:px-4 md:py-6">
         <Link
           href="/"
           aria-label="Home"
@@ -189,11 +149,13 @@ export default function WinkelSidebar({
         </Link>
         {mainItems.map((item) => {
           let active = isActivePath(pathname, item.href);
-          if (item.href === "/winkel") active = showWinkelSubNav;
-          if (item.href === "/bakkerij") active = showBakkerijSubNav;
-          if (item.href === "/bakkerij/logistiek") active = showLogistiekNav;
-          if (item.href === "/vierdaagse") active = showVierdaagseNav;
-          if (item.href === "/sinterklaas") active = showSinterklaasNav;
+          if (item.href === "/winkel") active = inWinkelArea;
+          if (item.href === "/ijs") active = inIjsArea;
+          if (item.href === "/bakkerij") active = inBakkerijArea;
+          if (item.href === "/bakkerij/logistiek") active = inLogistiekArea;
+          if (item.href === "/management") active = inManagementArea;
+          if (item.href === "/vierdaagse") active = inVierdaagseArea;
+          if (item.href === "/sinterklaas") active = inSinterklaasArea;
 
           return (
             <Link
@@ -218,67 +180,6 @@ export default function WinkelSidebar({
             </Link>
           );
         })}
-      </aside>
-
-      {showSubNav && (
-        <aside className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-[5.4rem] md:shrink-0 md:flex-col md:items-center md:gap-4 md:rounded-r-[3.2rem] md:border-r md:border-[#e7e0d8] md:bg-white/85 md:px-2 md:py-24">
-          {subNavItems.map((item) => {
-            const active = isActivePath(pathname, item.href);
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-label={item.label}
-                className={`group relative flex h-14 w-14 items-center justify-center rounded-2xl transition ${
-                  active
-                    ? "bg-[#ef5737] shadow-sm"
-                    : "hover:bg-[#f8f6f3]"
-                }`}
-              >
-                <img
-                  src={item.icon}
-                  alt=""
-                  className={`${item.desktopIconClass ?? "h-8 w-8"} object-contain ${active ? "brightness-0 invert" : ""}`}
-                />
-                <span className="sr-only">{item.label}</span>
-                <span className="pointer-events-none absolute left-[calc(100%+0.75rem)] top-1/2 z-[70] -translate-y-1/2 translate-x-1 whitespace-nowrap rounded-lg bg-[#183d29] px-3 py-2 text-xs font-black text-white opacity-0 shadow-lg transition group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100">
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </aside>
-      )}
-
-      {showSubNav && (
-        <nav className="fixed bottom-[5rem] left-2 right-2 z-40 rounded-xl border border-[#e7e0d8] bg-white/95 p-1.5 shadow-sm backdrop-blur md:hidden">
-          <div className="flex gap-1 overflow-x-auto">
-            {subNavItems.map((item) => {
-              const active = isActivePath(pathname, item.href);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`relative flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[0.72rem] font-black ${
-                    active
-                      ? "bg-[#ef5737] text-white"
-                      : "bg-[#f8f6f3] text-[#2d2a26]/65"
-                  }`}
-                >
-                  <img
-                    src={item.icon}
-                    alt=""
-                    className={`${item.mobileIconClass ?? "h-3.5 w-3.5"} object-contain ${active ? "brightness-0 invert" : ""}`}
-                  />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
-      )}
-    </>
+    </aside>
   );
 }

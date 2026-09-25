@@ -1,28 +1,53 @@
-import CompactAgendaPanel from "../CompactAgendaPanel";
-import CompactLatestNewsPanel from "../CompactLatestNewsPanel";
 import CompactStaffOverview from "../CompactStaffOverview";
-import WeeklyOfferPanel from "../WeeklyOfferPanel";
+import DepartmentHub from "../DepartmentHub";
+import { strikIcons } from "../StrikUI";
+import { filterAllowedItems } from "../lib/auth/access";
+import { getCurrentProfile } from "../lib/auth/session";
 
-export default function WinkelPage() {
+const winkelItems = [
+  {
+    href: "/winkel/haccp",
+    title: "HACCP & werkplannen",
+    description: "Openen, afsluiten, schoonmaak en registraties.",
+    icon: strikIcons.cleaning,
+    accent: "green" as const,
+  },
+  {
+    href: "/bruidstaarten",
+    title: "Bruidstaarten",
+    description: "Afspraken, studio en inspiratie voor klanten.",
+    icon: strikIcons.bruidstaart,
+    accent: "coral" as const,
+  },
+  {
+    href: "/info",
+    title: "Documenten",
+    description: "Handleidingen en praktische informatie voor de winkels.",
+    icon: strikIcons.info,
+    accent: "yellow" as const,
+  },
+];
+
+export const dynamic = "force-dynamic";
+
+export default async function WinkelPage() {
+  const profile = await getCurrentProfile();
+  const visibleItems = filterAllowedItems(winkelItems, profile);
+
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-3 py-3 text-[#050505] sm:px-6 sm:py-5 lg:px-10">
-      <div className="mx-auto max-w-6xl space-y-4 sm:space-y-6 lg:space-y-7">
-        <header className="flex min-w-0 items-center gap-3 pb-1 sm:gap-4">
-          <span className="winkel-page-heading-icon shrink-0" aria-hidden="true" />
-          <h1 className="winkel-page-heading min-w-0 text-[#ef5737]">
-            Winkel overzicht
-          </h1>
-        </header>
-
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,0.82fr)_minmax(0,1fr)] sm:gap-6 lg:gap-7">
-          <WeeklyOfferPanel />
-          <CompactLatestNewsPanel />
-        </div>
-
-        <CompactAgendaPanel />
-
+    <DepartmentHub
+      eyebrow="Strik winkels"
+      title="Winkel"
+      description="Alles voor de werkdag in de winkel, rustig bij elkaar."
+      icon={strikIcons.winkel}
+      items={visibleItems}
+    >
+      <section className="rounded-[1.4rem] border border-[#d9d2c9] bg-[#efe9e1] p-3 sm:p-4">
+        <p className="mb-3 px-1 text-[0.64rem] font-black uppercase tracking-[0.18em] text-[#756d64]">
+          Vandaag in de winkels
+        </p>
         <CompactStaffOverview />
-      </div>
-    </main>
+      </section>
+    </DepartmentHub>
   );
 }

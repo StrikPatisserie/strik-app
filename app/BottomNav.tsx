@@ -32,8 +32,39 @@ function isLogistiekPath(pathname: string) {
   );
 }
 
+function isWinkelPath(pathname: string) {
+  return (
+    pathname === "/winkel" ||
+    pathname.startsWith("/winkel/") ||
+    pathname.startsWith("/info") ||
+    pathname.startsWith("/bruidstaarten")
+  );
+}
+
+function isIjsPath(pathname: string) {
+  return (
+    pathname === "/ijs" ||
+    pathname.startsWith("/ijs/") ||
+    pathname === "/schoonmaak" ||
+    (pathname.startsWith("/schoonmaak/") &&
+      !pathname.startsWith("/schoonmaak/overzicht"))
+  );
+}
+
+function isManagementPath(pathname: string) {
+  return (
+    pathname === "/management" ||
+    pathname.startsWith("/management/") ||
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/schoonmaak/overzicht"
+  );
+}
+
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
+  if (href === "/winkel") return isWinkelPath(pathname);
+  if (href === "/ijs") return isIjsPath(pathname);
   if (href === "/bakkerij/logistiek") return isLogistiekPath(pathname);
   if (href === "/bakkerij") {
     return (
@@ -51,6 +82,7 @@ function isActivePath(pathname: string, href: string) {
   if (href === "/sinterklaas") {
     return pathname === "/sinterklaas" || pathname.startsWith("/sinterklaas/");
   }
+  if (href === "/management") return isManagementPath(pathname);
 
   return pathname === href || pathname.startsWith(`${href}/`);
 }

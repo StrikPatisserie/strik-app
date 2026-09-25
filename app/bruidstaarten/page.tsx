@@ -1,46 +1,48 @@
-import {
-  StrikMenuLink,
-  StrikPageHeader,
-  StrikShell,
-  strikIcons,
-} from "../StrikUI";
+import DepartmentHub from "../DepartmentHub";
+import SecondaryResourceLink from "../SecondaryResourceLink";
+import { strikIcons } from "../StrikUI";
 
 const items = [
   {
     href: "/bruidstaarten/studio",
     title: "Bruidstaart Studio",
+    description: "",
     icon: strikIcons.bruidstaart,
-    tone: "green" as const,
+    accent: "coral" as const,
   },
   {
     href: "/bruidstaarten/agenda",
-    title: "Bruidstaart agenda",
-    icon: strikIcons.bruidstaart,
-    tone: "yellow" as const,
+    title: "Geplande afspraken",
+    description: "",
+    icon: strikIcons.strikAgenda,
+    accent: "green" as const,
   },
   {
-    href: "https://strik-patisserie.nl/wp-content/uploads/2025/06/bruidstaart-inspiratie.pdf",
-    title: "Bruidstaart voorbeelden",
-    icon: strikIcons.info,
-    tone: "neutral" as const,
-    target: "_blank" as const,
-    rel: "noopener noreferrer",
+    href: "/bruidstaarten/overzicht",
+    title: "Bruidstaarten overzicht",
+    description: "",
+    icon: strikIcons.data,
+    accent: "blue" as const,
   },
 ];
 
 export default function BruidstaartenPage() {
   return (
-    <StrikShell>
-      <StrikPageHeader
-        title="Bruidstaarten"
-        icon={strikIcons.bruidstaart}
-      />
-
-      <div className="grid gap-2">
-        {items.map((item) => (
-          <StrikMenuLink key={item.href} {...item} />
-        ))}
+    <DepartmentHub
+      description="Studio, afspraken en definitieve bruidstaarten."
+      title="Bruidstaarten"
+      icon={strikIcons.bruidstaart}
+      items={items}
+    >
+      <div className="flex justify-end">
+        <SecondaryResourceLink
+          href="https://strik-patisserie.nl/wp-content/uploads/2025/06/bruidstaart-inspiratie.pdf"
+          title="Bekijk de bruidstaart voorbeelden"
+          label="Inspiratie-pdf"
+          icon={strikIcons.info}
+          newTab
+        />
       </div>
-    </StrikShell>
+    </DepartmentHub>
   );
 }

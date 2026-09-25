@@ -1,50 +1,39 @@
-import {
-  StrikMenuLink,
-  StrikPageHeader,
-  StrikShell,
-  strikIcons,
-} from "../../StrikUI";
+import DepartmentHub from "../../DepartmentHub";
+import { strikIcons } from "../../StrikUI";
 
 const ijsChocoladeLinks = [
   {
     href: "/bakkerij/ijs-chocolade/recepten",
-    label: "Recepten",
+    title: "Recepten",
+    description: "Recepturen voor ijs, chocolade en bonbons.",
     icon: strikIcons.recepturen,
-    tone: "yellow" as const,
+    accent: "green" as const,
   },
   {
     href: "/bakkerij/ijs-chocolade/haccp",
-    label: "HACCP",
+    title: "HACCP",
+    description: "Registraties en controles voor de afdeling.",
     icon: strikIcons.cleaning,
-    tone: "yellow" as const,
+    accent: "blue" as const,
   },
   {
     href: "/bakkerij/ijs-chocolade/bestellen",
-    label: "Bestellen",
+    title: "Bestellen",
+    description: "Maak de benodigde bestellingen snel compleet.",
     icon: strikIcons.ijsChocolade,
-    tone: "yellow" as const,
+    accent: "yellow" as const,
   },
 ];
 
 export default function IjsChocoladePage() {
   return (
-    <StrikShell>
-      <StrikPageHeader
-        title="IJs & chocolade"
-        icon={strikIcons.ijsChocolade}
-      />
-
-      <div className="grid gap-2">
-        {ijsChocoladeLinks.map((item) => (
-          <StrikMenuLink
-            key={item.href}
-            href={item.href}
-            title={item.label}
-            icon={item.icon}
-            tone={item.tone}
-          />
-        ))}
-      </div>
-    </StrikShell>
+    <DepartmentHub
+      eyebrow="Productie"
+      title="IJs & chocolade"
+      description="Alle recepten, bestellingen en registraties bij elkaar."
+      icon={strikIcons.ijsChocolade}
+      items={ijsChocoladeLinks}
+      tone="yellow"
+    />
   );
 }

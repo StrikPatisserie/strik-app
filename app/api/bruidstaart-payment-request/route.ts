@@ -18,6 +18,7 @@ type PaymentRequestInput = {
   code?: string;
   customerName?: string;
   deliveryDate?: string;
+  existingPaymentLinkId?: string;
 };
 
 const PAYMENT_REQUEST_RECIPIENTS = (
@@ -181,6 +182,55 @@ async function createMolliePaymentLink(input: {
   };
 }
 
+async function getExistingMolliePaymentLink(paymentLinkId: string) {
+  const apiKey = getMollieApiKey();
+
+  if (!apiKey) {
+    throw new Error(
+      "Mollie is nog niet ingesteld. Vul MOLLIE_API_KEY in bij de app-instellingen."
+    );
+  }
+
+  if (!/^pl_[A-Za-z0-9]+$/.test(paymentLinkId)) {
+    throw new Error("Geen geldige bestaande Mollie betaallink gevonden.");
+  }
+
+  const response = await fetch(
+    `${MOLLIE_PAYMENT_LINKS_URL.replace(/\/+$/, "")}/${encodeURIComponent(
+      paymentLinkId
+    )}`,
+    {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      cache: "no-store",
+    }
+  );
+  const data = (await readJson(response)) as MolliePaymentLinkResponse | null;
+
+  if (!response.ok) {
+    const mollieMessage = getMollieErrorMessage(data);
+    throw new Error(
+      mollieMessage
+        ? `Bestaande Mollie betaallink ophalen lukt niet: ${mollieMessage}`
+        : "Bestaande Mollie betaallink ophalen lukt niet."
+    );
+  }
+
+  const paymentLinkUrl =
+    data?._links?.paymentLink?.href || data?._links?.checkout?.href || "";
+
+  if (!paymentLinkUrl) {
+    throw new Error("Mollie gaf geen bestaande betaallink terug.");
+  }
+
+  return {
+    id: cleanText(data?.id, 80) || paymentLinkId,
+    url: paymentLinkUrl,
+  };
+}
+
 function createPaymentDescription(input: {
   amount: number;
   code: string;
@@ -233,6 +283,7 @@ export async function POST(request: Request) {
   const code = cleanText(input.code, 80);
   const customerName = cleanText(input.customerName, 160) || "Bruidstaart";
   const deliveryDate = normalizeDate(cleanText(input.deliveryDate, 20));
+  const existingPaymentLinkId = cleanText(input.existingPaymentLinkId, 80);
 
   if (!recipientEmail || !isEmail(recipientEmail)) {
     return jsonError("Vul een geldig e-mailadres in voor het betaalverzoek.");
@@ -249,15 +300,17 @@ export async function POST(request: Request) {
   let paymentLink: { id: string; url: string };
 
   try {
-    paymentLink = await createMolliePaymentLink({
-      amount,
-      description: createPaymentDescription({
-        amount,
-        code,
-        customerName,
-        deliveryDate,
-      }),
-    });
+    paymentLink = existingPaymentLinkId
+      ? await getExistingMolliePaymentLink(existingPaymentLinkId)
+      : await createMolliePaymentLink({
+          amount,
+          description: createPaymentDescription({
+            amount,
+            code,
+            customerName,
+            deliveryDate,
+          }),
+        });
   } catch (error) {
     return jsonError(
       error instanceof Error
@@ -284,7 +337,7 @@ export async function POST(request: Request) {
     .slice(0, 10);
 
   const order: PersonnelMailOrder = {
-    id: `wedding-cake-payment-link-${code || "zonder-code"}-${hash}`,
+    id: `wedding-cake-payment-${existingPaymentLinkId ? "reminder" : "link"}-${code || "zonder-code"}-${hash}`,
     mailType: "wedding-cake-payment-request",
     employeeName: customerName,
     firstName: customerName.split(/\s+/)[0] || "Bruidstaart",
@@ -313,8 +366,12 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: result.sent.length
-        ? "Betaalverzoek is naar de klant gemaild."
-        : "Dit betaalverzoek was al gemaild.",
+        ? existingPaymentLinkId
+          ? "Betaalherinnering is naar de klant gemaild."
+          : "Betaalverzoek is naar de klant gemaild."
+        : existingPaymentLinkId
+          ? "Deze betaalherinnering was al gemaild."
+          : "Dit betaalverzoek was al gemaild.",
       paymentLinkId: paymentLink.id,
       paymentLinkUrl: paymentLink.url,
       sent: result.sent.length,

@@ -1,35 +1,23 @@
-import {
-  StrikMenuLink,
-  StrikPageHeader,
-  StrikShell,
-  strikIcons,
-} from "../../../StrikUI";
+import DepartmentHub from "../../../DepartmentHub";
+import { strikIcons } from "../../../StrikUI";
 
-const ijsChocoladeHaccpLinks = [
+const items = [
   {
     href: "/bakkerij/ijs-chocolade/haccp/temperatuurregistratie",
     title: "Temperatuurregistratie",
+    description: "",
     icon: strikIcons.cleaning,
-    tone: "yellow" as const,
+    accent: "yellow" as const,
   },
 ];
 
 export default function IjsChocoladeHaccpPage() {
   return (
-    <StrikShell>
-      <StrikPageHeader title="HACCP" icon={strikIcons.cleaning} />
-
-      <div className="grid gap-2">
-        {ijsChocoladeHaccpLinks.map((item) => (
-          <StrikMenuLink
-            key={item.href}
-            href={item.href}
-            title={item.title}
-            icon={item.icon}
-            tone={item.tone}
-          />
-        ))}
-      </div>
-    </StrikShell>
+    <DepartmentHub
+      title="HACCP"
+      description="Registraties voor ijs en chocolade."
+      icon={strikIcons.cleaning}
+      items={items}
+    />
   );
 }

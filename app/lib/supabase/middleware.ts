@@ -14,6 +14,7 @@ const PUBLIC_PATHS = new Set([
   "/sint-voor-bedrijven",
   "/kerst-voor-bedrijven",
   "/lettershop",
+  "/menu-preview",
 ]);
 
 // These endpoints either contain no private data or perform their own

@@ -1,35 +1,32 @@
-import {
-  StrikMenuLink,
-  StrikPageHeader,
-  StrikShell,
-  strikIcons,
-} from "../StrikUI";
+import DepartmentHub from "../DepartmentHub";
+import { strikIcons } from "../StrikUI";
 
 const items = [
   {
     href: "/sinterklaas/letters",
     title: "Chocoladeletters",
+    description: "Webshop, winkel en het centrale productieoverzicht.",
     icon: strikIcons.sinterklaasLetter,
-    tone: "yellow" as const,
+    accent: "yellow" as const,
   },
   {
     href: "/sinterklaas/bedrijven",
     title: "B2B bestellingen",
+    description: "Verkoop, bestellingen en productie voor bedrijven.",
     icon: strikIcons.sinterklaasB2B,
-    tone: "green" as const,
+    accent: "green" as const,
   },
 ];
 
 export default function SinterklaasPage() {
   return (
-    <StrikShell>
-      <StrikPageHeader title="Sinterklaas" icon={strikIcons.sinterklaas} />
-
-      <div className="grid gap-2">
-        {items.map((item) => (
-          <StrikMenuLink key={item.href} {...item} />
-        ))}
-      </div>
-    </StrikShell>
+    <DepartmentHub
+      eyebrow="Seizoen"
+      title="Sinterklaas"
+      description="Alle chocoladeletters en zakelijke bestellingen bij elkaar."
+      icon={strikIcons.sinterklaas}
+      items={items}
+      tone="yellow"
+    />
   );
 }

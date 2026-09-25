@@ -1,30 +1,31 @@
-import {
-  StrikMenuLink,
-  StrikPageHeader,
-  StrikShell,
-  strikIcons,
-} from "../../StrikUI";
+import DepartmentHub from "../../DepartmentHub";
+import { strikIcons } from "../../StrikUI";
+
+const logistiekItems = [
+  {
+    href: "/bakkerij/logistiek/dagstart",
+    title: "Dagstart",
+    description: "Begin de route met de actuele taken en aandachtspunten.",
+    icon: strikIcons.logistiekDagstart,
+    accent: "green" as const,
+  },
+  {
+    href: "/magazijn/verpakking",
+    title: "Havelaar",
+    description: "Magazijn, verpakkingen en de interactieve plattegrond.",
+    icon: strikIcons.logistiek,
+    accent: "yellow" as const,
+  },
+];
 
 export default function BakkerijLogistiekPage() {
   return (
-    <StrikShell>
-      <StrikPageHeader
-        title="Bakkerij logistiek"
-        icon={strikIcons.logistiek}
-      />
-
-      <section className="space-y-2">
-        <StrikMenuLink
-          href="/bakkerij/logistiek/dagstart"
-          title="Dagstart"
-          icon={strikIcons.logistiekDagstart}
-        />
-        <StrikMenuLink
-          href="/magazijn/verpakking"
-          title="Havelaar"
-          icon={strikIcons.logistiek}
-        />
-      </section>
-    </StrikShell>
+    <DepartmentHub
+      eyebrow="Strik logistiek"
+      title="Logistiek"
+      description="Dagstart, routes en magazijn zonder extra navigatielaag."
+      icon={strikIcons.logistiek}
+      items={logistiekItems}
+    />
   );
 }

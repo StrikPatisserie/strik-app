@@ -162,7 +162,7 @@ function StrikMenuRowContent({
             </span>
           )}
         </span>
-        <span className="truncate text-xl font-black text-[#1a1815]">
+        <span className="truncate text-base font-black text-[#1a1815] sm:text-xl">
           {title}
         </span>
       </span>

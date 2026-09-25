@@ -391,20 +391,20 @@ body {
   }
 
   html,
-  body {
+  body.studio-printing {
     background: #ffffff;
   }
 
-  body * {
+  body.studio-printing * {
     visibility: hidden !important;
   }
 
-  .studio-print-report,
-  .studio-print-report * {
+  body.studio-printing .studio-print-report,
+  body.studio-printing .studio-print-report * {
     visibility: visible !important;
   }
 
-  .studio-print-report {
+  body.studio-printing .studio-print-report {
     display: block !important;
     position: absolute;
     inset: 0 auto auto 0;
@@ -413,11 +413,11 @@ body {
     color: var(--neutral-900);
   }
 
-  .studio-print-report button {
+  body.studio-printing .studio-print-report button {
     display: none !important;
   }
 
-  .studio-no-print {
+  body.studio-printing .studio-no-print {
     display: none !important;
   }
 }
@@ -576,22 +576,22 @@ select:focus {
     overflow: visible !important;
     background: #fff !important;
   }
-  body * { visibility: hidden !important; }
-  main {
+  body:has(.allergen-screen) * { visibility: hidden !important; }
+  body:has(.allergen-screen) main {
     min-height: 0 !important;
     padding: 0 !important;
     background: #fff !important;
   }
-  main > div {
+  body:has(.allergen-screen) main > div {
     width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
   }
-  main > div > :not(.allergen-screen),
-  .allergen-screen > :not(.allergen-print-sheet) {
+  body:has(.allergen-screen) main > div > :not(.allergen-screen),
+  body:has(.allergen-screen) .allergen-screen > :not(.allergen-print-sheet) {
     display: none !important;
   }
-  .allergen-screen {
+  body:has(.allergen-screen) .allergen-screen {
     display: block !important;
     min-height: 0 !important;
   }
