@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import BruidstaartStudioConfigurator from "../bruidstaart-studio/BruidstaartStudioConfigurator";
+import CompactStaffOverview from "../CompactStaffOverview";
 import DepartmentHub, { type DepartmentHubItem } from "../DepartmentHub";
 import SecondaryResourceLink from "../SecondaryResourceLink";
-import { strikIcons } from "../StrikUI";
+import { StrikPageHeader, StrikShell, strikIcons } from "../StrikUI";
 import BruidstaartenOverzichtPreview from "./BruidstaartenOverzichtPreview";
 import BruidstaartProductiePreview from "./BruidstaartProductiePreview";
 import BakeryRegistrationPreview from "./BakeryRegistrationPreview";
@@ -37,6 +39,7 @@ type PreviewKey =
   | "nieuw-recept"
   | "bruidstaart-productie"
   | "bruidstaarten"
+  | "bruidstaart-studio"
   | "bruidstaarten-overzicht"
   | "management"
   | "vierdaagse"
@@ -233,10 +236,18 @@ const previews: Record<PreviewKey, MenuPreview> = {
     icon: strikIcons.bruidstaart,
     tone: "coral",
     items: [
-      { href: "#", title: "Bruidstaart Studio", description: "", icon: strikIcons.bruidstaart, accent: "coral" },
+      { href: "/menu-preview?menu=bruidstaart-studio", title: "Bruidstaart Studio", description: "", icon: strikIcons.bruidstaart, accent: "coral" },
       { href: "#", title: "Geplande afspraken", description: "", icon: strikIcons.strikAgenda, accent: "green" },
       { href: "/menu-preview?menu=bruidstaarten-overzicht", title: "Bruidstaarten overzicht", description: "", icon: strikIcons.data, accent: "blue" },
     ],
+  },
+  "bruidstaart-studio": {
+    label: "Bruidstaart Studio",
+    eyebrow: "Bruidstaarten",
+    title: "Bruidstaart Studio",
+    description: "Veilige lokale weergave van de bestaande Studio.",
+    icon: strikIcons.bruidstaart,
+    items: [],
   },
   "bruidstaarten-overzicht": {
     label: "Bruidstaarten overzicht",
@@ -318,6 +329,8 @@ export default async function MenuPreviewPage({
       ? "productie"
       : activeKey === "bruidstaarten"
         ? "winkel"
+      : activeKey === "bruidstaart-studio"
+        ? "winkel"
       : activeKey === "bruidstaarten-overzicht"
         ? "winkel"
       : activeKey;
@@ -340,6 +353,7 @@ export default async function MenuPreviewPage({
       key !== "nieuw-recept" &&
       key !== "bruidstaart-productie" &&
       key !== "bruidstaarten" &&
+      key !== "bruidstaart-studio" &&
       key !== "bruidstaarten-overzicht"
   );
 
@@ -379,6 +393,19 @@ export default async function MenuPreviewPage({
 
   if (activeKey === "bruidstaarten-overzicht") {
     return <BruidstaartenOverzichtPreview toolbar={toolbar} />;
+  }
+
+  if (activeKey === "bruidstaart-studio") {
+    return (
+      <StrikShell wide backHref="/menu-preview?menu=bruidstaarten">
+        {toolbar}
+        <StrikPageHeader
+          title="Bruidstaart Studio"
+          icon={strikIcons.bruidstaart}
+        />
+        <BruidstaartStudioConfigurator />
+      </StrikShell>
+    );
   }
 
   if (activeKey === "recepten") {
@@ -488,6 +515,8 @@ export default async function MenuPreviewPage({
             newTab
           />
         </div>
+      ) : activeKey === "winkel" ? (
+        <CompactStaffOverview />
       ) : null}
     </DepartmentHub>
   );

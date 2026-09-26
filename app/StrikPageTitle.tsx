@@ -3,7 +3,21 @@ export default function StrikPageTitle({
 }: Readonly<{
   title: string;
 }>) {
-  return <h1 className="strik-page-title max-w-full">{title}</h1>;
+  return (
+    <h1
+      className="strik-page-title max-w-full"
+      style={{
+        color: "#fff",
+        fontSize: "clamp(0.84rem, 1.25vw, 0.98rem)",
+        fontWeight: 500,
+        letterSpacing: "0.3em",
+        lineHeight: 1,
+        textTransform: "uppercase",
+      }}
+    >
+      {title}
+    </h1>
+  );
 }
 
 export function StrikPageHeading({

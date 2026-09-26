@@ -6034,50 +6034,65 @@ export default function BruidstaartStudioConfigurator() {
       )}
 
       {studioMode === "home" ? (
-        <section className="studio-no-print mx-auto grid w-full max-w-5xl gap-3">
+        <section className="studio-no-print mx-auto grid w-full max-w-[36rem] grid-cols-2 gap-3 sm:gap-4">
           <button
             type="button"
             onClick={startNewWeddingCake}
-            className="flex min-h-24 items-center justify-between gap-4 border border-[#cbdcc5] bg-white px-4 py-4 text-left shadow-sm transition hover:bg-[#f6faf4] active:scale-[0.99]"
+            className="group flex aspect-square min-w-0 flex-col items-center justify-center rounded-[1.35rem] border border-[#e9aa9f] bg-[#fff7f3]/95 p-3 text-center shadow-[0_8px_20px_rgba(73,52,45,.08)] transition active:scale-[0.985] sm:rounded-[1.65rem] sm:p-5"
           >
-            <span className="flex min-w-0 items-center gap-4">
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center bg-[#c3d3bc] text-2xl font-black text-[#1a1815]">
+            <span className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[1.2rem] bg-[#d75a48] sm:h-[5.5rem] sm:w-[5.5rem] sm:rounded-[1.45rem]">
+              <Image
+                src="/icons_strik_bruidstaart.svg"
+                alt=""
+                width={58}
+                height={58}
+                className="h-11 w-11 object-contain brightness-0 invert sm:h-14 sm:w-14"
+              />
+              <span
+                aria-hidden="true"
+                className="absolute -right-2.5 -top-2.5 flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-[#fff7f3] bg-[#fed500] text-2xl font-black leading-none text-[#49342d] shadow-sm sm:h-10 sm:w-10 sm:text-[1.7rem]"
+              >
                 +
               </span>
-              <span className="min-w-0">
-                <span className="block text-[clamp(1.25rem,3.6vw,2rem)] font-black leading-none text-[#111111]">
-                  Nieuwe bruidstaart starten
-                </span>
-              </span>
             </span>
-            <span
-              className="flex h-12 w-12 shrink-0 items-center justify-center bg-[#c3d3bc] text-2xl font-black text-[#1a1815]"
-              aria-hidden="true"
-            >
-              &gt;
+            <span className="mt-4 block max-w-[9rem] text-[0.9rem] font-black leading-[1.05] text-[#49342d] sm:mt-5 sm:max-w-none sm:text-lg">
+              Nieuwe bruidstaart
             </span>
           </button>
 
           <button
             type="button"
             onClick={openManageMode}
-            className="flex min-h-24 items-center justify-between gap-4 border border-[#eadb8b] bg-white px-4 py-4 text-left shadow-sm transition hover:bg-[#fff8d8] active:scale-[0.99]"
+            className="group flex aspect-square min-w-0 flex-col items-center justify-center rounded-[1.35rem] border border-[#cdb7c2] bg-[#fbf6f8]/95 p-3 text-center shadow-[0_8px_20px_rgba(73,52,45,.08)] transition active:scale-[0.985] sm:rounded-[1.65rem] sm:p-5"
           >
-            <span className="flex min-w-0 items-center gap-4">
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center bg-[#f7df83] text-xl font-black text-[#1a1815]">
-                ↗
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[clamp(1.25rem,3.6vw,2rem)] font-black leading-none text-[#111111]">
-                  Concepten beheren
-                </span>
+            <span className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[1.2rem] bg-[#a27a8e] sm:h-[5.5rem] sm:w-[5.5rem] sm:rounded-[1.45rem]">
+              <Image
+                src="/icons_strik_bruidstaart.svg"
+                alt=""
+                width={58}
+                height={58}
+                className="h-11 w-11 object-contain brightness-0 invert sm:h-14 sm:w-14"
+              />
+              <span
+                aria-hidden="true"
+                className="absolute -right-2.5 -top-2.5 flex h-9 w-9 items-center justify-center rounded-full border-[3px] border-[#fbf6f8] bg-white text-[#76596a] shadow-sm sm:h-10 sm:w-10"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-[1.15rem] w-[1.15rem] sm:h-5 sm:w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 20h4l11-11a2.8 2.8 0 0 0-4-4L4 16v4Z" />
+                  <path d="m13.5 6.5 4 4" />
+                </svg>
               </span>
             </span>
-            <span
-              className="flex h-12 w-12 shrink-0 items-center justify-center bg-[#f7df83] text-2xl font-black text-[#1a1815]"
-              aria-hidden="true"
-            >
-              &gt;
+            <span className="mt-4 block text-[0.9rem] font-black leading-[1.05] text-[#49342d] sm:mt-5 sm:text-lg">
+              Concepten
             </span>
           </button>
         </section>

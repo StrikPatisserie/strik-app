@@ -56,26 +56,26 @@ export default function CompactStaffOverview() {
 
   return (
     <details
-      className="group overflow-hidden rounded-[1.15rem] border border-white/90 bg-white/95 shadow-[0_7px_18px_rgba(73,52,45,.08)]"
+      className="group w-full sm:max-w-[calc(50%-0.3125rem)]"
     >
-      <summary className="grid min-h-[4rem] cursor-pointer list-none grid-cols-[2.75rem_minmax(0,1fr)_2rem] items-center gap-2.5 p-2 [&::-webkit-details-marker]:hidden sm:min-h-[4.5rem] sm:grid-cols-[3rem_minmax(0,1fr)_2rem] sm:p-2.5">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#c3d3bc] sm:h-12 sm:w-12">
+      <summary className="grid w-fit min-h-[3.25rem] cursor-pointer list-none grid-cols-[2rem_minmax(0,1fr)_1.5rem] items-center gap-2 px-1 py-1.5 [&::-webkit-details-marker]:hidden">
+        <span className="flex h-8 w-8 items-center justify-center">
           <img
             src={strikIcons.winkel}
             alt=""
-            className="h-6 w-6 object-contain sm:h-7 sm:w-7"
+            className="h-[1.35rem] w-[1.35rem] object-contain opacity-65"
           />
         </span>
-        <h2 className="min-w-0 text-sm font-black leading-tight text-[#49342d] sm:text-base">
+        <span className="min-w-0 text-[0.78rem] font-black leading-tight text-[#49342d] sm:text-[0.82rem]">
           Wie werkt er vandaag?
-        </h2>
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f1e9df] text-base font-black leading-none text-[#49342d] transition group-open:rotate-90">
+        </span>
+        <span className="flex h-6 w-6 items-center justify-center text-sm font-black leading-none text-[#49342d]/55 transition group-open:rotate-90">
           &gt;
         </span>
       </summary>
 
       {state === "loading" && (
-        <div className="animate-pulse space-y-2 border-t border-[#ece6dc] p-3 sm:p-5">
+        <div className="mt-2 animate-pulse space-y-2 rounded-[1rem] border border-white/80 bg-white/90 p-3 shadow-[0_5px_14px_rgba(73,52,45,.06)] sm:p-5">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-10 bg-[#f0ead0] rounded-lg" />
           ))}
@@ -83,13 +83,13 @@ export default function CompactStaffOverview() {
       )}
 
       {state === "error" && (
-        <p className="border-t border-[#ece6dc] p-3 text-sm font-bold text-[#2d2a26]/55 sm:p-5">
+        <p className="mt-2 rounded-[1rem] border border-white/80 bg-white/90 p-3 text-sm font-bold text-[#2d2a26]/55 shadow-[0_5px_14px_rgba(73,52,45,.06)] sm:p-5">
           Rooster niet beschikbaar
         </p>
       )}
 
       {state === "ready" && schedule && (
-        <div className="border-t border-[#ece6dc] px-4 py-2 sm:px-5 sm:py-4">
+        <div className="mt-2 rounded-[1rem] border border-white/80 bg-white/90 px-4 py-2 shadow-[0_5px_14px_rgba(73,52,45,.06)] sm:px-5 sm:py-4">
           {schedule.shops.map((shop) => {
             const iceEmployees = shop.iceEmployees || [];
 
