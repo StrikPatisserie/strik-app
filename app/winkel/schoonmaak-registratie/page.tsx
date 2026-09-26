@@ -31,6 +31,7 @@ import {
   saveTemperatureRegistration,
 } from "./temperatureRegistrationApi";
 import { useAllowedWinkelOptions } from "./useAllowedWinkelOptions";
+import WinkelTemperatureStoreChooser from "./WinkelTemperatureStoreChooser";
 
 type TemperatureDraft = TemperaturePayload & {
   verzondenSignatuur?: string;
@@ -510,7 +511,7 @@ function TemperatureValueInput({
             type="button"
             onClick={() => updateSign("+")}
             aria-label={`${label} positief maken`}
-            className={`h-4 w-4 rounded-full text-[0.52rem] font-black leading-none shadow-sm sm:h-5 sm:w-5 sm:text-[0.62rem] ${
+            className={`h-11 w-11 rounded-xl border border-[#dbe9ee] text-base font-black leading-none shadow-sm sm:h-5 sm:w-5 sm:rounded-full sm:border-0 sm:text-[0.62rem] ${
               isNegative
                 ? "bg-white text-[#2d2a26]/45"
                 : "bg-[#dbe9ee] text-[#214456]"
@@ -522,7 +523,7 @@ function TemperatureValueInput({
             type="button"
             onClick={() => updateSign("-")}
             aria-label={`${label} negatief maken`}
-            className={`h-4 w-4 rounded-full text-[0.52rem] font-black leading-none shadow-sm sm:h-5 sm:w-5 sm:text-[0.62rem] ${
+            className={`h-11 w-11 rounded-xl border border-[#e7e0d8] text-base font-black leading-none shadow-sm sm:h-5 sm:w-5 sm:rounded-full sm:border-0 sm:text-[0.62rem] ${
               isNegative
                 ? "bg-[#dbe9ee] text-[#214456]"
                 : "bg-white text-[#2d2a26]/45"
@@ -538,7 +539,7 @@ function TemperatureValueInput({
           disabled={disabled}
           inputMode="decimal"
           placeholder="0,0"
-          className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1.5 py-1.5 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/35 sm:px-2 sm:text-sm"
+          className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-3 py-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/35 sm:rounded-lg sm:px-2 sm:py-1.5 sm:text-sm"
         />
       </span>
     </label>
@@ -601,6 +602,7 @@ type TemperatureRegistrationPageProps = {
   defaultLocationId?: string;
   overviewHref?: string | ((locationId: string) => string | null) | null;
   loadCleaningFallback?: boolean;
+  lockLocation?: boolean;
 };
 
 export function TemperatureRegistrationPage({
@@ -612,6 +614,7 @@ export function TemperatureRegistrationPage({
   overviewHref = (locationId) =>
     `/winkel/schoonmaak-registratie/overzicht?winkel=${locationId}`,
   loadCleaningFallback = true,
+  lockLocation = false,
 }: Readonly<TemperatureRegistrationPageProps> = {}) {
   const allowedLocationOptions = useAllowedWinkelOptions(locationOptions);
   const initialLocationId =
@@ -1068,7 +1071,7 @@ export function TemperatureRegistrationPage({
             </div>
 
             <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr_11rem] lg:min-w-[48rem]">
-              {allowedLocationOptions.length > 1 && (
+              {allowedLocationOptions.length > 1 && !lockLocation && (
                 <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
                   Winkel
                   <select
@@ -1226,13 +1229,13 @@ export function TemperatureRegistrationPage({
                   ref={(element) => {
                     registrationRowRefs.current[item.id] = element;
                   }}
-                  className={`grid grid-cols-[minmax(5.3rem,1fr)_3.55rem_3.9rem_3.9rem_3.7rem] items-end gap-1 rounded-[0.75rem] border p-1.5 transition sm:grid-cols-[minmax(8rem,1fr)_5.25rem_5.2rem_5.2rem_5rem_auto] sm:gap-2 sm:p-2 ${
+                  className={`grid grid-cols-2 items-end gap-3 rounded-2xl border p-3 transition md:grid-cols-[minmax(8rem,1fr)_5.25rem_5.2rem_5.2rem_5rem_auto] md:gap-2 md:rounded-[0.75rem] md:p-2 ${
                     isInactive
                       ? "border-dashed border-[#d8d0c7] bg-[#f3f0eb] opacity-55"
                       : "border-[#e8e4de] bg-[#faf8f5]"
                   }`}
                 >
-                  <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
+                  <label className="col-span-full grid min-w-0 gap-1 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 md:col-span-1 md:text-[0.58rem]">
                     <span className="flex min-w-0 items-center justify-between gap-1">
                       <span>Apparaat {index + 1}</span>
                       {item.department && (
@@ -1248,7 +1251,7 @@ export function TemperatureRegistrationPage({
                       }
                       disabled={isInactive}
                       placeholder="Bijvoorbeeld koeling"
-                      className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1.5 py-1.5 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/45 sm:px-2 sm:text-sm"
+                      className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-3 py-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/45 md:rounded-lg md:px-2 md:py-1.5 md:text-sm"
                     />
                     {Number.isFinite(item.maxTemperature) && (
                       <span className="text-[0.52rem] font-black normal-case tracking-normal text-[#a0382f] sm:text-[0.6rem]">
@@ -1256,7 +1259,7 @@ export function TemperatureRegistrationPage({
                       </span>
                     )}
                   </label>
-                  <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
+                  <label className="grid min-w-0 gap-1 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 md:text-[0.58rem]">
                     Type
                     <select
                       value={deviceType}
@@ -1268,7 +1271,7 @@ export function TemperatureRegistrationPage({
                         )
                       }
                       disabled={isInactive}
-                      className="min-w-0 rounded-lg border border-[#e7e0d8] bg-white px-1 py-1.5 text-[0.64rem] font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/45 sm:px-2 sm:text-sm"
+                      className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-2 py-3 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/45 md:rounded-lg md:py-1.5 md:text-sm"
                     >
                       {deviceTypeOptions.map((option) => (
                         <option key={option.id} value={option.id}>
@@ -1298,7 +1301,7 @@ export function TemperatureRegistrationPage({
                       Status
                     </p>
                     <span
-                      className={`rounded-full border px-1.5 py-1 text-center text-[0.58rem] font-black sm:text-xs ${statusPillClass(
+                      className={`rounded-full border px-2 py-2 text-center text-xs font-black md:px-1.5 md:py-1 md:text-xs ${statusPillClass(
                         evaluation.status
                       )}`}
                     >
@@ -1309,7 +1312,7 @@ export function TemperatureRegistrationPage({
                     <button
                       type="button"
                       onClick={() => toggleRegistrationInactive(item.id)}
-                      className={`col-span-full justify-self-start rounded-full px-2 py-1 text-[0.58rem] font-black shadow-sm sm:col-auto sm:self-end sm:text-xs ${
+                      className={`col-span-full justify-self-start rounded-full px-3 py-2 text-xs font-black shadow-sm md:col-auto md:self-end md:px-2 md:py-1 md:text-xs ${
                         isInactive
                           ? "bg-[#dbe9ee] text-[#214456]"
                           : "bg-white text-[#8a6a3d]"
@@ -1321,7 +1324,7 @@ export function TemperatureRegistrationPage({
                     <button
                       type="button"
                       onClick={() => removeRegistrationRow(item.id)}
-                      className="col-span-full justify-self-start rounded-full bg-white px-2 py-1 text-[0.58rem] font-black text-[#c94f43] shadow-sm sm:col-auto sm:self-end sm:text-xs"
+                      className="col-span-full justify-self-start rounded-full bg-white px-3 py-2 text-xs font-black text-[#c94f43] shadow-sm md:col-auto md:self-end md:px-2 md:py-1 md:text-xs"
                     >
                       Verwijder
                     </button>
@@ -1398,5 +1401,5 @@ export function TemperatureRegistrationPage({
 }
 
 export default function SchoonmaakRegistratiePage() {
-  return <TemperatureRegistrationPage />;
+  return <WinkelTemperatureStoreChooser allowedStoreIds={["heyendaal", "ziekerstraat", "lent", "daalseweg"]} />;
 }

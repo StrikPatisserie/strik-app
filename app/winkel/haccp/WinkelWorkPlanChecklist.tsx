@@ -39,6 +39,7 @@ type Props = {
   definitions: WinkelWorkPlanDefinition[];
   defaultStoreId: WinkelWorkPlanStoreId;
   emptyPlanLabel?: string;
+  previewMode?: boolean;
   storeOptions?: {
     id: WinkelWorkPlanStoreId;
     label: string;
@@ -134,10 +135,28 @@ function statusText(status: SaveStatus) {
   return "autosave";
 }
 
+function previewAccentClass(sectionId: string) {
+  if (sectionId.includes("dinsdag")) return "border-l-[#fed500]";
+  if (sectionId.includes("woensdag")) return "border-l-[#a27a8e]";
+  if (sectionId.includes("donderdag")) return "border-l-[#d75a48]";
+  if (sectionId.includes("vrijdag")) return "border-l-[#b8cfc4]";
+  if (sectionId.includes("zaterdag")) return "border-l-[#fed500]";
+
+  return "border-l-[#c3d3bc]";
+}
+
+function planLabel(definition: WinkelWorkPlanDefinition) {
+  if (definition.id === "afsluitplan") return "Afsluitplan";
+  if (definition.id === "opstartplan") return "Opstartplan";
+
+  return "Schoonmaakrooster";
+}
+
 export default function WinkelWorkPlanChecklist({
   definitions,
   defaultStoreId,
   emptyPlanLabel = "lijst",
+  previewMode = false,
   storeOptions,
 }: Readonly<Props>) {
   const [storeId, setStoreId] = useState(defaultStoreId);
@@ -180,7 +199,7 @@ export default function WinkelWorkPlanChecklist({
   const periodKey = date;
 
   useEffect(() => {
-    if (!currentDefinition) return;
+    if (!currentDefinition || previewMode) return;
 
     let ignoreResult = false;
     const definition = currentDefinition;
@@ -240,7 +259,7 @@ export default function WinkelWorkPlanChecklist({
     return () => {
       ignoreResult = true;
     };
-  }, [currentDefinition, periodKey]);
+  }, [currentDefinition, periodKey, previewMode]);
 
   useEffect(() => {
     return () => {
@@ -313,6 +332,11 @@ export default function WinkelWorkPlanChecklist({
       optimisticCheck,
     ]);
 
+    if (previewMode) {
+      setStatus("saved");
+      return;
+    }
+
     try {
       await saveChange({ itemId, checked: nextChecked });
     } catch (error) {
@@ -328,6 +352,11 @@ export default function WinkelWorkPlanChecklist({
     if (!currentDefinition) return;
 
     setNote(nextNote);
+
+    if (previewMode) {
+      setStatus("saved");
+      return;
+    }
 
     if (!noteLoadedRef.current) return;
     if (noteSaveTimerRef.current) {
@@ -345,22 +374,24 @@ export default function WinkelWorkPlanChecklist({
   }
 
   return (
-    <div className="space-y-3">
-      <section className="border border-[#d8d0c7] bg-white p-3 shadow-sm sm:p-4">
+    <div className="preview-workplan space-y-3">
+      <section className="rounded-lg border border-[#c3d3bc] bg-white p-3 shadow-[0_8px_24px_rgba(74,109,90,.08)] sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <p className="text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#8b8278]">
               {currentDefinition
-                ? `${currentDefinition.storeLabel} · ${currentDefinition.cadenceLabel}`
+                ? planLabel(currentDefinition)
                 : `${
                     availableStores.find((store) => store.id === storeId)
                       ?.label || storeId
                   } · nog niet ingericht`}
             </p>
-            <h2 className="mt-1 text-2xl font-black leading-tight text-[#1a1815]">
-              {currentDefinition?.title || `Nog geen ${emptyPlanLabel}`}
+            <h2 className="mt-1 text-lg font-black leading-tight text-[#1a1815]">
+              {currentDefinition
+                ? currentDefinition.storeLabel
+                : `Nog geen ${emptyPlanLabel}`}
             </h2>
-            <p className="mt-1 text-sm font-semibold leading-snug text-[#6b645b]">
+            <p className="mt-1 text-[0.68rem] font-semibold leading-snug text-[#6b645b]">
               {currentDefinition
                 ? `${formatReadableDate(date)} · ${checkedCount}/${visibleItems.length} klaar`
                 : `Voor deze winkel is nog geen ${emptyPlanLabel} ingericht.`}
@@ -370,13 +401,13 @@ export default function WinkelWorkPlanChecklist({
           <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr] lg:min-w-[40rem]">
             {availableStores.length > 1 && (
               <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
-                Winkel
+                <span className="sr-only">Winkel</span>
                 <select
                   value={storeId}
                   onChange={(event) =>
                     setStoreId(event.target.value as WinkelWorkPlanStoreId)
                   }
-                  className="h-10 rounded-lg border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+                  className="h-8 rounded-md border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815]"
                 >
                   {availableStores.map((store) => (
                     <option key={store.id} value={store.id}>
@@ -391,7 +422,7 @@ export default function WinkelWorkPlanChecklist({
               <button
                 type="button"
                 onClick={() => setDate(getYesterday())}
-                className={`h-10 border px-3 text-xs font-black uppercase ${
+                className={`h-8 border px-3 text-xs font-black uppercase ${
                   date === getYesterday()
                     ? "border-[#1a1815] bg-[#1a1815] text-white"
                     : "border-[#d8d0c7] bg-white text-[#1a1815]"
@@ -402,7 +433,7 @@ export default function WinkelWorkPlanChecklist({
               <button
                 type="button"
                 onClick={() => setDate(getToday())}
-                className={`h-10 border px-3 text-xs font-black uppercase ${
+                className={`h-8 border px-3 text-xs font-black uppercase ${
                   date === getToday()
                     ? "border-[#1a1815] bg-[#1a1815] text-white"
                     : "border-[#d8d0c7] bg-white text-[#1a1815]"
@@ -413,7 +444,7 @@ export default function WinkelWorkPlanChecklist({
               <button
                 type="button"
                 onClick={() => setDate(getTomorrow())}
-                className={`h-10 border px-3 text-xs font-black uppercase ${
+                className={`h-8 border px-3 text-xs font-black uppercase ${
                   date === getTomorrow()
                     ? "border-[#1a1815] bg-[#1a1815] text-white"
                     : "border-[#d8d0c7] bg-white text-[#1a1815]"
@@ -424,33 +455,35 @@ export default function WinkelWorkPlanChecklist({
             </div>
 
             <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
-              Eerder
+              <span className="sr-only">Eerder</span>
               <input
                 type="date"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
-                className="h-10 rounded-lg border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+                className="h-8 rounded-md border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815]"
               />
             </label>
           </div>
         </div>
 
-        <div
-          className={`mt-3 border px-3 py-2 text-xs font-black uppercase tracking-[0.08em] ${
-            !currentDefinition
-              ? "border-[#e8e4de] bg-[#faf8f5] text-[#8b8278]"
-              : allDone
-              ? "border-[#c6dec0] bg-[#edf7ea] text-[#3f6b36]"
-              : "border-[#e8e4de] bg-[#faf8f5] text-[#8b8278]"
-          }`}
-        >
-          {currentDefinition ? statusText(status) : `geen ${emptyPlanLabel}`}
-          {currentDefinition && errorMessage && (
-            <span className="ml-2 normal-case tracking-normal text-[#a0382f]">
-              {errorMessage}
-            </span>
-          )}
-        </div>
+        {!previewMode && (
+          <div
+            className={`mt-3 rounded-lg border px-3 py-2 text-xs font-black uppercase tracking-[0.08em] ${
+              !currentDefinition
+                ? "border-[#e8e4de] bg-[#faf8f5] text-[#8b8278]"
+                : allDone
+                ? "border-[#c6dec0] bg-[#edf7ea] text-[#3f6b36]"
+                : "border-[#e8e4de] bg-[#faf8f5] text-[#8b8278]"
+            }`}
+          >
+            {currentDefinition ? statusText(status) : `geen ${emptyPlanLabel}`}
+            {currentDefinition && errorMessage && (
+              <span className="ml-2 normal-case tracking-normal text-[#a0382f]">
+                {errorMessage}
+              </span>
+            )}
+          </div>
+        )}
       </section>
 
       {!currentDefinition ? (
@@ -463,24 +496,24 @@ export default function WinkelWorkPlanChecklist({
           </p>
         </section>
       ) : visibleSections.length ? (
-        <div className="grid gap-3">
+        <div className="grid gap-0 overflow-hidden rounded-[1rem] border border-[#d6e5d8] bg-white shadow-[0_8px_24px_rgba(74,109,90,.08)]">
           {visibleSections.map((section) => (
             <section
               key={section.id}
-              className="border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4"
+              className={`border-x-0 border-t-0 border-b border-[#e8e4de] border-l-4 bg-white p-3 shadow-sm sm:p-4 ${previewAccentClass(section.id)}`}
             >
               <div className="mb-2 flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-lg font-black leading-tight text-[#1a1815]">
+                  <h3 className="text-base font-black leading-tight text-[#1a1815]">
                     {section.title}
                   </h3>
-                  {section.subtitle && (
+                  {section.subtitle && !previewMode && (
                     <p className="mt-0.5 text-xs font-semibold text-[#8b8278]">
                       {section.subtitle}
                     </p>
                   )}
                 </div>
-                <span className="shrink-0 bg-[#f3f0eb] px-2 py-1 text-xs font-black text-[#6b645b]">
+                <span className="shrink-0 bg-[#f3f0eb] px-2 py-1 text-[0.65rem] font-black text-[#6b645b]">
                   {
                     section.items.filter((item) => checkedMap[item.id]).length
                   }
@@ -488,7 +521,7 @@ export default function WinkelWorkPlanChecklist({
                 </span>
               </div>
 
-              <div className="grid gap-1.5">
+              <div className="grid gap-0">
                 {section.items.map((item) => {
                   const check = checkedMap[item.id];
 
@@ -497,7 +530,7 @@ export default function WinkelWorkPlanChecklist({
                       key={item.id}
                       type="button"
                       onClick={() => void toggleItem(item.id)}
-                      className={`grid grid-cols-[2.25rem_minmax(0,1fr)] gap-2 border p-2 text-left transition active:scale-[0.99] ${
+                      className={`grid grid-cols-[2.25rem_minmax(0,1fr)] gap-2 rounded-none border-x-0 border-t-0 border-b-[#e8e4de] border-l-4 p-2 py-2.5 text-left transition active:scale-[0.99] ${previewAccentClass(section.id)} ${
                         check
                           ? "border-[#c6dec0] bg-[#edf7ea]"
                           : "border-[#e8e4de] bg-[#faf8f5] hover:bg-white"
@@ -514,11 +547,11 @@ export default function WinkelWorkPlanChecklist({
                         ✓
                       </span>
                       <span className="min-w-0">
-                        <span className="block text-sm font-black leading-snug text-[#1a1815]">
+                        <span className="block text-xs font-black leading-snug text-[#1a1815]">
                           {item.label}
                         </span>
                         {item.detail && (
-                          <span className="mt-0.5 block text-xs font-semibold leading-snug text-[#6b645b]">
+                          <span className="mt-0.5 block text-[0.68rem] font-semibold leading-snug text-[#6b645b]">
                             {item.detail}
                           </span>
                         )}
@@ -544,7 +577,7 @@ export default function WinkelWorkPlanChecklist({
       )}
 
       {currentDefinition && (
-        <section className="border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
+        <section className="rounded-2xl border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
           <label className="grid gap-1 text-sm font-black text-[#1a1815]">
             Notitie voor collega&apos;s
             <textarea

@@ -247,15 +247,34 @@ export function StrikShell({
   children,
   wide = false,
   extraWide = false,
+  tone = "default",
+  backHref,
 }: Readonly<{
   children: React.ReactNode;
   wide?: boolean;
   extraWide?: boolean;
+  tone?: "default" | "mint";
+  backHref?: string;
 }>) {
   return (
-    <main className="min-h-screen bg-[#faf8f5] px-4 py-5 pb-24 text-[#1a1815] sm:px-6 lg:px-7">
-      <div className={`mx-auto w-full ${extraWide ? "max-w-[96rem]" : wide ? "max-w-6xl" : "max-w-4xl"}`}>
-        <StrikBackButton />
+    <main
+      className={`relative min-h-screen overflow-hidden px-4 py-5 pb-24 text-[#1a1815] sm:px-6 lg:px-7 ${
+        tone === "mint" ? "bg-[#c3d3bc]" : "bg-[#faf8f5]"
+      }`}
+    >
+      {tone === "mint" && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-[22rem] top-12 h-[34rem] w-[46rem] rotate-[-9deg] bg-[#dce6d8] opacity-[0.55] sm:-right-[28rem] sm:-top-40 sm:h-[68rem] sm:w-[90rem]"
+          style={{
+            WebkitMask:
+              'url("/strik%20logo%20icon.svg") center / contain no-repeat',
+            mask: 'url("/strik%20logo%20icon.svg") center / contain no-repeat',
+          }}
+        />
+      )}
+      <div className={`relative mx-auto w-full ${extraWide ? "max-w-[96rem]" : wide ? "max-w-6xl" : "max-w-4xl"}`}>
+        <StrikBackButton href={backHref} />
         {children}
       </div>
     </main>

@@ -113,14 +113,14 @@ export default function DepartmentHub({
 
             return linksEnabled ? (
               <Link
-                key={item.href}
+                key={`${item.href}-${item.title}`}
                 href={item.href}
                 className={className}
               >
                 {content}
               </Link>
             ) : (
-              <div key={item.href} className={className}>
+              <div key={`${item.href}-${item.title}`} className={className}>
                 {content}
               </div>
             );

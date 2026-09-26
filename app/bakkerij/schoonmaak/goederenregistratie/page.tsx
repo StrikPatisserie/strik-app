@@ -306,7 +306,7 @@ export default function GoederenregistratiePage() {
                 type="date"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
-                className="min-h-10 border border-[#c3d3bc] bg-white px-2 text-sm font-bold normal-case tracking-normal outline-none"
+                className="min-h-12 rounded-xl border border-[#c3d3bc] bg-white px-3 text-base font-bold normal-case tracking-normal outline-none"
               />
             </label>
             <TextField
@@ -335,7 +335,7 @@ export default function GoederenregistratiePage() {
                     setActualTemperature("");
                   }
                 }}
-                className="min-h-10 border border-[#c3d3bc] bg-white px-2 text-sm font-bold normal-case tracking-normal outline-none"
+                className="min-h-12 rounded-xl border border-[#c3d3bc] bg-white px-3 text-base font-bold normal-case tracking-normal outline-none"
               >
                 <option value="koel">Koel</option>
                 <option value="vries">Vries</option>
@@ -350,7 +350,7 @@ export default function GoederenregistratiePage() {
                   value={actualTemperature}
                   onChange={(event) => setActualTemperature(event.target.value)}
                   placeholder="graden"
-                  className="min-h-10 border border-[#c3d3bc] bg-white px-2 text-sm font-bold normal-case tracking-normal outline-none"
+                  className="min-h-12 rounded-xl border border-[#c3d3bc] bg-white px-3 text-base font-bold normal-case tracking-normal outline-none"
                 />
               </label>
             )}
@@ -498,7 +498,7 @@ function TextField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="min-h-10 border border-[#c3d3bc] bg-white px-2 text-sm font-bold normal-case tracking-normal outline-none"
+        className="min-h-12 rounded-xl border border-[#c3d3bc] bg-white px-3 text-base font-bold normal-case tracking-normal outline-none"
       />
     </label>
   );
@@ -522,7 +522,7 @@ function YesNoControl({
             key={option}
             type="button"
             onClick={() => onChange(option)}
-            className={`min-h-10 text-sm font-black normal-case tracking-normal ${
+            className={`min-h-12 rounded-xl text-base font-black normal-case tracking-normal ${
               value === option
                 ? option === "ja"
                   ? "bg-[#c3d3bc] text-[#1a1815]"

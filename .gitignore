@@ -25,6 +25,7 @@
 *.pem
 ~$*
 /recovery/
+/tmp/
 
 # debug
 npm-debug.log*

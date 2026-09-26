@@ -297,7 +297,7 @@ export default function IjsChocoladeTemperatuurregistratiePage() {
           icon={strikIcons.cleaning}
         />
 
-        <section className="border border-[#eadb8b] bg-[#fffdf0] p-3 shadow-sm">
+        <section className="rounded-2xl border border-[#eadb8b] bg-[#fffdf0] p-3 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <label className="grid gap-1 text-xs font-black uppercase tracking-[0.1em] text-[#594b10]/60 md:w-44">
               Dag ophalen
@@ -305,7 +305,7 @@ export default function IjsChocoladeTemperatuurregistratiePage() {
                 type="date"
                 value={date}
                 onChange={(event) => setDate(event.target.value)}
-                className="min-h-10 border border-[#eadb8b] bg-white px-2 text-sm font-bold normal-case tracking-normal outline-none"
+                className="min-h-12 rounded-xl border border-[#eadb8b] bg-white px-3 text-base font-bold normal-case tracking-normal outline-none"
               />
             </label>
 
@@ -320,7 +320,7 @@ export default function IjsChocoladeTemperatuurregistratiePage() {
             {selectedEvaluations.map(({ evaluation, step, value }) => (
               <div
                 key={step.id}
-                className="grid gap-2 border border-[#eadb8b] bg-white p-3 md:grid-cols-[10rem_1fr_8rem_7rem]"
+                className="grid gap-3 rounded-2xl border border-[#eadb8b] bg-white p-3 md:grid-cols-[10rem_1fr_8rem_7rem]"
               >
                 <div>
                   <h2 className="text-sm font-black text-[#1a1815]">
@@ -337,14 +337,14 @@ export default function IjsChocoladeTemperatuurregistratiePage() {
                     value={value}
                     onChange={(event) => updateValue(step.id, event.target.value)}
                     placeholder="0"
-                    className="min-h-10 border border-[#eadb8b] bg-[#fffdf8] px-2 text-sm font-bold normal-case tracking-normal outline-none"
+                    className="min-h-12 rounded-xl border border-[#eadb8b] bg-[#fffdf8] px-3 text-base font-bold normal-case tracking-normal outline-none"
                   />
                 </label>
                 <span className="self-end text-sm font-black text-[#2d2a26]/65">
                   graden Celsius
                 </span>
                 <span
-                  className={`self-end border px-2 py-2 text-center text-xs font-black ${statusClass(
+                    className={`self-end rounded-xl border px-3 py-3 text-center text-sm font-black ${statusClass(
                     evaluation.status
                   )}`}
                 >

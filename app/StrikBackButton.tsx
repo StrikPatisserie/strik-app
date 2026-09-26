@@ -16,6 +16,14 @@ const parentRoutes: Record<string, string> = {
   "/vierdaagse/kassa-tool": "/vierdaagse",
   "/vierdaagse/kassa": "/vierdaagse/kassa-tool",
   "/vierdaagse/productie-bediening": "/vierdaagse/kassa-tool",
+  "/bakkerij/ijs-chocolade/bestellen": "/bakkerij/ijs-chocolade",
+  "/bakkerij/ijs-chocolade/haccp": "/bakkerij/ijs-chocolade",
+  "/bakkerij/ijs-chocolade/haccp/temperatuurregistratie": "/bakkerij/ijs-chocolade/haccp",
+  "/bakkerij/schoonmaak/goederenregistratie": "/bakkerij/schoonmaak",
+  "/bakkerij/schoonmaak/schoonmaakrooster": "/bakkerij/schoonmaak",
+  "/winkel/haccp/afsluitplan": "/winkel/haccp",
+  "/winkel/haccp/opstartplan": "/winkel/haccp",
+  "/winkel/haccp/schoonmaakrooster": "/winkel/haccp",
   "/winkel/schoonmaak-registratie": "/winkel/haccp",
   "/winkel/schoonmaak-registratie/overzicht": "/winkel/schoonmaak-registratie",
   "/schoonmaak": "/ijs",
@@ -63,14 +71,17 @@ function getParentRoute(pathname: string) {
   return `/${parts.slice(0, -1).join("/")}`;
 }
 
-export default function StrikBackButton() {
+export default function StrikBackButton({
+  href,
+}: Readonly<{ href?: string }>) {
   const pathname = usePathname();
   const router = useRouter();
   const parentRoute = getParentRoute(pathname);
+  const destination = href || parentRoute;
   const className =
     "mb-4 inline-flex items-center gap-2 rounded-lg border border-[#e8e4de] bg-white px-3 py-2 text-sm font-medium text-[#8b8278] transition hover:bg-[#faf8f5] active:scale-[0.97]";
 
-  if (!parentRoute) return null;
+  if (!destination) return null;
 
   if (pathname === "/bruidstaarten/studio") {
     return (
@@ -83,7 +94,7 @@ export default function StrikBackButton() {
           const shouldNavigate = window.dispatchEvent(event);
 
           if (shouldNavigate) {
-            router.push(parentRoute);
+            router.push(destination);
           }
         }}
         className={className}
@@ -96,7 +107,7 @@ export default function StrikBackButton() {
 
   return (
     <Link
-      href={parentRoute}
+      href={destination}
       className={className}
     >
       <span className="text-base leading-none">←</span>

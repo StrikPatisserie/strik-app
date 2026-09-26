@@ -5,8 +5,13 @@ import SecondaryResourceLink from "../SecondaryResourceLink";
 import { strikIcons } from "../StrikUI";
 import BruidstaartenOverzichtPreview from "./BruidstaartenOverzichtPreview";
 import BruidstaartProductiePreview from "./BruidstaartProductiePreview";
+import BakeryRegistrationPreview from "./BakeryRegistrationPreview";
 import NieuwReceptPreview from "./NieuwReceptPreview";
 import ReceptenPreview from "./ReceptenPreview";
+import SchoonmaakroosterPatisseriePreview from "./SchoonmaakroosterPatisseriePreview";
+import SchoonmaakroosterStoreChooser from "../winkel/haccp/SchoonmaakroosterStoreChooser";
+import WinkelTemperatureStoreChooser from "../winkel/schoonmaak-registratie/WinkelTemperatureStoreChooser";
+import WinkelPlanPreview from "./WinkelPlanPreview";
 
 export const metadata: Metadata = {
   title: "Menu-preview · Strik Team App",
@@ -14,10 +19,20 @@ export const metadata: Metadata = {
 
 type PreviewKey =
   | "winkel"
+  | "haccp"
+  | "winkel-temperatuurregistratie"
+  | "afsluitplan-winkels"
+  | "opstartplan-winkels"
+  | "schoonmaakrooster-winkels"
+  | "schoonmaakrooster-patisserie"
   | "ijs"
   | "logistiek"
   | "productie"
   | "bakkerij"
+  | "bakkerij-haccp"
+  | "bakkerij-temperatuurregistratie"
+  | "bakkerij-goederenregistratie"
+  | "bakkerij-temperaturen-overzicht"
   | "recepten"
   | "nieuw-recept"
   | "bruidstaart-productie"
@@ -45,11 +60,43 @@ const previews: Record<PreviewKey, MenuPreview> = {
     description: "Alles voor de werkdag in de winkel, rustig bij elkaar.",
     icon: strikIcons.winkel,
     items: [
-      { href: "#", title: "HACCP & werkplannen", description: "", icon: strikIcons.cleaning, accent: "green" },
+      { href: "/menu-preview?menu=haccp", title: "HACCP & werkplannen", description: "", icon: strikIcons.cleaning, accent: "green" },
       { href: "/menu-preview?menu=bruidstaarten", title: "Bruidstaarten", description: "", icon: strikIcons.bruidstaart, accent: "coral" },
       { href: "#", title: "Documenten", description: "", icon: strikIcons.info, accent: "yellow" },
     ],
   },
+  haccp: {
+    label: "HACCP & werkplannen",
+    eyebrow: "Winkel",
+    title: "HACCP & werkplannen",
+    description: "",
+    icon: strikIcons.cleaning,
+    items: [
+      { href: "/menu-preview?menu=schoonmaakrooster-winkels", title: "Schoonmaakrooster", description: "", icon: strikIcons.cleaning, accent: "green" },
+      { href: "/menu-preview?menu=winkel-temperatuurregistratie", title: "Temperatuurregistratie", description: "", icon: strikIcons.cleaning, accent: "yellow" },
+      { href: "/menu-preview?menu=afsluitplan-winkels", title: "Afsluitplan patisserie", description: "", icon: strikIcons.afsluitplan, accent: "blue" },
+      { href: "/menu-preview?menu=opstartplan-winkels", title: "Opstartplan patisserie", description: "", icon: strikIcons.opstartplan, accent: "coral" },
+    ],
+  },
+  "schoonmaakrooster-patisserie": {
+    label: "Schoonmaakrooster",
+    eyebrow: "HACCP & werkplannen",
+    title: "Schoonmaakrooster patisserie",
+    description: "Weektaak en dagtaken met autosave per winkel.",
+    icon: strikIcons.cleaning,
+    items: [],
+  },
+  "schoonmaakrooster-winkels": {
+    label: "Schoonmaakrooster",
+    eyebrow: "HACCP & werkplannen",
+    title: "Schoonmaakrooster",
+    description: "",
+    icon: strikIcons.cleaning,
+    items: [],
+  },
+  "winkel-temperatuurregistratie": { label: "Temperatuurregistratie", eyebrow: "Winkel", title: "Temperatuurregistratie", description: "", icon: strikIcons.cleaning, items: [] },
+  "afsluitplan-winkels": { label: "Afsluitplan", eyebrow: "HACCP & werkplannen", title: "Afsluitplan", description: "", icon: strikIcons.afsluitplan, items: [] },
+  "opstartplan-winkels": { label: "Opstartplan", eyebrow: "HACCP & werkplannen", title: "Opstartplan", description: "", icon: strikIcons.opstartplan, items: [] },
   ijs: {
     label: "IJssalons",
     eyebrow: "Strik ijssalons",
@@ -97,7 +144,37 @@ const previews: Record<PreviewKey, MenuPreview> = {
       { href: "/menu-preview?menu=recepten", title: "Recepten", description: "", icon: strikIcons.recepturen, accent: "green" },
       { href: "/menu-preview?menu=bakkerij", title: "Productieplanning", description: "", icon: strikIcons.bakkerij, accent: "yellow" },
       { href: "/menu-preview?menu=bruidstaart-productie", title: "Bruidstaart productie", description: "", icon: strikIcons.bruidstaart, accent: "coral" },
-      { href: "/menu-preview?menu=bakkerij", title: "HACCP & registraties", description: "", icon: strikIcons.cleaning, accent: "blue" },
+      { href: "/menu-preview?menu=bakkerij-haccp", title: "HACCP & registraties", description: "", icon: strikIcons.cleaning, accent: "blue" },
+    ],
+  },
+  "bakkerij-haccp": {
+    label: "HACCP & registraties",
+    eyebrow: "Bakkerij",
+    title: "HACCP & registraties",
+    description: "",
+    icon: strikIcons.cleaning,
+    items: [
+      {
+        href: "/menu-preview?menu=bakkerij-temperatuurregistratie",
+        title: "Temperatuurregistratie",
+        description: "",
+        icon: strikIcons.cleaning,
+        accent: "yellow",
+      },
+      {
+        href: "/menu-preview?menu=bakkerij-goederenregistratie",
+        title: "Goederenregistratie",
+        description: "",
+        icon: strikIcons.info,
+        accent: "green",
+      },
+      {
+        href: "/menu-preview?menu=bakkerij-temperaturen-overzicht",
+        title: "Temperaturen overzicht",
+        description: "",
+        icon: strikIcons.data,
+        accent: "blue",
+      },
     ],
   },
   recepten: {
@@ -106,6 +183,30 @@ const previews: Record<PreviewKey, MenuPreview> = {
     title: "Recepten",
     description: "Veilige voorbeeldweergave van de receptenlijst.",
     icon: strikIcons.recepturen,
+    items: [],
+  },
+  "bakkerij-temperatuurregistratie": {
+    label: "Temperatuurregistratie",
+    eyebrow: "HACCP & registraties",
+    title: "Temperatuurregistratie",
+    description: "Voorbeeldweergave van de bakkerijtemperaturen.",
+    icon: strikIcons.cleaning,
+    items: [],
+  },
+  "bakkerij-goederenregistratie": {
+    label: "Goederenregistratie",
+    eyebrow: "HACCP & registraties",
+    title: "Goederenregistratie",
+    description: "Voorbeeldweergave van inkomende goederen.",
+    icon: strikIcons.info,
+    items: [],
+  },
+  "bakkerij-temperaturen-overzicht": {
+    label: "Temperaturen overzicht",
+    eyebrow: "HACCP & registraties",
+    title: "Temperaturen overzicht",
+    description: "Voorbeeldweergave van het maandrapport.",
+    icon: strikIcons.data,
     items: [],
   },
   "nieuw-recept": {
@@ -193,13 +294,24 @@ function isPreviewKey(value: string | undefined): value is PreviewKey {
 export default async function MenuPreviewPage({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ menu?: string }>;
+  searchParams: Promise<{ menu?: string; store?: string }>;
 }>) {
   const params = await searchParams;
   const activeKey: PreviewKey = isPreviewKey(params.menu) ? params.menu : "winkel";
   const active = previews[activeKey];
   const activeMainKey: PreviewKey =
-    activeKey === "bakkerij" ||
+    activeKey === "haccp" ||
+    activeKey === "winkel-temperatuurregistratie" ||
+    activeKey === "afsluitplan-winkels" ||
+    activeKey === "opstartplan-winkels" ||
+    activeKey === "schoonmaakrooster-winkels" ||
+    activeKey === "schoonmaakrooster-patisserie"
+      ? "winkel"
+      : activeKey === "bakkerij" ||
+    activeKey === "bakkerij-haccp" ||
+    activeKey === "bakkerij-temperatuurregistratie" ||
+    activeKey === "bakkerij-goederenregistratie" ||
+    activeKey === "bakkerij-temperaturen-overzicht" ||
     activeKey === "recepten" ||
     activeKey === "nieuw-recept" ||
     activeKey === "bruidstaart-productie"
@@ -214,6 +326,16 @@ export default async function MenuPreviewPage({
   ).filter(
     ([key]) =>
       key !== "bakkerij" &&
+      key !== "bakkerij-haccp" &&
+      key !== "bakkerij-temperatuurregistratie" &&
+      key !== "bakkerij-goederenregistratie" &&
+      key !== "bakkerij-temperaturen-overzicht" &&
+      key !== "haccp" &&
+      key !== "winkel-temperatuurregistratie" &&
+      key !== "afsluitplan-winkels" &&
+      key !== "opstartplan-winkels" &&
+      key !== "schoonmaakrooster-winkels" &&
+      key !== "schoonmaakrooster-patisserie" &&
       key !== "recepten" &&
       key !== "nieuw-recept" &&
       key !== "bruidstaart-productie" &&
@@ -267,6 +389,76 @@ export default async function MenuPreviewPage({
     return <NieuwReceptPreview toolbar={toolbar} />;
   }
 
+  if (activeKey === "bakkerij-temperatuurregistratie") {
+    return <BakeryRegistrationPreview toolbar={toolbar} kind="temperature" />;
+  }
+
+  if (activeKey === "bakkerij-goederenregistratie") {
+    return <BakeryRegistrationPreview toolbar={toolbar} kind="goods" />;
+  }
+
+  if (activeKey === "bakkerij-temperaturen-overzicht") {
+    return <BakeryRegistrationPreview toolbar={toolbar} kind="overview" />;
+  }
+
+  if (activeKey === "schoonmaakrooster-patisserie") {
+    const storeId = ["heyendaal", "ziekerstraat", "lent", "daalseweg"].includes(
+      params.store || ""
+    )
+      ? (params.store as "heyendaal" | "ziekerstraat" | "lent" | "daalseweg")
+      : "heyendaal";
+
+    return (
+      <SchoonmaakroosterPatisseriePreview
+        toolbar={toolbar}
+        storeId={storeId}
+      />
+    );
+  }
+
+  if (activeKey === "schoonmaakrooster-winkels") {
+    return (
+      <SchoonmaakroosterStoreChooser
+        allowedStoreIds={["heyendaal", "ziekerstraat", "lent", "daalseweg"]}
+        toolbar={toolbar}
+        previewMode
+      />
+    );
+  }
+
+  if (activeKey === "winkel-temperatuurregistratie") {
+    const storeId = ["heyendaal", "ziekerstraat", "lent", "daalseweg"].includes(params.store || "") ? params.store : null;
+    if (storeId) {
+      const label = storeId[0].toUpperCase() + storeId.slice(1);
+      return <BakeryRegistrationPreview toolbar={toolbar} kind="temperature" locationLabel={label} />;
+    }
+
+    return <WinkelTemperatureStoreChooser allowedStoreIds={["heyendaal", "ziekerstraat", "lent", "daalseweg"]} toolbar={toolbar} previewMode />;
+  }
+
+  if (activeKey === "afsluitplan-winkels" || activeKey === "opstartplan-winkels") {
+    const storeId = ["heyendaal", "ziekerstraat", "lent", "daalseweg"].includes(params.store || "")
+      ? (params.store as "heyendaal" | "ziekerstraat" | "lent" | "daalseweg")
+      : null;
+
+    if (storeId) {
+      const planId = activeKey === "afsluitplan-winkels" ? "afsluitplan" : "opstartplan";
+      const title = activeKey === "afsluitplan-winkels" ? "Afsluitplan" : "Opstartplan";
+
+      return <WinkelPlanPreview planId={planId} title={title} storeId={storeId} toolbar={toolbar} backMenu={activeKey} />;
+    }
+
+    return (
+      <SchoonmaakroosterStoreChooser
+        allowedStoreIds={["heyendaal", "ziekerstraat", "lent", "daalseweg"]}
+        previewMode
+        planId={activeKey === "afsluitplan-winkels" ? "afsluitplan" : "opstartplan"}
+        title={activeKey === "afsluitplan-winkels" ? "Afsluitplan" : "Opstartplan"}
+        previewMenu={activeKey}
+      />
+    );
+  }
+
   return (
     <DepartmentHub
       eyebrow={active.eyebrow}
@@ -279,9 +471,11 @@ export default async function MenuPreviewPage({
       showBackButton={false}
       linksEnabled={
         activeKey === "winkel" ||
+        activeKey === "haccp" ||
         activeKey === "bruidstaarten" ||
         activeKey === "productie" ||
         activeKey === "bakkerij"
+        || activeKey === "bakkerij-haccp"
       }
     >
       {activeKey === "bruidstaarten" ? (
