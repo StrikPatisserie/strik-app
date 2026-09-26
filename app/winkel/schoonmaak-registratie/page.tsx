@@ -53,37 +53,12 @@ function getVandaag() {
   return `${jaar}-${maand}-${dag}`;
 }
 
-function getDatumMetOffset(offsetDays: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + offsetDays);
-
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-    2,
-    "0"
-  )}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function getGisteren() {
-  return getDatumMetOffset(-1);
-}
-
-function getMorgen() {
-  return getDatumMetOffset(1);
-}
-
-function formatReadableDate(dateValue: string) {
+function formatCompactDate(dateValue: string) {
   const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return dateValue;
 
-  return new Date(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3])
-  ).toLocaleDateString("nl-NL", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const compact = `${match[3]}-${match[2]}${dateValue === getVandaag() ? "" : `-${match[1]}`}`;
+  return dateValue === getVandaag() ? `vandaag ${compact}` : compact;
 }
 
 function createTemperatureRowId(prefix: string, index: number) {
@@ -483,6 +458,17 @@ function statusPillClass(status: ReturnType<typeof evaluateTemperature>["status"
   return "border-[#ded8cf] bg-white text-[#2d2a26]/45";
 }
 
+function temperatureBorderClass(
+  status: ReturnType<typeof evaluateTemperature>["status"]
+) {
+  if (status === "ok") return "border-l-[#82b879]";
+  if (status === "attention") return "border-l-[#e4ad4f]";
+  if (status === "deviation") return "border-l-[#d95749]";
+  if (status === "inactive") return "border-l-[#b9b1a7]";
+
+  return "border-l-[#d8d0c7]";
+}
+
 function TemperatureValueInput({
   label,
   value,
@@ -503,15 +489,26 @@ function TemperatureValueInput({
   }
 
   return (
-    <label className="grid min-w-0 gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
-      {label}
-      <span className="grid grid-cols-[auto_minmax(0,1fr)] gap-1">
-        <span className="grid gap-0.5">
+    <label className="flex min-w-0 flex-1 items-center gap-2">
+      <span className="sr-only">{label}</span>
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        inputMode="decimal"
+        placeholder="0,0"
+        className="h-12 min-w-0 flex-1 rounded-xl border border-[#e8e4de] bg-white px-3 text-base font-black normal-case tracking-normal text-[#1a1815] outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:cursor-not-allowed disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/35"
+      />
+      <span className="shrink-0 text-base font-black text-[#6b645b]" aria-hidden="true">
+        °C
+      </span>
+      <span className="flex shrink-0 gap-1">
           <button
             type="button"
             onClick={() => updateSign("+")}
             aria-label={`${label} positief maken`}
-            className={`h-11 w-11 rounded-xl border border-[#dbe9ee] text-base font-black leading-none shadow-sm sm:h-5 sm:w-5 sm:rounded-full sm:border-0 sm:text-[0.62rem] ${
+            className={`h-11 w-11 rounded-xl border border-[#dbe9ee] text-lg font-black leading-none ${
               isNegative
                 ? "bg-white text-[#2d2a26]/45"
                 : "bg-[#dbe9ee] text-[#214456]"
@@ -523,7 +520,7 @@ function TemperatureValueInput({
             type="button"
             onClick={() => updateSign("-")}
             aria-label={`${label} negatief maken`}
-            className={`h-11 w-11 rounded-xl border border-[#e7e0d8] text-base font-black leading-none shadow-sm sm:h-5 sm:w-5 sm:rounded-full sm:border-0 sm:text-[0.62rem] ${
+            className={`h-11 w-11 rounded-xl border border-[#e7e0d8] text-lg font-black leading-none ${
               isNegative
                 ? "bg-[#dbe9ee] text-[#214456]"
                 : "bg-white text-[#2d2a26]/45"
@@ -531,16 +528,6 @@ function TemperatureValueInput({
           >
             -
           </button>
-        </span>
-        <input
-          ref={inputRef}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          disabled={disabled}
-          inputMode="decimal"
-          placeholder="0,0"
-          className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-3 py-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/35 sm:rounded-lg sm:px-2 sm:py-1.5 sm:text-sm"
-        />
       </span>
     </label>
   );
@@ -638,6 +625,9 @@ export function TemperatureRegistrationPage({
   const verzondenSignatuurRef = useRef("");
   const extraRowIdRef = useRef(0);
   const [addFeedback, setAddFeedback] = useState("");
+  const [openRowDetails, setOpenRowDetails] = useState<Record<string, boolean>>(
+    {}
+  );
   const selectedWinkel = getSelectedLocation(winkelId, allowedLocationOptions);
   const currentOverviewHref =
     typeof overviewHref === "function" ? overviewHref(winkelId) : overviewHref;
@@ -1040,164 +1030,122 @@ export function TemperatureRegistrationPage({
   return (
     <StrikShell wide>
       <div className="space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <StrikPageHeader
-            title={title}
-            kicker={kicker}
-            icon={strikIcons.cleaning}
-          />
-          {currentOverviewHref && (
-            <Link
-              href={currentOverviewHref}
-              className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
-            >
-              Maandoverzicht
-            </Link>
-          )}
-        </div>
+        <StrikPageHeader title={title} kicker={kicker} icon={strikIcons.cleaning} />
 
-        <section className="border border-[#d8d0c7] bg-white p-3 shadow-sm sm:p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div className="min-w-0">
-              <p className="text-[0.66rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
-                {selectedWinkel.label} · HACCP
+        <section className="mt-4 rounded-2xl border border-[#c3d3bc] bg-white p-3 shadow-[0_8px_24px_rgba(74,109,90,.08)] sm:p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#e8e4de] pb-3">
+            <div>
+              <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#8b8278]">
+                {selectedWinkel.label}
               </p>
-              <h2 className="mt-1 text-2xl font-black leading-tight text-[#1a1815]">
-                Temperatuurregistratie
+              <h2 className="mt-1 text-xl font-black leading-none text-[#111111]">
+                Meetpunten
               </h2>
-              <p className="mt-1 text-sm font-semibold leading-snug text-[#6b645b]">
-                {formatReadableDate(datum)} · {summaryStatus.toLowerCase()}
+              <p className="mt-1 text-[0.62rem] font-bold text-[#8b8278]">
+                {activeRegistrationCount} actief
+                {inactiveRegistrationCount ? ` · ${inactiveRegistrationCount} uit` : ""}
+                {missingRegistrationCount ? ` · ${missingRegistrationCount} ontbreekt` : ""}
               </p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr_11rem] lg:min-w-[48rem]">
-              {allowedLocationOptions.length > 1 && !lockLocation && (
-                <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
-                  Winkel
-                  <select
-                    value={winkelId}
-                    onChange={(event) => setWinkelId(event.target.value)}
-                    className="h-10 border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#1a1815]"
-                  >
-                    {allowedLocationOptions.map((winkel) => (
-                      <option key={winkel.id} value={winkel.id}>
-                        {winkel.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-
-              <div className="flex items-end gap-1">
-                <button
-                  type="button"
-                  onClick={() => setDatum(getGisteren())}
-                  className={`h-10 border px-3 text-xs font-black uppercase ${
-                    datum === getGisteren()
-                      ? "border-[#1a1815] bg-[#1a1815] text-white"
-                      : "border-[#d8d0c7] bg-white text-[#1a1815]"
-                  }`}
-                >
-                  Gister
-                </button>
+            <div className="flex flex-wrap items-end justify-end gap-2">
+              {datum !== getVandaag() && (
                 <button
                   type="button"
                   onClick={() => setDatum(getVandaag())}
-                  className={`h-10 border px-3 text-xs font-black uppercase ${
-                    datum === getVandaag()
-                      ? "border-[#1a1815] bg-[#1a1815] text-white"
-                      : "border-[#d8d0c7] bg-white text-[#1a1815]"
-                  }`}
+                  className="pb-2 text-[0.65rem] font-semibold lowercase italic text-[#a27a8e] underline decoration-[#a27a8e]/40 underline-offset-2"
                 >
-                  Vandaag
+                  vandaag
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setDatum(getMorgen())}
-                  className={`h-10 border px-3 text-xs font-black uppercase ${
-                    datum === getMorgen()
-                      ? "border-[#1a1815] bg-[#1a1815] text-white"
-                      : "border-[#d8d0c7] bg-white text-[#1a1815]"
-                  }`}
-                >
-                  Morgen
-                </button>
-              </div>
-
-              <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
-                Eerder
+              )}
+              <span className="pb-2 text-sm font-black text-[#1a1815]">
+                {formatCompactDate(datum)}
+              </span>
+              <label className="relative flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-[#d8d0c7] bg-white text-[#6b645b]">
+                <span
+                  aria-hidden="true"
+                  className="h-5 w-5 bg-[#6b645b]"
+                  style={{
+                    WebkitMask: `url("${strikIcons.agenda}") center / contain no-repeat`,
+                    mask: `url("${strikIcons.agenda}") center / contain no-repeat`,
+                  }}
+                />
                 <input
                   type="date"
                   value={datum}
                   onChange={(event) => setDatum(event.target.value)}
-                  className="h-10 border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#1a1815]"
+                  aria-label="Datum wijzigen"
+                  className="absolute inset-0 cursor-pointer opacity-0"
                 />
               </label>
-
-              <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
-                Naam
-                <input
-                  value={form.naam}
-                  onChange={(event) =>
-                    updateForm({ ...form, naam: event.target.value })
-                  }
-                  placeholder="Naam medewerker"
-                  className="h-10 border border-[#d8d0c7] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#1a1815]"
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="mt-3 grid gap-1.5 sm:grid-cols-3">
-            {[
-              {
-                id: "meetpunten",
-                value: `${activeRegistrationCount} actief${
-                  inactiveRegistrationCount
-                    ? ` · ${inactiveRegistrationCount} uit`
-                    : ""
-                }`,
-              },
-              { id: "ontbreekt", value: `${missingRegistrationCount} ontbreekt` },
-              { id: "status", value: summaryStatus },
-            ].map((item) => (
-              <div
-                key={item.id}
-                className="border border-[#e8e4de] bg-[#faf8f5] px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#8b8278]"
-              >
-                {item.value}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="border border-[#e8e4de] bg-white p-3 shadow-sm sm:p-4">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-base font-black text-[#1a1815] sm:text-lg">Meetpunten</h2>
-              <p className="text-[0.58rem] font-bold uppercase tracking-[0.08em] text-[#8b8278] sm:text-xs">
-                {selectedWinkel.label} · {datum}
-              </p>
-            </div>
-            <div className="grid justify-items-start gap-2 sm:justify-items-end">
-              <div className="flex flex-wrap justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={addRegistrationRow}
-                  className="border border-[#1a1815] bg-[#1a1815] px-3 py-1.5 text-xs font-black text-white transition hover:bg-[#3b352f]"
+              {currentOverviewHref && (
+                <Link
+                  href={currentOverviewHref}
+                  className="flex h-10 items-center rounded-full border border-[#d8d0c7] bg-white px-3 text-[0.64rem] font-black text-[#55704d]"
                 >
-                  + Meetpunt
-                </button>
-              </div>
-              {addFeedback && (
-                <p className="text-[0.62rem] font-black text-[#4a6d5a] sm:text-xs">
-                  {addFeedback}
-                </p>
+                  Maandoverzicht
+                </Link>
               )}
             </div>
           </div>
 
-          <div className="mt-2 grid gap-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_auto]">
+            {allowedLocationOptions.length > 1 && !lockLocation ? (
+              <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
+                Locatie
+                <select
+                  value={winkelId}
+                  onChange={(event) => setWinkelId(event.target.value)}
+                  className="h-10 rounded-xl border border-[#e8e4de] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:ring-2 focus:ring-[#8fb184]"
+                >
+                  {allowedLocationOptions.map((winkel) => (
+                    <option key={winkel.id} value={winkel.id}>
+                      {winkel.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <div className="hidden lg:block" />
+            )}
+            <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
+              Medewerker
+              <input
+                value={form.naam}
+                onChange={(event) =>
+                  updateForm({ ...form, naam: event.target.value })
+                }
+                placeholder="Naam medewerker"
+                className="h-10 rounded-xl border border-[#e8e4de] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none focus:ring-2 focus:ring-[#8fb184]"
+              />
+            </label>
+            <div className="flex items-end justify-between gap-2 sm:col-span-2 lg:col-span-1 lg:justify-end">
+              <span className={`rounded-full border px-3 py-2 text-xs font-black ${
+                problemRegistrationCount
+                  ? "border-[#efb4aa] bg-[#fff0ed] text-[#a0382f]"
+                  : missingRegistrationCount
+                    ? "border-[#f1d28f] bg-[#fff5d8] text-[#7a5a18]"
+                    : "border-[#c6dec0] bg-[#edf7ea] text-[#3f6b36]"
+              }`}>
+                {summaryStatus}
+              </span>
+              <button
+                type="button"
+                onClick={addRegistrationRow}
+                className="rounded-full bg-[#1a1815] px-4 py-2.5 text-xs font-black text-white"
+              >
+                + Meetpunt
+              </button>
+            </div>
+          </div>
+
+          {addFeedback && (
+            <p className="mt-2 text-[0.62rem] font-black text-[#4a6d5a]">
+              {addFeedback}
+            </p>
+          )}
+
+          <div className="mt-3 grid gap-2">
             {form.temperatuurRegistraties.map((item, index) => {
               const isDefaultRow = isDefaultTemperatureRow(
                 winkelId,
@@ -1222,6 +1170,10 @@ export function TemperatureRegistrationPage({
                     getMeasuredTemperature(item),
                     item.maxTemperature
                   );
+              const detailsOpen =
+                Boolean(openRowDetails[item.id]) ||
+                Boolean(item.note?.trim()) ||
+                isActionRequiredStatus(evaluation.status);
 
               return (
                 <div
@@ -1229,21 +1181,40 @@ export function TemperatureRegistrationPage({
                   ref={(element) => {
                     registrationRowRefs.current[item.id] = element;
                   }}
-                  className={`grid grid-cols-2 items-end gap-3 rounded-2xl border p-3 transition md:grid-cols-[minmax(8rem,1fr)_5.25rem_5.2rem_5.2rem_5rem_auto] md:gap-2 md:rounded-[0.75rem] md:p-2 ${
-                    isInactive
-                      ? "border-dashed border-[#d8d0c7] bg-[#f3f0eb] opacity-55"
-                      : "border-[#e8e4de] bg-[#faf8f5]"
-                  }`}
+                  className={`rounded-2xl border border-l-8 bg-[#fffdfb] p-2.5 transition ${temperatureBorderClass(
+                    evaluation.status
+                  )} ${isInactive ? "border-dashed opacity-55" : "border-[#e8e4de]"}`}
                 >
-                  <label className="col-span-full grid min-w-0 gap-1 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 md:col-span-1 md:text-[0.58rem]">
-                    <span className="flex min-w-0 items-center justify-between gap-1">
-                      <span>Apparaat {index + 1}</span>
-                      {item.department && (
-                        <span className="truncate rounded-full bg-white px-1.5 py-0.5 text-[0.48rem] text-[#45663b] sm:text-[0.56rem]">
-                          {item.department}
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[0.52rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
+                      Apparaat {index + 1}
+                      {item.department ? ` · ${item.department}` : ""}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {Number.isFinite(item.maxTemperature) && (
+                        <span className="text-[0.68rem] font-black text-[#a0382f]">
+                          max {formatTemperatureLimit(Number(item.maxTemperature))} °C
                         </span>
                       )}
-                    </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenRowDetails((current) => ({
+                            ...current,
+                            [item.id]: !current[item.id],
+                          }))
+                        }
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e4de] bg-white text-base font-black text-[#6b645b]"
+                        aria-label={`Notitie bij ${item.naam || `apparaat ${index + 1}`}`}
+                      >
+                        ▤
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <label className="min-w-0 flex-1">
+                      <span className="sr-only">Naam apparaat</span>
                     <input
                       value={item.naam}
                       onChange={(event) =>
@@ -1251,16 +1222,15 @@ export function TemperatureRegistrationPage({
                       }
                       disabled={isInactive}
                       placeholder="Bijvoorbeeld koeling"
-                      className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-3 py-3 text-base font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/45 md:rounded-lg md:px-2 md:py-1.5 md:text-sm"
+                      className="h-10 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-1 text-base font-black normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#c3d3bc] focus:bg-white disabled:text-[#2d2a26]/45"
                     />
-                    {Number.isFinite(item.maxTemperature) && (
-                      <span className="text-[0.52rem] font-black normal-case tracking-normal text-[#a0382f] sm:text-[0.6rem]">
-                        max {formatTemperatureLimit(Number(item.maxTemperature))} °C
-                      </span>
-                    )}
-                  </label>
-                  <label className="grid min-w-0 gap-1 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 md:text-[0.58rem]">
-                    Type
+                    </label>
+                    <span aria-hidden="true" className="text-base text-[#8b8278]">✎</span>
+                  </div>
+
+                  <div className="mt-2 flex min-w-0 flex-col gap-2 md:flex-row md:items-center">
+                    <label className="shrink-0">
+                    <span className="sr-only">Type</span>
                     <select
                       value={deviceType}
                       onChange={(event) =>
@@ -1271,7 +1241,7 @@ export function TemperatureRegistrationPage({
                         )
                       }
                       disabled={isInactive}
-                      className="min-w-0 rounded-xl border border-[#e7e0d8] bg-white px-2 py-3 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] disabled:bg-[#f3f0eb] disabled:text-[#2d2a26]/45 md:rounded-lg md:py-1.5 md:text-sm"
+                      className="h-10 w-full rounded-full border border-[#c3d3bc] bg-[#f6faf4] px-3 text-[0.68rem] font-black normal-case tracking-normal text-[#30462f] outline-none disabled:cursor-not-allowed md:w-32"
                     >
                       {deviceTypeOptions.map((option) => (
                         <option key={option.id} value={option.id}>
@@ -1281,14 +1251,6 @@ export function TemperatureRegistrationPage({
                     </select>
                   </label>
                   <TemperatureValueInput
-                    label="Display"
-                    value={item.displayTemperatuur}
-                    onChange={(value) =>
-                      updateRegistration(item.id, "displayTemperatuur", value)
-                    }
-                    disabled={isInactive}
-                  />
-                  <TemperatureValueInput
                     label="Handmeting"
                     value={item.handTemperatuur}
                     onChange={(value) =>
@@ -1296,23 +1258,19 @@ export function TemperatureRegistrationPage({
                     }
                     disabled={isInactive}
                   />
-                  <div className="grid min-w-0 content-end gap-1">
-                    <p className="text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem]">
-                      Status
-                    </p>
-                    <span
-                      className={`rounded-full border px-2 py-2 text-center text-xs font-black md:px-1.5 md:py-1 md:text-xs ${statusPillClass(
-                        evaluation.status
-                      )}`}
-                    >
-                      {evaluation.shortLabel}
-                    </span>
                   </div>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full border px-3 py-1.5 text-[0.62rem] font-black ${statusPillClass(
+                      evaluation.status
+                    )}`}>
+                      {evaluation.label}
+                    </span>
                   {isDefaultRow ? (
                     <button
                       type="button"
                       onClick={() => toggleRegistrationInactive(item.id)}
-                      className={`col-span-full justify-self-start rounded-full px-3 py-2 text-xs font-black shadow-sm md:col-auto md:self-end md:px-2 md:py-1 md:text-xs ${
+                      className={`rounded-full px-3 py-1.5 text-[0.62rem] font-black shadow-sm ${
                         isInactive
                           ? "bg-[#dbe9ee] text-[#214456]"
                           : "bg-white text-[#8a6a3d]"
@@ -1324,13 +1282,17 @@ export function TemperatureRegistrationPage({
                     <button
                       type="button"
                       onClick={() => removeRegistrationRow(item.id)}
-                      className="col-span-full justify-self-start rounded-full bg-white px-3 py-2 text-xs font-black text-[#c94f43] shadow-sm md:col-auto md:self-end md:px-2 md:py-1 md:text-xs"
+                      className="rounded-full bg-white px-3 py-1.5 text-[0.62rem] font-black text-[#c94f43] shadow-sm"
                     >
                       Verwijder
                     </button>
                   )}
-                  {isActionRequiredStatus(evaluation.status) && (
-                    <label className="col-span-full grid gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem] xl:col-span-3">
+                  </div>
+
+                  {detailsOpen && (
+                    <div className="mt-2 grid gap-2 border-t border-[#eee6dd] pt-2 md:grid-cols-2">
+                    {isActionRequiredStatus(evaluation.status) && (
+                    <label className="grid gap-1 text-[0.52rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
                       Actie bij afwijking
                       <textarea
                         value={item.actionTaken || ""}
@@ -1342,17 +1304,13 @@ export function TemperatureRegistrationPage({
                           )
                         }
                         placeholder={evaluation.actionHint}
-                        className="min-h-12 rounded-lg border border-[#e7e0d8] bg-white p-2 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:text-sm"
+                        className="min-h-12 rounded-lg border border-[#e8e4de] bg-white p-2 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] outline-none focus:ring-2 focus:ring-[#6d9caf]"
                       />
                     </label>
                   )}
-                  <label
-                    className={`col-span-full grid gap-1 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:text-[0.58rem] ${
-                      isActionRequiredStatus(evaluation.status)
-                        ? "xl:col-span-3"
-                        : "xl:col-span-6"
-                    }`}
-                  >
+                  <label className={`grid gap-1 text-[0.52rem] font-black uppercase tracking-[0.1em] text-[#8b8278] ${
+                    isActionRequiredStatus(evaluation.status) ? "" : "md:col-span-2"
+                  }`}>
                     Notitie
                     <input
                       value={item.note || ""}
@@ -1360,23 +1318,25 @@ export function TemperatureRegistrationPage({
                         updateRegistration(item.id, "note", event.target.value)
                       }
                       placeholder="Bijvoorbeeld deur open geweest of net bijgevuld"
-                      className="rounded-lg border border-[#e7e0d8] bg-white p-2 text-xs font-semibold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf] sm:text-sm"
+                      className="h-10 rounded-lg border border-[#e8e4de] bg-white px-3 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] outline-none focus:ring-2 focus:ring-[#6d9caf]"
                     />
                   </label>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
 
-          <label className="mt-3 grid gap-1.5 text-xs font-black text-[#2d2a26]/65">
-            Opmerking
+          <label className="mt-3 grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
+            Algemene opmerking
             <textarea
               value={form.opmerking}
               onChange={(event) =>
                 updateForm({ ...form, opmerking: event.target.value })
               }
               placeholder="Afwijkingen, acties of bijzonderheden"
-              className="min-h-16 rounded-xl border border-[#e7e0d8] bg-white p-2.5 text-sm font-semibold text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#6d9caf]"
+              className="min-h-16 rounded-xl border border-[#e8e4de] bg-white p-2.5 text-sm font-semibold normal-case tracking-normal text-[#2d2a26] outline-none focus:ring-2 focus:ring-[#6d9caf]"
             />
           </label>
 
@@ -1390,7 +1350,7 @@ export function TemperatureRegistrationPage({
             type="button"
             onClick={() => void submitPayload(createPayload())}
             disabled={opslaanBezig}
-            className="sticky bottom-40 mt-3 w-full rounded-full bg-[#d95749] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#c8493d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 lg:static"
+            className="sticky bottom-40 mt-3 w-full rounded-full bg-[#d95749] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#c8493d] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 md:w-auto lg:static"
           >
             {opslaanBezig ? "Opslaan..." : "Opslaan"}
           </button>

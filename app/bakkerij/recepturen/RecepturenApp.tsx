@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { strikIcons } from "../../StrikUI";
+import { StrikPageHeading } from "../../StrikPageTitle";
 import { canAccessWeddingCakes } from "../../lib/auth/access";
 import type { UserProfile } from "../../lib/supabase/types";
 import FactuurImport from "./FactuurImport";
@@ -2214,7 +2215,7 @@ export default function RecepturenApp({
   }
 
   return (
-    <main className="h-[calc(100dvh-8.5rem)] overflow-hidden bg-[#faf8f5] text-[#111111] md:h-screen md:h-[100dvh]">
+    <main className="h-[calc(100dvh-8.5rem)] overflow-hidden bg-[#c3d3bc] text-[#111111] md:h-screen md:h-[100dvh]">
       <div className="flex h-[calc(100dvh-8.5rem)] min-w-0 flex-col overflow-hidden md:h-screen md:h-[100dvh]">
         {!hideTopNav && (
           <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
@@ -2337,14 +2338,21 @@ function BakkerijTopNav({
 }>) {
   if (active === "start") {
     return (
-      <header className="flex h-[clamp(4.8rem,7vw,6.2rem)] shrink-0 items-center justify-center border-b border-[#e8e4de] bg-[#faf8f5] px-4">
+      <header className="flex h-[clamp(4.8rem,7vw,6.2rem)] shrink-0 items-center px-4">
         <button
           type="button"
           onClick={() => onSelect("start")}
-          className="flex min-w-0 items-center justify-center gap-4"
+          className="flex min-w-0 items-center gap-2"
         >
-          <span className="bakkerij-page-heading-icon shrink-0" aria-hidden="true" />
-          <h1 className="bakkerij-page-heading min-w-0 text-[#ef5737]">
+          <span
+            aria-hidden="true"
+            className="h-8 w-8 shrink-0 bg-white"
+            style={{
+              WebkitMask: `url("${strikIcons.bakkerij}") center / contain no-repeat`,
+              mask: `url("${strikIcons.bakkerij}") center / contain no-repeat`,
+            }}
+          />
+          <h1 className="strik-page-title min-w-0">
             Bakkerij overzicht
           </h1>
         </button>
@@ -2359,7 +2367,7 @@ function BakkerijTopNav({
   ];
 
   return (
-    <header className="flex h-[clamp(4.6rem,6vw,5.8rem)] shrink-0 items-center border-b border-[#e8e4de] bg-[#faf8f5] px-4">
+    <header className="flex h-[clamp(4.6rem,6vw,5.8rem)] shrink-0 items-center border-b border-white/25 px-4">
       <div className="flex min-w-0 gap-2 rounded-full border border-[#d6e5d8] bg-white/85 p-1 shadow-sm">
       {tabs.map((tab) => (
         <button
@@ -2410,15 +2418,11 @@ function BakkerijStartScreen({
     <section className="mx-auto h-full w-full max-w-[76rem] overflow-y-auto px-3 py-3 sm:px-6 sm:py-5">
       <div className="grid gap-4 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(0,1.55fr)] lg:gap-7">
         {showProductionLinks && (
-          <header className="flex min-w-0 items-center gap-3 pb-1 sm:gap-4 lg:col-span-2">
-            <span
-              className="productie-page-heading-icon shrink-0"
-              aria-hidden="true"
-            />
-            <h1 className="winkel-page-heading min-w-0 text-[#ef5737]">
-              Productie overzicht
-            </h1>
-          </header>
+          <StrikPageHeading
+            title="Productie overzicht"
+            icon={strikIcons.overview}
+            className="pb-1 lg:col-span-2"
+          />
         )}
 
         <section className="min-w-0 rounded-[1.25rem] border border-[#ded8cf] bg-white p-3 shadow-sm sm:p-4">
@@ -3186,19 +3190,7 @@ function BeheerHome({
 
   return (
     <section className="grid gap-2.5 sm:gap-3">
-      <header className="mb-1 flex min-w-0 items-center gap-3 pb-1 sm:gap-4">
-        <span
-          aria-hidden="true"
-          className="block h-[clamp(0.9rem,3.2vw,1.5rem)] w-[clamp(0.9rem,3.2vw,1.5rem)] shrink-0 bg-[#ef5737]"
-          style={{
-            WebkitMask: `url("${strikIcons.data}") center / contain no-repeat`,
-            mask: `url("${strikIcons.data}") center / contain no-repeat`,
-          }}
-        />
-        <h1 className="min-w-0 text-[clamp(2rem,6vw,3.4rem)] font-black uppercase leading-none tracking-[0.16em] text-[#ef5737]">
-          Data
-        </h1>
-      </header>
+      <StrikPageHeading title="Data" icon={strikIcons.data} className="mb-1 pb-1" />
 
       <div className="grid gap-2.5">
         <button

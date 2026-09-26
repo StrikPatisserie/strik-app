@@ -1,9 +1,9 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import StrikBackButton from "../../StrikBackButton";
+import { StrikPageHeading } from "../../StrikPageTitle";
 import { strikIcons } from "../../StrikUI";
 import { cakeSizes } from "../../bruidstaart-studio/data";
 import {
@@ -401,10 +401,7 @@ export default function BruidstaartenOverzichtClient() {
       <span aria-hidden="true" className="pointer-events-none absolute -right-[22rem] top-12 h-[34rem] w-[46rem] rotate-[-9deg] bg-[#dce6d8] opacity-[0.55] sm:-right-[28rem] sm:-top-40 sm:h-[68rem] sm:w-[90rem]" style={{ WebkitMask: 'url("/strik%20logo%20icon.svg") center / contain no-repeat', mask: 'url("/strik%20logo%20icon.svg") center / contain no-repeat' }} />
       <div className="relative mx-auto w-full max-w-[72rem]">
         <StrikBackButton />
-        <header className="mt-3 flex items-center gap-2">
-          <img src={strikIcons.bruidstaart} alt="" className="h-7 w-7 object-contain brightness-0 invert" />
-          <h1 className="text-[0.9rem] font-medium uppercase tracking-[0.3em] text-white">Bruidstaarten overzicht</h1>
-        </header>
+        <StrikPageHeading title="Bruidstaarten overzicht" icon={strikIcons.bruidstaart} className="mt-3" />
 
         {status ? <p className="mt-3 rounded-xl border border-white/70 bg-white/60 px-4 py-2 text-xs font-bold">{status}</p> : null}
 

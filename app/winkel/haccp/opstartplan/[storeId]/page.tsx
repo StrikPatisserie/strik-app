@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { StrikShell, strikIcons } from "../../../../StrikUI";
+import { StrikPageHeading } from "../../../../StrikPageTitle";
 import { canAccessWinkelStore } from "../../../../lib/auth/access";
 import { requireCurrentProfile } from "../../../../lib/auth/session";
 import WinkelWorkPlanChecklist from "../../WinkelWorkPlanChecklist";
@@ -16,19 +17,7 @@ export default async function OpstartplanStorePage({
 
   return (
     <StrikShell wide tone="mint">
-      <header className="relative mt-3 flex items-center gap-2">
-        <span
-          aria-hidden="true"
-          className="h-8 w-8 shrink-0 bg-white"
-          style={{
-            WebkitMask: `url("${strikIcons.opstartplan}") center / contain no-repeat`,
-            mask: `url("${strikIcons.opstartplan}") center / contain no-repeat`,
-          }}
-        />
-        <h1 className="text-[0.9rem] font-medium uppercase leading-none tracking-[0.3em] text-white">
-          Opstartplan patisserie
-        </h1>
-      </header>
+      <StrikPageHeading title="Opstartplan patisserie" icon={strikIcons.opstartplan} className="mt-3" />
       <div className="mt-4">
         <WinkelWorkPlanChecklist definitions={definitions} defaultStoreId={storeId} emptyPlanLabel="opstartplan" storeOptions={[]} />
       </div>

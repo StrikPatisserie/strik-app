@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import StrikBackButton from "./StrikBackButton";
-import StrikPageTitle from "./StrikPageTitle";
+import { StrikPageHeading } from "./StrikPageTitle";
 
 export const strikIcons = {
   agenda: "/icons_strik_agenda.svg",
@@ -247,7 +247,7 @@ export function StrikShell({
   children,
   wide = false,
   extraWide = false,
-  tone = "default",
+  tone = "mint",
   backHref,
 }: Readonly<{
   children: React.ReactNode;
@@ -283,9 +283,7 @@ export function StrikShell({
 
 export function StrikPageHeader({
   title,
-  description,
   icon,
-  kicker,
 }: Readonly<{
   title: string;
   description?: string;
@@ -294,28 +292,11 @@ export function StrikPageHeader({
   tone?: Tone;
 }>) {
   return (
-    <header className="mb-4 flex min-w-0 flex-col gap-1.5 pb-1 sm:mb-5">
-      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-        {icon && (
-          <span
-            aria-hidden="true"
-            className="block h-[clamp(1rem,4.4vw,1.8rem)] w-[clamp(1rem,4.4vw,1.8rem)] shrink-0 bg-[#ef5737]"
-            style={{
-              WebkitMask: `url("${icon}") center / contain no-repeat`,
-              mask: `url("${icon}") center / contain no-repeat`,
-            }}
-          />
-        )}
-        <div className="min-w-0">
-          <StrikPageTitle title={title} />
-        </div>
-      </div>
-      {(kicker || description) && (
-        <p className="max-w-2xl pl-[calc(clamp(1rem,4.4vw,1.8rem)+0.75rem)] text-xs font-normal leading-snug tracking-normal text-[#6b645b] sm:pl-[calc(clamp(1rem,4.4vw,1.8rem)+1rem)] sm:text-sm">
-          {[kicker?.toLowerCase(), description].filter(Boolean).join(" · ")}
-        </p>
-      )}
-    </header>
+    <StrikPageHeading
+      title={title}
+      icon={icon}
+      className="mb-4 mt-3 pb-1 sm:mb-5"
+    />
   );
 }
 

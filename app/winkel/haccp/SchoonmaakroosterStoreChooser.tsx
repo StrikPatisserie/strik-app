@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { StrikShell, strikIcons } from "../../StrikUI";
+import { StrikPageHeading } from "../../StrikPageTitle";
 import {
   getWinkelWorkPlansForPlan,
   WINKEL_WORK_PLAN_STORE_LABELS,
@@ -51,27 +52,7 @@ export default function SchoonmaakroosterStoreChooser({
       backHref={previewMode ? "/menu-preview?menu=haccp" : undefined}
     >
       {toolbar}
-      <header className="relative mt-3 flex items-center gap-2">
-        <span
-          aria-hidden="true"
-          className="flex h-8 w-8 shrink-0 items-center justify-center bg-white"
-          style={{
-            WebkitMask: `url("${strikIcons.cleaning}") center / contain no-repeat`,
-            mask: `url("${strikIcons.cleaning}") center / contain no-repeat`,
-          }}
-        />
-        <h1
-          className="uppercase text-white"
-          style={{
-            fontSize: "clamp(0.84rem, 1.25vw, 0.98rem)",
-            fontWeight: 500,
-            letterSpacing: "0.3em",
-            lineHeight: 1,
-          }}
-        >
-          {title}
-        </h1>
-      </header>
+      <StrikPageHeading title={title} icon={strikIcons.cleaning} className="mt-3" />
 
       <section className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         {visibleStoreIds.map((storeId) => {

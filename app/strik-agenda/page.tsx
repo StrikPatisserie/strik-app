@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { StrikShell, strikIcons } from "../StrikUI";
+import { StrikPageHeading } from "../StrikPageTitle";
 import {
   TeamAgendaEvent,
   TeamAgendaEventType,
@@ -310,19 +311,11 @@ export default function StrikAgendaPage() {
 
   return (
     <StrikShell>
-      <header className="mb-3 flex items-center gap-2 sm:mb-4">
-        <span
-          aria-hidden="true"
-          className="block h-[clamp(1rem,4.4vw,1.8rem)] w-[clamp(1rem,4.4vw,1.8rem)] shrink-0 bg-[#ef5737]"
-          style={{
-            WebkitMask: `url("${strikIcons.agenda}") center / contain no-repeat`,
-            mask: `url("${strikIcons.agenda}") center / contain no-repeat`,
-          }}
-        />
-        <h1 className="strik-page-title text-[#ef5737]">
-          Agenda
-        </h1>
-      </header>
+      <StrikPageHeading
+        title="Agenda"
+        icon={strikIcons.agenda}
+        className="mb-3 mt-3 sm:mb-4"
+      />
 
       <div className="space-y-2.5 sm:space-y-4">
         <section className="rounded-lg border border-[#e7e0d8] bg-white/85 p-1.5 shadow-sm sm:p-2">

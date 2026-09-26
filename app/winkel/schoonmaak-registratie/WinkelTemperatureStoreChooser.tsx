@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { StrikShell, strikIcons } from "../../StrikUI";
+import { StrikPageHeading } from "../../StrikPageTitle";
 import { WINKEL_WORK_PLAN_STORE_LABELS, type WinkelWorkPlanStoreId } from "../haccp/workPlans";
 
 type Props = {
@@ -13,10 +14,7 @@ export default function WinkelTemperatureStoreChooser({ allowedStoreIds, preview
   return (
     <StrikShell wide tone="mint" backHref={previewMode ? "/menu-preview?menu=haccp" : undefined}>
       {toolbar}
-      <header className="relative mt-3 flex items-center gap-2">
-        <span aria-hidden="true" className="h-8 w-8 bg-white" style={{ WebkitMask: `url("${strikIcons.cleaning}") center / contain no-repeat`, mask: `url("${strikIcons.cleaning}") center / contain no-repeat` }} />
-        <h1 className="uppercase text-white" style={{ fontSize: "clamp(.84rem,1.25vw,.98rem)", fontWeight: 500, letterSpacing: ".3em", lineHeight: 1 }}>Temperatuurregistratie</h1>
-      </header>
+      <StrikPageHeading title="Temperatuurregistratie" icon={strikIcons.cleaning} className="mt-3" />
       <section className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         {stores.filter((store) => allowedStoreIds.includes(store)).map((store) => {
           const label = WINKEL_WORK_PLAN_STORE_LABELS[store];

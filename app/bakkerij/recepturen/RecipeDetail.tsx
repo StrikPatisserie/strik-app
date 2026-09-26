@@ -1310,7 +1310,7 @@ export default function RecipeDetail({
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <span
-              className="h-7 w-7 shrink-0 bg-white"
+              className="h-8 w-8 shrink-0 bg-white"
               style={{
                 WebkitMask:
                   'url("/apps%20strik_recepten.svg") center / contain no-repeat',
@@ -1318,7 +1318,7 @@ export default function RecipeDetail({
               }}
               aria-hidden="true"
             />
-            <h2 className="truncate text-[0.88rem] font-medium uppercase tracking-[0.3em] text-white sm:text-base">
+            <h2 className="strik-page-title truncate">
               {draft.type === "semiFinished" ? "Halffabricaat" : "Recept"}
               {draft.name ? ` · ${draft.name}` : ""}
             </h2>

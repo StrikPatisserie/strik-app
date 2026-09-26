@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import StrikBackButton from "./StrikBackButton";
+import { StrikPageHeading } from "./StrikPageTitle";
 
 export type DepartmentHubItem = {
   href: string;
@@ -66,26 +67,7 @@ export default function DepartmentHub({
         {showBackButton && <StrikBackButton />}
         {toolbar}
 
-        <header className="relative mt-3 flex items-center gap-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center">
-            <img
-              src={icon}
-              alt=""
-              className="h-[1.65rem] w-[1.65rem] object-contain brightness-0 invert"
-            />
-          </span>
-          <h1
-            className="uppercase text-white"
-            style={{
-              fontSize: "clamp(0.84rem, 1.25vw, 0.98rem)",
-              fontWeight: 500,
-              letterSpacing: "0.3em",
-              lineHeight: 1,
-            }}
-          >
-            {title}
-          </h1>
-        </header>
+        <StrikPageHeading title={title} icon={icon} className="mt-3" />
 
         <section className="mt-4 grid gap-2.5 sm:grid-cols-2">
           {items.map((item) => {
