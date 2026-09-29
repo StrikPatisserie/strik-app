@@ -77,6 +77,14 @@ function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | null {
     ];
   });
 
+  const totalCents = numberFrom(value.totalCents);
+  const storedPaidAmountCents = numberFrom(value.paidAmountCents);
+  const paidAmountCents = storedPaidAmountCents > 0
+    ? storedPaidAmountCents
+    : boolFrom(value.paid)
+      ? totalCents
+      : 0;
+
   return {
     id,
     year: textFrom(value.year) || currentYear(),
@@ -102,9 +110,10 @@ function normalizeLetterOrder(value: unknown): ChocolateLetterOrder | null {
     lines,
     sendCustomerEmail: boolFrom(value.sendCustomerEmail),
     giftWrap: boolFrom(value.giftWrap),
-    paid: boolFrom(value.paid),
+    paid: totalCents > 0 && paidAmountCents >= totalCents,
+    paidAmountCents,
     paidAt: textFrom(value.paidAt),
-    totalCents: numberFrom(value.totalCents),
+    totalCents,
     productionDone: boolFrom(value.productionDone),
     productionDoneAt: textFrom(value.productionDoneAt),
     productionDoneBy: textFrom(value.productionDoneBy),

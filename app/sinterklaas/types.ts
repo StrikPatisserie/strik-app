@@ -35,6 +35,7 @@ export type ChocolateLetterOrder = {
   sendCustomerEmail: boolean;
   giftWrap: boolean;
   paid: boolean;
+  paidAmountCents: number;
   paidAt: string;
   totalCents: number;
   productionDone: boolean;

@@ -130,7 +130,7 @@ export async function proxySinterklaasMutation(
     const data = await readWordPressResponse(response);
 
     if (!response.ok) {
-      if (endpoint === "sinterklaas-b2b-orders" && data && typeof data === "object" && "message" in data && typeof data.message === "string") {
+      if (data && typeof data === "object" && "message" in data && typeof data.message === "string") {
         return NextResponse.json({ message: data.message }, { status: response.status });
       }
       return createWordPressErrorResponse(endpoint, response.status);

@@ -135,6 +135,14 @@ function strik_sinterklaas_save_orders($option_name, $orders) {
 }
 }
 
+if (!function_exists('strik_sinterklaas_letter_paid_amount')) {
+function strik_sinterklaas_letter_paid_amount($order) {
+    if (!is_array($order)) return 0;
+    if (isset($order['paidAmountCents'])) return absint($order['paidAmountCents']);
+    return !empty($order['paid']) && isset($order['totalCents']) ? absint($order['totalCents']) : 0;
+}
+}
+
 if (!function_exists('strik_sinterklaas_request_id')) {
 function strik_sinterklaas_request_id($request) {
     $id = strik_sinterklaas_text($request->get_param('id'), 120);
@@ -249,6 +257,33 @@ function strik_sinterklaas_ensure_letter_order_numbers($orders) {
 }
 }
 
+if (!function_exists('strik_sinterklaas_ensure_letter_payment_amounts')) {
+function strik_sinterklaas_ensure_letter_payment_amounts($orders) {
+    $changed = false;
+
+    foreach ($orders as $key => $order) {
+        if (!is_array($order)) continue;
+
+        $total_cents = isset($order['totalCents']) ? absint($order['totalCents']) : 0;
+        $paid_amount_cents = strik_sinterklaas_letter_paid_amount($order);
+        $fully_paid = $total_cents > 0 && $paid_amount_cents >= $total_cents;
+
+        if (!isset($order['paidAmountCents']) || absint($order['paidAmountCents']) !== $paid_amount_cents || !isset($order['paid']) || !empty($order['paid']) !== $fully_paid) {
+            $order['paidAmountCents'] = $paid_amount_cents;
+            $order['paid'] = $fully_paid;
+            $orders[$key] = $order;
+            $changed = true;
+        }
+    }
+
+    if ($changed) {
+        strik_sinterklaas_save_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME, $orders);
+    }
+
+    return $orders;
+}
+}
+
 if (!function_exists('strik_sinterklaas_sanitize_letter_lines')) {
 function strik_sinterklaas_sanitize_letter_lines($lines) {
     if (!is_array($lines)) return array();
@@ -301,6 +336,20 @@ function strik_sinterklaas_sanitize_letter_order($order, $existing = array()) {
 
     $source = isset($order['source']) ? strik_sinterklaas_text($order['source'], 40) : 'winkel';
     $source = $source === 'online' ? 'online' : 'winkel';
+    $total_cents = isset($order['totalCents']) ? absint($order['totalCents']) : 0;
+    $existing_paid_amount_cents = strik_sinterklaas_letter_paid_amount($existing);
+    if (array_key_exists('paidAmountCents', $order)) {
+        $submitted_paid_amount_cents = min(absint($order['paidAmountCents']), $total_cents);
+    } elseif ($existing_paid_amount_cents === 0 && !empty($order['paid'])) {
+        $submitted_paid_amount_cents = $total_cents;
+    } else {
+        $submitted_paid_amount_cents = $existing_paid_amount_cents;
+    }
+    $paid_amount_cents = max($existing_paid_amount_cents, $submitted_paid_amount_cents);
+    $fully_paid = $total_cents > 0 && $paid_amount_cents >= $total_cents;
+    $paid_at = $paid_amount_cents > 0
+        ? (isset($order['paidAt']) && $order['paidAt'] !== '' ? strik_sinterklaas_text($order['paidAt'], 80) : $now)
+        : '';
 
     return array(
         'id' => $id,
@@ -321,9 +370,10 @@ function strik_sinterklaas_sanitize_letter_order($order, $existing = array()) {
         'lines' => $lines,
         'sendCustomerEmail' => !empty($order['sendCustomerEmail']),
         'giftWrap' => !empty($order['giftWrap']),
-        'paid' => !empty($order['paid']),
-        'paidAt' => isset($order['paidAt']) ? strik_sinterklaas_text($order['paidAt'], 80) : '',
-        'totalCents' => isset($order['totalCents']) ? absint($order['totalCents']) : 0,
+        'paid' => $fully_paid,
+        'paidAmountCents' => $paid_amount_cents,
+        'paidAt' => $paid_at,
+        'totalCents' => $total_cents,
         'productionDone' => !empty($order['productionDone']),
         'productionDoneAt' => isset($order['productionDoneAt']) ? strik_sinterklaas_text($order['productionDoneAt'], 80) : '',
         'productionDoneBy' => isset($order['productionDoneBy']) ? strik_sinterklaas_text($order['productionDoneBy'], 120) : '',
@@ -391,8 +441,13 @@ function strik_sinterklaas_create_letter_mail_body($order, $for_customer = false
     }
 
     if (!empty($order['giftWrap'])) $lines[] = 'Alles in cadeaupapier';
-    if (!empty($order['totalCents'])) $lines[] = 'Prijs: € ' . number_format($order['totalCents'] / 100, 2, ',', '.');
-    if (!empty($order['paid'])) $lines[] = 'Al afgerekend in Bake-it';
+    if (!empty($order['totalCents'])) {
+        $lines[] = 'Prijs: € ' . number_format($order['totalCents'] / 100, 2, ',', '.');
+        $paid_amount_cents = strik_sinterklaas_letter_paid_amount($order);
+        $open_amount_cents = max(0, absint($order['totalCents']) - $paid_amount_cents);
+        if ($paid_amount_cents > 0) $lines[] = 'Betaald: € ' . number_format($paid_amount_cents / 100, 2, ',', '.');
+        if ($open_amount_cents > 0) $lines[] = 'Nog open: € ' . number_format($open_amount_cents / 100, 2, ',', '.');
+    }
 
     if ($for_customer) {
         $lines[] = '';
@@ -439,7 +494,15 @@ function strik_sinterklaas_letter_customer_mail_html($order, $reminder = false, 
     $wrap = !empty($order['giftWrap']) ? '<p style="margin:12px 0 0;font-size:14px;color:#536b57;">🎁 Alles feestelijk ingepakt in cadeaupapier.</p>' : '';
     $allergen_note = $has_special_request ? '<p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#755b4f;">Let op: chocoladeletters kunnen altijd sporen van allergenen bevatten. Bij een ernstige allergie raden we consumptie af.</p>' : '';
     $price = !empty($order['totalCents']) ? '<p style="margin:12px 0 0;font-size:16px;color:#263b2b;"><strong>Totaal: € ' . esc_html(number_format($order['totalCents'] / 100, 2, ',', '.')) . '</strong></p>' : '';
-    $payment = !empty($order['paid']) ? 'Deze bestelling is al afgerekend.' : 'U betaalt bij het afhalen in de winkel.';
+    $paid_amount_cents = strik_sinterklaas_letter_paid_amount($order);
+    $open_amount_cents = max(0, (isset($order['totalCents']) ? absint($order['totalCents']) : 0) - $paid_amount_cents);
+    if ($paid_amount_cents > 0 && $open_amount_cents > 0) {
+        $payment = 'Er is al € ' . number_format($paid_amount_cents / 100, 2, ',', '.') . ' betaald. Nog open bij afhalen: € ' . number_format($open_amount_cents / 100, 2, ',', '.') . '.';
+    } elseif ($paid_amount_cents > 0) {
+        $payment = 'Deze bestelling is volledig afgerekend.';
+    } else {
+        $payment = 'U betaalt bij het afhalen in de winkel.';
+    }
     $heading = $reminder ? 'Ophaalherinnering' : ($updated ? 'Gewijzigde bestelling' : 'Bestelbevestiging');
 
     return '<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:24px 12px;background:#edf4ec;font-family:Arial,Helvetica,sans-serif;color:#263b2b;">'
@@ -711,6 +774,7 @@ if (!function_exists('strik_sinterklaas_letter_get')) {
 function strik_sinterklaas_letter_get($request) {
     $orders = strik_sinterklaas_get_orders(STRIK_SINTERKLAAS_LETTERS_OPTION_NAME);
     $orders = strik_sinterklaas_ensure_letter_order_numbers($orders);
+    $orders = strik_sinterklaas_ensure_letter_payment_amounts($orders);
     $filtered = strik_sinterklaas_filter_orders($orders, $request, 'pickupDate');
 
     return rest_ensure_response(array(
@@ -753,6 +817,17 @@ function strik_sinterklaas_letter_save($request, $send_emails = true) {
     $existing = $id !== '' && isset($orders[strik_sinterklaas_order_key($id)])
         ? $orders[strik_sinterklaas_order_key($id)]
         : array();
+    $existing_paid_amount_cents = strik_sinterklaas_letter_paid_amount($existing);
+    $requested_total_cents = isset($params['totalCents'])
+        ? absint($params['totalCents'])
+        : (isset($existing['totalCents']) ? absint($existing['totalCents']) : 0);
+    if (!empty($existing) && $requested_total_cents < $existing_paid_amount_cents) {
+        return new WP_Error(
+            'strik_sinterklaas_paid_total_cannot_decrease',
+            'Deze bestelling is al betaald. Het totaalbedrag kan niet lager worden; bijbestellen kan wel en alleen het verschil blijft dan open.',
+            array('status' => 409)
+        );
+    }
     $order = strik_sinterklaas_sanitize_letter_order(array_merge(is_array($existing) ? $existing : array(), $params), is_array($existing) ? $existing : array());
 
     if ($order === null) {

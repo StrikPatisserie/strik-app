@@ -19,6 +19,7 @@ import type {
 } from "../types";
 import { b2bLetterTotal } from "../b2bLetterLines";
 import B2BLetterLineBadges from "../B2BLetterLineBadges";
+import { isFullyPaid, openAmountCents, paidAmountCents } from "../letterPayments";
 import StoreLetterShopForm from "./StoreLetterShopForm";
 
 type Mode = "winkel" | "productie" | "b2b";
@@ -165,6 +166,10 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatMoney(cents: number) {
+  return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
 function totalPieces(order: ChocolateLetterOrder) {
@@ -470,6 +475,8 @@ function OrderRow({
   const isDone = order.productionDone || order.status === "klaar";
   const isOnline = order.source === "online";
   const isPickedUp = order.pickedUp || order.status === "opgehaald";
+  const paidAmount = paidAmountCents(order);
+  const openAmount = openAmountCents(order);
   const doneAtLabel = order.productionDoneAt
     ? formatDateTime(order.productionDoneAt)
     : "";
@@ -540,9 +547,9 @@ function OrderRow({
           <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
             {order.lines.map(lineLabel).join(" · ")}
           </p>
-          {order.source === "winkel" && (order.giftWrap || order.totalCents > 0 || order.paid) && (
+          {order.source === "winkel" && (order.giftWrap || order.totalCents > 0 || paidAmount > 0) && (
             <p className="mt-1 text-xs font-bold text-[#547762]">
-              {[order.giftWrap && "Cadeaupapier", order.totalCents > 0 && `Prijs € ${(order.totalCents / 100).toFixed(2).replace(".", ",")}`, order.paid ? "Al betaald" : "Betalen bij afhalen"].filter(Boolean).join(" · ")}
+              {[order.giftWrap && "Cadeaupapier", order.totalCents > 0 && `Totaal ${formatMoney(order.totalCents)}`, paidAmount > 0 && `Betaald ${formatMoney(paidAmount)}`, openAmount > 0 ? `Open ${formatMoney(openAmount)}` : paidAmount > 0 ? "Volledig betaald" : "Betalen bij afhalen"].filter(Boolean).join(" · ")}
             </p>
           )}
           {order.lines.some((line) => line.notes.trim()) && (
@@ -606,7 +613,7 @@ function OrderRow({
                 : "bg-[#24551d] text-white"
             }`}
           >
-            {updatingId === order.id ? "..." : isPickedUp ? "Ophalen terugdraaien" : order.paid ? "Meegegeven" : "Afgerekend & opgehaald"}
+            {updatingId === order.id ? "..." : isPickedUp ? "Ophalen terugdraaien" : openAmount === 0 ? "Meegegeven" : "Open bedrag afrekenen & meegeven"}
           </button>}
           <button
             type="button"
@@ -1255,11 +1262,12 @@ export default function SinterklaasLettersClient({
 
   async function togglePickedUp(order: ChocolateLetterOrder) {
     const pickedUp = order.pickedUp || order.status === "opgehaald";
+    const openAmount = openAmountCents(order);
     const confirmed = window.confirm(pickedUp
       ? `Ophalen van ${order.customerName} terugdraaien? De betaling in Bake-it wordt hierdoor niet aangepast.`
-      : order.paid
+      : isFullyPaid(order)
         ? `Is bestelling ${order.code} van ${order.customerName} aan de klant meegegeven? De betaling staat al als gedaan gemarkeerd.`
-        : `Is bestelling ${order.code} van ${order.customerName} in Bake-it afgerekend én aan de klant meegegeven?`);
+        : `Staat het openstaande bedrag van ${formatMoney(openAmount)} in Bake-it als afgerekend en is bestelling ${order.code} meegegeven?`);
     if (!confirmed) return;
 
     setUpdatingId(order.id);
@@ -1269,6 +1277,7 @@ export default function SinterklaasLettersClient({
         pickedUp: !pickedUp,
         pickedUpAt: pickedUp ? "" : new Date().toISOString(),
         paid: pickedUp ? order.paid : true,
+        paidAmountCents: pickedUp ? paidAmountCents(order) : order.totalCents,
         paidAt: pickedUp ? order.paidAt : (order.paidAt || new Date().toISOString()),
         status: pickedUp ? (order.productionDone ? "klaar" : "besteld") : "opgehaald",
       });
@@ -1590,6 +1599,11 @@ export default function SinterklaasLettersClient({
             <p className={`${isStoreMode ? "mt-0.5 text-[0.65rem] tracking-[0.16em]" : "text-xs tracking-[0.12em]"} font-black uppercase text-[#8b8278]`}>
               Gesorteerd op ophaaldatum
             </p>
+            {isStoreMode && (
+              <p className="mt-1 max-w-2xl text-xs font-semibold leading-relaxed text-[#6b645b]">
+                E-mailadres ingevuld? Dan ontvangt de klant automatisch een bestelbevestiging en de dag vóór afhalen een herinnering.
+              </p>
+            )}
           </div>
           <span className="w-fit rounded-full border border-white/80 bg-[#f2eee8]/90 px-3 py-1 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#6b645b]">
             {visibleOrders.length} zichtbaar

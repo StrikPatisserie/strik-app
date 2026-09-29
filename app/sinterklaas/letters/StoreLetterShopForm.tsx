@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { formatPickupDate } from "@/app/lettershop/formatPickupDate";
 import { lettershopShopLabel } from "@/app/lettershop/shops";
+import { paidAmountCents as getPaidAmountCents } from "../letterPayments";
 import { saveLetterOrder, updateLetterOrder } from "../sinterklaasApi";
 import type { ChocolateLetterChocolate, ChocolateLetterLine, ChocolateLetterOrder, ChocolateLetterSize, ChocolateLetterStyle } from "../types";
 
@@ -98,6 +99,11 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
 
   const count = lines.reduce((sum, item) => sum + item.quantity, 0);
   const totalCents = lines.reduce((sum, item) => sum + item.quantity * (PRICE_CENTS[item.size] + (item.logo ? 50 : 0)), giftWrap ? count * 100 : 0);
+  const recordedPaidAmountCents = initialOrder ? getPaidAmountCents(initialOrder) : 0;
+  const paidAmount = initialOrder ? recordedPaidAmountCents : paid ? totalCents : 0;
+  const openAmount = Math.max(0, totalCents - paidAmount);
+  const totalBelowPaidAmount = recordedPaidAmountCents > 0 && totalCents < recordedPaidAmountCents;
+  const fullyPaid = totalCents > 0 && paidAmount >= totalCents;
   const linesChanged = Boolean(initialOrder && JSON.stringify(initialOrder.lines) !== JSON.stringify(lines));
   const customerLinesChanged = Boolean(initialOrder && JSON.stringify(initialOrder.lines.map(customerLineSignature)) !== JSON.stringify(lines.map(customerLineSignature)));
   const reopenProduction = Boolean((initialOrder?.productionDone || initialOrder?.status === "klaar") && !initialOrder?.pickedUp && linesChanged);
@@ -149,6 +155,9 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
       return "Deze afhaaldatum is niet beschikbaar. Kies een datum uit de lijst.";
     }
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return "Controleer het e-mailadres.";
+    if (totalBelowPaidAmount) {
+      return `Deze bestelling is al voor ${money(recordedPaidAmountCents)} betaald. Je kunt het totaal daarom niet verlagen. Bijbestellen kan wel; alleen het verschil blijft dan open.`;
+    }
     return "";
   }
 
@@ -182,8 +191,9 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
         ...(reopenProduction ? { productionDone: false, productionDoneAt: "", productionDoneBy: "" } : {}),
         sendCustomerEmail,
         giftWrap,
-        paid,
-        paidAt: paid ? (initialOrder?.paidAt || new Date().toISOString()) : "",
+        paid: fullyPaid,
+        paidAmountCents: paidAmount,
+        paidAt: paidAmount > 0 ? (initialOrder?.paidAt || new Date().toISOString()) : "",
         totalCents,
       };
       const needsFirstConfirmation = Boolean(initialOrder && sendCustomerEmail && (
@@ -241,10 +251,26 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
         <label className="text-sm font-black">Afhaalwinkel *<select value={shop} onChange={(event) => setShop(event.target.value)} className={`${inputClass} mt-1`}><option value="">Kies winkel</option>{shop && !SHOPS.some((item) => item.value === shop) && <option value={shop}>{shop} (bestaand)</option>}{SHOPS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
         <label className="text-sm font-black sm:col-span-2">E-mailadres <span className="font-normal">(optioneel)</span><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="klant@voorbeeld.nl" className={`${inputClass} mt-1`} /><span className="mt-1 block text-xs font-medium text-[#6b645b]">Met e-mailadres sturen we een mooie bestelbevestiging en de dag vóór afhalen een herinnering. Zonder e-mailadres sturen we niets naar de klant.</span></label>
       </div>
-      <div className="mt-4 flex flex-wrap gap-3"><label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={giftWrap} onChange={(event) => setGiftWrap(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Alles in cadeaupapier · + € 1 per letter</label><label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Al afgerekend in Bake-it</label></div>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={giftWrap} onChange={(event) => setGiftWrap(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Alles in cadeaupapier · + € 1 per letter</label>
+        {recordedPaidAmountCents > 0 ? (
+          <div className={`min-w-[15rem] rounded-xl border px-3 py-2 text-sm ${totalBelowPaidAmount ? "border-[#eaa08f] bg-[#fff1e9] text-[#a63f2b]" : "border-[#b7d8ad] bg-[#eef8ea] text-[#24551d]"}`}>
+            <p className="font-black">{money(recordedPaidAmountCents)} betaald</p>
+            <p className="mt-0.5 text-xs font-semibold">
+              {totalBelowPaidAmount
+                ? "Het nieuwe totaal is lager dan het al betaalde bedrag."
+                : openAmount > 0
+                  ? `${money(openAmount)} blijft open voor de bijbestelling.`
+                  : "De bestelling is volledig betaald."}
+            </p>
+          </div>
+        ) : (
+          <label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={paid} onChange={(event) => setPaid(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Al afgerekend in Bake-it</label>
+        )}
+      </div>
     </section>
 
-    <section className="rounded-2xl border border-[#d1dfcb] bg-[#f8fbf5] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#547762] text-sm font-black text-white">3</span><h3 className="text-lg font-black">Controleer en sla op</h3></div><strong className="text-xl">{money(totalCents)}</strong></div>{error && <p role="alert" className="mt-3 rounded-lg bg-[#fff1e9] p-3 text-sm font-bold text-[#a63f2b]">{error}</p>}{review ? <div className="mt-3 space-y-2 rounded-xl bg-white p-3 text-sm"><p><strong>{name}</strong> · {phone}{email ? ` · ${email}` : ""}</p><p>Afhalen: <strong>{friendlyDate(pickupDate)}</strong> · {shop}</p><ul className="border-y border-[#e4ded5] py-2">{lines.map((line) => <li key={line.id}><strong>{line.quantity}×</strong> {lineName(line)}{line.logo ? " · logo" : ""}{line.specialRequests?.length ? ` · ${line.specialRequests.join(", ")}` : ""}</li>)}</ul><p>{count} letters · {giftWrap ? "cadeaupapier" : "niet ingepakt"} · {paid ? "al betaald" : "betalen bij afhalen"}</p>{reopenProduction && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">De letters zijn gewijzigd; de productie wordt opnieuw opengezet.</p>}{initialOrder?.paid && initialOrder.totalCents !== totalCents && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">De prijs is gewijzigd. Controleer de betaling ook in Bake-it; de app past die niet aan.</p>}<p className="text-xs text-[#6b645b]">Na opslaan staat de bestelling in de productielijst. Schrijf het ordernummer op de papieren bon en vink ‘ingevoerd’ aan.</p><button type="button" onClick={() => void save()} disabled={saving} className="mt-2 h-12 w-full rounded-xl bg-[#24551d] px-5 text-base font-black text-white disabled:opacity-60">{saving ? "Opslaan..." : initialOrder ? "Wijziging opslaan" : "Bestelling definitief opslaan"}</button><button type="button" onClick={() => setReview(false)} className="w-full py-2 text-sm font-bold text-[#547762] underline">Terug naar gegevens</button></div> : <button type="button" onClick={() => { const validationError = validate(); setError(validationError); if (!validationError) setReview(true); }} className="mt-3 h-12 w-full rounded-xl bg-[#547762] px-5 text-base font-black text-white">Bestelling controleren →</button>}</section>
+    <section className="rounded-2xl border border-[#d1dfcb] bg-[#f8fbf5] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#547762] text-sm font-black text-white">3</span><h3 className="text-lg font-black">Controleer en sla op</h3></div><strong className="text-xl">{money(totalCents)}</strong></div>{error && <p role="alert" className="mt-3 rounded-lg bg-[#fff1e9] p-3 text-sm font-bold text-[#a63f2b]">{error}</p>}{review ? <div className="mt-3 space-y-2 rounded-xl bg-white p-3 text-sm"><p><strong>{name}</strong> · {phone}{email ? ` · ${email}` : ""}</p><p>Afhalen: <strong>{friendlyDate(pickupDate)}</strong> · {shop}</p><ul className="border-y border-[#e4ded5] py-2">{lines.map((line) => <li key={line.id}><strong>{line.quantity}×</strong> {lineName(line)}{line.logo ? " · logo" : ""}{line.specialRequests?.length ? ` · ${line.specialRequests.join(", ")}` : ""}</li>)}</ul><p>{count} letters · {giftWrap ? "cadeaupapier" : "niet ingepakt"} · {paidAmount > 0 ? fullyPaid ? `volledig betaald (${money(paidAmount)})` : `${money(paidAmount)} betaald · ${money(openAmount)} open` : "betalen bij afhalen"}</p>{reopenProduction && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">De letters zijn gewijzigd; de productie wordt opnieuw opengezet.</p>}{recordedPaidAmountCents > 0 && openAmount > 0 && <p className="rounded-lg bg-[#fff3dc] p-2 font-bold text-[#70460e]">Alleen de bijbestelling van {money(openAmount)} blijft openstaan.</p>}<p className="text-xs text-[#6b645b]">Na opslaan staat de bestelling in de productielijst. Schrijf het ordernummer op de papieren bon en vink ‘ingevoerd’ aan.</p><button type="button" onClick={() => void save()} disabled={saving} className="mt-2 h-12 w-full rounded-xl bg-[#24551d] px-5 text-base font-black text-white disabled:opacity-60">{saving ? "Opslaan..." : initialOrder ? "Wijziging opslaan" : "Bestelling definitief opslaan"}</button><button type="button" onClick={() => setReview(false)} className="w-full py-2 text-sm font-bold text-[#547762] underline">Terug naar gegevens</button></div> : <button type="button" onClick={() => { const validationError = validate(); setError(validationError); if (!validationError) setReview(true); }} className="mt-3 h-12 w-full rounded-xl bg-[#547762] px-5 text-base font-black text-white">Bestelling controleren →</button>}</section>
     <button type="button" onClick={onCancel} className="text-sm font-bold text-[#6b645b] underline">Sluiten zonder opslaan</button>
   </div>;
 }
