@@ -52,7 +52,8 @@ export async function getLettershopPickupDates(season = 2026): Promise<string[]>
     todayParts.find((item) => item.type === type)?.value || "";
   const today = `${part("year")}-${part("month")}-${part("day")}`;
   const now = new Date();
-  const end = new Date(`${season + 1}-01-01T12:00:00Z`);
+  // Sinterklaasletters can be collected through 5 December, never after it.
+  const end = new Date(`${season}-12-06T12:00:00Z`);
   const pickupDates: string[] = [];
 
   for (

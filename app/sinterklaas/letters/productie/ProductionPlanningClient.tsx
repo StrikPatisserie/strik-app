@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
 import { fetchB2BOrders, fetchLetterOrders } from "../../sinterklaasApi";
 import type {
   ChocolateLetterLine,
@@ -66,7 +66,51 @@ type DistributionOrder = {
   shop: string;
   lines: DistributionLine[];
   note?: string;
+  giftWrap?: boolean;
+  paid?: boolean;
 };
+
+type DistributionMarker = "wrap" | "photo" | "nut-free" | "gluten-free" | "vegan" | "lactose-free";
+
+const DISTRIBUTION_MARKERS: Array<{ key: DistributionMarker; label: string }> = [
+  { key: "wrap", label: "Inpakken" },
+  { key: "photo", label: "Foto/logo" },
+  { key: "nut-free", label: "Notenvrij" },
+  { key: "gluten-free", label: "Glutenvrij" },
+  { key: "vegan", label: "Vegan" },
+  { key: "lactose-free", label: "Lactosevrij" },
+];
+
+function DistributionMarkerIcon({ marker }: Readonly<{ marker: DistributionMarker }>) {
+  if (marker === "wrap") {
+    return <svg viewBox="0 0 24 24" className="h-full w-full" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 10C9 5 4 4 4 7c0 2.5 4.5 3 8 3Z"/><path d="M12 10c3-5 8-6 8-3 0 2.5-4.5 3-8 3Z"/><circle cx="12" cy="10" r="1.7"/><path d="m10.8 11.5-2.3 7 3.5-2 3.5 2-2.3-7"/></svg>;
+  }
+  if (marker === "photo") {
+    return <svg viewBox="0 0 24 24" className="h-full w-full" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h4l1.5-2h5L16 7h4v12H4Z"/><circle cx="12" cy="13" r="3.2"/></svg>;
+  }
+  if (marker === "nut-free") {
+    return <svg viewBox="0 0 24 24" className="h-full w-full" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 9c.5-3 2.5-5 5-5s4.5 2 5 5c-1.5 1-3.2 1.5-5 1.5S8.5 10 7 9Z"/><path d="M8 10c-1 1.5-1.5 3-1 5 1 4 4 6 7 4 3-2 4-6 2-9"/><path d="m4 4 16 16"/></svg>;
+  }
+  if (marker === "gluten-free") {
+    return <svg viewBox="0 0 24 24" className="h-full w-full" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v18M12 7 8 5M12 11 8 9M12 15l-4-2M12 7l4-2M12 11l4-2M12 15l4-2"/><path d="m4 4 16 16"/></svg>;
+  }
+  if (marker === "vegan") {
+    return <svg viewBox="0 0 24 24" className="h-full w-full" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 4C10 4 5 8 5 15c0 3 2 5 5 5 7 0 9-7 9-16Z"/><path d="M6 18c3-4 6-6 10-9"/></svg>;
+  }
+  return <svg viewBox="0 0 24 24" className="h-full w-full" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 3h6v3l2 3v11H7V9l2-3Z"/><path d="M9 6h6M7 12h10"/><path d="m4 4 16 16"/></svg>;
+}
+
+function distributionMarkersFor(order: DistributionOrder) {
+  const extras = order.lines.flatMap((line) => line.extras || []).map((extra) => extra.toLocaleLowerCase("nl-NL"));
+  const markers = new Set<DistributionMarker>();
+  if (order.giftWrap) markers.add("wrap");
+  if (extras.some((extra) => extra.includes("foto") || extra.includes("logo"))) markers.add("photo");
+  if (extras.includes("notenvrij")) markers.add("nut-free");
+  if (extras.includes("glutenvrij")) markers.add("gluten-free");
+  if (extras.includes("vegan")) markers.add("vegan");
+  if (extras.includes("lactosevrij")) markers.add("lactose-free");
+  return DISTRIBUTION_MARKERS.filter(({ key }) => markers.has(key));
+}
 
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const DISTRIBUTION_SHOPS = ["ziekerstraat", "heyendaal", "daalseweg", "lent"];
@@ -75,6 +119,12 @@ const SHOP_LABELS: Record<string, string> = {
   heyendaal: "Heyendaal",
   daalseweg: "Daalseweg",
   lent: "Lent",
+};
+const SHOP_SHORT_LABELS: Record<string, string> = {
+  ziekerstraat: "ZIEK",
+  heyendaal: "HEY",
+  daalseweg: "DAAL",
+  lent: "LENT",
 };
 
 function formatDate(date: string) {
@@ -105,6 +155,17 @@ function formatCompactProductionDate(startDate: string) {
     .format(date)
     .replace(".", "");
   return `${weekday(start)} ${start.getDate()} ${month(start)} ${start.getFullYear()}`;
+}
+
+function formatDistributionProductionDate(startDate: string) {
+  const start = new Date(`${startDate}T12:00:00`);
+  const weekday = new Intl.DateTimeFormat("nl-NL", { weekday: "short" })
+    .format(start)
+    .replace(".", "");
+  const month = new Intl.DateTimeFormat("nl-NL", { month: "short" })
+    .format(start)
+    .replace(".", "");
+  return `${weekday} ${start.getDate()} ${month}`;
 }
 
 function formatDeadline(value?: string) {
@@ -177,26 +238,27 @@ function legacyLineIdentity(line: ChocolateLetterLine) {
   return { key, label };
 }
 
-function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    OPEN: "Open",
-    PLANNED: "Ingepland",
-    IN_PRODUCTION: "In productie",
-    COMPLETED: "Gereed",
-    CLOSED: "Afgesloten",
-  };
-  return labels[status] || status;
+function batchIsPlanned(status: string) {
+  return ["PLANNED", "IN_PRODUCTION", "COMPLETED", "CLOSED"].includes(status);
 }
 
 function totalsFor(rows: WorkingRow[]) {
   return rows.reduce(
-    (total, row) => ({
-      orders: total.orders + row.orders,
-      stock: total.stock + row.stock,
-      produced: total.produced + row.produced,
-    }),
+    (total, row) => {
+      const planned = row.orders + row.stock;
+      return {
+        orders: total.orders + row.orders,
+        stock: total.stock + row.stock,
+        produced: total.produced + (planned > 0 && row.produced >= planned ? planned : 0),
+      };
+    },
     { orders: 0, stock: 0, produced: 0 }
   );
+}
+
+function productionRowIsComplete(row: WorkingRow) {
+  const planned = row.orders + row.stock;
+  return planned > 0 && row.produced >= planned;
 }
 
 function productionVariant(label: string) {
@@ -206,78 +268,172 @@ function productionVariant(label: string) {
     .filter(Boolean);
 
   return {
+    letter,
+    chocolate,
+    size,
+    style,
     product: [letter, chocolate, size, style].filter(Boolean).join(" · "),
     extras,
   };
 }
 
-function ProductionTable({ rows }: Readonly<{ rows: WorkingRow[] }>) {
+const PRODUCTION_STYLE_ORDER: Record<string, number> = { spuit: 0, vorm: 1 };
+const PRODUCTION_FLAVOUR_ORDER: Record<string, number> = { melk: 0, puur: 1, wit: 2, "vegan-puur": 3 };
+const PRODUCTION_SIZE_ORDER: Record<string, number> = { groot: 0, klein: 1 };
+
+function productionValueLabel(value: string) {
+  if (!value) return "Overig";
+  return `${value.charAt(0).toUpperCase()}${value.slice(1).replace("-", " ")}`;
+}
+
+function productionFlavourTheme(flavour: string) {
+  if (flavour === "melk") {
+    return { rail: "bg-[#c99f78] text-[#4b352f]", line: "bg-[#c99f78]", label: "text-[#9a704d]" };
+  }
+  if (flavour === "puur") {
+    return { rail: "bg-[#4b352f] text-white", line: "bg-[#4b352f]", label: "text-[#4b352f]" };
+  }
+  if (flavour === "wit") {
+    return { rail: "bg-[#eadfc4] text-[#6f624d]", line: "bg-[#d9caa8]", label: "text-[#97866a]" };
+  }
+  if (flavour === "vegan-puur") {
+    return { rail: "bg-[#315b49] text-white", line: "bg-[#557b69]", label: "text-[#315b49]" };
+  }
+  return { rail: "bg-[#d6d0c7] text-[#5f5951]", line: "bg-[#d6d0c7]", label: "text-[#817a71]" };
+}
+
+function compareProductionRows(first: WorkingRow, second: WorkingRow) {
+  const a = productionVariant(first.label);
+  const b = productionVariant(second.label);
+  return (PRODUCTION_STYLE_ORDER[a.style] ?? 99) - (PRODUCTION_STYLE_ORDER[b.style] ?? 99)
+    || (PRODUCTION_FLAVOUR_ORDER[a.chocolate] ?? 99) - (PRODUCTION_FLAVOUR_ORDER[b.chocolate] ?? 99)
+    || (PRODUCTION_SIZE_ORDER[a.size] ?? 99) - (PRODUCTION_SIZE_ORDER[b.size] ?? 99)
+    || a.letter.localeCompare(b.letter, "nl")
+    || a.extras.join("|").localeCompare(b.extras.join("|"), "nl");
+}
+
+function productionSections(rows: WorkingRow[]) {
+  const sections = new Map<string, Map<string, WorkingRow[]>>();
+  [...rows].sort(compareProductionRows).forEach((row) => {
+    const variant = productionVariant(row.label);
+    const styleKey = variant.style || "overig";
+    const groupKey = `${variant.chocolate}|${variant.size}`;
+    const groups = sections.get(styleKey) || new Map<string, WorkingRow[]>();
+    groups.set(groupKey, [...(groups.get(groupKey) || []), row]);
+    sections.set(styleKey, groups);
+  });
+  return [...sections.entries()].map(([style, groups]) => ({
+    key: style,
+    label: style === "spuit" ? "Spuitletters" : style === "vorm" ? "Vormletters" : "Overige letters",
+    groups: [...groups.entries()].map(([key, groupRows]) => {
+      const variant = productionVariant(groupRows[0]?.label || "");
+      return {
+        key,
+        label: `${productionValueLabel(variant.chocolate)} · ${productionValueLabel(variant.size)}`,
+        flavour: variant.chocolate,
+        size: variant.size,
+        rows: groupRows,
+      };
+    }),
+  }));
+}
+
+function ProductionTable({
+  rows,
+  onToggleComplete,
+}: Readonly<{
+  rows: WorkingRow[];
+  onToggleComplete?: (row: WorkingRow) => void;
+}>) {
+  if (rows.length === 0) {
+    return <p className="bg-white px-3 py-4 text-center text-sm font-semibold text-[#776f66]">Nog geen letters ingepland.</p>;
+  }
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[470px] border-collapse text-left text-xs sm:min-w-[520px] sm:text-sm">
-        <thead className="bg-[#f1ede7] text-[0.66rem] font-black uppercase tracking-[0.1em] text-[#6b645b]">
-          <tr>
-            <th className="px-2 py-1.5 sm:px-3 sm:py-2">Letter en uitvoering</th>
-            <th className="px-2 py-1.5 text-right sm:px-3 sm:py-2">Totaal te maken</th>
-            <th className="px-2 py-1.5 text-right sm:px-3 sm:py-2">Gemaakt</th>
-            <th className="px-2 py-1.5 text-right sm:px-3 sm:py-2">Open</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="px-3 py-4 text-center font-semibold text-[#776f66]">
-                Nog geen letters ingepland.
-              </td>
-            </tr>
-          ) : rows.map((row) => {
-            const planned = row.orders + row.stock;
-            const variant = productionVariant(row.label);
-            const isSpecial = variant.extras.length > 0;
-            return (
-              <tr
-                key={row.key}
-                className={`border-t border-[#e4ded5] ${isSpecial ? "bg-[#fff8e8]" : "bg-white"}`}
-              >
-                <td className={`px-2 py-1.5 sm:px-3 sm:py-2 ${isSpecial ? "border-l-4 border-[#d75a48]" : "border-l-4 border-[#9bb79a]"}`}>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <strong className="text-[#1a1815]">{variant.product}</strong>
-                    {isSpecial ? (
-                      <>
-                        <span className="rounded-full bg-[#d75a48] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.1em] text-white">
-                          Afwijking
-                        </span>
-                        {variant.extras.map((extra) => (
-                          <span
-                            key={extra}
-                            className="rounded-full border border-[#e4c17b] bg-white px-2 py-0.5 text-[0.62rem] font-black text-[#765019]"
-                          >
-                            {extra}
-                          </span>
-                        ))}
-                      </>
-                    ) : (
-                      <span className="rounded-full bg-[#e7f0e3] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#3f6848]">
-                        Standaard
-                      </span>
-                    )}
-                  </div>
-                  {row.stock > 0 && (
-                    <p className="mt-1 text-[0.65rem] font-black text-[#7b5970]">
-                      * incl. {row.stock}× algemene winkelvoorraad
-                    </p>
-                  )}
-                </td>
-                <td className="px-2 py-1.5 text-right font-black sm:px-3 sm:py-2">{planned}</td>
-                <td className="px-2 py-1.5 text-right sm:px-3 sm:py-2">{row.produced}</td>
-                <td className="px-2 py-1.5 text-right font-black text-[#9a3412] sm:px-3 sm:py-2">
-                  {Math.max(0, planned - row.produced)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="space-y-3 bg-[#f7f3ee] p-2 sm:space-y-4 sm:p-3">
+      {productionSections(rows).map((section) => (
+        <section key={section.key} className="overflow-hidden rounded-xl border border-[#d9d2c8] bg-white shadow-sm">
+          <h3 className="border-b border-[#bfcfbb] bg-[#dcebd8] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.15em] text-[#24551d]">{section.label}</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[500px] border-collapse text-left text-xs sm:min-w-[560px] sm:text-sm">
+              <thead className="bg-[#fffdfa] text-[0.56rem] italic tracking-[0.05em] text-[#9a9187] sm:text-[0.6rem]">
+                <tr>
+                  <th className="px-3 py-1.5 font-medium">Letter en uitvoering</th>
+                  <th className="w-16 px-1 py-1.5 text-center text-[0.5rem] font-normal text-[#aaa197]">Besteld</th>
+                  <th className="w-16 px-1 py-1.5 text-center text-[0.5rem] font-normal text-[#aaa197]">Winkel</th>
+                  <th className="w-16 border-x-2 border-[#d5cec5] bg-[#eeeae3] px-1 py-1.5 text-center text-[0.62rem] font-black uppercase text-[#4d463d]">Totaal</th>
+                  <th className="w-20 px-1 py-1.5 text-center font-medium">Klaar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {section.groups.map((group) => {
+                  const flavourTheme = productionFlavourTheme(group.flavour);
+                  return (
+                  <Fragment key={`${section.key}-${group.key}`}>
+                    <tr className="bg-white">
+                      <td colSpan={5} className="px-3 pb-1 pt-2">
+                        <div className="flex items-center gap-2">
+                          <span className={`shrink-0 text-[0.58rem] font-bold italic uppercase tracking-[0.12em] ${flavourTheme.label}`}>{group.label}</span>
+                          <span className={`h-px flex-1 opacity-55 ${flavourTheme.line}`} />
+                        </div>
+                      </td>
+                    </tr>
+                    {group.rows.map((row) => {
+                      const planned = row.orders + row.stock;
+                      const variant = productionVariant(row.label);
+                      const isSpecial = variant.extras.length > 0;
+                      const isComplete = productionRowIsComplete(row);
+                      const rowTheme = productionFlavourTheme(variant.chocolate);
+                      return (
+                        <tr key={row.key} className={`border-t border-[#eee9e2] ${isComplete ? "bg-[#f3f8f0]" : "bg-white"}`}>
+                          <td className="p-0">
+                            <div className="flex min-h-12 items-stretch">
+                              <span className={`flex w-[1.4rem] shrink-0 items-center justify-center py-1 text-[0.48rem] font-black uppercase tracking-[0.08em] [writing-mode:vertical-rl] ${rowTheme.rail}`}>{productionValueLabel(variant.chocolate)}</span>
+                              <div className="flex flex-1 flex-wrap items-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2">
+                                <strong className={isComplete ? "text-[#527058] line-through opacity-65" : "text-[#1a1815]"}>{variant.letter}</strong>
+                                {isSpecial && (
+                                  <>
+                                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#d75a48] text-[0.7rem] font-black text-white" aria-label="Afwijking">!</span>
+                                    {variant.extras.map((extra) => (
+                                      <span key={extra} className="rounded-full border border-[#e4c17b] bg-[#fffaf0] px-2 py-0.5 text-[0.62rem] font-black text-[#765019]">{extra}</span>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-1 py-1.5 text-center text-[0.66rem] font-medium text-[#9d958c]">{row.orders}</td>
+                          <td className="px-1 py-1.5 text-center text-[0.66rem] font-medium text-[#9d958c]">{row.stock}</td>
+                          <td className="border-x-2 border-[#d5cec5] bg-[#eeeae3] px-1 py-1.5 text-center text-lg font-black text-[#1a1815]">{planned}</td>
+                          <td className="px-1 py-1.5 text-center">
+                            {onToggleComplete ? (
+                              <button
+                                type="button"
+                                role="checkbox"
+                                aria-checked={isComplete}
+                                aria-label={`${variant.product} ${isComplete ? "weer openzetten" : "als geproduceerd markeren"}`}
+                                onClick={() => onToggleComplete(row)}
+                                className={`mx-auto flex h-8 min-w-8 items-center justify-center rounded-full border px-2 text-xs font-black transition ${isComplete ? "border-[#24551d] bg-[#24551d] text-white" : "border-[#cfc8be] bg-white text-[#8b8278] hover:border-[#7aa173] hover:text-[#24551d]"}`}
+                              >
+                                {isComplete ? "✓" : "○"}
+                              </button>
+                            ) : (
+                              <span className={`inline-flex rounded-full px-2 py-1 text-[0.58rem] font-black uppercase tracking-[0.08em] ${isComplete ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff0e8] text-[#9a3412]"}`}>
+                                {isComplete ? "✓ Gereed" : "Open"}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -538,10 +694,11 @@ function GeneralStoreOrderDialog({
 
 function demoDistributionOrders(batch: ProductionBatchSeed): DistributionOrder[] {
   const firstPickup = batch.pickupFrom || addDays(batch.date, batch.minimumLeadDays);
-  return [
+  const baseOrders: DistributionOrder[] = [
     {
       id: `${batch.id}-1`, code: "CL26-0107", customerName: "Sophie van Dijk", shop: "ziekerstraat", pickupDate: firstPickup,
       lines: [{ quantity: 2, product: "S · melk · groot · spuit" }, { quantity: 1, product: "M · wit · klein · spuit", extras: ["foto"] }],
+      paid: true,
     },
     {
       id: `${batch.id}-2`, code: "CL26-0112", customerName: "Familie Jansen", shop: "ziekerstraat", pickupDate: addDays(firstPickup, 1),
@@ -549,7 +706,7 @@ function demoDistributionOrders(batch: ProductionBatchSeed): DistributionOrder[]
     },
     {
       id: `${batch.id}-3`, code: "CL26-0118", customerName: "Noor Peters", shop: "heyendaal", pickupDate: firstPickup,
-      lines: [{ quantity: 2, product: "S · melk · groot · spuit", extras: ["notenvrij"] }, { quantity: 1, product: "S · melk · groot · spuit", extras: ["notenvrij", "foto"] }],
+      lines: [{ quantity: 2, product: "S · melk · groot · spuit", extras: ["notenvrij"] }, { quantity: 1, product: "S · melk · groot · spuit", extras: ["notenvrij", "foto"] }], paid: true,
     },
     {
       id: `${batch.id}-4`, code: "CL26-0124", customerName: "M. de Bruin", shop: "heyendaal", pickupDate: addDays(firstPickup, 2),
@@ -557,7 +714,7 @@ function demoDistributionOrders(batch: ProductionBatchSeed): DistributionOrder[]
     },
     {
       id: `${batch.id}-5`, code: "CL26-0131", customerName: "Eva Smit", shop: "daalseweg", pickupDate: firstPickup,
-      lines: [{ quantity: 1, product: "K · puur · groot · spuit", extras: ["lactosevrij", "foto"] }, { quantity: 2, product: "E · wit · klein · spuit" }],
+      lines: [{ quantity: 1, product: "K · puur · groot · spuit", extras: ["lactosevrij", "foto"] }, { quantity: 2, product: "E · wit · klein · spuit" }], paid: true,
     },
     {
       id: `${batch.id}-6`, code: "CL26-0138", customerName: "Bram Hendriks", shop: "daalseweg", pickupDate: addDays(firstPickup, 1),
@@ -566,16 +723,162 @@ function demoDistributionOrders(batch: ProductionBatchSeed): DistributionOrder[]
     {
       id: `${batch.id}-7`, code: "CL26-0145", customerName: "Lotte Willems", shop: "lent", pickupDate: firstPickup,
       lines: [{ quantity: 5, product: "S · melk · groot · spuit", extras: ["foto"] }],
+      giftWrap: true,
     },
     {
       id: `${batch.id}-8`, code: "CL26-0150", customerName: "Daan Meijer", shop: "lent", pickupDate: addDays(firstPickup, 2),
       lines: [{ quantity: 2, product: "P · puur · groot · spuit", extras: ["vegan"] }, { quantity: 1, product: "M · wit · klein · spuit" }],
     },
   ];
+
+  const ziekerstraatCustomers = [
+    "Lieke de Boer", "Milan Vermeer", "Saar Hendriks", "Tess van Leeuwen", "Noah Vos", "Evi van Dalen",
+    "Lucas Smeets", "Fleur Janssen", "Olivier de Wit", "Nina Kuipers", "Sem Peeters", "Lynn Mulder",
+    "Mees Bakker", "Julia van den Berg", "Finn Bos", "Sara Peters", "Levi de Jong", "Emma Willems",
+  ];
+  const letters = ["A", "B", "E", "F", "J", "K", "L", "M", "N", "P", "R", "S", "T", "V", "W"];
+  const chocolates = ["melk", "puur", "wit"];
+  const extraZiekerstraatOrders: DistributionOrder[] = ziekerstraatCustomers.map((customerName, index) => {
+    const extras = index % 7 === 2
+      ? ["foto"]
+      : index % 9 === 4
+        ? ["notenvrij"]
+        : index % 11 === 6
+          ? ["glutenvrij"]
+          : undefined;
+    const giftWrap = index === 5 || index === 14;
+    return {
+      id: `${batch.id}-ziek-test-${index + 1}`,
+      code: `CL26-${String(160 + index).padStart(4, "0")}`,
+      customerName,
+      shop: "ziekerstraat",
+      pickupDate: addDays(firstPickup, index % 3),
+      lines: [{
+        quantity: (index % 3) + 1,
+        product: `${letters[index % letters.length]} · ${chocolates[index % chocolates.length]} · ${index % 4 === 0 ? "klein" : "groot"} · spuit`,
+        extras,
+      }],
+      giftWrap,
+      paid: index % 4 !== 1,
+    };
+  });
+
+  return [...baseOrders, ...extraZiekerstraatOrders];
+}
+
+function paginateDistributionOrders(orders: DistributionOrder[]) {
+  if (orders.length === 0) return [[]];
+  const pages: DistributionOrder[][] = [orders.slice(0, 4)];
+  for (let index = 4; index < orders.length; index += 8) {
+    pages.push(orders.slice(index, index + 8));
+  }
+  return pages;
+}
+
+function DistributionOrderCard({ order, shop }: Readonly<{ order: DistributionOrder; shop: string }>) {
+  const markers = distributionMarkersFor(order);
+  const packingInstruction = order.giftWrap && !/inpak|cadeaupapier/i.test(order.note || "")
+    ? "Inpakken in cadeaupapier."
+    : "";
+  const note = [packingInstruction, order.note].filter(Boolean).join(" ");
+
+  return (
+    <article className="break-inside-avoid rounded-xl border-2 border-dashed border-[#bdb5aa] p-4">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.12em] text-[#6f6860] sm:text-sm">{order.code}</p>
+        <h4 className="text-lg font-black text-[#1a1815]">{order.customerName}</h4>
+        <p className="mt-0.5 text-[0.68rem] font-black uppercase tracking-[0.08em] text-[#6b645b]">
+          {SHOP_SHORT_LABELS[shop]} · {formatDistributionProductionDate(order.pickupDate)} · <span className={order.paid ? "text-[#24551d]" : "text-[#9a3412]"}>{order.paid ? "Betaald" : "Niet betaald"}</span>
+        </p>
+      </div>
+      <ul className="mt-3 divide-y divide-[#e4ded5] border-y border-[#e4ded5]">
+        {order.lines.map((line, index) => (
+          <li key={`${order.id}-${index}`} className="flex gap-2 py-2 text-sm">
+            <strong className="w-8 shrink-0 text-base">{line.quantity}×</strong>
+            <div>
+              <p className="font-black">{line.product}</p>
+              {line.extras?.length ? <p className="mt-0.5 font-black text-[#a23c2b]">Let op: {line.extras.join(" + ")}</p> : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {note && <p className="mt-2 rounded-lg bg-[#fff3dc] p-2 text-xs font-bold text-[#70460e]">Notitie: {note}</p>}
+      <div className="mt-3 flex min-h-7 items-end justify-between gap-3">
+        <div className="flex flex-wrap gap-1.5" aria-label="Bijzonderheden">
+          {markers.map(({ key, label }) => (
+            <span key={key} title={label} aria-label={label} className="flex h-7 w-7 items-center justify-center rounded-full border border-[#8b8278] bg-white text-[#302d29]">
+              <span className="h-[1.05rem] w-[1.05rem]"><DistributionMarkerIcon marker={key} /></span>
+            </span>
+          ))}
+        </div>
+        <p className="shrink-0 text-right text-xs font-black uppercase tracking-[0.12em] text-[#4d463d]">Compleet □</p>
+      </div>
+    </article>
+  );
+}
+
+function DistributionLegend() {
+  return (
+    <section className="mt-auto break-inside-avoid pt-6">
+      <p className="text-[0.58rem] font-black uppercase tracking-[0.15em] text-[#8b8278]">Legenda bijzonderheden</p>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+        {DISTRIBUTION_MARKERS.map(({ key, label }) => (
+          <span key={key} className="flex items-center gap-1.5 text-[0.64rem] font-bold text-[#4d463d]">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-[#8b8278] bg-white text-[#302d29]">
+              <span className="h-3.5 w-3.5"><DistributionMarkerIcon marker={key} /></span>
+            </span>
+            {label}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PrintOptionsDialog({
+  batch,
+  onClose,
+  onSelect,
+}: Readonly<{
+  batch: ProductionBatchSeed;
+  onClose: () => void;
+  onSelect: (type: "production" | "distribution") => void;
+}>) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#263b2b]/60 px-3 py-6 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="print-options-title">
+      <section className="w-full max-w-lg overflow-hidden rounded-[1.5rem] border border-white/90 bg-[#faf8f2] shadow-2xl sm:rounded-[2rem]">
+        <header className="flex items-start justify-between gap-3 border-b border-[#ded7cd] px-4 py-4 sm:px-5">
+          <div>
+            <p className="text-[0.58rem] font-black uppercase tracking-[0.15em] text-[#778878]">Printlijsten · {formatCompactProductionDate(batch.startDate)}</p>
+            <h2 id="print-options-title" className="mt-0.5 text-xl font-black text-[#263b2b]">Welke lijst wil je printen?</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Sluiten" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#dfd8ce] bg-white text-lg font-black">×</button>
+        </header>
+
+        <div className="grid gap-2.5 p-3 sm:grid-cols-2 sm:p-5">
+          <button type="button" onClick={() => onSelect("production")} className="group rounded-2xl border border-[#bdd0b8] bg-[#edf4eb] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#24551d] text-xl font-black text-white" aria-hidden="true">✓</span>
+            <strong className="mt-3 block text-base text-[#263b2b]">Productielijst bakkerij</strong>
+            <span className="mt-1 block text-xs font-semibold leading-relaxed text-[#657063]">Alle letters per smaak, soort en alfabet om tijdens de productie af te werken.</span>
+          </button>
+          <button type="button" onClick={() => onSelect("distribution")} className="group rounded-2xl border border-[#d7c4cf] bg-[#f3edf1] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#7b5970] text-lg font-black text-white" aria-hidden="true">↗</span>
+            <strong className="mt-3 block text-base text-[#4b352f]">Verdeellijst logistiek</strong>
+            <span className="mt-1 block text-xs font-semibold leading-relaxed text-[#75686f]">Klantbonnen en winkelvoorraad, per vestiging op een aparte pagina.</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function DistributionPreviewDialog({ batch, onClose }: Readonly<{ batch: ProductionBatchSeed; onClose: () => void }>) {
   const orders = demoDistributionOrders(batch);
+  const shopPageGroups = DISTRIBUTION_SHOPS.map((shop) => {
+    const shopOrders = orders.filter((order) => order.shop === shop);
+    return { shop, shopOrders, pages: paginateDistributionOrders(shopOrders) };
+  });
+  const totalPrintPages = shopPageGroups.reduce((total, group) => total + group.pages.length, 0);
 
   return (
     <div className="letter-distribution-overlay fixed inset-0 z-[90] overflow-y-auto bg-[#263b2b]/65 px-3 py-5 backdrop-blur-sm" role="dialog" aria-modal="true">
@@ -585,41 +888,60 @@ function DistributionPreviewDialog({ batch, onClose }: Readonly<{ batch: Product
           body * { visibility: hidden !important; }
           .letter-distribution-print, .letter-distribution-print * { visibility: visible !important; }
           .letter-distribution-overlay { position: static !important; overflow: visible !important; background: white !important; padding: 0 !important; }
-          .letter-distribution-print { position: absolute !important; inset: 0 !important; width: 100% !important; }
-          .letter-distribution-page { min-height: 277mm; margin: 0 !important; border: 0 !important; box-shadow: none !important; break-after: page; page-break-after: always; }
+          .letter-distribution-print {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            filter: grayscale(100%) contrast(108%) !important;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+          .letter-distribution-page {
+            box-sizing: border-box !important;
+            width: 190mm !important;
+            min-height: 277mm !important;
+            height: 277mm !important;
+            margin: 0 auto !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            break-inside: avoid-page;
+            page-break-inside: avoid;
+            break-after: page;
+            page-break-after: always;
+          }
           .letter-distribution-page:last-child { break-after: auto; page-break-after: auto; }
           .letter-distribution-no-print { display: none !important; }
         }
       `}</style>
       <div className="letter-distribution-no-print sticky top-0 z-10 mx-auto mb-4 flex max-w-4xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/80 bg-[#faf8f2]/95 p-3 shadow-xl backdrop-blur">
         <div>
-          <p className="font-black text-[#1a1815]">Preview verdeellijst · vier winkelpagina’s</p>
-          <p className="text-xs font-semibold text-[#6b645b]">Alle gegevens zijn fictief. B2B-bestellingen staan bewust niet in deze lijst.</p>
+          <p className="font-black text-[#1a1815]">Preview verdeellijst · {totalPrintPages} printpagina’s</p>
+          <p className="text-xs font-semibold text-[#6b645b]">Ziekerstraat bevat tijdelijk twintig fictieve klantbonnen. B2B staat bewust niet in deze lijst.</p>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={onClose} className="h-10 rounded-full border border-[#ddd5ca] bg-white px-4 text-sm font-black text-[#4d463d]">Sluiten</button>
-          <button type="button" onClick={() => window.print()} className="h-10 rounded-full bg-[#24551d] px-4 text-sm font-black text-white">Print vier winkellijsten</button>
+          <button type="button" onClick={() => window.print()} className="h-10 rounded-full bg-[#24551d] px-4 text-sm font-black text-white">Print {totalPrintPages} pagina’s</button>
         </div>
       </div>
 
       <div className="letter-distribution-print mx-auto max-w-4xl space-y-5 print:space-y-0">
-        {DISTRIBUTION_SHOPS.map((shop, shopIndex) => {
-          const shopOrders = orders.filter((order) => order.shop === shop);
+        {shopPageGroups.map(({ shop, shopOrders, pages }) => {
           const orderPieces = shopOrders.reduce((sum, order) => sum + order.lines.reduce((lineSum, line) => lineSum + line.quantity, 0), 0);
           const shopGeneralRows = (batch.storeOrders || []).find((order) => order.shop === shop)?.rows || [];
           const generalPieces = shopGeneralRows.reduce((sum, row) => sum + row.quantity, 0);
 
-          return (
-            <section key={shop} className="letter-distribution-page min-h-[70rem] rounded-[1.5rem] border border-[#d8d1c8] bg-white p-7 shadow-2xl">
+          return pages.map((pageOrders, pageIndex) => (
+            <section key={`${shop}-${pageIndex}`} className="letter-distribution-page flex min-h-[70rem] aspect-[210/297] flex-col rounded-[1.5rem] border border-[#d8d1c8] bg-white p-7 shadow-2xl">
               <header className="flex items-start justify-between gap-4 border-b-2 border-[#263b2b] pb-4">
                 <div>
                   <p className="text-[0.68rem] font-black uppercase tracking-[0.2em] text-[#778878]">Chocoladeletters · verdeellijst</p>
                   <h2 className="mt-1 text-3xl font-black uppercase tracking-[0.08em] text-[#263b2b]">{SHOP_LABELS[shop]}</h2>
-                  <p className="mt-1 text-sm font-bold capitalize text-[#6b645b]">Productie {formatProductionPeriod(batch.startDate, batch.date)}</p>
+                  <p className="mt-1 text-sm font-bold text-[#6b645b]">Productie {formatDistributionProductionDate(batch.startDate)}{pageIndex > 0 ? " · vervolg" : ""}</p>
                 </div>
                 <div className="rounded-2xl bg-[#e6efe2] px-4 py-3 text-right">
                   <p className="text-[0.6rem] font-black uppercase tracking-[0.12em] text-[#59705c]">Klaarzetten</p>
                   <p className="text-xl font-black text-[#263b2b]">{orderPieces + generalPieces} letters</p>
+                  <p className="mt-0.5 text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#59705c]">Pagina {pageIndex + 1} van {pages.length}</p>
                 </div>
               </header>
 
@@ -629,61 +951,195 @@ function DistributionPreviewDialog({ batch, onClose }: Readonly<{ batch: Product
                 <span className="rounded-full bg-[#e9e0e7] px-3 py-1">{generalPieces} algemene winkelvoorraad</span>
               </div>
 
-              <section className="mt-6">
-                <h3 className="text-xs font-black uppercase tracking-[0.16em] text-[#776f66]">Klantbestellingen · losse bonnen</h3>
-                <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                  {shopOrders.map((order) => (
-                    <article key={order.id} className="break-inside-avoid rounded-xl border-2 border-dashed border-[#bdb5aa] p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-[0.62rem] font-black uppercase tracking-[0.13em] text-[#8b8278]">{order.code}</p>
-                          <h4 className="text-lg font-black text-[#1a1815]">{order.customerName}</h4>
-                          <p className="text-xs font-bold text-[#6b645b]">Afhalen {formatDate(order.pickupDate)} · {SHOP_LABELS[shop]}</p>
-                        </div>
-                        <span className="text-2xl" aria-hidden="true">□</span>
-                      </div>
-                      <ul className="mt-3 divide-y divide-[#e4ded5] border-y border-[#e4ded5]">
-                        {order.lines.map((line, index) => (
-                          <li key={`${order.id}-${index}`} className="flex gap-2 py-2 text-sm">
-                            <strong className="w-8 shrink-0 text-base">{line.quantity}×</strong>
-                            <div>
-                              <p className="font-black">{line.product}</p>
-                              {line.extras?.length ? <p className="mt-0.5 font-black text-[#a23c2b]">Let op: {line.extras.join(" + ")}</p> : null}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                      {order.note && <p className="mt-2 rounded-lg bg-[#fff3dc] p-2 text-xs font-bold text-[#70460e]">Notitie: {order.note}</p>}
-                      <p className="mt-3 text-right text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#776f66]">Klaargelegd □</p>
-                    </article>
-                  ))}
-                </div>
-              </section>
-
-              <section className="mt-6 break-inside-avoid rounded-2xl border border-[#cab7c2] bg-[#f3edf1] p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#806174]">Voor in de winkel</p>
-                    <h3 className="text-lg font-black text-[#4b352f]">Algemene winkelvoorraad</h3>
+              {pageIndex === 0 && (
+                <section className="mt-6 break-inside-avoid rounded-2xl border border-[#cab7c2] bg-[#f3edf1] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#806174]">Eerst klaarzetten</p>
+                      <h3 className="text-lg font-black text-[#4b352f]">Algemene winkelvoorraad</h3>
+                    </div>
+                    <span className="rounded-full bg-white px-3 py-1 text-sm font-black text-[#4b352f]">{generalPieces} letters</span>
                   </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-sm font-black text-[#4b352f]">{generalPieces} letters</span>
+                  <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                    {shopGeneralRows.map((row) => (
+                      <p key={row.label} className="flex justify-between gap-3 border-b border-[#d8cbd3] pb-1 text-sm"><span>{row.label}</span><strong>{row.quantity}×</strong></p>
+                    ))}
+                    {shopGeneralRows.length === 0 && <p className="text-sm font-semibold text-[#6b645b]">Geen algemene winkelvoorraad voor deze ronde.</p>}
+                  </div>
+                  <div className="mt-4 flex items-center justify-end gap-2.5 text-[#4b352f]">
+                    <p className="text-[0.68rem] font-black uppercase tracking-[0.12em]">Toegevoegd aan winkelkrat</p>
+                    <span className="h-8 w-8 shrink-0 rounded-md border-2 border-[#4b352f] bg-white" aria-hidden="true" />
+                  </div>
+                </section>
+              )}
+
+              <section className="mt-6">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-black uppercase tracking-[0.16em] text-[#776f66]">Klantbestellingen{pageIndex > 0 ? " · vervolg" : ""}</h3>
+                  <span className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#9a9187]">
+                    {shopOrders.length === 0
+                      ? "Geen bonnen"
+                      : `Bon ${pageIndex === 0 ? 1 : 5 + ((pageIndex - 1) * 8)}–${Math.min(shopOrders.length, pageIndex === 0 ? 4 : 4 + (pageIndex * 8))} van ${shopOrders.length}`}
+                  </span>
                 </div>
-                <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                  {shopGeneralRows.map((row) => (
-                    <p key={row.label} className="flex justify-between gap-3 border-b border-[#d8cbd3] pb-1 text-sm"><span>{row.label}</span><strong>{row.quantity}×</strong></p>
-                  ))}
-                  {shopGeneralRows.length === 0 && <p className="text-sm font-semibold text-[#6b645b]">Geen algemene winkelvoorraad voor deze ronde.</p>}
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  {pageOrders.map((order) => <DistributionOrderCard key={order.id} order={order} shop={shop} />)}
+                  {shopOrders.length === 0 && <p className="rounded-xl border border-dashed border-[#cfc8be] p-4 text-sm font-semibold text-[#6b645b]">Geen klantbestellingen voor deze winkel.</p>}
                 </div>
-                <p className="mt-4 text-right text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#806174]">Toegevoegd aan winkelkrat □</p>
               </section>
 
-              <footer className="mt-8 flex items-center justify-between border-t border-[#d8d1c8] pt-3 text-[0.65rem] font-bold text-[#8b8278]">
-                <span>Strik Patisserie · interne verdeellijst</span><span>{shopIndex + 1} / {DISTRIBUTION_SHOPS.length}</span>
+              <DistributionLegend />
+
+              <footer className="mt-4 flex items-center justify-between border-t border-[#d8d1c8] pt-3 text-[0.65rem] font-bold text-[#8b8278]">
+                <span>Strik Patisserie · interne verdeellijst</span><span>{SHOP_LABELS[shop]} · Pagina {pageIndex + 1} van {pages.length}</span>
               </footer>
             </section>
-          );
+          ));
         })}
       </div>
+    </div>
+  );
+}
+
+function ProductionPrintPreviewDialog({ batch, onClose }: Readonly<{ batch: ProductionBatchSeed; onClose: () => void }>) {
+  const totals = totalsFor(batch.rows);
+  const totalToMake = totals.orders + totals.stock;
+  const totalOpen = Math.max(0, totalToMake - totals.produced);
+
+  return (
+    <div className="production-checklist-overlay fixed inset-0 z-[95] overflow-y-auto bg-[#263b2b]/65 px-2 py-4 backdrop-blur-sm sm:px-4" role="dialog" aria-modal="true">
+      <style jsx global>{`
+        @media print {
+          @page { size: A4 portrait; margin: 10mm; }
+          body * { visibility: hidden !important; }
+          .production-checklist-print, .production-checklist-print * { visibility: visible !important; }
+          .production-checklist-overlay { position: static !important; overflow: visible !important; background: white !important; padding: 0 !important; }
+          .production-checklist-print { position: absolute !important; inset: 0 !important; width: 100% !important; margin: 0 !important; border: 0 !important; box-shadow: none !important; }
+          .production-checklist-no-print { display: none !important; }
+          .production-checklist-row { break-inside: avoid; page-break-inside: avoid; }
+          .production-checklist-print thead { display: table-header-group; }
+          .production-checklist-print {
+            filter: grayscale(100%) contrast(108%) !important;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+        }
+      `}</style>
+
+      <div className="production-checklist-no-print sticky top-0 z-10 mx-auto mb-3 flex max-w-5xl flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/80 bg-[#faf8f2]/95 p-3 shadow-xl backdrop-blur">
+        <div>
+          <p className="font-black text-[#1a1815]">Preview productielijst · {formatCompactProductionDate(batch.startDate)}</p>
+          <p className="text-xs font-semibold text-[#6b645b]">Eén duidelijke afwerklijst voor de bakkerij.</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="h-9 rounded-full border border-[#ddd5ca] bg-white px-4 text-xs font-black text-[#4d463d]">Sluiten</button>
+          <button type="button" onClick={() => window.print()} className="h-9 rounded-full bg-[#24551d] px-4 text-xs font-black text-white">Print productielijst</button>
+        </div>
+      </div>
+
+      <section className="production-checklist-print mx-auto max-w-5xl overflow-hidden rounded-[1.5rem] border border-[#cfc8be] bg-white p-5 shadow-2xl sm:p-7">
+        <header className="border-b-2 border-[#263b2b] pb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[0.66rem] font-black uppercase tracking-[0.2em] text-[#778878]">Strik Patisserie · chocoladeletters</p>
+              <h2 className="mt-1 text-3xl font-black text-[#263b2b]">Productielijst</h2>
+              <p className="mt-1 text-lg font-black text-[#4b352f]">{formatCompactProductionDate(batch.startDate)}</p>
+            </div>
+            <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-[#d8d1c8] text-center">
+              <div className="px-3 py-2">
+                <span className="block text-[0.55rem] font-black uppercase tracking-[0.1em] text-[#776f66]">Totaal</span>
+                <strong className="text-xl">{totalToMake}</strong>
+              </div>
+              <div className="border-x border-[#d8d1c8] px-3 py-2">
+                <span className="block text-[0.55rem] font-black uppercase tracking-[0.1em] text-[#776f66]">Gereed</span>
+                <strong className="text-xl text-[#5f3f00]">{totals.produced}</strong>
+              </div>
+              <div className="bg-[#fff2e9] px-3 py-2">
+                <span className="block text-[0.55rem] font-black uppercase tracking-[0.1em] text-[#8a4937]">Open</span>
+                <strong className="text-xl text-[#9a3412]">{totalOpen}</strong>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-5 text-xs font-bold text-[#6b645b]">
+            <p>Bakker: <span className="ml-2 inline-block w-44 border-b border-[#8b8278]">&nbsp;</span></p>
+            <p>Datum/tijd gereed: <span className="ml-2 inline-block w-32 border-b border-[#8b8278]">&nbsp;</span></p>
+          </div>
+        </header>
+
+        <div className="mt-4 space-y-4">
+          {productionSections(batch.rows).map((section) => (
+            <section key={section.key} className="overflow-hidden rounded-xl border border-[#d8d1c8] bg-white">
+              <h3 className="border-b border-[#bfcfbb] bg-[#dcebd8] px-3 py-2 text-[0.7rem] font-black uppercase tracking-[0.14em] text-[#24551d]">{section.label}</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[620px] border-collapse text-left">
+                  <thead>
+                    <tr className="bg-[#fffdfa] text-[0.58rem] italic tracking-[0.05em] text-[#9a9187]">
+                      <th className="px-3 py-1.5 font-medium">Letter en uitvoering</th>
+                      <th className="w-16 px-1 py-1.5 text-center text-[0.5rem] font-normal text-[#aaa197]">Besteld</th>
+                      <th className="w-16 px-1 py-1.5 text-center text-[0.5rem] font-normal text-[#aaa197]">Winkel</th>
+                      <th className="w-16 border-x-2 border-[#a9a29a] bg-[#ededeb] px-1 py-1.5 text-center text-[0.62rem] font-black uppercase text-[#302d29]">Totaal</th>
+                      <th className="w-20 px-2 py-1.5 text-center font-medium">Klaar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.groups.map((group) => {
+                      const flavourTheme = productionFlavourTheme(group.flavour);
+                      return (
+                      <Fragment key={`${section.key}-${group.key}`}>
+                        <tr className="bg-white">
+                          <td colSpan={5} className="px-3 pb-1 pt-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`shrink-0 text-[0.58rem] font-bold italic uppercase tracking-[0.12em] ${flavourTheme.label}`}>{group.label}</span>
+                              <span className={`h-px flex-1 opacity-55 ${flavourTheme.line}`} />
+                            </div>
+                          </td>
+                        </tr>
+                        {group.rows.map((row) => {
+                          const planned = row.orders + row.stock;
+                          const variant = productionVariant(row.label);
+                          const isSpecial = variant.extras.length > 0;
+                          const isComplete = productionRowIsComplete(row);
+                          const rowTheme = productionFlavourTheme(variant.chocolate);
+                          return (
+                            <tr key={row.key} className="production-checklist-row border-t border-[#eee9e2] bg-white">
+                              <td className="p-0">
+                                <div className="flex min-h-12 items-stretch">
+                                  <span className={`flex w-[1.4rem] shrink-0 items-center justify-center py-1 text-[0.48rem] font-black uppercase tracking-[0.08em] [writing-mode:vertical-rl] ${rowTheme.rail}`}>{productionValueLabel(variant.chocolate)}</span>
+                                  <div className="flex flex-1 flex-wrap items-center gap-1.5 px-3 py-2.5">
+                                    <strong className="text-base text-[#1a1815]">{variant.letter}</strong>
+                                    {isSpecial && (
+                                      <>
+                                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#d75a48] text-[0.7rem] font-black text-white">!</span>
+                                        {variant.extras.map((extra) => (
+                                          <span key={extra} className="rounded-full border border-[#e4c17b] bg-[#fffaf0] px-2 py-0.5 text-[0.62rem] font-black text-[#765019]">{extra}</span>
+                                        ))}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-1 py-2.5 text-center text-[0.68rem] font-medium text-[#88827b]">{row.orders}</td>
+                              <td className="px-1 py-2.5 text-center text-[0.68rem] font-medium text-[#88827b]">{row.stock}</td>
+                              <td className="border-x-2 border-[#a9a29a] bg-[#ededeb] px-1 py-2.5 text-center text-xl font-black text-black">{planned}</td>
+                              <td className={`px-2 py-2.5 text-center text-2xl font-black ${isComplete ? "text-[#24551d]" : "text-[#8b8278]"}`}>{isComplete ? "✓" : "□"}</td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <footer className="mt-5 flex items-center justify-between border-t border-[#d8d1c8] pt-3 text-[0.62rem] font-bold text-[#8b8278]">
+          <span>Werk regel voor regel af en controleer afwijkingen vóór verpakken.</span>
+          <span>Productieronde {formatCompactProductionDate(batch.startDate)}</span>
+        </footer>
+      </section>
     </div>
   );
 }
@@ -705,11 +1161,15 @@ export default function ProductionPlanningClient({
   const [warning, setWarning] = useState("");
   const [storeOrderBatch, setStoreOrderBatch] = useState<ProductionBatchSeed | null>(null);
   const [storeOrderInitialShop, setStoreOrderInitialShop] = useState(DISTRIBUTION_SHOPS[0]);
+  const [printOptionsBatch, setPrintOptionsBatch] = useState<ProductionBatchSeed | null>(null);
   const [distributionBatch, setDistributionBatch] = useState<ProductionBatchSeed | null>(null);
+  const [productionPrintBatch, setProductionPrintBatch] = useState<ProductionBatchSeed | null>(null);
+  const [showGrandOverview, setShowGrandOverview] = useState(false);
   const [storeOrdersByBatch, setStoreOrdersByBatch] = useState<Record<string, StoreStockOrder[]>>(() =>
     Object.fromEntries(batches.map((batch) => [batch.id, batch.storeOrders || []]))
   );
   const [stockRowsByBatch, setStockRowsByBatch] = useState<Record<string, StoreOrderRow[]>>({});
+  const [producedRowsByBatch, setProducedRowsByBatch] = useState<Record<string, ProductionSeedRow[]>>({});
 
   useEffect(() => {
     if (demoMode) {
@@ -765,6 +1225,16 @@ export default function ProductionPlanningClient({
       });
     });
 
+    Object.entries(producedRowsByBatch).forEach(([batchId, producedRows]) => {
+      const batch = batches.find((item) => item.id === batchId);
+      const rows = batch ? rowsByDate.get(batch.date) : undefined;
+      if (!rows) return;
+      producedRows.forEach((update) => {
+        const current = rows.get(update.key);
+        if (current) current.produced = update.produced;
+      });
+    });
+
     const unplanned: string[] = [];
     const addOrderLine = (date: string, key: string, label: string, quantity: number) => {
       const rows = rowsByDate.get(date);
@@ -812,7 +1282,7 @@ export default function ProductionPlanningClient({
     const batchViews = batches.map((batch) => ({
       ...batch,
       storeOrders: storeOrdersByBatch[batch.id] || batch.storeOrders || [],
-      rows: [...(rowsByDate.get(batch.date)?.values() || [])].sort((a, b) => a.label.localeCompare(b.label, "nl")),
+      rows: [...(rowsByDate.get(batch.date)?.values() || [])].sort(compareProductionRows),
     }));
     const grandRows = new Map<string, WorkingRow>();
     batchViews.forEach((batch) => batch.rows.forEach((row) => {
@@ -825,13 +1295,36 @@ export default function ProductionPlanningClient({
 
     return {
       batches: batchViews,
-      grandRows: [...grandRows.values()].sort((a, b) => a.label.localeCompare(b.label, "nl")),
+      grandRows: [...grandRows.values()].sort(compareProductionRows),
       unplanned,
     };
-  }, [b2bOrders, batches, legacyOrders, stockRowsByBatch, storeOrdersByBatch]);
+  }, [b2bOrders, batches, legacyOrders, producedRowsByBatch, stockRowsByBatch, storeOrdersByBatch]);
 
-  const grandTotals = totalsFor(overview.grandRows);
+  const grandTotals = overview.batches.reduce(
+    (total, batch) => {
+      const batchTotals = totalsFor(batch.rows);
+      return {
+        orders: total.orders + batchTotals.orders,
+        stock: total.stock + batchTotals.stock,
+        produced: total.produced + batchTotals.produced,
+      };
+    },
+    { orders: 0, stock: 0, produced: 0 }
+  );
   const totalToMake = grandTotals.orders + grandTotals.stock;
+
+  function toggleProductionRow(batch: ProductionBatchSeed, selectedRow: WorkingRow) {
+    setProducedRowsByBatch((current) => ({
+      ...current,
+      [batch.id]: batch.rows.map((row) => {
+        if (row.key !== selectedRow.key) return row;
+        return {
+          ...row,
+          produced: productionRowIsComplete(row) ? 0 : row.orders + row.stock,
+        };
+      }),
+    }));
+  }
 
   return (
     <div className="space-y-3 sm:space-y-5">
@@ -848,25 +1341,26 @@ export default function ProductionPlanningClient({
       )}
       {warning && <p role="alert" className="border border-[#efb8aa] bg-[#fff4ef] px-3 py-2 text-sm font-bold text-[#9a3412]">{warning}</p>}
 
-      <section className="overflow-hidden rounded-2xl border border-[#d8d1c8] bg-white shadow-sm">
-        <div className="grid grid-cols-3">
-          <div className="border-r border-[#e4ded5] p-3 sm:p-4">
-            <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#776f66]">Totaal te maken</p>
-            <p className="mt-0.5 text-2xl font-black text-[#1a1815] sm:mt-1 sm:text-3xl">{totalToMake}</p>
+      <section className="overflow-hidden rounded-2xl border border-white/80 bg-[#edf1e8]/90 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
+          <div className="mr-auto min-w-[9rem]">
+            <p className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#748071]">Alle rondes samen</p>
+            <p className="text-sm font-black text-[#263b2b]">Compact totaaloverzicht</p>
           </div>
-          <div className="border-r border-[#e4ded5] p-3 sm:p-4">
-            <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#776f66]">Gemaakt</p>
-            <p className="mt-0.5 text-2xl font-black text-[#5f3f00] sm:mt-1 sm:text-3xl">{grandTotals.produced}</p>
+          <div className="flex flex-wrap gap-1.5">
+            <p className="rounded-full bg-white px-2.5 py-1 text-[0.65rem] font-bold text-[#615a52]"><strong className="mr-1 text-sm text-[#1a1815]">{totalToMake}</strong> te maken</p>
+            <p className="rounded-full bg-white px-2.5 py-1 text-[0.65rem] font-bold text-[#615a52]"><strong className="mr-1 text-sm text-[#5f3f00]">{grandTotals.produced}</strong> gereed</p>
+            <p className="rounded-full bg-[#fff2e9] px-2.5 py-1 text-[0.65rem] font-bold text-[#7c3a28]"><strong className="mr-1 text-sm text-[#9a3412]">{Math.max(0, totalToMake - grandTotals.produced)}</strong> open</p>
           </div>
-          <div className="p-3 sm:p-4">
-            <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#776f66]">Nog open</p>
-            <p className="mt-0.5 text-2xl font-black text-[#9a3412] sm:mt-1 sm:text-3xl">{Math.max(0, totalToMake - grandTotals.produced)}</p>
-          </div>
+          <button type="button" onClick={() => setShowGrandOverview((current) => !current)} className="rounded-full border border-[#cbd6c7] bg-white px-3 py-1 text-[0.65rem] font-black text-[#36523a]">
+            {showGrandOverview ? "Verberg lijst ↑" : "Bekijk totaallijst ↓"}
+          </button>
         </div>
-        <div className="border-t border-[#d8d1c8]">
-          <div className="bg-[#dcebd8] px-3 py-2 text-sm font-black text-[#24551d]">Totaal van alle productierondes</div>
-          <ProductionTable rows={overview.grandRows} />
-        </div>
+        {showGrandOverview && (
+          <div className="border-t border-[#d7dfd3] bg-white">
+            <ProductionTable rows={overview.grandRows} />
+          </div>
+        )}
       </section>
 
       {(centralUnplannedCount > 0 || overview.unplanned.length > 0) && (
@@ -889,30 +1383,52 @@ export default function ProductionPlanningClient({
           const storeOrdersLocked = batchIsLocked(batch);
           return (
             <section key={batch.id} className="overflow-hidden rounded-2xl border border-[#d8d1c8] bg-white shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f7df83] px-3 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
+              <div className="relative flex flex-wrap items-center justify-between gap-2 bg-[#f7df83] py-2 pl-3 pr-12 sm:gap-3 sm:py-2.5 sm:pl-4 sm:pr-14">
                 <div>
                   <p className="text-[0.56rem] font-black uppercase tracking-[0.11em] text-[#6b5120] sm:text-[0.62rem]">Centrale productieronde</p>
                   <h2 className="mt-0.5 text-sm font-black leading-tight text-[#1a1815] sm:text-base md:text-lg">{formatCompactProductionDate(batch.startDate)}</h2>
                 </div>
                 <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto sm:justify-end sm:gap-2">
                   {demoMode && (
-                    <button type="button" onClick={() => setDistributionBatch(batch)} className="rounded-full border border-[#4b352f]/15 bg-[#4b352f] px-2.5 py-1 text-[0.65rem] font-black text-white shadow-sm sm:px-3 sm:py-1.5 sm:text-xs">
-                      Verdeel- en printlijst
+                    <button
+                      type="button"
+                      onClick={() => setPrintOptionsBatch(batch)}
+                      aria-label="Printlijsten openen"
+                      title="Printlijsten"
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-[#24551d]/15 bg-[#24551d] text-white shadow-sm transition hover:scale-105 sm:h-9 sm:w-9"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 sm:h-[1.1rem] sm:w-[1.1rem]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M6 9V3h12v6" />
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                        <rect x="6" y="14" width="12" height="7" rx="1" />
+                      </svg>
                     </button>
                   )}
                   <button type="button" onClick={() => { setStoreOrderInitialShop(DISTRIBUTION_SHOPS[0]); setStoreOrderBatch(batch); }} className="rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[0.65rem] font-black text-[#4b352f] shadow-sm sm:px-3 sm:py-1.5 sm:text-xs">
                     {storeOrdersLocked ? "Bekijk winkelvoorraad" : storeStockTotal > 0 ? "Winkelvoorraad wijzigen" : "+ Winkelvoorraad per winkel"}
                   </button>
                   <span className="bg-white/80 px-2 py-1 text-[0.64rem] font-black text-[#5f3f00] sm:px-3 sm:text-xs">{planned} te maken</span>
-                  <span className="bg-[#24551d] px-2 py-1 text-[0.64rem] font-black text-white sm:px-3 sm:text-xs">{statusLabel(batch.status)}</span>
                 </div>
+                <span
+                  role="img"
+                  aria-label={batchIsPlanned(batch.status) ? "Productieronde ingepland" : "Productieronde nog niet ingepland"}
+                  title={batchIsPlanned(batch.status) ? "Ingepland" : "Nog niet ingepland"}
+                  className={`absolute right-3 top-2.5 flex h-7 w-7 items-center justify-center rounded-full border sm:right-4 sm:top-3 sm:h-8 sm:w-8 ${batchIsPlanned(batch.status) ? "border-[#24551d] bg-[#24551d] text-white" : "border-[#c9c2b8] bg-white/55 text-[#aaa197]"}`}
+                >
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m5 12 4 4L19 6" />
+                  </svg>
+                </span>
               </div>
               <div className="grid grid-cols-3 border-b border-[#e4ded5] bg-[#fffdf6] text-center text-[0.68rem] sm:text-xs">
                 <p className="border-r p-1.5 sm:p-2">Totaal te maken <strong className="block text-sm sm:text-base">{planned}</strong></p>
-                <p className="border-r p-1.5 sm:p-2">Gemaakt <strong className="block text-sm sm:text-base">{totals.produced}</strong></p>
+                <p className="border-r p-1.5 sm:p-2">Gereed <strong className="block text-sm sm:text-base">{totals.produced}</strong></p>
                 <p className="p-1.5 sm:p-2">Open <strong className="block text-sm text-[#9a3412] sm:text-base">{Math.max(0, planned - totals.produced)}</strong></p>
               </div>
-              <ProductionTable rows={batch.rows} />
+              <ProductionTable
+                rows={batch.rows}
+                onToggleComplete={demoMode ? (row) => toggleProductionRow(batch, row) : undefined}
+              />
               <div className="border-t border-[#e4ded5] bg-[#f7f3ee] p-2.5 sm:p-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <p className="text-[0.64rem] font-black uppercase tracking-[0.13em] text-[#776f66]">Bevestigde winkelvoorraad per vestiging</p>
@@ -934,6 +1450,18 @@ export default function ProductionPlanningClient({
           );
         })}
       </div>
+      {printOptionsBatch && (
+        <PrintOptionsDialog
+          batch={printOptionsBatch}
+          onClose={() => setPrintOptionsBatch(null)}
+          onSelect={(type) => {
+            const selectedBatch = printOptionsBatch;
+            setPrintOptionsBatch(null);
+            if (type === "production") setProductionPrintBatch(selectedBatch);
+            else setDistributionBatch(selectedBatch);
+          }}
+        />
+      )}
       {storeOrderBatch && (
         <GeneralStoreOrderDialog
           batch={storeOrderBatch}
@@ -949,6 +1477,9 @@ export default function ProductionPlanningClient({
       )}
       {distributionBatch && (
         <DistributionPreviewDialog batch={distributionBatch} onClose={() => setDistributionBatch(null)} />
+      )}
+      {productionPrintBatch && (
+        <ProductionPrintPreviewDialog batch={productionPrintBatch} onClose={() => setProductionPrintBatch(null)} />
       )}
     </div>
   );

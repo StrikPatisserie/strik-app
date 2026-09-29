@@ -100,6 +100,10 @@ export async function POST(request: Request) {
   if (Number.isNaN(requestedDate.getTime()) || requestedDate.toISOString().slice(0, 10) !== payload.pickupDate) {
     return error("Kies een geldige afhaaldatum.");
   }
+  const lastPickupDate = `${requestedDate.getUTCFullYear()}-12-05`;
+  if (payload.pickupDate > lastPickupDate) {
+    return error("Chocoladeletters kunnen uiterlijk 5 december worden afgehaald.");
+  }
 
   try {
     const { url } = requireSupabasePublicConfig();
