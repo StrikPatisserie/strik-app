@@ -441,6 +441,7 @@ function OrderRow({
   onDelete,
   updatingId,
   productionMode = false,
+  roundedStyle = false,
 }: Readonly<{
   order: ChocolateLetterOrder;
   onToggleDone: (order: ChocolateLetterOrder) => void;
@@ -449,6 +450,7 @@ function OrderRow({
   onDelete: (order: ChocolateLetterOrder) => void;
   updatingId: string;
   productionMode?: boolean;
+  roundedStyle?: boolean;
 }>) {
   const extraLines = [
     order.source === "online" && "Herkomst: online bestelling",
@@ -474,7 +476,7 @@ function OrderRow({
 
   return (
     <article
-      className={`border px-3 py-2 ${
+      className={`border px-3 py-2 ${roundedStyle ? "rounded-2xl shadow-[0_8px_22px_rgba(50,67,51,0.07)]" : ""} ${
         isDone
           ? "border-[#b7d8ad] bg-[#eef8ea]"
           : isOnline
@@ -956,8 +958,8 @@ function LetterOrderDialog({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-6xl border border-[#d6e5d8] bg-[#faf8f5] p-3 shadow-2xl sm:p-4">
-        <div className="mb-3 flex items-start justify-between gap-3 border-b border-[#e4ded5] pb-3">
+      <div className={`w-full max-w-6xl border bg-[#faf8f5] p-3 shadow-2xl sm:p-4 ${mode === "winkel" ? "rounded-[2rem] border-white/90" : "border-[#d6e5d8]"}`}>
+        <div className={`mb-3 flex items-start justify-between gap-3 pb-3 ${mode === "winkel" ? "px-1" : "border-b border-[#e4ded5]"}`}>
           <div>
             <p className="text-[0.66rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
               Chocoladeletters
@@ -969,7 +971,7 @@ function LetterOrderDialog({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center border border-[#e4ded5] bg-white text-xl font-black text-[#1a1815]"
+            className={`flex h-9 w-9 shrink-0 items-center justify-center border border-[#e4ded5] bg-white text-xl font-black text-[#1a1815] ${mode === "winkel" ? "rounded-full shadow-sm" : ""}`}
             aria-label="Sluiten"
           >
             ×
@@ -1429,6 +1431,7 @@ export default function SinterklaasLettersClient({
   }
 
   const groupedOrders = groupByMonth(visibleOrders);
+  const isStoreMode = mode === "winkel";
 
   return (
     <div className="space-y-4">
@@ -1445,25 +1448,25 @@ export default function SinterklaasLettersClient({
           </span>
         </div>
       )}
-      <section className="border border-[#e4ded5] bg-white p-3 shadow-sm">
-        <div className={`grid gap-2 ${mode === "productie" ? "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_13rem]" : "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem]"}`}>
+      <section className={isStoreMode ? "rounded-[1.75rem] border border-white/90 bg-[#f8f5ee]/95 p-3 shadow-[0_12px_30px_rgba(50,67,51,0.09)] sm:p-4" : "border border-[#e4ded5] bg-white p-3 shadow-sm"}>
+        <div className={`grid gap-2 ${mode === "productie" ? "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_13rem]" : isStoreMode ? "md:grid-cols-[minmax(0,1fr)_6rem_8rem_auto]" : "xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem]"}`}>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Zoek ordernummer, klant, datum of letter"
-            className="h-10 border border-[#e4ded5] bg-[#faf8f5] px-3 text-sm font-bold outline-none"
+            className={`h-11 border border-[#e4ded5] bg-white px-4 text-sm font-bold outline-none transition focus:border-[#78947e] focus:ring-2 focus:ring-[#c3d3bc]/60 ${isStoreMode ? "rounded-full" : ""}`}
           />
           <input
             value={year}
             onChange={(event) => setYear(event.target.value)}
-            className="h-10 border border-[#e4ded5] bg-[#faf8f5] px-3 text-sm font-black outline-none"
+            className={`h-11 border border-[#e4ded5] bg-white px-4 text-sm font-black outline-none transition focus:border-[#78947e] focus:ring-2 focus:ring-[#c3d3bc]/60 ${isStoreMode ? "rounded-full" : ""}`}
           />
           <button
             type="button"
             onClick={() => void loadOrders(year, search)}
-            className="h-10 bg-[#f7df83] px-3 text-sm font-black text-[#1a1815]"
+            className={`h-11 px-4 text-sm font-black transition ${isStoreMode ? "rounded-full bg-[#efe6dc] text-[#4b352f] hover:bg-[#e7d9cd]" : "bg-[#f7df83] text-[#1a1815]"}`}
           >
-            Ververs
+            {isStoreMode ? "↻ Ververs" : "Ververs"}
           </button>
           {mode === "productie" && (
             <button
@@ -1478,10 +1481,10 @@ export default function SinterklaasLettersClient({
           <button
             type="button"
             onClick={openNewOrderDialog}
-            className="flex h-10 items-center justify-center gap-2 bg-[#24551d] px-3 text-sm font-black text-white"
+            className={`flex items-center justify-center gap-2 bg-[#24551d] px-4 text-sm font-black text-white transition hover:bg-[#1d4618] ${isStoreMode ? "h-11 rounded-full shadow-[0_8px_18px_rgba(36,85,29,0.18)]" : "h-10"}`}
           >
             <span
-              className="flex h-6 w-6 items-center justify-center bg-white/20 text-lg leading-none"
+              className={`flex h-6 w-6 items-center justify-center text-lg leading-none ${isStoreMode ? "rounded-full border border-white/70" : "bg-white/20"}`}
               aria-hidden="true"
             >
               +
@@ -1492,11 +1495,11 @@ export default function SinterklaasLettersClient({
       </section>
 
       {error && (
-        <p className="border border-[#f1b8a8] bg-[#fff4ef] px-3 py-2 text-sm font-black text-[#9a3412]">
+        <p className={`border border-[#f1b8a8] bg-[#fff4ef] px-3 py-2 text-sm font-black text-[#9a3412] ${isStoreMode ? "rounded-2xl" : ""}`}>
           {error}
         </p>
       )}
-      {notice && <p role="status" className="border border-[#b7d8ad] bg-[#eef8ea] px-3 py-2 text-sm font-black text-[#24551d]">{notice}</p>}
+      {notice && <p role="status" className={`border border-[#b7d8ad] bg-[#eef8ea] px-3 py-2 text-sm font-black text-[#24551d] ${isStoreMode ? "rounded-2xl" : ""}`}>{notice}</p>}
 
       {mode === "productie" && (
         <section className="space-y-2 border border-[#b9d0bd] bg-[#f6faf4] p-3">
@@ -1578,31 +1581,31 @@ export default function SinterklaasLettersClient({
           )}
         </section>
       ) : (
-      <section className="space-y-3">
+      <section className={isStoreMode ? "space-y-2" : "space-y-3"}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-2xl font-black text-[#1a1815]">
+            <h2 className={`${isStoreMode ? "text-xl" : "text-2xl"} font-black text-[#1a1815]`}>
               {mode === "productie" ? "Productielijst" : "Bestellingen"}
             </h2>
-            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#8b8278]">
+            <p className={`${isStoreMode ? "mt-0.5 text-[0.65rem] tracking-[0.16em]" : "text-xs tracking-[0.12em]"} font-black uppercase text-[#8b8278]`}>
               Gesorteerd op ophaaldatum
             </p>
           </div>
-          <span className="w-fit rounded-full bg-[#f2eee8] px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#6b645b]">
+          <span className="w-fit rounded-full border border-white/80 bg-[#f2eee8]/90 px-3 py-1 text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#6b645b]">
             {visibleOrders.length} zichtbaar
           </span>
         </div>
 
         <div className="space-y-3">
           {loading && (
-            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
+            <p className={`border border-[#e4ded5] bg-white px-4 py-3 text-sm font-bold text-[#6b645b] ${isStoreMode ? "rounded-2xl" : ""}`}>
               Laden...
             </p>
           )}
           {!loading &&
             groupedOrders.map(([key, group]) => (
-              <section key={key} className="border border-[#e4ded5] bg-white/65">
-                <div className="flex items-center justify-between bg-[#dcebd8] px-3 py-1.5">
+              <section key={key} className={`border border-[#e4ded5] bg-white/65 ${isStoreMode ? "rounded-[1.75rem] border-white/85 p-2 shadow-[0_10px_25px_rgba(50,67,51,0.07)]" : ""}`}>
+                <div className={`flex items-center justify-between bg-[#dcebd8] px-3 py-1.5 ${isStoreMode ? "rounded-2xl" : ""}`}>
                   <h3 className="text-sm font-black capitalize text-[#1a1815]">
                     {monthLabel(key)}
                   </h3>
@@ -1610,7 +1613,7 @@ export default function SinterklaasLettersClient({
                     {group.length} totaal
                   </span>
                 </div>
-                <div className="grid gap-1.5 p-2">
+                <div className={`grid gap-1.5 ${isStoreMode ? "px-0 pt-2" : "p-2"}`}>
                   {group.map((order) => (
                     <OrderRow
                       key={order.id}
@@ -1621,14 +1624,15 @@ export default function SinterklaasLettersClient({
                       onDelete={(nextOrder) => void deleteOrder(nextOrder)}
                       updatingId={updatingId}
                       productionMode={mode === "productie"}
+                      roundedStyle={isStoreMode}
                     />
                   ))}
                 </div>
               </section>
             ))}
           {!loading && visibleOrders.length < 1 && (
-            <p className="border border-[#e4ded5] bg-white px-3 py-2 text-sm font-bold text-[#6b645b]">
-              Geen letterbestellingen gevonden.
+            <p className={`border border-white/90 bg-[#f8f5ee]/90 px-4 py-4 text-sm font-bold text-[#6b645b] shadow-[0_8px_22px_rgba(50,67,51,0.06)] ${isStoreMode ? "rounded-2xl" : "border-[#e4ded5] bg-white px-3 py-2 shadow-none"}`}>
+              {isStoreMode ? "Nog geen winkelbestellingen gevonden." : "Geen letterbestellingen gevonden."}
             </p>
           )}
         </div>
