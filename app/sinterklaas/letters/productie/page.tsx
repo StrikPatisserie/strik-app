@@ -50,7 +50,9 @@ type RegistrationPart = {
 
 type Batch = {
   id: string;
+  production_start_date: string | null;
   production_date: string;
+  pickup_from_date: string | null;
   status: string;
   minimum_lead_days: number;
 };
@@ -72,12 +74,25 @@ function productIdentity(product: Product | null | undefined, logo = false, note
 export default async function SinterklaasLettersProductiePage() {
   const season = String(new Date().getFullYear());
   const db = createAdminClient();
-  const [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult] = await Promise.all([
-    db
+  const batchesRequest = (async () => {
+    const extendedResult = await db
+      .from("letter_production_batches")
+      .select("id,production_start_date,production_date,pickup_from_date,status,minimum_lead_days")
+      .eq("season", Number(season))
+      .neq("status", "CLOSED")
+      .order("production_date");
+
+    if (!extendedResult.error) return extendedResult;
+
+    return db
       .from("letter_production_batches")
       .select("id,production_date,status,minimum_lead_days")
       .eq("season", Number(season))
-      .order("production_date"),
+      .neq("status", "CLOSED")
+      .order("production_date");
+  })();
+  const [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult] = await Promise.all([
+    batchesRequest,
     db
       .from("letter_production_allocations")
       .select("id,batch_id,planned_quantity,letter_order_items(id,quantity,logo,notes,letter_products(letter,flavour,size,style),letter_orders(requested_date,fulfillment_status))"),
@@ -93,7 +108,22 @@ export default async function SinterklaasLettersProductiePage() {
   ]);
   const loadError = [batchesResult, allocationsResult, targetsResult, partsResult, itemsResult]
     .find((result) => result.error)?.error;
-  const batches = (batchesResult.data || []) as Batch[];
+  const batchRows = (batchesResult.data || []) as unknown as Array<{
+    id: string;
+    production_start_date?: string | null;
+    production_date: string;
+    pickup_from_date?: string | null;
+    status: string;
+    minimum_lead_days: number;
+  }>;
+  const batches = batchRows.map((batch) => ({
+    id: batch.id,
+    production_start_date: batch.production_start_date || null,
+    production_date: batch.production_date,
+    pickup_from_date: batch.pickup_from_date || null,
+    status: batch.status,
+    minimum_lead_days: batch.minimum_lead_days,
+  })) as Batch[];
   const allocations = (allocationsResult.data || []) as unknown as Allocation[];
   const targets = (targetsResult.data || []) as unknown as StockTarget[];
   const parts = (partsResult.data || []) as RegistrationPart[];
@@ -164,7 +194,9 @@ export default async function SinterklaasLettersProductiePage() {
 
     return {
       id: batch.id,
+      startDate: batch.production_start_date || batch.production_date,
       date: batch.production_date,
+      pickupFrom: batch.pickup_from_date || undefined,
       status: batch.status,
       minimumLeadDays: batch.minimum_lead_days,
       rows: [...rows.values()],
@@ -175,7 +207,7 @@ export default async function SinterklaasLettersProductiePage() {
     <StrikShell wide>
       <StrikPageHeader
         title="Productie chocoladeletters"
-        description={`Totaaloverzicht en verdeling over de centrale productiedagen van ${season}.`}
+        description={`Totaaloverzicht en verdeling over de drie centrale productierondes van ${season}.`}
         icon={strikIcons.sinterklaasProductie}
       />
       {loadError ? (
@@ -184,7 +216,7 @@ export default async function SinterklaasLettersProductiePage() {
         </p>
       ) : batchSeeds.length === 0 ? (
         <p className="border border-[#d8d1c8] bg-white p-4 font-bold text-[#6b645b]">
-          Voor {season} zijn nog geen centrale productiedagen ingesteld.
+          Voor {season} zijn nog geen centrale productierondes ingesteld.
         </p>
       ) : (
         <ProductionPlanningClient

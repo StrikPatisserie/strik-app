@@ -18,7 +18,9 @@ export type ProductionSeedRow = {
 
 export type ProductionBatchSeed = {
   id: string;
+  startDate: string;
   date: string;
+  pickupFrom?: string;
   status: string;
   minimumLeadDays: number;
   rows: ProductionSeedRow[];
@@ -35,6 +37,16 @@ function formatDate(date: string) {
   }).format(new Date(`${date}T12:00:00`));
 }
 
+function formatProductionPeriod(startDate: string, endDate: string) {
+  if (startDate === endDate) return formatDate(endDate);
+  const start = new Intl.DateTimeFormat("nl-NL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date(`${startDate}T12:00:00`));
+  return `${start} & ${formatDate(endDate)}`;
+}
+
 function addDays(date: string, days: number) {
   const [year, month, day] = date.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
@@ -45,11 +57,18 @@ function findProductionDate(
   requestedDate: string,
   explicitDate = ""
 ) {
-  if (batches.some((batch) => batch.date === explicitDate)) return explicitDate;
+  const explicitBatch = batches.find(
+    (batch) => batch.date === explicitDate || batch.startDate === explicitDate
+  );
+  if (explicitBatch) return explicitBatch.date;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)) return "";
 
   return batches
-    .filter((batch) => addDays(batch.date, batch.minimumLeadDays) <= requestedDate)
+    .filter(
+      (batch) =>
+        (batch.pickupFrom || addDays(batch.date, batch.minimumLeadDays)) <=
+        requestedDate
+    )
     .at(-1)?.date || "";
 }
 
@@ -279,7 +298,7 @@ export default function ProductionPlanningClient({
           </div>
         </div>
         <div className="border-t border-[#d8d1c8]">
-          <div className="bg-[#dcebd8] px-3 py-2 text-sm font-black text-[#24551d]">Totaal van alle drie productiedagen</div>
+          <div className="bg-[#dcebd8] px-3 py-2 text-sm font-black text-[#24551d]">Totaal van alle productierondes</div>
           <ProductionTable rows={overview.grandRows} />
         </div>
       </section>
@@ -304,8 +323,8 @@ export default function ProductionPlanningClient({
             <section key={batch.id} className="overflow-hidden border border-[#d8d1c8] bg-white shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3 bg-[#f7df83] px-4 py-3">
                 <div>
-                  <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#6b5120]">Centrale productiedag</p>
-                  <h2 className="text-xl font-black capitalize text-[#1a1815]">{formatDate(batch.date)}</h2>
+                  <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#6b5120]">Centrale productieronde</p>
+                  <h2 className="text-xl font-black capitalize text-[#1a1815]">{formatProductionPeriod(batch.startDate, batch.date)}</h2>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="bg-white/80 px-3 py-1 text-xs font-black text-[#5f3f00]">{planned} te maken</span>

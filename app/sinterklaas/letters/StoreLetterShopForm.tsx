@@ -234,7 +234,7 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
             {availableDates.map((date) => <option key={date} value={date}>{formatPickupDate(date)}</option>)}
           </select>
           <div className="mt-1 flex items-center justify-between gap-2 text-xs font-medium text-[#6b645b]">
-            <span>{availableDates.length ? "Zelfde beschikbare dagen en besteldeadlines als online." : "Geen nieuwe afhaaldatums beschikbaar."}</span>
+            <span>{availableDates.length ? "Dezelfde rondes als online · deadline zondag 20:00." : "Geen nieuwe afhaaldatums beschikbaar."}</span>
             <button type="button" disabled={refreshingDates} onClick={() => void refreshAvailableDates().catch((refreshError) => setError(refreshError instanceof Error ? refreshError.message : "Datums verversen is mislukt."))} className="shrink-0 font-bold text-[#547762] underline disabled:opacity-50">{refreshingDates ? "Laden..." : "Ververs"}</button>
           </div>
         </div>
