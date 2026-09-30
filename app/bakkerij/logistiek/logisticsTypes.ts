@@ -34,7 +34,7 @@ export type LogisticsReceiptLine = {
 
 export type LogisticsPreparationProduct = {
   id: string;
-  category: "vers";
+  category: "bakkerij" | "logistiek";
   articleNumber: string;
   articleName: string;
   updatedAt: string;

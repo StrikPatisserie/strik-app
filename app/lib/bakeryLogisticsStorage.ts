@@ -84,27 +84,53 @@ const DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT =
 const DEFAULT_LOGISTICS_PREPARATION_PRODUCT_UPDATED_AT =
   "2026-09-30T00:00:00.000Z";
 
-const DEFAULT_LOGISTICS_PREPARATION_PRODUCTS: LogisticsPreparationProduct[] = [
-  ["20100.686", "Red velvet"],
-  ["20101.686", "Framboyant"],
-  ["20102.686", "Brownie salty caramel"],
-  ["20106.686", "Seizoens cheesecake"],
-  ["20202.638", "Hazelnoot slagroom schuim"],
-  ["20203.658", "Nougatine slagroom schuim"],
-  ["20701", "Vegan pistache lemon"],
-  ["20702", "Vegan sticky choco walnoot"],
-  ["25100", "Strik's marsepeintaart"],
-  ["35100", "Passie slof"],
-  ["35101", "Woudvruchten slof"],
-  ["35102", "Caramelslof"],
-  ["35103", "Yoghurt frambozenslof"],
-].map(([articleNumber, articleName]) => ({
-  id: `preparation:${articleNumber}`,
-  category: "vers" as const,
-  articleNumber,
-  articleName,
-  updatedAt: DEFAULT_LOGISTICS_PREPARATION_PRODUCT_UPDATED_AT,
-}));
+const DEFAULT_LOGISTICS_PREPARATION_PRODUCTS: LogisticsPreparationProduct[] = (
+  [
+    {
+      category: "logistiek" as const,
+      products: [
+        ["20100.686", "Red velvet"],
+        ["20101.686", "Framboyant"],
+        ["20102.686", "Brownie salty caramel"],
+        ["20106.686", "Seizoens cheesecake"],
+        ["20202.638", "Hazelnoot slagroom schuim"],
+        ["20203.658", "Nougatine slagroom schuim"],
+        ["20701", "Vegan pistache lemon"],
+        ["20702", "Vegan sticky choco walnoot"],
+        ["25100", "Strik's marsepeintaart"],
+        ["35100", "Passie slof"],
+        ["35101", "Woudvruchten slof"],
+        ["35102", "Caramelslof"],
+        ["35103", "Yoghurt frambozenslof"],
+      ],
+    },
+    {
+      category: "bakkerij" as const,
+      products: [
+        [".690", "12 pers. DV Horeca"],
+        ["550", "Petit four (p.s.)"],
+        ["551", "Petit Four met tekst"],
+        ["552", "Petit Four met logo"],
+        ["508.201", "Petit Fleur (p.s.)"],
+        ["509.611", "Petit gateau Lemon Merengue"],
+        ["509.612", "Petit gateau Choco Mousse"],
+        ["509.613", "Petit gateau Blueberry Cheese"],
+        ["509.614", "Petit gateau Passie/Mango"],
+      ],
+    },
+  ] satisfies Array<{
+    category: LogisticsPreparationProduct["category"];
+    products: string[][];
+  }>
+).flatMap(({ category, products }) =>
+  products.map(([articleNumber, articleName]) => ({
+    id: `preparation:${category}:${articleNumber}`,
+    category,
+    articleNumber,
+    articleName,
+    updatedAt: DEFAULT_LOGISTICS_PREPARATION_PRODUCT_UPDATED_AT,
+  }))
+);
 
 const DEFAULT_LOGISTICS_FIXED_CUSTOMERS: LogisticsFixedCustomer[] = [
   {
@@ -701,17 +727,18 @@ function normalizeLogisticsPreparationProduct(
 ): LogisticsPreparationProduct | null {
   if (!value || typeof value !== "object") return null;
 
-  const raw = value as Partial<LogisticsPreparationProduct>;
+  const raw = value as Partial<LogisticsPreparationProduct> & {
+    category?: unknown;
+  };
+  const category = raw.category === "bakkerij" ? "bakkerij" : "logistiek";
   const articleNumber = cleanPreparationArticleNumber(raw.articleNumber);
   const articleName = cleanFixedCustomerText(raw.articleName, 200);
   const updatedAt =
     cleanFixedCustomerText(raw.updatedAt, 80) || new Date().toISOString();
-  const id =
-    cleanFixedCustomerText(raw.id, 160) || `preparation:${articleNumber}`;
 
   if (
     !articleName ||
-    !/^(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?$/.test(
+    !/^(?:(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?|\.[A-Z0-9]{1,8})$/.test(
       articleNumber
     )
   ) {
@@ -719,8 +746,8 @@ function normalizeLogisticsPreparationProduct(
   }
 
   return {
-    id,
-    category: "vers",
+    id: `preparation:${category}:${articleNumber}`,
+    category,
     articleNumber,
     articleName,
     updatedAt,
@@ -942,14 +969,24 @@ function normalizeLogisticsPreparationProductsState(
     .map(normalizeLogisticsPreparationProduct)
     .forEach((product) => {
       if (!product) return;
-      productsByNumber.set(product.articleNumber, product);
+      productsByNumber.set(`${product.category}:${product.articleNumber}`, product);
     });
+  if (![...productsByNumber.values()].some((product) => product.category === "bakkerij")) {
+    DEFAULT_LOGISTICS_PREPARATION_PRODUCTS.filter(
+      (product) => product.category === "bakkerij"
+    ).forEach((product) => {
+      productsByNumber.set(`${product.category}:${product.articleNumber}`, product);
+    });
+  }
   const products = Array.from(productsByNumber.values())
-    .sort((first, second) =>
-      first.articleNumber.localeCompare(second.articleNumber, "nl-NL", {
+    .sort((first, second) => {
+      const categoryCompare = first.category.localeCompare(second.category);
+      if (categoryCompare) return categoryCompare;
+
+      return first.articleNumber.localeCompare(second.articleNumber, "nl-NL", {
         numeric: true,
-      })
-    )
+      });
+    })
     .slice(0, MAX_STORED_PREPARATION_PRODUCTS);
   const updatedAt =
     cleanFixedCustomerText(rawUpdatedAt, 80) ||

@@ -437,107 +437,31 @@ const preparationCategories: Record<
     emptyLabel: "Geen bakkerij-voorbereiding gevonden voor deze dag.",
   },
   logistiek: {
-    label: "Verdeellijst logistiek · vers",
-    shortLabel: "Vers",
-    emptyLabel: "Geen versproducten gevonden voor deze dag.",
+    label: "Verdeellijst logistiek",
+    shortLabel: "Logistiek",
+    emptyLabel: "Geen logistieke producten gevonden voor deze dag.",
   },
 };
-
-const preparationRules: PreparationRule[] = [
-  {
-    category: "bakkerij",
-    code: ".690",
-    label: "12 pers. DV Horeca",
-    subcode: "690",
-    textPatterns: [/\bdv horeca\b/, /\b12\s*pers\b.*\bhoreca\b/],
-  },
-  {
-    category: "bakkerij",
-    code: "550",
-    label: "Petit four (p.s.)",
-    articleNumber: "550",
-    textPatterns: [/^(?!.*\b(?:tekst|logo|foto)\b).*\bpetit fours?\b/],
-  },
-  {
-    category: "bakkerij",
-    code: "551",
-    label: "Petit Four met tekst",
-    articleNumber: "551",
-    textPatterns: [/\bpetit fours?\b.*\btekst\b/, /\btekst\b.*\bpetit fours?\b/],
-  },
-  {
-    category: "bakkerij",
-    code: "552",
-    label: "Petit Four met logo",
-    articleNumber: "552",
-    textPatterns: [
-      /\bpetit fours?\b.*\b(?:logo|foto)\b/,
-      /\b(?:logo|foto)\b.*\bpetit fours?\b/,
-    ],
-  },
-  {
-    category: "bakkerij",
-    code: "508.201",
-    label: "Petit Fleur (p.s.)",
-    articleNumber: "508",
-    subcode: "201",
-    textPatterns: [/\bpetit\s+fleur\b/],
-  },
-  {
-    category: "bakkerij",
-    code: "509.611",
-    label: "Petit gateau Lemon Merengue",
-    articleNumber: "509",
-    subcode: "611",
-    textPatterns: [
-      /\bpetit gateau\b.*\b(?:lemon|citroen)\b.*\b(?:merengue|meringue)\b/,
-    ],
-  },
-  {
-    category: "bakkerij",
-    code: "509.612",
-    label: "Petit gateau Choco Mousse",
-    articleNumber: "509",
-    subcode: "612",
-    textPatterns: [/\bpetit gateau\b.*\b(?:choco|chocolade)\b.*\bmousse\b/],
-  },
-  {
-    category: "bakkerij",
-    code: "509.613",
-    label: "Petit gateau Blueberry Cheese",
-    articleNumber: "509",
-    subcode: "613",
-    textPatterns: [/\bpetit gateau\b.*\b(?:blueberry|blauwe bes)\b.*\bcheese\b/],
-  },
-  {
-    category: "bakkerij",
-    code: "509.614",
-    label: "Petit gateau Passie/Mango",
-    articleNumber: "509",
-    subcode: "614",
-    textPatterns: [/\bpetit gateau\b.*\b(?:passie|passion|mango)\b/],
-  },
-];
 
 function preparationRulesFor(
   category: PreparationCategory,
   products: PreparationProductSummary[]
 ) {
-  if (category === "bakkerij") {
-    return preparationRules.filter((rule) => rule.category === category);
-  }
-
-  return products.map((product) => {
+  const managedRules = products
+    .filter((product) => product.category === category)
+    .map((product) => {
     const [articleNumber, subcode] = product.articleNumber.split(".", 2);
 
     return {
-      category: "logistiek" as const,
+      category,
       code: product.articleNumber,
       label: product.articleName,
       articleNumber,
       subcode: subcode || undefined,
     };
   });
+
+  return managedRules;
 }
 
 const pressureOptions: {
@@ -4240,7 +4164,7 @@ function normalizePreparationCode(value: string) {
 
 function receiptLineArticleParts(
   line: ReceiptLine,
-  rules: PreparationRule[] = preparationRules
+  rules: PreparationRule[]
 ) {
   const article = String(line.articleNumber || "").trim();
   const articleMatch = article.match(
@@ -4328,7 +4252,7 @@ function preparationItemKeyFor(
   const { articleNumber, subcode } = receiptLineArticleParts(line, rules);
   const description = cleanProductLabel(cleanReceiptLineDescription(line.description));
   const productKey =
-    rule.category === "logistiek"
+    rule.articleNumber
       ? rule.code
       : rule.subcode && !rule.articleNumber
         ? `${articleNumber}|${subcode}|${normalizeMatchText(description)}`
@@ -4382,7 +4306,7 @@ function buildPreparationItems(
           articleNumber: line.catalogArticleNumber || articleNumber,
           subcode,
           description:
-            category === "logistiek"
+            rule.articleNumber
               ? rule.label
               : cleanProductLabel(cleanReceiptLineDescription(line.description)) ||
                 rule.label,
@@ -8400,8 +8324,8 @@ export default function BakkerijLogistiekDashboard() {
   const [preparationProducts, setPreparationProducts] = useState<
     PreparationProductSummary[]
   >([]);
-  const [preparationProductManagerOpen, setPreparationProductManagerOpen] =
-    useState(false);
+  const [preparationProductManagerCategory, setPreparationProductManagerCategory] =
+    useState<PreparationCategory | null>(null);
   const [preparationProductMessage, setPreparationProductMessage] = useState("");
   const [isSavingPreparationProducts, setIsSavingPreparationProducts] =
     useState(false);
@@ -9597,10 +9521,16 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   async function savePreparationProducts(
+    category: PreparationCategory,
     products: PreparationProductSummary[]
   ) {
+    const categoryLabel = category === "bakkerij" ? "Bakkerijlijst" : "Logistieklijst";
+    const allProducts = [
+      ...preparationProducts.filter((product) => product.category !== category),
+      ...products,
+    ];
     setIsSavingPreparationProducts(true);
-    setPreparationProductMessage("verslijst opslaan...");
+    setPreparationProductMessage(`${categoryLabel.toLowerCase()} opslaan...`);
 
     try {
       const response = await fetch(
@@ -9608,7 +9538,7 @@ export default function BakkerijLogistiekDashboard() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ products }),
+          body: JSON.stringify({ products: allProducts }),
         }
       );
       const data = (await response.json()) as {
@@ -9618,19 +9548,24 @@ export default function BakkerijLogistiekDashboard() {
       };
 
       if (!response.ok || !data.ok || !data.products) {
-        throw new Error(data.message || "Verslijst opslaan is niet gelukt.");
+        throw new Error(
+          data.message || `${categoryLabel} opslaan is niet gelukt.`
+        );
       }
 
       setPreparationProducts(data.products);
+      const savedCount = data.products.filter(
+        (product) => product.category === category
+      ).length;
       setPreparationProductMessage(
-        `${data.products.length} versproducten opgeslagen.`
+        `${savedCount} producten in de ${categoryLabel.toLowerCase()} opgeslagen.`
       );
       return true;
     } catch (error) {
       setPreparationProductMessage(
         error instanceof Error
           ? error.message
-          : "Verslijst opslaan is niet gelukt."
+          : `${categoryLabel} opslaan is niet gelukt.`
       );
       return false;
     } finally {
@@ -9807,9 +9742,9 @@ export default function BakkerijLogistiekDashboard() {
               <span className="ml-1 border-l border-[#e8e4de] pl-2">
                 <PreparationPrintButton
                   printDisabled={receiptSummaries.length === 0}
-                  onManage={() => {
+                  onManage={(category) => {
                     setPreparationProductMessage("");
-                    setPreparationProductManagerOpen(true);
+                    setPreparationProductManagerCategory(category);
                   }}
                   onSelect={(category) =>
                     openPreparationSheet(
@@ -10058,11 +9993,12 @@ export default function BakkerijLogistiekDashboard() {
             </section>
           </div>
         )}
-        {preparationProductManagerOpen && (
+        {preparationProductManagerCategory && (
           <PreparationProductsModal
+            category={preparationProductManagerCategory}
             isSaving={isSavingPreparationProducts}
             message={preparationProductMessage}
-            onClose={() => setPreparationProductManagerOpen(false)}
+            onClose={() => setPreparationProductManagerCategory(null)}
             onSave={savePreparationProducts}
             products={preparationProducts}
           />
@@ -12190,32 +12126,40 @@ function cleanManagedPreparationArticleNumber(value: string) {
 }
 
 function PreparationProductsModal({
+  category,
   isSaving,
   message,
   onClose,
   onSave,
   products,
 }: Readonly<{
+  category: PreparationCategory;
   isSaving: boolean;
   message: string;
   onClose: () => void;
-  onSave: (products: PreparationProductSummary[]) => Promise<boolean>;
+  onSave: (
+    category: PreparationCategory,
+    products: PreparationProductSummary[]
+  ) => Promise<boolean>;
   products: PreparationProductSummary[];
 }>) {
-  const [draft, setDraft] = useState<PreparationProductSummary[]>(products);
+  const [draft, setDraft] = useState<PreparationProductSummary[]>(() =>
+    products.filter((product) => product.category === category)
+  );
   const [articleNumber, setArticleNumber] = useState("");
   const [articleName, setArticleName] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
+  const listLabel = category === "bakkerij" ? "Bakkerijlijst" : "Logistieklijst";
 
   useEffect(() => {
-    setDraft(products);
-  }, [products]);
+    setDraft(products.filter((product) => product.category === category));
+  }, [category, products]);
 
   function addProduct() {
     const number = cleanManagedPreparationArticleNumber(articleNumber);
     const name = articleName.replace(/\s+/g, " ").trim();
 
-    if (!/^(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?$/.test(number)) {
+    if (!/^(?:(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?|\.[A-Z0-9]{1,8})$/.test(number)) {
       setValidationMessage("Vul een geldig, volledig artikelnummer in.");
       return;
     }
@@ -12224,7 +12168,7 @@ function PreparationProductsModal({
       return;
     }
     if (draft.some((product) => product.articleNumber === number)) {
-      setValidationMessage(`${number} staat al in de verslijst.`);
+      setValidationMessage(`${number} staat al in de ${listLabel.toLowerCase()}.`);
       return;
     }
 
@@ -12232,8 +12176,8 @@ function PreparationProductsModal({
       [
         ...current,
         {
-          id: `preparation:${number}`,
-          category: "vers" as const,
+          id: `preparation:${category}:${number}`,
+          category,
           articleNumber: number,
           articleName: name,
           updatedAt: new Date().toISOString(),
@@ -12258,13 +12202,13 @@ function PreparationProductsModal({
         <header className="flex items-start justify-between gap-3 border-b border-[#e8e1d8] px-4 py-3 sm:px-5">
           <div>
             <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#6f836b]">
-              Verdeellijst logistiek
+              Voorbereidingslijst
             </p>
             <h2
               id="preparation-products-title"
               className="mt-0.5 text-xl font-black tracking-normal text-[#1a1815] sm:text-2xl"
             >
-              Versproducten beheren
+              {listLabel} beheren
             </h2>
             <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
               Het artikelnummer wordt exact gematcht. De naam is alleen een
@@ -12297,7 +12241,7 @@ function PreparationProductsModal({
                 <button
                   type="button"
                   aria-label={`${product.articleName} verwijderen`}
-                  title="Uit verslijst verwijderen"
+                  title={`Uit de ${listLabel.toLowerCase()} verwijderen`}
                   onClick={() => {
                     setDraft((current) =>
                       current.filter((item) => item.id !== product.id)
@@ -12363,7 +12307,7 @@ function PreparationProductsModal({
 
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e8e1d8] bg-white px-4 py-3 sm:px-5">
           <p className="text-xs font-semibold text-[#6b645b]">
-            {message || `${draft.length} producten in de verslijst`}
+            {message || `${draft.length} producten in de ${listLabel.toLowerCase()}`}
           </p>
           <div className="ml-auto flex gap-2">
             <button
@@ -12376,7 +12320,7 @@ function PreparationProductsModal({
             <button
               type="button"
               disabled={isSaving || draft.length === 0}
-              onClick={() => void onSave(draft)}
+              onClick={() => void onSave(category, draft)}
               className="h-10 rounded-xl bg-[#1a1815] px-4 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isSaving ? "Opslaan..." : "Lijst opslaan"}
@@ -12394,7 +12338,7 @@ function PreparationPrintButton({
   onSelect,
 }: Readonly<{
   printDisabled?: boolean;
-  onManage: () => void;
+  onManage: (category: PreparationCategory) => void;
   onSelect: (category: PreparationCategory) => void;
 }>) {
   const [open, setOpen] = useState(false);
@@ -12429,16 +12373,25 @@ function PreparationPrintButton({
               </button>
             )
           )}
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              onManage();
-            }}
-            className="min-h-8 rounded-lg border-t border-[#eee9e2] px-2 text-left text-[0.68rem] font-bold tracking-normal text-[#6b645b] transition hover:bg-[#faf8f5] hover:text-[#1a1815]"
-          >
-            Versproducten beheren
-          </button>
+          {(["bakkerij", "logistiek"] as PreparationCategory[]).map(
+            (category, index) => (
+              <button
+                key={`manage-${category}`}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onManage(category);
+                }}
+                className={`min-h-8 rounded-lg px-2 text-left text-[0.68rem] font-bold tracking-normal text-[#6b645b] transition hover:bg-[#faf8f5] hover:text-[#1a1815] ${
+                  index === 0 ? "border-t border-[#eee9e2]" : ""
+                }`}
+              >
+                {category === "bakkerij"
+                  ? "Bakkerijlijst beheren"
+                  : "Logistieklijst beheren"}
+              </button>
+            )
+          )}
         </div>
       )}
     </div>

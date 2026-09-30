@@ -36,11 +36,12 @@ function cleanPreparationProduct(
   if (!value || typeof value !== "object") return null;
 
   const raw = value as Record<string, unknown>;
+  const category = raw.category === "bakkerij" ? "bakkerij" : "logistiek";
   const articleNumber = cleanArticleNumber(raw.articleNumber);
   const articleName = cleanText(raw.articleName, 200);
   if (
     !articleName ||
-    !/^(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?$/.test(
+    !/^(?:(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?|\.[A-Z0-9]{1,8})$/.test(
       articleNumber
     )
   ) {
@@ -48,8 +49,8 @@ function cleanPreparationProduct(
   }
 
   return {
-    id: `preparation:${articleNumber}`,
-    category: "vers",
+    id: `preparation:${category}:${articleNumber}`,
+    category,
     articleNumber,
     articleName,
     updatedAt: new Date().toISOString(),
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
     const productsByNumber = new Map<string, LogisticsPreparationProduct>();
     body.products.map(cleanPreparationProduct).forEach((product) => {
       if (!product) return;
-      productsByNumber.set(product.articleNumber, product);
+      productsByNumber.set(`${product.category}:${product.articleNumber}`, product);
     });
     const products = await replaceLogisticsPreparationProducts(
       Array.from(productsByNumber.values())
