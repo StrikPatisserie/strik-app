@@ -4650,58 +4650,78 @@ function createBusRoutePrintHtml(input: {
     input.plan.date
   )}`;
   const routesHtml = printableRoutes
-    .map((route) => {
+    .map((route, routeIndex) => {
+      const nextRoute = printableRoutes[routeIndex + 1];
       const rowsHtml = route.stops
         .map((stop, index) => {
           const detailParts = routePrintTimeParts(stop);
           const timeBadge = routePrintTimeBadgeHtml(stop);
-          const badges = stop.badges.length
-            ? `<small class="badges">${escapeHtml(stop.badges.join(" · "))}</small>`
-            : "";
 
           return `
-            <tr>
-              <td class="check"><span></span></td>
-              <td class="nr">${index + 1}</td>
-              <td class="stop">
-                <strong>${escapeHtml(stop.label)}</strong>
-                ${timeBadge}
-                <small>${escapeHtml(detailParts.detail)}</small>
-                ${badges}
-              </td>
-              <td class="arrival"></td>
-              <td class="note"></td>
-            </tr>
+            <article class="stop-card">
+              <div class="stop-number">${index + 1}</div>
+              <div class="stop-content">
+                <div class="stop-heading">
+                  <strong>${escapeHtml(stop.label)}</strong>
+                  ${timeBadge}
+                </div>
+                <p>${escapeHtml(detailParts.detail || "Adres controleren")}</p>
+                <div class="write-fields">
+                  <span><b>Aankomst</b></span>
+                  <span class="note-line"><b>Opmerking</b></span>
+                </div>
+              </div>
+              <div class="stop-check"><span></span><small>GEREED</small></div>
+            </article>
           `;
         })
         .join("");
 
       return `
-        <section class="route-block">
+        <section class="route-page">
+          <header class="sheet-header">
+            <div class="bus-heading">
+              <span class="bus-letter">${escapeHtml(
+                busIdFromVehicleName(input.routeGroup.vehicle) || "•"
+              )}</span>
+              <div>
+                <h1>${escapeHtml(routeGroupDisplayTitle(input.routeGroup.vehicle))}</h1>
+                <p>${escapeHtml(formatDateLabel(input.plan.date))} · ${stopCount} stops totaal</p>
+              </div>
+            </div>
+            <div class="driver-fields">
+              <span>Chauffeur</span>
+              <span>Vertrek</span>
+              <span>Terug</span>
+            </div>
+          </header>
+
           <div class="route-title">
             <div>
               <h2>${escapeHtml(route.title)}</h2>
-              <p>${escapeHtml(route.departure)} · ${escapeHtml(route.badge)}</p>
+              <p>${escapeHtml(route.departure)} · ${escapeHtml(route.badge)} · ${route.stops.length} stops</p>
             </div>
             <strong>${escapeHtml(route.load)}</strong>
           </div>
           <div class="depot-line">
-            Start: ${escapeHtml(routeDepot.name)} · ${escapeHtml(
-              routeDepot.address
-            )} <span>Terug naar ${escapeHtml(routeDepot.address)}</span>
+            <b>START EN EINDE</b> · ${escapeHtml(routeDepot.address)}
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th class="check">OK</th>
-                <th class="nr">#</th>
-                <th>Stop</th>
-                <th class="arrival">Aankomst</th>
-                <th class="note">Opmerking</th>
-              </tr>
-            </thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
+          <div class="stops">${rowsHtml}</div>
+
+          <section class="general-notes">
+            <h2>Algemene opmerkingen</h2>
+            <div></div>
+            <div></div>
+          </section>
+
+          <footer class="page-footer">
+            <span>Pagina ${routeIndex + 1} van ${printableRoutes.length}</span>
+            ${
+              nextRoute
+                ? `<strong>Z.O.Z. — ${escapeHtml(nextRoute.title)}</strong>`
+                : `<strong class="route-end">EINDE ROUTE</strong>`
+            }
+          </footer>
         </section>
       `;
     })
@@ -4716,7 +4736,7 @@ function createBusRoutePrintHtml(input: {
       @page { margin: 7mm; size: A4 portrait; }
       * { box-sizing: border-box; }
       body {
-        background: #f7f4ef;
+        background: #e9e9e9;
         color: #111;
         font-family: Arial, Helvetica, sans-serif;
         margin: 0;
@@ -4754,168 +4774,237 @@ function createBusRoutePrintHtml(input: {
         border: 1px solid #111;
         color: #111;
       }
-      main {
+      .route-page {
         background: #fff;
+        display: flex;
+        flex-direction: column;
         margin: 0 auto;
-        min-height: 297mm;
-        padding: 8mm;
+        min-height: 283mm;
+        padding: 7mm;
         width: 210mm;
       }
+      .route-page + .route-page {
+        margin-top: 8mm;
+      }
       .sheet-header {
-        align-items: flex-start;
-        border-bottom: 2px solid #111;
+        align-items: center;
+        border-bottom: 3px solid #111;
         display: flex;
         justify-content: space-between;
-        margin-bottom: 4mm;
+        margin-bottom: 3mm;
         padding-bottom: 3mm;
       }
+      .bus-heading {
+        align-items: center;
+        display: flex;
+        gap: 3mm;
+      }
+      .bus-letter {
+        align-items: center;
+        border: 2px solid #111;
+        border-radius: 50%;
+        display: flex;
+        font-size: 17px;
+        font-weight: 900;
+        height: 11mm;
+        justify-content: center;
+        width: 11mm;
+      }
       .sheet-header h1 {
-        font-size: 18px;
+        font-size: 22px;
+        line-height: 1;
         margin: 0;
       }
       .sheet-header p {
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
-        margin: 1mm 0 0;
+        margin: 1.2mm 0 0;
       }
       .driver-fields {
         display: grid;
-        gap: 2mm;
-        min-width: 62mm;
+        gap: 1.2mm;
+        min-width: 55mm;
       }
       .driver-fields span {
         border-bottom: 1px solid #111;
         display: block;
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 700;
-        height: 6mm;
+        height: 5.5mm;
         padding-top: 1mm;
-      }
-      .route-block {
-        break-inside: avoid;
-        margin-bottom: 4mm;
       }
       .route-title {
         align-items: center;
-        background: #f1eee8;
-        border: 1px solid #111;
+        background: #e8e8e8;
+        border: 2px solid #111;
+        border-radius: 3mm 3mm 0 0;
         display: flex;
         justify-content: space-between;
-        padding: 1.5mm 2mm;
+        padding: 2.2mm 3mm;
       }
       .route-title h2 {
-        font-size: 12px;
+        font-size: 18px;
+        line-height: 1;
         margin: 0;
-        text-transform: uppercase;
       }
       .route-title p,
       .route-title strong {
-        font-size: 8px;
-        margin: 0.5mm 0 0;
+        font-size: 11px;
+        margin: 1mm 0 0;
+      }
+      .route-title > strong {
+        margin: 0;
+        max-width: 48%;
+        text-align: right;
       }
       .depot-line {
-        border-left: 1px solid #111;
-        border-right: 1px solid #111;
-        font-size: 7.5px;
-        font-weight: 800;
-        padding: 1.2mm 2mm;
+        border: 2px solid #111;
+        border-top: 0;
+        font-size: 10px;
+        padding: 1.6mm 3mm;
       }
-      .depot-line span {
-        float: right;
+      .stops {
+        display: grid;
+        gap: 1.8mm;
+        margin-top: 2.5mm;
       }
-      table {
-        border-collapse: collapse;
-        table-layout: fixed;
-        width: 100%;
-      }
-      th,
-      td {
-        border: 1px solid #111;
-        font-size: 8px;
-        padding: 1.2mm;
-        text-align: left;
-        vertical-align: top;
-      }
-      th {
-        background: #f8f8f8;
-        font-size: 7px;
-        text-transform: uppercase;
-      }
-      .check {
-        text-align: center;
-        width: 9mm;
-      }
-      .check span {
+      .stop-card {
+        align-items: stretch;
         border: 1.5px solid #111;
-        display: inline-block;
-        height: 4mm;
-        width: 4mm;
+        border-left-width: 4px;
+        border-radius: 2.5mm;
+        display: grid;
+        grid-template-columns: 10mm minmax(0, 1fr) 17mm;
+        min-height: 17mm;
+        overflow: hidden;
+        page-break-inside: avoid;
       }
-      .nr {
-        text-align: center;
-        width: 7mm;
+      .stop-number {
+        align-items: center;
+        border-right: 1px solid #aaa;
+        display: flex;
+        font-size: 15px;
+        font-weight: 900;
+        justify-content: center;
       }
-      .stop {
-        width: auto;
+      .stop-content {
+        min-width: 0;
+        padding: 2mm 2.5mm 1.5mm;
       }
-      .stop strong,
-      .stop small {
-        display: block;
+      .stop-heading {
+        align-items: flex-start;
+        display: flex;
+        gap: 2mm;
+        justify-content: space-between;
       }
-      .stop strong {
-        font-size: 8.5px;
+      .stop-heading strong {
+        font-size: 15px;
+        line-height: 1.05;
+      }
+      .stop-content p {
+        font-size: 11.5px;
+        font-weight: 700;
+        line-height: 1.2;
+        margin: 1mm 0 0;
       }
       .time-badge {
         background: #111;
+        border: 2px solid #111;
+        border-radius: 2mm;
         color: #fff;
-        display: inline-block;
-        font-size: 11px;
+        flex: none;
+        font-size: 12px;
         font-weight: 900;
-        letter-spacing: 0;
-        margin: 0.8mm 0;
-        padding: 0.7mm 1.4mm;
-        text-transform: uppercase;
+        line-height: 1;
+        padding: 1.2mm 1.8mm;
+        white-space: nowrap;
       }
       .time-badge.urgent {
-        background: #b42318;
-        font-size: 12px;
+        background: #fff;
+        border: 3px double #111;
+        color: #111;
       }
-      .stop small {
-        color: #333;
+      .write-fields {
+        display: grid;
+        font-size: 9px;
+        gap: 3mm;
+        grid-template-columns: 35mm minmax(0, 1fr);
+        margin-top: 2mm;
+      }
+      .write-fields span {
+        border-bottom: 1px solid #777;
+        min-height: 4mm;
+      }
+      .write-fields b {
+        background: #fff;
+        padding-right: 1.5mm;
+      }
+      .stop-check {
+        align-items: center;
+        border-left: 1px solid #aaa;
+        display: flex;
+        flex-direction: column;
+        gap: 1mm;
+        justify-content: center;
+      }
+      .stop-check span {
+        border: 2px solid #111;
+        height: 7mm;
+        width: 7mm;
+      }
+      .stop-check small {
         font-size: 7px;
-        margin-top: 0.5mm;
-      }
-      .badges {
-        font-weight: 700;
-      }
-      .arrival {
-        width: 22mm;
-      }
-      .note {
-        width: 38mm;
+        font-weight: 900;
       }
       .general-notes {
-        border: 1px solid #111;
+        border: 1.5px solid #111;
+        border-radius: 2.5mm;
         margin-top: 3mm;
-        min-height: 28mm;
-        padding: 2mm;
+        padding: 2mm 3mm;
       }
       .general-notes h2 {
-        font-size: 10px;
-        margin: 0 0 2mm;
-        text-transform: uppercase;
+        font-size: 11px;
+        margin: 0 0 1mm;
       }
       .general-notes div {
         border-bottom: 1px solid #888;
-        height: 6mm;
+        height: 5mm;
+      }
+      .page-footer {
+        align-items: flex-end;
+        border-top: 3px solid #111;
+        display: flex;
+        justify-content: space-between;
+        margin-top: auto;
+        padding-top: 2.5mm;
+      }
+      .page-footer span {
+        font-size: 11px;
+        font-weight: 800;
+      }
+      .page-footer strong {
+        font-size: 20px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+      }
+      .page-footer .route-end {
+        font-size: 13px;
       }
       @media print {
         body { background: #fff; }
         .screen-actions { display: none; }
-        main {
-          min-height: auto;
+        .route-page {
+          break-after: page;
+          margin: 0;
+          min-height: 283mm;
           padding: 0;
           width: auto;
+        }
+        .route-page:last-child {
+          break-after: auto;
+        }
+        .route-page + .route-page {
+          margin-top: 0;
         }
       }
     </style>
@@ -4928,29 +5017,7 @@ function createBusRoutePrintHtml(input: {
         <button type="button" onclick="window.print()">Afdrukken</button>
       </div>
     </div>
-    <main>
-      <header class="sheet-header">
-        <div>
-          <h1>${escapeHtml(title)}</h1>
-          <p>${escapeHtml(input.plan.title)} · ${escapeHtml(
-            input.plan.status
-          )} · ${stopCount} stops</p>
-          <p>Start/eind: ${escapeHtml(routeDepot.address)}</p>
-        </div>
-        <div class="driver-fields">
-          <span>Chauffeur</span>
-          <span>Vertrek</span>
-          <span>Terug</span>
-        </div>
-      </header>
-      ${routesHtml}
-      <section class="general-notes">
-        <h2>Algemene opmerkingen</h2>
-        <div></div>
-        <div></div>
-        <div></div>
-      </section>
-    </main>
+    ${routesHtml}
   </body>
 </html>`;
 }
@@ -4961,15 +5028,19 @@ function openBusRouteSheet(plan: DayPlan, routeGroup: RouteGroup) {
     return;
   }
 
-  const printWindow = window.open("", "_blank", "width=950,height=800");
+  const printHtml = createBusRoutePrintHtml({ plan, routeGroup });
+  const printUrl = URL.createObjectURL(
+    new Blob([printHtml], { type: "text/html;charset=utf-8" })
+  );
+  const printWindow = window.open(printUrl, "_blank", "width=950,height=800");
   if (!printWindow) {
+    URL.revokeObjectURL(printUrl);
     window.alert("Routevenster kon niet geopend worden.");
     return;
   }
 
-  printWindow.document.write(createBusRoutePrintHtml({ plan, routeGroup }));
-  printWindow.document.close();
   printWindow.focus();
+  window.setTimeout(() => URL.revokeObjectURL(printUrl), 60_000);
 }
 
 function createReceiptPrintHtml(input: {
