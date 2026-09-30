@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { fetchB2BOrders, fetchLetterOrders } from "../../sinterklaasApi";
 import type {
   ChocolateLetterLine,
@@ -734,11 +734,13 @@ function StartDistributionDialog({
   initial,
   onClose,
   onSaved,
+  onAutosaved,
 }: Readonly<{
   season: string;
   initial: StartDistribution | null;
   onClose: () => void;
   onSaved: (result: StartDistributionResult) => void;
+  onAutosaved: (result: StartDistributionResult) => void;
 }>) {
   const defaultDate = todayInAmsterdam().startsWith(`${season}-`) ? todayInAmsterdam() : `${season}-09-01`;
   const [date, setDate] = useState(initial?.date || defaultDate);
@@ -757,6 +759,14 @@ function StartDistributionDialog({
   const [review, setReview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [savedId, setSavedId] = useState(initial?.id || "");
+  const [autosaveState, setAutosaveState] = useState<"idle" | "saving" | "saved" | "error">(initial ? "saved" : "idle");
+  const [autosaveError, setAutosaveError] = useState("");
+  const draftsRef = useRef(drafts);
+  const dateRef = useRef(date);
+  const savedIdRef = useRef(initial?.id || "");
+  const autosaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const latestAutosaveRef = useRef(0);
   const rows = drafts[selectedShop] || [];
   const rowsTotal = rows.reduce((sum, row) => sum + row.quantity, 0);
   const overallTotal = DISTRIBUTION_SHOPS.reduce(
@@ -764,9 +774,75 @@ function StartDistributionDialog({
     0
   );
 
-  function updateRows(nextRows: StoreOrderRow[]) {
-    setDrafts((current) => ({ ...current, [selectedShop]: nextRows }));
+  function ordersFor(nextDrafts: Record<string, StoreOrderRow[]>) {
+    return DISTRIBUTION_SHOPS.flatMap((shop) => {
+      const shopRows = nextDrafts[shop] || [];
+      return shopRows.length > 0 ? [{ shop, rows: shopRows }] : [];
+    });
+  }
+
+  function totalFor(nextDrafts: Record<string, StoreOrderRow[]>) {
+    return DISTRIBUTION_SHOPS.reduce(
+      (sum, shop) => sum + (nextDrafts[shop] || []).reduce((shopSum, row) => shopSum + row.quantity, 0),
+      0
+    );
+  }
+
+  function queueAutosave(nextDrafts: Record<string, StoreOrderRow[]>, nextDate: string) {
+    if (totalFor(nextDrafts) < 1 || !/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || !nextDate.startsWith(`${season}-`)) return;
+    const version = latestAutosaveRef.current + 1;
+    latestAutosaveRef.current = version;
+    setAutosaveState("saving");
+    setAutosaveError("");
+
+    const snapshot = Object.fromEntries(
+      DISTRIBUTION_SHOPS.map((shop) => [shop, (nextDrafts[shop] || []).map((row) => ({ ...row }))])
+    ) as Record<string, StoreOrderRow[]>;
+
+    autosaveQueueRef.current = autosaveQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const response = await fetch("/api/sinterklaas-letter-start-distributions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: savedIdRef.current,
+            season,
+            date: nextDate,
+            orders: ordersFor(snapshot),
+          }),
+        });
+        const result = await response.json() as StartDistributionResult;
+        if (!response.ok) throw new Error(result.message || "Automatisch opslaan is mislukt.");
+        const saved = result.distributions.find((distribution) => distribution.id === savedIdRef.current)
+          || result.distributions.find((distribution) => distribution.date === nextDate);
+        if (saved) {
+          savedIdRef.current = saved.id;
+          setSavedId(saved.id);
+        }
+        onAutosaved(result);
+        if (latestAutosaveRef.current === version) {
+          setAutosaveState("saved");
+          setAutosaveError("");
+        }
+      })
+      .catch((saveError) => {
+        if (latestAutosaveRef.current === version) {
+          setAutosaveState("error");
+          setAutosaveError(saveError instanceof Error ? saveError.message : "Automatisch opslaan is mislukt.");
+        }
+      });
+  }
+
+  function applyDrafts(nextDrafts: Record<string, StoreOrderRow[]>) {
+    draftsRef.current = nextDrafts;
+    setDrafts(nextDrafts);
+    queueAutosave(nextDrafts, dateRef.current);
     setReview(false);
+  }
+
+  function updateRows(nextRows: StoreOrderRow[]) {
+    applyDrafts({ ...draftsRef.current, [selectedShop]: nextRows });
   }
 
   function rowWithAddedQuantity(currentRows: StoreOrderRow[], amount: number) {
@@ -793,18 +869,17 @@ function StartDistributionDialog({
       setError("Vul een heel aantal tussen 1 en 10.000 in.");
       return;
     }
-    setDrafts((current) => {
-      if (target === "all") {
-        return Object.fromEntries(DISTRIBUTION_SHOPS.map((shop) => [
-          shop,
-          rowWithAddedQuantity(current[shop] || [], amount),
-        ]));
-      }
-      return {
+    const current = draftsRef.current;
+    const nextDrafts = target === "all"
+      ? Object.fromEntries(DISTRIBUTION_SHOPS.map((shop) => [
+        shop,
+        rowWithAddedQuantity(current[shop] || [], amount),
+      ])) as Record<string, StoreOrderRow[]>
+      : {
         ...current,
         [selectedShop]: rowWithAddedQuantity(current[selectedShop] || [], amount),
       };
-    });
+    applyDrafts(nextDrafts);
     setQuantity("1");
     setReview(false);
     setError("");
@@ -822,16 +897,16 @@ function StartDistributionDialog({
       otherShopsContainRows
       && !window.confirm(`De huidige lijsten van de andere winkels vervangen door die van ${SHOP_LABELS[selectedShop]}?`)
     ) return;
-    setDrafts(Object.fromEntries(DISTRIBUTION_SHOPS.map((shop) => [
+    applyDrafts(Object.fromEntries(DISTRIBUTION_SHOPS.map((shop) => [
       shop,
       rows.map((row) => ({ ...row })),
-    ])));
-    setReview(false);
+    ])) as Record<string, StoreOrderRow[]>);
     setError("");
   }
 
   function adjustLine(key: string, delta: number) {
-    updateRows(rows.flatMap((row) => {
+    const currentRows = draftsRef.current[selectedShop] || [];
+    updateRows(currentRows.flatMap((row) => {
       if (row.key !== key) return [row];
       const nextQuantity = row.quantity + delta;
       return nextQuantity > 0 ? [{ ...row, quantity: nextQuantity }] : [];
@@ -854,17 +929,15 @@ function StartDistributionDialog({
     setSaving(true);
     setError("");
     try {
+      await autosaveQueueRef.current.catch(() => undefined);
       const response = await fetch("/api/sinterklaas-letter-start-distributions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: initial?.id || "",
+          id: savedIdRef.current,
           season,
           date,
-          orders: DISTRIBUTION_SHOPS.flatMap((shop) => {
-            const shopRows = drafts[shop] || [];
-            return shopRows.length > 0 ? [{ shop, rows: shopRows }] : [];
-          }),
+          orders: ordersFor(draftsRef.current),
         }),
       });
       const result = await response.json() as StartDistributionResult;
@@ -878,13 +951,14 @@ function StartDistributionDialog({
   }
 
   async function removeDistribution() {
-    if (!initial || !window.confirm(`Startverdeling van ${formatShortDate(initial.date)} verwijderen?`)) return;
+    const distributionId = savedIdRef.current;
+    if (!distributionId || !window.confirm(`Startverdeling van ${formatShortDate(dateRef.current)} verwijderen?`)) return;
     setSaving(true);
     setError("");
     try {
       const url = new URL("/api/sinterklaas-letter-start-distributions", window.location.origin);
       url.searchParams.set("season", season);
-      url.searchParams.set("id", initial.id);
+      url.searchParams.set("id", distributionId);
       const response = await fetch(url.toString(), { method: "DELETE" });
       const result = await response.json() as StartDistributionResult;
       if (!response.ok) throw new Error(result.message || "Startverdeling verwijderen is mislukt.");
@@ -908,9 +982,15 @@ function StartDistributionDialog({
           <button type="button" onClick={onClose} aria-label="Sluiten" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#dfd8ce] bg-white text-lg font-black sm:h-9 sm:w-9 sm:text-xl">×</button>
         </header>
 
-        <label className="mt-3 block max-w-xs text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b] sm:mt-4 sm:text-xs">Datum meegegeven
-          <input type="date" value={date} min={`${season}-01-01`} max={`${season}-12-31`} onChange={(event) => { setDate(event.target.value); setReview(false); }} className="mt-1 h-10 w-full rounded-xl border border-[#d8d1c8] bg-white px-3 text-sm font-black text-[#263b2b] outline-none focus:border-[#547762] sm:h-11" />
-        </label>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-2 sm:mt-4">
+          <label className="block w-full max-w-xs text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b] sm:text-xs">Datum meegegeven
+            <input type="date" value={date} min={`${season}-01-01`} max={`${season}-12-31`} onChange={(event) => { const nextDate = event.target.value; dateRef.current = nextDate; setDate(nextDate); queueAutosave(draftsRef.current, nextDate); setReview(false); }} className="mt-1 h-10 w-full rounded-xl border border-[#d8d1c8] bg-white px-3 text-sm font-black text-[#263b2b] outline-none focus:border-[#547762] sm:h-11" />
+          </label>
+          <span role="status" className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[0.62rem] font-black sm:text-xs ${autosaveState === "error" ? "bg-[#fff0ea] text-[#9a3412]" : autosaveState === "saving" ? "bg-[#fff3dc] text-[#70460e]" : "bg-[#e6efe2] text-[#24551d]"}`}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h12l2 2v14H5Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></svg>
+            {autosaveState === "saving" ? "Automatisch opslaan..." : autosaveState === "error" ? "Niet opgeslagen" : autosaveState === "saved" ? "Automatisch opgeslagen" : "Wordt automatisch opgeslagen"}
+          </span>
+        </div>
 
         <div className="mt-3 grid grid-cols-2 gap-1.5 sm:mt-4 sm:grid-cols-4 sm:gap-2">
           {DISTRIBUTION_SHOPS.map((shop) => {
@@ -976,13 +1056,135 @@ function StartDistributionDialog({
           </section>
         )}
 
-        {error && <p role="alert" className="mt-3 rounded-xl bg-[#fff0ea] p-3 text-sm font-black text-[#9a3412]">{error}</p>}
+        {(error || autosaveError) && <p role="alert" className="mt-3 rounded-xl bg-[#fff0ea] p-3 text-sm font-black text-[#9a3412]">{error || autosaveError}</p>}
         <footer className="mt-3 flex flex-col-reverse gap-1.5 sm:mt-5 sm:flex-row sm:items-center sm:justify-end sm:gap-2">
-          {initial && <button type="button" disabled={saving} onClick={() => void removeDistribution()} className="h-10 rounded-full border border-[#efb8aa] bg-white px-4 text-xs font-black text-[#9a3412] disabled:opacity-50 sm:mr-auto sm:h-11 sm:text-sm">Verwijder verdeling</button>}
-          <button type="button" onClick={onClose} className="h-10 rounded-full border border-[#ddd5ca] bg-white px-4 text-xs font-black text-[#4d463d] sm:h-11 sm:text-sm">Annuleren</button>
+          {savedId && <button type="button" disabled={saving || autosaveState === "saving"} onClick={() => void removeDistribution()} className="h-10 rounded-full border border-[#efb8aa] bg-white px-4 text-xs font-black text-[#9a3412] disabled:opacity-50 sm:mr-auto sm:h-11 sm:text-sm">Verwijder verdeling</button>}
+          <button type="button" onClick={onClose} className="h-10 rounded-full border border-[#ddd5ca] bg-white px-4 text-xs font-black text-[#4d463d] sm:h-11 sm:text-sm">Sluiten</button>
           {review ? <><button type="button" onClick={() => setReview(false)} className="h-10 rounded-full border border-[#b9cbb5] bg-[#edf4eb] px-4 text-xs font-black text-[#24551d] sm:h-11 sm:text-sm">← Nog wijzigen</button><button type="submit" disabled={saving} className="h-10 rounded-full bg-[#24551d] px-5 text-xs font-black text-white disabled:opacity-60 sm:h-11 sm:text-sm">{saving ? "Opslaan..." : initial ? "Wijzigingen opslaan" : "Startverdeling opslaan"}</button></> : <button type="button" onClick={() => { if (overallTotal < 1) setError("Voeg minimaal één letter toe."); else { setError(""); setReview(true); } }} className="h-10 rounded-full bg-[#24551d] px-5 text-xs font-black text-white sm:h-11 sm:text-sm">Controleer startverdeling →</button>}
         </footer>
       </form>
+    </div>
+  );
+}
+
+function StartDistributionPrintDialog({
+  distribution,
+  onClose,
+}: Readonly<{
+  distribution: StartDistribution;
+  onClose: () => void;
+}>) {
+  return (
+    <div className="start-distribution-print-overlay fixed inset-0 z-[95] overflow-y-auto bg-[#263b2b]/65 px-2 py-4 backdrop-blur-sm sm:px-4" role="dialog" aria-modal="true" aria-labelledby="start-distribution-print-title">
+      <style jsx global>{`
+        @media print {
+          @page { size: A4 portrait; margin: 10mm; }
+          body * { visibility: hidden !important; }
+          .start-distribution-print, .start-distribution-print * { visibility: visible !important; }
+          .start-distribution-print-overlay { position: static !important; overflow: visible !important; background: white !important; padding: 0 !important; }
+          .start-distribution-print {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            filter: grayscale(100%) contrast(108%) !important;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+          }
+          .start-distribution-print-page {
+            box-sizing: border-box !important;
+            width: 190mm !important;
+            min-height: 277mm !important;
+            height: 277mm !important;
+            margin: 0 auto !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            break-inside: avoid-page;
+            page-break-inside: avoid;
+            break-after: page;
+            page-break-after: always;
+          }
+          .start-distribution-print-page:last-child { break-after: auto; page-break-after: auto; }
+          .start-distribution-no-print { display: none !important; }
+        }
+      `}</style>
+
+      <div className="start-distribution-no-print sticky top-0 z-10 mx-auto mb-4 flex max-w-4xl flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/80 bg-[#faf8f2]/95 p-3 shadow-xl backdrop-blur">
+        <div>
+          <p id="start-distribution-print-title" className="font-black text-[#1a1815]">Preview startverdeling · 4 A4-pagina’s</p>
+          <p className="text-xs font-semibold text-[#6b645b]">Iedere winkel krijgt één eigen pagina met de ontvangen voorraad.</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="h-10 rounded-full border border-[#ddd5ca] bg-white px-4 text-sm font-black text-[#4d463d]">Sluiten</button>
+          <button type="button" onClick={() => window.print()} className="h-10 rounded-full bg-[#24551d] px-4 text-sm font-black text-white">Print 4 pagina’s</button>
+        </div>
+      </div>
+
+      <div className="start-distribution-print mx-auto max-w-4xl space-y-5 print:space-y-0">
+        {DISTRIBUTION_SHOPS.map((shop) => {
+          const rows = [...(distribution.orders.find((order) => order.shop === shop)?.rows || [])].sort((a, b) => {
+            const flavourOrder: Record<string, number> = { melk: 0, puur: 1, wit: 2 };
+            return a.style.localeCompare(b.style, "nl")
+              || (flavourOrder[a.flavour] ?? 9) - (flavourOrder[b.flavour] ?? 9)
+              || a.size.localeCompare(b.size, "nl")
+              || a.letter.localeCompare(b.letter, "nl");
+          });
+          const total = rows.reduce((sum, row) => sum + row.quantity, 0);
+
+          return (
+            <section key={shop} className="start-distribution-print-page flex min-h-[70rem] aspect-[210/297] flex-col rounded-[1.5rem] border border-[#d8d1c8] bg-white p-7 shadow-2xl">
+              <header className="flex items-start justify-between gap-4 border-b-2 border-[#263b2b] pb-4">
+                <div>
+                  <p className="text-[0.68rem] font-black uppercase tracking-[0.2em] text-[#778878]">Strik Patisserie · chocoladeletters</p>
+                  <h2 className="mt-1 text-3xl font-black uppercase tracking-[0.07em] text-[#263b2b]">{SHOP_LABELS[shop]}</h2>
+                  <p className="mt-1 text-base font-black text-[#4b352f]">Startverdeling · {formatShortDate(distribution.date)}</p>
+                </div>
+                <div className="rounded-2xl bg-[#e6efe2] px-5 py-3 text-right">
+                  <p className="text-[0.58rem] font-black uppercase tracking-[0.13em] text-[#59705c]">Totaal ontvangen</p>
+                  <p className="mt-0.5 text-3xl font-black text-[#263b2b]">{total}</p>
+                  <p className="text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#59705c]">letters</p>
+                </div>
+              </header>
+
+              <div className="mt-5 grid grid-cols-[minmax(0,1fr)_3.5rem] border-b border-[#cfc8be] pb-1.5 text-[0.6rem] font-black uppercase italic tracking-[0.14em] text-[#776f66]">
+                <span>Letter en uitvoering</span>
+                <span className="text-right">Aantal</span>
+              </div>
+
+              {rows.length > 0 ? (
+                <div className="mt-2 grid grid-cols-2 gap-x-8">
+                  {rows.map((row) => (
+                    <div key={`${shop}-${row.key}`} className="flex break-inside-avoid items-center justify-between gap-3 border-b border-[#e5dfd6] py-1.5 text-[0.72rem]">
+                      <span className="font-bold text-[#322e29]">{row.letter} · {row.flavour} · {row.size} · {row.style}</span>
+                      <strong className="min-w-8 text-right text-sm text-[#1a1815]">{row.quantity}×</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-5 rounded-xl border border-dashed border-[#cfc8be] p-4 text-sm font-semibold text-[#6b645b]">Voor deze winkel staan geen letters in deze startverdeling.</p>
+              )}
+
+              <section className="mt-auto rounded-2xl border-2 border-[#4b352f] p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#6b645b]">Controle winkel</p>
+                    <p className="mt-1 text-base font-black text-[#1a1815]">Alles ontvangen en gecontroleerd</p>
+                  </div>
+                  <span className="h-11 w-11 shrink-0 rounded-md border-[3px] border-[#1a1815] bg-white" aria-hidden="true" />
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-8 text-[0.65rem] font-bold text-[#6b645b]">
+                  <p className="border-t border-[#8b8278] pt-1">Naam</p>
+                  <p className="border-t border-[#8b8278] pt-1">Datum</p>
+                </div>
+              </section>
+
+              <footer className="mt-4 flex items-center justify-between border-t border-[#d8d1c8] pt-3 text-[0.62rem] font-bold text-[#8b8278]">
+                <span>Interne winkellijst · startvoorraad</span>
+                <span>{SHOP_LABELS[shop]} · 1 van 1</span>
+              </footer>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1465,6 +1667,7 @@ export default function ProductionPlanningClient({
   const [startDistributionError, setStartDistributionError] = useState("");
   const [startDistributionOpen, setStartDistributionOpen] = useState(false);
   const [editingStartDistribution, setEditingStartDistribution] = useState<StartDistribution | null>(null);
+  const [startDistributionPrint, setStartDistributionPrint] = useState<StartDistribution | null>(null);
   const [storeOrdersByBatch, setStoreOrdersByBatch] = useState<Record<string, StoreStockOrder[]>>(() =>
     Object.fromEntries(batches.map((batch) => [batch.id, batch.storeOrders || []]))
   );
@@ -1716,9 +1919,14 @@ export default function ProductionPlanningClient({
               <p className="mr-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b]">Startvoorraad</p>
               {startDistributionsLoading && <span className="text-xs font-semibold text-[#776f66]">Laden...</span>}
               {!startDistributionsLoading && startDistributions.map((distribution) => (
-                <button key={distribution.id} type="button" onClick={() => { setEditingStartDistribution(distribution); setStartDistributionOpen(true); }} className="rounded-full border border-[#c9d9c5] bg-white px-2.5 py-1 text-[0.65rem] font-black text-[#36523a]">
-                  {formatShortDate(distribution.date)} · {distributionTotal(distribution)}
-                </button>
+                <span key={distribution.id} className="inline-flex overflow-hidden rounded-full border border-[#c9d9c5] bg-white shadow-sm">
+                  <button type="button" onClick={() => { setEditingStartDistribution(distribution); setStartDistributionOpen(true); }} className="px-2.5 py-1 text-[0.65rem] font-black text-[#36523a]">
+                    {formatShortDate(distribution.date)} · {distributionTotal(distribution)}
+                  </button>
+                  <button type="button" onClick={() => setStartDistributionPrint(distribution)} aria-label={`Startverdeling van ${formatShortDate(distribution.date)} printen`} title="Startverdeling printen" className="flex w-8 items-center justify-center border-l border-[#dbe4d8] bg-[#edf4eb] text-[#24551d] transition hover:bg-[#dfead9]">
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7" rx="1"/></svg>
+                  </button>
+                </span>
               ))}
               {startDistributions.length > 0 && <strong className="ml-auto text-xs text-[#24551d]">{startDistributionTotal} letters verdeeld</strong>}
             </div>
@@ -1865,6 +2073,10 @@ export default function ProductionPlanningClient({
           season={season}
           initial={editingStartDistribution}
           onClose={() => { setStartDistributionOpen(false); setEditingStartDistribution(null); }}
+          onAutosaved={(result) => {
+            setStartDistributions(result.distributions || []);
+            setStartDistributionError("");
+          }}
           onSaved={(result) => {
             setStartDistributions(result.distributions || []);
             setStartDistributionError("");
@@ -1872,6 +2084,9 @@ export default function ProductionPlanningClient({
             setEditingStartDistribution(null);
           }}
         />
+      )}
+      {startDistributionPrint && (
+        <StartDistributionPrintDialog distribution={startDistributionPrint} onClose={() => setStartDistributionPrint(null)} />
       )}
     </div>
   );

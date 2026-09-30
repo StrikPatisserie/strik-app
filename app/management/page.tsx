@@ -36,6 +36,14 @@ const managementItems = [
     accent: "coral" as const,
   },
   {
+    href: "/management/horeca-mailing",
+    label: "Horeca",
+    title: "Horecamailing",
+    description: "Updates voor vaste horecaklanten.",
+    icon: strikIcons.newsManagement,
+    accent: "yellow" as const,
+  },
+  {
     href: "/settings",
     label: "Beheer",
     title: "Gebruikers & app",
