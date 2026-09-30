@@ -115,13 +115,24 @@ function visibleChoiceLabel(product: Product, choice: string) {
   return productChoiceLabel(product, choice);
 }
 
+function internalChoiceLabel(product: Product, choice: string) {
+  const label = visibleChoiceLabel(product, choice);
+  if (product.id !== "speculaasplak-gedicht") return label;
+  const configured = configuredProduct(product, choice);
+  const retailPriceIncl = roundCents(
+    (configured.retailPriceIncl || 0) + (configured.fixedSurchargeIncl || 0)
+  );
+  return `${label} · ${money(retailPriceIncl)} incl.`;
+}
+
 function lineDescription(line: B2BProductLine) {
   if (line.productId === CUSTOM_PRODUCT_ID) return line.description.trim();
   const product = catalogProduct(line.productId);
   if (!product) return line.description.trim();
   const choice = visibleChoiceLabel(product, line.choice);
   const includeChoice = choice && choice !== "Standaard";
-  return `${product.name}${includeChoice ? ` · ${choice}` : ""}${line.withLogo ? " · eigen logo" : ""}`;
+  const withLogo = line.withLogo && productSupportsLogo(product, line.choice);
+  return `${product.name}${includeChoice ? ` · ${choice}` : ""}${withLogo ? " · eigen logo" : ""}`;
 }
 
 function repriceProductLines(lines: B2BProductLine[]) {
@@ -139,8 +150,12 @@ function repriceProductLines(lines: B2BProductLine[]) {
     const configured = configuredProduct(product, line.choice);
     const tier = tierFor(configured, Math.max(1, quantities.get(line.productId) || line.quantity));
     const unitPrice = productUnitPrice(configured, tier, false) +
-      (line.withLogo && productSupportsLogo(product) ? productLogoPrice(false) : 0);
-    return { ...line, unitPriceEx: decimalInput(unitPrice) };
+      (line.withLogo && productSupportsLogo(product, line.choice) ? productLogoPrice(false) : 0);
+    return {
+      ...line,
+      withLogo: line.withLogo && productSupportsLogo(product, line.choice),
+      unitPriceEx: decimalInput(unitPrice),
+    };
   });
 }
 
@@ -184,7 +199,11 @@ function matchCatalogDescription(description: string) {
     for (const choice of choicesForProduct(product)) {
       const label = visibleChoiceLabel(product, choice);
       const candidate = `${product.name}${label && label !== "Standaard" ? ` · ${label}` : ""}`;
-      if (candidate === cleanDescription) return { product, choice, withLogo };
+      if (candidate === cleanDescription) return {
+        product,
+        choice,
+        withLogo: withLogo && productSupportsLogo(product, choice),
+      };
     }
   }
   return null;
@@ -696,7 +715,12 @@ function B2BOrderForm({
   }
 
   function updateProductDraft(patch: Partial<B2BProductLine>) {
-    setProductDraft((current) => repriceProductLines([{ ...current, ...patch }])[0]);
+    setProductDraft((current) => {
+      const next = { ...current, ...patch };
+      const product = catalogProduct(next.productId);
+      if (product && !productSupportsLogo(product, next.choice)) next.withLogo = false;
+      return repriceProductLines([next])[0];
+    });
     setAddFeedback("");
   }
 
@@ -1039,7 +1063,7 @@ function B2BOrderForm({
             <label className="grid text-[0.48rem] font-semibold uppercase tracking-wide text-[#6b645b]">
               Variant
               <select value={productDraft.choice} onChange={(event) => updateProductDraft({ choice: event.target.value })} className="h-6 min-w-0 border border-[#d0b96e] bg-white px-1 text-[0.6rem] font-medium normal-case tracking-normal text-[#1a1815]">
-                {draftChoices.map((choice) => <option key={choice} value={choice}>{visibleChoiceLabel(draftProduct!, choice)}</option>)}
+                {draftChoices.map((choice) => <option key={choice} value={choice}>{internalChoiceLabel(draftProduct!, choice)}</option>)}
               </select>
             </label>
           )}
@@ -1052,7 +1076,7 @@ function B2BOrderForm({
             Prijs p.s. ex
             <input type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={(event) => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} className="h-6 border border-[#d0b96e] px-1 text-right text-[0.6rem] font-semibold" />
           </label>
-          <label className={`flex h-6 items-center gap-1 whitespace-nowrap text-[0.55rem] font-bold ${draftProduct && productSupportsLogo(draftProduct) ? "" : "invisible"}`}>
+          <label className={`flex h-6 items-center gap-1 whitespace-nowrap text-[0.55rem] font-bold ${draftProduct && productSupportsLogo(draftProduct, productDraft.choice) ? "" : "invisible"}`}>
             <input className="h-3 w-3" type="checkbox" checked={productDraft.withLogo} onChange={(event) => updateProductDraft({ withLogo: event.target.checked })} /> Logo
           </label>
           <button type="button" onClick={addProductToOrder} className="h-6 whitespace-nowrap rounded-md bg-[#9a7510] px-2 text-[0.56rem] font-semibold text-white">+ toevoegen</button>
@@ -1067,7 +1091,7 @@ function B2BOrderForm({
                 <div className="min-w-0 text-[0.6rem] font-bold">
                   <span className="font-semibold">{lineDescription(line)}</span>
                   {isLetterProduct && <span className="ml-1 text-[0.52rem] text-[#6b645b]">via letterregels</span>}
-                  {product && productSupportsLogo(product) && !isLetterProduct && <label className="ml-1.5 inline-flex items-center gap-0.5 text-[0.52rem]"><input className="h-3 w-3" type="checkbox" checked={line.withLogo} onChange={(event) => updateProductLine(line.id, { withLogo: event.target.checked })} />Logo</label>}
+                  {product && productSupportsLogo(product, line.choice) && !isLetterProduct && <label className="ml-1.5 inline-flex items-center gap-0.5 text-[0.52rem]"><input className="h-3 w-3" type="checkbox" checked={line.withLogo} onChange={(event) => updateProductLine(line.id, { withLogo: event.target.checked })} />Logo</label>}
                 </div>
                 {isLetterProduct ? (
                   <span className="text-right text-[0.58rem] font-semibold">{line.quantity}×</span>
