@@ -2,7 +2,7 @@
 "use client";
 
 import Image from "next/image";
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 
 type TemplateKey = "hours" | "product" | "cheesecake";
 type OccasionKey = "christmas" | "sinterklaas" | "easter" | "kingsday" | "ascension" | "pentecost" | "vierdaagse" | "other";
@@ -20,8 +20,21 @@ type TemplateContent = {
 type Recipient = {
   id: string;
   company: string;
-  contact: string;
-  email: string;
+  emails: string[];
+};
+
+type MailingDraft = {
+  template: TemplateKey;
+  occasion: OccasionKey;
+  content: TemplateContent;
+  photoUrl?: string;
+};
+
+type MailingApiResponse = {
+  customers?: Recipient[];
+  draft?: MailingDraft;
+  sent?: number;
+  message?: string;
 };
 
 const templateMeta: Record<TemplateKey, {
@@ -166,7 +179,7 @@ function occasionContent(key: OccasionKey, now = new Date()): TemplateContent {
       ...base,
       subject: `Bestellen en leveren rond Kerst ${year}`,
       title: "Belangrijke informatie voor jullie kerstbestelling",
-      body: `Beste {{contactpersoon}},\n\nTijdens de kerstdagen zijn wij op ${dutchDate(christmasDay)} en ${dutchDate(secondChristmasDay)} gesloten. Ook rond ${dutchDate(newYearsDay)} kan onze bestel- en leverplanning afwijken.\n\nWillen jullie een bestelling ontvangen op ${dutchDate(delivery)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door, zodat wij voldoende tijd hebben voor de voorbereidingen.\n\nLet op: door de kerstdrukte kan het levermoment op 24 december afwijken van het tijdstip dat jullie van ons gewend zijn. Als dit voor jullie geldt, laten we dat natuurlijk tijdig weten.\n\nHeb je een vraag over je bestelling of levering? Antwoord gerust op deze mail.`,
+      body: `Beste team {{bedrijfsnaam}},\n\nTijdens de kerstdagen zijn wij op ${dutchDate(christmasDay)} en ${dutchDate(secondChristmasDay)} gesloten. Ook rond ${dutchDate(newYearsDay)} kan onze bestel- en leverplanning afwijken.\n\nWillen jullie een bestelling ontvangen op ${dutchDate(delivery)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door, zodat wij voldoende tijd hebben voor de voorbereidingen.\n\nLet op: door de kerstdrukte kan het levermoment op 24 december afwijken van het tijdstip dat jullie van ons gewend zijn. Als dit voor jullie geldt, laten we dat natuurlijk tijdig weten.\n\nHeb je een vraag over je bestelling of levering? Antwoord gerust op deze mail.`,
     };
   }
 
@@ -178,7 +191,7 @@ function occasionContent(key: OccasionKey, now = new Date()): TemplateContent {
       ...base,
       subject: `Bestellen en leveren rond Sinterklaas ${celebration.getFullYear()}`,
       title: "Geef jullie Sinterklaasbestelling op tijd door",
-      body: `Beste {{contactpersoon}},\n\nRond Sinterklaas verwachten wij extra drukte in onze bakkerij. Willen jullie een bestelling ontvangen vóór ${dutchDate(celebration)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door.\n\nVoor leveringen op ${dutchDate(delivery)} kan het bezorgmoment afwijken van jullie gebruikelijke tijdstip. Als dit voor jullie geldt, laten we dat natuurlijk tijdig weten.\n\nHeb je een vraag over je bestelling of levering? Antwoord gerust op deze mail.`,
+      body: `Beste team {{bedrijfsnaam}},\n\nRond Sinterklaas verwachten wij extra drukte in onze bakkerij. Willen jullie een bestelling ontvangen vóór ${dutchDate(celebration)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door.\n\nVoor leveringen op ${dutchDate(delivery)} kan het bezorgmoment afwijken van jullie gebruikelijke tijdstip. Als dit voor jullie geldt, laten we dat natuurlijk tijdig weten.\n\nHeb je een vraag over je bestelling of levering? Antwoord gerust op deze mail.`,
     };
   }
 
@@ -191,7 +204,7 @@ function occasionContent(key: OccasionKey, now = new Date()): TemplateContent {
       ...base,
       subject: `Bestellen en leveren rond Pasen ${easter.getFullYear()}`,
       title: "Aangepaste planning rond Pasen",
-      body: `Beste {{contactpersoon}},\n\nRond Eerste en Tweede Paasdag, ${dutchDate(easter)} en ${dutchDate(easterMonday)}, wijkt onze bestel- en leverplanning af.\n\nWillen jullie een bestelling ontvangen vóór Pasen, op ${dutchDate(delivery)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door, zodat wij voldoende tijd hebben voor de voorbereidingen.\n\nDoor de paasdrukte kan het levermoment afwijken van het tijdstip dat jullie van ons gewend zijn. Als dit voor jullie geldt, laten we dat tijdig weten.\n\nHeb je een vraag? Antwoord gerust op deze mail.`,
+      body: `Beste team {{bedrijfsnaam}},\n\nRond Eerste en Tweede Paasdag, ${dutchDate(easter)} en ${dutchDate(easterMonday)}, wijkt onze bestel- en leverplanning af.\n\nWillen jullie een bestelling ontvangen vóór Pasen, op ${dutchDate(delivery)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door, zodat wij voldoende tijd hebben voor de voorbereidingen.\n\nDoor de paasdrukte kan het levermoment afwijken van het tijdstip dat jullie van ons gewend zijn. Als dit voor jullie geldt, laten we dat tijdig weten.\n\nHeb je een vraag? Antwoord gerust op deze mail.`,
     };
   }
 
@@ -202,7 +215,7 @@ function occasionContent(key: OccasionKey, now = new Date()): TemplateContent {
       ...base,
       subject: `Bestellen en leveren rond Koningsdag ${kingsDay.getFullYear()}`,
       title: "Aangepaste planning rond Koningsdag",
-      body: `Beste {{contactpersoon}},\n\nRond Koningsdag op ${dutchDate(kingsDay)} wijkt onze bestel- en leverplanning af. Geef bestellingen voor de week van Koningsdag daarom uiterlijk ${dutchDate(deadline)} aan ons door.\n\nOok kan het levermoment die week afwijken van het tijdstip dat jullie van ons gewend zijn. Als dit voor jullie geldt, laten we dat natuurlijk tijdig weten.\n\nHeb je een vraag over je bestelling of levering? Antwoord gerust op deze mail.`,
+      body: `Beste team {{bedrijfsnaam}},\n\nRond Koningsdag op ${dutchDate(kingsDay)} wijkt onze bestel- en leverplanning af. Geef bestellingen voor de week van Koningsdag daarom uiterlijk ${dutchDate(deadline)} aan ons door.\n\nOok kan het levermoment die week afwijken van het tijdstip dat jullie van ons gewend zijn. Als dit voor jullie geldt, laten we dat natuurlijk tijdig weten.\n\nHeb je een vraag over je bestelling of levering? Antwoord gerust op deze mail.`,
     };
   }
 
@@ -214,7 +227,7 @@ function occasionContent(key: OccasionKey, now = new Date()): TemplateContent {
       ...base,
       subject: `Bestellen en leveren rond Hemelvaart ${ascension.getFullYear()}`,
       title: "Aangepaste planning rond Hemelvaart",
-      body: `Beste {{contactpersoon}},\n\nRond Hemelvaartsdag op ${dutchDate(ascension)} wijkt onze bestel- en leverplanning af. Willen jullie een bestelling ontvangen op ${dutchDate(delivery)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door.\n\nHet levermoment kan die week afwijken van jullie gebruikelijke tijdstip. Als dit voor jullie geldt, laten we dat natuurlijk tijdig weten.\n\nHeb je een vraag? Antwoord gerust op deze mail.`,
+      body: `Beste team {{bedrijfsnaam}},\n\nRond Hemelvaartsdag op ${dutchDate(ascension)} wijkt onze bestel- en leverplanning af. Willen jullie een bestelling ontvangen op ${dutchDate(delivery)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door.\n\nHet levermoment kan die week afwijken van jullie gebruikelijke tijdstip. Als dit voor jullie geldt, laten we dat natuurlijk tijdig weten.\n\nHeb je een vraag? Antwoord gerust op deze mail.`,
     };
   }
 
@@ -227,7 +240,7 @@ function occasionContent(key: OccasionKey, now = new Date()): TemplateContent {
       ...base,
       subject: `Bestellen en leveren rond Pinksteren ${pentecost.getFullYear()}`,
       title: "Aangepaste planning rond Pinksteren",
-      body: `Beste {{contactpersoon}},\n\nRond Eerste en Tweede Pinksterdag, ${dutchDate(pentecost)} en ${dutchDate(pentecostMonday)}, wijkt onze bestel- en leverplanning af.\n\nWillen jullie een bestelling ontvangen vóór Pinksteren, op ${dutchDate(delivery)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door. Het levermoment kan afwijken van jullie gebruikelijke tijdstip.\n\nHeb je een vraag? Antwoord gerust op deze mail.`,
+      body: `Beste team {{bedrijfsnaam}},\n\nRond Eerste en Tweede Pinksterdag, ${dutchDate(pentecost)} en ${dutchDate(pentecostMonday)}, wijkt onze bestel- en leverplanning af.\n\nWillen jullie een bestelling ontvangen vóór Pinksteren, op ${dutchDate(delivery)}? Geef deze dan uiterlijk ${dutchDate(deadline)} aan ons door. Het levermoment kan afwijken van jullie gebruikelijke tijdstip.\n\nHeb je een vraag? Antwoord gerust op deze mail.`,
     };
   }
 
@@ -239,7 +252,7 @@ function occasionContent(key: OccasionKey, now = new Date()): TemplateContent {
       ...base,
       subject: `Bestellen en leveren tijdens de 4Daagse ${start.getFullYear()}`,
       title: "Leveringen tijdens de Nijmeegse 4Daagse",
-      body: `Beste {{contactpersoon}},\n\nDe Nijmeegse 4Daagse vindt plaats van ${dutchDate(start)} tot en met ${dutchDate(end)}. Door de drukte en wegafsluitingen kan onze bezorgroute die week anders zijn dan jullie gewend zijn.\n\nGeef bestellingen voor de 4Daagseweek daarom uiterlijk ${dutchDate(deadline)} aan ons door. Het exacte levermoment stemmen we waar nodig persoonlijk met jullie af.\n\nHeb je een vraag over je bestelling of bereikbaarheid? Antwoord gerust op deze mail.`,
+      body: `Beste team {{bedrijfsnaam}},\n\nDe Nijmeegse 4Daagse vindt plaats van ${dutchDate(start)} tot en met ${dutchDate(end)}. Door de drukte en wegafsluitingen kan onze bezorgroute die week anders zijn dan jullie gewend zijn.\n\nGeef bestellingen voor de 4Daagseweek daarom uiterlijk ${dutchDate(deadline)} aan ons door. Het exacte levermoment stemmen we waar nodig persoonlijk met jullie af.\n\nHeb je een vraag over je bestelling of bereikbaarheid? Antwoord gerust op deze mail.`,
     };
   }
 
@@ -247,7 +260,7 @@ function occasionContent(key: OccasionKey, now = new Date()): TemplateContent {
     ...base,
     subject: "Belangrijke bestel- en leverinformatie",
     title: "Een aangepaste bestel- en leverplanning",
-    body: "Beste {{contactpersoon}},\n\nBinnenkort wijkt onze gebruikelijke bestel- en leverplanning af. Vul hier de juiste dagen, uiterste besteldatum en eventuele aangepaste levertijd in.\n\nHeb je een vraag over je bestelling of levering? Antwoord gerust op deze mail.",
+    body: "Beste team {{bedrijfsnaam}},\n\nBinnenkort wijkt onze gebruikelijke bestel- en leverplanning af. Vul hier de juiste dagen, uiterste besteldatum en eventuele aangepaste levertijd in.\n\nHeb je een vraag over je bestelling of levering? Antwoord gerust op deze mail.",
   };
 }
 
@@ -261,16 +274,16 @@ const initialContent: Record<TemplateKey, TemplateContent> = {
     subject: "Nieuw voor onze horecaklanten",
     eyebrow: "Vers uit onze bakkerij",
     title: "Nieuw: mini sloffen voor bij de koffie",
-    body: "Beste {{contactpersoon}},\n\nWe hebben iets nieuws voor onze vaste horecaklanten: kleine sloffen met banketbakkersroom en vers fruit. Handig als gebakje bij de koffie of als onderdeel van een luncharrangement.\n\nWil je dit product toevoegen aan jullie vaste levering? Antwoord gerust op deze mail.",
+    body: "Beste team {{bedrijfsnaam}},\n\nWe hebben iets nieuws voor onze vaste horecaklanten: kleine sloffen met banketbakkersroom en vers fruit. Handig als gebakje bij de koffie of als onderdeel van een luncharrangement.\n\nWillen jullie dit product toevoegen aan de vaste levering? Antwoord gerust op deze mail.",
     price: "",
     buttonLabel: "Bestellen of meer weten",
     buttonUrl: "mailto:info@strik-patisserie.nl",
   },
   cheesecake: {
     subject: "De nieuwe cheesecake van het seizoen",
-    eyebrow: "Seizoenssmaak",
-    title: "Pompoen-karamel is er weer",
-    body: "Beste {{contactpersoon}},\n\nOnze cheesecake van het seizoen is terug: romige pompoen-cheesecake met karamel en een kruidige bodem. Vanaf volgende week kan deze weer mee met jullie vaste levering.\n\nWil je hem toevoegen aan je bestelling? Reageer dan eenvoudig op deze mail.",
+    eyebrow: "Cheesecake seizoen 10-12p",
+    title: "Cheesecake",
+    body: "Beste team {{bedrijfsnaam}},\n\nOnze cheesecake van het seizoen is terug. Vul hier de smaak en een korte omschrijving in. Vanaf volgende week kan deze weer mee met jullie vaste levering.\n\nWillen jullie hem toevoegen aan de bestelling? Reageer dan eenvoudig op deze mail.",
     price: "",
     buttonLabel: "Bestellen of meer weten",
     buttonUrl: "mailto:info@strik-patisserie.nl",
@@ -278,17 +291,29 @@ const initialContent: Record<TemplateKey, TemplateContent> = {
 };
 
 const initialRecipients: Recipient[] = [
-  { id: "h1", company: "Restaurant De Linden", contact: "Sanne", email: "sanne@voorbeeld.nl" },
-  { id: "h2", company: "Lunchbar De Markt", contact: "Milan", email: "milan@voorbeeld.nl" },
-  { id: "h3", company: "Hotel aan de Waal", contact: "Inge", email: "inge@voorbeeld.nl" },
-  { id: "h4", company: "Brasserie Het Plein", contact: "Robin", email: "robin@voorbeeld.nl" },
-  { id: "h5", company: "Koffiebar No. 8", contact: "Noor", email: "noor@voorbeeld.nl" },
-  { id: "h6", company: "Bistro Nijmegen", contact: "Joost", email: "joost@voorbeeld.nl" },
-  { id: "h7", company: "De Stadskamer", contact: "Lotte", email: "lotte@voorbeeld.nl" },
-  { id: "h8", company: "Café De Hoek", contact: "Daan", email: "daan@voorbeeld.nl" },
-  { id: "h9", company: "Gasterij Lent", contact: "Eva", email: "eva@voorbeeld.nl" },
-  { id: "h10", company: "Vergaderhuis Oost", contact: "Meike", email: "meike@voorbeeld.nl" },
+  { id: "dries-en-co", company: "Dries en Co", emails: ["info@driesenco.nl", "lisette@driesenco.nl"] },
+  { id: "jachtslot", company: "Jachtslot", emails: ["Restaurant@jachtslot.com"] },
+  { id: "sanadome", company: "Sanadome", emails: ["Sebastiaan.Ruys@sanadome.nl", "Jacco.Beck@sanadome.nl"] },
+  { id: "restaurant-steven", company: "Restaurant Steven", emails: ["info@stevennijmegen.nl", "roel@gezelligezakennijmegen.nl"] },
+  { id: "hotel-credible", company: "Hotel Credible", emails: ["zeno@in-credible.nl"] },
+  { id: "radboud-universiteit", company: "Radboud Universiteit", emails: ["martijn.gesthuizen@ru.nl", "supportfb-cf@ru.nl"] },
+  { id: "sint-maartenskliniek", company: "Sint Maartenskliniek", emails: ["catering@maartenskliniek.nl", "T.Lamers@maartenskliniek.nl"] },
+  { id: "radboud-vermaat", company: "Radboud Vermaat", emails: ["radboud-vergaderservice@vermaatgroep.nl"] },
+  { id: "restaurant-blue-by-manna", company: "Restaurant BLUE by Manna", emails: ["info@manna-nijmegen.nl", "jay@manna-nijmegen.nl"] },
+  { id: "bakkerij-koenen", company: "Bakkerij Koenen", emails: ["nijmegen@bakkerijkoenen.nl"] },
 ];
+
+async function horecaApi(method = "GET", body?: unknown) {
+  const response = await fetch("/api/horeca-mailing", {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+  });
+  const data = await response.json().catch(() => null) as MailingApiResponse | null;
+  if (!response.ok) throw new Error(data?.message || "Horecamailing kon niet worden verwerkt.");
+  return data || {};
+}
 
 function TemplateIcon({ kind, className = "h-6 w-6" }: Readonly<{ kind: "clock" | "sparkle" | "cake"; className?: string }>) {
   if (kind === "clock") {
@@ -318,7 +343,7 @@ function MailPreview({
   const meta = template === "hours"
     ? { ...templateMeta.hours, ...occasionMeta[occasion] }
     : templateMeta[template];
-  const previewBody = content.body.replaceAll("{{contactpersoon}}", "Sanne");
+  const previewBody = content.body.replaceAll("{{bedrijfsnaam}}", "Dries en Co");
 
   return (
     <div className="overflow-hidden rounded-[1.65rem] border border-[#ded5ca] bg-[#f2eee7] shadow-[0_18px_45px_rgba(55,43,36,.12)]">
@@ -339,17 +364,17 @@ function MailPreview({
 
         <div className="mt-5 overflow-hidden rounded-[1.35rem]" style={{ backgroundColor: meta.accentSoft }}>
           {photo ? (
-            <img src={photo} alt="Gekozen afbeelding voor de mailing" className="aspect-[16/8] w-full object-cover" />
+            <img src={photo} alt="Gekozen afbeelding voor de mailing" className="aspect-[16/5] max-h-44 w-full object-cover" />
           ) : (
-            <div className="relative flex h-16 items-center justify-center overflow-hidden sm:h-20" style={{ color: meta.accent }}>
-              <span className="absolute -right-5 -top-10 h-24 w-24 rounded-full border-[18px] opacity-15" />
-              <span className="absolute -bottom-12 -left-6 h-24 w-24 rounded-full border-[18px] opacity-15" />
-              <TemplateIcon kind={meta.icon} className="relative h-8 w-8" />
+            <div className="relative flex h-10 items-center justify-center overflow-hidden sm:h-12" style={{ color: meta.accent }}>
+              <span className="absolute -right-5 -top-12 h-20 w-20 rounded-full border-[15px] opacity-15" />
+              <span className="absolute -bottom-14 -left-6 h-20 w-20 rounded-full border-[15px] opacity-15" />
+              <TemplateIcon kind={meta.icon} className="relative h-6 w-6" />
             </div>
           )}
-          <div className="px-5 py-5 sm:px-6">
+          <div className="px-5 py-3.5 sm:px-6">
             <p className="text-[.58rem] font-black uppercase tracking-[.2em]" style={{ color: meta.accent }}>{content.eyebrow || meta.label}</p>
-            <h2 className="mt-2 text-[1.55rem] font-black leading-[1.05] text-[#302821] sm:text-[1.8rem]">{content.title || "Titel van je bericht"}</h2>
+            <h2 className="mt-1.5 text-[1.45rem] font-black leading-[1.05] text-[#302821] sm:text-[1.7rem]">{content.title || "Titel van je bericht"}</h2>
           </div>
         </div>
 
@@ -401,19 +426,60 @@ export default function HorecaMailingPreview() {
   const [selected, setSelected] = useState(() => initialRecipients.map((recipient) => recipient.id));
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const [draftRecipient, setDraftRecipient] = useState({ company: "", contact: "", email: "" });
+  const [editingRecipient, setEditingRecipient] = useState("");
+  const [draftRecipient, setDraftRecipient] = useState({ company: "", emails: "" });
   const [previewMessage, setPreviewMessage] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendProgress, setSendProgress] = useState(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const content = activeTemplate === "hours" ? contentByOccasion[occasion] : contentByTemplate[activeTemplate];
   const meta = activeTemplate === "hours"
     ? { ...templateMeta.hours, ...occasionMeta[occasion] }
     : templateMeta[activeTemplate];
   const priceMissing = activeTemplate !== "hours" && !content.price.trim();
+  const selectedRecipients = recipients.filter((recipient) => selected.includes(recipient.id));
+  const selectedAddressCount = selectedRecipients.reduce((total, recipient) => total + recipient.emails.length, 0);
   const shownRecipients = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return recipients;
-    return recipients.filter((recipient) => `${recipient.company} ${recipient.contact} ${recipient.email}`.toLowerCase().includes(query));
+    return recipients.filter((recipient) => `${recipient.company} ${recipient.emails.join(" ")}`.toLowerCase().includes(query));
   }, [recipients, search]);
+
+  useEffect(() => {
+    let active = true;
+    void horecaApi()
+      .then((data) => {
+        if (!active) return;
+        if (Array.isArray(data.customers) && data.customers.length > 0) {
+          setRecipients(data.customers);
+          setSelected(data.customers.map((recipient) => recipient.id));
+        }
+        if (data.draft) {
+          setActiveTemplate(data.draft.template);
+          setOccasion(data.draft.occasion);
+          if (data.draft.template === "hours") {
+            setContentByOccasion((current) => ({ ...current, [data.draft!.occasion]: data.draft!.content }));
+          } else {
+            setContentByTemplate((current) => ({ ...current, [data.draft!.template]: data.draft!.content }));
+          }
+          if (data.draft.photoUrl) {
+            setPhoto(data.draft.photoUrl);
+            setPhotoName("Opgeslagen foto");
+          }
+        }
+        setPreviewMessage(data.message || "");
+      })
+      .catch((error) => {
+        if (active) setPreviewMessage(error instanceof Error ? error.message : "Horecamailing laden is mislukt.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   function patchContent(value: Partial<TemplateContent>) {
     if (activeTemplate === "hours") {
@@ -444,8 +510,8 @@ export default function HorecaMailingPreview() {
       setPhotoError("Kies een afbeelding, bijvoorbeeld JPG, PNG of WEBP.");
       return;
     }
-    if (file.size > 5_000_000) {
-      setPhotoError("Deze foto is groter dan 5 MB. Kies een kleinere afbeelding.");
+    if (file.size > 3_000_000) {
+      setPhotoError("Deze foto is groter dan 3 MB. Kies een kleinere afbeelding.");
       return;
     }
     const reader = new FileReader();
@@ -463,27 +529,116 @@ export default function HorecaMailingPreview() {
 
   function addRecipient() {
     const company = draftRecipient.company.trim();
-    const contact = draftRecipient.contact.trim();
-    const email = draftRecipient.email.trim();
-    if (!company || !email.includes("@")) return;
-    const recipient = { id: `preview-${Date.now()}`, company, contact, email };
-    setRecipients((current) => [...current, recipient]);
-    setSelected((current) => [...current, recipient.id]);
-    setDraftRecipient({ company: "", contact: "", email: "" });
+    const emails = Array.from(new Set(draftRecipient.emails.split(/[;,\s]+/).map((email) => email.trim()).filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))));
+    if (!company || emails.length === 0) return;
+    if (editingRecipient) {
+      setRecipients((current) => current.map((recipient) => recipient.id === editingRecipient ? { ...recipient, company, emails } : recipient));
+    } else {
+      const recipient = { id: `horeca-${Date.now()}`, company, emails };
+      setRecipients((current) => [...current, recipient]);
+      setSelected((current) => [...current, recipient.id]);
+    }
+    setDraftRecipient({ company: "", emails: "" });
+    setEditingRecipient("");
     setAddOpen(false);
+  }
+
+  function editRecipient(recipient: Recipient) {
+    setDraftRecipient({ company: recipient.company, emails: recipient.emails.join("; ") });
+    setEditingRecipient(recipient.id);
+    setAddOpen(true);
+  }
+
+  function draftPayload() {
+    return {
+      customers: recipients,
+      draft: {
+        template: activeTemplate,
+        occasion,
+        content,
+        photoData: photo.startsWith("data:image/") ? photo : "",
+        photoUrl: photo.startsWith("http") ? photo : "",
+        photoName,
+        removePhoto: !photo,
+      },
+    };
+  }
+
+  function applyServerData(data: MailingApiResponse) {
+    if (Array.isArray(data.customers) && data.customers.length > 0) setRecipients(data.customers);
+    if (data.draft?.photoUrl) {
+      setPhoto(data.draft.photoUrl);
+      setPhotoName("Opgeslagen foto");
+    }
+  }
+
+  async function saveDraft(showMessage = true) {
+    const data = await horecaApi("POST", draftPayload());
+    applyServerData(data);
+    if (showMessage) setPreviewMessage("Concept en horecalijst zijn opgeslagen.");
+    return data;
+  }
+
+  async function saveNow() {
+    setSaving(true);
+    try {
+      await saveDraft();
+    } catch (error) {
+      setPreviewMessage(error instanceof Error ? error.message : "Opslaan is mislukt.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function sendTestMail() {
+    if (priceMissing) return;
+    setSending(true);
+    try {
+      await saveDraft(false);
+      await horecaApi("PATCH", { test: true });
+      setPreviewMessage("Testmail is verstuurd naar info@strik-patisserie.nl.");
+    } catch (error) {
+      setPreviewMessage(error instanceof Error ? error.message : "Testmail versturen is mislukt.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendCampaign() {
+    const jobs = selectedRecipients.flatMap((recipient) => recipient.emails.map((email) => ({ customerId: recipient.id, email })));
+    if (!jobs.length || priceMissing) return;
+    setSending(true);
+    setSendProgress(0);
+    setConfirmOpen(false);
+    let completed = 0;
+    try {
+      await saveDraft(false);
+      for (const job of jobs) {
+        const data = await horecaApi("PATCH", job);
+        applyServerData(data);
+        completed += 1;
+        setSendProgress(completed);
+      }
+      setPreviewMessage(`Mailing is afzonderlijk verstuurd naar ${jobs.length} adres${jobs.length === 1 ? "" : "sen"} van ${selectedRecipients.length} bedrijf${selectedRecipients.length === 1 ? "" : "ven"}.`);
+    } catch (error) {
+      setPreviewMessage(`${completed} van ${jobs.length} mails verstuurd. ${error instanceof Error ? error.message : "Versturen is gestopt."}`);
+    } finally {
+      setSending(false);
+      setSendProgress(0);
+    }
   }
 
   return (
     <div className="space-y-4 pb-10">
-      <section className="flex flex-col gap-3 rounded-[1.35rem] border border-[#e5d8c5] bg-[#fffaf2]/95 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <section className="flex flex-col gap-3 rounded-[1.35rem] border border-[#d4e2d2] bg-[#f3f8f1]/95 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f3df9d] text-[#6c5120]">✦</span>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#dcebd8] text-[#315c46]">✓</span>
           <div>
-            <p className="text-sm font-black text-[#49342d]">Lokale ontwerp-preview</p>
-            <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[#786d62]">Aparte horecalijst · niets wordt opgeslagen of verstuurd.</p>
+            <p className="text-sm font-black text-[#315c46]">Horecamailing</p>
+            <p className="mt-0.5 text-xs font-semibold leading-relaxed text-[#667568]">Aparte horecalijst · mails gaan altijd afzonderlijk naar ieder adres.</p>
           </div>
         </div>
-        <span className="w-fit rounded-full bg-[#ebe5da] px-3 py-1.5 text-[.62rem] font-black uppercase tracking-[.14em] text-[#665d55]">Eerst samen bijschaven</span>
+        <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[.62rem] font-black uppercase tracking-[.14em] text-[#315c46]">{loading ? "Laden..." : "Klaar voor gebruik"}</span>
       </section>
 
       <section className="rounded-[1.55rem] border border-[#ded6ca] bg-white/95 p-3 shadow-[0_12px_30px_rgba(63,50,42,.08)] sm:p-5">
@@ -549,7 +704,7 @@ export default function HorecaMailingPreview() {
             </div>
             <label className={labelClass}>Tekst
               <textarea value={content.body} onChange={(event) => patchContent({ body: event.target.value })} rows={8} className={`${fieldClass} resize-y leading-relaxed`} />
-              <span className="mt-1.5 block normal-case tracking-normal text-[.66rem] font-semibold text-[#90867c]">Gebruik <strong>{"{{contactpersoon}}"}</strong> voor de voornaam in iedere persoonlijke mail.</span>
+              <span className="mt-1.5 block normal-case tracking-normal text-[.66rem] font-semibold text-[#90867c]">Gebruik <strong>{"{{bedrijfsnaam}}"}</strong>; iedere mail begint standaard met “Beste team bedrijfsnaam”.</span>
             </label>
 
             {activeTemplate !== "hours" && (
@@ -588,7 +743,7 @@ export default function HorecaMailingPreview() {
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#6c6259] shadow-sm"><PhotoIcon /></span>
                   <div>
                     <p className="text-xs font-black text-[#3e3731]">Foto toevoegen <span className="font-semibold text-[#8b8177]">(optioneel)</span></p>
-                    <p className="mt-0.5 text-[.65rem] font-semibold text-[#8b8177]">JPG, PNG of WEBP · maximaal 5 MB</p>
+                    <p className="mt-0.5 text-[.65rem] font-semibold text-[#8b8177]">JPG, PNG of WEBP · maximaal 3 MB</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -609,7 +764,7 @@ export default function HorecaMailingPreview() {
           <div className="mb-3 flex items-center justify-between gap-3 px-1">
             <div>
               <p className="text-[.62rem] font-black uppercase tracking-[.16em] text-[#8b8177]">Live voorbeeld</p>
-              <p className="mt-0.5 text-xs font-semibold text-[#6f665e]">Zo ontvangt Sanne de mail.</p>
+              <p className="mt-0.5 text-xs font-semibold text-[#6f665e]">Voorbeeld voor team Dries en Co.</p>
             </div>
             <span className="rounded-full bg-white px-3 py-1.5 text-[.62rem] font-black text-[#72685f] shadow-sm">Mobiele mail</span>
           </div>
@@ -624,26 +779,29 @@ export default function HorecaMailingPreview() {
             <h2 className="mt-0.5 text-xl font-black text-[#302821]">Kies de horecaklanten</h2>
             <p className="mt-1 text-xs font-semibold text-[#7c7269]">Deze adressenlijst staat straks volledig los van de Sinterklaas-mailing.</p>
           </div>
-          <button type="button" onClick={() => setAddOpen((current) => !current)} className="w-fit rounded-full bg-[#315c46] px-4 py-2.5 text-xs font-black text-white shadow-sm">+ Horecaklant toevoegen</button>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={saving || sending} onClick={() => void saveNow()} className="w-fit rounded-full border border-[#9eb59f] bg-white px-4 py-2.5 text-xs font-black text-[#315c46] shadow-sm disabled:opacity-45">{saving ? "Opslaan..." : "Opslaan"}</button>
+            <button type="button" onClick={() => { setEditingRecipient(""); setDraftRecipient({ company: "", emails: "" }); setAddOpen((current) => !current); }} className="w-fit rounded-full bg-[#315c46] px-4 py-2.5 text-xs font-black text-white shadow-sm">+ Horecaklant toevoegen</button>
+          </div>
         </div>
 
         {addOpen && (
-          <div className="mt-4 grid gap-2 rounded-[1.15rem] border border-[#d7e2d2] bg-[#f4f8f2] p-3 sm:grid-cols-[1fr_.8fr_1.15fr_auto] sm:items-end">
+          <div className="mt-4 grid gap-2 rounded-[1.15rem] border border-[#d7e2d2] bg-[#f4f8f2] p-3 sm:grid-cols-[.85fr_1.55fr_auto] sm:items-end">
             <label className={labelClass}>Bedrijf
               <input value={draftRecipient.company} onChange={(event) => setDraftRecipient((current) => ({ ...current, company: event.target.value }))} placeholder="Naam horecazaak" className={fieldClass} />
             </label>
-            <label className={labelClass}>Contactpersoon
-              <input value={draftRecipient.contact} onChange={(event) => setDraftRecipient((current) => ({ ...current, contact: event.target.value }))} placeholder="Voornaam" className={fieldClass} />
+            <label className={labelClass}>E-mailadres(sen)
+              <input value={draftRecipient.emails} onChange={(event) => setDraftRecipient((current) => ({ ...current, emails: event.target.value }))} placeholder="adres@bedrijf.nl; tweede@bedrijf.nl" className={fieldClass} />
+              <span className="mt-1 block normal-case tracking-normal text-[.62rem] font-semibold text-[#8a8178]">Meerdere adressen scheid je met een puntkomma.</span>
             </label>
-            <label className={labelClass}>E-mailadres
-              <input type="email" value={draftRecipient.email} onChange={(event) => setDraftRecipient((current) => ({ ...current, email: event.target.value }))} placeholder="naam@bedrijf.nl" className={fieldClass} />
-            </label>
-            <button type="button" onClick={addRecipient} className="h-[2.65rem] rounded-xl bg-[#49342d] px-4 text-xs font-black text-white disabled:opacity-40" disabled={!draftRecipient.company.trim() || !draftRecipient.email.includes("@")}>Toevoegen</button>
+            <button type="button" onClick={addRecipient} className="h-[2.65rem] rounded-xl bg-[#49342d] px-4 text-xs font-black text-white disabled:opacity-40" disabled={!draftRecipient.company.trim() || !draftRecipient.emails.includes("@")}>
+              {editingRecipient ? "Wijzigingen bewaren" : "Toevoegen"}
+            </button>
           </div>
         )}
 
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zoek bedrijf, naam of e-mailadres" className="h-10 w-full rounded-xl border border-[#ded4c7] bg-[#fbfaf7] px-3 text-xs font-semibold outline-none focus:border-[#71907b] sm:max-w-sm" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zoek bedrijf of e-mailadres" className="h-10 w-full rounded-xl border border-[#ded4c7] bg-[#fbfaf7] px-3 text-xs font-semibold outline-none focus:border-[#71907b] sm:max-w-sm" />
           <button type="button" onClick={() => setSelected(selected.length === recipients.length ? [] : recipients.map((recipient) => recipient.id))} className="w-fit text-xs font-black text-[#466b51] underline underline-offset-4">{selected.length === recipients.length ? "Niemand selecteren" : "Iedereen selecteren"}</button>
         </div>
 
@@ -655,9 +813,9 @@ export default function HorecaMailingPreview() {
                 <input type="checkbox" checked={checked} onChange={() => toggleRecipient(recipient.id)} className="h-5 w-5 shrink-0 accent-[#315c46]" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-xs font-black text-[#352f2a]">{recipient.company}</span>
-                  <span className="mt-0.5 block truncate text-[.65rem] font-semibold text-[#82786f]">{recipient.contact ? `${recipient.contact} · ` : ""}{recipient.email}</span>
+                  <span className="mt-0.5 block text-[.65rem] font-semibold leading-relaxed text-[#82786f]">{recipient.emails.join(" · ")}</span>
                 </span>
-                <button type="button" onClick={(event) => { event.preventDefault(); setPreviewMessage("In de echte versie kun je hier dit adres wijzigen of verwijderen."); }} className="rounded-full bg-white px-2.5 py-1.5 text-[.6rem] font-black text-[#72685f] shadow-sm">Wijzig</button>
+                <button type="button" onClick={(event) => { event.preventDefault(); editRecipient(recipient); }} className="rounded-full bg-white px-2.5 py-1.5 text-[.6rem] font-black text-[#72685f] shadow-sm">Wijzig</button>
               </label>
             );
           })}
@@ -667,16 +825,30 @@ export default function HorecaMailingPreview() {
       <section className="rounded-[1.55rem] border border-[#c7d8c5] bg-[#e6efe2]/95 p-4 shadow-sm sm:flex sm:items-center sm:justify-between sm:gap-5 sm:p-5">
         <div>
           <p className="text-[.62rem] font-black uppercase tracking-[.16em] text-[#5e7964]">Klaar voor controle</p>
-          <p className="mt-1 text-base font-black text-[#2e4936]">{meta.shortLabel}-mail naar {selected.length} {selected.length === 1 ? "horecaklant" : "horecaklanten"}</p>
-          <p className="mt-1 text-xs font-semibold text-[#65746a]">Iedere klant ontvangt één persoonlijke mail; adressen zijn nooit zichtbaar voor anderen.</p>
+          <p className="mt-1 text-base font-black text-[#2e4936]">{meta.shortLabel}-mail naar {selected.length} {selected.length === 1 ? "bedrijf" : "bedrijven"}</p>
+          <p className="mt-1 text-xs font-semibold text-[#65746a]">{selectedAddressCount} adres{selectedAddressCount === 1 ? "" : "sen"} · ieder adres ontvangt een afzonderlijke mail met de eigen bedrijfsnaam.</p>
           {priceMissing && <p role="alert" className="mt-2 text-xs font-black text-[#a94a38]">Vul eerst de prijs in voordat deze mail kan worden verstuurd.</p>}
           {previewMessage && <p role="status" className="mt-2 text-xs font-black text-[#8a5e2d]">{previewMessage}</p>}
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:min-w-[20rem] sm:flex-row sm:justify-end">
-          <button type="button" onClick={() => setPreviewMessage("Preview: er is geen testmail verstuurd.")} className="rounded-full border border-[#8da78f] bg-white px-4 py-3 text-xs font-black text-[#315c46]">Testmail bekijken</button>
-          <button type="button" disabled={priceMissing || selected.length === 0} onClick={() => setPreviewMessage("Preview: er is niets verstuurd of opgeslagen.")} className="rounded-full bg-[#315c46] px-5 py-3 text-xs font-black text-white shadow-md disabled:cursor-not-allowed disabled:opacity-40">Controleren & versturen →</button>
+          <button type="button" disabled={sending || saving || priceMissing} onClick={() => void sendTestMail()} className="rounded-full border border-[#8da78f] bg-white px-4 py-3 text-xs font-black text-[#315c46] disabled:opacity-40">Test naar info@</button>
+          <button type="button" disabled={sending || saving || priceMissing || selected.length === 0} onClick={() => setConfirmOpen(true)} className="rounded-full bg-[#315c46] px-5 py-3 text-xs font-black text-white shadow-md disabled:cursor-not-allowed disabled:opacity-40">{sending ? `Versturen ${sendProgress}/${selectedAddressCount}...` : "Controleren & versturen →"}</button>
         </div>
       </section>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#263b2b]/55 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="horeca-send-title">
+          <section className="w-full max-w-lg rounded-[1.6rem] border border-[#ded6ca] bg-[#fffdf9] p-5 shadow-2xl sm:p-6">
+            <p className="text-[.62rem] font-black uppercase tracking-[.16em] text-[#758276]">Laatste controle</p>
+            <h2 id="horeca-send-title" className="mt-1 text-2xl font-black text-[#302821]">Mailing definitief versturen?</h2>
+            <p className="mt-3 text-sm font-semibold leading-relaxed text-[#6d645c]">Je verstuurt <strong>{selectedAddressCount} afzonderlijke mails</strong> naar {selected.length} geselecteerde {selected.length === 1 ? "organisatie" : "organisaties"}. Antwoorden komen altijd binnen op info@strik-patisserie.nl.</p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setConfirmOpen(false)} className="rounded-full border border-[#d8cec2] bg-white px-5 py-3 text-xs font-black text-[#655c54]">Nog niet</button>
+              <button type="button" onClick={() => void sendCampaign()} className="rounded-full bg-[#315c46] px-5 py-3 text-xs font-black text-white shadow-md">Definitief versturen</button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
