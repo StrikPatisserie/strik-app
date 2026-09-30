@@ -16,6 +16,7 @@ import type {
   LogisticsFixedCustomer,
   LogisticsFulfillment,
   LogisticsLoadPressure,
+  LogisticsPreparationProduct,
   LogisticsReceipt,
   LogisticsReceiptLine,
   LogisticsReceiptOverride,
@@ -164,6 +165,7 @@ type WebshopImageSummary = LogisticsWebshopImage;
 type RouteDraftSummary = LogisticsRouteDraft;
 type RouteLearningSummary = LogisticsRouteLearning;
 type FixedCustomerSummary = LogisticsFixedCustomer;
+type PreparationProductSummary = LogisticsPreparationProduct;
 type OperationsDraft = Required<
   Pick<LogisticsDayOperations, "teamStartTime" | "teamEndTime" | "teamMembers">
 > & {
@@ -435,20 +437,13 @@ const preparationCategories: Record<
     emptyLabel: "Geen bakkerij-voorbereiding gevonden voor deze dag.",
   },
   logistiek: {
-    label: "Voorbereiden logistiek",
-    shortLabel: "Logistiek",
-    emptyLabel: "Geen logistieke voorbereiding gevonden voor deze dag.",
+    label: "Verdeellijst logistiek · vers",
+    shortLabel: "Vers",
+    emptyLabel: "Geen versproducten gevonden voor deze dag.",
   },
 };
 
 const preparationRules: PreparationRule[] = [
-  {
-    category: "logistiek",
-    code: ".686",
-    label: "6-8 pers.",
-    subcode: "686",
-    textPatterns: [/\b6\s*8\s*pers\b/, /\b6\s*8p\b/],
-  },
   {
     category: "bakkerij",
     code: ".690",
@@ -523,6 +518,27 @@ const preparationRules: PreparationRule[] = [
     textPatterns: [/\bpetit gateau\b.*\b(?:passie|passion|mango)\b/],
   },
 ];
+
+function preparationRulesFor(
+  category: PreparationCategory,
+  products: PreparationProductSummary[]
+) {
+  if (category === "bakkerij") {
+    return preparationRules.filter((rule) => rule.category === category);
+  }
+
+  return products.map((product) => {
+    const [articleNumber, subcode] = product.articleNumber.split(".", 2);
+
+    return {
+      category: "logistiek" as const,
+      code: product.articleNumber,
+      label: product.articleName,
+      articleNumber,
+      subcode: subcode || undefined,
+    };
+  });
+}
 
 const pressureOptions: {
   value: LogisticsLoadPressure | "";
@@ -4222,7 +4238,10 @@ function normalizePreparationCode(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-function receiptLineArticleParts(line: ReceiptLine) {
+function receiptLineArticleParts(
+  line: ReceiptLine,
+  rules: PreparationRule[] = preparationRules
+) {
   const article = String(line.articleNumber || "").trim();
   const articleMatch = article.match(
     /^([A-Z]{0,4}\d{3,9})(?:[.,]([A-Z0-9]{1,8}))?$/i
@@ -4241,7 +4260,7 @@ function receiptLineArticleParts(line: ReceiptLine) {
   );
   const compactRule =
     articleNumber && !subcode
-      ? preparationRules.find(
+      ? rules.find(
           (rule) =>
             rule.articleNumber &&
             rule.subcode &&
@@ -4276,8 +4295,12 @@ function preparationRuleMatchesText(rule: PreparationRule, line: ReceiptLine) {
   return rule.textPatterns.some((pattern) => pattern.test(text));
 }
 
-function preparationRuleMatchesLine(rule: PreparationRule, line: ReceiptLine) {
-  const { articleNumber, subcode } = receiptLineArticleParts(line);
+function preparationRuleMatchesLine(
+  rule: PreparationRule,
+  line: ReceiptLine,
+  rules: PreparationRule[]
+) {
+  const { articleNumber, subcode } = receiptLineArticleParts(line, rules);
   const catalogArticle = normalizePreparationCode(line.catalogArticleNumber || "");
   const ruleArticle = normalizePreparationCode(rule.articleNumber || "");
   const ruleSubcode = normalizePreparationCode(rule.subcode || "");
@@ -4286,6 +4309,7 @@ function preparationRuleMatchesLine(rule: PreparationRule, line: ReceiptLine) {
   if (ruleArticle && ruleSubcode) {
     return (
       (articleNumber === ruleArticle && subcode === ruleSubcode) ||
+      (catalogArticle === ruleArticle && subcode === ruleSubcode) ||
       articleNumber === `${ruleArticle}${ruleSubcode}` ||
       textMatched
     );
@@ -4296,21 +4320,29 @@ function preparationRuleMatchesLine(rule: PreparationRule, line: ReceiptLine) {
   return textMatched;
 }
 
-function preparationItemKeyFor(rule: PreparationRule, line: ReceiptLine) {
-  const { articleNumber, subcode } = receiptLineArticleParts(line);
+function preparationItemKeyFor(
+  rule: PreparationRule,
+  line: ReceiptLine,
+  rules: PreparationRule[]
+) {
+  const { articleNumber, subcode } = receiptLineArticleParts(line, rules);
   const description = cleanProductLabel(cleanReceiptLineDescription(line.description));
-  const productKey = rule.subcode && !rule.articleNumber
-    ? `${articleNumber}|${subcode}|${normalizeMatchText(description)}`
-    : `${rule.code}|${normalizeMatchText(description)}`;
+  const productKey =
+    rule.category === "logistiek"
+      ? rule.code
+      : rule.subcode && !rule.articleNumber
+        ? `${articleNumber}|${subcode}|${normalizeMatchText(description)}`
+        : `${rule.code}|${normalizeMatchText(description)}`;
 
   return `${rule.category}|${rule.code}|${productKey}`;
 }
 
 function buildPreparationItems(
   receipts: ReceiptSummary[],
-  category: PreparationCategory
+  category: PreparationCategory,
+  products: PreparationProductSummary[]
 ) {
-  const rules = preparationRules.filter((rule) => rule.category === category);
+  const rules = preparationRulesFor(category, products);
   const ruleIndex = new Map(rules.map((rule, index) => [rule.code, index]));
   const itemsByKey = new Map<string, PreparationItem>();
 
@@ -4326,10 +4358,10 @@ function buildPreparationItems(
       if (quantity <= 0) return;
 
       rules.forEach((rule) => {
-        if (!preparationRuleMatchesLine(rule, line)) return;
+        if (!preparationRuleMatchesLine(rule, line, rules)) return;
 
-        const key = preparationItemKeyFor(rule, line);
-        const { articleNumber, subcode } = receiptLineArticleParts(line);
+        const key = preparationItemKeyFor(rule, line, rules);
+        const { articleNumber, subcode } = receiptLineArticleParts(line, rules);
         const source = {
           receiptNumber: receipt.receiptNumber || receipt.id,
           customerName: receipt.customer || "Klant controleren",
@@ -4350,8 +4382,10 @@ function buildPreparationItems(
           articleNumber: line.catalogArticleNumber || articleNumber,
           subcode,
           description:
-            cleanProductLabel(cleanReceiptLineDescription(line.description)) ||
-            rule.label,
+            category === "logistiek"
+              ? rule.label
+              : cleanProductLabel(cleanReceiptLineDescription(line.description)) ||
+                rule.label,
           quantity,
           sources: [source],
         });
@@ -4614,9 +4648,10 @@ function createPreparationPrintHtml(input: {
 function openPreparationSheet(
   plan: DayPlan,
   receipts: ReceiptSummary[],
-  category: PreparationCategory
+  category: PreparationCategory,
+  products: PreparationProductSummary[]
 ) {
-  const items = buildPreparationItems(receipts, category);
+  const items = buildPreparationItems(receipts, category, products);
   if (items.length === 0) {
     window.alert(preparationCategories[category].emptyLabel);
     return;
@@ -8362,6 +8397,14 @@ export default function BakkerijLogistiekDashboard() {
   const [fixedCustomers, setFixedCustomers] = useState<FixedCustomerSummary[]>(
     []
   );
+  const [preparationProducts, setPreparationProducts] = useState<
+    PreparationProductSummary[]
+  >([]);
+  const [preparationProductManagerOpen, setPreparationProductManagerOpen] =
+    useState(false);
+  const [preparationProductMessage, setPreparationProductMessage] = useState("");
+  const [isSavingPreparationProducts, setIsSavingPreparationProducts] =
+    useState(false);
   const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
   const [batchReloadCounter, setBatchReloadCounter] = useState(0);
   const [routeSaveState, setRouteSaveState] = useState<RouteSaveState>("idle");
@@ -8520,6 +8563,11 @@ export default function BakkerijLogistiekDashboard() {
     selectedPlan.date === dateState.tomorrow && fileSnapshot
       ? fileSnapshot.status
       : tomorrowBatch?.status;
+  const tomorrowDefinitiveBatchMissing =
+    isNextLogisticsDateCalendarTomorrow(dateState) &&
+    minuteOfDay(dateState.hour, dateState.minute) >=
+      DEFINITIVE_BATCH_START_MINUTE_OF_DAY &&
+    tomorrowBatchStatus !== "definitief";
   const selectedBatch = activeImportedBatch || batchByDate[selectedPlan.date] || null;
   const selectedBatchStatus = fileSnapshot?.status || selectedBatch?.status;
   const definitiveBatchExpected =
@@ -8607,7 +8655,7 @@ export default function BakkerijLogistiekDashboard() {
         tomorrowPrefetchRef.current = null;
       }
     };
-  }, [dateState.tomorrow]);
+  }, [batchReloadCounter, dateState.tomorrow]);
 
   useEffect(() => {
     function syncOpenAppDate() {
@@ -8701,6 +8749,7 @@ export default function BakkerijLogistiekDashboard() {
           routeDraft?: RouteDraftSummary | null;
           routeLearning?: RouteLearningSummary | null;
           fixedCustomers?: FixedCustomerSummary[];
+          preparationProducts?: PreparationProductSummary[];
           message?: string;
         };
 
@@ -8713,6 +8762,7 @@ export default function BakkerijLogistiekDashboard() {
           setRouteDraft(null);
           setRouteLearning(null);
           setFixedCustomers([]);
+          setPreparationProducts([]);
           if (manualRefresh) {
             setImportMessage(data.message || "Opnieuw ophalen is niet gelukt.");
           }
@@ -8729,6 +8779,7 @@ export default function BakkerijLogistiekDashboard() {
         setRouteDraft(data.routeDraft || null);
         setRouteLearning(data.routeLearning || null);
         setFixedCustomers(data.fixedCustomers || []);
+        setPreparationProducts(data.preparationProducts || []);
         setRecentDayFeedback(data.recentDayFeedback || []);
         setFeedbackByDate((current) => ({
           ...current,
@@ -9545,6 +9596,48 @@ export default function BakkerijLogistiekDashboard() {
     }
   }
 
+  async function savePreparationProducts(
+    products: PreparationProductSummary[]
+  ) {
+    setIsSavingPreparationProducts(true);
+    setPreparationProductMessage("verslijst opslaan...");
+
+    try {
+      const response = await fetch(
+        "/api/bakkerij-logistiek/preparation-products",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ products }),
+        }
+      );
+      const data = (await response.json()) as {
+        ok?: boolean;
+        products?: PreparationProductSummary[];
+        message?: string;
+      };
+
+      if (!response.ok || !data.ok || !data.products) {
+        throw new Error(data.message || "Verslijst opslaan is niet gelukt.");
+      }
+
+      setPreparationProducts(data.products);
+      setPreparationProductMessage(
+        `${data.products.length} versproducten opgeslagen.`
+      );
+      return true;
+    } catch (error) {
+      setPreparationProductMessage(
+        error instanceof Error
+          ? error.message
+          : "Verslijst opslaan is niet gelukt."
+      );
+      return false;
+    } finally {
+      setIsSavingPreparationProducts(false);
+    }
+  }
+
   return (
     <StrikShell wide>
       <StrikPageHeader
@@ -9625,6 +9718,7 @@ export default function BakkerijLogistiekDashboard() {
               />
               <BatchDayButton
                 active={selectedPlan.date === dateState.tomorrow}
+                alert={tomorrowDefinitiveBatchMissing}
                 date={dateState.tomorrow}
                 disabled={isOpeningTomorrow}
                 label={nextLogisticsDateLabel(dateState)}
@@ -9712,9 +9806,18 @@ export default function BakkerijLogistiekDashboard() {
               />
               <span className="ml-1 border-l border-[#e8e4de] pl-2">
                 <PreparationPrintButton
-                  disabled={receiptSummaries.length === 0}
+                  printDisabled={receiptSummaries.length === 0}
+                  onManage={() => {
+                    setPreparationProductMessage("");
+                    setPreparationProductManagerOpen(true);
+                  }}
                   onSelect={(category) =>
-                    openPreparationSheet(selectedPlan, receiptSummaries, category)
+                    openPreparationSheet(
+                      selectedPlan,
+                      receiptSummaries,
+                      category,
+                      preparationProducts
+                    )
                   }
                 />
               </span>
@@ -9954,6 +10057,15 @@ export default function BakkerijLogistiekDashboard() {
               </div>
             </section>
           </div>
+        )}
+        {preparationProductManagerOpen && (
+          <PreparationProductsModal
+            isSaving={isSavingPreparationProducts}
+            message={preparationProductMessage}
+            onClose={() => setPreparationProductManagerOpen(false)}
+            onSave={savePreparationProducts}
+            products={preparationProducts}
+          />
         )}
       </div>
       </>
@@ -11848,6 +11960,7 @@ function PencilIcon() {
 
 function BatchDayButton({
   active,
+  alert = false,
   date,
   disabled = false,
   label,
@@ -11856,6 +11969,7 @@ function BatchDayButton({
   status,
 }: Readonly<{
   active: boolean;
+  alert?: boolean;
   date: string;
   disabled?: boolean;
   label: string;
@@ -11863,11 +11977,13 @@ function BatchDayButton({
   onClick: () => void;
   status?: BatchStatus;
 }>) {
-  const tone = status === "definitief"
-    ? "border-[#a8c4a6] bg-[#e4eee0] text-[#244b32]"
-    : status === "prognose"
-      ? "border-[#ead178] bg-[#fff0b8] text-[#6f5212]"
-      : "border-[#ddd8d1] bg-[#f1efec] text-[#6b645b]";
+  const tone = alert
+    ? "border-[#dc8c7b] bg-[#fde5df] text-[#923a2a]"
+    : status === "definitief"
+      ? "border-[#a8c4a6] bg-[#e4eee0] text-[#244b32]"
+      : status === "prognose"
+        ? "border-[#9ebbd4] bg-[#e4f0fa] text-[#244f70]"
+        : "border-[#ddd8d1] bg-[#f1efec] text-[#6b645b]";
 
   return (
     <button
@@ -12064,11 +12180,221 @@ function ReceiptPrintButton({
   );
 }
 
+function cleanManagedPreparationArticleNumber(value: string) {
+  return value
+    .toUpperCase()
+    .replace(/,/g, ".")
+    .replace(/\s+/g, "")
+    .replace(/[^A-Z0-9.]/g, "")
+    .slice(0, 24);
+}
+
+function PreparationProductsModal({
+  isSaving,
+  message,
+  onClose,
+  onSave,
+  products,
+}: Readonly<{
+  isSaving: boolean;
+  message: string;
+  onClose: () => void;
+  onSave: (products: PreparationProductSummary[]) => Promise<boolean>;
+  products: PreparationProductSummary[];
+}>) {
+  const [draft, setDraft] = useState<PreparationProductSummary[]>(products);
+  const [articleNumber, setArticleNumber] = useState("");
+  const [articleName, setArticleName] = useState("");
+  const [validationMessage, setValidationMessage] = useState("");
+
+  useEffect(() => {
+    setDraft(products);
+  }, [products]);
+
+  function addProduct() {
+    const number = cleanManagedPreparationArticleNumber(articleNumber);
+    const name = articleName.replace(/\s+/g, " ").trim();
+
+    if (!/^(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?$/.test(number)) {
+      setValidationMessage("Vul een geldig, volledig artikelnummer in.");
+      return;
+    }
+    if (!name) {
+      setValidationMessage("Vul ook de artikelnaam in.");
+      return;
+    }
+    if (draft.some((product) => product.articleNumber === number)) {
+      setValidationMessage(`${number} staat al in de verslijst.`);
+      return;
+    }
+
+    setDraft((current) =>
+      [
+        ...current,
+        {
+          id: `preparation:${number}`,
+          category: "vers" as const,
+          articleNumber: number,
+          articleName: name,
+          updatedAt: new Date().toISOString(),
+        },
+      ].sort((first, second) =>
+        first.articleNumber.localeCompare(second.articleNumber, "nl-NL", {
+          numeric: true,
+        })
+      )
+    );
+    setArticleNumber("");
+    setArticleName("");
+    setValidationMessage("");
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3 sm:p-4">
+      <section
+        aria-labelledby="preparation-products-title"
+        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-[#d7cec4] bg-[#fbf9f5] shadow-2xl"
+      >
+        <header className="flex items-start justify-between gap-3 border-b border-[#e8e1d8] px-4 py-3 sm:px-5">
+          <div>
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#6f836b]">
+              Verdeellijst logistiek
+            </p>
+            <h2
+              id="preparation-products-title"
+              className="mt-0.5 text-xl font-black tracking-normal text-[#1a1815] sm:text-2xl"
+            >
+              Versproducten beheren
+            </h2>
+            <p className="mt-1 text-xs font-semibold leading-snug text-[#6b645b]">
+              Het artikelnummer wordt exact gematcht. De naam is alleen een
+              extra controle en mag op de bon iets afwijken.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Sluiten"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d7cec4] bg-white text-base font-black text-[#4a4540]"
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5">
+          <div className="grid gap-1.5">
+            {draft.map((product) => (
+              <div
+                key={product.articleNumber}
+                className="grid grid-cols-[6.8rem_minmax(0,1fr)_2rem] items-center gap-2 rounded-xl border border-[#e6dfd6] bg-white px-2.5 py-2"
+              >
+                <span className="text-[0.7rem] font-black tabular-nums text-[#31523b]">
+                  {product.articleNumber}
+                </span>
+                <span className="truncate text-[0.76rem] font-bold tracking-normal text-[#1a1815]">
+                  {product.articleName}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`${product.articleName} verwijderen`}
+                  title="Uit verslijst verwijderen"
+                  onClick={() => {
+                    setDraft((current) =>
+                      current.filter((item) => item.id !== product.id)
+                    );
+                    setValidationMessage("");
+                  }}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-[#9b2d1f] transition hover:bg-[#fff0eb]"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 rounded-2xl border border-[#cfdacb] bg-[#eef4eb] p-3">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#52654f]">
+              Artikel toevoegen
+            </p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)_auto]">
+              <input
+                aria-label="Artikelnummer"
+                inputMode="text"
+                value={articleNumber}
+                onChange={(event) => {
+                  setArticleNumber(
+                    cleanManagedPreparationArticleNumber(event.target.value)
+                  );
+                  setValidationMessage("");
+                }}
+                placeholder="Bijv. 20100.686"
+                className="h-10 min-w-0 rounded-xl border border-[#c9d2c5] bg-white px-3 text-sm font-black tabular-nums outline-none focus:border-[#6f836b]"
+              />
+              <input
+                aria-label="Artikelnaam"
+                value={articleName}
+                onChange={(event) => {
+                  setArticleName(event.target.value);
+                  setValidationMessage("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  addProduct();
+                }}
+                placeholder="Artikelnaam ter controle"
+                className="h-10 min-w-0 rounded-xl border border-[#c9d2c5] bg-white px-3 text-sm font-bold outline-none focus:border-[#6f836b]"
+              />
+              <button
+                type="button"
+                onClick={addProduct}
+                className="h-10 rounded-xl bg-[#31523b] px-4 text-xs font-black text-white"
+              >
+                + Toevoegen
+              </button>
+            </div>
+            {validationMessage && (
+              <p className="mt-2 text-xs font-bold text-[#a43d28]">
+                {validationMessage}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#e8e1d8] bg-white px-4 py-3 sm:px-5">
+          <p className="text-xs font-semibold text-[#6b645b]">
+            {message || `${draft.length} producten in de verslijst`}
+          </p>
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-10 rounded-xl border border-[#d7cec4] bg-white px-4 text-xs font-black text-[#4a4540]"
+            >
+              Annuleren
+            </button>
+            <button
+              type="button"
+              disabled={isSaving || draft.length === 0}
+              onClick={() => void onSave(draft)}
+              className="h-10 rounded-xl bg-[#1a1815] px-4 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isSaving ? "Opslaan..." : "Lijst opslaan"}
+            </button>
+          </div>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function PreparationPrintButton({
-  disabled,
+  printDisabled,
+  onManage,
   onSelect,
 }: Readonly<{
-  disabled?: boolean;
+  printDisabled?: boolean;
+  onManage: () => void;
   onSelect: (category: PreparationCategory) => void;
 }>) {
   const [open, setOpen] = useState(false);
@@ -12080,29 +12406,39 @@ function PreparationPrintButton({
         aria-expanded={open}
         aria-label="Voorbereidingslijst openen"
         title="Voorbereidingslijst openen"
-        disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e4de] bg-[#faf8f5] text-[#6b645b] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+        className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e4de] bg-[#faf8f5] text-[#6b645b] shadow-sm transition hover:bg-white"
       >
         <PreparationIcon />
       </button>
-      {open && !disabled && (
-        <div className="absolute right-0 z-30 mt-1 grid min-w-36 gap-1 rounded-xl border border-[#d7d1c8] bg-white p-1 shadow-lg">
+      {open && (
+        <div className="absolute right-0 z-30 mt-1 grid min-w-48 gap-1 rounded-xl border border-[#d7d1c8] bg-white p-1 shadow-lg">
           {(["bakkerij", "logistiek"] as PreparationCategory[]).map(
             (category) => (
               <button
                 key={category}
                 type="button"
+                disabled={printDisabled}
                 onClick={() => {
                   setOpen(false);
                   onSelect(category);
                 }}
-                className="min-h-8 px-2 text-left text-[0.68rem] font-black uppercase tracking-normal text-[#1a1815] transition hover:bg-[#faf8f5]"
+                className="min-h-8 rounded-lg px-2 text-left text-[0.68rem] font-black uppercase tracking-normal text-[#1a1815] transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-35"
               >
                 {preparationCategories[category].shortLabel}
               </button>
             )
           )}
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onManage();
+            }}
+            className="min-h-8 rounded-lg border-t border-[#eee9e2] px-2 text-left text-[0.68rem] font-bold tracking-normal text-[#6b645b] transition hover:bg-[#faf8f5] hover:text-[#1a1815]"
+          >
+            Versproducten beheren
+          </button>
         </div>
       )}
     </div>

@@ -5,6 +5,7 @@ import {
   getLogisticsBatchForDate,
   getLogisticsDayFeedbackForDate,
   getLogisticsFixedCustomers,
+  getLogisticsPreparationProducts,
   getRecentLogisticsDayFeedback,
   getLogisticsReceiptOverridesForDate,
   getLogisticsRouteDraftForDate,
@@ -43,6 +44,7 @@ export async function GET(request: Request) {
       routeDraft,
       routeLearning,
       fixedCustomers,
+      preparationProducts,
     ] =
       await Promise.all([
         getLogisticsBatchForDate(date),
@@ -53,6 +55,7 @@ export async function GET(request: Request) {
         getLogisticsRouteDraftForDate(date),
         getLogisticsRouteLearning(),
         getLogisticsFixedCustomers(),
+        getLogisticsPreparationProducts(),
       ]);
 
     if (debug) {
@@ -103,6 +106,7 @@ export async function GET(request: Request) {
       routeDraft,
       routeLearning,
       fixedCustomers,
+      preparationProducts,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

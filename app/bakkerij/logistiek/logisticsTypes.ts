@@ -32,6 +32,14 @@ export type LogisticsReceiptLine = {
   unitPrice?: number;
 };
 
+export type LogisticsPreparationProduct = {
+  id: string;
+  category: "vers";
+  articleNumber: string;
+  articleName: string;
+  updatedAt: string;
+};
+
 export type LogisticsReceipt = {
   id: string;
   receiptNumber: string;

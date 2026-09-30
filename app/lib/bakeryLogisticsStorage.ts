@@ -5,6 +5,7 @@ import type {
   LogisticsDayFeedback,
   LogisticsDayOperations,
   LogisticsFixedCustomer,
+  LogisticsPreparationProduct,
   LogisticsTeamMember,
   LogisticsLoadPressure,
   LogisticsReceiptOverride,
@@ -29,6 +30,8 @@ const LOGISTICS_DAY_FEEDBACK_SETTING_KEY = "bakery_logistics_day_feedback";
 const LOGISTICS_ROUTE_DRAFTS_SETTING_KEY = "bakery_logistics_route_drafts";
 const LOGISTICS_ROUTE_LEARNING_SETTING_KEY = "bakery_logistics_route_learning";
 const LOGISTICS_FIXED_CUSTOMERS_SETTING_KEY = "bakery_logistics_fixed_customers";
+const LOGISTICS_PREPARATION_PRODUCTS_SETTING_KEY =
+  "bakery_logistics_preparation_products";
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
 const MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES = 5_500_000;
@@ -40,6 +43,7 @@ const MAX_STORED_ROUTE_LEARNING_OBSERVATIONS = 180;
 const MAX_ROUTE_LEARNING_STOPS = 500;
 const MAX_ROUTE_LEARNING_PAIRS = 800;
 const MAX_STORED_FIXED_CUSTOMERS = 1000;
+const MAX_STORED_PREPARATION_PRODUCTS = 500;
 
 type LogisticsState = {
   batches: LogisticsBatch[];
@@ -70,8 +74,37 @@ type LogisticsFixedCustomersState = {
   updatedAt: string;
 };
 
+type LogisticsPreparationProductsState = {
+  products: LogisticsPreparationProduct[];
+  updatedAt: string;
+};
+
 const DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT =
   "2026-08-07T00:00:00.000Z";
+const DEFAULT_LOGISTICS_PREPARATION_PRODUCT_UPDATED_AT =
+  "2026-09-30T00:00:00.000Z";
+
+const DEFAULT_LOGISTICS_PREPARATION_PRODUCTS: LogisticsPreparationProduct[] = [
+  ["20100.686", "Red velvet"],
+  ["20101.686", "Framboyant"],
+  ["20102.686", "Brownie salty caramel"],
+  ["20106.686", "Seizoens cheesecake"],
+  ["20202.638", "Hazelnoot slagroom schuim"],
+  ["20203.658", "Nougatine slagroom schuim"],
+  ["20701", "Vegan pistache lemon"],
+  ["20702", "Vegan sticky choco walnoot"],
+  ["25100", "Strik's marsepeintaart"],
+  ["35100", "Passie slof"],
+  ["35101", "Woudvruchten slof"],
+  ["35102", "Caramelslof"],
+  ["35103", "Yoghurt frambozenslof"],
+].map(([articleNumber, articleName]) => ({
+  id: `preparation:${articleNumber}`,
+  category: "vers" as const,
+  articleNumber,
+  articleName,
+  updatedAt: DEFAULT_LOGISTICS_PREPARATION_PRODUCT_UPDATED_AT,
+}));
 
 const DEFAULT_LOGISTICS_FIXED_CUSTOMERS: LogisticsFixedCustomer[] = [
   {
@@ -280,6 +313,13 @@ function emptyLogisticsFixedCustomersState(): LogisticsFixedCustomersState {
   return {
     customers: DEFAULT_LOGISTICS_FIXED_CUSTOMERS,
     updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
+  };
+}
+
+function emptyLogisticsPreparationProductsState(): LogisticsPreparationProductsState {
+  return {
+    products: DEFAULT_LOGISTICS_PREPARATION_PRODUCTS,
+    updatedAt: DEFAULT_LOGISTICS_PREPARATION_PRODUCT_UPDATED_AT,
   };
 }
 
@@ -647,6 +687,46 @@ function normalizeLogisticsFixedCustomer(
   };
 }
 
+function cleanPreparationArticleNumber(value: unknown) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/,/g, ".")
+    .replace(/\s+/g, "")
+    .replace(/[^A-Z0-9.]/g, "")
+    .slice(0, 24);
+}
+
+function normalizeLogisticsPreparationProduct(
+  value: unknown
+): LogisticsPreparationProduct | null {
+  if (!value || typeof value !== "object") return null;
+
+  const raw = value as Partial<LogisticsPreparationProduct>;
+  const articleNumber = cleanPreparationArticleNumber(raw.articleNumber);
+  const articleName = cleanFixedCustomerText(raw.articleName, 200);
+  const updatedAt =
+    cleanFixedCustomerText(raw.updatedAt, 80) || new Date().toISOString();
+  const id =
+    cleanFixedCustomerText(raw.id, 160) || `preparation:${articleNumber}`;
+
+  if (
+    !articleName ||
+    !/^(?:\d{3,9}|[A-Z]{1,4}\d{3,9})(?:\.[A-Z0-9]{1,8})?$/.test(
+      articleNumber
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    category: "vers",
+    articleNumber,
+    articleName,
+    updatedAt,
+  };
+}
+
 function normalizeLogisticsState(value: unknown): LogisticsState {
   if (!value || typeof value !== "object") return emptyLogisticsState();
 
@@ -844,6 +924,45 @@ function normalizeLogisticsFixedCustomersState(
   return { customers, updatedAt };
 }
 
+function normalizeLogisticsPreparationProductsState(
+  value: unknown
+): LogisticsPreparationProductsState {
+  if (!value || typeof value !== "object") {
+    return emptyLogisticsPreparationProductsState();
+  }
+
+  const rawProducts = (value as { products?: unknown }).products;
+  const rawUpdatedAt = (value as { updatedAt?: unknown }).updatedAt;
+  if (!Array.isArray(rawProducts)) {
+    return emptyLogisticsPreparationProductsState();
+  }
+
+  const productsByNumber = new Map<string, LogisticsPreparationProduct>();
+  rawProducts
+    .map(normalizeLogisticsPreparationProduct)
+    .forEach((product) => {
+      if (!product) return;
+      productsByNumber.set(product.articleNumber, product);
+    });
+  const products = Array.from(productsByNumber.values())
+    .sort((first, second) =>
+      first.articleNumber.localeCompare(second.articleNumber, "nl-NL", {
+        numeric: true,
+      })
+    )
+    .slice(0, MAX_STORED_PREPARATION_PRODUCTS);
+  const updatedAt =
+    cleanFixedCustomerText(rawUpdatedAt, 80) ||
+    products.reduce(
+      (latest, product) =>
+        product.updatedAt > latest ? product.updatedAt : latest,
+      ""
+    ) ||
+    new Date(0).toISOString();
+
+  return { products, updatedAt };
+}
+
 function toJson(
   value:
     | LogisticsState
@@ -853,6 +972,7 @@ function toJson(
     | LogisticsRouteDraftsState
     | LogisticsRouteLearningState
     | LogisticsFixedCustomersState
+    | LogisticsPreparationProductsState
 ): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
 }
@@ -1612,6 +1732,35 @@ export async function readLogisticsFixedCustomersState() {
   return normalizeLogisticsFixedCustomersState(data.value);
 }
 
+async function writeLogisticsPreparationProductsState(
+  state: LogisticsPreparationProductsState
+) {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_PREPARATION_PRODUCTS_SETTING_KEY,
+      value: toJson(state),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
+}
+
+export async function readLogisticsPreparationProductsState() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", LOGISTICS_PREPARATION_PRODUCTS_SETTING_KEY)
+    .maybeSingle();
+
+  if (error || !data) return emptyLogisticsPreparationProductsState();
+
+  return normalizeLogisticsPreparationProductsState(data.value);
+}
+
 export async function getLogisticsBatchForDate(date: string) {
   const state = await readLogisticsState();
 
@@ -1701,6 +1850,29 @@ export async function replaceLogisticsFixedCustomers(
   await writeLogisticsFixedCustomersState(state);
 
   return state.customers;
+}
+
+export async function getLogisticsPreparationProducts() {
+  const state = await readLogisticsPreparationProductsState();
+
+  return state.products;
+}
+
+export async function replaceLogisticsPreparationProducts(
+  products: LogisticsPreparationProduct[]
+) {
+  const updatedAt = new Date().toISOString();
+  const state = normalizeLogisticsPreparationProductsState({
+    products: products.map((product) => ({
+      ...product,
+      updatedAt: product.updatedAt || updatedAt,
+    })),
+    updatedAt,
+  });
+
+  await writeLogisticsPreparationProductsState(state);
+
+  return state.products;
 }
 
 export async function upsertLogisticsBatch(batch: LogisticsBatch) {
