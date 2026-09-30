@@ -753,7 +753,7 @@ function StartDistributionDialog({
   const [flavour, setFlavour] = useState("melk");
   const [size, setSize] = useState("groot");
   const [style, setStyle] = useState("spuit");
-  const [quantity, setQuantity] = useState(12);
+  const [quantity, setQuantity] = useState("12");
   const [review, setReview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -769,10 +769,10 @@ function StartDistributionDialog({
     setReview(false);
   }
 
-  function addLine() {
+  function rowWithAddedQuantity(currentRows: StoreOrderRow[], amount: number) {
     const values = [letter, flavour, size, style];
     const key = values.join("|").toLocaleLowerCase("nl-NL");
-    const current = rows.find((row) => row.key === key);
+    const current = currentRows.find((row) => row.key === key);
     const nextRow: StoreOrderRow = {
       key,
       label: values.join(" · "),
@@ -780,12 +780,54 @@ function StartDistributionDialog({
       flavour,
       size,
       style,
-      quantity: (current?.quantity || 0) + quantity,
+      quantity: (current?.quantity || 0) + amount,
     };
-    updateRows(current
-      ? rows.map((row) => row.key === key ? nextRow : row)
-      : [...rows, nextRow].sort((a, b) => a.label.localeCompare(b.label, "nl")));
-    setQuantity(1);
+    return current
+      ? currentRows.map((row) => row.key === key ? nextRow : row)
+      : [...currentRows, nextRow].sort((a, b) => a.label.localeCompare(b.label, "nl"));
+  }
+
+  function addLine(target: "selected" | "all") {
+    const amount = Number(quantity);
+    if (!Number.isInteger(amount) || amount < 1 || amount > 10000) {
+      setError("Vul een heel aantal tussen 1 en 10.000 in.");
+      return;
+    }
+    setDrafts((current) => {
+      if (target === "all") {
+        return Object.fromEntries(DISTRIBUTION_SHOPS.map((shop) => [
+          shop,
+          rowWithAddedQuantity(current[shop] || [], amount),
+        ]));
+      }
+      return {
+        ...current,
+        [selectedShop]: rowWithAddedQuantity(current[selectedShop] || [], amount),
+      };
+    });
+    setQuantity("1");
+    setReview(false);
+    setError("");
+  }
+
+  function copySelectedShopToAll() {
+    if (rows.length === 0) {
+      setError(`Voeg eerst letters toe aan ${SHOP_LABELS[selectedShop]}.`);
+      return;
+    }
+    const otherShopsContainRows = DISTRIBUTION_SHOPS.some(
+      (shop) => shop !== selectedShop && (drafts[shop] || []).length > 0
+    );
+    if (
+      otherShopsContainRows
+      && !window.confirm(`De huidige lijsten van de andere winkels vervangen door die van ${SHOP_LABELS[selectedShop]}?`)
+    ) return;
+    setDrafts(Object.fromEntries(DISTRIBUTION_SHOPS.map((shop) => [
+      shop,
+      rows.map((row) => ({ ...row })),
+    ])));
+    setReview(false);
+    setError("");
   }
 
   function adjustLine(key: string, delta: number) {
@@ -885,9 +927,12 @@ function StartDistributionDialog({
         {!review ? (
           <>
             <section className="mt-3 rounded-xl border border-[#e0d8cd] bg-white p-3 sm:mt-4 sm:rounded-2xl sm:p-4">
-              <div className="flex items-end justify-between gap-3">
+              <div className="flex flex-wrap items-end justify-between gap-2">
                 <div><p className="text-[0.6rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">Meegeven aan</p><h3 className="text-base font-black text-[#263b2b] sm:text-lg">{SHOP_LABELS[selectedShop]}</h3></div>
-                <strong className="rounded-full bg-[#e6efe2] px-2.5 py-1 text-xs text-[#24551d] sm:text-sm">{rowsTotal} letters</strong>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <strong className="rounded-full bg-[#e6efe2] px-2.5 py-1 text-xs text-[#24551d] sm:text-sm">{rowsTotal} letters</strong>
+                  <button type="button" onClick={copySelectedShopToAll} disabled={rows.length === 0} className="rounded-full border border-[#c9d9c5] bg-[#f4f8f2] px-2.5 py-1 text-[0.62rem] font-black text-[#24551d] disabled:opacity-40 sm:text-xs">Kopieer hele lijst naar alle winkels</button>
+                </div>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
                 <label className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:text-xs">Letter
@@ -903,9 +948,13 @@ function StartDistributionDialog({
                   <select value={style} onChange={(event) => { const next = event.target.value; setStyle(next); if (next === "vorm") { setLetter("S"); setSize("groot"); } }} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black sm:h-11 sm:text-sm"><option value="spuit">Spuit</option><option value="vorm">Vorm</option></select>
                 </label>
                 <label className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:text-xs">Aantal
-                  <input type="number" min={1} max={10000} value={quantity} onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black sm:h-11 sm:text-sm" />
+                  <input type="number" inputMode="numeric" min={1} max={10000} value={quantity} onFocus={(event) => event.currentTarget.select()} onChange={(event) => setQuantity(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black sm:h-11 sm:text-sm" />
                 </label>
-                <button type="button" onClick={addLine} className="col-span-3 h-9 rounded-full bg-[#4b352f] px-3 text-xs font-black text-white sm:col-span-5 sm:h-11 sm:text-sm">+ Voeg toe aan {SHOP_LABELS[selectedShop]}</button>
+                <div className="col-span-3 grid grid-cols-1 gap-1.5 sm:col-span-5 sm:grid-cols-2 sm:gap-2">
+                  <button type="button" onClick={() => addLine("selected")} className="h-9 rounded-full bg-[#4b352f] px-3 text-xs font-black text-white sm:h-11 sm:text-sm">+ Alleen {SHOP_LABELS[selectedShop]}</button>
+                  <button type="button" onClick={() => addLine("all")} className="h-9 rounded-full bg-[#24551d] px-3 text-xs font-black text-white sm:h-11 sm:text-sm">+ Dezelfde letter voor alle winkels</button>
+                </div>
+                <p className="col-span-3 -mt-0.5 text-center text-[0.6rem] font-semibold text-[#776f66] sm:col-span-5 sm:text-xs">Bij ‘alle winkels’ geldt het ingevulde aantal voor iedere winkel apart.</p>
               </div>
             </section>
 
