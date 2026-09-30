@@ -31,6 +31,20 @@ export type StoreStockOrder = {
   rows: StoreOrderRow[];
 };
 
+type StartDistribution = {
+  id: string;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+  orders: StoreStockOrder[];
+};
+
+type StartDistributionResult = {
+  season: string;
+  distributions: StartDistribution[];
+  message?: string;
+};
+
 export type ProductionBatchSeed = {
   id: string;
   startDate: string;
@@ -168,6 +182,25 @@ function formatDistributionProductionDate(startDate: string) {
   return `${weekday} ${start.getDate()} ${month}`;
 }
 
+function formatShortDate(date: string) {
+  return new Intl.DateTimeFormat("nl-NL", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${date}T12:00:00`)).replaceAll(".", "");
+}
+
+function todayInAmsterdam() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
 function formatDeadline(value?: string) {
   if (!value) return "de besteldeadline";
   return new Intl.DateTimeFormat("nl-NL", {
@@ -182,6 +215,10 @@ function formatDeadline(value?: string) {
 
 function storeOrderTotal(order?: StoreStockOrder) {
   return order?.rows.reduce((sum, row) => sum + row.quantity, 0) || 0;
+}
+
+function distributionTotal(distribution: StartDistribution) {
+  return distribution.orders.reduce((sum, order) => sum + storeOrderTotal(order), 0);
 }
 
 function batchIsLocked(batch: ProductionBatchSeed) {
@@ -692,6 +729,215 @@ function GeneralStoreOrderDialog({
   );
 }
 
+function StartDistributionDialog({
+  season,
+  initial,
+  onClose,
+  onSaved,
+}: Readonly<{
+  season: string;
+  initial: StartDistribution | null;
+  onClose: () => void;
+  onSaved: (result: StartDistributionResult) => void;
+}>) {
+  const defaultDate = todayInAmsterdam().startsWith(`${season}-`) ? todayInAmsterdam() : `${season}-09-01`;
+  const [date, setDate] = useState(initial?.date || defaultDate);
+  const [selectedShop, setSelectedShop] = useState(DISTRIBUTION_SHOPS[0]);
+  const [drafts, setDrafts] = useState<Record<string, StoreOrderRow[]>>(() =>
+    Object.fromEntries(DISTRIBUTION_SHOPS.map((shop) => [
+      shop,
+      (initial?.orders.find((order) => order.shop === shop)?.rows || []).map((row) => ({ ...row })),
+    ]))
+  );
+  const [letter, setLetter] = useState("S");
+  const [flavour, setFlavour] = useState("melk");
+  const [size, setSize] = useState("groot");
+  const [style, setStyle] = useState("spuit");
+  const [quantity, setQuantity] = useState(12);
+  const [review, setReview] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const rows = drafts[selectedShop] || [];
+  const rowsTotal = rows.reduce((sum, row) => sum + row.quantity, 0);
+  const overallTotal = DISTRIBUTION_SHOPS.reduce(
+    (sum, shop) => sum + (drafts[shop] || []).reduce((shopSum, row) => shopSum + row.quantity, 0),
+    0
+  );
+
+  function updateRows(nextRows: StoreOrderRow[]) {
+    setDrafts((current) => ({ ...current, [selectedShop]: nextRows }));
+    setReview(false);
+  }
+
+  function addLine() {
+    const values = [letter, flavour, size, style];
+    const key = values.join("|").toLocaleLowerCase("nl-NL");
+    const current = rows.find((row) => row.key === key);
+    const nextRow: StoreOrderRow = {
+      key,
+      label: values.join(" · "),
+      letter,
+      flavour,
+      size,
+      style,
+      quantity: (current?.quantity || 0) + quantity,
+    };
+    updateRows(current
+      ? rows.map((row) => row.key === key ? nextRow : row)
+      : [...rows, nextRow].sort((a, b) => a.label.localeCompare(b.label, "nl")));
+    setQuantity(1);
+  }
+
+  function adjustLine(key: string, delta: number) {
+    updateRows(rows.flatMap((row) => {
+      if (row.key !== key) return [row];
+      const nextQuantity = row.quantity + delta;
+      return nextQuantity > 0 ? [{ ...row, quantity: nextQuantity }] : [];
+    }));
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !date.startsWith(`${season}-`)) {
+      setError(`Kies een datum in ${season}.`);
+      setReview(false);
+      return;
+    }
+    if (overallTotal < 1) {
+      setError("Voeg minimaal één letter toe.");
+      setReview(false);
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch("/api/sinterklaas-letter-start-distributions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: initial?.id || "",
+          season,
+          date,
+          orders: DISTRIBUTION_SHOPS.flatMap((shop) => {
+            const shopRows = drafts[shop] || [];
+            return shopRows.length > 0 ? [{ shop, rows: shopRows }] : [];
+          }),
+        }),
+      });
+      const result = await response.json() as StartDistributionResult;
+      if (!response.ok) throw new Error(result.message || "Startverdeling opslaan is mislukt.");
+      onSaved(result);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Startverdeling opslaan is mislukt.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeDistribution() {
+    if (!initial || !window.confirm(`Startverdeling van ${formatShortDate(initial.date)} verwijderen?`)) return;
+    setSaving(true);
+    setError("");
+    try {
+      const url = new URL("/api/sinterklaas-letter-start-distributions", window.location.origin);
+      url.searchParams.set("season", season);
+      url.searchParams.set("id", initial.id);
+      const response = await fetch(url.toString(), { method: "DELETE" });
+      const result = await response.json() as StartDistributionResult;
+      if (!response.ok) throw new Error(result.message || "Startverdeling verwijderen is mislukt.");
+      onSaved(result);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Startverdeling verwijderen is mislukt.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[85] flex items-start justify-center overflow-y-auto bg-[#263b2b]/50 px-2 py-3 backdrop-blur-sm sm:px-3 sm:py-8" role="dialog" aria-modal="true" aria-labelledby="start-distribution-title">
+      <form onSubmit={submit} className="w-full max-w-3xl rounded-[1.4rem] border border-white/90 bg-[#faf8f2] p-3 shadow-2xl sm:rounded-[2rem] sm:p-5 lg:p-6">
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.16em] text-[#8b8278]">Voorraad vóór de centrale rondes</p>
+            <h2 id="start-distribution-title" className="mt-0.5 text-lg font-black text-[#1a1815] sm:text-xl">{review ? "Startverdeling controleren" : initial ? "Startverdeling wijzigen" : "Startverdeling winkels"}</h2>
+            <p className="mt-1 max-w-xl text-xs font-semibold leading-relaxed text-[#6b645b]">Leg vast welke letters op deze datum daadwerkelijk naar iedere winkel gaan. Deze aantallen worden niet opnieuw bij productie opgeteld.</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Sluiten" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#dfd8ce] bg-white text-lg font-black sm:h-9 sm:w-9 sm:text-xl">×</button>
+        </header>
+
+        <label className="mt-3 block max-w-xs text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b] sm:mt-4 sm:text-xs">Datum meegegeven
+          <input type="date" value={date} min={`${season}-01-01`} max={`${season}-12-31`} onChange={(event) => { setDate(event.target.value); setReview(false); }} className="mt-1 h-10 w-full rounded-xl border border-[#d8d1c8] bg-white px-3 text-sm font-black text-[#263b2b] outline-none focus:border-[#547762] sm:h-11" />
+        </label>
+
+        <div className="mt-3 grid grid-cols-2 gap-1.5 sm:mt-4 sm:grid-cols-4 sm:gap-2">
+          {DISTRIBUTION_SHOPS.map((shop) => {
+            const total = (drafts[shop] || []).reduce((sum, row) => sum + row.quantity, 0);
+            return (
+              <button key={shop} type="button" onClick={() => { setSelectedShop(shop); setReview(false); setError(""); }} className={`rounded-xl border px-2.5 py-2 text-left transition sm:rounded-2xl sm:px-3 sm:py-3 ${selectedShop === shop ? "border-[#24551d] bg-[#e4eee0]" : "border-[#ddd5ca] bg-white"}`}>
+                <span className="block text-[0.62rem] font-black uppercase tracking-[0.06em] text-[#4d463d] sm:text-xs">{SHOP_LABELS[shop]}</span>
+                <span className="mt-0.5 block text-xs font-bold text-[#776f66] sm:text-sm">{total > 0 ? `${total} letters` : "Nog leeg"}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {!review ? (
+          <>
+            <section className="mt-3 rounded-xl border border-[#e0d8cd] bg-white p-3 sm:mt-4 sm:rounded-2xl sm:p-4">
+              <div className="flex items-end justify-between gap-3">
+                <div><p className="text-[0.6rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">Meegeven aan</p><h3 className="text-base font-black text-[#263b2b] sm:text-lg">{SHOP_LABELS[selectedShop]}</h3></div>
+                <strong className="rounded-full bg-[#e6efe2] px-2.5 py-1 text-xs text-[#24551d] sm:text-sm">{rowsTotal} letters</strong>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
+                <label className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:text-xs">Letter
+                  <select value={letter} disabled={style === "vorm"} onChange={(event) => setLetter(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black disabled:bg-[#eee9e2] sm:h-11 sm:text-sm">{LETTERS.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+                </label>
+                <label className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:text-xs">Chocolade
+                  <select value={flavour} onChange={(event) => setFlavour(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black sm:h-11 sm:text-sm"><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option></select>
+                </label>
+                <label className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:text-xs">Formaat
+                  <select value={size} disabled={style === "vorm"} onChange={(event) => setSize(event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black disabled:bg-[#eee9e2] sm:h-11 sm:text-sm"><option value="groot">Groot</option><option value="klein">Klein</option></select>
+                </label>
+                <label className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:text-xs">Uitvoering
+                  <select value={style} onChange={(event) => { const next = event.target.value; setStyle(next); if (next === "vorm") { setLetter("S"); setSize("groot"); } }} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black sm:h-11 sm:text-sm"><option value="spuit">Spuit</option><option value="vorm">Vorm</option></select>
+                </label>
+                <label className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#6b645b] sm:text-xs">Aantal
+                  <input type="number" min={1} max={10000} value={quantity} onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))} className="mt-1 h-9 w-full rounded-lg border border-[#ddd5ca] bg-white px-2 text-xs font-black sm:h-11 sm:text-sm" />
+                </label>
+                <button type="button" onClick={addLine} className="col-span-3 h-9 rounded-full bg-[#4b352f] px-3 text-xs font-black text-white sm:col-span-5 sm:h-11 sm:text-sm">+ Voeg toe aan {SHOP_LABELS[selectedShop]}</button>
+              </div>
+            </section>
+
+            <section className="mt-3 overflow-hidden rounded-xl border border-[#e0d8cd] bg-white sm:mt-4 sm:rounded-2xl">
+              <div className="flex items-center justify-between bg-[#f1ede7] px-3 py-2 sm:px-4 sm:py-3"><h3 className="text-xs font-black sm:text-sm">Verdeling {SHOP_LABELS[selectedShop]}</h3><span className="text-[0.65rem] font-black text-[#6b645b] sm:text-xs">{rows.length} regels · {rowsTotal} stuks</span></div>
+              {rows.length === 0 ? <p className="px-3 py-3 text-xs font-semibold text-[#776f66] sm:px-4 sm:py-5 sm:text-sm">Voor deze winkel zijn nog geen letters toegevoegd.</p> : (
+                <div className="divide-y divide-[#e4ded5]">{rows.map((row) => (
+                  <div key={row.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-4 sm:py-3"><p className="text-sm font-black text-[#1a1815] sm:text-base">{row.label}</p><div className="flex items-center gap-1.5"><button type="button" onClick={() => adjustLine(row.key, -1)} className="h-7 w-7 rounded-full border border-[#ddd5ca] bg-white text-sm font-black sm:h-8 sm:w-8">−</button><strong className="min-w-8 text-center text-sm sm:text-base">{row.quantity}×</strong><button type="button" onClick={() => adjustLine(row.key, 1)} className="h-7 w-7 rounded-full bg-[#dbe9ee] text-sm font-black text-[#244c60] sm:h-8 sm:w-8">+</button><button type="button" onClick={() => updateRows(rows.filter((item) => item.key !== row.key))} className="ml-1 text-[0.65rem] font-black text-[#a23c2b] underline sm:text-xs">Verwijder</button></div></div>
+                ))}</div>
+              )}
+            </section>
+          </>
+        ) : (
+          <section className="mt-3 rounded-[1.25rem] border border-[#c9d9c5] bg-white p-4 sm:mt-4 sm:p-5">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.15em] text-[#668064]">Laatste controle · {formatShortDate(date)}</p>
+            <div className="mt-1 flex items-end justify-between gap-3"><h3 className="text-xl font-black text-[#263b2b]">Startverdeling winkels</h3><strong className="text-lg text-[#24551d] sm:text-xl">{overallTotal} letters</strong></div>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{DISTRIBUTION_SHOPS.map((shop) => { const total = (drafts[shop] || []).reduce((sum, row) => sum + row.quantity, 0); return <div key={shop} className="rounded-xl bg-[#f3f0ea] p-3"><p className="text-xs font-black">{SHOP_LABELS[shop]}</p><p className="mt-1 text-lg font-black text-[#24551d]">{total}</p></div>; })}</div>
+            <p className="mt-3 rounded-xl bg-[#fff3dc] p-2.5 text-xs font-black text-[#70460e] sm:p-3 sm:text-sm">Na opslaan telt deze verdeling mee in het cumulatieve winkeltotaal, maar niet in de nog te maken productie.</p>
+          </section>
+        )}
+
+        {error && <p role="alert" className="mt-3 rounded-xl bg-[#fff0ea] p-3 text-sm font-black text-[#9a3412]">{error}</p>}
+        <footer className="mt-3 flex flex-col-reverse gap-1.5 sm:mt-5 sm:flex-row sm:items-center sm:justify-end sm:gap-2">
+          {initial && <button type="button" disabled={saving} onClick={() => void removeDistribution()} className="h-10 rounded-full border border-[#efb8aa] bg-white px-4 text-xs font-black text-[#9a3412] disabled:opacity-50 sm:mr-auto sm:h-11 sm:text-sm">Verwijder verdeling</button>}
+          <button type="button" onClick={onClose} className="h-10 rounded-full border border-[#ddd5ca] bg-white px-4 text-xs font-black text-[#4d463d] sm:h-11 sm:text-sm">Annuleren</button>
+          {review ? <><button type="button" onClick={() => setReview(false)} className="h-10 rounded-full border border-[#b9cbb5] bg-[#edf4eb] px-4 text-xs font-black text-[#24551d] sm:h-11 sm:text-sm">← Nog wijzigen</button><button type="submit" disabled={saving} className="h-10 rounded-full bg-[#24551d] px-5 text-xs font-black text-white disabled:opacity-60 sm:h-11 sm:text-sm">{saving ? "Opslaan..." : initial ? "Wijzigingen opslaan" : "Startverdeling opslaan"}</button></> : <button type="button" onClick={() => { if (overallTotal < 1) setError("Voeg minimaal één letter toe."); else { setError(""); setReview(true); } }} className="h-10 rounded-full bg-[#24551d] px-5 text-xs font-black text-white sm:h-11 sm:text-sm">Controleer startverdeling →</button>}
+        </footer>
+      </form>
+    </div>
+  );
+}
+
 function demoDistributionOrders(batch: ProductionBatchSeed): DistributionOrder[] {
   const firstPickup = batch.pickupFrom || addDays(batch.date, batch.minimumLeadDays);
   const baseOrders: DistributionOrder[] = [
@@ -1165,6 +1411,11 @@ export default function ProductionPlanningClient({
   const [distributionBatch, setDistributionBatch] = useState<ProductionBatchSeed | null>(null);
   const [productionPrintBatch, setProductionPrintBatch] = useState<ProductionBatchSeed | null>(null);
   const [showGrandOverview, setShowGrandOverview] = useState(false);
+  const [startDistributions, setStartDistributions] = useState<StartDistribution[]>([]);
+  const [startDistributionsLoading, setStartDistributionsLoading] = useState(!demoMode);
+  const [startDistributionError, setStartDistributionError] = useState("");
+  const [startDistributionOpen, setStartDistributionOpen] = useState(false);
+  const [editingStartDistribution, setEditingStartDistribution] = useState<StartDistribution | null>(null);
   const [storeOrdersByBatch, setStoreOrdersByBatch] = useState<Record<string, StoreStockOrder[]>>(() =>
     Object.fromEntries(batches.map((batch) => [batch.id, batch.storeOrders || []]))
   );
@@ -1191,6 +1442,37 @@ export default function ProductionPlanningClient({
       })
       .finally(() => {
         if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [demoMode, season]);
+
+  useEffect(() => {
+    if (demoMode) {
+      setStartDistributions([]);
+      setStartDistributionsLoading(false);
+      setStartDistributionError("");
+      return;
+    }
+
+    let active = true;
+    setStartDistributionsLoading(true);
+    fetch(`/api/sinterklaas-letter-start-distributions?season=${encodeURIComponent(season)}`, { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json() as StartDistributionResult;
+        if (!response.ok) throw new Error(result.message || "Startverdelingen konden niet worden geladen.");
+        if (active) {
+          setStartDistributions(result.distributions || []);
+          setStartDistributionError("");
+        }
+      })
+      .catch((loadError) => {
+        if (active) setStartDistributionError(loadError instanceof Error ? loadError.message : "Startverdelingen konden niet worden geladen.");
+      })
+      .finally(() => {
+        if (active) setStartDistributionsLoading(false);
       });
 
     return () => {
@@ -1312,6 +1594,21 @@ export default function ProductionPlanningClient({
     { orders: 0, stock: 0, produced: 0 }
   );
   const totalToMake = grandTotals.orders + grandTotals.stock;
+  const startDistributionTotal = startDistributions.reduce((sum, distribution) => sum + distributionTotal(distribution), 0);
+  const startTotalsByShop = Object.fromEntries(DISTRIBUTION_SHOPS.map((shop) => [
+    shop,
+    startDistributions.reduce(
+      (sum, distribution) => sum + storeOrderTotal(distribution.orders.find((order) => order.shop === shop)),
+      0
+    ),
+  ])) as Record<string, number>;
+  const roundTotalsByShop = Object.fromEntries(DISTRIBUTION_SHOPS.map((shop) => [
+    shop,
+    overview.batches.reduce(
+      (sum, batch) => sum + storeOrderTotal((batch.storeOrders || []).find((order) => order.shop === shop)),
+      0
+    ),
+  ])) as Record<string, number>;
 
   function toggleProductionRow(batch: ProductionBatchSeed, selectedRow: WorkingRow) {
     setProducedRowsByBatch((current) => ({
@@ -1355,10 +1652,43 @@ export default function ProductionPlanningClient({
           <button type="button" onClick={() => setShowGrandOverview((current) => !current)} className="rounded-full border border-[#cbd6c7] bg-white px-3 py-1 text-[0.65rem] font-black text-[#36523a]">
             {showGrandOverview ? "Verberg lijst ↑" : "Bekijk totaallijst ↓"}
           </button>
+          {!demoMode && <button type="button" onClick={() => { setEditingStartDistribution(null); setStartDistributionOpen(true); }} className="rounded-full bg-[#4b352f] px-3 py-1 text-[0.65rem] font-black text-white shadow-sm">
+            + Startverdeling winkels
+          </button>}
         </div>
         {showGrandOverview && (
           <div className="border-t border-[#d7dfd3] bg-white">
             <ProductionTable rows={overview.grandRows} />
+          </div>
+        )}
+        {!demoMode && (startDistributionsLoading || startDistributionError || startDistributions.length > 0) && (
+          <div className="border-t border-[#d7dfd3] bg-[#f8faf5] px-3 py-2.5 sm:px-4 sm:py-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="mr-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b]">Startvoorraad</p>
+              {startDistributionsLoading && <span className="text-xs font-semibold text-[#776f66]">Laden...</span>}
+              {!startDistributionsLoading && startDistributions.map((distribution) => (
+                <button key={distribution.id} type="button" onClick={() => { setEditingStartDistribution(distribution); setStartDistributionOpen(true); }} className="rounded-full border border-[#c9d9c5] bg-white px-2.5 py-1 text-[0.65rem] font-black text-[#36523a]">
+                  {formatShortDate(distribution.date)} · {distributionTotal(distribution)}
+                </button>
+              ))}
+              {startDistributions.length > 0 && <strong className="ml-auto text-xs text-[#24551d]">{startDistributionTotal} letters verdeeld</strong>}
+            </div>
+            {startDistributionError && <p role="alert" className="mt-2 rounded-lg bg-[#fff0ea] px-2.5 py-2 text-xs font-black text-[#9a3412]">{startDistributionError}</p>}
+            {startDistributions.length > 0 && (
+              <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                {DISTRIBUTION_SHOPS.map((shop) => {
+                  const startTotal = startTotalsByShop[shop] || 0;
+                  const roundsTotal = roundTotalsByShop[shop] || 0;
+                  return (
+                    <div key={shop} className="rounded-xl border border-[#dde5d9] bg-white px-2.5 py-2">
+                      <p className="text-[0.62rem] font-black uppercase tracking-[0.06em] text-[#6b645b]">{SHOP_LABELS[shop]}</p>
+                      <p className="mt-0.5 text-[0.64rem] font-semibold text-[#8b8278]">Start {startTotal} · rondes {roundsTotal}</p>
+                      <p className="text-sm font-black text-[#24551d]">Totaal {startTotal + roundsTotal}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -1480,6 +1810,19 @@ export default function ProductionPlanningClient({
       )}
       {productionPrintBatch && (
         <ProductionPrintPreviewDialog batch={productionPrintBatch} onClose={() => setProductionPrintBatch(null)} />
+      )}
+      {startDistributionOpen && (
+        <StartDistributionDialog
+          season={season}
+          initial={editingStartDistribution}
+          onClose={() => { setStartDistributionOpen(false); setEditingStartDistribution(null); }}
+          onSaved={(result) => {
+            setStartDistributions(result.distributions || []);
+            setStartDistributionError("");
+            setStartDistributionOpen(false);
+            setEditingStartDistribution(null);
+          }}
+        />
       )}
     </div>
   );
