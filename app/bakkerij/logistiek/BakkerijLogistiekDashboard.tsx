@@ -71,7 +71,12 @@ type DayPlan = {
 type DayStat = {
   label: string;
   value?: string;
-  lines?: string[];
+  alert?: boolean;
+  metrics?: {
+    label: string;
+    value: string;
+    alert: boolean;
+  }[];
 };
 
 type BakeryProductionTotals = {
@@ -404,7 +409,6 @@ const saturdayRouteShopPlan: Record<
 const tabs: { id: DashboardTab; label: string }[] = [
   { id: "routes", label: "Routes" },
   { id: "bonnen", label: "Bonnen" },
-  { id: "leren", label: "Leren" },
 ];
 
 const ordersFilters: {
@@ -413,12 +417,12 @@ const ordersFilters: {
   location?: string;
   fulfillment?: LogisticsFulfillment;
 }[] = [
-  { id: "all", label: "ALL" },
-  { id: "delivery", label: "BEZ", fulfillment: "bezorgen" },
-  { id: "pickup-heyendaalseweg", label: "HEY", location: "Heyendaalseweg" },
-  { id: "pickup-daalseweg", label: "DAAL", location: "Daalseweg" },
-  { id: "pickup-ziekerstraat", label: "ZIEK", location: "Ziekerstraat" },
-  { id: "pickup-lent", label: "LENT", location: "Lent" },
+  { id: "all", label: "Alles" },
+  { id: "delivery", label: "Bezorgen", fulfillment: "bezorgen" },
+  { id: "pickup-heyendaalseweg", label: "Heyendaalseweg", location: "Heyendaalseweg" },
+  { id: "pickup-daalseweg", label: "Daalseweg", location: "Daalseweg" },
+  { id: "pickup-ziekerstraat", label: "Ziekerstraat", location: "Ziekerstraat" },
+  { id: "pickup-lent", label: "Lent", location: "Lent" },
 ];
 
 const preparationCategories: Record<
@@ -629,7 +633,7 @@ function operationsDraftToPayload(
   return operations;
 }
 
-const DEFINITIVE_BATCH_START_MINUTE_OF_DAY = 20 * 60;
+const DEFINITIVE_BATCH_START_MINUTE_OF_DAY = 20 * 60 + 30;
 const TOMORROW_PROGNOSE_START_MINUTE_OF_DAY = 12 * 60 + 30;
 const SATURDAY_MONDAY_PROGNOSE_START_MINUTE_OF_DAY = 7 * 60 + 15;
 
@@ -796,6 +800,10 @@ function formatCurrency(value: number) {
   return `EUR ${Math.round(value).toLocaleString("nl-NL")}`;
 }
 
+function formatCompactCurrency(value: number) {
+  return `€ ${Math.round(value).toLocaleString("nl-NL")}`;
+}
+
 function formatCompactNumber(value: number) {
   return Math.round(value).toLocaleString("nl-NL");
 }
@@ -805,12 +813,6 @@ function formatReceiptMoney(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-}
-
-function formatBytes(bytes: number) {
-  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
-  if (bytes >= 1_000) return `${Math.round(bytes / 1_000)} KB`;
-  return `${bytes} B`;
 }
 
 function formatDateTimeLabel(value: string) {
@@ -1156,63 +1158,50 @@ function batchLabelFor(status: BatchStatus) {
 
 function buildStats(
   plan: DayPlan,
-  loadProfile: DayLoadProfile,
   productionTotals: BakeryProductionTotals
 ): DayStat[] {
+  const weekday = dayOfWeekForDate(plan.date);
+  const showPressureSignals = weekday >= 1 && weekday <= 5;
+
   return [
     {
       label: "Bonwaarde",
-      value: formatCurrency(plan.orderValue),
+      value: formatCompactCurrency(plan.orderValue),
+      alert: showPressureSignals && plan.orderValue >= 2500,
     },
-    { label: "Pakbonnen", value: String(plan.orderCount) },
+    {
+      label: "Pakbonnen",
+      value: String(plan.orderCount),
+      alert: showPressureSignals && plan.orderCount > 35,
+    },
     {
       label: "IJs/tempex",
       value: `${plan.iceTubs} / ${plan.tempexBoxes}`,
     },
     {
       label: "Banket",
-      lines: [
-        `Ges. gebak ${formatCompactNumber(productionTotals.assortedPastry)}`,
-        `Petit fours ${formatCompactNumber(productionTotals.petitFours)}`,
-        `Feesttaart ${formatCompactNumber(
-          productionTotals.marzipanAndCreamCakes
-        )}`,
+      metrics: [
+        {
+          label: "Ges. gebak",
+          value: formatCompactNumber(productionTotals.assortedPastry),
+          alert:
+            showPressureSignals && productionTotals.assortedPastry > 100,
+        },
+        {
+          label: "Petit fours",
+          value: formatCompactNumber(productionTotals.petitFours),
+          alert: showPressureSignals && productionTotals.petitFours > 100,
+        },
+        {
+          label: "Feesttaarten",
+          value: formatCompactNumber(productionTotals.marzipanAndCreamCakes),
+          alert:
+            showPressureSignals &&
+            productionTotals.marzipanAndCreamCakes > 5,
+        },
       ],
     },
-    {
-      label: "Drukte",
-      value: pressureLabelFor(loadProfile.pressure),
-    },
   ];
-}
-
-function statusToneFor(status: BatchStatus) {
-  if (status === "prognose") {
-    return "border-[#eadb8b] bg-[#fff8d8] text-[#6f5212]";
-  }
-  if (status === "definitief") {
-    return "border-[#d6e5d8] bg-[#f6faf4] text-[#315641]";
-  }
-  if (status === "handmatig") {
-    return "border-[#efc7b8] bg-[#fff3ed] text-[#8f3d27]";
-  }
-
-  return "border-[#e8e4de] bg-[#faf8f5] text-[#6b645b]";
-}
-
-function headerMetaLine(
-  plan: DayPlan,
-  importedBatch: LogisticsBatch | null,
-  fallback: string
-) {
-  if (importedBatch) {
-    const source = importedBatch.source === "gmail" ? "Gmail" : "upload";
-
-    return `ingelezen op ${formatDateTimeLabel(importedBatch.importedAt)} · via ${source}`;
-  }
-
-  if (fallback) return fallback;
-  return plan.sourceLabel;
 }
 
 function receiptFulfillment(receipt: ReceiptSummary): LogisticsFulfillment {
@@ -1271,19 +1260,11 @@ function receiptTargetLine(receipt: ReceiptSummary) {
   return receipt.alternativeAddress || receipt.deliveryAddress || receipt.address;
 }
 
-function fulfillmentLabel(receipt: ReceiptSummary) {
-  const fulfillment = receiptFulfillment(receipt);
-  if (fulfillment === "afhalen") return "Afhalen";
-  if (fulfillment === "bezorgen") return "Bezorgen";
-
-  return "Check";
-}
-
 function pickupAbbreviationForKey(key: string) {
-  if (key === "heyendaalseweg") return "HEY";
-  if (key === "daalseweg") return "DAAL";
-  if (key === "ziekerstraat") return "ZIEK";
-  if (key === "lent") return "LENT";
+  if (key === "heyendaalseweg") return "H";
+  if (key === "daalseweg") return "D";
+  if (key === "ziekerstraat") return "Z";
+  if (key === "lent") return "L";
 
   return "";
 }
@@ -1300,16 +1281,6 @@ function receiptToneFor(receipt: ReceiptSummary): ReceiptTone {
   ) {
     return shopKey;
   }
-
-  return "neutral";
-}
-
-function receiptToneForFilter(filter: OrdersFilter): ReceiptTone {
-  if (filter === "delivery") return "delivery";
-  if (filter === "pickup-heyendaalseweg") return "heyendaalseweg";
-  if (filter === "pickup-daalseweg") return "daalseweg";
-  if (filter === "pickup-ziekerstraat") return "ziekerstraat";
-  if (filter === "pickup-lent") return "lent";
 
   return "neutral";
 }
@@ -1332,22 +1303,6 @@ function receiptToneBadgeClasses(tone: ReceiptTone) {
   return "border-[#1a1815] bg-[#1a1815] text-white";
 }
 
-function receiptFilterClasses(tone: ReceiptTone, active: boolean) {
-  if (active) {
-    if (tone === "neutral") return "border-[#1a1815] bg-[#1a1815] text-white";
-    if (tone === "lent") return "border-[#4f8d55] bg-[#4f8d55] text-white";
-    if (tone === "heyendaalseweg") {
-      return "border-[#d6bd3e] bg-[#fff0a7] text-[#1a1815]";
-    }
-    if (tone === "ziekerstraat") return "border-[#d4695f] bg-[#d4695f] text-white";
-    if (tone === "daalseweg") return "border-[#4f95d2] bg-[#4f95d2] text-white";
-
-    return "border-[#8a8580] bg-[#8a8580] text-white";
-  }
-
-  return receiptToneBadgeClasses(tone);
-}
-
 function receiptAccentClasses(tone: ReceiptTone) {
   if (tone === "lent") return "border-l-[#8fbc8c] bg-[#fbfffb]";
   if (tone === "heyendaalseweg") return "border-l-[#e5cf68] bg-[#fffdf5]";
@@ -1363,6 +1318,28 @@ function receiptLocationBadge(receipt: ReceiptSummary) {
 
   const shopKey = shopKeyForText(pickupLocationFor(receipt)) || shopKeyForReceipt(receipt);
   return pickupAbbreviationForKey(shopKey) || "CHK";
+}
+
+function receiptBusForRoutes(
+  receipt: ReceiptSummary,
+  routeRounds: RouteRound[]
+): BusId | "" {
+  const sourceIds = new Set([
+    `receipt:${receipt.id}`,
+    `ice:${receipt.id}`,
+  ]);
+  const assignedRoute = routeRounds.find((route) =>
+    route.stops.some((stop) => sourceIds.has(stop.sourceId))
+  );
+  const assignedBus = assignedRoute
+    ? busIdFromVehicleName(assignedRoute.vehicle)
+    : "";
+  if (assignedBus) return assignedBus;
+
+  const shopKey = shopKeyForReceipt(receipt);
+  if (shopKey) return busForShopKey(shopKey);
+
+  return busIdFromVehicleName(receipt.route || "") || preferredBusForReceipt(receipt);
 }
 
 function timeLooksLikePhotoTimestamp(receipt: ReceiptSummary, time: string) {
@@ -7979,39 +7956,43 @@ function buildReceiptSummaries(
       id: "CB-001",
       time: "08:00",
       customer: "Hinke",
-      address: "Afhalen / winkel",
+      address: "Berg en Dalseweg 45, Nijmegen",
       route: "Bus A",
-      tags: ["tijd", "check"],
+      tags: ["tijd", "bezorgen"],
+      fulfillment: "bezorgen",
       value: 68,
       note: "Vroegste bon, eerst klaarzetten.",
     },
     {
       id: "CB-002",
-      time: "08:00-09:00",
+      time: "09:00-10:00",
       customer: "Janssen",
-      address: "Nijmegen",
+      address: "St. Annastraat 20, Nijmegen",
       route: "Bus A",
-      tags: ["tijd"],
+      tags: ["tijd", "bezorgen"],
+      fulfillment: "bezorgen",
       value: 94,
       note: "Voor vertrekcontrole bellen bij vertraging.",
     },
     {
       id: "CB-003",
-      time: "08:30",
+      time: "09:15-10:00",
       customer: "Sanadome",
-      address: "Weg door Jonkerbos",
+      address: "Weg door Jonkerbos 90, Nijmegen",
       route: "Bus B",
-      tags: ["groot", "gebak"],
+      tags: ["groot", "gebak", "bezorgen"],
+      fulfillment: "bezorgen",
       value: 420,
       note: "Grote gebaksorder na winkelstops, tenzij expliciet vroeg.",
     },
     {
       id: "CB-004",
-      time: "09:00-09:30",
+      time: "09:30-10:00",
       customer: "Sint Maartenskliniek",
-      address: "Hengstdal",
+      address: "Hengstdal 3, Ubbergen",
       route: "Bus A",
-      tags: ["zorg", "tijd"],
+      tags: ["zorg", "tijd", "bezorgen"],
+      fulfillment: "bezorgen",
       value: 310,
       note: "Niet achter winkelvoorraad laten verdwijnen.",
     },
@@ -8019,9 +8000,10 @@ function buildReceiptSummaries(
       id: "CB-005",
       time: "09:00-10:00",
       customer: "Radboud",
-      address: "Heyendaal",
+      address: "Heyendaalseweg 141, Nijmegen",
       route: "Bus A",
-      tags: ["tijd", "campus"],
+      tags: ["tijd", "campus", "bezorgen"],
+      fulfillment: "bezorgen",
       value: 280,
       note: "Combineren met Heyendaal/Daalseweg als dat tijd wint.",
     },
@@ -8032,6 +8014,8 @@ function buildReceiptSummaries(
       address: "interne levering",
       route: "Bus A",
       tags: ["winkel", "intern"],
+      fulfillment: "afhalen",
+      pickupLocation: "Heyendaalseweg",
       note: "Niet meetellen in externe waarde.",
     },
     {
@@ -8041,6 +8025,8 @@ function buildReceiptSummaries(
       address: "interne levering",
       route: "Bus A",
       tags: ["winkel", "intern"],
+      fulfillment: "afhalen",
+      pickupLocation: "Daalseweg",
       note: "Niet meetellen in externe waarde.",
     },
     {
@@ -8049,7 +8035,8 @@ function buildReceiptSummaries(
       customer: "IJssalons",
       address: "ijssalonbonnen controleren",
       route: "Ronde 2",
-      tags: ["ijs", "intern", `${plan.tempexBoxes} tempex`],
+      tags: ["ijs", "intern", "bezorgen", `${plan.tempexBoxes} tempex`],
+      fulfillment: "bezorgen",
       note: `${plan.iceTubs} bakken ijs, apart laden.`,
     },
     {
@@ -8059,6 +8046,8 @@ function buildReceiptSummaries(
       address: "interne levering",
       route: "Bus B",
       tags: ["winkel", "intern"],
+      fulfillment: "afhalen",
+      pickupLocation: "Ziekerstraat",
       note: "Eerste vaste centrum/winkelstop.",
     },
     {
@@ -8068,6 +8057,8 @@ function buildReceiptSummaries(
       address: "interne levering",
       route: "Bus B",
       tags: ["winkel", "intern"],
+      fulfillment: "afhalen",
+      pickupLocation: "Lent",
       note: "Laatste vaste winkelstop.",
     },
     {
@@ -8222,8 +8213,12 @@ function buildReceiptSummaries(
     },
   ];
 
+  const visibleReceiptCount =
+    process.env.NODE_ENV === "development" && plan.orderCount === 0
+      ? 10
+      : plan.orderCount;
   const visibleReceipts = sharedReceipts
-    .slice(0, plan.orderCount)
+    .slice(0, visibleReceiptCount)
     .map((receipt) => hydrateReceipt(receipt, plan));
 
   if (plan.isFuture) {
@@ -8280,6 +8275,9 @@ export default function BakkerijLogistiekDashboard() {
   const [dateState, setDateState] = useState<DateState>(createDateState);
   const [fileSnapshot, setFileSnapshot] = useState<FileSnapshot | null>(null);
   const [importedBatch, setImportedBatch] = useState<LogisticsBatch | null>(null);
+  const [batchByDate, setBatchByDate] = useState<
+    Record<string, LogisticsBatch | null>
+  >({});
   const [webshopImages, setWebshopImages] = useState<WebshopImageSummary[]>([]);
   const [photoPrintHistoryByDate, setPhotoPrintHistoryByDate] = useState<
     Record<string, MarzipanPhotoPrintHistory>
@@ -8370,8 +8368,8 @@ export default function BakkerijLogistiekDashboard() {
     [receiptSummaries]
   );
   const stats = useMemo(
-    () => buildStats(selectedPlan, loadProfile, productionTotals),
-    [loadProfile, productionTotals, selectedPlan]
+    () => buildStats(selectedPlan, productionTotals),
+    [productionTotals, selectedPlan]
   );
   const automaticRouteRounds = useMemo(
     () =>
@@ -8437,30 +8435,70 @@ export default function BakkerijLogistiekDashboard() {
       ),
     [feedback, operationsDraft, pressureOverride]
   );
-  const headerTone = statusToneFor(selectedPlan.status);
-
-  const uploadStatus = useMemo(() => {
-    if (isImporting) return "batch wordt ingelezen...";
-    if (!fileSnapshot) return selectedPlan.sourceLabel;
-
-    return `${batchLabelFor(fileSnapshot.status)} · ${fileSnapshot.name} · ${formatBytes(fileSnapshot.size)} · ${fileSnapshot.uploadedAt}`;
-  }, [fileSnapshot, isImporting, selectedPlan.sourceLabel]);
-
-  const batchStatusLine = useMemo(() => {
-    if (importMessage) return importMessage;
-    if (activeImportedBatch) {
-      return `${activeImportedBatch.fileName} · ${activeImportedBatch.orderCount} bonnen · ${formatDateTimeLabel(activeImportedBatch.importedAt)}`;
+  const todayBatch = dateState.selectedDate === dateState.today
+    ? activeImportedBatch
+    : batchByDate[dateState.today];
+  const tomorrowBatch = dateState.selectedDate === dateState.tomorrow
+    ? activeImportedBatch
+    : batchByDate[dateState.tomorrow];
+  const todayBatchStatus =
+    selectedPlan.date === dateState.today && fileSnapshot
+      ? fileSnapshot.status
+      : todayBatch?.status;
+  const tomorrowBatchStatus =
+    selectedPlan.date === dateState.tomorrow && fileSnapshot
+      ? fileSnapshot.status
+      : tomorrowBatch?.status;
+  const selectedBatch = activeImportedBatch || batchByDate[selectedPlan.date] || null;
+  const selectedBatchStatus = fileSnapshot?.status || selectedBatch?.status;
+  const definitiveBatchExpected =
+    selectedPlan.date === dateState.today ||
+    (selectedPlan.date === dateState.tomorrow &&
+      isNextLogisticsDateCalendarTomorrow(dateState) &&
+      minuteOfDay(dateState.hour, dateState.minute) >=
+        DEFINITIVE_BATCH_START_MINUTE_OF_DAY);
+  const definitiveBatchMissing =
+    definitiveBatchExpected &&
+    selectedBatchStatus !== "definitief" &&
+    batchLoadState !== "loading" &&
+    !isImporting;
+  const showManualBatchUpload = definitiveBatchMissing || isImporting;
+  const compactBatchStatus = useMemo(() => {
+    if (isImporting) return "Mailbatch wordt ingeladen...";
+    if (batchLoadState === "loading") return "Mailbatch controleren...";
+    if (definitiveBatchMissing) {
+      return "Let op: geen definitieve batch ingeladen. Controleer.";
     }
-    if (batchLoadState === "loading") return "mailbatch controleren...";
-    if (batchLoadState === "error") return "mailbatch kon niet worden opgehaald";
-
-    return "nog geen echte batch voor deze dag";
-  }, [activeImportedBatch, batchLoadState, importMessage]);
-  const headerStatusLine = headerMetaLine(
-    selectedPlan,
-    activeImportedBatch,
-    batchStatusLine
-  );
+    if (selectedBatch) {
+      const label = selectedBatch.status === "definitief"
+        ? "Definitief"
+        : selectedBatch.status === "prognose"
+          ? "Prognose"
+          : "Handmatig";
+      return `${label} ingeladen op ${formatDateTimeLabel(selectedBatch.importedAt)}`;
+    }
+    if (fileSnapshot) {
+      const label = fileSnapshot.status === "definitief" ? "Definitief" : "Prognose";
+      return `${label} handmatig ingeladen om ${fileSnapshot.uploadedAt}`;
+    }
+    if (importMessage && batchLoadState === "error") return importMessage;
+    if (batchLoadState === "error") {
+      return "Mailbatch kon niet worden opgehaald. Controleer.";
+    }
+    if (selectedPlan.date < dateState.today) {
+      return `Dagarchief van ${formatDateLabel(selectedPlan.date)}`;
+    }
+    return "Nog geen mailbatch ingeladen.";
+  }, [
+    batchLoadState,
+    dateState.today,
+    definitiveBatchMissing,
+    fileSnapshot,
+    importMessage,
+    isImporting,
+    selectedBatch,
+    selectedPlan.date,
+  ]);
 
   useEffect(() => {
     dateStateRef.current = dateState;
@@ -8473,6 +8511,7 @@ export default function BakkerijLogistiekDashboard() {
   useEffect(() => {
     const date = dateState.tomorrow;
     const controller = new AbortController();
+    let cancelled = false;
     const promise = fetch(
       `/api/bakkerij-logistiek?date=${encodeURIComponent(date)}`,
       { cache: "no-store", signal: controller.signal }
@@ -8484,8 +8523,14 @@ export default function BakkerijLogistiekDashboard() {
       })
       .catch(() => null);
 
+    void promise.then((batch) => {
+      if (cancelled) return;
+      setBatchByDate((current) => ({ ...current, [date]: batch }));
+    });
+
     tomorrowPrefetchRef.current = { date, promise };
     return () => {
+      cancelled = true;
       controller.abort();
       if (tomorrowPrefetchRef.current?.date === date) {
         tomorrowPrefetchRef.current = null;
@@ -8604,6 +8649,10 @@ export default function BakkerijLogistiekDashboard() {
         }
 
         setImportedBatch(data.batch || null);
+        setBatchByDate((current) => ({
+          ...current,
+          [dateState.selectedDate]: data.batch || null,
+        }));
         setWebshopImages(data.webshopImages || []);
         setReceiptOverrides(data.receiptOverrides || []);
         setRouteDraft(data.routeDraft || null);
@@ -8691,6 +8740,7 @@ export default function BakkerijLogistiekDashboard() {
             .catch(() => null);
 
       setImportedBatch(batch);
+      setBatchByDate((current) => ({ ...current, [date]: batch }));
       selectDate(date);
     } finally {
       setIsOpeningTomorrow(false);
@@ -8740,7 +8790,7 @@ export default function BakkerijLogistiekDashboard() {
     setRouteSaveState("saving");
     setRouteSaveMessage(
       learn
-        ? "definitieve route opslaan en leren..."
+        ? "route opslaan en routegeheugen bijwerken..."
         : "routeconcept opslaan..."
     );
 
@@ -8777,7 +8827,7 @@ export default function BakkerijLogistiekDashboard() {
       setRouteSaveState("saved");
       setRouteSaveMessage(
         learn
-          ? `definitieve route opgeslagen en geleerd om ${getUploadTime()}`
+          ? `route opgeslagen om ${getUploadTime()}`
           : `routeconcept bewaard om ${getUploadTime()}`
       );
     } catch (error) {
@@ -9022,6 +9072,10 @@ export default function BakkerijLogistiekDashboard() {
       }
 
       setImportedBatch(data.batch);
+      setBatchByDate((current) => ({
+        ...current,
+        [data.batch!.date]: data.batch!,
+      }));
       setRouteDraft(null);
       setRouteHasUnsavedChanges(false);
       setDateState((current) => ({ ...current, selectedDate: data.batch!.date }));
@@ -9487,123 +9541,136 @@ export default function BakkerijLogistiekDashboard() {
         </div>
       ) : (
       <>
-
-      <div className="flex flex-wrap justify-end gap-4">
-        <button
-          type="button"
-          disabled={isImporting}
-          onClick={() => fileInputRef.current?.click()}
-          className="px-1 text-xs font-semibold italic text-[#7b746c] underline decoration-[#b9b1a8] underline-offset-4 transition hover:text-[#1a1815] disabled:opacity-50"
-        >
-          {isImporting ? "PDF inladen..." : "Bon-PDF handmatig inladen"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setAdvancePhotoOpen(true)}
-          className="px-1 text-xs font-semibold italic text-[#7b746c] underline decoration-[#b9b1a8] underline-offset-4 transition hover:text-[#1a1815]"
-        >
-          Foto of logo vooruit opslaan
-        </button>
-      </div>
-
-      <section className={`relative border p-2.5 shadow-sm sm:p-3 ${headerTone}`}>
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+      <section className="relative rounded-2xl border border-[#e8e4de] bg-white/95 p-2.5 shadow-sm sm:p-3">
+        <div className="grid gap-3 md:grid-cols-[minmax(17rem,1fr)_auto] md:items-start">
           <div className="min-w-0">
-            <p className="text-[0.68rem] font-black uppercase tracking-normal opacity-75">
-              {selectedPlan.title} · {formatDateLabel(selectedPlan.date)}
-            </p>
-            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-              <span className="border border-current bg-white/65 px-2 py-1 text-xs font-black uppercase tracking-normal text-[#1a1815]">
-                {selectedPlan.status}
-              </span>
-              <span className="min-w-0 truncate text-xs font-bold tracking-normal text-[#4a4540]">
-                {headerStatusLine}
-              </span>
+            <div className="flex items-stretch gap-2">
+              <BatchDayButton
+                active={selectedPlan.date === dateState.today}
+                date={dateState.today}
+                label="Vandaag"
+                onClick={() => selectDate(dateState.today)}
+                status={todayBatchStatus}
+              />
+              <BatchDayButton
+                active={selectedPlan.date === dateState.tomorrow}
+                date={dateState.tomorrow}
+                disabled={isOpeningTomorrow}
+                label={nextLogisticsDateLabel(dateState)}
+                loading={isOpeningTomorrow}
+                onClick={() => void openTomorrow()}
+                status={tomorrowBatchStatus}
+              />
+              <label
+                aria-label="Eerdere datum kiezen"
+                title="Eerdere datum kiezen"
+                className={`relative flex h-12 w-10 shrink-0 cursor-pointer items-center justify-center self-center rounded-xl border shadow-sm transition ${
+                  selectedPlan.date !== dateState.today &&
+                  selectedPlan.date !== dateState.tomorrow
+                    ? "border-[#1a1815] bg-[#1a1815] text-white"
+                    : "border-[#e8e4de] bg-[#faf8f5] text-[#6b645b] hover:bg-white"
+                }`}
+              >
+                <CalendarIcon />
+                <input
+                  type="date"
+                  value={selectedPlan.date > dateState.today ? dateState.today : selectedPlan.date}
+                  max={dateState.today}
+                  aria-label="Eerdere leverdatum kiezen"
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  onChange={(event) => selectDate(event.target.value)}
+                />
+              </label>
             </div>
-            {fileSnapshot && (
-              <p className="mt-1 truncate text-[0.68rem] font-bold tracking-normal opacity-75">
-                {uploadStatus}
-              </p>
-            )}
+            <div
+              className={`mt-2 flex min-h-5 flex-wrap items-center gap-x-2 gap-y-1 pl-0.5 text-[0.68rem] font-semibold italic tracking-normal ${
+                definitiveBatchMissing || batchLoadState === "error"
+                  ? "text-[#a43d28]"
+                  : "text-[#7b746c]"
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                {(definitiveBatchMissing || batchLoadState === "error") && (
+                  <WarningIcon />
+                )}
+                <span className="truncate">{compactBatchStatus}</span>
+              </span>
+              {showManualBatchUpload && (
+                <button
+                  type="button"
+                  disabled={isImporting}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="shrink-0 rounded-full border border-[#c95a46] bg-[#fff1ed] px-2.5 py-1 text-[0.62rem] font-black not-italic leading-none text-[#a43d28] transition hover:bg-[#ffe5de] disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isImporting ? "Uploaden..." : "Handmatig uploaden"}
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <label
-              className={`flex items-center gap-2 border px-2 text-[0.68rem] font-black tracking-normal transition ${
-                selectedPlan.date !== dateState.today &&
-                selectedPlan.date !== dateState.tomorrow
-                  ? "border-[#1a1815] bg-[#1a1815] text-white"
-                  : "border-[#e8e4de] bg-white/70 text-[#8b8278] hover:bg-white"
-              }`}
-            >
-              Eerdere datum
-              <input
-                type="date"
-                value={selectedPlan.date > dateState.today ? dateState.today : selectedPlan.date}
-                max={dateState.today}
-                aria-label="Eerdere leverdatum kiezen"
-                className="min-h-8 border border-[#d7cec4] bg-white px-1 text-xs font-bold text-[#1a1815]"
-                onChange={(event) => selectDate(event.target.value)}
+          <div className="flex flex-wrap items-center justify-between gap-2 md:h-full md:flex-col md:items-end">
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <RefreshButton
+                disabled={batchLoadState === "loading" || isImporting}
+                loading={batchLoadState === "loading"}
+                onClick={refreshBatch}
               />
-            </label>
+              <MarzipanPhotoPrintButton
+                count={marzipanPrintItems.length + arendNumberPrintCount}
+                disabled={
+                  marzipanPrintItems.length === 0 &&
+                  arendNumberPrintOrders.length === 0
+                }
+                onClick={() =>
+                  openMarzipanPrintChoice({
+                    arendOrders: arendNumberPrintOrders,
+                    marzipanItems: marzipanPrintItems,
+                    newMarzipanItems: newMarzipanPrintItems,
+                    lastPhotoPrintAt: photoPrintHistory?.printedAt,
+                    onPhotoPrint: rememberMarzipanPhotoPrint,
+                    plan: selectedPlan,
+                  })
+                }
+              />
+              <WrittenTextPrintButton
+                count={writtenTextPrintItems.length}
+                disabled={writtenTextPrintItems.length === 0}
+                onClick={() =>
+                  openWrittenTextSheet(selectedPlan, writtenTextPrintItems)
+                }
+              />
+              <span className="ml-1 border-l border-[#e8e4de] pl-2">
+                <PreparationPrintButton
+                  disabled={receiptSummaries.length === 0}
+                  onSelect={(category) =>
+                    openPreparationSheet(selectedPlan, receiptSummaries, category)
+                  }
+                />
+              </span>
+              {fileSnapshot && (
+                <button
+                  type="button"
+                  aria-label="Batch wissen"
+                  title="Batch wissen"
+                  onClick={() => {
+                    setFileSnapshot(null);
+                    setImportMessage("");
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#e8e4de] bg-white text-sm font-black text-[#6b645b] shadow-sm transition hover:bg-[#faf8f5]"
+                >
+                  X
+                </button>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => selectDate(dateState.today)}
-              className={`min-h-10 border px-3 text-sm font-black tracking-normal transition ${
-                selectedPlan.date === dateState.today
-                  ? "border-[#1a1815] bg-[#1a1815] text-white"
-                  : "border-[#e8e4de] bg-white text-[#1a1815] hover:bg-[#faf8f5]"
-              }`}
+              onClick={() => setAdvancePhotoOpen(true)}
+              className="rounded-full border border-[#e2ddd6] bg-[#faf8f5] px-2.5 py-1 text-[0.6rem] font-semibold italic leading-none text-[#7b746c] transition hover:border-[#cfc7bd] hover:bg-white hover:text-[#4a4540] sm:px-3 sm:text-[0.66rem]"
             >
-              Vandaag
+              <span className="sm:hidden">Foto/logo opslaan</span>
+              <span className="hidden sm:inline">Foto of logo vooruit opslaan</span>
             </button>
-            <button
-              type="button"
-              disabled={isOpeningTomorrow}
-              onClick={() => void openTomorrow()}
-              className={`min-h-10 border px-3 text-sm font-black tracking-normal transition ${
-                selectedPlan.date === dateState.tomorrow
-                  ? "border-[#1a1815] bg-[#1a1815] text-white"
-                  : "border-[#e8e4de] bg-white text-[#1a1815] hover:bg-[#faf8f5]"
-              }`}
-            >
-              {isOpeningTomorrow ? "Morgen ophalen..." : nextLogisticsDateLabel(dateState)}
-            </button>
-            <RefreshButton
-              disabled={batchLoadState === "loading" || isImporting}
-              loading={batchLoadState === "loading"}
-              onClick={refreshBatch}
-            />
-            <MarzipanPhotoPrintButton
-              count={marzipanPrintItems.length + arendNumberPrintCount}
-              disabled={
-                marzipanPrintItems.length === 0 &&
-                arendNumberPrintOrders.length === 0
-              }
-              onClick={() =>
-                openMarzipanPrintChoice({
-                  arendOrders: arendNumberPrintOrders,
-                  marzipanItems: marzipanPrintItems,
-                  newMarzipanItems: newMarzipanPrintItems,
-                  lastPhotoPrintAt: photoPrintHistory?.printedAt,
-                  onPhotoPrint: rememberMarzipanPhotoPrint,
-                  plan: selectedPlan,
-                })
-              }
-            />
-            <WrittenTextPrintButton
-              count={writtenTextPrintItems.length}
-              disabled={writtenTextPrintItems.length === 0}
-              onClick={() =>
-                openWrittenTextSheet(selectedPlan, writtenTextPrintItems)
-              }
-            />
-            <PreparationPrintButton
-              disabled={receiptSummaries.length === 0}
-              onSelect={(category) =>
-                openPreparationSheet(selectedPlan, receiptSummaries, category)
-              }
-            />
             <input
               ref={fileInputRef}
               type="file"
@@ -9612,55 +9679,62 @@ export default function BakkerijLogistiekDashboard() {
               className="sr-only"
               onChange={handleFileChange}
             />
-            {fileSnapshot && (
-              <button
-                type="button"
-                aria-label="Batch wissen"
-                title="Batch wissen"
-                onClick={() => {
-                  setFileSnapshot(null);
-                  setImportMessage("");
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }}
-                className="flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-sm font-black text-[#6b645b] shadow-sm transition hover:bg-[#faf8f5]"
-              >
-                X
-              </button>
-            )}
           </div>
         </div>
       </section>
 
-      <section className="mt-3 grid grid-cols-2 border border-[#e8e4de] bg-white shadow-sm sm:grid-cols-5">
-        {stats.map((stat) => (
+      <section className="mt-2 grid grid-cols-3 overflow-hidden rounded-xl border border-[#e8e4de] bg-white/95 shadow-sm sm:grid-cols-[minmax(7.5rem,0.9fr)_minmax(6.5rem,0.72fr)_minmax(7rem,0.75fr)_minmax(21rem,2.35fr)]">
+        {stats.map((stat, index) => (
           <div
             key={stat.label}
-            className="min-h-12 border-l border-[#efe7dd] px-2 py-2 first:border-l-0 sm:px-3"
+            className={`min-h-9 border-l border-t border-[#efe7dd] px-2 py-1.5 sm:border-t-0 sm:px-3 last:col-span-3 sm:last:col-span-1 ${
+              index < 3 ? "border-t-0" : "border-l-0 sm:border-l"
+            } ${index === 0 ? "border-l-0" : ""}`}
           >
-            <p className="text-[0.65rem] font-black uppercase tracking-normal text-[#6b645b]">
-              {stat.label}
-            </p>
-            {stat.lines ? (
-              <div className="mt-0.5 grid gap-px">
-                {stat.lines.map((line) => (
-                  <p
-                    key={`${stat.label}-${line}`}
-                    className="truncate text-[0.65rem] font-bold leading-tight tracking-normal text-[#1a1815]"
-                  >
-                    {line}
-                  </p>
-                ))}
+            {stat.metrics ? (
+              <div className="flex h-full min-w-0 items-center gap-2">
+                <p className="shrink-0 text-[0.58rem] font-bold uppercase tracking-[0.08em] text-[#8b8278]">
+                  {stat.label}
+                </p>
+                <div className="grid min-w-0 flex-1 grid-cols-3 divide-x divide-[#efe7dd]">
+                  {stat.metrics.map((metric) => (
+                    <div
+                      key={metric.label}
+                      className={`min-w-0 px-2 first:pl-0 last:pr-0 ${
+                        metric.alert ? "text-[#b43e2b]" : "text-[#1a1815]"
+                      }`}
+                    >
+                      <p className="truncate text-[0.55rem] font-semibold leading-none tracking-normal opacity-70">
+                        {metric.label}
+                      </p>
+                      <p className="mt-1 flex items-center gap-1 text-xs font-black leading-none tabular-nums">
+                        {metric.alert && <WarningIcon />}
+                        {metric.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
-              <p className="mt-0.5 truncate text-sm font-black leading-tight tracking-normal text-[#1a1815] sm:text-base">
-                {stat.value}
-              </p>
+              <div
+                className={`flex h-full items-center justify-between gap-2 ${
+                  stat.alert ? "text-[#b43e2b]" : "text-[#1a1815]"
+                }`}
+              >
+                <p className="truncate text-[0.58rem] font-bold uppercase tracking-[0.08em] opacity-65">
+                  {stat.label}
+                </p>
+                <p className="flex shrink-0 items-center gap-1 text-sm font-black leading-none tabular-nums">
+                  {stat.alert && <WarningIcon />}
+                  {stat.value}
+                </p>
+              </div>
             )}
           </div>
         ))}
       </section>
 
-      <div className="mt-3 grid grid-cols-3 border border-[#e8e4de] bg-white p-1 shadow-sm">
+      <div className="mt-2 grid grid-cols-2 rounded-2xl border border-[#e8e4de] bg-white p-1 shadow-sm">
         {tabs.map((tab) => {
           const active = activeTab === tab.id;
 
@@ -9670,7 +9744,7 @@ export default function BakkerijLogistiekDashboard() {
               type="button"
               aria-pressed={active}
               onClick={() => setActiveTab(tab.id)}
-              className={`min-h-10 px-2 text-sm font-black tracking-normal transition ${
+              className={`min-h-9 rounded-xl px-2 text-xs font-black tracking-normal transition ${
                 active
                   ? "bg-[#1a1815] text-white"
                   : "bg-white text-[#6b645b] hover:bg-[#faf8f5]"
@@ -9682,7 +9756,7 @@ export default function BakkerijLogistiekDashboard() {
         })}
       </div>
 
-      <div className="mt-3">
+      <div className="mt-2">
         {activeTab === "routes" && (
           <RoutesPanel
             deletedRouteStopLabel={deletedRouteStopSnapshot?.stopLabel || ""}
@@ -9715,6 +9789,7 @@ export default function BakkerijLogistiekDashboard() {
             }
             overrideMessage={overrideMessage}
             photoLinkMessage={photoLinkMessage}
+            routeRounds={routeRounds}
             selectedPlan={selectedPlan}
             webshopImages={webshopImages}
           />
@@ -9840,6 +9915,23 @@ function routeGroupDisplayTitle(vehicle: string) {
   if (vehicle === "Bus B") return "Bus B · Buitenroute";
 
   return vehicle;
+}
+
+function routeStopDeliveryTime(stop: RouteStop) {
+  return stop.detail
+    .split(" · ")
+    .map((part) => part.trim())
+    .find((part) => /\b\d{1,2}:\d{2}\b/.test(part)) || "";
+}
+
+function routeStopAddressLabel(stop: RouteStop) {
+  if (stop.learningTarget?.trim()) return stop.learningTarget.trim();
+
+  const time = routeStopDeliveryTime(stop);
+  return stop.detail
+    .split(" · ")
+    .map((part) => part.trim())
+    .find((part) => part && part !== time && !/^vast:/i.test(part)) || "Adres controleren";
 }
 
 const routeDragMimeType = "application/x-strik-route-stop";
@@ -10022,32 +10114,16 @@ function RoutesPanel({
 
   return (
     <section className="grid gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3">
-        <div className="min-w-0">
-          <h2 className="text-base font-black tracking-normal text-[#1a1815]">
-            Routeplanning
-          </h2>
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-            <span className="inline-flex border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black uppercase tracking-normal text-[#6b645b]">
-              {routesEdited ? "Handmatig" : "Auto"}
-            </span>
-            {(routeSaveMessage || routeSaveState === "saving") && (
-              <span
-                className={`min-w-0 truncate text-[0.68rem] font-bold tracking-normal ${
-                  routeSaveState === "error" ? "text-[#9b2d1f]" : "text-[#6b645b]"
-                }`}
-              >
-                {routeSaveMessage || "route opslaan..."}
-              </span>
-            )}
-          </div>
-        </div>
+      <div className="flex min-h-8 flex-wrap items-center justify-between gap-2 px-1">
+        <h2 className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#52654f]">
+          Routeplanning
+        </h2>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {deletedRouteStopLabel && (
             <button
               type="button"
               onClick={onRouteStopUndo}
-              className="min-h-9 border border-[#d7cec4] bg-white px-3 py-2 text-xs font-black tracking-normal text-[#1a1815] transition hover:border-[#111]"
+              className="min-h-8 rounded-lg border border-white/70 bg-white/55 px-2.5 text-xs font-bold tracking-normal text-[#4a4540] transition hover:bg-white"
             >
               Ongedaan
             </button>
@@ -10061,31 +10137,57 @@ function RoutesPanel({
             onClick={onRoutesReset}
           />
         </div>
+        {(routeSaveState === "error" || routeSaveState === "saving") && (
+          <span
+            aria-live="polite"
+            className={`basis-full text-right text-[0.62rem] font-semibold italic ${
+              routeSaveState === "error" ? "text-[#9b2d1f]" : "text-[#6b645b]"
+            }`}
+          >
+            {routeSaveMessage || "Route opslaan..."}
+          </span>
+        )}
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-2.5 md:grid-cols-2">
         {routeGroups.map((group) => {
           const printableRouteCount = group.routes.filter(
             (route) => route.stops.length > 0
           ).length;
           const visibleRouteCount = group.routes.length;
+          const isElectricBus = group.vehicle === "Bus A";
+          const groupTone = isElectricBus
+            ? busRouteMeta.A.tone
+            : busRouteMeta.B.tone;
+          const groupIconTone = isElectricBus
+            ? "border-[#abc6a8] bg-[#e4eee0] text-[#315641]"
+            : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]";
 
           return (
             <article
               key={group.vehicle}
               className="rounded-lg border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3"
             >
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-base font-black tracking-normal text-[#1a1815]">
-                  {routeGroupDisplayTitle(group.vehicle)}
-                </h2>
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${groupIconTone}`}>
+                    <DeliveryVanIcon electric={isElectricBus} />
+                  </span>
+                  <p className="min-w-0 truncate text-[0.96rem] font-black leading-none tracking-normal text-[#1a1815]">
+                    {routeGroupDisplayTitle(group.vehicle)}
+                    <span className="ml-1 text-[0.82rem] font-medium italic text-[#7b746c]">
+                      · {visibleRouteCount} ronde
+                      {visibleRouteCount === 1 ? "" : "s"}
+                    </span>
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
                   <button
                     type="button"
                     aria-label={`Ronde toevoegen aan ${group.vehicle}`}
                     title="Ronde toevoegen"
                     onClick={() => onRouteAdd(group.vehicle)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center border border-[#e8e4de] bg-white text-base font-black text-[#1a1815] shadow-sm transition hover:border-[#111] hover:bg-[#faf8f5]"
+                    className={`flex h-[1.6rem] w-[1.6rem] shrink-0 items-center justify-center rounded-full border text-sm font-black shadow-sm transition hover:bg-white ${groupIconTone}`}
                   >
                     +
                   </button>
@@ -10093,11 +10195,8 @@ function RoutesPanel({
                     disabled={printableRouteCount === 0}
                     label={`Route printen voor ${group.vehicle}`}
                     onClick={() => openBusRouteSheet(selectedPlan, group)}
+                    tone={isElectricBus ? "green" : "yellow"}
                   />
-                  <span className="border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
-                    {visibleRouteCount} ronde
-                    {visibleRouteCount === 1 ? "" : "s"}
-                  </span>
                 </div>
               </div>
               <div className="mt-2 grid gap-2">
@@ -10106,8 +10205,8 @@ function RoutesPanel({
                     key={route.id}
                     onDragOver={(event) => handleRouteDragOver(event, route.id)}
                     onDrop={(event) => handleRouteDrop(event, route.id)}
-                    className={`border p-2 transition ${
-                      route.tone
+                    className={`rounded-lg border p-2 transition ${
+                      groupTone
                     } ${
                       dragging
                         ? "outline outline-1 outline-offset-1 outline-[#d7cec4]"
@@ -10115,31 +10214,20 @@ function RoutesPanel({
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="text-xs font-black uppercase tracking-normal text-[#1a1815]">
-                          {route.title}
-                        </h3>
-                      </div>
+                      <p className="min-w-0 text-[0.68rem] font-bold italic leading-none tracking-normal text-[#4a4540]">
+                        {route.title}
+                      </p>
                       {!isStandardRouteRound(route) && (
                         <button
                           type="button"
                           aria-label={`${route.title} verwijderen`}
                           title="Ronde verwijderen"
                           onClick={() => onRouteDelete(route.id)}
-                          className="flex h-6 w-6 shrink-0 items-center justify-center border border-white/80 bg-white text-xs font-black text-[#6b645b] transition hover:border-[#9b2d1f] hover:text-[#9b2d1f]"
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/80 text-xs font-black text-[#6b645b] transition hover:border-[#9b2d1f] hover:text-[#9b2d1f]"
                         >
                           X
                         </button>
                       )}
-                      <button
-                        type="button"
-                        aria-label={`Stop toevoegen aan ${route.title}`}
-                        title="Stop toevoegen"
-                        onClick={() => addManualStop(route.id)}
-                        className="flex h-6 w-6 shrink-0 items-center justify-center border border-white/80 bg-white text-sm font-black text-[#1a1815] transition hover:border-[#111]"
-                      >
-                        +
-                      </button>
                     </div>
                     <ol className="mt-2 grid min-h-12 gap-1">
                       {route.stops.length === 0 && (
@@ -10169,7 +10257,7 @@ function RoutesPanel({
                           onDrop={(event) =>
                             handleStopDrop(event, route.id, stop.id)
                           }
-                          className={`relative grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)_1.5rem] gap-1.5 border border-white/80 bg-white px-1.5 py-1 transition hover:border-[#d7cec4] hover:shadow-sm active:cursor-grabbing ${
+                          className={`relative grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)_auto_1.5rem] items-center gap-1.5 rounded-md border border-white/80 bg-white px-1.5 py-1.5 transition hover:border-[#d7cec4] hover:shadow-sm active:cursor-grabbing ${
                             dragging?.stopId === stop.id ? "opacity-45" : ""
                           }`}
                         >
@@ -10185,29 +10273,20 @@ function RoutesPanel({
                             <GripIcon />
                           </span>
                           <span
-                            className="flex h-5 w-5 items-center justify-center bg-[#1a1815] text-[0.62rem] font-black tabular-nums tracking-normal text-white"
+                            className={`flex h-5 w-5 items-center justify-center rounded-full border text-[0.62rem] font-black tabular-nums tracking-normal ${groupIconTone}`}
                           >
                             {index + 1}
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-xs font-black tracking-normal text-[#1a1815]">
+                            <span className="block truncate text-[0.8rem] font-black leading-tight tracking-normal text-[#1a1815]">
                               {stop.label}
                             </span>
-                            <span className="mt-0.5 block truncate text-[0.65rem] font-normal tracking-normal text-[#6b645b]">
-                              {stop.detail}
+                            <span className="mt-0.5 block truncate text-[0.72rem] font-normal leading-tight tracking-normal text-[#6b645b]">
+                              {routeStopAddressLabel(stop)}
                             </span>
-                            {stop.badges.length > 0 && (
-                              <span className="mt-1 flex flex-wrap gap-1">
-                                {stop.badges.map((badge) => (
-                                  <span
-                                    key={`${stop.id}-${badge}`}
-                                    className="border border-[#e8e4de] bg-white px-1 py-0.5 text-[0.58rem] font-black tracking-normal text-[#6b645b]"
-                                  >
-                                    {badge}
-                                  </span>
-                                ))}
-                              </span>
-                            )}
+                          </span>
+                          <span className="whitespace-nowrap text-right text-[0.68rem] font-black tabular-nums tracking-normal text-[#4a4540]">
+                            {routeStopDeliveryTime(stop) || "—"}
                           </span>
                           <button
                             type="button"
@@ -10231,6 +10310,18 @@ function RoutesPanel({
                           </li>
                         )}
                     </ol>
+                    <button
+                      type="button"
+                      aria-label={`Adres toevoegen aan ${route.title}`}
+                      title="Adres handmatig toevoegen"
+                      onClick={() => addManualStop(route.id)}
+                      className="mt-1.5 flex min-h-7 w-full items-center gap-2 rounded-md border border-dashed border-white/90 bg-white/55 px-2 text-left text-[0.65rem] font-semibold italic tracking-normal text-[#6b645b] transition hover:border-[#b9b1a8] hover:bg-white"
+                    >
+                      <span className={`flex h-4 w-4 items-center justify-center rounded-full border text-xs font-black not-italic ${groupIconTone}`}>
+                        +
+                      </span>
+                      Adres toevoegen
+                    </button>
                   </section>
                 ))}
               </div>
@@ -10257,6 +10348,7 @@ function OrdersPanel({
   photoLinkMessage,
   receiptOverrides,
   receiptSummaries,
+  routeRounds,
   selectedPlan,
   webshopImages,
 }: Readonly<{
@@ -10278,6 +10370,7 @@ function OrdersPanel({
   photoLinkMessage: string;
   receiptOverrides: ReceiptOverrideSummary[];
   receiptSummaries: ReceiptSummary[];
+  routeRounds: RouteRound[];
   selectedPlan: DayPlan;
   webshopImages: WebshopImageSummary[];
 }>) {
@@ -10285,9 +10378,13 @@ function OrdersPanel({
   const [activeFilter, setActiveFilter] = useState<OrdersFilter>("all");
   const filteredReceipts = useMemo(
     () =>
-      receiptSummaries.filter((receipt) =>
-        receiptMatchesFilter(receipt, activeFilter)
-      ),
+      receiptSummaries
+        .filter((receipt) => receiptMatchesFilter(receipt, activeFilter))
+        .sort((first, second) =>
+          first.customer.localeCompare(second.customer, "nl", {
+            sensitivity: "base",
+          })
+        ),
     [activeFilter, receiptSummaries]
   );
   const selectedReceipt =
@@ -10313,59 +10410,57 @@ function OrdersPanel({
   );
 
   return (
-    <section className="grid gap-3 lg:grid-cols-[minmax(16rem,0.5fr)_minmax(0,1fr)]">
-      <div className="rounded-lg border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-black tracking-normal text-[#1a1815]">
-            Bonnen
-          </h2>
-          <div className="flex items-center gap-1.5">
-            <span className="w-fit border border-[#e8e4de] bg-[#faf8f5] px-2 py-1 text-[0.68rem] font-black tracking-normal text-[#6b645b]">
-              {filteredReceipts.length}/{receiptSummaries.length} · foto {webshopImages.length}
-            </span>
-            <ReceiptPrintButton
-              disabled={!selectedReceipt}
-              label={
-                selectedReceipt
-                  ? `Contantbon ${selectedReceipt.receiptNumber || selectedReceipt.id} printen`
-                  : "Contantbon printen"
-              }
-              onClick={() => {
-                if (!selectedReceipt) return;
-                openReceiptPrintSheet(selectedReceipt, selectedPlan);
-              }}
-            />
-          </div>
+    <section className="grid gap-3">
+      <div className="flex min-h-8 flex-wrap items-center justify-between gap-2 px-1">
+        <h2 className="text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[#52654f]">
+          Bonnen
+        </h2>
+        <div className="flex items-center gap-1.5">
+          <span className="w-fit rounded-lg border border-white/70 bg-white/55 px-2.5 py-1 text-[0.65rem] font-bold tracking-normal text-[#6b645b]">
+            {filteredReceipts.length}/{receiptSummaries.length} · foto {webshopImages.length}
+          </span>
+          <ReceiptPrintButton
+            disabled={!selectedReceipt}
+            label={
+              selectedReceipt
+                ? `Contantbon ${selectedReceipt.receiptNumber || selectedReceipt.id} printen`
+                : "Contantbon printen"
+            }
+            onClick={() => {
+              if (!selectedReceipt) return;
+              openReceiptPrintSheet(selectedReceipt, selectedPlan);
+            }}
+          />
         </div>
-        <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
-          {ordersFilters.map((filter) => {
-            const active = activeFilter === filter.id;
-            const count = receiptFilterCount(receiptSummaries, filter.id);
-            const tone = receiptToneForFilter(filter.id);
+      </div>
 
-            return (
-              <button
-                key={filter.id}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setActiveFilter(filter.id)}
-                className={`shrink-0 border px-1.5 py-0.5 text-[0.62rem] font-normal tracking-normal transition ${
-                  receiptFilterClasses(tone, active)
-                }`}
-              >
-                {filter.label} {count}
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-2 h-[30rem] overflow-y-auto pr-1">
+      <div className="grid gap-3 md:grid-cols-[minmax(15rem,0.48fr)_minmax(0,1fr)]">
+        <div className="rounded-lg border border-[#e8e4de] bg-white p-2.5 shadow-sm sm:p-3">
+          <label className="flex items-center gap-2" htmlFor="receipt-location-filter">
+            <span className="shrink-0 text-[0.62rem] font-bold uppercase tracking-[0.1em] text-[#8b8278]">
+              Toon
+            </span>
+            <select
+              id="receipt-location-filter"
+              value={activeFilter}
+              onChange={(event) => setActiveFilter(event.target.value as OrdersFilter)}
+              className="h-8 min-w-0 flex-1 rounded-lg border border-[#ddd7cf] bg-[#faf8f5] px-2.5 text-[0.72rem] font-bold tracking-normal text-[#1a1815] outline-none transition focus:border-[#8ba287] focus:bg-white"
+            >
+              {ordersFilters.map((filter) => (
+                <option key={filter.id} value={filter.id}>
+                  {filter.label} ({receiptFilterCount(receiptSummaries, filter.id)})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="mt-2 h-[24rem] overflow-y-auto pr-1 sm:h-[28rem]">
           <div className="grid gap-1.5">
-            {filteredReceipts.map((receipt, index) => (
+            {filteredReceipts.map((receipt) => (
               <ReceiptRow
                 key={receipt.id}
                 active={receipt.id === activeReceiptId}
+                bus={receiptBusForRoutes(receipt, routeRounds)}
                 imageCount={imageMatchesForReceipt(receipt, webshopImages).length}
-                index={index}
                 onSelect={() => setSelectedReceiptId(receipt.id)}
                 receipt={receipt}
               />
@@ -10440,41 +10535,41 @@ function OrdersPanel({
               </div>
             )}
           </div>
+          </div>
         </div>
-      </div>
 
-      <ReceiptDetail
-        imageMatches={selectedImageMatches}
-        onDeleteWebshopImage={onDeleteWebshopImage}
-        onUnlinkWebshopImageFromReceipt={onUnlinkWebshopImageFromReceipt}
-        onUploadManualWebshopImageForReceipt={
-          onUploadManualWebshopImageForReceipt
-        }
-        onSaveReceiptOverride={onSaveReceiptOverride}
-        override={selectedOverride}
-        overrideMessage={overrideMessage}
-        photoLinkMessage={photoLinkMessage}
-        receipt={selectedReceipt}
-        selectedPlan={selectedPlan}
-      />
+        <ReceiptDetail
+          imageMatches={selectedImageMatches}
+          onDeleteWebshopImage={onDeleteWebshopImage}
+          onUnlinkWebshopImageFromReceipt={onUnlinkWebshopImageFromReceipt}
+          onUploadManualWebshopImageForReceipt={
+            onUploadManualWebshopImageForReceipt
+          }
+          onSaveReceiptOverride={onSaveReceiptOverride}
+          override={selectedOverride}
+          overrideMessage={overrideMessage}
+          photoLinkMessage={photoLinkMessage}
+          receipt={selectedReceipt}
+          selectedPlan={selectedPlan}
+        />
+      </div>
     </section>
   );
 }
 
 function ReceiptRow({
   active,
+  bus,
   imageCount,
-  index,
   onSelect,
   receipt,
 }: Readonly<{
   active: boolean;
+  bus: BusId | "";
   imageCount: number;
-  index: number;
   onSelect: () => void;
   receipt: ReceiptSummary;
 }>) {
-  const fulfillment = fulfillmentLabel(receipt);
   const time = receiptListTimeLabel(receipt);
   const tone = receiptToneFor(receipt);
   const locationBadge = receiptLocationBadge(receipt);
@@ -10484,63 +10579,62 @@ function ReceiptRow({
       type="button"
       aria-pressed={active}
       onClick={onSelect}
-      className={`grid w-full grid-cols-[1.75rem_minmax(0,1fr)] gap-1.5 border border-l-4 p-1.5 text-left transition ${
+      className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-lg border border-l-4 px-2.5 py-2 text-left transition ${
         active
-          ? "border-[#1a1815] bg-white"
+          ? "border-[#1a1815] bg-white shadow-sm"
           : "border-[#efe7dd] bg-[#faf8f5] hover:border-[#d7cec4] hover:bg-white"
       } ${receiptAccentClasses(tone)}`}
     >
-      <span className="flex h-6 w-6 items-center justify-center bg-[#1a1815] text-[0.62rem] font-bold tabular-nums tracking-normal text-white">
-        {index + 1}
-      </span>
       <div className="min-w-0">
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-1.5">
-          <div className="min-w-0">
-            <p className="truncate text-[0.72rem] font-bold leading-tight tracking-normal text-[#1a1815]">
-              {receipt.customer}
-            </p>
-            {time && (
-              <p className="mt-0.5 truncate text-[0.62rem] font-normal leading-tight tracking-normal text-[#6b645b]">
-                {time}
-              </p>
-            )}
-          </div>
-          <div className="shrink-0 text-right">
-            <span
-              className={`inline-flex min-w-8 justify-center border px-1.5 py-0.5 text-[0.58rem] font-bold leading-none tracking-normal ${receiptToneBadgeClasses(
-                tone
-              )}`}
-            >
-              {locationBadge}
-            </span>
-            {receipt.value ? (
-              <p className="mt-1 text-[0.62rem] font-normal leading-none tracking-normal text-[#6b645b]">
-                {formatCurrency(receipt.value)}
-              </p>
-            ) : (
-              <p className="mt-1 text-[0.62rem] font-normal leading-none tracking-normal text-[#8b8278]">
-                intern
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="mt-1 flex items-center gap-1 overflow-hidden">
-          <span
-            className={`border px-1.5 py-0.5 text-[0.58rem] font-normal leading-none tracking-normal ${receiptToneBadgeClasses(
-              tone
-            )}`}
-          >
-            {fulfillment}
-          </span>
+        <p className="truncate text-[0.88rem] font-black leading-tight tracking-normal text-[#1a1815] sm:text-[0.94rem]">
+          {receipt.customer}
+        </p>
+        {time && (
+          <p className="mt-0.5 truncate text-[0.68rem] font-medium leading-tight tracking-normal text-[#6b645b]">
+            {time}
+          </p>
+        )}
+        <div className="mt-1.5 flex items-center gap-1.5 overflow-hidden text-[0.6rem] font-medium leading-none tracking-normal text-[#8b8278]">
+          <span>{receipt.lines.length} regels</span>
           {imageCount > 0 && (
-            <span className="border border-[#d6e5d8] bg-white px-1.5 py-0.5 text-[0.58rem] font-bold leading-none tracking-normal text-[#315641]">
+            <span className="rounded-full border border-[#d6e5d8] bg-white px-1.5 py-0.5 font-bold text-[#315641]">
               foto {imageCount}
             </span>
           )}
-          <span className="truncate text-[0.6rem] font-normal leading-none tracking-normal text-[#8b8278]">
-            {receipt.lines.length} regels
-          </span>
         </div>
+      </div>
+      <div className="shrink-0 text-right">
+        <div className="flex items-center justify-end gap-1">
+          <span
+            className={`inline-flex min-w-7 justify-center rounded-md border px-1.5 py-1 text-[0.58rem] font-black leading-none tracking-normal ${receiptToneBadgeClasses(
+              tone
+            )}`}
+          >
+            {locationBadge}
+          </span>
+          {bus && (
+            <span
+              aria-label={`Bus ${bus}`}
+              title={`Bus ${bus}`}
+              className={`flex h-6 w-6 items-center justify-center rounded-full border text-[0.62rem] font-black leading-none ${
+                bus === "A"
+                  ? "border-[#abc6a8] bg-[#e4eee0] text-[#315641]"
+                  : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]"
+              }`}
+            >
+              {bus}
+            </span>
+          )}
+        </div>
+        {receipt.value ? (
+          <p className="mt-1.5 text-[0.62rem] font-medium leading-none tracking-normal text-[#6b645b]">
+            {formatCompactCurrency(receipt.value)}
+          </p>
+        ) : (
+          <p className="mt-1.5 text-[0.62rem] font-medium leading-none tracking-normal text-[#8b8278]">
+            intern
+          </p>
+        )}
       </div>
     </button>
   );
@@ -11414,7 +11508,7 @@ function LearningPanel({
   ).length;
 
   return (
-    <section className="grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
+    <section className="grid gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
       <div className="grid gap-3">
         <div className="rounded-lg border border-[#d6e5d8] bg-[#f6faf4] p-3 shadow-sm sm:p-4">
           <p className="text-[0.68rem] font-black uppercase tracking-normal text-[#6f7d68]">
@@ -11681,6 +11775,49 @@ function PencilIcon() {
   );
 }
 
+function BatchDayButton({
+  active,
+  date,
+  disabled = false,
+  label,
+  loading = false,
+  onClick,
+  status,
+}: Readonly<{
+  active: boolean;
+  date: string;
+  disabled?: boolean;
+  label: string;
+  loading?: boolean;
+  onClick: () => void;
+  status?: BatchStatus;
+}>) {
+  const tone = status === "definitief"
+    ? "border-[#a8c4a6] bg-[#e4eee0] text-[#244b32]"
+    : status === "prognose"
+      ? "border-[#ead178] bg-[#fff0b8] text-[#6f5212]"
+      : "border-[#ddd8d1] bg-[#f1efec] text-[#6b645b]";
+
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={`min-w-[6.75rem] rounded-xl border px-3 py-2 text-left shadow-sm transition hover:brightness-[0.99] disabled:cursor-wait disabled:opacity-60 ${tone} ${
+        active ? "ring-2 ring-[#1a1815] ring-offset-1" : ""
+      }`}
+    >
+      <span className="block text-sm font-black leading-none tracking-normal">
+        {loading ? "Ophalen..." : label}
+      </span>
+      <span className="mt-1 block text-[0.62rem] font-bold leading-none opacity-70">
+        {formatDateLabel(date)}
+      </span>
+    </button>
+  );
+}
+
 function RefreshButton({
   disabled,
   loading,
@@ -11697,7 +11834,7 @@ function RefreshButton({
       title="Bonnen opnieuw ophalen"
       disabled={disabled}
       onClick={onClick}
-      className="flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-50"
     >
       <RefreshIcon spinning={loading} />
     </button>
@@ -11720,11 +11857,11 @@ function MarzipanPhotoPrintButton({
       title="Marsepeinfoto's controleren"
       disabled={disabled}
       onClick={onClick}
-      className="relative flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+      className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
     >
       <PhotoSheetIcon />
       {count > 0 && (
-        <span className="absolute -right-1 -top-1 min-w-4 border border-[#1a1815] bg-[#1a1815] px-1 text-center text-[0.56rem] font-black leading-4 tracking-normal text-white">
+        <span className="absolute -right-1 -top-1 min-w-4 rounded-full border border-[#1a1815] bg-[#1a1815] px-1 text-center text-[0.56rem] font-black leading-4 tracking-normal text-white">
           {count > 99 ? "99+" : count}
         </span>
       )}
@@ -11748,11 +11885,11 @@ function WrittenTextPrintButton({
       title="Geschreven teksten controleren"
       disabled={disabled}
       onClick={onClick}
-      className="relative flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+      className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
     >
       <TextSheetIcon />
       {count > 0 && (
-        <span className="absolute -right-1 -top-1 min-w-4 border border-[#1a1815] bg-[#1a1815] px-1 text-center text-[0.56rem] font-black leading-4 tracking-normal text-white">
+        <span className="absolute -right-1 -top-1 min-w-4 rounded-full border border-[#1a1815] bg-[#1a1815] px-1 text-center text-[0.56rem] font-black leading-4 tracking-normal text-white">
           {count > 99 ? "99+" : count}
         </span>
       )}
@@ -11774,7 +11911,7 @@ function RouteRecalculateButton({
       title="Herbereken automatisch"
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 items-center gap-1.5 border border-[#e8e4de] bg-white px-2 text-xs font-black tracking-normal text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-8 items-center gap-1.5 rounded-lg border border-white/70 bg-white/55 px-2.5 text-xs font-bold tracking-normal text-[#4a4540] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
     >
       <RefreshIcon spinning={false} />
       <span>Herbereken</span>
@@ -11792,15 +11929,14 @@ function RouteConfirmButton({
   return (
     <button
       type="button"
-      aria-label="Definitieve route opslaan"
-      title="Definitieve route opslaan en routegeheugen bijwerken"
+      aria-label="Route opslaan"
+      title="Route opslaan en routegeheugen bijwerken"
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 items-center gap-1.5 border border-[#bfe3c8] bg-[#f6faf4] px-2 text-xs font-black tracking-normal text-[#1a1815] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex h-8 items-center gap-1.5 rounded-lg border border-[#abc6a8] bg-[#e4eee0] px-2.5 text-xs font-bold tracking-normal text-[#315641] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
     >
       <SaveIcon />
-      <span className="sm:hidden">Definitief</span>
-      <span className="hidden sm:inline">Definitieve route opslaan</span>
+      <span>Route opslaan</span>
     </button>
   );
 }
@@ -11809,10 +11945,12 @@ function RoutePrintButton({
   disabled,
   label,
   onClick,
+  tone,
 }: Readonly<{
   disabled?: boolean;
   label: string;
   onClick: () => void;
+  tone: "green" | "yellow";
 }>) {
   return (
     <button
@@ -11821,7 +11959,11 @@ function RoutePrintButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+      className={`flex h-[1.6rem] w-[1.6rem] items-center justify-center rounded-full border shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 ${
+        tone === "green"
+          ? "border-[#abc6a8] bg-[#e4eee0] text-[#315641]"
+          : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]"
+      }`}
     >
       <PrintIcon />
     </button>
@@ -11869,12 +12011,12 @@ function PreparationPrintButton({
         title="Voorbereidingslijst openen"
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="relative flex h-10 w-10 items-center justify-center border border-[#e8e4de] bg-white text-[#1a1815] shadow-sm transition hover:bg-[#faf8f5] disabled:cursor-not-allowed disabled:opacity-40"
+        className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e4de] bg-[#faf8f5] text-[#6b645b] shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
       >
         <PreparationIcon />
       </button>
       {open && !disabled && (
-        <div className="absolute right-0 z-30 mt-1 grid min-w-36 gap-1 border border-[#d7d1c8] bg-white p-1 shadow-lg">
+        <div className="absolute right-0 z-30 mt-1 grid min-w-36 gap-1 rounded-xl border border-[#d7d1c8] bg-white p-1 shadow-lg">
           {(["bakkerij", "logistiek"] as PreparationCategory[]).map(
             (category) => (
               <button
@@ -11950,11 +12092,76 @@ function SaveIcon() {
   );
 }
 
+function CalendarIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-[1.1rem] w-[1.1rem]"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.9"
+    >
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M8 3v4M16 3v4M3.5 9.5h17" />
+      <path d="M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01" />
+    </svg>
+  );
+}
+
+function DeliveryVanIcon({ electric }: Readonly<{ electric: boolean }>) {
+  return (
+    <svg
+      viewBox="0 0 32 24"
+      className="h-[1.05rem] w-[1.45rem]"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.7"
+    >
+      <path d="M2.5 5.5h17v13h-17z" />
+      <path d="M19.5 10h5.2l4.2 4.6v3.9h-9.4z" />
+      <path d="M22 10v4.5h6.4" />
+      <circle cx="8" cy="19" r="2.3" fill="white" />
+      <circle cx="24.5" cy="19" r="2.3" fill="white" />
+      {electric && (
+        <path
+          d="m11.2 6.2-3.5 6h3l-2.1 5.1 6.2-7.1h-3.1l2.2-4z"
+          fill="currentColor"
+          stroke="none"
+        />
+      )}
+    </svg>
+  );
+}
+
+function WarningIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5 shrink-0"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2.2"
+    >
+      <path d="M10.2 4.2 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.8 4.2a2 2 0 0 0-3.6 0Z" />
+      <path d="M12 9v5M12 18h.01" />
+    </svg>
+  );
+}
+
 function PhotoSheetIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-5 w-5"
+      className="h-[1.35rem] w-[1.35rem]"
       aria-hidden="true"
       fill="none"
       stroke="currentColor"
@@ -11974,19 +12181,27 @@ function TextSheetIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-5 w-5"
+      className="h-[1.35rem] w-[1.35rem]"
       aria-hidden="true"
       fill="none"
       stroke="currentColor"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth="2"
+      strokeWidth="1.5"
     >
-      <path d="M5 4h14v16H5z" />
-      <path d="M8 8h8" />
-      <path d="M8 12h8" />
-      <path d="M8 16h5" />
-      <path d="M15.5 15.5 18 18" />
+      <text
+        x="4"
+        y="17"
+        fill="currentColor"
+        stroke="none"
+        fontFamily="Snell Roundhand, Apple Chancery, Segoe Script, cursive"
+        fontSize="18"
+        fontStyle="italic"
+        fontWeight="600"
+      >
+        A
+      </text>
+      <path d="M6 19.2c3.4-1.1 7.3-.2 11.6-1.5 1.1-.3 1.9-.8 2.4-1.4" />
     </svg>
   );
 }
@@ -11995,7 +12210,7 @@ function PreparationIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-5 w-5"
+      className="h-[1.35rem] w-[1.35rem]"
       aria-hidden="true"
       fill="none"
       stroke="currentColor"
@@ -12037,7 +12252,7 @@ function RefreshIcon({ spinning }: Readonly<{ spinning: boolean }>) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className={`h-5 w-5 ${spinning ? "animate-spin" : ""}`}
+      className={`h-[1.35rem] w-[1.35rem] ${spinning ? "animate-spin" : ""}`}
       aria-hidden="true"
     >
       <path
