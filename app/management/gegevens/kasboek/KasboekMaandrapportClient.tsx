@@ -146,6 +146,13 @@ function hasIceCashRecord(
 function safeExpectedCash(record: RevenueCashRecord | undefined) {
   if (!record) return 0;
 
+  if (record.cashRevenue !== undefined) {
+    return Math.max(
+      0,
+      roundMoney(record.cashRevenue - cashOutAmount(record))
+    );
+  }
+
   if (record.startCash !== undefined) {
     return Math.max(
       0,
@@ -153,7 +160,7 @@ function safeExpectedCash(record: RevenueCashRecord | undefined) {
     );
   }
 
-  return record.cashRevenue ?? record.countedCash ?? 0;
+  return record.countedCash ?? 0;
 }
 
 function safeCheckedCash(record: RevenueCashRecord | undefined) {
@@ -165,7 +172,7 @@ function safeCheckedCash(record: RevenueCashRecord | undefined) {
 function safeDifference(record: RevenueCashRecord | undefined) {
   if (!record) return 0;
 
-  return record.safeDifference ?? roundMoney(safeCheckedCash(record) - safeExpectedCash(record));
+  return roundMoney(safeCheckedCash(record) - safeExpectedCash(record));
 }
 
 function cashAdjustmentAmount(record: RevenueCashRecord) {
@@ -315,12 +322,12 @@ function buildWinkelLine(input: {
     }
     if (cashRecord.difference !== undefined && Math.abs(cashRecord.difference) > 0.01) {
       input.comments.push(
-        `${dayLabel(date)}: kasverschil ${formatMoney(cashRecord.difference)}.`
+        `${dayLabel(date)}: verschil in dagafsluiting ${formatMoney(cashRecord.difference)}.`
       );
     }
     if (cashRecord.checkedAt && Math.abs(safeDifference(cashRecord)) > 0.01) {
       input.comments.push(
-        `${dayLabel(date)}: kluisverschil ${formatMoney(safeDifference(cashRecord))}.`
+        `${dayLabel(date)}: kasverschil ${formatMoney(safeDifference(cashRecord))}.`
       );
     }
   });
