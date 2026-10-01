@@ -5,13 +5,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import StrikBackButton from "../../StrikBackButton";
 import { StrikPageHeading } from "../../StrikPageTitle";
 import { strikIcons } from "../../StrikUI";
+import { CakeVisualizer } from "../../bruidstaart-studio/BruidstaartStudioConfigurator";
 import { cakeSizes } from "../../bruidstaart-studio/data";
 import {
   calculateWeddingCakePrice,
   findOption,
   formatEuro,
+  getDecorationColorNotes,
+  getDecorationNoteTexts,
+  getDecorationSurcharges,
   getDeliveryMethodLabel,
   getDeliveryTimeLabel,
+  getSelectedWeddingCakeLabels,
+  getTopperNoteTexts,
+  getTopperSurcharges,
 } from "../../bruidstaart-studio/pricing";
 import {
   getWeddingCakeStudioUrl,
@@ -174,6 +181,324 @@ function applyPaymentSyncResults(
   });
 }
 
+type WeddingCakePreviewSection = {
+  title: string;
+  rows: { label: string; value: string }[];
+};
+
+function previewDate(value: string) {
+  const date = dateFrom(value);
+  if (!date) return value || "—";
+
+  return new Intl.DateTimeFormat("nl-NL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function previewText(values: string[]) {
+  return values.map((value) => value.trim()).filter(Boolean).join(" | ") || "—";
+}
+
+function surchargeText(
+  surcharges: { description: string; amount: number }[],
+) {
+  return (
+    surcharges
+      .map(
+        (surcharge) =>
+          `${surcharge.description || "Extra wens"} (${formatEuro(surcharge.amount)})`,
+      )
+      .join(" | ") || "—"
+  );
+}
+
+function weddingCakePreviewSections(
+  draft: WeddingCakeDraft,
+): WeddingCakePreviewSection[] {
+  const config = draft.config;
+  const contact = config.contact;
+  const labels = getSelectedWeddingCakeLabels(config);
+  const price = calculateWeddingCakePrice(config);
+  const decorationColors = getDecorationColorNotes(config);
+  const paidAt = config.paymentRequestPaidAt || config.paidInStoreAt || "";
+
+  return [
+    {
+      title: "Klant en datum",
+      rows: [
+        { label: "Herkenningscode", value: contact.recognitionCode || draft.code },
+        { label: "Bruidspaar", value: contact.names || draft.surname || "—" },
+        { label: "Achternaam", value: contact.surname || draft.surname || "—" },
+        { label: "Trouwdatum", value: previewDate(contact.weddingDate) },
+        { label: "E-mail", value: contact.email || "—" },
+        { label: "Telefoon", value: contact.phone || "—" },
+      ],
+    },
+    {
+      title: "Levering en factuur",
+      rows: [
+        { label: "Leverdatum", value: previewDate(contact.deliveryDate) },
+        {
+          label: "Levering",
+          value: getDeliveryMethodLabel(contact.deliveryMethod),
+        },
+        {
+          label: "Tijd",
+          value:
+            contact.deliveryMethod === "pickup"
+              ? "Afhalen bij Strik Ziekerstraat"
+              : getDeliveryTimeLabel(contact) || "Niet opgegeven",
+        },
+        {
+          label: "Adres",
+          value:
+            contact.deliveryMethod === "pickup"
+              ? "Strik Patisserie Ziekerstraat"
+              : contact.deliveryAddress || "—",
+        },
+        { label: "Factuurnaam", value: contact.invoiceName || "—" },
+        { label: "Factuur e-mail", value: contact.invoiceEmail || "—" },
+      ],
+    },
+    {
+      title: "De taart",
+      rows: [
+        { label: "Formaat en opbouw", value: labels.size || "—" },
+        { label: "Stijl", value: labels.style || "—" },
+        { label: "Smaak en vulling", value: labels.filling || "—" },
+        {
+          label: "Kleur",
+          value: config.styleId === "naked" ? "Niet van toepassing" : labels.color || "—",
+        },
+        { label: "Indeling", value: labels.layout || "—" },
+        ...(config.customCakeDescription
+          ? [{ label: "Maatwerk", value: config.customCakeDescription }]
+          : []),
+      ],
+    },
+    {
+      title: "Decoratie en topper",
+      rows: [
+        {
+          label: "Decoratie",
+          value: labels.decorations.length ? labels.decorations.join(", ") : "Geen",
+        },
+        {
+          label: "Decoratiekleuren",
+          value: previewText(
+            decorationColors.map((item) => `${item.label}: ${item.color}`),
+          ),
+        },
+        {
+          label: "Decoratie-opmerkingen",
+          value: previewText(getDecorationNoteTexts(config)),
+        },
+        {
+          label: "Decoratietoeslagen",
+          value: surchargeText(getDecorationSurcharges(config)),
+        },
+        { label: "Topper", value: labels.topper || "Geen topper" },
+        { label: "Toppertekst", value: config.topperInitialsText || "—" },
+        {
+          label: "Topper-opmerkingen",
+          value: previewText(getTopperNoteTexts(config)),
+        },
+        {
+          label: "Toppertoeslagen",
+          value: surchargeText(getTopperSurcharges(config)),
+        },
+        { label: "Algemene opmerkingen", value: contact.notes || "—" },
+      ],
+    },
+    {
+      title: "Prijs en betaling",
+      rows: [
+        ...price.lines.map((line) => ({
+          label: line.label,
+          value: line.quote ? "Op aanvraag" : formatEuro(line.amount),
+        })),
+        {
+          label: "Totaal",
+          value: `${formatEuro(price.total)}${
+            price.hasQuoteItems ? " + onderdelen op aanvraag" : ""
+          }`,
+        },
+        { label: "Betaalstatus", value: paymentLabel(draft) },
+        ...(paidAt ? [{ label: "Betaald op", value: paidAt }] : []),
+        ...(config.paymentRequestAmount
+          ? [
+              {
+                label: "Betaalverzoek",
+                value: `${formatEuro(config.paymentRequestAmount)} · ${
+                  config.paymentRequestEmail || contact.email || "geen e-mail"
+                }`,
+              },
+            ]
+          : []),
+      ],
+    },
+  ];
+}
+
+function escapeWeddingCakePrintHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function printWeddingCakePreview(draft: WeddingCakeDraft) {
+  const printWindow = window.open("", "_blank", "width=960,height=820");
+  if (!printWindow) return;
+
+  const sections = weddingCakePreviewSections(draft);
+  const customer = draft.config.contact.names || draft.surname || draft.code;
+  const sectionHtml = sections
+    .map(
+      (section) => `<section>
+        <h2>${escapeWeddingCakePrintHtml(section.title)}</h2>
+        ${section.rows
+          .map(
+            (row) => `<div class="row"><span>${escapeWeddingCakePrintHtml(
+              row.label,
+            )}</span><strong>${escapeWeddingCakePrintHtml(row.value)}</strong></div>`,
+          )
+          .join("")}
+      </section>`,
+    )
+    .join("");
+
+  printWindow.document.write(`<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <title>Bruidstaart ${escapeWeddingCakePrintHtml(draft.code)}</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #171513; font-family: Arial, sans-serif; font-size: 10pt; }
+    .actions { margin-bottom: 14px; }
+    .actions button { border: 0; border-radius: 999px; background: #171513; padding: 10px 18px; color: white; font-weight: 700; }
+    header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #171513; padding-bottom: 10px; }
+    .eyebrow, h2 { margin: 0; font-size: 8pt; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 4px 0 0; font-size: 20pt; }
+    header p { margin: 5px 0 0; font-weight: 700; }
+    .code { text-align: right; }
+    .code strong { display: block; margin-top: 4px; font-size: 17pt; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    section { break-inside: avoid; border: 1px solid #bbb; padding: 9px; }
+    section:last-child { grid-column: 1 / -1; }
+    h2 { border-bottom: 1px solid #bbb; padding-bottom: 6px; }
+    .row { display: grid; grid-template-columns: 34% 1fr; gap: 8px; border-bottom: 1px solid #e2e2e2; padding: 5px 0; }
+    .row:last-child { border-bottom: 0; }
+    .row span { color: #666; font-size: 8pt; font-weight: 700; text-transform: uppercase; }
+    .row strong { overflow-wrap: anywhere; }
+    @media print { .actions { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="actions"><button type="button" onclick="window.print()">Afdrukken</button></div>
+  <header>
+    <div><p class="eyebrow">Strik Patisserie · definitieve bruidstaart</p><h1>${escapeWeddingCakePrintHtml(
+      customer,
+    )}</h1><p>${escapeWeddingCakePrintHtml(
+      previewDate(deliveryDateFor(draft)),
+    )}</p></div>
+    <div class="code"><span class="eyebrow">Herkenningscode</span><strong>${escapeWeddingCakePrintHtml(
+      draft.config.contact.recognitionCode || draft.code,
+    )}</strong></div>
+  </header>
+  <div class="grid">${sectionHtml}</div>
+</body>
+</html>`);
+  printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => printWindow.print(), 150);
+}
+
+function WeddingCakePreview({
+  draft,
+  onBack,
+}: Readonly<{
+  draft: WeddingCakeDraft;
+  onBack: () => void;
+}>) {
+  const sections = weddingCakePreviewSections(draft);
+
+  return (
+    <div className="mt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-full px-4 py-2 text-xs font-black text-[#49342d]"
+        >
+          ← Terug
+        </button>
+        <button
+          type="button"
+          onClick={() => printWeddingCakePreview(draft)}
+          className="rounded-full bg-[#265c45] px-5 py-2.5 text-xs font-black text-white shadow-sm"
+        >
+          Print overzicht
+        </button>
+      </div>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-[13rem_minmax(0,1fr)] lg:items-start">
+        <aside className="rounded-xl border border-[#d8e2d3] bg-[#f4f8f2] p-3">
+          <div className="mx-auto max-w-[11rem]">
+            <CakeVisualizer config={draft.config} compact showDownload={false} />
+          </div>
+          <p className="mt-2 text-center text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#55704d]">
+            Herkenningscode
+          </p>
+          <p className="mt-1 break-words text-center text-base font-black text-[#49342d]">
+            {draft.config.contact.recognitionCode || draft.code}
+          </p>
+          <p className="mt-1 text-center text-xs font-bold text-[#49342d]/55">
+            {previewDate(deliveryDateFor(draft))}
+          </p>
+        </aside>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sections.map((section) => (
+            <section
+              key={section.title}
+              className={`rounded-xl border border-[#e5ddd4] bg-white p-3 ${
+                section.title === "Prijs en betaling" ? "sm:col-span-2" : ""
+              }`}
+            >
+              <h3 className="border-b border-[#eee6dd] pb-2 text-[0.56rem] font-black uppercase tracking-[0.12em] text-[#55704d]">
+                {section.title}
+              </h3>
+              <dl className="mt-1.5 grid gap-0">
+                {section.rows.map((row, rowIndex) => (
+                  <div
+                    key={`${section.title}-${row.label}-${rowIndex}`}
+                    className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2 border-b border-[#f0ebe5] py-1.5 last:border-b-0"
+                  >
+                    <dt className="text-[0.52rem] font-black uppercase leading-snug text-[#49342d]/45">
+                      {row.label}
+                    </dt>
+                    <dd className="min-w-0 break-words text-[0.68rem] font-bold leading-snug text-[#49342d]">
+                      {row.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function BruidstaartenOverzichtClient() {
   const today = useMemo(() => new Date(), []);
   const [visibleMonth, setVisibleMonth] = useState(
@@ -183,7 +508,9 @@ export default function BruidstaartenOverzichtClient() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
   const [selectedDraft, setSelectedDraft] = useState<WeddingCakeDraft | null>(null);
-  const [dialogMode, setDialogMode] = useState<"choice" | "details" | "cake">("choice");
+  const [dialogMode, setDialogMode] = useState<
+    "choice" | "details" | "preview" | "cake"
+  >("choice");
   const [editDraft, setEditDraft] = useState<WeddingCakeDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [reminderDraft, setReminderDraft] = useState<WeddingCakeDraft | null>(null);
@@ -510,10 +837,21 @@ export default function BruidstaartenOverzichtClient() {
 
       {selectedDraft && editDraft ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1a1815]/45 p-3">
-          <section className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-[1.3rem] bg-[#fffaf0] p-4 shadow-2xl sm:p-5">
+          <section
+            className={`max-h-[92dvh] w-full overflow-y-auto rounded-[1.3rem] bg-[#fffaf0] p-4 shadow-2xl sm:p-5 ${
+              dialogMode === "preview" ? "max-w-5xl" : "max-w-2xl"
+            }`}
+          >
             <div className="flex items-start justify-between gap-3"><div><p className="text-[0.55rem] font-black uppercase tracking-[0.14em] text-[#55704d]">Definitieve bruidstaart</p><h2 className="mt-1 text-lg font-black">{selectedDraft.code} · {selectedDraft.config.contact.names || selectedDraft.surname}</h2></div><button type="button" onClick={closeDraft} aria-label="Sluiten" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f1e9df] text-lg font-black">×</button></div>
-            {dialogMode === "choice" ? <div className="mt-4 grid gap-2"><button type="button" onClick={() => setDialogMode("details")} className="flex items-center justify-between rounded-xl border border-[#cdddc8] bg-white p-3 text-left"><span><strong className="block text-sm font-black">Alleen gegevens wijzigen</strong><small className="text-[0.62rem] font-bold text-[#49342d]/45">Contact en levering; het taartontwerp blijft vergrendeld.</small></span><span className="rounded-full bg-[#e3eee0] px-3 py-2 font-black">›</span></button><button type="button" onClick={() => setDialogMode("cake")} className="flex items-center justify-between rounded-xl border border-[#efd0c8] bg-white p-3 text-left"><span><strong className="block text-sm font-black">De taart zelf wijzigen</strong><small className="text-[0.62rem] font-bold text-[#49342d]/45">Opbouw, smaak, kleur, decoratie of topper in de Studio.</small></span><span className="rounded-full bg-[#f7e3de] px-3 py-2 font-black text-[#d75a48]">›</span></button></div> : null}
+            {dialogMode === "choice" ? (
+              <div className="mt-4 grid gap-2">
+                <button type="button" onClick={() => setDialogMode("details")} className="flex items-center justify-between rounded-xl border border-[#cdddc8] bg-white p-3 text-left"><span><strong className="block text-sm font-black">Alleen gegevens wijzigen</strong><small className="text-[0.62rem] font-bold text-[#49342d]/45">Contact en levering; het taartontwerp blijft vergrendeld.</small></span><span className="rounded-full bg-[#e3eee0] px-3 py-2 font-black">›</span></button>
+                <button type="button" onClick={() => setDialogMode("preview")} className="flex items-center justify-between rounded-xl border border-[#c8d9c3] bg-[#f4f8f2] p-3 text-left"><span><strong className="block text-sm font-black">Taart bekijken</strong><small className="text-[0.62rem] font-bold text-[#49342d]/45">Bekijk en print alle gegevens van deze definitieve bruidstaart.</small></span><span className="rounded-full bg-[#dce9d8] px-3 py-2 font-black text-[#265c45]">›</span></button>
+                <button type="button" onClick={() => setDialogMode("cake")} className="flex items-center justify-between rounded-xl border border-[#efd0c8] bg-white p-3 text-left"><span><strong className="block text-sm font-black">De taart zelf wijzigen</strong><small className="text-[0.62rem] font-bold text-[#49342d]/45">Opbouw, smaak, kleur, decoratie of topper in de Studio.</small></span><span className="rounded-full bg-[#f7e3de] px-3 py-2 font-black text-[#d75a48]">›</span></button>
+              </div>
+            ) : null}
             {dialogMode === "details" ? <div className="mt-4"><div className="mb-3 flex items-center justify-between"><p className="text-[0.56rem] font-black uppercase tracking-[0.12em] text-[#55704d]">Gegevens wijzigen</p><span className="rounded-full bg-[#e3eee0] px-2.5 py-1 text-[0.5rem] font-black uppercase text-[#45663b]">Taart vergrendeld</span></div><div className="grid gap-2 sm:grid-cols-2">{([['names','Bruidspaar','text'],['email','E-mail','email'],['phone','Telefoon','tel'],['deliveryDate','Leverdatum','date'],['deliveryTimeStart','Tijd vanaf','time'],['deliveryTimeEnd','Tijd tot / uiterlijk','time'],['deliveryAddress','Locatie / adres','text'],['invoiceEmail','Factuur e-mail','email']] as const).map(([field,label,type]) => <label key={field}><span className="block text-[0.5rem] font-black uppercase tracking-[0.1em] text-[#49342d]/40">{label}</span><input type={type} value={editDraft.config.contact[field]} onChange={(event) => updateContact(field,event.target.value)} className="mt-1 h-9 w-full rounded-lg border border-[#ddd3c8] bg-white px-3 text-xs font-bold outline-none" /></label>)}</div><div className="mt-3 flex justify-end gap-2"><button type="button" onClick={() => setDialogMode("choice")} className="rounded-full px-4 py-2 text-xs font-black">Terug</button><button type="button" disabled={saving} onClick={() => void saveDetails()} className="rounded-full bg-[#265c45] px-4 py-2 text-xs font-black text-white disabled:opacity-50">{saving ? "Opslaan…" : "Gegevens opslaan"}</button></div></div> : null}
+            {dialogMode === "preview" ? <WeddingCakePreview draft={selectedDraft} onBack={() => setDialogMode("choice")} /> : null}
             {dialogMode === "cake" ? <div className="mt-4 rounded-xl border border-[#efd0c8] bg-white p-4"><p className="text-sm font-black text-[#b34535]">Weet je zeker dat je de definitieve taart wilt aanpassen?</p><p className="mt-1 text-xs font-bold text-[#49342d]/55">Je opent de volledige Studio en kunt daarmee het afgesproken taartontwerp veranderen.</p><div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setDialogMode("choice")} className="rounded-full px-4 py-2 text-xs font-black">Annuleren</button><Link href={`/bruidstaarten/studio?openFinal=${encodeURIComponent(selectedDraft.code)}&editCake=1`} className="rounded-full bg-[#d75a48] px-4 py-2 text-xs font-black text-white">Ja, open Studio</Link></div></div> : null}
           </section>
         </div>
