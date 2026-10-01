@@ -4996,13 +4996,17 @@ function createBusRoutePrintHtml(input: {
         .route-page {
           break-inside: avoid;
           break-after: page;
-          height: 280mm;
+          display: block;
+          height: auto;
           margin: 0;
           min-height: 0;
           page-break-after: always;
           page-break-inside: avoid;
           padding: 0;
           width: auto;
+        }
+        .page-footer {
+          margin-top: 3mm;
         }
         .route-page:last-child {
           break-after: auto;
