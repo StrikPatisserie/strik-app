@@ -2134,13 +2134,21 @@ function isPetitFourLine(line: ReceiptLine) {
 }
 
 function isWeddingCakeLine(line: ReceiptLine) {
-  return [line.articleNumber, line.catalogArticleNumber].some((value) => {
+  const hasWeddingCakeArticleNumber = [
+    line.articleNumber,
+    line.catalogArticleNumber,
+  ].some((value) => {
     const articleNumber = String(value || "")
       .trim()
       .match(/^\d+/)?.[0];
 
     return Boolean(articleNumber && weddingCakeArticleNumbers.has(articleNumber));
   });
+  if (hasWeddingCakeArticleNumber) return true;
+
+  const description = normalizedLineDescription(line.description);
+
+  return /^bruidstaart\b/.test(description) && /\bpp\b/.test(description);
 }
 
 function isWeddingCakeReceipt(receipt: ReceiptSummary) {
