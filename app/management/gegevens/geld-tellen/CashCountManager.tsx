@@ -886,10 +886,6 @@ export default function CashCountManager() {
       }),
     [cashRecords, selectedShop, selectedWeekDates]
   );
-  const selectedShopDayColumns = useMemo(
-    () => [selectedShopDays.slice(0, 4), selectedShopDays.slice(4)],
-    [selectedShopDays]
-  );
   const selectedShopDay =
     selectedShopDays.find((day) => day.date === selectedDate) ||
     selectedShopDays[0];
@@ -1834,10 +1830,10 @@ export default function CashCountManager() {
     : "";
 
   return (
-    <div className="space-y-2">
-      <section className="rounded-lg border border-[#d9cbb8] bg-[#f7f1e7]/90 p-2 shadow-sm">
-        <div className="grid gap-1.5 xl:grid-cols-[minmax(13rem,18rem)_minmax(12rem,16rem)_minmax(0,1fr)_auto] xl:items-end">
-          <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+    <div className="space-y-3">
+      <section className="rounded-3xl border border-[#d9cbb8] bg-[#fbf7ef]/95 p-3 shadow-sm sm:p-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(13rem,18rem)_minmax(12rem,16rem)_minmax(0,1fr)_auto] xl:items-end">
+          <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#766b5f]">
             Week · gestort
             <select
               value={depositWeekKey}
@@ -1849,7 +1845,7 @@ export default function CashCountManager() {
                   isoDateFromDate(dateFromIsoWeekParts(parts.year, parts.week))
                 );
               }}
-              className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
+              className="h-11 rounded-xl border border-[#ded5ca] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none transition focus:border-[#8ba287]"
             >
               {availableWeeks.map((week) => (
                 <option key={week.key} value={week.key}>
@@ -1859,7 +1855,7 @@ export default function CashCountManager() {
             </select>
           </label>
 
-          <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+          <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#766b5f]">
             Locatie
             <select
               value={selectedCashLocationKey}
@@ -1873,7 +1869,7 @@ export default function CashCountManager() {
                   setSelectedDate(selectedWeekDates[0] || localIsoDate());
                 }
               }}
-              className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
+              className="h-11 rounded-xl border border-[#ded5ca] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none transition focus:border-[#8ba287]"
             >
               {cashLocationRows.map((row) => (
                 <option key={row.key} value={row.key}>
@@ -1886,34 +1882,34 @@ export default function CashCountManager() {
             </select>
           </label>
 
-          <div className="grid grid-cols-3 rounded-md bg-[#f8f6f3] text-center">
-            <div className="border-r border-[#e7e0d8] px-2 py-1">
-              <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+          <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-[#e7e0d8] bg-white text-center">
+            <div className="border-r border-[#e7e0d8] px-2 py-2.5">
+              <p className="text-[0.6rem] font-black uppercase tracking-[0.06em] text-[#8b8278]">
                 Gecheckt
               </p>
-              <p className="text-sm font-black text-[#1a1815]">
+              <p className="mt-0.5 text-lg font-black tabular-nums text-[#1a1815]">
                 {weekCheckedCount}/{weekExpectedCount}
               </p>
             </div>
-            <div className="border-r border-[#e7e0d8] px-2 py-1">
-              <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+            <div className="border-r border-[#e7e0d8] bg-[#f6faf4] px-2 py-2.5">
+              <p className="text-[0.6rem] font-black uppercase tracking-[0.06em] text-[#71806d]">
                 Verwacht
               </p>
-              <p className="text-sm font-black text-[#1a1815]">
+              <p className="mt-0.5 text-lg font-black tabular-nums text-[#1f4f35]">
                 {formatMoney(weekExpectedTotal)}
               </p>
             </div>
-            <div className="px-2 py-1">
-              <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
+            <div className="px-2 py-2.5">
+              <p className="text-[0.6rem] font-black uppercase tracking-[0.06em] text-[#8b8278]">
                 Gestort
               </p>
-              <p className="text-sm font-black text-[#1a1815]">
+              <p className="mt-0.5 text-lg font-black tabular-nums text-[#1a1815]">
                 {formatMoney(weekDepositedTotal)}
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-[2.75rem_minmax(5rem,1fr)_2.75rem_minmax(8rem,1.25fr)] gap-1.5">
             <button
               type="button"
               onClick={() =>
@@ -1921,16 +1917,18 @@ export default function CashCountManager() {
                   shiftedWeekDate(selectedWeek.year, selectedWeek.week, -1)
                 )
               }
-              className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815]"
+              aria-label="Vorige week"
+              title="Vorige week"
+              className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-2 text-lg font-black text-[#1a1815] transition hover:bg-[#f8f6f3]"
             >
-              Vorige
+              ‹
             </button>
             <button
               type="button"
               onClick={() => setSelectedDate(localIsoDate())}
-              className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815]"
+              className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-2 text-xs font-black text-[#1a1815] transition hover:bg-[#f8f6f3]"
             >
-              Vandaag
+              Deze week
             </button>
             <button
               type="button"
@@ -1939,9 +1937,11 @@ export default function CashCountManager() {
                   shiftedWeekDate(selectedWeek.year, selectedWeek.week, 1)
                 )
               }
-              className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815]"
+              aria-label="Volgende week"
+              title="Volgende week"
+              className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-2 text-lg font-black text-[#1a1815] transition hover:bg-[#f8f6f3]"
             >
-              Volgende
+              ›
             </button>
             <button
               type="button"
@@ -1960,15 +1960,16 @@ export default function CashCountManager() {
                     ? "Storting bevestigen en mailen naar administratie"
                   : "Alle verwachte dagen eerst afvinken"
               }
-              className="flex h-8 items-center justify-center rounded-md border border-[#1a1815] bg-[#1a1815] px-2 text-white disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
+              className="flex h-11 items-center justify-center gap-2 rounded-xl border border-[#1f4f35] bg-[#1f4f35] px-3 text-xs font-black text-white shadow-sm disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
             >
               <BankIcon />
+              <span>{mailState === "sending" ? "Versturen..." : "Week afsluiten"}</span>
             </button>
           </div>
         </div>
 
         {isSelectedWeekClosed ? (
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#cbdcc5] bg-[#f6fbf5] px-2 py-1.5 text-xs font-bold text-[#1f4f35]">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#cbdcc5] bg-[#f6fbf5] px-3 py-2.5 text-xs font-bold text-[#1f4f35]">
             <span>
               Week definitief gesloten
               {selectedWeekClosedAtLabel
@@ -1981,41 +1982,36 @@ export default function CashCountManager() {
               onClick={() => void reopenWeek()}
               disabled={state === "saving" || mailState === "sending" || isSelectedWeekCashbookBooked}
               title={isSelectedWeekCashbookBooked ? "Deze week is al in het kasboek geboekt" : "Week na twee bevestigingen heropenen"}
-              className="rounded-md border border-[#1f4f35] bg-white px-2 py-1 text-[0.62rem] font-black uppercase disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-[#1f4f35] bg-white px-3 py-2 text-[0.68rem] font-black disabled:cursor-not-allowed disabled:opacity-50"
             >
               Week heropenen
             </button>
           </div>
         ) : isSelectedWeekComplete ? (
-          <p className="mt-2 rounded-md border border-[#efd1a1] bg-[#fff8d8] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
+          <p className="mt-3 rounded-2xl border border-[#efd1a1] bg-[#fff8d8] px-3 py-2.5 text-xs font-bold text-[#7a5417]">
             Let op: na storting bevestigen en mailen naar administratie kun je
             niets meer wijzigen in deze week.
           </p>
         ) : null}
 
         {storage?.status === "seed" && (
-          <p className="mt-2 rounded-md border border-[#f3d4a4] bg-[#fef9f3] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
+          <p className="mt-3 rounded-2xl border border-[#f3d4a4] bg-[#fef9f3] px-3 py-2.5 text-xs font-bold text-[#7a5417]">
             {storage.message} Nieuwe geldcontroles worden pas blijvend opgeslagen
             zodra de WordPress omzet-snippet actief is.
           </p>
         )}
 
         {status && (
-          <p className="mt-2 rounded-md bg-[#f8f6f3] px-2 py-1.5 text-xs font-bold text-[#6b645b]">
+          <p className="mt-3 rounded-2xl bg-[#f8f6f3] px-3 py-2.5 text-xs font-bold text-[#6b645b]">
             {status}
           </p>
         )}
       </section>
 
       {selectedShopRow && (
-        <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/92 p-1.5 shadow-sm">
-          <div className="grid gap-1 md:grid-cols-2">
-            {selectedShopDayColumns.map((column, columnIndex) => (
-              <div
-                key={columnIndex === 0 ? "first-days" : "last-days"}
-                className="overflow-hidden rounded-md border border-[#e7e0d8] bg-white"
-              >
-                {column.map(({ date, iceRecord, isExpected, patisserieRecord }) => {
+        <section className="rounded-3xl border border-[#e7e0d8]/80 bg-white/95 p-3 shadow-sm sm:p-4">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-7">
+            {selectedShopDays.map(({ date, iceRecord, isExpected, patisserieRecord }) => {
                   const isActive = date === selectedDate;
                   const dayRecord =
                     selectedCashLocationKind === "ice"
@@ -2039,31 +2035,31 @@ export default function CashCountManager() {
                       ? Boolean(dayRecord?.iceCheckedAt)
                       : Boolean(dayRecord?.checkedAt);
                   const rowClass = isMissing
-                    ? "border-l-[#d2453d] bg-[#fdeaea] text-[#1a1815]"
+                    ? "border-[#e1a49d] bg-[#fdeaea] text-[#1a1815]"
                     : isChecked
-                      ? "border-l-[#2f6f43] bg-[#eef8ef] text-[#1a1815]"
+                      ? "border-[#a8c4a6] bg-[#eef8ef] text-[#1a1815]"
                       : warning
-                        ? "border-l-[#b47a22] bg-[#fff8d8] text-[#1a1815]"
+                        ? "border-[#e0c269] bg-[#fff8d8] text-[#1a1815]"
                         : isClosed
-                          ? "border-l-[#d9d2c9] bg-[#f5f2ee] text-[#8b8278]"
-                          : "border-l-[#d9d2c9] bg-white text-[#1a1815]";
+                          ? "border-[#ddd7cf] bg-[#f5f2ee] text-[#8b8278]"
+                          : "border-[#ddd7cf] bg-white text-[#1a1815]";
 
                   return (
                     <button
                       key={date}
                       type="button"
                       onClick={() => setSelectedDate(date)}
-                      className={`grid h-8 w-full grid-cols-[1.8rem_3.5rem_minmax(5rem,1fr)_1.5rem] items-center gap-1.5 border-l-[3px] border-t border-t-[#ece5dd] px-2 text-left transition first:border-t-0 ${
-                        isActive ? "ring-2 ring-inset ring-[#1a1815]" : ""
+                      className={`relative min-h-[5.4rem] w-full rounded-2xl border p-2 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
+                        isActive ? "ring-2 ring-[#1a1815] ring-offset-1" : ""
                       } ${rowClass}`}
                     >
-                      <span className="text-xs font-black uppercase leading-none">
+                      <span className="block text-[0.65rem] font-black uppercase tracking-[0.08em] opacity-65">
                         {dayShortName(date).replace(".", "")}
                       </span>
-                      <span className="text-xs font-bold leading-none">
+                      <span className="mt-0.5 block text-sm font-black leading-none">
                         {date.slice(8, 10)}-{date.slice(5, 7)}
                       </span>
-                      <span className="truncate text-xs font-bold leading-none">
+                      <span className="mt-2 block truncate text-xs font-black tabular-nums leading-none">
                         {dayRecord
                           ? formatMoney(
                               selectedCashLocationKind === "ice"
@@ -2077,12 +2073,12 @@ export default function CashCountManager() {
                             : "-"}
                       </span>
                       <span
-                        className={`text-center text-base font-black leading-none ${
+                        className={`absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full text-sm font-black leading-none ${
                           isMissing
-                            ? "text-[#d21f18]"
+                            ? "bg-[#d2453d] text-white"
                             : isChecked
-                              ? "text-[#2f6f43]"
-                              : "text-[#8b8278]"
+                              ? "bg-[#2f6f43] text-white"
+                              : "bg-white/70 text-[#8b8278]"
                         }`}
                       >
                         {isMissing ? "×" : isChecked ? "✓" : isClosed ? "" : "•"}
@@ -2090,18 +2086,16 @@ export default function CashCountManager() {
                     </button>
                   );
                 })}
-              </div>
-            ))}
           </div>
 
-          <div className="mt-1.5">
+          <div className="mt-3">
             {selectedCashLocationKind === "patisserie" ? (
               <>
                 {!selectedCashRecord &&
                 selectedShopDay &&
                 !selectedShopDay.isExpected ? (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#e7e0d8] bg-[#f5f2ee] px-3 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#e7e0d8] bg-[#f5f2ee] px-4 py-4">
                   <div>
                     <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
                       {dayName(selectedShopDay.date)}
@@ -2117,7 +2111,7 @@ export default function CashCountManager() {
               </>
             ) : !selectedCashRecord ? (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#ece5dd] bg-[#faf8f5] px-3 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#ece5dd] bg-[#faf8f5] px-4 py-4">
                   <div>
                     <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
                       {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"}
@@ -2134,7 +2128,7 @@ export default function CashCountManager() {
             ) : (
               <article
                 key={selectedCashRecord.id}
-                className={`rounded-md border px-2 py-1.5 ${
+                className={`rounded-2xl border p-3 ${
                   selectedCashRecord.checkedAt
                     ? "border-[#cbdcc5] bg-[#f6fbf5]"
                     : selectedCashWarning
@@ -2142,20 +2136,20 @@ export default function CashCountManager() {
                       : "border-[#ece5dd] bg-[#faf8f5]"
                 }`}
               >
-                <div className="grid gap-2 lg:grid-cols-[5rem_minmax(0,1fr)_6rem] lg:items-start">
+                <div className="grid gap-3 md:grid-cols-[6.5rem_minmax(0,1fr)_7rem] md:items-start">
                   <label className="flex items-center gap-2 lg:items-start">
                     <input
                       type="checkbox"
                       checked={Boolean(selectedCashRecord.checkedAt)}
                       disabled={state === "saving" || isSelectedWeekClosed}
                       onChange={() => void toggleChecked(selectedCashRecord)}
-                      className="mt-0.5 h-4 w-4 accent-[#1f4f35]"
+                      className="mt-0.5 h-5 w-5 accent-[#1f4f35]"
                     />
                     <span>
                       <span className="block text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
                         {dayShortName(selectedCashRecord.date)}
                       </span>
-                      <span className="block text-sm font-black leading-tight text-[#1a1815]">
+                    <span className="block text-base font-black leading-tight text-[#1a1815]">
                         {selectedCashRecord.date.slice(8, 10)}-
                         {selectedCashRecord.date.slice(5, 7)}
                       </span>
@@ -2171,7 +2165,7 @@ export default function CashCountManager() {
                     </span>
                   </label>
 
-                  <div className="grid gap-x-3 gap-y-1 sm:grid-cols-3 xl:grid-cols-6">
+                  <div className="grid gap-x-4 gap-y-2 grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
                     <AmountCell
                       label="Start"
                       value={formatOptionalMoney(selectedStartCash)}
@@ -2220,7 +2214,7 @@ export default function CashCountManager() {
                     type="button"
                     onClick={() => void toggleChecked(selectedCashRecord)}
                     disabled={state === "saving" || isSelectedWeekClosed}
-                    className={`h-8 rounded-md border px-2 text-[0.62rem] font-black uppercase tracking-normal disabled:opacity-60 ${
+                    className={`h-10 rounded-xl border px-3 text-xs font-black disabled:opacity-60 ${
                       selectedCashRecord.checkedAt
                         ? "border-[#d9d2c9] bg-white text-[#6b645b]"
                         : "border-[#1a1815] bg-[#1a1815] text-white"
@@ -2230,7 +2224,7 @@ export default function CashCountManager() {
                   </button>
                 </div>
 
-                <div className="mt-2 grid gap-2 border-t border-[#e7e0d8]/80 pt-1.5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+                <div className="mt-3 grid gap-3 border-t border-[#e7e0d8]/80 pt-3 md:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
                   <CashNoteControl
                     disabled={
                       Boolean(selectedCashRecord.checkedAt) ||
@@ -2248,7 +2242,7 @@ export default function CashCountManager() {
                   />
 
                   <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
-                    <div className="grid gap-2 rounded-md border border-[#e7e0d8] bg-white/70 p-2 sm:col-span-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                    <div className="grid gap-2 rounded-xl border border-[#e7e0d8] bg-white/70 p-2.5 sm:col-span-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                       <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
                         Startbedrag
                         <input
@@ -2269,7 +2263,7 @@ export default function CashCountManager() {
                             isSelectedWeekClosed
                           }
                           placeholder="0,00"
-                          className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                          className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
                         />
                       </label>
 
@@ -2293,7 +2287,7 @@ export default function CashCountManager() {
                             isSelectedWeekClosed
                           }
                           placeholder="0,00"
-                          className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                          className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
                         />
                       </label>
 
@@ -2308,7 +2302,7 @@ export default function CashCountManager() {
                           isSelectedWeekClosed ||
                           !selectedHasSourceCorrection
                         }
-                        className="h-8 rounded-md border border-[#1a1815] bg-[#1a1815] px-2 text-[0.58rem] font-black uppercase tracking-normal text-white disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
+                        className="h-10 rounded-xl border border-[#1a1815] bg-[#1a1815] px-3 text-[0.68rem] font-black text-white disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
                       >
                         Corrigeren
                       </button>
@@ -2331,7 +2325,7 @@ export default function CashCountManager() {
                           isSelectedWeekClosed
                         }
                         placeholder="0,00"
-                        className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                        className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
                       />
                     </label>
 
@@ -2366,13 +2360,13 @@ export default function CashCountManager() {
                           isSelectedWeekClosed
                         }
                         placeholder="Bijv. kas-uitbon ontbreekt of bedrag gecorrigeerd"
-                        className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                        className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-3 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
                       />
                     </label>
                   </div>
 
                   {selectedCashWarning && (
-                    <p className="rounded-md bg-[#fff8d8] px-2 py-1 text-xs font-bold text-[#7a5417] lg:col-span-2">
+                    <p className="rounded-xl bg-[#fff8d8] px-3 py-2 text-xs font-bold text-[#7a5417] md:col-span-2">
                       {selectedCashWarning}
                     </p>
                   )}
@@ -2421,7 +2415,7 @@ export default function CashCountManager() {
                 sourceStartInputValue={selectedIceStartCashInputValue}
               />
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[#dce8df] bg-[#f6fbf5] px-3 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#dce8df] bg-[#f6fbf5] px-4 py-4">
                 <div>
                   <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#1f4f35]">
                     {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"}
@@ -2440,17 +2434,17 @@ export default function CashCountManager() {
       )}
 
       {selectedShopRow && selectedCashLocationKind === "patisserie" && (
-        <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/92 p-2 shadow-sm">
+        <section className="rounded-3xl border border-[#e7e0d8]/80 bg-white/95 p-3 shadow-sm sm:p-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
+              <p className="text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#6f836b]">
                 Weekstorting
               </p>
-              <h2 className="text-lg font-black leading-tight text-[#1a1815]">
+              <h2 className="mt-0.5 text-2xl font-black leading-tight text-[#1a1815]">
                 {selectedShopRow.shop}
               </h2>
             </div>
-            <div className="grid w-full gap-2 sm:grid-cols-4 lg:w-auto lg:min-w-[32rem]">
+            <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto lg:min-w-[32rem]">
               <AmountCell
                 label="Compleet"
                 value={`${selectedShopRow.checkedCount}/${selectedShopRow.expectedCount}`}
@@ -2470,7 +2464,7 @@ export default function CashCountManager() {
             </div>
           </div>
 
-          <div className="mt-2 grid gap-1.5 rounded-md border border-[#ece5dd] bg-[#faf8f5] p-1.5 sm:grid-cols-2 lg:grid-cols-6">
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl border border-[#ece5dd] bg-[#faf8f5] p-3 md:grid-cols-6">
             <AmountCell
               label="Pin"
               value={formatMoney(selectedShopRow.includedPinRevenue)}
@@ -2507,7 +2501,7 @@ export default function CashCountManager() {
             />
           </div>
 
-          <div className="mt-2 grid gap-1.5 lg:grid-cols-[12rem_minmax(14rem,1fr)_auto] lg:items-end">
+          <div className="mt-3 grid gap-2 md:grid-cols-[12rem_minmax(14rem,1fr)_auto] md:items-end">
             <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
               Storting
               <input
@@ -2527,7 +2521,7 @@ export default function CashCountManager() {
                 inputMode="decimal"
                 disabled={isSelectedWeekClosed}
                 placeholder="0,00"
-                className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+                className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-3 text-base font-black normal-case tracking-normal text-[#1a1815]"
               />
             </label>
             <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
@@ -2548,7 +2542,7 @@ export default function CashCountManager() {
                   selectedShopRow.deposit?.depositedAt ? "al gestort" : "optioneel"
                 }
                 disabled={isSelectedWeekClosed}
-                className="h-9 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815]"
+                className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-bold normal-case tracking-normal text-[#1a1815]"
               />
             </label>
             <button
@@ -2559,7 +2553,7 @@ export default function CashCountManager() {
                 state === "saving" ||
                 selectedShopRow.checkedCount === 0
               }
-              className="h-9 rounded-md bg-[#c3d3bc] px-3 text-[0.62rem] font-black uppercase tracking-normal text-[#1a1815] disabled:opacity-50"
+              className="h-11 rounded-xl bg-[#1f4f35] px-4 text-xs font-black text-white shadow-sm disabled:bg-[#c3d3bc] disabled:text-[#6b645b] disabled:opacity-50"
             >
               {isSelectedWeekClosed
                 ? "Week gesloten"
@@ -2569,7 +2563,7 @@ export default function CashCountManager() {
             </button>
           </div>
           {selectedShopRow.deposit?.depositedAt && (
-            <div className="mt-2 rounded-md border border-[#efd1a1] bg-[#fffaf0] p-2">
+            <div className="mt-3 rounded-2xl border border-[#efd1a1] bg-[#fffaf0] p-3">
               <div className="flex flex-wrap items-center justify-between gap-1">
                 <p className="text-xs font-black text-[#493c2d]">Werkelijke bankstorting en stortverschil</p>
                 <p className="text-xs font-bold text-[#6b645b]">
@@ -2579,7 +2573,7 @@ export default function CashCountManager() {
                   )}
                 </p>
               </div>
-              <div className="mt-1.5 grid gap-1.5 lg:grid-cols-[12rem_minmax(14rem,1fr)_auto] lg:items-end">
+              <div className="mt-2 grid gap-2 md:grid-cols-[12rem_minmax(14rem,1fr)_auto] md:items-end">
                 <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#8b8278]">
                   Werkelijk gestort
                   <input
@@ -2587,7 +2581,7 @@ export default function CashCountManager() {
                     onChange={(event) => setActualDepositDrafts((current) => ({ ...current, [selectedDepositDraftKey]: event.target.value }))}
                     inputMode="decimal"
                     disabled={Boolean(selectedShopRow.deposit.cashbookBookedAt)}
-                    className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-sm font-bold normal-case text-[#1a1815] disabled:opacity-50"
+                    className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-bold normal-case text-[#1a1815] disabled:opacity-50"
                   />
                 </label>
                 <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#8b8278]">
@@ -2597,14 +2591,14 @@ export default function CashCountManager() {
                     onChange={(event) => setDifferenceNotes((current) => ({ ...current, [selectedDepositDraftKey]: event.target.value }))}
                     disabled={Boolean(selectedShopRow.deposit.cashbookBookedAt)}
                     placeholder="Bijv. € 15 minder door banktelling"
-                    className="h-8 rounded-md border border-[#d9d2c9] bg-white px-2 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
+                    className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-3 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
                   />
                 </label>
                 <button
                   type="button"
                   onClick={() => void saveActualDeposit(selectedShopRow)}
                   disabled={state === "saving" || Boolean(selectedShopRow.deposit.cashbookBookedAt)}
-                  className="h-8 rounded-md bg-[#c3d3bc] px-3 text-[0.62rem] font-black uppercase text-[#1a1815] disabled:opacity-50"
+                  className="h-10 rounded-xl bg-[#c3d3bc] px-3 text-[0.68rem] font-black text-[#1a1815] disabled:opacity-50"
                 >
                   Verschil opslaan
                 </button>
@@ -2615,17 +2609,17 @@ export default function CashCountManager() {
       )}
 
       {selectedShopRow && selectedCashLocationKind === "ice" && (
-        <section className="rounded-lg border border-[#c8ddd2] bg-[#f6fbf5] p-3 shadow-sm">
+        <section className="rounded-3xl border border-[#c8ddd2] bg-[#f6fbf5] p-3 shadow-sm sm:p-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
-              <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#1f4f35]">
+              <p className="text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#1f4f35]">
                 IJs weekoverzicht
               </p>
-              <h2 className="text-lg font-black leading-tight text-[#1a1815]">
+              <h2 className="mt-0.5 text-2xl font-black leading-tight text-[#1a1815]">
                 IJs {selectedShopRow.shop}
               </h2>
             </div>
-            <div className="grid w-full gap-3 sm:grid-cols-3 lg:w-auto lg:min-w-[28rem]">
+            <div className="grid w-full grid-cols-3 gap-3 lg:w-auto lg:min-w-[28rem]">
               <AmountCell
                 label="Compleet"
                 value={`${selectedShopRow.iceCheckedCount}/${selectedShopRow.iceCount}`}
@@ -2641,7 +2635,7 @@ export default function CashCountManager() {
             </div>
           </div>
 
-          <div className="mt-3 grid gap-2 rounded-md border border-[#c8ddd2] bg-white/70 p-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl border border-[#c8ddd2] bg-white/70 p-3 md:grid-cols-4">
             <AmountCell
               label="Bonnen"
               value={formatMoney(selectedShopRow.includedIceReceipts)}
@@ -2664,7 +2658,7 @@ export default function CashCountManager() {
               value={formatMoney(selectedShopRow.includedIceCash)}
             />
           </div>
-          <div className="mt-2 grid gap-1.5 rounded-md border border-[#c8ddd2] bg-white/70 p-2 lg:grid-cols-[12rem_minmax(14rem,1fr)_auto] lg:items-end">
+          <div className="mt-3 grid gap-2 rounded-2xl border border-[#c8ddd2] bg-white/70 p-3 md:grid-cols-[12rem_minmax(14rem,1fr)_auto] md:items-end">
             <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#1f4f35]">
               Gestort voor ijs
               <input
@@ -2673,7 +2667,7 @@ export default function CashCountManager() {
                 inputMode="decimal"
                 disabled={isSelectedWeekClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
                 placeholder="0,00"
-                className="h-8 rounded-md border border-[#c8ddd2] bg-white px-2 text-sm font-bold normal-case text-[#1a1815] disabled:opacity-50"
+                className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-sm font-bold normal-case text-[#1a1815] disabled:opacity-50"
               />
             </label>
             <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#1f4f35]">
@@ -2683,14 +2677,14 @@ export default function CashCountManager() {
                 onChange={(event) => setIceDepositNotes((current) => ({ ...current, [selectedIceDepositDraftKey]: event.target.value }))}
                 disabled={isSelectedWeekClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
                 placeholder="Bijv. kassa tijdelijk uitgeschakeld"
-                className="h-8 rounded-md border border-[#c8ddd2] bg-white px-2 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
+                className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
               />
             </label>
             <button
               type="button"
               onClick={() => void saveIceDeposit(selectedShopRow)}
               disabled={state === "saving" || isSelectedWeekClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
-              className="h-8 rounded-md bg-[#c3d3bc] px-3 text-[0.62rem] font-black uppercase text-[#1a1815] disabled:opacity-50"
+              className="h-10 rounded-xl bg-[#1f4f35] px-3 text-[0.68rem] font-black text-white disabled:opacity-50"
             >
               {selectedShopRow.deposit?.iceDepositedAt ? "Ijsstorting bijwerken" : "Ijsstorting opslaan"}
             </button>
@@ -2745,21 +2739,21 @@ function IceCashSummary({
   const isChecked = Boolean(record.iceCheckedAt);
 
   return (
-    <article className="mt-2 rounded-md border border-[#c8ddd2] bg-[#f6fbf5] px-3 py-2">
-      <div className="grid gap-3 lg:grid-cols-[14rem_minmax(0,1fr)_7rem] lg:items-start">
+    <article className="mt-3 rounded-2xl border border-[#c8ddd2] bg-[#f6fbf5] p-3">
+      <div className="grid gap-3 md:grid-cols-[10rem_minmax(0,1fr)_7rem] md:items-start">
         <label className="flex items-start gap-2">
           <input
             type="checkbox"
             checked={isChecked}
             disabled={disabled}
             onChange={onToggleChecked}
-            className="mt-0.5 h-4 w-4 accent-[#1f4f35]"
+            className="mt-0.5 h-5 w-5 accent-[#1f4f35]"
           />
           <span>
             <span className="block text-[0.58rem] font-black uppercase tracking-normal text-[#1f4f35]">
               IJstelling
             </span>
-            <span className="block text-sm font-black leading-tight text-[#1a1815]">
+            <span className="block text-base font-black leading-tight text-[#1a1815]">
               {dayName(record.date)} · {record.shop}
             </span>
             <span
@@ -2777,7 +2771,7 @@ function IceCashSummary({
           </span>
         </label>
 
-        <div className="grid gap-x-4 gap-y-2 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 xl:grid-cols-6">
           <AmountCell
             label="Start"
             value={formatOptionalMoney(record.iceStartCash)}
@@ -2816,7 +2810,7 @@ function IceCashSummary({
           type="button"
           onClick={onToggleChecked}
           disabled={disabled}
-          className={`h-9 rounded-md border px-2 text-[0.62rem] font-black uppercase tracking-normal disabled:opacity-60 ${
+          className={`h-10 rounded-xl border px-3 text-xs font-black disabled:opacity-60 ${
             isChecked
               ? "border-[#d9d2c9] bg-white text-[#6b645b]"
               : "border-[#1f4f35] bg-[#1f4f35] text-white"
@@ -2826,8 +2820,8 @@ function IceCashSummary({
         </button>
       </div>
 
-      <div className="mt-3 grid gap-2 border-t border-[#c8ddd2]/80 pt-2 lg:grid-cols-[12rem_7rem_minmax(14rem,1fr)] lg:items-end">
-        <div className="grid gap-2 rounded-md border border-[#c8ddd2] bg-white/70 p-2 lg:col-span-3 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+      <div className="mt-3 grid gap-2 border-t border-[#c8ddd2]/80 pt-3 md:grid-cols-[12rem_7rem_minmax(14rem,1fr)] md:items-end">
+        <div className="grid gap-2 rounded-xl border border-[#c8ddd2] bg-white/70 p-2.5 md:col-span-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
           <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
             Startbedrag
             <input
@@ -2838,7 +2832,7 @@ function IceCashSummary({
               inputMode="decimal"
               disabled={isChecked || disabled}
               placeholder="0,00"
-              className="h-8 rounded-md border border-[#c8ddd2] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+              className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
             />
           </label>
 
@@ -2852,7 +2846,7 @@ function IceCashSummary({
               inputMode="decimal"
               disabled={isChecked || disabled}
               placeholder="0,00"
-              className="h-8 rounded-md border border-[#c8ddd2] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+              className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
             />
           </label>
 
@@ -2860,7 +2854,7 @@ function IceCashSummary({
             type="button"
             onClick={onSaveSourceCorrection}
             disabled={isChecked || disabled || !hasSourceCorrection}
-            className="h-8 rounded-md border border-[#1f4f35] bg-[#1f4f35] px-2 text-[0.58rem] font-black uppercase tracking-normal text-white disabled:border-[#c8ddd2] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
+            className="h-10 rounded-xl border border-[#1f4f35] bg-[#1f4f35] px-3 text-[0.68rem] font-black text-white disabled:border-[#c8ddd2] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
           >
             Corrigeren
           </button>
@@ -2874,7 +2868,7 @@ function IceCashSummary({
             inputMode="decimal"
             disabled={isChecked || disabled}
             placeholder="0,00"
-            className="h-9 rounded-md border border-[#c8ddd2] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+            className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
           />
         </label>
 
@@ -2891,7 +2885,7 @@ function IceCashSummary({
             onChange={(event) => onNoteChange(event.target.value)}
             disabled={isChecked || disabled}
             placeholder="Bijv. opnieuw geteld of kasverschil verklaard"
-            className="h-9 rounded-md border border-[#c8ddd2] bg-white px-2 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+            className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
           />
         </label>
       </div>
@@ -2915,10 +2909,10 @@ function CashNoteControl({
   return (
     <div className="min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
+        <p className="text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#8b8278]">
           Briefjescontrole
         </p>
-        <div className="flex flex-wrap items-center gap-2 text-[0.58rem] font-bold text-[#8b8278]">
+        <div className="flex flex-wrap items-center gap-2 text-[0.65rem] font-bold text-[#8b8278]">
           <span>{record.countedBy || "teller onbekend"}</span>
           <span
             className={`rounded-full px-2 py-0.5 text-[0.56rem] font-black ${
@@ -2931,8 +2925,8 @@ function CashNoteControl({
           </span>
         </div>
       </div>
-      <div className="mt-1 overflow-hidden rounded-md border border-[#e7e0d8] bg-white">
-        <div className="grid grid-cols-[2.7rem_3.5rem_4rem_minmax(4.5rem,1fr)] items-center gap-2 border-b border-[#e7e0d8] bg-[#f8f6f3] px-2 py-0.5 text-[0.52rem] font-black uppercase tracking-normal text-[#8b8278]">
+      <div className="mt-1.5 overflow-hidden rounded-xl border border-[#e7e0d8] bg-white">
+        <div className="grid grid-cols-[3rem_3.5rem_4rem_minmax(4.5rem,1fr)] items-center gap-2 border-b border-[#e7e0d8] bg-[#f8f6f3] px-2 py-1.5 text-[0.56rem] font-black uppercase tracking-[0.05em] text-[#8b8278]">
           <span>Brief</span>
           <span className="text-center">PDF</span>
           <span className="text-center">Geteld</span>
@@ -2950,7 +2944,7 @@ function CashNoteControl({
           return (
             <div
               key={denomination.key}
-              className="grid grid-cols-[2.7rem_3.5rem_4rem_minmax(4.5rem,1fr)] items-center gap-2 border-b border-[#eee7df] px-2 py-0.5 last:border-b-0"
+              className="grid grid-cols-[3rem_3.5rem_4rem_minmax(4.5rem,1fr)] items-center gap-2 border-b border-[#eee7df] px-2 py-1 last:border-b-0"
             >
               <CashNote denomination={denomination} />
               <span
@@ -2967,7 +2961,7 @@ function CashNoteControl({
                 }
                 inputMode="numeric"
                 disabled={disabled}
-                className="h-6 w-full rounded-md border border-[#d9d2c9] bg-white px-1 text-center text-xs font-black text-[#1a1815] disabled:opacity-60"
+                className="h-8 w-full rounded-lg border border-[#d9d2c9] bg-white px-1 text-center text-sm font-black text-[#1a1815] disabled:opacity-60"
               />
               <span
                 className={`truncate text-right text-xs font-black ${
@@ -2995,7 +2989,7 @@ function CashNote({
   return (
     <span
       aria-hidden="true"
-      className="relative inline-flex h-6 w-10 items-center justify-center overflow-hidden rounded-[3px] border text-[0.58rem] font-black shadow-sm"
+      className="relative inline-flex h-7 w-12 items-center justify-center overflow-hidden rounded-[4px] border text-[0.62rem] font-black shadow-sm"
       style={{
         background: `linear-gradient(135deg, ${style.bg}, #fffdf8 48%, ${style.bg})`,
         borderColor: style.border,
@@ -3046,10 +3040,10 @@ function AmountCell({
 }>) {
   return (
     <div className={tone === "warn" ? "text-[#7a5417]" : "text-[#1a1815]"}>
-      <p className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
+      <p className="text-[0.62rem] font-black uppercase tracking-[0.05em] text-[#8b8278]">
         {label}
       </p>
-      <p className="whitespace-nowrap text-sm font-black leading-tight">{value}</p>
+      <p className="mt-0.5 whitespace-nowrap text-base font-black leading-tight tabular-nums">{value}</p>
     </div>
   );
 }

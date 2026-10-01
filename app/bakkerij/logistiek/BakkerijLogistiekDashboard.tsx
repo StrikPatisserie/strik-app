@@ -3507,6 +3507,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <title>${escapeHtml(title)}</title>
     <style>
       @page { margin: 3mm 3mm 60mm; size: A4 portrait; }
+      @page:first { margin-top: 8mm; }
       * { box-sizing: border-box; }
       :root {
         --petit-four-size: 37.8mm;
@@ -4608,36 +4609,78 @@ function createBusRoutePrintHtml(input: {
   const title = `${routeGroupDisplayTitle(input.routeGroup.vehicle)} · ${formatDateLabel(
     input.plan.date
   )}`;
-  const routesHtml = printableRoutes
-    .map((route, routeIndex) => {
-      const nextRoute = printableRoutes[routeIndex + 1];
-      const rowsHtml = route.stops
-        .map((stop, index) => {
-          const detailParts = routePrintTimeParts(stop);
-          const timeBadge = routePrintTimeBadgeHtml(stop);
+  const printPages = printableRoutes.reduce<RouteRound[][]>((pages, route) => {
+    const currentPage = pages.at(-1);
+    const routePrintUnits = (routes: RouteRound[]) =>
+      routes.reduce(
+        (total, pageRoute) => total + pageRoute.stops.length + 2,
+        0
+      );
+
+    // A full round always stays together. Two rounds only share one side when
+    // all stops plus both round headings fit comfortably on that A4.
+    if (
+      currentPage &&
+      currentPage.length < 2 &&
+      routePrintUnits([...currentPage, route]) <= 17
+    ) {
+      currentPage.push(route);
+    } else {
+      pages.push([route]);
+    }
+
+    return pages;
+  }, []);
+  const routesHtml = printPages
+    .map((pageRoutes, pageIndex) => {
+      const nextPage = printPages[pageIndex + 1];
+      const routeSectionsHtml = pageRoutes
+        .map((route) => {
+          const rowsHtml = route.stops
+            .map((stop, index) => {
+              const detailParts = routePrintTimeParts(stop);
+              const timeBadge = routePrintTimeBadgeHtml(stop);
+
+              return `
+                <article class="stop-card">
+                  <div class="stop-number">${index + 1}</div>
+                  <div class="stop-content">
+                    <div class="stop-heading">
+                      <strong>${escapeHtml(stop.label)}</strong>
+                      ${timeBadge}
+                    </div>
+                    <p>${escapeHtml(detailParts.detail || "Adres controleren")}</p>
+                    <div class="write-fields">
+                      <span><b>Aankomst</b></span>
+                      <span class="note-line"><b>Opmerking</b></span>
+                    </div>
+                  </div>
+                  <div class="stop-check"><span></span><small>GEREED</small></div>
+                </article>
+              `;
+            })
+            .join("");
 
           return `
-            <article class="stop-card">
-              <div class="stop-number">${index + 1}</div>
-              <div class="stop-content">
-                <div class="stop-heading">
-                  <strong>${escapeHtml(stop.label)}</strong>
-                  ${timeBadge}
+            <section class="route-block">
+              <div class="route-title">
+                <div>
+                  <h2>${escapeHtml(route.title)}</h2>
+                  <p>${escapeHtml(route.departure)} · ${escapeHtml(route.badge)} · ${route.stops.length} stops</p>
                 </div>
-                <p>${escapeHtml(detailParts.detail || "Adres controleren")}</p>
-                <div class="write-fields">
-                  <span><b>Aankomst</b></span>
-                  <span class="note-line"><b>Opmerking</b></span>
-                </div>
+                <strong>${escapeHtml(route.load)}</strong>
               </div>
-              <div class="stop-check"><span></span><small>GEREED</small></div>
-            </article>
+              <div class="depot-line">
+                <b>START EN EINDE</b> · ${escapeHtml(routeDepot.address)}
+              </div>
+              <div class="stops">${rowsHtml}</div>
+            </section>
           `;
         })
         .join("");
 
       return `
-        <section class="route-page">
+        <section class="route-page" data-route-count="${pageRoutes.length}">
           <header class="sheet-header">
             <div class="bus-heading">
               <span class="bus-letter">${escapeHtml(
@@ -4655,17 +4698,7 @@ function createBusRoutePrintHtml(input: {
             </div>
           </header>
 
-          <div class="route-title">
-            <div>
-              <h2>${escapeHtml(route.title)}</h2>
-              <p>${escapeHtml(route.departure)} · ${escapeHtml(route.badge)} · ${route.stops.length} stops</p>
-            </div>
-            <strong>${escapeHtml(route.load)}</strong>
-          </div>
-          <div class="depot-line">
-            <b>START EN EINDE</b> · ${escapeHtml(routeDepot.address)}
-          </div>
-          <div class="stops">${rowsHtml}</div>
+          <div class="route-sections">${routeSectionsHtml}</div>
 
           <section class="general-notes">
             <h2>Algemene opmerkingen</h2>
@@ -4674,10 +4707,10 @@ function createBusRoutePrintHtml(input: {
           </section>
 
           <footer class="page-footer">
-            <span>Pagina ${routeIndex + 1} van ${printableRoutes.length}</span>
+            <span>Pagina ${pageIndex + 1} van ${printPages.length}</span>
             ${
-              nextRoute
-                ? `<strong>Z.O.Z. — ${escapeHtml(nextRoute.title)}</strong>`
+              nextPage
+                ? `<strong>Z.O.Z. — ${escapeHtml(nextPage[0]?.title || "VOLGENDE RONDE")}</strong>`
                 : `<strong class="route-end">EINDE ROUTE</strong>`
             }
           </footer>
@@ -4738,7 +4771,7 @@ function createBusRoutePrintHtml(input: {
         display: flex;
         flex-direction: column;
         margin: 0 auto;
-        min-height: 283mm;
+        min-height: 280mm;
         padding: 7mm;
         width: 210mm;
       }
@@ -4750,8 +4783,8 @@ function createBusRoutePrintHtml(input: {
         border-bottom: 3px solid #111;
         display: flex;
         justify-content: space-between;
-        margin-bottom: 3mm;
-        padding-bottom: 3mm;
+        margin-bottom: 2mm;
+        padding-bottom: 2mm;
       }
       .bus-heading {
         align-items: center;
@@ -4765,19 +4798,19 @@ function createBusRoutePrintHtml(input: {
         display: flex;
         font-size: 17px;
         font-weight: 900;
-        height: 11mm;
+        height: 9mm;
         justify-content: center;
-        width: 11mm;
+        width: 9mm;
       }
       .sheet-header h1 {
-        font-size: 22px;
+        font-size: 20px;
         line-height: 1;
         margin: 0;
       }
       .sheet-header p {
         font-size: 11px;
         font-weight: 700;
-        margin: 1.2mm 0 0;
+        margin: 0.8mm 0 0;
       }
       .driver-fields {
         display: grid;
@@ -4789,8 +4822,16 @@ function createBusRoutePrintHtml(input: {
         display: block;
         font-size: 10px;
         font-weight: 700;
-        height: 5.5mm;
-        padding-top: 1mm;
+        height: 4.5mm;
+        padding-top: 0.6mm;
+      }
+      .route-sections {
+        display: grid;
+        gap: 2mm;
+      }
+      .route-block {
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
       .route-title {
         align-items: center;
@@ -4799,17 +4840,17 @@ function createBusRoutePrintHtml(input: {
         border-radius: 3mm 3mm 0 0;
         display: flex;
         justify-content: space-between;
-        padding: 2.2mm 3mm;
+        padding: 1.5mm 2.5mm;
       }
       .route-title h2 {
-        font-size: 18px;
+        font-size: 16px;
         line-height: 1;
         margin: 0;
       }
       .route-title p,
       .route-title strong {
         font-size: 11px;
-        margin: 1mm 0 0;
+        margin: 0.6mm 0 0;
       }
       .route-title > strong {
         margin: 0;
@@ -4820,12 +4861,12 @@ function createBusRoutePrintHtml(input: {
         border: 2px solid #111;
         border-top: 0;
         font-size: 10px;
-        padding: 1.6mm 3mm;
+        padding: 1.1mm 2.5mm;
       }
       .stops {
         display: grid;
-        gap: 1.8mm;
-        margin-top: 2.5mm;
+        gap: 1mm;
+        margin-top: 1.4mm;
       }
       .stop-card {
         align-items: stretch;
@@ -4834,7 +4875,7 @@ function createBusRoutePrintHtml(input: {
         border-radius: 2.5mm;
         display: grid;
         grid-template-columns: 10mm minmax(0, 1fr) 17mm;
-        min-height: 17mm;
+        min-height: 12.5mm;
         overflow: hidden;
         page-break-inside: avoid;
       }
@@ -4848,7 +4889,7 @@ function createBusRoutePrintHtml(input: {
       }
       .stop-content {
         min-width: 0;
-        padding: 2mm 2.5mm 1.5mm;
+        padding: 1.1mm 2mm 0.8mm;
       }
       .stop-heading {
         align-items: flex-start;
@@ -4857,14 +4898,14 @@ function createBusRoutePrintHtml(input: {
         justify-content: space-between;
       }
       .stop-heading strong {
-        font-size: 15px;
+        font-size: 14.5px;
         line-height: 1.05;
       }
       .stop-content p {
         font-size: 11.5px;
         font-weight: 700;
         line-height: 1.2;
-        margin: 1mm 0 0;
+        margin: 0.4mm 0 0;
       }
       .time-badge {
         background: #111;
@@ -4875,7 +4916,7 @@ function createBusRoutePrintHtml(input: {
         font-size: 12px;
         font-weight: 900;
         line-height: 1;
-        padding: 1.2mm 1.8mm;
+        padding: 0.9mm 1.5mm;
         white-space: nowrap;
       }
       .time-badge.urgent {
@@ -4888,11 +4929,11 @@ function createBusRoutePrintHtml(input: {
         font-size: 9px;
         gap: 3mm;
         grid-template-columns: 35mm minmax(0, 1fr);
-        margin-top: 2mm;
+        margin-top: 0.8mm;
       }
       .write-fields span {
         border-bottom: 1px solid #777;
-        min-height: 4mm;
+        min-height: 2.7mm;
       }
       .write-fields b {
         background: #fff;
@@ -4918,16 +4959,16 @@ function createBusRoutePrintHtml(input: {
       .general-notes {
         border: 1.5px solid #111;
         border-radius: 2.5mm;
-        margin-top: 3mm;
-        padding: 2mm 3mm;
+        margin-top: 1.8mm;
+        padding: 1.2mm 2.5mm;
       }
       .general-notes h2 {
         font-size: 11px;
-        margin: 0 0 1mm;
+        margin: 0 0 0.5mm;
       }
       .general-notes div {
         border-bottom: 1px solid #888;
-        height: 5mm;
+        height: 3.5mm;
       }
       .page-footer {
         align-items: flex-end;
@@ -4935,7 +4976,7 @@ function createBusRoutePrintHtml(input: {
         display: flex;
         justify-content: space-between;
         margin-top: auto;
-        padding-top: 2.5mm;
+        padding-top: 1.5mm;
       }
       .page-footer span {
         font-size: 11px;
@@ -4953,14 +4994,19 @@ function createBusRoutePrintHtml(input: {
         body { background: #fff; }
         .screen-actions { display: none; }
         .route-page {
+          break-inside: avoid;
           break-after: page;
+          height: 280mm;
           margin: 0;
-          min-height: 283mm;
+          min-height: 0;
+          page-break-after: always;
+          page-break-inside: avoid;
           padding: 0;
           width: auto;
         }
         .route-page:last-child {
           break-after: auto;
+          page-break-after: auto;
         }
         .route-page + .route-page {
           margin-top: 0;
