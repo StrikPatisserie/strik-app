@@ -29,10 +29,10 @@ export default function CashCountPage() {
           Geld tellen
         </Link>
         <Link
-          href="/management/gegevens/omzet"
+          href="/management/gegevens/kasboek"
           className="rounded-full px-4 py-2.5 text-center text-xs font-black text-[#4a4540] transition hover:bg-white"
         >
-          Weekrapport
+          Maandrapport
         </Link>
       </nav>
 

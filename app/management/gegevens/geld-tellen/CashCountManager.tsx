@@ -218,6 +218,10 @@ function roundedMoney(value: number) {
   return Number(value.toFixed(2));
 }
 
+function hasNonWholeMoney(value: number) {
+  return Math.abs(roundedMoney(value) - Math.round(value)) > 0.009;
+}
+
 function safeExpectedCashFromValues(startCash: number, countedCash: number) {
   return Math.max(0, roundedMoney((countedCash || 0) - startCash));
 }
@@ -757,6 +761,8 @@ export default function CashCountManager() {
           selectedWeek.week,
           shop
         );
+        const bankAmount = deposit?.actualAmount ?? includedCheckedSafeCash;
+        const iceBankAmount = deposit?.iceDepositAmount ?? includedIceCash;
 
         return {
           shop,
@@ -794,6 +800,8 @@ export default function CashCountManager() {
           closedCount: closedDates.length,
           expectedDates,
           deposit,
+          bankAmount,
+          iceBankAmount,
         };
       }),
     [
@@ -816,7 +824,7 @@ export default function CashCountManager() {
           checkedCount: row.checkedCount,
           expectedCount: row.expectedCount,
           missingCount: row.missingCount,
-          weekTotal: row.includedCheckedSafeCash,
+          weekTotal: row.bankAmount,
         },
         {
           key: cashLocationKey("ice", row.shop),
@@ -826,7 +834,7 @@ export default function CashCountManager() {
           checkedCount: row.iceCheckedCount,
           expectedCount: row.iceCount,
           missingCount: 0,
-          weekTotal: row.includedIceCash,
+          weekTotal: row.iceBankAmount,
         },
       ]),
     [weekRows]
@@ -835,6 +843,9 @@ export default function CashCountManager() {
     selectedCashLocationKind,
     selectedShop
   );
+  const selectedCashLocationRow =
+    cashLocationRows.find((row) => row.key === selectedCashLocationKey) ||
+    cashLocationRows[0];
   const selectedShopRow =
     weekRows.find((row) => row.shop === selectedShop) || weekRows[0];
   const selectedShopDays = useMemo(
@@ -1047,10 +1058,9 @@ export default function CashCountManager() {
     (deposit) =>
       deposit.year === selectedWeek.year && deposit.week === selectedWeek.week
   );
-  const weekCheckedSafeTotal = roundedMoney(
+  const weekBankTotal = roundedMoney(
     weekRows.reduce(
-      (total, row) =>
-        total + row.includedCheckedSafeCash + row.includedIceCash,
+      (total, row) => total + row.bankAmount + row.iceBankAmount,
       0
     )
   );
@@ -1858,12 +1868,17 @@ export default function CashCountManager() {
                   setSelectedDate(selectedWeekDates[0] || localIsoDate());
                 }
               }}
-              className="h-11 rounded-xl border border-[#ded5ca] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none transition focus:border-[#8ba287]"
+              className={`h-11 rounded-xl border border-[#ded5ca] bg-white px-2.5 text-xs font-black normal-case tracking-normal outline-none transition focus:border-[#8ba287] ${
+                selectedCashLocationRow &&
+                hasNonWholeMoney(selectedCashLocationRow.weekTotal)
+                  ? "text-[#a43b2f]"
+                  : "text-[#1a1815]"
+              }`}
             >
               {cashLocationRows.map((row) => (
                 <option key={row.key} value={row.key}>
                   {row.kind === "patisserie" ? `P. ${row.shop}` : row.label} ·{" "}
-                  naar kluis {formatMoney(row.weekTotal)}
+                  naar bank {formatMoney(row.weekTotal)}
                 </option>
               ))}
             </select>
@@ -1871,7 +1886,7 @@ export default function CashCountManager() {
 
           <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-[#e7e0d8] bg-white text-center">
             <div
-              className={`border-r border-[#e7e0d8] px-2 py-2.5 ${
+              className={`min-w-0 border-r border-[#e7e0d8] px-1.5 py-2 ${
                 weekMissingRevenueCount > 0 ? "bg-[#fff1ee]" : ""
               }`}
             >
@@ -1892,7 +1907,7 @@ export default function CashCountManager() {
                 )}
                 Gecheckt
               </p>
-              <p className="mt-0.5 text-lg font-black tabular-nums text-[#1a1815]">
+              <p className="mt-0.5 truncate whitespace-nowrap text-[clamp(0.78rem,1.4vw,1.05rem)] font-black tabular-nums text-[#1a1815]">
                 {weekCheckedCount}/{weekExpectedCount}
               </p>
               {weekMissingRevenueCount > 0 && (
@@ -1901,20 +1916,30 @@ export default function CashCountManager() {
                 </p>
               )}
             </div>
-            <div className="border-r border-[#e7e0d8] bg-[#f6faf4] px-2 py-2.5">
+            <div className="min-w-0 border-r border-[#e7e0d8] bg-[#f6faf4] px-1.5 py-2">
               <p className="text-[0.6rem] font-black uppercase tracking-[0.06em] text-[#71806d]">
                 Verwacht
               </p>
-              <p className="mt-0.5 text-lg font-black tabular-nums text-[#1f4f35]">
+              <p
+                className="mt-0.5 truncate whitespace-nowrap text-[clamp(0.78rem,1.4vw,1.05rem)] font-black tabular-nums text-[#1f4f35]"
+                title={formatMoney(weekExpectedTotal)}
+              >
                 {formatMoney(weekExpectedTotal)}
               </p>
             </div>
-            <div className="px-2 py-2.5">
+            <div className="min-w-0 px-1.5 py-2">
               <p className="text-[0.6rem] font-black uppercase tracking-[0.06em] text-[#8b8278]">
-                Naar kluis
+                Naar bank
               </p>
-              <p className="mt-0.5 text-lg font-black tabular-nums text-[#1a1815]">
-                {formatMoney(weekCheckedSafeTotal)}
+              <p
+                className={`mt-0.5 truncate whitespace-nowrap text-[clamp(0.78rem,1.4vw,1.05rem)] font-black tabular-nums ${
+                  hasNonWholeMoney(weekBankTotal)
+                    ? "text-[#a43b2f]"
+                    : "text-[#1a1815]"
+                }`}
+                title={formatMoney(weekBankTotal)}
+              >
+                {formatMoney(weekBankTotal)}
               </p>
             </div>
           </div>
@@ -2443,6 +2468,12 @@ export default function CashCountManager() {
                             : formatMoney(selectedManagementSafeCash)
                         }
                         emphasized
+                        tone={
+                          selectedManagementSafeCash !== undefined &&
+                          hasNonWholeMoney(selectedManagementSafeCash)
+                            ? "warn"
+                            : "normal"
+                        }
                       />
                       <CashOverviewMetric
                         label="Kasverschil"
@@ -2589,16 +2620,21 @@ export default function CashCountManager() {
               </div>
             </div>
 
-            <div
-              className="rounded-2xl border border-[#9fbd9d] bg-[#e7f2e4] px-4 py-2.5"
-            >
+            <div className="rounded-2xl border border-[#9fbd9d] bg-[#e7f2e4] px-4 py-2.5">
               <div className="flex items-end justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[0.55rem] font-black uppercase tracking-[0.08em] text-[#1f4f35]">
-                    Totaal naar kluis voor {selectedShopRow.shop}
+                    Naar bank voor {selectedShopRow.shop}
                   </p>
-                  <p className="mt-1 truncate text-[1.65rem] font-black leading-none tabular-nums text-[#1f4f35]">
-                    {formatMoney(selectedShopRow.includedCheckedSafeCash)}
+                  <p
+                    className={`mt-1 truncate text-xl font-black leading-none tabular-nums ${
+                      hasNonWholeMoney(selectedShopRow.bankAmount)
+                        ? "text-[#a43b2f]"
+                        : "text-[#1f4f35]"
+                    }`}
+                    title={formatMoney(selectedShopRow.bankAmount)}
+                  >
+                    {formatMoney(selectedShopRow.bankAmount)}
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-white/75 px-2 py-1 text-[0.5rem] font-black uppercase text-[#1f4f35]">
@@ -2639,9 +2675,14 @@ export default function CashCountManager() {
               </p>
               <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
                 <WeekControlMetric
-                  label="Totaal naar kluis"
-                  value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
+                  label="Naar bank"
+                  value={formatMoney(selectedShopRow.bankAmount)}
                   emphasized
+                  tone={
+                    hasNonWholeMoney(selectedShopRow.bankAmount)
+                      ? "warn"
+                      : "normal"
+                  }
                 />
                 <WeekControlMetric
                   label="Kasverschil"
@@ -2752,6 +2793,11 @@ export default function CashCountManager() {
             <AmountCell
               label="Naar kluis"
               value={formatMoney(selectedShopRow.includedIceCash)}
+              tone={
+                hasNonWholeMoney(selectedShopRow.includedIceCash)
+                  ? "error"
+                  : "normal"
+              }
             />
           </div>
           <div className="mt-3 grid gap-2 rounded-2xl border border-[#c8ddd2] bg-white/70 p-3 md:grid-cols-[12rem_minmax(14rem,1fr)_auto] md:items-end">
@@ -2967,7 +3013,11 @@ function IceCashSummary({
                 : "normal"
             }
           />
-          <AmountCell label="Naar kluis" value={formatMoney(expectedCash)} />
+          <AmountCell
+            label="Naar kluis"
+            value={formatMoney(expectedCash)}
+            tone={hasNonWholeMoney(expectedCash) ? "error" : "normal"}
+          />
           <AmountCell
             label="Kasverschil"
             value={formatOptionalMoney(record.iceDifference)}
@@ -3138,12 +3188,21 @@ function BankIcon() {
 function CashOverviewMetric({
   emphasized = false,
   label,
+  tone = "normal",
   value,
 }: Readonly<{
   emphasized?: boolean;
   label: string;
+  tone?: "normal" | "warn";
   value: string;
 }>) {
+  const valueColorClass =
+    tone === "warn"
+      ? "text-[#a43b2f]"
+      : emphasized
+        ? "text-[#1f4f35]"
+        : "text-[#1a1815]";
+
   return (
     <div
       className={`min-w-0 rounded-xl px-2 py-2 ${
@@ -3154,7 +3213,7 @@ function CashOverviewMetric({
         {label}
       </p>
       <p
-        className={`mt-0.5 truncate whitespace-nowrap font-black leading-none tabular-nums text-[#1a1815] ${
+        className={`mt-0.5 truncate whitespace-nowrap font-black leading-none tabular-nums ${valueColorClass} ${
           emphasized ? "text-base" : "text-sm"
         }`}
         title={value}
@@ -3237,11 +3296,18 @@ function AmountCell({
   value,
 }: Readonly<{
   label: string;
-  tone?: "normal" | "warn";
+  tone?: "normal" | "warn" | "error";
   value: string;
 }>) {
+  const colorClass =
+    tone === "error"
+      ? "text-[#a43b2f]"
+      : tone === "warn"
+        ? "text-[#7a5417]"
+        : "text-[#1a1815]";
+
   return (
-    <div className={tone === "warn" ? "text-[#7a5417]" : "text-[#1a1815]"}>
+    <div className={colorClass}>
       <p className="text-[0.62rem] font-black uppercase tracking-[0.05em] text-[#8b8278]">
         {label}
       </p>
