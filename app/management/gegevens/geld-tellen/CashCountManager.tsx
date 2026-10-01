@@ -565,7 +565,6 @@ export default function CashCountManager() {
   const [cashSourceDrafts, setCashSourceDrafts] = useState<
     Record<string, { startCash?: string; countedCash?: string }>
   >({});
-  const [depositNotes, setDepositNotes] = useState<Record<string, string>>({});
   const [actualDepositDrafts, setActualDepositDrafts] = useState<Record<string, string>>({});
   const [differenceNotes, setDifferenceNotes] = useState<Record<string, string>>({});
   const [iceDepositDrafts, setIceDepositDrafts] = useState<Record<string, string>>({});
@@ -716,14 +715,6 @@ export default function CashCountManager() {
           (total, record) => total + (cashOutAmount(record) || 0),
           0
         );
-        const includedCashDifference = checkedRecords.reduce(
-          (total, record) => total + (record.difference || 0),
-          0
-        );
-        const includedExpectedSafeCash = checkedRecords.reduce(
-          (total, record) => total + safeExpectedCash(record),
-          0
-        );
         const includedCheckedSafeCash = checkedRecords.reduce(
           (total, record) => total + safeCheckedCash(record),
           0
@@ -777,8 +768,6 @@ export default function CashCountManager() {
           includedPinRevenue,
           includedReceipts,
           includedCashOut,
-          includedCashDifference,
-          includedExpectedSafeCash,
           includedCheckedSafeCash,
           difference,
           iceCash,
@@ -1622,52 +1611,6 @@ export default function CashCountManager() {
     }
   }
 
-  async function saveDeposit(row: (typeof weekRows)[number]) {
-    if (isSelectedWeekClosed) {
-      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const draftKey = `${depositWeekKey}:${row.shop}`;
-    const amount = roundedMoney(row.includedCheckedSafeCash);
-    const checkedRecords = row.records.filter(
-      (record) => hasPatisserieCashRecord(record) && record.checkedAt
-    );
-    const dateRange = checkedRecords.map((record) => record.date).sort();
-    const deposit: RevenueCashDeposit = {
-      id: createRevenueCashDepositKey(selectedWeek.year, selectedWeek.week, row.shop),
-      year: selectedWeek.year,
-      week: selectedWeek.week,
-      shop: row.shop,
-      amount,
-      actualAmount: row.deposit?.actualAmount,
-      differenceNote: row.deposit?.differenceNote,
-      iceDepositAmount: row.deposit?.iceDepositAmount,
-      iceDepositedAt: row.deposit?.iceDepositedAt,
-      iceDepositNote: row.deposit?.iceDepositNote,
-      dateFrom: dateRange[0],
-      dateTo: dateRange.at(-1),
-      cashRecordIds: checkedRecords.map((record) => record.id),
-      depositedAt: now,
-      depositedBy: "Strik app",
-      closedAt: row.deposit?.closedAt,
-      closedBy: row.deposit?.closedBy,
-      cashbookBookedAt: row.deposit?.cashbookBookedAt,
-      cashbookBookedBy: row.deposit?.cashbookBookedBy,
-      note: depositNotes[draftKey] || row.deposit?.note || "",
-      createdAt: row.deposit?.createdAt || now,
-      updatedAt: now,
-    };
-    const nextDeposits = mergeRevenueCashDeposits(
-      cashDeposits.filter((item) => item.id !== deposit.id),
-      [deposit]
-    );
-
-    setCashDeposits(nextDeposits);
-    await saveCash(nextDeposits);
-  }
-
   function buildWeekCashDeposits(sourceRecords = cashRecords, closeWeek = false) {
     const now = new Date().toISOString();
     const weekShops = new Set(weekRows.map((row) => row.shop));
@@ -1688,7 +1631,6 @@ export default function CashCountManager() {
         0
       );
       const dateRange = checkedRecords.map((record) => record.date).sort();
-      const draftKey = `${depositWeekKey}:${row.shop}`;
       const amount = roundedMoney(checkedSafeCash);
 
       return {
@@ -1711,7 +1653,7 @@ export default function CashCountManager() {
         closedBy: closeWeek ? row.deposit?.closedBy || "Strik app" : row.deposit?.closedBy,
         cashbookBookedAt: row.deposit?.cashbookBookedAt,
         cashbookBookedBy: row.deposit?.cashbookBookedBy,
-        note: depositNotes[draftKey] || row.deposit?.note || "",
+        note: row.deposit?.note || "",
         createdAt: row.deposit?.createdAt || now,
         updatedAt: now,
       } satisfies RevenueCashDeposit;
@@ -1744,7 +1686,6 @@ export default function CashCountManager() {
 
         return hasPatisserieCashRecord(record) && record?.checkedAt ? [record] : [];
       });
-      const depositDraftKey = `${depositWeekKey}:${row.shop}`;
       const expectedSafeCash = checkedRecords.reduce(
         (total, record) => total + safeExpectedCash(record),
         0
@@ -1780,7 +1721,7 @@ export default function CashCountManager() {
         checkedSafeCash,
         difference,
         depositAmount,
-        depositNote: depositNotes[depositDraftKey] || sourceDeposit?.note || "",
+        depositNote: sourceDeposit?.note || "",
         days: row.expectedDates.map((date) => {
           const record = findCashRecord(shopRecords, date, row.shop);
           const closed = dailyRecords.some(
@@ -2696,24 +2637,11 @@ export default function CashCountManager() {
               <p className="text-[0.55rem] font-black uppercase tracking-[0.08em] text-[#1f4f35]">
                 Daadwerkelijk geteld en gecheckt
               </p>
-              <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
+              <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
                 <WeekControlMetric
-                  label="Volgens kassa"
-                  value={formatMoney(selectedShopRow.includedExpectedSafeCash)}
-                />
-                <WeekControlMetric
-                  label="Geteld"
+                  label="Totaal naar kluis"
                   value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
                   emphasized
-                />
-                <WeekControlMetric
-                  label="Dagafsluiting"
-                  tone={
-                    Math.abs(selectedShopRow.includedCashDifference) > 5
-                      ? "warn"
-                      : "normal"
-                  }
-                  value={formatMoney(selectedShopRow.includedCashDifference)}
                 />
                 <WeekControlMetric
                   label="Kasverschil"
@@ -2726,61 +2654,6 @@ export default function CashCountManager() {
                 />
               </div>
             </section>
-          </div>
-
-          <div className="mt-2 grid gap-2 rounded-2xl border border-[#d9e1d5] bg-[#f8fbf7] p-2.5 md:grid-cols-[11rem_minmax(12rem,1fr)_auto] md:items-end">
-            <label className="grid gap-0.5 text-[0.52rem] font-black uppercase tracking-[0.04em] text-[#6f836b]">
-              Bedrag bankstorting
-              <span className="relative block">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#1f4f35]">
-                  €
-                </span>
-                <input
-                  value={formatAmountInput(
-                    selectedShopRow.includedCheckedSafeCash
-                  )}
-                  readOnly
-                  disabled={isSelectedWeekClosed}
-                  placeholder="0,00"
-                  className="h-10 w-full rounded-xl border border-[#c8d9c3] bg-[#f4f7f2] pl-7 pr-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-50"
-                />
-              </span>
-            </label>
-            <label className="grid gap-0.5 text-[0.52rem] font-black uppercase tracking-[0.04em] text-[#6f836b]">
-              Notitie <span className="font-semibold normal-case">(optioneel)</span>
-              <input
-                value={
-                  depositNotes[selectedDepositDraftKey] ??
-                  selectedShopRow.deposit?.note ??
-                  ""
-                }
-                onChange={(event) =>
-                  setDepositNotes((current) => ({
-                    ...current,
-                    [selectedDepositDraftKey]: event.target.value,
-                  }))
-                }
-                placeholder="Bijv. twee stortingen"
-                disabled={isSelectedWeekClosed}
-                className="h-10 rounded-xl border border-[#d9e1d5] bg-white px-3 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-50"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void saveDeposit(selectedShopRow)}
-              disabled={
-                isSelectedWeekClosed ||
-                state === "saving" ||
-                selectedShopRow.checkedCount === 0
-              }
-              className="h-10 rounded-full bg-[#1f4f35] px-4 text-xs font-black text-white shadow-sm disabled:bg-[#c3d3bc] disabled:text-[#6b645b] disabled:opacity-50"
-            >
-              {isSelectedWeekClosed
-                ? "Week gesloten"
-                : selectedShopRow.deposit?.depositedAt
-                  ? "Storting bijwerken"
-                  : "Storting opslaan"}
-            </button>
           </div>
 
           {selectedShopRow.deposit?.depositedAt && (
