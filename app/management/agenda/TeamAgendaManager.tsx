@@ -8,12 +8,12 @@ import {
   TeamAgendaEventType,
   createTeamAgendaId,
   getEmptyTeamAgenda,
-  getEventTypeLabel,
   getTeamAgendaUrl,
   normalizeTeamAgenda,
   teamAgendaAudiences,
   teamAgendaEventTypes,
 } from "../../strik-agenda/teamAgendaApi";
+import { formatJubileeYears } from "../../strik-agenda/personnelJubilees";
 
 type EventDraft = {
   title: string;
@@ -84,10 +84,18 @@ function createYearlyDate(year: number, month: number, day: number) {
   return date;
 }
 
-function getEventDisplayDate(event: TeamAgendaEvent) {
+function getEventDisplayDate(event: TeamAgendaEvent, calendarYear?: number) {
   const sourceDate = parseLocalDate(event.date);
 
   if (!event.recurringYearly) return sourceDate;
+
+  if (calendarYear) {
+    return createYearlyDate(
+      calendarYear,
+      sourceDate.getMonth() + 1,
+      sourceDate.getDate()
+    );
+  }
 
   const today = parseLocalDate(getToday());
   let displayDate = createYearlyDate(
@@ -117,15 +125,61 @@ function getDaysUntilEvent(event: TeamAgendaEvent) {
   );
 }
 
-function formatEventDate(event: TeamAgendaEvent) {
-  const date = getEventDisplayDate(event);
+function formatEventDate(event: TeamAgendaEvent, calendarYear: number) {
+  const date = getEventDisplayDate(event, calendarYear);
 
   return date.toLocaleDateString("nl-NL", {
     weekday: "short",
     day: "numeric",
     month: "short",
-    year: "numeric",
   });
+}
+
+function eventBelongsToYear(event: TeamAgendaEvent, calendarYear: number) {
+  const displayDate = getEventDisplayDate(event, calendarYear);
+
+  if (!event.recurringYearly && displayDate.getFullYear() !== calendarYear) {
+    return false;
+  }
+
+  if (event.type === "anniversary" && event.startDate) {
+    return calendarYear >= parseLocalDate(event.startDate).getFullYear() + 1;
+  }
+
+  return true;
+}
+
+function getAnniversaryYearsForYear(
+  event: TeamAgendaEvent,
+  calendarYear: number
+) {
+  if (event.type !== "anniversary") return undefined;
+  if (!event.recurringYearly) return event.anniversaryYears;
+
+  if (event.startDate) {
+    return calendarYear - parseLocalDate(event.startDate).getFullYear();
+  }
+
+  if (event.occurrenceDate && typeof event.anniversaryYears === "number") {
+    return (
+      event.anniversaryYears +
+      calendarYear -
+      parseLocalDate(event.occurrenceDate).getFullYear()
+    );
+  }
+
+  return event.anniversaryYears;
+}
+
+function getEventDisplayTitle(event: TeamAgendaEvent, calendarYear: number) {
+  const years = getAnniversaryYearsForYear(event, calendarYear);
+  if (!years || years < 1) return event.title;
+
+  const employeeName =
+    event.employeeName?.trim() ||
+    event.title.replace(/\s+\d+(?:[,.]5)?\s+jaar\s+bij\s+Strik.*$/i, "").trim();
+
+  return `${employeeName} ${formatJubileeYears(years)} jaar bij Strik`;
 }
 
 function formatUpdatedAt(value?: string) {
@@ -142,10 +196,11 @@ function formatUpdatedAt(value?: string) {
   });
 }
 
-function sortEvents(events: TeamAgendaEvent[]) {
+function sortEvents(events: TeamAgendaEvent[], calendarYear?: number) {
   return [...events].sort((a, b) => {
     const dateDiff =
-      getEventDisplayDate(a).getTime() - getEventDisplayDate(b).getTime();
+      getEventDisplayDate(a, calendarYear).getTime() -
+      getEventDisplayDate(b, calendarYear).getTime();
     if (dateDiff !== 0) return dateDiff;
 
     return a.title.localeCompare(b.title);
@@ -209,30 +264,35 @@ export default function TeamAgendaManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [filter, setFilter] = useState<ManagementAgendaFilter>("all");
+  const [calendarYear, setCalendarYear] = useState(
+    () => new Date().getFullYear()
+  );
   const [status, setStatus] = useState("Agenda laden...");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [manualAgendaAvailable, setManualAgendaAvailable] = useState(true);
 
   const combinedEvents = useMemo(
-    () => sortEvents([...agenda.events, ...tamigoEvents, ...driveEvents]),
+    () => [...agenda.events, ...tamigoEvents, ...driveEvents],
     [agenda.events, driveEvents, tamigoEvents]
   );
   const visibleEvents = useMemo(() => {
-    if (filter === "manual") return sortEvents(agenda.events);
-    if (filter === "birthday") {
-      return sortEvents(
-        combinedEvents.filter((event) => event.type === "birthday")
-      );
-    }
-    if (filter === "anniversary") {
-      return sortEvents(
-        combinedEvents.filter((event) => event.type === "anniversary")
-      );
-    }
+    const filteredEvents =
+      filter === "manual"
+        ? agenda.events
+        : filter === "birthday"
+        ? combinedEvents.filter((event) => event.type === "birthday")
+        : filter === "anniversary"
+        ? combinedEvents.filter((event) => event.type === "anniversary")
+        : combinedEvents;
 
-    return combinedEvents;
-  }, [agenda.events, combinedEvents, filter]);
+    return sortEvents(
+      filteredEvents.filter((event) =>
+        eventBelongsToYear(event, calendarYear)
+      ),
+      calendarYear
+    );
+  }, [agenda.events, calendarYear, combinedEvents, filter]);
   const upcomingTamigoCount = useMemo(
     () =>
       [...tamigoEvents, ...driveEvents].filter((event) => {
@@ -426,64 +486,62 @@ export default function TeamAgendaManager() {
   }
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-5 shadow-sm">
-        <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-          <div className="rounded-2xl bg-[#eef3ea] p-3">
-            <p className="text-2xl font-bold">{agenda.events.length}</p>
-            <p className="text-xs font-semibold text-[#2d2a26]/55">
+    <div className="space-y-2">
+      <section className="rounded-2xl border border-[#e7e0d8] bg-white/88 p-2 shadow-sm">
+        <div className="grid grid-cols-2 gap-1 text-center sm:grid-cols-4">
+          <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-lg bg-[#eef3ea] px-1.5 py-1">
+            <p className="text-sm font-black leading-none">{agenda.events.length}</p>
+            <p className="text-[0.52rem] font-bold leading-none text-[#2d2a26]/55">
               Strik agenda
             </p>
           </div>
-          <div className="rounded-2xl bg-[#f8e1ea] p-3">
-            <p className="text-2xl font-bold">
+          <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-lg bg-[#f8e1ea] px-1.5 py-1">
+            <p className="text-sm font-black leading-none">
               {
                 [...tamigoEvents, ...driveEvents].filter(
                   (event) => event.type === "birthday"
                 ).length
               }
             </p>
-            <p className="text-xs font-semibold text-[#2d2a26]/55">
+            <p className="text-[0.52rem] font-bold leading-none text-[#2d2a26]/55">
               Verjaardagen
             </p>
           </div>
-          <div className="rounded-2xl bg-[#eef3ea] p-3">
-            <p className="text-2xl font-bold">
+          <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-lg bg-[#eef3ea] px-1.5 py-1">
+            <p className="text-sm font-black leading-none">
               {
                 [...tamigoEvents, ...driveEvents].filter(
                   (event) => event.type === "anniversary"
                 ).length
               }
             </p>
-            <p className="text-xs font-semibold text-[#2d2a26]/55">
+            <p className="text-[0.52rem] font-bold leading-none text-[#2d2a26]/55">
               Jubilea
             </p>
           </div>
-          <div className="rounded-2xl bg-[#f1d28f]/60 p-3">
-            <p className="text-2xl font-bold">{upcomingTamigoCount}</p>
-            <p className="text-xs font-semibold text-[#2d2a26]/55">
+          <div className="flex min-h-8 items-center justify-center gap-1.5 rounded-lg bg-[#f1d28f]/60 px-1.5 py-1">
+            <p className="text-sm font-black leading-none">{upcomingTamigoCount}</p>
+            <p className="text-[0.52rem] font-bold leading-none text-[#2d2a26]/55">
               Binnen 7 dagen
             </p>
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-3 text-xs font-semibold text-gray-500">
-          <span>
-            {loading ? "Laden..." : status || "Alles bijgewerkt."}
-          </span>
-          {agenda.updatedAt && <span>{formatUpdatedAt(agenda.updatedAt)}</span>}
-        </div>
-      </section>
+        {(loading || status) && (
+          <div className="mt-1 flex items-center justify-between gap-3 px-0.5 text-[0.52rem] font-semibold text-gray-500">
+            <span>{loading ? "Laden..." : status}</span>
+            {agenda.updatedAt && <span>{formatUpdatedAt(agenda.updatedAt)}</span>}
+          </div>
+        )}
 
-      <section className="space-y-3">
-        <div className="rounded-[1.75rem] border border-[#e7e0d8] bg-white/85 p-3 shadow-sm">
-          <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] bg-[#f8f6f3] p-1 sm:grid-cols-4">
+        <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] gap-1 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <div className="col-span-2 grid grid-cols-4 gap-px rounded-lg bg-[#f8f6f3] p-px sm:col-span-1">
             {filterOptions.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => setFilter(option.value)}
-                className={`rounded-full px-3 py-3 text-sm font-bold transition ${
+                className={`min-h-8 rounded-md px-1.5 py-1 text-[0.58rem] font-black transition ${
                   filter === option.value
                     ? "bg-[#c3d3bc] text-[#2d2a26] shadow-sm"
                     : "text-[#2d2a26]/50"
@@ -493,23 +551,46 @@ export default function TeamAgendaManager() {
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold">Strik Agenda</h2>
+          <div className="flex h-8 items-center overflow-hidden rounded-lg border border-[#e7e0d8] bg-white">
+            <button
+              type="button"
+              aria-label="Vorig kalenderjaar"
+              onClick={() => setCalendarYear((year) => year - 1)}
+              className="h-full w-8 text-sm font-black text-[#52654f]"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarYear(new Date().getFullYear())}
+              className="h-full min-w-12 border-x border-[#e7e0d8] px-1.5 text-[0.65rem] font-black tabular-nums text-[#2d2a26]"
+              title="Terug naar dit jaar"
+            >
+              {calendarYear}
+            </button>
+            <button
+              type="button"
+              aria-label="Volgend kalenderjaar"
+              onClick={() => setCalendarYear((year) => year + 1)}
+              className="h-full w-8 text-sm font-black text-[#52654f]"
+            >
+              ›
+            </button>
+          </div>
           <button
             type="button"
             onClick={formOpen ? closeDraftForm : openDraftForm}
             aria-label={
               formOpen ? "Agenda-item toevoegen sluiten" : "Agenda-item toevoegen"
             }
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#c3d3bc] text-2xl font-black leading-none text-[#2d2a26] shadow-sm active:scale-[0.98]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#c3d3bc] text-base font-black leading-none text-[#2d2a26] shadow-sm active:scale-[0.98]"
           >
             {formOpen ? "x" : "+"}
           </button>
         </div>
+      </section>
 
-        {formOpen && (
+      {formOpen && (
           <section className="rounded-[1.5rem] border border-[#e7e0d8] bg-white/85 p-4 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-base font-black">
@@ -621,56 +702,71 @@ export default function TeamAgendaManager() {
           </section>
         )}
 
+      <section className="space-y-1">
+        <div className="flex items-center justify-between gap-3 px-1 text-[0.55rem] font-black uppercase tracking-[0.07em] text-[#52654f]">
+          <span>
+            {filterOptions.find((option) => option.value === filter)?.label} · {calendarYear}
+          </span>
+          <span>{visibleEvents.length} items</span>
+        </div>
+
         {visibleEvents.length === 0 ? (
-          <div className="rounded-[1.5rem] bg-white/80 p-5 text-sm text-gray-600 shadow-sm">
-            Nog geen agenda-items gevonden voor deze selectie.
+          <div className="rounded-lg bg-white/80 px-2.5 py-3 text-xs text-gray-600 shadow-sm">
+            Geen agenda-items gevonden in {calendarYear}.
           </div>
         ) : (
-          visibleEvents.map((event) => (
-            <article
-              key={event.id}
-              className={`rounded-lg border px-3 py-2 shadow-sm ${
-                event.type === "anniversary"
-                  ? "border-[#c3d3bc] bg-[#f6faf4]"
-                  : "border-[#e7e0d8] bg-white"
-              }`}
-            >
-              <div className="grid grid-cols-[5.8rem_1fr] items-center gap-2 sm:grid-cols-[7rem_1fr_auto]">
-                <p className="text-[0.7rem] font-black capitalize leading-tight text-[#2d2a26]/55 sm:text-xs">
-                  {formatEventDate(event)}
-                </p>
-                <div className="min-w-0">
-                  <h3 className="truncate text-sm font-black leading-tight text-[#1a1815] sm:text-base">
-                    {event.title}
-                  </h3>
-                  {event.type !== "anniversary" && (
-                    <p className="mt-0.5 text-[0.68rem] font-bold text-[#2d2a26]/45">
-                      {getEventTypeLabel(event.type)}
+          visibleEvents.map((event) => {
+            const eventDate = getEventDisplayDate(event, calendarYear);
+            const isPast = eventDate < parseLocalDate(getToday());
+
+            return (
+              <article
+                key={event.id}
+                className={`rounded-md border px-2 py-1 shadow-sm ${
+                  event.type === "anniversary"
+                    ? isPast
+                      ? "border-[#d8ddd4] bg-white/72"
+                      : "border-[#c3d3bc] bg-[#f6faf4]"
+                    : "border-[#e7e0d8] bg-white"
+                }`}
+              >
+                <div className="grid min-h-7 grid-cols-[6rem_1fr] items-center gap-1.5 sm:grid-cols-[7.1rem_1fr_auto]">
+                  <p className="flex items-center gap-1 text-[0.58rem] font-black capitalize leading-none text-[#2d2a26]/55">
+                    <span>{formatEventDate(event, calendarYear)}</span>
+                    {isPast && (
+                      <span className="text-[0.43rem] font-bold uppercase tracking-[0.03em] text-[#9a8d81]">
+                        geweest
+                      </span>
+                    )}
+                  </p>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-black leading-none text-[#1a1815]">
+                      {getEventDisplayTitle(event, calendarYear)}
                     </p>
+                  </div>
+
+                  {event.source === "manual" && (
+                    <div className="col-span-2 flex gap-1 sm:col-span-1">
+                      <button
+                        type="button"
+                        onClick={() => editEvent(event)}
+                        className="rounded bg-white px-1.5 py-0.5 text-[0.52rem] font-black text-[#24551d]"
+                      >
+                        Wijzig
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteEvent(event.id)}
+                        className="rounded bg-white px-1.5 py-0.5 text-[0.52rem] font-black text-[#d75a48]"
+                      >
+                        Verwijder
+                      </button>
+                    </div>
                   )}
                 </div>
-
-                {event.source === "manual" && (
-                  <div className="col-span-2 mt-1 flex gap-1.5 sm:col-span-1 sm:mt-0">
-                  <button
-                    type="button"
-                    onClick={() => editEvent(event)}
-                    className="flex-1 rounded-md bg-white px-2.5 py-1.5 text-xs font-black text-[#24551d] sm:flex-none"
-                  >
-                    Wijzig
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteEvent(event.id)}
-                    className="rounded-md bg-white px-2.5 py-1.5 text-xs font-black text-[#d75a48]"
-                  >
-                    Verwijder
-                  </button>
-                </div>
-                )}
-              </div>
-            </article>
-          ))
+              </article>
+            );
+          })
         )}
       </section>
     </div>

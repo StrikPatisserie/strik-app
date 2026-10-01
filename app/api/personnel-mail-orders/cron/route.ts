@@ -8,7 +8,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CRON_KEY =
+const CRON_SECRET = process.env.CRON_SECRET?.trim() || "";
+const MANUAL_CRON_KEY =
   process.env.PERSONNEL_MAIL_CRON_KEY ||
   process.env.WORDPRESS_PERSONNEL_MAIL_ORDERS_API_KEY ||
   process.env.WORDPRESS_CUPCAKE_ORDERS_API_KEY ||
@@ -18,12 +19,11 @@ const CRON_KEY =
 function isAllowedCronRequest(request: Request) {
   const url = new URL(request.url);
   const key = url.searchParams.get("key");
-  if (key && key === CRON_KEY) return true;
+  if (key && (key === MANUAL_CRON_KEY || key === CRON_SECRET)) return true;
 
-  const userAgent = request.headers.get("user-agent") || "";
-  const schedule = request.headers.get("x-vercel-cron-schedule") || "";
+  const authorization = request.headers.get("authorization") || "";
 
-  return userAgent.includes("vercel-cron/1.0") && Boolean(schedule);
+  return Boolean(CRON_SECRET) && authorization === `Bearer ${CRON_SECRET}`;
 }
 
 function getErrorStatus(error: unknown) {

@@ -318,13 +318,24 @@ async function findDeliveryShift(
 
 async function fetchDriveEvents(request: Request) {
   const origin = new URL(request.url).origin;
+  const headers = new Headers();
+  const cookie = request.headers.get("cookie");
+  const internalSecret = process.env.CRON_SECRET?.trim();
+
+  if (cookie) headers.set("cookie", cookie);
+  if (internalSecret) {
+    headers.set("x-strik-internal-secret", internalSecret);
+  }
+
   const response = await fetch(
     `${origin}/api/personnel-sheet-agenda?view=management`,
-    { cache: "no-store" }
+    { cache: "no-store", headers }
   );
   const data = (await response.json().catch(() => null)) as unknown;
 
-  if (!response.ok) return [];
+  if (!response.ok) {
+    throw new Error("Drive personeelslijst is tijdelijk niet beschikbaar.");
+  }
 
   return normalizeTeamAgenda(data).events.filter(
     (event) => event.source === "sheet"
@@ -647,10 +658,22 @@ function dedupeOrders(orders: PersonnelMailOrder[]) {
 export async function getPersonnelMailOrderGroups(
   request: Request
 ): Promise<PersonnelMailOrderGroups> {
-  const [tamigoAgenda, driveEvents] = await Promise.all([
+  const [tamigoResult, driveResult] = await Promise.allSettled([
     getPersonnelAgenda(),
     fetchDriveEvents(request),
   ]);
+  if (tamigoResult.status === "rejected" && driveResult.status === "rejected") {
+    throw tamigoResult.reason instanceof Error
+      ? tamigoResult.reason
+      : driveResult.reason;
+  }
+
+  const tamigoAgenda =
+    tamigoResult.status === "fulfilled"
+      ? tamigoResult.value
+      : { anniversaries: [], birthdays: [] };
+  const driveEvents =
+    driveResult.status === "fulfilled" ? driveResult.value : [];
 
   const [
     tamigoCupcakes,

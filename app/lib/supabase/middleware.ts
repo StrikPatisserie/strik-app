@@ -27,6 +27,7 @@ const PUBLIC_API_PATHS = new Set([
   "/api/bakkerij-logistiek/import",
   "/api/bakkerij-logistiek/webshop-images/import",
   "/api/management-revenue/day-import",
+  "/api/personnel-sheet-agenda",
   "/api/personnel-mail-orders/cron",
   "/api/bruidstaart-payment-request/webhook",
 ]);

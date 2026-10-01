@@ -44,6 +44,9 @@ export type RevenueDayRecord = {
   week: number;
   shop: RevenueShop;
   amount: number;
+  shopClosed?: boolean;
+  shopClosedAt?: string;
+  shopClosedBy?: string;
   note?: string;
   source?: Exclude<RevenueSource, "excel">;
   messageId?: string;
@@ -86,6 +89,9 @@ export type RevenueCashRecord = {
   iceNote?: string;
   cashImportKind?: "patisserie" | "ice";
   checkedDenominations?: CashDenominationCounts;
+  denominationCheckStatus?: "correct" | "incorrect";
+  denominationCheckNote?: string;
+  denominationCheckedAt?: string;
   countedBy?: string;
   openedAt?: string;
   closedAt?: string;
@@ -233,6 +239,9 @@ function compactCashRecordPayload(record: RevenueCashRecord) {
     inote: record.iceNote,
     ck: record.cashImportKind,
     xd: record.checkedDenominations,
+    xcs: record.denominationCheckStatus,
+    xcn: record.denominationCheckNote,
+    xca: record.denominationCheckedAt,
     cb: record.countedBy,
     oa: record.openedAt,
     ca: record.closedAt,
@@ -285,6 +294,10 @@ function expandCashRecordPayload(
     iceNote: payload.iceNote ?? payload.inote,
     cashImportKind: payload.cashImportKind ?? payload.ck,
     checkedDenominations: payload.checkedDenominations ?? payload.xd,
+    denominationCheckStatus:
+      payload.denominationCheckStatus ?? payload.xcs,
+    denominationCheckNote: payload.denominationCheckNote ?? payload.xcn,
+    denominationCheckedAt: payload.denominationCheckedAt ?? payload.xca,
     countedBy: payload.countedBy ?? payload.cb,
     openedAt: payload.openedAt ?? payload.oa,
     closedAt: payload.closedAt ?? payload.ca,
@@ -580,6 +593,9 @@ export function normalizeRevenueDayRecord(value: unknown): RevenueDayRecord | nu
     week,
     shop,
     amount: Math.max(0, Number(amount.toFixed(2))),
+    shopClosed: value.shopClosed === true ? true : undefined,
+    shopClosedAt: textFrom(value.shopClosedAt) || undefined,
+    shopClosedBy: textFrom(value.shopClosedBy) || undefined,
     note: cleanRevenueNote(value.note),
     source:
       source === "excel"
@@ -745,6 +761,16 @@ export function normalizeRevenueCashRecord(
     iceNote: textFrom(value.iceNote),
     cashImportKind,
     checkedDenominations,
+    denominationCheckStatus:
+      value.denominationCheckStatus === "correct" ||
+      value.denominationCheckStatus === "incorrect"
+        ? value.denominationCheckStatus
+        : undefined,
+    denominationCheckNote: textFrom(value.denominationCheckNote),
+    denominationCheckedAt:
+      value.denominationCheckedAt === ""
+        ? ""
+        : textFrom(value.denominationCheckedAt) || undefined,
     countedBy: textFrom(value.countedBy) || undefined,
     openedAt: textFrom(value.openedAt) || undefined,
     closedAt: textFrom(value.closedAt) || undefined,
@@ -1088,6 +1114,19 @@ export function mergeRevenueCashRecords(
         isIceOnly && existing
           ? existing.checkedDenominations
           : record.checkedDenominations || existing?.checkedDenominations,
+      denominationCheckStatus:
+        isIceOnly && existing
+          ? existing.denominationCheckStatus
+          : record.denominationCheckStatus ??
+            existing?.denominationCheckStatus,
+      denominationCheckNote:
+        isIceOnly && existing
+          ? existing.denominationCheckNote
+          : record.denominationCheckNote ?? existing?.denominationCheckNote,
+      denominationCheckedAt:
+        isIceOnly && existing
+          ? existing.denominationCheckedAt
+          : record.denominationCheckedAt ?? existing?.denominationCheckedAt,
       countedBy: isIceOnly && existing
         ? existing.countedBy
         : record.countedBy || existing?.countedBy,

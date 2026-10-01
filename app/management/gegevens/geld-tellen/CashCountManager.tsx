@@ -389,6 +389,10 @@ function cashNoteDraftKey(record: RevenueCashRecord, key: CashDenominationKey) {
   return `${record.date}:${record.shop}:${key}`;
 }
 
+function denominationCheckDraftKey(record: RevenueCashRecord) {
+  return `${record.date}:${record.shop}:denomination-check-note`;
+}
+
 function cashSourceDraftKey(record: RevenueCashRecord) {
   return `${record.date}:${record.shop}:source`;
 }
@@ -455,6 +459,20 @@ function cashNoteControlDifference(
       }, 0)
       .toFixed(2)
   );
+}
+
+function cashNoteControlMatches(
+  record: RevenueCashRecord,
+  drafts: Record<string, string>
+) {
+  return banknoteDenominations.every((denomination) => {
+    const expected = cashNoteCount(record, denomination.key);
+    const actual = parseCount(
+      cashNoteInputValue(record, denomination.key, drafts)
+    );
+
+    return actual === expected;
+  });
 }
 
 function findCashRecord(
@@ -565,6 +583,25 @@ function isCashExpectedForShopDate(shop: RevenueShop, date: string) {
   return !(shop === "Daalseweg" && dateFromIso(date).getDay() === 0);
 }
 
+function isShopClosedDayRecord(record: RevenueDayRecord | undefined) {
+  return Boolean(
+    record &&
+      (record.shopClosed === true ||
+        String(record.note || "")
+          .toLowerCase()
+          .includes("winkel was gesloten"))
+  );
+}
+
+function hasRevenueDayReport(record: RevenueDayRecord | undefined) {
+  return Boolean(
+    record &&
+      (isShopClosedDayRecord(record) ||
+        record.amount > 0 ||
+        String(record.note || "").trim())
+  );
+}
+
 function cashWarning(record: RevenueCashRecord | undefined) {
   if (!record) return "Geen Cash-it dagafsluiting ontvangen.";
   if (Math.abs(record.countedCash - record.denominationTotal) > 0.01) {
@@ -591,6 +628,11 @@ export default function CashCountManager() {
   const [cashDeposits, setCashDeposits] = useState<RevenueCashDeposit[]>([]);
   const [safeCashDrafts, setSafeCashDrafts] = useState<Record<string, string>>({});
   const [cashNoteDrafts, setCashNoteDrafts] = useState<Record<string, string>>({});
+  const [cashNoteModalOpen, setCashNoteModalOpen] = useState(false);
+  const [denominationCheckNotes, setDenominationCheckNotes] = useState<
+    Record<string, string>
+  >({});
+  const [denominationCheckError, setDenominationCheckError] = useState("");
   const [cashSourceDrafts, setCashSourceDrafts] = useState<
     Record<string, { startCash?: string; countedCash?: string }>
   >({});
@@ -711,6 +753,9 @@ export default function CashCountManager() {
 
           return hasPatisserieCashRecord(record) && record?.checkedAt ? [record] : [];
         });
+        const closedDates = expectedDates.filter(
+          (date) => isShopClosedDayRecord(dayRecordByDate.get(date))
+        );
         const checkedIceRecords = iceRecords.filter(
           (record) => record.iceCheckedAt
         );
@@ -816,11 +861,20 @@ export default function CashCountManager() {
           includedIceCashDifference,
           iceCount: iceRecords.length,
           iceCheckedCount,
-          checkedCount: checkedRecords.length,
+          checkedCount: checkedRecords.length + closedDates.length,
           expectedCount: expectedDates.length,
           missingCount: expectedDates.filter(
-            (date) => !hasPatisserieCashRecord(findCashRecord(shopRecords, date, shop))
+            (date) =>
+              !isShopClosedDayRecord(dayRecordByDate.get(date)) &&
+              !hasPatisserieCashRecord(findCashRecord(shopRecords, date, shop))
           ).length,
+          missingRevenueCount: expectedDates.filter(
+            (date) =>
+              date < localIsoDate() &&
+              !isShopClosedDayRecord(dayRecordByDate.get(date)) &&
+              !hasRevenueDayReport(dayRecordByDate.get(date))
+          ).length,
+          closedCount: closedDates.length,
           expectedDates,
           deposit,
         };
@@ -876,19 +930,34 @@ export default function CashCountManager() {
     () =>
       selectedWeekDates.map((date) => {
         const record = findCashRecord(cashRecords, date, selectedShop);
+        const revenueRecord = dailyRecords.find(
+          (dayRecord) =>
+            dayRecord.date === date && dayRecord.shop === selectedShop
+        );
 
         return {
           date,
           patisserieRecord: hasPatisserieCashRecord(record) ? record : undefined,
           iceRecord: hasIceCashRecord(record) ? record : undefined,
-          isExpected: isCashExpectedForShopDate(selectedShop, date),
+          revenueRecord,
+          hasRevenue: hasRevenueDayReport(revenueRecord),
+          isExpected:
+            isCashExpectedForShopDate(selectedShop, date) ||
+            hasPatisserieCashRecord(record) ||
+            isShopClosedDayRecord(revenueRecord),
         };
       }),
-    [cashRecords, selectedShop, selectedWeekDates]
+    [cashRecords, dailyRecords, selectedShop, selectedWeekDates]
   );
   const selectedShopDay =
     selectedShopDays.find((day) => day.date === selectedDate) ||
     selectedShopDays[0];
+  const selectedShopDayIsPast = Boolean(
+    selectedShopDay && selectedShopDay.date < localIsoDate()
+  );
+  const selectedRevenueDayRecord = dailyRecords.find(
+    (record) => record.date === selectedDate && record.shop === selectedShop
+  );
   const selectedPatisserieCashRecord =
     selectedCashLocationKind === "patisserie"
       ? selectedShopDay?.patisserieRecord
@@ -897,6 +966,14 @@ export default function CashCountManager() {
     selectedCashLocationKind === "ice" ? selectedShopDay?.iceRecord : undefined;
   const selectedCashRecord = selectedPatisserieCashRecord;
   const selectedCashWarning = cashWarning(selectedCashRecord);
+  const selectedDenominationCheckDraftKey = selectedCashRecord
+    ? denominationCheckDraftKey(selectedCashRecord)
+    : "";
+  const selectedDenominationCheckNote = selectedCashRecord
+    ? denominationCheckNotes[selectedDenominationCheckDraftKey] ??
+      selectedCashRecord.denominationCheckNote ??
+      ""
+    : "";
   const selectedSafeDraftKey = selectedCashRecord
     ? `${selectedCashRecord.date}:${selectedCashRecord.shop}`
     : "";
@@ -962,6 +1039,15 @@ export default function CashCountManager() {
   const selectedDifference = selectedCashRecord
     ? selectedCashRecord.difference
     : undefined;
+  const selectedRegisteredCash = selectedCashRecord
+    ? cashRevenueAmount(selectedCashRecord)
+    : undefined;
+  const selectedRegisteredPin = selectedCashRecord
+    ? selectedRevenueDayRecord
+      ? pinRevenueAmount(selectedCashRecord, selectedRevenueDayRecord)
+      : undefined
+    : undefined;
+  const selectedRegisteredTotal = selectedRevenueDayRecord?.amount;
   const selectedIceSafeDraftKey = selectedIceCashRecord
     ? iceSafeDraftKey(selectedIceCashRecord)
     : "";
@@ -1038,6 +1124,10 @@ export default function CashCountManager() {
   );
   const weekMissingCount = weekRows.reduce(
     (total, row) => total + row.missingCount,
+    0
+  );
+  const weekMissingRevenueCount = weekRows.reduce(
+    (total, row) => total + row.missingRevenueCount,
     0
   );
   const isSelectedWeekComplete =
@@ -1206,6 +1296,145 @@ export default function CashCountManager() {
     }
 
     await markChecked(record);
+  }
+
+  async function markShopClosed(date: string, shop: RevenueShop) {
+    if (isSelectedWeekClosed) {
+      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Wil je ${shop} op ${dayName(date)} markeren als gesloten?`
+    );
+    if (!confirmed) return;
+
+    const now = new Date().toISOString();
+    const parts = weekPartsForDate(date);
+    const closedRecord: RevenueDayRecord = {
+      id: `closed:${date}:${shop}`,
+      date,
+      year: parts.year,
+      week: parts.week,
+      shop,
+      amount: 0,
+      shopClosed: true,
+      shopClosedAt: now,
+      shopClosedBy: "Management",
+      note: "Winkel was gesloten.",
+      source: "manual",
+      updatedAt: now,
+    };
+    const nextDailyRecords = [
+      ...dailyRecords.filter(
+        (record) => !(record.date === date && record.shop === shop)
+      ),
+      closedRecord,
+    ].sort(
+      (first, second) =>
+        second.date.localeCompare(first.date) ||
+        revenueShops.indexOf(first.shop) - revenueShops.indexOf(second.shop)
+    );
+
+    setDailyRecords(nextDailyRecords);
+    const saved = await saveCash(cashDeposits, cashRecords, nextDailyRecords);
+    if (saved) {
+      setStatus(`${shop} is voor ${dayName(date)} gemarkeerd als gesloten.`);
+    }
+  }
+
+  async function unmarkShopClosed(date: string, shop: RevenueShop) {
+    if (isSelectedWeekClosed) {
+      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+      return;
+    }
+
+    const nextDailyRecords = dailyRecords.filter(
+      (record) =>
+        !(
+          record.date === date &&
+          record.shop === shop &&
+          isShopClosedDayRecord(record)
+        )
+    );
+
+    setDailyRecords(nextDailyRecords);
+    const saved = await saveCash(cashDeposits, cashRecords, nextDailyRecords);
+    if (saved) {
+      setStatus(
+        `De sluitingsmarkering voor ${shop} op ${dayName(date)} is verwijderd.`
+      );
+    }
+  }
+
+  async function saveDenominationCheck(
+    record: RevenueCashRecord,
+    result: "correct" | "incorrect"
+  ) {
+    if (isCashRecordInClosedWeek(record)) {
+      setDenominationCheckError(
+        "Deze week is definitief gesloten en kan niet meer worden gewijzigd."
+      );
+      return;
+    }
+
+    if (record.checkedAt) {
+      setDenominationCheckError(
+        "Heropen eerst de managementcontrole om de briefjescontrole te wijzigen."
+      );
+      return;
+    }
+
+    const draftKey = denominationCheckDraftKey(record);
+    const note = (
+      denominationCheckNotes[draftKey] ??
+      record.denominationCheckNote ??
+      ""
+    ).trim();
+
+    if (result === "incorrect" && !note) {
+      setDenominationCheckError(
+        "Schrijf bij ‘Klopt niet’ kort op wat er niet klopt."
+      );
+      return;
+    }
+
+    if (result === "correct" && !cashNoteControlMatches(record, cashNoteDrafts)) {
+      setDenominationCheckError(
+        "De getelde briefjes wijken af van de PDF. Pas de aantallen aan of kies ‘Klopt niet’."
+      );
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const nextCashRecords = buildUpdatedCashRecords(
+      cashRecords,
+      record.date,
+      record.shop,
+      (current) => ({
+        ...current,
+        checkedDenominations: buildCheckedCashDenominations(
+          current,
+          cashNoteDrafts
+        ),
+        denominationCheckStatus: result,
+        denominationCheckNote: note,
+        denominationCheckedAt: now,
+        updatedAt: now,
+      })
+    );
+
+    setCashRecords(nextCashRecords);
+    const saved = await saveCash(cashDeposits, nextCashRecords);
+    if (!saved) return;
+
+    setCashNoteModalOpen(false);
+    setDenominationCheckError("");
+    setStatus(
+      result === "correct"
+        ? "Briefjescontrole klopt en is opgeslagen."
+        : "Afwijking bij de briefjescontrole is opgeslagen."
+    );
   }
 
   async function saveCashSourceCorrection(record: RevenueCashRecord) {
@@ -1422,7 +1651,8 @@ export default function CashCountManager() {
 
   async function saveCash(
     nextDeposits = cashDeposits,
-    nextCashRecords = cashRecords
+    nextCashRecords = cashRecords,
+    nextDailyRecords = dailyRecords
   ) {
     const cleanedCashRecords = nextCashRecords.map((record) => ({
       ...record,
@@ -1441,7 +1671,7 @@ export default function CashCountManager() {
         },
         body: JSON.stringify({
           records,
-          dailyRecords,
+          dailyRecords: nextDailyRecords,
           cashRecords: cleanedCashRecords,
           cashDeposits: nextDeposits,
         }),
@@ -1460,7 +1690,7 @@ export default function CashCountManager() {
 
       setRecords(Array.isArray(data.records) ? data.records : records);
       setDailyRecords(
-        Array.isArray(data.dailyRecords) ? data.dailyRecords : dailyRecords
+        Array.isArray(data.dailyRecords) ? data.dailyRecords : nextDailyRecords
       );
       setCashRecords(
         Array.isArray(data.cashRecords) ? data.cashRecords : cleanedCashRecords
@@ -1742,7 +1972,7 @@ export default function CashCountManager() {
       return {
         shop: row.shop,
         expectedCount: row.expectedCount,
-        checkedCount: checkedRecords.length,
+        checkedCount: checkedRecords.length + row.closedCount,
         missingCount: row.missingCount,
         cashRevenue,
         expectedSafeCash,
@@ -1752,10 +1982,18 @@ export default function CashCountManager() {
         depositNote: depositNotes[depositDraftKey] || sourceDeposit?.note || "",
         days: row.expectedDates.map((date) => {
           const record = findCashRecord(shopRecords, date, row.shop);
+          const closed = dailyRecords.some(
+            (dayRecord) =>
+              dayRecord.date === date &&
+              dayRecord.shop === row.shop &&
+              isShopClosedDayRecord(dayRecord)
+          );
 
           return {
             date,
-            checked: Boolean(hasPatisserieCashRecord(record) && record?.checkedAt),
+            checked:
+              closed ||
+              Boolean(hasPatisserieCashRecord(record) && record?.checkedAt),
             safeCash: hasPatisserieCashRecord(record) ? safeCheckedCash(record) : 0,
           };
         }),
@@ -1832,10 +2070,19 @@ export default function CashCountManager() {
   return (
     <div className="space-y-3">
       <section className="rounded-3xl border border-[#d9cbb8] bg-[#fbf7ef]/95 p-3 shadow-sm sm:p-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(13rem,18rem)_minmax(12rem,16rem)_minmax(0,1fr)_auto] xl:items-end">
-          <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#766b5f]">
-            Week · gestort
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(9rem,11rem)_minmax(12rem,16rem)_minmax(0,1fr)_auto] xl:items-end">
+          <label className="relative flex h-14 cursor-pointer items-center gap-2 rounded-2xl border border-[#cad9c5] bg-[#eef6eb] px-3 text-[#1f4f35] shadow-sm">
+            <span className="text-[0.58rem] font-black uppercase tracking-[0.08em]">
+              Weeknr.
+            </span>
+            <strong className="text-3xl font-black leading-none tabular-nums">
+              {selectedWeek.week}
+            </strong>
+            <span className="ml-auto text-[0.58rem] font-bold text-[#71806d]">
+              {selectedWeek.year}
+            </span>
             <select
+              aria-label="Kies weeknummer"
               value={depositWeekKey}
               onChange={(event) => {
                 const parts = parseWeekKey(event.target.value);
@@ -1845,11 +2092,11 @@ export default function CashCountManager() {
                   isoDateFromDate(dateFromIsoWeekParts(parts.year, parts.week))
                 );
               }}
-              className="h-11 rounded-xl border border-[#ded5ca] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] outline-none transition focus:border-[#8ba287]"
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
             >
               {availableWeeks.map((week) => (
                 <option key={week.key} value={week.key}>
-                  W{week.week} · {weekRangeLabel(week.year, week.week).replace(" t/m ", "–")} · {formatMoney(depositedTotalForWeek(cashDeposits, week.year, week.week))}
+                  Week {week.week} · {week.year}
                 </option>
               ))}
             </select>
@@ -1883,13 +2130,36 @@ export default function CashCountManager() {
           </label>
 
           <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-[#e7e0d8] bg-white text-center">
-            <div className="border-r border-[#e7e0d8] px-2 py-2.5">
-              <p className="text-[0.6rem] font-black uppercase tracking-[0.06em] text-[#8b8278]">
+            <div
+              className={`border-r border-[#e7e0d8] px-2 py-2.5 ${
+                weekMissingRevenueCount > 0 ? "bg-[#fff1ee]" : ""
+              }`}
+            >
+              <p
+                className={`flex items-center justify-center gap-1 text-[0.6rem] font-black uppercase tracking-[0.06em] ${
+                  weekMissingRevenueCount > 0
+                    ? "text-[#a43b2f]"
+                    : "text-[#8b8278]"
+                }`}
+              >
+                {weekMissingRevenueCount > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#d2453d] text-[0.62rem] text-white"
+                  >
+                    !
+                  </span>
+                )}
                 Gecheckt
               </p>
               <p className="mt-0.5 text-lg font-black tabular-nums text-[#1a1815]">
                 {weekCheckedCount}/{weekExpectedCount}
               </p>
+              {weekMissingRevenueCount > 0 && (
+                <p className="mt-0.5 text-[0.52rem] font-black uppercase tracking-[0.03em] text-[#a43b2f]">
+                  {weekMissingRevenueCount}× mist omzet
+                </p>
+              )}
             </div>
             <div className="border-r border-[#e7e0d8] bg-[#f6faf4] px-2 py-2.5">
               <p className="text-[0.6rem] font-black uppercase tracking-[0.06em] text-[#71806d]">
@@ -2011,12 +2281,23 @@ export default function CashCountManager() {
       {selectedShopRow && (
         <section className="rounded-3xl border border-[#e7e0d8]/80 bg-white/95 p-3 shadow-sm sm:p-4">
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-7">
-            {selectedShopDays.map(({ date, iceRecord, isExpected, patisserieRecord }) => {
+            {selectedShopDays.map(
+              ({
+                date,
+                hasRevenue,
+                iceRecord,
+                isExpected,
+                patisserieRecord,
+                revenueRecord,
+              }) => {
                   const isActive = date === selectedDate;
                   const dayRecord =
                     selectedCashLocationKind === "ice"
                       ? iceRecord
                       : patisserieRecord;
+                  const isMarkedClosed =
+                    selectedCashLocationKind === "patisserie" &&
+                    isShopClosedDayRecord(revenueRecord);
                   const dayIsExpected =
                     selectedCashLocationKind === "ice"
                       ? Boolean(iceRecord)
@@ -2025,10 +2306,20 @@ export default function CashCountManager() {
                     selectedCashLocationKind === "ice"
                       ? ""
                       : cashWarning(dayRecord);
-                  const isClosed = !dayIsExpected && !dayRecord;
+                  const isClosed =
+                    isMarkedClosed || (!dayIsExpected && !dayRecord);
+                  const isPast = date < localIsoDate();
+                  const isMissingRevenue =
+                    selectedCashLocationKind === "patisserie" &&
+                    dayIsExpected &&
+                    isPast &&
+                    !isMarkedClosed &&
+                    !hasRevenue;
                   const isMissing =
                     selectedCashLocationKind === "patisserie" &&
                     dayIsExpected &&
+                    isPast &&
+                    !isMarkedClosed &&
                     !dayRecord;
                   const isChecked =
                     selectedCashLocationKind === "ice"
@@ -2049,18 +2340,22 @@ export default function CashCountManager() {
                       key={date}
                       type="button"
                       onClick={() => setSelectedDate(date)}
-                      className={`relative min-h-[5.4rem] w-full rounded-2xl border p-2 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
-                        isActive ? "ring-2 ring-[#1a1815] ring-offset-1" : ""
+                      className={`relative min-h-[4.35rem] w-full rounded-[1.35rem] border px-2.5 py-2 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
+                        isActive ? "ring-2 ring-[#1f4f35] ring-offset-1" : ""
                       } ${rowClass}`}
                     >
-                      <span className="block text-[0.65rem] font-black uppercase tracking-[0.08em] opacity-65">
-                        {dayShortName(date).replace(".", "")}
+                      <span className="flex items-baseline gap-1.5 pr-5">
+                        <span className="text-[0.68rem] font-black uppercase tracking-[0.06em] opacity-70">
+                          {dayShortName(date).replace(".", "")}
+                        </span>
+                        <span className="text-[0.55rem] font-bold italic leading-none opacity-65">
+                          {date.slice(8, 10)}-{date.slice(5, 7)}
+                        </span>
                       </span>
-                      <span className="mt-0.5 block text-sm font-black leading-none">
-                        {date.slice(8, 10)}-{date.slice(5, 7)}
-                      </span>
-                      <span className="mt-2 block truncate text-xs font-black tabular-nums leading-none">
-                        {dayRecord
+                      <span className="mt-1.5 block truncate text-[0.78rem] font-black tabular-nums leading-none">
+                        {isMarkedClosed
+                          ? "gesloten"
+                          : dayRecord
                           ? formatMoney(
                               selectedCashLocationKind === "ice"
                                 ? iceExpectedCash(dayRecord)
@@ -2073,25 +2368,68 @@ export default function CashCountManager() {
                             : "-"}
                       </span>
                       <span
-                        className={`absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full text-sm font-black leading-none ${
-                          isMissing
+                        className={`absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full text-[0.62rem] font-black leading-none ${
+                          isMissingRevenue
                             ? "bg-[#d2453d] text-white"
+                            : isMarkedClosed
+                              ? "bg-[#8b8278] text-white"
                             : isChecked
                               ? "bg-[#2f6f43] text-white"
                               : "bg-white/70 text-[#8b8278]"
                         }`}
                       >
-                        {isMissing ? "×" : isChecked ? "✓" : isClosed ? "" : "•"}
+                        {isMissingRevenue
+                          ? "!"
+                          : isMarkedClosed
+                            ? "✓"
+                            : isMissing
+                              ? "×"
+                              : isChecked
+                                ? "✓"
+                                : isClosed
+                                  ? ""
+                                  : "•"}
                       </span>
                     </button>
                   );
-                })}
+                }
+              )}
           </div>
 
           <div className="mt-3">
             {selectedCashLocationKind === "patisserie" ? (
               <>
                 {!selectedCashRecord &&
+                isShopClosedDayRecord(selectedShopDay?.revenueRecord) ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#d8d2ca] bg-[#f5f2ee] px-4 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#8b8278] text-base font-black text-white">
+                    ✓
+                  </span>
+                  <div>
+                    <p className="text-[0.58rem] font-black uppercase tracking-[0.06em] text-[#8b8278]">
+                      {dayName(selectedShopDay.date)} · {selectedShop}
+                    </p>
+                    <p className="text-sm font-black text-[#1a1815]">
+                      Winkel was gesloten
+                    </p>
+                    <p className="mt-0.5 text-xs font-semibold text-[#766f67]">
+                      Deze dag telt als afgehandeld en bevat geen omzet.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void unmarkShopClosed(selectedShopDay.date, selectedShop)
+                  }
+                  disabled={state === "saving" || isSelectedWeekClosed}
+                  className="h-9 rounded-full border border-[#8b8278] bg-white px-4 text-xs font-black text-[#6b645b] disabled:opacity-50"
+                >
+                  Markering verwijderen
+                </button>
+              </div>
+            ) : !selectedCashRecord &&
                 selectedShopDay &&
                 !selectedShopDay.isExpected ? (
               <>
@@ -2110,25 +2448,78 @@ export default function CashCountManager() {
                 </div>
               </>
             ) : !selectedCashRecord ? (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#ece5dd] bg-[#faf8f5] px-4 py-4">
-                  <div>
-                    <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-                      {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"}
-                    </p>
-                    <p className="text-sm font-black text-[#1a1815]">
-                      Dagafsluiting ontbreekt
-                    </p>
+              <div
+                className={`rounded-2xl border px-4 py-3 ${
+                  selectedShopDayIsPast
+                    ? "border-[#e1a49d] bg-[#fff1ee]"
+                    : "border-[#e7e0d8] bg-[#faf8f5]"
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg font-black ${
+                        selectedShopDayIsPast
+                          ? "bg-[#d2453d] text-white"
+                          : "bg-[#e9e4de] text-[#8b8278]"
+                      }`}
+                    >
+                      {selectedShopDayIsPast ? "!" : "·"}
+                    </span>
+                    <div>
+                      <p className="text-[0.58rem] font-black uppercase tracking-[0.06em] text-[#a43b2f]">
+                        {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"} · {selectedShop}
+                      </p>
+                      <p className="text-sm font-black text-[#1a1815]">
+                        {!selectedShopDayIsPast
+                          ? "Nog niet ontvangen"
+                          : selectedShopDay?.hasRevenue
+                          ? "Mist kasgegevens"
+                          : "Mist omzet"}
+                      </p>
+                      <p className="mt-0.5 max-w-xl text-xs font-semibold text-[#766f67]">
+                        {!selectedShopDayIsPast
+                          ? "De dagafsluiting van deze dag wordt later verwacht."
+                          : selectedShopDay?.hasRevenue
+                          ? "De omzet is binnen, maar de Cash-it geldtelling ontbreekt. Laad het dagrapport opnieuw in."
+                          : "Was de winkel open? Laad dan het dagrapport opnieuw in. Alleen bij een werkelijk gesloten winkel mag je deze dag als gesloten markeren."}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-sm font-bold text-[#8b8278]">
-                    Geen Cash-it dagafsluiting ontvangen.
-                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedShopDayIsPast && (
+                      <button
+                        type="button"
+                        onClick={() => window.location.reload()}
+                        className="h-9 rounded-full border border-[#a43b2f] bg-white px-4 text-xs font-black text-[#a43b2f]"
+                      >
+                        Opnieuw ophalen
+                      </button>
+                    )}
+                    {selectedShopDayIsPast &&
+                      !selectedShopDay?.hasRevenue &&
+                      selectedShopDay && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void markShopClosed(
+                            selectedShopDay.date,
+                            selectedShop
+                          )
+                        }
+                        disabled={state === "saving" || isSelectedWeekClosed}
+                        className="h-9 rounded-full bg-[#1a1815] px-4 text-xs font-black text-white disabled:opacity-50"
+                      >
+                        Winkel was gesloten
+                      </button>
+                      )}
+                  </div>
                 </div>
-              </>
+              </div>
             ) : (
               <article
                 key={selectedCashRecord.id}
-                className={`rounded-2xl border p-3 ${
+                className={`rounded-[1.65rem] border p-3 ${
                   selectedCashRecord.checkedAt
                     ? "border-[#cbdcc5] bg-[#f6fbf5]"
                     : selectedCashWarning
@@ -2136,113 +2527,206 @@ export default function CashCountManager() {
                       : "border-[#ece5dd] bg-[#faf8f5]"
                 }`}
               >
-                <div className="grid gap-3 md:grid-cols-[6.5rem_minmax(0,1fr)_7rem] md:items-start">
-                  <label className="flex items-center gap-2 lg:items-start">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(selectedCashRecord.checkedAt)}
-                      disabled={state === "saving" || isSelectedWeekClosed}
-                      onChange={() => void toggleChecked(selectedCashRecord)}
-                      className="mt-0.5 h-5 w-5 accent-[#1f4f35]"
-                    />
-                    <span>
-                      <span className="block text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-                        {dayShortName(selectedCashRecord.date)}
-                      </span>
-                    <span className="block text-base font-black leading-tight text-[#1a1815]">
-                        {selectedCashRecord.date.slice(8, 10)}-
-                        {selectedCashRecord.date.slice(5, 7)}
-                      </span>
-                      <span
-                        className={`mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-normal ${
-                          selectedCashRecord.checkedAt
-                            ? "bg-[#dfeadd] text-[#1f4f35]"
-                            : "bg-[#f5ead6] text-[#7a5417]"
-                        }`}
-                      >
-                        {selectedCashRecord.checkedAt ? "compleet" : "open"}
-                      </span>
-                    </span>
-                  </label>
-
-                  <div className="grid gap-x-4 gap-y-2 grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
-                    <AmountCell
-                      label="Start"
-                      value={formatOptionalMoney(selectedStartCash)}
-                    />
-                    <AmountCell
-                      label="Geteld"
-                      value={formatOptionalMoney(selectedCountedCash)}
-                    />
-                    <AmountCell
-                      label="Kas-uit"
-                      value={formatOptionalMoney(selectedCashOut)}
-                      tone={
-                        selectedCashOut !== undefined &&
-                        Math.abs(selectedCashOut) > 0.01
-                          ? "warn"
-                          : "normal"
-                      }
-                    />
-                    <AmountCell
-                      label="Bonnen"
-                      value={formatOptionalMoney(selectedReceipts)}
-                      tone={
-                        selectedReceipts !== undefined &&
-                        Math.abs(selectedReceipts) > 0.01
-                          ? "warn"
-                          : "normal"
-                      }
-                    />
-                    <AmountCell
-                      label="Naar kluis"
-                      value={formatMoney(selectedExpectedCash)}
-                    />
-                    <AmountCell
-                      label="Kasverschil"
-                      value={formatOptionalMoney(selectedDifference)}
-                      tone={
-                        selectedDifference !== undefined &&
-                        Math.abs(selectedDifference) > 0.05
-                          ? "warn"
-                          : "normal"
-                      }
-                    />
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                  <div>
+                    <p className="text-[0.56rem] font-black uppercase tracking-[0.1em] text-[#71806d]">
+                      {dayName(selectedCashRecord.date)}
+                    </p>
+                    <p className="mt-0.5 text-sm font-black leading-none text-[#1a1815]">
+                      Dagcontrole · {selectedCashRecord.shop}
+                    </p>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void toggleChecked(selectedCashRecord)}
-                    disabled={state === "saving" || isSelectedWeekClosed}
-                    className={`h-10 rounded-xl border px-3 text-xs font-black disabled:opacity-60 ${
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.58rem] font-black uppercase tracking-[0.06em] ${
                       selectedCashRecord.checkedAt
-                        ? "border-[#d9d2c9] bg-white text-[#6b645b]"
-                        : "border-[#1a1815] bg-[#1a1815] text-white"
+                        ? "bg-[#dfeadd] text-[#1f4f35]"
+                        : "bg-[#f5ead6] text-[#7a5417]"
                     }`}
                   >
-                    {selectedCashRecord.checkedAt ? "Heropenen" : "Afvinken"}
-                  </button>
+                    <span aria-hidden="true">
+                      {selectedCashRecord.checkedAt ? "✓" : "•"}
+                    </span>
+                    {selectedCashRecord.checkedAt
+                      ? "management akkoord"
+                      : "nog controleren"}
+                  </span>
                 </div>
 
-                <div className="mt-3 grid gap-3 border-t border-[#e7e0d8]/80 pt-3 md:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
-                  <CashNoteControl
-                    disabled={
-                      Boolean(selectedCashRecord.checkedAt) ||
-                      state === "saving" ||
-                      isSelectedWeekClosed
-                    }
-                    drafts={cashNoteDrafts}
-                    onChange={(key, value) =>
-                      setCashNoteDrafts((current) => ({
-                        ...current,
-                        [cashNoteDraftKey(selectedCashRecord, key)]: value,
-                      }))
-                    }
-                    record={selectedCashRecord}
-                  />
+                <div className="mt-2.5 grid gap-2 lg:grid-cols-3">
+                  <section className="rounded-[1.25rem] border border-[#e2ddd6] bg-white px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#77716a]">
+                          Kassa geregistreerd
+                        </p>
+                        <p className="mt-0.5 text-[0.62rem] font-semibold text-[#8b8278]">
+                          Uit de dagafsluiting
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-[#f0ece7] px-2 py-1 text-[0.5rem] font-black uppercase text-[#77716a]">
+                        kassa
+                      </span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-1.5">
+                      <CashOverviewMetric
+                        label="Cash"
+                        value={formatOptionalMoney(selectedRegisteredCash)}
+                        emphasized
+                      />
+                      <CashOverviewMetric
+                        label="Pin"
+                        value={formatOptionalMoney(selectedRegisteredPin)}
+                      />
+                      <CashOverviewMetric
+                        label="Bonnen"
+                        value={formatOptionalMoney(selectedReceipts)}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between border-t border-[#e7e0d8] pt-2">
+                      <span className="text-[0.56rem] font-black uppercase tracking-[0.06em] text-[#8b8278]">
+                        Totaal kassa
+                      </span>
+                      <strong className="text-sm tabular-nums text-[#1a1815]">
+                        {formatOptionalMoney(selectedRegisteredTotal)}
+                      </strong>
+                    </div>
+                  </section>
 
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
-                    <div className="grid gap-2 rounded-xl border border-[#e7e0d8] bg-white/70 p-2.5 sm:col-span-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                  <section className="rounded-[1.25rem] border border-[#ead9b9] bg-[#fff9ea] px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#866326]">
+                          Winkeldame genoteerd
+                        </p>
+                        <p className="mt-0.5 text-[0.62rem] font-semibold text-[#8b8278]">
+                          {selectedCashRecord.countedBy || "Teller niet vermeld"}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-white/80 px-2 py-1 text-[0.5rem] font-black uppercase text-[#866326]">
+                        telling
+                      </span>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-1.5">
+                      <CashOverviewMetricButton
+                        label="Geteld in lade"
+                        value={formatOptionalMoney(selectedCountedCash)}
+                        status={selectedCashRecord.denominationCheckStatus}
+                        onClick={() => {
+                          setDenominationCheckError("");
+                          setCashNoteModalOpen(true);
+                        }}
+                      />
+                      <CashOverviewMetric
+                        label="Startgeld"
+                        value={formatOptionalMoney(selectedStartCash)}
+                      />
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-2 border-t border-[#ead9b9] pt-2">
+                      <AmountCell
+                        label="Kas-uit"
+                        value={formatOptionalMoney(selectedCashOut)}
+                        tone={
+                          selectedCashOut !== undefined &&
+                          Math.abs(selectedCashOut) > 0.01
+                            ? "warn"
+                            : "normal"
+                        }
+                      />
+                      <AmountCell
+                        label="Naar kluis"
+                        value={formatMoney(selectedExpectedCash)}
+                      />
+                      <AmountCell
+                        label="Kasverschil"
+                        value={formatOptionalMoney(selectedDifference)}
+                        tone={
+                          selectedDifference !== undefined &&
+                          Math.abs(selectedDifference) > 0.05
+                            ? "warn"
+                            : "normal"
+                        }
+                      />
+                    </div>
+                  </section>
+
+                  <section className="rounded-[1.25rem] border border-[#c8d9c3] bg-[#eef6eb] px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#1f4f35]">
+                          Managementcontrole
+                        </p>
+                        <p className="mt-0.5 text-[0.62rem] font-semibold text-[#667361]">
+                          Controleer wat werkelijk in de kluis ligt
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-white/80 px-2 py-1 text-[0.5rem] font-black uppercase text-[#1f4f35]">
+                        controle
+                      </span>
+                    </div>
+                    <label className="mt-2 grid gap-0.5 text-[0.54rem] font-black uppercase tracking-[0.04em] text-[#667361]">
+                      Werkelijk geteld
+                      <span className="relative block">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#1f4f35]">
+                          €
+                        </span>
+                        <input
+                          value={selectedSafeInputValue}
+                          onChange={(event) =>
+                            setSafeCashDrafts((current) => ({
+                              ...current,
+                              [selectedSafeDraftKey]: event.target.value,
+                            }))
+                          }
+                          inputMode="decimal"
+                          disabled={
+                            Boolean(selectedCashRecord.checkedAt) ||
+                            state === "saving" ||
+                            isSelectedWeekClosed
+                          }
+                          placeholder="0,00"
+                          className="h-10 w-full rounded-xl border border-[#b9cdb3] bg-white pl-7 pr-3 text-base font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
+                        />
+                      </span>
+                    </label>
+                    <div className="mt-2 flex items-center justify-between gap-3 text-[0.58rem] font-bold text-[#667361]">
+                      <span>Verwacht {formatMoney(selectedExpectedCash)}</span>
+                      <span
+                        className={
+                          Math.abs(selectedSafeDraftDifference) > 0.01
+                            ? "font-black text-[#9a5f08]"
+                            : "font-black text-[#1f4f35]"
+                        }
+                      >
+                        Verschil {formatMoney(selectedSafeDraftDifference)}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void toggleChecked(selectedCashRecord)}
+                      disabled={state === "saving" || isSelectedWeekClosed}
+                      className={`mt-2.5 flex h-9 w-full items-center justify-center gap-1.5 rounded-full border px-3 text-[0.68rem] font-black disabled:opacity-60 ${
+                        selectedCashRecord.checkedAt
+                          ? "border-[#b9cdb3] bg-white text-[#667361]"
+                          : "border-[#1f4f35] bg-[#1f4f35] text-white"
+                      }`}
+                    >
+                      <span aria-hidden="true">
+                        {selectedCashRecord.checkedAt ? "↺" : "✓"}
+                      </span>
+                      {selectedCashRecord.checkedAt
+                        ? "Controle heropenen"
+                        : "Controle afvinken"}
+                    </button>
+                  </section>
+                </div>
+
+                <div className="mt-2.5 border-t border-[#e7e0d8]/80 pt-3">
+                  <div className="grid content-start gap-2 md:grid-cols-2">
+                    <details className="rounded-xl border border-[#e7e0d8] bg-white/70 p-2.5">
+                      <summary className="cursor-pointer text-[0.58rem] font-black uppercase tracking-[0.05em] text-[#8b8278]">
+                        Start- of sluitbedrag corrigeren
+                      </summary>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                       <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
                         Startbedrag
                         <input
@@ -2306,40 +2790,10 @@ export default function CashCountManager() {
                       >
                         Corrigeren
                       </button>
-                    </div>
+                      </div>
+                    </details>
 
-                    <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-                      Controlebedrag
-                      <input
-                        value={selectedSafeInputValue}
-                        onChange={(event) =>
-                          setSafeCashDrafts((current) => ({
-                            ...current,
-                            [selectedSafeDraftKey]: event.target.value,
-                          }))
-                        }
-                        inputMode="decimal"
-                        disabled={
-                          Boolean(selectedCashRecord.checkedAt) ||
-                          state === "saving" ||
-                          isSelectedWeekClosed
-                        }
-                        placeholder="0,00"
-                        className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
-                      />
-                    </label>
-
-                    <AmountCell
-                      label="Verschil"
-                      value={formatMoney(selectedSafeDraftDifference)}
-                      tone={
-                        Math.abs(selectedSafeDraftDifference) > 0.01
-                          ? "warn"
-                          : "normal"
-                      }
-                    />
-
-                    <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278] sm:col-span-2">
+                    <label className="grid gap-0.5 rounded-xl border border-[#e7e0d8] bg-white/70 p-2.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
                       Controle-notitie
                       <input
                         value={visibleCashNote(selectedCashRecord.note)}
@@ -2366,7 +2820,7 @@ export default function CashCountManager() {
                   </div>
 
                   {selectedCashWarning && (
-                    <p className="rounded-xl bg-[#fff8d8] px-3 py-2 text-xs font-bold text-[#7a5417] md:col-span-2">
+                    <p className="mt-2 rounded-xl bg-[#fff8d8] px-3 py-2 text-xs font-bold text-[#7a5417]">
                       {selectedCashWarning}
                     </p>
                   )}
@@ -2434,98 +2888,157 @@ export default function CashCountManager() {
       )}
 
       {selectedShopRow && selectedCashLocationKind === "patisserie" && (
-        <section className="rounded-3xl border border-[#e7e0d8]/80 bg-white/95 p-3 shadow-sm sm:p-4">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <p className="text-[0.65rem] font-black uppercase tracking-[0.1em] text-[#6f836b]">
-                Weekstorting
-              </p>
-              <h2 className="mt-0.5 text-2xl font-black leading-tight text-[#1a1815]">
-                {selectedShopRow.shop}
-              </h2>
+        <section className="rounded-[1.6rem] border border-[#d9e1d5] bg-white/95 p-3 shadow-sm">
+          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)] lg:items-stretch">
+            <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-[#f8f6f3] px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="text-[0.55rem] font-black uppercase tracking-[0.1em] text-[#71806d]">
+                  Weekstorting
+                </p>
+                <h2 className="mt-0.5 truncate text-lg font-black leading-none text-[#1a1815]">
+                  {selectedShopRow.shop}
+                </h2>
+              </div>
+              <div className="text-right">
+                <p className="text-[0.5rem] font-black uppercase tracking-[0.05em] text-[#8b8278]">
+                  Dagen gecontroleerd
+                </p>
+                <p className="mt-0.5 text-base font-black tabular-nums text-[#1a1815]">
+                  {selectedShopRow.checkedCount}/{selectedShopRow.expectedCount}
+                </p>
+              </div>
             </div>
-            <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto lg:min-w-[32rem]">
-              <AmountCell
-                label="Compleet"
-                value={`${selectedShopRow.checkedCount}/${selectedShopRow.expectedCount}`}
-              />
-              <AmountCell
-                label="Kasomzet"
-                value={formatMoney(selectedShopRow.includedCashRevenue)}
-              />
-              <AmountCell
-                label="Verwacht"
-                value={formatMoney(selectedShopRow.includedExpectedSafeCash)}
-              />
-              <AmountCell
-                label="Weektotaal"
-                value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
-              />
-            </div>
-          </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl border border-[#ece5dd] bg-[#faf8f5] p-3 md:grid-cols-6">
-            <AmountCell
-              label="Pin"
-              value={formatMoney(selectedShopRow.includedPinRevenue)}
-            />
-            <AmountCell
-              label="Bonnen"
-              value={formatMoney(selectedShopRow.includedReceipts)}
-            />
-            <AmountCell
-              label="Kas uit"
-              value={formatMoney(selectedShopRow.includedCashOut)}
-            />
-            <AmountCell
-              label="Kasverschil"
-              tone={
-                Math.abs(selectedShopRow.includedCashDifference) > 5
-                  ? "warn"
-                  : "normal"
-              }
-              value={formatMoney(selectedShopRow.includedCashDifference)}
-            />
-            <AmountCell
-              label="Kluisverschil"
-              tone={Math.abs(selectedShopRow.difference) > 0.01 ? "warn" : "normal"}
-              value={formatMoney(selectedShopRow.difference)}
-            />
-            <AmountCell
-              label="Gestort"
-              value={
+            <div
+              className={`rounded-2xl border px-4 py-2.5 ${
                 selectedShopRow.deposit?.depositedAt
-                  ? formatMoney(selectedShopRow.deposit.actualAmount ?? selectedShopRow.deposit.amount)
-                  : `${formatMoney(selectedShopRow.includedCheckedSafeCash)} te storten`
-              }
-            />
+                  ? "border-[#9fbd9d] bg-[#e7f2e4]"
+                  : "border-[#e7c985] bg-[#fff6dc]"
+              }`}
+            >
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[0.55rem] font-black uppercase tracking-[0.08em] text-[#1f4f35]">
+                    {selectedShopRow.deposit?.depositedAt
+                      ? `Totaal gestort voor ${selectedShopRow.shop}`
+                      : `Nog te storten voor ${selectedShopRow.shop}`}
+                  </p>
+                  <p className="mt-1 truncate text-[1.65rem] font-black leading-none tabular-nums text-[#1f4f35]">
+                    {selectedShopRow.deposit?.depositedAt
+                      ? formatMoney(
+                          selectedShopRow.deposit.actualAmount ??
+                            selectedShopRow.deposit.amount
+                        )
+                      : formatMoney(
+                          parseAmount(
+                            depositDrafts[selectedDepositDraftKey] ??
+                              formatAmountInput(
+                                selectedShopRow.includedCheckedSafeCash
+                              )
+                          )
+                        )}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-white/75 px-2 py-1 text-[0.5rem] font-black uppercase text-[#1f4f35]">
+                  {selectedShopRow.deposit?.depositedAt
+                    ? "vastgelegd"
+                    : "nog opslaan"}
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="mt-3 grid gap-2 md:grid-cols-[12rem_minmax(14rem,1fr)_auto] md:items-end">
-            <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-              Storting
-              <input
-                value={
-                  depositDrafts[selectedDepositDraftKey] ??
-                  formatAmountInput(
-                    selectedShopRow.deposit?.amount ||
-                      selectedShopRow.includedCheckedSafeCash
-                  )
-                }
-                onChange={(event) =>
-                  setDepositDrafts((current) => ({
-                    ...current,
-                    [selectedDepositDraftKey]: event.target.value,
-                  }))
-                }
-                inputMode="decimal"
-                disabled={isSelectedWeekClosed}
-                placeholder="0,00"
-                className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-3 text-base font-black normal-case tracking-normal text-[#1a1815]"
-              />
+          <div className="mt-2 grid gap-2 lg:grid-cols-2">
+            <section className="rounded-2xl border border-[#e7e0d8] bg-[#faf8f5] px-3 py-2.5">
+              <p className="text-[0.55rem] font-black uppercase tracking-[0.08em] text-[#77716a]">
+                Kassa geregistreerd
+              </p>
+              <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
+                <WeekControlMetric
+                  label="Cash"
+                  value={formatMoney(selectedShopRow.includedCashRevenue)}
+                />
+                <WeekControlMetric
+                  label="Pin"
+                  value={formatMoney(selectedShopRow.includedPinRevenue)}
+                />
+                <WeekControlMetric
+                  label="Bonnen"
+                  value={formatMoney(selectedShopRow.includedReceipts)}
+                />
+                <WeekControlMetric
+                  label="Kas uit"
+                  value={formatMoney(selectedShopRow.includedCashOut)}
+                />
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[#c8d9c3] bg-[#f2f7f0] px-3 py-2.5">
+              <p className="text-[0.55rem] font-black uppercase tracking-[0.08em] text-[#1f4f35]">
+                Daadwerkelijk geteld en gecheckt
+              </p>
+              <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-4">
+                <WeekControlMetric
+                  label="Volgens kassa"
+                  value={formatMoney(selectedShopRow.includedExpectedSafeCash)}
+                />
+                <WeekControlMetric
+                  label="Geteld"
+                  value={formatMoney(selectedShopRow.includedCheckedSafeCash)}
+                  emphasized
+                />
+                <WeekControlMetric
+                  label="Kasverschil"
+                  tone={
+                    Math.abs(selectedShopRow.includedCashDifference) > 5
+                      ? "warn"
+                      : "normal"
+                  }
+                  value={formatMoney(selectedShopRow.includedCashDifference)}
+                />
+                <WeekControlMetric
+                  label="Kluisverschil"
+                  tone={
+                    Math.abs(selectedShopRow.difference) > 0.01
+                      ? "warn"
+                      : "normal"
+                  }
+                  value={formatMoney(selectedShopRow.difference)}
+                />
+              </div>
+            </section>
+          </div>
+
+          <div className="mt-2 grid gap-2 rounded-2xl border border-[#d9e1d5] bg-[#f8fbf7] p-2.5 md:grid-cols-[11rem_minmax(12rem,1fr)_auto] md:items-end">
+            <label className="grid gap-0.5 text-[0.52rem] font-black uppercase tracking-[0.04em] text-[#6f836b]">
+              Bedrag bankstorting
+              <span className="relative block">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-[#1f4f35]">
+                  €
+                </span>
+                <input
+                  value={
+                    depositDrafts[selectedDepositDraftKey] ??
+                    formatAmountInput(
+                      selectedShopRow.deposit?.amount ||
+                        selectedShopRow.includedCheckedSafeCash
+                    )
+                  }
+                  onChange={(event) =>
+                    setDepositDrafts((current) => ({
+                      ...current,
+                      [selectedDepositDraftKey]: event.target.value,
+                    }))
+                  }
+                  inputMode="decimal"
+                  disabled={isSelectedWeekClosed}
+                  placeholder="0,00"
+                  className="h-10 w-full rounded-xl border border-[#c8d9c3] bg-white pl-7 pr-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-50"
+                />
+              </span>
             </label>
-            <label className="grid gap-0.5 text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
-              Stortnotitie
+            <label className="grid gap-0.5 text-[0.52rem] font-black uppercase tracking-[0.04em] text-[#6f836b]">
+              Notitie <span className="font-semibold normal-case">(optioneel)</span>
               <input
                 value={
                   depositNotes[selectedDepositDraftKey] ??
@@ -2538,11 +3051,9 @@ export default function CashCountManager() {
                     [selectedDepositDraftKey]: event.target.value,
                   }))
                 }
-                placeholder={
-                  selectedShopRow.deposit?.depositedAt ? "al gestort" : "optioneel"
-                }
+                placeholder="Bijv. twee stortingen"
                 disabled={isSelectedWeekClosed}
-                className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-bold normal-case tracking-normal text-[#1a1815]"
+                className="h-10 rounded-xl border border-[#d9e1d5] bg-white px-3 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-50"
               />
             </label>
             <button
@@ -2553,7 +3064,7 @@ export default function CashCountManager() {
                 state === "saving" ||
                 selectedShopRow.checkedCount === 0
               }
-              className="h-11 rounded-xl bg-[#1f4f35] px-4 text-xs font-black text-white shadow-sm disabled:bg-[#c3d3bc] disabled:text-[#6b645b] disabled:opacity-50"
+              className="h-10 rounded-full bg-[#1f4f35] px-4 text-xs font-black text-white shadow-sm disabled:bg-[#c3d3bc] disabled:text-[#6b645b] disabled:opacity-50"
             >
               {isSelectedWeekClosed
                 ? "Week gesloten"
@@ -2562,48 +3073,51 @@ export default function CashCountManager() {
                   : "Storting opslaan"}
             </button>
           </div>
+
           {selectedShopRow.deposit?.depositedAt && (
-            <div className="mt-3 rounded-2xl border border-[#efd1a1] bg-[#fffaf0] p-3">
-              <div className="flex flex-wrap items-center justify-between gap-1">
-                <p className="text-xs font-black text-[#493c2d]">Werkelijke bankstorting en stortverschil</p>
-                <p className="text-xs font-bold text-[#6b645b]">
-                  Oorspronkelijk opgegeven: {formatMoney(selectedShopRow.deposit.amount)}
-                  {selectedShopRow.deposit.actualAmount !== undefined && (
-                    <> · Verschil: {formatMoney(selectedShopRow.deposit.actualAmount - selectedShopRow.deposit.amount)}</>
-                  )}
-                </p>
-              </div>
-              <div className="mt-2 grid gap-2 md:grid-cols-[12rem_minmax(14rem,1fr)_auto] md:items-end">
-                <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#8b8278]">
-                  Werkelijk gestort
+            <details className="mt-2 rounded-xl border border-[#ead9b9] bg-[#fffaf0] px-3 py-2">
+              <summary className="cursor-pointer text-[0.56rem] font-black uppercase tracking-[0.05em] text-[#866326]">
+                Bankbedrag corrigeren
+                {selectedShopRow.deposit.actualAmount !== undefined && (
+                  <span className="ml-2 normal-case tracking-normal text-[#6b645b]">
+                    Verschil {formatMoney(
+                      selectedShopRow.deposit.actualAmount -
+                        selectedShopRow.deposit.amount
+                    )}
+                  </span>
+                )}
+              </summary>
+              <div className="mt-2 grid gap-2 md:grid-cols-[11rem_minmax(12rem,1fr)_auto] md:items-end">
+                <label className="grid gap-0.5 text-[0.52rem] font-black uppercase text-[#8b8278]">
+                  Werkelijk op de bank
                   <input
                     value={actualDepositDrafts[selectedDepositDraftKey] ?? formatAmountInput(selectedShopRow.deposit.actualAmount ?? selectedShopRow.deposit.amount)}
                     onChange={(event) => setActualDepositDrafts((current) => ({ ...current, [selectedDepositDraftKey]: event.target.value }))}
                     inputMode="decimal"
                     disabled={Boolean(selectedShopRow.deposit.cashbookBookedAt)}
-                    className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-bold normal-case text-[#1a1815] disabled:opacity-50"
+                    className="h-9 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-black normal-case text-[#1a1815] disabled:opacity-50"
                   />
                 </label>
-                <label className="grid gap-0.5 text-[0.56rem] font-black uppercase text-[#8b8278]">
-                  Toelichting bij verschil
+                <label className="grid gap-0.5 text-[0.52rem] font-black uppercase text-[#8b8278]">
+                  Reden van verschil
                   <input
                     value={differenceNotes[selectedDepositDraftKey] ?? selectedShopRow.deposit.differenceNote ?? ""}
                     onChange={(event) => setDifferenceNotes((current) => ({ ...current, [selectedDepositDraftKey]: event.target.value }))}
                     disabled={Boolean(selectedShopRow.deposit.cashbookBookedAt)}
-                    placeholder="Bijv. € 15 minder door banktelling"
-                    className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-3 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
+                    placeholder="Bijv. bank telde € 15 minder"
+                    className="h-9 rounded-xl border border-[#d9d2c9] bg-white px-3 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
                   />
                 </label>
                 <button
                   type="button"
                   onClick={() => void saveActualDeposit(selectedShopRow)}
                   disabled={state === "saving" || Boolean(selectedShopRow.deposit.cashbookBookedAt)}
-                  className="h-10 rounded-xl bg-[#c3d3bc] px-3 text-[0.68rem] font-black text-[#1a1815] disabled:opacity-50"
+                  className="h-9 rounded-full bg-[#c3d3bc] px-4 text-[0.65rem] font-black text-[#1a1815] disabled:opacity-50"
                 >
-                  Verschil opslaan
+                  Correctie opslaan
                 </button>
               </div>
-            </div>
+            </details>
           )}
         </section>
       )}
@@ -2695,6 +3209,142 @@ export default function CashCountManager() {
             </p>
           )}
         </section>
+      )}
+
+      {cashNoteModalOpen && selectedCashRecord && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-[#1a1815]/45 p-2 backdrop-blur-[2px] sm:items-center sm:p-5"
+          onClick={() => {
+            if (state === "saving") return;
+            setCashNoteModalOpen(false);
+            setDenominationCheckError("");
+          }}
+        >
+          <section
+            aria-labelledby="cash-note-dialog-title"
+            aria-modal="true"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-y-auto rounded-[1.6rem] border border-[#ded5ca] bg-[#fbf9f5] p-3 shadow-2xl sm:max-h-[calc(100dvh-2.5rem)] sm:p-4"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-[#e7e0d8] pb-3">
+              <div>
+                <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#866326]">
+                  Geteld in de lade · {selectedCashRecord.shop}
+                </p>
+                <h2
+                  id="cash-note-dialog-title"
+                  className="mt-0.5 text-xl font-black leading-tight text-[#1a1815]"
+                >
+                  {formatOptionalMoney(selectedCountedCash)} controleren
+                </h2>
+                <p className="mt-1 text-xs font-semibold text-[#766f67]">
+                  Vergelijk de briefjes uit de PDF met wat werkelijk is geteld.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Briefjescontrole sluiten"
+                onClick={() => {
+                  setCashNoteModalOpen(false);
+                  setDenominationCheckError("");
+                }}
+                disabled={state === "saving"}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#ded5ca] bg-white text-lg font-black text-[#6b645b] disabled:opacity-50"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-3 rounded-2xl border border-[#ead9b9] bg-white p-3">
+              <CashNoteControl
+                disabled={
+                  Boolean(selectedCashRecord.checkedAt) ||
+                  state === "saving" ||
+                  isSelectedWeekClosed
+                }
+                drafts={cashNoteDrafts}
+                onChange={(key, value) => {
+                  setDenominationCheckError("");
+                  setCashNoteDrafts((current) => ({
+                    ...current,
+                    [cashNoteDraftKey(selectedCashRecord, key)]: value,
+                  }));
+                }}
+                record={selectedCashRecord}
+              />
+            </div>
+
+            <label className="mt-3 grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.06em] text-[#6b645b]">
+              Notitie
+              <span className="text-[0.58rem] font-semibold normal-case tracking-normal text-[#8b8278]">
+                Verplicht wanneer je kiest voor ‘Klopt niet’.
+              </span>
+              <textarea
+                value={selectedDenominationCheckNote}
+                onChange={(event) => {
+                  setDenominationCheckError("");
+                  setDenominationCheckNotes((current) => ({
+                    ...current,
+                    [selectedDenominationCheckDraftKey]: event.target.value,
+                  }));
+                }}
+                disabled={
+                  Boolean(selectedCashRecord.checkedAt) ||
+                  state === "saving" ||
+                  isSelectedWeekClosed
+                }
+                rows={2}
+                placeholder="Bijv. één briefje van € 20 ontbreekt"
+                className="min-h-16 resize-y rounded-xl border border-[#d9d2c9] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[#1a1815] outline-none focus:border-[#866326] disabled:opacity-60"
+              />
+            </label>
+
+            {denominationCheckError && (
+              <p className="mt-2 rounded-xl bg-[#fbe9e5] px-3 py-2 text-xs font-bold text-[#a43b2f]">
+                {denominationCheckError}
+              </p>
+            )}
+
+            {selectedCashRecord.checkedAt && (
+              <p className="mt-2 rounded-xl bg-[#f0ece7] px-3 py-2 text-xs font-bold text-[#6b645b]">
+                De managementcontrole is al afgevinkt. Heropen die controle om
+                de briefjescontrole te wijzigen.
+              </p>
+            )}
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() =>
+                  void saveDenominationCheck(selectedCashRecord, "incorrect")
+                }
+                disabled={
+                  Boolean(selectedCashRecord.checkedAt) ||
+                  state === "saving" ||
+                  isSelectedWeekClosed
+                }
+                className="h-11 rounded-full border border-[#c95a4a] bg-white px-4 text-sm font-black text-[#a43b2f] disabled:opacity-45"
+              >
+                ! Klopt niet
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void saveDenominationCheck(selectedCashRecord, "correct")
+                }
+                disabled={
+                  Boolean(selectedCashRecord.checkedAt) ||
+                  state === "saving" ||
+                  isSelectedWeekClosed
+                }
+                className="h-11 rounded-full bg-[#1f4f35] px-4 text-sm font-black text-white shadow-sm disabled:opacity-45"
+              >
+                ✓ Klopt
+              </button>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );
@@ -3026,6 +3676,115 @@ function BankIcon() {
         strokeWidth="2"
       />
     </svg>
+  );
+}
+
+function CashOverviewMetric({
+  emphasized = false,
+  label,
+  value,
+}: Readonly<{
+  emphasized?: boolean;
+  label: string;
+  value: string;
+}>) {
+  return (
+    <div
+      className={`min-w-0 rounded-xl px-2 py-2 ${
+        emphasized ? "bg-[#f1f6ef]" : "bg-[#faf8f5]"
+      }`}
+    >
+      <p className="truncate text-[0.5rem] font-bold uppercase tracking-[0.04em] text-[#8b8278]">
+        {label}
+      </p>
+      <p
+        className={`mt-0.5 truncate whitespace-nowrap font-black leading-none tabular-nums text-[#1a1815] ${
+          emphasized ? "text-base" : "text-sm"
+        }`}
+        title={value}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function CashOverviewMetricButton({
+  label,
+  onClick,
+  status,
+  value,
+}: Readonly<{
+  label: string;
+  onClick: () => void;
+  status?: "correct" | "incorrect";
+  value: string;
+}>) {
+  const statusLabel =
+    status === "correct"
+      ? "✓ Briefjes kloppen"
+      : status === "incorrect"
+        ? "! Afwijking genoteerd"
+        : "Bekijk briefjes →";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="min-w-0 rounded-xl bg-white px-2 py-2 text-left shadow-sm ring-1 ring-[#ead9b9] transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#866326]"
+    >
+      <span className="block truncate text-[0.5rem] font-bold uppercase tracking-[0.04em] text-[#8b8278]">
+        {label}
+      </span>
+      <span
+        className="mt-0.5 block truncate whitespace-nowrap text-base font-black leading-none tabular-nums text-[#1a1815]"
+        title={value}
+      >
+        {value}
+      </span>
+      <span
+        className={`mt-1 block truncate text-[0.5rem] font-black uppercase tracking-[0.03em] ${
+          status === "incorrect" ? "text-[#a43b2f]" : "text-[#866326]"
+        }`}
+      >
+        {statusLabel}
+      </span>
+    </button>
+  );
+}
+
+function WeekControlMetric({
+  emphasized = false,
+  label,
+  tone = "normal",
+  value,
+}: Readonly<{
+  emphasized?: boolean;
+  label: string;
+  tone?: "normal" | "warn";
+  value: string;
+}>) {
+  const colorClass =
+    tone === "warn"
+      ? "text-[#a43b2f]"
+      : emphasized
+        ? "text-[#1f4f35]"
+        : "text-[#1a1815]";
+
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-[0.48rem] font-bold uppercase tracking-[0.03em] text-[#8b8278]">
+        {label}
+      </p>
+      <p
+        className={`mt-0.5 truncate whitespace-nowrap font-black leading-none tabular-nums ${colorClass} ${
+          emphasized ? "text-sm" : "text-[0.72rem]"
+        }`}
+        title={value}
+      >
+        {value}
+      </p>
+    </div>
   );
 }
 

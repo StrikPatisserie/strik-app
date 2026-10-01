@@ -3,6 +3,7 @@ import {
   formatJubileeYears,
   isStoreAgendaJubileeEvent,
 } from "../../strik-agenda/personnelJubilees";
+import { getCurrentProfile } from "../../lib/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -348,7 +349,22 @@ function getView(request: Request) {
     : "management";
 }
 
+async function isAllowedRequest(request: Request) {
+  const internalSecret = process.env.CRON_SECRET?.trim();
+  const suppliedSecret = request.headers.get("x-strik-internal-secret");
+
+  if (internalSecret && suppliedSecret === internalSecret) return true;
+
+  const profile = await getCurrentProfile();
+
+  return Boolean(profile?.active);
+}
+
 export async function GET(request: Request) {
+  if (!(await isAllowedRequest(request))) {
+    return Response.json({ message: "Niet ingelogd." }, { status: 401 });
+  }
+
   try {
     const response = await fetch(getCsvUrl(), { cache: "no-store" });
 

@@ -1,15 +1,14 @@
-import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
+import { StrikPageHeading } from "../../StrikPageTitle";
+import { StrikShell, strikIcons } from "../../StrikUI";
 import TeamAgendaManager from "./TeamAgendaManager";
 
 export default function ManagementAgendaPage() {
   return (
     <StrikShell wide>
-      <StrikPageHeader
+      <StrikPageHeading
         title="Strik Agenda"
-        description="Agenda, verjaardagen en jubilea."
         icon={strikIcons.strikAgenda}
-        kicker="Management"
-        tone="honey"
+        className="mb-2 mt-1"
       />
 
       <TeamAgendaManager />
