@@ -413,6 +413,8 @@ const tabs: { id: DashboardTab; label: string }[] = [
   { id: "bonnen", label: "Bonnen" },
 ];
 
+const weddingCakeArticleNumbers = new Set(["25400", "25401", "25402", "25403"]);
+
 const ordersFilters: {
   id: OrdersFilter;
   label: string;
@@ -2129,6 +2131,20 @@ function isPetitFourLine(line: ReceiptLine) {
   const description = normalizedLineDescription(line.description);
 
   return /\bpetit\s*-?\s*fours?\b/.test(description);
+}
+
+function isWeddingCakeLine(line: ReceiptLine) {
+  return [line.articleNumber, line.catalogArticleNumber].some((value) => {
+    const articleNumber = String(value || "")
+      .trim()
+      .match(/^\d+/)?.[0];
+
+    return Boolean(articleNumber && weddingCakeArticleNumbers.has(articleNumber));
+  });
+}
+
+function isWeddingCakeReceipt(receipt: ReceiptSummary) {
+  return receipt.lines.some(isWeddingCakeLine);
 }
 
 function lineSearchDescription(line: ReceiptLine) {
@@ -5406,7 +5422,7 @@ function buildBakeryProductionTotals(
         if (isPetitFourLine(line)) {
           totals.petitFours += quantity;
         }
-        if (isMarzipanOrCreamCakeLine(line)) {
+        if (!isWeddingCakeLine(line) && isMarzipanOrCreamCakeLine(line)) {
           totals.marzipanAndCreamCakes += quantity;
         }
       });
@@ -8455,6 +8471,24 @@ export default function BakkerijLogistiekDashboard() {
     () => buildBakeryProductionTotals(receiptSummaries),
     [receiptSummaries]
   );
+  const weddingCakeReferences = useMemo(
+    () =>
+      receiptSummaries.flatMap((receipt) => {
+        if (isInternalReceiptSummary(receipt) || !isWeddingCakeReceipt(receipt)) {
+          return [];
+        }
+
+        const reference = weddingCakeReferenceForReceipt(
+          receipt,
+          selectedPlan.date
+        );
+
+        return reference
+          ? [{ receiptId: receipt.id, reference }]
+          : [];
+      }),
+    [receiptSummaries, selectedPlan.date]
+  );
   const stats = useMemo(
     () => buildStats(selectedPlan, productionTotals),
     [productionTotals, selectedPlan]
@@ -9869,6 +9903,36 @@ export default function BakkerijLogistiekDashboard() {
                       <p className="mt-1 flex items-center gap-1 text-xs font-black leading-none tabular-nums">
                         {metric.alert && <WarningIcon />}
                         {metric.value}
+                        {metric.label === "Feesttaarten" &&
+                          weddingCakeReferences.map(
+                            ({ receiptId, reference }, weddingCakeIndex) => (
+                              <a
+                                key={receiptId}
+                                href={reference.href}
+                                target="_blank"
+                                rel="noreferrer"
+                                aria-label={`Open definitieve bruidstaart ${
+                                  reference.code || reference.search
+                                }`}
+                                title={`Definitieve bruidstaart ${
+                                  reference.code || reference.search
+                                } openen`}
+                                className="relative ml-0.5 inline-flex h-6 w-7 shrink-0 items-center justify-center rounded-lg border border-[#b9cdb4] bg-[#edf5ea] text-[#315641] shadow-sm transition hover:bg-[#dcebd8]"
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className="h-4 w-4 bg-current"
+                                  style={{
+                                    WebkitMask: `url("${strikIcons.bruidstaart}") center / contain no-repeat`,
+                                    mask: `url("${strikIcons.bruidstaart}") center / contain no-repeat`,
+                                  }}
+                                />
+                                <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#1f4f35] px-0.5 text-[0.48rem] font-black leading-none text-white">
+                                  {weddingCakeIndex + 1}
+                                </span>
+                              </a>
+                            )
+                          )}
                       </p>
                     </div>
                   ))}
@@ -10853,7 +10917,7 @@ function ReceiptAddressBlock({
               rel="noreferrer"
               className="mt-2 inline-flex border border-[#ead8aa] bg-[#fff7df] px-2 py-1 text-[0.62rem] font-black uppercase tracking-normal text-[#5c4921] underline-offset-2 hover:underline"
             >
-              Design {weddingCakeReference.code || weddingCakeReference.search}
+              Definitieve bruidstaart {weddingCakeReference.code || weddingCakeReference.search}
             </a>
           )}
         </div>
@@ -11353,13 +11417,13 @@ function weddingCakeReferenceForReceipt(
   if (!search) return null;
 
   const params = new URLSearchParams();
-  params.set("zoek", search);
+  params.set("open", search);
   params.set("datum", date);
 
   return {
     search,
     code,
-    href: `/bruidstaarten/studio?${params.toString()}`,
+    href: `/bruidstaarten/overzicht?${params.toString()}`,
   };
 }
 

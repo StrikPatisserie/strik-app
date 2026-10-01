@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import StrikBackButton from "../../StrikBackButton";
 import { StrikPageHeading } from "../../StrikPageTitle";
 import { strikIcons } from "../../StrikUI";
@@ -189,7 +189,27 @@ export default function BruidstaartenOverzichtClient() {
   const [reminderDraft, setReminderDraft] = useState<WeddingCakeDraft | null>(null);
   const [reminderSending, setReminderSending] = useState(false);
   const [paymentCheckingCode, setPaymentCheckingCode] = useState("");
+  const [directOpenRequest, setDirectOpenRequest] = useState<{
+    search: string;
+    date: string;
+  } | null>(null);
+  const directOpenHandledRef = useRef("");
   const year = String(visibleMonth.getFullYear());
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const search = (params.get("open") || params.get("zoek") || "").trim();
+    const date = (params.get("datum") || params.get("date") || "").trim();
+    if (!search) return;
+
+    setDirectOpenRequest({ search, date });
+    const requestedDate = dateFrom(date);
+    if (requestedDate) {
+      setVisibleMonth(
+        new Date(requestedDate.getFullYear(), requestedDate.getMonth(), 1),
+      );
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -240,6 +260,45 @@ export default function BruidstaartenOverzichtClient() {
       cancelled = true;
     };
   }, [year]);
+
+  useEffect(() => {
+    if (!directOpenRequest || loading) return;
+
+    const requestKey = `${directOpenRequest.search}:${directOpenRequest.date}`;
+    if (directOpenHandledRef.current === requestKey) return;
+
+    const requestedDate = dateFrom(directOpenRequest.date);
+    if (requestedDate && String(requestedDate.getFullYear()) !== year) return;
+
+    const needle = directOpenRequest.search.toLocaleLowerCase("nl-NL");
+    const directDraft =
+      drafts.find((draft) =>
+        [draft.code, draft.config.contact.recognitionCode]
+          .filter(Boolean)
+          .some((value) => value.toLocaleLowerCase("nl-NL") === needle),
+      ) ||
+      drafts.find((draft) =>
+        [draft.surname, draft.config.contact.names]
+          .filter(Boolean)
+          .some((value) => value.toLocaleLowerCase("nl-NL").includes(needle)),
+      );
+
+    directOpenHandledRef.current = requestKey;
+    if (!directDraft) {
+      setStatus(
+        `Definitieve bruidstaart ${directOpenRequest.search} is niet gevonden.`,
+      );
+      return;
+    }
+
+    const deliveryDate = dateFrom(deliveryDateFor(directDraft));
+    if (deliveryDate) {
+      setVisibleMonth(
+        new Date(deliveryDate.getFullYear(), deliveryDate.getMonth(), 1),
+      );
+    }
+    openDraft(directDraft);
+  }, [directOpenRequest, drafts, loading, year]);
 
   const monthDrafts = useMemo(
     () =>
