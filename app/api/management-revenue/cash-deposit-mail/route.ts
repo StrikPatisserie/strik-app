@@ -33,6 +33,18 @@ type CashDepositMailInput = {
   week?: number;
   weekLabel?: string;
   rows?: CashDepositMailRow[];
+  entries?: CashDepositReportEntry[];
+};
+
+type CashDepositReportEntry = {
+  key?: string;
+  year?: number;
+  week?: number;
+  weekLabel?: string;
+  shop?: string;
+  kind?: "patisserie" | "ice";
+  label?: string;
+  amount?: number;
 };
 
 const ADMINISTRATION_RECIPIENTS = (
@@ -115,6 +127,75 @@ function normalizeRows(rows: unknown) {
   });
 }
 
+function normalizeReportEntries(entries: unknown) {
+  if (!Array.isArray(entries)) return [];
+
+  return entries.slice(0, 80).flatMap((entry) => {
+    const source = entry && typeof entry === "object"
+      ? entry as CashDepositReportEntry
+      : null;
+    const year = Math.trunc(numberFrom(source?.year));
+    const week = Math.trunc(numberFrom(source?.week));
+    const kind = source?.kind === "ice" ? "ice" : source?.kind === "patisserie" ? "patisserie" : null;
+    const shop = cleanText(source?.shop, 80);
+    const label = cleanText(source?.label, 100);
+    const weekLabel = cleanText(source?.weekLabel, 80);
+
+    if (
+      !source ||
+      year < 2020 ||
+      year > 2100 ||
+      week < 1 ||
+      week > 53 ||
+      !kind ||
+      !shop ||
+      !label ||
+      !weekLabel
+    ) {
+      return [];
+    }
+
+    return [{
+      key: cleanText(source.key, 160),
+      year,
+      week,
+      weekLabel,
+      shop,
+      kind,
+      label,
+      amount: moneyFrom(source.amount),
+    }];
+  });
+}
+
+function createBatchMailBody(entries: ReturnType<typeof normalizeReportEntries>) {
+  const byWeek = new Map<string, typeof entries>();
+  for (const entry of entries) {
+    const key = `${entry.year}-W${String(entry.week).padStart(2, "0")}`;
+    byWeek.set(key, [...(byWeek.get(key) || []), entry]);
+  }
+  const totalDeposit = entries.reduce((total, entry) => total + entry.amount, 0);
+  const lines = [
+    "Storting gemeld",
+    "",
+  ];
+
+  for (const weekEntries of byWeek.values()) {
+    const first = weekEntries[0];
+    lines.push(`Week ${first.week} ${first.year} - ${first.weekLabel}`);
+    weekEntries.forEach((entry) => {
+      lines.push(`- ${entry.label}: ${formatMoney(entry.amount)}`);
+    });
+    lines.push("");
+  }
+
+  lines.push(`Totaal gestort: ${formatMoney(totalDeposit)}`);
+  lines.push("");
+  lines.push("Automatisch gemeld vanuit Geld tellen in de Strik Team app.");
+
+  return lines.join("\n").slice(0, 3900);
+}
+
 function createMailBody(
   year: number,
   week: number,
@@ -145,6 +226,54 @@ export async function POST(request: Request) {
     const input = (await request.json().catch(() => null)) as
       | CashDepositMailInput
       | null;
+    const reportEntries = normalizeReportEntries(input?.entries);
+
+    if (reportEntries.length) {
+      const totalDeposit = reportEntries.reduce(
+        (total, entry) => total + entry.amount,
+        0
+      );
+      const body = createBatchMailBody(reportEntries);
+      const hash = createHash("sha1")
+        .update(JSON.stringify(reportEntries))
+        .digest("hex")
+        .slice(0, 12);
+      const today = new Date().toISOString().slice(0, 10);
+      const subject = `Storting gemeld - ${reportEntries.length} locatie${reportEntries.length === 1 ? "" : "s"} - ${formatMoney(totalDeposit)}`;
+      const order: PersonnelMailOrder = {
+        id: `cash-deposit-report-${hash}`,
+        mailType: "cash-deposit-summary",
+        employeeName: "Storting gemeld",
+        firstName: "Storting",
+        eventDate: today,
+        eventDateLabel: today,
+        daysUntil: 0,
+        source: "drive",
+        recipients: ADMINISTRATION_RECIPIENTS,
+        subject,
+        body,
+        deliveryShop: "Administratie",
+        deliveryDate: today,
+        deliveryDateLabel: today,
+        deliveryTimeLabel: "",
+        note: "Gezamenlijke stortingsmelding geld tellen",
+      };
+      const result = await sendPersonnelMailOrders([order]);
+
+      if (result.failed.length) {
+        return jsonError("Stortingsmelding mailen is mislukt.", 502);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        message: result.sent.length
+          ? "Storting naar administratie gemaild."
+          : "Deze stortingsmelding was al eerder gemaild.",
+        sent: result.sent.length,
+        skipped: result.skipped.length,
+      });
+    }
+
     const year = Math.trunc(numberFrom(input?.year));
     const week = Math.trunc(numberFrom(input?.week));
     const weekLabel = cleanText(input?.weekLabel, 80);

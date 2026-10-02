@@ -81,7 +81,7 @@ export async function updateHolidayEvaluationDocumentAction(
   const holiday = getHolidayEvaluation(slug);
 
   if (!holiday) {
-    return { message: "Deze feestdag kon niet worden gevonden." };
+    return { message: "Deze evaluatie kon niet worden gevonden." };
   }
 
   const body = normalizeText(formData.get("body")).trimEnd();

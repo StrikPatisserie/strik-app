@@ -124,6 +124,10 @@ export type RevenueCashDeposit = {
   patisserieClosedBy?: string;
   iceDepositClosedAt?: string;
   iceDepositClosedBy?: string;
+  patisserieReportedAt?: string;
+  patisserieReportedBy?: string;
+  iceReportedAt?: string;
+  iceReportedBy?: string;
   iceSeasonOpen?: boolean;
   closedAt?: string;
   closedBy?: string;
@@ -333,6 +337,10 @@ function compactCashDepositPayload(deposit: RevenueCashDeposit) {
     pcb: deposit.patisserieClosedBy,
     ica: deposit.iceDepositClosedAt,
     icb: deposit.iceDepositClosedBy,
+    pra: deposit.patisserieReportedAt,
+    prb: deposit.patisserieReportedBy,
+    ira: deposit.iceReportedAt,
+    irb: deposit.iceReportedBy,
     iso: deposit.iceSeasonOpen,
     cla: deposit.closedAt,
     clb: deposit.closedBy,
@@ -371,6 +379,10 @@ function expandCashDepositPayload(
     patisserieClosedBy: payload.patisserieClosedBy ?? payload.pcb,
     iceDepositClosedAt: payload.iceDepositClosedAt ?? payload.ica,
     iceDepositClosedBy: payload.iceDepositClosedBy ?? payload.icb,
+    patisserieReportedAt: payload.patisserieReportedAt ?? payload.pra,
+    patisserieReportedBy: payload.patisserieReportedBy ?? payload.prb,
+    iceReportedAt: payload.iceReportedAt ?? payload.ira,
+    iceReportedBy: payload.iceReportedBy ?? payload.irb,
     iceSeasonOpen: payload.iceSeasonOpen ?? payload.iso,
     closedAt: payload.closedAt ?? payload.cla,
     closedBy: payload.closedBy ?? payload.clb,
@@ -845,6 +857,10 @@ export function normalizeRevenueCashDeposit(
     patisserieClosedBy: textFrom(value.patisserieClosedBy) || undefined,
     iceDepositClosedAt: textFrom(value.iceDepositClosedAt) || undefined,
     iceDepositClosedBy: textFrom(value.iceDepositClosedBy) || undefined,
+    patisserieReportedAt: textFrom(value.patisserieReportedAt) || undefined,
+    patisserieReportedBy: textFrom(value.patisserieReportedBy) || undefined,
+    iceReportedAt: textFrom(value.iceReportedAt) || undefined,
+    iceReportedBy: textFrom(value.iceReportedBy) || undefined,
     iceSeasonOpen:
       value.iceSeasonOpen === true
         ? true
