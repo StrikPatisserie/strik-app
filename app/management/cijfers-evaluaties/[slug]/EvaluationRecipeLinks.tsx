@@ -79,9 +79,6 @@ export default function EvaluationRecipeLinks({
       ),
     [links]
   );
-  const totalMargin =
-    totals.netRevenue > 0 ? (totals.profit / totals.netRevenue) * 100 : 0;
-
   function updateLink(
     recipeId: string,
     field: "quantity" | "revenueGross",
@@ -127,52 +124,26 @@ export default function EvaluationRecipeLinks({
   return (
     <section
       id="recepten"
-      className="rounded-[1.2rem] border border-[#cbdcc5] bg-white/95 p-3 shadow-sm"
+      className="rounded-xl border border-[#cbdcc5] bg-white/95 shadow-sm"
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="text-[0.6rem] font-black uppercase tracking-[0.1em] text-[#6d8068]">
-            Gekoppeld aan recepturen
-          </p>
-          <h2 className="mt-0.5 text-lg font-black leading-tight text-[#1a1815]">
-            Kostprijs en actiemarge
-          </h2>
-        </div>
-        <span className="rounded-full bg-[#e6f0e3] px-2.5 py-1 text-[0.62rem] font-black uppercase text-[#2f6540]">
-          {links.length} {links.length === 1 ? "recept" : "recepten"}
-        </span>
-      </div>
+      <details>
+        <summary className="evaluation-summary flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+          <span className="text-sm font-black text-[#1a1815]">
+            Recepturen en berekening
+          </span>
+          <span className="flex flex-wrap items-center gap-2 text-[0.65rem] font-bold text-[#756d64]">
+            <span>{links.length} gekoppeld</span>
+            <span>kost {formatEuro(totals.cost)}</span>
+            <span className="rounded-full bg-[#edf5eb] px-2 py-0.5 font-black text-[#2f6540]">
+              Bekijk
+            </span>
+          </span>
+        </summary>
 
-      {links.length ? (
-        <>
-          <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-            <div className="rounded-xl bg-[#edf5eb] px-2.5 py-2">
-              <span className="block text-[0.58rem] font-black uppercase text-[#6d8068]">
-                Brutowinst ex. btw
-              </span>
-              <strong className="mt-0.5 block text-base font-black text-[#1f5b39] sm:text-lg">
-                {formatEuro(totals.profit)}
-              </strong>
-            </div>
-            <div className="rounded-xl bg-[#faf6f0] px-2.5 py-2">
-              <span className="block text-[0.58rem] font-black uppercase text-[#82776c]">
-                Actiemarge
-              </span>
-              <strong className="mt-0.5 block text-base font-black text-[#49342d] sm:text-lg">
-                {formatNumber(totalMargin, 1)}%
-              </strong>
-            </div>
-            <div className="rounded-xl bg-[#faf6f0] px-2.5 py-2">
-              <span className="block text-[0.58rem] font-black uppercase text-[#82776c]">
-                Totale kostprijs
-              </span>
-              <strong className="mt-0.5 block text-base font-black text-[#49342d] sm:text-lg">
-                {formatEuro(totals.cost)}
-              </strong>
-            </div>
-          </div>
-
-          <div className="mt-2.5 overflow-x-auto rounded-xl border border-[#e5ded5]">
+        <div className="border-t border-[#e5ded5] p-2.5">
+        {links.length ? (
+          <>
+          <div className="overflow-x-auto rounded-lg border border-[#e5ded5]">
             <div className="min-w-[42rem]">
               <div className="grid grid-cols-[minmax(12rem,1fr)_4.5rem_5rem_5.5rem_4.5rem_6.5rem] gap-2 bg-[#f3efe9] px-2.5 py-1.5 text-[0.56rem] font-black uppercase text-[#756d64]">
                 <span>Recept</span>
@@ -218,20 +189,18 @@ export default function EvaluationRecipeLinks({
             </div>
           </div>
 
-          <p className="mt-1.5 text-[0.62rem] font-bold leading-snug text-[#81786e]">
-            Brutowinst en marge zijn exclusief 9% btw en vóór arbeid, derving en
-            overige kosten. De kostprijs per recept is als historische snapshot
-            vastgezet.
+          <p className="mt-1.5 text-[0.6rem] font-bold leading-snug text-[#81786e]">
+            Excl. 9% btw; arbeid en derving niet meegerekend. Kostprijzen zijn vastgezet.
           </p>
-        </>
-      ) : (
-        <p className="mt-2 rounded-xl bg-[#faf8f5] px-3 py-2 text-xs font-bold text-[#81786e]">
-          Nog geen recept gekoppeld.
-        </p>
-      )}
+          </>
+        ) : (
+          <p className="rounded-lg bg-[#faf8f5] px-3 py-2 text-xs font-bold text-[#81786e]">
+            Nog geen recept gekoppeld.
+          </p>
+        )}
 
-      <details className="evaluation-no-print mt-2.5 rounded-xl border border-[#e5ded5] bg-[#faf8f5]">
-        <summary className="cursor-pointer px-3 py-2 text-xs font-black text-[#49342d]">
+      <details className="evaluation-no-print mt-2 rounded-lg border border-[#e5ded5] bg-[#faf8f5]">
+        <summary className="cursor-pointer px-3 py-1.5 text-[0.68rem] font-black text-[#49342d]">
           Recepten of verkoopcijfers aanpassen
         </summary>
         <form action={formAction} className="space-y-2 border-t border-[#e5ded5] p-3">
@@ -336,6 +305,8 @@ export default function EvaluationRecipeLinks({
             </button>
           </div>
         </form>
+      </details>
+        </div>
       </details>
     </section>
   );

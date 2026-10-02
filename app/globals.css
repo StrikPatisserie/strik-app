@@ -423,6 +423,10 @@ body {
 }
 
 /* Compact management evaluation report */
+.evaluation-summary::-webkit-details-marker {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -468,6 +472,10 @@ body {
   }
 
   body:has(.evaluation-print-report) .evaluation-print-only {
+    display: block !important;
+  }
+
+  body:has(.evaluation-print-report) .evaluation-print-report details > * {
     display: block !important;
   }
 

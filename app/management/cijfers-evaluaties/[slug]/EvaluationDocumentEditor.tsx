@@ -37,18 +37,13 @@ export default function EvaluationDocumentEditor({
   );
 
   return (
-    <section id="evaluatie" className="border border-[#e5ded5] bg-white p-3 shadow-sm">
+    <section id="evaluatie" className="rounded-xl border border-[#e5ded5] bg-white p-3 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-[0.6rem] font-black uppercase text-[#8b8278]">
-            Evaluatie-document
-          </p>
-          <h2 className="mt-0.5 text-lg font-black text-[#1a1815]">
-            Geschreven evaluatie
-          </h2>
-        </div>
+        <h2 className="text-sm font-black text-[#1a1815]">
+          Evaluatietekst
+        </h2>
         <div className="evaluation-no-print flex flex-wrap items-center justify-end gap-2">
-          <p className="max-w-sm text-right text-[0.62rem] font-bold leading-snug text-[#8b8278]">
+          <p className="max-w-sm text-right text-[0.58rem] font-bold leading-snug text-[#8b8278]">
             {formatSavedText(document)}
           </p>
           <button
@@ -60,12 +55,6 @@ export default function EvaluationDocumentEditor({
           </button>
         </div>
       </div>
-
-      {!isOpen ? (
-        <p className="evaluation-no-print mt-2 line-clamp-2 whitespace-pre-line text-xs font-bold leading-snug text-[#746c63]">
-          {body}
-        </p>
-      ) : null}
 
       <div className="evaluation-print-only hidden whitespace-pre-wrap text-[9pt] leading-snug text-[#302d29] print:block">
         {body}
