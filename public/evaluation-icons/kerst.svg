@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kerstboom">
+  <g fill="none" stroke="#49342d" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="m32 3 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1 3-7Z"/>
+    <path d="m32 20-13 16h7L14 51h36L38 36h7L32 20Z"/>
+    <path d="M27 51v9h10v-9"/>
+    <circle cx="25" cy="39" r="2"/>
+    <circle cx="39" cy="44" r="2"/>
+    <circle cx="32" cy="31" r="2"/>
+  </g>
+</svg>

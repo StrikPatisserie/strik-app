@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Vuurwerk">
+  <g fill="none" stroke="#49342d" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="M22 25V7M22 25 10 13M22 25H5M22 25 10 37M22 25l12-12M22 25l13 8"/>
+    <path d="M45 42V27M45 42l11-11M45 42h14M45 42l11 11M45 42 34 53M45 42l-7-12"/>
+    <path d="M22 25h.1M45 42h.1"/>
+  </g>
+</svg>

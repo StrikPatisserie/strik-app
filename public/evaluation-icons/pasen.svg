@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Paasei">
+  <g fill="none" stroke="#49342d" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="M32 5C20 5 11 25 11 40c0 12 9 19 21 19s21-7 21-19C53 25 44 5 32 5Z"/>
+    <path d="m13 34 9-6 10 6 10-6 9 6M13 44h38"/>
+    <circle cx="25" cy="20" r="2"/>
+    <circle cx="39" cy="20" r="2"/>
+  </g>
+</svg>

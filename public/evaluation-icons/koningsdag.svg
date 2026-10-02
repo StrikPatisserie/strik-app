@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Kroon">
+  <g fill="none" stroke="#49342d" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="m8 20 13 11 11-19 11 19 13-11-5 30H13L8 20Z"/>
+    <path d="M14 41h36M17 50h30"/>
+    <circle cx="8" cy="20" r="2"/>
+    <circle cx="32" cy="12" r="2"/>
+    <circle cx="56" cy="20" r="2"/>
+  </g>
+</svg>

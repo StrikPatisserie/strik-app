@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import type { Json } from "../../lib/supabase/types";
 import { requireAdminProfile } from "../../lib/auth/session";
 import { createAdminClient } from "../../lib/supabase/admin";
-import { getHolidayEvaluation } from "./evaluationData";
+import {
+  getHolidayEvaluation,
+  getLegacyFeastDaySlug,
+} from "./evaluationData";
+import { getCustomHolidayEvaluation } from "./customEvaluationData";
 import { getEvaluationRecipeOptions } from "./recipeData";
 import type {
   EvaluationRecipeLink,
@@ -14,10 +18,12 @@ import type {
 const EVALUATION_DOCUMENT_SETTING_PREFIX = "holiday_evaluation_document:";
 const EVALUATION_RECIPE_SETTING_PREFIX = "holiday_evaluation_recipes:";
 const MAX_DOCUMENT_LENGTH = 50000;
+const MAX_TIPS_LENGTH = 10000;
 const MAX_RECIPE_LINKS = 30;
 
 export type EvaluationDocument = {
   body: string;
+  tipsBody: string;
   updatedAt: string;
   updatedByName: string;
 };
@@ -128,6 +134,7 @@ function recipeLinksToJson(links: EvaluationRecipeLink[]): Json {
 function documentToJson(document: EvaluationDocument): Json {
   return {
     body: document.body,
+    tipsBody: document.tipsBody,
     updatedAt: document.updatedAt,
     updatedByName: document.updatedByName,
   };
@@ -136,9 +143,16 @@ function documentToJson(document: EvaluationDocument): Json {
 export async function getHolidayEvaluationDocument(
   slug: string
 ): Promise<EvaluationDocument> {
-  const holiday = getHolidayEvaluation(slug);
+  const holiday =
+    getHolidayEvaluation(slug) || (await getCustomHolidayEvaluation(slug));
   const fallback: EvaluationDocument = {
     body: holiday?.documentBody || "",
+    tipsBody:
+      holiday?.tipsBody ||
+      holiday?.planningTips
+        .map(([label, value]) => `${label}: ${value}`)
+        .join("\n") ||
+      "",
     updatedAt: "",
     updatedByName: "",
   };
@@ -147,18 +161,27 @@ export async function getHolidayEvaluationDocument(
 
   try {
     const supabase = createAdminClient();
+    const legacySlug = getLegacyFeastDaySlug(slug);
+    const keys = [settingKeyForSlug(slug)];
+    if (legacySlug) keys.push(settingKeyForSlug(legacySlug));
     const { data, error } = await supabase
       .from("app_settings")
-      .select("value")
-      .eq("key", settingKeyForSlug(slug))
-      .maybeSingle();
+      .select("key,value")
+      .in("key", keys);
 
-    if (error || !data || !isRecord(data.value)) return fallback;
+    if (error || !data?.length) return fallback;
+    const stored =
+      data.find((item) => item.key === settingKeyForSlug(slug)) ||
+      (legacySlug
+        ? data.find((item) => item.key === settingKeyForSlug(legacySlug))
+        : null);
+    if (!stored || !isRecord(stored.value)) return fallback;
 
     return {
-      body: normalizeText(data.value.body) || fallback.body,
-      updatedAt: normalizeText(data.value.updatedAt),
-      updatedByName: normalizeText(data.value.updatedByName),
+      body: normalizeText(stored.value.body) || fallback.body,
+      tipsBody: normalizeText(stored.value.tipsBody) || fallback.tipsBody,
+      updatedAt: normalizeText(stored.value.updatedAt),
+      updatedByName: normalizeText(stored.value.updatedByName),
     };
   } catch {
     return fallback;
@@ -168,22 +191,33 @@ export async function getHolidayEvaluationDocument(
 export async function getEvaluationRecipeLinks(
   slug: string
 ): Promise<EvaluationRecipeLink[]> {
-  const evaluation = getHolidayEvaluation(slug);
+  const evaluation =
+    getHolidayEvaluation(slug) || (await getCustomHolidayEvaluation(slug));
   const fallback = normalizeRecipeLinks(evaluation?.recipeLinks || []);
   if (!evaluation) return fallback;
 
   try {
     const supabase = createAdminClient();
+    const legacySlug = getLegacyFeastDaySlug(slug);
+    const keys = [recipeSettingKeyForSlug(slug)];
+    if (legacySlug) keys.push(recipeSettingKeyForSlug(legacySlug));
     const { data, error } = await supabase
       .from("app_settings")
-      .select("value")
-      .eq("key", recipeSettingKeyForSlug(slug))
-      .maybeSingle();
+      .select("key,value")
+      .in("key", keys);
 
-    if (error || !data || !isRecord(data.value)) return fallback;
-    if (!Array.isArray(data.value.links)) return fallback;
+    if (error || !data?.length) return fallback;
+    const stored =
+      data.find((item) => item.key === recipeSettingKeyForSlug(slug)) ||
+      (legacySlug
+        ? data.find(
+            (item) => item.key === recipeSettingKeyForSlug(legacySlug)
+          )
+        : null);
+    if (!stored || !isRecord(stored.value)) return fallback;
+    if (!Array.isArray(stored.value.links)) return fallback;
 
-    return normalizeRecipeLinks(data.value.links);
+    return normalizeRecipeLinks(stored.value.links);
   } catch {
     return fallback;
   }
@@ -195,17 +229,25 @@ export async function updateHolidayEvaluationDocumentAction(
 ): Promise<EvaluationDocumentActionState> {
   const profile = await requireAdminProfile();
   const slug = normalizeText(formData.get("slug"));
-  const holiday = getHolidayEvaluation(slug);
+  const holiday =
+    getHolidayEvaluation(slug) || (await getCustomHolidayEvaluation(slug));
 
   if (!holiday) {
     return { message: "Deze evaluatie kon niet worden gevonden." };
   }
 
   const body = normalizeText(formData.get("body")).trimEnd();
+  const tipsBody = normalizeText(formData.get("tipsBody")).trimEnd();
 
   if (body.length > MAX_DOCUMENT_LENGTH) {
     return {
       message: `Dit document is te lang. Maximaal ${MAX_DOCUMENT_LENGTH.toLocaleString("nl-NL")} tekens.`,
+    };
+  }
+
+  if (tipsBody.length > MAX_TIPS_LENGTH) {
+    return {
+      message: `De tips zijn te lang. Maximaal ${MAX_TIPS_LENGTH.toLocaleString("nl-NL")} tekens.`,
     };
   }
 
@@ -217,7 +259,7 @@ export async function updateHolidayEvaluationDocumentAction(
     const { error } = await supabase.from("app_settings").upsert(
       {
         key: settingKeyForSlug(slug),
-        value: documentToJson({ body, updatedAt, updatedByName }),
+        value: documentToJson({ body, tipsBody, updatedAt, updatedByName }),
         updated_at: updatedAt,
         updated_by: profile.id,
       },
@@ -249,7 +291,8 @@ export async function updateEvaluationRecipeLinksAction(
 ): Promise<EvaluationRecipeActionState> {
   const profile = await requireAdminProfile();
   const slug = normalizeText(formData.get("slug"));
-  const evaluation = getHolidayEvaluation(slug);
+  const evaluation =
+    getHolidayEvaluation(slug) || (await getCustomHolidayEvaluation(slug));
 
   if (!evaluation) {
     return { message: "Deze evaluatie kon niet worden gevonden." };

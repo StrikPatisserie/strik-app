@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import {
   updateHolidayEvaluationDocumentAction,
   type EvaluationDocument,
@@ -8,19 +8,6 @@ import {
 } from "../actions";
 
 const initialState: EvaluationDocumentActionState = {};
-
-function formatSavedText(document: EvaluationDocument) {
-  if (!document.updatedAt) return "Nog niet opgeslagen in de app.";
-
-  const savedAt = new Intl.DateTimeFormat("nl-NL", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(document.updatedAt));
-
-  return document.updatedByName
-    ? `Laatst opgeslagen door ${document.updatedByName} op ${savedAt}.`
-    : `Laatst opgeslagen op ${savedAt}.`;
-}
 
 export default function EvaluationDocumentEditor({
   slug,
@@ -30,85 +17,169 @@ export default function EvaluationDocumentEditor({
   document: EvaluationDocument;
 }>) {
   const [body, setBody] = useState(document.body);
-  const [isOpen, setIsOpen] = useState(false);
+  const [tipsBody, setTipsBody] = useState(document.tipsBody);
+  const [openEditor, setOpenEditor] = useState<"evaluation" | "tips" | null>(null);
   const [state, formAction, pending] = useActionState(
     updateHolidayEvaluationDocumentAction,
     initialState
   );
 
+  useEffect(() => {
+    if (state.ok) setOpenEditor(null);
+  }, [state]);
+
   return (
-    <section id="evaluatie" className="rounded-xl border border-[#e5ded5] bg-white p-3 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-black text-[#1a1815]">
-          Evaluatietekst
-        </h2>
-        <div className="evaluation-no-print flex flex-wrap items-center justify-end gap-2">
-          <p className="max-w-sm text-right text-[0.58rem] font-bold leading-snug text-[#8b8278]">
-            {formatSavedText(document)}
-          </p>
-          <button
-            type="button"
-            onClick={() => setIsOpen((current) => !current)}
-            className="h-8 rounded-full border border-[#d8d0c5] bg-[#faf8f5] px-3 text-xs font-black text-[#49342d]"
-          >
-            {isOpen ? "Sluiten" : "Bewerken"}
-          </button>
-        </div>
-      </div>
-
-      <div className="evaluation-print-only hidden whitespace-pre-wrap text-[9pt] leading-snug text-[#302d29] print:block">
-        {body}
-      </div>
-
-      {isOpen ? (
-      <form action={formAction} className="evaluation-no-print mt-3 space-y-2.5">
-        <input type="hidden" name="slug" value={slug} />
-
-        {state.message ? (
-          <p
-            className={`border px-3 py-2 text-xs font-bold ${
-              state.ok
-                ? "border-[#c8dbc2] bg-[#f3faf0] text-[#275d35]"
-                : "border-[#f1b8a8] bg-[#fff4ef] text-[#bf3d26]"
-            }`}
-          >
-            {state.message}
-          </p>
-        ) : null}
-
-        <div className="border border-[#d8d0c5] bg-[#f7f4f1] p-2.5">
-          <div className="mb-2 flex items-center justify-between border-b border-[#ddd6cc] pb-2">
-            <span className="text-[0.62rem] font-black uppercase text-[#8b8278]">
-              document
-            </span>
-            <span className="text-[0.62rem] font-black text-[#6b645b]">
-              {body.length.toLocaleString("nl-NL")} tekens
-            </span>
-          </div>
+    <section id="evaluatie" className="grid items-start gap-1.5 md:grid-cols-2">
+      <EvaluationTextCard
+        title="Evaluatietekst"
+        value={body}
+        isOpen={openEditor === "evaluation"}
+        onToggle={() =>
+          setOpenEditor((current) =>
+            current === "evaluation" ? null : "evaluation"
+          )
+        }
+        tone="yellow"
+      >
+        <form action={formAction} className="evaluation-no-print mt-2 space-y-2">
+          <input type="hidden" name="slug" value={slug} />
+          <input type="hidden" name="tipsBody" value={tipsBody} />
           <textarea
             name="body"
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            className="min-h-[20rem] w-full resize-y border border-[#e5ded5] bg-white px-4 py-3 font-serif text-sm leading-6 text-[#1a1815] shadow-sm outline-none transition focus:border-[#c3d3bc] focus:ring-2 focus:ring-[#d6e5d8]"
+            className="min-h-52 w-full resize-y rounded-lg border border-[#d8d0c5] bg-white px-2.5 py-2 text-[0.68rem] font-normal leading-relaxed text-[#302d29] outline-none focus:border-[#8eaa8b]"
             spellCheck
           />
-        </div>
+          <EditorFooter pending={pending} />
+        </form>
+      </EvaluationTextCard>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[0.65rem] font-bold leading-snug text-[#8b8278]">
-            Wijzigingen worden definitief opgeslagen voor management en zijn daarna
-            op ieder apparaat zichtbaar.
-          </p>
-          <button
-            type="submit"
-            disabled={pending}
-            className="h-9 bg-[#1f4f35] px-4 text-xs font-black uppercase text-white shadow-sm transition active:scale-[0.99] disabled:opacity-60"
-          >
-            {pending ? "Opslaan..." : "Document opslaan"}
-          </button>
-        </div>
-      </form>
+      <EvaluationTextCard
+        title="Tips voor volgende keer"
+        value={tipsBody}
+        isOpen={openEditor === "tips"}
+        onToggle={() =>
+          setOpenEditor((current) => (current === "tips" ? null : "tips"))
+        }
+        tone="green"
+      >
+        <form action={formAction} className="evaluation-no-print mt-2 space-y-2">
+          <input type="hidden" name="slug" value={slug} />
+          <input type="hidden" name="body" value={body} />
+          <textarea
+            name="tipsBody"
+            value={tipsBody}
+            onChange={(event) => setTipsBody(event.target.value)}
+            className="min-h-52 w-full resize-y rounded-lg border border-[#e4c9b7] bg-white px-2.5 py-2 text-[0.68rem] font-normal leading-relaxed text-[#302d29] outline-none focus:border-[#d29a78]"
+            spellCheck
+          />
+          <EditorFooter pending={pending} />
+        </form>
+      </EvaluationTextCard>
+
+      <div className="evaluation-print-only hidden whitespace-pre-wrap text-[8pt] leading-snug text-[#302d29] print:block">
+        <strong>Evaluatietekst</strong>
+        {"\n"}
+        {body}
+        {"\n\n"}
+        <strong>Tips voor volgende keer</strong>
+        {"\n"}
+        {tipsBody}
+      </div>
+
+      {state.message ? (
+        <p
+          className={`evaluation-no-print px-2 py-1 text-[0.62rem] font-medium md:col-span-2 ${
+            state.ok
+              ? "bg-[#edf6e9] text-[#275d35]"
+              : "bg-[#fff1ec] text-[#a93825]"
+          }`}
+        >
+          {state.message}
+        </p>
       ) : null}
     </section>
+  );
+}
+
+function EvaluationTextCard({
+  title,
+  value,
+  isOpen,
+  onToggle,
+  tone,
+  children,
+}: Readonly<{
+  title: string;
+  value: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  tone: "green" | "yellow";
+  children: ReactNode;
+}>) {
+  return (
+    <article
+      className={`min-w-0 rounded-[1.15rem] px-2.5 py-2 shadow-sm ${
+        tone === "yellow"
+          ? "bg-[#fed500]"
+          : "bg-[#c3d3bc]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[0.83rem] font-semibold normal-case leading-tight text-[#302d29]">
+          {title}
+        </p>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="evaluation-no-print grid h-5 w-5 shrink-0 place-items-center rounded-full border border-[#d5cec4] bg-white/80 text-[#5e574e] transition hover:bg-white"
+          aria-label={`${title} bewerken`}
+          title={`${title} bewerken`}
+        >
+          {isOpen ? (
+            <span aria-hidden="true" className="text-xs">
+              ×
+            </span>
+          ) : (
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-2.5 w-2.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+            </svg>
+          )}
+        </button>
+      </div>
+
+      {isOpen ? (
+        children
+      ) : (
+        <p className="mt-1.5 line-clamp-5 whitespace-pre-line text-[0.74rem] font-normal leading-relaxed text-[#493f38]">
+          {value || "Nog geen tekst ingevuld."}
+        </p>
+      )}
+    </article>
+  );
+}
+
+function EditorFooter({ pending }: Readonly<{ pending: boolean }>) {
+  return (
+    <div className="flex justify-end">
+      <button
+        type="submit"
+        disabled={pending}
+        className="h-7 rounded-full bg-[#1f4f35] px-3 text-[0.62rem] font-semibold text-white disabled:opacity-60"
+      >
+        {pending ? "Opslaan…" : "Opslaan"}
+      </button>
+    </div>
   );
 }

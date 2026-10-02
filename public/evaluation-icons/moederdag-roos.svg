@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Roos">
+  <g fill="none" stroke="#49342d" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="M31 31c-9 1-17-5-17-13 7-2 13 0 17 6 1-8 6-14 14-16 5 8 2 17-6 22 7 0 12 3 15 9-7 6-17 5-23-2-5 5-13 6-20 2 3-6 10-9 20-8Z"/>
+    <path d="M32 35c0 9-1 17-5 24M31 47c-6-5-11-5-16-3M31 50c6-5 12-5 17-2"/>
+  </g>
+</svg>

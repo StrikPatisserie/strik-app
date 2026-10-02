@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Gebakje">
+  <g fill="none" stroke="#49342d" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="M15 28h34l-4 28H19l-4-28Z"/>
+    <path d="M14 28c0-7 5-12 12-12 2-6 12-6 14 0 6 0 10 5 10 12H14Z"/>
+    <circle cx="32" cy="11" r="5"/>
+    <path d="M24 36v13M32 36v13M40 36v13"/>
+  </g>
+</svg>
