@@ -33,8 +33,22 @@ const euroFormatter = new Intl.NumberFormat("nl-NL", {
   style: "currency",
 });
 
-function isCashDepositLocked(deposit: RevenueCashDeposit) {
-  return Boolean(deposit.closedAt || deposit.cashbookBookedAt);
+function isPatisserieDepositClosed(deposit: RevenueCashDeposit | undefined) {
+  return Boolean(
+    deposit &&
+      (deposit.patisserieClosedAt ||
+        deposit.closedAt ||
+        deposit.cashbookBookedAt)
+  );
+}
+
+function isIceDepositClosed(deposit: RevenueCashDeposit | undefined) {
+  return Boolean(
+    deposit &&
+      (deposit.iceDepositClosedAt ||
+        deposit.closedAt ||
+        deposit.cashbookBookedAt)
+  );
 }
 
 function cashDepositLockedAt(deposit: RevenueCashDeposit) {
@@ -392,6 +406,10 @@ function cashLocationKey(kind: CashLocationKind, shop: RevenueShop) {
   return `${kind}:${shop}`;
 }
 
+function cashLocationLabel(kind: CashLocationKind, shop: RevenueShop) {
+  return `${shop} ${kind === "ice" ? "ijs" : "Patisserie"}`;
+}
+
 function parseCashLocationKey(
   value: string
 ): { kind: CashLocationKind; shop: RevenueShop } | null {
@@ -458,7 +476,7 @@ function syncOpenCashDepositWithCheckedDays(
     record.week,
     record.shop
   );
-  if (!deposit || isCashDepositLocked(deposit)) return deposits;
+  if (!deposit || isPatisserieDepositClosed(deposit)) return deposits;
 
   const checkedRecords = recordsForWeek(
     records,
@@ -649,6 +667,14 @@ export default function CashCountManager() {
     () => datesInIsoWeek(selectedWeek.year, selectedWeek.week),
     [selectedWeek.week, selectedWeek.year]
   );
+  const selectedWeekDeposits = cashDeposits.filter(
+    (deposit) =>
+      deposit.year === selectedWeek.year && deposit.week === selectedWeek.week
+  );
+  const isIceSeasonOpen =
+    selectedWeekDeposits.find(
+      (deposit) => deposit.iceSeasonOpen !== undefined
+    )?.iceSeasonOpen ?? true;
   const weekRows = useMemo(
     () =>
       revenueShops.map((shop) => {
@@ -763,6 +789,23 @@ export default function CashCountManager() {
         );
         const bankAmount = deposit?.actualAmount ?? includedCheckedSafeCash;
         const iceBankAmount = deposit?.iceDepositAmount ?? includedIceCash;
+        const patisserieComplete =
+          expectedDates.length > 0 &&
+          expectedDates.length <= checkedRecords.length + closedDates.length &&
+          expectedDates.every(
+            (date) =>
+              isShopClosedDayRecord(dayRecordByDate.get(date)) ||
+              Boolean(
+                hasPatisserieCashRecord(
+                  findCashRecord(shopRecords, date, shop)
+                ) && findCashRecord(shopRecords, date, shop)?.checkedAt
+              )
+          );
+        const iceComplete =
+          iceRecords.length > 0 &&
+          checkedIceRecords.length >= iceRecords.length &&
+          deposit?.iceDepositAmount !== undefined &&
+          Boolean(deposit.iceDepositedAt);
 
         return {
           shop,
@@ -802,6 +845,10 @@ export default function CashCountManager() {
           deposit,
           bankAmount,
           iceBankAmount,
+          patisserieComplete,
+          iceComplete,
+          patisserieClosed: isPatisserieDepositClosed(deposit),
+          iceClosed: isIceDepositClosed(deposit),
         };
       }),
     [
@@ -815,30 +862,53 @@ export default function CashCountManager() {
   );
   const cashLocationRows = useMemo(
     () =>
-      weekRows.flatMap((row) => [
-        {
+      weekRows.flatMap((row) => {
+        const locations: Array<{
+          key: string;
+          kind: CashLocationKind;
+          shop: RevenueShop;
+          label: string;
+          checkedCount: number;
+          expectedCount: number;
+          missingCount: number;
+          weekTotal: number;
+          complete: boolean;
+          closed: boolean;
+        }> = [{
           key: cashLocationKey("patisserie", row.shop),
           kind: "patisserie" as const,
           shop: row.shop,
-          label: `Patisserie ${row.shop}`,
+          label: cashLocationLabel("patisserie", row.shop),
           checkedCount: row.checkedCount,
           expectedCount: row.expectedCount,
           missingCount: row.missingCount,
           weekTotal: row.bankAmount,
-        },
-        {
+          complete: row.patisserieComplete,
+          closed: row.patisserieClosed,
+        }];
+
+        if (isIceSeasonOpen) locations.push({
           key: cashLocationKey("ice", row.shop),
           kind: "ice" as const,
           shop: row.shop,
-          label: `IJs ${row.shop}`,
+          label: cashLocationLabel("ice", row.shop),
           checkedCount: row.iceCheckedCount,
           expectedCount: row.iceCount,
           missingCount: 0,
           weekTotal: row.iceBankAmount,
-        },
-      ]),
-    [weekRows]
+          complete: row.iceComplete,
+          closed: row.iceClosed,
+        });
+
+        return locations;
+      }),
+    [isIceSeasonOpen, weekRows]
   );
+  useEffect(() => {
+    if (isIceSeasonOpen || selectedCashLocationKind !== "ice") return;
+
+    setSelectedCashLocationKind("patisserie");
+  }, [isIceSeasonOpen, selectedCashLocationKind]);
   const selectedCashLocationKey = cashLocationKey(
     selectedCashLocationKind,
     selectedShop
@@ -1042,44 +1112,52 @@ export default function CashCountManager() {
     (total, row) => total + row.expectedCount,
     0
   );
-  const weekMissingCount = weekRows.reduce(
-    (total, row) => total + row.missingCount,
-    0
-  );
   const weekMissingRevenueCount = weekRows.reduce(
     (total, row) => total + row.missingRevenueCount,
     0
   );
-  const isSelectedWeekComplete =
-    weekExpectedCount > 0 &&
-    weekMissingCount === 0 &&
-    weekRows.every((row) => row.checkedCount >= row.expectedCount);
-  const selectedWeekDeposits = cashDeposits.filter(
-    (deposit) =>
-      deposit.year === selectedWeek.year && deposit.week === selectedWeek.week
-  );
   const weekBankTotal = roundedMoney(
     weekRows.reduce(
-      (total, row) => total + row.bankAmount + row.iceBankAmount,
+      (total, row) =>
+        total + row.bankAmount + (isIceSeasonOpen ? row.iceBankAmount : 0),
       0
     )
   );
   const isSelectedWeekClosed =
     selectedWeekDeposits.length >= revenueShops.length &&
     revenueShops.every((shop) =>
-      selectedWeekDeposits.some(
-        (deposit) => deposit.shop === shop && isCashDepositLocked(deposit)
-      )
+      {
+        const deposit = selectedWeekDeposits.find(
+          (item) => item.shop === shop
+        );
+
+        return (
+          isPatisserieDepositClosed(deposit) &&
+          (!isIceSeasonOpen || isIceDepositClosed(deposit))
+        );
+      }
     );
   const isSelectedWeekCashbookBooked = selectedWeekDeposits.some(
     (deposit) => Boolean(deposit.cashbookBookedAt)
   );
   const selectedWeekClosedAt = selectedWeekDeposits.find(
-    (deposit) => cashDepositLockedAt(deposit)
+    (deposit) =>
+      cashDepositLockedAt(deposit) ||
+      deposit.patisserieClosedAt ||
+      deposit.iceDepositClosedAt
   );
   const selectedWeekClosedAtLabel = selectedWeekClosedAt
-    ? cashDepositLockedAt(selectedWeekClosedAt)
+    ? cashDepositLockedAt(selectedWeekClosedAt) ||
+      selectedWeekClosedAt.patisserieClosedAt ||
+      selectedWeekClosedAt.iceDepositClosedAt ||
+      ""
     : "";
+  const isSelectedCashLocationClosed = Boolean(
+    selectedCashLocationRow?.closed
+  );
+  const isSelectedCashLocationComplete = Boolean(
+    selectedCashLocationRow?.complete
+  );
   const availableWeeks = useMemo(() => {
     const byKey = new Map<string, { key: string; year: number; week: number }>();
 
@@ -1124,19 +1202,20 @@ export default function CashCountManager() {
     );
   }
 
-  function isCashRecordInClosedWeek(record: RevenueCashRecord) {
-    const depositsForWeek = cashDeposits.filter(
-      (deposit) => deposit.year === record.year && deposit.week === record.week
+  function isCashRecordInClosedLocation(
+    record: RevenueCashRecord,
+    kind: CashLocationKind
+  ) {
+    const deposit = cashDeposits.find(
+      (item) =>
+        item.year === record.year &&
+        item.week === record.week &&
+        item.shop === record.shop
     );
 
-    return (
-      depositsForWeek.length >= revenueShops.length &&
-      revenueShops.every((shop) =>
-        depositsForWeek.some(
-          (deposit) => deposit.shop === shop && isCashDepositLocked(deposit)
-        )
-      )
-    );
+    return kind === "ice"
+      ? isIceDepositClosed(deposit)
+      : isPatisserieDepositClosed(deposit);
   }
 
   function updateCashRecord(
@@ -1150,8 +1229,8 @@ export default function CashCountManager() {
   }
 
   async function markChecked(record: RevenueCashRecord) {
-    if (isCashRecordInClosedWeek(record)) {
-      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+    if (isCashRecordInClosedLocation(record, "patisserie")) {
+      setStatus("Deze winkelweek is gesloten. Heropen de locatie om te wijzigen.");
       return;
     }
 
@@ -1215,8 +1294,8 @@ export default function CashCountManager() {
   }
 
   async function unmarkChecked(record: RevenueCashRecord) {
-    if (isCashRecordInClosedWeek(record)) {
-      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+    if (isCashRecordInClosedLocation(record, "patisserie")) {
+      setStatus("Deze winkelweek is gesloten. Heropen de locatie om te wijzigen.");
       return;
     }
 
@@ -1253,8 +1332,13 @@ export default function CashCountManager() {
   }
 
   async function markShopClosed(date: string, shop: RevenueShop) {
-    if (isSelectedWeekClosed) {
-      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+    const parts = weekPartsForDate(date);
+    if (
+      isPatisserieDepositClosed(
+        existingDepositFor(cashDeposits, parts.year, parts.week, shop)
+      )
+    ) {
+      setStatus("Deze winkelweek is gesloten. Heropen de locatie om te wijzigen.");
       return;
     }
 
@@ -1264,7 +1348,6 @@ export default function CashCountManager() {
     if (!confirmed) return;
 
     const now = new Date().toISOString();
-    const parts = weekPartsForDate(date);
     const closedRecord: RevenueDayRecord = {
       id: `closed:${date}:${shop}`,
       date,
@@ -1298,8 +1381,13 @@ export default function CashCountManager() {
   }
 
   async function unmarkShopClosed(date: string, shop: RevenueShop) {
-    if (isSelectedWeekClosed) {
-      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+    const parts = weekPartsForDate(date);
+    if (
+      isPatisserieDepositClosed(
+        existingDepositFor(cashDeposits, parts.year, parts.week, shop)
+      )
+    ) {
+      setStatus("Deze winkelweek is gesloten. Heropen de locatie om te wijzigen.");
       return;
     }
 
@@ -1322,8 +1410,8 @@ export default function CashCountManager() {
   }
 
   async function saveIceCashSourceCorrection(record: RevenueCashRecord) {
-    if (isCashRecordInClosedWeek(record)) {
-      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+    if (isCashRecordInClosedLocation(record, "ice")) {
+      setStatus("Deze ijsweek is gesloten. Heropen de locatie om te wijzigen.");
       return;
     }
 
@@ -1394,8 +1482,8 @@ export default function CashCountManager() {
   }
 
   async function markIceChecked(record: RevenueCashRecord) {
-    if (isCashRecordInClosedWeek(record)) {
-      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+    if (isCashRecordInClosedLocation(record, "ice")) {
+      setStatus("Deze ijsweek is gesloten. Heropen de locatie om te wijzigen.");
       return;
     }
 
@@ -1427,8 +1515,8 @@ export default function CashCountManager() {
   }
 
   async function unmarkIceChecked(record: RevenueCashRecord) {
-    if (isCashRecordInClosedWeek(record)) {
-      setStatus("Deze week is definitief gesloten en kan niet meer worden gewijzigd.");
+    if (isCashRecordInClosedLocation(record, "ice")) {
+      setStatus("Deze ijsweek is gesloten. Heropen de locatie om te wijzigen.");
       return;
     }
 
@@ -1520,6 +1608,329 @@ export default function CashCountManager() {
     }
   }
 
+  function depositForWeekRow(
+    row: (typeof weekRows)[number],
+    now = new Date().toISOString()
+  ): RevenueCashDeposit {
+    const checkedRecords = row.expectedDates.flatMap((date) => {
+      const record = findCashRecord(row.records, date, row.shop);
+
+      return hasPatisserieCashRecord(record) && record?.checkedAt ? [record] : [];
+    });
+    const dateRange = checkedRecords.map((record) => record.date).sort();
+    const existing = row.deposit;
+
+    return {
+      id: createRevenueCashDepositKey(
+        selectedWeek.year,
+        selectedWeek.week,
+        row.shop
+      ),
+      year: selectedWeek.year,
+      week: selectedWeek.week,
+      shop: row.shop,
+      ...existing,
+      amount: roundedMoney(
+        checkedRecords.reduce(
+          (total, record) => total + safeCheckedCash(record),
+          0
+        )
+      ),
+      cashRecordIds: checkedRecords.map((record) => record.id),
+      dateFrom: dateRange[0] || existing?.dateFrom || selectedWeekDates[0],
+      dateTo:
+        dateRange.at(-1) || existing?.dateTo || selectedWeekDates.at(-1),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+  }
+
+  function finalizeWeekWhenAllActiveLocationsClosed(
+    deposits: RevenueCashDeposit[],
+    iceSeasonOpen: boolean,
+    now = new Date().toISOString()
+  ) {
+    const depositsForWeek = revenueShops.map((shop) =>
+      deposits.find(
+        (deposit) =>
+          deposit.year === selectedWeek.year &&
+          deposit.week === selectedWeek.week &&
+          deposit.shop === shop
+      )
+    );
+    const allClosed = depositsForWeek.every(
+      (deposit) =>
+        isPatisserieDepositClosed(deposit) &&
+        (!iceSeasonOpen || isIceDepositClosed(deposit))
+    );
+
+    if (!allClosed) return { deposits, allClosed: false };
+
+    return {
+      allClosed: true,
+      deposits: deposits.map((deposit) =>
+        deposit.year === selectedWeek.year &&
+        deposit.week === selectedWeek.week
+          ? {
+              ...deposit,
+              closedAt: deposit.closedAt || now,
+              closedBy: deposit.closedBy || "Strik app",
+              updatedAt: now,
+            }
+          : deposit
+      ),
+    };
+  }
+
+  async function mailWeekDepositSummary(sourceDeposits: RevenueCashDeposit[]) {
+    const response = await fetch("/api/management-revenue/cash-deposit-mail", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        year: selectedWeek.year,
+        week: selectedWeek.week,
+        weekLabel: weekRangeLabel(selectedWeek.year, selectedWeek.week),
+        rows: buildWeekDepositMailRows(cashRecords, sourceDeposits),
+      }),
+    });
+    const data = (await response.json().catch(() => null)) as
+      | { message?: string }
+      | null;
+
+    if (!response.ok) {
+      throw new Error(data?.message || "Weekstorting mailen is mislukt.");
+    }
+
+    return data?.message || "Weekstorting naar administratie gemaild.";
+  }
+
+  async function closeSelectedCashLocation() {
+    if (!selectedShopRow || !selectedCashLocationRow || state === "saving") return;
+    if (isSelectedCashLocationClosed) {
+      await reopenSelectedCashLocation();
+      return;
+    }
+    if (!isSelectedCashLocationComplete) {
+      setStatus(
+        selectedCashLocationKind === "ice"
+          ? "Sla eerst de complete ijsstorting voor deze locatie op."
+          : "Controleer eerst alle verwachte dagen van deze winkel."
+      );
+      return;
+    }
+
+    const locationLabel = cashLocationLabel(
+      selectedCashLocationKind,
+      selectedShopRow.shop
+    );
+    const amount =
+      selectedCashLocationKind === "ice"
+        ? selectedShopRow.iceBankAmount
+        : selectedShopRow.bankAmount;
+    if (
+      !window.confirm(
+        `${locationLabel} sluiten met ${formatMoney(amount)} naar bank? De andere locaties blijven open.`
+      )
+    ) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const baseDeposit = depositForWeekRow(selectedShopRow, now);
+    const closedDeposit: RevenueCashDeposit =
+      selectedCashLocationKind === "ice"
+        ? {
+            ...baseDeposit,
+            iceDepositClosedAt: now,
+            iceDepositClosedBy: "Management",
+            updatedAt: now,
+          }
+        : {
+            ...baseDeposit,
+            depositedAt: baseDeposit.depositedAt || now,
+            depositedBy: baseDeposit.depositedBy || "Strik app",
+            patisserieClosedAt: now,
+            patisserieClosedBy: "Management",
+            updatedAt: now,
+          };
+    const mergedDeposits = mergeRevenueCashDeposits(
+      cashDeposits.filter((deposit) => deposit.id !== closedDeposit.id),
+      [closedDeposit]
+    );
+    const finalized = finalizeWeekWhenAllActiveLocationsClosed(
+      mergedDeposits,
+      isIceSeasonOpen,
+      now
+    );
+
+    setCashDeposits(finalized.deposits);
+    if (finalized.allClosed) setMailState("sending");
+    const saved = await saveCash(finalized.deposits);
+    if (!saved) {
+      setMailState("idle");
+      return;
+    }
+
+    if (!finalized.allClosed) {
+      setStatus(`${locationLabel} is gesloten. De andere locaties blijven open.`);
+      return;
+    }
+
+    try {
+      const message = await mailWeekDepositSummary(finalized.deposits);
+      setStatus(`Alle actieve locaties zijn gesloten. ${message}`);
+    } catch (error) {
+      setStatus(
+        `Alle actieve locaties zijn gesloten, maar de mail is niet verstuurd: ${
+          error instanceof Error ? error.message : "onbekende fout"
+        }`
+      );
+    } finally {
+      setMailState("idle");
+    }
+  }
+
+  async function reopenSelectedCashLocation() {
+    if (!selectedShopRow || !selectedCashLocationRow || state === "saving") return;
+    const deposit = selectedShopRow.deposit;
+    if (!deposit || deposit.cashbookBookedAt) {
+      setStatus(
+        deposit?.cashbookBookedAt
+          ? "Deze storting is al in het kasboek geboekt en kan niet worden heropend."
+          : "Voor deze locatie is geen gesloten storting gevonden."
+      );
+      return;
+    }
+    if (
+      deposit.closedAt &&
+      !deposit.patisserieClosedAt &&
+      !deposit.iceDepositClosedAt
+    ) {
+      setStatus("Dit is een oude gesloten week. Gebruik ‘Week heropenen’.");
+      return;
+    }
+
+    const locationLabel = cashLocationLabel(
+      selectedCashLocationKind,
+      selectedShopRow.shop
+    );
+    if (!window.confirm(`${locationLabel} heropenen voor correcties?`)) return;
+
+    const now = new Date().toISOString();
+    const nextDeposits = cashDeposits.map((item) => {
+      if (item.year !== selectedWeek.year || item.week !== selectedWeek.week) {
+        return item;
+      }
+      if (item.shop !== selectedShopRow.shop) {
+        return {
+          ...item,
+          closedAt: undefined,
+          closedBy: undefined,
+          updatedAt: now,
+        };
+      }
+
+      return selectedCashLocationKind === "ice"
+        ? {
+            ...item,
+            iceDepositClosedAt: undefined,
+            iceDepositClosedBy: undefined,
+            closedAt: undefined,
+            closedBy: undefined,
+            updatedAt: now,
+          }
+        : {
+            ...item,
+            patisserieClosedAt: undefined,
+            patisserieClosedBy: undefined,
+            closedAt: undefined,
+            closedBy: undefined,
+            updatedAt: now,
+          };
+    });
+
+    if (await saveCash(nextDeposits)) {
+      setStatus(`${locationLabel} is heropend; de andere gesloten locaties blijven dicht.`);
+    }
+  }
+
+  async function toggleIceSeason() {
+    if (state === "saving" || mailState === "sending") return;
+    if (isSelectedWeekClosed) {
+      setStatus("Heropen de week voordat je de ijsseizoen-instelling wijzigt.");
+      return;
+    }
+
+    const nextOpen = !isIceSeasonOpen;
+    const hasIceData = weekRows.some(
+      (row) =>
+        row.iceCount > 0 ||
+        row.deposit?.iceDepositAmount !== undefined ||
+        Boolean(row.deposit?.iceDepositedAt)
+    );
+    if (
+      !nextOpen &&
+      hasIceData &&
+      !window.confirm(
+        "Er staat al ijsdata in deze week. IJsseizoen toch sluiten? De bestaande ijsdata blijft bewaard, maar ijslocaties zijn niet meer verplicht voor de weekafsluiting."
+      )
+    ) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const weekDeposits = weekRows.map((row) => ({
+      ...depositForWeekRow(row, now),
+      iceSeasonOpen: nextOpen,
+      updatedAt: now,
+    }));
+    const mergedDeposits = mergeRevenueCashDeposits(
+      cashDeposits.filter(
+        (deposit) =>
+          deposit.year !== selectedWeek.year ||
+          deposit.week !== selectedWeek.week
+      ),
+      weekDeposits
+    );
+    const finalized = finalizeWeekWhenAllActiveLocationsClosed(
+      mergedDeposits,
+      nextOpen,
+      now
+    );
+
+    if (!nextOpen) setSelectedCashLocationKind("patisserie");
+    if (finalized.allClosed) setMailState("sending");
+    const saved = await saveCash(finalized.deposits);
+    if (!saved) {
+      setMailState("idle");
+      return;
+    }
+
+    if (!finalized.allClosed) {
+      setStatus(
+        nextOpen
+          ? "IJsseizoen staat voor deze week open."
+          : "IJsseizoen staat voor deze week dicht; ijslocaties blokkeren de weekafsluiting niet."
+      );
+      return;
+    }
+
+    try {
+      const message = await mailWeekDepositSummary(finalized.deposits);
+      setStatus(`Alle actieve winkels waren al gesloten. ${message}`);
+    } catch (error) {
+      setStatus(
+        `Week automatisch gesloten, maar de mail is niet verstuurd: ${
+          error instanceof Error ? error.message : "onbekende fout"
+        }`
+      );
+    } finally {
+      setMailState("idle");
+    }
+  }
+
   async function reopenWeek() {
     if (!isSelectedWeekClosed || state === "saving" || mailState === "sending") return;
     if (isSelectedWeekCashbookBooked) {
@@ -1532,7 +1943,16 @@ export default function CashCountManager() {
     const now = new Date().toISOString();
     const nextDeposits = cashDeposits.map((deposit) =>
       deposit.year === selectedWeek.year && deposit.week === selectedWeek.week
-        ? { ...deposit, closedAt: undefined, closedBy: undefined, updatedAt: now }
+        ? {
+            ...deposit,
+            patisserieClosedAt: undefined,
+            patisserieClosedBy: undefined,
+            iceDepositClosedAt: undefined,
+            iceDepositClosedBy: undefined,
+            closedAt: undefined,
+            closedBy: undefined,
+            updatedAt: now,
+          }
         : deposit
     );
     if (await saveCash(nextDeposits)) {
@@ -1559,7 +1979,7 @@ export default function CashCountManager() {
       setStatus("Geef bij een stortverschil ook een toelichting op.");
       return;
     }
-    if (!window.confirm(`Storting ${row.shop}: opgegeven ${formatMoney(deposit.amount)}, werkelijk ${formatMoney(actualAmount)}. Verschil ${formatMoney(actualAmount - deposit.amount)}. Opslaan?`)) return;
+    if (!window.confirm(`Storting ${cashLocationLabel("patisserie", row.shop)}: opgegeven ${formatMoney(deposit.amount)}, werkelijk ${formatMoney(actualAmount)}. Verschil ${formatMoney(actualAmount - deposit.amount)}. Opslaan?`)) return;
 
     const nextDeposits = cashDeposits.map((item) =>
       item.id === deposit.id
@@ -1567,13 +1987,13 @@ export default function CashCountManager() {
         : item
     );
     if (await saveCash(nextDeposits)) {
-      setStatus(`Werkelijke storting voor ${row.shop} opgeslagen; oorspronkelijke storting blijft bewaard.`);
+      setStatus(`Werkelijke storting voor ${cashLocationLabel("patisserie", row.shop)} opgeslagen; oorspronkelijke storting blijft bewaard.`);
     }
   }
 
   async function saveIceDeposit(row: (typeof weekRows)[number]) {
-    if (isSelectedWeekClosed || state === "saving") {
-      setStatus("Deze week is gesloten. Heropen de week eerst om een ijsstorting te wijzigen.");
+    if (row.iceClosed || state === "saving") {
+      setStatus("Deze ijsweek is gesloten. Heropen de locatie om te wijzigen.");
       return;
     }
     if (row.deposit?.cashbookBookedAt) {
@@ -1592,7 +2012,7 @@ export default function CashCountManager() {
       return;
     }
     const amount = parseAmount(raw);
-    if (!window.confirm(`IJs ${row.shop}: ${formatMoney(amount)} als weekstorting opslaan${row.iceCount === 0 ? " zonder dagrapport" : ""}?`)) return;
+    if (!window.confirm(`${cashLocationLabel("ice", row.shop)}: ${formatMoney(amount)} als weekstorting opslaan${row.iceCount === 0 ? " zonder dagrapport" : ""}?`)) return;
 
     const now = new Date().toISOString();
     const existing = row.deposit;
@@ -1617,67 +2037,8 @@ export default function CashCountManager() {
       [deposit]
     );
     if (await saveCash(nextDeposits)) {
-      setStatus(`Ijsstorting voor ${row.shop} opgeslagen; overige kasgegevens zijn niet gewijzigd.`);
+      setStatus(`IJs-storting voor ${cashLocationLabel("ice", row.shop)} opgeslagen; overige kasgegevens zijn niet gewijzigd.`);
     }
-  }
-
-  function buildWeekCashDeposits(sourceRecords = cashRecords, closeWeek = false) {
-    const now = new Date().toISOString();
-    const weekShops = new Set(weekRows.map((row) => row.shop));
-    const deposits = weekRows.map((row) => {
-      const shopRecords = recordsForWeek(
-        sourceRecords,
-        selectedWeek.year,
-        selectedWeek.week,
-        row.shop
-      );
-      const checkedRecords = row.expectedDates.flatMap((date) => {
-        const record = findCashRecord(shopRecords, date, row.shop);
-
-        return hasPatisserieCashRecord(record) && record?.checkedAt ? [record] : [];
-      });
-      const checkedSafeCash = checkedRecords.reduce(
-        (total, record) => total + safeCheckedCash(record),
-        0
-      );
-      const dateRange = checkedRecords.map((record) => record.date).sort();
-      const amount = roundedMoney(checkedSafeCash);
-
-      return {
-        id: createRevenueCashDepositKey(selectedWeek.year, selectedWeek.week, row.shop),
-        year: selectedWeek.year,
-        week: selectedWeek.week,
-        shop: row.shop,
-        amount,
-        actualAmount: row.deposit?.actualAmount,
-        differenceNote: row.deposit?.differenceNote,
-        iceDepositAmount: row.deposit?.iceDepositAmount,
-        iceDepositedAt: row.deposit?.iceDepositedAt,
-        iceDepositNote: row.deposit?.iceDepositNote,
-        dateFrom: dateRange[0],
-        dateTo: dateRange.at(-1),
-        cashRecordIds: checkedRecords.map((record) => record.id),
-        depositedAt: row.deposit?.depositedAt || now,
-        depositedBy: row.deposit?.depositedBy || "Strik app",
-        closedAt: closeWeek ? row.deposit?.closedAt || now : row.deposit?.closedAt,
-        closedBy: closeWeek ? row.deposit?.closedBy || "Strik app" : row.deposit?.closedBy,
-        cashbookBookedAt: row.deposit?.cashbookBookedAt,
-        cashbookBookedBy: row.deposit?.cashbookBookedBy,
-        note: row.deposit?.note || "",
-        createdAt: row.deposit?.createdAt || now,
-        updatedAt: now,
-      } satisfies RevenueCashDeposit;
-    });
-
-    return mergeRevenueCashDeposits(
-      cashDeposits.filter(
-        (item) =>
-          item.year !== selectedWeek.year ||
-          item.week !== selectedWeek.week ||
-          !weekShops.has(item.shop)
-      ),
-      deposits
-    );
   }
 
   function buildWeekDepositMailRows(
@@ -1753,65 +2114,6 @@ export default function CashCountManager() {
     });
   }
 
-  async function sendWeekDepositMail() {
-    if (isSelectedWeekClosed) {
-      setStatus("Deze weekstorting is al definitief gesloten.");
-      return;
-    }
-
-    if (!isSelectedWeekComplete) {
-      setStatus("Weekstorting kan pas worden gemaild als alle verwachte dagen compleet zijn.");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      [
-        "Wil je de storting bevestigen en mailen naar administratie?",
-        "",
-        "Let op: hierna kun je niets meer wijzigen in deze week.",
-      ].join("\n")
-    );
-    if (!confirmed) return;
-
-    const nextDeposits = buildWeekCashDeposits(cashRecords, true);
-    setCashDeposits(nextDeposits);
-    setMailState("sending");
-
-    try {
-      await saveCash(nextDeposits, cashRecords);
-
-      const response = await fetch("/api/management-revenue/cash-deposit-mail", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          year: selectedWeek.year,
-          week: selectedWeek.week,
-          weekLabel: weekRangeLabel(selectedWeek.year, selectedWeek.week),
-          rows: buildWeekDepositMailRows(cashRecords, nextDeposits),
-        }),
-      });
-      const data = (await response.json().catch(() => null)) as
-        | { message?: string }
-        | null;
-
-      if (!response.ok) {
-        throw new Error(data?.message || "Weekstorting mailen is mislukt.");
-      }
-
-      setStatus(data?.message || "Weekstorting naar administratie gemaild.");
-    } catch (error) {
-      setStatus(
-        error instanceof Error
-          ? error.message
-          : "Weekstorting mailen is mislukt."
-      );
-    } finally {
-      setMailState("idle");
-    }
-  }
-
   const selectedDepositDraftKey = selectedShopRow
     ? `${depositWeekKey}:${selectedShopRow.shop}`
     : "";
@@ -1822,7 +2124,7 @@ export default function CashCountManager() {
   return (
     <div className="space-y-3">
       <section className="rounded-3xl border border-[#d9cbb8] bg-[#fbf7ef]/95 p-3 shadow-sm sm:p-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(9rem,11rem)_minmax(12rem,16rem)_minmax(0,1fr)_auto] xl:items-end">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(9rem,11rem)_minmax(12rem,16rem)_minmax(9rem,11rem)_minmax(0,1fr)_auto] xl:items-end">
           <label className="relative flex h-14 cursor-pointer items-center gap-2 rounded-2xl border border-[#cad9c5] bg-[#eef6eb] px-3 text-[#1f4f35] shadow-sm">
             <span className="text-[0.58rem] font-black uppercase tracking-[0.08em]">
               Weeknr.
@@ -1869,20 +2171,58 @@ export default function CashCountManager() {
                 }
               }}
               className={`h-11 rounded-xl border border-[#ded5ca] bg-white px-2.5 text-xs font-black normal-case tracking-normal outline-none transition focus:border-[#8ba287] ${
-                selectedCashLocationRow &&
-                hasNonWholeMoney(selectedCashLocationRow.weekTotal)
-                  ? "text-[#a43b2f]"
-                  : "text-[#1a1815]"
+                selectedCashLocationRow?.closed
+                  ? "border-[#9fbd9d] bg-[#eef8ef] text-[#1f4f35]"
+                  : selectedCashLocationRow &&
+                      hasNonWholeMoney(selectedCashLocationRow.weekTotal)
+                    ? "text-[#a43b2f]"
+                    : "text-[#1a1815]"
               }`}
             >
               {cashLocationRows.map((row) => (
                 <option key={row.key} value={row.key}>
-                  {row.kind === "patisserie" ? `P. ${row.shop}` : row.label} ·{" "}
+                  {row.label} ·{" "}
                   naar bank {formatMoney(row.weekTotal)}
+                  {row.closed ? " · gesloten" : ""}
                 </option>
               ))}
             </select>
           </label>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isIceSeasonOpen}
+            onClick={() => void toggleIceSeason()}
+            disabled={
+              state === "saving" ||
+              mailState === "sending" ||
+              isSelectedWeekClosed
+            }
+            className={`flex h-11 items-center justify-between gap-2 rounded-xl border px-3 text-left text-[0.65rem] font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              isIceSeasonOpen
+                ? "border-[#a8c4a6] bg-[#eef8ef] text-[#1f4f35]"
+                : "border-[#d9d2c9] bg-[#f2efeb] text-[#766f67]"
+            }`}
+          >
+            <span>
+              IJsseizoen
+              <span className="block text-[0.55rem] font-bold opacity-70">
+                deze week
+              </span>
+            </span>
+            <span
+              className={`relative h-5 w-9 rounded-full transition ${
+                isIceSeasonOpen ? "bg-[#2f6f43]" : "bg-[#b8b1a8]"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition ${
+                  isIceSeasonOpen ? "left-[1.12rem]" : "left-0.5"
+                }`}
+              />
+            </span>
+          </button>
 
           <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-[#e7e0d8] bg-white text-center">
             <div
@@ -1980,25 +2320,40 @@ export default function CashCountManager() {
             </button>
             <button
               type="button"
-              onClick={() => void sendWeekDepositMail()}
-              aria-label="Storting bevestigen en mailen naar administratie"
+              onClick={() => void closeSelectedCashLocation()}
+              aria-label={
+                isSelectedCashLocationClosed
+                  ? "Geselecteerde locatie heropenen"
+                  : "Geselecteerde locatie sluiten"
+              }
               disabled={
-                isSelectedWeekClosed ||
-                !isSelectedWeekComplete ||
+                (!isSelectedCashLocationClosed &&
+                  !isSelectedCashLocationComplete) ||
                 state === "saving" ||
-                mailState === "sending"
+                mailState === "sending" ||
+                Boolean(selectedShopRow?.deposit?.cashbookBookedAt)
               }
               title={
-                isSelectedWeekClosed
-                  ? "Week is definitief gesloten"
-                  : isSelectedWeekComplete
-                    ? "Storting bevestigen en mailen naar administratie"
-                  : "Alle verwachte dagen eerst afvinken"
+                isSelectedCashLocationClosed
+                  ? "Alleen deze locatie heropenen"
+                  : isSelectedCashLocationComplete
+                    ? "Bedrag vastzetten en deze locatie sluiten"
+                    : "Deze locatie eerst compleet maken"
               }
-              className="flex h-11 items-center justify-center gap-2 rounded-xl border border-[#1f4f35] bg-[#1f4f35] px-3 text-xs font-black text-white shadow-sm disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60"
+              className={`flex h-11 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black shadow-sm disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60 ${
+                isSelectedCashLocationClosed
+                  ? "border-[#8fb18b] bg-[#eef8ef] text-[#1f4f35]"
+                  : "border-[#1f4f35] bg-[#1f4f35] text-white"
+              }`}
             >
               <BankIcon />
-              <span>{mailState === "sending" ? "Versturen..." : "Week afsluiten"}</span>
+              <span>
+                {mailState === "sending"
+                  ? "Week afronden..."
+                  : isSelectedCashLocationClosed
+                    ? "Heropen locatie"
+                    : "Locatie sluiten"}
+              </span>
             </button>
           </div>
         </div>
@@ -2022,10 +2377,15 @@ export default function CashCountManager() {
               Week heropenen
             </button>
           </div>
-        ) : isSelectedWeekComplete ? (
+        ) : isSelectedCashLocationClosed ? (
+          <p className="mt-3 rounded-2xl border border-[#cbdcc5] bg-[#f6fbf5] px-3 py-2.5 text-xs font-bold text-[#1f4f35]">
+            {cashLocationLabel(selectedCashLocationKind, selectedShop)} is voor deze week gesloten. Andere locaties kunnen
+            apart verder worden afgehandeld.
+          </p>
+        ) : isSelectedCashLocationComplete ? (
           <p className="mt-3 rounded-2xl border border-[#efd1a1] bg-[#fff8d8] px-3 py-2.5 text-xs font-bold text-[#7a5417]">
-            Let op: na storting bevestigen en mailen naar administratie kun je
-            niets meer wijzigen in deze week.
+            Het bedrag voor deze locatie staat vast. Sluit alleen deze locatie;
+            de overige vestigingen blijven open.
           </p>
         ) : null}
 
@@ -2173,7 +2533,7 @@ export default function CashCountManager() {
                   </span>
                   <div>
                     <p className="text-[0.58rem] font-black uppercase tracking-[0.06em] text-[#8b8278]">
-                      {dayName(selectedShopDay.date)} · {selectedShop}
+                      {dayName(selectedShopDay.date)} · {cashLocationLabel("patisserie", selectedShop)}
                     </p>
                     <p className="text-sm font-black text-[#1a1815]">
                       Winkel was gesloten
@@ -2188,7 +2548,7 @@ export default function CashCountManager() {
                   onClick={() =>
                     void unmarkShopClosed(selectedShopDay.date, selectedShop)
                   }
-                  disabled={state === "saving" || isSelectedWeekClosed}
+                  disabled={state === "saving" || isSelectedCashLocationClosed}
                   className="h-9 rounded-full border border-[#8b8278] bg-white px-4 text-xs font-black text-[#6b645b] disabled:opacity-50"
                 >
                   Markering verwijderen
@@ -2233,7 +2593,7 @@ export default function CashCountManager() {
                     </span>
                     <div>
                       <p className="text-[0.58rem] font-black uppercase tracking-[0.06em] text-[#a43b2f]">
-                        {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"} · {selectedShop}
+                        {selectedShopDay ? dayName(selectedShopDay.date) : "Dag"} · {cashLocationLabel("patisserie", selectedShop)}
                       </p>
                       <p className="text-sm font-black text-[#1a1815]">
                         {!selectedShopDayIsPast
@@ -2272,7 +2632,7 @@ export default function CashCountManager() {
                             selectedShop
                           )
                         }
-                        disabled={state === "saving" || isSelectedWeekClosed}
+                        disabled={state === "saving" || isSelectedCashLocationClosed}
                         className="h-9 rounded-full bg-[#1a1815] px-4 text-xs font-black text-white disabled:opacity-50"
                       >
                         Winkel was gesloten
@@ -2292,7 +2652,7 @@ export default function CashCountManager() {
                       {dayName(selectedCashRecord.date)}
                     </p>
                     <p className="mt-0.5 text-sm font-black leading-none text-[#1a1815]">
-                      Dagcontrole · {selectedCashRecord.shop}
+                      Dagcontrole · {cashLocationLabel("patisserie", selectedCashRecord.shop)}
                     </p>
                   </div>
                   <span
@@ -2424,7 +2784,7 @@ export default function CashCountManager() {
                             disabled={
                               Boolean(selectedCashRecord.checkedAt) ||
                               state === "saving" ||
-                              isSelectedWeekClosed
+                              isSelectedCashLocationClosed
                             }
                             placeholder="0,00"
                             className="h-10 w-full rounded-xl border border-[#d8c58f] bg-white pl-7 pr-3 text-base font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
@@ -2448,7 +2808,7 @@ export default function CashCountManager() {
                           disabled={
                             Boolean(selectedCashRecord.checkedAt) ||
                             state === "saving" ||
-                            isSelectedWeekClosed
+                            isSelectedCashLocationClosed
                           }
                           placeholder="0,00"
                           className="h-10 rounded-xl border border-[#d8c58f] bg-white px-3 text-sm font-black normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
@@ -2505,7 +2865,7 @@ export default function CashCountManager() {
                         disabled={
                           Boolean(selectedCashRecord.checkedAt) ||
                           state === "saving" ||
-                          isSelectedWeekClosed
+                          isSelectedCashLocationClosed
                         }
                         placeholder="Bijv. startbedrag gecorrigeerd of verschil verklaard"
                         className="h-9 rounded-xl border border-[#d8c58f] bg-white px-3 text-xs font-bold normal-case tracking-normal text-[#1a1815] disabled:opacity-60"
@@ -2514,7 +2874,7 @@ export default function CashCountManager() {
                     <button
                       type="button"
                       onClick={() => void toggleChecked(selectedCashRecord)}
-                      disabled={state === "saving" || isSelectedWeekClosed}
+                      disabled={state === "saving" || isSelectedCashLocationClosed}
                       className={`mt-2.5 flex h-9 w-full items-center justify-center gap-1.5 rounded-full border px-3 text-[0.68rem] font-black disabled:opacity-60 ${
                         selectedCashRecord.checkedAt
                           ? "border-[#9fbd9d] bg-[#1f4f35] text-white"
@@ -2541,7 +2901,7 @@ export default function CashCountManager() {
               </>
             ) : selectedIceCashRecord ? (
               <IceCashSummary
-                disabled={state === "saving" || isSelectedWeekClosed}
+                disabled={state === "saving" || isSelectedCashLocationClosed}
                 draftDifference={selectedIceSafeDraftDifference}
                 hasSourceCorrection={selectedHasIceSourceCorrection}
                 inputValue={selectedIceSafeInputValue}
@@ -2607,7 +2967,7 @@ export default function CashCountManager() {
                   Weekstorting
                 </p>
                 <h2 className="mt-0.5 truncate text-lg font-black leading-none text-[#1a1815]">
-                  {selectedShopRow.shop}
+                  {cashLocationLabel("patisserie", selectedShopRow.shop)}
                 </h2>
               </div>
               <div className="text-right">
@@ -2624,7 +2984,7 @@ export default function CashCountManager() {
               <div className="flex items-end justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[0.55rem] font-black uppercase tracking-[0.08em] text-[#1f4f35]">
-                    Naar bank voor {selectedShopRow.shop}
+                    Naar bank voor {cashLocationLabel("patisserie", selectedShopRow.shop)}
                   </p>
                   <p
                     className={`mt-1 truncate text-xl font-black leading-none tabular-nums ${
@@ -2753,7 +3113,7 @@ export default function CashCountManager() {
                 IJs weekoverzicht
               </p>
               <h2 className="mt-0.5 text-2xl font-black leading-tight text-[#1a1815]">
-                IJs {selectedShopRow.shop}
+                {cashLocationLabel("ice", selectedShopRow.shop)}
               </h2>
             </div>
             <div className="grid w-full grid-cols-3 gap-3 lg:w-auto lg:min-w-[28rem]">
@@ -2807,7 +3167,7 @@ export default function CashCountManager() {
                 value={iceDepositDrafts[selectedIceDepositDraftKey] ?? formatOptionalAmountInput(selectedShopRow.deposit?.iceDepositAmount)}
                 onChange={(event) => setIceDepositDrafts((current) => ({ ...current, [selectedIceDepositDraftKey]: event.target.value }))}
                 inputMode="decimal"
-                disabled={isSelectedWeekClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
+                disabled={isSelectedCashLocationClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
                 placeholder="0,00"
                 className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-sm font-bold normal-case text-[#1a1815] disabled:opacity-50"
               />
@@ -2817,7 +3177,7 @@ export default function CashCountManager() {
               <input
                 value={iceDepositNotes[selectedIceDepositDraftKey] ?? selectedShopRow.deposit?.iceDepositNote ?? ""}
                 onChange={(event) => setIceDepositNotes((current) => ({ ...current, [selectedIceDepositDraftKey]: event.target.value }))}
-                disabled={isSelectedWeekClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
+                disabled={isSelectedCashLocationClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
                 placeholder="Bijv. kassa tijdelijk uitgeschakeld"
                 className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
               />
@@ -2825,7 +3185,7 @@ export default function CashCountManager() {
             <button
               type="button"
               onClick={() => void saveIceDeposit(selectedShopRow)}
-              disabled={state === "saving" || isSelectedWeekClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
+              disabled={state === "saving" || isSelectedCashLocationClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
               className="h-10 rounded-xl bg-[#1f4f35] px-3 text-[0.68rem] font-black text-white disabled:opacity-50"
             >
               {selectedShopRow.deposit?.iceDepositedAt ? "Ijsstorting bijwerken" : "Ijsstorting opslaan"}
@@ -2969,7 +3329,7 @@ function IceCashSummary({
               IJstelling
             </span>
             <span className="block text-base font-black leading-tight text-[#1a1815]">
-              {dayName(record.date)} · {record.shop}
+              {dayName(record.date)} · {cashLocationLabel("ice", record.shop)}
             </span>
             <span
               className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-normal ${

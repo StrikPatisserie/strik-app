@@ -8,6 +8,15 @@ import {
   type ArendPrintSessionBreakdown,
   type ArendPrintSession,
 } from "./arendPrintSession";
+import {
+  applySpecialSchoolDeliverySplit,
+  isSpecialSchoolChildReceipt,
+  isSpecialSchoolSourceReceipt,
+  specialSchoolDeliveryCakeCount,
+  specialSchoolDeliveryDate,
+  specialSchoolDeliveryRouteIndex,
+  specialSchoolDeliveryStops,
+} from "./specialSchoolDelivery";
 import type {
   LogisticsBatch,
   LogisticsBatchStatus,
@@ -5076,6 +5085,118 @@ function openBusRouteSheet(plan: DayPlan, routeGroup: RouteGroup) {
   window.setTimeout(() => URL.revokeObjectURL(printUrl), 60_000);
 }
 
+function createSpecialSchoolDeliveryPrintHtml(input: {
+  plan: DayPlan;
+  sourceReceipt: ReceiptSummary | null;
+}) {
+  const sourceNumber =
+    input.sourceReceipt?.receiptNumber || input.sourceReceipt?.id || "wordt zondag gekoppeld";
+  const rows = specialSchoolDeliveryStops
+    .map(
+      (stop, index) => `
+        <tr>
+          <td class="number">${index + 1}</td>
+          <td>
+            <strong>${escapeHtml(stop.name)}</strong>
+            <span>${escapeHtml(stop.address)} · ${escapeHtml(stop.postalCity)}</span>
+          </td>
+          <td>${stop.cakes.map((cake) => escapeHtml(cake)).join(" · ")}</td>
+          <td class="card"><span></span> kaart</td>
+          <td class="check"><span></span></td>
+        </tr>`
+    )
+    .join("");
+
+  return `<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>St Josephschool · 15 afleveradressen</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { background:#efefef; color:#111; font-family:Arial,Helvetica,sans-serif; margin:0; }
+      .screen-actions { align-items:center; background:#fff; border-bottom:1px solid #ccc; display:flex; justify-content:space-between; padding:14px 18px; }
+      .screen-actions h1 { font-size:18px; margin:0; }
+      button { background:#111; border:0; border-radius:10px; color:#fff; cursor:pointer; font-size:14px; font-weight:800; padding:11px 18px; }
+      button.secondary { background:#fff; border:1px solid #aaa; color:#111; margin-right:8px; }
+      main { background:#fff; margin:18px auto; max-width:1120px; min-height:190mm; padding:10mm; }
+      header { align-items:flex-end; border-bottom:3px solid #111; display:flex; justify-content:space-between; padding-bottom:4mm; }
+      header h1 { font-size:20pt; line-height:1; margin:0; }
+      header p { font-size:9pt; font-weight:700; margin:1.5mm 0 0; }
+      .totals { text-align:right; }
+      .totals strong { display:block; font-size:15pt; }
+      .totals span { font-size:9pt; font-weight:800; }
+      table { border-collapse:collapse; margin-top:4mm; table-layout:fixed; width:100%; }
+      th { border-bottom:2px solid #111; font-size:8pt; padding:1.5mm; text-align:left; text-transform:uppercase; }
+      td { border-bottom:1px solid #aaa; font-size:8.5pt; line-height:1.15; padding:1.35mm 1.5mm; vertical-align:middle; }
+      td.number { font-size:10pt; font-weight:900; text-align:center; width:8mm; }
+      td strong { display:block; font-size:9.5pt; line-height:1.1; }
+      td span { display:block; font-size:8pt; margin-top:.5mm; }
+      th:nth-child(1) { width:8mm; }
+      th:nth-child(2) { width:66mm; }
+      th:nth-child(4) { width:25mm; }
+      th:nth-child(5) { width:13mm; text-align:center; }
+      td.card { font-size:8pt; font-weight:800; white-space:nowrap; }
+      td.card span, td.check span { border:1.5px solid #111; display:inline-block; height:5mm; margin:0 1mm 0 0; vertical-align:middle; width:5mm; }
+      td.check { text-align:center; }
+      .note { border:1.5px solid #111; font-size:9pt; font-weight:800; margin-top:4mm; padding:2.5mm 3mm; }
+      @media print {
+        @page { margin:7mm; size:A4 landscape; }
+        body { background:#fff; }
+        .screen-actions { display:none; }
+        main { margin:0; max-width:none; min-height:0; padding:0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen-actions">
+      <h1>St Josephschool · 15 afleveradressen</h1>
+      <div>
+        <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
+        <button type="button" onclick="window.print()">Afdrukken</button>
+      </div>
+    </div>
+    <main>
+      <header>
+        <div>
+          <h1>St Josephschool · schoolleveringen</h1>
+          <p>${escapeHtml(formatReceiptDateLabel(input.plan.date))} · hoofd-bon ${escapeHtml(sourceNumber)}</p>
+        </div>
+        <div class="totals">
+          <strong>15 adressen · ${specialSchoolDeliveryCakeCount()} taarten</strong>
+          <span>Iedere levering heeft een kaart</span>
+        </div>
+      </header>
+      <table>
+        <thead><tr><th>#</th><th>School en adres</th><th>Taarten</th><th>Kaart</th><th>Klaar</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="note">Let op: dit zijn logistieke deelbonnen. Omzet en productie blijven uitsluitend op de hoofd-bon St Josephschool staan.</p>
+    </main>
+  </body>
+</html>`;
+}
+
+function openSpecialSchoolDeliverySheet(
+  plan: DayPlan,
+  sourceReceipt: ReceiptSummary | null
+) {
+  const printHtml = createSpecialSchoolDeliveryPrintHtml({ plan, sourceReceipt });
+  const printUrl = URL.createObjectURL(
+    new Blob([printHtml], { type: "text/html;charset=utf-8" })
+  );
+  const printWindow = window.open(printUrl, "_blank", "width=1100,height=800");
+  if (!printWindow) {
+    URL.revokeObjectURL(printUrl);
+    window.alert("Overzicht kon niet geopend worden.");
+    return;
+  }
+
+  printWindow.focus();
+  window.setTimeout(() => URL.revokeObjectURL(printUrl), 60_000);
+}
+
 function createReceiptPrintHtml(input: {
   notes: string[];
   receipt: ReceiptSummary;
@@ -5379,7 +5500,13 @@ function createReceiptPrintHtml(input: {
         </table>
         <div class="total">
           <strong>Totaalprijs</strong>
-          <span>${receipt.value ? escapeHtml(formatReceiptMoney(receipt.value)) : "intern"}</span>
+          <span>${
+            receipt.value
+              ? escapeHtml(formatReceiptMoney(receipt.value))
+              : isSpecialSchoolChildReceipt(receipt)
+                ? "via hoofd-bon"
+                : "intern"
+          }</span>
         </div>
         ${notesHtml}
         <section class="fulfillment">
@@ -6406,6 +6533,12 @@ function shouldRideAfterLentOnSaturday(receipt: ReceiptSummary) {
 
 function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
   return [...receipts].sort((first, second) => {
+    const firstSchoolRouteIndex = specialSchoolDeliveryRouteIndex(first);
+    const secondSchoolRouteIndex = specialSchoolDeliveryRouteIndex(second);
+    if (firstSchoolRouteIndex >= 0 && secondSchoolRouteIndex >= 0) {
+      return firstSchoolRouteIndex - secondSchoolRouteIndex;
+    }
+
     const earlyCompare =
       Number(isEarlyException(second)) - Number(isEarlyException(first));
     if (earlyCompare !== 0) return earlyCompare;
@@ -8413,6 +8546,8 @@ export default function BakkerijLogistiekDashboard() {
   const [overrideMessage, setOverrideMessage] = useState("");
   const [photoLinkMessage, setPhotoLinkMessage] = useState("");
   const [advancePhotoOpen, setAdvancePhotoOpen] = useState(false);
+  const [schoolDeliveryOverviewOpen, setSchoolDeliveryOverviewOpen] =
+    useState(false);
   const [advancePhotoDate, setAdvancePhotoDate] = useState(() =>
     toInputDate(addDays(new Date(), 14))
   );
@@ -8469,11 +8604,25 @@ export default function BakkerijLogistiekDashboard() {
     },
     [baseReceiptSummaries, fixedCustomers, receiptOverrides, selectedPlan.date]
   );
+  const logisticsReceiptSummaries = useMemo(
+    () => applySpecialSchoolDeliverySplit(receiptSummaries, selectedPlan.date),
+    [receiptSummaries, selectedPlan.date]
+  );
+  const schoolDeliverySourceReceipt = useMemo(
+    () => receiptSummaries.find(isSpecialSchoolSourceReceipt) || null,
+    [receiptSummaries]
+  );
+  const showSpecialSchoolDelivery =
+    selectedPlan.date === specialSchoolDeliveryDate;
   const pressureOverride = pressureByDate[selectedPlan.date] || "";
   const loadProfile = useMemo(
     () =>
-      buildDayLoadProfile(selectedPlan, receiptSummaries, pressureOverride),
-    [pressureOverride, selectedPlan, receiptSummaries]
+      buildDayLoadProfile(
+        selectedPlan,
+        logisticsReceiptSummaries,
+        pressureOverride
+      ),
+    [pressureOverride, selectedPlan, logisticsReceiptSummaries]
   );
   const productionTotals = useMemo(
     () => buildBakeryProductionTotals(receiptSummaries),
@@ -8503,8 +8652,13 @@ export default function BakkerijLogistiekDashboard() {
   );
   const automaticRouteRounds = useMemo(
     () =>
-      buildRouteRounds(selectedPlan, receiptSummaries, loadProfile, routeLearning),
-    [loadProfile, receiptSummaries, routeLearning, selectedPlan]
+      buildRouteRounds(
+        selectedPlan,
+        logisticsReceiptSummaries,
+        loadProfile,
+        routeLearning
+      ),
+    [loadProfile, logisticsReceiptSummaries, routeLearning, selectedPlan]
   );
   const [manualRouteRounds, setManualRouteRounds] = useState<
     RouteRound[] | null
@@ -9802,6 +9956,19 @@ export default function BakkerijLogistiekDashboard() {
 
           <div className="flex flex-wrap items-center justify-between gap-2 md:h-full md:flex-col md:items-end">
             <div className="flex flex-wrap items-center justify-end gap-1.5">
+              {showSpecialSchoolDelivery && (
+                <button
+                  type="button"
+                  onClick={() => setSchoolDeliveryOverviewOpen(true)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#9fb6c8] bg-[#eaf4fb] px-2.5 text-[0.64rem] font-black leading-none text-[#244c67] shadow-sm transition hover:bg-[#dceef9] sm:px-3 sm:text-[0.7rem]"
+                >
+                  <SchoolIcon />
+                  <span className="sm:hidden">15 scholen</span>
+                  <span className="hidden sm:inline">
+                    St Josephschool · 15 adressen
+                  </span>
+                </button>
+              )}
               <RefreshButton
                 disabled={batchLoadState === "loading" || isImporting}
                 loading={batchLoadState === "loading"}
@@ -10009,7 +10176,7 @@ export default function BakkerijLogistiekDashboard() {
         )}
         {activeTab === "bonnen" && (
           <OrdersPanel
-            receiptSummaries={receiptSummaries}
+            receiptSummaries={logisticsReceiptSummaries}
             receiptOverrides={receiptOverrides}
             onSaveReceiptOverride={saveReceiptOverride}
             onLinkWebshopImageToReceipt={linkWebshopImageToReceipt}
@@ -10125,10 +10292,139 @@ export default function BakkerijLogistiekDashboard() {
             products={preparationProducts}
           />
         )}
+        {schoolDeliveryOverviewOpen && showSpecialSchoolDelivery && (
+          <SpecialSchoolDeliveryModal
+            onClose={() => setSchoolDeliveryOverviewOpen(false)}
+            plan={selectedPlan}
+            sourceReceipt={schoolDeliverySourceReceipt}
+          />
+        )}
       </div>
       </>
       )}
     </StrikShell>
+  );
+}
+
+function SpecialSchoolDeliveryModal({
+  onClose,
+  plan,
+  sourceReceipt,
+}: Readonly<{
+  onClose: () => void;
+  plan: DayPlan;
+  sourceReceipt: ReceiptSummary | null;
+}>) {
+  const sourceNumber = sourceReceipt?.receiptNumber || sourceReceipt?.id || "";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-2 sm:p-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="school-delivery-title"
+        className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-[#cad8e1] bg-[#f8fbfd] shadow-2xl"
+      >
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#dce6ec] bg-white px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#527187]">
+              Eenmalige schoollevering · maandag
+            </p>
+            <h2
+              id="school-delivery-title"
+              className="mt-0.5 text-xl font-black tracking-normal text-[#17232b] sm:text-2xl"
+            >
+              St Josephschool · 15 afleveradressen
+            </h2>
+            <p className="mt-1 text-xs font-semibold text-[#61717c]">
+              {specialSchoolDeliveryCakeCount()} taarten · bij ieder adres een kaart
+              {sourceNumber
+                ? ` · gekoppeld aan hoofd-bon ${sourceNumber}`
+                : " · koppelt automatisch zodra de hoofd-bon binnenkomt"}
+            </p>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => openSpecialSchoolDeliverySheet(plan, sourceReceipt)}
+              className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#244c67] px-3 text-xs font-black text-white"
+            >
+              <PrintIcon />
+              Overzicht printen
+            </button>
+            <button
+              type="button"
+              aria-label="Sluiten"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#cfd9df] bg-white text-base font-black text-[#435762]"
+            >
+              ×
+            </button>
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+          {!sourceReceipt && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#e9c876] bg-[#fff7d9] px-3 py-2 text-xs font-bold text-[#6f5212]">
+              <WarningIcon />
+              <span>
+                De 15 logistieke deelbonnen staan al klaar. De financiële
+                hoofd-bon “St Josephschool” wordt na de definitieve import
+                automatisch gekoppeld; deze adressen worden daarbij niet
+                overschreven.
+              </span>
+            </div>
+          )}
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {specialSchoolDeliveryStops.map((stop, index) => (
+              <article
+                key={stop.id}
+                className="grid grid-cols-[2rem_minmax(0,1fr)] gap-2 rounded-2xl border border-[#dbe5ea] bg-white p-2.5 shadow-sm"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#244c67] text-xs font-black text-white">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-black leading-tight tracking-normal text-[#17232b]">
+                    {stop.name}
+                  </h3>
+                  <p className="mt-0.5 text-[0.68rem] font-semibold leading-tight text-[#687985]">
+                    {stop.address} · {stop.postalCity}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {stop.cakes.map((cake) => (
+                      <span
+                        key={cake}
+                        className="rounded-full bg-[#edf3f6] px-2 py-1 text-[0.58rem] font-bold leading-none text-[#3d5666]"
+                      >
+                        {cake}
+                      </span>
+                    ))}
+                    <span className="rounded-full border border-[#d8b760] bg-[#fff7d9] px-2 py-1 text-[0.58rem] font-black leading-none text-[#6f5212]">
+                      + kaart
+                    </span>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#dce6ec] bg-white px-4 py-2.5 sm:px-5">
+          <p className="text-[0.68rem] font-semibold text-[#61717c]">
+            De hoofd-bon telt één keer mee voor omzet en productie; deze 15
+            deelbonnen alleen voor route, laden en afleveren.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 rounded-xl border border-[#cfd9df] bg-white px-4 text-xs font-black text-[#435762]"
+          >
+            Sluiten
+          </button>
+        </footer>
+      </section>
+    </div>
   );
 }
 
@@ -10870,6 +11166,10 @@ function ReceiptRow({
         {receipt.value ? (
           <p className="mt-1.5 text-[0.62rem] font-medium leading-none tracking-normal text-[#6b645b]">
             {formatCompactCurrency(receipt.value)}
+          </p>
+        ) : isSpecialSchoolChildReceipt(receipt) ? (
+          <p className="mt-1.5 text-[0.58rem] font-bold leading-none tracking-normal text-[#527187]">
+            deelbon
           </p>
         ) : (
           <p className="mt-1.5 text-[0.62rem] font-medium leading-none tracking-normal text-[#8b8278]">
@@ -12589,6 +12889,24 @@ function CalendarIcon() {
       <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
       <path d="M8 3v4M16 3v4M3.5 9.5h17" />
       <path d="M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01" />
+    </svg>
+  );
+}
+
+function SchoolIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4 shrink-0"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.9"
+    >
+      <path d="M3 21h18M5 21V9h14v12M3 9l9-6 9 6" />
+      <path d="M9 21v-5h6v5M8 12h.01M12 12h.01M16 12h.01" />
     </svg>
   );
 }

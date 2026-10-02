@@ -97,6 +97,153 @@ function formatSpecifications(line: Pick<AllergenListLine, "allergens" | "origin
     .join("; ");
 }
 
+function escapePrintHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function printFileName(list: CustomerAllergenList) {
+  const customer = list.customerName
+    .trim()
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-|-$/g, "");
+  return `Allergenenlijst-${customer || "klant"}`;
+}
+
+function createAllergenPrintHtml(list: CustomerAllergenList) {
+  const customerMeta = [
+    list.contactName.trim() ? `t.a.v. ${list.contactName.trim()}` : "",
+    list.reference.trim(),
+  ].filter(Boolean);
+  const rows = list.lines.map((line) => {
+    const allergenLabels = line.allergens.length
+      ? line.allergens.map((allergen) => `<span class="allergen-label">${escapePrintHtml(allergen)}</span>`).join("")
+      : '<span class="empty">Geen geregistreerd</span>';
+    const note = line.note?.trim()
+      ? `<p class="note">${escapePrintHtml(line.note.trim())}</p>`
+      : "";
+    return `<tr>
+      <td><strong>${escapePrintHtml(line.productName)}</strong>${note}</td>
+      <td><div class="allergens">${allergenLabels}</div></td>
+      <td>${escapePrintHtml(formatSpecifications(line) || "–")}</td>
+    </tr>`;
+  }).join("");
+  const generatedAt = new Intl.DateTimeFormat("nl-NL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date());
+
+  return `<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapePrintHtml(printFileName(list))}</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: #eef2eb; color: #171713; font-family: Arial, Helvetica, sans-serif; }
+    body { padding: 24px; }
+    .screen-actions { position: sticky; top: 12px; z-index: 10; display: flex; justify-content: center; gap: 10px; margin: 0 auto 18px; }
+    .screen-actions button { min-height: 46px; border: 1px solid #b9cbb3; border-radius: 999px; background: white; padding: 0 22px; color: #244e35; font: 800 15px/1 Arial, sans-serif; box-shadow: 0 4px 15px rgba(20, 40, 25, .12); cursor: pointer; }
+    .screen-actions .primary { border-color: #31552a; background: #31552a; color: white; }
+    .sheet { width: min(100%, 210mm); min-height: 297mm; margin: 0 auto; background: white; padding: 15mm 14mm 17mm; box-shadow: 0 8px 35px rgba(20, 30, 20, .16); }
+    header { margin: 2mm 0 10mm; text-align: center; }
+    h1 { margin: 0; font-size: 24pt; font-weight: 900; letter-spacing: .04em; }
+    .brand { margin: 1.5mm 0 0; font-size: 11pt; font-weight: 800; letter-spacing: .14em; }
+    .customer { margin-top: 6mm; font-size: 11pt; }
+    .customer strong { display: block; font-size: 14pt; }
+    .customer-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 2mm 5mm; margin-top: 1.5mm; color: #57534d; font-size: 9pt; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.5pt; }
+    th { border-bottom: 1.5pt solid #222; padding: 2.5mm 2mm; text-align: left; font-size: 8pt; text-transform: uppercase; letter-spacing: .04em; }
+    th:nth-child(1) { width: 27%; }
+    th:nth-child(2) { width: 43%; }
+    th:nth-child(3) { width: 30%; }
+    td { border-bottom: .5pt solid #888; border-right: .5pt solid #bbb; padding: 3mm 2mm; vertical-align: top; overflow-wrap: anywhere; }
+    td:last-child { border-right: 0; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    .allergens { display: flex; flex-wrap: wrap; gap: 1.2mm; }
+    .allergen-label { display: inline-flex; align-items: center; min-height: 6mm; border: 1pt solid #222; border-radius: 999px; padding: .7mm 2mm; font-size: 7.4pt; font-weight: 800; line-height: 1.1; }
+    .empty { color: #777; font-style: italic; }
+    .note { margin: 1.8mm 0 0; color: #555; font-size: 7.5pt; font-style: italic; font-weight: 400; line-height: 1.3; }
+    footer { margin-top: 8mm; border-top: .5pt solid #aaa; padding-top: 2mm; text-align: center; color: #666; font-size: 7pt; }
+    @media print {
+      @page { size: A4 portrait; margin: 12mm; }
+      html, body { min-height: 0; background: white; }
+      body { padding: 0; }
+      .screen-actions { display: none !important; }
+      .sheet { width: 100%; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+      .allergen-label { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="screen-actions">
+    <button type="button" onclick="window.close()">Sluiten</button>
+    <button type="button" class="primary" onclick="window.print()">Afdrukken / opslaan als PDF</button>
+  </div>
+  <main class="sheet">
+    <header>
+      <h1>ALLERGENENLIJST</h1>
+      <p class="brand">STRIK PATISSERIE</p>
+      <div class="customer">
+        <strong>${escapePrintHtml(list.customerName || "Klant")}</strong>
+        ${customerMeta.length ? `<div class="customer-meta">${customerMeta.map((value) => `<span>${escapePrintHtml(value)}</span>`).join("")}</div>` : ""}
+      </div>
+    </header>
+    <table>
+      <thead><tr><th>Artikel</th><th>Aanwezige allergenen</th><th>Specificatie</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <footer>Strik Patisserie · allergeneninformatie · gegenereerd ${escapePrintHtml(generatedAt)}</footer>
+  </main>
+  <script>
+    window.addEventListener("load", function () {
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(function () {
+          window.setTimeout(function () { window.print(); }, 180);
+        });
+      });
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function prepareAllergenPrintWindow(list: CustomerAllergenList) {
+  const printWindow = window.open("", "_blank", "width=1050,height=850");
+  if (!printWindow) return null;
+  printWindow.document.title = printFileName(list);
+  printWindow.document.body.style.cssText = "margin:0;padding:32px;font-family:Arial,sans-serif;background:#eef2eb;color:#244e35";
+  const message = printWindow.document.createElement("p");
+  message.textContent = "Allergenenlijst voorbereiden…";
+  message.style.cssText = "margin:0;font-size:18px;font-weight:700";
+  printWindow.document.body.appendChild(message);
+  return printWindow;
+}
+
+function showAllergenPrintWindow(list: CustomerAllergenList, preparedWindow?: Window | null) {
+  const printHtml = createAllergenPrintHtml(list);
+  const printUrl = URL.createObjectURL(new Blob([printHtml], { type: "text/html;charset=utf-8" }));
+  const printWindow = preparedWindow && !preparedWindow.closed
+    ? preparedWindow
+    : window.open(printUrl, "_blank", "width=1050,height=850");
+  if (!printWindow) {
+    URL.revokeObjectURL(printUrl);
+    return false;
+  }
+  if (preparedWindow && !preparedWindow.closed) {
+    preparedWindow.location.replace(printUrl);
+  }
+  printWindow.focus();
+  window.setTimeout(() => URL.revokeObjectURL(printUrl), 60_000);
+  return true;
+}
+
 function normalizeAllergen(value: string): AllergenName | null {
   const key = value.toLocaleLowerCase("nl-NL").replace(/[^a-z]+/g, "_").replace(/^_|_$/g, "");
   return allergenAliases[key] ?? null;
@@ -310,28 +457,21 @@ export default function AllergenenClient() {
     }
   }
 
-  function openPrintDialog(list: CustomerAllergenList, asPdf = false) {
-    window.setTimeout(() => {
-      const originalTitle = document.title;
-      if (asPdf) {
-        const customer = list.customerName.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-        document.title = `Allergenenlijst-${customer || "klant"}`;
-      }
-      window.print();
-      document.title = originalTitle;
-    }, 150);
-  }
-
   async function saveDraft(output?: "print" | "pdf") {
     if (!draft || !draft.customerName.trim() || !draft.lines.length) {
       setMessage("Vul een klantnaam in en voeg minimaal één product toe.");
       return;
     }
     const saved = { ...draft, customerName: draft.customerName.trim(), updatedAt: new Date().toISOString() };
+    const preparedWindow = output ? prepareAllergenPrintWindow(saved) : null;
     const next = [...archives.filter((item) => item.id !== saved.id), saved];
     if (await persist(next)) {
       setDraft(saved);
-      if (output) openPrintDialog(saved, output === "pdf");
+      if (output && !showAllergenPrintWindow(saved, preparedWindow)) {
+        setMessage("De lijst is opgeslagen. Sta pop-ups toe om de print- of PDF-weergave te openen.");
+      }
+    } else if (preparedWindow && !preparedWindow.closed) {
+      preparedWindow.close();
     }
   }
 
@@ -349,7 +489,9 @@ export default function AllergenenClient() {
     );
     setDraft(refreshed);
     setArchiveOpen(false);
-    if (output) openPrintDialog(refreshed, output === "pdf");
+    if (output && !showAllergenPrintWindow(refreshed)) {
+      setMessage("Sta pop-ups toe om de print- of PDF-weergave te openen.");
+    }
   }
 
   return (

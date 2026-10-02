@@ -120,6 +120,11 @@ export type RevenueCashDeposit = {
   cashRecordIds: string[];
   depositedAt?: string;
   depositedBy?: string;
+  patisserieClosedAt?: string;
+  patisserieClosedBy?: string;
+  iceDepositClosedAt?: string;
+  iceDepositClosedBy?: string;
+  iceSeasonOpen?: boolean;
   closedAt?: string;
   closedBy?: string;
   cashbookBookedAt?: string;
@@ -324,6 +329,11 @@ function compactCashDepositPayload(deposit: RevenueCashDeposit) {
     ids: deposit.cashRecordIds,
     da: deposit.depositedAt,
     db: deposit.depositedBy,
+    pca: deposit.patisserieClosedAt,
+    pcb: deposit.patisserieClosedBy,
+    ica: deposit.iceDepositClosedAt,
+    icb: deposit.iceDepositClosedBy,
+    iso: deposit.iceSeasonOpen,
     cla: deposit.closedAt,
     clb: deposit.closedBy,
     cba: deposit.cashbookBookedAt,
@@ -357,6 +367,11 @@ function expandCashDepositPayload(
     cashRecordIds: payload.cashRecordIds ?? payload.ids,
     depositedAt: payload.depositedAt ?? payload.da,
     depositedBy: payload.depositedBy ?? payload.db,
+    patisserieClosedAt: payload.patisserieClosedAt ?? payload.pca,
+    patisserieClosedBy: payload.patisserieClosedBy ?? payload.pcb,
+    iceDepositClosedAt: payload.iceDepositClosedAt ?? payload.ica,
+    iceDepositClosedBy: payload.iceDepositClosedBy ?? payload.icb,
+    iceSeasonOpen: payload.iceSeasonOpen ?? payload.iso,
     closedAt: payload.closedAt ?? payload.cla,
     closedBy: payload.closedBy ?? payload.clb,
     cashbookBookedAt: payload.cashbookBookedAt ?? payload.cba,
@@ -826,6 +841,16 @@ export function normalizeRevenueCashDeposit(
     cashRecordIds,
     depositedAt: textFrom(value.depositedAt) || undefined,
     depositedBy: textFrom(value.depositedBy) || undefined,
+    patisserieClosedAt: textFrom(value.patisserieClosedAt) || undefined,
+    patisserieClosedBy: textFrom(value.patisserieClosedBy) || undefined,
+    iceDepositClosedAt: textFrom(value.iceDepositClosedAt) || undefined,
+    iceDepositClosedBy: textFrom(value.iceDepositClosedBy) || undefined,
+    iceSeasonOpen:
+      value.iceSeasonOpen === true
+        ? true
+        : value.iceSeasonOpen === false
+          ? false
+          : undefined,
     closedAt: textFrom(value.closedAt) || undefined,
     closedBy: textFrom(value.closedBy) || undefined,
     cashbookBookedAt: textFrom(value.cashbookBookedAt) || undefined,
