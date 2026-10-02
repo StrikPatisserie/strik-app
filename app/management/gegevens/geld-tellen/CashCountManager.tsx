@@ -2123,16 +2123,16 @@ export default function CashCountManager() {
 
   return (
     <div className="space-y-3">
-      <section className="rounded-3xl border border-[#d9cbb8] bg-[#fbf7ef]/95 p-3 shadow-sm sm:p-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(9rem,11rem)_minmax(12rem,16rem)_minmax(9rem,11rem)_minmax(0,1fr)_auto] xl:items-end">
-          <label className="relative flex h-14 cursor-pointer items-center gap-2 rounded-2xl border border-[#cad9c5] bg-[#eef6eb] px-3 text-[#1f4f35] shadow-sm">
-            <span className="text-[0.58rem] font-black uppercase tracking-[0.08em]">
+      <section className="rounded-3xl border border-[#d9cbb8] bg-[#fbf7ef]/95 p-2.5 shadow-sm sm:p-3">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(8rem,9.5rem)_minmax(0,1fr)_minmax(8rem,9.5rem)_minmax(21rem,24rem)] xl:items-end">
+          <label className="relative flex h-12 min-w-0 cursor-pointer items-center gap-1.5 rounded-xl border border-[#cad9c5] bg-[#eef6eb] px-2.5 text-[#1f4f35] shadow-sm">
+            <span className="text-[0.52rem] font-black uppercase tracking-[0.06em]">
               Weeknr.
             </span>
-            <strong className="text-3xl font-black leading-none tabular-nums">
+            <strong className="text-2xl font-black leading-none tabular-nums">
               {selectedWeek.week}
             </strong>
-            <span className="ml-auto text-[0.58rem] font-bold text-[#71806d]">
+            <span className="ml-auto text-[0.52rem] font-bold text-[#71806d]">
               {selectedWeek.year}
             </span>
             <select
@@ -2156,7 +2156,7 @@ export default function CashCountManager() {
             </select>
           </label>
 
-          <label className="grid gap-1 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#766b5f]">
+          <label className="grid min-w-0 gap-0.5 text-[0.54rem] font-black uppercase tracking-[0.08em] text-[#766b5f]">
             Locatie
             <select
               value={selectedCashLocationKey}
@@ -2170,7 +2170,7 @@ export default function CashCountManager() {
                   setSelectedDate(selectedWeekDates[0] || localIsoDate());
                 }
               }}
-              className={`h-11 rounded-xl border border-[#ded5ca] bg-white px-2.5 text-xs font-black normal-case tracking-normal outline-none transition focus:border-[#8ba287] ${
+              className={`h-10 w-full min-w-0 max-w-full truncate rounded-xl border border-[#ded5ca] bg-white px-2 text-[0.68rem] font-black normal-case tracking-normal outline-none transition focus:border-[#8ba287] ${
                 selectedCashLocationRow?.closed
                   ? "border-[#9fbd9d] bg-[#eef8ef] text-[#1f4f35]"
                   : selectedCashLocationRow &&
@@ -2199,7 +2199,7 @@ export default function CashCountManager() {
               mailState === "sending" ||
               isSelectedWeekClosed
             }
-            className={`flex h-11 items-center justify-between gap-2 rounded-xl border px-3 text-left text-[0.65rem] font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`flex h-10 min-w-0 items-center justify-between gap-1.5 overflow-hidden rounded-xl border px-2.5 text-left text-[0.58rem] font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
               isIceSeasonOpen
                 ? "border-[#a8c4a6] bg-[#eef8ef] text-[#1f4f35]"
                 : "border-[#d9d2c9] bg-[#f2efeb] text-[#766f67]"
@@ -2207,31 +2207,31 @@ export default function CashCountManager() {
           >
             <span>
               IJsseizoen
-              <span className="block text-[0.55rem] font-bold opacity-70">
+              <span className="block text-[0.48rem] font-bold opacity-70">
                 deze week
               </span>
             </span>
             <span
-              className={`relative h-5 w-9 rounded-full transition ${
+              className={`relative h-4 w-8 shrink-0 rounded-full transition ${
                 isIceSeasonOpen ? "bg-[#2f6f43]" : "bg-[#b8b1a8]"
               }`}
             >
               <span
-                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition ${
-                  isIceSeasonOpen ? "left-[1.12rem]" : "left-0.5"
+                className={`absolute top-px h-3.5 w-3.5 rounded-full bg-white shadow-sm transition ${
+                  isIceSeasonOpen ? "left-[1.05rem]" : "left-px"
                 }`}
               />
             </span>
           </button>
 
-          <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-[#e7e0d8] bg-white text-center">
+          <div className="grid min-h-12 min-w-0 grid-cols-3 overflow-hidden rounded-xl border border-[#e7e0d8] bg-white text-center">
             <div
-              className={`min-w-0 border-r border-[#e7e0d8] px-1.5 py-2 ${
+              className={`min-w-0 border-r border-[#e7e0d8] px-1.5 py-1.5 ${
                 weekMissingRevenueCount > 0 ? "bg-[#fff1ee]" : ""
               }`}
             >
               <p
-                className={`flex items-center justify-center gap-1 text-[0.6rem] font-black uppercase tracking-[0.06em] ${
+                className={`flex items-center justify-center gap-1 whitespace-nowrap text-[0.58rem] font-black uppercase tracking-[0.04em] ${
                   weekMissingRevenueCount > 0
                     ? "text-[#a43b2f]"
                     : "text-[#8b8278]"
@@ -2247,7 +2247,7 @@ export default function CashCountManager() {
                 )}
                 Gecheckt
               </p>
-              <p className="mt-0.5 truncate whitespace-nowrap text-[clamp(0.78rem,1.4vw,1.05rem)] font-black tabular-nums text-[#1a1815]">
+              <p className="mt-0.5 whitespace-nowrap text-[0.9rem] font-black tabular-nums text-[#1a1815]">
                 {weekCheckedCount}/{weekExpectedCount}
               </p>
               {weekMissingRevenueCount > 0 && (
@@ -2256,23 +2256,23 @@ export default function CashCountManager() {
                 </p>
               )}
             </div>
-            <div className="min-w-0 border-r border-[#e7e0d8] bg-[#f6faf4] px-1.5 py-2">
-              <p className="text-[0.6rem] font-black uppercase tracking-[0.06em] text-[#71806d]">
+            <div className="min-w-0 border-r border-[#e7e0d8] bg-[#f6faf4] px-1.5 py-1.5">
+              <p className="whitespace-nowrap text-[0.58rem] font-black uppercase tracking-[0.04em] text-[#71806d]">
                 Verwacht
               </p>
               <p
-                className="mt-0.5 truncate whitespace-nowrap text-[clamp(0.78rem,1.4vw,1.05rem)] font-black tabular-nums text-[#1f4f35]"
+                className="mt-0.5 whitespace-nowrap text-[0.9rem] font-black tabular-nums text-[#1f4f35]"
                 title={formatMoney(weekExpectedTotal)}
               >
                 {formatMoney(weekExpectedTotal)}
               </p>
             </div>
-            <div className="min-w-0 px-1.5 py-2">
-              <p className="text-[0.6rem] font-black uppercase tracking-[0.06em] text-[#8b8278]">
+            <div className="min-w-0 px-1.5 py-1.5">
+              <p className="whitespace-nowrap text-[0.58rem] font-black uppercase tracking-[0.04em] text-[#8b8278]">
                 Naar bank
               </p>
               <p
-                className={`mt-0.5 truncate whitespace-nowrap text-[clamp(0.78rem,1.4vw,1.05rem)] font-black tabular-nums ${
+                className={`mt-0.5 whitespace-nowrap text-[0.9rem] font-black tabular-nums ${
                   hasNonWholeMoney(weekBankTotal)
                     ? "text-[#a43b2f]"
                     : "text-[#1a1815]"
@@ -2284,7 +2284,7 @@ export default function CashCountManager() {
             </div>
           </div>
 
-          <div className="grid grid-cols-[2.75rem_minmax(5rem,1fr)_2.75rem_minmax(8rem,1.25fr)] gap-1.5">
+          <div className="grid grid-cols-[2.75rem_minmax(5rem,1fr)_2.75rem_minmax(8rem,1.25fr)] gap-1.5 md:col-span-2 xl:col-span-4 xl:ml-auto xl:w-full xl:max-w-[28rem]">
             <button
               type="button"
               onClick={() =>
@@ -2294,14 +2294,14 @@ export default function CashCountManager() {
               }
               aria-label="Vorige week"
               title="Vorige week"
-              className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-2 text-lg font-black text-[#1a1815] transition hover:bg-[#f8f6f3]"
+              className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-2 text-lg font-black text-[#1a1815] transition hover:bg-[#f8f6f3]"
             >
               ‹
             </button>
             <button
               type="button"
               onClick={() => setSelectedDate(localIsoDate())}
-              className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-2 text-xs font-black text-[#1a1815] transition hover:bg-[#f8f6f3]"
+              className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-2 text-[0.68rem] font-black text-[#1a1815] transition hover:bg-[#f8f6f3]"
             >
               Deze week
             </button>
@@ -2314,7 +2314,7 @@ export default function CashCountManager() {
               }
               aria-label="Volgende week"
               title="Volgende week"
-              className="h-11 rounded-xl border border-[#d9d2c9] bg-white px-2 text-lg font-black text-[#1a1815] transition hover:bg-[#f8f6f3]"
+              className="h-10 rounded-xl border border-[#d9d2c9] bg-white px-2 text-lg font-black text-[#1a1815] transition hover:bg-[#f8f6f3]"
             >
               ›
             </button>
@@ -2340,7 +2340,7 @@ export default function CashCountManager() {
                     ? "Bedrag vastzetten en deze locatie sluiten"
                     : "Deze locatie eerst compleet maken"
               }
-              className={`flex h-11 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black shadow-sm disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60 ${
+              className={`flex h-10 items-center justify-center gap-1.5 rounded-xl border px-2.5 text-[0.68rem] font-black shadow-sm disabled:border-[#d9d2c9] disabled:bg-white disabled:text-[#8b8278] disabled:opacity-60 ${
                 isSelectedCashLocationClosed
                   ? "border-[#8fb18b] bg-[#eef8ef] text-[#1f4f35]"
                   : "border-[#1f4f35] bg-[#1f4f35] text-white"
