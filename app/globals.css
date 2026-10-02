@@ -422,6 +422,71 @@ body {
   }
 }
 
+/* Compact management evaluation report */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  body:has(.evaluation-print-report) * {
+    visibility: hidden !important;
+  }
+
+  body:has(.evaluation-print-report),
+  body:has(.evaluation-print-report) main {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body:has(.evaluation-print-report) main {
+    padding: 0 !important;
+  }
+
+  body:has(.evaluation-print-report) .evaluation-print-report,
+  body:has(.evaluation-print-report) .evaluation-print-report * {
+    visibility: visible !important;
+  }
+
+  body:has(.evaluation-print-report) .evaluation-print-report {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    color: #111 !important;
+    background: #fff !important;
+    font-size: 8.5pt !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body:has(.evaluation-print-report) .evaluation-no-print {
+    display: none !important;
+  }
+
+  body:has(.evaluation-print-report) .evaluation-print-only {
+    display: block !important;
+  }
+
+  body:has(.evaluation-print-report) .evaluation-print-report section,
+  body:has(.evaluation-print-report) .evaluation-print-report article,
+  body:has(.evaluation-print-report) .evaluation-print-report header {
+    break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  body:has(.evaluation-print-report) .evaluation-print-report > * {
+    margin-top: 3mm !important;
+  }
+
+  body:has(.evaluation-print-report) .evaluation-print-report > header {
+    margin-top: 0 !important;
+  }
+}
+
 /* FORM ELEMENTS */
 input[type="text"],
 input[type="email"],

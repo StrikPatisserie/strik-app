@@ -13,6 +13,19 @@ export type EvaluationSection = {
 
 export type EvaluationPair = [string, string];
 
+export type EvaluationRecipeDefault = {
+  id: string;
+  name: string;
+  articleNumber: string;
+  costPrice: number;
+  salesPrice: number;
+  currentMargin: number;
+  lastUpdated: string;
+  quantity: number;
+  revenueGross: number;
+  capturedAt: string;
+};
+
 export type HolidayEvaluation = {
   slug: string;
   title: string;
@@ -31,6 +44,7 @@ export type HolidayEvaluation = {
   revenueItems: EvaluationPair[];
   planningTips: EvaluationPair[];
   files: EvaluationFile[];
+  recipeLinks?: EvaluationRecipeDefault[];
 };
 
 const vierdaagseDocumentBody = `Vierdaagse evaluatie 2026
@@ -373,6 +387,32 @@ Commercieel indrukwekkend. Het financiële rendement moet nog worden vastgesteld
     ["Na afloop", "Verkoop, bestellingen en productie per winkel vergelijken"],
   ],
   files: [],
+  recipeLinks: [
+    {
+      id: "recipe-new-1790830768113",
+      name: "Speculaasbrok naturel",
+      articleNumber: "40825",
+      costPrice: 0.727,
+      salesPrice: 4.95,
+      currentMargin: 84,
+      lastUpdated: "2026-10-01",
+      quantity: 4223,
+      revenueGross: 10533.6,
+      capturedAt: "2026-10-02T12:30:00+02:00",
+    },
+    {
+      id: "recipe-new-1782251670930",
+      name: "Speculaasbrok met amandel",
+      articleNumber: "40826",
+      costPrice: 0.811,
+      salesPrice: 7.95,
+      currentMargin: 88.9,
+      lastUpdated: "2026-08-13",
+      quantity: 45,
+      revenueGross: 352.8,
+      capturedAt: "2026-10-02T12:30:00+02:00",
+    },
+  ],
 };
 
 export const holidayEvaluations: HolidayEvaluation[] = [
