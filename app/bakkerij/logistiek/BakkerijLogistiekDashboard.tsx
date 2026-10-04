@@ -18,7 +18,20 @@ import {
   specialSchoolDeliveryRouteIndex,
   specialSchoolDeliveryStops,
   specialSchoolDeliveryVehicle,
+  specialSchoolDeliveryVehicleForReceipt,
+  specialSchoolDeliveryVehicleRouteIndex,
 } from "./specialSchoolDelivery";
+import {
+  applySpecialProCollegeDeliverySplit,
+  isSpecialProCollegeChildReceipt,
+  isSpecialProCollegeSourceReceipt,
+  specialProCollegeDeliveryDate,
+  specialProCollegeDeliveryPieceCount,
+  specialProCollegeDeliveryStops,
+  specialProCollegeRoundForReceipt,
+  specialProCollegeRouteIndex,
+  specialProCollegeVehicleForReceipt,
+} from "./specialProCollegeDelivery";
 import type {
   LogisticsBatch,
   LogisticsBatchStatus,
@@ -1277,7 +1290,12 @@ function receiptBusForRoutes(
   receipt: ReceiptSummary,
   routeRounds: RouteRound[]
 ): BusId | "" {
-  if (isSpecialSchoolChildReceipt(receipt)) return "";
+  if (
+    isSpecialSchoolSourceReceipt(receipt) ||
+    isSpecialProCollegeSourceReceipt(receipt)
+  ) {
+    return "";
+  }
 
   const sourceIds = new Set([
     `receipt:${receipt.id}`,
@@ -5108,6 +5126,7 @@ function createSpecialSchoolDeliveryPrintHtml(input: {
             <span>${escapeHtml(stop.address)} · ${escapeHtml(stop.postalCity)}</span>
           </td>
           <td>${stop.cakes.map((cake) => escapeHtml(cake)).join(" · ")}</td>
+          <td>${escapeHtml(stop.vehicle)}</td>
           <td class="card"><span></span> kaart</td>
           <td class="check"><span></span></td>
         </tr>`
@@ -5142,8 +5161,9 @@ function createSpecialSchoolDeliveryPrintHtml(input: {
       td span { display:block; font-size:8pt; margin-top:.5mm; }
       th:nth-child(1) { width:8mm; }
       th:nth-child(2) { width:66mm; }
-      th:nth-child(4) { width:25mm; }
-      th:nth-child(5) { width:13mm; text-align:center; }
+      th:nth-child(4) { width:27mm; }
+      th:nth-child(5) { width:25mm; }
+      th:nth-child(6) { width:13mm; text-align:center; }
       td.card { font-size:8pt; font-weight:800; white-space:nowrap; }
       td.card span, td.check span { border:1.5px solid #111; display:inline-block; height:5mm; margin:0 1mm 0 0; vertical-align:middle; width:5mm; }
       td.check { text-align:center; }
@@ -5176,7 +5196,7 @@ function createSpecialSchoolDeliveryPrintHtml(input: {
         </div>
       </header>
       <table>
-        <thead><tr><th>#</th><th>School en adres</th><th>Taarten</th><th>Kaart</th><th>Klaar</th></tr></thead>
+        <thead><tr><th>#</th><th>School en adres</th><th>Taarten</th><th>Route</th><th>Kaart</th><th>Klaar</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <p class="note">Let op: dit zijn logistieke deelbonnen. Omzet en productie blijven uitsluitend op de hoofd-bon St Josephschool staan.</p>
@@ -5194,6 +5214,123 @@ function openSpecialSchoolDeliverySheet(
     new Blob([printHtml], { type: "text/html;charset=utf-8" })
   );
   const printWindow = window.open(printUrl, "_blank", "width=1100,height=800");
+  if (!printWindow) {
+    URL.revokeObjectURL(printUrl);
+    window.alert("Overzicht kon niet geopend worden.");
+    return;
+  }
+
+  printWindow.focus();
+  window.setTimeout(() => URL.revokeObjectURL(printUrl), 60_000);
+}
+
+function createSpecialProCollegeDeliveryPrintHtml(input: {
+  plan: DayPlan;
+  sourceReceipt: ReceiptSummary | null;
+}) {
+  const sourceNumber =
+    input.sourceReceipt?.receiptNumber ||
+    input.sourceReceipt?.id ||
+    "wordt aan Pro College gekoppeld";
+  const rows = specialProCollegeDeliveryStops
+    .map(
+      (stop, index) => `
+        <tr>
+          <td class="number">${index + 1}</td>
+          <td>
+            <strong>${escapeHtml(stop.name)}</strong>
+            <span>${escapeHtml(stop.address)} · ${escapeHtml(stop.postalCity)}</span>
+          </td>
+          <td class="quantity">${stop.quantity}</td>
+          <td>${escapeHtml(stop.vehicle)}${stop.vehicle === "Bus B" ? ` · ronde ${stop.round}` : ""}</td>
+          <td class="check"><span></span></td>
+        </tr>`
+    )
+    .join("");
+
+  return `<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pro College · 4 afleveradressen</title>
+    <style>
+      * { box-sizing:border-box; }
+      body { background:#efefef; color:#111; font-family:Arial,Helvetica,sans-serif; margin:0; }
+      .screen-actions { align-items:center; background:#fff; border-bottom:1px solid #ccc; display:flex; justify-content:space-between; padding:14px 18px; }
+      .screen-actions h1 { font-size:18px; margin:0; }
+      button { background:#111; border:0; border-radius:10px; color:#fff; cursor:pointer; font-size:14px; font-weight:800; padding:11px 18px; }
+      button.secondary { background:#fff; border:1px solid #aaa; color:#111; margin-right:8px; }
+      main { background:#fff; margin:18px auto; max-width:820px; min-height:190mm; padding:12mm; }
+      header { align-items:flex-end; border-bottom:3px solid #111; display:flex; justify-content:space-between; padding-bottom:5mm; }
+      header h1 { font-size:22pt; line-height:1; margin:0; }
+      header p { font-size:9pt; font-weight:700; margin:2mm 0 0; }
+      .totals { text-align:right; }
+      .totals strong { display:block; font-size:16pt; }
+      .totals span { font-size:9pt; font-weight:800; }
+      table { border-collapse:collapse; margin-top:6mm; table-layout:fixed; width:100%; }
+      th { border-bottom:2px solid #111; font-size:8pt; padding:2mm; text-align:left; text-transform:uppercase; }
+      td { border-bottom:1px solid #aaa; font-size:9pt; line-height:1.2; padding:3mm 2mm; vertical-align:middle; }
+      td.number { font-size:11pt; font-weight:900; text-align:center; width:10mm; }
+      td strong { display:block; font-size:11pt; }
+      td span { display:block; font-size:8.5pt; margin-top:1mm; }
+      th:nth-child(1) { width:10mm; }
+      th:nth-child(3) { width:24mm; }
+      th:nth-child(4) { width:38mm; }
+      th:nth-child(5) { width:16mm; text-align:center; }
+      td.quantity { font-size:13pt; font-weight:900; }
+      td.check { text-align:center; }
+      td.check span { border:1.5px solid #111; display:inline-block; height:6mm; width:6mm; }
+      .note { border:1.5px solid #111; font-size:9pt; font-weight:800; margin-top:6mm; padding:3mm; }
+      @media print {
+        @page { margin:10mm; size:A4 portrait; }
+        body { background:#fff; }
+        .screen-actions { display:none; }
+        main { margin:0; max-width:none; min-height:0; padding:0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen-actions">
+      <h1>Pro College · 4 afleveradressen</h1>
+      <div>
+        <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
+        <button type="button" onclick="window.print()">Afdrukken</button>
+      </div>
+    </div>
+    <main>
+      <header>
+        <div>
+          <h1>Pro College · deelleveringen</h1>
+          <p>${escapeHtml(formatReceiptDateLabel(input.plan.date))} · hoofd-bon ${escapeHtml(sourceNumber)}</p>
+        </div>
+        <div class="totals">
+          <strong>${specialProCollegeDeliveryPieceCount()} petit gateaux</strong>
+          <span>verdeeld over 4 adressen</span>
+        </div>
+      </header>
+      <table>
+        <thead><tr><th>#</th><th>Locatie en adres</th><th>Aantal</th><th>Route</th><th>Klaar</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p class="note">De originele Pro College-bon blijft intact. Deze vier deelbonnen zijn alleen voor laden en afleveren en tellen niet opnieuw mee in omzet of productie.</p>
+    </main>
+  </body>
+</html>`;
+}
+
+function openSpecialProCollegeDeliverySheet(
+  plan: DayPlan,
+  sourceReceipt: ReceiptSummary | null
+) {
+  const printHtml = createSpecialProCollegeDeliveryPrintHtml({
+    plan,
+    sourceReceipt,
+  });
+  const printUrl = URL.createObjectURL(
+    new Blob([printHtml], { type: "text/html;charset=utf-8" })
+  );
+  const printWindow = window.open(printUrl, "_blank", "width=900,height=800");
   if (!printWindow) {
     URL.revokeObjectURL(printUrl);
     window.alert("Overzicht kon niet geopend worden.");
@@ -6545,6 +6682,11 @@ function sortDeliveryReceipts(receipts: ReceiptSummary[]) {
     if (firstSchoolRouteIndex >= 0 && secondSchoolRouteIndex >= 0) {
       return firstSchoolRouteIndex - secondSchoolRouteIndex;
     }
+    const firstProCollegeRouteIndex = specialProCollegeRouteIndex(first);
+    const secondProCollegeRouteIndex = specialProCollegeRouteIndex(second);
+    if (firstProCollegeRouteIndex >= 0 && secondProCollegeRouteIndex >= 0) {
+      return firstProCollegeRouteIndex - secondProCollegeRouteIndex;
+    }
 
     const earlyCompare =
       Number(isEarlyException(second)) - Number(isEarlyException(first));
@@ -6623,7 +6765,7 @@ function teamStartTimeForPressure(pressure: LogisticsLoadPressure) {
 }
 
 function teamSizeForDate(date: string) {
-  if (date === specialSchoolDeliveryDate) return 2;
+  if (date === specialSchoolDeliveryDate) return 3;
 
   const dayOfWeek = dayOfWeekForDate(date);
 
@@ -6642,7 +6784,7 @@ function buildLogisticsAdvice(
     teamSize: teamSizeForDate(date),
     reason:
       date === specialSchoolDeliveryDate
-        ? `Eenmalig 2 bezorgers voor de scholenroute · drukte ${pressureLabelFor(
+        ? `Eenmalig 3 bezorgers voor de scholen- en Pro College-routes · drukte ${pressureLabelFor(
             loadProfile.pressure
           )} · rustig 06:30 · normaal 06:00 · druk 05:45`
         : `Drukte ${pressureLabelFor(
@@ -7200,6 +7342,41 @@ function buildWeekdayFixedRouteRounds(
       specialSchoolDeliveryRouteIndex(first) -
       specialSchoolDeliveryRouteIndex(second)
   );
+  const schoolReceiptsFor = (vehicle: string) =>
+    schoolReceipts.filter(
+      (receipt) => specialSchoolDeliveryVehicleForReceipt(receipt) === vehicle
+    ).sort(
+      (first, second) =>
+        specialSchoolDeliveryVehicleRouteIndex(first) -
+        specialSchoolDeliveryVehicleRouteIndex(second)
+    );
+  const busASchoolReceipts = schoolReceiptsFor("Bus A");
+  const busBSchoolReceipts = schoolReceiptsFor("Bus B");
+  const dedicatedSchoolReceipts = schoolReceiptsFor(
+    specialSchoolDeliveryVehicle
+  );
+  const proCollegeReceipts = takeReceipts(
+    (receipt) =>
+      plan.date === specialProCollegeDeliveryDate &&
+      isSpecialProCollegeChildReceipt(receipt)
+  ).sort(
+    (first, second) =>
+      specialProCollegeRouteIndex(first) -
+      specialProCollegeRouteIndex(second)
+  );
+  const proCollegeReceiptsFor = (vehicle: string, round: 1 | 2) =>
+    proCollegeReceipts.filter(
+      (receipt) =>
+        specialProCollegeVehicleForReceipt(receipt) === vehicle &&
+        specialProCollegeRoundForReceipt(receipt) === round
+    );
+  const busAProCollegeReceipts = proCollegeReceiptsFor("Bus A", 1);
+  const busBFirstProCollegeReceipts = proCollegeReceiptsFor("Bus B", 1);
+  const busBSecondProCollegeReceipts = proCollegeReceiptsFor("Bus B", 2);
+  const dedicatedProCollegeReceipts = proCollegeReceiptsFor(
+    specialSchoolDeliveryVehicle,
+    1
+  );
   const vermaatReceipts = takeReceipts(isVermaatReceipt);
   const sintMaartenskliniekReceipts = takeReceipts(
     isSintMaartenskliniekReceipt
@@ -7248,13 +7425,16 @@ function buildWeekdayFixedRouteRounds(
   );
 
   const busAFirstStops: RouteStop[] = [
+    ...asStops(busAProCollegeReceipts, "A-pro-college-"),
     fixedShopStop({
       receipts,
       shopKey: "heyendaalseweg",
       load: "fresh",
       label: "Winkel Heyendaalseweg vers",
     }),
+    ...asStops(busASchoolReceipts.slice(0, 1), "A-school-south-"),
     ...asStops(vermaatReceipts, "A-vermaat-"),
+    ...asStops(busASchoolReceipts.slice(1), "A-school-east-"),
     fixedShopStop({
       receipts,
       shopKey: "daalseweg",
@@ -7318,6 +7498,8 @@ function buildWeekdayFixedRouteRounds(
       shopKey: "lent",
       label: "Winkel Lent ijs",
     }),
+    ...asStops(busBSchoolReceipts, "B-school-north-"),
+    ...asStops(busBFirstProCollegeReceipts, "B-pro-college-north-"),
     ...asStops(driesReceipts, "B-dries-"),
     ...asStops(sanadomeReceipts, "B-sanadome-"),
     ...asStops(remainingOutsideReceipts, "B-rest-"),
@@ -7325,7 +7507,12 @@ function buildWeekdayFixedRouteRounds(
   ];
   const busBSecondStops: RouteStop[] = [
     ...asStops(outsideSecondRoundReceipts, "B-outside-"),
+    ...asStops(busBSecondProCollegeReceipts, "B-pro-college-south-"),
     ...busBSecondIceReceipts.map(iceStopForReceipt),
+  ];
+  const dedicatedSchoolRouteStops = [
+    ...asStops(dedicatedSchoolReceipts, "school-"),
+    ...asStops(dedicatedProCollegeReceipts, "school-pro-college-"),
   ];
 
   return [
@@ -7373,7 +7560,7 @@ function buildWeekdayFixedRouteRounds(
       load: routeLoadLineForStops(busBSecondStops),
       loadProfile,
     }),
-    ...(schoolReceipts.length
+    ...(dedicatedSchoolRouteStops.length
       ? [
           buildRouteRound({
             id: specialSchoolDeliveryRouteId,
@@ -7381,10 +7568,13 @@ function buildWeekdayFixedRouteRounds(
             vehicle: specialSchoolDeliveryVehicle,
             departure: plan.isFuture ? "advies 08:00" : "08:00",
             tone: "border-[#cdb6c1] bg-[#f7f0f4]",
-            stops: asStops(schoolReceipts, "school-"),
+            stops: dedicatedSchoolRouteStops,
             reason:
-              "Eenmalige lus vanaf Ambachtsweg: Noord/Lent → centrum/oost → zuid → west. De 15 deelbonnen blijven gekoppeld aan St Josephschool en tellen niet dubbel mee.",
-            load: `${schoolReceipts.length} scholen · ${specialSchoolDeliveryCakeCount()} taarten · ${schoolReceipts.length} kaarten`,
+              "Eenmalige west-/stadsroute. De overige scholen rijden geografisch mee met Bus A en Bus B; alle deelbonnen blijven aan hun hoofd-bon gekoppeld en tellen niet dubbel mee.",
+            load: `${dedicatedSchoolReceipts.length} scholen · ${dedicatedProCollegeReceipts.reduce(
+              (total, receipt) => total + receiptPastryUnits(receipt),
+              0
+            )} petit gateaux · ${dedicatedSchoolReceipts.length} kaarten`,
             loadProfile,
           }),
         ]
@@ -7999,11 +8189,17 @@ function reconcileRouteDraftRounds(
   const automaticRouteById = new Map(
     automaticRouteRounds.map((route) => [route.id, route])
   );
-  const migrateSchoolStopsToDedicatedRoute =
+  const migrateSpecialDeliveryPlan =
     automaticRouteById.has(specialSchoolDeliveryRouteId) &&
     !routeDraft.routes.some(
       (route) => route.id === specialSchoolDeliveryRouteId
     );
+
+  if (migrateSpecialDeliveryPlan) {
+    return automaticRouteRounds.map((route) =>
+      refreshRouteRoundAfterManualMove(route, loadProfile)
+    );
+  }
 
   automaticRouteRounds.forEach((route) => {
     route.stops.forEach((stop) => {
@@ -8017,12 +8213,6 @@ function reconcileRouteDraftRounds(
     const stops = draftRoute.stops
       .map((draftStop) => {
         const sourceKey = draftStop.sourceId || draftStop.id;
-        if (
-          migrateSchoolStopsToDedicatedRoute &&
-          sourceKey.startsWith("receipt:st-josephschool-")
-        ) {
-          return null;
-        }
         if (excludedSourceIds.has(sourceKey)) return null;
         if (sourceKey.startsWith("manual:")) {
           usedSourceKeys.add(sourceKey);
@@ -8601,6 +8791,8 @@ export default function BakkerijLogistiekDashboard() {
   const [advancePhotoOpen, setAdvancePhotoOpen] = useState(false);
   const [schoolDeliveryOverviewOpen, setSchoolDeliveryOverviewOpen] =
     useState(false);
+  const [proCollegeDeliveryOverviewOpen, setProCollegeDeliveryOverviewOpen] =
+    useState(false);
   const [advancePhotoDate, setAdvancePhotoDate] = useState(() =>
     toInputDate(addDays(new Date(), 14))
   );
@@ -8658,8 +8850,23 @@ export default function BakkerijLogistiekDashboard() {
     [baseReceiptSummaries, fixedCustomers, receiptOverrides, selectedPlan.date]
   );
   const logisticsReceiptSummaries = useMemo(
-    () => applySpecialSchoolDeliverySplit(receiptSummaries, selectedPlan.date),
+    () =>
+      applySpecialProCollegeDeliverySplit(
+        applySpecialSchoolDeliverySplit(receiptSummaries, selectedPlan.date),
+        selectedPlan.date
+      ),
     [receiptSummaries, selectedPlan.date]
+  );
+  const proCollegeDeliverySourceReceipt = useMemo(
+    () => receiptSummaries.find(isSpecialProCollegeSourceReceipt) || null,
+    [receiptSummaries]
+  );
+  const orderReceiptSummaries = useMemo(
+    () =>
+      proCollegeDeliverySourceReceipt
+        ? [...logisticsReceiptSummaries, proCollegeDeliverySourceReceipt]
+        : logisticsReceiptSummaries,
+    [logisticsReceiptSummaries, proCollegeDeliverySourceReceipt]
   );
   const schoolDeliverySourceReceipt = useMemo(
     () => receiptSummaries.find(isSpecialSchoolSourceReceipt) || null,
@@ -8667,6 +8874,8 @@ export default function BakkerijLogistiekDashboard() {
   );
   const showSpecialSchoolDelivery =
     selectedPlan.date === specialSchoolDeliveryDate;
+  const showSpecialProCollegeDelivery =
+    selectedPlan.date === specialProCollegeDeliveryDate;
   const pressureOverride = pressureByDate[selectedPlan.date] || "";
   const loadProfile = useMemo(
     () =>
@@ -10022,6 +10231,19 @@ export default function BakkerijLogistiekDashboard() {
                   </span>
                 </button>
               )}
+              {showSpecialProCollegeDelivery && (
+                <button
+                  type="button"
+                  onClick={() => setProCollegeDeliveryOverviewOpen(true)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#d0b7c4] bg-[#f6edf2] px-2.5 text-[0.64rem] font-black leading-none text-[#654454] shadow-sm transition hover:bg-[#efdee7] sm:px-3 sm:text-[0.7rem]"
+                >
+                  <SchoolIcon />
+                  <span className="sm:hidden">4 Pro College</span>
+                  <span className="hidden sm:inline">
+                    Pro College · 4 adressen
+                  </span>
+                </button>
+              )}
               <RefreshButton
                 disabled={batchLoadState === "loading" || isImporting}
                 loading={batchLoadState === "loading"}
@@ -10229,7 +10451,7 @@ export default function BakkerijLogistiekDashboard() {
         )}
         {activeTab === "bonnen" && (
           <OrdersPanel
-            receiptSummaries={logisticsReceiptSummaries}
+            receiptSummaries={orderReceiptSummaries}
             receiptOverrides={receiptOverrides}
             onSaveReceiptOverride={saveReceiptOverride}
             onLinkWebshopImageToReceipt={linkWebshopImageToReceipt}
@@ -10352,6 +10574,13 @@ export default function BakkerijLogistiekDashboard() {
             sourceReceipt={schoolDeliverySourceReceipt}
           />
         )}
+        {proCollegeDeliveryOverviewOpen && showSpecialProCollegeDelivery && (
+          <SpecialProCollegeDeliveryModal
+            onClose={() => setProCollegeDeliveryOverviewOpen(false)}
+            plan={selectedPlan}
+            sourceReceipt={proCollegeDeliverySourceReceipt}
+          />
+        )}
       </div>
       </>
       )}
@@ -10445,6 +10674,9 @@ function SpecialSchoolDeliveryModal({
                     {stop.address} · {stop.postalCity}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1">
+                    <span className="rounded-full bg-[#244c67] px-2 py-1 text-[0.58rem] font-black leading-none text-white">
+                      {stop.vehicle}
+                    </span>
                     {stop.cakes.map((cake) => (
                       <span
                         key={cake}
@@ -10472,6 +10704,124 @@ function SpecialSchoolDeliveryModal({
             type="button"
             onClick={onClose}
             className="h-9 rounded-xl border border-[#cfd9df] bg-white px-4 text-xs font-black text-[#435762]"
+          >
+            Sluiten
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function SpecialProCollegeDeliveryModal({
+  onClose,
+  plan,
+  sourceReceipt,
+}: Readonly<{
+  onClose: () => void;
+  plan: DayPlan;
+  sourceReceipt: ReceiptSummary | null;
+}>) {
+  const sourceNumber = sourceReceipt?.receiptNumber || sourceReceipt?.id || "";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-2 sm:p-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pro-college-delivery-title"
+        className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#d8c6cf] bg-[#fbf7f9] shadow-2xl"
+      >
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-[#eadfe4] bg-white px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#8a6074]">
+              Eenmalige deellevering · maandag
+            </p>
+            <h2
+              id="pro-college-delivery-title"
+              className="mt-0.5 text-xl font-black tracking-normal text-[#32232a] sm:text-2xl"
+            >
+              Pro College · 4 afleveradressen
+            </h2>
+            <p className="mt-1 text-xs font-semibold text-[#75646c]">
+              {specialProCollegeDeliveryPieceCount()} petit gateaux
+              {sourceNumber
+                ? ` · gekoppeld aan hoofd-bon ${sourceNumber}`
+                : " · koppelt automatisch zodra de hoofd-bon binnenkomt"}
+            </p>
+          </div>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                openSpecialProCollegeDeliverySheet(plan, sourceReceipt)
+              }
+              className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#7b5367] px-3 text-xs font-black text-white"
+            >
+              <PrintIcon />
+              Overzicht printen
+            </button>
+            <button
+              type="button"
+              aria-label="Sluiten"
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#ddd0d6] bg-white text-base font-black text-[#654f59]"
+            >
+              ×
+            </button>
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+          {!sourceReceipt && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#e9c876] bg-[#fff7d9] px-3 py-2 text-xs font-bold text-[#6f5212]">
+              <WarningIcon />
+              <span>
+                De vier logistieke deelbonnen staan klaar. Zodra de hoofd-bon
+                “Pro College” is ingeladen, koppelt de app die automatisch.
+              </span>
+            </div>
+          )}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {specialProCollegeDeliveryStops.map((stop, index) => (
+              <article
+                key={stop.id}
+                className="grid grid-cols-[2rem_minmax(0,1fr)] gap-2 rounded-2xl border border-[#e5d9df] bg-white p-3 shadow-sm"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#a27a8e] text-xs font-black text-white">
+                  {index + 1}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="truncate text-sm font-black leading-tight tracking-normal text-[#32232a]">
+                      {stop.name}
+                    </h3>
+                    <span className="shrink-0 rounded-full bg-[#f2e9ee] px-2 py-1 text-[0.58rem] font-black leading-none text-[#6e4d5d]">
+                      {stop.vehicle}
+                      {stop.vehicle === "Bus B" ? ` · ronde ${stop.round}` : ""}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[0.68rem] font-semibold leading-tight text-[#75646c]">
+                    {stop.address} · {stop.postalCity}
+                  </p>
+                  <p className="mt-2 text-base font-black leading-none text-[#32232a]">
+                    {stop.quantity} petit gateaux
+                  </p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-[#eadfe4] bg-white px-4 py-2.5 sm:px-5">
+          <p className="text-[0.68rem] font-semibold text-[#75646c]">
+            De originele bon blijft zichtbaar en telt één keer mee; de vier
+            deelbonnen zijn alleen voor route, laden en afleveren.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-9 rounded-xl border border-[#ddd0d6] bg-white px-4 text-xs font-black text-[#654f59]"
           >
             Sluiten
           </button>

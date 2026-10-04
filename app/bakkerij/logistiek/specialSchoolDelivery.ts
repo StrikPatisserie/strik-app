@@ -1,8 +1,9 @@
 import type { LogisticsReceipt, LogisticsReceiptLine } from "./logisticsTypes";
 
 export const specialSchoolDeliveryDate = "2026-10-05";
-export const specialSchoolDeliveryRouteId = "school-route-2026-10-05";
+export const specialSchoolDeliveryRouteId = "school-route-2026-10-05-v2";
 export const specialSchoolDeliveryVehicle = "Scholenroute";
+export type SpecialDeliveryVehicle = "Bus A" | "Bus B" | "Scholenroute";
 
 export type SpecialSchoolDeliveryStop = {
   id: string;
@@ -217,12 +218,63 @@ const specialSchoolDeliveryRouteIds = [
   "kind-centrum-toon",
 ] as const;
 
+const specialSchoolDeliveryVehicleById: Record<
+  (typeof specialSchoolDeliveryRouteIds)[number],
+  SpecialDeliveryVehicle
+> = {
+  "jenaplanschool-de-noorderstroom": "Bus B",
+  "de-boomgaard": "Bus B",
+  "stichting-sint-josephscholen": "Scholenroute",
+  "de-sterredans": "Scholenroute",
+  "montessori-nijmegen-oost": "Bus A",
+  "klein-heyendaal": "Bus A",
+  brakkenstein: "Bus A",
+  "de-kleine-wereld": "Scholenroute",
+  "sint-nicolaas": "Scholenroute",
+  "de-akker": "Scholenroute",
+  "de-hazesprong": "Scholenroute",
+  "het-kleurrijk": "Scholenroute",
+  "petrus-canisius": "Scholenroute",
+  "de-wieken": "Scholenroute",
+  "kind-centrum-toon": "Scholenroute",
+};
+
+const specialSchoolDeliveryRouteIdsByVehicle: Record<
+  SpecialDeliveryVehicle,
+  readonly (typeof specialSchoolDeliveryRouteIds)[number][]
+> = {
+  "Bus A": [
+    "brakkenstein",
+    "klein-heyendaal",
+    "montessori-nijmegen-oost",
+  ],
+  "Bus B": [
+    "jenaplanschool-de-noorderstroom",
+    "de-boomgaard",
+  ],
+  Scholenroute: [
+    "de-wieken",
+    "de-sterredans",
+    "stichting-sint-josephscholen",
+    "petrus-canisius",
+    "het-kleurrijk",
+    "de-hazesprong",
+    "de-akker",
+    "de-kleine-wereld",
+    "sint-nicolaas",
+    "kind-centrum-toon",
+  ],
+};
+
 export const specialSchoolDeliveryStops = specialSchoolDeliveryRouteIds.map(
   (id) => {
     const stop = listedSpecialSchoolDeliveryStops.find((item) => item.id === id);
     if (!stop) throw new Error(`Schoolafleveradres ontbreekt: ${id}`);
 
-    return stop;
+    return {
+      ...stop,
+      vehicle: specialSchoolDeliveryVehicleById[id],
+    };
   }
 );
 
@@ -258,6 +310,33 @@ export function specialSchoolDeliveryRouteIndex(receipt: LogisticsReceipt) {
   return specialSchoolDeliveryRouteIds.indexOf(
     stopId as (typeof specialSchoolDeliveryRouteIds)[number]
   );
+}
+
+export function specialSchoolDeliveryVehicleForReceipt(
+  receipt: LogisticsReceipt
+): SpecialDeliveryVehicle | "" {
+  if (!isSpecialSchoolChildReceipt(receipt)) return "";
+
+  const stopId = receipt.id.replace(/^st-josephschool-/, "");
+  return (
+    specialSchoolDeliveryVehicleById[
+      stopId as (typeof specialSchoolDeliveryRouteIds)[number]
+    ] || ""
+  );
+}
+
+export function specialSchoolDeliveryVehicleRouteIndex(
+  receipt: LogisticsReceipt
+) {
+  if (!isSpecialSchoolChildReceipt(receipt)) return -1;
+
+  const stopId = receipt.id.replace(/^st-josephschool-/, "") as (
+    typeof specialSchoolDeliveryRouteIds
+  )[number];
+  const vehicle = specialSchoolDeliveryVehicleById[stopId];
+  return vehicle
+    ? specialSchoolDeliveryRouteIdsByVehicle[vehicle].indexOf(stopId)
+    : -1;
 }
 
 function stopLines(
@@ -310,7 +389,7 @@ export function applySpecialSchoolDeliverySplit(
       address: deliveryAddress,
       deliveryAddress,
       fulfillment: "bezorgen" as const,
-      route: specialSchoolDeliveryVehicle,
+      route: stop.vehicle,
       tags: ["bezorgen", "st-josephschool-deelbon"],
       note: "Eenmalige schoollevering · gekoppeld aan hoofd-bon St Josephschool.",
       customerNote: [
