@@ -36,6 +36,7 @@ const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
 const MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES = 5_500_000;
 const WEBSHOP_IMAGE_RETENTION_DAYS = 14;
+const PRO_COLLEGE_DELIVERY_DATE = "2026-10-05";
 const MAX_STORED_RECEIPT_OVERRIDES = 3000;
 const MAX_STORED_DAY_FEEDBACK = 1200;
 const MAX_STORED_ROUTE_DRAFTS = 180;
@@ -367,6 +368,45 @@ function isLogisticsWebshopImage(value: unknown): value is LogisticsWebshopImage
       typeof (value as LogisticsWebshopImage).deliveryDate === "string" &&
       typeof (value as LogisticsWebshopImage).photoUrl === "string"
   );
+}
+
+function isAccidentalProPersonaAdvancePhoto(image: LogisticsWebshopImage) {
+  const normalizedCustomer = image.customerName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+  return (
+    image.deliveryDate === PRO_COLLEGE_DELIVERY_DATE &&
+    normalizedCustomer === "pro persona" &&
+    (image.messageId.startsWith("manual-mail-photo:") ||
+      image.id.startsWith("manual-mail-photo-")) &&
+    image.productSummary === "Vooruit ontvangen klantlogo of klantfoto"
+  );
+}
+
+function correctProCollegeAdvancePhoto(image: LogisticsWebshopImage) {
+  if (!isAccidentalProPersonaAdvancePhoto(image)) return image;
+
+  const correctedImage: LogisticsWebshopImage = {
+    ...image,
+    customerName: "Pro College",
+    notes: Array.from(
+      new Set([
+        ...image.notes,
+        "Klantnaam gecorrigeerd van Pro Persona naar Pro College.",
+      ])
+    ),
+  };
+  delete correctedImage.matchedReceiptId;
+  delete correctedImage.matchedReceiptNumber;
+  delete correctedImage.matchedReceiptCustomer;
+  delete correctedImage.matchedAt;
+  delete correctedImage.matchSource;
+
+  return correctedImage;
 }
 
 function logisticsWebshopImageDuplicateKey(image: LogisticsWebshopImage) {
@@ -777,7 +817,11 @@ function normalizeLogisticsWebshopImagesState(
 
   return {
     images: pruneExpiredWebshopImages(
-      dedupeLogisticsWebshopImages(images.filter(isLogisticsWebshopImage))
+      dedupeLogisticsWebshopImages(
+        images
+          .filter(isLogisticsWebshopImage)
+          .map(correctProCollegeAdvancePhoto)
+      )
     ),
   };
 }
@@ -1675,9 +1719,17 @@ export async function readLogisticsWebshopImagesState() {
       ? (data.value as { images: unknown[] }).images
       : [];
   const validStoredImageCount = rawImages.filter(isLogisticsWebshopImage).length;
+  const hasProCollegeNameCorrection = rawImages.some(
+    (image) =>
+      isLogisticsWebshopImage(image) &&
+      isAccidentalProPersonaAdvancePhoto(image)
+  );
   const normalized = normalizeLogisticsWebshopImagesState(data.value);
 
-  if (validStoredImageCount !== normalized.images.length) {
+  if (
+    validStoredImageCount !== normalized.images.length ||
+    hasProCollegeNameCorrection
+  ) {
     try {
       await writeLogisticsWebshopImagesState(normalized);
     } catch {

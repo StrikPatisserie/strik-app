@@ -2164,6 +2164,20 @@ function isPetitFourLine(line: ReceiptLine) {
   return /\bpetit\s*-?\s*fours?\b/.test(description);
 }
 
+function isPetitGateauLine(line: ReceiptLine) {
+  if (isProductOptionLine(line)) return false;
+
+  const articleNumber = String(
+    line.catalogArticleNumber || line.articleNumber || ""
+  ).trim();
+  const description = normalizedLineDescription(line.description);
+
+  return (
+    /^509\.61[1-4]\b/.test(articleNumber) ||
+    /\bpetit\s*-?\s*gateau(?:x)?\b/.test(description)
+  );
+}
+
 function isWeddingCakeLine(line: ReceiptLine) {
   const hasWeddingCakeArticleNumber = [
     line.articleNumber,
@@ -2377,14 +2391,17 @@ function addPhotoProductPlan(input: {
   const description = lineSearchDescription(input.line);
   const product = cleanProductLabel(input.line.description);
   const copies = printCopiesForLine(input.line);
-  const isPetitFourProduct = isPetitFourLine(input.line);
+  const isSmallSquarePhotoProduct =
+    isPetitFourLine(input.line) || isPetitGateauLine(input.line);
   const isRoundProduct =
     input.forceRound ||
     isMarzipanOrCreamCakeProductLine(input.line) ||
     Boolean(cakeServingSizeForText(description));
-  if (!isPetitFourProduct && !isRoundProduct) return;
+  if (!isSmallSquarePhotoProduct && !isRoundProduct) return;
 
-  const shape: MarzipanPrintShape = isPetitFourProduct ? "square" : "round";
+  const shape: MarzipanPrintShape = isSmallSquarePhotoProduct
+    ? "square"
+    : "round";
   const cakeSizePlan = roundPhotoSizePlanForCakeText(description);
   const plan: PhotoProductPlan =
     shape === "square"
@@ -2445,6 +2462,7 @@ function photoProductPlansForReceipt(
     if (
       (!options.requirePhotoSignal || hasPhotoSignal) &&
       (isPetitFourLine(line) ||
+        isPetitGateauLine(line) ||
         (hasPhotoSignal && /\bpetit\s*-?\s*fours?\b/.test(description)))
     ) {
       addPhotoProductPlan({
