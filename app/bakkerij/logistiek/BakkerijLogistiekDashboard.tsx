@@ -2659,7 +2659,7 @@ function marzipanPhotoPrintKeyFor(input: {
 
 function marzipanPhotoPrintVersionForImage(image: WebshopImageSummary) {
   if (image.deliveryDate === specialProCollegeDeliveryDate) {
-    return "print-reset-2026-10-05-v3";
+    return "print-reset-2026-10-05-v4";
   }
 
   return "";
@@ -2677,7 +2677,7 @@ function isProCollegeLogoPrintItem(item: MarzipanPrintItem) {
 function isSpecialProCollegeLogoPrintItem(item: MarzipanPrintItem) {
   return (
     isProCollegeLogoPrintItem(item) &&
-    item.printKey.startsWith("print-reset-2026-10-05-v3:")
+    item.printKey.startsWith("print-reset-2026-10-05-v4:")
   );
 }
 
@@ -3698,8 +3698,19 @@ function createMarzipanPhotoPrintHtml(input: {
         padding: 8px 12px;
       }
       .screen-actions .action-buttons {
+        align-items: center;
         display: flex;
         gap: 8px;
+      }
+      .print-registration-note {
+        color: #666;
+        font-size: 10px;
+        font-weight: 700;
+        max-width: 230px;
+        text-align: right;
+      }
+      .print-registration-note.confirmed {
+        color: #2d6b43;
       }
       .screen-actions .secondary {
         background: #fff;
@@ -3906,13 +3917,47 @@ function createMarzipanPhotoPrintHtml(input: {
         }
       }
     </style>
+    <script>
+      function printAndConfirmMarzipanSheet() {
+        window.print();
+        window.setTimeout(function () {
+          var didPrint = window.confirm(
+            "Is de afdruk daadwerkelijk gelukt?\\n\\nKlik OK om deze foto’s als geprint te registreren.\\nKlik Annuleren als je alleen hebt gekeken of niet hebt afgedrukt."
+          );
+          var status = document.getElementById("print-registration-note");
+
+          if (!didPrint) {
+            if (status) {
+              status.textContent = "Niet geregistreerd · je kunt later opnieuw printen";
+              status.classList.remove("confirmed");
+            }
+            return;
+          }
+
+          if (typeof window.confirmMarzipanPrint !== "function") {
+            if (status) {
+              status.textContent = "Afdruk niet geregistreerd · open de dagstart opnieuw";
+              status.classList.remove("confirmed");
+            }
+            return;
+          }
+
+          window.confirmMarzipanPrint();
+          if (status) {
+            status.textContent = "Geregistreerd als geprint";
+            status.classList.add("confirmed");
+          }
+        }, 100);
+      }
+    </script>
   </head>
   <body>
     <div class="screen-actions">
       <h1>${escapeHtml(title)} · ${input.items.length} printstukken</h1>
       <div class="action-buttons">
+        <span id="print-registration-note" class="print-registration-note">Bekijken telt niet als print</span>
         <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
-        <button type="button" onclick="window.print()">Afdrukken</button>
+        <button type="button" onclick="printAndConfirmMarzipanSheet()">Afdrukken</button>
       </div>
     </div>
     <main>
@@ -3949,8 +3994,11 @@ function openMarzipanPhotoSheet(
   printWindow.document.open();
   printWindow.document.write(createMarzipanPhotoPrintHtml({ items, plan }));
   printWindow.document.close();
+  const trackedPrintWindow = printWindow as Window & {
+    confirmMarzipanPrint?: () => void;
+  };
+  trackedPrintWindow.confirmMarzipanPrint = () => onPrinted?.(items);
   printWindow.focus();
-  onPrinted?.(items);
 }
 
 function arendPromptDefaultFor(orders: ArendNumberPrintOrder[]) {
