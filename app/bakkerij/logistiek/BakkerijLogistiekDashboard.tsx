@@ -3931,20 +3931,18 @@ function createMarzipanPhotoPrintHtml(input: {
 function openMarzipanPhotoSheet(
   plan: DayPlan,
   items: MarzipanPrintItem[],
-  onPrinted?: (items: MarzipanPrintItem[]) => void,
-  reservedPrintWindow?: Window | null
+  onPrinted?: (items: MarzipanPrintItem[]) => void
 ) {
   if (items.length === 0) {
-    reservedPrintWindow?.close();
     window.alert("Geen webshopfoto's gevonden voor deze dag.");
     return;
   }
 
-  const printWindow =
-    reservedPrintWindow ||
-    window.open("", "_blank", "width=1100,height=800");
+  const printWindow = window.open("", "_blank", "width=1100,height=800");
   if (!printWindow) {
-    window.alert("Controlevenster kon niet geopend worden.");
+    window.alert(
+      "Controlevenster kon niet geopend worden. Sta pop-ups voor deze app toe."
+    );
     return;
   }
 
@@ -3953,161 +3951,6 @@ function openMarzipanPhotoSheet(
   printWindow.document.close();
   printWindow.focus();
   onPrinted?.(items);
-}
-
-function reserveMarzipanPhotoPrintWindow() {
-  const printWindow = window.open("", "_blank", "width=1100,height=800");
-  if (!printWindow) {
-    window.alert(
-      "Controlevenster kon niet geopend worden. Sta pop-ups voor deze app toe."
-    );
-    return null;
-  }
-
-  printWindow.document.open();
-  printWindow.document.write(`<!doctype html>
-    <html lang="nl">
-      <head><meta charset="utf-8"><title>Print voorbereiden</title></head>
-      <body style="font-family:Arial,Helvetica,sans-serif;padding:24px;color:#222">
-        <strong>Print wordt voorbereid…</strong>
-        <p style="font-size:13px;color:#666">Maak de keuze in het vorige venster.</p>
-      </body>
-    </html>`);
-  printWindow.document.close();
-  window.focus();
-
-  return printWindow;
-}
-
-function openMarzipanPrintChoice(input: {
-  arendOrders: ArendNumberPrintOrder[];
-  marzipanItems: MarzipanPrintItem[];
-  newMarzipanItems: MarzipanPrintItem[];
-  lastPhotoPrintAt?: string;
-  onPhotoPrint?: (items: MarzipanPrintItem[]) => void;
-  plan: DayPlan;
-}) {
-  const newItems = input.lastPhotoPrintAt
-    ? input.newMarzipanItems
-    : input.marzipanItems;
-  const openPhotoItems = (
-    items: MarzipanPrintItem[],
-    reservedPrintWindow?: Window | null
-  ) =>
-    openMarzipanPhotoSheet(
-      input.plan,
-      items,
-      input.onPhotoPrint,
-      reservedPrintWindow
-    );
-
-  if (input.arendOrders.length > 0 && input.marzipanItems.length > 0) {
-    const reservedPrintWindow = reserveMarzipanPhotoPrintWindow();
-    if (!reservedPrintWindow) return;
-    const answer = window.prompt(
-      [
-        "Wat wil je printen?",
-        "Typ 1 voor Arend cijfers.",
-        input.lastPhotoPrintAt
-          ? `Typ 2 voor nieuwe overige marsepeinfoto's (${newItems.length}).`
-          : `Typ 2 voor overige marsepeinfoto's (${input.marzipanItems.length}).`,
-        input.lastPhotoPrintAt
-          ? `Typ 3 voor alle overige marsepeinfoto's (${input.marzipanItems.length}).`
-          : "",
-      ].join("\n"),
-      "1"
-    );
-    if (answer === null) {
-      reservedPrintWindow.close();
-      return;
-    }
-
-    if (answer.trim() === "1" || /arend/i.test(answer)) {
-      reservedPrintWindow.close();
-      openArendNumberSheet(input.plan, input.arendOrders);
-      return;
-    }
-
-    if (
-      answer.trim() === "2" ||
-      /overig|foto|afbeelding|klant/i.test(answer)
-    ) {
-      if (newItems.length === 0) {
-        reservedPrintWindow.close();
-        window.alert("Geen nieuwe marsepeinfoto's sinds de laatste print.");
-        return;
-      }
-
-      openPhotoItems(newItems, reservedPrintWindow);
-      return;
-    }
-
-    if (answer.trim() === "3" || /alles|alle/i.test(answer)) {
-      openPhotoItems(input.marzipanItems, reservedPrintWindow);
-      return;
-    }
-
-    reservedPrintWindow.close();
-    window.alert("Kies 1 voor Arend, 2 voor nieuwe foto's of 3 voor alle foto's.");
-    return;
-  }
-
-  if (input.arendOrders.length > 0) {
-    openArendNumberSheet(input.plan, input.arendOrders);
-    return;
-  }
-
-  if (
-    input.lastPhotoPrintAt &&
-    newItems.length > 0 &&
-    newItems.length < input.marzipanItems.length
-  ) {
-    const reservedPrintWindow = reserveMarzipanPhotoPrintWindow();
-    if (!reservedPrintWindow) return;
-    const answer = window.prompt(
-      [
-        `${newItems.length} nieuwe marsepeinfoto's sinds de laatste print.`,
-        `Typ 1 voor alleen nieuw (${newItems.length}).`,
-        `Typ 2 voor alles opnieuw (${input.marzipanItems.length}).`,
-      ].join("\n"),
-      "1"
-    );
-    if (answer === null) {
-      reservedPrintWindow.close();
-      return;
-    }
-
-    if (answer.trim() === "1" || /nieuw/i.test(answer)) {
-      openPhotoItems(newItems, reservedPrintWindow);
-      return;
-    }
-
-    if (answer.trim() === "2" || /alles|alle/i.test(answer)) {
-      openPhotoItems(input.marzipanItems, reservedPrintWindow);
-      return;
-    }
-
-    reservedPrintWindow.close();
-    window.alert("Kies 1 voor nieuw of 2 voor alles.");
-    return;
-  }
-
-  if (input.lastPhotoPrintAt && newItems.length === 0) {
-    const reservedPrintWindow = reserveMarzipanPhotoPrintWindow();
-    if (!reservedPrintWindow) return;
-    const shouldPrintAll = window.confirm(
-      "Geen nieuwe marsepeinfoto's sinds de laatste print. Wil je alles toch opnieuw openen?"
-    );
-    if (!shouldPrintAll) {
-      reservedPrintWindow.close();
-      return;
-    }
-
-    openPhotoItems(input.marzipanItems, reservedPrintWindow);
-    return;
-  }
-
-  openPhotoItems(input.marzipanItems);
 }
 
 function arendPromptDefaultFor(orders: ArendNumberPrintOrder[]) {
@@ -8967,6 +8810,8 @@ export default function BakkerijLogistiekDashboard() {
   const [overrideMessage, setOverrideMessage] = useState("");
   const [photoLinkMessage, setPhotoLinkMessage] = useState("");
   const [advancePhotoOpen, setAdvancePhotoOpen] = useState(false);
+  const [marzipanPrintChoiceOpen, setMarzipanPrintChoiceOpen] =
+    useState(false);
   const [schoolDeliveryOverviewOpen, setSchoolDeliveryOverviewOpen] =
     useState(false);
   const [proCollegeDeliveryOverviewOpen, setProCollegeDeliveryOverviewOpen] =
@@ -9512,6 +9357,41 @@ export default function BakkerijLogistiekDashboard() {
       writeMarzipanPhotoPrintHistory(next);
       return next;
     });
+  }
+
+  function openMarzipanPrintMenu() {
+    if (
+      arendNumberPrintOrders.length > 0 &&
+      marzipanPrintItems.length === 0
+    ) {
+      openArendNumberSheet(selectedPlan, arendNumberPrintOrders);
+      return;
+    }
+
+    if (
+      marzipanPrintItems.length > 0 &&
+      !photoPrintHistory?.printedAt &&
+      arendNumberPrintOrders.length === 0
+    ) {
+      openMarzipanPhotoSheet(
+        selectedPlan,
+        marzipanPrintItems,
+        rememberMarzipanPhotoPrint
+      );
+      return;
+    }
+
+    setMarzipanPrintChoiceOpen(true);
+  }
+
+  function printMarzipanPhotos(items: MarzipanPrintItem[]) {
+    setMarzipanPrintChoiceOpen(false);
+    openMarzipanPhotoSheet(selectedPlan, items, rememberMarzipanPhotoPrint);
+  }
+
+  function printArendNumbers() {
+    setMarzipanPrintChoiceOpen(false);
+    openArendNumberSheet(selectedPlan, arendNumberPrintOrders);
   }
 
   async function saveRouteDraft(
@@ -10433,16 +10313,7 @@ export default function BakkerijLogistiekDashboard() {
                   marzipanPrintItems.length === 0 &&
                   arendNumberPrintOrders.length === 0
                 }
-                onClick={() =>
-                  openMarzipanPrintChoice({
-                    arendOrders: arendNumberPrintOrders,
-                    marzipanItems: marzipanPrintItems,
-                    newMarzipanItems: newMarzipanPrintItems,
-                    lastPhotoPrintAt: photoPrintHistory?.printedAt,
-                    onPhotoPrint: rememberMarzipanPhotoPrint,
-                    plan: selectedPlan,
-                  })
-                }
+                onClick={openMarzipanPrintMenu}
               />
               <WrittenTextPrintButton
                 count={writtenTextPrintItems.length}
@@ -10735,6 +10606,19 @@ export default function BakkerijLogistiekDashboard() {
             </section>
           </div>
         )}
+        {marzipanPrintChoiceOpen && (
+          <MarzipanPrintChoiceModal
+            allPhotoCount={marzipanPrintItems.length}
+            arendCount={arendNumberPrintCount}
+            hasPrintHistory={Boolean(photoPrintHistory?.printedAt)}
+            lastPrintAt={photoPrintHistory?.printedAt || ""}
+            newPhotoCount={newMarzipanPrintItems.length}
+            onClose={() => setMarzipanPrintChoiceOpen(false)}
+            onPrintAll={() => printMarzipanPhotos(marzipanPrintItems)}
+            onPrintArend={printArendNumbers}
+            onPrintNew={() => printMarzipanPhotos(newMarzipanPrintItems)}
+          />
+        )}
         {preparationProductManagerCategory && (
           <PreparationProductsModal
             category={preparationProductManagerCategory}
@@ -10763,6 +10647,154 @@ export default function BakkerijLogistiekDashboard() {
       </>
       )}
     </StrikShell>
+  );
+}
+
+function MarzipanPrintChoiceModal({
+  allPhotoCount,
+  arendCount,
+  hasPrintHistory,
+  lastPrintAt,
+  newPhotoCount,
+  onClose,
+  onPrintAll,
+  onPrintArend,
+  onPrintNew,
+}: Readonly<{
+  allPhotoCount: number;
+  arendCount: number;
+  hasPrintHistory: boolean;
+  lastPrintAt: string;
+  newPhotoCount: number;
+  onClose: () => void;
+  onPrintAll: () => void;
+  onPrintArend: () => void;
+  onPrintNew: () => void;
+}>) {
+  const parsedLastPrintAt = lastPrintAt ? new Date(lastPrintAt) : null;
+  const lastPrintLabel =
+    parsedLastPrintAt && !Number.isNaN(parsedLastPrintAt.getTime())
+      ? parsedLastPrintAt.toLocaleString("nl-NL", {
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          month: "long",
+        })
+      : "";
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="marzipan-print-choice-title"
+        className="w-full max-w-lg rounded-3xl border border-[#d7cec4] bg-[#f8f6f1] p-4 shadow-2xl sm:p-5"
+      >
+        <header className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#7d746b]">
+              Printkeuze
+            </p>
+            <h2
+              id="marzipan-print-choice-title"
+              className="mt-0.5 text-xl font-black tracking-normal text-[#1a1815]"
+            >
+              Marsepeinfoto’s printen
+            </h2>
+            {hasPrintHistory && (
+              <p className="mt-1 text-xs font-semibold text-[#776f66]">
+                Laatste print{lastPrintLabel ? `: ${lastPrintLabel}` : ""}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-label="Sluiten"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d7cec4] bg-white text-lg font-black text-[#554d45]"
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="mt-4 grid gap-2">
+          {arendCount > 0 && (
+            <button
+              type="button"
+              onClick={onPrintArend}
+              className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#c9d8c2] bg-white px-4 py-3 text-left shadow-sm transition hover:bg-[#f3f8f1]"
+            >
+              <span>
+                <strong className="block text-sm font-black text-[#1a1815]">
+                  Arend-cijfers printen
+                </strong>
+                <small className="mt-0.5 block text-xs font-semibold text-[#776f66]">
+                  Open de cijfersheet voor de Arend-bestelling.
+                </small>
+              </span>
+              <span className="rounded-full bg-[#c3d3bc] px-2.5 py-1 text-xs font-black text-[#253822]">
+                {arendCount}
+              </span>
+            </button>
+          )}
+
+          {hasPrintHistory && (
+            <button
+              type="button"
+              disabled={newPhotoCount === 0}
+              onClick={onPrintNew}
+              className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#c9d8c2] bg-[#edf5ea] px-4 py-3 text-left shadow-sm transition hover:bg-[#e5f0e1] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span>
+                <strong className="block text-sm font-black text-[#1a1815]">
+                  Alleen nieuw sinds laatste print
+                </strong>
+                <small className="mt-0.5 block text-xs font-semibold text-[#62705d]">
+                  {newPhotoCount > 0
+                    ? "Print alleen later toegevoegde foto’s."
+                    : "Er zijn geen nieuwe foto’s bijgekomen."}
+                </small>
+              </span>
+              <span className="rounded-full bg-[#2d6b43] px-2.5 py-1 text-xs font-black text-white">
+                {newPhotoCount}
+              </span>
+            </button>
+          )}
+
+          {allPhotoCount > 0 && (
+            <button
+              type="button"
+              onClick={onPrintAll}
+              className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#d5c0ca] bg-white px-4 py-3 text-left shadow-sm transition hover:bg-[#f8f1f5]"
+            >
+              <span>
+                <strong className="block text-sm font-black text-[#1a1815]">
+                  {hasPrintHistory
+                    ? "Alles opnieuw printen"
+                    : "Alle foto’s printen"}
+                </strong>
+                <small className="mt-0.5 block text-xs font-semibold text-[#776f66]">
+                  {hasPrintHistory
+                    ? "Open ook alle eerder geprinte foto’s opnieuw."
+                    : "Open alle foto’s voor deze dag."}
+                </small>
+              </span>
+              <span className="rounded-full bg-[#a27a8e] px-2.5 py-1 text-xs font-black text-white">
+                {allPhotoCount}
+              </span>
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-4 min-h-10 w-full rounded-xl border border-[#d7cec4] bg-white px-4 text-xs font-black text-[#554d45]"
+        >
+          Annuleren
+        </button>
+      </section>
+    </div>
   );
 }
 
