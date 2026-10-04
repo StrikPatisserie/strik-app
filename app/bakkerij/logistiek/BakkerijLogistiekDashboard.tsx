@@ -2659,10 +2659,53 @@ function marzipanPhotoPrintKeyFor(input: {
 
 function marzipanPhotoPrintVersionForImage(image: WebshopImageSummary) {
   if (image.deliveryDate === specialProCollegeDeliveryDate) {
-    return "print-reset-2026-10-05-v2";
+    return "print-reset-2026-10-05-v3";
   }
 
   return "";
+}
+
+const specialProCollegeLogoReserveCopies = 10;
+
+function isProCollegeLogoPrintItem(item: MarzipanPrintItem) {
+  return (
+    item.shape === "square" &&
+    normalizeMatchText(item.customerName).includes("pro college")
+  );
+}
+
+function isSpecialProCollegeLogoPrintItem(item: MarzipanPrintItem) {
+  return (
+    isProCollegeLogoPrintItem(item) &&
+    item.printKey.startsWith("print-reset-2026-10-05-v3:")
+  );
+}
+
+function addSpecialProCollegeLogoReserveCopies(items: MarzipanPrintItem[]) {
+  const proCollegeItems = items.filter(isSpecialProCollegeLogoPrintItem);
+  const template = proCollegeItems[0];
+  if (!template) return;
+
+  const copyTotal =
+    proCollegeItems.length + specialProCollegeLogoReserveCopies;
+  proCollegeItems.forEach((item) => {
+    item.copyTotal = copyTotal;
+  });
+
+  for (
+    let reserveCopy = 1;
+    reserveCopy <= specialProCollegeLogoReserveCopies;
+    reserveCopy += 1
+  ) {
+    const copyNumber = proCollegeItems.length + reserveCopy;
+    items.push({
+      ...template,
+      id: `${template.id}-reserve-${reserveCopy}`,
+      copyNumber,
+      copyTotal,
+      printKey: `${template.printKey}:reserve-v1:${reserveCopy}`,
+    });
+  }
 }
 
 function imageImportedAtForPrint(image: WebshopImageSummary) {
@@ -2845,6 +2888,8 @@ function buildMarzipanPrintItems(
       planIndex: imageIndex,
     });
   });
+
+  addSpecialProCollegeLogoReserveCopies(items);
 
   return items;
 }
@@ -3546,9 +3591,10 @@ function createMarzipanPhotoPrintHtml(input: {
         ? diagonalRoundLayout?.itemStyleById.get(item.id) || ""
         : "";
     const preserveRectangle = item.photoUrl.includes("douglas-60716");
+    const proCollegeLogo = isProCollegeLogoPrintItem(item);
 
     return `
-      <article class="print-item ${item.shape} ${preserveRectangle ? "keep-rectangular" : ""} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${printSizeCm}cm;${layoutStyle}">
+      <article class="print-item ${item.shape} ${preserveRectangle ? "keep-rectangular" : ""} ${proCollegeLogo ? "pro-college-logo" : ""} ${includeLabel ? "" : "no-label"} ${item.needsCheck ? "needs-check" : ""}" style="--item-size:${printSizeCm}cm;${layoutStyle}">
         <div class="photo-frame">
           <img src="${escapeAttribute(item.photoUrl)}" alt="${escapeAttribute(item.customerName)}">
         </div>
@@ -3568,10 +3614,19 @@ function createMarzipanPhotoPrintHtml(input: {
 
   const squareHtml = squareGroups
     .map((group) => {
+      const proCollegeLogoGroup = isProCollegeLogoPrintItem(group.labelItem);
+      const includesProCollegeReserve = group.items.some(
+        isSpecialProCollegeLogoPrintItem
+      );
       return `
-        <section class="square-group">
+        <section class="square-group ${proCollegeLogoGroup ? "rectangular-logo-group" : ""}">
           <div class="square-group-label">
             <strong>${escapeHtml(group.labelItem.customerLastName)}</strong>
+            ${
+              includesProCollegeReserve
+                ? `<span>${group.items.length} stuks · inclusief ${specialProCollegeLogoReserveCopies} reserve</span>`
+                : ""
+            }
           </div>
           <div class="square-grid">
             ${group.items.map((item) => printItemHtmlFor(item)).join("")}
@@ -3587,6 +3642,19 @@ function createMarzipanPhotoPrintHtml(input: {
         </section>`
       : "";
   const itemHtml = `${squareHtml}${roundHtml}`;
+  const printSizeSummary = [
+    input.items.some(isProCollegeLogoPrintItem)
+      ? "Pro College-logo max. 3,5 cm breed"
+      : "",
+    input.items.some(
+      (item) => item.shape === "square" && !isProCollegeLogoPrintItem(item)
+    )
+      ? "petit four/gateau ca. 3,8 cm"
+      : "",
+    roundItems.length > 0 ? "taart 6-12 cm rond" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return `<!doctype html>
 <html lang="nl">
@@ -3689,6 +3757,10 @@ function createMarzipanPhotoPrintHtml(input: {
         justify-content: start;
         width: 189mm;
       }
+      .rectangular-logo-group .square-grid {
+        grid-template-columns: repeat(5, 35mm);
+        width: 175mm;
+      }
       .round-grid {
         align-items: flex-start;
         display: flex;
@@ -3731,6 +3803,14 @@ function createMarzipanPhotoPrintHtml(input: {
         height: var(--petit-four-size);
         padding: 0;
         width: var(--petit-four-size);
+      }
+      .rectangular-logo-group .square,
+      .rectangular-logo-group .square .photo-frame {
+        height: 14mm;
+        width: 35mm;
+      }
+      .rectangular-logo-group .square .photo-frame img {
+        object-fit: contain;
       }
       .round .photo-frame {
         border-radius: 999px;
@@ -3815,6 +3895,15 @@ function createMarzipanPhotoPrintHtml(input: {
           height: 37.8mm !important;
           width: 37.8mm !important;
         }
+        .rectangular-logo-group .square-grid {
+          grid-template-columns: repeat(5, 35mm) !important;
+          width: 175mm !important;
+        }
+        .rectangular-logo-group .square,
+        .rectangular-logo-group .square .photo-frame {
+          height: 14mm !important;
+          width: 35mm !important;
+        }
       }
     </style>
   </head>
@@ -3829,7 +3918,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <main>
       <div class="sheet-header">
         <h1>${escapeHtml(title)}</h1>
-        <p>${input.items.length} printstukken · petit four/gateau ca. 3,8 cm · taart 6-12 cm rond</p>
+        <p>${input.items.length} printstukken${printSizeSummary ? ` · ${printSizeSummary}` : ""}</p>
       </div>
       <section class="sheet">
         ${itemHtml}
@@ -3842,23 +3931,52 @@ function createMarzipanPhotoPrintHtml(input: {
 function openMarzipanPhotoSheet(
   plan: DayPlan,
   items: MarzipanPrintItem[],
-  onPrinted?: (items: MarzipanPrintItem[]) => void
+  onPrinted?: (items: MarzipanPrintItem[]) => void,
+  reservedPrintWindow?: Window | null
 ) {
   if (items.length === 0) {
+    reservedPrintWindow?.close();
     window.alert("Geen webshopfoto's gevonden voor deze dag.");
     return;
   }
 
-  const printWindow = window.open("", "_blank", "width=1100,height=800");
+  const printWindow =
+    reservedPrintWindow ||
+    window.open("", "_blank", "width=1100,height=800");
   if (!printWindow) {
     window.alert("Controlevenster kon niet geopend worden.");
     return;
   }
 
+  printWindow.document.open();
   printWindow.document.write(createMarzipanPhotoPrintHtml({ items, plan }));
   printWindow.document.close();
   printWindow.focus();
   onPrinted?.(items);
+}
+
+function reserveMarzipanPhotoPrintWindow() {
+  const printWindow = window.open("", "_blank", "width=1100,height=800");
+  if (!printWindow) {
+    window.alert(
+      "Controlevenster kon niet geopend worden. Sta pop-ups voor deze app toe."
+    );
+    return null;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(`<!doctype html>
+    <html lang="nl">
+      <head><meta charset="utf-8"><title>Print voorbereiden</title></head>
+      <body style="font-family:Arial,Helvetica,sans-serif;padding:24px;color:#222">
+        <strong>Print wordt voorbereid…</strong>
+        <p style="font-size:13px;color:#666">Maak de keuze in het vorige venster.</p>
+      </body>
+    </html>`);
+  printWindow.document.close();
+  window.focus();
+
+  return printWindow;
 }
 
 function openMarzipanPrintChoice(input: {
@@ -3872,10 +3990,20 @@ function openMarzipanPrintChoice(input: {
   const newItems = input.lastPhotoPrintAt
     ? input.newMarzipanItems
     : input.marzipanItems;
-  const openPhotoItems = (items: MarzipanPrintItem[]) =>
-    openMarzipanPhotoSheet(input.plan, items, input.onPhotoPrint);
+  const openPhotoItems = (
+    items: MarzipanPrintItem[],
+    reservedPrintWindow?: Window | null
+  ) =>
+    openMarzipanPhotoSheet(
+      input.plan,
+      items,
+      input.onPhotoPrint,
+      reservedPrintWindow
+    );
 
   if (input.arendOrders.length > 0 && input.marzipanItems.length > 0) {
+    const reservedPrintWindow = reserveMarzipanPhotoPrintWindow();
+    if (!reservedPrintWindow) return;
     const answer = window.prompt(
       [
         "Wat wil je printen?",
@@ -3889,9 +4017,13 @@ function openMarzipanPrintChoice(input: {
       ].join("\n"),
       "1"
     );
-    if (answer === null) return;
+    if (answer === null) {
+      reservedPrintWindow.close();
+      return;
+    }
 
     if (answer.trim() === "1" || /arend/i.test(answer)) {
+      reservedPrintWindow.close();
       openArendNumberSheet(input.plan, input.arendOrders);
       return;
     }
@@ -3901,19 +4033,21 @@ function openMarzipanPrintChoice(input: {
       /overig|foto|afbeelding|klant/i.test(answer)
     ) {
       if (newItems.length === 0) {
+        reservedPrintWindow.close();
         window.alert("Geen nieuwe marsepeinfoto's sinds de laatste print.");
         return;
       }
 
-      openPhotoItems(newItems);
+      openPhotoItems(newItems, reservedPrintWindow);
       return;
     }
 
     if (answer.trim() === "3" || /alles|alle/i.test(answer)) {
-      openPhotoItems(input.marzipanItems);
+      openPhotoItems(input.marzipanItems, reservedPrintWindow);
       return;
     }
 
+    reservedPrintWindow.close();
     window.alert("Kies 1 voor Arend, 2 voor nieuwe foto's of 3 voor alle foto's.");
     return;
   }
@@ -3928,6 +4062,8 @@ function openMarzipanPrintChoice(input: {
     newItems.length > 0 &&
     newItems.length < input.marzipanItems.length
   ) {
+    const reservedPrintWindow = reserveMarzipanPhotoPrintWindow();
+    if (!reservedPrintWindow) return;
     const answer = window.prompt(
       [
         `${newItems.length} nieuwe marsepeinfoto's sinds de laatste print.`,
@@ -3936,29 +4072,38 @@ function openMarzipanPrintChoice(input: {
       ].join("\n"),
       "1"
     );
-    if (answer === null) return;
+    if (answer === null) {
+      reservedPrintWindow.close();
+      return;
+    }
 
     if (answer.trim() === "1" || /nieuw/i.test(answer)) {
-      openPhotoItems(newItems);
+      openPhotoItems(newItems, reservedPrintWindow);
       return;
     }
 
     if (answer.trim() === "2" || /alles|alle/i.test(answer)) {
-      openPhotoItems(input.marzipanItems);
+      openPhotoItems(input.marzipanItems, reservedPrintWindow);
       return;
     }
 
+    reservedPrintWindow.close();
     window.alert("Kies 1 voor nieuw of 2 voor alles.");
     return;
   }
 
   if (input.lastPhotoPrintAt && newItems.length === 0) {
+    const reservedPrintWindow = reserveMarzipanPhotoPrintWindow();
+    if (!reservedPrintWindow) return;
     const shouldPrintAll = window.confirm(
       "Geen nieuwe marsepeinfoto's sinds de laatste print. Wil je alles toch opnieuw openen?"
     );
-    if (!shouldPrintAll) return;
+    if (!shouldPrintAll) {
+      reservedPrintWindow.close();
+      return;
+    }
 
-    openPhotoItems(input.marzipanItems);
+    openPhotoItems(input.marzipanItems, reservedPrintWindow);
     return;
   }
 
