@@ -2647,8 +2647,22 @@ function marzipanPhotoPrintKeyFor(input: {
   imageId: string;
   planIndex: number;
   copyNumber: number;
+  version?: string;
 }) {
-  return [input.imageId, input.planIndex, input.copyNumber].join(":");
+  return [
+    ...(input.version ? [input.version] : []),
+    input.imageId,
+    input.planIndex,
+    input.copyNumber,
+  ].join(":");
+}
+
+function marzipanPhotoPrintVersionForImage(image: WebshopImageSummary) {
+  if (image.deliveryDate === specialProCollegeDeliveryDate) {
+    return "print-reset-2026-10-05-v2";
+  }
+
+  return "";
 }
 
 function imageImportedAtForPrint(image: WebshopImageSummary) {
@@ -2677,6 +2691,7 @@ function pushMarzipanPrintCopies(input: {
       imageId: input.image.id,
       planIndex: input.planIndex,
       copyNumber: copy,
+      version: marzipanPhotoPrintVersionForImage(input.image),
     });
 
     input.items.push({
@@ -3708,11 +3723,11 @@ function createMarzipanPhotoPrintHtml(input: {
       }
       .square .photo-frame {
         aspect-ratio: 1 / 1;
-        background: #000;
+        background: #fff;
         border: 0;
         box-shadow:
-          inset -0.25mm 0 0 #fff,
-          inset 0 -0.25mm 0 #fff;
+          inset -0.25mm 0 0 #ddd,
+          inset 0 -0.25mm 0 #ddd;
         height: var(--petit-four-size);
         padding: 0;
         width: var(--petit-four-size);
@@ -3814,7 +3829,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <main>
       <div class="sheet-header">
         <h1>${escapeHtml(title)}</h1>
-        <p>${input.items.length} printstukken · petit four ca. 3,8 cm · taart 6-12 cm rond</p>
+        <p>${input.items.length} printstukken · petit four/gateau ca. 3,8 cm · taart 6-12 cm rond</p>
       </div>
       <section class="sheet">
         ${itemHtml}
