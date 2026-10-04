@@ -5,10 +5,10 @@ import ManagementStatusSection from "./ManagementStatusSection";
 const managementItems = [
   {
     href: "/management/dashboard",
-    label: "Analyse",
-    title: "Dashboard",
-    description: "Omzet, uren, productiviteit en loonkosten.",
-    icon: strikIcons.management,
+    label: "Personeel",
+    title: "Loonkostenpercentage",
+    description: "Omzet, gewerkte uren en loonkosten per winkel.",
+    icon: strikIcons.managementLabor,
     accent: "green" as const,
   },
   {
@@ -20,10 +20,18 @@ const managementItems = [
     accent: "blue" as const,
   },
   {
+    href: "/management/gegevens/geld-tellen",
+    label: "Kascontrole",
+    title: "Geld tellen",
+    description: "Dagcontroles, weekstortingen en maandrapport.",
+    icon: strikIcons.managementCashCount,
+    accent: "yellow" as const,
+  },
+  {
     href: "/management/gegevens",
-    label: "Brondata",
+    label: "Beheer",
     title: "Gegevens",
-    description: "Omzet, kasboek, agenda, aanbiedingen en nieuws.",
+    description: "Agenda, aanbiedingen en nieuws.",
     icon: strikIcons.info,
     accent: "yellow" as const,
   },
@@ -48,7 +56,7 @@ const managementItems = [
     label: "Beheer",
     title: "Gebruikers & app",
     description: "Accounts, rechten en app-instellingen beheren.",
-    icon: strikIcons.management,
+    icon: strikIcons.managementUsers,
     accent: "green" as const,
   },
   {
@@ -56,7 +64,7 @@ const managementItems = [
     label: "IJssalons",
     title: "Schoonmaak",
     description: "Registraties per datum en locatie.",
-    icon: strikIcons.cleaningManagement,
+    icon: strikIcons.managementCleaning,
     accent: "blue" as const,
   },
 ];

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Geld tellen">
+  <g fill="none" stroke="#49342d" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="M7 40V17c0-2.2 1.8-4 4-4h35"/>
+    <rect x="14" y="21" width="43" height="30" rx="4"/>
+    <path d="M20 27h31M20 45h31"/>
+    <circle cx="35.5" cy="36" r="8"/>
+    <path d="M39 31.5c-1-1-2.2-1.5-3.7-1.5-2.7 0-4.8 2-4.8 6s2.1 6 4.8 6c1.5 0 2.7-.5 3.7-1.5M29 34h7M29 38h7"/>
+  </g>
+</svg>
