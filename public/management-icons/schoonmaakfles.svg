@@ -1,9 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Schoonmaak">
-  <g fill="none" stroke="#49342d" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
-    <path d="M25 8h18v8H31v8"/>
-    <path d="M43 10h9l5 5H43M31 16h-9l-5 5h14"/>
-    <path d="M24 23h14l4 7v5c5 4 7 9 7 16 0 3-2 5-5 5H17c-3 0-5-2-5-5 0-8 3-14 9-18v-5l3-5Z"/>
-    <path d="M19 43h23M19 49h23"/>
-    <path d="M54 23h5M55 29l4 2M55 17l4-2"/>
+  <g fill="none" stroke="#111111" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.25">
+    <path d="M24 10h18v7H30v8M42 12h9l5 5H42M30 17h-8l-5 5h13"/>
+    <path d="M23 24h14l4 7v5c5 4 7 9 7 15a5 5 0 0 1-5 5H17a5 5 0 0 1-5-5c0-8 3-13 9-17v-5l2-5Z"/>
+    <path d="M19 43h22M19 49h22M53 24h6M54 30l5 2M54 18l5-2"/>
   </g>
 </svg>

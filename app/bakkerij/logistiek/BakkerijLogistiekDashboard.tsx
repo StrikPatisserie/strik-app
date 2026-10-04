@@ -14,8 +14,10 @@ import {
   isSpecialSchoolSourceReceipt,
   specialSchoolDeliveryCakeCount,
   specialSchoolDeliveryDate,
+  specialSchoolDeliveryRouteId,
   specialSchoolDeliveryRouteIndex,
   specialSchoolDeliveryStops,
+  specialSchoolDeliveryVehicle,
 } from "./specialSchoolDelivery";
 import type {
   LogisticsBatch,
@@ -1275,6 +1277,8 @@ function receiptBusForRoutes(
   receipt: ReceiptSummary,
   routeRounds: RouteRound[]
 ): BusId | "" {
+  if (isSpecialSchoolChildReceipt(receipt)) return "";
+
   const sourceIds = new Set([
     `receipt:${receipt.id}`,
     `ice:${receipt.id}`,
@@ -4717,7 +4721,10 @@ function createBusRoutePrintHtml(input: {
           <header class="sheet-header">
             <div class="bus-heading">
               <span class="bus-letter">${escapeHtml(
-                busIdFromVehicleName(input.routeGroup.vehicle) || "•"
+                busIdFromVehicleName(input.routeGroup.vehicle) ||
+                  (input.routeGroup.vehicle === specialSchoolDeliveryVehicle
+                    ? "S"
+                    : "•")
               )}</span>
               <div>
                 <h1>${escapeHtml(routeGroupDisplayTitle(input.routeGroup.vehicle))}</h1>
@@ -6616,6 +6623,8 @@ function teamStartTimeForPressure(pressure: LogisticsLoadPressure) {
 }
 
 function teamSizeForDate(date: string) {
+  if (date === specialSchoolDeliveryDate) return 2;
+
   const dayOfWeek = dayOfWeekForDate(date);
 
   if (dayOfWeek === 1 || dayOfWeek === 2) return 1;
@@ -6631,9 +6640,14 @@ function buildLogisticsAdvice(
   return {
     teamStartTime: teamStartTimeForPressure(loadProfile.pressure),
     teamSize: teamSizeForDate(date),
-    reason: `Drukte ${pressureLabelFor(
-      loadProfile.pressure
-    )} · rustig 06:30 · normaal 06:00 · druk 05:45 · ma/di 1, wo-za 2`,
+    reason:
+      date === specialSchoolDeliveryDate
+        ? `Eenmalig 2 bezorgers voor de scholenroute · drukte ${pressureLabelFor(
+            loadProfile.pressure
+          )} · rustig 06:30 · normaal 06:00 · druk 05:45`
+        : `Drukte ${pressureLabelFor(
+            loadProfile.pressure
+          )} · rustig 06:30 · normaal 06:00 · druk 05:45 · ma/di 1, wo-za 2`,
   };
 }
 
@@ -7130,7 +7144,7 @@ function routePrintTimeParts(stop: RouteStop) {
 
   return {
     time: firstPartLooksLikeTime ? firstPart : "",
-    detail: firstPartLooksLikeTime ? detailParts.slice(1).join(" · ") : stop.detail,
+    detail: routeStopAddressLabel(stop),
   };
 }
 
@@ -7177,6 +7191,15 @@ function buildWeekdayFixedRouteRounds(
   const asStops = (items: ReceiptSummary[], prefix: string) =>
     items.map((receipt) => routeStopForReceipt(receipt, prefix));
 
+  const schoolReceipts = takeReceipts(
+    (receipt) =>
+      plan.date === specialSchoolDeliveryDate &&
+      isSpecialSchoolChildReceipt(receipt)
+  ).sort(
+    (first, second) =>
+      specialSchoolDeliveryRouteIndex(first) -
+      specialSchoolDeliveryRouteIndex(second)
+  );
   const vermaatReceipts = takeReceipts(isVermaatReceipt);
   const sintMaartenskliniekReceipts = takeReceipts(
     isSintMaartenskliniekReceipt
@@ -7350,6 +7373,22 @@ function buildWeekdayFixedRouteRounds(
       load: routeLoadLineForStops(busBSecondStops),
       loadProfile,
     }),
+    ...(schoolReceipts.length
+      ? [
+          buildRouteRound({
+            id: specialSchoolDeliveryRouteId,
+            title: "Scholenroute",
+            vehicle: specialSchoolDeliveryVehicle,
+            departure: plan.isFuture ? "advies 08:00" : "08:00",
+            tone: "border-[#cdb6c1] bg-[#f7f0f4]",
+            stops: asStops(schoolReceipts, "school-"),
+            reason:
+              "Eenmalige lus vanaf Ambachtsweg: Noord/Lent → centrum/oost → zuid → west. De 15 deelbonnen blijven gekoppeld aan St Josephschool en tellen niet dubbel mee.",
+            load: `${schoolReceipts.length} scholen · ${specialSchoolDeliveryCakeCount()} taarten · ${schoolReceipts.length} kaarten`,
+            loadProfile,
+          }),
+        ]
+      : []),
   ];
 }
 
@@ -7757,7 +7796,10 @@ function isPrimaryRouteRound(route: RouteRound) {
 }
 
 function isStandardRouteRound(route: RouteRound) {
-  return /^bus-[ab]-[12](?:-saturday)?$/i.test(route.id);
+  return (
+    /^bus-[ab]-[12](?:-saturday)?$/i.test(route.id) ||
+    route.id === specialSchoolDeliveryRouteId
+  );
 }
 
 function isUserAddedRouteRound(route: RouteRound) {
@@ -7957,6 +7999,11 @@ function reconcileRouteDraftRounds(
   const automaticRouteById = new Map(
     automaticRouteRounds.map((route) => [route.id, route])
   );
+  const migrateSchoolStopsToDedicatedRoute =
+    automaticRouteById.has(specialSchoolDeliveryRouteId) &&
+    !routeDraft.routes.some(
+      (route) => route.id === specialSchoolDeliveryRouteId
+    );
 
   automaticRouteRounds.forEach((route) => {
     route.stops.forEach((stop) => {
@@ -7970,6 +8017,12 @@ function reconcileRouteDraftRounds(
     const stops = draftRoute.stops
       .map((draftStop) => {
         const sourceKey = draftStop.sourceId || draftStop.id;
+        if (
+          migrateSchoolStopsToDedicatedRoute &&
+          sourceKey.startsWith("receipt:st-josephschool-")
+        ) {
+          return null;
+        }
         if (excludedSourceIds.has(sourceKey)) return null;
         if (sourceKey.startsWith("manual:")) {
           usedSourceKeys.add(sourceKey);
@@ -10439,8 +10492,19 @@ function routeGroupsFor(routeRounds: RouteRound[]): RouteGroup[] {
     groups.set(route.vehicle, routes);
   });
 
-  return ["Bus A", "Bus B"]
-    .filter((vehicle) => groups.has(vehicle))
+  const preferredVehicleOrder = [
+    "Bus A",
+    "Bus B",
+    specialSchoolDeliveryVehicle,
+  ];
+  const vehicles = [
+    ...preferredVehicleOrder.filter((vehicle) => groups.has(vehicle)),
+    ...Array.from(groups.keys()).filter(
+      (vehicle) => !preferredVehicleOrder.includes(vehicle)
+    ),
+  ];
+
+  return vehicles
     .map((vehicle) => ({
       vehicle,
       routes: groups.get(vehicle) || [],
@@ -10450,6 +10514,9 @@ function routeGroupsFor(routeRounds: RouteRound[]): RouteGroup[] {
 function routeGroupDisplayTitle(vehicle: string) {
   if (vehicle === "Bus A") return "Bus A · Stadroute";
   if (vehicle === "Bus B") return "Bus B · Buitenroute";
+  if (vehicle === specialSchoolDeliveryVehicle) {
+    return "Extra bezorger · Scholenroute";
+  }
 
   return vehicle;
 }
@@ -10686,19 +10753,29 @@ function RoutesPanel({
         )}
       </div>
 
-      <div className="grid gap-2.5 md:grid-cols-2">
+      <div
+        className={`grid gap-2.5 md:grid-cols-2 ${
+          routeGroups.length >= 3 ? "xl:grid-cols-3" : ""
+        }`}
+      >
         {routeGroups.map((group) => {
           const printableRouteCount = group.routes.filter(
             (route) => route.stops.length > 0
           ).length;
           const visibleRouteCount = group.routes.length;
           const isElectricBus = group.vehicle === "Bus A";
-          const groupTone = isElectricBus
-            ? busRouteMeta.A.tone
-            : busRouteMeta.B.tone;
-          const groupIconTone = isElectricBus
-            ? "border-[#abc6a8] bg-[#e4eee0] text-[#315641]"
-            : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]";
+          const isSchoolRoute =
+            group.vehicle === specialSchoolDeliveryVehicle;
+          const groupTone = isSchoolRoute
+            ? "border-[#cdb6c1] bg-[#f7f0f4]"
+            : isElectricBus
+              ? busRouteMeta.A.tone
+              : busRouteMeta.B.tone;
+          const groupIconTone = isSchoolRoute
+            ? "border-[#c4a4b4] bg-[#eadde4] text-[#6a4358]"
+            : isElectricBus
+              ? "border-[#abc6a8] bg-[#e4eee0] text-[#315641]"
+              : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]";
 
           return (
             <article
@@ -10719,20 +10796,28 @@ function RoutesPanel({
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
-                  <button
-                    type="button"
-                    aria-label={`Ronde toevoegen aan ${group.vehicle}`}
-                    title="Ronde toevoegen"
-                    onClick={() => onRouteAdd(group.vehicle)}
-                    className={`flex h-[1.6rem] w-[1.6rem] shrink-0 items-center justify-center rounded-full border text-sm font-black shadow-sm transition hover:bg-white ${groupIconTone}`}
-                  >
-                    +
-                  </button>
+                  {!isSchoolRoute && (
+                    <button
+                      type="button"
+                      aria-label={`Ronde toevoegen aan ${group.vehicle}`}
+                      title="Ronde toevoegen"
+                      onClick={() => onRouteAdd(group.vehicle)}
+                      className={`flex h-[1.6rem] w-[1.6rem] shrink-0 items-center justify-center rounded-full border text-sm font-black shadow-sm transition hover:bg-white ${groupIconTone}`}
+                    >
+                      +
+                    </button>
+                  )}
                   <RoutePrintButton
                     disabled={printableRouteCount === 0}
                     label={`Route printen voor ${group.vehicle}`}
                     onClick={() => openBusRouteSheet(selectedPlan, group)}
-                    tone={isElectricBus ? "green" : "yellow"}
+                    tone={
+                      isSchoolRoute
+                        ? "purple"
+                        : isElectricBus
+                          ? "green"
+                          : "yellow"
+                    }
                   />
                 </div>
               </div>
@@ -12495,8 +12580,15 @@ function RoutePrintButton({
   disabled?: boolean;
   label: string;
   onClick: () => void;
-  tone: "green" | "yellow";
+  tone: "green" | "yellow" | "purple";
 }>) {
+  const toneClasses =
+    tone === "green"
+      ? "border-[#abc6a8] bg-[#e4eee0] text-[#315641]"
+      : tone === "purple"
+        ? "border-[#c4a4b4] bg-[#eadde4] text-[#6a4358]"
+        : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]";
+
   return (
     <button
       type="button"
@@ -12504,11 +12596,7 @@ function RoutePrintButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className={`flex h-[1.6rem] w-[1.6rem] items-center justify-center rounded-full border shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 ${
-        tone === "green"
-          ? "border-[#abc6a8] bg-[#e4eee0] text-[#315641]"
-          : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]"
-      }`}
+      className={`flex h-[1.6rem] w-[1.6rem] items-center justify-center rounded-full border shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 ${toneClasses}`}
     >
       <PrintIcon />
     </button>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Horecamailing">
+  <g fill="none" stroke="#111111" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.25">
+    <rect x="9" y="17" width="46" height="34" rx="5"/>
+    <path d="m11 21 21 16 21-16M11 47l14-14M53 47 39 33"/>
+    <path d="M20 11h24"/>
+  </g>
+</svg>

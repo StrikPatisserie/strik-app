@@ -2,6 +2,12 @@ import DepartmentHub from "../DepartmentHub";
 import { strikIcons } from "../StrikUI";
 import ManagementStatusSection from "./ManagementStatusSection";
 
+const managementIconAppearance = {
+  accent: "green" as const,
+  iconBackground: "#c3d3bc",
+  iconColor: "#111111",
+};
+
 const managementItems = [
   {
     href: "/management/dashboard",
@@ -9,15 +15,15 @@ const managementItems = [
     title: "Loonkostenpercentage",
     description: "Omzet, gewerkte uren en loonkosten per winkel.",
     icon: strikIcons.managementLabor,
-    accent: "green" as const,
+    ...managementIconAppearance,
   },
   {
     href: "/management/cijfers-evaluaties",
     label: "Evaluaties",
     title: "Cijfers & evaluaties",
     description: "Feestdagen, omzetnotities, assortiment en drukwerk.",
-    icon: strikIcons.data,
-    accent: "blue" as const,
+    icon: strikIcons.managementEvaluations,
+    ...managementIconAppearance,
   },
   {
     href: "/management/gegevens/geld-tellen",
@@ -25,31 +31,31 @@ const managementItems = [
     title: "Geld tellen",
     description: "Dagcontroles, weekstortingen en maandrapport.",
     icon: strikIcons.managementCashCount,
-    accent: "yellow" as const,
+    ...managementIconAppearance,
   },
   {
     href: "/management/gegevens",
     label: "Beheer",
     title: "Gegevens",
     description: "Agenda, aanbiedingen en nieuws.",
-    icon: strikIcons.info,
-    accent: "yellow" as const,
+    icon: strikIcons.managementData,
+    ...managementIconAppearance,
   },
   {
     href: "/management/rooster",
     label: "Tamigo",
     title: "Rooster",
     description: "Werkrooster en loonkosten.",
-    icon: strikIcons.strikAgenda,
-    accent: "coral" as const,
+    icon: strikIcons.managementSchedule,
+    ...managementIconAppearance,
   },
   {
     href: "/management/horeca-mailing",
     label: "Horeca",
     title: "Horecamailing",
     description: "Updates voor vaste horecaklanten.",
-    icon: strikIcons.newsManagement,
-    accent: "yellow" as const,
+    icon: strikIcons.managementMailing,
+    ...managementIconAppearance,
   },
   {
     href: "/settings",
@@ -57,7 +63,7 @@ const managementItems = [
     title: "Gebruikers & app",
     description: "Accounts, rechten en app-instellingen beheren.",
     icon: strikIcons.managementUsers,
-    accent: "green" as const,
+    ...managementIconAppearance,
   },
   {
     href: "/schoonmaak/overzicht",
@@ -65,7 +71,7 @@ const managementItems = [
     title: "Schoonmaak",
     description: "Registraties per datum en locatie.",
     icon: strikIcons.managementCleaning,
-    accent: "blue" as const,
+    ...managementIconAppearance,
   },
 ];
 

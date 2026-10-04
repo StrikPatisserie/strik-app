@@ -1,6 +1,8 @@
 import type { LogisticsReceipt, LogisticsReceiptLine } from "./logisticsTypes";
 
 export const specialSchoolDeliveryDate = "2026-10-05";
+export const specialSchoolDeliveryRouteId = "school-route-2026-10-05";
+export const specialSchoolDeliveryVehicle = "Scholenroute";
 
 export type SpecialSchoolDeliveryStop = {
   id: string;
@@ -198,21 +200,21 @@ const listedSpecialSchoolDeliveryStops: SpecialSchoolDeliveryStop[] = [
 ];
 
 const specialSchoolDeliveryRouteIds = [
-  "brakkenstein",
-  "de-akker",
-  "de-kleine-wereld",
-  "kind-centrum-toon",
-  "de-wieken",
-  "de-hazesprong",
-  "klein-heyendaal",
-  "montessori-nijmegen-oost",
-  "sint-nicolaas",
-  "het-kleurrijk",
-  "de-sterredans",
-  "petrus-canisius",
-  "stichting-sint-josephscholen",
   "jenaplanschool-de-noorderstroom",
   "de-boomgaard",
+  "stichting-sint-josephscholen",
+  "de-sterredans",
+  "montessori-nijmegen-oost",
+  "klein-heyendaal",
+  "brakkenstein",
+  "de-kleine-wereld",
+  "sint-nicolaas",
+  "de-akker",
+  "de-hazesprong",
+  "het-kleurrijk",
+  "petrus-canisius",
+  "de-wieken",
+  "kind-centrum-toon",
 ] as const;
 
 export const specialSchoolDeliveryStops = specialSchoolDeliveryRouteIds.map(
@@ -308,7 +310,7 @@ export function applySpecialSchoolDeliverySplit(
       address: deliveryAddress,
       deliveryAddress,
       fulfillment: "bezorgen" as const,
-      route: stop.postalCity.toLowerCase().includes("lent") ? "Bus B" : "Bus A",
+      route: specialSchoolDeliveryVehicle,
       tags: ["bezorgen", "st-josephschool-deelbon"],
       note: "Eenmalige schoollevering · gekoppeld aan hoofd-bon St Josephschool.",
       customerNote: [

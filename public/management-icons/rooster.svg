@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Rooster">
+  <g fill="none" stroke="#111111" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.25">
+    <rect x="10" y="14" width="44" height="40" rx="5"/>
+    <path d="M10 25h44M21 9v10M43 9v10"/>
+    <path d="M19 33h6M29 33h6M39 33h6M19 41h6M29 41h6M39 41h6M19 49h6M29 49h6"/>
+  </g>
+</svg>
