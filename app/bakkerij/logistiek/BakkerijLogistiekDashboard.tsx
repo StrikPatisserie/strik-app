@@ -298,6 +298,7 @@ type ArendNumberPrintParseResult = {
 };
 
 const AREND_ORDERED_SQUARES_PER_SHEET = 50;
+const legacyProCollegeFullDeleteDate = "2026-10-06";
 
 type PreparationCategory = "bakkerij" | "logistiek";
 
@@ -926,6 +927,29 @@ function applyReceiptOverrides(
       },
     ];
   });
+}
+
+function applyLegacyProCollegeFullDeletion(
+  receipts: ReceiptSummary[],
+  date: string,
+  excludedSourceIds: string[]
+) {
+  if (date !== legacyProCollegeFullDeleteDate) return receipts;
+
+  const excludedReceiptIds = new Set(
+    excludedSourceIds
+      .filter((sourceId) => sourceId.startsWith("receipt:"))
+      .map((sourceId) => sourceId.slice("receipt:".length))
+  );
+  if (excludedReceiptIds.size === 0) return receipts;
+
+  return receipts.filter(
+    (receipt) =>
+      !(
+        excludedReceiptIds.has(receipt.id) &&
+        normalizeMatchText(receipt.customer).includes("pro college")
+      )
+  );
 }
 
 function fixedCustomerNumbersForReceipt(receipt: ReceiptSummary) {
@@ -9022,6 +9046,8 @@ export default function BakkerijLogistiekDashboard() {
     useState(false);
   const [routeStopDeleteChoice, setRouteStopDeleteChoice] =
     useState<RouteStopDeleteChoice | null>(null);
+  const [receiptDeleteRequest, setReceiptDeleteRequest] =
+    useState<ReceiptSummary | null>(null);
   const [routeStopDeleteError, setRouteStopDeleteError] = useState("");
   const [isDeletingReceipt, setIsDeletingReceipt] = useState(false);
   const [schoolDeliveryOverviewOpen, setSchoolDeliveryOverviewOpen] =
@@ -9079,10 +9105,24 @@ export default function BakkerijLogistiekDashboard() {
         receiptOverrides,
         selectedPlan.date
       );
+      const receiptsAfterLegacyDeletion = applyLegacyProCollegeFullDeletion(
+        overriddenReceipts,
+        selectedPlan.date,
+        routeDraft?.excludedSourceIds || []
+      );
 
-      return applyFixedCustomerDefaults(overriddenReceipts, fixedCustomers);
+      return applyFixedCustomerDefaults(
+        receiptsAfterLegacyDeletion,
+        fixedCustomers
+      );
     },
-    [baseReceiptSummaries, fixedCustomers, receiptOverrides, selectedPlan.date]
+    [
+      baseReceiptSummaries,
+      fixedCustomers,
+      receiptOverrides,
+      routeDraft,
+      selectedPlan.date,
+    ]
   );
   const operationalPlan = useMemo(
     () => dayPlanWithReceiptTotals(selectedPlan, receiptSummaries),
@@ -9800,9 +9840,9 @@ export default function BakkerijLogistiekDashboard() {
     });
   }
 
-  async function deleteReceiptFromDayStart(choice: RouteStopDeleteChoice) {
+  async function deleteReceiptFromDayStart(receiptId: string) {
     const receipt = receiptSummaries.find(
-      (item) => item.id === choice.receiptId
+      (item) => item.id === receiptId
     );
     if (!receipt || isDeletingReceipt) return;
 
@@ -9862,6 +9902,7 @@ export default function BakkerijLogistiekDashboard() {
         `${receipt.customer} volledig uit de dagstart verwijderd`
       );
       setRouteStopDeleteChoice(null);
+      setReceiptDeleteRequest(null);
       void saveRouteDraft(nextRoutes, false);
     } catch (error) {
       setRouteStopDeleteError(
@@ -10814,6 +10855,10 @@ export default function BakkerijLogistiekDashboard() {
             onLinkWebshopImageToReceipt={linkWebshopImageToReceipt}
             onUnlinkWebshopImageFromReceipt={unlinkWebshopImageFromReceipt}
             onDeleteWebshopImage={deleteWebshopImage}
+            onDeleteReceipt={(receipt) => {
+              setRouteStopDeleteError("");
+              setReceiptDeleteRequest(receipt);
+            }}
             onUploadManualWebshopImageForReceipt={
               uploadManualWebshopImageForReceipt
             }
@@ -10857,7 +10902,7 @@ export default function BakkerijLogistiekDashboard() {
               setRouteStopDeleteError("");
             }}
             onDeleteReceipt={() =>
-              void deleteReceiptFromDayStart(routeStopDeleteChoice)
+              void deleteReceiptFromDayStart(routeStopDeleteChoice.receiptId)
             }
             onRemoveFromRoute={() =>
               removeRouteStopOnly(
@@ -10865,6 +10910,21 @@ export default function BakkerijLogistiekDashboard() {
                 routeStopDeleteChoice.stopId
               )
             }
+          />
+        )}
+        {receiptDeleteRequest && (
+          <ReceiptDeleteModal
+            error={routeStopDeleteError}
+            isDeleting={isDeletingReceipt}
+            onClose={() => {
+              if (isDeletingReceipt) return;
+              setReceiptDeleteRequest(null);
+              setRouteStopDeleteError("");
+            }}
+            onConfirm={() =>
+              void deleteReceiptFromDayStart(receiptDeleteRequest.id)
+            }
+            receipt={receiptDeleteRequest}
           />
         )}
         {advancePhotoOpen && (
@@ -10978,6 +11038,76 @@ export default function BakkerijLogistiekDashboard() {
       </>
       )}
     </StrikShell>
+  );
+}
+
+function ReceiptDeleteModal({
+  error,
+  isDeleting,
+  onClose,
+  onConfirm,
+  receipt,
+}: Readonly<{
+  error: string;
+  isDeleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  receipt: ReceiptSummary;
+}>) {
+  const receiptNumber = receipt.receiptNumber || receipt.id;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="receipt-delete-title"
+        className="w-full max-w-md rounded-3xl border border-[#d7cec4] bg-[#f8f6f1] p-5 shadow-2xl"
+      >
+        <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#8a8178]">
+          Extra controle
+        </p>
+        <h2
+          id="receipt-delete-title"
+          className="mt-1 text-xl font-black tracking-normal text-[#1a1815]"
+        >
+          Hele bon verwijderen?
+        </h2>
+        <p className="mt-1 text-sm font-bold text-[#6b645b]">
+          {receipt.customer} · bon {receiptNumber}
+        </p>
+        <p className="mt-3 rounded-xl bg-[#fff2ef] px-3 py-2 text-xs font-semibold leading-relaxed text-[#805047]">
+          De bon verdwijnt uit de bonnenlijst en alle routes. Bonwaarde,
+          aantallen, petit fours en overige producttotalen worden direct
+          gecorrigeerd.
+        </p>
+
+        {error && (
+          <p className="mt-3 rounded-xl bg-[#fff0ed] px-3 py-2 text-xs font-bold text-[#a73d2e]">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={isDeleting}
+            onClick={onClose}
+            className="min-h-11 rounded-xl border border-[#d7cec4] bg-white px-4 text-xs font-black text-[#554d45] disabled:opacity-40"
+          >
+            Annuleren
+          </button>
+          <button
+            type="button"
+            disabled={isDeleting}
+            onClick={onConfirm}
+            className="min-h-11 rounded-xl bg-[#d75a48] px-4 text-xs font-black text-white transition hover:bg-[#bb4939] disabled:cursor-wait disabled:opacity-55"
+          >
+            {isDeleting ? "Verwijderen..." : "Hele bon verwijderen"}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -12080,6 +12210,7 @@ function RoutesPanel({
 }
 
 function OrdersPanel({
+  onDeleteReceipt,
   onDeleteWebshopImage,
   onLinkWebshopImageToReceipt,
   onUnlinkWebshopImageFromReceipt,
@@ -12093,6 +12224,7 @@ function OrdersPanel({
   selectedPlan,
   webshopImages,
 }: Readonly<{
+  onDeleteReceipt: (receipt: ReceiptSummary) => void;
   onDeleteWebshopImage: (image: WebshopImageSummary) => Promise<void>;
   onLinkWebshopImageToReceipt: (
     image: WebshopImageSummary,
@@ -12281,6 +12413,7 @@ function OrdersPanel({
 
         <ReceiptDetail
           imageMatches={selectedImageMatches}
+          onDeleteReceipt={onDeleteReceipt}
           onDeleteWebshopImage={onDeleteWebshopImage}
           onUnlinkWebshopImageFromReceipt={onUnlinkWebshopImageFromReceipt}
           onUploadManualWebshopImageForReceipt={
@@ -12971,6 +13104,7 @@ function ReceiptFulfillmentBlock({
 
 function ReceiptDetail({
   imageMatches,
+  onDeleteReceipt,
   onDeleteWebshopImage,
   onUnlinkWebshopImageFromReceipt,
   onUploadManualWebshopImageForReceipt,
@@ -12982,6 +13116,7 @@ function ReceiptDetail({
   selectedPlan,
 }: Readonly<{
   imageMatches: WebshopImageSummary[];
+  onDeleteReceipt: (receipt: ReceiptSummary) => void;
   onDeleteWebshopImage: (image: WebshopImageSummary) => Promise<void>;
   onUnlinkWebshopImageFromReceipt: (
     image: WebshopImageSummary
@@ -13071,6 +13206,19 @@ function ReceiptDetail({
         </div>
 
         <ReceiptAddressBlock receipt={receipt} selectedPlan={selectedPlan} />
+
+        {!isSpecialSchoolChildReceipt(receipt) &&
+          !isSpecialProCollegeChildReceipt(receipt) && (
+            <div className="flex justify-end border-b border-dashed border-[#e0dbd4] bg-white px-3 py-2">
+              <button
+                type="button"
+                onClick={() => onDeleteReceipt(receipt)}
+                className="min-h-8 rounded-lg border border-[#e1aa9f] bg-[#fff2ef] px-2.5 text-[0.62rem] font-black text-[#a73d2e] transition hover:bg-[#ffe9e4]"
+              >
+                Hele bon verwijderen
+              </button>
+            </div>
+          )}
 
         <ReceiptOverrideEditor
           key={`${receipt.id}-${override?.updatedAt || "nieuw"}`}
