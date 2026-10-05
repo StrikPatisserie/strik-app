@@ -837,7 +837,10 @@ function normalizeLogisticsReceiptOverridesState(
   if (!Array.isArray(overrides)) return emptyLogisticsReceiptOverridesState();
 
   return {
-    overrides: overrides.filter(isLogisticsReceiptOverride),
+    overrides: overrides.filter(isLogisticsReceiptOverride).map((override) => ({
+      ...override,
+      removed: override.removed === true,
+    })),
   };
 }
 

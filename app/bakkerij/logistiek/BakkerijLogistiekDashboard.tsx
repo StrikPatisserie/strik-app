@@ -162,6 +162,14 @@ type DeletedRouteStopSnapshot = {
   excludedSourceIds: string[];
 };
 
+type RouteStopDeleteChoice = {
+  receiptId: string;
+  routeId: string;
+  routeTitle: string;
+  stopId: string;
+  stopLabel: string;
+};
+
 type BusId = "A" | "B";
 type ShopKey = "heyendaalseweg" | "daalseweg" | "ziekerstraat" | "lent";
 type ReceiptTone =
@@ -231,6 +239,16 @@ type MarzipanPrintItem = {
   confidence: string;
   needsCheck: boolean;
   printKey: string;
+};
+
+type MarzipanPhotoPrintGroup = {
+  customerName: string;
+  imageId: string;
+  itemCount: number;
+  newItemCount: number;
+  photoUrl: string;
+  products: string[];
+  receiptNumbers: string[];
 };
 
 type MarzipanPhotoPrintHistory = {
@@ -880,9 +898,10 @@ function applyReceiptOverrides(
 ): ReceiptSummary[] {
   const byId = new Map(overrides.map((override) => [override.id, override]));
 
-  return receipts.map((receipt) => {
+  return receipts.flatMap((receipt) => {
     const override = byId.get(receiptOverrideId(date, receipt));
-    if (!override) return receipt;
+    if (!override) return [receipt];
+    if (override.removed) return [];
 
     const nextTags = receipt.tags.includes("aangepast")
       ? receipt.tags
@@ -891,19 +910,21 @@ function applyReceiptOverrides(
       ? `Regie: ${override.routeNote}`
       : receipt.internalNote;
 
-    return {
-      ...receipt,
-      time: override.time || receipt.time,
-      fulfillment: override.fulfillment || receipt.fulfillment,
-      deliveryAddress: override.deliveryAddress || receipt.deliveryAddress,
-      alternativeAddress:
-        override.alternativeAddress || receipt.alternativeAddress,
-      pickupLocation: override.pickupLocation || receipt.pickupLocation,
-      tags: nextTags,
-      note: override.routeNote || receipt.note,
-      customerNote: receipt.customerNote,
-      internalNote: nextInternalNote,
-    };
+    return [
+      {
+        ...receipt,
+        time: override.time || receipt.time,
+        fulfillment: override.fulfillment || receipt.fulfillment,
+        deliveryAddress: override.deliveryAddress || receipt.deliveryAddress,
+        alternativeAddress:
+          override.alternativeAddress || receipt.alternativeAddress,
+        pickupLocation: override.pickupLocation || receipt.pickupLocation,
+        tags: nextTags,
+        note: override.routeNote || receipt.note,
+        customerNote: receipt.customerNote,
+        internalNote: nextInternalNote,
+      },
+    ];
   });
 }
 
@@ -1103,6 +1124,36 @@ function buildDayPlan(
         ? "voorbereiden"
         : "voor 10:00",
     isFuture,
+  };
+}
+
+function dayPlanWithReceiptTotals(
+  plan: DayPlan,
+  receipts: ReceiptSummary[]
+): DayPlan {
+  const orderValue = receipts
+    .filter(
+      (receipt) =>
+        !receipt.tags.includes("intern") && !receipt.tags.includes("ijs")
+    )
+    .reduce((total, receipt) => total + (receipt.value || 0), 0);
+  const orderCount = receipts.length;
+  const iceTubs = calculateIceTubTotal(receipts);
+  const orderPressure =
+    orderValue >= 3500 || orderCount >= 35
+      ? "hoog"
+      : orderValue >= 2000 || orderCount >= 18
+        ? "middel"
+        : "laag";
+
+  return {
+    ...plan,
+    orderCount,
+    orderValue,
+    orderPressure,
+    iceTubs,
+    tempexBoxes: Math.ceil(iceTubs / 3),
+    criticalWindows: receipts.filter(isCriticalReceipt).length,
   };
 }
 
@@ -1547,9 +1598,13 @@ function customerMatchesReceipt(
 ) {
   if (isStoreReceiptCustomer(receipt)) return false;
 
-  const imageName = normalizeMatchText(image.customerName);
+  const imageCustomerName =
+    image.customerName || image.matchedReceiptCustomer || "";
+  const imageName = normalizeMatchText(imageCustomerName);
   const receiptName = normalizeMatchText(receipt.customer);
-  const imageLastName = normalizeMatchText(customerLastNameFor(image.customerName));
+  const imageLastName = normalizeMatchText(
+    customerLastNameFor(imageCustomerName)
+  );
   const receiptLastName = normalizeMatchText(customerLastNameFor(receipt.customer));
 
   if (!imageName || !receiptName) return false;
@@ -1565,10 +1620,36 @@ function customerMatchesReceipt(
     return true;
   }
 
-  const imageNameWords = significantWords(image.customerName);
+  const imageNameWords = significantWords(imageCustomerName);
   return (
     imageNameWords.length > 0 &&
     imageNameWords.every((word) => hasNormalizedWord(receiptName, word))
+  );
+}
+
+function isBeterVoorLogoImage(image: WebshopImageSummary) {
+  const text = normalizeMatchText(
+    [image.fileName, image.productSummary || "", image.subject]
+      .filter(Boolean)
+      .join(" ")
+  );
+
+  return (
+    text.includes("beter voor logo") ||
+    (hasNormalizedWord(text, "beter") &&
+      hasNormalizedWord(text, "voor") &&
+      hasNormalizedWord(text, "logo"))
+  );
+}
+
+function isArendBeterVoorPetitFourReceipt(receipt: ReceiptSummary) {
+  if (!isGasterijDeArendReceipt(receipt)) return false;
+
+  return receipt.lines.some(
+    (line) =>
+      isPetitFourLine(line) &&
+      isPhotoSignalLine(line) &&
+      Math.round(numericQuantity(line.quantity)) === 100
   );
 }
 
@@ -1577,11 +1658,25 @@ function imageMatchesReceipt(
   receipt: ReceiptSummary
 ) {
   if (image.matchedReceiptId || image.matchedReceiptNumber) {
-    return Boolean(
+    const directMatch = Boolean(
       (image.matchedReceiptId && image.matchedReceiptId === receipt.id) ||
         (image.matchedReceiptNumber &&
           image.matchedReceiptNumber === receipt.receiptNumber)
     );
+    if (directMatch) return true;
+
+    // Een handmatig gekoppelde foto kan nog het bon-ID uit de prognose hebben,
+    // terwijl de definitieve import voor dezelfde klant een nieuw ID gebruikt.
+    // Laat zo'n foto daarom ook nog op klantnaam en product proberen te koppelen.
+    if (!isManualUploadedWebshopImage(image)) return false;
+  }
+
+  if (
+    image.deliveryDate === "2026-10-06" &&
+    isBeterVoorLogoImage(image) &&
+    isArendBeterVoorPetitFourReceipt(receipt)
+  ) {
+    return true;
   }
 
   const haystack = receiptPhotoMatchText(receipt);
@@ -2770,7 +2865,9 @@ function addMarzipanPrintItemsForReceipt(input: {
   images: WebshopImageSummary[];
   inferredMatch?: boolean;
 }) {
-  const strictProductPlans = photoProductPlansForReceipt(input.receipt);
+  const strictProductPlans = photoProductPlansForReceipt(input.receipt, {
+    requirePhotoSignal: true,
+  });
   const productPlans =
     strictProductPlans.length > 0
       ? strictProductPlans
@@ -2892,6 +2989,52 @@ function buildMarzipanPrintItems(
   addSpecialProCollegeLogoReserveCopies(items);
 
   return items;
+}
+
+function buildMarzipanPhotoPrintGroups(
+  items: MarzipanPrintItem[],
+  printedKeys: Set<string>
+): MarzipanPhotoPrintGroup[] {
+  const groups = new Map<
+    string,
+    MarzipanPhotoPrintGroup & {
+      productSet: Set<string>;
+      receiptNumberSet: Set<string>;
+    }
+  >();
+
+  items.forEach((item) => {
+    let group = groups.get(item.imageId);
+    if (!group) {
+      group = {
+        customerName: item.customerName || "Klant controleren",
+        imageId: item.imageId,
+        itemCount: 0,
+        newItemCount: 0,
+        photoUrl: item.photoUrl,
+        products: [],
+        productSet: new Set<string>(),
+        receiptNumbers: [],
+        receiptNumberSet: new Set<string>(),
+      };
+      groups.set(item.imageId, group);
+    }
+
+    group.itemCount += 1;
+    if (!printedKeys.has(item.printKey)) group.newItemCount += 1;
+    if (item.product) group.productSet.add(item.product);
+    if (item.receiptNumber) group.receiptNumberSet.add(item.receiptNumber);
+  });
+
+  return Array.from(groups.values())
+    .map(({ productSet, receiptNumberSet, ...group }) => ({
+      ...group,
+      products: Array.from(productSet),
+      receiptNumbers: Array.from(receiptNumberSet),
+    }))
+    .sort((left, right) =>
+      left.customerName.localeCompare(right.customerName, "nl")
+    );
 }
 
 function readMarzipanPhotoPrintHistory() {
@@ -8224,6 +8367,23 @@ function routeStopSourceKey(stop: RouteStop) {
   return stop.sourceId || stop.id;
 }
 
+function receiptIdForRouteStop(stop: RouteStop) {
+  const sourceKey = routeStopSourceKey(stop);
+
+  if (sourceKey.startsWith("receipt:")) {
+    return sourceKey.slice("receipt:".length);
+  }
+  if (sourceKey.startsWith("ice:")) {
+    return sourceKey.slice("ice:".length);
+  }
+
+  return "";
+}
+
+function routeStopBelongsToReceipt(stop: RouteStop, receiptId: string) {
+  return receiptIdForRouteStop(stop) === receiptId;
+}
+
 function serializeRouteRounds(routeRounds: RouteRound[]) {
   return routeRounds.map((route) => ({
     id: route.id,
@@ -8860,6 +9020,10 @@ export default function BakkerijLogistiekDashboard() {
   const [advancePhotoOpen, setAdvancePhotoOpen] = useState(false);
   const [marzipanPrintChoiceOpen, setMarzipanPrintChoiceOpen] =
     useState(false);
+  const [routeStopDeleteChoice, setRouteStopDeleteChoice] =
+    useState<RouteStopDeleteChoice | null>(null);
+  const [routeStopDeleteError, setRouteStopDeleteError] = useState("");
+  const [isDeletingReceipt, setIsDeletingReceipt] = useState(false);
   const [schoolDeliveryOverviewOpen, setSchoolDeliveryOverviewOpen] =
     useState(false);
   const [proCollegeDeliveryOverviewOpen, setProCollegeDeliveryOverviewOpen] =
@@ -8920,6 +9084,10 @@ export default function BakkerijLogistiekDashboard() {
     },
     [baseReceiptSummaries, fixedCustomers, receiptOverrides, selectedPlan.date]
   );
+  const operationalPlan = useMemo(
+    () => dayPlanWithReceiptTotals(selectedPlan, receiptSummaries),
+    [receiptSummaries, selectedPlan]
+  );
   const logisticsReceiptSummaries = useMemo(
     () =>
       applySpecialProCollegeDeliverySplit(
@@ -8951,11 +9119,11 @@ export default function BakkerijLogistiekDashboard() {
   const loadProfile = useMemo(
     () =>
       buildDayLoadProfile(
-        selectedPlan,
+        operationalPlan,
         logisticsReceiptSummaries,
         pressureOverride
       ),
-    [pressureOverride, selectedPlan, logisticsReceiptSummaries]
+    [logisticsReceiptSummaries, operationalPlan, pressureOverride]
   );
   const productionTotals = useMemo(
     () => buildBakeryProductionTotals(receiptSummaries),
@@ -8980,18 +9148,18 @@ export default function BakkerijLogistiekDashboard() {
     [receiptSummaries, selectedPlan.date]
   );
   const stats = useMemo(
-    () => buildStats(selectedPlan, productionTotals),
-    [productionTotals, selectedPlan]
+    () => buildStats(operationalPlan, productionTotals),
+    [operationalPlan, productionTotals]
   );
   const automaticRouteRounds = useMemo(
     () =>
       buildRouteRounds(
-        selectedPlan,
+        operationalPlan,
         logisticsReceiptSummaries,
         loadProfile,
         routeLearning
       ),
-    [loadProfile, logisticsReceiptSummaries, routeLearning, selectedPlan]
+    [loadProfile, logisticsReceiptSummaries, operationalPlan, routeLearning]
   );
   const [manualRouteRounds, setManualRouteRounds] = useState<
     RouteRound[] | null
@@ -9018,6 +9186,10 @@ export default function BakkerijLogistiekDashboard() {
   const newMarzipanPrintItems = useMemo(
     () =>
       marzipanPrintItems.filter((item) => !printedPhotoKeys.has(item.printKey)),
+    [marzipanPrintItems, printedPhotoKeys]
+  );
+  const marzipanPhotoPrintGroups = useMemo(
+    () => buildMarzipanPhotoPrintGroups(marzipanPrintItems, printedPhotoKeys),
     [marzipanPrintItems, printedPhotoKeys]
   );
   const writtenTextPrintItems = useMemo(
@@ -9408,27 +9580,6 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   function openMarzipanPrintMenu() {
-    if (
-      arendNumberPrintOrders.length > 0 &&
-      marzipanPrintItems.length === 0
-    ) {
-      openArendNumberSheet(selectedPlan, arendNumberPrintOrders);
-      return;
-    }
-
-    if (
-      marzipanPrintItems.length > 0 &&
-      !photoPrintHistory?.printedAt &&
-      arendNumberPrintOrders.length === 0
-    ) {
-      openMarzipanPhotoSheet(
-        selectedPlan,
-        marzipanPrintItems,
-        rememberMarzipanPhotoPrint
-      );
-      return;
-    }
-
     setMarzipanPrintChoiceOpen(true);
   }
 
@@ -9440,6 +9591,15 @@ export default function BakkerijLogistiekDashboard() {
   function printArendNumbers() {
     setMarzipanPrintChoiceOpen(false);
     openArendNumberSheet(selectedPlan, arendNumberPrintOrders);
+  }
+
+  function printSelectedMarzipanPhotos(imageIds: string[]) {
+    const selectedImageIds = new Set(imageIds);
+    const selectedItems = marzipanPrintItems.filter((item) =>
+      selectedImageIds.has(item.imageId)
+    );
+
+    printMarzipanPhotos(selectedItems);
   }
 
   async function saveRouteDraft(
@@ -9571,16 +9731,11 @@ export default function BakkerijLogistiekDashboard() {
     void saveRouteDraft(nextRoutes, false);
   }
 
-  function deleteRouteStop(routeId: string, stopId: string) {
+  function removeRouteStopOnly(routeId: string, stopId: string) {
     const currentRoutes = manualRouteRounds || automaticRouteRounds;
     const sourceRoute = currentRoutes.find((route) => route.id === routeId);
     const stop = sourceRoute?.stops.find((item) => item.id === stopId);
     if (!sourceRoute || !stop) return;
-
-    const confirmed = window.confirm(
-      `Weet je zeker dat je "${stop.label}" uit ${sourceRoute.title} wil verwijderen?`
-    );
-    if (!confirmed) return;
 
     const sourceKey = routeStopSourceKey(stop);
     const nextExcludedSourceIds = sourceKey.startsWith("manual:")
@@ -9611,7 +9766,112 @@ export default function BakkerijLogistiekDashboard() {
     setRouteHasUnsavedChanges(true);
     setRouteSaveState("idle");
     setRouteSaveMessage("stop verwijderd · nog niet definitief opgeslagen");
+    setRouteStopDeleteChoice(null);
+    setRouteStopDeleteError("");
     void saveRouteDraft(nextRoutes, false, nextExcludedSourceIds);
+  }
+
+  function deleteRouteStop(routeId: string, stopId: string) {
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const sourceRoute = currentRoutes.find((route) => route.id === routeId);
+    const stop = sourceRoute?.stops.find((item) => item.id === stopId);
+    if (!sourceRoute || !stop) return;
+
+    const receiptId = receiptIdForRouteStop(stop);
+    const canDeleteReceipt = receiptSummaries.some(
+      (receipt) => receipt.id === receiptId
+    );
+
+    if (!receiptId || !canDeleteReceipt) {
+      const confirmed = window.confirm(
+        `Weet je zeker dat je "${stop.label}" alleen uit ${sourceRoute.title} wil verwijderen?`
+      );
+      if (confirmed) removeRouteStopOnly(routeId, stopId);
+      return;
+    }
+
+    setRouteStopDeleteError("");
+    setRouteStopDeleteChoice({
+      receiptId,
+      routeId,
+      routeTitle: sourceRoute.title,
+      stopId,
+      stopLabel: stop.label,
+    });
+  }
+
+  async function deleteReceiptFromDayStart(choice: RouteStopDeleteChoice) {
+    const receipt = receiptSummaries.find(
+      (item) => item.id === choice.receiptId
+    );
+    if (!receipt || isDeletingReceipt) return;
+
+    const existingOverride = receiptOverrides.find(
+      (override) =>
+        override.id === receiptOverrideId(selectedPlan.date, receipt)
+    );
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const nextRoutes = compactEmptyRouteRounds(
+      currentRoutes.map((route) =>
+        refreshRouteRoundAfterManualMove(
+          {
+            ...route,
+            stops: route.stops.filter(
+              (stop) => !routeStopBelongsToReceipt(stop, receipt.id)
+            ),
+          },
+          loadProfile
+        )
+      )
+    );
+
+    setIsDeletingReceipt(true);
+    setRouteStopDeleteError("");
+
+    try {
+      const response = await fetch("/api/bakkerij-logistiek/receipt-overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedPlan.date,
+          receiptId: receipt.id,
+          receiptNumber: receipt.receiptNumber,
+          ...draftForReceiptOverride(existingOverride),
+          removed: true,
+        }),
+      });
+      const data = (await response.json()) as {
+        override?: ReceiptOverrideSummary;
+        message?: string;
+      };
+
+      if (!response.ok || !data.override?.removed) {
+        throw new Error(data.message || "De volledige bon verwijderen is niet gelukt.");
+      }
+
+      setReceiptOverrides((current) => [
+        data.override!,
+        ...current.filter((item) => item.id !== data.override!.id),
+      ]);
+      setManualRouteRounds(nextRoutes);
+      setDeletedRouteStopSnapshot(null);
+      setRoutesEdited(true);
+      setRouteHasUnsavedChanges(true);
+      setRouteSaveState("idle");
+      setRouteSaveMessage(
+        `${receipt.customer} volledig uit de dagstart verwijderd`
+      );
+      setRouteStopDeleteChoice(null);
+      void saveRouteDraft(nextRoutes, false);
+    } catch (error) {
+      setRouteStopDeleteError(
+        error instanceof Error
+          ? error.message
+          : "De volledige bon verwijderen is niet gelukt."
+      );
+    } finally {
+      setIsDeletingReceipt(false);
+    }
   }
 
   function deleteRouteRound(routeId: string) {
@@ -10586,6 +10846,27 @@ export default function BakkerijLogistiekDashboard() {
             selectedPlan={selectedPlan}
           />
         )}
+        {routeStopDeleteChoice && (
+          <RouteStopDeleteModal
+            choice={routeStopDeleteChoice}
+            error={routeStopDeleteError}
+            isDeletingReceipt={isDeletingReceipt}
+            onClose={() => {
+              if (isDeletingReceipt) return;
+              setRouteStopDeleteChoice(null);
+              setRouteStopDeleteError("");
+            }}
+            onDeleteReceipt={() =>
+              void deleteReceiptFromDayStart(routeStopDeleteChoice)
+            }
+            onRemoveFromRoute={() =>
+              removeRouteStopOnly(
+                routeStopDeleteChoice.routeId,
+                routeStopDeleteChoice.stopId
+              )
+            }
+          />
+        )}
         {advancePhotoOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
             <section className="w-full max-w-lg border border-[#d7cec4] bg-white p-5 shadow-2xl">
@@ -10665,6 +10946,8 @@ export default function BakkerijLogistiekDashboard() {
             onPrintAll={() => printMarzipanPhotos(marzipanPrintItems)}
             onPrintArend={printArendNumbers}
             onPrintNew={() => printMarzipanPhotos(newMarzipanPrintItems)}
+            onPrintSelection={printSelectedMarzipanPhotos}
+            photoGroups={marzipanPhotoPrintGroups}
           />
         )}
         {preparationProductManagerCategory && (
@@ -10698,6 +10981,104 @@ export default function BakkerijLogistiekDashboard() {
   );
 }
 
+function RouteStopDeleteModal({
+  choice,
+  error,
+  isDeletingReceipt,
+  onClose,
+  onDeleteReceipt,
+  onRemoveFromRoute,
+}: Readonly<{
+  choice: RouteStopDeleteChoice;
+  error: string;
+  isDeletingReceipt: boolean;
+  onClose: () => void;
+  onDeleteReceipt: () => void;
+  onRemoveFromRoute: () => void;
+}>) {
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="route-stop-delete-title"
+        className="w-full max-w-md rounded-3xl border border-[#d7cec4] bg-[#f8f6f1] p-5 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-[#8a8178]">
+              Extra controle
+            </p>
+            <h2
+              id="route-stop-delete-title"
+              className="mt-1 text-xl font-black tracking-normal text-[#1a1815]"
+            >
+              Wat wil je verwijderen?
+            </h2>
+            <p className="mt-1 text-sm font-bold text-[#6b645b]">
+              {choice.stopLabel} · {choice.routeTitle}
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Sluiten"
+            disabled={isDeletingReceipt}
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d7cec4] bg-white text-lg font-black text-[#554d45] disabled:opacity-40"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2">
+          <button
+            type="button"
+            disabled={isDeletingReceipt}
+            onClick={onRemoveFromRoute}
+            className="rounded-2xl border border-[#bfd0b8] bg-[#edf5ea] px-4 py-3 text-left transition hover:bg-[#e5f0e1] disabled:opacity-40"
+          >
+            <strong className="block text-sm font-black text-[#1a1815]">
+              Alleen uit de logistiek verwijderen
+            </strong>
+            <small className="mt-1 block text-xs font-semibold leading-snug text-[#62705d]">
+              De bon en alle totalen blijven staan; alleen deze routestop verdwijnt.
+            </small>
+          </button>
+
+          <button
+            type="button"
+            disabled={isDeletingReceipt}
+            onClick={onDeleteReceipt}
+            className="rounded-2xl border border-[#e1aa9f] bg-[#fff2ef] px-4 py-3 text-left transition hover:bg-[#ffe9e4] disabled:cursor-wait disabled:opacity-55"
+          >
+            <strong className="block text-sm font-black text-[#a73d2e]">
+              {isDeletingReceipt ? "Bon verwijderen..." : "Hele bon verwijderen"}
+            </strong>
+            <small className="mt-1 block text-xs font-semibold leading-snug text-[#805047]">
+              Verwijdert de bon uit de dagstart en corrigeert bonwaarde, aantallen en producttotalen.
+            </small>
+          </button>
+        </div>
+
+        {error && (
+          <p className="mt-3 rounded-xl bg-[#fff0ed] px-3 py-2 text-xs font-bold text-[#a73d2e]">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="button"
+          disabled={isDeletingReceipt}
+          onClick={onClose}
+          className="mt-4 min-h-10 w-full rounded-xl border border-[#d7cec4] bg-white px-4 text-xs font-black text-[#554d45] disabled:opacity-40"
+        >
+          Annuleren
+        </button>
+      </section>
+    </div>
+  );
+}
+
 function MarzipanPrintChoiceModal({
   allPhotoCount,
   arendCount,
@@ -10708,6 +11089,8 @@ function MarzipanPrintChoiceModal({
   onPrintAll,
   onPrintArend,
   onPrintNew,
+  onPrintSelection,
+  photoGroups,
 }: Readonly<{
   allPhotoCount: number;
   arendCount: number;
@@ -10718,7 +11101,10 @@ function MarzipanPrintChoiceModal({
   onPrintAll: () => void;
   onPrintArend: () => void;
   onPrintNew: () => void;
+  onPrintSelection: (imageIds: string[]) => void;
+  photoGroups: MarzipanPhotoPrintGroup[];
 }>) {
+  const [selectedImageIds, setSelectedImageIds] = useState<string[]>([]);
   const parsedLastPrintAt = lastPrintAt ? new Date(lastPrintAt) : null;
   const lastPrintLabel =
     parsedLastPrintAt && !Number.isNaN(parsedLastPrintAt.getTime())
@@ -10729,6 +11115,20 @@ function MarzipanPrintChoiceModal({
           month: "long",
         })
       : "";
+  const selectedImageIdSet = new Set(selectedImageIds);
+  const selectedItemCount = photoGroups.reduce(
+    (count, group) =>
+      count + (selectedImageIdSet.has(group.imageId) ? group.itemCount : 0),
+    0
+  );
+
+  function toggleImage(imageId: string) {
+    setSelectedImageIds((current) =>
+      current.includes(imageId)
+        ? current.filter((id) => id !== imageId)
+        : [...current, imageId]
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-4">
@@ -10736,7 +11136,7 @@ function MarzipanPrintChoiceModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="marzipan-print-choice-title"
-        className="w-full max-w-lg rounded-3xl border border-[#d7cec4] bg-[#f8f6f1] p-4 shadow-2xl sm:p-5"
+        className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-[#d7cec4] bg-[#f8f6f1] p-4 shadow-2xl sm:p-5"
       >
         <header className="flex items-start justify-between gap-3">
           <div>
@@ -10747,7 +11147,7 @@ function MarzipanPrintChoiceModal({
               id="marzipan-print-choice-title"
               className="mt-0.5 text-xl font-black tracking-normal text-[#1a1815]"
             >
-              Marsepeinfoto’s printen
+              Foto’s en logo’s printen
             </h2>
             {hasPrintHistory && (
               <p className="mt-1 text-xs font-semibold text-[#776f66]">
@@ -10765,72 +11165,183 @@ function MarzipanPrintChoiceModal({
           </button>
         </header>
 
-        <div className="mt-4 grid gap-2">
-          {arendCount > 0 && (
-            <button
-              type="button"
-              onClick={onPrintArend}
-              className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#c9d8c2] bg-white px-4 py-3 text-left shadow-sm transition hover:bg-[#f3f8f1]"
-            >
-              <span>
-                <strong className="block text-sm font-black text-[#1a1815]">
-                  Arend-cijfers printen
-                </strong>
-                <small className="mt-0.5 block text-xs font-semibold text-[#776f66]">
-                  Open de cijfersheet voor de Arend-bestelling.
-                </small>
-              </span>
-              <span className="rounded-full bg-[#c3d3bc] px-2.5 py-1 text-xs font-black text-[#253822]">
-                {arendCount}
-              </span>
-            </button>
-          )}
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="grid gap-2">
+            {arendCount > 0 && (
+              <button
+                type="button"
+                onClick={onPrintArend}
+                className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#c9d8c2] bg-white px-4 py-3 text-left shadow-sm transition hover:bg-[#f3f8f1]"
+              >
+                <span>
+                  <strong className="block text-sm font-black text-[#1a1815]">
+                    Arend-cijfers printen
+                  </strong>
+                  <small className="mt-0.5 block text-xs font-semibold text-[#776f66]">
+                    Open de cijfersheet voor de Arend-bestelling.
+                  </small>
+                </span>
+                <span className="rounded-full bg-[#c3d3bc] px-2.5 py-1 text-xs font-black text-[#253822]">
+                  {arendCount}
+                </span>
+              </button>
+            )}
 
-          {hasPrintHistory && (
-            <button
-              type="button"
-              disabled={newPhotoCount === 0}
-              onClick={onPrintNew}
-              className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#c9d8c2] bg-[#edf5ea] px-4 py-3 text-left shadow-sm transition hover:bg-[#e5f0e1] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <span>
-                <strong className="block text-sm font-black text-[#1a1815]">
-                  Alleen nieuw sinds laatste print
-                </strong>
-                <small className="mt-0.5 block text-xs font-semibold text-[#62705d]">
-                  {newPhotoCount > 0
-                    ? "Print alleen later toegevoegde foto’s."
-                    : "Er zijn geen nieuwe foto’s bijgekomen."}
-                </small>
-              </span>
-              <span className="rounded-full bg-[#2d6b43] px-2.5 py-1 text-xs font-black text-white">
-                {newPhotoCount}
-              </span>
-            </button>
-          )}
+            {hasPrintHistory && (
+              <button
+                type="button"
+                disabled={newPhotoCount === 0}
+                onClick={onPrintNew}
+                className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#c9d8c2] bg-[#edf5ea] px-4 py-3 text-left shadow-sm transition hover:bg-[#e5f0e1] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span>
+                  <strong className="block text-sm font-black text-[#1a1815]">
+                    Alleen nieuw sinds laatste print
+                  </strong>
+                  <small className="mt-0.5 block text-xs font-semibold text-[#62705d]">
+                    {newPhotoCount > 0
+                      ? "Print alleen later toegevoegde foto’s."
+                      : "Er zijn geen nieuwe foto’s bijgekomen."}
+                  </small>
+                </span>
+                <span className="rounded-full bg-[#2d6b43] px-2.5 py-1 text-xs font-black text-white">
+                  {newPhotoCount}
+                </span>
+              </button>
+            )}
 
-          {allPhotoCount > 0 && (
-            <button
-              type="button"
-              onClick={onPrintAll}
-              className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#d5c0ca] bg-white px-4 py-3 text-left shadow-sm transition hover:bg-[#f8f1f5]"
-            >
-              <span>
-                <strong className="block text-sm font-black text-[#1a1815]">
-                  {hasPrintHistory
-                    ? "Alles opnieuw printen"
-                    : "Alle foto’s printen"}
-                </strong>
-                <small className="mt-0.5 block text-xs font-semibold text-[#776f66]">
-                  {hasPrintHistory
-                    ? "Open ook alle eerder geprinte foto’s opnieuw."
-                    : "Open alle foto’s voor deze dag."}
-                </small>
-              </span>
-              <span className="rounded-full bg-[#a27a8e] px-2.5 py-1 text-xs font-black text-white">
-                {allPhotoCount}
-              </span>
-            </button>
+            {allPhotoCount > 0 && (
+              <button
+                type="button"
+                onClick={onPrintAll}
+                className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-[#d5c0ca] bg-white px-4 py-3 text-left shadow-sm transition hover:bg-[#f8f1f5]"
+              >
+                <span>
+                  <strong className="block text-sm font-black text-[#1a1815]">
+                    {hasPrintHistory
+                      ? "Alles opnieuw printen"
+                      : "Alle foto’s printen"}
+                  </strong>
+                  <small className="mt-0.5 block text-xs font-semibold text-[#776f66]">
+                    {hasPrintHistory
+                      ? "Open ook alle eerder geprinte foto’s opnieuw."
+                      : "Open alle foto’s voor deze dag."}
+                  </small>
+                </span>
+                <span className="rounded-full bg-[#a27a8e] px-2.5 py-1 text-xs font-black text-white">
+                  {allPhotoCount}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {photoGroups.length > 0 && (
+            <section className="mt-4 border-t border-[#ddd5cc] pt-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-black tracking-normal text-[#1a1815]">
+                    Handmatig foto’s kiezen
+                  </h3>
+                  <p className="mt-0.5 text-[0.68rem] font-semibold text-[#776f66]">
+                    Selecteer klantnamen die je nogmaals wilt openen.
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedImageIds(
+                        photoGroups.map((group) => group.imageId)
+                      )
+                    }
+                    className="rounded-lg border border-[#d7cec4] bg-white px-2 py-1 text-[0.62rem] font-black text-[#554d45]"
+                  >
+                    Alles
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedImageIds([])}
+                    className="rounded-lg border border-[#d7cec4] bg-white px-2 py-1 text-[0.62rem] font-black text-[#554d45]"
+                  >
+                    Geen
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-2 grid gap-1.5">
+                {photoGroups.map((group) => {
+                  const selected = selectedImageIdSet.has(group.imageId);
+                  const productLabel = group.products.join(" · ");
+                  const receiptLabel = group.receiptNumbers.join(", ");
+
+                  return (
+                    <label
+                      key={group.imageId}
+                      className={`grid cursor-pointer grid-cols-[auto_2.75rem_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border px-2.5 py-2 transition ${
+                        selected
+                          ? "border-[#88a881] bg-[#edf5ea]"
+                          : "border-[#ddd5cc] bg-white hover:border-[#b8aea4]"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleImage(group.imageId)}
+                        className="h-4 w-4 accent-[#2d6b43]"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="h-11 w-11 rounded-lg border border-[#e5ddd4] bg-white bg-contain bg-center bg-no-repeat"
+                        style={{
+                          backgroundImage: `url("${group.photoUrl.replace(/"/g, "%22")}")`,
+                        }}
+                      />
+                      <span className="min-w-0">
+                        <strong className="block truncate text-xs font-black text-[#1a1815]">
+                          {group.customerName}
+                        </strong>
+                        {productLabel && (
+                          <small className="mt-0.5 block truncate text-[0.64rem] font-semibold text-[#776f66]">
+                            {productLabel}
+                          </small>
+                        )}
+                        {receiptLabel && (
+                          <small className="mt-0.5 block truncate text-[0.6rem] font-medium text-[#948a80]">
+                            bon {receiptLabel}
+                          </small>
+                        )}
+                      </span>
+                      <span className="text-right">
+                        <strong className="block text-xs font-black text-[#1a1815]">
+                          {group.itemCount}x
+                        </strong>
+                        <small
+                          className={`mt-0.5 block whitespace-nowrap text-[0.58rem] font-black ${
+                            group.newItemCount > 0
+                              ? "text-[#2d6b43]"
+                              : "text-[#948a80]"
+                          }`}
+                        >
+                          {group.newItemCount > 0
+                            ? `${group.newItemCount} nieuw`
+                            : "geprint"}
+                        </small>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                disabled={selectedImageIds.length === 0}
+                onClick={() => onPrintSelection(selectedImageIds)}
+                className="mt-3 min-h-11 w-full rounded-xl bg-[#1a1815] px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Selectie printen
+                {selectedItemCount > 0 ? ` · ${selectedItemCount} stuks` : ""}
+              </button>
+            </section>
           )}
         </div>
 

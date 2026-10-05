@@ -38,12 +38,13 @@ function overrideIdFor(date: string, receiptId: string, receiptNumber: string) {
 
 function hasOverrideValue(override: LogisticsReceiptOverride) {
   return Boolean(
+    override.removed ||
     override.time ||
-      override.fulfillment ||
-      override.deliveryAddress ||
-      override.alternativeAddress ||
-      override.pickupLocation ||
-      override.routeNote
+    override.fulfillment ||
+    override.deliveryAddress ||
+    override.alternativeAddress ||
+    override.pickupLocation ||
+    override.routeNote
   );
 }
 
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
       date,
       receiptId,
       receiptNumber,
+      removed: body.removed === true,
       time: cleanText(body.time, 80),
       fulfillment: cleanFulfillment(body.fulfillment),
       deliveryAddress: cleanText(body.deliveryAddress, 300),

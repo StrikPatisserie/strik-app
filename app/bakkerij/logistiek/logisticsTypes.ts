@@ -64,6 +64,7 @@ export type LogisticsReceiptOverride = {
   date: string;
   receiptId: string;
   receiptNumber: string;
+  removed: boolean;
   time: string;
   fulfillment: LogisticsFulfillment | "";
   deliveryAddress: string;
