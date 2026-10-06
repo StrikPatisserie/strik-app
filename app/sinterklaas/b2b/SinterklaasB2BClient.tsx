@@ -888,17 +888,17 @@ function B2BOrderForm({
   return (
     <form
       onSubmit={submitOrder}
-      className="grid gap-2 text-[11px] lg:grid-cols-[17rem_minmax(0,1fr)] lg:items-start"
+      className="grid gap-3 text-xs xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start"
     >
-      <section className="overflow-hidden rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] lg:col-start-1 lg:row-start-1">
-        <div className="flex items-center justify-between bg-[#e5e0d9] px-2.5 py-1.5">
-          <div className="text-[0.65rem] font-bold text-[#4d463d]">Orderinformatie</div>
-          <span className="text-[0.52rem] font-medium text-[#756d64]">klant & levering</span>
+      <section className="overflow-hidden rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] xl:col-start-1 xl:row-start-1">
+        <div className="flex items-center justify-between bg-[#e5e0d9] px-3 py-2">
+          <div className="text-sm font-bold text-[#4d463d]">Orderinformatie</div>
+          <span className="text-[0.68rem] font-medium text-[#756d64]">klant & levering</span>
         </div>
-        <div className="grid gap-px bg-[#ddd7cf] p-px sm:grid-cols-2 lg:grid-cols-1">
-        <label className="grid bg-white px-2 py-1 sm:col-span-2 lg:col-span-1">
-          <span className="text-[0.48rem] font-semibold uppercase tracking-[0.08em] text-[#8b8278]">Fase</span>
-          <select value={form.status} onChange={(event) => setField("status", event.target.value as B2BFormState["status"])} className="h-6 min-w-0 border-0 bg-white px-0 text-[0.62rem] font-semibold outline-none">
+        <div className="grid gap-px bg-[#ddd7cf] p-px sm:grid-cols-2 xl:grid-cols-1">
+        <label className="grid bg-white px-3 py-2 sm:col-span-2 xl:col-span-1">
+          <span className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-[#8b8278]">Fase</span>
+          <select value={form.status} onChange={(event) => setField("status", event.target.value as B2BFormState["status"])} className="h-9 min-w-0 border-0 bg-white px-0 text-sm font-semibold outline-none">
             <option value="aanvraag">Aanvraag · nog niet definitief</option>
             <option value="offerte">Offerte verzonden · wacht op akkoord</option>
             <option value="akkoord">Definitief · klant heeft akkoord gegeven</option>
@@ -909,36 +909,36 @@ function B2BOrderForm({
           value={form.customerName}
           onChange={(event) => setField("customerName", event.target.value)}
           placeholder="Klantnaam"
-          className="h-7 min-w-0 border-0 bg-white px-2 text-[0.62rem] font-medium outline-none"
+          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none"
         />
         <input
           value={form.contactName}
           onChange={(event) => setField("contactName", event.target.value)}
           placeholder="Contactpersoon"
-          className="h-7 min-w-0 border-0 bg-white px-2 text-[0.62rem] font-medium outline-none"
+          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none"
         />
         <input
           value={form.customerEmail}
           onChange={(event) => setField("customerEmail", event.target.value)}
           placeholder="E-mail"
           type="email"
-          className="h-7 min-w-0 border-0 bg-white px-2 text-[0.62rem] font-medium outline-none"
+          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none"
         />
         <input
           value={form.phone}
           onChange={(event) => setField("phone", event.target.value)}
           placeholder="Telefoon"
-          className="h-7 min-w-0 border-0 bg-white px-2 text-[0.62rem] font-medium outline-none"
+          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none"
         />
-        <label className="grid bg-white px-2 py-1">
-          <span className="text-[0.48rem] font-semibold uppercase tracking-[0.08em] text-[#8b8278]">
+        <label className="grid bg-white px-3 py-2">
+          <span className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-[#8b8278]">
             Leverdatum
           </span>
           <input
             value={form.deliveryDate}
             onChange={(event) => setForm((current) => ({ ...current, deliveryDate: event.target.value, productionDate: "" }))}
             type="date"
-            className="h-6 min-w-0 border-0 bg-white px-0 text-[0.62rem] font-semibold outline-none"
+            className="h-9 min-w-0 border-0 bg-white px-0 text-sm font-semibold outline-none"
           />
         </label>
         <select
@@ -949,7 +949,7 @@ function B2BOrderForm({
               event.target.value as SinterklaasB2BOrder["department"]
             )
           }
-          className="h-7 min-w-0 border-0 bg-white px-2 text-[0.62rem] font-semibold outline-none"
+          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-semibold outline-none"
         >
           {DEPARTMENTS.map((department) => (
             <option key={department.id} value={department.id}>
@@ -961,77 +961,104 @@ function B2BOrderForm({
           value={form.deliveryMethod}
           onChange={(event) => setField("deliveryMethod", event.target.value)}
           placeholder="Bezorgen / ophalen"
-          className="h-7 min-w-0 border-0 bg-white px-2 text-[0.62rem] font-medium outline-none sm:col-span-2 lg:col-span-1"
+          className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none sm:col-span-2 xl:col-span-1"
         />
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-[#b8cab5] bg-[#f7faf6] shadow-sm lg:col-start-2 lg:row-span-2 lg:row-start-1">
-        <div className="flex items-center justify-between bg-[#315d2a] px-2.5 py-1.5 text-white">
-          <div className="text-[0.68rem] font-bold">Bestelling</div>
-          <span className="text-[0.55rem] font-medium">{form.productLines.length} regels · {money(calculatedTotalEx)} ex btw</span>
+      <section className="overflow-hidden rounded-xl border border-[#b8cab5] bg-[#f7faf6] shadow-sm xl:col-start-2 xl:row-span-2 xl:row-start-1">
+        <div className="flex items-center justify-between bg-[#315d2a] px-3 py-2 text-white">
+          <div className="text-sm font-bold">Bestelling</div>
+          <span className="text-xs font-medium">{form.productLines.length} regels · {money(calculatedTotalEx)} ex btw</span>
         </div>
 
       {form.department !== "bakkerij" && (
         <div className="border-b-2 border-[#5f8458] bg-white">
-          <div className="flex items-center justify-between bg-[#cfe5ca] px-2 py-1">
-            <div className="text-[0.62rem] font-semibold text-[#24451f]">Chocoladeletters</div>
-            <span className="text-[0.55rem] font-semibold text-[#365b30]">{b2bLetterTotal(form.letterLines)} stuks</span>
+          <div className="flex items-center justify-between bg-[#cfe5ca] px-3 py-2">
+            <div className="text-sm font-semibold text-[#24451f]">Chocoladeletters</div>
+            <span className="text-xs font-semibold text-[#365b30]">{b2bLetterTotal(form.letterLines)} stuks</span>
           </div>
 
-          <div className="overflow-x-auto">
-            <div className="min-w-[56rem]">
-              <div className="grid grid-cols-[4rem_7rem_6rem_5.5rem_4.5rem_minmax(22rem,1fr)_6.5rem] border-y border-[#c9d8c6] bg-[#edf4eb] py-1 text-[0.45rem] font-semibold uppercase tracking-[0.06em] text-[#6b645b]">
-                <span className="px-2">Letter</span><span className="px-2">Chocolade</span><span className="px-2">Soort</span><span className="px-2">Formaat</span><span className="px-2 text-right">Aantal</span><span className="px-2">Vrij van</span><span />
-              </div>
-              <div className="grid grid-cols-[4rem_7rem_6rem_5.5rem_4.5rem_minmax(22rem,1fr)_6.5rem] items-center divide-x divide-[#dbe6d8] bg-white py-0.5">
-                <select aria-label="Letter" value={letterDraft.style === "vorm" ? "S" : letterDraft.letter} disabled={letterDraft.style === "vorm"} onChange={(event) => updateLetterDraft({ letter: event.target.value })} className="!h-7 !min-w-0 !rounded-none !border-0 !bg-transparent !px-2 !py-0 !text-[0.58rem] !leading-none font-semibold outline-none disabled:text-[#8b8278]">
-                  {(letterDraft.style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).map((letter) => <option key={letter} value={letter}>{letter}</option>)}
-                </select>
-                <select aria-label="Chocolade" value={letterDraft.chocolate} onChange={(event) => updateLetterDraft({ chocolate: event.target.value as B2BLetterLine["chocolate"] })} className="!h-7 !min-w-0 !rounded-none !border-0 !bg-transparent !px-2 !py-0 !text-[0.58rem] !leading-none font-medium outline-none">
-                  <option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option>
-                </select>
-                <select aria-label="Soort" value={letterDraft.style} onChange={(event) => updateLetterDraft({ style: event.target.value as B2BLetterLine["style"] })} className="!h-7 !min-w-0 !rounded-none !border-0 !bg-transparent !px-2 !py-0 !text-[0.58rem] !leading-none font-medium outline-none">
-                  <option value="spuit">Spuit</option><option value="vorm">Vorm (S)</option>
-                </select>
-                <select aria-label="Formaat" value={letterDraft.size} disabled={letterDraft.style === "vorm"} onChange={(event) => updateLetterDraft({ size: event.target.value as B2BLetterLine["size"] })} className="!h-7 !min-w-0 !rounded-none !border-0 !bg-transparent !px-2 !py-0 !text-[0.58rem] !leading-none font-medium outline-none disabled:text-[#8b8278]">
-                  <option value="groot">Groot</option><option value="klein">Klein</option>
-                </select>
-                <input aria-label="Aantal" type="number" min="1" max="10000" value={letterDraft.quantity} onChange={(event) => updateLetterDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="!h-7 !min-w-0 !rounded-none !border-0 !bg-transparent !px-2 !py-0 text-right !text-[0.58rem] !leading-none font-semibold outline-none" />
-                <div className="flex h-7 items-center gap-3 overflow-x-auto whitespace-nowrap px-2 text-[0.52rem] font-medium text-[#5d554d]">
-                  {B2B_LETTER_EXCEPTIONS.map(({ id, label }) => <label key={id} className="inline-flex items-center gap-0.5"><input className="h-3 w-3" type="checkbox" checked={letterDraft.exceptions.includes(id)} onChange={(event) => updateLetterDraft({ exceptions: event.target.checked ? [...letterDraft.exceptions, id] : letterDraft.exceptions.filter((value) => value !== id) })} />{label}</label>)}
-                </div>
-                <div className="px-1.5"><button type="button" onClick={addLetterToOrder} className="h-6 w-full rounded-md bg-[#315d2a] px-1.5 text-[0.52rem] font-semibold text-white">+ toevoegen</button></div>
-              </div>
+          <div className="hidden grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] border-y border-[#c9d8c6] bg-[#edf4eb] py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.06em] text-[#6b645b] xl:grid">
+            <span className="px-2">Letter</span>
+            <span className="px-2">Chocolade</span>
+            <span className="px-2">Soort</span>
+            <span className="px-2">Formaat</span>
+            <span className="px-2 text-right">Aantal</span>
+            <span className="px-2">Vrij van</span>
+            <span />
+          </div>
 
-              <div className="divide-y divide-[#e2e9df] border-t border-[#dbe6d8]">
-                {form.letterLines.map((line) => (
-                  <div key={line.id} className="grid grid-cols-[4rem_7rem_6rem_5.5rem_4.5rem_minmax(22rem,1fr)_6.5rem] items-center py-0.5 text-[0.56rem]">
-                    <span className="px-2 font-semibold">{line.letter}</span>
-                    <span className="px-2 capitalize">{line.chocolate}</span>
-                    <span className="px-2 capitalize">{line.style}</span>
-                    <span className="px-2 capitalize">{line.size}</span>
-                    <input aria-label={`Aantal ${line.letter}`} type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateLetterLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} className="!h-6 !min-w-0 !rounded-none !border-0 !bg-transparent !px-2 !py-0 text-right !text-[0.56rem] !leading-none font-semibold outline-none focus:!bg-[#f6faf4]" />
-                    <span className="truncate px-2 text-[#705000]">{line.exceptions.length ? line.exceptions.join(", ") : "—"}</span>
-                    <div className="text-right"><button type="button" aria-label="Letterregel verwijderen" onClick={() => setLetterLines(form.letterLines.filter((item) => item.id !== line.id))} className="h-5 px-1.5 text-xs font-semibold text-[#9a3412]">Verwijder</button></div>
-                  </div>
-                ))}
-                {form.letterLines.length === 0 && <p className="px-2 py-1 text-[0.54rem] font-medium text-[#8b8278]">Nog geen letters toegevoegd.</p>}
+          <div className="grid grid-cols-2 gap-2 bg-white p-3 sm:grid-cols-3 xl:grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] xl:items-end xl:gap-0 xl:p-0">
+            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
+              <span className="xl:hidden">Letter</span>
+              <select aria-label="Letter" value={letterDraft.style === "vorm" ? "S" : letterDraft.letter} disabled={letterDraft.style === "vorm"} onChange={(event) => updateLetterDraft({ letter: event.target.value })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-semibold outline-none disabled:text-[#8b8278] xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
+                {(letterDraft.style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).map((letter) => <option key={letter} value={letter}>{letter}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
+              <span className="xl:hidden">Chocolade</span>
+              <select aria-label="Chocolade" value={letterDraft.chocolate} onChange={(event) => updateLetterDraft({ chocolate: event.target.value as B2BLetterLine["chocolate"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
+                <option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
+              <span className="xl:hidden">Soort</span>
+              <select aria-label="Soort" value={letterDraft.style} onChange={(event) => updateLetterDraft({ style: event.target.value as B2BLetterLine["style"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
+                <option value="spuit">Spuit</option><option value="vorm">Vorm (S)</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
+              <span className="xl:hidden">Formaat</span>
+              <select aria-label="Formaat" value={letterDraft.size} disabled={letterDraft.style === "vorm"} onChange={(event) => updateLetterDraft({ size: event.target.value as B2BLetterLine["size"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none disabled:text-[#8b8278] xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
+                <option value="groot">Groot</option><option value="klein">Klein</option>
+              </select>
+            </label>
+            <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
+              <span className="xl:hidden">Aantal</span>
+              <input aria-label="Aantal" type="number" min="1" max="10000" value={letterDraft.quantity} onChange={(event) => updateLetterDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 text-right !text-sm font-semibold outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent" />
+            </label>
+            <fieldset className="col-span-2 rounded-md border border-[#c9d8c6] px-2 py-2 sm:col-span-3 xl:col-span-1 xl:rounded-none xl:border-0 xl:px-2 xl:py-0">
+              <legend className="px-1 text-[0.65rem] font-semibold text-[#6b645b] xl:hidden">Vrij van</legend>
+              <div className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-[#5d554d]">
+                {B2B_LETTER_EXCEPTIONS.map(({ id, label }) => <label key={id} className="inline-flex items-center gap-1.5"><input className="h-4 w-4" type="checkbox" checked={letterDraft.exceptions.includes(id)} onChange={(event) => updateLetterDraft({ exceptions: event.target.checked ? [...letterDraft.exceptions, id] : letterDraft.exceptions.filter((value) => value !== id) })} />{label}</label>)}
               </div>
+            </fieldset>
+            <div className="col-span-2 sm:col-span-3 xl:col-span-1 xl:px-2">
+              <button type="button" onClick={addLetterToOrder} className="h-10 w-full rounded-md bg-[#315d2a] px-3 text-xs font-semibold text-white xl:h-8">+ Letter toevoegen</button>
             </div>
           </div>
-          {form.letterOrderText && <details className="border-t border-[#d7e3d4] px-1.5 py-0.5 text-[0.58rem]"><summary className="cursor-pointer font-bold text-[#6b645b]">Oude vrije letteromschrijving</summary><p className="mt-1 whitespace-pre-wrap">{form.letterOrderText}</p></details>}
+
+          <div className="divide-y divide-[#e2e9df] border-t border-[#dbe6d8]">
+            {form.letterLines.map((line) => (
+              <div key={line.id} className="grid grid-cols-[minmax(0,1fr)_5rem_auto] items-center gap-2 px-3 py-2 text-xs xl:grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] xl:gap-0 xl:px-0">
+                <span className="min-w-0 font-semibold xl:px-2">
+                  {line.letter}
+                  <span className="ml-1 font-medium capitalize text-[#6b645b] xl:hidden">· {line.chocolate} · {line.style} · {line.size}</span>
+                  {line.exceptions.length > 0 && <span className="mt-0.5 block truncate font-medium text-[#705000] xl:hidden">Vrij van: {line.exceptions.join(", ")}</span>}
+                </span>
+                <span className="hidden px-2 capitalize xl:block">{line.chocolate}</span>
+                <span className="hidden px-2 capitalize xl:block">{line.style}</span>
+                <span className="hidden px-2 capitalize xl:block">{line.size}</span>
+                <input aria-label={`Aantal ${line.letter}`} type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateLetterLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} className="!h-9 !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 text-right !text-xs font-semibold outline-none focus:!bg-[#f6faf4] xl:!rounded-none xl:!border-0 xl:!bg-transparent" />
+                <span className="hidden truncate px-2 text-[#705000] xl:block">{line.exceptions.length ? line.exceptions.join(", ") : "—"}</span>
+                <div className="text-right"><button type="button" aria-label="Letterregel verwijderen" onClick={() => setLetterLines(form.letterLines.filter((item) => item.id !== line.id))} className="h-9 rounded-md px-2 text-xs font-semibold text-[#9a3412] hover:bg-[#fff1e8]">Verwijder</button></div>
+              </div>
+            ))}
+            {form.letterLines.length === 0 && <p className="px-3 py-2 text-xs font-medium text-[#8b8278]">Nog geen letters toegevoegd.</p>}
+          </div>
+          {form.letterOrderText && <details className="border-t border-[#d7e3d4] px-3 py-2 text-xs"><summary className="cursor-pointer font-bold text-[#6b645b]">Oude vrije letteromschrijving</summary><p className="mt-1 whitespace-pre-wrap">{form.letterOrderText}</p></details>}
         </div>
       )}
 
       <div className="bg-white">
-        <div className="flex items-center justify-between bg-[#f3dfa2] px-2 py-1">
-          <div className="text-[0.62rem] font-semibold text-[#5a4300]">Overige producten</div>
-          <span className="text-[0.52rem] font-medium text-[#705a18]">folderprijs automatisch · handmatig aanpasbaar</span>
+        <div className="flex flex-wrap items-center justify-between gap-1 bg-[#f3dfa2] px-3 py-2">
+          <div className="text-sm font-semibold text-[#5a4300]">Overige producten</div>
+          <span className="text-[0.68rem] font-medium text-[#705a18]">folderprijs automatisch · handmatig aanpasbaar</span>
         </div>
 
-        <div className="grid gap-x-1 gap-y-0.5 bg-[#fff9e9] px-1.5 py-1 sm:grid-cols-[minmax(11rem,1.5fr)_minmax(7rem,1fr)_3.8rem_5rem_auto_auto] sm:items-end">
-          <label className="grid text-[0.48rem] font-semibold uppercase tracking-wide text-[#6b645b]">
+        <div className="grid grid-cols-2 gap-2 bg-[#fff9e9] p-3 lg:grid-cols-[minmax(14rem,1.5fr)_minmax(10rem,1fr)_5rem_7rem_auto_auto] lg:items-end">
+          <label className="col-span-2 grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b] lg:col-span-1">
             Product
             <select
               value={productDraft.productId}
@@ -1047,7 +1074,7 @@ function B2BOrderForm({
                   withLogo: false,
                 });
               }}
-              className="h-6 min-w-0 border border-[#d0b96e] bg-white px-1 text-[0.6rem] font-semibold normal-case tracking-normal text-[#1a1815]"
+              className="h-10 min-w-0 border border-[#d0b96e] bg-white px-2 text-sm font-semibold normal-case tracking-normal text-[#1a1815]"
             >
               {MANUAL_PRODUCT_CATALOG.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               <option value={CUSTOM_PRODUCT_ID}>Anders / niet in folder</option>
@@ -1055,31 +1082,31 @@ function B2BOrderForm({
           </label>
 
           {productDraft.productId === CUSTOM_PRODUCT_ID ? (
-            <label className="grid text-[0.48rem] font-semibold uppercase tracking-wide text-[#6b645b]">
+            <label className="col-span-2 grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b] sm:col-span-1">
               Omschrijving
-              <input value={productDraft.description} onChange={(event) => updateProductDraft({ description: event.target.value })} placeholder="Vrij product" className="h-6 min-w-0 border border-[#d0b96e] px-1 text-[0.6rem] font-medium normal-case tracking-normal text-[#1a1815]" />
+              <input value={productDraft.description} onChange={(event) => updateProductDraft({ description: event.target.value })} placeholder="Vrij product" className="h-10 min-w-0 border border-[#d0b96e] px-2 text-sm font-medium normal-case tracking-normal text-[#1a1815]" />
             </label>
           ) : (
-            <label className="grid text-[0.48rem] font-semibold uppercase tracking-wide text-[#6b645b]">
+            <label className="col-span-2 grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b] sm:col-span-1">
               Variant
-              <select value={productDraft.choice} onChange={(event) => updateProductDraft({ choice: event.target.value })} className="h-6 min-w-0 border border-[#d0b96e] bg-white px-1 text-[0.6rem] font-medium normal-case tracking-normal text-[#1a1815]">
+              <select value={productDraft.choice} onChange={(event) => updateProductDraft({ choice: event.target.value })} className="h-10 min-w-0 border border-[#d0b96e] bg-white px-2 text-sm font-medium normal-case tracking-normal text-[#1a1815]">
                 {draftChoices.map((choice) => <option key={choice} value={choice}>{internalChoiceLabel(draftProduct!, choice)}</option>)}
               </select>
             </label>
           )}
 
-          <label className="grid text-[0.48rem] font-semibold uppercase tracking-wide text-[#6b645b]">
+          <label className="grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
             Aantal
-            <input type="number" min="1" max="10000" value={productDraft.quantity} onChange={(event) => updateProductDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-6 border border-[#d0b96e] px-1 text-right text-[0.6rem] font-semibold" />
+            <input type="number" min="1" max="10000" value={productDraft.quantity} onChange={(event) => updateProductDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
           </label>
-          <label className="grid text-[0.48rem] font-semibold uppercase tracking-wide text-[#6b645b]">
+          <label className="grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
             Prijs p.s. ex
-            <input type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={(event) => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} className="h-6 border border-[#d0b96e] px-1 text-right text-[0.6rem] font-semibold" />
+            <input type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={(event) => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
           </label>
-          <label className={`flex h-6 items-center gap-1 whitespace-nowrap text-[0.55rem] font-bold ${draftProduct && productSupportsLogo(draftProduct, productDraft.choice) ? "" : "invisible"}`}>
-            <input className="h-3 w-3" type="checkbox" checked={productDraft.withLogo} onChange={(event) => updateProductDraft({ withLogo: event.target.checked })} /> Logo
+          <label className={`flex h-10 items-center gap-2 self-end whitespace-nowrap text-xs font-bold ${draftProduct && productSupportsLogo(draftProduct, productDraft.choice) ? "" : "invisible"}`}>
+            <input className="h-4 w-4" type="checkbox" checked={productDraft.withLogo} onChange={(event) => updateProductDraft({ withLogo: event.target.checked })} /> Logo
           </label>
-          <button type="button" onClick={addProductToOrder} className="h-6 whitespace-nowrap rounded-md bg-[#9a7510] px-2 text-[0.56rem] font-semibold text-white">+ toevoegen</button>
+          <button type="button" onClick={addProductToOrder} className="h-10 self-end whitespace-nowrap rounded-md bg-[#9a7510] px-3 text-xs font-semibold text-white">+ Product toevoegen</button>
         </div>
 
         <div className="divide-y divide-[#eadfbd] border-t border-[#d0b96e]">
@@ -1087,80 +1114,80 @@ function B2BOrderForm({
             const product = catalogProduct(line.productId);
             const isLetterProduct = line.productId === "chocoladeletter" || line.productId === "chocolade-vormletter";
             return (
-              <div key={line.id} className="grid grid-cols-[minmax(0,1fr)_3.5rem_4.5rem_4.5rem_1.5rem] items-center gap-1 px-1.5 py-0.5">
-                <div className="min-w-0 text-[0.6rem] font-bold">
+              <div key={line.id} className="grid grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_5.5rem_2rem] items-center gap-2 px-3 py-2">
+                <div className="min-w-0 text-xs font-bold">
                   <span className="font-semibold">{lineDescription(line)}</span>
-                  {isLetterProduct && <span className="ml-1 text-[0.52rem] text-[#6b645b]">via letterregels</span>}
-                  {product && productSupportsLogo(product, line.choice) && !isLetterProduct && <label className="ml-1.5 inline-flex items-center gap-0.5 text-[0.52rem]"><input className="h-3 w-3" type="checkbox" checked={line.withLogo} onChange={(event) => updateProductLine(line.id, { withLogo: event.target.checked })} />Logo</label>}
+                  {isLetterProduct && <span className="ml-1 text-[0.68rem] text-[#6b645b]">via letterregels</span>}
+                  {product && productSupportsLogo(product, line.choice) && !isLetterProduct && <label className="ml-2 inline-flex items-center gap-1 text-[0.68rem]"><input className="h-4 w-4" type="checkbox" checked={line.withLogo} onChange={(event) => updateProductLine(line.id, { withLogo: event.target.checked })} />Logo</label>}
                 </div>
                 {isLetterProduct ? (
-                  <span className="text-right text-[0.58rem] font-semibold">{line.quantity}×</span>
+                  <span className="text-right text-xs font-semibold">{line.quantity}×</span>
                 ) : (
-                  <input aria-label={`Aantal ${lineDescription(line)}`} type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateProductLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-5 border border-[#d0b96e] px-1 text-right text-[0.58rem] font-semibold" />
+                  <input aria-label={`Aantal ${lineDescription(line)}`} type="number" min="1" max="10000" value={line.quantity} onChange={(event) => updateProductLine(line.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-9 border border-[#d0b96e] px-2 text-right text-xs font-semibold" />
                 )}
-                <input aria-label={`Prijs ${lineDescription(line)}`} type="number" min="0" step="0.01" value={line.unitPriceEx} onChange={(event) => updateProductLine(line.id, { unitPriceEx: event.target.value, manualPrice: true })} className="h-5 border border-[#d0b96e] px-1 text-right text-[0.58rem] font-semibold" />
-                <div className="text-right text-[0.58rem] font-semibold">
+                <input aria-label={`Prijs ${lineDescription(line)}`} type="number" min="0" step="0.01" value={line.unitPriceEx} onChange={(event) => updateProductLine(line.id, { unitPriceEx: event.target.value, manualPrice: true })} className="h-9 border border-[#d0b96e] px-2 text-right text-xs font-semibold" />
+                <div className="text-right text-xs font-semibold">
                   {money(line.quantity * moneyNumber(line.unitPriceEx))}
-                  {line.manualPrice && product && <button type="button" onClick={() => updateProductLine(line.id, { manualPrice: false })} className="block w-full text-[0.46rem] font-semibold text-[#24551d] underline">folderprijs</button>}
+                  {line.manualPrice && product && <button type="button" onClick={() => updateProductLine(line.id, { manualPrice: false })} className="block w-full text-[0.62rem] font-semibold text-[#24551d] underline">folderprijs</button>}
                 </div>
-                <button type="button" aria-label={`${lineDescription(line) || "Product"} verwijderen`} disabled={isLetterProduct} onClick={() => setProductLines(form.productLines.filter((item) => item.id !== line.id))} className="h-5 text-sm font-black text-[#9a3412] disabled:cursor-not-allowed disabled:text-[#c9c3bb]">×</button>
+                <button type="button" aria-label={`${lineDescription(line) || "Product"} verwijderen`} disabled={isLetterProduct} onClick={() => setProductLines(form.productLines.filter((item) => item.id !== line.id))} className="h-9 text-base font-black text-[#9a3412] disabled:cursor-not-allowed disabled:text-[#c9c3bb]">×</button>
               </div>
             );
           })}
-          {form.productLines.length === 0 && <p className="px-1.5 py-1 text-[0.58rem] font-bold text-[#8b8278]">Nog geen producten toegevoegd.</p>}
+          {form.productLines.length === 0 && <p className="px-3 py-2 text-xs font-bold text-[#8b8278]">Nog geen producten toegevoegd.</p>}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-1 border-t border-[#d0b96e] bg-[#f3dfa2] px-1.5 py-1">
-          <details className="min-w-[14rem] flex-1 text-[0.56rem]">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#d0b96e] bg-[#f3dfa2] px-3 py-2">
+          <details className="min-w-[14rem] flex-1 text-xs">
             <summary className="cursor-pointer font-semibold text-[#6b645b]">Aanvullende orderafspraken{form.orderText.trim() ? " · ingevuld" : ""}</summary>
-            <textarea value={form.orderText} onChange={(event) => setField("orderText", event.target.value)} placeholder="Alleen wat niet al in de productregels staat" rows={2} className="mt-1 min-h-10 w-full border border-[#d0b96e] bg-white px-1.5 py-1 text-[0.58rem] font-medium text-[#1a1815]" />
+            <textarea value={form.orderText} onChange={(event) => setField("orderText", event.target.value)} placeholder="Alleen wat niet al in de productregels staat" rows={3} className="mt-2 min-h-20 w-full border border-[#d0b96e] bg-white px-2 py-2 text-sm font-medium text-[#1a1815]" />
           </details>
-          <label className="flex items-center gap-1 text-[0.5rem] font-semibold uppercase tracking-wide text-[#6b645b]">
+          <label className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
             Totaal ex btw
-            <input value={displayedTotalEx} onChange={(event) => { setManualTotal(true); setField("totalExVat", event.target.value); }} placeholder="0,00" className="h-6 w-24 border border-[#d0b96e] bg-white px-1.5 text-right text-[0.62rem] font-semibold normal-case tracking-normal text-[#1a1815]" />
-            {form.productLines.length > 0 && manualTotal && <button type="button" onClick={() => setManualTotal(false)} className="text-[0.46rem] font-semibold normal-case tracking-normal text-[#24551d] underline">berekend: {money(calculatedTotalEx)}</button>}
+            <input value={displayedTotalEx} onChange={(event) => { setManualTotal(true); setField("totalExVat", event.target.value); }} placeholder="0,00" className="h-10 w-28 border border-[#d0b96e] bg-white px-2 text-right text-sm font-semibold normal-case tracking-normal text-[#1a1815]" />
+            {form.productLines.length > 0 && manualTotal && <button type="button" onClick={() => setManualTotal(false)} className="text-[0.65rem] font-semibold normal-case tracking-normal text-[#24551d] underline">berekend: {money(calculatedTotalEx)}</button>}
           </label>
         </div>
       </div>
 
       {addFeedback && (
-        <p role="status" className={`border-t border-[#5f8458] px-1.5 py-0.5 text-[0.56rem] font-semibold ${addFeedback.startsWith("Toegevoegd") ? "bg-[#d9ead5] text-[#24551d]" : "bg-[#fff1e8] text-[#9a3412]"}`}>
+        <p role="status" className={`border-t border-[#5f8458] px-3 py-2 text-xs font-semibold ${addFeedback.startsWith("Toegevoegd") ? "bg-[#d9ead5] text-[#24551d]" : "bg-[#fff1e8] text-[#9a3412]"}`}>
           {addFeedback}
         </p>
       )}
       </section>
 
-      <details className="overflow-hidden rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] lg:col-start-1 lg:row-start-2">
-        <summary className="cursor-pointer bg-[#e5e0d9] px-2.5 py-1.5 text-[0.6rem] font-semibold text-[#4d463d]">Extra gegevens{extraDataCount ? ` · ${extraDataCount} ingevuld` : ""}</summary>
+      <details className="overflow-hidden rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] xl:col-start-1 xl:row-start-2">
+        <summary className="cursor-pointer bg-[#e5e0d9] px-3 py-2.5 text-sm font-semibold text-[#4d463d]">Extra gegevens{extraDataCount ? ` · ${extraDataCount} ingevuld` : ""}</summary>
         <div className="grid gap-px border-t border-[#d8d2ca] bg-[#ddd7cf] p-px">
-          <input value={form.logo} onChange={(event) => setField("logo", event.target.value)} placeholder="Logo-afspraak" className="h-7 border-0 bg-white px-2 text-[0.6rem] font-medium outline-none" />
-          <input value={form.packaging} onChange={(event) => setField("packaging", event.target.value)} placeholder="Verpakken" className="h-7 border-0 bg-white px-2 text-[0.6rem] font-medium outline-none" />
-          <input value={form.textInstructions} onChange={(event) => setField("textInstructions", event.target.value)} placeholder="Tekst op product / kaartje" className="h-7 border-0 bg-white px-2 text-[0.6rem] font-medium outline-none" />
-          <input value={form.priceAgreement} onChange={(event) => setField("priceAgreement", event.target.value)} placeholder="Prijsafspraak" className="h-7 border-0 bg-white px-2 text-[0.6rem] font-medium outline-none" />
-          <textarea value={form.importantNotes} onChange={(event) => setField("importantNotes", event.target.value)} placeholder="Belangrijk" rows={2} className="border-0 bg-white px-2 py-1 text-[0.6rem] font-medium outline-none" />
-          <textarea value={form.deliveryAddress} onChange={(event) => setField("deliveryAddress", event.target.value)} placeholder="Bezorgadres" rows={2} className="border-0 bg-white px-2 py-1 text-[0.6rem] font-medium outline-none" />
-          <textarea value={form.invoiceInfo} onChange={(event) => setField("invoiceInfo", event.target.value)} placeholder="Factuurgegevens" rows={2} className="border-0 bg-white px-2 py-1 text-[0.6rem] font-medium outline-none" />
+          <input value={form.logo} onChange={(event) => setField("logo", event.target.value)} placeholder="Logo-afspraak" className="h-10 border-0 bg-white px-3 text-sm font-medium outline-none" />
+          <input value={form.packaging} onChange={(event) => setField("packaging", event.target.value)} placeholder="Verpakken" className="h-10 border-0 bg-white px-3 text-sm font-medium outline-none" />
+          <input value={form.textInstructions} onChange={(event) => setField("textInstructions", event.target.value)} placeholder="Tekst op product / kaartje" className="h-10 border-0 bg-white px-3 text-sm font-medium outline-none" />
+          <input value={form.priceAgreement} onChange={(event) => setField("priceAgreement", event.target.value)} placeholder="Prijsafspraak" className="h-10 border-0 bg-white px-3 text-sm font-medium outline-none" />
+          <textarea value={form.importantNotes} onChange={(event) => setField("importantNotes", event.target.value)} placeholder="Belangrijk" rows={3} className="border-0 bg-white px-3 py-2 text-sm font-medium outline-none" />
+          <textarea value={form.deliveryAddress} onChange={(event) => setField("deliveryAddress", event.target.value)} placeholder="Bezorgadres" rows={3} className="border-0 bg-white px-3 py-2 text-sm font-medium outline-none" />
+          <textarea value={form.invoiceInfo} onChange={(event) => setField("invoiceInfo", event.target.value)} placeholder="Factuurgegevens" rows={3} className="border-0 bg-white px-3 py-2 text-sm font-medium outline-none" />
         </div>
       </details>
 
       {message && (
-        <p className="rounded-lg border border-[#d6e5d8] bg-white px-2 py-1 text-[0.6rem] font-medium text-[#24551d] lg:col-span-2">
+        <p className="rounded-lg border border-[#d6e5d8] bg-white px-3 py-2 text-xs font-medium text-[#24551d] xl:col-span-2">
           {message}
         </p>
       )}
 
-      <div className="sticky bottom-0 z-30 flex flex-col gap-1 rounded-lg border border-[#d8d2ca] bg-[#f3f0ec]/95 p-1.5 backdrop-blur sm:flex-row sm:justify-end lg:col-span-2">
+      <div className="sticky bottom-0 z-30 flex flex-col gap-2 rounded-lg border border-[#d8d2ca] bg-[#f3f0ec]/95 p-2 backdrop-blur sm:flex-row sm:justify-end xl:col-span-2">
         <button
           type="button"
           onClick={onCancel}
-          className="h-7 rounded-md border border-[#cfc8bf] bg-white px-3 text-[0.6rem] font-semibold text-[#4d463d]"
+          className="h-10 rounded-md border border-[#cfc8bf] bg-white px-4 text-xs font-semibold text-[#4d463d]"
         >
           Sluiten
         </button>
         <button
           type="submit"
           disabled={saving}
-          className="h-7 rounded-md bg-[#315d2a] px-3 text-[0.6rem] font-semibold text-white shadow-sm disabled:opacity-60"
+          className="h-10 rounded-md bg-[#315d2a] px-4 text-xs font-semibold text-white shadow-sm disabled:opacity-60"
         >
           {saving
             ? "Opslaan..."
@@ -1184,24 +1211,24 @@ function B2BOrderDialog({
 }>) {
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#1a1815]/45 px-1.5 py-2 backdrop-blur-sm sm:px-2"
+      className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-[#1a1815]/45 p-2 backdrop-blur-sm md:p-4"
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-7xl rounded-2xl border border-[#bdb5ab] bg-[#f7f5f2] p-2 shadow-2xl">
-        <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-[#cfc8bf] pb-1.5">
-          <div className="flex items-baseline gap-2">
-            <p className="text-[0.55rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
+      <div className="w-full max-w-[96rem] rounded-2xl border border-[#bdb5ab] bg-[#f7f5f2] p-3 shadow-2xl md:p-4">
+        <div className="mb-3 flex items-center justify-between gap-3 border-b border-[#cfc8bf] pb-3">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
               Sinterklaas B2B
             </p>
-            <div className="text-[0.78rem] font-bold text-[#1a1815]">
+            <div className="text-lg font-bold text-[#1a1815]">
               {order ? "Bestelling wijzigen" : "Bestelling toevoegen"}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-6 w-6 shrink-0 items-center justify-center border border-[#cfc8bf] bg-white text-sm font-black text-[#1a1815]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[#cfc8bf] bg-white text-lg font-black text-[#1a1815]"
             aria-label="Sluiten"
           >
             ×
@@ -1260,7 +1287,7 @@ function B2BOrderRow({
 
   return (
     <article
-      className={`border px-2.5 py-1.5 ${
+      className={`rounded-xl border px-3 py-2 shadow-sm ${
         order.cancelled
           ? "border-[#e4ded5] bg-[#f4f0ea] opacity-70"
           : dueSoon(order)
@@ -1283,6 +1310,11 @@ function B2BOrderRow({
             <h3 className="text-base font-black leading-tight text-[#1a1815]">
               {order.customerName}
             </h3>
+            {order.totalExVat && (
+              <span className="rounded-full bg-[#a27a8e]/15 px-2 py-0.5 text-[0.68rem] font-black text-[#765267]">
+                {money(moneyNumber(order.totalExVat))} ex btw
+              </span>
+            )}
             <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
               {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
             </span>
@@ -1372,11 +1404,11 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   const [deleteReasonNote, setDeleteReasonNote] = useState("");
   const [planDrafts, setPlanDrafts] = useState<Record<string, string>>({});
 
-  async function loadOrders(nextYear = year, nextSearch = search) {
+  async function loadOrders(nextYear = year) {
     setLoading(true);
     setError("");
     try {
-      setOrders(await fetchB2BOrders(nextYear, nextSearch));
+      setOrders(await fetchB2BOrders(nextYear));
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -1389,7 +1421,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   }
 
   useEffect(() => {
-    void loadOrders(year, search);
+    void loadOrders(year);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year]);
 
@@ -1412,6 +1444,29 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
         .includes(term)
     );
   }, [orders, search]);
+  const forecastOrders = useMemo(
+    () =>
+      orders.filter(
+        (order) => !order.cancelled && order.status !== "afgewezen"
+      ),
+    [orders]
+  );
+  const expectedRevenue = useMemo(
+    () =>
+      roundCents(
+        forecastOrders.reduce(
+          (total, order) => total + moneyNumber(order.totalExVat),
+          0
+        )
+      ),
+    [forecastOrders]
+  );
+  const pricedOrderCount = useMemo(
+    () =>
+      forecastOrders.filter((order) => moneyNumber(order.totalExVat) > 0)
+        .length,
+    [forecastOrders]
+  );
 
   async function toggleStatus(
     order: SinterklaasB2BOrder,
@@ -1633,19 +1688,19 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
 
   return (
     <div className="space-y-4">
-      <section className="border border-[#e4ded5] bg-white p-3 shadow-sm">
-        <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_12rem]">
+      <section className="rounded-2xl border border-[#d7e2d3] bg-white/95 p-3 shadow-sm">
+        <div className="grid gap-2 lg:grid-cols-[minmax(14rem,1fr)_9rem_auto_auto_auto]">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Zoek klant, datum, product"
-            className="h-10 border border-[#e4ded5] bg-[#faf8f5] px-3 text-sm font-bold outline-none"
+            className="h-9 rounded-lg border border-[#e4ded5] bg-[#faf8f5] px-3 text-sm font-semibold outline-none"
           />
           <select
             aria-label="Besteljaar"
             value={year}
             onChange={(event) => setYear(event.target.value)}
-            className="h-10 border border-[#e4ded5] bg-[#faf8f5] px-3 text-sm font-black outline-none"
+            className="h-9 rounded-lg border border-[#e4ded5] bg-[#faf8f5] px-3 text-xs font-black outline-none"
           >
             {Array.from(
               { length: Number(currentYear()) - 2018 },
@@ -1658,25 +1713,25 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
           </select>
           <button
             type="button"
-            onClick={() => void loadOrders(year, search)}
-            className="h-10 bg-[#f7df83] px-3 text-sm font-black text-[#1a1815]"
+            onClick={() => void loadOrders(year)}
+            className="h-9 rounded-lg bg-[#fff3ba] px-3 text-xs font-black text-[#5a4300] transition hover:bg-[#fed500]/35"
           >
             Ververs
           </button>
           <button
             type="button"
             onClick={openNewOrderDialog}
-            className="flex h-10 items-center justify-center gap-2 bg-[#24551d] px-3 text-sm font-black text-white"
+            className="flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#24551d] px-3 text-xs font-black text-white shadow-sm"
           >
             <span
-              className="flex h-6 w-6 items-center justify-center bg-white/20 text-lg leading-none"
+              className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-base leading-none"
               aria-hidden="true"
             >
               +
             </span>
             Toevoegen
           </button>
-          <label className="flex h-10 cursor-pointer items-center justify-center border border-[#d6e5d8] bg-[#f6faf4] px-3 text-sm font-black text-[#24551d]">
+          <label className="flex h-9 cursor-pointer items-center justify-center rounded-lg border border-[#d6e5d8] bg-[#f6faf4] px-3 text-xs font-black text-[#24551d]">
             Excel import
             <input
               type="file"
@@ -1685,6 +1740,21 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
               className="sr-only"
             />
           </label>
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#ece7e0] pt-2">
+          <div className="inline-flex items-center gap-3 rounded-full bg-[#a27a8e] px-4 py-2 text-white shadow-sm">
+            <span className="text-[0.62rem] font-black uppercase tracking-[0.08em] text-white/80">
+              Verwachte omzet {year}
+            </span>
+            <strong className="text-base leading-none">{money(expectedRevenue)}</strong>
+            <span className="text-[0.68rem] font-semibold text-white/85">
+              {forecastOrders.length} bestellingen
+            </span>
+          </div>
+          <p className="text-[0.68rem] font-semibold text-[#7b736b]">
+            {pricedOrderCount} met bedrag · aanvragen, offertes en akkoorden tellen mee
+          </p>
         </div>
       </section>
 
@@ -1723,15 +1793,13 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
         </section>
       )}
 
-      <section className="space-y-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div>
-            <h2 className="text-2xl font-black text-[#1a1815]">Bestellingen</h2>
-            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#8b8278]">
-              Gesorteerd op leverdatum
-            </p>
+            <h2 className="text-xl font-black text-[#1a1815]">Bestellingen</h2>
+            <p className="text-[0.68rem] font-semibold text-[#8b8278]">op leverdatum</p>
           </div>
-          <span className="w-fit rounded-full bg-[#f2eee8] px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#6b645b]">
+          <span className="w-fit rounded-full bg-white/80 px-3 py-1 text-[0.68rem] font-black text-[#6b645b] shadow-sm">
             {visibleOrders.length} zichtbaar
           </span>
         </div>
@@ -1744,16 +1812,16 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
           )}
           {!loading &&
             groupedOrders.map(([key, group]) => (
-              <section key={key} className="border border-[#e4ded5] bg-white/65">
-                <div className="flex items-center justify-between bg-[#dcebd8] px-3 py-1.5">
+              <section key={key} className="overflow-hidden rounded-2xl border border-[#d7e2d3] bg-white/70 shadow-sm">
+                <div className="flex items-center justify-between gap-2 bg-[#dcebd8] px-3 py-2">
                   <h3 className="text-sm font-black capitalize text-[#1a1815]">
                     {monthLabel(key)}
                   </h3>
-                  <span className="rounded-full bg-white/85 px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#6b645b]">
-                    {group.length} totaal
+                  <span className="rounded-full bg-white/85 px-2.5 py-1 text-[0.68rem] font-black text-[#6b645b]">
+                    {group.length} orders · {money(group.reduce((total, order) => total + moneyNumber(order.totalExVat), 0))}
                   </span>
                 </div>
-                <div className="grid gap-1.5 p-2">
+                <div className="grid gap-2 p-2">
                   {group.map((order) => (
                     <B2BOrderRow
                       key={order.id}

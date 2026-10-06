@@ -697,6 +697,7 @@ export default function ManagementDashboard() {
     setDraftCompareYear(String(nextCompareYear));
     setDraftCompareWeek(String(nextCompareWeek));
     setDraftCompareDate(nextCompareDate);
+    setCompareOpen(false);
   }
 
   function nudgeDraftPeriod(direction: -1 | 1) {
@@ -705,11 +706,17 @@ export default function ManagementDashboard() {
     if (draftPeriod === "day") {
       const nextDate = addDaysToIsoDate(parseIsoDateInput(draftDate, date), direction);
       const nextDateParts = getIsoPartsForIsoDate(nextDate);
+      const nextMonth = Number(nextDate.slice(5, 7));
 
       setDraftDate(nextDate);
       setDraftYear(String(nextDateParts.year));
       setDraftWeek(String(nextDateParts.week));
-      setDraftMonth(Number(nextDate.slice(5, 7)));
+      setDraftMonth(nextMonth);
+      setPeriod("day");
+      setDate(nextDate);
+      setYear(nextDateParts.year);
+      setWeek(nextDateParts.week);
+      setMonth(nextMonth);
       return;
     }
 
@@ -721,6 +728,10 @@ export default function ManagementDashboard() {
 
       setDraftYear(String(next.year));
       setDraftMonth(next.month);
+      setPeriod("month");
+      setYear(next.year);
+      setMonth(next.month);
+      setWeek(getIsoWeekForMonth(next.year, next.month));
       return;
     }
 
@@ -732,6 +743,9 @@ export default function ManagementDashboard() {
 
     setDraftYear(String(next.year));
     setDraftWeek(String(next.week));
+    setPeriod("week");
+    setYear(next.year);
+    setWeek(next.week);
   }
 
   function goToCurrentWeek() {
@@ -764,10 +778,21 @@ export default function ManagementDashboard() {
   }
 
   function openComparePanel() {
-    setCompareOpen((isOpen) => !isOpen);
-    if (draftCompareMode === "none") {
-      setDraftCompareMode("previous");
+    if (compareOpen) {
+      setCompareOpen(false);
+      if (compareMode === "none") {
+        setDraftCompareMode("none");
+      }
+      return;
     }
+
+    if (compareMode !== "none") {
+      resetCompare();
+      return;
+    }
+
+    setCompareOpen(true);
+    setDraftCompareMode("previous");
   }
 
   const draftLabel = formatPeriodLabel(
@@ -780,22 +805,27 @@ export default function ManagementDashboard() {
 
   return (
     <div className="space-y-2 sm:space-y-3">
-      <section className="rounded-lg border border-[#e7e0d8]/80 bg-white/88 p-2 shadow-sm">
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-[0.68rem] font-black uppercase tracking-[0.08em] text-[#ef533b] sm:text-xs">
-            {data?.periodLabel || formatPeriodLabel(period, year, week, month, date)}
-          </p>
+      <section className="rounded-2xl border border-[#dce5d8] bg-white/92 p-3 shadow-sm">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
+              Loonkostenoverzicht
+            </p>
+            <h2 className="truncate text-base font-black capitalize text-[#1a1815]">
+              {formatPeriodLabel(period, year, week, month, date)}
+            </h2>
+          </div>
           <button
             type="button"
             onClick={goToCurrentWeek}
-            className="h-7 rounded-full bg-[#c3d3bc] px-2.5 text-[0.62rem] font-black uppercase tracking-[0.06em] text-[#1a1815] shadow-sm active:scale-[0.98]"
+            className="h-8 shrink-0 rounded-full bg-[#dcebd8] px-3 text-[0.62rem] font-black text-[#24551d] shadow-sm active:scale-[0.98]"
           >
             deze week
           </button>
         </div>
 
-        <div className="flex flex-wrap items-end gap-1.5">
-          <div className="grid h-8 grid-cols-3 rounded-full bg-[#f8f6f3] p-0.5">
+        <div className="flex flex-wrap items-end gap-2 rounded-xl bg-[#f8f6f3] p-2">
+          <div className="grid h-9 grid-cols-3 rounded-full bg-white p-0.5 shadow-sm">
             {[
               ["day", "Dag"],
               ["week", "Week"],
@@ -805,9 +835,9 @@ export default function ManagementDashboard() {
                 key={value}
                 type="button"
                 onClick={() => setDraftPeriod(value as Period)}
-                className={`rounded-full px-2.5 text-[0.68rem] font-black transition ${
+                className={`rounded-full px-3 text-xs font-black transition ${
                   draftPeriod === value
-                    ? "bg-[#ef533b] text-white shadow-sm"
+                    ? "bg-[#a27a8e] text-white shadow-sm"
                     : "text-[#2d2a26]/50"
                 }`}
               >
@@ -817,35 +847,35 @@ export default function ManagementDashboard() {
           </div>
 
           {draftPeriod !== "day" && (
-            <label className="grid w-16 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+            <label className="grid w-20 gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
               Jaar
               <input
                 type="text"
                 inputMode="numeric"
                 value={draftYear}
                 onChange={(event) => setDraftYear(cleanDigits(event.target.value, 4))}
-                className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+                className="h-9 rounded-lg border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
               />
             </label>
           )}
 
           {draftPeriod === "day" ? (
-            <label className="grid min-w-36 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+            <label className="grid min-w-40 gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
               Datum
               <input
                 type="date"
                 value={draftDate}
                 onChange={(event) => setDraftDate(event.target.value)}
-                className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-xs font-black normal-case tracking-normal text-[#1a1815]"
+                className="h-9 rounded-lg border border-[#e7e0d8] bg-white px-2 text-xs font-black normal-case tracking-normal text-[#1a1815]"
               />
             </label>
           ) : draftPeriod === "month" ? (
-            <label className="grid min-w-28 flex-1 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:max-w-40">
+            <label className="grid min-w-32 flex-1 gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45 sm:max-w-44">
               Maand
               <select
                 value={draftMonth}
                 onChange={(event) => setDraftMonth(Number(event.target.value))}
-                className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-xs font-black normal-case tracking-normal text-[#1a1815]"
+                className="h-9 rounded-lg border border-[#e7e0d8] bg-white px-2 text-xs font-black normal-case tracking-normal text-[#1a1815]"
               >
                 {monthNames.map((name, index) => (
                   <option key={name} value={index + 1}>
@@ -855,24 +885,24 @@ export default function ManagementDashboard() {
               </select>
             </label>
           ) : (
-            <label className="grid w-14 gap-0.5 text-[0.5rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
+            <label className="grid w-16 gap-0.5 text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
               Week
               <input
                 type="text"
                 inputMode="numeric"
                 value={draftWeek}
                 onChange={(event) => setDraftWeek(cleanDigits(event.target.value, 2))}
-                className="h-8 rounded-md border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
+                className="h-9 rounded-lg border border-[#e7e0d8] bg-white px-2 text-sm font-black normal-case tracking-normal text-[#1a1815]"
               />
             </label>
           )}
 
-          <div className="flex h-8 items-end gap-1">
+          <div className="flex h-9 items-end gap-1">
             <button
               type="button"
               onClick={() => nudgeDraftPeriod(-1)}
               aria-label="Week eerder"
-              className="grid h-8 w-8 place-items-center rounded-md bg-[#f8f6f3] text-base font-black leading-none text-[#1a1815] shadow-sm active:scale-[0.96]"
+              className="grid h-9 w-9 place-items-center rounded-lg bg-white text-lg font-black leading-none text-[#1a1815] shadow-sm active:scale-[0.96]"
             >
               ‹
             </button>
@@ -880,7 +910,7 @@ export default function ManagementDashboard() {
               type="button"
               onClick={() => nudgeDraftPeriod(1)}
               aria-label="Week verder"
-              className="grid h-8 w-8 place-items-center rounded-md bg-[#f8f6f3] text-base font-black leading-none text-[#1a1815] shadow-sm active:scale-[0.96]"
+              className="grid h-9 w-9 place-items-center rounded-lg bg-white text-lg font-black leading-none text-[#1a1815] shadow-sm active:scale-[0.96]"
             >
               ›
             </button>
@@ -889,19 +919,19 @@ export default function ManagementDashboard() {
           <button
             type="button"
             onClick={openComparePanel}
-            className={`h-8 rounded-md px-2.5 text-[0.62rem] font-black uppercase tracking-[0.08em] shadow-sm active:scale-[0.98] ${
-              draftCompareMode !== "none"
-                ? "bg-[#2f6b3b] text-white"
-                : "bg-[#f8f6f3] text-[#6b645b]"
+            className={`h-9 rounded-lg border px-3 text-[0.68rem] font-black shadow-sm active:scale-[0.98] ${
+              compareOpen || draftCompareMode !== "none"
+                ? "border-[#a27a8e] bg-[#a27a8e] text-white"
+                : "border-[#d8d2ca] bg-white text-[#6b645b]"
             }`}
           >
-            vergelijk
+            {showCompare ? "vergelijking uit" : "vergelijk"}
           </button>
         </div>
 
         {compareOpen && (
-          <div className="mt-2 rounded-md border border-[#e7e0d8]/80 bg-[#f8f6f3] p-2">
-            <div className="grid grid-cols-3 gap-1">
+          <div className="mt-2 rounded-xl border border-[#e7e0d8]/80 bg-[#fbfaf8] p-2.5 shadow-inner">
+            <div className="flex flex-wrap gap-1.5">
               {[
                 [
                   "previous",
@@ -918,10 +948,10 @@ export default function ManagementDashboard() {
                   key={value}
                   type="button"
                   onClick={() => setDraftCompareMode(value as CompareMode)}
-                  className={`min-h-8 rounded-md px-1.5 text-[0.58rem] font-black uppercase tracking-[0.06em] transition sm:text-[0.68rem] ${
+                  className={`h-7 rounded-full border px-3 text-[0.65rem] font-black transition ${
                     draftCompareMode === value
-                      ? "bg-[#ef533b] text-white shadow-sm"
-                      : "bg-white text-[#6b645b]"
+                      ? "border-[#a27a8e] bg-[#a27a8e] text-white shadow-sm"
+                      : "border-[#ded7cf] bg-white text-[#6b645b]"
                   }`}
                 >
                   {label}
@@ -991,31 +1021,30 @@ export default function ManagementDashboard() {
               </div>
             )}
 
-            <p className="mt-2 text-[0.58rem] font-bold leading-tight text-[#8b8278] sm:text-[0.68rem]">
-              Kies vergelijking en druk daarna op Ga.
-            </p>
           </div>
         )}
 
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.58rem] font-bold text-[#8b8278] sm:text-[0.68rem]">
-            <span>klaar: {draftLabel}</span>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.68rem] font-semibold text-[#8b8278]">
+            <span>Geselecteerd: {draftLabel}</span>
             {showCompare && <span>actief: {compareLabel}</span>}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={resetCompare}
-              className="h-7 rounded-md bg-[#f8f6f3] px-2.5 text-[0.58rem] font-black uppercase tracking-[0.08em] text-[#6b645b] shadow-sm active:scale-[0.98]"
-            >
-              reset
-            </button>
+            {(draftCompareMode !== "none" || showCompare) && (
+              <button
+                type="button"
+                onClick={resetCompare}
+                className="h-7 rounded-full border border-[#ded7cf] bg-white px-3 text-[0.62rem] font-black text-[#6b645b] shadow-sm active:scale-[0.98]"
+              >
+                vergelijking uit
+              </button>
+            )}
             <button
               type="button"
               onClick={applyFilters}
-              className="h-8 rounded-md bg-[#ef533b] px-3 text-[0.68rem] font-black uppercase tracking-[0.08em] text-white shadow-sm active:scale-[0.98]"
+              className="h-8 rounded-lg bg-[#24551d] px-3 text-[0.68rem] font-black text-white shadow-sm active:scale-[0.98]"
             >
-              Ga
+              Tonen
             </button>
           </div>
         </div>
