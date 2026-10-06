@@ -259,11 +259,12 @@ export default function ChristmasLettersPreview() {
 
     let cancelled = false;
     setHistoryLoading(true);
+    setHistoryLetters([]);
     setOpenHistoryId("");
 
     fetch(
       `/api/christmas-letters?year=${year}&historyFor=${encodeURIComponent(selectedEmployee.name)}&employeeId=${encodeURIComponent(selectedEmployee.id)}`,
-      { cache: "force-cache" }
+      { cache: "no-store" }
     )
       .then(async (response) => {
         const data = (await response.json()) as ChristmasLettersHistoryResponse & {

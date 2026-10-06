@@ -555,7 +555,7 @@ export async function GET(request: Request) {
           (left, right) => right.year - left.year
         ),
       },
-      { headers: { "Cache-Control": "private, max-age=300" } }
+      { headers: { "Cache-Control": "no-store" } }
     );
   }
 
