@@ -114,13 +114,26 @@ export async function getMergedRevenueData() {
   const dailyWeekRecords = createWeeklyRevenueRecordsFromDays(
     stored.data.dailyRecords || []
   );
+  const dailyWeekKeys = new Set(
+    dailyWeekRecords.map(
+      (record) => `${record.year}-W${record.week}-${record.shop}`
+    )
+  );
+  const storedWeeklyFallbacks = (stored.data.records || []).filter(
+    (record) =>
+      !dailyWeekKeys.has(`${record.year}-W${record.week}-${record.shop}`)
+  );
   const recordsWithDaily = mergeRevenueRecords(
     excelRevenueSeed,
     dailyWeekRecords
   );
 
   return {
-    records: mergeRevenueRecords(recordsWithDaily, stored.data.records),
+    // The WordPress payload also contains technical weekly carrier rows for
+    // cash deposits and older partial daily rollups. Once day records exist,
+    // their fresh sum is authoritative; otherwise an old/zero carrier can
+    // overwrite the actual weekly turnover shown on the dashboard.
+    records: mergeRevenueRecords(recordsWithDaily, storedWeeklyFallbacks),
     dailyRecords: stored.data.dailyRecords || [],
     cashRecords: stored.data.cashRecords || [],
     cashDeposits: stored.data.cashDeposits || [],

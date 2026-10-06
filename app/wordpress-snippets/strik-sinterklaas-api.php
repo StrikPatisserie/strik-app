@@ -1182,7 +1182,22 @@ function strik_sinterklaas_mailing_clean($input, $existing = array()) {
                 $kind = strik_sinterklaas_text(isset($event['kind']) ? $event['kind'] : '', 20);
                 if (in_array($kind, array('folder', 'reminder1', 'reminder2'), true)) $sent[] = array('kind' => $kind, 'sentAt' => strik_sinterklaas_text(isset($event['sentAt']) ? $event['sentAt'] : '', 80));
             }
-            $recipients[] = array('id' => $recipient_id, 'contactName' => strik_sinterklaas_text(isset($recipient['contactName']) ? $recipient['contactName'] : '', 160), 'email' => $email, 'doNotEmail' => !empty($recipient['doNotEmail']), 'sent' => $sent);
+            $interests = array();
+            $raw_interests = isset($recipient['interests']) && is_array($recipient['interests']) ? $recipient['interests'] : array();
+            foreach ($raw_interests as $interest) {
+                $interest = strik_sinterklaas_text($interest, 20);
+                if (in_array($interest, array('sint', 'kerst'), true) && !in_array($interest, $interests, true)) $interests[] = $interest;
+            }
+            $recipients[] = array(
+                'id' => $recipient_id,
+                'contactName' => strik_sinterklaas_text(isset($recipient['contactName']) ? $recipient['contactName'] : '', 160),
+                'email' => $email,
+                'doNotEmail' => !empty($recipient['doNotEmail']),
+                'sent' => $sent,
+                'interests' => $interests,
+                'consentAt' => strik_sinterklaas_text(isset($recipient['consentAt']) ? $recipient['consentAt'] : '', 80),
+                'consentSource' => strik_sinterklaas_text(isset($recipient['consentSource']) ? $recipient['consentSource'] : '', 160),
+            );
         }
         $customers[] = array('id' => $customer_id, 'company' => strik_sinterklaas_text(isset($customer['company']) ? $customer['company'] : '', 180), 'notes' => strik_sinterklaas_textarea(isset($customer['notes']) ? $customer['notes'] : '', 1600), 'ordered' => !empty($customer['ordered']), 'orderedAt' => strik_sinterklaas_text(isset($customer['orderedAt']) ? $customer['orderedAt'] : '', 80), 'recipients' => $recipients);
     }

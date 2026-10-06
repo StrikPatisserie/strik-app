@@ -10,6 +10,9 @@ type Recipient = {
   email: string;
   doNotEmail: boolean;
   sent: { kind: SendKind; sentAt: string }[];
+  interests?: ("sint" | "kerst")[];
+  consentAt?: string;
+  consentSource?: string;
 };
 type Customer = {
   id: string;
@@ -386,6 +389,20 @@ export default function SinterklaasMailingClient() {
   const addressCount = campaign.customers.reduce((total, customer) => total + customer.recipients.length, 0);
   const allowedAddressCount = campaign.customers.reduce((total, customer) => total + customer.recipients.filter((recipient) => recipient.email && !recipient.doNotEmail).length, 0);
   const sentAddressCount = campaign.customers.reduce((total, customer) => total + customer.recipients.filter((recipient) => stamp(recipient, "folder")).length, 0);
+  const websiteSignupCount = campaign.customers.reduce(
+    (total, customer) => {
+      const structuredCount = customer.recipients.filter(
+        (recipient) => recipient.consentSource === "/kerst-voor-bedrijven"
+      ).length;
+
+      return (
+        total +
+        (structuredCount ||
+          (customer.notes.includes("Website-aanmelding Sint + kerst") ? 1 : 0))
+      );
+    },
+    0
+  );
   const allShownSelected = shown.length > 0 && shown.every((customer) => selected.includes(customer.id));
 
   return (
@@ -402,8 +419,8 @@ export default function SinterklaasMailingClient() {
               <h2 className="mt-0.5 text-xl font-black sm:text-2xl">Sinterklaasnieuwsbrief</h2>
             </div>
           </div>
-          <div className="grid shrink-0 grid-cols-2 gap-2 text-center">
-            {[["Klanten", campaign.customers.length], ["Verstuurd", sentAddressCount]].map(([label, value]) => <div key={label} className="min-w-24 rounded-xl bg-white/92 px-3 py-2 shadow-sm"><p className="text-[.54rem] font-black uppercase tracking-wider text-[#9a4d35]">{label}</p><p className="text-xl font-black leading-tight">{value}</p></div>)}
+          <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
+            {[["Klanten", campaign.customers.length], ["Wachtlijst", websiteSignupCount], ["Verstuurd", sentAddressCount]].map(([label, value]) => <div key={label} className="min-w-24 rounded-xl bg-white/92 px-3 py-2 shadow-sm"><p className="text-[.54rem] font-black uppercase tracking-wider text-[#9a4d35]">{label}</p><p className="text-xl font-black leading-tight">{value}</p></div>)}
           </div>
         </div>
       </section>

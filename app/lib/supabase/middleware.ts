@@ -21,6 +21,7 @@ const PUBLIC_PATHS = new Set([
 // request authentication. Every other API route requires a Supabase session.
 const PUBLIC_API_PATHS = new Set([
   "/api/app-version",
+  "/api/business-folder-signup",
   "/api/lettershop/checkout",
   "/api/lettershop/mail-retry",
   "/api/bakkerij-logistiek",

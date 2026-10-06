@@ -20,6 +20,7 @@ export const dynamic = "force-dynamic";
 type Status = "green" | "orange" | "red" | "missing";
 type Period = "day" | "week" | "month";
 type PeriodWeek = { year: number; week: number };
+type PeriodDateRange = { start: string; end: string };
 
 function getIsoWeekYear(date: Date) {
   const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -101,6 +102,63 @@ function getIsoWeekStartDate(year: number, week: number) {
   jan4.setUTCDate(jan4.getUTCDate() - jan4Day + 1 + (week - 1) * 7);
 
   return jan4;
+}
+
+function getPeriodDateRange(
+  year: number,
+  week: number,
+  period: Period,
+  date = ""
+): PeriodDateRange {
+  if (period === "day" && date) {
+    return { start: date, end: date };
+  }
+
+  const weekStart = getIsoWeekStartDate(year, week);
+  if (period === "week") {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
+
+    return {
+      start: formatIsoDate(weekStart),
+      end: formatIsoDate(weekEnd),
+    };
+  }
+
+  const monthStart = new Date(
+    Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), 1)
+  );
+  const monthEnd = new Date(
+    Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth() + 1, 0)
+  );
+
+  return {
+    start: formatIsoDate(monthStart),
+    end: formatIsoDate(monthEnd),
+  };
+}
+
+function comparableDatesForRange(
+  sourceRange: PeriodDateRange,
+  sourceDates: string[],
+  targetRange: PeriodDateRange
+) {
+  const sourceStart = new Date(`${sourceRange.start}T00:00:00.000Z`);
+  const targetStart = new Date(`${targetRange.start}T00:00:00.000Z`);
+
+  return new Set(
+    sourceDates.flatMap((sourceDate) => {
+      const date = new Date(`${sourceDate}T00:00:00.000Z`);
+      const dayOffset = Math.round(
+        (date.getTime() - sourceStart.getTime()) / 86400000
+      );
+      const targetDate = new Date(targetStart);
+      targetDate.setUTCDate(targetDate.getUTCDate() + dayOffset);
+      const targetDateKey = formatIsoDate(targetDate);
+
+      return targetDateKey <= targetRange.end ? [targetDateKey] : [];
+    })
+  );
 }
 
 function getPreviousWeek(year: number, week: number) {
@@ -298,6 +356,68 @@ function sumRevenueDay(
     missing: !record,
     note: record?.note || "",
     source: record ? record.source || "dagafsluiting" : null,
+    dailyDates: record ? [date] : [],
+    usesDaily: true,
+  };
+}
+
+function isActualRevenueDayRecord(record: RevenueDayRecord) {
+  return Boolean(
+    record.amount > 0 || record.shopClosed || String(record.note || "").trim()
+  );
+}
+
+function sumRevenueForRange(
+  weeklyRecords: RevenueRecord[],
+  dailyRecords: RevenueDayRecord[] | undefined,
+  weeks: PeriodWeek[],
+  range: PeriodDateRange,
+  shop: RevenueShop,
+  includedDates?: ReadonlySet<string>
+) {
+  const matchingDays = (dailyRecords || []).filter(
+    (record) =>
+      record.shop === shop &&
+      record.date >= range.start &&
+      record.date <= range.end &&
+      (!includedDates || includedDates.has(record.date)) &&
+      isActualRevenueDayRecord(record)
+  );
+
+  if (!matchingDays.length) {
+    if (includedDates) {
+      return {
+        amount: null,
+        missing: true,
+        note: "Geen dagcijfers beschikbaar voor een zuivere vergelijking.",
+        source: null,
+        dailyDates: [] as string[],
+        usesDaily: true,
+      };
+    }
+
+    return {
+      ...sumRevenue(weeklyRecords, weeks, shop),
+      dailyDates: [] as string[],
+      usesDaily: false,
+    };
+  }
+
+  return {
+    amount: Number(
+      matchingDays
+        .reduce((total, record) => total + record.amount, 0)
+        .toFixed(2)
+    ),
+    missing: false,
+    note: [
+      ...new Set(
+        matchingDays.map((record) => record.note).filter(Boolean)
+      ),
+    ].join(" · "),
+    source: "dagafsluiting",
+    dailyDates: matchingDays.map((record) => record.date),
+    usesDaily: true,
   };
 }
 
@@ -333,12 +453,14 @@ async function fetchLaborSchedules(weeks: PeriodWeek[]) {
 function sumLaborForShop(
   schedules: LaborCostSchedule[],
   shop: RevenueShop,
-  date?: string
+  range?: PeriodDateRange,
+  includedDates?: ReadonlySet<string>
 ) {
   return schedules.reduce(
     (totals, schedule) => {
       for (const day of schedule.days) {
-        if (date && day.date !== date) continue;
+        if (range && (day.date < range.start || day.date > range.end)) continue;
+        if (includedDates && !includedDates.has(day.date)) continue;
 
         const dayShop = day.shops.find((item) => item.shop === shop);
         if (!dayShop) continue;
@@ -407,6 +529,30 @@ export async function GET(request: Request) {
     period === "day"
       ? [getIsoPartsForDate(manualCompareDate)]
       : getPeriodWeeks(compareYear, compareWeek, period);
+  const periodRange = getPeriodDateRange(
+    year,
+    week,
+    period,
+    selectedDate
+  );
+  const previousPeriodRange = getPeriodDateRange(
+    previousPeriod.year,
+    previousPeriod.week,
+    period,
+    previousDay
+  );
+  const samePeriodLastYearRange = getPeriodDateRange(
+    samePeriodLastYear.year,
+    samePeriodLastYear.week,
+    period,
+    sameDayLastYear
+  );
+  const manualPeriodRange = getPeriodDateRange(
+    compareYear,
+    compareWeek,
+    period,
+    manualCompareDate
+  );
   const [revenue, labor] = await Promise.all([
     getMergedRevenueData(),
     fetchLaborSchedules(periodWeeks),
@@ -416,23 +562,79 @@ export async function GET(request: Request) {
     const currentRevenue =
       period === "day"
         ? sumRevenueDay(revenue.dailyRecords, selectedDate, shop)
-        : sumRevenue(revenue.records, periodWeeks, shop);
+        : sumRevenueForRange(
+            revenue.records,
+            revenue.dailyRecords,
+            periodWeeks,
+            periodRange,
+            shop
+          );
+    const previousComparableDates =
+      period !== "day" && currentRevenue.usesDaily
+        ? comparableDatesForRange(
+            periodRange,
+            currentRevenue.dailyDates,
+            previousPeriodRange
+          )
+        : undefined;
+    const lastYearComparableDates =
+      period !== "day" && currentRevenue.usesDaily
+        ? comparableDatesForRange(
+            periodRange,
+            currentRevenue.dailyDates,
+            samePeriodLastYearRange
+          )
+        : undefined;
+    const manualComparableDates =
+      period !== "day" && currentRevenue.usesDaily
+        ? comparableDatesForRange(
+            periodRange,
+            currentRevenue.dailyDates,
+            manualPeriodRange
+          )
+        : undefined;
     const previousRevenue =
       period === "day"
         ? sumRevenueDay(revenue.dailyRecords, previousDay, shop)
-        : sumRevenue(revenue.records, previousPeriodWeeks, shop);
+        : sumRevenueForRange(
+            revenue.records,
+            revenue.dailyRecords,
+            previousPeriodWeeks,
+            previousPeriodRange,
+            shop,
+            previousComparableDates
+          );
     const lastYearRevenue =
       period === "day"
         ? sumRevenueDay(revenue.dailyRecords, sameDayLastYear, shop)
-        : sumRevenue(revenue.records, samePeriodLastYearWeeks, shop);
+        : sumRevenueForRange(
+            revenue.records,
+            revenue.dailyRecords,
+            samePeriodLastYearWeeks,
+            samePeriodLastYearRange,
+            shop,
+            lastYearComparableDates
+          );
     const manualRevenue =
       period === "day"
         ? sumRevenueDay(revenue.dailyRecords, manualCompareDate, shop)
-        : sumRevenue(revenue.records, manualPeriodWeeks, shop);
+        : sumRevenueForRange(
+            revenue.records,
+            revenue.dailyRecords,
+            manualPeriodWeeks,
+            manualPeriodRange,
+            shop,
+            manualComparableDates
+          );
+    const includedLaborDates =
+      period !== "day" && currentRevenue.usesDaily
+        ? new Set(currentRevenue.dailyDates)
+        : undefined;
     const laborShop = sumLaborForShop(
       labor.schedules,
       shop,
-      period === "day" ? selectedDate : undefined
+      periodRange,
+      includedLaborDates
     );
     const revenueAmount = currentRevenue.amount;
     const hours = labor.schedules.length
@@ -486,6 +688,9 @@ export async function GET(request: Request) {
     (total, row) => total + (row.laborCost || 0),
     0
   );
+  const hasLaborData = rows.some(
+    (row) => row.hours !== null || row.laborCost !== null
+  );
 
   return NextResponse.json(
     {
@@ -506,12 +711,14 @@ export async function GET(request: Request) {
       laborWarning: labor.warning,
       totals: {
         revenue: Number(totalRevenue.toFixed(2)),
-        hours: Number(totalHours.toFixed(2)),
-        laborCost: Number(totalLaborCost.toFixed(2)),
+        hours: hasLaborData ? Number(totalHours.toFixed(2)) : null,
+        laborCost: hasLaborData ? Number(totalLaborCost.toFixed(2)) : null,
         productivity:
-          totalHours > 0 ? Number((totalRevenue / totalHours).toFixed(2)) : null,
+          hasLaborData && totalHours > 0
+            ? Number((totalRevenue / totalHours).toFixed(2))
+            : null,
         laborCostPercentage:
-          totalRevenue > 0
+          hasLaborData && totalRevenue > 0
             ? Number((totalLaborCost / totalRevenue).toFixed(4))
             : null,
       },

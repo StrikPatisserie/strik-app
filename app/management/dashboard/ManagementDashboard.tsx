@@ -42,8 +42,8 @@ type DashboardResponse = {
   laborWarning?: string;
   totals: {
     revenue: number;
-    hours: number;
-    laborCost: number;
+    hours: number | null;
+    laborCost: number | null;
     productivity: number | null;
     laborCostPercentage: number | null;
   };

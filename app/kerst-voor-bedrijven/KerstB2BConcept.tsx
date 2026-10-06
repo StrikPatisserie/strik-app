@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import {
   BusinessFolderSeasonIntro,
   BusinessFolderSeasonNav,
@@ -40,6 +40,50 @@ export default function KerstB2BConcept() {
   const [budget, setBudget] = useState(20);
   const [wantsLogo, setWantsLogo] = useState(false);
   const [includeVat, setIncludeVat] = useState(true);
+  const [signup, setSignup] = useState({
+    company: "",
+    contactName: "",
+    email: "",
+    consent: false,
+    website: "",
+  });
+  const [signupState, setSignupState] = useState<
+    "idle" | "sending" | "success" | "error"
+  >("idle");
+  const [signupMessage, setSignupMessage] = useState("");
+
+  async function submitFolderSignup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSignupState("sending");
+    setSignupMessage("");
+
+    try {
+      const response = await fetch("/api/business-folder-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(signup),
+      });
+      const result = (await response.json().catch(() => null)) as
+        | { message?: string; alreadyRegistered?: boolean }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(result?.message || "Aanmelden is niet gelukt.");
+      }
+
+      setSignupState("success");
+      setSignupMessage(
+        result?.alreadyRegistered
+          ? "Je stond al in onze B2B-lijst. Je voorkeur voor Sint en kerst is bijgewerkt."
+          : "Gelukt! Je krijgt een mail zodra de kerstfolder klaar is."
+      );
+    } catch (error) {
+      setSignupState("error");
+      setSignupMessage(
+        error instanceof Error ? error.message : "Aanmelden is niet gelukt."
+      );
+    }
+  }
 
   return (
     <main className="min-h-dvh overflow-hidden bg-[#171b38] text-[#f8f0df]">
@@ -213,9 +257,121 @@ export default function KerstB2BConcept() {
               <p className="mt-3 text-sm font-semibold leading-relaxed text-[#e4dce2] sm:text-base">
                 We stellen op dit moment een feestelijk assortiment samen. Houd deze pagina in de gaten; producten, prijzen en mogelijkheden verschijnen hier zodra ze klaarstaan.
               </p>
+              <div className="mt-5 rounded-[1.4rem] border border-[#d8b56d]/40 bg-[#171b38]/55 p-4 sm:p-5">
+                <p className="text-xs font-black uppercase tracking-[.16em] text-[#d8b56d]">
+                  Als eerste bekijken
+                </p>
+                <h4 className="mt-1 text-xl font-black text-white sm:text-2xl">
+                  Krijg een seintje zodra de kerstfolder klaar is
+                </h4>
+
+                {signupState === "success" ? (
+                  <div
+                    role="status"
+                    className="mt-4 rounded-xl border border-[#d8b56d]/45 bg-[#d8b56d] px-4 py-3 text-sm font-black text-[#202542]"
+                  >
+                    {signupMessage}
+                  </div>
+                ) : (
+                  <form className="mt-4 grid gap-3" onSubmit={submitFolderSignup}>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="grid gap-1 text-xs font-black text-[#f8f0df]">
+                        Bedrijfsnaam
+                        <input
+                          required
+                          autoComplete="organization"
+                          value={signup.company}
+                          onChange={(event) =>
+                            setSignup((current) => ({
+                              ...current,
+                              company: event.target.value,
+                            }))
+                          }
+                          className="h-11 rounded-xl border border-[#d8b56d]/45 bg-[#f8f0df] px-3 text-sm font-bold text-[#202542] outline-none focus:border-[#d8b56d]"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs font-black text-[#f8f0df]">
+                        Contactpersoon <span className="font-semibold opacity-70">(optioneel)</span>
+                        <input
+                          autoComplete="name"
+                          value={signup.contactName}
+                          onChange={(event) =>
+                            setSignup((current) => ({
+                              ...current,
+                              contactName: event.target.value,
+                            }))
+                          }
+                          className="h-11 rounded-xl border border-[#d8b56d]/45 bg-[#f8f0df] px-3 text-sm font-bold text-[#202542] outline-none focus:border-[#d8b56d]"
+                        />
+                      </label>
+                    </div>
+                    <label className="grid gap-1 text-xs font-black text-[#f8f0df]">
+                      E-mailadres
+                      <input
+                        required
+                        type="email"
+                        autoComplete="email"
+                        value={signup.email}
+                        onChange={(event) =>
+                          setSignup((current) => ({
+                            ...current,
+                            email: event.target.value,
+                          }))
+                        }
+                        className="h-11 rounded-xl border border-[#d8b56d]/45 bg-[#f8f0df] px-3 text-sm font-bold text-[#202542] outline-none focus:border-[#d8b56d]"
+                      />
+                    </label>
+                    <label className="sr-only" aria-hidden="true">
+                      Website
+                      <input
+                        tabIndex={-1}
+                        autoComplete="off"
+                        value={signup.website}
+                        onChange={(event) =>
+                          setSignup((current) => ({
+                            ...current,
+                            website: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="flex items-start gap-2.5 text-[.68rem] font-semibold leading-relaxed text-[#e4dce2] sm:text-xs">
+                      <input
+                        required
+                        type="checkbox"
+                        checked={signup.consent}
+                        onChange={(event) =>
+                          setSignup((current) => ({
+                            ...current,
+                            consent: event.target.checked,
+                          }))
+                        }
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#d8b56d]"
+                      />
+                      <span>
+                        Ja, mail mij zodra de kerstfolder klaar is en houd mij op de hoogte van de zakelijke Sint- en kerstfolders van Strik Patisserie. Afmelden kan altijd.
+                      </span>
+                    </label>
+                    {signupState === "error" && (
+                      <p role="alert" className="text-xs font-bold text-[#ffd6d6]">
+                        {signupMessage}
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={signupState === "sending"}
+                      className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#d8b56d] px-5 py-2.5 text-sm font-black text-[#202542] shadow-lg transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-65 sm:justify-self-start"
+                    >
+                      {signupState === "sending"
+                        ? "Aanmelden..."
+                        : "Houd mij op de hoogte →"}
+                    </button>
+                  </form>
+                )}
+              </div>
               <Link
                 href="/sint-voor-bedrijven"
-                className="mt-6 inline-flex rounded-full bg-[#d8b56d] px-5 py-3 text-sm font-black text-[#202542] shadow-lg transition hover:-translate-y-0.5"
+                className="mt-5 inline-flex text-sm font-black text-[#d8b56d] underline decoration-[#d8b56d]/50 underline-offset-4 transition hover:text-white"
               >
                 Bekijk ondertussen de Sintfolder →
               </Link>
