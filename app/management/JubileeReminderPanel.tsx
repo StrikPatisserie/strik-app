@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
   TeamAgendaEvent,
   normalizeTeamAgenda,
@@ -41,8 +40,7 @@ type JubileeReminderPanelProps = {
   onStatusChange?: (status: JubileeReminderStatus) => void;
 };
 
-const birthdayLookaheadDays = 5;
-const seenStorageKey = "strik-management-celebration-alerts-seen";
+const birthdayLookaheadDays = 1;
 const acknowledgedStorageKey =
   "strik-management-celebration-alerts-acknowledged";
 
@@ -149,18 +147,30 @@ function getUpcomingCelebrationAlerts(
   });
 }
 
-function getAlertKey(alerts: CelebrationAlert[]) {
-  return alerts
-    .map((alert) => {
-      if (alert.kind === "birthday") {
-        return `${alert.kind}:${alert.event.id}:${alert.occurrenceDate.toISOString()}`;
-      }
+function getAlertKey(alert: CelebrationAlert) {
+  if (alert.kind === "birthday") {
+    return `${alert.kind}:${alert.event.id}:${alert.occurrenceDate.toISOString()}`;
+  }
 
-      return `${alert.kind}:${alert.event.id}:${alert.occurrenceDate.toISOString()}:${formatJubileeYears(
-        alert.years
-      )}`;
-    })
-    .join("|");
+  return `${alert.kind}:${alert.event.id}:${alert.occurrenceDate.toISOString()}:${formatJubileeYears(
+    alert.years
+  )}`;
+}
+
+function readAcknowledgedKeys() {
+  const stored = window.localStorage.getItem(acknowledgedStorageKey);
+  if (!stored) return [];
+
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed.filter((value): value is string => typeof value === "string");
+    }
+  } catch {
+    // The previous version stored all keys in one pipe-separated string.
+  }
+
+  return stored.split("|").filter(Boolean);
 }
 
 function getAlertTitle(alert: CelebrationAlert) {
@@ -177,24 +187,13 @@ function getAlertDetail(alert: CelebrationAlert) {
   return `${formatJubileeYears(alert.years)} jaar in dienst`;
 }
 
-function alertTone(alert: CelebrationAlert) {
-  if (alert.kind === "birthday") return "border-white/35 bg-white text-[#8f2f1d]";
-  if (alert.level === "major") return "border-white/35 bg-white text-[#8f2f1d]";
-  if (alert.level === "medium") return "border-white/30 bg-white/90 text-[#5f4810]";
-
-  return "border-white/30 bg-white/90 text-[#24551d]";
-}
-
 export default function JubileeReminderPanel({
   onStatusChange,
 }: Readonly<JubileeReminderPanelProps> = {}) {
   const [events, setEvents] = useState<TeamAgendaEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [displayMode, setDisplayMode] = useState<"large" | "compact">(
-    "compact"
-  );
-  const [acknowledgedKey, setAcknowledgedKey] = useState("");
-  const [checkedAlertKey, setCheckedAlertKey] = useState("");
+  const [acknowledgedKeys, setAcknowledgedKeys] = useState<string[]>([]);
+  const [acknowledgementsLoaded, setAcknowledgementsLoaded] = useState(false);
 
   useEffect(() => {
     let ignoreResult = false;
@@ -222,133 +221,60 @@ export default function JubileeReminderPanel({
   const alerts = useMemo(() => getUpcomingCelebrationAlerts(events), [
     events,
   ]);
-  const alertKey = useMemo(() => getAlertKey(alerts), [alerts]);
 
   useEffect(() => {
-    if (!alertKey) return;
+    setAcknowledgedKeys(readAcknowledgedKeys());
+    setAcknowledgementsLoaded(true);
+  }, []);
 
-    const seenKey = window.localStorage.getItem(seenStorageKey);
-    // Local storage is the acknowledgement source for these browser-only reminders.
-    setAcknowledgedKey(
-      window.localStorage.getItem(acknowledgedStorageKey) || ""
-    );
-    setDisplayMode(seenKey === alertKey ? "compact" : "large");
-    if (seenKey !== alertKey) {
-      window.localStorage.setItem(seenStorageKey, alertKey);
-    }
-    setCheckedAlertKey(alertKey);
-  }, [alertKey]);
-
-  const hasCheckedCurrentAlertKey = !alertKey || checkedAlertKey === alertKey;
-  const openAlertCount =
-    !loading &&
-    hasCheckedCurrentAlertKey &&
-    alerts.length > 0 &&
-    acknowledgedKey !== alertKey
-      ? alerts.length
-      : 0;
+  const openAlerts = useMemo(() => {
+    const acknowledged = new Set(acknowledgedKeys);
+    return alerts.filter((alert) => !acknowledged.has(getAlertKey(alert)));
+  }, [acknowledgedKeys, alerts]);
+  const panelLoading = loading || !acknowledgementsLoaded;
+  const openAlertCount = panelLoading ? 0 : openAlerts.length;
 
   useEffect(() => {
     onStatusChange?.({
-      loading,
+      loading: panelLoading,
       openAlertCount,
     });
-  }, [loading, onStatusChange, openAlertCount]);
+  }, [onStatusChange, openAlertCount, panelLoading]);
 
-  if (
-    loading ||
-    alerts.length === 0 ||
-    !hasCheckedCurrentAlertKey ||
-    acknowledgedKey === alertKey
-  ) {
-    return null;
-  }
+  if (panelLoading || openAlerts.length === 0) return null;
 
-  function acknowledge() {
-    window.localStorage.setItem(acknowledgedStorageKey, alertKey);
-    setAcknowledgedKey(alertKey);
-  }
-
-  const primaryAlert = alerts[0];
-
-  if (displayMode === "compact") {
-    return (
-      <section className="rounded-lg border border-[#ef5737] bg-[#ef5737] px-3 py-2 text-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Link
-            href="/management/agenda"
-            className="min-w-0 flex-1 text-xs font-black uppercase leading-tight"
-          >
-            {alerts.length} personeelsmelding{alerts.length === 1 ? "" : "en"}{" "}
-            open
-          </Link>
-          <button
-            type="button"
-            onClick={acknowledge}
-            className="rounded-md bg-white px-3 py-1.5 text-xs font-black text-[#24551d] active:scale-[0.98]"
-          >
-            Genoteerd
-          </button>
-        </div>
-      </section>
-    );
+  function acknowledge(alert: CelebrationAlert) {
+    const key = getAlertKey(alert);
+    setAcknowledgedKeys((current) => {
+      const next = Array.from(new Set([...current, key]));
+      window.localStorage.setItem(acknowledgedStorageKey, JSON.stringify(next));
+      return next;
+    });
   }
 
   return (
-    <section className="rounded-lg border border-[#ef5737] bg-[#ef5737] p-3 text-white shadow-sm">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-[0.62rem] font-black uppercase leading-tight text-white/78">
-            {primaryAlert.kind === "birthday"
-              ? "Verjaardag voorbereiden"
-              : "Jubileum voorbereiden"}
-          </p>
-          <h2 className="mt-0.5 text-sm font-black leading-tight sm:text-base">
-            {getAlertTitle(primaryAlert)}
-          </h2>
-          <p className="mt-0.5 text-[0.72rem] font-bold leading-tight text-white/82 sm:text-xs">
-            {formatAlertDate(primaryAlert.occurrenceDate)} ·{" "}
-            {formatDaysUntil(primaryAlert.daysUntil)} ·{" "}
-            {getAlertDetail(primaryAlert)}
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <Link
-            href="/management/agenda"
-            className="rounded-md bg-white/18 px-3 py-2 text-xs font-black text-white"
-          >
-            Agenda
-          </Link>
+    <section className="grid gap-1.5 rounded-lg border border-[#ef5737] bg-[#ef5737] p-2 text-white shadow-sm">
+      {openAlerts.map((alert) => (
+        <div
+          key={getAlertKey(alert)}
+          className="grid gap-2 rounded-md border border-white/35 bg-white px-2.5 py-2 text-[#8f2f1d] sm:grid-cols-[4.8rem_minmax(0,1fr)_auto] sm:items-center"
+        >
+          <span className="text-[0.66rem] font-black capitalize">
+            {formatAlertDate(alert.occurrenceDate)}
+          </span>
+          <span className="min-w-0 text-xs font-black leading-snug">
+            {getAlertTitle(alert)} · {getAlertDetail(alert)} ·{" "}
+            {formatDaysUntil(alert.daysUntil)}
+          </span>
           <button
             type="button"
-            onClick={acknowledge}
-            className="rounded-md bg-white px-3 py-2 text-xs font-black text-[#24551d] active:scale-[0.98]"
+            onClick={() => acknowledge(alert)}
+            className="w-fit rounded-md bg-[#24551d] px-3 py-1.5 text-[0.68rem] font-black text-white active:scale-[0.98]"
           >
-            Genoteerd
+            Afvinken
           </button>
         </div>
-      </div>
-
-      <div className="mt-2 grid gap-1.5">
-        {alerts.map((alert) => (
-          <div
-            key={alert.id}
-            className={`grid grid-cols-[4.6rem_1fr_auto] items-center gap-2 rounded-md border px-2 py-1.5 ${alertTone(
-              alert
-            )}`}
-          >
-            <span className="text-[0.66rem] font-black capitalize">
-              {formatAlertDate(alert.occurrenceDate)}
-            </span>
-            <span className="min-w-0 truncate text-xs font-black">
-              {getAlertTitle(alert)} · {getAlertDetail(alert)}
-            </span>
-            <span className="text-[0.66rem] font-black">
-              {formatDaysUntil(alert.daysUntil)}
-            </span>
-          </div>
-        ))}
-      </div>
+      ))}
     </section>
   );
 }

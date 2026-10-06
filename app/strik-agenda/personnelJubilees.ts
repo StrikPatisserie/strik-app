@@ -4,14 +4,8 @@ export const storeJubileeYears = [5, 10, 12.5, 25, 40, 50] as const;
 
 const alertRules = [
   {
-    years: [1, 2, 3],
-    days: 3,
-    level: "small",
-    label: "kort jubileum",
-  },
-  {
     years: [5, 10],
-    days: 7,
+    days: 14,
     level: "medium",
     label: "jubileum",
   },

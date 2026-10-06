@@ -80,6 +80,7 @@ export default function WordPressStatusPanel() {
         "Omzet",
         "Notities",
         "Nieuws",
+        "Leat / Piggy",
       ].map((label) => ({
         id: label,
         label,

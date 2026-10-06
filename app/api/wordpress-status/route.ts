@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkLeatConnection } from "@/app/management/leatInsightsServer";
 
 export const dynamic = "force-dynamic";
 
@@ -99,8 +100,23 @@ async function checkWordPressEndpoint(check: WordPressCheck) {
   }
 }
 
+async function checkLeatEndpoint() {
+  const ok = await checkLeatConnection();
+
+  return {
+    id: "leat",
+    label: "Leat / Piggy",
+    ok,
+    status: ok ? 200 : 0,
+    message: ok ? "Verbonden" : "Geen verbinding",
+  };
+}
+
 export async function GET() {
-  const results = await Promise.all(checks.map(checkWordPressEndpoint));
+  const results = await Promise.all([
+    ...checks.map(checkWordPressEndpoint),
+    checkLeatEndpoint(),
+  ]);
 
   return NextResponse.json({
     ok: results.every((result) => result.ok),
