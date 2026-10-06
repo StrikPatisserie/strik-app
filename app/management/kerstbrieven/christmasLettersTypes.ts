@@ -3,7 +3,8 @@ export type ChristmasLetterStage =
   | "Notities compleet"
   | "Concept klaar"
   | "Controleren"
-  | "Definitief";
+  | "Definitief"
+  | "Geprint";
 
 export type ChristmasLetterNote = {
   id: string;
@@ -17,6 +18,15 @@ export type HistoricalChristmasLetter = {
   year: number;
   recipient: string;
   content: string;
+};
+
+export type ChristmasLetterDraft = {
+  text: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+  printedAt: string;
+  printCount: number;
 };
 
 export type KnownChristmasEmployee = {
@@ -52,6 +62,7 @@ export type ChristmasLettersState = {
   manualEmployees: ManualChristmasEmployee[];
   employeeOverrides: Record<string, ChristmasEmployeeOverride>;
   notesByYear: Record<string, Record<string, ChristmasLetterNote[]>>;
+  draftsByYear: Record<string, Record<string, ChristmasLetterDraft>>;
   updatedAt: string;
 };
 
@@ -68,6 +79,9 @@ export type ChristmasLetterEmployee = {
   status: ChristmasLetterStage;
   notes: ChristmasLetterNote[];
   noteCount: number;
+  hasDraft: boolean;
+  printedAt: string;
+  printCount: number;
   previousYears: number[];
 };
 
@@ -78,6 +92,7 @@ export function emptyChristmasLettersState(): ChristmasLettersState {
     manualEmployees: [],
     employeeOverrides: {},
     notesByYear: {},
+    draftsByYear: {},
     updatedAt: "",
   };
 }
@@ -97,9 +112,28 @@ function normalizeStage(value: unknown): ChristmasLetterStage | undefined {
     "Concept klaar",
     "Controleren",
     "Definitief",
+    "Geprint",
   ];
 
   return stages.find((stage) => stage === value);
+}
+
+function normalizeDraft(value: unknown): ChristmasLetterDraft | null {
+  if (!isRecord(value)) return null;
+  const draftText = text(value.text, 12000);
+  if (!draftText) return null;
+
+  return {
+    text: draftText,
+    model: text(value.model, 120),
+    createdAt: text(value.createdAt, 80),
+    updatedAt: text(value.updatedAt, 80),
+    printedAt: text(value.printedAt, 80),
+    printCount:
+      typeof value.printCount === "number" && Number.isFinite(value.printCount)
+        ? Math.max(0, Math.trunc(value.printCount))
+        : 0,
+  };
 }
 
 function normalizeKnownEmployee(value: unknown): KnownChristmasEmployee | null {
@@ -191,6 +225,18 @@ export function normalizeChristmasLettersState(value: unknown): ChristmasLetters
     }
   }
 
+  const draftsByYear: ChristmasLettersState["draftsByYear"] = {};
+  if (isRecord(value.draftsByYear)) {
+    for (const [year, employeeDrafts] of Object.entries(value.draftsByYear)) {
+      if (!isRecord(employeeDrafts)) continue;
+      draftsByYear[year] = {};
+      for (const [employeeId, rawDraft] of Object.entries(employeeDrafts)) {
+        const draft = normalizeDraft(rawDraft);
+        if (draft) draftsByYear[year][employeeId] = draft;
+      }
+    }
+  }
+
   return {
     version: 1,
     knownTamigoEmployees: Array.isArray(value.knownTamigoEmployees)
@@ -205,6 +251,7 @@ export function normalizeChristmasLettersState(value: unknown): ChristmasLetters
       : [],
     employeeOverrides,
     notesByYear,
+    draftsByYear,
     updatedAt: text(value.updatedAt, 80),
   };
 }

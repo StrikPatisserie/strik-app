@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type {
+  ChristmasLetterDraft,
   ChristmasLetterEmployee,
   ChristmasLetterStage,
   HistoricalChristmasLetter,
@@ -18,11 +19,15 @@ type ChristmasLettersResponse = {
     active: number;
     inactive: number;
     withNotes: number;
+    todo: number;
+    ready: number;
     definitive: number;
+    printed: number;
   };
   storageAvailable: boolean;
   tamigoAvailable: boolean;
   tamigoMessage: string;
+  aiAvailable: boolean;
 };
 
 type ChristmasLettersHistoryResponse = {
@@ -35,6 +40,7 @@ const statusStyles: Record<ChristmasLetterStage, string> = {
   "Concept klaar": "bg-[#eee5ea] text-[#704b60]",
   Controleren: "bg-[#fbe5df] text-[#9b392d]",
   Definitief: "bg-[#dcebd8] text-[#225c31]",
+  Geprint: "bg-[#245c32] text-white",
 };
 
 const emptyEmployee: ChristmasLetterEmployee = {
@@ -50,6 +56,9 @@ const emptyEmployee: ChristmasLetterEmployee = {
   status: "Notities nodig",
   notes: [],
   noteCount: 0,
+  hasDraft: false,
+  printedAt: "",
+  printCount: 0,
   previousYears: [],
 };
 
@@ -59,6 +68,15 @@ function MiniIcon({ children }: Readonly<{ children: React.ReactNode }>) {
       {children}
     </span>
   );
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 export default function ChristmasLettersPreview() {
@@ -84,17 +102,28 @@ export default function ChristmasLettersPreview() {
     active: 0,
     inactive: 0,
     withNotes: 0,
+    todo: 0,
+    ready: 0,
     definitive: 0,
+    printed: 0,
   });
   const [storageAvailable, setStorageAvailable] = useState(true);
+  const [aiAvailable, setAiAvailable] = useState(false);
   const [historyLetters, setHistoryLetters] = useState<HistoricalChristmasLetter[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [openHistoryId, setOpenHistoryId] = useState("");
+  const [draft, setDraft] = useState<ChristmasLetterDraft | null>(null);
+  const [draftText, setDraftText] = useState("");
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [openNoteMenuId, setOpenNoteMenuId] = useState("");
+  const [showPrintConfirmation, setShowPrintConfirmation] = useState(false);
 
   function applyResponse(data: ChristmasLettersResponse) {
     setEmployees(data.employees);
     setStats(data.stats);
     setStorageAvailable(data.storageAvailable);
+    setAiAvailable(data.aiAvailable);
     setSelectedId((current) => {
       if (current && data.employees.some((employee) => employee.id === current)) {
         return current;
@@ -158,8 +187,8 @@ export default function ChristmasLettersPreview() {
   const tabLabels: Array<{ id: LetterTab; label: string; count?: number }> = [
     { id: "notities", label: `Notities ${year}`, count: selectedEmployee.noteCount },
     { id: "vorige", label: "Vorige brieven", count: selectedEmployee.previousYears.length },
-    { id: "concept", label: "Concept" },
-    { id: "controle", label: "Controle", count: 2 },
+    { id: "concept", label: "Brief", count: selectedEmployee.hasDraft ? 1 : undefined },
+    { id: "controle", label: "Afronden" },
   ];
 
   useEffect(() => {
@@ -170,7 +199,7 @@ export default function ChristmasLettersPreview() {
     setOpenHistoryId("");
 
     fetch(
-      `/api/christmas-letters?year=${year}&historyFor=${encodeURIComponent(selectedEmployee.name)}`,
+      `/api/christmas-letters?year=${year}&historyFor=${encodeURIComponent(selectedEmployee.name)}&employeeId=${encodeURIComponent(selectedEmployee.id)}`,
       { cache: "force-cache" }
     )
       .then(async (response) => {
@@ -194,6 +223,44 @@ export default function ChristmasLettersPreview() {
       cancelled = true;
     };
   }, [activeTab, selectedEmployee.id, selectedEmployee.name, year]);
+
+  useEffect(() => {
+    if (!selectedEmployee.id) return;
+
+    let cancelled = false;
+    setDraftLoading(true);
+    setDraft(null);
+    setDraftText("");
+    setShowPrintConfirmation(false);
+
+    fetch(
+      `/api/christmas-letters?year=${year}&draftFor=${encodeURIComponent(selectedEmployee.id)}`,
+      { cache: "no-store" }
+    )
+      .then(async (response) => {
+        const data = (await response.json()) as {
+          draft: ChristmasLetterDraft | null;
+          message?: string;
+        };
+        if (!response.ok) throw new Error(data.message || "Concept ophalen is mislukt.");
+        if (!cancelled) {
+          setDraft(data.draft);
+          setDraftText(data.draft?.text || "");
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setMessage(error instanceof Error ? error.message : "Concept ophalen is mislukt.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setDraftLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEmployee.id, year]);
 
   async function performAction(payload: Record<string, unknown>) {
     setSaving(true);
@@ -230,6 +297,169 @@ export default function ChristmasLettersPreview() {
       category: "Notitie",
     });
     if (saved) setNewNote("");
+  }
+
+  async function deleteNote(noteId: string) {
+    if (!selectedEmployee.id) return;
+    if (!window.confirm("Deze persoonlijke notitie verwijderen?")) return;
+
+    const saved = await performAction({
+      action: "delete-note",
+      employeeId: selectedEmployee.id,
+      noteId,
+      year,
+    });
+    if (saved) setOpenNoteMenuId("");
+  }
+
+  async function generateDraft() {
+    if (!selectedEmployee.id || !notes.length || generating) return;
+    if (!aiAvailable) {
+      setMessage("De AI-schrijver is nog niet gekoppeld. Voeg OPENAI_API_KEY toe in Vercel.");
+      return;
+    }
+
+    setGenerating(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/christmas-letters/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employeeId: selectedEmployee.id, year }),
+      });
+      const data = (await response.json()) as {
+        draft?: ChristmasLetterDraft;
+        message?: string;
+      };
+      if (!response.ok || !data.draft) {
+        throw new Error(data.message || "AI-concept maken is mislukt.");
+      }
+
+      setDraft(data.draft);
+      setDraftText(data.draft.text);
+      setEmployees((current) =>
+        current.map((employee) =>
+          employee.id === selectedEmployee.id
+            ? {
+                ...employee,
+                hasDraft: true,
+                status: "Concept klaar",
+                printedAt: "",
+              }
+            : employee
+        )
+      );
+      if (
+        selectedEmployee.activeForLetters &&
+        (selectedEmployee.status === "Definitief" || selectedEmployee.status === "Geprint")
+      ) {
+        setStats((current) => ({
+          ...current,
+          todo: current.todo + 1,
+          ready: Math.max(0, current.ready - 1),
+          definitive:
+            selectedEmployee.status === "Definitief"
+              ? Math.max(0, current.definitive - 1)
+              : current.definitive,
+          printed:
+            selectedEmployee.status === "Geprint"
+              ? Math.max(0, current.printed - 1)
+              : current.printed,
+        }));
+      }
+      setActiveTab("concept");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "AI-concept maken is mislukt.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function saveDraft(stage: "Concept klaar" | "Definitief") {
+    const text = draftText.trim();
+    if (!selectedEmployee.id || !text) {
+      setMessage("De brief is nog leeg.");
+      return false;
+    }
+
+    const saved = await performAction({
+      action: "save-draft",
+      employeeId: selectedEmployee.id,
+      year,
+      text,
+      stage,
+      model: draft?.model || "handmatig",
+    });
+    if (saved) {
+      const now = new Date().toISOString();
+      setDraft((current) => ({
+        text,
+        model: current?.model || "handmatig",
+        createdAt: current?.createdAt || now,
+        updatedAt: now,
+        printedAt: current?.text === text ? current.printedAt : "",
+        printCount: current?.printCount || 0,
+      }));
+    }
+    return saved;
+  }
+
+  async function printDraft() {
+    const text = draftText.trim();
+    if (!text || !selectedEmployee.id) return;
+
+    const printWindow = window.open("", "_blank", "width=820,height=920");
+    if (!printWindow) {
+      setMessage("Sta pop-ups toe om de brief te printen.");
+      return;
+    }
+    printWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Brief voorbereiden…</p>");
+
+    const saved = await saveDraft("Definitief");
+    if (!saved) {
+      printWindow.close();
+      return;
+    }
+
+    const paragraphs = text
+      .split(/\n{2,}/)
+      .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
+      .join("");
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+      <html lang="nl"><head><meta charset="utf-8"><title>Kerstbrief ${escapeHtml(selectedEmployee.name)} ${year}</title>
+      <style>
+        @page { size: A4; margin: 24mm 23mm; }
+        body { margin: 0; color: #2f2823; font-family: Georgia, 'Times New Roman', serif; font-size: 11.5pt; line-height: 1.55; }
+        p { margin: 0 0 12pt; }
+      </style></head><body>${paragraphs}
+      <script>window.addEventListener('load', function(){ window.focus(); window.print(); });<\/script>
+      </body></html>`);
+    printWindow.document.close();
+    setShowPrintConfirmation(true);
+  }
+
+  async function confirmPrinted() {
+    const text = draftText.trim();
+    if (!selectedEmployee.id || !text) return;
+    const saved = await performAction({
+      action: "mark-printed",
+      employeeId: selectedEmployee.id,
+      year,
+      text,
+    });
+    if (saved) {
+      const now = new Date().toISOString();
+      setDraft((current) => ({
+        text,
+        model: current?.model || "handmatig",
+        createdAt: current?.createdAt || now,
+        updatedAt: now,
+        printedAt: now,
+        printCount: (current?.printCount || 0) + 1,
+      }));
+      setShowPrintConfirmation(false);
+    }
   }
 
   async function toggleSelectedEmployee() {
@@ -275,16 +505,6 @@ export default function ChristmasLettersPreview() {
     }
   }
 
-  async function setSelectedStage(stage: ChristmasLetterStage) {
-    if (!selectedEmployee.id) return;
-    await performAction({
-      action: "set-stage",
-      employeeId: selectedEmployee.id,
-      year,
-      stage,
-    });
-  }
-
   return (
     <section className="space-y-2.5">
       <div className="rounded-[1.35rem] border border-white/70 bg-white/92 p-3 shadow-[0_10px_28px_rgba(72,91,66,0.12)] sm:p-4">
@@ -295,7 +515,7 @@ export default function ChristmasLettersPreview() {
                 Kerstbrieven {year}
               </h1>
               <span className="rounded-full bg-[#e8f0e5] px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#486046]">
-                Actief = brief maken
+                Alleen briefstatus · Tamigo blijft gelijk
               </span>
             </div>
           </div>
@@ -373,10 +593,11 @@ export default function ChristmasLettersPreview() {
 
         <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[#eee8e1] pt-3">
           {[
-            [String(stats.active), "actief", "#c3d3bc"],
-            [String(stats.inactive), "inactief", "#d9d2c9"],
-            [String(stats.withNotes), "met notities", "#fed500"],
-            [String(stats.definitive), "definitief", "#d8c5cf"],
+            [String(stats.active), "brieven", "#c3d3bc"],
+            [String(stats.inactive), "geen brief", "#d9d2c9"],
+            [String(stats.todo), "te doen", "#fed500"],
+            [String(stats.definitive), "klaar", "#d8c5cf"],
+            [String(stats.printed), "geprint", "#82a27b"],
           ].map(([value, label, color]) => (
             <div key={label} className="flex items-center gap-2 rounded-full border border-[#e5ded6] bg-[#faf9f7] py-1 pl-1 pr-3">
                 <span
@@ -407,8 +628,8 @@ export default function ChristmasLettersPreview() {
             </label>
             <div className="mt-1.5 grid grid-cols-3 gap-1 rounded-lg bg-[#f1ede8] p-1">
               {([
-                ["active", `Actief ${stats.active}`],
-                ["inactive", `Inactief ${stats.inactive}`],
+                ["active", `Brief ${stats.active}`],
+                ["inactive", `Geen brief ${stats.inactive}`],
                 ["all", `Alle ${stats.total}`],
               ] as Array<[RosterFilter, string]>).map(([filter, label]) => (
                 <button
@@ -457,10 +678,21 @@ export default function ChristmasLettersPreview() {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-black text-[#2f2823]">{employee.name}</span>
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${employee.activeForLetters ? "bg-[#4f8a5b]" : "bg-[#a69d95]"}`} title={employee.activeForLetters ? "Actief" : "Inactief"} />
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${
+                            !employee.activeForLetters
+                              ? "bg-[#a69d95]"
+                              : employee.status === "Geprint"
+                                ? "bg-[#245c32]"
+                                : employee.status === "Definitief"
+                                  ? "bg-[#a27a8e]"
+                                  : "bg-[#fed500]"
+                          }`}
+                          title={employee.activeForLetters ? employee.status : "Geen brief"}
+                        />
                       </span>
                       <span className="block truncate text-[0.68rem] text-[#857b72]">
-                        {employee.location || employee.role} · {employee.noteCount} notities · {employee.activeForLetters ? "actief" : "inactief"}
+                        {employee.location || employee.role} · {employee.activeForLetters ? employee.status.toLowerCase() : "geen brief"}
                       </span>
                     </span>
                   </div>
@@ -470,7 +702,7 @@ export default function ChristmasLettersPreview() {
           </div>
 
           <div className="mx-2 mb-2 border-t border-[#e3eae0] pt-2 text-[0.65rem] italic text-[#667163]">
-            Inactief krijgt geen nieuwe kerstbrief.
+            ‘Geen brief’ verandert niets in Tamigo.
           </div>
         </aside>
 
@@ -508,7 +740,7 @@ export default function ChristmasLettersPreview() {
                       : "bg-[#245c32] text-white"
                   }`}
                 >
-                  {selectedEmployee.activeForLetters ? "Zet op inactief" : "Actief maken"}
+                  {selectedEmployee.activeForLetters ? "Geen brief maken" : "Wel brief maken"}
                 </button>
               </div>
             </div>
@@ -588,7 +820,28 @@ export default function ChristmasLettersPreview() {
                             </div>
                             <p className="mt-0.5 text-[0.8rem] leading-snug text-[#655b53]">{note.text}</p>
                           </div>
-                          <button type="button" className="text-[#9d938b]" aria-label="Notitie bewerken">•••</button>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setOpenNoteMenuId((current) => current === note.id ? "" : note.id)}
+                              className="rounded-md px-1.5 py-0.5 text-[#9d938b] hover:bg-[#f1ede8]"
+                              aria-label="Acties voor notitie"
+                            >
+                              •••
+                            </button>
+                            {openNoteMenuId === note.id && (
+                              <div className="absolute right-0 z-10 mt-1 min-w-28 rounded-lg border border-[#e2d9d0] bg-white p-1 shadow-lg">
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() => void deleteNote(note.id)}
+                                  className="w-full rounded-md px-2.5 py-1.5 text-left text-xs font-black text-[#b04435] hover:bg-[#fff0ec] disabled:opacity-50"
+                                >
+                                  Verwijderen
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -614,12 +867,15 @@ export default function ChristmasLettersPreview() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => setActiveTab("concept")}
-                      disabled={!notes.length}
+                      onClick={() => void generateDraft()}
+                      disabled={!notes.length || generating || !aiAvailable}
                       className="mt-2 w-full rounded-lg bg-[#a27a8e] px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Maak opzet →
+                      {generating ? "AI schrijft…" : draftText ? "Nieuwe AI-versie" : "Schrijf met AI →"}
                     </button>
+                    {!aiAvailable && (
+                      <p className="mt-1 text-[0.62rem] italic text-[#7e6875]">OPENAI_API_KEY ontbreekt nog.</p>
+                    )}
                   </div>
                 </aside>
               </div>
@@ -673,42 +929,89 @@ export default function ChristmasLettersPreview() {
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
                 <section>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-base font-black text-[#2f2823]">Opzet voor {selectedEmployee.name.split(" ")[0]}</h2>
-                    <span className="rounded-full bg-[#e9f1e6] px-2.5 py-1 text-[0.68rem] font-black text-[#35603d]">{notes.length} notities gebruikt</span>
+                    <h2 className="text-base font-black text-[#2f2823]">Brief voor {selectedEmployee.name.split(" ")[0]}</h2>
+                    <span className={`rounded-full px-2.5 py-1 text-[0.68rem] font-black ${statusStyles[selectedEmployee.status]}`}>
+                      {selectedEmployee.status}
+                    </span>
                   </div>
-                  {notes.length ? (
-                    <div className="mt-2 rounded-xl border border-[#ddd5cc] bg-[#fffdf9] p-4 text-sm leading-6 text-[#4f463f] shadow-sm" contentEditable suppressContentEditableWarning>
-                      <p className="font-black text-[#342a25]">Lieve {selectedEmployee.name.split(" ")[0]},</p>
-                      <p className="mt-3">Als we terugkijken op {year}, zijn dit de momenten die we graag in jouw persoonlijke kerstbrief willen verwerken:</p>
-                      {notes.map((note) => (
-                        <p key={note.id} className="mt-3">{note.text}</p>
-                      ))}
-                      <p className="mt-3">Dank je wel voor alles wat je dit jaar voor Strik en je collega’s hebt betekend. We wensen je hele fijne feestdagen en alle goeds voor {year + 1}.</p>
-                      <p className="mt-3">Heel veel liefs,<br />Roos &amp; Fien</p>
+                  {draftLoading ? (
+                    <div className="mt-2 rounded-xl border border-dashed border-[#d8d0c8] px-3 py-8 text-center text-xs text-[#8a8178]">
+                      Brief laden…
                     </div>
+                  ) : draftText ? (
+                    <textarea
+                      value={draftText}
+                      onChange={(event) => {
+                        setDraftText(event.target.value);
+                        setShowPrintConfirmation(false);
+                      }}
+                      aria-label={`Kerstbrief voor ${selectedEmployee.name}`}
+                      className="mt-2 min-h-[27rem] w-full resize-y rounded-xl border border-[#ddd5cc] bg-[#fffdf9] p-4 text-sm leading-6 text-[#4f463f] shadow-sm outline-none focus:border-[#a27a8e] focus:ring-2 focus:ring-[#a27a8e]/15"
+                    />
                   ) : (
                     <div className="mt-2 rounded-xl border border-dashed border-[#d8d0c8] px-3 py-6 text-center text-xs text-[#8a8178]">
-                      Voeg eerst notities toe om een feitelijke opzet te maken.
+                      {notes.length
+                        ? "Laat de AI een eerste versie schrijven; daarna kun je alles zelf aanpassen."
+                        : "Voeg eerst een of meer persoonlijke notities toe."}
                     </div>
                   )}
                 </section>
                 <aside className="space-y-2">
                   <div className="rounded-xl bg-[#edf3ea] p-3">
-                    <h3 className="text-sm font-black text-[#315239]">Veilige opzet</h3>
-                    <ul className="mt-2 space-y-1.5 text-xs text-[#52634f]">
-                      <li>✓ Alleen eigen notities</li>
-                      <li>✓ Geen verzonnen feiten</li>
-                      <li>✓ Jaar klopt</li>
-                    </ul>
+                    <h3 className="text-sm font-black text-[#315239]">Slim geschreven</h3>
+                    <p className="mt-1 text-xs leading-snug text-[#52634f]">
+                      Nieuwe notities leveren de feiten; oude brieven bewaken stijl en herhaling.
+                    </p>
                   </div>
-                  <button type="button" onClick={() => setActiveTab("controle")} disabled={!notes.length} className="w-full rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white disabled:opacity-40">Controleer</button>
+                  <button
+                    type="button"
+                    onClick={() => void generateDraft()}
+                    disabled={!notes.length || generating || !aiAvailable}
+                    className="w-full rounded-lg bg-[#a27a8e] px-3 py-2 text-xs font-black text-white disabled:opacity-40"
+                  >
+                    {generating ? "AI schrijft…" : draftText ? "Nieuwe AI-versie" : "Schrijf met AI"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveDraft("Concept klaar")}
+                    disabled={saving || !draftText.trim()}
+                    className="w-full rounded-lg border border-[#d9d1c8] bg-white px-3 py-2 text-xs font-black text-[#5f554d] disabled:opacity-40"
+                  >
+                    Concept opslaan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (await saveDraft("Definitief")) setActiveTab("controle");
+                    }}
+                    disabled={saving || !draftText.trim()}
+                    className="w-full rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white disabled:opacity-40"
+                  >
+                    Klaar voor print
+                  </button>
+                  {!aiAvailable && (
+                    <p className="text-[0.62rem] italic text-[#7e6875]">AI wordt actief zodra OPENAI_API_KEY in Vercel staat.</p>
+                  )}
+                  {draft?.updatedAt && (
+                    <p className="text-[0.62rem] italic text-[#857b72]">
+                      Opgeslagen {new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(draft.updatedAt))}
+                    </p>
+                  )}
                 </aside>
               </div>
             )}
 
             {activeTab === "controle" && (
               <div>
-                <h2 className="text-base font-black text-[#2f2823]">Controle</h2>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-base font-black text-[#2f2823]">Afronden</h2>
+                  {draft?.printedAt && (
+                    <span className="rounded-full bg-[#dcebd8] px-2.5 py-1 text-[0.68rem] font-black text-[#225c31]">
+                      Geprint {new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short" }).format(new Date(draft.printedAt))}
+                      {draft.printCount > 1 ? ` · ${draft.printCount}×` : ""}
+                    </span>
+                  )}
+                </div>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
                   <div className={`rounded-xl border p-3 ${selectedEmployee.previousYears.length ? "border-[#cee0ca] bg-[#eef6ec]" : "border-[#eadb99] bg-[#fff8d8]"}`}>
                     <div className="flex items-center gap-2.5">
@@ -738,14 +1041,28 @@ export default function ChristmasLettersPreview() {
                     <h3 className="text-sm font-black text-[#315b39]">✓ Jaartallen kloppen</h3>
                     <p className="mt-1 text-xs text-[#5c7058]">{year} wordt afgesloten; de wens verwijst naar {year + 1}.</p>
                   </div>
-                  <div className="rounded-xl border border-[#cee0ca] bg-[#eef6ec] p-3">
-                    <h3 className="text-sm font-black text-[#315b39]">✓ Geen extra feiten toegevoegd</h3>
-                    <p className="mt-1 text-xs text-[#5c7058]">Persoonlijke details komen uitsluitend uit jullie eigen notities.</p>
+                  <div className={`rounded-xl border p-3 ${draftText.trim() ? "border-[#cee0ca] bg-[#eef6ec]" : "border-[#eadb99] bg-[#fff8d8]"}`}>
+                    <h3 className={`text-sm font-black ${draftText.trim() ? "text-[#315b39]" : "text-[#765c14]"}`}>
+                      {draftText.trim() ? "✓ Brief opgeslagen" : "! Nog geen brief"}
+                    </h3>
+                    <p className={`mt-1 text-xs ${draftText.trim() ? "text-[#5c7058]" : "text-[#7b6a3e]"}`}>
+                      {draftText.trim() ? "De brief is klaar om definitief te maken en af te drukken." : "Ga eerst naar Brief en maak een concept."}
+                    </p>
                   </div>
                 </div>
+                {showPrintConfirmation && (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#eadb99] bg-[#fff8d8] px-3 py-2.5">
+                    <p className="text-xs font-black text-[#765c14]">Heb je de brief echt afgedrukt?</p>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setShowPrintConfirmation(false)} className="rounded-lg border border-[#ddcf91] bg-white px-3 py-1.5 text-xs font-black text-[#6e6250]">Alleen bekeken</button>
+                      <button type="button" disabled={saving} onClick={() => void confirmPrinted()} className="rounded-lg bg-[#245c32] px-3 py-1.5 text-xs font-black text-white disabled:opacity-40">Ja, registreer</button>
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-[#e7e0d8] pt-3">
-                  <button type="button" disabled={saving || !notes.length} onClick={() => void setSelectedStage("Concept klaar")} className="rounded-lg border border-[#d9d1c8] px-3 py-2 text-xs font-black text-[#5f554d] disabled:opacity-40">Concept opslaan</button>
-                  <button type="button" disabled={saving || !notes.length} onClick={() => void setSelectedStage("Definitief")} className="rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white disabled:opacity-40">Definitief maken</button>
+                  <button type="button" onClick={() => setActiveTab("concept")} className="rounded-lg border border-[#d9d1c8] px-3 py-2 text-xs font-black text-[#5f554d]">Brief aanpassen</button>
+                  <button type="button" disabled={saving || !draftText.trim()} onClick={() => void saveDraft("Definitief")} className="rounded-lg border border-[#a9c1a4] bg-[#edf3ea] px-3 py-2 text-xs font-black text-[#315239] disabled:opacity-40">Definitief opslaan</button>
+                  <button type="button" disabled={saving || !draftText.trim()} onClick={() => void printDraft()} className="rounded-lg bg-[#245c32] px-4 py-2 text-xs font-black text-white disabled:opacity-40">Print brief</button>
                 </div>
               </div>
             )}
