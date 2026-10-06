@@ -911,6 +911,7 @@ export async function POST(request: Request) {
     const draft: ChristmasLetterDraft = {
       text: draftText,
       model: existingDraft?.model || cleanText(body.model, 120),
+      historyYearsUsed: existingDraft?.historyYearsUsed,
       createdAt: existingDraft?.createdAt || now,
       updatedAt: now,
       printedAt:

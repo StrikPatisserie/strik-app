@@ -74,6 +74,7 @@ export type HistoricalChristmasLetter = {
 export type ChristmasLetterDraft = {
   text: string;
   model: string;
+  historyYearsUsed?: number[];
   createdAt: string;
   updatedAt: string;
   printedAt: string;
@@ -199,6 +200,15 @@ function normalizeDraft(value: unknown): ChristmasLetterDraft | null {
   return {
     text: draftText,
     model: text(value.model, 120),
+    historyYearsUsed: Array.isArray(value.historyYearsUsed)
+      ? [
+          ...new Set(
+            value.historyYearsUsed
+              .map((year) => Number(year))
+              .filter((year) => Number.isInteger(year) && year >= 2020 && year <= 2100)
+          ),
+        ].sort((left, right) => right - left)
+      : undefined,
     createdAt: text(value.createdAt, 80),
     updatedAt: text(value.updatedAt, 80),
     printedAt: text(value.printedAt, 80),

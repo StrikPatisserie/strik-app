@@ -1187,7 +1187,7 @@ export default function ChristmasLettersPreview() {
                     <h3 className="text-sm font-black text-[#3c321f]">Eerder benoemd</h3>
                     <p className="mt-1 text-xs leading-snug text-[#756431]">
                       {selectedEmployee.previousYears.length
-                        ? `AI gebruikt alle eerdere brieven uit ${selectedEmployee.previousYears.join(", ")} om herhaling te voorkomen en eventueel één passende terugblik te maken.`
+                        ? `AI gebruikt alle eerdere brieven uit ${selectedEmployee.previousYears.join(", ")} als stijlvoorbeeld én uitsluitlijst voor herhaling.`
                         : "Nog geen oude brieven gekoppeld."}
                     </p>
                   </div>
@@ -1309,7 +1309,11 @@ export default function ChristmasLettersPreview() {
                     <p className="mt-1 text-xs leading-snug text-[#52634f]">
                       {selectedEmployee.letterMode === "general"
                         ? "Dit template wordt bij het printen automatisch met de juiste voornaam gevuld."
-                        : "Nieuwe notities leveren de feiten; oude brieven bewaken stijl en herhaling."}
+                        : draft?.historyYearsUsed?.length
+                          ? `Bij deze versie zijn de brieven uit ${draft.historyYearsUsed.join(", ")} gecontroleerd op inhoudelijke herhaling.`
+                          : selectedEmployee.previousYears.length
+                            ? `Maak een nieuwe AI-versie; de brieven uit ${selectedEmployee.previousYears.join(", ")} worden dan als uitsluitlijst gebruikt.`
+                            : "Nieuwe notities leveren de feiten; er zijn nog geen oude brieven gekoppeld."}
                     </p>
                   </div>
                   {selectedEmployee.letterMode === "personal" ? (
