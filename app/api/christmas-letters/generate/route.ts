@@ -7,9 +7,14 @@ import {
   writeChristmasLettersState,
 } from "../../../lib/christmasLettersStorage";
 import type {
+  ChristmasLetterCategory,
   ChristmasLetterDraft,
   ChristmasLettersState,
   HistoricalChristmasLetter,
+} from "../../../management/kerstbrieven/christmasLettersTypes";
+import {
+  canUseGeneralChristmasTemplate,
+  inferChristmasLetterCategory,
 } from "../../../management/kerstbrieven/christmasLettersTypes";
 
 export const runtime = "nodejs";
@@ -32,9 +37,10 @@ function savedHistoricalLetters(
   state: ChristmasLettersState,
   employeeId: string,
   employeeName: string,
-  selectedYear: number
+  selectedYear: number,
+  category: ChristmasLetterCategory
 ) {
-  return Object.entries(state.draftsByYear).flatMap(([year, employeeDrafts]) => {
+  const personalLetters = Object.entries(state.draftsByYear).flatMap(([year, employeeDrafts]) => {
     const numericYear = Number(year);
     const draft = employeeDrafts[employeeId];
     const stage = state.employeeOverrides[employeeId]?.stageByYear?.[year];
@@ -52,6 +58,30 @@ function savedHistoricalLetters(
       content: draft.text,
     } satisfies HistoricalChristmasLetter];
   });
+  const generalLetters = Object.entries(state.categoryTemplatesByYear).flatMap(
+    ([year, templates]) => {
+      const numericYear = Number(year);
+      const mode = state.employeeOverrides[employeeId]?.letterModeByYear?.[year];
+      const template = templates[category];
+      const printRecord = state.generalPrintsByYear[year]?.[employeeId];
+      if (
+        numericYear >= selectedYear ||
+        mode !== "general" ||
+        !template?.text ||
+        printRecord?.templateUpdatedAt !== template.updatedAt
+      ) return [];
+      return [{
+        id: `general-${year}-${employeeId}`,
+        year: numericYear,
+        recipient: employeeName,
+        content: template.text.replace(
+          /\[voornaam\]|\{\{voornaam\}\}/gi,
+          employeeName.trim().split(/\s+/)[0] || employeeName
+        ),
+      } satisfies HistoricalChristmasLetter];
+    }
+  );
+  return [...personalLetters, ...generalLetters];
 }
 
 function extractOutputText(value: unknown) {
@@ -133,6 +163,25 @@ export async function POST(request: Request) {
   if (!employee) {
     return NextResponse.json({ message: "Medewerker is niet gevonden." }, { status: 404 });
   }
+  const employeeCategory =
+    state.employeeOverrides[employeeId]?.category ||
+    ("category" in employee ? employee.category : undefined) ||
+    inferChristmasLetterCategory(
+      employee.role,
+      "location" in employee ? employee.location : ""
+    );
+  const requestedMode =
+    state.employeeOverrides[employeeId]?.letterModeByYear?.[String(year)] ||
+    "personal";
+  if (
+    requestedMode === "general" &&
+    canUseGeneralChristmasTemplate(employeeCategory)
+  ) {
+    return NextResponse.json(
+      { message: "Kies ‘Eigen brief’ om voor deze medewerker een AI-brief te schrijven." },
+      { status: 400 }
+    );
+  }
   const notes = (state.notesByYear[String(year)]?.[employeeId] || []).map(
     (note) => note.text
   );
@@ -144,7 +193,7 @@ export async function POST(request: Request) {
   }
 
   const previousLetters = [
-    ...savedHistoricalLetters(state, employeeId, employee.name, year),
+    ...savedHistoricalLetters(state, employeeId, employee.name, year, employeeCategory),
     ...historicalLettersForEmployee(employee.name).filter(
       (letter) => letter.year < year
     ),

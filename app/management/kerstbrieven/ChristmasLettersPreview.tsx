@@ -2,14 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type {
+  ChristmasLetterCategory,
   ChristmasLetterDraft,
   ChristmasLetterEmployee,
+  ChristmasLetterMode,
   ChristmasLetterStage,
   HistoricalChristmasLetter,
+} from "./christmasLettersTypes";
+import {
+  CHRISTMAS_LETTER_CATEGORIES,
+  GENERAL_TEMPLATE_CATEGORIES,
+  canUseGeneralChristmasTemplate,
 } from "./christmasLettersTypes";
 
 type LetterTab = "notities" | "vorige" | "concept" | "controle";
 type RosterFilter = "active" | "inactive" | "all";
+type CategoryFilter = "all" | ChristmasLetterCategory;
+
+const categoryLabels: Record<ChristmasLetterCategory, string> = {
+  "vast-winkel": "Vast winkel",
+  "hulp-winkel": "Hulp winkel",
+  bezorgers: "Bezorgers",
+  "vast-bakkerij": "Vast bakkerij",
+  "hulp-bakkerij": "Hulp bakkerij",
+  overig: "Overig",
+};
 
 type ChristmasLettersResponse = {
   year: number;
@@ -28,6 +45,7 @@ type ChristmasLettersResponse = {
   tamigoAvailable: boolean;
   tamigoMessage: string;
   aiAvailable: boolean;
+  categoryTemplates: Partial<Record<ChristmasLetterCategory, ChristmasLetterDraft>>;
 };
 
 type ChristmasLettersHistoryResponse = {
@@ -50,6 +68,9 @@ const emptyEmployee: ChristmasLetterEmployee = {
   email: "",
   role: "",
   location: "",
+  category: "overig",
+  letterMode: "personal",
+  templateAvailable: false,
   source: "manual",
   currentlyActive: false,
   activeForLetters: false,
@@ -79,12 +100,18 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
+function personalizeTemplate(value: string, name: string) {
+  const firstName = name.trim().split(/\s+/)[0] || name;
+  return value.replace(/\[voornaam\]|\{\{voornaam\}\}/gi, firstName);
+}
+
 export default function ChristmasLettersPreview() {
   const [employees, setEmployees] = useState<ChristmasLetterEmployee[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [activeTab, setActiveTab] = useState<LetterTab>("notities");
   const [query, setQuery] = useState("");
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("active");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [year, setYear] = useState(new Date().getFullYear());
   const [newNote, setNewNote] = useState("");
   const [loading, setLoading] = useState(true);
@@ -96,6 +123,7 @@ export default function ChristmasLettersPreview() {
     role: "",
     location: "",
     email: "",
+    category: "overig" as ChristmasLetterCategory,
   });
   const [stats, setStats] = useState({
     total: 0,
@@ -118,12 +146,19 @@ export default function ChristmasLettersPreview() {
   const [generating, setGenerating] = useState(false);
   const [openNoteMenuId, setOpenNoteMenuId] = useState("");
   const [showPrintConfirmation, setShowPrintConfirmation] = useState(false);
+  const [categoryTemplates, setCategoryTemplates] = useState<
+    Partial<Record<ChristmasLetterCategory, ChristmasLetterDraft>>
+  >({});
+  const [editingTemplateCategory, setEditingTemplateCategory] =
+    useState<ChristmasLetterCategory | null>(null);
+  const [categoryTemplateText, setCategoryTemplateText] = useState("");
 
   function applyResponse(data: ChristmasLettersResponse) {
     setEmployees(data.employees);
     setStats(data.stats);
     setStorageAvailable(data.storageAvailable);
     setAiAvailable(data.aiAvailable);
+    setCategoryTemplates(data.categoryTemplates || {});
     setSelectedId((current) => {
       if (current && data.employees.some((employee) => employee.id === current)) {
         return current;
@@ -143,6 +178,8 @@ export default function ChristmasLettersPreview() {
     let cancelled = false;
     setLoading(true);
     setMessage("");
+    setEditingTemplateCategory(null);
+    setCategoryTemplateText("");
 
     fetch(`/api/christmas-letters?year=${year}`, { cache: "no-store" })
       .then(async (response) => {
@@ -171,18 +208,34 @@ export default function ChristmasLettersPreview() {
     employees[0] ||
     emptyEmployee;
   const notes = selectedEmployee.notes;
+  const selectedTemplateUpdatedAt =
+    categoryTemplates[selectedEmployee.category]?.updatedAt || "";
   const filteredEmployees = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return employees.filter((employee) => {
       if (rosterFilter === "active" && !employee.activeForLetters) return false;
       if (rosterFilter === "inactive" && employee.activeForLetters) return false;
+      if (categoryFilter !== "all" && employee.category !== categoryFilter) return false;
       if (!normalizedQuery) return true;
 
-      return `${employee.name} ${employee.role} ${employee.location}`
+      return `${employee.name} ${employee.role} ${employee.location} ${categoryLabels[employee.category]}`
         .toLowerCase()
         .includes(normalizedQuery);
     });
-  }, [employees, query, rosterFilter]);
+  }, [categoryFilter, employees, query, rosterFilter]);
+
+  const categoryCounts = useMemo(
+    () =>
+      Object.fromEntries(
+        CHRISTMAS_LETTER_CATEGORIES.map((category) => [
+          category,
+          employees.filter(
+            (employee) => employee.activeForLetters && employee.category === category
+          ).length,
+        ])
+      ) as Record<ChristmasLetterCategory, number>,
+    [employees]
+  );
 
   const tabLabels: Array<{ id: LetterTab; label: string; count?: number }> = [
     { id: "notities", label: `Notities ${year}`, count: selectedEmployee.noteCount },
@@ -260,7 +313,13 @@ export default function ChristmasLettersPreview() {
     return () => {
       cancelled = true;
     };
-  }, [selectedEmployee.id, year]);
+  }, [
+    selectedEmployee.category,
+    selectedEmployee.id,
+    selectedEmployee.letterMode,
+    year,
+    selectedTemplateUpdatedAt,
+  ]);
 
   async function performAction(payload: Record<string, unknown>) {
     setSaving(true);
@@ -314,6 +373,10 @@ export default function ChristmasLettersPreview() {
 
   async function generateDraft() {
     if (!selectedEmployee.id || !notes.length || generating) return;
+    if (selectedEmployee.letterMode === "general") {
+      setMessage("Kies eerst ‘Eigen brief’ om een persoonlijke AI-brief te schrijven.");
+      return;
+    }
     if (!aiAvailable) {
       setMessage("De AI-schrijver is nog niet gekoppeld. Voeg OPENAI_API_KEY toe in Vercel.");
       return;
@@ -381,6 +444,10 @@ export default function ChristmasLettersPreview() {
       setMessage("De brief is nog leeg.");
       return false;
     }
+    if (selectedEmployee.letterMode === "general") {
+      setMessage("Het algemene template wordt bovenaan bij de categorie opgeslagen.");
+      return false;
+    }
 
     const saved = await performAction({
       action: "save-draft",
@@ -415,13 +482,19 @@ export default function ChristmasLettersPreview() {
     }
     printWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Brief voorbereiden…</p>");
 
-    const saved = await saveDraft("Definitief");
-    if (!saved) {
-      printWindow.close();
-      return;
+    if (selectedEmployee.letterMode === "personal") {
+      const saved = await saveDraft("Definitief");
+      if (!saved) {
+        printWindow.close();
+        return;
+      }
     }
 
-    const paragraphs = text
+    const printableText =
+      selectedEmployee.letterMode === "general"
+        ? personalizeTemplate(text, selectedEmployee.name)
+        : text;
+    const paragraphs = printableText
       .split(/\n{2,}/)
       .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
       .join("");
@@ -440,7 +513,10 @@ export default function ChristmasLettersPreview() {
   }
 
   async function confirmPrinted() {
-    const text = draftText.trim();
+    const text =
+      selectedEmployee.letterMode === "general"
+        ? personalizeTemplate(draftText.trim(), selectedEmployee.name)
+        : draftText.trim();
     if (!selectedEmployee.id || !text) return;
     const saved = await performAction({
       action: "mark-printed",
@@ -499,10 +575,54 @@ export default function ChristmasLettersPreview() {
       ...newEmployee,
     });
     if (saved) {
-      setNewEmployee({ name: "", role: "", location: "", email: "" });
+      setNewEmployee({ name: "", role: "", location: "", email: "", category: "overig" });
       setShowAddEmployee(false);
       setRosterFilter("active");
     }
+  }
+
+  async function setEmployeeCategory(category: ChristmasLetterCategory) {
+    if (!selectedEmployee.id || category === selectedEmployee.category) return;
+    await performAction({
+      action: "set-category",
+      employeeId: selectedEmployee.id,
+      year,
+      category,
+    });
+  }
+
+  async function setEmployeeLetterMode(mode: ChristmasLetterMode) {
+    if (!selectedEmployee.id || mode === selectedEmployee.letterMode) return;
+    await performAction({
+      action: "set-letter-mode",
+      employeeId: selectedEmployee.id,
+      year,
+      mode,
+    });
+  }
+
+  function openCategoryTemplate(category: ChristmasLetterCategory) {
+    setEditingTemplateCategory((current) => (current === category ? null : category));
+    setCategoryTemplateText(categoryTemplates[category]?.text || "Lieve [voornaam],\n\n");
+  }
+
+  async function saveCategoryTemplate() {
+    if (!editingTemplateCategory || !categoryTemplateText.trim()) return;
+    await performAction({
+      action: "save-category-template",
+      year,
+      category: editingTemplateCategory,
+      text: categoryTemplateText,
+    });
+  }
+
+  async function assignCategoryTemplate(category: ChristmasLetterCategory) {
+    if (!window.confirm(`Algemeen template toewijzen aan alle ${categoryCounts[category]} actieve medewerkers in ${categoryLabels[category]}?`)) return;
+    await performAction({
+      action: "assign-category-template",
+      year,
+      category,
+    });
   }
 
   return (
@@ -547,7 +667,7 @@ export default function ChristmasLettersPreview() {
         </div>
 
         {showAddEmployee && (
-          <form onSubmit={addEmployee} className="mt-3 grid gap-2 border-t border-[#eee8e1] pt-3 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_1.2fr_auto]">
+          <form onSubmit={addEmployee} className="mt-3 grid gap-2 border-t border-[#eee8e1] pt-3 sm:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr_1fr_1.2fr_auto]">
             <input
               required
               value={newEmployee.name}
@@ -574,6 +694,19 @@ export default function ChristmasLettersPreview() {
               placeholder="E-mail (optioneel)"
               className="rounded-lg border border-[#ddd5cb] bg-[#faf8f5] px-3 py-2 text-xs outline-none"
             />
+            <select
+              value={newEmployee.category}
+              onChange={(event) => setNewEmployee((current) => ({
+                ...current,
+                category: event.target.value as ChristmasLetterCategory,
+              }))}
+              className="rounded-lg border border-[#ddd5cb] bg-[#faf8f5] px-3 py-2 text-xs font-bold outline-none"
+              aria-label="Personeelscategorie"
+            >
+              {CHRISTMAS_LETTER_CATEGORIES.map((category) => (
+                <option key={category} value={category}>{categoryLabels[category]}</option>
+              ))}
+            </select>
             <button disabled={saving} className="rounded-lg bg-[#fed500] px-3 py-2 text-xs font-black text-[#382e1d] disabled:opacity-50">
               Toevoegen
             </button>
@@ -612,7 +745,78 @@ export default function ChristmasLettersPreview() {
             </div>
           ))}
         </div>
+
+        <div className="mt-2 flex gap-1.5 overflow-x-auto border-t border-[#eee8e1] pt-2">
+          <button
+            type="button"
+            onClick={() => setCategoryFilter("all")}
+            className={`min-w-max rounded-full px-3 py-1.5 text-[0.65rem] font-black ${categoryFilter === "all" ? "bg-[#352720] text-white" : "bg-[#f4f0eb] text-[#756b62]"}`}
+          >
+            Alle categorieën · {stats.active}
+          </button>
+          {CHRISTMAS_LETTER_CATEGORIES.map((category) => (
+            <button
+              key={category}
+              type="button"
+              onClick={() => {
+                setCategoryFilter(category);
+                setRosterFilter("active");
+              }}
+              className={`min-w-max rounded-full px-3 py-1.5 text-[0.65rem] font-black ${categoryFilter === category ? "bg-[#a27a8e] text-white" : "bg-[#f4f0eb] text-[#756b62]"}`}
+            >
+              {categoryLabels[category]} · {categoryCounts[category]}
+            </button>
+          ))}
+        </div>
       </div>
+
+      <section className="rounded-[1.35rem] border border-white/70 bg-white/92 p-3 shadow-[0_8px_24px_rgba(72,91,66,0.1)]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-black text-[#352720]">Algemene brieven</h2>
+          <span className="text-[0.65rem] italic text-[#81766d]">Gebruik [voornaam] voor de aanhef.</span>
+        </div>
+        <div className="mt-2 grid gap-2 md:grid-cols-3">
+          {GENERAL_TEMPLATE_CATEGORIES.map((category) => {
+            const template = categoryTemplates[category];
+            const assigned = employees.filter(
+              (employee) =>
+                employee.activeForLetters &&
+                employee.category === category &&
+                employee.letterMode === "general"
+            ).length;
+            return (
+              <button
+                key={category}
+                type="button"
+                onClick={() => openCategoryTemplate(category)}
+                className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left ${editingTemplateCategory === category ? "border-[#a27a8e] bg-[#f6eff3]" : "border-[#e4ddd5] bg-[#fbfaf8]"}`}
+              >
+                <span>
+                  <span className="block text-xs font-black text-[#3b312b]">{categoryLabels[category]}</span>
+                  <span className="block text-[0.65rem] text-[#82786f]">{assigned}/{categoryCounts[category]} algemeen</span>
+                </span>
+                <span className={`rounded-full px-2 py-1 text-[0.6rem] font-black ${template ? "bg-[#dcebd8] text-[#285632]" : "bg-[#fff0b2] text-[#765c14]"}`}>
+                  {template ? "Geschreven" : "Nog maken"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {editingTemplateCategory && (
+          <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <textarea
+              value={categoryTemplateText}
+              onChange={(event) => setCategoryTemplateText(event.target.value)}
+              className="min-h-36 resize-y rounded-xl border border-[#d9d1c8] bg-[#fffdf9] p-3 text-sm leading-6 text-[#4f463f] outline-none focus:border-[#a27a8e]"
+              aria-label={`Algemene brief ${categoryLabels[editingTemplateCategory]}`}
+            />
+            <div className="flex gap-2 lg:w-44 lg:flex-col">
+              <button type="button" disabled={saving || !categoryTemplateText.trim()} onClick={() => void saveCategoryTemplate()} className="flex-1 rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white disabled:opacity-40">Template opslaan</button>
+              <button type="button" disabled={saving || !categoryTemplates[editingTemplateCategory]} onClick={() => void assignCategoryTemplate(editingTemplateCategory)} className="flex-1 rounded-lg border border-[#a27a8e] bg-white px-3 py-2 text-xs font-black text-[#704b60] disabled:opacity-40">Aan iedereen koppelen</button>
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="grid min-h-[34rem] gap-2.5 xl:grid-cols-[18rem_minmax(0,1fr)]">
         <aside className="overflow-hidden rounded-[1.35rem] border border-white/70 bg-white/92 shadow-[0_8px_24px_rgba(72,91,66,0.11)]">
@@ -692,7 +896,8 @@ export default function ChristmasLettersPreview() {
                         />
                       </span>
                       <span className="block truncate text-[0.68rem] text-[#857b72]">
-                        {employee.location || employee.role} · {employee.activeForLetters ? employee.status.toLowerCase() : "geen brief"}
+                        {categoryLabels[employee.category]} · {employee.activeForLetters ? employee.status.toLowerCase() : "geen brief"}
+                        {employee.activeForLetters && employee.letterMode === "general" ? " · algemeen" : ""}
                       </span>
                     </span>
                   </div>
@@ -724,6 +929,37 @@ export default function ChristmasLettersPreview() {
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedEmployee.category}
+                  disabled={!selectedEmployee.id || saving}
+                  onChange={(event) => void setEmployeeCategory(event.target.value as ChristmasLetterCategory)}
+                  className="rounded-lg border border-[#ddd5cb] bg-white px-2 py-1 text-[0.68rem] font-black text-[#655c54] outline-none disabled:opacity-50"
+                  aria-label="Categorie medewerker"
+                >
+                  {CHRISTMAS_LETTER_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>{categoryLabels[category]}</option>
+                  ))}
+                </select>
+                {canUseGeneralChristmasTemplate(selectedEmployee.category) && (
+                  <span className="flex rounded-lg bg-[#f1ede8] p-0.5">
+                    <button
+                      type="button"
+                      disabled={saving || !selectedEmployee.id}
+                      onClick={() => void setEmployeeLetterMode("general")}
+                      className={`rounded-md px-2 py-1 text-[0.65rem] font-black ${selectedEmployee.letterMode === "general" ? "bg-[#a27a8e] text-white shadow-sm" : "text-[#746a61]"}`}
+                    >
+                      Gebruik algemeen template
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving || !selectedEmployee.id}
+                      onClick={() => void setEmployeeLetterMode("personal")}
+                      className={`rounded-md px-2 py-1 text-[0.65rem] font-black ${selectedEmployee.letterMode === "personal" ? "bg-white text-[#352720] shadow-sm" : "text-[#746a61]"}`}
+                    >
+                      Schrijf eigen brief
+                    </button>
+                  </span>
+                )}
                 <span className="rounded-full bg-[#f1ede8] px-2.5 py-1 text-[0.68rem] font-black text-[#655c54]">
                   {selectedEmployee.source === "tamigo" ? "Tamigo" : "Handmatig"}
                 </span>
@@ -868,10 +1104,16 @@ export default function ChristmasLettersPreview() {
                     <button
                       type="button"
                       onClick={() => void generateDraft()}
-                      disabled={!notes.length || generating || !aiAvailable}
+                      disabled={!notes.length || generating || !aiAvailable || selectedEmployee.letterMode === "general"}
                       className="mt-2 w-full rounded-lg bg-[#a27a8e] px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {generating ? "AI schrijft…" : draftText ? "Nieuwe AI-versie" : "Schrijf met AI →"}
+                      {selectedEmployee.letterMode === "general"
+                        ? "Gebruikt algemeen template"
+                        : generating
+                          ? "AI schrijft…"
+                          : draftText
+                            ? "Nieuwe AI-versie"
+                            : "Schrijf met AI →"}
                     </button>
                     {!aiAvailable && (
                       <p className="mt-1 text-[0.62rem] italic text-[#7e6875]">OPENAI_API_KEY ontbreekt nog.</p>
@@ -929,7 +1171,9 @@ export default function ChristmasLettersPreview() {
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
                 <section>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-base font-black text-[#2f2823]">Brief voor {selectedEmployee.name.split(" ")[0]}</h2>
+                    <h2 className="text-base font-black text-[#2f2823]">
+                      {selectedEmployee.letterMode === "general" ? "Algemene brief" : `Brief voor ${selectedEmployee.name.split(" ")[0]}`}
+                    </h2>
                     <span className={`rounded-full px-2.5 py-1 text-[0.68rem] font-black ${statusStyles[selectedEmployee.status]}`}>
                       {selectedEmployee.status}
                     </span>
@@ -941,55 +1185,68 @@ export default function ChristmasLettersPreview() {
                   ) : draftText ? (
                     <textarea
                       value={draftText}
+                      readOnly={selectedEmployee.letterMode === "general"}
                       onChange={(event) => {
                         setDraftText(event.target.value);
                         setShowPrintConfirmation(false);
                       }}
                       aria-label={`Kerstbrief voor ${selectedEmployee.name}`}
-                      className="mt-2 min-h-[27rem] w-full resize-y rounded-xl border border-[#ddd5cc] bg-[#fffdf9] p-4 text-sm leading-6 text-[#4f463f] shadow-sm outline-none focus:border-[#a27a8e] focus:ring-2 focus:ring-[#a27a8e]/15"
+                      className={`mt-2 min-h-[27rem] w-full resize-y rounded-xl border border-[#ddd5cc] p-4 text-sm leading-6 text-[#4f463f] shadow-sm outline-none focus:border-[#a27a8e] focus:ring-2 focus:ring-[#a27a8e]/15 ${selectedEmployee.letterMode === "general" ? "bg-[#f5f1ed]" : "bg-[#fffdf9]"}`}
                     />
                   ) : (
                     <div className="mt-2 rounded-xl border border-dashed border-[#d8d0c8] px-3 py-6 text-center text-xs text-[#8a8178]">
-                      {notes.length
-                        ? "Laat de AI een eerste versie schrijven; daarna kun je alles zelf aanpassen."
-                        : "Voeg eerst een of meer persoonlijke notities toe."}
+                      {selectedEmployee.letterMode === "general"
+                        ? `Schrijf eerst bovenaan het algemene template voor ${categoryLabels[selectedEmployee.category]}.`
+                        : notes.length
+                          ? "Laat de AI een eerste versie schrijven; daarna kun je alles zelf aanpassen."
+                          : "Voeg eerst een of meer persoonlijke notities toe."}
                     </div>
                   )}
                 </section>
                 <aside className="space-y-2">
                   <div className="rounded-xl bg-[#edf3ea] p-3">
-                    <h3 className="text-sm font-black text-[#315239]">Slim geschreven</h3>
+                    <h3 className="text-sm font-black text-[#315239]">
+                      {selectedEmployee.letterMode === "general" ? categoryLabels[selectedEmployee.category] : "Slim geschreven"}
+                    </h3>
                     <p className="mt-1 text-xs leading-snug text-[#52634f]">
-                      Nieuwe notities leveren de feiten; oude brieven bewaken stijl en herhaling.
+                      {selectedEmployee.letterMode === "general"
+                        ? "Dit template wordt bij het printen automatisch met de juiste voornaam gevuld."
+                        : "Nieuwe notities leveren de feiten; oude brieven bewaken stijl en herhaling."}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void generateDraft()}
-                    disabled={!notes.length || generating || !aiAvailable}
-                    className="w-full rounded-lg bg-[#a27a8e] px-3 py-2 text-xs font-black text-white disabled:opacity-40"
-                  >
-                    {generating ? "AI schrijft…" : draftText ? "Nieuwe AI-versie" : "Schrijf met AI"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void saveDraft("Concept klaar")}
-                    disabled={saving || !draftText.trim()}
-                    className="w-full rounded-lg border border-[#d9d1c8] bg-white px-3 py-2 text-xs font-black text-[#5f554d] disabled:opacity-40"
-                  >
-                    Concept opslaan
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (await saveDraft("Definitief")) setActiveTab("controle");
-                    }}
-                    disabled={saving || !draftText.trim()}
-                    className="w-full rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white disabled:opacity-40"
-                  >
-                    Klaar voor print
-                  </button>
-                  {!aiAvailable && (
+                  {selectedEmployee.letterMode === "personal" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void generateDraft()}
+                        disabled={!notes.length || generating || !aiAvailable}
+                        className="w-full rounded-lg bg-[#a27a8e] px-3 py-2 text-xs font-black text-white disabled:opacity-40"
+                      >
+                        {generating ? "AI schrijft…" : draftText ? "Nieuwe AI-versie" : "Schrijf met AI"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void saveDraft("Concept klaar")}
+                        disabled={saving || !draftText.trim()}
+                        className="w-full rounded-lg border border-[#d9d1c8] bg-white px-3 py-2 text-xs font-black text-[#5f554d] disabled:opacity-40"
+                      >
+                        Concept opslaan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (await saveDraft("Definitief")) setActiveTab("controle");
+                        }}
+                        disabled={saving || !draftText.trim()}
+                        className="w-full rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white disabled:opacity-40"
+                      >
+                        Klaar voor print
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => setActiveTab("controle")} disabled={!draftText.trim()} className="w-full rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white disabled:opacity-40">Naar print</button>
+                  )}
+                  {!aiAvailable && selectedEmployee.letterMode === "personal" && (
                     <p className="text-[0.62rem] italic text-[#7e6875]">AI wordt actief zodra OPENAI_API_KEY in Vercel staat.</p>
                   )}
                   {draft?.updatedAt && (
@@ -1032,8 +1289,14 @@ export default function ChristmasLettersPreview() {
                     <div className="flex items-center gap-2.5">
                       <MiniIcon>✓</MiniIcon>
                       <div>
-                        <h3 className="text-sm font-black text-[#315b39]">Alleen bevestigde notities</h3>
-                        <p className="mt-0.5 text-xs leading-snug text-[#5c7058]">De opzet gebruikt {notes.length} opgeslagen notitie{notes.length === 1 ? "" : "s"}.</p>
+                        <h3 className="text-sm font-black text-[#315b39]">
+                          {selectedEmployee.letterMode === "general" ? "Algemeen template gekozen" : "Alleen bevestigde notities"}
+                        </h3>
+                        <p className="mt-0.5 text-xs leading-snug text-[#5c7058]">
+                          {selectedEmployee.letterMode === "general"
+                            ? `${categoryLabels[selectedEmployee.category]} · de voornaam wordt automatisch ingevuld.`
+                            : `De opzet gebruikt ${notes.length} opgeslagen notitie${notes.length === 1 ? "" : "s"}.`}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1060,8 +1323,10 @@ export default function ChristmasLettersPreview() {
                   </div>
                 )}
                 <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-[#e7e0d8] pt-3">
-                  <button type="button" onClick={() => setActiveTab("concept")} className="rounded-lg border border-[#d9d1c8] px-3 py-2 text-xs font-black text-[#5f554d]">Brief aanpassen</button>
-                  <button type="button" disabled={saving || !draftText.trim()} onClick={() => void saveDraft("Definitief")} className="rounded-lg border border-[#a9c1a4] bg-[#edf3ea] px-3 py-2 text-xs font-black text-[#315239] disabled:opacity-40">Definitief opslaan</button>
+                  <button type="button" onClick={() => setActiveTab("concept")} className="rounded-lg border border-[#d9d1c8] px-3 py-2 text-xs font-black text-[#5f554d]">Brief bekijken</button>
+                  {selectedEmployee.letterMode === "personal" && (
+                    <button type="button" disabled={saving || !draftText.trim()} onClick={() => void saveDraft("Definitief")} className="rounded-lg border border-[#a9c1a4] bg-[#edf3ea] px-3 py-2 text-xs font-black text-[#315239] disabled:opacity-40">Definitief opslaan</button>
+                  )}
                   <button type="button" disabled={saving || !draftText.trim()} onClick={() => void printDraft()} className="rounded-lg bg-[#245c32] px-4 py-2 text-xs font-black text-white disabled:opacity-40">Print brief</button>
                 </div>
               </div>

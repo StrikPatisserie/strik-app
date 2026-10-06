@@ -6,6 +6,57 @@ export type ChristmasLetterStage =
   | "Definitief"
   | "Geprint";
 
+export const CHRISTMAS_LETTER_CATEGORIES = [
+  "vast-winkel",
+  "hulp-winkel",
+  "bezorgers",
+  "vast-bakkerij",
+  "hulp-bakkerij",
+  "overig",
+] as const;
+
+export type ChristmasLetterCategory =
+  (typeof CHRISTMAS_LETTER_CATEGORIES)[number];
+
+export type ChristmasLetterMode = "general" | "personal";
+
+export const GENERAL_TEMPLATE_CATEGORIES: ChristmasLetterCategory[] = [
+  "hulp-winkel",
+  "bezorgers",
+  "hulp-bakkerij",
+];
+
+export function isChristmasLetterCategory(
+  value: unknown
+): value is ChristmasLetterCategory {
+  return CHRISTMAS_LETTER_CATEGORIES.includes(
+    value as ChristmasLetterCategory
+  );
+}
+
+export function canUseGeneralChristmasTemplate(
+  category: ChristmasLetterCategory
+) {
+  return GENERAL_TEMPLATE_CATEGORIES.includes(category);
+}
+
+export function inferChristmasLetterCategory(
+  role: string,
+  location = ""
+): ChristmasLetterCategory {
+  const source = `${role} ${location}`.toLowerCase();
+  const fixed = /maandloon|vaste?\b|contract|full.?time|part.?time/.test(source);
+
+  if (/bezorg|chauff|transport|logist/.test(source)) return "bezorgers";
+  if (/bakkerij|bakker\b|banket|productie|chocolat/.test(source)) {
+    return fixed ? "vast-bakkerij" : "hulp-bakkerij";
+  }
+  if (/winkel|verkoop|patisserie|ijsloket|horeca|bediening/.test(source)) {
+    return fixed ? "vast-winkel" : "hulp-winkel";
+  }
+  return "overig";
+}
+
 export type ChristmasLetterNote = {
   id: string;
   text: string;
@@ -29,6 +80,12 @@ export type ChristmasLetterDraft = {
   printCount: number;
 };
 
+export type ChristmasLetterPrintRecord = {
+  printedAt: string;
+  printCount: number;
+  templateUpdatedAt: string;
+};
+
 export type KnownChristmasEmployee = {
   id: string;
   name: string;
@@ -46,6 +103,7 @@ export type ManualChristmasEmployee = {
   email: string;
   role: string;
   location: string;
+  category: ChristmasLetterCategory;
   activeForLetters: boolean;
   createdAt: string;
 };
@@ -53,6 +111,8 @@ export type ManualChristmasEmployee = {
 export type ChristmasEmployeeOverride = {
   activeForLetters?: boolean;
   location?: string;
+  category?: ChristmasLetterCategory;
+  letterModeByYear?: Record<string, ChristmasLetterMode>;
   stageByYear?: Record<string, ChristmasLetterStage>;
 };
 
@@ -63,6 +123,14 @@ export type ChristmasLettersState = {
   employeeOverrides: Record<string, ChristmasEmployeeOverride>;
   notesByYear: Record<string, Record<string, ChristmasLetterNote[]>>;
   draftsByYear: Record<string, Record<string, ChristmasLetterDraft>>;
+  categoryTemplatesByYear: Record<
+    string,
+    Partial<Record<ChristmasLetterCategory, ChristmasLetterDraft>>
+  >;
+  generalPrintsByYear: Record<
+    string,
+    Record<string, ChristmasLetterPrintRecord>
+  >;
   updatedAt: string;
 };
 
@@ -73,6 +141,9 @@ export type ChristmasLetterEmployee = {
   email: string;
   role: string;
   location: string;
+  category: ChristmasLetterCategory;
+  letterMode: ChristmasLetterMode;
+  templateAvailable: boolean;
   source: "tamigo" | "manual";
   currentlyActive: boolean;
   activeForLetters: boolean;
@@ -93,6 +164,8 @@ export function emptyChristmasLettersState(): ChristmasLettersState {
     employeeOverrides: {},
     notesByYear: {},
     draftsByYear: {},
+    categoryTemplatesByYear: {},
+    generalPrintsByYear: {},
     updatedAt: "",
   };
 }
@@ -136,6 +209,21 @@ function normalizeDraft(value: unknown): ChristmasLetterDraft | null {
   };
 }
 
+function normalizePrintRecord(value: unknown): ChristmasLetterPrintRecord | null {
+  if (!isRecord(value)) return null;
+  const printedAt = text(value.printedAt, 80);
+  if (!printedAt) return null;
+
+  return {
+    printedAt,
+    printCount:
+      typeof value.printCount === "number" && Number.isFinite(value.printCount)
+        ? Math.max(0, Math.trunc(value.printCount))
+        : 1,
+    templateUpdatedAt: text(value.templateUpdatedAt, 80),
+  };
+}
+
 function normalizeKnownEmployee(value: unknown): KnownChristmasEmployee | null {
   if (!isRecord(value)) return null;
   const id = text(value.id, 180);
@@ -166,6 +254,9 @@ function normalizeManualEmployee(value: unknown): ManualChristmasEmployee | null
     email: text(value.email, 240),
     role: text(value.role, 180) || "Medewerker",
     location: text(value.location, 180),
+    category: isChristmasLetterCategory(value.category)
+      ? value.category
+      : inferChristmasLetterCategory(text(value.role, 180), text(value.location, 180)),
     activeForLetters: value.activeForLetters !== false,
     createdAt: text(value.createdAt, 80),
   };
@@ -193,10 +284,18 @@ export function normalizeChristmasLettersState(value: unknown): ChristmasLetters
     for (const [employeeId, rawOverride] of Object.entries(value.employeeOverrides)) {
       if (!isRecord(rawOverride)) continue;
       const stageByYear: Record<string, ChristmasLetterStage> = {};
+      const letterModeByYear: Record<string, ChristmasLetterMode> = {};
       if (isRecord(rawOverride.stageByYear)) {
         for (const [year, rawStage] of Object.entries(rawOverride.stageByYear)) {
           const stage = normalizeStage(rawStage);
           if (stage) stageByYear[year] = stage;
+        }
+      }
+      if (isRecord(rawOverride.letterModeByYear)) {
+        for (const [year, rawMode] of Object.entries(rawOverride.letterModeByYear)) {
+          if (rawMode === "general" || rawMode === "personal") {
+            letterModeByYear[year] = rawMode;
+          }
         }
       }
 
@@ -206,6 +305,10 @@ export function normalizeChristmasLettersState(value: unknown): ChristmasLetters
             ? rawOverride.activeForLetters
             : undefined,
         location: text(rawOverride.location, 180) || undefined,
+        category: isChristmasLetterCategory(rawOverride.category)
+          ? rawOverride.category
+          : undefined,
+        letterModeByYear,
         stageByYear,
       };
     }
@@ -237,6 +340,31 @@ export function normalizeChristmasLettersState(value: unknown): ChristmasLetters
     }
   }
 
+  const categoryTemplatesByYear: ChristmasLettersState["categoryTemplatesByYear"] = {};
+  if (isRecord(value.categoryTemplatesByYear)) {
+    for (const [year, rawTemplates] of Object.entries(value.categoryTemplatesByYear)) {
+      if (!isRecord(rawTemplates)) continue;
+      categoryTemplatesByYear[year] = {};
+      for (const [rawCategory, rawDraft] of Object.entries(rawTemplates)) {
+        if (!isChristmasLetterCategory(rawCategory)) continue;
+        const draft = normalizeDraft(rawDraft);
+        if (draft) categoryTemplatesByYear[year][rawCategory] = draft;
+      }
+    }
+  }
+
+  const generalPrintsByYear: ChristmasLettersState["generalPrintsByYear"] = {};
+  if (isRecord(value.generalPrintsByYear)) {
+    for (const [year, rawPrints] of Object.entries(value.generalPrintsByYear)) {
+      if (!isRecord(rawPrints)) continue;
+      generalPrintsByYear[year] = {};
+      for (const [employeeId, rawPrint] of Object.entries(rawPrints)) {
+        const printRecord = normalizePrintRecord(rawPrint);
+        if (printRecord) generalPrintsByYear[year][employeeId] = printRecord;
+      }
+    }
+  }
+
   return {
     version: 1,
     knownTamigoEmployees: Array.isArray(value.knownTamigoEmployees)
@@ -252,6 +380,8 @@ export function normalizeChristmasLettersState(value: unknown): ChristmasLetters
     employeeOverrides,
     notesByYear,
     draftsByYear,
+    categoryTemplatesByYear,
+    generalPrintsByYear,
     updatedAt: text(value.updatedAt, 80),
   };
 }
