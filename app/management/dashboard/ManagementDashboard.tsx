@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  laborCostBenchmarkText,
+  productivityBenchmarkText,
+  type LaborBenchmarkStatus,
+} from "../laborBenchmarks";
 
 type DashboardStatus = "loading" | "ready" | "error";
-type BadgeStatus = "green" | "orange" | "red" | "missing";
+type BadgeStatus = LaborBenchmarkStatus;
 type CompareMode = "none" | "previous" | "lastYear" | "custom";
 type Period = "day" | "week" | "month";
 
@@ -375,6 +380,37 @@ function statusTextClasses(status: BadgeStatus) {
   return "text-[#8b8278]";
 }
 
+function KpiStatusDot({
+  status,
+  description,
+}: Readonly<{
+  status: BadgeStatus;
+  description: string;
+}>) {
+  const dotClass = status === "green"
+    ? "border-[#2f6b3b] bg-[#48a15a]"
+    : status === "orange"
+      ? "border-[#b88900] bg-[#fed500]"
+      : status === "red"
+        ? "border-[#a23b30] bg-[#d75a48]"
+        : "border-[#aaa39b] bg-[#d8d3cc]";
+
+  return (
+    <details className="relative inline-flex shrink-0">
+      <summary
+        aria-label={description}
+        title={description}
+        className="grid h-4 w-4 cursor-pointer list-none place-items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-[#a27a8e]"
+      >
+        <span className={`h-2.5 w-2.5 rounded-full border ${dotClass}`} />
+      </summary>
+      <span className="absolute left-0 top-5 z-30 w-max max-w-48 rounded-md border border-[#ded7cf] bg-white px-2 py-1.5 text-[0.6rem] font-bold normal-case leading-snug tracking-normal text-[#4d463d] shadow-lg">
+        {description}
+      </span>
+    </details>
+  );
+}
+
 function Metric({
   label,
   value,
@@ -470,25 +506,33 @@ function DashboardRowCard({
             <p className="text-[0.48rem] uppercase tracking-[0.06em] text-[#2d2a26]/42">
               Prod.
             </p>
-            <p
+            <div
               className={`text-[0.76rem] font-black leading-tight sm:text-sm ${statusTextClasses(
                 row.productivityStatus
-              )}`}
+              )} flex items-center gap-1`}
             >
+              <KpiStatusDot
+                status={row.productivityStatus}
+                description={productivityBenchmarkText(row.shop, row.productivityStatus)}
+              />
               {formatProductivity(row.productivity)}
-            </p>
+            </div>
           </div>
           <div>
             <p className="text-[0.48rem] uppercase tracking-[0.06em] text-[#2d2a26]/42">
               Loon %
             </p>
-            <p
+            <div
               className={`text-[0.76rem] font-black leading-tight sm:text-sm ${statusTextClasses(
                 row.laborCostStatus
-              )}`}
+              )} flex items-center gap-1`}
             >
+              <KpiStatusDot
+                status={row.laborCostStatus}
+                description={laborCostBenchmarkText(row.shop, row.laborCostStatus)}
+              />
               {formatPercent(row.laborCostPercentage)}
-            </p>
+            </div>
           </div>
           {showCompare && (
             <div className="col-span-3 sm:col-span-1">

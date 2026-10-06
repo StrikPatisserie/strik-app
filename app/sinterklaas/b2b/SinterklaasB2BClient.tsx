@@ -135,26 +135,84 @@ function lineDescription(line: B2BProductLine) {
   return `${product.name}${includeChoice ? ` · ${choice}` : ""}${withLogo ? " · eigen logo" : ""}`;
 }
 
-function repriceProductLines(lines: B2BProductLine[]) {
-  const quantities = lines.reduce((totals, line) => {
+type B2BLinePriceBreakdown = {
+  line: B2BProductLine;
+  basePrice: number;
+  optionSurcharge: number;
+  logoSurcharge: number;
+  unitPrice: number;
+  automatic: boolean;
+};
+
+function productQuantities(lines: B2BProductLine[]) {
+  return lines.reduce((totals, line) => {
     if (line.productId !== CUSTOM_PRODUCT_ID) {
       totals.set(line.productId, (totals.get(line.productId) || 0) + Math.max(0, line.quantity));
     }
     return totals;
   }, new Map<string, number>());
+}
+
+function automaticPriceBreakdown(
+  line: B2BProductLine,
+  quantities: Map<string, number>
+): B2BLinePriceBreakdown | null {
+  if (line.productId === CUSTOM_PRODUCT_ID) return null;
+  const product = catalogProduct(line.productId);
+  if (!product) return null;
+  const configured = configuredProduct(product, line.choice);
+  const tier = tierFor(configured, Math.max(1, quantities.get(line.productId) || line.quantity));
+  const basePrice = productUnitPrice(configured, tier, false);
+  const optionSurcharge = configured.fixedSurchargeIncl || 0;
+  const logoSurcharge = line.withLogo && productSupportsLogo(product, line.choice)
+    ? productLogoPrice(false)
+    : 0;
+  return {
+    line,
+    basePrice,
+    optionSurcharge,
+    logoSurcharge,
+    unitPrice: roundCents(basePrice + optionSurcharge + logoSurcharge),
+    automatic: true,
+  };
+}
+
+function linePriceBreakdowns(lines: B2BProductLine[]) {
+  const quantities = productQuantities(lines);
+  return lines.map((line) => {
+    const storedPrice = moneyNumber(line.unitPriceEx);
+    if (line.manualPrice) return {
+      line,
+      basePrice: storedPrice,
+      optionSurcharge: 0,
+      logoSurcharge: 0,
+      unitPrice: storedPrice,
+      automatic: false,
+    };
+    return automaticPriceBreakdown(line, quantities) || {
+      line,
+      basePrice: storedPrice,
+      optionSurcharge: 0,
+      logoSurcharge: 0,
+      unitPrice: storedPrice,
+      automatic: false,
+    };
+  });
+}
+
+function repriceProductLines(lines: B2BProductLine[]) {
+  const quantities = productQuantities(lines);
 
   return lines.map((line) => {
     if (line.manualPrice || line.productId === CUSTOM_PRODUCT_ID) return line;
     const product = catalogProduct(line.productId);
     if (!product) return line;
-    const configured = configuredProduct(product, line.choice);
-    const tier = tierFor(configured, Math.max(1, quantities.get(line.productId) || line.quantity));
-    const unitPrice = productUnitPrice(configured, tier, false) +
-      (line.withLogo && productSupportsLogo(product, line.choice) ? productLogoPrice(false) : 0);
+    const price = automaticPriceBreakdown(line, quantities);
+    if (!price) return line;
     return {
       ...line,
       withLogo: line.withLogo && productSupportsLogo(product, line.choice),
-      unitPriceEx: decimalInput(unitPrice),
+      unitPriceEx: decimalInput(price.unitPrice),
     };
   });
 }
@@ -211,12 +269,12 @@ function matchCatalogDescription(description: string) {
 
 function parseOrderText(value: string) {
   if (!value.startsWith(`${PRODUCT_SECTION_HEADING}\n`)) {
-    return { productLines: [] as B2BProductLine[], otherText: value };
+    return { productLines: [] as B2BProductLine[], otherText: value, originalProductTotal: 0 };
   }
 
   const [productPart, ...otherParts] = value.split(`\n${OTHER_ORDER_HEADING}\n`);
   const unparsedRows: string[] = [];
-  const productLines = productPart.split("\n").slice(1).flatMap((row, index) => {
+  const savedProductLines = productPart.split("\n").slice(1).flatMap((row, index) => {
     const match = row.match(/^(\d+) × (.+) · €\s?([\d.,]+) p\.s\. ex btw · €\s?[\d.,]+$/);
     if (!match) {
       if (row.trim()) unparsedRows.push(row);
@@ -234,9 +292,27 @@ function parseOrderText(value: string) {
       withLogo: Boolean(catalogMatch?.withLogo),
     }];
   });
+  const quantities = productQuantities(savedProductLines);
+  const productLines = savedProductLines.map((line) => {
+    const automaticPrice = automaticPriceBreakdown(line, quantities);
+    if (!automaticPrice) return line;
+    const storedPrice = moneyNumber(line.unitPriceEx);
+    const previousAutomaticPrice = roundCents(
+      automaticPrice.basePrice + automaticPrice.logoSurcharge
+    );
+    const isAutomaticPrice =
+      Math.abs(storedPrice - previousAutomaticPrice) < 0.011 ||
+      Math.abs(storedPrice - automaticPrice.unitPrice) < 0.011;
+    return isAutomaticPrice ? {
+      ...line,
+      unitPriceEx: decimalInput(automaticPrice.unitPrice),
+      manualPrice: false,
+    } : line;
+  });
 
   return {
     productLines,
+    originalProductTotal: productLinesTotal(savedProductLines),
     otherText: [...unparsedRows, otherParts.join(`\n${OTHER_ORDER_HEADING}\n`)].filter(Boolean).join("\n"),
   };
 }
@@ -254,7 +330,26 @@ function usesManualTotal(order: SinterklaasB2BOrder | null | undefined) {
   if (!order?.totalExVat) return false;
   const parsed = parseOrderText(order.orderText);
   if (parsed.productLines.length === 0) return true;
-  return Math.abs(moneyNumber(order.totalExVat) - productLinesTotal(parsed.productLines)) > 0.011;
+  const savedTotal = moneyNumber(order.totalExVat);
+  const calculatedTotal = productLinesTotal(parsed.productLines);
+  return Math.abs(savedTotal - calculatedTotal) > 0.011 &&
+    Math.abs(savedTotal - parsed.originalProductTotal) > 0.011;
+}
+
+function effectiveOrderTotal(order: SinterklaasB2BOrder) {
+  const savedTotal = moneyNumber(order.totalExVat);
+  const parsed = parseOrderText(order.orderText);
+  const calculatedTotal = productLinesTotal(parsed.productLines);
+  if (!order.totalExVat.trim() && parsed.productLines.length > 0) {
+    return calculatedTotal;
+  }
+  if (
+    parsed.productLines.length > 0 &&
+    Math.abs(savedTotal - parsed.originalProductTotal) < 0.011
+  ) {
+    return calculatedTotal;
+  }
+  return savedTotal;
 }
 
 function syncLetterProductLines(productLines: B2BProductLine[], letterLines: B2BLetterLine[]) {
@@ -359,7 +454,7 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined) {
     packaging: order.packaging,
     importantNotes: order.importantNotes,
     priceAgreement: order.priceAgreement,
-    totalExVat: order.totalExVat,
+    totalExVat: usesManualTotal(order) ? order.totalExVat : money(effectiveOrderTotal(order)),
     deliveryMethod: order.deliveryMethod,
     deliveryAddress: order.deliveryAddress,
     invoiceInfo: order.invoiceInfo,
@@ -1264,6 +1359,14 @@ function B2BOrderRow({
   onDelete: (order: SinterklaasB2BOrder) => void;
   onRetryConfirmation: (order: SinterklaasB2BOrder) => void;
 }>) {
+  const parsedOrder = parseOrderText(order.orderText);
+  const priceBreakdowns = linePriceBreakdowns(parsedOrder.productLines);
+  const orderTotal = effectiveOrderTotal(order);
+  const deliveryLabel = /bezorg|lever/i.test(order.deliveryMethod)
+    ? "Bezorgen"
+    : /afhaal|ophal/i.test(order.deliveryMethod)
+      ? "Ophalen"
+      : "";
   const extraLines = [
     order.contactName && `Contact: ${order.contactName}`,
     order.customerEmail && `E-mail: ${order.customerEmail}`,
@@ -1274,7 +1377,7 @@ function B2BOrderRow({
     order.importantNotes && `Belangrijk: ${order.importantNotes}`,
     order.deliveryAddress && `Adres: ${order.deliveryAddress}`,
     order.priceAgreement && `Prijsafspraak: ${order.priceAgreement}`,
-    order.totalExVat && `Totaal ex btw: ${order.totalExVat}`,
+    orderTotal > 0 && `Totaal ex btw: ${money(orderTotal)}`,
     order.reminderEmailedAt &&
       `Reminder gemaild: ${formatDateTime(order.reminderEmailedAt)}`,
     order.confirmationEmailedAt &&
@@ -1306,27 +1409,70 @@ function B2BOrderRow({
         </div>
 
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <h3 className="text-base font-black leading-tight text-[#1a1815]">
-              {order.customerName}
-            </h3>
-            {order.totalExVat && (
-              <span className="rounded-full bg-[#a27a8e]/15 px-2 py-0.5 text-[0.68rem] font-black text-[#765267]">
-                {money(moneyNumber(order.totalExVat))} ex btw
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <h3 className="text-base font-black leading-tight text-[#1a1815]">
+                {order.customerName}
+              </h3>
+              <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
+                {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
               </span>
-            )}
-            <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
-              {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
-            </span>
-            {dueSoon(order) && (
-              <span className="rounded-full bg-[#fff3c4] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#705000]">
-                Binnen 2 dagen
-              </span>
+              {deliveryLabel && (
+                <span className="rounded-full bg-[#dceaf4] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.1em] text-[#24506c]">
+                  {deliveryLabel}
+                </span>
+              )}
+              {dueSoon(order) && (
+                <span className="rounded-full bg-[#fff3c4] px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#705000]">
+                  Binnen 2 dagen
+                </span>
+              )}
+            </div>
+            {orderTotal > 0 && (
+              <div className="flex shrink-0 items-center gap-1">
+                <span className="rounded-full bg-[#a27a8e]/15 px-2 py-0.5 text-[0.68rem] font-black text-[#765267]">
+                  {money(orderTotal)} ex btw
+                </span>
+                {priceBreakdowns.length > 0 && (
+                  <details className="relative">
+                    <summary
+                      aria-label="Prijsspecificatie bekijken"
+                      title="Prijsspecificatie"
+                      className="flex h-6 w-6 cursor-pointer list-none items-center justify-center rounded-full border border-[#a27a8e]/40 bg-white text-[0.7rem] font-black text-[#765267] shadow-sm"
+                    >
+                      €
+                    </summary>
+                    <div className="absolute right-0 z-40 mt-1 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-[#ded4da] bg-white p-3 text-left shadow-xl">
+                      <p className="text-xs font-black text-[#4d3541]">Prijsspecificatie</p>
+                      <div className="mt-2 grid gap-2">
+                        {priceBreakdowns.map((price) => (
+                          <div key={price.line.id} className="border-t border-[#eee8df] pt-2 text-[0.7rem] leading-snug text-[#5d554d] first:border-t-0 first:pt-0">
+                            <p className="font-black text-[#1a1815]">{price.line.quantity}× {lineDescription(price.line)}</p>
+                            {price.automatic ? (
+                              <p>
+                                Staffel {money(price.basePrice)}
+                                {price.optionSurcharge > 0 ? ` + optie ${money(price.optionSurcharge)}` : ""}
+                                {price.logoSurcharge > 0 ? ` + logo ${money(price.logoSurcharge)}` : ""}
+                                {` = ${money(price.unitPrice)} p.s.`}
+                              </p>
+                            ) : (
+                              <p>Afgesproken stukprijs {money(price.unitPrice)}</p>
+                            )}
+                            <p className="font-bold text-[#4d3541]">Regeltotaal {money(price.line.quantity * price.unitPrice)}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 border-t border-[#ded4da] pt-2 text-xs font-black text-[#4d3541]">
+                        Totaal {money(orderTotal)} ex btw
+                      </p>
+                    </div>
+                  </details>
+                )}
+              </div>
             )}
           </div>
 
           <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs font-bold text-[#6b645b]">
-            <span aria-label={order.deliveryMethod || "Leverwijze niet ingevuld"} title={order.deliveryMethod || "Leverwijze niet ingevuld"}>{/bezorg|lever/i.test(order.deliveryMethod) ? "🚚" : /afhaal|ophal/i.test(order.deliveryMethod) ? "🏬" : "○"}</span>
             {order.logo && <span aria-label="Logo nodig" title="Logo nodig">🖼️</span>}
             {order.status === "akkoord" && <span className={`italic ${order.entered ? "text-[#24551d]" : "text-[#b42318]"}`}>{order.entered ? "Ingevoerd" : "Niet ingevoerd"}</span>}
           </div>
@@ -1455,19 +1601,12 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
     () =>
       roundCents(
         forecastOrders.reduce(
-          (total, order) => total + moneyNumber(order.totalExVat),
+          (total, order) => total + effectiveOrderTotal(order),
           0
         )
       ),
     [forecastOrders]
   );
-  const pricedOrderCount = useMemo(
-    () =>
-      forecastOrders.filter((order) => moneyNumber(order.totalExVat) > 0)
-        .length,
-    [forecastOrders]
-  );
-
   async function toggleStatus(
     order: SinterklaasB2BOrder,
     key: "entered" | "productionScheduled" | "productionDone" | "letterProductionDone" | "packed" | "delivered" | "logoChecked" | "textChecked" | "packagingChecked"
@@ -1689,7 +1828,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   return (
     <div className="space-y-4">
       <section className="rounded-2xl border border-[#d7e2d3] bg-white/95 p-3 shadow-sm">
-        <div className="grid gap-2 lg:grid-cols-[minmax(14rem,1fr)_9rem_auto_auto_auto]">
+        <div className="grid gap-2 lg:grid-cols-[minmax(14rem,1fr)_6.5rem_auto_auto_auto]">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -1707,7 +1846,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
               (_, index) => String(Number(currentYear()) - index)
             ).map((optionYear) => (
               <option key={optionYear} value={optionYear}>
-                {optionYear} · {optionYear === currentYear() ? "huidig" : "archief"}
+                {optionYear}
               </option>
             ))}
           </select>
@@ -1742,7 +1881,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
           </label>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#ece7e0] pt-2">
+        <div className="mt-2 border-t border-[#ece7e0] pt-2">
           <div className="inline-flex items-center gap-3 rounded-full bg-[#a27a8e] px-4 py-2 text-white shadow-sm">
             <span className="text-[0.62rem] font-black uppercase tracking-[0.08em] text-white/80">
               Verwachte omzet {year}
@@ -1752,9 +1891,6 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
               {forecastOrders.length} bestellingen
             </span>
           </div>
-          <p className="text-[0.68rem] font-semibold text-[#7b736b]">
-            {pricedOrderCount} met bedrag · aanvragen, offertes en akkoorden tellen mee
-          </p>
         </div>
       </section>
 
@@ -1794,14 +1930,8 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
       )}
 
       <section className="space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <div>
-            <h2 className="text-xl font-black text-[#1a1815]">Bestellingen</h2>
-            <p className="text-[0.68rem] font-semibold text-[#8b8278]">op leverdatum</p>
-          </div>
-          <span className="w-fit rounded-full bg-white/80 px-3 py-1 text-[0.68rem] font-black text-[#6b645b] shadow-sm">
-            {visibleOrders.length} zichtbaar
-          </span>
+        <div className="px-1">
+          <h2 className="text-xl font-black text-[#1a1815]">Bestellingen</h2>
         </div>
 
         <div className="space-y-3">
@@ -1812,14 +1942,11 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
           )}
           {!loading &&
             groupedOrders.map(([key, group]) => (
-              <section key={key} className="overflow-hidden rounded-2xl border border-[#d7e2d3] bg-white/70 shadow-sm">
-                <div className="flex items-center justify-between gap-2 bg-[#dcebd8] px-3 py-2">
+              <section key={key} className="rounded-2xl border border-[#d7e2d3] bg-white/70 shadow-sm">
+                <div className="rounded-t-2xl bg-[#dcebd8] px-3 py-2">
                   <h3 className="text-sm font-black capitalize text-[#1a1815]">
                     {monthLabel(key)}
                   </h3>
-                  <span className="rounded-full bg-white/85 px-2.5 py-1 text-[0.68rem] font-black text-[#6b645b]">
-                    {group.length} orders · {money(group.reduce((total, order) => total + moneyNumber(order.totalExVat), 0))}
-                  </span>
                 </div>
                 <div className="grid gap-2 p-2">
                   {group.map((order) => (

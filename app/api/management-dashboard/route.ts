@@ -13,11 +13,14 @@ import {
   type RevenueShop,
 } from "../../management/revenueData";
 import { getMergedRevenueData } from "../../management/revenueServer";
+import {
+  getLaborCostStatus,
+  getProductivityStatus,
+} from "../../management/laborBenchmarks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Status = "green" | "orange" | "red" | "missing";
 type Period = "day" | "week" | "month";
 type PeriodWeek = { year: number; week: number };
 type PeriodDateRange = { start: string; end: string };
@@ -283,34 +286,6 @@ function percentDifference(current: number | null, compare: number | null) {
   if (current === null || compare === null || compare <= 0) return null;
 
   return Number((((current - compare) / compare) * 100).toFixed(1));
-}
-
-function getProductivityStatus(shop: RevenueShop, value: number | null): Status {
-  if (value === null) return "missing";
-
-  if (shop === "Ziekerstraat") {
-    if (value >= 80) return "green";
-    if (value >= 65) return "orange";
-    return "red";
-  }
-
-  if (value >= 100) return "green";
-  if (value >= 80) return "orange";
-  return "red";
-}
-
-function getLaborCostStatus(shop: RevenueShop, value: number | null): Status {
-  if (value === null) return "missing";
-
-  if (shop === "Ziekerstraat") {
-    if (value <= 0.22) return "green";
-    if (value <= 0.26) return "orange";
-    return "red";
-  }
-
-  if (value <= 0.18) return "green";
-  if (value <= 0.21) return "orange";
-  return "red";
 }
 
 function sumRevenue(
