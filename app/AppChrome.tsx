@@ -47,6 +47,7 @@ export default function AppChrome({
           />
 
           <main
+            data-app-content
             className={`relative z-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pb-24 md:pb-0 ${isWelcomeArea ? "bg-[#c3d3bc]" : ""}`}
           >
             {children}

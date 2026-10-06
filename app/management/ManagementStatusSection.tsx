@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import PersonnelAutoMailPanel from "./CupcakeAutoOrderPanel";
+import PersonnelAutoMailPanel, {
+  PersonnelAutoMailStatus,
+} from "./CupcakeAutoOrderPanel";
 import JubileeReminderPanel, {
   JubileeReminderStatus,
 } from "./JubileeReminderPanel";
@@ -12,47 +14,43 @@ export default function ManagementStatusSection() {
     loading: true,
     openAlertCount: 0,
   });
-  const hasOpenJubileeAlerts = jubileeStatus.openAlertCount > 0;
+  const [mailStatus, setMailStatus] = useState<PersonnelAutoMailStatus>({
+    loading: true,
+    alertCount: 0,
+  });
+  const notificationCount =
+    jubileeStatus.openAlertCount + mailStatus.alertCount;
+  const hasNotifications = notificationCount > 0;
 
   return (
-    <details className="group mt-5">
-      <summary
-        className={`flex cursor-pointer list-none items-center justify-between border-y py-3 text-sm font-black [&::-webkit-details-marker]:hidden ${
-          hasOpenJubileeAlerts
-            ? "border-[#ef5737]/45 bg-[#fff7f4] px-3 text-[#8f2f1d]"
-            : "border-[#e7e0d8] text-[#2d2a26]/70"
-        }`}
+    <div className="mt-5">
+      <section
+        className={
+          hasNotifications
+            ? "rounded-xl border border-[#ef5737]/45 bg-white/70 p-2 shadow-sm"
+            : ""
+        }
       >
-        <span className="flex min-w-0 items-center gap-2">
-          Meldingen & status
-          {hasOpenJubileeAlerts && (
-            <span
-              className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#ef5737] px-1.5 text-xs font-black leading-none text-white shadow-sm"
-              title={`${jubileeStatus.openAlertCount} open verjaardag of jubileum`}
-              aria-label={`${jubileeStatus.openAlertCount} open verjaardag of jubileum`}
-            >
-              !
+        {hasNotifications && (
+          <div className="mb-2 flex items-center justify-between gap-2 px-1 text-xs font-black uppercase tracking-[0.08em] text-[#8f2f1d]">
+            <span className="flex items-center gap-2">
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#ef5737] text-xs leading-none text-white shadow-sm">
+                !
+              </span>
+              Meldingen
             </span>
-          )}
-        </span>
+            <span>{notificationCount} open</span>
+          </div>
+        )}
+        <div className={hasNotifications ? "grid gap-2" : "hidden"}>
+          <JubileeReminderPanel onStatusChange={setJubileeStatus} />
+          <PersonnelAutoMailPanel onStatusChange={setMailStatus} />
+        </div>
+      </section>
 
-        <span className="flex shrink-0 items-center gap-2">
-          {hasOpenJubileeAlerts && (
-            <span className="hidden text-[0.66rem] font-black uppercase leading-tight tracking-normal text-[#b73524] sm:inline">
-              {jubileeStatus.openAlertCount} open
-            </span>
-          )}
-          <span className="text-xl leading-none transition group-open:rotate-90">
-            &gt;
-          </span>
-        </span>
-      </summary>
-
-      <div className="mt-3 grid gap-3">
-        <JubileeReminderPanel onStatusChange={setJubileeStatus} />
-        <PersonnelAutoMailPanel />
+      <div className="mt-2 flex justify-end px-1">
         <WordPressStatusPanel />
       </div>
-    </details>
+    </div>
   );
 }

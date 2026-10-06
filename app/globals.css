@@ -195,6 +195,20 @@ body {
   min-height: 100dvh;
 }
 
+/*
+ * Full-screen dialogs live inside the app content tree, but `position: fixed`
+ * otherwise uses the complete viewport. On desktop that would place the first
+ * 7rem underneath the persistent navigation rail. Keep every internal overlay
+ * inside the usable content area; public pages do not use `data-app-content`.
+ */
+@media screen and (min-width: 768px) {
+  [data-app-content] .fixed.inset-0,
+  [data-app-content] .fixed.inset-x-0 {
+    left: 7rem;
+    inset-inline-start: 7rem;
+  }
+}
+
 /* TYPOGRAPHY */
 h1 {
   font-size: var(--text-4xl);
