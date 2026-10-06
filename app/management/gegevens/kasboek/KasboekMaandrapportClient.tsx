@@ -13,6 +13,7 @@ import {
 import type { LeatGiftcardControlResponse } from "@/app/management/leatGiftcardTypes";
 
 type LoadState = "loading" | "ready" | "saving" | "error";
+type CashbookKind = "patisserie" | "ice";
 
 type RevenueResponse = RevenueData & {
   storage?: {
@@ -42,8 +43,10 @@ type ShopReport = {
   shop: RevenueShop;
   winkel: ReportLine;
   ijs: ReportLine;
-  comments: string[];
-  warnings: string[];
+  winkelComments: string[];
+  winkelWarnings: string[];
+  iceComments: string[];
+  iceWarnings: string[];
 };
 
 type GiftcardDayComparison = {
@@ -54,6 +57,20 @@ type GiftcardDayComparison = {
   leatIssued: number;
   redemptionCount: number;
   issueCount: number;
+};
+
+type GiftcardDayAllocation = {
+  date: string;
+  cashPatisserie: number;
+  cashIce: number;
+  leatPatisserie: number;
+  leatIce: number;
+  issuedPatisserie: number;
+  issuedIce: number;
+  redemptionCountPatisserie: number;
+  redemptionCountIce: number;
+  issueCountPatisserie: number;
+  issueCountIce: number;
 };
 
 const euroFormatter = new Intl.NumberFormat("nl-NL", {
@@ -268,6 +285,42 @@ function cashDepositBelongsToMonth(
   return bookingDate.startsWith(monthKey);
 }
 
+function isCashbookDepositBooked(
+  deposit: RevenueCashDeposit,
+  kind: CashbookKind
+) {
+  if (deposit.cashbookBookedAt) return true;
+
+  return kind === "ice"
+    ? Boolean(deposit.iceCashbookBookedAt)
+    : Boolean(deposit.patisserieCashbookBookedAt);
+}
+
+function cashDepositHasKind(
+  deposit: RevenueCashDeposit,
+  kind: CashbookKind
+) {
+  if (kind === "patisserie") {
+    return Boolean(
+      deposit.amount ||
+        deposit.depositedAt ||
+        deposit.patisserieClosedAt ||
+        deposit.patisserieReportedAt ||
+        deposit.patisserieCashbookBookedAt ||
+        deposit.cashbookBookedAt
+    );
+  }
+
+  return Boolean(
+    deposit.iceDepositAmount !== undefined ||
+      deposit.iceDepositedAt ||
+      deposit.iceDepositClosedAt ||
+      deposit.iceReportedAt ||
+      deposit.iceCashbookBookedAt ||
+      deposit.cashbookBookedAt
+  );
+}
+
 function buildMonthCashTotals(cashRecords: RevenueCashRecord[], month: string) {
   const monthRecords = cashRecords.filter((record) => record.date.startsWith(month));
   const patisserieRecords = monthRecords.filter(hasPatisserieCashRecord);
@@ -276,6 +329,15 @@ function buildMonthCashTotals(cashRecords: RevenueCashRecord[], month: string) {
     (record) => record.checkedAt
   );
   const checkedIceRecords = iceRecords.filter((record) => record.iceCheckedAt);
+  const patisserieReceipts = sumMoney(patisserieRecords, receiptAmount);
+  const iceReceipts = sumMoney(iceRecords, (record) => record.iceReceipts);
+  const patisserieCashOut = sumMoney(patisserieRecords, cashOutAmount);
+  const iceCashOut = sumMoney(iceRecords, (record) => record.iceCashOut);
+  const patisserieCashDifference = sumMoney(
+    checkedPatisserieRecords,
+    safeDifference
+  );
+  const iceCashDifference = sumMoney(checkedIceRecords, iceSafeDifference);
 
   return {
     cashRevenue: sumMoney(
@@ -288,35 +350,56 @@ function buildMonthCashTotals(cashRecords: RevenueCashRecord[], month: string) {
     ),
     checkedPatisserieCash: sumMoney(checkedPatisserieRecords, safeCheckedCash),
     checkedIceCash: sumMoney(checkedIceRecords, iceCheckedCash),
-    receipts: roundMoney(
-      sumMoney(patisserieRecords, receiptAmount) +
-        sumMoney(iceRecords, (record) => record.iceReceipts)
-    ),
-    cashOut: roundMoney(
-      sumMoney(patisserieRecords, cashOutAmount) +
-        sumMoney(iceRecords, (record) => record.iceCashOut)
-    ),
+    patisserieReceipts,
+    iceReceipts,
+    receipts: roundMoney(patisserieReceipts + iceReceipts),
+    patisserieCashOut,
+    iceCashOut,
+    cashOut: roundMoney(patisserieCashOut + iceCashOut),
+    patisserieCashDifference,
+    iceCashDifference,
     cashDifference: roundMoney(
-      sumMoney(checkedPatisserieRecords, safeDifference) +
-        sumMoney(checkedIceRecords, iceSafeDifference)
+      patisserieCashDifference + iceCashDifference
     ),
   };
 }
 
-function cashItGiftcardAmount(record: RevenueCashRecord) {
-  return roundMoney(
-    (hasPatisserieCashRecord(record) ? record.receipts || 0 : 0) +
-      (hasIceCashRecord(record) ? record.iceReceipts || 0 : 0)
-  );
+function cashItGiftcardAmount(
+  record: RevenueCashRecord,
+  kind: CashbookKind
+) {
+  if (kind === "ice") {
+    return hasIceCashRecord(record) ? roundMoney(record.iceReceipts || 0) : 0;
+  }
+
+  return hasPatisserieCashRecord(record)
+    ? roundMoney(record.receipts || 0)
+    : 0;
 }
 
 function buildGiftcardDayComparisons(input: {
   month: string;
   shop: RevenueShop;
+  kind: CashbookKind;
   cashRecords: RevenueCashRecord[];
   control: LeatGiftcardControlResponse | null;
 }) {
-  const rows = new Map<string, GiftcardDayComparison>();
+  const rows = new Map<string, GiftcardDayAllocation>();
+
+  const rowFor = (date: string) =>
+    rows.get(date) || {
+      date,
+      cashPatisserie: 0,
+      cashIce: 0,
+      leatPatisserie: 0,
+      leatIce: 0,
+      issuedPatisserie: 0,
+      issuedIce: 0,
+      redemptionCountPatisserie: 0,
+      redemptionCountIce: 0,
+      issueCountPatisserie: 0,
+      issueCountIce: 0,
+    };
 
   input.cashRecords
     .filter(
@@ -324,18 +407,13 @@ function buildGiftcardDayComparisons(input: {
         record.shop === input.shop && record.date.startsWith(input.month)
     )
     .forEach((record) => {
-      const amount = cashItGiftcardAmount(record);
-      if (amount === 0) return;
-      const existing = rows.get(record.date) || {
-        date: record.date,
-        cashItRedeemed: 0,
-        leatRedeemed: 0,
-        difference: 0,
-        leatIssued: 0,
-        redemptionCount: 0,
-        issueCount: 0,
-      };
-      existing.cashItRedeemed = roundMoney(existing.cashItRedeemed + amount);
+      const existing = rowFor(record.date);
+      existing.cashPatisserie = roundMoney(
+        existing.cashPatisserie + cashItGiftcardAmount(record, "patisserie")
+      );
+      existing.cashIce = roundMoney(
+        existing.cashIce + cashItGiftcardAmount(record, "ice")
+      );
       rows.set(record.date, existing);
     });
 
@@ -343,30 +421,73 @@ function buildGiftcardDayComparisons(input: {
     input.control.daily
       .filter((total) => total.shop === input.shop)
       .forEach((total) => {
-        const existing = rows.get(total.date) || {
-          date: total.date,
-          cashItRedeemed: 0,
-          leatRedeemed: 0,
-          difference: 0,
-          leatIssued: 0,
-          redemptionCount: 0,
-          issueCount: 0,
-        };
-        existing.leatRedeemed = roundMoney(
-          existing.leatRedeemed + total.redeemed
-        );
-        existing.leatIssued = roundMoney(existing.leatIssued + total.issued);
-        existing.redemptionCount += total.redemptionCount;
-        existing.issueCount += total.issueCount;
+        const existing = rowFor(total.date);
+        const isIceProfile = total.channel === "ijs";
+        if (isIceProfile) {
+          existing.leatIce = roundMoney(existing.leatIce + total.redeemed);
+          existing.issuedIce = roundMoney(existing.issuedIce + total.issued);
+          existing.redemptionCountIce += total.redemptionCount;
+          existing.issueCountIce += total.issueCount;
+        } else {
+          existing.leatPatisserie = roundMoney(
+            existing.leatPatisserie + total.redeemed
+          );
+          existing.issuedPatisserie = roundMoney(
+            existing.issuedPatisserie + total.issued
+          );
+          existing.redemptionCountPatisserie += total.redemptionCount;
+          existing.issueCountPatisserie += total.issueCount;
+        }
         rows.set(total.date, existing);
       });
   }
 
   return [...rows.values()]
-    .map((row) => ({
-      ...row,
-      difference: roundMoney(row.cashItRedeemed - row.leatRedeemed),
-    }))
+    .map((row): GiftcardDayComparison => {
+      const cashItRedeemed =
+        input.kind === "ice" ? row.cashIce : row.cashPatisserie;
+      const otherCash =
+        input.kind === "ice" ? row.cashPatisserie : row.cashIce;
+      const cashTotal = roundMoney(cashItRedeemed + otherCash);
+      const leatTotal = roundMoney(row.leatPatisserie + row.leatIce);
+      const profileRedeemed =
+        input.kind === "ice" ? row.leatIce : row.leatPatisserie;
+      const profileRedemptionCount =
+        input.kind === "ice"
+          ? row.redemptionCountIce
+          : row.redemptionCountPatisserie;
+      const totalRedemptionCount =
+        row.redemptionCountPatisserie + row.redemptionCountIce;
+      const hasCashAllocation = cashTotal > 0;
+      const leatRedeemed = hasCashAllocation
+        ? roundMoney(leatTotal * (cashItRedeemed / cashTotal))
+        : profileRedeemed;
+      const redemptionCount = hasCashAllocation
+        ? cashItRedeemed > 0
+          ? totalRedemptionCount
+          : 0
+        : profileRedemptionCount;
+      const leatIssued =
+        input.kind === "ice" ? row.issuedIce : row.issuedPatisserie;
+      const issueCount =
+        input.kind === "ice" ? row.issueCountIce : row.issueCountPatisserie;
+
+      return {
+        date: row.date,
+        cashItRedeemed,
+        leatRedeemed,
+        difference: roundMoney(cashItRedeemed - leatRedeemed),
+        leatIssued,
+        redemptionCount,
+        issueCount,
+      };
+    })
+    .filter(
+      (row) =>
+        row.cashItRedeemed !== 0 ||
+        row.leatRedeemed !== 0 ||
+        row.leatIssued !== 0
+    )
     .sort((first, second) => first.date.localeCompare(second.date));
 }
 
@@ -561,8 +682,10 @@ function buildShopReports(input: {
   const today = localIsoDate();
 
   return revenueShops.map((shop) => {
-    const comments: string[] = [];
-    const warnings: string[] = [];
+    const winkelComments: string[] = [];
+    const winkelWarnings: string[] = [];
+    const iceComments: string[] = [];
+    const iceWarnings: string[] = [];
     const shopDailyRecords = input.dailyRecords.filter(
       (record) =>
         record.shop === shop &&
@@ -580,23 +703,37 @@ function buildShopReports(input: {
       shop,
       dailyRecords: shopDailyRecords,
       cashRecords: winkelCashRecords,
-      comments,
-      warnings,
+      comments: winkelComments,
+      warnings: winkelWarnings,
     });
     const ijs = buildIceLine({
       cashRecords: iceCashRecords,
-      comments,
-      warnings,
+      comments: iceComments,
+      warnings: iceWarnings,
     });
 
     return {
       shop,
       winkel,
       ijs,
-      comments,
-      warnings,
+      winkelComments,
+      winkelWarnings,
+      iceComments,
+      iceWarnings,
     } satisfies ShopReport;
   });
+}
+
+function reportLineForKind(report: ShopReport, kind: CashbookKind) {
+  return kind === "ice" ? report.ijs : report.winkel;
+}
+
+function reportCommentsForKind(report: ShopReport, kind: CashbookKind) {
+  return kind === "ice" ? report.iceComments : report.winkelComments;
+}
+
+function reportWarningsForKind(report: ShopReport, kind: CashbookKind) {
+  return kind === "ice" ? report.iceWarnings : report.winkelWarnings;
 }
 
 function totalReportLine(label: ReportLine["label"], lines: ReportLine[]) {
@@ -636,6 +773,7 @@ function lineCsvValue(value: number | null) {
 }
 
 function buildCsv(
+  kind: CashbookKind,
   month: string,
   reports: ShopReport[],
   cashRecords: RevenueCashRecord[],
@@ -644,18 +782,18 @@ function buildCsv(
   const rows = [
     [
       "Maand",
+      "Kasboek",
       "Locatie",
-      "Soort",
       "Dagen data",
       "Dagen verwacht",
       "Gecontroleerd",
       "Omzet",
-      "Contant betaald",
+      kind === "ice" ? "Kasomzet" : "Contant betaald",
       "Pin en overig elektronisch",
       "Kadobonnen Cash-it",
-      "Leat ingewisseld locatietotaal",
-      "Kadobonverschil locatietotaal",
-      "Leat uitgegeven locatietotaal",
+      "Leat ingewisseld",
+      "Kadobonverschil",
+      "Leat uitgegeven",
       "Kas-uit",
       "Verwacht naar bank",
       "Geteld naar bank",
@@ -671,60 +809,60 @@ function buildCsv(
       buildGiftcardDayComparisons({
         month,
         shop: report.shop,
+        kind,
         cashRecords,
         control: giftcardControl,
       })
     );
 
-    [report.winkel, report.ijs].forEach((line) => {
-      const isLocationSummary = line.label === "Winkel";
-      rows.push([
-        monthLabel(month),
-        report.shop,
-        line.label,
-        String(line.daysWithData),
-        String(line.expectedDays),
-        String(line.checkedDays),
-        lineCsvValue(line.revenue),
-        lineCsvValue(line.cashPaid),
-        lineCsvValue(line.pinPaid),
-        lineCsvValue(line.giftCards),
-        isLocationSummary && giftcardControl?.available
-          ? lineCsvValue(giftcardTotals.leatRedeemed)
-          : "",
-        isLocationSummary && giftcardControl?.available
-          ? lineCsvValue(giftcardTotals.difference)
-          : "",
-        isLocationSummary && giftcardControl?.available
-          ? lineCsvValue(giftcardTotals.leatIssued)
-          : "",
-        lineCsvValue(line.cashOut),
-        lineCsvValue(line.expectedDeposit),
-        lineCsvValue(line.deposited),
-        lineCsvValue(line.cashDifference),
-        reportLineStatus(line),
-        report.comments.join(" | "),
-        report.warnings.join(" | "),
-      ]);
-    });
+    const line = reportLineForKind(report, kind);
+    rows.push([
+      monthLabel(month),
+      kind === "ice" ? "IJs" : "Patisserie",
+      report.shop,
+      String(line.daysWithData),
+      String(line.expectedDays),
+      String(line.checkedDays),
+      lineCsvValue(line.revenue),
+      lineCsvValue(line.cashPaid),
+      lineCsvValue(line.pinPaid),
+      lineCsvValue(line.giftCards),
+      giftcardControl?.available
+        ? lineCsvValue(giftcardTotals.leatRedeemed)
+        : "",
+      giftcardControl?.available
+        ? lineCsvValue(giftcardTotals.difference)
+        : "",
+      giftcardControl?.available
+        ? lineCsvValue(giftcardTotals.leatIssued)
+        : "",
+      lineCsvValue(line.cashOut),
+      lineCsvValue(line.expectedDeposit),
+      lineCsvValue(line.deposited),
+      lineCsvValue(line.cashDifference),
+      reportLineStatus(line),
+      reportCommentsForKind(report, kind).join(" | "),
+      reportWarningsForKind(report, kind).join(" | "),
+    ]);
   });
 
   return rows.map((row) => row.map(csvValue).join(";")).join("\n");
 }
 
 function downloadCsv(
+  kind: CashbookKind,
   month: string,
   reports: ShopReport[],
   cashRecords: RevenueCashRecord[],
   giftcardControl: LeatGiftcardControlResponse | null
 ) {
-  const csv = buildCsv(month, reports, cashRecords, giftcardControl);
+  const csv = buildCsv(kind, month, reports, cashRecords, giftcardControl);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
 
   anchor.href = url;
-  anchor.download = `boekingsgegevens-${month}.csv`;
+  anchor.download = `kasboek-${kind === "ice" ? "ijs" : "patisserie"}-${month}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -750,13 +888,16 @@ function MetricCell({
   );
 }
 
-function ReportLineRow({ line }: Readonly<{ line: ReportLine }>) {
+function ReportLineRow({
+  line,
+  kind,
+}: Readonly<{ line: ReportLine; kind: CashbookKind }>) {
   const hasOpenChecks = line.expectedDays > 0 && line.checkedDays < line.expectedDays;
 
   return (
     <tr className="border-t border-[#ece5dc] align-top">
       <th className="sticky left-0 bg-white px-2 py-2 text-left text-xs font-black text-[#1a1815]">
-        {line.label}
+        {kind === "ice" ? "IJs" : "Patisserie"}
       </th>
       <td className="px-2 py-2 text-xs font-bold text-[#6b645b]">
         {line.daysWithData}/{line.expectedDays || "-"}
@@ -764,15 +905,19 @@ function ReportLineRow({ line }: Readonly<{ line: ReportLine }>) {
       <td className="px-2 py-2 text-xs font-bold text-[#6b645b]">
         {line.checkedDays}/{line.expectedDays || "-"}
       </td>
-      <td className="px-2 py-2 text-right text-xs font-black">
-        {formatMoney(line.revenue)}
-      </td>
+      {kind === "patisserie" && (
+        <td className="px-2 py-2 text-right text-xs font-black">
+          {formatMoney(line.revenue)}
+        </td>
+      )}
       <td className="px-2 py-2 text-right text-xs font-black">
         {formatMoney(line.cashPaid)}
       </td>
-      <td className="px-2 py-2 text-right text-xs font-black">
-        {formatMoney(line.pinPaid)}
-      </td>
+      {kind === "patisserie" && (
+        <td className="px-2 py-2 text-right text-xs font-black">
+          {formatMoney(line.pinPaid)}
+        </td>
+      )}
       <td className="px-2 py-2 text-right text-xs font-black">
         {formatMoney(line.giftCards)}
       </td>
@@ -805,15 +950,21 @@ function ReportLineRow({ line }: Readonly<{ line: ReportLine }>) {
   );
 }
 
-function ReportTable({ report }: Readonly<{ report: ShopReport }>) {
-  const detailCount = report.comments.length + report.warnings.length;
+function ReportTable({
+  report,
+  kind,
+}: Readonly<{ report: ShopReport; kind: CashbookKind }>) {
+  const line = reportLineForKind(report, kind);
+  const comments = reportCommentsForKind(report, kind);
+  const warnings = reportWarningsForKind(report, kind);
+  const detailCount = comments.length + warnings.length;
 
   return (
     <section className="rounded-lg border border-[#e7e0d8] bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ece5dc] px-3 py-2">
         <div>
           <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-            Locatie
+            {kind === "ice" ? "IJskasboek" : "Patisseriekasboek"}
           </p>
           <h2 className="text-base font-black leading-tight text-[#1a1815]">
             {report.shop}
@@ -821,25 +972,25 @@ function ReportTable({ report }: Readonly<{ report: ShopReport }>) {
         </div>
         <span
           className={`rounded-full px-2 py-1 text-[0.62rem] font-black uppercase tracking-normal ${
-            report.warnings.length
+            warnings.length
               ? "bg-[#fff8d8] text-[#8a5a10]"
               : "bg-[#edf7ec] text-[#1f4f35]"
           }`}
         >
-          {report.warnings.length ? `${report.warnings.length} checks` : "compleet"}
+          {warnings.length ? `${warnings.length} checks` : "compleet"}
         </span>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[62rem] border-collapse text-left">
+        <table className={`w-full ${kind === "ice" ? "min-w-[48rem]" : "min-w-[62rem]"} border-collapse text-left`}>
           <thead>
             <tr className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
               <th className="sticky left-0 bg-white px-2 py-2 text-left">Soort</th>
               <th className="px-2 py-2 text-left">Dagen</th>
               <th className="px-2 py-2 text-left">Controle</th>
-              <th className="px-2 py-2 text-right">Omzet</th>
-              <th className="px-2 py-2 text-right">Contant</th>
-              <th className="px-2 py-2 text-right">Pin/overig</th>
+              {kind === "patisserie" && <th className="px-2 py-2 text-right">Omzet</th>}
+              <th className="px-2 py-2 text-right">{kind === "ice" ? "Kasomzet" : "Contant"}</th>
+              {kind === "patisserie" && <th className="px-2 py-2 text-right">Pin/overig</th>}
               <th className="px-2 py-2 text-right">Kadobonnen</th>
               <th className="px-2 py-2 text-right">Kas-uit</th>
               <th className="px-2 py-2 text-right">Verwacht bank</th>
@@ -849,8 +1000,7 @@ function ReportTable({ report }: Readonly<{ report: ShopReport }>) {
             </tr>
           </thead>
           <tbody>
-            <ReportLineRow line={report.winkel} />
-            <ReportLineRow line={report.ijs} />
+            <ReportLineRow line={line} kind={kind} />
           </tbody>
         </table>
       </div>
@@ -861,25 +1011,25 @@ function ReportTable({ report }: Readonly<{ report: ShopReport }>) {
             Kasverschillen en datachecks ({detailCount})
           </summary>
           <div className="mt-2 grid gap-2 md:grid-cols-2">
-            {report.comments.length > 0 && (
+            {comments.length > 0 && (
               <div>
                 <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
                   Herleiding
                 </p>
                 <ul className="mt-1 space-y-1 text-xs font-bold leading-snug text-[#4a433b]">
-                  {report.comments.map((comment) => (
+                  {comments.map((comment) => (
                     <li key={comment}>{comment}</li>
                   ))}
                 </ul>
               </div>
             )}
-            {report.warnings.length > 0 && (
+            {warnings.length > 0 && (
               <div>
                 <p className="text-[0.56rem] font-black uppercase tracking-normal text-[#8b8278]">
                   Datachecks
                 </p>
                 <ul className="mt-1 space-y-1 text-xs font-bold leading-snug text-[#8a5a10]">
-                  {report.warnings.map((warning) => (
+                  {warnings.map((warning) => (
                     <li key={warning}>{warning}</li>
                   ))}
                 </ul>
@@ -892,86 +1042,175 @@ function ReportTable({ report }: Readonly<{ report: ShopReport }>) {
   );
 }
 
-function MonthShopOverview({ reports }: Readonly<{ reports: ShopReport[] }>) {
+function MonthShopOverview({
+  reports,
+  kind,
+  month,
+  selectedShop,
+}: Readonly<{
+  reports: ShopReport[];
+  kind: CashbookKind;
+  month: string;
+  selectedShop: RevenueShop;
+}>) {
   const total = totalReportLine(
-    "Winkel",
-    reports.map((report) => report.winkel)
+    kind === "ice" ? "IJs" : "Winkel",
+    reports.map((report) => reportLineForKind(report, kind))
   );
 
   return (
-    <section className="rounded-lg border border-[#e7e0d8] bg-white/95 shadow-sm">
-      <div className="border-b border-[#ece5dc] px-3 py-2">
-        <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#8b8278]">
-          Boekingscontrole per winkel
+    <section className="cashbook-print-report rounded-lg border border-[#e7e0d8] bg-white/95 shadow-sm print:border-0 print:shadow-none">
+      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[#ece5dc] px-3 py-1.5">
+        <div>
+          <p className="text-[0.52rem] font-black uppercase tracking-normal text-[#8b8278]">
+            {kind === "ice" ? "IJskasboek" : "Patisseriekasboek"}
+          </p>
+          <h2 className="text-sm font-black leading-tight text-[#1a1815]">
+            Maandcijfers in één overzicht
+          </h2>
+        </div>
+        <p className="text-xs font-black capitalize text-[#4b433c]">
+          {monthLabel(month)}
         </p>
-        <h2 className="text-base font-black text-[#1a1815]">
-          Maandcijfers in één overzicht
-        </h2>
-        <p className="mt-0.5 text-[0.68rem] font-bold text-[#8b8278]">
-          Omzet komt uit Cash-it. Pin/overig is omzet min contant en kadobonnen; het kasverschil blijft een aparte controleregel.
+        <p className="w-full text-[0.62rem] font-bold leading-tight text-[#8b8278] print:hidden">
+          {kind === "ice"
+            ? "Alleen ijsdagrapporten, ijsstortingen en ijsverschillen staan in dit kasboek."
+            : "Omzet komt uit Cash-it. Pin/overig is omzet min contant en kadobonnen; ijs staat volledig apart."}
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[68rem] border-collapse text-left">
+        <table
+          className={`w-full ${
+            kind === "ice" ? "min-w-[52rem]" : "min-w-[68rem]"
+          } border-collapse text-left print:min-w-0`}
+        >
           <thead>
             <tr className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
-              <th className="px-3 py-2">Winkel</th>
-              <th className="px-2 py-2 text-right">Omzet</th>
-              <th className="px-2 py-2 text-right">Contant</th>
-              <th className="px-2 py-2 text-right">Pin/overig</th>
-              <th className="px-2 py-2 text-right">Kadobonnen</th>
-              <th className="px-2 py-2 text-right">Kas-uit</th>
-              <th className="px-2 py-2 text-right">Verwacht bank</th>
-              <th className="px-2 py-2 text-right">Geteld bank</th>
-              <th className="px-2 py-2 text-right">Verschil</th>
-              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-1.5">Locatie</th>
+              {kind === "patisserie" && (
+                <th className="px-2 py-1.5 text-right">Omzet</th>
+              )}
+              <th className="px-2 py-1.5 text-right">
+                {kind === "ice" ? "Kasomzet" : "Contant"}
+              </th>
+              {kind === "patisserie" && (
+                <th className="px-2 py-1.5 text-right">Pin/overig</th>
+              )}
+              <th className="px-2 py-1.5 text-right">Kadobonnen</th>
+              <th className="px-2 py-1.5 text-right">Kas-uit</th>
+              <th className="px-2 py-1.5 text-right">Verwacht bank</th>
+              <th className="px-2 py-1.5 text-right">Geteld bank</th>
+              <th className="px-2 py-1.5 text-right">Verschil</th>
+              <th className="px-3 py-1.5">Status</th>
             </tr>
           </thead>
           <tbody>
             {reports.map((report) => {
-              const line = report.winkel;
+              const line = reportLineForKind(report, kind);
+              const warnings = reportWarningsForKind(report, kind);
               const isFinal =
                 reportLineStatus(line) === "Definitief" &&
-                report.warnings.length === 0;
+                warnings.length === 0;
               const status = isFinal
                 ? "Definitief"
-                : report.warnings.length > 0
-                  ? `Voorlopig · ${report.warnings.length} checks`
+                : warnings.length > 0
+                  ? `Voorlopig · ${warnings.length} checks`
                   : reportLineStatus(line);
 
               return (
-                <tr key={report.shop} className="border-t border-[#ece5dc] text-xs font-bold">
-                  <th className="px-3 py-2 text-left font-black text-[#1a1815]">
-                    {report.shop}
+                <tr
+                  key={report.shop}
+                  className={`border-t border-[#ece5dc] text-xs font-bold ${
+                    report.shop === selectedShop ? "bg-[#fff3a8]" : ""
+                  }`}
+                >
+                  <th className="px-3 py-1.5 text-left font-black text-[#1a1815]">
+                    <span className="inline-flex items-center gap-1.5">
+                      {report.shop}
+                      {report.shop === selectedShop && (
+                        <span className="rounded-full bg-[#fed500] px-1.5 py-0.5 text-[0.5rem] font-black uppercase text-[#332c25] print:hidden">
+                          geselecteerd
+                        </span>
+                      )}
+                    </span>
                   </th>
-                  <td className="px-2 py-2 text-right font-black">{formatMoney(line.revenue)}</td>
-                  <td className="px-2 py-2 text-right">{formatMoney(line.cashPaid)}</td>
-                  <td className="px-2 py-2 text-right">{formatMoney(line.pinPaid)}</td>
-                  <td className="px-2 py-2 text-right">{formatMoney(line.giftCards)}</td>
-                  <td className="px-2 py-2 text-right">{formatMoney(line.cashOut)}</td>
-                  <td className="px-2 py-2 text-right">{formatMoney(line.expectedDeposit)}</td>
-                  <td className="px-2 py-2 text-right">{formatMoney(line.deposited)}</td>
-                  <td className={`px-2 py-2 text-right ${line.cashDifference && Math.abs(line.cashDifference) > 0.01 ? "text-[#a15c10]" : ""}`}>
+                  {kind === "patisserie" && (
+                    <td className="px-2 py-1.5 text-right font-black">
+                      {formatMoney(line.revenue)}
+                    </td>
+                  )}
+                  <td className="px-2 py-1.5 text-right">
+                    {formatMoney(line.cashPaid)}
+                  </td>
+                  {kind === "patisserie" && (
+                    <td className="px-2 py-1.5 text-right">
+                      {formatMoney(line.pinPaid)}
+                    </td>
+                  )}
+                  <td className="px-2 py-1.5 text-right">
+                    {formatMoney(line.giftCards)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    {formatMoney(line.cashOut)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    {formatMoney(line.expectedDeposit)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    {formatMoney(line.deposited)}
+                  </td>
+                  <td
+                    className={`px-2 py-1.5 text-right ${
+                      line.cashDifference &&
+                      Math.abs(line.cashDifference) > 0.01
+                        ? "text-[#a15c10]"
+                        : ""
+                    }`}
+                  >
                     {formatMoney(line.cashDifference)}
                   </td>
-                  <td className={`px-3 py-2 font-black ${isFinal ? "text-[#1f4f35]" : "text-[#a15c10]"}`}>
+                  <td
+                    className={`px-3 py-1.5 font-black ${
+                      isFinal ? "text-[#1f4f35]" : "text-[#a15c10]"
+                    }`}
+                  >
                     {status}
                   </td>
                 </tr>
               );
             })}
             <tr className="border-t-2 border-[#d9d0c6] bg-[#f8f6f3] text-xs font-black text-[#1a1815]">
-              <th className="px-3 py-2 text-left">Totaal</th>
-              <td className="px-2 py-2 text-right">{formatMoney(total.revenue)}</td>
-              <td className="px-2 py-2 text-right">{formatMoney(total.cashPaid)}</td>
-              <td className="px-2 py-2 text-right">{formatMoney(total.pinPaid)}</td>
-              <td className="px-2 py-2 text-right">{formatMoney(total.giftCards)}</td>
-              <td className="px-2 py-2 text-right">{formatMoney(total.cashOut)}</td>
-              <td className="px-2 py-2 text-right">{formatMoney(total.expectedDeposit)}</td>
-              <td className="px-2 py-2 text-right">{formatMoney(total.deposited)}</td>
-              <td className="px-2 py-2 text-right">{formatMoney(total.cashDifference)}</td>
-              <td className="px-3 py-2">
-                {reports.some((report) => report.warnings.length > 0)
+              <th className="px-3 py-1.5 text-left">Totaal</th>
+              {kind === "patisserie" && (
+                <td className="px-2 py-1.5 text-right">
+                  {formatMoney(total.revenue)}
+                </td>
+              )}
+              <td className="px-2 py-1.5 text-right">
+                {formatMoney(total.cashPaid)}
+              </td>
+              {kind === "patisserie" && (
+                <td className="px-2 py-1.5 text-right">
+                  {formatMoney(total.pinPaid)}
+                </td>
+              )}
+              <td className="px-2 py-1.5 text-right">
+                {formatMoney(total.giftCards)}
+              </td>
+              <td className="px-2 py-1.5 text-right">
+                {formatMoney(total.cashOut)}
+              </td>
+              <td className="px-2 py-1.5 text-right">
+                {formatMoney(total.expectedDeposit)}
+              </td>
+              <td className="px-2 py-1.5 text-right">
+                {formatMoney(total.deposited)}
+              </td>
+              <td className="px-2 py-1.5 text-right">
+                {formatMoney(total.cashDifference)}
+              </td>
+              <td className="px-3 py-1.5">
+                {reports.some((report) => reportWarningsForKind(report, kind).length > 0)
                   ? "Voorlopig"
                   : reportLineStatus(total)}
               </td>
@@ -986,12 +1225,14 @@ function MonthShopOverview({ reports }: Readonly<{ reports: ShopReport[] }>) {
 function GiftcardControlPanel({
   month,
   selectedShop,
+  kind,
   cashRecords,
   control,
   loading,
 }: Readonly<{
   month: string;
   selectedShop: RevenueShop;
+  kind: CashbookKind;
   cashRecords: RevenueCashRecord[];
   control: LeatGiftcardControlResponse | null;
   loading: boolean;
@@ -999,6 +1240,7 @@ function GiftcardControlPanel({
   const rows = buildGiftcardDayComparisons({
     month,
     shop: selectedShop,
+    kind,
     cashRecords,
     control,
   });
@@ -1016,7 +1258,7 @@ function GiftcardControlPanel({
             Automatische cadeauboncontrole
           </p>
           <h2 className="text-base font-black text-[#1a1815]">
-            Cash-it ↔ Leat · {selectedShop}
+            Cash-it ↔ Leat · {selectedShop} {kind === "ice" ? "IJs" : "Patisserie"}
           </h2>
           <p className="mt-0.5 text-[0.68rem] font-bold text-[#7c746b]">
             Cash-it registreert wat aan de kassa is afgerekend; Leat bevestigt wat werkelijk is ingewisseld.
@@ -1071,7 +1313,10 @@ function GiftcardControlPanel({
         </p>
       )}
 
-      {!loading && control?.available && control.unmappedShops.length > 0 && (
+      {!loading &&
+        kind === "patisserie" &&
+        control?.available &&
+        control.unmappedShops.length > 0 && (
         <div className="m-3 rounded-md border border-[#f3d4a4] bg-[#fef9f3] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
           Nog niet gekoppeld aan dit maandrapport:{" "}
           {control.unmappedShops
@@ -1136,7 +1381,7 @@ function GiftcardControlPanel({
 
       {control?.syncedAt && (
         <p className="border-t border-[#e7eee4] px-3 py-2 text-[0.62rem] font-bold text-[#8b8278]">
-          Leat live gecontroleerd op {new Date(control.syncedAt).toLocaleString("nl-NL")} · positieve transacties staan apart als uitgegeven/opgewaardeerd en wijzigen de omzet niet.
+          Leat live gecontroleerd op {new Date(control.syncedAt).toLocaleString("nl-NL")} · bij een gedeeld Leat-verkooppunt wordt ingewisseld per dag verdeeld volgens de aparte Cash-it-regels voor patisserie en ijs · positieve transacties staan apart en wijzigen de omzet niet.
         </p>
       )}
     </section>
@@ -1145,6 +1390,8 @@ function GiftcardControlPanel({
 
 export default function KasboekMaandrapportClient() {
   const [month, setMonth] = useState(localMonthKey());
+  const [cashbookKind, setCashbookKind] =
+    useState<CashbookKind>("patisserie");
   const [selectedShop, setSelectedShop] = useState<RevenueShop>(revenueShops[0]);
   const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
@@ -1288,18 +1535,34 @@ export default function KasboekMaandrapportClient() {
       cashDeposits.filter((deposit) => cashDepositBelongsToMonth(deposit, month)),
     [cashDeposits, month]
   );
+  const activeMonthCashDeposits = useMemo(
+    () =>
+      monthCashDeposits.filter((deposit) =>
+        cashDepositHasKind(deposit, cashbookKind)
+      ),
+    [cashbookKind, monthCashDeposits]
+  );
   const monthDepositTotal = useMemo(
-    () => sumMoney(monthCashDeposits, (deposit) =>
-      (deposit.depositedAt ? deposit.actualAmount ?? deposit.amount : 0) +
-      (deposit.iceDepositedAt ? deposit.iceDepositAmount ?? 0 : 0)
-    ),
-    [monthCashDeposits]
+    () =>
+      sumMoney(activeMonthCashDeposits, (deposit) =>
+        cashbookKind === "ice"
+          ? deposit.iceDepositedAt
+            ? deposit.iceDepositAmount ?? 0
+            : 0
+          : deposit.depositedAt
+            ? deposit.actualAmount ?? deposit.amount
+            : 0
+      ),
+    [activeMonthCashDeposits, cashbookKind]
   );
   const isMonthCashbookBooked =
-    monthCashDeposits.length > 0 &&
-    monthCashDeposits.every((deposit) => deposit.cashbookBookedAt);
+    activeMonthCashDeposits.length > 0 &&
+    activeMonthCashDeposits.every((deposit) =>
+      isCashbookDepositBooked(deposit, cashbookKind)
+    );
   const revenueWarningCount = reports.reduce(
-    (total, report) => total + report.warnings.length,
+    (total, report) =>
+      total + reportWarningsForKind(report, cashbookKind).length,
     0
   );
   const allGiftcardRows = useMemo(
@@ -1308,11 +1571,12 @@ export default function KasboekMaandrapportClient() {
         buildGiftcardDayComparisons({
           month,
           shop,
+          kind: cashbookKind,
           cashRecords,
           control: giftcardControl,
         })
       ),
-    [cashRecords, giftcardControl, month]
+    [cashRecords, cashbookKind, giftcardControl, month]
   );
   const allGiftcardTotals = useMemo(
     () => giftcardComparisonTotals(allGiftcardRows),
@@ -1325,7 +1589,10 @@ export default function KasboekMaandrapportClient() {
     ? 1
     : giftcardControl?.available
       ? giftcardMismatchCount +
-        (giftcardControl.unmappedShops.length > 0 ? 1 : 0)
+        (cashbookKind === "patisserie" &&
+        giftcardControl.unmappedShops.length > 0
+          ? 1
+          : 0)
       : 1;
   const warningCount = revenueWarningCount + giftcardControlCount;
 
@@ -1334,8 +1601,10 @@ export default function KasboekMaandrapportClient() {
       setStatus("Dit kasboek is al geboekt.");
       return;
     }
-    if (!monthCashDeposits.length) {
-      setStatus("Er zijn nog geen weekstortingen voor deze maand gevonden.");
+    if (!activeMonthCashDeposits.length) {
+      setStatus(
+        `Er zijn nog geen ${cashbookKind === "ice" ? "ijs" : "patisserie"}weekstortingen voor deze maand gevonden.`
+      );
       return;
     }
     if (warningCount > 0) {
@@ -1347,7 +1616,7 @@ export default function KasboekMaandrapportClient() {
 
     const confirmed = window.confirm(
       [
-        `Heb je het kasboek van ${monthLabel(month)} in Exact geboekt?`,
+        `Heb je het ${cashbookKind === "ice" ? "ijskasboek" : "patisseriekasboek"} van ${monthLabel(month)} in Exact geboekt?`,
         "",
         "Na bevestigen wordt deze maand in de Strik app gesloten.",
       ].join("\n")
@@ -1356,14 +1625,29 @@ export default function KasboekMaandrapportClient() {
 
     const now = new Date().toISOString();
     const nextCashDeposits = cashDeposits.map((deposit) => {
-      if (!cashDepositBelongsToMonth(deposit, month)) return deposit;
+      if (
+        !cashDepositBelongsToMonth(deposit, month) ||
+        !cashDepositHasKind(deposit, cashbookKind)
+      ) {
+        return deposit;
+      }
 
-      return {
-        ...deposit,
-        cashbookBookedAt: deposit.cashbookBookedAt || now,
-        cashbookBookedBy: deposit.cashbookBookedBy || "Strik app",
-        updatedAt: now,
-      };
+      return cashbookKind === "ice"
+        ? {
+            ...deposit,
+            iceCashbookBookedAt: deposit.iceCashbookBookedAt || now,
+            iceCashbookBookedBy:
+              deposit.iceCashbookBookedBy || "Strik app",
+            updatedAt: now,
+          }
+        : {
+            ...deposit,
+            patisserieCashbookBookedAt:
+              deposit.patisserieCashbookBookedAt || now,
+            patisserieCashbookBookedBy:
+              deposit.patisserieCashbookBookedBy || "Strik app",
+            updatedAt: now,
+          };
     });
 
     setState("saving");
@@ -1405,7 +1689,9 @@ export default function KasboekMaandrapportClient() {
         Array.isArray(data.cashDeposits) ? data.cashDeposits : nextCashDeposits
       );
       setStorage(data.storage);
-      setStatus("Kasboek geboekt.");
+      setStatus(
+        `${cashbookKind === "ice" ? "IJskasboek" : "Patisseriekasboek"} geboekt.`
+      );
       setState("ready");
     } catch (error) {
       setStatus(
@@ -1421,7 +1707,7 @@ export default function KasboekMaandrapportClient() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[0.6rem] font-black uppercase tracking-normal text-[#8b8278]">
-              Maandrapport
+              {cashbookKind === "ice" ? "IJskasboek" : "Patisseriekasboek"}
             </p>
             <h2 className="text-xl font-black leading-tight text-[#1a1815]">
               {monthLabel(month)}
@@ -1449,7 +1735,7 @@ export default function KasboekMaandrapportClient() {
               }`}
               title={
                 isMonthCashbookBooked
-                  ? "Kasboek is in Exact geboekt"
+                  ? `${cashbookKind === "ice" ? "IJskasboek" : "Patisseriekasboek"} is in Exact geboekt`
                   : warningCount > 0
                     ? `Nog ${warningCount} open controles vóór boeken in Exact`
                     : "Na boeken in Exact deze maand sluiten"
@@ -1461,7 +1747,13 @@ export default function KasboekMaandrapportClient() {
             <button
               type="button"
               onClick={() =>
-                downloadCsv(month, reports, cashRecords, giftcardControl)
+                downloadCsv(
+                  cashbookKind,
+                  month,
+                  reports,
+                  cashRecords,
+                  giftcardControl
+                )
               }
               disabled={state !== "ready"}
               className="rounded-md border border-[#24543a] bg-[#24543a] px-3 py-2 text-xs font-black uppercase tracking-normal text-white disabled:opacity-50"
@@ -1474,12 +1766,31 @@ export default function KasboekMaandrapportClient() {
               disabled={state !== "ready"}
               className="rounded-md border border-[#d8d0c7] bg-white px-3 py-2 text-xs font-black uppercase tracking-normal text-[#1a1815] disabled:opacity-50"
             >
-              Print
+              Print maand {monthLabel(month).replace(/\s+\d{4}$/, "")}
             </button>
           </div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-[#f8f6f3] p-2">
+          <div className="inline-flex rounded-md border border-[#cbd8c7] bg-white p-0.5">
+            {(["patisserie", "ice"] as const).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => {
+                  setCashbookKind(kind);
+                  setStatus("");
+                }}
+                className={`rounded px-3 py-1.5 text-xs font-black transition ${
+                  cashbookKind === kind
+                    ? "bg-[#24543a] text-white"
+                    : "text-[#5f574f] hover:bg-[#edf4ea]"
+                }`}
+              >
+                {kind === "ice" ? "IJs" : "Patisserie"}
+              </button>
+            ))}
+          </div>
           <label className="text-xs font-black uppercase tracking-normal text-[#8b8278]">
             Locatie
             <select
@@ -1498,8 +1809,8 @@ export default function KasboekMaandrapportClient() {
           </label>
           <span className="text-xs font-bold text-[#6b645b]">
             {isMonthCashbookBooked
-              ? "Deze maand is geboekt en gesloten."
-              : "Boek pas wanneer alle weekstortingen kloppen."}
+              ? `Het ${cashbookKind === "ice" ? "ijskasboek" : "patisseriekasboek"} is geboekt en gesloten.`
+              : `Boek alleen het ${cashbookKind === "ice" ? "ijskasboek" : "patisseriekasboek"} wanneer de bijbehorende stortingen kloppen.`}
           </span>
         </div>
 
@@ -1515,20 +1826,41 @@ export default function KasboekMaandrapportClient() {
         )}
       </section>
 
-      <section className="rounded-lg border border-[#e7e0d8] bg-white/95 p-2 shadow-sm">
+      {state !== "loading" && (
+        <MonthShopOverview
+          reports={reports}
+          kind={cashbookKind}
+          month={month}
+          selectedShop={selectedShop}
+        />
+      )}
+
+      <section className="rounded-lg border border-[#e7e0d8] bg-white/95 p-2 shadow-sm print:hidden">
         <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-          <MetricCell label="Omzet winkel" value={formatMoney(totalWinkel.revenue)} />
+          {cashbookKind === "patisserie" && (
+            <MetricCell label="Omzet patisserie" value={formatMoney(totalWinkel.revenue)} />
+          )}
           <MetricCell
-            label="Contant winkel"
-            value={formatMoney(monthCashTotals.cashRevenue)}
+            label={cashbookKind === "ice" ? "Kasomzet ijs" : "Contant patisserie"}
+            value={formatMoney(
+              cashbookKind === "ice"
+                ? monthCashTotals.iceCashRevenue
+                : monthCashTotals.cashRevenue
+            )}
           />
+          {cashbookKind === "patisserie" && (
+            <MetricCell
+              label="Pin/overig patisserie"
+              value={formatMoney(totalWinkel.pinPaid)}
+            />
+          )}
           <MetricCell
-            label="Pin/overig winkel"
-            value={formatMoney(totalWinkel.pinPaid)}
-          />
-          <MetricCell
-            label="Bonnen Cash-it"
-            value={formatMoney(monthCashTotals.receipts)}
+            label={`Bonnen Cash-it ${cashbookKind === "ice" ? "ijs" : "patisserie"}`}
+            value={formatMoney(
+              cashbookKind === "ice"
+                ? monthCashTotals.iceReceipts
+                : monthCashTotals.patisserieReceipts
+            )}
           />
           <MetricCell
             label="Bonnen Leat"
@@ -1559,7 +1891,7 @@ export default function KasboekMaandrapportClient() {
             }
           />
           <MetricCell
-            label="Weekstortingen"
+            label={`Weekstortingen ${cashbookKind === "ice" ? "ijs" : "patisserie"}`}
             value={formatMoney(monthDepositTotal)}
           />
           <MetricCell
@@ -1568,41 +1900,56 @@ export default function KasboekMaandrapportClient() {
             warn={warningCount > 0}
           />
           <MetricCell
-            label="Contant ijs"
-            value={formatMoney(monthCashTotals.iceCashRevenue)}
+            label={`Geteld ${cashbookKind === "ice" ? "ijs" : "patisserie"}`}
+            value={formatMoney(
+              cashbookKind === "ice"
+                ? totalIjs.deposited
+                : totalWinkel.deposited
+            )}
           />
           <MetricCell
-            label="Geteld winkel"
-            value={formatMoney(totalWinkel.deposited)}
+            label={`Kas-uit ${cashbookKind === "ice" ? "ijs" : "patisserie"}`}
+            value={formatMoney(
+              cashbookKind === "ice"
+                ? monthCashTotals.iceCashOut
+                : monthCashTotals.patisserieCashOut
+            )}
           />
-          <MetricCell label="Geteld ijs" value={formatMoney(totalIjs.deposited)} />
-          <MetricCell label="Kas-uit" value={formatMoney(monthCashTotals.cashOut)} />
           <MetricCell
             label="Kasverschil telling"
-            value={formatMoney(monthCashTotals.cashDifference)}
+            value={formatMoney(
+              cashbookKind === "ice"
+                ? monthCashTotals.iceCashDifference
+                : monthCashTotals.patisserieCashDifference
+            )}
             warn={Boolean(
-              monthCashTotals.cashDifference &&
-                Math.abs(monthCashTotals.cashDifference) > 0.01
+              cashbookKind === "ice"
+                ? monthCashTotals.iceCashDifference &&
+                    Math.abs(monthCashTotals.iceCashDifference) > 0.01
+                : monthCashTotals.patisserieCashDifference &&
+                    Math.abs(monthCashTotals.patisserieCashDifference) > 0.01
             )}
           />
         </div>
       </section>
 
       {state === "loading" ? (
-        <section className="rounded-lg border border-[#e7e0d8] bg-white p-4 text-sm font-bold text-[#6b645b]">
+        <section className="rounded-lg border border-[#e7e0d8] bg-white p-4 text-sm font-bold text-[#6b645b] print:hidden">
           Maandrapport laden...
         </section>
       ) : (
-        <div className="grid gap-3 print:block print:space-y-3">
-          <MonthShopOverview reports={reports} />
+        <div className="grid gap-3 print:hidden">
           <GiftcardControlPanel
             month={month}
             selectedShop={selectedShop}
+            kind={cashbookKind}
             cashRecords={cashRecords}
             control={giftcardControl}
             loading={giftcardLoading}
           />
-          {selectedReport && <ReportTable report={selectedReport} />}
+          {selectedReport && (
+            <ReportTable report={selectedReport} kind={cashbookKind} />
+          )}
         </div>
       )}
     </div>

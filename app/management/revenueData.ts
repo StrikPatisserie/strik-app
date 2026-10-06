@@ -133,6 +133,10 @@ export type RevenueCashDeposit = {
   closedBy?: string;
   cashbookBookedAt?: string;
   cashbookBookedBy?: string;
+  patisserieCashbookBookedAt?: string;
+  patisserieCashbookBookedBy?: string;
+  iceCashbookBookedAt?: string;
+  iceCashbookBookedBy?: string;
   note?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -346,6 +350,10 @@ function compactCashDepositPayload(deposit: RevenueCashDeposit) {
     clb: deposit.closedBy,
     cba: deposit.cashbookBookedAt,
     cbb: deposit.cashbookBookedBy,
+    pcba: deposit.patisserieCashbookBookedAt,
+    pcbb: deposit.patisserieCashbookBookedBy,
+    icba: deposit.iceCashbookBookedAt,
+    icbb: deposit.iceCashbookBookedBy,
     n: deposit.note,
     ca: deposit.createdAt,
     ua: deposit.updatedAt,
@@ -388,6 +396,12 @@ function expandCashDepositPayload(
     closedBy: payload.closedBy ?? payload.clb,
     cashbookBookedAt: payload.cashbookBookedAt ?? payload.cba,
     cashbookBookedBy: payload.cashbookBookedBy ?? payload.cbb,
+    patisserieCashbookBookedAt:
+      payload.patisserieCashbookBookedAt ?? payload.pcba,
+    patisserieCashbookBookedBy:
+      payload.patisserieCashbookBookedBy ?? payload.pcbb,
+    iceCashbookBookedAt: payload.iceCashbookBookedAt ?? payload.icba,
+    iceCashbookBookedBy: payload.iceCashbookBookedBy ?? payload.icbb,
     note: payload.note ?? payload.n,
     createdAt: payload.createdAt ?? payload.ca,
     updatedAt: payload.updatedAt ?? payload.ua,
@@ -871,6 +885,12 @@ export function normalizeRevenueCashDeposit(
     closedBy: textFrom(value.closedBy) || undefined,
     cashbookBookedAt: textFrom(value.cashbookBookedAt) || undefined,
     cashbookBookedBy: textFrom(value.cashbookBookedBy) || undefined,
+    patisserieCashbookBookedAt:
+      textFrom(value.patisserieCashbookBookedAt) || undefined,
+    patisserieCashbookBookedBy:
+      textFrom(value.patisserieCashbookBookedBy) || undefined,
+    iceCashbookBookedAt: textFrom(value.iceCashbookBookedAt) || undefined,
+    iceCashbookBookedBy: textFrom(value.iceCashbookBookedBy) || undefined,
     note: textFrom(value.note),
     createdAt: textFrom(value.createdAt) || undefined,
     updatedAt: textFrom(value.updatedAt) || undefined,
@@ -1216,7 +1236,19 @@ export function mergeRevenueCashDeposits(
     byKey.set(record.id, record);
   }
   for (const record of overrideRecords) {
-    byKey.set(record.id, record);
+    const existing = byKey.get(record.id);
+    if (!existing) {
+      byKey.set(record.id, record);
+      continue;
+    }
+
+    const definedOverride = Object.fromEntries(
+      Object.entries(record).filter(([, value]) => value !== undefined)
+    ) as Partial<RevenueCashDeposit>;
+    byKey.set(record.id, {
+      ...existing,
+      ...definedOverride,
+    });
   }
 
   return [...byKey.values()].sort(

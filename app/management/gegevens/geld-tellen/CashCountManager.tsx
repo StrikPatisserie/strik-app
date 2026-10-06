@@ -47,12 +47,33 @@ const euroFormatter = new Intl.NumberFormat("nl-NL", {
   style: "currency",
 });
 
+function isPatisserieCashbookBooked(
+  deposit: RevenueCashDeposit | undefined
+) {
+  return Boolean(
+    deposit?.patisserieCashbookBookedAt || deposit?.cashbookBookedAt
+  );
+}
+
+function isIceCashbookBooked(deposit: RevenueCashDeposit | undefined) {
+  return Boolean(deposit?.iceCashbookBookedAt || deposit?.cashbookBookedAt);
+}
+
+function isCashbookBookedForKind(
+  deposit: RevenueCashDeposit | undefined,
+  kind: CashLocationKind
+) {
+  return kind === "ice"
+    ? isIceCashbookBooked(deposit)
+    : isPatisserieCashbookBooked(deposit);
+}
+
 function isPatisserieDepositClosed(deposit: RevenueCashDeposit | undefined) {
   return Boolean(
     deposit &&
       (deposit.patisserieClosedAt ||
         deposit.closedAt ||
-        deposit.cashbookBookedAt)
+        isPatisserieCashbookBooked(deposit))
   );
 }
 
@@ -61,20 +82,28 @@ function isIceDepositClosed(deposit: RevenueCashDeposit | undefined) {
     deposit &&
       (deposit.iceDepositClosedAt ||
         deposit.closedAt ||
-        deposit.cashbookBookedAt)
+        isIceCashbookBooked(deposit))
   );
 }
 
 function isPatisserieDepositReported(deposit: RevenueCashDeposit | undefined) {
-  return Boolean(deposit?.patisserieReportedAt || deposit?.cashbookBookedAt);
+  return Boolean(
+    deposit?.patisserieReportedAt || isPatisserieCashbookBooked(deposit)
+  );
 }
 
 function isIceDepositReported(deposit: RevenueCashDeposit | undefined) {
-  return Boolean(deposit?.iceReportedAt || deposit?.cashbookBookedAt);
+  return Boolean(deposit?.iceReportedAt || isIceCashbookBooked(deposit));
 }
 
 function cashDepositLockedAt(deposit: RevenueCashDeposit) {
-  return deposit.closedAt || deposit.cashbookBookedAt || "";
+  return (
+    deposit.closedAt ||
+    deposit.patisserieCashbookBookedAt ||
+    deposit.iceCashbookBookedAt ||
+    deposit.cashbookBookedAt ||
+    ""
+  );
 }
 
 function localIsoDate(date = new Date()) {
@@ -1170,7 +1199,8 @@ export default function CashCountManager() {
       }
     );
   const isSelectedWeekCashbookBooked = selectedWeekDeposits.some(
-    (deposit) => Boolean(deposit.cashbookBookedAt)
+    (deposit) =>
+      isPatisserieCashbookBooked(deposit) || isIceCashbookBooked(deposit)
   );
   const isSelectedWeekReported = selectedWeekDeposits.some(
     (deposit) =>
@@ -1252,7 +1282,9 @@ export default function CashCountManager() {
           amount: roundedMoney(deposit.actualAmount ?? deposit.amount),
           reported: isPatisserieDepositReported(deposit),
           reportedAt:
-            deposit.patisserieReportedAt || deposit.cashbookBookedAt,
+            deposit.patisserieReportedAt ||
+            deposit.patisserieCashbookBookedAt ||
+            deposit.cashbookBookedAt,
         });
       }
 
@@ -1281,7 +1313,10 @@ export default function CashCountManager() {
           label: cashLocationLabel("ice", deposit.shop),
           amount: roundedMoney(deposit.iceDepositAmount ?? 0),
           reported: isIceDepositReported(deposit),
-          reportedAt: deposit.iceReportedAt || deposit.cashbookBookedAt,
+          reportedAt:
+            deposit.iceReportedAt ||
+            deposit.iceCashbookBookedAt ||
+            deposit.cashbookBookedAt,
         });
       }
 
@@ -2033,9 +2068,9 @@ export default function CashCountManager() {
       );
       return;
     }
-    if (!deposit || deposit.cashbookBookedAt) {
+    if (!deposit || isCashbookBookedForKind(deposit, selectedCashLocationKind)) {
       setStatus(
-        deposit?.cashbookBookedAt
+        isCashbookBookedForKind(deposit, selectedCashLocationKind)
           ? "Deze storting is al in het kasboek geboekt en kan niet worden heropend."
           : "Voor deze locatie is geen gesloten storting gevonden."
       );
@@ -2193,7 +2228,7 @@ export default function CashCountManager() {
   async function saveActualDeposit(row: (typeof weekRows)[number]) {
     const deposit = row.deposit;
     if (!deposit?.depositedAt || state === "saving") return;
-    if (deposit.cashbookBookedAt) {
+    if (isPatisserieCashbookBooked(deposit)) {
       setStatus("Deze storting is al in het kasboek geboekt. Wijzigen is niet mogelijk.");
       return;
     }
@@ -2226,7 +2261,7 @@ export default function CashCountManager() {
       setStatus("Deze ijsweek is gesloten. Heropen de locatie om te wijzigen.");
       return;
     }
-    if (row.deposit?.cashbookBookedAt) {
+    if (isIceCashbookBooked(row.deposit)) {
       setStatus("Deze week is al in het kasboek geboekt. De ijsstorting kan niet worden gewijzigd.");
       return;
     }
@@ -2521,7 +2556,10 @@ export default function CashCountManager() {
                   !isSelectedCashLocationComplete) ||
                 state === "saving" ||
                 mailState === "sending" ||
-                Boolean(selectedShopRow?.deposit?.cashbookBookedAt)
+                isCashbookBookedForKind(
+                  selectedShopRow?.deposit,
+                  selectedCashLocationKind
+                )
               }
               title={
                 isSelectedCashLocationReported
@@ -3276,7 +3314,7 @@ export default function CashCountManager() {
                     value={actualDepositDrafts[selectedDepositDraftKey] ?? formatAmountInput(selectedShopRow.deposit.actualAmount ?? selectedShopRow.deposit.amount)}
                     onChange={(event) => setActualDepositDrafts((current) => ({ ...current, [selectedDepositDraftKey]: event.target.value }))}
                     inputMode="decimal"
-                    disabled={Boolean(selectedShopRow.deposit.cashbookBookedAt)}
+                    disabled={isPatisserieCashbookBooked(selectedShopRow.deposit)}
                     className="h-9 rounded-xl border border-[#d9d2c9] bg-white px-3 text-sm font-black normal-case text-[#1a1815] disabled:opacity-50"
                   />
                 </label>
@@ -3285,7 +3323,7 @@ export default function CashCountManager() {
                   <input
                     value={differenceNotes[selectedDepositDraftKey] ?? selectedShopRow.deposit.differenceNote ?? ""}
                     onChange={(event) => setDifferenceNotes((current) => ({ ...current, [selectedDepositDraftKey]: event.target.value }))}
-                    disabled={Boolean(selectedShopRow.deposit.cashbookBookedAt)}
+                    disabled={isPatisserieCashbookBooked(selectedShopRow.deposit)}
                     placeholder="Bijv. bank telde € 15 minder"
                     className="h-9 rounded-xl border border-[#d9d2c9] bg-white px-3 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
                   />
@@ -3293,7 +3331,7 @@ export default function CashCountManager() {
                 <button
                   type="button"
                   onClick={() => void saveActualDeposit(selectedShopRow)}
-                  disabled={state === "saving" || Boolean(selectedShopRow.deposit.cashbookBookedAt)}
+                  disabled={state === "saving" || isPatisserieCashbookBooked(selectedShopRow.deposit)}
                   className="h-9 rounded-full bg-[#c3d3bc] px-4 text-[0.65rem] font-black text-[#1a1815] disabled:opacity-50"
                 >
                   Correctie opslaan
@@ -3366,7 +3404,7 @@ export default function CashCountManager() {
                 value={iceDepositDrafts[selectedIceDepositDraftKey] ?? formatOptionalAmountInput(selectedShopRow.deposit?.iceDepositAmount)}
                 onChange={(event) => setIceDepositDrafts((current) => ({ ...current, [selectedIceDepositDraftKey]: event.target.value }))}
                 inputMode="decimal"
-                disabled={isSelectedCashLocationClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
+                disabled={isSelectedCashLocationClosed || isIceCashbookBooked(selectedShopRow.deposit)}
                 placeholder="0,00"
                 className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-sm font-bold normal-case text-[#1a1815] disabled:opacity-50"
               />
@@ -3376,7 +3414,7 @@ export default function CashCountManager() {
               <input
                 value={iceDepositNotes[selectedIceDepositDraftKey] ?? selectedShopRow.deposit?.iceDepositNote ?? ""}
                 onChange={(event) => setIceDepositNotes((current) => ({ ...current, [selectedIceDepositDraftKey]: event.target.value }))}
-                disabled={isSelectedCashLocationClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
+                disabled={isSelectedCashLocationClosed || isIceCashbookBooked(selectedShopRow.deposit)}
                 placeholder="Bijv. kassa tijdelijk uitgeschakeld"
                 className="h-10 rounded-xl border border-[#c8ddd2] bg-white px-3 text-xs font-bold normal-case text-[#1a1815] disabled:opacity-50"
               />
@@ -3384,7 +3422,7 @@ export default function CashCountManager() {
             <button
               type="button"
               onClick={() => void saveIceDeposit(selectedShopRow)}
-              disabled={state === "saving" || isSelectedCashLocationClosed || Boolean(selectedShopRow.deposit?.cashbookBookedAt)}
+              disabled={state === "saving" || isSelectedCashLocationClosed || isIceCashbookBooked(selectedShopRow.deposit)}
               className="h-10 rounded-xl bg-[#1f4f35] px-3 text-[0.68rem] font-black text-white disabled:opacity-50"
             >
               {selectedShopRow.deposit?.iceDepositedAt ? "Ijsstorting bijwerken" : "Ijsstorting opslaan"}
