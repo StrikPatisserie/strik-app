@@ -48,15 +48,6 @@ function stageForEmployee(
   );
 }
 
-function previousYearsForEmployee(state: ChristmasLettersState, employeeId: string, year: number) {
-  return Object.entries(state.notesByYear)
-    .filter(([noteYear, employeeNotes]) =>
-      Number(noteYear) < year && Boolean(employeeNotes[employeeId]?.length)
-    )
-    .map(([noteYear]) => Number(noteYear))
-    .sort((left, right) => right - left);
-}
-
 function mergeEmployees(
   state: ChristmasLettersState,
   tamigoEmployees: ChristmasLetterTamigoEmployee[],
@@ -88,7 +79,7 @@ function mergeEmployees(
       status: stageForEmployee(state, employee.id, year, notes.length),
       notes,
       noteCount: notes.length,
-      previousYears: previousYearsForEmployee(state, employee.id, year),
+      previousYears: [],
     };
   });
 
@@ -107,7 +98,7 @@ function mergeEmployees(
       status: stageForEmployee(state, employee.id, year, notes.length),
       notes,
       noteCount: notes.length,
-      previousYears: previousYearsForEmployee(state, employee.id, year),
+      previousYears: [],
     };
   });
 
@@ -313,6 +304,34 @@ export async function POST(request: Request) {
             note,
             ...(state.notesByYear[yearKey]?.[employeeId] || []),
           ],
+        },
+      },
+    };
+  } else if (action === "set-stage") {
+    const employeeId = cleanText(body.employeeId, 180);
+    const year = Number(body.year);
+    const stages = [
+      "Notities nodig",
+      "Notities compleet",
+      "Concept klaar",
+      "Controleren",
+      "Definitief",
+    ] as const;
+    const stage = stages.find((item) => item === body.stage);
+    if (!employeeId || !Number.isInteger(year) || !stage) {
+      return NextResponse.json({ message: "Briefstatus is niet compleet." }, { status: 400 });
+    }
+
+    nextState = {
+      ...state,
+      employeeOverrides: {
+        ...state.employeeOverrides,
+        [employeeId]: {
+          ...state.employeeOverrides[employeeId],
+          stageByYear: {
+            ...(state.employeeOverrides[employeeId]?.stageByYear || {}),
+            [String(year)]: stage,
+          },
         },
       },
     };

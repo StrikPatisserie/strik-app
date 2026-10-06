@@ -215,6 +215,16 @@ export default function ChristmasLettersPreview() {
     }
   }
 
+  async function setSelectedStage(stage: ChristmasLetterStage) {
+    if (!selectedEmployee.id) return;
+    await performAction({
+      action: "set-stage",
+      employeeId: selectedEmployee.id,
+      year,
+      stage,
+    });
+  }
+
   return (
     <section className="space-y-2.5">
       <div className="rounded-[1.35rem] border border-white/70 bg-white/92 p-3 shadow-[0_10px_28px_rgba(72,91,66,0.12)] sm:p-4">
@@ -528,29 +538,27 @@ export default function ChristmasLettersPreview() {
                 <aside className="space-y-2">
                   <div className="rounded-xl bg-[#fff0b2] p-3 shadow-sm">
                     <h3 className="text-sm font-black text-[#3c321f]">Eerder benoemd</h3>
-                    <div className="mt-2 space-y-1.5 text-xs">
-                      {[
-                        ["Rust tijdens drukte", "2022 · 2024"],
-                        ["Rots in de branding", "2021 · 2023"],
-                        ["Verbouwing thuis", "2023"],
-                      ].map(([topic, years]) => (
-                        <div key={topic} className="flex items-center justify-between gap-2 rounded-lg bg-white/75 px-2.5 py-1.5">
-                          <strong>{topic}</strong>
-                          <span className="shrink-0 text-[#8b7950]">{years}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="mt-1 text-xs leading-snug text-[#756431]">
+                      {selectedEmployee.previousYears.length
+                        ? `${selectedEmployee.previousYears.length} eerder jaar gevonden.`
+                        : "Nog geen oude brieven gekoppeld."}
+                    </p>
                   </div>
 
                   <div className="rounded-xl bg-[#eee5ea] p-3 shadow-sm">
-                    <h3 className="text-sm font-black text-[#3f2f37]">AI-voorstel</h3>
-                    <p className="mt-1 text-xs leading-snug text-[#67545f]">Zet haar ontwikkeling als rustige kartrekker centraal. Noem de woning alleen kort.</p>
+                    <h3 className="text-sm font-black text-[#3f2f37]">Conceptopzet</h3>
+                    <p className="mt-1 text-xs leading-snug text-[#67545f]">
+                      {notes.length
+                        ? `Maak een feitelijke eerste opzet uit ${notes.length} notitie${notes.length === 1 ? "" : "s"}.`
+                        : "Voeg eerst minimaal één notitie toe."}
+                    </p>
                     <button
                       type="button"
                       onClick={() => setActiveTab("concept")}
-                      className="mt-2 w-full rounded-lg bg-[#a27a8e] px-3 py-2 text-xs font-black text-white"
+                      disabled={!notes.length}
+                      className="mt-2 w-full rounded-lg bg-[#a27a8e] px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Bekijk AI-concept →
+                      Maak opzet →
                     </button>
                   </div>
                 </aside>
@@ -561,7 +569,6 @@ export default function ChristmasLettersPreview() {
               <div>
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-base font-black text-[#2f2823]">Eerdere kerstbrieven</h2>
-                  <button type="button" className="rounded-lg border border-[#d9d1c8] px-3 py-1.5 text-xs font-black text-[#5f554d]">Importeren</button>
                 </div>
                 <div className="mt-3 space-y-1.5">
                   {!selectedEmployee.previousYears.length && (
@@ -586,52 +593,58 @@ export default function ChristmasLettersPreview() {
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
                 <section>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-base font-black text-[#2f2823]">Concept voor {selectedEmployee.name.split(" ")[0]}</h2>
-                    <span className="rounded-full bg-[#e9f1e6] px-2.5 py-1 text-[0.68rem] font-black text-[#35603d]">5 notities gebruikt</span>
+                    <h2 className="text-base font-black text-[#2f2823]">Opzet voor {selectedEmployee.name.split(" ")[0]}</h2>
+                    <span className="rounded-full bg-[#e9f1e6] px-2.5 py-1 text-[0.68rem] font-black text-[#35603d]">{notes.length} notities gebruikt</span>
                   </div>
-                  <div className="mt-2 rounded-xl border border-[#ddd5cc] bg-[#fffdf9] p-4 text-sm leading-6 text-[#4f463f] shadow-sm" contentEditable suppressContentEditableWarning>
-                    <p className="font-black text-[#342a25]">Lieve {selectedEmployee.name.split(" ")[0]},</p>
-                    <p className="mt-3">Wat hebben we jou dit jaar opnieuw zien groeien. Niet door het hardst te roepen, maar juist door rustig te kijken wat er nodig is en het vervolgens gewoon te regelen. Dat zagen we tijdens de Vierdaagse, maar ook in de manier waarop je een nieuwe collega onder je hoede nam.</p>
-                    <p className="mt-3">Zelfs terwijl thuis de verhuisdozen en verbouwing op je wachtten, bleef je flexibel en betrokken. Die combinatie van rust, aandacht en daadkracht maakt jou een ontzettend fijne collega.</p>
-                    <p className="mt-3">We hopen dat je tijdens de feestdagen heerlijk kunt landen in je nieuwe huis en kunt genieten van alles wat je dit jaar hebt opgebouwd. Dank je wel voor alles wat je voor Strik en je collega’s doet.</p>
-                    <p className="mt-3">Heel veel liefs,<br />Roos &amp; Fien</p>
-                  </div>
+                  {notes.length ? (
+                    <div className="mt-2 rounded-xl border border-[#ddd5cc] bg-[#fffdf9] p-4 text-sm leading-6 text-[#4f463f] shadow-sm" contentEditable suppressContentEditableWarning>
+                      <p className="font-black text-[#342a25]">Lieve {selectedEmployee.name.split(" ")[0]},</p>
+                      <p className="mt-3">Als we terugkijken op {year}, zijn dit de momenten die we graag in jouw persoonlijke kerstbrief willen verwerken:</p>
+                      {notes.map((note) => (
+                        <p key={note.id} className="mt-3">{note.text}</p>
+                      ))}
+                      <p className="mt-3">Dank je wel voor alles wat je dit jaar voor Strik en je collega’s hebt betekend. We wensen je hele fijne feestdagen en alle goeds voor {year + 1}.</p>
+                      <p className="mt-3">Heel veel liefs,<br />Roos &amp; Fien</p>
+                    </div>
+                  ) : (
+                    <div className="mt-2 rounded-xl border border-dashed border-[#d8d0c8] px-3 py-6 text-center text-xs text-[#8a8178]">
+                      Voeg eerst notities toe om een feitelijke opzet te maken.
+                    </div>
+                  )}
                 </section>
                 <aside className="space-y-2">
                   <div className="rounded-xl bg-[#edf3ea] p-3">
-                    <h3 className="text-sm font-black text-[#315239]">Schrijfstijl klopt</h3>
+                    <h3 className="text-sm font-black text-[#315239]">Veilige opzet</h3>
                     <ul className="mt-2 space-y-1.5 text-xs text-[#52634f]">
-                      <li>✓ Warm en direct</li>
-                      <li>✓ Concrete momenten</li>
+                      <li>✓ Alleen eigen notities</li>
                       <li>✓ Geen verzonnen feiten</li>
-                      <li>✓ Lengte: compact</li>
+                      <li>✓ Jaar klopt</li>
                     </ul>
                   </div>
-                  <button type="button" onClick={() => setActiveTab("controle")} className="w-full rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white">Controleer</button>
-                  <button type="button" className="w-full rounded-lg border border-[#d9d1c8] px-3 py-2 text-xs font-black text-[#5f554d]">Andere versie</button>
+                  <button type="button" onClick={() => setActiveTab("controle")} disabled={!notes.length} className="w-full rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white disabled:opacity-40">Controleer</button>
                 </aside>
               </div>
             )}
 
             {activeTab === "controle" && (
               <div>
-                <h2 className="text-base font-black text-[#2f2823]">2 punten controleren</h2>
+                <h2 className="text-base font-black text-[#2f2823]">Controle</h2>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
-                  <div className="rounded-xl border border-[#efd2c9] bg-[#fff1ec] p-3">
+                  <div className="rounded-xl border border-[#eadb99] bg-[#fff8d8] p-3">
                     <div className="flex items-center gap-2.5">
                       <MiniIcon>!</MiniIcon>
                       <div>
-                        <h3 className="text-sm font-black text-[#873d32]">Mogelijke herhaling</h3>
-                        <p className="mt-0.5 text-xs leading-snug text-[#835a53]">“Rust tijdens drukte” stond ook in 2024. Maak het nu concreet met de Vierdaagse.</p>
+                        <h3 className="text-sm font-black text-[#765c14]">Historie nog koppelen</h3>
+                        <p className="mt-0.5 text-xs leading-snug text-[#7b6a3e]">Herhalingen kunnen pas worden gecontroleerd zodra eerdere brieven zijn gekoppeld.</p>
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-xl border border-[#eadb99] bg-[#fff8d8] p-3">
+                  <div className="rounded-xl border border-[#cee0ca] bg-[#eef6ec] p-3">
                     <div className="flex items-center gap-2.5">
-                      <MiniIcon>?</MiniIcon>
+                      <MiniIcon>✓</MiniIcon>
                       <div>
-                        <h3 className="text-sm font-black text-[#765c14]">Persoonlijk feit bevestigen</h3>
-                        <p className="mt-0.5 text-xs leading-snug text-[#7b6a3e]">Bevestig dat de nieuwe woning genoemd mag worden.</p>
+                        <h3 className="text-sm font-black text-[#315b39]">Alleen bevestigde notities</h3>
+                        <p className="mt-0.5 text-xs leading-snug text-[#5c7058]">De opzet gebruikt {notes.length} opgeslagen notitie{notes.length === 1 ? "" : "s"}.</p>
                       </div>
                     </div>
                   </div>
@@ -640,13 +653,13 @@ export default function ChristmasLettersPreview() {
                     <p className="mt-1 text-xs text-[#5c7058]">{year} wordt afgesloten; de wens verwijst naar {year + 1}.</p>
                   </div>
                   <div className="rounded-xl border border-[#cee0ca] bg-[#eef6ec] p-3">
-                    <h3 className="text-sm font-black text-[#315b39]">✓ Geen gekopieerd slot</h3>
-                    <p className="mt-1 text-xs text-[#5c7058]">De afsluiting is niet identiek aan andere brieven van dit jaar.</p>
+                    <h3 className="text-sm font-black text-[#315b39]">✓ Geen extra feiten toegevoegd</h3>
+                    <p className="mt-1 text-xs text-[#5c7058]">Persoonlijke details komen uitsluitend uit jullie eigen notities.</p>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-[#e7e0d8] pt-3">
-                  <button type="button" className="rounded-lg border border-[#d9d1c8] px-3 py-2 text-xs font-black text-[#5f554d]">Concept opslaan</button>
-                  <button type="button" className="rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white">Definitief maken</button>
+                  <button type="button" disabled={saving || !notes.length} onClick={() => void setSelectedStage("Concept klaar")} className="rounded-lg border border-[#d9d1c8] px-3 py-2 text-xs font-black text-[#5f554d] disabled:opacity-40">Concept opslaan</button>
+                  <button type="button" disabled={saving || !notes.length} onClick={() => void setSelectedStage("Definitief")} className="rounded-lg bg-[#245c32] px-3 py-2 text-xs font-black text-white disabled:opacity-40">Definitief maken</button>
                 </div>
               </div>
             )}
