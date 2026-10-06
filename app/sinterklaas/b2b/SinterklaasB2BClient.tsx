@@ -46,7 +46,10 @@ type B2BFormState = {
   contactName: string;
   customerEmail: string;
   phone: string;
+  deliveryWindowType: SinterklaasB2BOrder["deliveryWindowType"];
   deliveryDate: string;
+  deliveryDateEnd: string;
+  deliveryWeek: string;
   productionDate: string;
   department: SinterklaasB2BOrder["department"];
   orderText: string;
@@ -400,6 +403,41 @@ function yearFromDate(date: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 4) : currentYear();
 }
 
+function isoWeekBounds(value: string) {
+  const match = value.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  if (week < 1 || week > 53) return null;
+
+  const januaryFourth = new Date(Date.UTC(year, 0, 4));
+  const januaryFourthDay = januaryFourth.getUTCDay() || 7;
+  const monday = new Date(
+    Date.UTC(year, 0, 4 - januaryFourthDay + 1 + (week - 1) * 7)
+  );
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+
+  return {
+    start: monday.toISOString().slice(0, 10),
+    end: sunday.toISOString().slice(0, 10),
+  };
+}
+
+function isoWeekFromDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "";
+  const date = new Date(`${value}T12:00:00Z`);
+  const thursday = new Date(date);
+  const day = thursday.getUTCDay() || 7;
+  thursday.setUTCDate(thursday.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(
+    ((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7
+  );
+  return `${thursday.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
 function addDays(date: string, days: number) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
   const next = new Date(`${date}T12:00:00`);
@@ -413,7 +451,10 @@ function createFormState(): B2BFormState {
     contactName: "",
     customerEmail: "",
     phone: "",
+    deliveryWindowType: "date",
     deliveryDate: "",
+    deliveryDateEnd: "",
+    deliveryWeek: "",
     productionDate: "",
     department: "chocolade",
     orderText: "",
@@ -442,7 +483,10 @@ function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined) {
     contactName: order.contactName,
     customerEmail: order.customerEmail,
     phone: order.phone,
+    deliveryWindowType: order.deliveryWindowType,
     deliveryDate: order.deliveryDate,
+    deliveryDateEnd: order.deliveryDateEnd,
+    deliveryWeek: order.deliveryWeek,
     productionDate: order.productionDate,
     department: order.department,
     orderText: parsedOrder.otherText,
@@ -472,6 +516,21 @@ function formatDate(date: string) {
     day: "2-digit",
     month: "2-digit",
   }).format(new Date(`${date}T12:00:00`));
+}
+
+function deliveryWindowLabel(order: Pick<SinterklaasB2BOrder, "deliveryWindowType" | "deliveryDate" | "deliveryDateEnd" | "deliveryWeek">) {
+  if (order.deliveryWindowType === "week" && order.deliveryWeek) {
+    const week = Number(order.deliveryWeek.slice(-2));
+    return `Week ${week}`;
+  }
+  if (
+    order.deliveryWindowType === "range" &&
+    order.deliveryDate &&
+    order.deliveryDateEnd
+  ) {
+    return `${formatDate(order.deliveryDate)} t/m ${formatDate(order.deliveryDateEnd)}`;
+  }
+  return formatDate(order.deliveryDate);
 }
 
 function formatDateTime(value: string) {
@@ -608,7 +667,13 @@ function updateOrderList(
 }
 
 function dueSoon(order: SinterklaasB2BOrder) {
-  if (!order.deliveryDate || order.status !== "akkoord" || order.delivered || order.cancelled) return false;
+  if (
+    order.deliveryWindowType !== "date" ||
+    !order.deliveryDate ||
+    order.status !== "akkoord" ||
+    order.delivered ||
+    order.cancelled
+  ) return false;
   const today = new Date(`${todayIso()}T12:00:00`).getTime();
   const delivery = new Date(`${order.deliveryDate}T12:00:00`).getTime();
   const days = Math.round((delivery - today) / 86400000);
@@ -922,8 +987,32 @@ function B2BOrderForm({
       setMessage("Vul minimaal de klantnaam in.");
       return;
     }
+    if (
+      form.deliveryWindowType === "range" &&
+      (!form.deliveryDate || !form.deliveryDateEnd)
+    ) {
+      setMessage("Vul voor de gewenste periode een begin- en einddatum in.");
+      return;
+    }
+    if (
+      form.deliveryWindowType === "range" &&
+      form.deliveryDateEnd < form.deliveryDate
+    ) {
+      setMessage("De einddatum moet op of na de begindatum liggen.");
+      return;
+    }
+    if (form.deliveryWindowType === "week" && !form.deliveryWeek) {
+      setMessage("Kies de gewenste leverweek.");
+      return;
+    }
+    if (form.status === "akkoord" && form.deliveryWindowType !== "date") {
+      setMessage(
+        "Kies voor een definitieve bestelling één vaste leverdatum. Een periode of week kan bij een aanvraag of offerte."
+      );
+      return;
+    }
     if (form.status === "akkoord" && (!form.deliveryDate || !orderText.trim())) {
-      setMessage("Voor definitief zijn de bestelling en leverdatum nodig.");
+      setMessage("Voor definitief zijn de bestelling en een vaste leverdatum nodig.");
       return;
     }
     if (form.status === "akkoord" && form.department !== "bakkerij" && form.letterLines.length === 0 && initialOrder?.status !== "akkoord") {
@@ -962,10 +1051,18 @@ function B2BOrderForm({
         ...(initialOrder?.packaging !== form.packaging ? { packagingChecked: false } : {}),
         ...(initialOrder?.textInstructions !== form.textInstructions ? { textChecked: false } : {}),
         ...(initialOrder && (JSON.stringify(initialOrder.letterLines) !== JSON.stringify(form.letterLines) || initialOrder.department !== form.department) ? { letterProductionDone: false, ...(form.department === "chocolade" ? { productionDone: false, productionDoneAt: "" } : {}) } : {}),
-        ...(initialOrder && initialOrder.deliveryDate !== form.deliveryDate ? { productionScheduled: false } : {}),
-        year: form.deliveryDate
-          ? yearFromDate(form.deliveryDate)
-          : initialOrder?.year || currentYear(),
+        ...(initialOrder && (
+          initialOrder.deliveryWindowType !== form.deliveryWindowType ||
+          initialOrder.deliveryDate !== form.deliveryDate ||
+          initialOrder.deliveryDateEnd !== form.deliveryDateEnd ||
+          initialOrder.deliveryWeek !== form.deliveryWeek
+        ) ? { productionScheduled: false } : {}),
+        year:
+          form.deliveryWindowType === "week" && form.deliveryWeek
+            ? form.deliveryWeek.slice(0, 4)
+            : form.deliveryDate
+              ? yearFromDate(form.deliveryDate)
+              : initialOrder?.year || currentYear(),
         season: initialOrder?.season || "sint",
         source: initialOrder?.source || "handmatig",
         sourceSheet: initialOrder?.sourceSheet || "",
@@ -1025,17 +1122,121 @@ function B2BOrderForm({
           placeholder="Telefoon"
           className="h-10 min-w-0 border-0 bg-white px-3 text-sm font-medium outline-none"
         />
-        <label className="grid bg-white px-3 py-2">
+        <div className="grid gap-1.5 bg-white px-3 py-2 sm:col-span-2 xl:col-span-1">
           <span className="text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-[#8b8278]">
-            Leverdatum
+            Gewenste levering
           </span>
-          <input
-            value={form.deliveryDate}
-            onChange={(event) => setForm((current) => ({ ...current, deliveryDate: event.target.value, productionDate: "" }))}
-            type="date"
-            className="h-9 min-w-0 border-0 bg-white px-0 text-sm font-semibold outline-none"
-          />
-        </label>
+          <select
+            value={form.deliveryWindowType}
+            onChange={(event) => {
+              const deliveryWindowType = event.target
+                .value as B2BFormState["deliveryWindowType"];
+              setForm((current) => {
+                if (deliveryWindowType === "week") {
+                  const deliveryWeek =
+                    current.deliveryWeek || isoWeekFromDate(current.deliveryDate);
+                  const bounds = isoWeekBounds(deliveryWeek);
+                  return {
+                    ...current,
+                    deliveryWindowType,
+                    deliveryWeek,
+                    deliveryDate: bounds?.start || "",
+                    deliveryDateEnd: bounds?.end || "",
+                    productionDate: "",
+                  };
+                }
+                if (deliveryWindowType === "range") {
+                  return {
+                    ...current,
+                    deliveryWindowType,
+                    deliveryDateEnd:
+                      current.deliveryDateEnd || current.deliveryDate,
+                    deliveryWeek: "",
+                    productionDate: "",
+                  };
+                }
+                return {
+                  ...current,
+                  deliveryWindowType,
+                  deliveryDateEnd: "",
+                  deliveryWeek: "",
+                  productionDate: "",
+                };
+              });
+            }}
+            className="h-8 min-w-0 rounded-lg border border-[#e4ded5] bg-[#faf8f5] px-2 text-xs font-bold outline-none"
+          >
+            <option value="date">Vaste datum</option>
+            <option value="range">Tussen twee data</option>
+            <option value="week">Hele week</option>
+          </select>
+          {form.deliveryWindowType === "date" && (
+            <input
+              value={form.deliveryDate}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  deliveryDate: event.target.value,
+                  productionDate: "",
+                }))
+              }
+              type="date"
+              aria-label="Vaste leverdatum"
+              className="h-9 min-w-0 border-0 bg-white px-0 text-sm font-semibold outline-none"
+            />
+          )}
+          {form.deliveryWindowType === "range" && (
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+              <input
+                value={form.deliveryDate}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    deliveryDate: event.target.value,
+                    productionDate: "",
+                  }))
+                }
+                type="date"
+                aria-label="Begin gewenste leverperiode"
+                className="h-9 min-w-0 border-0 bg-white px-0 text-xs font-semibold outline-none"
+              />
+              <span className="text-[0.65rem] font-bold text-[#8b8278]">t/m</span>
+              <input
+                value={form.deliveryDateEnd}
+                min={form.deliveryDate || undefined}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    deliveryDateEnd: event.target.value,
+                    productionDate: "",
+                  }))
+                }
+                type="date"
+                aria-label="Einde gewenste leverperiode"
+                className="h-9 min-w-0 border-0 bg-white px-0 text-xs font-semibold outline-none"
+              />
+            </div>
+          )}
+          {form.deliveryWindowType === "week" && (
+            <input
+              value={form.deliveryWeek}
+              onChange={(event) => {
+                const deliveryWeek = event.target.value;
+                const bounds = isoWeekBounds(deliveryWeek);
+                setForm((current) => ({
+                  ...current,
+                  deliveryWeek,
+                  deliveryDate: bounds?.start || "",
+                  deliveryDateEnd: bounds?.end || "",
+                  productionDate: "",
+                }));
+              }}
+              type="week"
+              aria-label="Gewenste leverweek"
+              className="h-9 min-w-0 border-0 bg-white px-0 text-sm font-semibold outline-none"
+            />
+          )}
+        </div>
         <select
           value={form.department}
           onChange={(event) =>
@@ -1385,7 +1586,7 @@ function B2BOrderRow({
   ].filter(Boolean);
   const archived = order.id.startsWith("historie-");
   const warnings = orderWarnings(order);
-  const confirmationNeedsAttention = order.status === "akkoord" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
+  const confirmationNeedsAttention = order.status === "akkoord" && order.deliveryWindowType === "date" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
   const orderSummary = compactOrderText(order.orderText);
 
   return (
@@ -1398,14 +1599,19 @@ function B2BOrderRow({
             : "border-[#e4ded5] bg-white"
       }`}
     >
-      <div className="grid gap-2 lg:grid-cols-[6.5rem_minmax(0,1fr)_10.5rem]">
+      <div className="grid gap-2 lg:grid-cols-[9.5rem_minmax(0,1fr)_10.5rem]">
         <div className="border-l-4 border-[#c3d3bc] pl-2">
           <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
-            Leverdatum
+            {order.deliveryWindowType === "date" ? "Leverdatum" : "Gewenste levering"}
           </p>
-          <p className="whitespace-nowrap text-base font-black text-[#1a1815]">
-            {formatDate(order.deliveryDate)}
+          <p className="text-base font-black leading-tight text-[#1a1815]">
+            {deliveryWindowLabel(order)}
           </p>
+          {order.deliveryWindowType === "week" && order.deliveryDate && order.deliveryDateEnd && (
+            <p className="mt-0.5 text-[0.62rem] font-semibold text-[#8b8278]">
+              {formatDate(order.deliveryDate)} t/m {formatDate(order.deliveryDateEnd)}
+            </p>
+          )}
         </div>
 
         <div className="min-w-0">
@@ -1582,6 +1788,9 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
         order.letterOrderText,
         order.letterLines.map(b2bLetterLineLabel).join(" "),
         order.deliveryDate,
+        order.deliveryDateEnd,
+        order.deliveryWeek,
+        deliveryWindowLabel(order),
         order.deliveryMethod,
         order.department,
       ]

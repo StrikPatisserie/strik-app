@@ -136,6 +136,13 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
   const id = textFrom(value.id);
   const customerName = textFrom(value.customerName);
   const orderText = textFrom(value.orderText);
+  const sourceSheetValue = textFrom(value.sourceSheet);
+  const deliveryFallback = decodeDeliveryWindowFallback(sourceSheetValue);
+  const deliveryWindowType =
+    value.deliveryWindowType === "range" ||
+    value.deliveryWindowType === "week"
+      ? value.deliveryWindowType
+      : deliveryFallback?.deliveryWindowType || "date";
 
   if (!id || !customerName || (!orderText && value.status !== "aanvraag" && value.status !== "offerte" && value.status !== "afgewezen")) return null;
 
@@ -168,7 +175,12 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     contactName: textFrom(value.contactName),
     customerEmail: textFrom(value.customerEmail),
     phone: textFrom(value.phone),
+    deliveryWindowType,
     deliveryDate: textFrom(value.deliveryDate),
+    deliveryDateEnd:
+      textFrom(value.deliveryDateEnd) || deliveryFallback?.deliveryDateEnd || "",
+    deliveryWeek:
+      textFrom(value.deliveryWeek) || deliveryFallback?.deliveryWeek || "",
     productionDate: textFrom(value.productionDate),
     department:
       value.department === "bakkerij" || value.department === "beide"
@@ -186,7 +198,7 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     deliveryAddress: textFrom(value.deliveryAddress),
     invoiceInfo: textFrom(value.invoiceInfo),
     source: value.source === "excel" ? "excel" : "handmatig",
-    sourceSheet: textFrom(value.sourceSheet),
+    sourceSheet: deliveryFallback?.sourceSheet || sourceSheetValue,
     status:
       value.status === "aanvraag" || value.status === "offerte" || value.status === "afgewezen"
         ? value.status
@@ -213,6 +225,52 @@ function normalizeB2BOrder(value: unknown): SinterklaasB2BOrder | null {
     confirmationEmailError: textFrom(value.confirmationEmailError),
     createdAt: textFrom(value.createdAt),
     updatedAt: textFrom(value.updatedAt),
+  };
+}
+
+const DELIVERY_WINDOW_MARKER = "__STRIK_LEVERPERIODE__";
+
+// Keep ranges working with the currently installed WordPress snippet too.
+// Once the snippet accepts the structured fields, this marker remains a harmless fallback.
+function decodeDeliveryWindowFallback(value: string) {
+  const markerIndex = value.lastIndexOf(DELIVERY_WINDOW_MARKER);
+  if (markerIndex < 0) return null;
+
+  const encoded = value.slice(markerIndex + DELIVERY_WINDOW_MARKER.length);
+  const [deliveryWindowType, deliveryDateEnd = "", deliveryWeek = ""] =
+    encoded.split("|");
+  if (deliveryWindowType !== "range" && deliveryWindowType !== "week") {
+    return null;
+  }
+
+  return {
+    sourceSheet: value.slice(0, markerIndex).trimEnd(),
+    deliveryWindowType,
+    deliveryDateEnd,
+    deliveryWeek,
+  } as const;
+}
+
+function withDeliveryWindowFallback<T extends Partial<SinterklaasB2BOrder>>(
+  order: T
+) {
+  if (!("deliveryWindowType" in order) && !("sourceSheet" in order)) {
+    return order;
+  }
+
+  const sourceSheet = (order.sourceSheet || "")
+    .split(DELIVERY_WINDOW_MARKER)[0]
+    .trimEnd();
+  if (
+    order.deliveryWindowType !== "range" &&
+    order.deliveryWindowType !== "week"
+  ) {
+    return { ...order, sourceSheet };
+  }
+
+  return {
+    ...order,
+    sourceSheet: `${sourceSheet}${DELIVERY_WINDOW_MARKER}${order.deliveryWindowType}|${order.deliveryDateEnd || ""}|${order.deliveryWeek || ""}`,
   };
 }
 
@@ -341,7 +399,7 @@ export async function saveB2BOrder(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(order),
+      body: JSON.stringify(withDeliveryWindowFallback(order)),
     },
     "B2B-bestelling opslaan is mislukt."
   );
@@ -359,7 +417,7 @@ export async function updateB2BOrder(id: string, patch: Partial<SinterklaasB2BOr
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...patch }),
+      body: JSON.stringify(withDeliveryWindowFallback({ id, ...patch })),
     },
     "B2B-bestelling bijwerken is mislukt."
   );

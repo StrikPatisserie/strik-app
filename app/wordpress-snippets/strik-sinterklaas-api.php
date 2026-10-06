@@ -651,12 +651,18 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
 
     $customer_name = isset($order['customerName']) ? strik_sinterklaas_text($order['customerName'], 180) : '';
     $order_text = isset($order['orderText']) ? strik_sinterklaas_textarea($order['orderText'], 5000) : '';
+    $delivery_window_type = isset($order['deliveryWindowType']) ? strik_sinterklaas_text($order['deliveryWindowType'], 20) : 'date';
+    if (!in_array($delivery_window_type, array('date', 'range', 'week'), true)) $delivery_window_type = 'date';
     $delivery_date = isset($order['deliveryDate']) ? strik_sinterklaas_date($order['deliveryDate']) : '';
+    $delivery_date_end = isset($order['deliveryDateEnd']) ? strik_sinterklaas_date($order['deliveryDateEnd']) : '';
+    $delivery_week = isset($order['deliveryWeek']) ? strik_sinterklaas_text($order['deliveryWeek'], 12) : '';
     $letter_lines = isset($order['letterLines']) ? strik_sinterklaas_sanitize_b2b_letter_lines($order['letterLines']) : array();
 
     if (isset($order['letterLines']) && (!is_array($order['letterLines']) || count($letter_lines) !== count($order['letterLines']))) return null;
 
     if ($customer_name === '') return null;
+    if ($delivery_window_type === 'range' && ($delivery_date === '' || $delivery_date_end === '' || $delivery_date_end < $delivery_date)) return null;
+    if ($delivery_window_type === 'week' && !preg_match('/^\d{4}-W\d{2}$/', $delivery_week)) return null;
 
     $id = isset($order['id']) ? strik_sinterklaas_text($order['id'], 120) : '';
     if ($id === '') {
@@ -666,7 +672,7 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     $now = wp_date(DATE_ATOM);
     $status = isset($order['status']) ? strik_sinterklaas_text($order['status'], 20) : 'akkoord';
     if (!in_array($status, array('aanvraag', 'offerte', 'akkoord', 'afgewezen'), true)) $status = 'aanvraag';
-    if ($status === 'akkoord' && ($delivery_date === '' || $order_text === '') && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'))) return null;
+    if ($status === 'akkoord' && ($delivery_window_type !== 'date' || $delivery_date === '' || $order_text === '')) return null;
     $department = isset($order['department']) ? strik_sinterklaas_text($order['department'], 80) : 'chocolade';
     if ($status === 'akkoord' && $department !== 'bakkerij' && empty($letter_lines) && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord')) && (!isset($order['source']) || $order['source'] !== 'excel')) return null;
 
@@ -678,7 +684,10 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
         'contactName' => isset($order['contactName']) ? strik_sinterklaas_text($order['contactName'], 160) : '',
         'customerEmail' => isset($order['customerEmail']) ? strik_sinterklaas_email($order['customerEmail']) : '',
         'phone' => isset($order['phone']) ? strik_sinterklaas_text($order['phone'], 80) : '',
+        'deliveryWindowType' => $delivery_window_type,
         'deliveryDate' => $delivery_date,
+        'deliveryDateEnd' => $delivery_date_end,
+        'deliveryWeek' => $delivery_week,
         'productionDate' => isset($order['productionDate']) ? strik_sinterklaas_date($order['productionDate']) : '',
         'department' => $department,
         'orderText' => $order_text,
@@ -907,7 +916,7 @@ function strik_sinterklaas_b2b_save($request) {
 
     $became_confirmed = $order['status'] === 'akkoord'
         && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord'));
-    $mail_fields = array('customerName', 'contactName', 'customerEmail', 'phone', 'deliveryDate', 'productionDate', 'department', 'orderText', 'letterOrderText', 'letterLines', 'logo', 'textInstructions', 'packaging', 'importantNotes', 'deliveryMethod', 'deliveryAddress', 'priceAgreement', 'totalExVat', 'invoiceInfo');
+    $mail_fields = array('customerName', 'contactName', 'customerEmail', 'phone', 'deliveryWindowType', 'deliveryDate', 'deliveryDateEnd', 'deliveryWeek', 'productionDate', 'department', 'orderText', 'letterOrderText', 'letterLines', 'logo', 'textInstructions', 'packaging', 'importantNotes', 'deliveryMethod', 'deliveryAddress', 'priceAgreement', 'totalExVat', 'invoiceInfo');
     $details_changed = false;
     if ($order['status'] === 'akkoord' && !empty($existing)) {
         foreach ($mail_fields as $field) {
@@ -948,6 +957,8 @@ function strik_sinterklaas_create_b2b_confirmation_body($order, $is_new_confirma
         'E-mail klant' => $order['customerEmail'],
         'Telefoon' => $order['phone'],
         'Leverdatum' => $order['deliveryDate'],
+        'Einde gewenste leverperiode' => isset($order['deliveryDateEnd']) ? $order['deliveryDateEnd'] : '',
+        'Gewenste leverweek' => isset($order['deliveryWeek']) ? $order['deliveryWeek'] : '',
         'Afdeling' => $order['department'],
         'Bestelling' => $order['orderText'],
         'Logo' => $order['logo'],

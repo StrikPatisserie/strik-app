@@ -6,6 +6,7 @@ import type {
   ChristmasLetterDraft,
   ChristmasLetterEmployee,
   ChristmasLetterMode,
+  ChristmasLetterNote,
   ChristmasLetterStage,
   HistoricalChristmasLetter,
 } from "./christmasLettersTypes";
@@ -145,6 +146,8 @@ export default function ChristmasLettersPreview() {
   const [draftLoading, setDraftLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [openNoteMenuId, setOpenNoteMenuId] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState("");
+  const [editingNoteText, setEditingNoteText] = useState("");
   const [showPrintConfirmation, setShowPrintConfirmation] = useState(false);
   const [categoryTemplates, setCategoryTemplates] = useState<
     Partial<Record<ChristmasLetterCategory, ChristmasLetterDraft>>
@@ -210,6 +213,13 @@ export default function ChristmasLettersPreview() {
   const notes = selectedEmployee.notes;
   const selectedTemplateUpdatedAt =
     categoryTemplates[selectedEmployee.category]?.updatedAt || "";
+
+  useEffect(() => {
+    setEditingNoteId("");
+    setEditingNoteText("");
+    setOpenNoteMenuId("");
+  }, [selectedEmployee.id, year]);
+
   const filteredEmployees = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return employees.filter((employee) => {
@@ -356,6 +366,29 @@ export default function ChristmasLettersPreview() {
       category: "Notitie",
     });
     if (saved) setNewNote("");
+  }
+
+  function startEditingNote(note: ChristmasLetterNote) {
+    setEditingNoteId(note.id);
+    setEditingNoteText(note.text);
+    setOpenNoteMenuId("");
+  }
+
+  async function updateNote() {
+    const text = editingNoteText.trim();
+    if (!selectedEmployee.id || !editingNoteId || !text) return;
+
+    const saved = await performAction({
+      action: "update-note",
+      employeeId: selectedEmployee.id,
+      noteId: editingNoteId,
+      year,
+      text,
+    });
+    if (saved) {
+      setEditingNoteId("");
+      setEditingNoteText("");
+    }
   }
 
   async function deleteNote(noteId: string) {
@@ -1015,15 +1048,24 @@ export default function ChristmasLettersPreview() {
                     </span>
                   </div>
 
-                  <div className="mt-2 flex gap-2 rounded-xl border border-[#e2d9d0] bg-[#fffdf9] p-1.5 shadow-sm">
-                    <input
+                  <div className="mt-2 flex items-end gap-2 rounded-xl border border-[#e2d9d0] bg-[#fffdf9] p-1.5 shadow-sm">
+                    <textarea
                       value={newNote}
                       onChange={(event) => setNewNote(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") void addNote();
+                      onInput={(event) => {
+                        event.currentTarget.style.height = "auto";
+                        event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 240)}px`;
                       }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                          event.preventDefault();
+                          void addNote();
+                        }
+                      }}
+                      rows={2}
+                      maxLength={4000}
                       placeholder="Bijvoorbeeld: pakte Koningsdag zelfstandig geweldig op…"
-                      className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-[#aaa198]"
+                      className="max-h-60 min-h-14 min-w-0 flex-1 resize-y bg-transparent px-2 py-1 text-sm leading-relaxed outline-none placeholder:text-[#aaa198]"
                     />
                     <button
                       type="button"
@@ -1054,9 +1096,56 @@ export default function ChristmasLettersPreview() {
                                   : ""}
                               </span>
                             </div>
-                            <p className="mt-0.5 text-[0.8rem] leading-snug text-[#655b53]">{note.text}</p>
+                            {editingNoteId === note.id ? (
+                              <div className="mt-1.5">
+                                <textarea
+                                  value={editingNoteText}
+                                  onChange={(event) => setEditingNoteText(event.target.value)}
+                                  onInput={(event) => {
+                                    event.currentTarget.style.height = "auto";
+                                    event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 280)}px`;
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                                      event.preventDefault();
+                                      void updateNote();
+                                    }
+                                    if (event.key === "Escape") {
+                                      setEditingNoteId("");
+                                      setEditingNoteText("");
+                                    }
+                                  }}
+                                  rows={4}
+                                  maxLength={4000}
+                                  autoFocus
+                                  className="max-h-72 min-h-24 w-full resize-y rounded-lg border border-[#d8cec5] bg-[#fffdf9] px-2.5 py-2 text-[0.8rem] leading-relaxed text-[#514841] outline-none focus:border-[#a27a8e]"
+                                />
+                                <div className="mt-1.5 flex justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingNoteId("");
+                                      setEditingNoteText("");
+                                    }}
+                                    className="rounded-md border border-[#ddd4cc] px-2.5 py-1 text-[0.68rem] font-black text-[#756c64]"
+                                  >
+                                    Annuleren
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void updateNote()}
+                                    disabled={saving || !editingNoteText.trim()}
+                                    className="rounded-md bg-[#245c32] px-2.5 py-1 text-[0.68rem] font-black text-white disabled:opacity-40"
+                                  >
+                                    Opslaan
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="mt-0.5 whitespace-pre-wrap break-words text-[0.8rem] leading-relaxed text-[#655b53]">{note.text}</p>
+                            )}
                           </div>
-                          <div className="relative">
+                          {editingNoteId !== note.id && <div className="relative">
                             <button
                               type="button"
                               onClick={() => setOpenNoteMenuId((current) => current === note.id ? "" : note.id)}
@@ -1070,6 +1159,14 @@ export default function ChristmasLettersPreview() {
                                 <button
                                   type="button"
                                   disabled={saving}
+                                  onClick={() => startEditingNote(note)}
+                                  className="w-full rounded-md px-2.5 py-1.5 text-left text-xs font-black text-[#315b39] hover:bg-[#eef5eb] disabled:opacity-50"
+                                >
+                                  Wijzigen
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={saving}
                                   onClick={() => void deleteNote(note.id)}
                                   className="w-full rounded-md px-2.5 py-1.5 text-left text-xs font-black text-[#b04435] hover:bg-[#fff0ec] disabled:opacity-50"
                                 >
@@ -1077,7 +1174,7 @@ export default function ChristmasLettersPreview() {
                                 </button>
                               </div>
                             )}
-                          </div>
+                          </div>}
                         </div>
                       </div>
                     ))}
@@ -1089,7 +1186,7 @@ export default function ChristmasLettersPreview() {
                     <h3 className="text-sm font-black text-[#3c321f]">Eerder benoemd</h3>
                     <p className="mt-1 text-xs leading-snug text-[#756431]">
                       {selectedEmployee.previousYears.length
-                        ? `${selectedEmployee.previousYears.length} eerder jaar gevonden.`
+                        ? `AI gebruikt alle eerdere brieven uit ${selectedEmployee.previousYears.join(", ")} om herhaling te voorkomen en eventueel één passende terugblik te maken.`
                         : "Nog geen oude brieven gekoppeld."}
                     </p>
                   </div>

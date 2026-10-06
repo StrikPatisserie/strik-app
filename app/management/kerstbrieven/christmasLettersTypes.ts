@@ -265,7 +265,7 @@ function normalizeManualEmployee(value: unknown): ManualChristmasEmployee | null
 function normalizeNote(value: unknown): ChristmasLetterNote | null {
   if (!isRecord(value)) return null;
   const id = text(value.id, 180);
-  const noteText = text(value.text, 1600);
+  const noteText = text(value.text, 4000);
   if (!id || !noteText) return null;
 
   return {

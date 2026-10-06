@@ -61,7 +61,10 @@ export type SinterklaasB2BOrder = {
   contactName: string;
   customerEmail: string;
   phone: string;
+  deliveryWindowType: "date" | "range" | "week";
   deliveryDate: string;
+  deliveryDateEnd: string;
+  deliveryWeek: string;
   productionDate: string;
   department: "chocolade" | "bakkerij" | "beide";
   orderText: string;

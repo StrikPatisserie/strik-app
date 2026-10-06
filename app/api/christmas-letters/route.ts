@@ -783,7 +783,7 @@ export async function POST(request: Request) {
     };
   } else if (action === "add-note") {
     const employeeId = cleanText(body.employeeId, 180);
-    const noteText = cleanText(body.text, 1600);
+    const noteText = cleanText(body.text, 4000);
     const year = Number(body.year);
     if (!employeeId || !noteText || !Number.isInteger(year)) {
       return NextResponse.json({ message: "Notitie is niet compleet." }, { status: 400 });
@@ -806,6 +806,32 @@ export async function POST(request: Request) {
             note,
             ...(state.notesByYear[yearKey]?.[employeeId] || []),
           ],
+        },
+      },
+    };
+  } else if (action === "update-note") {
+    const employeeId = cleanText(body.employeeId, 180);
+    const noteId = cleanText(body.noteId, 180);
+    const noteText = cleanText(body.text, 4000);
+    const year = Number(body.year);
+    if (!employeeId || !noteId || !noteText || !Number.isInteger(year)) {
+      return NextResponse.json({ message: "Notitie is niet compleet." }, { status: 400 });
+    }
+
+    const yearKey = String(year);
+    const employeeNotes = state.notesByYear[yearKey]?.[employeeId] || [];
+    if (!employeeNotes.some((note) => note.id === noteId)) {
+      return NextResponse.json({ message: "Notitie is niet gevonden." }, { status: 404 });
+    }
+    nextState = {
+      ...state,
+      notesByYear: {
+        ...state.notesByYear,
+        [yearKey]: {
+          ...(state.notesByYear[yearKey] || {}),
+          [employeeId]: employeeNotes.map((note) =>
+            note.id === noteId ? { ...note, text: noteText } : note
+          ),
         },
       },
     };
