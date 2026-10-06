@@ -9,6 +9,10 @@ import {
   writeChristmasLettersState,
 } from "../../lib/christmasLettersStorage";
 import {
+  historicalLettersForEmployee,
+  historicalLetterYearsForEmployee,
+} from "../../lib/historicalChristmasLetters";
+import {
   emptyChristmasLettersState,
   type ChristmasLetterEmployee,
   type ChristmasLetterNote,
@@ -79,7 +83,9 @@ function mergeEmployees(
       status: stageForEmployee(state, employee.id, year, notes.length),
       notes,
       noteCount: notes.length,
-      previousYears: [],
+      previousYears: historicalLetterYearsForEmployee(employee.name).filter(
+        (letterYear) => letterYear < year
+      ),
     };
   });
 
@@ -98,7 +104,9 @@ function mergeEmployees(
       status: stageForEmployee(state, employee.id, year, notes.length),
       notes,
       noteCount: notes.length,
-      previousYears: [],
+      previousYears: historicalLetterYearsForEmployee(employee.name).filter(
+        (letterYear) => letterYear < year
+      ),
     };
   });
 
@@ -166,7 +174,13 @@ async function createResponse(request: Request, stateOverride?: ChristmasLetters
     stateOverride
       ? Promise.resolve({ state: stateOverride, storageAvailable: true })
       : loadStateWithAvailability(),
-    loadTamigoEmployees(),
+    stateOverride
+      ? Promise.resolve({
+          employees: [] as ChristmasLetterTamigoEmployee[],
+          tamigoAvailable: true,
+          tamigoMessage: "",
+        })
+      : loadTamigoEmployees(),
   ]);
   let state = stored.state;
 
@@ -208,6 +222,20 @@ async function createResponse(request: Request, stateOverride?: ChristmasLetters
 }
 
 export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const historyFor = cleanText(url.searchParams.get("historyFor"), 180);
+  if (historyFor) {
+    const year = yearFromRequest(request);
+    return NextResponse.json(
+      {
+        letters: historicalLettersForEmployee(historyFor).filter(
+          (letter) => letter.year < year
+        ),
+      },
+      { headers: { "Cache-Control": "private, max-age=300" } }
+    );
+  }
+
   return createResponse(request);
 }
 

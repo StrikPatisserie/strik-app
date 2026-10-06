@@ -12,6 +12,13 @@ export type ChristmasLetterNote = {
   createdAt: string;
 };
 
+export type HistoricalChristmasLetter = {
+  id: string;
+  year: number;
+  recipient: string;
+  content: string;
+};
+
 export type KnownChristmasEmployee = {
   id: string;
   name: string;

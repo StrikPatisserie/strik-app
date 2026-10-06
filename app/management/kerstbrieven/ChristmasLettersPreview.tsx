@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   ChristmasLetterEmployee,
   ChristmasLetterStage,
+  HistoricalChristmasLetter,
 } from "./christmasLettersTypes";
 
 type LetterTab = "notities" | "vorige" | "concept" | "controle";
@@ -22,6 +23,10 @@ type ChristmasLettersResponse = {
   storageAvailable: boolean;
   tamigoAvailable: boolean;
   tamigoMessage: string;
+};
+
+type ChristmasLettersHistoryResponse = {
+  letters: HistoricalChristmasLetter[];
 };
 
 const statusStyles: Record<ChristmasLetterStage, string> = {
@@ -82,6 +87,9 @@ export default function ChristmasLettersPreview() {
     definitive: 0,
   });
   const [storageAvailable, setStorageAvailable] = useState(true);
+  const [historyLetters, setHistoryLetters] = useState<HistoricalChristmasLetter[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [openHistoryId, setOpenHistoryId] = useState("");
 
   function applyResponse(data: ChristmasLettersResponse) {
     setEmployees(data.employees);
@@ -154,6 +162,39 @@ export default function ChristmasLettersPreview() {
     { id: "controle", label: "Controle", count: 2 },
   ];
 
+  useEffect(() => {
+    if (activeTab !== "vorige" || !selectedEmployee.id) return;
+
+    let cancelled = false;
+    setHistoryLoading(true);
+    setOpenHistoryId("");
+
+    fetch(
+      `/api/christmas-letters?year=${year}&historyFor=${encodeURIComponent(selectedEmployee.name)}`,
+      { cache: "force-cache" }
+    )
+      .then(async (response) => {
+        const data = (await response.json()) as ChristmasLettersHistoryResponse & {
+          message?: string;
+        };
+        if (!response.ok) throw new Error(data.message || "Oude brieven ophalen is mislukt.");
+        if (!cancelled) setHistoryLetters(data.letters);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setHistoryLetters([]);
+          setMessage(error instanceof Error ? error.message : "Oude brieven ophalen is mislukt.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, selectedEmployee.id, selectedEmployee.name, year]);
+
   async function performAction(payload: Record<string, unknown>) {
     setSaving(true);
     setMessage("");
@@ -194,12 +235,31 @@ export default function ChristmasLettersPreview() {
   async function toggleSelectedEmployee() {
     if (!selectedEmployee.id) return;
     const active = !selectedEmployee.activeForLetters;
+    const previousEmployees = employees;
+    const previousStats = stats;
+    setEmployees((current) =>
+      current.map((employee) =>
+        employee.id === selectedEmployee.id
+          ? { ...employee, activeForLetters: active }
+          : employee
+      )
+    );
+    setStats((current) => ({
+      ...current,
+      active: current.active + (active ? 1 : -1),
+      inactive: current.inactive + (active ? -1 : 1),
+    }));
+    setRosterFilter(active ? "active" : "inactive");
     const saved = await performAction({
       action: "set-active",
       employeeId: selectedEmployee.id,
       active,
     });
-    if (saved) setRosterFilter(active ? "active" : "inactive");
+    if (!saved) {
+      setEmployees(previousEmployees);
+      setStats(previousStats);
+      setRosterFilter(selectedEmployee.activeForLetters ? "active" : "inactive");
+    }
   }
 
   async function addEmployee(event: React.FormEvent<HTMLFormElement>) {
@@ -571,20 +631,40 @@ export default function ChristmasLettersPreview() {
                   <h2 className="text-base font-black text-[#2f2823]">Eerdere kerstbrieven</h2>
                 </div>
                 <div className="mt-3 space-y-1.5">
-                  {!selectedEmployee.previousYears.length && (
+                  {historyLoading && (
+                    <div className="rounded-xl border border-dashed border-[#d8d0c8] px-3 py-5 text-center text-xs text-[#8a8178]">
+                      Oude brieven laden…
+                    </div>
+                  )}
+                  {!historyLoading && !historyLetters.length && (
                     <div className="rounded-xl border border-dashed border-[#d8d0c8] px-3 py-5 text-center text-xs text-[#8a8178]">
                       Nog geen eerdere brieven gekoppeld.
                     </div>
                   )}
-                  {selectedEmployee.previousYears.map((year, index) => (
-                    <button key={year} type="button" className="flex w-full items-center justify-between gap-3 rounded-xl border border-[#e3dcd4] bg-[#fbfaf8] px-3 py-2.5 text-left shadow-sm transition hover:border-[#a27a8e]">
-                      <span className="font-black text-[#3d312b]">Kerst {year}</span>
-                      <span className="flex items-center gap-3 text-xs text-[#81766d]">
-                        {index + 5} onderwerpen
-                        <strong className="text-[#8b5d76]">Open →</strong>
-                      </span>
-                    </button>
-                  ))}
+                  {historyLetters.map((letter) => {
+                    const isOpen = openHistoryId === letter.id;
+                    return (
+                      <div key={letter.id} className="overflow-hidden rounded-xl border border-[#e3dcd4] bg-[#fbfaf8] shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => setOpenHistoryId(isOpen ? "" : letter.id)}
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-[#f6f0f3]"
+                        >
+                          <span className="font-black text-[#3d312b]">Kerst {letter.year}</span>
+                          <strong className="text-xs text-[#8b5d76]">{isOpen ? "Sluit ↑" : "Open ↓"}</strong>
+                        </button>
+                        {isOpen && (
+                          <div className="border-t border-[#e7e0d8] bg-white px-3 py-3 text-[0.8rem] leading-relaxed text-[#5d534b]">
+                            {letter.content.split(/\n{2,}/).map((paragraph, index) => (
+                              <p key={`${letter.id}-${index}`} className={index ? "mt-3" : ""}>
+                                {paragraph}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -630,12 +710,18 @@ export default function ChristmasLettersPreview() {
               <div>
                 <h2 className="text-base font-black text-[#2f2823]">Controle</h2>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
-                  <div className="rounded-xl border border-[#eadb99] bg-[#fff8d8] p-3">
+                  <div className={`rounded-xl border p-3 ${selectedEmployee.previousYears.length ? "border-[#cee0ca] bg-[#eef6ec]" : "border-[#eadb99] bg-[#fff8d8]"}`}>
                     <div className="flex items-center gap-2.5">
-                      <MiniIcon>!</MiniIcon>
+                      <MiniIcon>{selectedEmployee.previousYears.length ? "✓" : "!"}</MiniIcon>
                       <div>
-                        <h3 className="text-sm font-black text-[#765c14]">Historie nog koppelen</h3>
-                        <p className="mt-0.5 text-xs leading-snug text-[#7b6a3e]">Herhalingen kunnen pas worden gecontroleerd zodra eerdere brieven zijn gekoppeld.</p>
+                        <h3 className={`text-sm font-black ${selectedEmployee.previousYears.length ? "text-[#315b39]" : "text-[#765c14]"}`}>
+                          {selectedEmployee.previousYears.length ? "Historie gekoppeld" : "Geen historie gevonden"}
+                        </h3>
+                        <p className={`mt-0.5 text-xs leading-snug ${selectedEmployee.previousYears.length ? "text-[#5c7058]" : "text-[#7b6a3e]"}`}>
+                          {selectedEmployee.previousYears.length
+                            ? `${selectedEmployee.previousYears.length} oude brief${selectedEmployee.previousYears.length === 1 ? "" : "ven"} beschikbaar om herhaling te controleren.`
+                            : "Voor deze naam is in 2020–2024 geen oude brief gevonden."}
+                        </p>
                       </div>
                     </div>
                   </div>
