@@ -58,6 +58,14 @@ const managementItems = [
     ...managementIconAppearance,
   },
   {
+    href: "/management/kerstbrieven",
+    label: "Personeel",
+    title: "Kerstbrieven",
+    description: "Persoonlijke notities, eerdere brieven en AI-hulp.",
+    icon: strikIcons.managementChristmasLetters,
+    ...managementIconAppearance,
+  },
+  {
     href: "/settings",
     label: "Beheer",
     title: "Gebruikers & app",

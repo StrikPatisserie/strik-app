@@ -50,6 +50,16 @@ type TamigoDetailedEmployee = {
   IsUserEnabled?: boolean;
 };
 
+export type ChristmasLetterTamigoEmployee = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  startDate: string;
+  endDate: string;
+  currentlyActive: boolean;
+};
+
 type TamigoHistoricalWage = {
   StartDate?: string;
   Wage?: number;
@@ -642,7 +652,11 @@ async function fetchTamigoEmployeeDetails() {
       addedCount += 1;
     }
 
-    if (pageEmployees.length === 0 || addedCount === 0) break;
+    if (pageEmployees.length === 0) {
+      if (page === 0) continue;
+      break;
+    }
+    if (addedCount === 0) break;
   }
 
   return employees;
@@ -673,6 +687,82 @@ function isActiveEmployee(employee: TamigoDetailedEmployee, today: Date) {
   endDate.setHours(23, 59, 59, 999);
 
   return endDate >= today;
+}
+
+export async function getChristmasLetterTamigoEmployees(): Promise<
+  ChristmasLetterTamigoEmployee[]
+> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const detailedEmployees = await fetchTamigoEmployeeDetails();
+
+  if (detailedEmployees.length) {
+    return detailedEmployees
+      .flatMap((employee) => {
+        const name = employee.Name?.trim();
+        if (!name) return [];
+
+        const identity = getEmployeeIdentity(employee);
+
+        return [
+          {
+            id: `tamigo-${employee.EmployeeId || createSafeId(identity)}`,
+            name,
+            email: employee.Email?.trim() || "",
+            role:
+              employee.CurrentWageRateType?.trim() ||
+              employee.CurrentPaymentModel?.trim() ||
+              "Medewerker",
+            startDate: employee.From?.trim() || "",
+            endDate: employee.To?.trim() || "",
+            currentlyActive: isActiveEmployee(employee, today),
+          },
+        ];
+      })
+      .sort((left, right) => left.name.localeCompare(right.name, "nl"));
+  }
+
+  const simpleEmployees = new Map<string, TamigoSimpleEmployee>();
+  for (let page = 1; page <= TAMIGO_MAX_EMPLOYEE_PAGES; page += 1) {
+    const pageEmployees = await fetchTamigoEmployeesPage(page);
+    let addedCount = 0;
+
+    for (const employee of pageEmployees) {
+      const identity =
+        employee.EmployeeId || employee.Email || employee.Name || "";
+      if (!identity || simpleEmployees.has(identity)) continue;
+
+      simpleEmployees.set(identity, employee);
+      addedCount += 1;
+    }
+
+    if (pageEmployees.length === 0) {
+      break;
+    }
+    if (addedCount === 0) break;
+  }
+
+  return [...simpleEmployees.entries()]
+    .flatMap(([identity, employee]) => {
+      const name = employee.Name?.trim();
+      if (!name) return [];
+      const endDate = parseDateOnly(employee.EndDate);
+      if (endDate) endDate.setHours(23, 59, 59, 999);
+
+      return [
+        {
+          id: `tamigo-${employee.EmployeeId || createSafeId(identity)}`,
+          name,
+          email: employee.Email?.trim() || "",
+          role: "Medewerker",
+          startDate: "",
+          endDate: employee.EndDate?.trim() || "",
+          currentlyActive:
+            employee.IsEnabled !== false && (!endDate || endDate >= today),
+        },
+      ];
+    })
+    .sort((left, right) => left.name.localeCompare(right.name, "nl"));
 }
 
 function parseOffsetMinutes(value: string) {

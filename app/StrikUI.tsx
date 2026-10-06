@@ -26,6 +26,7 @@ export const strikIcons = {
   managementMailing: "/management-icons/horecamailing.svg",
   managementUsers: "/management-icons/gebruikers.svg",
   managementCleaning: "/management-icons/schoonmaakfles.svg",
+  managementChristmasLetters: "/management-icons/kerstbrieven.svg",
   news: "/icons_strik_news.svg",
   newsManagement: "/icons_strik_add%20news%20management.svg",
   notities: "/icons_strik.svg",
