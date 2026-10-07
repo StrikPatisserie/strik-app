@@ -1,0 +1,167 @@
+.card {
+  --price-card-name-size: 6.5cqw;
+  --price-card-description-size: 3.55cqw;
+  position: relative;
+  box-sizing: border-box;
+  container-type: inline-size;
+  width: 100%;
+  aspect-ratio: 85 / 55;
+  overflow: hidden;
+  border: 0.9cqw solid #161616;
+  border-radius: 3.2cqw;
+  background: #fff;
+  color: #161616;
+  font-family: "StrikGotham", Arial, sans-serif;
+}
+
+.cardCopy {
+  position: absolute;
+  inset: 13cqw 7cqw 17cqw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.cardCopy h2 {
+  max-width: 100%;
+  margin: 0;
+  font-family: "StrikGotham", Arial, sans-serif;
+  font-size: var(--price-card-name-size);
+  font-weight: 800;
+  letter-spacing: -0.28cqw;
+  line-height: 0.91;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.cardCopy p {
+  max-width: 88%;
+  margin: 3.5cqw 0 0;
+  font-size: var(--price-card-description-size);
+  font-weight: 400;
+  letter-spacing: -0.09cqw;
+  line-height: 1.08;
+}
+
+.priceBlock {
+  position: absolute;
+  bottom: -0.2cqw;
+  left: -0.2cqw;
+  display: flex;
+  width: 29cqw;
+  height: 14.7cqw;
+  box-sizing: border-box;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 2cqw 0 0;
+  background: #161616;
+  color: #fff;
+}
+
+.pricePrefix {
+  margin-bottom: -1.2cqw;
+  font-size: 2.15cqw;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.priceLine {
+  display: flex;
+  align-items: flex-start;
+  line-height: 1;
+}
+
+.euro {
+  margin-top: 2.3cqw;
+  margin-right: 0.45cqw;
+  font-size: 5.6cqw;
+  font-weight: 800;
+}
+
+.whole {
+  font-size: 10.7cqw;
+  font-weight: 800;
+  letter-spacing: -0.7cqw;
+}
+
+.cents {
+  margin-top: 0.9cqw;
+  font-size: 5.1cqw;
+  font-weight: 800;
+  letter-spacing: -0.35cqw;
+}
+
+.logo {
+  position: absolute;
+  right: 4.2cqw;
+  bottom: 3.1cqw;
+  width: 13.5cqw;
+  height: 13.5cqw;
+  object-fit: contain;
+}
+
+.allergens {
+  position: absolute;
+  right: 20.2cqw;
+  bottom: 3.2cqw;
+  left: 31.5cqw;
+  display: flex;
+  min-height: 8.3cqw;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6cqw;
+}
+
+.allergenIcon {
+  position: relative;
+  display: block;
+  width: 8.35cqw;
+  height: 8.35cqw;
+  flex: 0 1 8.35cqw;
+  overflow: hidden;
+}
+
+.allergenIcon img {
+  position: absolute;
+  top: 0;
+  width: 161.85cqw;
+  max-width: none;
+  height: auto;
+}
+
+.themeBadge {
+  position: absolute;
+  z-index: 2;
+  top: -1.7cqw;
+  left: -1.7cqw;
+  display: flex;
+  width: 20cqw;
+  height: 20cqw;
+  align-items: center;
+  justify-content: center;
+  border: 0.75cqw solid #161616;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.themeBadge img {
+  width: 12.5cqw;
+  height: 12.5cqw;
+  object-fit: contain;
+  filter: grayscale(1) contrast(2);
+}
+
+.themeBadge.sint {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.themeBadge.sint img {
+  width: 15cqw;
+  height: 18cqw;
+}

@@ -1,0 +1,137 @@
+.printRoot {
+  min-height: 100vh;
+  background: #e8eee4;
+  padding: 1.25rem;
+  font-family: "Overpass", "StrikGotham", sans-serif;
+}
+
+.actions,
+.sessionInfo {
+  display: flex;
+  max-width: 60rem;
+  margin: 0 auto 0.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  background: #fff;
+  padding: 0.75rem 0.9rem;
+  box-shadow: 0 7px 20px rgba(40, 35, 30, 0.1);
+}
+
+.actions a {
+  color: #24551d;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.actions span {
+  margin-right: auto;
+  color: #756d64;
+  font-size: 0.76rem;
+}
+
+.actions strong {
+  color: #b34735;
+  font-size: 0.74rem;
+}
+
+.actions button {
+  min-height: 2.65rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: #161616;
+  padding: 0 1rem;
+  color: #fff;
+  font-weight: 900;
+}
+
+.sessionInfo {
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.sessionInfo span { color: #756d64; }
+
+.pages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+  max-width: 76rem;
+  margin: 0 auto;
+  gap: 1rem;
+}
+
+.printPage {
+  width: 100%;
+  box-sizing: border-box;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(40, 35, 30, 0.14);
+}
+
+.missing {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  gap: 0.65rem;
+  background: #e8eee4;
+  text-align: center;
+}
+
+.missing a { color: #24551d; font-weight: 900; }
+
+@page {
+  size: 85mm 55mm;
+  margin: 0;
+}
+
+@media print {
+  :global(html):has(.printRoot),
+  :global(body):has(.printRoot) {
+    width: 85mm;
+    min-width: 85mm;
+    height: auto;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .printRoot {
+    width: 85mm;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  .actions,
+  .sessionInfo {
+    display: none !important;
+  }
+
+  .pages {
+    display: block;
+    width: 85mm;
+    max-width: none;
+    margin: 0;
+  }
+
+  .printPage {
+    width: 85mm;
+    height: 55mm;
+    margin: 0;
+    break-after: page;
+    page-break-after: always;
+    box-shadow: none;
+  }
+
+  .printPage:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .actions,
+  .sessionInfo { align-items: stretch; flex-direction: column; }
+  .actions button { width: 100%; }
+  .pages { grid-template-columns: 1fr; }
+}

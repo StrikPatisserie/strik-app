@@ -66,6 +66,14 @@ const managementItems = [
     ...managementIconAppearance,
   },
   {
+    href: "/management/prijskaartjes",
+    label: "Winkels",
+    title: "Prijskaartjes",
+    description: "Kaartjes maken, bewaren en printen op de Evolis.",
+    icon: strikIcons.managementPriceCards,
+    ...managementIconAppearance,
+  },
+  {
     href: "/settings",
     label: "Beheer",
     title: "Gebruikers & app",
