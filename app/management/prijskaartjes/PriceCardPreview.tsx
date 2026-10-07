@@ -26,7 +26,7 @@ function AllergenIcon({ allergen }: { allergen: AllergenKey }) {
   );
 }
 
-function useFittedText<T extends HTMLElement>(singleLine: boolean) {
+function useFittedText<T extends HTMLElement>(singleLine: boolean, text: string) {
   const ref = useRef<T>(null);
   const fit = useCallback(() => {
     const element = ref.current;
@@ -57,18 +57,18 @@ function useFittedText<T extends HTMLElement>(singleLine: boolean) {
     observer.observe(frame);
     void document.fonts?.ready.then(fit);
     return () => observer.disconnect();
-  }, [fit]);
+  }, [fit, text]);
 
   return ref;
 }
 
 function FittedTitle({ text }: { text: string }) {
-  const ref = useFittedText<HTMLHeadingElement>(true);
+  const ref = useFittedText<HTMLHeadingElement>(true, text);
   return <h2 ref={ref}>{text}</h2>;
 }
 
 function FittedDescription({ text }: { text: string }) {
-  const ref = useFittedText<HTMLParagraphElement>(false);
+  const ref = useFittedText<HTMLParagraphElement>(false, text);
   return <p ref={ref}>{text}</p>;
 }
 
