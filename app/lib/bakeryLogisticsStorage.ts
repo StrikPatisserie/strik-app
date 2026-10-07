@@ -247,7 +247,8 @@ const DEFAULT_LOGISTICS_FIXED_CUSTOMERS: LogisticsFixedCustomer[] = [
     customerName: "Dries en Co",
     deliveryWindow: "08:00 - 11:00",
     address: "Valburgseweg 18C Elst",
-    routeNote: "Wordt1e ronde na winkel Lent bezorgd",
+    routeNote:
+      "Wordt in de 1e ronde na winkel Lent bezorgd; daarna indien tijd terug naar winkel Lent voor emballage",
     updatedAt: DEFAULT_LOGISTICS_FIXED_CUSTOMER_UPDATED_AT,
   },
   {

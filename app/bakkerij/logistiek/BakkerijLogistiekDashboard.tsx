@@ -6249,6 +6249,10 @@ function groupShopStops(
   return shopKeys
     .map((shopKey) => {
       const shopMeta = shopRouteMeta[shopKey];
+      const stopLabel =
+        shopKey === "lent"
+          ? "Winkel Lent vers + houdbaar"
+          : shopMeta.label;
       const shopReceipts = receipts.filter(
         (receipt) =>
           isShopReceipt(receipt) &&
@@ -6285,13 +6289,14 @@ function groupShopStops(
         id: `shop-${shopKey}`,
         sourceId: `shop:${shopKey}`,
         learningKey: `shop:${shopKey}`,
-        learningLabel: shopMeta.label,
+        learningLabel: stopLabel,
         learningTarget: shopMeta.address,
         learningKind: "shop" as const,
-        label: shopMeta.label,
+        label: stopLabel,
         detail: detailParts.join(" · "),
         badges: [
           "winkel",
+          ...(shopKey === "lent" ? ["vers + houdbaar"] : []),
           ...(pastryUnits >= 80 || shopReceipts.length >= 2 ? ["druk"] : []),
         ],
       };
@@ -6402,6 +6407,22 @@ function fixedShopIceStop(input: {
     label: input.label,
     detail,
     badges: ["winkel", "ijs", ...(iceTubs ? [`${iceTubs} ijs`] : [])],
+  };
+}
+
+function lentEmballageStop(): RouteStop {
+  const shopMeta = shopRouteMeta.lent;
+
+  return {
+    id: "shop-lent-emballage",
+    sourceId: "shop:lent:emballage",
+    learningKey: "shop:lent:emballage",
+    learningLabel: "Winkel Lent · emballage",
+    learningTarget: shopMeta.address,
+    learningKind: "shop",
+    label: "Winkel Lent · emballage",
+    detail: `${shopMeta.address} · na de klantstop terugrijden als er tijd is`,
+    badges: ["emballage", "indien tijd"],
   };
 }
 
@@ -6621,6 +6642,15 @@ function isSintMaartenskliniekReceipt(receipt: ReceiptSummary) {
 
 function isDriesElstReceipt(receipt: ReceiptSummary) {
   return /(?:^| )(?:dries en co|dries co|dries|elst)(?: |$)/.test(
+    receiptRouteIdentityText(receipt)
+  );
+}
+
+function isLentEmballageAreaReceipt(receipt: ReceiptSummary) {
+  if (!isRouteDelivery(receipt) || isShopReceipt(receipt)) return false;
+  if (isDriesElstReceipt(receipt)) return true;
+
+  return /(?:^| )(?:lent|bemmel|gendt)(?: |$)/.test(
     receiptRouteIdentityText(receipt)
   );
 }
@@ -7623,6 +7653,11 @@ function buildWeekdayFixedRouteRounds(
   const radboudUmcReceipts = takeReceipts(isRadboudUmcReceipt);
   const hanReceipts = takeReceipts(isHanReceipt);
   const driesReceipts = takeReceipts(isDriesElstReceipt);
+  const lentEmballageAreaReceipts = takeReceipts(
+    isLentEmballageAreaReceipt
+  );
+  const addLentEmballageStop =
+    driesReceipts.length > 0 || lentEmballageAreaReceipts.length > 0;
   const sanadomeReceipts = takeReceipts(isSanadomeReceipt);
   const cityReceipts = takeReceipts(
     (receipt) => !isOutsideRouteReceipt(receipt)
@@ -7717,18 +7752,7 @@ function buildWeekdayFixedRouteRounds(
       load: "fresh",
       label: "Winkel Ziekerstraat vers",
     }),
-    fixedShopStop({
-      receipts,
-      shopKey: "lent",
-      load: "fresh",
-      label: "Winkel Lent vers",
-    }),
-    fixedShopStop({
-      receipts,
-      shopKey: "lent",
-      load: "shelf",
-      label: "Winkel Lent houdbaar",
-    }),
+    ...groupShopStops(receipts, ["lent"], []),
     fixedShopIceStop({
       receipts,
       shopKey: "lent",
@@ -7737,6 +7761,8 @@ function buildWeekdayFixedRouteRounds(
     ...asStops(busBSchoolReceipts, "B-school-north-"),
     ...asStops(busBFirstProCollegeReceipts, "B-pro-college-north-"),
     ...asStops(driesReceipts, "B-dries-"),
+    ...asStops(lentEmballageAreaReceipts, "B-lent-area-"),
+    ...(addLentEmballageStop ? [lentEmballageStop()] : []),
     ...asStops(sanadomeReceipts, "B-sanadome-"),
     ...asStops(remainingOutsideReceipts, "B-rest-"),
     ...busBFirstIceReceipts.map(iceStopForReceipt),
@@ -7853,30 +7879,39 @@ function buildRouteRounds(
       shopKeys: shopAssignment.B,
     }),
   };
+  const lentBusId: BusId = buses.A.shopKeys.includes("lent") ? "A" : "B";
   const clusterAssignments = new Map<string, BusId>();
   const deliveryReceipts = sortDeliveryReceipts(receipts.filter(isRouteDelivery));
+  const addLentEmballageStop = deliveryReceipts.some(
+    isLentEmballageAreaReceipt
+  );
   const iceReceipts = sortDeliveryReceipts(receipts.filter(isIceReceiptSummary));
   const rounds: RouteRound[] = [];
 
   deliveryReceipts.forEach((receipt) => {
-    const firstChoiceBus = chooseBusForReceipt({
-      buses,
-      clusterAssignments,
-      date: plan.date,
-      receipt,
-      routeLearning,
-      round: "first",
-    });
-    const round = shouldUseSecondRound(
-      receipt,
-      buses[firstChoiceBus],
-      loadProfile,
-      plan.date
-    )
-      ? "second"
-      : isPriorityEarlyDelivery(receipt)
-        ? "early"
-        : "first";
+    const isLentEmballageArea = isLentEmballageAreaReceipt(receipt);
+    const firstChoiceBus = isLentEmballageArea
+      ? lentBusId
+      : chooseBusForReceipt({
+          buses,
+          clusterAssignments,
+          date: plan.date,
+          receipt,
+          routeLearning,
+          round: "first",
+        });
+    const round = isLentEmballageArea
+      ? "first"
+      : shouldUseSecondRound(
+            receipt,
+            buses[firstChoiceBus],
+            loadProfile,
+            plan.date
+          )
+        ? "second"
+        : isPriorityEarlyDelivery(receipt)
+          ? "early"
+          : "first";
     const bus =
       round === "second"
         ? chooseBusForReceipt({
@@ -7932,6 +7967,9 @@ function buildRouteRounds(
         plan.date,
         routeLearning
       ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-first-`)),
+      ...(addLentEmballageStop && bus.id === lentBusId
+        ? [lentEmballageStop()]
+        : []),
     ];
     const secondStops = [
       ...sortReceiptsForRoute(
@@ -8036,25 +8074,33 @@ function buildSaturdayRouteRounds(
   };
   const clusterAssignments = new Map<string, BusId>();
   const deliveryReceipts = sortDeliveryReceipts(receipts.filter(isRouteDelivery));
+  const addLentEmballageStop = deliveryReceipts.some(
+    isLentEmballageAreaReceipt
+  );
   const iceReceipts = sortDeliveryReceipts(receipts.filter(isIceReceiptSummary));
   const rounds: RouteRound[] = [];
 
   deliveryReceipts.forEach((receipt) => {
-    const bus = chooseBusForReceipt({
-      buses,
-      clusterAssignments,
-      date: plan.date,
-      receipt,
-      routeLearning,
-      round: "second",
-    });
+    const isLentEmballageArea = isLentEmballageAreaReceipt(receipt);
+    const bus = isLentEmballageArea
+      ? "B"
+      : chooseBusForReceipt({
+          buses,
+          clusterAssignments,
+          date: plan.date,
+          receipt,
+          routeLearning,
+          round: "second",
+        });
     const round =
-      bus === "B" &&
-      (isPriorityEarlyDelivery(receipt) ||
-        shouldRideAfterLentOnSaturday(receipt) ||
-        !isFlexibleLateDelivery(receipt, plan.date))
+      isLentEmballageArea
         ? "first"
-        : "second";
+        : bus === "B" &&
+            (isPriorityEarlyDelivery(receipt) ||
+              shouldRideAfterLentOnSaturday(receipt) ||
+              !isFlexibleLateDelivery(receipt, plan.date))
+          ? "first"
+          : "second";
 
     addReceiptToBus(buses[bus], receipt, round);
   });
@@ -8088,6 +8134,9 @@ function buildSaturdayRouteRounds(
         plan.date,
         routeLearning
       ).map((receipt) => routeStopForReceipt(receipt, `${bus.id}-first-`)),
+      ...(addLentEmballageStop && bus.id === "B"
+        ? [lentEmballageStop()]
+        : []),
     ];
     const secondStops = [
       ...groupShopStops(receipts, routePlan.secondShopKeys, []),
