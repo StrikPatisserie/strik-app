@@ -143,6 +143,7 @@ type RouteStopTiming = {
   arrivalMinute: number;
   travelMinutes: number;
   serviceMinutes: number;
+  combinedWithPrevious: boolean;
 };
 
 type RouteTiming = {
@@ -4950,16 +4951,21 @@ function createBusRoutePrintHtml(input: {
               const detailParts = routePrintTimeParts(stop);
               const timeBadge = routePrintTimeBadgeHtml(stop);
               const stopTiming = routeTiming?.stops[index];
+              const missesDeadline = routeStopMissesDeadline(stop, stopTiming);
               const planningLine = stopTiming
-                ? `<p class="planned-time"><b>RICHTTIJD ±${formatClockMinute(
+                ? `<p class="planned-time${missesDeadline ? " missed" : ""}"><b>${
+                    missesDeadline ? "! TIJDCONFLICT · " : ""
+                  }RICHTTIJD ±${formatClockMinute(
                     stopTiming.arrivalMinute
                   )}</b> · ${stopTiming.travelMinutes} min rijden · ${
-                    stopTiming.serviceMinutes
-                  } min stop</p>`
+                    stopTiming.combinedWithPrevious
+                      ? "zelfde winkelbezoek, tijd inbegrepen"
+                      : `${stopTiming.serviceMinutes} min stop`
+                  }</p>`
                 : "";
 
               return `
-                <article class="stop-card">
+                <article class="stop-card${missesDeadline ? " missed-deadline" : ""}">
                   <div class="stop-number">${index + 1}</div>
                   <div class="stop-content">
                     <div class="stop-heading">
@@ -5206,6 +5212,9 @@ function createBusRoutePrintHtml(input: {
         overflow: hidden;
         page-break-inside: avoid;
       }
+      .stop-card.missed-deadline {
+        border-color: #a92f20;
+      }
       .stop-number {
         align-items: center;
         border-right: 1px solid #aaa;
@@ -5238,6 +5247,9 @@ function createBusRoutePrintHtml(input: {
         color: #426145;
         font-size: 9.5px;
         margin-top: 0.5mm;
+      }
+      .stop-content .planned-time.missed {
+        color: #a92f20;
       }
       .time-badge {
         background: #111;
@@ -6768,7 +6780,7 @@ function estimatedTravelMinutes(from: RoutePoint, to: RoutePoint) {
 
 function estimatedServiceMinutes(stop: RouteStop) {
   if (isLentEmballageStop(stop)) return 7;
-  if (stop.learningKind === "shop") return 8;
+  if (stop.learningKind === "shop") return 15;
   if (stop.learningKind === "ice") return 5;
   if (stop.learningKind === "check") return 4;
   if (stop.badges.includes("druk") || stop.badges.includes("groot")) return 8;
@@ -6776,19 +6788,45 @@ function estimatedServiceMinutes(stop: RouteStop) {
   return 5;
 }
 
+function shopVisitKey(stop: RouteStop) {
+  if (isLentEmballageStop(stop)) return "";
+
+  const sourceText = `${stop.sourceId} ${stop.learningKey || ""}`;
+  const shopKey = (Object.keys(shopRouteMeta) as ShopKey[]).find((key) =>
+    sourceText.includes(`shop:${key}`)
+  );
+
+  return shopKey && stop.learningKind === "shop" ? shopKey : "";
+}
+
 function buildRouteTiming(route: RouteRound, departureMinute: number): RouteTiming {
   let currentMinute = departureMinute;
   let currentPoint = depotRoutePoint;
+  let previousShopVisitKey = "";
   const stops = route.stops.map((stop) => {
     const nextPoint = routePointForStop(stop);
     const travelMinutes = estimatedTravelMinutes(currentPoint, nextPoint);
     const arrivalMinute = currentMinute + travelMinutes;
-    const serviceMinutes = estimatedServiceMinutes(stop);
+    const currentShopVisitKey = shopVisitKey(stop);
+    const combinedWithPrevious = Boolean(
+      currentShopVisitKey &&
+        previousShopVisitKey === currentShopVisitKey &&
+        travelMinutes === 0
+    );
+    const serviceMinutes = combinedWithPrevious
+      ? 0
+      : estimatedServiceMinutes(stop);
 
     currentMinute = arrivalMinute + serviceMinutes;
     currentPoint = nextPoint;
+    previousShopVisitKey = currentShopVisitKey;
 
-    return { arrivalMinute, travelMinutes, serviceMinutes };
+    return {
+      arrivalMinute,
+      travelMinutes,
+      serviceMinutes,
+      combinedWithPrevious,
+    };
   });
   const returnMinute = currentMinute + estimatedTravelMinutes(
     currentPoint,
@@ -7765,6 +7803,19 @@ function routePrintTimeMinutes(value: string) {
   if (!match) return 9999;
 
   return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function routeStopMissesDeadline(
+  stop: RouteStop,
+  timing: RouteStopTiming | undefined
+) {
+  if (!timing) return false;
+
+  const deliveryTime = routeStopDeliveryTime(stop);
+  if (!deliveryTime) return false;
+
+  const deadlineMinute = routePrintTimeMinutes(deliveryTime);
+  return deadlineMinute < 9999 && timing.arrivalMinute > deadlineMinute;
 }
 
 function routePrintTimeBadgeHtml(stop: RouteStop) {
@@ -12269,7 +12320,7 @@ function RoutesPanel({
         <ClockIcon />
         <strong>Richttijden</strong>
         <span>
-          op basis van routeafstand, lostijd en 10 min laadbuffer tussen rondes · geen live verkeer
+          iedere ronde start/eindigt Ambachtsweg 4 · 10 min laden tussen rondes · geen live verkeer
         </span>
       </div>
 
@@ -12356,6 +12407,17 @@ function RoutesPanel({
               <div className="mt-2 grid gap-2">
                 {group.routes.map((route) => {
                   const routeTiming = routeTimings.get(route.id);
+                  const missedDeadlineCount = route.stops.reduce(
+                    (total, stop, index) =>
+                      total +
+                      Number(
+                        routeStopMissesDeadline(
+                          stop,
+                          routeTiming?.stops[index]
+                        )
+                      ),
+                    0
+                  );
 
                   return (
                     <section
@@ -12386,6 +12448,16 @@ function RoutesPanel({
                                   routeTiming.departureMinute
                               )}
                             </span>
+                            {missedDeadlineCount > 0 && (
+                              <span
+                                title="Geschatte aankomst valt na de uiterlijke bontijd. Vertrek eerder of versleep de stop."
+                                className="flex items-center gap-0.5 rounded-full bg-[#fee4de] px-1.5 py-0.5 text-[#a92f20]"
+                              >
+                                <WarningIcon />
+                                {missedDeadlineCount} tijdconflict
+                                {missedDeadlineCount === 1 ? "" : "en"}
+                              </span>
+                            )}
                           </p>
                         )}
                       </div>
@@ -12413,6 +12485,10 @@ function RoutesPanel({
                       )}
                       {route.stops.map((stop, index) => {
                         const stopTiming = routeTiming?.stops[index];
+                        const missesDeadline = routeStopMissesDeadline(
+                          stop,
+                          stopTiming
+                        );
 
                         return (
                           <li
@@ -12432,7 +12508,11 @@ function RoutesPanel({
                           onDrop={(event) =>
                             handleStopDrop(event, route.id, stop.id)
                           }
-                          className={`relative grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)_auto_1.5rem] items-center gap-1.5 rounded-md border border-white/80 bg-white px-1.5 py-1.5 transition hover:border-[#d7cec4] hover:shadow-sm active:cursor-grabbing ${
+                          className={`relative grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)_auto_1.5rem] items-center gap-1.5 rounded-md border px-1.5 py-1.5 transition hover:shadow-sm active:cursor-grabbing ${
+                            missesDeadline
+                              ? "border-[#ef9d8f] bg-[#fff4f1] hover:border-[#d86755]"
+                              : "border-white/80 bg-white hover:border-[#d7cec4]"
+                          } ${
                             dragging?.stopId === stop.id ? "opacity-45" : ""
                           }`}
                         >
@@ -12467,7 +12547,9 @@ function RoutesPanel({
                                   · {stopTiming.travelMinutes
                                     ? `${stopTiming.travelMinutes} min rijden`
                                     : "zelfde locatie"}
-                                  {` · ${stopTiming.serviceMinutes} min stop`}
+                                  {stopTiming.combinedWithPrevious
+                                    ? " · zelfde winkelbezoek, tijd inbegrepen"
+                                    : ` · ${stopTiming.serviceMinutes} min stop`}
                                 </span>
                               </span>
                             )}
@@ -12479,6 +12561,14 @@ function RoutesPanel({
                             >
                               <WarningIcon />
                               Alleen indien er tijd is
+                            </span>
+                          ) : missesDeadline ? (
+                            <span
+                              title="Geschatte aankomst is na de uiterlijke bontijd. Vertrek eerder of versleep deze stop."
+                              className="flex items-center gap-1 whitespace-nowrap rounded-full border border-[#ef9d8f] bg-[#fee4de] px-1.5 py-1 text-[0.6rem] font-black tracking-normal text-[#a92f20]"
+                            >
+                              <WarningIcon />
+                              Te laat · {routeStopDeliveryTime(stop)}
                             </span>
                           ) : (
                             <span className="whitespace-nowrap text-right text-[0.68rem] font-black tabular-nums tracking-normal text-[#4a4540]">
