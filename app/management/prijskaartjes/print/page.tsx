@@ -47,7 +47,10 @@ export default async function PriceCardPrintPage({
       </div>
       <div className={styles.pages}>
         {pages.map((page) => (
-          <div className={styles.printPage} key={page.key}>
+          <div
+            className={`${styles.printPage} ${page.card.category === "brood" ? styles.portraitPage : ""}`}
+            key={page.key}
+          >
             <PriceCardPreview card={page.card} />
           </div>
         ))}

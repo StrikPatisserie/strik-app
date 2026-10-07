@@ -72,6 +72,73 @@ function FittedDescription({ text }: { text: string }) {
   return <p ref={ref}>{text}</p>;
 }
 
+function FittedBreadTitle({ text }: { text: string }) {
+  const ref = useFittedText<HTMLHeadingElement>(false, text);
+  return <h2 ref={ref}>{text}</h2>;
+}
+
+function BreadWordmark({ position }: { position: "top" | "bottom" }) {
+  return (
+    <div className={`${styles.breadWordmark} ${styles[position]}`} aria-hidden="true">
+      <span>STRIK PATISSERIE</span>
+      <span>STRIK PATISSERIE</span>
+      <span>STRIK PATISSERIE</span>
+    </div>
+  );
+}
+
+function BreadCardPreview({
+  card,
+  className,
+}: Readonly<{
+  card: PriceCard;
+  className: string;
+}>) {
+  const price = formatPriceParts(card.priceCents);
+  const priceOptions = card.priceOptions.slice(0, 3);
+
+  return (
+    <article className={`${styles.breadCard} ${className}`}>
+      <BreadWordmark position="top" />
+      <span className={styles.breadRule} aria-hidden="true" />
+
+      <div className={`${styles.breadCopy} ${card.description ? "" : styles.breadNoDescription}`}>
+        <div className={styles.breadTitleFrame}>
+          <FittedBreadTitle text={card.name} />
+        </div>
+        {card.pricePrefix ? <span className={styles.breadPrefix}>{card.pricePrefix}</span> : null}
+        {card.description ? (
+          <div className={styles.breadDescriptionFrame}>
+            <FittedDescription text={card.description} />
+          </div>
+        ) : null}
+      </div>
+
+      {priceOptions.length >= 2 ? (
+        <div className={styles.breadPriceOptions}>
+          {priceOptions.map((option, index) => {
+            const optionPrice = formatPriceParts(option.priceCents);
+            return (
+              <div key={`${option.label}-${index}`}>
+                <span>{option.label}</span>
+                <b>€{optionPrice.euros},{optionPrice.cents}</b>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className={styles.breadPrice} aria-label={`€ ${price.euros},${price.cents}`}>
+          <strong>{price.euros}</strong>
+          <span>{price.cents}</span>
+        </div>
+      )}
+
+      <span className={`${styles.breadRule} ${styles.breadBottomRule}`} aria-hidden="true" />
+      <BreadWordmark position="bottom" />
+    </article>
+  );
+}
+
 export default function PriceCardPreview({
   card,
   className = "",
@@ -81,6 +148,10 @@ export default function PriceCardPreview({
 }>) {
   const price = formatPriceParts(card.priceCents);
   const priceOptions = card.priceOptions.slice(0, 3);
+
+  if (card.category === "brood") {
+    return <BreadCardPreview card={card} className={className} />;
+  }
 
   return (
     <article

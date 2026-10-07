@@ -1,4 +1,5 @@
 export const PRICE_CARD_CATEGORIES = [
+  "brood",
   "hartig",
   "chocolade",
   "taart",
@@ -139,8 +140,9 @@ export function normalizePriceCardCategory(
   if (isPriceCardCategory(value)) return value;
   const legacyCategory = cleanString(value, 40).toLowerCase();
   if (legacyCategory === "stukwerk") return "koek_cake_zout";
+  const hint = productHint.toLowerCase();
+  if (/brood|baguette|pistolet|bolletjes?|croissant|krentenbol/.test(hint)) return "brood";
   if (legacyCategory === "sint" || legacyCategory === "kerst") {
-    const hint = productHint.toLowerCase();
     if (/chocol|bonbon|praline|truffel|letter/.test(hint)) return "chocolade";
     if (/speculaas|koek|cake|brownie|stol|krans/.test(hint)) return "koek_cake_zout";
     if (/petit|macaron/.test(hint)) return "petit_fours";

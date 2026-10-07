@@ -102,6 +102,11 @@
   box-shadow: 0 8px 24px rgba(40, 35, 30, 0.14);
 }
 
+.portraitPage {
+  width: min(100%, 22rem);
+  justify-self: center;
+}
+
 .missing {
   display: grid;
   min-height: 100vh;
@@ -115,6 +120,11 @@
 
 @page {
   size: 85mm 55mm;
+  margin: 0;
+}
+
+@page bread-card {
+  size: 55mm 85mm;
   margin: 0;
 }
 
@@ -156,6 +166,12 @@
     break-after: page;
     page-break-after: always;
     box-shadow: none;
+  }
+
+  .portraitPage {
+    width: 55mm;
+    height: 85mm;
+    page: bread-card;
   }
 
   .printPage:last-child {

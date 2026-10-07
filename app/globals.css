@@ -32,6 +32,22 @@
 }
 
 @font-face {
+  font-family: "StrikGothamCondensed";
+  src: url("/fonts/GothamCondensed-Book.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "StrikGothamCondensed";
+  src: url("/fonts/GothamCondensed-Bold.otf") format("opentype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: "StrikGotham";
   src: url("/fonts/Gotham Bold.otf") format("opentype");
   font-weight: 800;

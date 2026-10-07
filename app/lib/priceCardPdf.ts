@@ -13,8 +13,12 @@ const CARD_HEIGHT_MM = 55;
 const POINTS_PER_MM = 72 / 25.4;
 const PDF_WIDTH = CARD_WIDTH_MM * POINTS_PER_MM;
 const PDF_HEIGHT = CARD_HEIGHT_MM * POINTS_PER_MM;
+const BREAD_PDF_WIDTH = CARD_HEIGHT_MM * POINTS_PER_MM;
+const BREAD_PDF_HEIGHT = CARD_WIDTH_MM * POINTS_PER_MM;
 const PIXEL_WIDTH = 1004;
 const PIXEL_HEIGHT = 650;
+const BREAD_PIXEL_WIDTH = PIXEL_HEIGHT;
+const BREAD_PIXEL_HEIGHT = PIXEL_WIDTH;
 
 let fontsReady = false;
 
@@ -27,6 +31,8 @@ function registerFonts() {
   GlobalFonts.registerFromPath(publicAsset("fonts", "GothamLight.otf"), "StrikGothamLight");
   GlobalFonts.registerFromPath(publicAsset("fonts", "Gotham Bold.otf"), "StrikGothamBold");
   GlobalFonts.registerFromPath(publicAsset("fonts", "GothamBlack.otf"), "StrikGothamBlack");
+  GlobalFonts.registerFromPath(publicAsset("fonts", "GothamCondensed-Book.otf"), "StrikGothamCondensedBook");
+  GlobalFonts.registerFromPath(publicAsset("fonts", "GothamCondensed-Bold.otf"), "StrikGothamCondensedBold");
   fontsReady = true;
 }
 
@@ -348,6 +354,143 @@ async function renderCard(card: PriceCard) {
   return canvas.toBuffer("image/png");
 }
 
+function drawBreadWordmark(context: SKRSContext2D, y: number) {
+  const label = "STRIK PATISSERIE";
+  const edge = 16;
+  context.fillStyle = "#161616";
+  context.font = '21px "StrikGothamCondensedBook"';
+  context.textAlign = "left";
+  context.textBaseline = "top";
+  const labelWidth = context.measureText(label).width;
+  const gap = (BREAD_PIXEL_WIDTH - edge * 2 - labelWidth * 3) / 2;
+  for (let index = 0; index < 3; index += 1) {
+    context.fillText(label, edge + index * (labelWidth + gap), y);
+  }
+}
+
+async function renderBreadCard(card: PriceCard) {
+  registerFonts();
+  const canvas = createCanvas(BREAD_PIXEL_WIDTH, BREAD_PIXEL_HEIGHT);
+  const context = canvas.getContext("2d");
+  context.imageSmoothingEnabled = true;
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, BREAD_PIXEL_WIDTH, BREAD_PIXEL_HEIGHT);
+
+  drawBreadWordmark(context, 17);
+  drawBreadWordmark(context, 964);
+
+  context.fillStyle = "#161616";
+  roundedRect(context, 139, 103, 372, 5, 3);
+  context.fill();
+
+  const title = fitLines({
+    context,
+    text: card.name.toLocaleUpperCase("nl-NL"),
+    maxWidth: 560,
+    maxLines: 3,
+    startSize: 92,
+    minSize: 38,
+    family: "StrikGothamBlack",
+    lineHeight: 0.85,
+    maxHeight: 170,
+  });
+  const description = card.description
+    ? fitLines({
+        context,
+        text: card.description,
+        maxWidth: 560,
+        maxLines: 4,
+        startSize: 62,
+        minSize: 31,
+        family: "StrikGothamCondensedBook",
+        lineHeight: 0.98,
+        maxHeight: 190,
+      })
+    : { lines: [] as string[], size: 0 };
+  const titleHeight = title.lines.length * title.size * 0.85;
+  const prefixHeight = card.pricePrefix ? 54 : 0;
+  const descriptionHeight = description.lines.length * description.size * 0.98;
+  const copyGap = description.lines.length ? 18 : 0;
+  const totalCopyHeight = titleHeight + prefixHeight + descriptionHeight + copyGap;
+  const copyTop = Math.max(125, 350 - totalCopyHeight / 2);
+
+  context.fillStyle = "#161616";
+  context.textAlign = "center";
+  context.textBaseline = "top";
+  context.font = `${title.size}px "StrikGothamBlack"`;
+  drawCenteredLines(context, title.lines, BREAD_PIXEL_WIDTH / 2, copyTop, title.size, 0.85);
+
+  let nextY = copyTop + titleHeight;
+  if (card.pricePrefix) {
+    context.font = '43px "StrikGothamCondensedBook"';
+    context.fillText(card.pricePrefix, BREAD_PIXEL_WIDTH / 2, nextY + 4);
+    nextY += prefixHeight;
+  }
+  if (description.lines.length) {
+    context.font = `${description.size}px "StrikGothamCondensedBook"`;
+    drawCenteredLines(
+      context,
+      description.lines,
+      BREAD_PIXEL_WIDTH / 2,
+      nextY + copyGap,
+      description.size,
+      0.98
+    );
+  }
+
+  const priceOptions = card.priceOptions.slice(0, 3);
+  if (priceOptions.length >= 2) {
+    const left = 76;
+    const right = BREAD_PIXEL_WIDTH - 76;
+    const top = 650;
+    const rowHeight = priceOptions.length === 2 ? 92 : 76;
+    context.strokeStyle = "#3569ad";
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(left, top);
+    context.lineTo(right, top);
+    context.stroke();
+
+    priceOptions.forEach((option, index) => {
+      const rowTop = top + index * rowHeight;
+      const formatted = formatPrice(option.priceCents);
+      context.fillStyle = "#161616";
+      context.textBaseline = "middle";
+      context.textAlign = "left";
+      context.font = `${priceOptions.length === 2 ? 43 : 36}px "StrikGothamCondensedBook"`;
+      context.fillText(option.label, left + 8, rowTop + rowHeight / 2);
+      context.textAlign = "right";
+      context.font = `${priceOptions.length === 2 ? 39 : 34}px "StrikGothamCondensedBold"`;
+      context.fillText(`€${formatted.euros},${formatted.cents}`, right - 8, rowTop + rowHeight / 2);
+      context.beginPath();
+      context.moveTo(left, rowTop + rowHeight);
+      context.lineTo(right, rowTop + rowHeight);
+      context.stroke();
+    });
+  } else {
+    const price = formatPrice(card.priceCents);
+    context.textBaseline = "top";
+    context.font = '300px "StrikGothamBlack"';
+    const wholeWidth = context.measureText(price.euros).width;
+    context.font = '128px "StrikGothamBlack"';
+    const centsWidth = context.measureText(price.cents).width;
+    const combinedWidth = wholeWidth + centsWidth - 10;
+    const startX = (BREAD_PIXEL_WIDTH - combinedWidth) / 2;
+    context.fillStyle = "#161616";
+    context.textAlign = "left";
+    context.font = '300px "StrikGothamBlack"';
+    context.fillText(price.euros, startX, 626);
+    context.font = '128px "StrikGothamBlack"';
+    context.fillText(price.cents, startX + wholeWidth - 10, 642);
+  }
+
+  context.fillStyle = "#161616";
+  roundedRect(context, 139, 918, 372, 5, 3);
+  context.fill();
+
+  return canvas.toBuffer("image/png");
+}
+
 export function priceCardPdfFilename(session: PriceCardPrintSession) {
   const day = new Intl.DateTimeFormat("nl-NL", {
     year: "numeric",
@@ -369,19 +512,22 @@ export async function createPriceCardPdf(session: PriceCardPrintSession) {
   const document = await PDFDocument.create();
   document.setTitle(session.name);
   document.setAuthor("Strik Patisserie");
-  document.setSubject("Evolis Zenius prijskaartjes 85 x 55 mm");
+  document.setSubject("Evolis Zenius prijskaartjes 85 x 55 mm en broodkaartjes 55 x 85 mm");
   document.setCreator("Strik Team app");
 
   for (const item of session.items) {
-    const png = await renderCard(item.card);
+    const isBread = item.card.category === "brood";
+    const png = isBread ? await renderBreadCard(item.card) : await renderCard(item.card);
     const embedded = await document.embedPng(png);
     for (let copy = 0; copy < item.quantity; copy += 1) {
-      const page = document.addPage([PDF_WIDTH, PDF_HEIGHT]);
+      const pageWidth = isBread ? BREAD_PDF_WIDTH : PDF_WIDTH;
+      const pageHeight = isBread ? BREAD_PDF_HEIGHT : PDF_HEIGHT;
+      const page = document.addPage([pageWidth, pageHeight]);
       page.drawImage(embedded, {
         x: 0,
         y: 0,
-        width: PDF_WIDTH,
-        height: PDF_HEIGHT,
+        width: pageWidth,
+        height: pageHeight,
       });
     }
   }

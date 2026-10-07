@@ -72,7 +72,7 @@ export default function PrintActions({
       >
         ← Aanpassen
       </a>
-      <span className={styles.printHint}>85 × 55 mm · iedere pagina is één kaartje</span>
+      <span className={styles.printHint}>Iedere pagina is één kaartje · brood wordt automatisch staand</span>
       {error ? <strong className={styles.actionError}>{error}</strong> : null}
       {success ? <strong className={styles.actionSuccess}>{success}</strong> : null}
       <a className={styles.actionButton} href={`${pdfUrl}&download=1`}>

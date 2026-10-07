@@ -18,6 +18,7 @@ import {
 } from "./priceCardTypes";
 
 const CATEGORY_LABELS: Record<PriceCardCategory, string> = {
+  brood: "Brood",
   hartig: "Hartig",
   chocolade: "Chocolade",
   taart: "Taart",
@@ -594,7 +595,10 @@ export default function PriceCardStudio() {
 
         <main className={styles.editor}>
           <div className={styles.panelHeading}>
-            <div><strong>{draft.id ? "Kaartje wijzigen" : "Nieuw kaartje"}</strong><span>85 × 55 mm</span></div>
+            <div>
+              <strong>{draft.id ? "Kaartje wijzigen" : "Nieuw kaartje"}</strong>
+              <span>{draft.category === "brood" ? "55 × 85 mm · staand" : "85 × 55 mm"}</span>
+            </div>
             {draft.sourcePath ? (
               <button type="button" className={styles.syncButton} onClick={() => void refreshFromWebshop()} disabled={searching}>
                 ↻ Webshop
@@ -602,7 +606,7 @@ export default function PriceCardStudio() {
             ) : null}
           </div>
 
-          <div className={styles.previewWrap}>
+          <div className={`${styles.previewWrap} ${draft.category === "brood" ? styles.breadPreviewWrap : ""}`}>
             <PriceCardPreview card={previewCard} />
           </div>
 
@@ -685,8 +689,13 @@ export default function PriceCardStudio() {
                   <span className={styles.priceInput}><b>€</b><input inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} /></span>
                 </label>
                 <label>
-                  <span>Tekst boven prijs</span>
-                  <input value={draft.pricePrefix} maxLength={30} placeholder="bijv. vanaf" onChange={(event) => setDraft((current) => ({ ...current, pricePrefix: event.target.value }))} />
+                  <span>{draft.category === "brood" ? "Extra regel bij titel" : "Tekst boven prijs"}</span>
+                  <input
+                    value={draft.pricePrefix}
+                    maxLength={30}
+                    placeholder={draft.category === "brood" ? "bijv. per 6 stuks" : "bijv. vanaf"}
+                    onChange={(event) => setDraft((current) => ({ ...current, pricePrefix: event.target.value }))}
+                  />
                 </label>
               </>
             )}

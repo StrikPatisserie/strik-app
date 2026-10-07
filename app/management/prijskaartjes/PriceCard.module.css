@@ -247,3 +247,161 @@
   width: 15cqw;
   height: 18cqw;
 }
+
+.breadCard {
+  position: relative;
+  box-sizing: border-box;
+  container-type: inline-size;
+  width: 100%;
+  aspect-ratio: 55 / 85;
+  overflow: hidden;
+  background: #fff;
+  color: #161616;
+  font-family: "StrikGotham", Arial, sans-serif;
+}
+
+.breadWordmark {
+  position: absolute;
+  right: 2.5cqw;
+  left: 2.5cqw;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: "StrikGothamCondensed", Arial, sans-serif;
+  font-size: 3.1cqw;
+  font-weight: 400;
+  letter-spacing: 0.12cqw;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.breadWordmark.top { top: 2.7cqw; }
+.breadWordmark.bottom { bottom: 2.7cqw; }
+
+.breadRule {
+  position: absolute;
+  top: 19cqw;
+  left: 50%;
+  width: 64cqw;
+  height: 0.7cqw;
+  border-radius: 999px;
+  background: #161616;
+  transform: translateX(-50%);
+}
+
+.breadCopy {
+  position: absolute;
+  top: 27cqw;
+  right: 7cqw;
+  left: 7cqw;
+  display: flex;
+  height: 64cqw;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.2cqw;
+  text-align: center;
+}
+
+.breadTitleFrame,
+.breadDescriptionFrame {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.breadTitleFrame { height: 28cqw; }
+.breadDescriptionFrame { height: 28cqw; }
+.breadNoDescription .breadTitleFrame { height: 45cqw; }
+
+.breadTitleFrame h2 {
+  width: 100%;
+  margin: 0;
+  font-family: "StrikGotham", Arial, sans-serif;
+  font-size: 12cqw;
+  font-weight: 800;
+  letter-spacing: -0.35cqw;
+  line-height: 0.84;
+  text-transform: uppercase;
+}
+
+.breadDescriptionFrame p {
+  width: 100%;
+  margin: 0;
+  font-family: "StrikGothamCondensed", Arial, sans-serif;
+  font-size: 8cqw;
+  font-weight: 400;
+  letter-spacing: -0.08cqw;
+  line-height: 0.98;
+}
+
+.breadPrefix {
+  font-family: "StrikGothamCondensed", Arial, sans-serif;
+  font-size: 7.5cqw;
+  font-weight: 400;
+  line-height: 0.9;
+}
+
+.breadPrice {
+  position: absolute;
+  top: 98cqw;
+  right: 0;
+  left: 0;
+  display: flex;
+  height: 38cqw;
+  align-items: flex-start;
+  justify-content: center;
+  line-height: 0.82;
+}
+
+.breadPrice strong {
+  font-size: 39cqw;
+  font-weight: 800;
+  letter-spacing: -2.3cqw;
+}
+
+.breadPrice span {
+  margin-top: 1.5cqw;
+  font-size: 17cqw;
+  font-weight: 800;
+  letter-spacing: -0.8cqw;
+}
+
+.breadPriceOptions {
+  position: absolute;
+  top: 98cqw;
+  right: 8cqw;
+  left: 8cqw;
+  display: grid;
+  border-top: 0.35cqw solid #3569ad;
+}
+
+.breadPriceOptions > div {
+  display: flex;
+  min-height: 10cqw;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2cqw;
+  border-bottom: 0.35cqw solid #3569ad;
+  font-family: "StrikGothamCondensed", Arial, sans-serif;
+}
+
+.breadPriceOptions span {
+  overflow: hidden;
+  font-size: 6.5cqw;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadPriceOptions b {
+  flex: 0 0 auto;
+  font-size: 6.3cqw;
+  font-weight: 800;
+}
+
+.breadBottomRule {
+  top: auto;
+  bottom: 17cqw;
+}

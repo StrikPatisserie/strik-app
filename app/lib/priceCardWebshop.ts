@@ -52,6 +52,7 @@ function categoryFromPath(path: string, name = ""): PriceCardCategory {
   const normalized = `${path} ${name}`.toLowerCase();
   if (/petit[\s_-]?four|macaron/.test(normalized)) return "petit_fours";
   if (/hartig|quiche|saucij|worstenbrood|kaasstengel/.test(normalized)) return "hartig";
+  if (/brood|baguette|pistolet|bolletjes?|croissant|krentenbol/.test(normalized)) return "brood";
   if (/chocol|bonbon|praline|truffel|chocoladeletter/.test(normalized)) return "chocolade";
   if (/taart|slof|vlaai/.test(normalized)) return "taart";
   if (/gebak|tompouce|moorkop|soes/.test(normalized)) return "gebak";
