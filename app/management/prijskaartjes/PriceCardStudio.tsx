@@ -568,15 +568,26 @@ export default function PriceCardStudio() {
               <p className={styles.empty}>Nog geen kaartjes in deze selectie.</p>
             ) : null}
             {filteredCards.map((card) => (
-              <button
+              <div
                 key={card.id}
-                type="button"
-                className={selectedId === card.id ? styles.selectedCard : ""}
-                onClick={() => selectCard(card)}
+                className={`${styles.cardListItem} ${selectedId === card.id ? styles.selectedCard : ""}`}
               >
-                <span><strong>{card.name}</strong><small>{CATEGORY_LABELS[card.category]}</small></span>
-                <b>{card.priceOptions.length >= 2 ? `${card.priceOptions.length} prijzen` : priceText(card.priceCents)}</b>
-              </button>
+                <button
+                  type="button"
+                  className={styles.cardSelectButton}
+                  onClick={() => selectCard(card)}
+                >
+                  <span><strong>{card.name}</strong><small>{CATEGORY_LABELS[card.category]}</small></span>
+                  <b>{card.priceOptions.length >= 2 ? `${card.priceOptions.length} prijzen` : priceText(card.priceCents)}</b>
+                </button>
+                <button
+                  type="button"
+                  className={styles.addCardToPrint}
+                  aria-label={`${card.name} toevoegen aan printsessie`}
+                  title="Toevoegen aan printsessie"
+                  onClick={() => setQuantity(card.id, (quantities[card.id] || 0) + 1)}
+                >+</button>
+              </div>
             ))}
           </div>
         </aside>
@@ -728,10 +739,12 @@ export default function PriceCardStudio() {
           </div>
           {state.cards.length === 0 ? (
             <p className={styles.empty}>Sla eerst een kaartje op.</p>
+          ) : selectedPrintItems.length === 0 ? (
+            <p className={styles.empty}>Nog niets geselecteerd. Voeg links een kaartje toe met +.</p>
           ) : (
             <div className={styles.printList}>
-              {state.cards.map((card) => (
-                <div key={card.id} className={(quantities[card.id] || 0) > 0 ? styles.printSelected : ""}>
+              {selectedPrintItems.map(({ card }) => (
+                <div key={card.id} className={styles.printSelected}>
                   <button type="button" onClick={() => selectCard(card)}>{card.name}</button>
                   <span>
                     <button type="button" onClick={() => setQuantity(card.id, (quantities[card.id] || 0) - 1)}>−</button>

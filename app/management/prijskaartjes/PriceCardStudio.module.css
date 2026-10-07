@@ -269,30 +269,59 @@
   padding: 0 0.45rem 0.55rem;
 }
 
-.cardList > button {
-  display: flex;
+.cardListItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2rem;
   width: 100%;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.45rem;
   border: 1px solid transparent;
   border-bottom-color: #eee8e0;
   border-radius: 0.65rem;
+  background: transparent;
+  overflow: hidden;
+}
+
+.cardSelectButton {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  border: 0;
   background: transparent;
   padding: 0.57rem 0.55rem;
   text-align: left;
 }
 
-.cardList > button strong {
+.cardSelectButton strong {
   overflow: hidden;
   font-size: 0.76rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cardList > button.selectedCard {
+.cardListItem.selectedCard {
   border-color: #b88ca2;
   background: #f8f0f4;
+}
+
+.addCardToPrint {
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  border: 1px solid #b8ceb2;
+  border-radius: 999px;
+  background: #f1f7ee;
+  color: #24551d;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.addCardToPrint:hover {
+  border-color: #24551d;
+  background: #24551d;
+  color: #fff;
 }
 
 .empty {
