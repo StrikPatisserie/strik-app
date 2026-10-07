@@ -1,5 +1,7 @@
+"use client";
+
 /* eslint-disable @next/next/no-img-element */
-import type { CSSProperties } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import styles from "./PriceCard.module.css";
 import type { AllergenKey, PriceCard } from "./priceCardTypes";
 
@@ -22,40 +24,6 @@ const ALLERGEN_LABELS: Record<AllergenKey, string> = {
   vegetarisch: "Vegetarisch",
 };
 
-const ALLERGEN_X: Record<AllergenKey, number> = {
-  selderij: 0,
-  vis: 102,
-  schaaldier: 205,
-  mosterd: 307,
-  sulfiet: 409,
-  weekdier: 511,
-  lupine: 613,
-  pinda: 715,
-  soja: 817,
-  noten: 919,
-  sesam: 1021,
-  lactose: 1123,
-  gluten: 1225,
-  alcohol: 1327,
-  ei: 1429,
-  vegetarisch: 1614,
-};
-
-function nameSize(name: string) {
-  const length = name.trim().length;
-  if (length <= 11) return "8.5cqw";
-  if (length <= 18) return "7.5cqw";
-  if (length <= 27) return "6.5cqw";
-  if (length <= 38) return "5.7cqw";
-  return "5cqw";
-}
-
-function descriptionSize(description: string) {
-  if (description.length <= 55) return "4cqw";
-  if (description.length <= 90) return "3.55cqw";
-  return "3.15cqw";
-}
-
 function formatPriceParts(priceCents: number) {
   return {
     euros: Math.floor(Math.max(0, priceCents) / 100).toLocaleString("nl-NL"),
@@ -64,16 +32,60 @@ function formatPriceParts(priceCents: number) {
 }
 
 function AllergenIcon({ allergen }: { allergen: AllergenKey }) {
-  const left = (ALLERGEN_X[allergen] / 88) * 8.35;
   return (
     <span className={styles.allergenIcon} title={ALLERGEN_LABELS[allergen]}>
       <img
-        src="/allergenen-icons.png"
+        src={`/allergens/${allergen}.svg`}
         alt={ALLERGEN_LABELS[allergen]}
-        style={{ left: `-${left}cqw` }}
       />
     </span>
   );
+}
+
+function useFittedText<T extends HTMLElement>(singleLine: boolean) {
+  const ref = useRef<T>(null);
+  const fit = useCallback(() => {
+    const element = ref.current;
+    const frame = element?.parentElement;
+    if (!element || !frame || frame.clientWidth <= 0 || frame.clientHeight <= 0) return;
+
+    element.style.whiteSpace = singleLine ? "nowrap" : "normal";
+    let minimum = 10;
+    let maximum = Math.max(12, frame.clientHeight * (singleLine ? 1.45 : 1.15));
+    for (let step = 0; step < 14; step += 1) {
+      const size = (minimum + maximum) / 2;
+      element.style.fontSize = `${size}px`;
+      const fits =
+        element.scrollWidth <= frame.clientWidth + 0.5 &&
+        element.scrollHeight <= frame.clientHeight + 0.5;
+      if (fits) minimum = size;
+      else maximum = size;
+    }
+    element.style.fontSize = `${Math.max(10, minimum - 0.35)}px`;
+  }, [singleLine]);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    const frame = element?.parentElement;
+    if (!element || !frame) return;
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(frame);
+    void document.fonts?.ready.then(fit);
+    return () => observer.disconnect();
+  }, [fit]);
+
+  return ref;
+}
+
+function FittedTitle({ text }: { text: string }) {
+  const ref = useFittedText<HTMLHeadingElement>(true);
+  return <h2 ref={ref}>{text}</h2>;
+}
+
+function FittedDescription({ text }: { text: string }) {
+  const ref = useFittedText<HTMLParagraphElement>(false);
+  return <p ref={ref}>{text}</p>;
 }
 
 export default function PriceCardPreview({
@@ -84,13 +96,9 @@ export default function PriceCardPreview({
   className?: string;
 }>) {
   const price = formatPriceParts(card.priceCents);
-  const style = {
-    "--price-card-name-size": nameSize(card.name),
-    "--price-card-description-size": descriptionSize(card.description),
-  } as CSSProperties;
 
   return (
-    <article className={`${styles.card} ${className}`} style={style}>
+    <article className={`${styles.card} ${className}`}>
       {card.theme !== "geen" ? (
         <span className={`${styles.themeBadge} ${styles[card.theme]}`} aria-hidden="true">
           <img
@@ -100,9 +108,15 @@ export default function PriceCardPreview({
         </span>
       ) : null}
 
-      <div className={styles.cardCopy}>
-        <h2>{card.name}</h2>
-        {card.description ? <p>{card.description}</p> : null}
+      <div className={`${styles.cardCopy} ${card.description ? "" : styles.noDescription}`}>
+        <div className={styles.titleFrame}>
+          <FittedTitle text={card.name} />
+        </div>
+        {card.description ? (
+          <div className={styles.descriptionFrame}>
+            <FittedDescription text={card.description} />
+          </div>
+        ) : null}
       </div>
 
       {card.allergens.length > 0 ? (

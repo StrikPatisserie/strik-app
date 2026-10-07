@@ -4,7 +4,6 @@ import path from "node:path";
 import { createCanvas, GlobalFonts, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
 import { PDFDocument } from "pdf-lib";
 import type {
-  AllergenKey,
   PriceCard,
   PriceCardPrintSession,
 } from "../management/prijskaartjes/priceCardTypes";
@@ -16,25 +15,6 @@ const PDF_WIDTH = CARD_WIDTH_MM * POINTS_PER_MM;
 const PDF_HEIGHT = CARD_HEIGHT_MM * POINTS_PER_MM;
 const PIXEL_WIDTH = 1004;
 const PIXEL_HEIGHT = 650;
-
-const ALLERGEN_X: Record<AllergenKey, number> = {
-  selderij: 0,
-  vis: 102,
-  schaaldier: 205,
-  mosterd: 307,
-  sulfiet: 409,
-  weekdier: 511,
-  lupine: 613,
-  pinda: 715,
-  soja: 817,
-  noten: 919,
-  sesam: 1021,
-  lactose: 1123,
-  gluten: 1225,
-  alcohol: 1327,
-  ei: 1429,
-  vegetarisch: 1614,
-};
 
 let fontsReady = false;
 
@@ -98,13 +78,16 @@ function fitLines(input: {
   startSize: number;
   minSize: number;
   family: string;
+  lineHeight: number;
+  maxHeight: number;
 }) {
   for (let size = input.startSize; size >= input.minSize; size -= 2) {
     input.context.font = `${size}px "${input.family}"`;
     const lines = wrappedLines(input.context, input.text, input.maxWidth);
     if (
       lines.length <= input.maxLines &&
-      lines.every((line) => input.context.measureText(line).width <= input.maxWidth)
+      lines.every((line) => input.context.measureText(line).width <= input.maxWidth) &&
+      lines.length * size * input.lineHeight <= input.maxHeight
     ) {
       return { lines, size };
     }
@@ -145,15 +128,13 @@ async function renderCard(card: PriceCard) {
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, PIXEL_WIDTH, PIXEL_HEIGHT);
 
-  context.strokeStyle = "#161616";
-  context.lineWidth = 10;
-  roundedRect(context, 7, 7, PIXEL_WIDTH - 14, PIXEL_HEIGHT - 14, 34);
-  context.stroke();
-
   const logoPromise = loadImage(publicAsset("STRIK_LOGO_2021_BW.png"));
-  const allergenPromise = card.allergens.length
-    ? loadImage(publicAsset("allergenen-icons.png"))
-    : Promise.resolve(null);
+  const shownAllergens = card.allergens.slice(0, 8);
+  const allergenPromise = Promise.all(
+    shownAllergens.map((allergen) =>
+      loadImage(publicAsset("allergens", `${allergen}.svg`))
+    )
+  );
   const themePromise = card.theme === "geen"
     ? Promise.resolve(null)
     : loadImage(
@@ -161,7 +142,7 @@ async function renderCard(card: PriceCard) {
           ? publicAsset("APP_icons_strik_SINT.svg")
           : publicAsset("evaluation-icons", "kerst.svg")
       );
-  const [logo, allergenSprite, themeIcon] = await Promise.all([
+  const [logo, allergenIcons, themeIcon] = await Promise.all([
     logoPromise,
     allergenPromise,
     themePromise,
@@ -182,33 +163,37 @@ async function renderCard(card: PriceCard) {
     }
   }
 
-  const titleLeft = card.theme === "geen" ? 72 : 155;
-  const titleRight = 930;
+  const titleLeft = 62;
+  const titleRight = 942;
   const titleCenter = (titleLeft + titleRight) / 2;
   const title = fitLines({
     context,
     text: card.name.toLocaleUpperCase("nl-NL"),
     maxWidth: titleRight - titleLeft,
-    maxLines: 3,
-    startSize: card.name.length <= 12 ? 88 : 76,
-    minSize: 44,
+    maxLines: 1,
+    startSize: 155,
+    minSize: 34,
     family: "StrikGothamBlack",
+    lineHeight: 0.91,
+    maxHeight: card.description ? 125 : 190,
   });
   const description = card.description
     ? fitLines({
         context,
         text: card.description,
-        maxWidth: 760,
-        maxLines: 3,
-        startSize: card.description.length <= 65 ? 39 : 34,
-        minSize: 26,
+        maxWidth: 835,
+        maxLines: 2,
+        startSize: 62,
+        minSize: 22,
         family: "StrikGothamLight",
+        lineHeight: 1.08,
+        maxHeight: 118,
       })
     : { lines: [] as string[], size: 0 };
   const titleHeight = title.lines.length * title.size * 0.94;
-  const descriptionHeight = description.lines.length * description.size * 1.12;
-  const copyHeight = titleHeight + (description.lines.length ? 28 + descriptionHeight : 0);
-  const copyTop = Math.max(140, 330 - copyHeight / 2);
+  const descriptionHeight = description.lines.length * description.size * 1.08;
+  const copyHeight = titleHeight + (description.lines.length ? 26 + descriptionHeight : 0);
+  const copyTop = Math.max(142, 318 - copyHeight / 2);
 
   context.fillStyle = "#161616";
   context.textAlign = "center";
@@ -224,7 +209,7 @@ async function renderCard(card: PriceCard) {
       545,
       copyTop + titleHeight + 28,
       description.size,
-      1.12
+      1.08
     );
   }
 
@@ -249,25 +234,27 @@ async function renderCard(card: PriceCard) {
   context.textAlign = "left";
   context.fillText(`,${price.cents}`, 150 + wholeWidth / 2 + 4, card.pricePrefix ? 558 : 548);
 
-  if (allergenSprite && card.allergens.length) {
-    const shown = card.allergens.slice(0, 8);
-    const iconSize = Math.min(66, 360 / shown.length);
-    const gap = 5;
-    const totalWidth = shown.length * iconSize + (shown.length - 1) * gap;
-    let x = 370 + Math.max(0, (390 - totalWidth) / 2);
-    for (const allergen of shown) {
+  if (allergenIcons.length) {
+    const gap = 7;
+    const iconBoxWidth = Math.min(
+      72,
+      (405 - (allergenIcons.length - 1) * gap) / allergenIcons.length
+    );
+    const iconBoxHeight = 84;
+    const totalWidth = allergenIcons.length * iconBoxWidth + (allergenIcons.length - 1) * gap;
+    let x = 367 + Math.max(0, (405 - totalWidth) / 2);
+    for (const icon of allergenIcons) {
+      const ratio = icon.width / icon.height;
+      const width = Math.min(iconBoxWidth, iconBoxHeight * ratio);
+      const height = width / ratio;
       context.drawImage(
-        allergenSprite,
-        ALLERGEN_X[allergen],
-        0,
-        88,
-        107,
-        x,
-        548,
-        iconSize,
-        iconSize
+        icon,
+        x + (iconBoxWidth - width) / 2,
+        536 + (iconBoxHeight - height) / 2,
+        width,
+        height
       );
-      x += iconSize + gap;
+      x += iconBoxWidth + gap;
     }
   }
 

@@ -1,6 +1,4 @@
 .card {
-  --price-card-name-size: 6.5cqw;
-  --price-card-description-size: 3.55cqw;
   position: relative;
   box-sizing: border-box;
   container-type: inline-size;
@@ -16,33 +14,57 @@
 
 .cardCopy {
   position: absolute;
-  inset: 13cqw 7cqw 17cqw;
+  inset: 13cqw 5.5cqw 17cqw;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2.3cqw;
   text-align: center;
 }
 
-.cardCopy h2 {
-  max-width: 100%;
-  margin: 0;
-  font-family: "StrikGotham", Arial, sans-serif;
-  font-size: var(--price-card-name-size);
-  font-weight: 800;
-  letter-spacing: -0.28cqw;
-  line-height: 0.91;
-  text-transform: uppercase;
-  overflow-wrap: anywhere;
+.titleFrame,
+.descriptionFrame {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
 }
 
-.cardCopy p {
-  max-width: 88%;
-  margin: 3.5cqw 0 0;
-  font-size: var(--price-card-description-size);
+.titleFrame {
+  height: 11.5cqw;
+}
+
+.descriptionFrame {
+  width: 91%;
+  height: 9.5cqw;
+}
+
+.noDescription .titleFrame {
+  height: 18cqw;
+}
+
+.titleFrame h2 {
+  width: 100%;
+  margin: 0;
+  font-family: "StrikGotham", Arial, sans-serif;
+  font-size: 7cqw;
+  font-weight: 800;
+  letter-spacing: -0.18cqw;
+  line-height: 0.91;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.descriptionFrame p {
+  width: 100%;
+  margin: 0;
+  font-size: 3.55cqw;
   font-weight: 400;
   letter-spacing: -0.09cqw;
   line-height: 1.08;
+  overflow-wrap: normal;
 }
 
 .priceBlock {
@@ -113,24 +135,22 @@
   min-height: 8.3cqw;
   align-items: center;
   justify-content: center;
-  gap: 0.6cqw;
+  gap: 0.65cqw;
 }
 
 .allergenIcon {
-  position: relative;
   display: block;
-  width: 8.35cqw;
-  height: 8.35cqw;
-  flex: 0 1 8.35cqw;
-  overflow: hidden;
+  min-width: 0;
+  max-width: 7.4cqw;
+  aspect-ratio: 102 / 107;
+  flex: 1 1 0;
 }
 
 .allergenIcon img {
-  position: absolute;
-  top: 0;
-  width: 161.85cqw;
-  max-width: none;
-  height: auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .themeBadge {
