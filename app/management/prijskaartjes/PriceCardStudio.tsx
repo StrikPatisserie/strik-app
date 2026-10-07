@@ -45,6 +45,11 @@ const ALLERGEN_LABELS: Record<AllergenKey, string> = {
   vegetarisch: "Vegetarisch",
 };
 
+type PriceOptionDraft = {
+  label: string;
+  price: string;
+};
+
 function blankCard(name = ""): PriceCard {
   return {
     id: "",
@@ -52,6 +57,7 @@ function blankCard(name = ""): PriceCard {
     description: "",
     priceCents: 0,
     pricePrefix: "",
+    priceOptions: [],
     category: "overig",
     theme: "geen",
     allergens: [],
@@ -88,12 +94,20 @@ function parsePrice(value: string) {
   return Number.isFinite(number) ? Math.max(0, Math.round(number * 100)) : 0;
 }
 
+function optionDraftsFromCard(card: PriceCard): PriceOptionDraft[] {
+  return card.priceOptions.map((option) => ({
+    label: option.label,
+    price: priceText(option.priceCents),
+  }));
+}
+
 export default function PriceCardStudio() {
   const router = useRouter();
   const [state, setState] = useState<PriceCardState>(emptyPriceCardState());
   const [selectedId, setSelectedId] = useState("");
   const [draft, setDraft] = useState<PriceCard>(blankCard());
   const [price, setPrice] = useState("0,00");
+  const [priceOptionDrafts, setPriceOptionDrafts] = useState<PriceOptionDraft[]>([]);
   const [libraryQuery, setLibraryQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<PriceCardCategory | "alle">("alle");
   const [webshopQuery, setWebshopQuery] = useState("");
@@ -130,6 +144,7 @@ export default function PriceCardStudio() {
           setSelectedId(first.id);
           setDraft(first);
           setPrice(priceText(first.priceCents));
+          setPriceOptionDrafts(optionDraftsFromCard(first));
         }
       })
       .catch((loadError) => {
@@ -158,12 +173,24 @@ export default function PriceCardStudio() {
     [quantities, state.cards]
   );
   const totalPrintCards = selectedPrintItems.reduce((sum, item) => sum + item.quantity, 0);
-  const previewCard = { ...draft, priceCents: parsePrice(price) };
+  const hasMultiplePrices = priceOptionDrafts.length >= 2;
+  const previewPriceOptions = hasMultiplePrices
+    ? priceOptionDrafts.slice(0, 3).map((option, index) => ({
+        label: option.label.trim() || `Optie ${index + 1}`,
+        priceCents: parsePrice(option.price),
+      }))
+    : [];
+  const previewCard = {
+    ...draft,
+    priceCents: previewPriceOptions[0]?.priceCents || parsePrice(price),
+    priceOptions: previewPriceOptions,
+  };
 
   function selectCard(card: PriceCard) {
     setSelectedId(card.id);
     setDraft(card);
     setPrice(priceText(card.priceCents));
+    setPriceOptionDrafts(optionDraftsFromCard(card));
     setMessage("");
     setError("");
   }
@@ -173,6 +200,7 @@ export default function PriceCardStudio() {
     setSelectedId("");
     setDraft(card);
     setPrice("0,00");
+    setPriceOptionDrafts([]);
     setWebshopResults([]);
     setMessage("Handmatig kaartje gestart.");
     setError("");
@@ -231,6 +259,7 @@ export default function PriceCardStudio() {
       setSelectedId("");
       setDraft(card);
       setPrice(priceText(card.priceCents));
+      setPriceOptionDrafts([]);
       setWebshopResults([]);
       setMessage(
         card.description
@@ -258,7 +287,9 @@ export default function PriceCardStudio() {
         throw new Error(data.message || "Product laden is mislukt.");
       }
       const product = data.product;
-      const oldPrice = parsePrice(price);
+      const oldPrice = hasMultiplePrices
+        ? parsePrice(priceOptionDrafts[0]?.price || "")
+        : parsePrice(price);
       setDraft((current) => ({
         ...current,
         name: product.name,
@@ -270,9 +301,11 @@ export default function PriceCardStudio() {
         sourceUrl: product.sourceUrl,
         sourceProductName: product.name,
       }));
-      setPrice(priceText(product.priceCents));
+      if (!hasMultiplePrices) setPrice(priceText(product.priceCents));
       setMessage(
-        oldPrice === product.priceCents
+        hasMultiplePrices
+          ? "Webshopgegevens bijgewerkt. De eigen optieprijzen zijn behouden."
+          : oldPrice === product.priceCents
           ? "Webshopgegevens zijn actueel."
           : `Webshopprijs bijgewerkt van ${priceText(oldPrice)} naar ${priceText(product.priceCents)}. Sla de wijziging nog op.`
       );
@@ -324,7 +357,18 @@ export default function PriceCardStudio() {
   }
 
   async function saveCard() {
-    const priceCents = parsePrice(price);
+    const priceOptions = hasMultiplePrices
+      ? priceOptionDrafts.slice(0, 3).map((option) => ({
+          label: option.label.trim(),
+          priceCents: parsePrice(option.price),
+        }))
+      : [];
+    const incompleteOption = priceOptions.some((option) => !option.label || option.priceCents <= 0);
+    if (hasMultiplePrices && incompleteOption) {
+      setError("Vul bij iedere optie een naam en geldige prijs in.");
+      return;
+    }
+    const priceCents = priceOptions[0]?.priceCents || parsePrice(price);
     if (!draft.name.trim() || priceCents <= 0) {
       setError("Vul een productnaam en prijs in.");
       return;
@@ -336,6 +380,7 @@ export default function PriceCardStudio() {
       ...draft,
       id: draft.id || `card-${crypto.randomUUID()}`,
       priceCents,
+      priceOptions,
     };
     try {
       const nextState = await postAction({ action: "upsert-card", card });
@@ -398,6 +443,39 @@ export default function PriceCardStudio() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function toggleMultiplePrices(enabled: boolean) {
+    if (!enabled) {
+      const firstPrice = priceOptionDrafts[0]?.price;
+      if (firstPrice && parsePrice(firstPrice) > 0) setPrice(firstPrice);
+      setPriceOptionDrafts([]);
+      return;
+    }
+    setPriceOptionDrafts([
+      { label: "", price: parsePrice(price) > 0 ? price : "" },
+      { label: "", price: "" },
+    ]);
+  }
+
+  function updatePriceOption(index: number, field: keyof PriceOptionDraft, value: string) {
+    setPriceOptionDrafts((current) => current.map((option, optionIndex) =>
+      optionIndex === index ? { ...option, [field]: value } : option
+    ));
+  }
+
+  function addPriceOption() {
+    setPriceOptionDrafts((current) => current.length >= 3
+      ? current
+      : [...current, { label: "", price: "" }]
+    );
+  }
+
+  function removePriceOption(index: number) {
+    setPriceOptionDrafts((current) => current.length <= 2
+      ? current
+      : current.filter((_, optionIndex) => optionIndex !== index)
+    );
   }
 
   function toggleAllergen(allergen: AllergenKey) {
@@ -496,7 +574,7 @@ export default function PriceCardStudio() {
                 onClick={() => selectCard(card)}
               >
                 <span><strong>{card.name}</strong><small>{CATEGORY_LABELS[card.category]}</small></span>
-                <b>{priceText(card.priceCents)}</b>
+                <b>{card.priceOptions.length >= 2 ? `${card.priceOptions.length} prijzen` : priceText(card.priceCents)}</b>
               </button>
             ))}
           </div>
@@ -537,14 +615,69 @@ export default function PriceCardStudio() {
               </span>
               <textarea rows={2} value={draft.description} maxLength={320} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} />
             </label>
-            <label>
-              <span>Prijs</span>
-              <span className={styles.priceInput}><b>€</b><input inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} /></span>
+            <label className={styles.priceModeToggle}>
+              <span>
+                <strong>Meerdere opties en prijzen</strong>
+                <small>Bijvoorbeeld 2, 4 en 6 stuks of klein en groot · maximaal 3</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={hasMultiplePrices}
+                onChange={(event) => toggleMultiplePrices(event.target.checked)}
+              />
+              <i aria-hidden="true" />
             </label>
-            <label>
-              <span>Tekst boven prijs</span>
-              <input value={draft.pricePrefix} maxLength={30} placeholder="bijv. vanaf" onChange={(event) => setDraft((current) => ({ ...current, pricePrefix: event.target.value }))} />
-            </label>
+            {hasMultiplePrices ? (
+              <div className={styles.priceOptionsEditor}>
+                {priceOptionDrafts.map((option, index) => (
+                  <div className={styles.priceOptionEditorRow} key={index}>
+                    <label>
+                      <span>Optie {index + 1}</span>
+                      <input
+                        value={option.label}
+                        maxLength={22}
+                        placeholder={index === 0 ? "bijv. 2 stuks of klein" : "bijv. 4 stuks of groot"}
+                        onChange={(event) => updatePriceOption(index, "label", event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span>Prijs</span>
+                      <span className={styles.priceInput}>
+                        <b>€</b>
+                        <input
+                          inputMode="decimal"
+                          value={option.price}
+                          onChange={(event) => updatePriceOption(index, "price", event.target.value)}
+                        />
+                      </span>
+                    </label>
+                    {priceOptionDrafts.length > 2 ? (
+                      <button
+                        type="button"
+                        aria-label={`Optie ${index + 1} verwijderen`}
+                        onClick={() => removePriceOption(index)}
+                      >×</button>
+                    ) : null}
+                  </div>
+                ))}
+                {priceOptionDrafts.length < 3 ? (
+                  <button type="button" className={styles.addPriceOption} onClick={addPriceOption}>
+                    + Derde optie
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <label>
+                  <span>Prijs</span>
+                  <span className={styles.priceInput}><b>€</b><input inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} /></span>
+                </label>
+                <label>
+                  <span>Tekst boven prijs</span>
+                  <input value={draft.pricePrefix} maxLength={30} placeholder="bijv. vanaf" onChange={(event) => setDraft((current) => ({ ...current, pricePrefix: event.target.value }))} />
+                </label>
+              </>
+            )}
             <label>
               <span>Soort kaartje</span>
               <select

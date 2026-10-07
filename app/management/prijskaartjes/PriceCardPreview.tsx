@@ -80,6 +80,7 @@ export default function PriceCardPreview({
   className?: string;
 }>) {
   const price = formatPriceParts(card.priceCents);
+  const priceOptions = card.priceOptions.slice(0, 3);
 
   return (
     <article
@@ -113,13 +114,31 @@ export default function PriceCardPreview({
         </div>
       ) : null}
 
-      <div className={styles.priceBlock}>
-        {card.pricePrefix ? <span className={styles.pricePrefix}>{card.pricePrefix}</span> : null}
-        <span className={styles.priceLine}>
-          <span className={styles.euro}>€</span>
-          <span className={styles.whole}>{price.euros}</span>
-          <span className={styles.cents}>,{price.cents}</span>
-        </span>
+      <div className={`${styles.priceBlock} ${priceOptions.length >= 2 ? styles.multiPriceBlock : ""}`}>
+        {priceOptions.length >= 2 ? (
+          <span className={styles.priceOptions}>
+            {priceOptions.map((option, index) => {
+              const optionPrice = formatPriceParts(option.priceCents);
+              return (
+                <span className={styles.priceOptionRow} key={`${option.label}-${index}`}>
+                  <span className={styles.priceOptionLabel}>{option.label}</span>
+                  <span className={styles.priceOptionValue}>
+                    <span>€</span> {optionPrice.euros},{optionPrice.cents}
+                  </span>
+                </span>
+              );
+            })}
+          </span>
+        ) : (
+          <>
+            {card.pricePrefix ? <span className={styles.pricePrefix}>{card.pricePrefix}</span> : null}
+            <span className={styles.priceLine}>
+              <span className={styles.euro}>€</span>
+              <span className={styles.whole}>{price.euros}</span>
+              <span className={styles.cents}>,{price.cents}</span>
+            </span>
+          </>
+        )}
       </div>
 
       <img className={styles.logo} src="/STRIK_LOGO_2021_BW.png" alt="Strik Patisserie" />

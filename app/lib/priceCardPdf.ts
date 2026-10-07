@@ -213,45 +213,104 @@ async function renderCard(card: PriceCard) {
     );
   }
 
-  const price = formatPrice(card.priceCents);
-  const mainPrice = `€ ${price.euros}`;
-  const centsPrice = `,${price.cents}`;
-  const priceLeft = 22;
-  context.font = '80px "StrikGothamBlack"';
-  const mainPriceWidth = context.measureText(mainPrice).width;
-  context.font = '38px "StrikGothamBlack"';
-  const centsPriceWidth = context.measureText(centsPrice).width;
-  const priceBlockWidth = Math.max(
-    235,
-    Math.ceil(priceLeft + mainPriceWidth + 4 + centsPriceWidth + 20)
-  );
+  const priceOptions = card.priceOptions.slice(0, 3);
+  if (priceOptions.length >= 2) {
+    const labelStartSize = priceOptions.length === 2 ? 27 : 23;
+    const valueSize = priceOptions.length === 2 ? 40 : 34;
+    const euroSize = priceOptions.length === 2 ? 27 : 23;
+    const rowGap = 26;
+    const paddingX = 22;
+    const rows = priceOptions.map((option) => {
+      const label = option.label.toLocaleUpperCase("nl-NL");
+      let labelSize = labelStartSize;
+      context.font = `${labelSize}px "StrikGothamBold"`;
+      while (labelSize > 16 && context.measureText(label).width > 240) {
+        labelSize -= 1;
+        context.font = `${labelSize}px "StrikGothamBold"`;
+      }
+      const labelWidth = context.measureText(label).width;
+      const formatted = formatPrice(option.priceCents);
+      const value = `${formatted.euros},${formatted.cents}`;
+      context.font = `700 ${euroSize}px Arial`;
+      const euroWidth = context.measureText("€").width;
+      context.font = `${valueSize}px "StrikGothamBlack"`;
+      const valueWidth = context.measureText(value).width;
+      return { label, labelSize, labelWidth, value, euroWidth, valueWidth };
+    });
+    const priceBlockWidth = Math.min(
+      480,
+      Math.max(
+        315,
+        Math.ceil(Math.max(...rows.map((row) =>
+          paddingX * 2 + row.labelWidth + rowGap + row.euroWidth + 6 + row.valueWidth
+        )))
+      )
+    );
 
-  context.fillStyle = "#161616";
-  roundedRect(context, 2, 493, priceBlockWidth, 155, 22);
-  context.fill();
-  context.fillRect(2, 555, priceBlockWidth, 93);
-  context.fillRect(2, 493, 70, 155);
+    context.fillStyle = "#161616";
+    roundedRect(context, 2, 493, priceBlockWidth, 155, 22);
+    context.fill();
+    context.fillRect(2, 555, priceBlockWidth, 93);
+    context.fillRect(2, 493, 70, 155);
 
-  context.fillStyle = "#ffffff";
-  context.textBaseline = "middle";
-  if (card.pricePrefix) {
-    context.font = '28px "StrikGothamBold"';
-    context.textAlign = "center";
+    const rowHeight = priceOptions.length === 2 ? 58 : 46;
+    const rowsHeight = rowHeight * rows.length;
+    const firstCenterY = 493 + (155 - rowsHeight) / 2 + rowHeight / 2;
+    context.fillStyle = "#ffffff";
+    context.textBaseline = "middle";
+    rows.forEach((row, index) => {
+      const centerY = firstCenterY + index * rowHeight;
+      context.textAlign = "left";
+      context.font = `${row.labelSize}px "StrikGothamBold"`;
+      context.fillText(row.label, paddingX, centerY);
+      const valueLeft = priceBlockWidth - paddingX - row.valueWidth;
+      const euroLeft = valueLeft - row.euroWidth - 6;
+      context.font = `700 ${euroSize}px Arial`;
+      context.fillText("€", euroLeft, centerY + 1);
+      context.font = `${valueSize}px "StrikGothamBlack"`;
+      context.fillText(row.value, valueLeft, centerY);
+    });
+  } else {
+    const price = formatPrice(card.priceCents);
+    const mainPrice = `€ ${price.euros}`;
+    const centsPrice = `,${price.cents}`;
+    const priceLeft = 22;
+    context.font = '80px "StrikGothamBlack"';
+    const mainPriceWidth = context.measureText(mainPrice).width;
+    context.font = '38px "StrikGothamBlack"';
+    const centsPriceWidth = context.measureText(centsPrice).width;
+    const priceBlockWidth = Math.max(
+      235,
+      Math.ceil(priceLeft + mainPriceWidth + 4 + centsPriceWidth + 20)
+    );
+
+    context.fillStyle = "#161616";
+    roundedRect(context, 2, 493, priceBlockWidth, 155, 22);
+    context.fill();
+    context.fillRect(2, 555, priceBlockWidth, 93);
+    context.fillRect(2, 493, 70, 155);
+
+    context.fillStyle = "#ffffff";
+    context.textBaseline = "middle";
+    if (card.pricePrefix) {
+      context.font = '28px "StrikGothamBold"';
+      context.textAlign = "center";
+      context.fillText(
+        card.pricePrefix.toLocaleUpperCase("nl-NL"),
+        priceBlockWidth / 2,
+        514
+      );
+    }
+    context.font = '80px "StrikGothamBlack"';
+    context.textAlign = "left";
+    context.fillText(mainPrice, priceLeft, card.pricePrefix ? 590 : 568);
+    context.font = '38px "StrikGothamBlack"';
     context.fillText(
-      card.pricePrefix.toLocaleUpperCase("nl-NL"),
-      priceBlockWidth / 2,
-      514
+      centsPrice,
+      priceLeft + mainPriceWidth + 4,
+      card.pricePrefix ? 570 : 548
     );
   }
-  context.font = '80px "StrikGothamBlack"';
-  context.textAlign = "left";
-  context.fillText(mainPrice, priceLeft, card.pricePrefix ? 590 : 568);
-  context.font = '38px "StrikGothamBlack"';
-  context.fillText(
-    centsPrice,
-    priceLeft + mainPriceWidth + 4,
-    card.pricePrefix ? 570 : 548
-  );
 
   if (allergenIcons.length) {
     const groupWidth = 860;

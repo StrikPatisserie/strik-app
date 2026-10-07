@@ -401,6 +401,119 @@
   border-radius: 0;
 }
 
+.priceModeToggle {
+  position: relative;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid #ddd5cb;
+  border-radius: 0.8rem;
+  background: #faf8f5;
+  padding: 0.55rem 0.65rem;
+  cursor: pointer;
+}
+
+.formGrid .priceModeToggle > span:first-child {
+  display: grid;
+  gap: 0.08rem;
+  color: #2a2520;
+  font-size: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.priceModeToggle strong {
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.priceModeToggle small {
+  color: #8b8278;
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.priceModeToggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.priceModeToggle i {
+  position: relative;
+  width: 2.3rem;
+  height: 1.28rem;
+  border-radius: 999px;
+  background: #d8d1c8;
+  transition: background 140ms ease;
+}
+
+.priceModeToggle i::after {
+  position: absolute;
+  top: 0.17rem;
+  left: 0.18rem;
+  width: 0.94rem;
+  height: 0.94rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(47, 35, 28, 0.22);
+  content: "";
+  transition: transform 140ms ease;
+}
+
+.priceModeToggle input:checked + i {
+  background: #24551d;
+}
+
+.priceModeToggle input:checked + i::after {
+  transform: translateX(1rem);
+}
+
+.priceModeToggle:focus-within {
+  border-color: #6f927c;
+  box-shadow: 0 0 0 3px rgba(111, 146, 124, 0.14);
+}
+
+.priceOptionsEditor {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 0.45rem;
+  border: 1px solid #e4ddd4;
+  border-radius: 0.8rem;
+  background: #faf8f5;
+  padding: 0.55rem;
+}
+
+.priceOptionEditorRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(8rem, 0.8fr) 1.9rem;
+  align-items: end;
+  gap: 0.45rem;
+}
+
+.priceOptionEditorRow > button,
+.addPriceOption {
+  border: 1px solid #ddd5cb;
+  border-radius: 0.6rem;
+  background: #fff;
+  color: #6b645b;
+  font-weight: 900;
+}
+
+.priceOptionEditorRow > button {
+  height: 2.45rem;
+  font-size: 1rem;
+}
+
+.addPriceOption {
+  justify-self: start;
+  min-height: 2rem;
+  padding: 0 0.7rem;
+  color: #24551d;
+  font-size: 0.68rem;
+}
+
 .allergenField {
   margin: 0;
   border: 0;
@@ -544,6 +657,9 @@
   .notFound { right: 0.5rem; left: 0.5rem; flex-direction: column; }
   .formGrid { grid-template-columns: 1fr; }
   .wideField,
-  .allergenField { grid-column: auto; }
+  .allergenField,
+  .priceModeToggle,
+  .priceOptionsEditor { grid-column: auto; }
+  .priceOptionEditorRow { grid-template-columns: 1fr 1fr 1.9rem; }
   .printList { grid-template-columns: 1fr; }
 }

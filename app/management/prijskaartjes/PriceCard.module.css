@@ -125,6 +125,46 @@
   letter-spacing: -0.35cqw;
 }
 
+.multiPriceBlock {
+  min-width: 31cqw;
+  max-width: 48cqw;
+  padding: 1.15cqw 2cqw;
+}
+
+.priceOptions {
+  display: grid;
+  width: 100%;
+  gap: 0.42cqw;
+}
+
+.priceOptionRow {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2.2cqw;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.priceOptionLabel {
+  overflow: hidden;
+  font-size: 2.1cqw;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+
+.priceOptionValue {
+  font-size: 3.05cqw;
+  font-weight: 800;
+  letter-spacing: -0.12cqw;
+}
+
+.priceOptionValue > span {
+  font-size: 2.25cqw;
+}
+
 .logo {
   position: absolute;
   right: 4.2cqw;

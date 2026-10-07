@@ -7,6 +7,7 @@ import {
   isAllergenKey,
   isPriceCardCategory,
   normalizePriceCard,
+  normalizePriceOptions,
   themeForCategory,
   type PriceCard,
   type PriceCardPrintItem,
@@ -74,7 +75,15 @@ export async function POST(request: Request) {
       ? (body.card as Record<string, unknown>)
       : null;
     const name = cleanText(input?.name, 120);
-    const priceCents = Math.round(Number(input?.priceCents) || 0);
+    const requestedPriceOptions = Array.isArray(input?.priceOptions) ? input.priceOptions : [];
+    const priceOptions = normalizePriceOptions(requestedPriceOptions);
+    if (requestedPriceOptions.length > 0 && priceOptions.length < 2) {
+      return NextResponse.json(
+        { message: "Vul minimaal twee complete opties met naam en prijs in." },
+        { status: 400 }
+      );
+    }
+    const priceCents = priceOptions[0]?.priceCents || Math.round(Number(input?.priceCents) || 0);
     if (!input || !name || priceCents <= 0) {
       return NextResponse.json(
         { message: "Naam en een geldige prijs zijn verplicht." },
@@ -91,6 +100,7 @@ export async function POST(request: Request) {
       description: cleanText(input.description, 320),
       priceCents,
       pricePrefix: cleanText(input.pricePrefix, 30),
+      priceOptions,
       category,
       theme:
         input.theme === "sint" || input.theme === "kerst"

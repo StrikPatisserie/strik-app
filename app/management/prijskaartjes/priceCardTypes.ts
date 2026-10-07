@@ -31,6 +31,11 @@ export const ALLERGEN_KEYS = [
 
 export type AllergenKey = (typeof ALLERGEN_KEYS)[number];
 
+export type PriceCardPriceOption = {
+  label: string;
+  priceCents: number;
+};
+
 export const ALLERGEN_LABELS: Record<AllergenKey, string> = {
   selderij: "Selderij",
   vis: "Vis",
@@ -56,6 +61,7 @@ export type PriceCard = {
   description: string;
   priceCents: number;
   pricePrefix: string;
+  priceOptions: PriceCardPriceOption[];
   category: PriceCardCategory;
   theme: PriceCardTheme;
   allergens: AllergenKey[];
@@ -129,19 +135,33 @@ export function isAllergenKey(value: unknown): value is AllergenKey {
   return ALLERGEN_KEYS.includes(value as AllergenKey);
 }
 
+export function normalizePriceOptions(value: unknown): PriceCardPriceOption[] {
+  if (!Array.isArray(value)) return [];
+  const options = value.slice(0, 3).flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const raw = entry as Record<string, unknown>;
+    const label = cleanString(raw.label, 22);
+    const priceCents = Math.max(0, Math.round(Number(raw.priceCents) || 0));
+    return label && priceCents > 0 ? [{ label, priceCents }] : [];
+  });
+  return options.length >= 2 ? options : [];
+}
+
 export function normalizePriceCard(value: unknown): PriceCard | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
   const id = cleanString(raw.id, 180);
   const name = cleanString(raw.name, 120);
   if (!id || !name) return null;
+  const priceOptions = normalizePriceOptions(raw.priceOptions);
 
   return {
     id,
     name,
     description: cleanString(raw.description, 320),
-    priceCents: Math.max(0, Math.round(Number(raw.priceCents) || 0)),
+    priceCents: priceOptions[0]?.priceCents || Math.max(0, Math.round(Number(raw.priceCents) || 0)),
     pricePrefix: cleanString(raw.pricePrefix, 30),
+    priceOptions,
     category: isPriceCardCategory(raw.category) ? raw.category : "overig",
     theme:
       raw.theme === "sint" || raw.theme === "kerst" ? raw.theme : "geen",
