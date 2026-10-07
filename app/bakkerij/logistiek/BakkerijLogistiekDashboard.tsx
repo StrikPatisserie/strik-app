@@ -6421,9 +6421,45 @@ function lentEmballageStop(): RouteStop {
     learningTarget: shopMeta.address,
     learningKind: "shop",
     label: "Winkel Lent · emballage",
-    detail: `${shopMeta.address} · na de klantstop terugrijden als er tijd is`,
+    detail: `${shopMeta.address} · alleen indien er tijd is · direct na de laatste klantstop in Lent, Elst, Bemmel of Gendt`,
     badges: ["emballage", "indien tijd"],
   };
+}
+
+function isLentEmballageStop(stop: RouteStop) {
+  return routeStopSourceKey(stop) === "shop:lent:emballage";
+}
+
+function isLentEmballageAreaRouteStop(stop: RouteStop) {
+  if (stop.learningKind !== "receipt") return false;
+
+  return /(?:^| )(?:dries en co|dries co|dries|lent|elst|bemmel|gendt)(?: |$)/.test(
+    normalizeMatchText(
+      [stop.label, stop.learningLabel || "", stop.learningTarget || "", stop.detail].join(
+        " "
+      )
+    )
+  );
+}
+
+function placeLentEmballageAfterLastAreaStop(stops: RouteStop[]) {
+  const emballageStop = stops.find(isLentEmballageStop);
+  if (!emballageStop) return stops;
+
+  const stopsWithoutEmballage = stops.filter(
+    (stop) => !isLentEmballageStop(stop)
+  );
+  const lastAreaStopIndex = stopsWithoutEmballage.findLastIndex(
+    isLentEmballageAreaRouteStop
+  );
+
+  if (lastAreaStopIndex < 0) return [...stopsWithoutEmballage, emballageStop];
+
+  return [
+    ...stopsWithoutEmballage.slice(0, lastAreaStopIndex + 1),
+    emballageStop,
+    ...stopsWithoutEmballage.slice(lastAreaStopIndex + 1),
+  ];
 }
 
 function isVermaatReceipt(receipt: ReceiptSummary) {
@@ -7745,7 +7781,7 @@ function buildWeekdayFixedRouteRounds(
     ...asStops(cityReceipts, "A-city-"),
     ...busACityIceReceipts.map(iceStopForReceipt),
   ];
-  const busBFirstStops: RouteStop[] = [
+  const busBFirstStops: RouteStop[] = placeLentEmballageAfterLastAreaStop([
     fixedShopStop({
       receipts,
       shopKey: "ziekerstraat",
@@ -7766,7 +7802,7 @@ function buildWeekdayFixedRouteRounds(
     ...asStops(sanadomeReceipts, "B-sanadome-"),
     ...asStops(remainingOutsideReceipts, "B-rest-"),
     ...busBFirstIceReceipts.map(iceStopForReceipt),
-  ];
+  ]);
   const busBSecondStops: RouteStop[] = [
     ...asStops(outsideSecondRoundReceipts, "B-outside-"),
     ...asStops(busBSecondProCollegeReceipts, "B-pro-college-south-"),
@@ -7952,7 +7988,7 @@ function buildRouteRounds(
     const looseFirstIceStops = sortDeliveryReceipts(
       bus.firstIce.filter((receipt) => !shopKeyForReceipt(receipt))
     ).map(iceStopForReceipt);
-    const firstStops = [
+    const firstStops = placeLentEmballageAfterLastAreaStop([
       ...shopStops,
       ...sortReceiptsForRoute(
         bus.early,
@@ -7970,7 +8006,7 @@ function buildRouteRounds(
       ...(addLentEmballageStop && bus.id === lentBusId
         ? [lentEmballageStop()]
         : []),
-    ];
+    ]);
     const secondStops = [
       ...sortReceiptsForRoute(
         bus.second,
@@ -8126,7 +8162,7 @@ function buildSaturdayRouteRounds(
       bus.id === "A"
         ? [...bus.early, ...bus.first, ...bus.second]
         : bus.second;
-    const firstStops = [
+    const firstStops = placeLentEmballageAfterLastAreaStop([
       ...groupShopStops(receipts, routePlan.firstShopKeys, []),
       ...sortReceiptsForRoute(
         firstRouteReceipts,
@@ -8137,7 +8173,7 @@ function buildSaturdayRouteRounds(
       ...(addLentEmballageStop && bus.id === "B"
         ? [lentEmballageStop()]
         : []),
-    ];
+    ]);
     const secondStops = [
       ...groupShopStops(receipts, routePlan.secondShopKeys, []),
       ...sortReceiptsForRoute(
@@ -8570,7 +8606,15 @@ function reconcileRouteDraftRounds(
     );
   });
 
-  return reconciledRoutes;
+  return reconciledRoutes.map((route) =>
+    refreshRouteRoundAfterManualMove(
+      {
+        ...route,
+        stops: placeLentEmballageAfterLastAreaStop(route.stops),
+      },
+      loadProfile
+    )
+  );
 }
 
 function buildReceiptLines(receipt: ReceiptSeed, plan: DayPlan): ReceiptLine[] {
@@ -12205,9 +12249,19 @@ function RoutesPanel({
                               {routeStopAddressLabel(stop)}
                             </span>
                           </span>
-                          <span className="whitespace-nowrap text-right text-[0.68rem] font-black tabular-nums tracking-normal text-[#4a4540]">
-                            {routeStopDeliveryTime(stop) || "—"}
-                          </span>
+                          {isLentEmballageStop(stop) ? (
+                            <span
+                              title="Alleen meenemen indien er tijd is"
+                              className="flex items-center gap-1 whitespace-nowrap rounded-full border border-[#e3c45d] bg-[#fff4bf] px-1.5 py-1 text-[0.6rem] font-black tracking-normal text-[#705510]"
+                            >
+                              <WarningIcon />
+                              Alleen indien er tijd is
+                            </span>
+                          ) : (
+                            <span className="whitespace-nowrap text-right text-[0.68rem] font-black tabular-nums tracking-normal text-[#4a4540]">
+                              {routeStopDeliveryTime(stop) || "—"}
+                            </span>
+                          )}
                           <button
                             type="button"
                             aria-label={`${stop.label} uit route halen`}
