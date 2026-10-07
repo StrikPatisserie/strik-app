@@ -60,6 +60,7 @@ export const ALLERGEN_LABELS: Record<AllergenKey, string> = {
 export type PriceCard = {
   id: string;
   name: string;
+  legalName: string;
   description: string;
   priceCents: number;
   pricePrefix: string;
@@ -195,6 +196,7 @@ export function normalizePriceCard(value: unknown): PriceCard | null {
   return {
     id,
     name,
+    legalName: cleanString(raw.legalName, 100),
     description: cleanString(raw.description, 320),
     priceCents: priceOptions[0]?.priceCents || Math.max(0, Math.round(Number(raw.priceCents) || 0)),
     pricePrefix: cleanString(raw.pricePrefix, 30),

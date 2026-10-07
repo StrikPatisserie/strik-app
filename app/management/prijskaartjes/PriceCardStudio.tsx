@@ -58,6 +58,7 @@ function blankCard(name = ""): PriceCard {
   return {
     id: "",
     name,
+    legalName: "",
     description: "",
     priceCents: 0,
     pricePrefix: "",
@@ -202,7 +203,7 @@ export default function PriceCardStudio() {
     const query = libraryQuery.trim().toLowerCase();
     return state.cards.filter((card) => {
       if (categoryFilter !== "alle" && card.category !== categoryFilter) return false;
-      return !query || `${card.name} ${card.description}`.toLowerCase().includes(query);
+      return !query || `${card.name} ${card.legalName} ${card.description}`.toLowerCase().includes(query);
     });
   }, [categoryFilter, libraryQuery, state.cards]);
 
@@ -452,6 +453,10 @@ export default function PriceCardStudio() {
       return;
     }
     const priceCents = priceOptions[0]?.priceCents || parsePrice(price);
+    if (draft.category === "brood" && !draft.legalName.trim()) {
+      setError("Vul voor een broodkaartje de officiële warenwettelijke naam in.");
+      return;
+    }
     if (!draft.name.trim() || priceCents <= 0) {
       setError("Vul een productnaam en prijs in.");
       return;
@@ -722,6 +727,20 @@ export default function PriceCardStudio() {
               <span>Productnaam</span>
               <input value={draft.name} maxLength={120} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
             </label>
+            {draft.category === "brood" ? (
+              <label className={styles.wideField}>
+                <span>Warenwettelijke naam</span>
+                <input
+                  value={draft.legalName}
+                  maxLength={100}
+                  placeholder="Bijv. WIT TARWE ROGGE DESEM"
+                  onChange={(event) => setDraft((current) => ({
+                    ...current,
+                    legalName: event.target.value.toLocaleUpperCase("nl-NL"),
+                  }))}
+                />
+              </label>
+            ) : null}
             <label className={styles.wideField}>
               <span className={styles.fieldHeading}>
                 <span>Omschrijving in één zin</span>

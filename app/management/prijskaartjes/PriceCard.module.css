@@ -156,13 +156,28 @@
 }
 
 .priceOptionValue {
-  font-size: 3.05cqw;
+  display: inline-flex;
+  align-items: flex-start;
+  color: #fff;
   font-weight: 800;
-  letter-spacing: -0.12cqw;
+  line-height: 0.9;
 }
 
-.priceOptionValue > span {
+.optionEuro {
+  margin-top: 0.75cqw;
+  margin-right: 0.25cqw;
   font-size: 2.25cqw;
+}
+
+.optionWhole {
+  font-size: 3.8cqw;
+  letter-spacing: -0.28cqw;
+}
+
+.optionCents {
+  margin-top: 0.18cqw;
+  font-size: 2.05cqw;
+  letter-spacing: -0.13cqw;
 }
 
 .logo {
@@ -262,21 +277,22 @@
 
 .breadWordmark {
   position: absolute;
-  right: 2.5cqw;
-  left: 2.5cqw;
+  right: 1.8cqw;
+  left: 1.8cqw;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 3.2cqw;
   font-family: "StrikGothamCondensed", Arial, sans-serif;
-  font-size: 3.1cqw;
+  font-size: 4cqw;
   font-weight: 400;
-  letter-spacing: 0.12cqw;
+  letter-spacing: 0.04cqw;
   line-height: 1;
   white-space: nowrap;
 }
 
-.breadWordmark.top { top: 2.7cqw; }
-.breadWordmark.bottom { bottom: 2.7cqw; }
+.breadWordmark.top { top: 2.35cqw; }
+.breadWordmark.bottom { bottom: 2.35cqw; }
 
 .breadRule {
   position: absolute;
@@ -291,19 +307,20 @@
 
 .breadCopy {
   position: absolute;
-  top: 27cqw;
-  right: 7cqw;
-  left: 7cqw;
+  top: 13.5cqw;
+  right: 6cqw;
+  left: 6cqw;
   display: flex;
-  height: 64cqw;
+  height: 72cqw;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2.2cqw;
+  justify-content: flex-start;
+  gap: 1.8cqw;
   text-align: center;
 }
 
 .breadTitleFrame,
+.breadLegalNameFrame,
 .breadDescriptionFrame {
   display: flex;
   width: 100%;
@@ -312,9 +329,10 @@
   justify-content: center;
 }
 
-.breadTitleFrame { height: 28cqw; }
-.breadDescriptionFrame { height: 28cqw; }
-.breadNoDescription .breadTitleFrame { height: 45cqw; }
+.breadTitleFrame { height: 27cqw; }
+.breadLegalNameFrame { height: 13cqw; }
+.breadDescriptionFrame { height: 25cqw; }
+.breadNoDescription .breadTitleFrame { height: 31cqw; }
 
 .breadTitleFrame h2 {
   width: 100%;
@@ -337,6 +355,17 @@
   line-height: 0.98;
 }
 
+.breadLegalNameFrame p {
+  width: 100%;
+  margin: 0;
+  font-family: "StrikGotham", Arial, sans-serif;
+  font-size: 5.6cqw;
+  font-weight: 400;
+  letter-spacing: 0.04cqw;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .breadPrefix {
   font-family: "StrikGothamCondensed", Arial, sans-serif;
   font-size: 7.5cqw;
@@ -346,7 +375,7 @@
 
 .breadPrice {
   position: absolute;
-  top: 98cqw;
+  top: 88cqw;
   right: 0;
   left: 0;
   display: flex;
@@ -357,34 +386,34 @@
 }
 
 .breadPrice strong {
-  font-size: 39cqw;
+  font-size: 43cqw;
   font-weight: 800;
-  letter-spacing: -2.3cqw;
+  letter-spacing: -2.6cqw;
 }
 
 .breadPrice span {
-  margin-top: 1.5cqw;
-  font-size: 17cqw;
+  margin-top: 2.2cqw;
+  font-size: 18cqw;
   font-weight: 800;
-  letter-spacing: -0.8cqw;
+  letter-spacing: -1.1cqw;
 }
 
 .breadPriceOptions {
   position: absolute;
-  top: 98cqw;
-  right: 8cqw;
-  left: 8cqw;
+  top: 88cqw;
+  right: 7cqw;
+  left: 7cqw;
   display: grid;
-  border-top: 0.35cqw solid #3569ad;
+  border-top: 0.35cqw solid #161616;
 }
 
 .breadPriceOptions > div {
   display: flex;
-  min-height: 10cqw;
+  min-height: 12cqw;
   align-items: baseline;
   justify-content: space-between;
   gap: 2cqw;
-  border-bottom: 0.35cqw solid #3569ad;
+  border-bottom: 0.35cqw solid #161616;
   font-family: "StrikGothamCondensed", Arial, sans-serif;
 }
 
@@ -396,12 +425,25 @@
 }
 
 .breadPriceOptions b {
+  display: inline-flex;
   flex: 0 0 auto;
-  font-size: 6.3cqw;
+  align-items: flex-start;
   font-weight: 800;
+  line-height: 0.85;
+}
+
+.breadPriceOptions b strong {
+  font-size: 9cqw;
+  letter-spacing: -0.55cqw;
+}
+
+.breadPriceOptions b small {
+  margin-top: 0.35cqw;
+  font-size: 4.5cqw;
+  letter-spacing: -0.25cqw;
 }
 
 .breadBottomRule {
   top: auto;
-  bottom: 17cqw;
+  bottom: 29cqw;
 }

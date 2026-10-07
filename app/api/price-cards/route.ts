@@ -97,6 +97,7 @@ export async function POST(request: Request) {
     const card: PriceCard = {
       id,
       name,
+      legalName: cleanText(input.legalName, 100),
       description: cleanText(input.description, 320),
       priceCents,
       pricePrefix: cleanText(input.pricePrefix, 30),

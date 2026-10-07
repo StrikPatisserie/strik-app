@@ -100,12 +100,16 @@ function BreadCardPreview({
   return (
     <article className={`${styles.breadCard} ${className}`}>
       <BreadWordmark position="top" />
-      <span className={styles.breadRule} aria-hidden="true" />
 
       <div className={`${styles.breadCopy} ${card.description ? "" : styles.breadNoDescription}`}>
         <div className={styles.breadTitleFrame}>
           <FittedBreadTitle text={card.name} />
         </div>
+        {card.legalName ? (
+          <div className={styles.breadLegalNameFrame}>
+            <FittedDescription text={card.legalName.toLocaleUpperCase("nl-NL")} />
+          </div>
+        ) : null}
         {card.pricePrefix ? <span className={styles.breadPrefix}>{card.pricePrefix}</span> : null}
         {card.description ? (
           <div className={styles.breadDescriptionFrame}>
@@ -121,7 +125,10 @@ function BreadCardPreview({
             return (
               <div key={`${option.label}-${index}`}>
                 <span>{option.label}</span>
-                <b>€{optionPrice.euros},{optionPrice.cents}</b>
+                <b>
+                  <strong>{optionPrice.euros}</strong>
+                  <small>,{optionPrice.cents}</small>
+                </b>
               </div>
             );
           })}
@@ -129,7 +136,7 @@ function BreadCardPreview({
       ) : (
         <div className={styles.breadPrice} aria-label={`€ ${price.euros},${price.cents}`}>
           <strong>{price.euros}</strong>
-          <span>{price.cents}</span>
+          <span>,{price.cents}</span>
         </div>
       )}
 
@@ -194,7 +201,9 @@ export default function PriceCardPreview({
                 <span className={styles.priceOptionRow} key={`${option.label}-${index}`}>
                   <span className={styles.priceOptionLabel}>{option.label}</span>
                   <span className={styles.priceOptionValue}>
-                    <span>€</span> {optionPrice.euros},{optionPrice.cents}
+                    <span className={styles.optionEuro}>€</span>
+                    <strong className={styles.optionWhole}>{optionPrice.euros}</strong>
+                    <small className={styles.optionCents}>,{optionPrice.cents}</small>
                   </span>
                 </span>
               );
