@@ -335,6 +335,30 @@
   text-transform: uppercase;
 }
 
+.formGrid .fieldHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.fieldHeading button {
+  border: 1px solid #d8c4cf;
+  border-radius: 999px;
+  background: #f7eef3;
+  padding: 0.26rem 0.55rem;
+  color: #81586f;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.fieldHeading button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .formGrid input,
 .formGrid select {
   height: 2.45rem;

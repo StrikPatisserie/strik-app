@@ -60,6 +60,8 @@ export type PriceCardPrintSession = {
   items: PriceCardPrintItem[];
   createdAt: string;
   printedAt: string;
+  emailedAt: string;
+  emailedTo: string;
 };
 
 export type PriceCardState = {
@@ -169,6 +171,8 @@ export function normalizePriceCardState(value: unknown): PriceCardState {
           items,
           createdAt: cleanDate(session.createdAt),
           printedAt: cleanDate(session.printedAt),
+          emailedAt: cleanDate(session.emailedAt),
+          emailedTo: cleanString(session.emailedTo, 240),
         }];
       })
     : [];

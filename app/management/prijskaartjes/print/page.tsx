@@ -36,10 +36,14 @@ export default async function PriceCardPrintPage({
 
   return (
     <main className={styles.printRoot}>
-      <PrintActions sessionId={session.id} />
+      <PrintActions
+        sessionId={session.id}
+        initialEmailedAt={session.emailedAt}
+        initialEmailedTo={session.emailedTo}
+      />
       <div className={styles.sessionInfo}>
         <strong>{session.name}</strong>
-        <span>{pages.length} kaartjes · elk kaartje wordt één aparte printpagina</span>
+        <span>{pages.length} kaartjes · {pages.length} losse PDF-pagina&apos;s</span>
       </div>
       <div className={styles.pages}>
         {pages.map((page) => (

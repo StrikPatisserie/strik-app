@@ -102,6 +102,7 @@ export default function PriceCardStudio() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -114,7 +115,17 @@ export default function PriceCardStudio() {
         if (!response.ok || !data.state) throw new Error(data.message || "Laden is mislukt.");
         if (!active) return;
         setState(data.state);
-        const first = data.state.cards[0];
+        const requestedSessionId = new URLSearchParams(window.location.search).get("session");
+        const requestedSession = data.state.sessions.find((session) => session.id === requestedSessionId);
+        if (requestedSession) {
+          setQuantities(Object.fromEntries(
+            requestedSession.items.map((item) => [item.cardId, item.quantity])
+          ));
+          setMessage("Printselectie teruggezet. Pas een kaartje aan en maak daarna een nieuwe PDF.");
+        }
+        const first = requestedSession
+          ? data.state.cards.find((card) => card.id === requestedSession.items[0]?.cardId)
+          : data.state.cards[0];
         if (first) {
           setSelectedId(first.id);
           setDraft(first);
@@ -269,6 +280,46 @@ export default function PriceCardStudio() {
       setError(refreshError instanceof Error ? refreshError.message : "Webshop bijwerken is mislukt.");
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function suggestDescription() {
+    if (!draft.name.trim()) {
+      setError("Vul eerst een productnaam in.");
+      return;
+    }
+    setSuggesting(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/price-cards/suggest-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: draft.name,
+          webshopDescription: draft.description,
+        }),
+      });
+      const data = (await response.json()) as {
+        description?: string;
+        basis?: "webshop" | "recept" | "algemene_productkennis";
+        recipeName?: string;
+        message?: string;
+      };
+      if (!response.ok || !data.description) {
+        throw new Error(data.message || "Tekst voorstellen is mislukt.");
+      }
+      setDraft((current) => ({ ...current, description: data.description || "" }));
+      const source = data.basis === "recept" && data.recipeName
+        ? `recept “${data.recipeName}”`
+        : data.basis === "webshop"
+          ? "webshoptekst"
+          : "algemene productkennis";
+      setMessage(`AI-voorstel op basis van ${source}. Controleer de tekst en sla hem daarna op.`);
+    } catch (suggestError) {
+      setError(suggestError instanceof Error ? suggestError.message : "Tekst voorstellen is mislukt.");
+    } finally {
+      setSuggesting(false);
     }
   }
 
@@ -471,7 +522,19 @@ export default function PriceCardStudio() {
               <input value={draft.name} maxLength={120} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
             </label>
             <label className={styles.wideField}>
-              <span>Omschrijving in één zin</span>
+              <span className={styles.fieldHeading}>
+                <span>Omschrijving in één zin</span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void suggestDescription();
+                  }}
+                  disabled={suggesting || !draft.name.trim()}
+                >
+                  {suggesting ? "AI schrijft…" : "✦ Tekst voorstellen"}
+                </button>
+              </span>
               <textarea rows={2} value={draft.description} maxLength={320} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} />
             </label>
             <label>
@@ -561,7 +624,16 @@ export default function PriceCardStudio() {
                 const count = session.items.reduce((sum, item) => sum + item.quantity, 0);
                 return (
                   <a key={session.id} href={`/management/prijskaartjes/print?session=${encodeURIComponent(session.id)}`} target="_blank" rel="noreferrer">
-                    <span>{session.name}<small>{session.printedAt ? "Geprint" : "Nog niet geprint"}</small></span>
+                    <span>
+                      {session.name}
+                      <small>
+                        {session.emailedAt
+                          ? `Gemaild naar ${session.emailedTo}`
+                          : session.printedAt
+                            ? "Geprint"
+                            : "Nog niet geprint of gemaild"}
+                      </small>
+                    </span>
                     <b>{count}×</b>
                   </a>
                 );

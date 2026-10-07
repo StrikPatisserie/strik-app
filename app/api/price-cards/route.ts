@@ -150,6 +150,8 @@ export async function POST(request: Request) {
       items,
       createdAt: now,
       printedAt: "",
+      emailedAt: "",
+      emailedTo: "",
     };
     nextState = { ...state, sessions: [session, ...state.sessions].slice(0, 100) };
   } else if (action === "mark-session-printed") {

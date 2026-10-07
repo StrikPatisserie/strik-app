@@ -18,31 +18,66 @@
   box-shadow: 0 7px 20px rgba(40, 35, 30, 0.1);
 }
 
-.actions a {
+.backLink {
   color: #24551d;
   font-weight: 900;
   text-decoration: none;
 }
 
-.actions span {
+.printHint {
   margin-right: auto;
   color: #756d64;
   font-size: 0.76rem;
 }
 
-.actions strong {
-  color: #b34735;
-  font-size: 0.74rem;
+.actionError,
+.actionSuccess {
+  max-width: 22rem;
+  font-size: 0.7rem;
 }
 
+.actionError {
+  color: #b34735;
+}
+
+.actionSuccess {
+  color: #24551d;
+}
+
+.actionButton,
 .actions button {
+  display: inline-flex;
   min-height: 2.65rem;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 0.75rem;
-  background: #161616;
   padding: 0 1rem;
   color: #fff;
+  font-size: 0.78rem;
   font-weight: 900;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.actionButton {
+  border: 1px solid #d8d0c7;
+  background: #fff;
+  color: #494039;
+}
+
+.printAction {
+  background: #161616;
+}
+
+.mailAction {
+  background: #24551d;
+}
+
+.actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .sessionInfo {
@@ -132,6 +167,7 @@
 @media (max-width: 700px) {
   .actions,
   .sessionInfo { align-items: stretch; flex-direction: column; }
+  .actionButton,
   .actions button { width: 100%; }
   .pages { grid-template-columns: 1fr; }
 }
