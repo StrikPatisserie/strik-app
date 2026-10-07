@@ -3,11 +3,9 @@ import "server-only";
 import path from "node:path";
 import { createCanvas, GlobalFonts, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
 import { PDFDocument } from "pdf-lib";
-import {
-  ALLERGEN_LABELS,
-  type AllergenKey,
-  type PriceCard,
-  type PriceCardPrintSession,
+import type {
+  PriceCard,
+  PriceCardPrintSession,
 } from "../management/prijskaartjes/priceCardTypes";
 
 const CARD_WIDTH_MM = 85;
@@ -180,22 +178,22 @@ async function renderCard(card: PriceCard) {
     maxHeight: card.description ? 125 : 190,
   });
   const description = card.description
-    ? fitLines({
+      ? fitLines({
         context,
         text: card.description,
-        maxWidth: 835,
-        maxLines: 2,
-        startSize: 62,
+        maxWidth: 900,
+        maxLines: 3,
+        startSize: 70,
         minSize: 22,
         family: "StrikGothamLight",
         lineHeight: 1.08,
-        maxHeight: 118,
+        maxHeight: 150,
       })
     : { lines: [] as string[], size: 0 };
   const titleHeight = title.lines.length * title.size * 0.94;
   const descriptionHeight = description.lines.length * description.size * 1.08;
   const copyHeight = titleHeight + (description.lines.length ? 26 + descriptionHeight : 0);
-  const copyTop = Math.max(82, 248 - copyHeight / 2);
+  const copyTop = Math.max(72, 235 - copyHeight / 2);
 
   context.fillStyle = "#161616";
   context.textAlign = "center";
@@ -216,9 +214,9 @@ async function renderCard(card: PriceCard) {
   }
 
   context.fillStyle = "#161616";
-  roundedRect(context, 2, 493, 330, 155, 22);
+  roundedRect(context, 2, 493, 292, 155, 22);
   context.fill();
-  context.fillRect(2, 555, 330, 93);
+  context.fillRect(2, 555, 292, 93);
   context.fillRect(2, 493, 70, 155);
 
   const price = formatPrice(card.priceCents);
@@ -227,23 +225,23 @@ async function renderCard(card: PriceCard) {
   context.textBaseline = "middle";
   if (card.pricePrefix) {
     context.font = '24px "StrikGothamBold"';
-    context.fillText(card.pricePrefix.toLocaleUpperCase("nl-NL"), 166, 520);
+    context.fillText(card.pricePrefix.toLocaleUpperCase("nl-NL"), 138, 520);
   }
   context.font = '80px "StrikGothamBlack"';
-  context.fillText(`€ ${price.euros}`, 150, card.pricePrefix ? 578 : 568);
+  context.fillText(`€ ${price.euros}`, 130, card.pricePrefix ? 578 : 568);
   const wholeWidth = context.measureText(`€ ${price.euros}`).width;
   context.font = '38px "StrikGothamBlack"';
   context.textAlign = "left";
-  context.fillText(`,${price.cents}`, 150 + wholeWidth / 2 + 4, card.pricePrefix ? 558 : 548);
+  context.fillText(`,${price.cents}`, 130 + wholeWidth / 2 + 4, card.pricePrefix ? 558 : 548);
 
   if (allergenIcons.length) {
     const groupWidth = 860;
     const gap = 15;
     const slotWidth = Math.min(
-      96,
+      110,
       (groupWidth - (allergenIcons.length - 1) * gap) / allergenIcons.length
     );
-    const circleSize = Math.min(64, slotWidth - 4);
+    const circleSize = Math.min(80, slotWidth - 4);
     const totalWidth = allergenIcons.length * slotWidth + (allergenIcons.length - 1) * gap;
     const startX = (PIXEL_WIDTH - totalWidth) / 2;
     const circleY = 398;
@@ -257,7 +255,7 @@ async function renderCard(card: PriceCard) {
       context.arc(centerX, circleY + circleSize / 2, circleSize / 2, 0, Math.PI * 2);
       context.stroke();
 
-      const symbolSize = circleSize * 0.58;
+      const symbolSize = circleSize * 0.64;
       context.drawImage(
         icon,
         centerX - symbolSize / 2,
@@ -265,24 +263,6 @@ async function renderCard(card: PriceCard) {
         symbolSize,
         symbolSize
       );
-
-      const allergen = shownAllergens[index] as AllergenKey;
-      const label = fitLines({
-        context,
-        text: ALLERGEN_LABELS[allergen].toLocaleUpperCase("nl-NL"),
-        maxWidth: slotWidth,
-        maxLines: 1,
-        startSize: 15,
-        minSize: 9,
-        family: "StrikGothamBold",
-        lineHeight: 1,
-        maxHeight: 16,
-      });
-      context.fillStyle = "#161616";
-      context.textAlign = "center";
-      context.textBaseline = "top";
-      context.font = `${label.size}px "StrikGothamBold"`;
-      context.fillText(label.lines[0] ?? "", centerX, circleY + circleSize + 7);
     });
   }
 

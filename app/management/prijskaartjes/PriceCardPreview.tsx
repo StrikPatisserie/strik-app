@@ -14,11 +14,14 @@ function formatPriceParts(priceCents: number) {
 
 function AllergenIcon({ allergen }: { allergen: AllergenKey }) {
   return (
-    <span className={styles.allergenIcon} title={ALLERGEN_LABELS[allergen]}>
+    <span
+      className={styles.allergenIcon}
+      title={ALLERGEN_LABELS[allergen]}
+      aria-label={ALLERGEN_LABELS[allergen]}
+    >
       <span className={styles.allergenCircle} aria-hidden="true">
         <img src={`/allergens/${allergen}.svg`} alt="" />
       </span>
-      <span className={styles.allergenLabel}>{ALLERGEN_LABELS[allergen]}</span>
     </span>
   );
 }
