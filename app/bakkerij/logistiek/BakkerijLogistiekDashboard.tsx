@@ -6583,6 +6583,7 @@ function isCenterRouteText(text: string) {
 }
 
 const cityRoutePostcodes = new Set([
+  "6511",
   "6521",
   "6522",
   "6523",
@@ -6593,7 +6594,6 @@ const cityRoutePostcodes = new Set([
   "6572",
 ]);
 const outsideRoutePostcodes = new Set([
-  "6511",
   "6512",
   "6531",
   "6532",
@@ -6635,6 +6635,7 @@ function nijmegenRouteZoneForReceipt(
   if (isCityRouteEfficiencyException(receipt)) return "city-red";
 
   if (
+    isCenterRouteText(identityText) ||
     /(?:^| )(?:radboud|heyendaal|heyendaalseweg|daalseweg|han|kapittelweg|geert groote|brakkenstein|galgenveld|hunnerberg|nijmegen oost|maartenskliniek|sint maartens|berg en dal|beek ubbergen|ubbergen|oude kleefsebaan)(?: |$)/.test(
       identityText
     ) || cityRoutePostcodes.has(postcode)
@@ -6643,7 +6644,6 @@ function nijmegenRouteZoneForReceipt(
   }
 
   if (
-    isCenterRouteText(identityText) ||
     /(?:^| )(?:ziekerstraat|nijmegen west|waterkwartier|wolfskuil|hees|heseveld|neerbosch|dukenburg|lindenholt|hatert|hazenkamp|goffert|jonkerbos|sanadome|cwz|lent|oosterhout|bemmel|dries en co|dries co|elst)(?: |$)/.test(
       identityText
     ) ||
