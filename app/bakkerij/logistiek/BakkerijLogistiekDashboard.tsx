@@ -6738,7 +6738,7 @@ function routePointForStop(stop: RouteStop): RoutePoint {
   );
 }
 
-const defaultRouteDepartureMinute = 8 * 60;
+const defaultRouteDepartureMinute = 8 * 60 + 5;
 const betweenRouteLoadBufferMinutes = 10;
 
 function clockMinuteFromText(value: string) {
@@ -8036,7 +8036,7 @@ function buildWeekdayFixedRouteRounds(
       id: "bus-A-1",
       title: "Ronde 1",
       vehicle: "Bus A",
-      departure: plan.isFuture ? "advies 08:00" : "08:00",
+      departure: plan.isFuture ? "advies 08:05" : "08:05",
       tone: busRouteMeta.A.tone,
       stops: busAFirstStops,
       reason: "Vaste stadroute: verse winkels en vroege vaste adressen.",
@@ -8058,7 +8058,7 @@ function buildWeekdayFixedRouteRounds(
       id: "bus-B-1",
       title: "Ronde 1",
       vehicle: "Bus B",
-      departure: plan.isFuture ? "advies 08:00" : "08:00",
+      departure: plan.isFuture ? "advies 08:05" : "08:05",
       tone: busRouteMeta.B.tone,
       stops: busBFirstStops,
       reason: "Vaste buitenroute: Ziekerstraat, Lent en vaste adressen onderweg.",
@@ -8082,7 +8082,7 @@ function buildWeekdayFixedRouteRounds(
             id: specialSchoolDeliveryRouteId,
             title: "Scholenroute",
             vehicle: specialSchoolDeliveryVehicle,
-            departure: plan.isFuture ? "advies 08:00" : "08:00",
+            departure: plan.isFuture ? "advies 08:05" : "08:05",
             tone: "border-[#cdb6c1] bg-[#f7f0f4]",
             stops: dedicatedSchoolRouteStops,
             reason:
@@ -8245,7 +8245,7 @@ function buildRouteRounds(
         id: `bus-${bus.id}-1`,
         title: "Ronde 1",
         vehicle: bus.title,
-        departure: plan.isFuture ? "advies 08:00" : "08:00",
+        departure: plan.isFuture ? "advies 08:05" : "08:05",
         tone: bus.tone,
         stops: firstStops,
         reason:
@@ -8413,7 +8413,7 @@ function buildSaturdayRouteRounds(
         id: `bus-${bus.id}-1-saturday`,
         title: "Ronde 1",
         vehicle: bus.title,
-        departure: plan.isFuture ? "advies 08:00" : "08:00",
+        departure: plan.isFuture ? "advies 08:05" : "08:05",
         tone: bus.tone,
         stops: firstStops,
         reason:
@@ -8786,6 +8786,9 @@ function reconcileRouteDraftRounds(
     return refreshRouteRoundAfterManualMove(
       {
         ...(automaticRoute || draftRoute),
+        departure: /^vertrek\s+\d{1,2}:\d{2}$/i.test(draftRoute.departure)
+          ? draftRoute.departure
+          : (automaticRoute || draftRoute).departure,
         stops,
       },
       loadProfile
@@ -10025,6 +10028,34 @@ export default function BakkerijLogistiekDashboard() {
     void saveRouteDraft(nextRoutes, false);
   }
 
+  function updatePlannedBusDeparture(bus: BusId, value: string) {
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const departure = value || formatClockMinute(defaultRouteDepartureMinute);
+    const departureLabel = `vertrek ${departure}`;
+    let firstRouteUpdated = false;
+    const nextRoutes = currentRoutes.map((route) => {
+      if (
+        firstRouteUpdated ||
+        busIdFromVehicleName(route.vehicle) !== bus
+      ) {
+        return route;
+      }
+
+      firstRouteUpdated = true;
+      return { ...route, departure: departureLabel };
+    });
+    if (!firstRouteUpdated) return;
+
+    setManualRouteRounds(nextRoutes);
+    setRoutesEdited(true);
+    setRouteHasUnsavedChanges(true);
+    setRouteSaveState("idle");
+    setRouteSaveMessage(
+      `vertrektijd Bus ${bus} ingesteld op ${departure}`
+    );
+    void saveRouteDraft(nextRoutes, false);
+  }
+
   function addRouteRound(vehicle: string) {
     const currentRoutes = manualRouteRounds || automaticRouteRounds;
     const nextRoutes = addRouteRoundForVehicle(currentRoutes, vehicle, loadProfile);
@@ -11141,8 +11172,8 @@ export default function BakkerijLogistiekDashboard() {
       <div className="mt-2">
         {activeTab === "routes" && (
           <RoutesPanel
-            busDepartures={operationsDraft.busDepartures}
             deletedRouteStopLabel={deletedRouteStopSnapshot?.stopLabel || ""}
+            onPlannedDepartureChange={updatePlannedBusDeparture}
             onRouteAdd={addRouteRound}
             onRouteDelete={deleteRouteRound}
             onRouteStopAdd={addManualRouteStop}
@@ -12140,8 +12171,8 @@ function eventHasRouteDragState(
 }
 
 function RoutesPanel({
-  busDepartures,
   deletedRouteStopLabel,
+  onPlannedDepartureChange,
   onRouteAdd,
   onRouteDelete,
   onRouteStopAdd,
@@ -12157,8 +12188,8 @@ function RoutesPanel({
   routesEdited,
   selectedPlan,
 }: Readonly<{
-  busDepartures: Record<BusId, string>;
   deletedRouteStopLabel: string;
+  onPlannedDepartureChange: (bus: BusId, value: string) => void;
   onRouteAdd: (vehicle: string) => void;
   onRouteDelete: (routeId: string) => void;
   onRouteStopAdd: (routeId: string, label: string, detail: string) => void;
@@ -12178,6 +12209,19 @@ function RoutesPanel({
   const [dropIndicator, setDropIndicator] =
     useState<RouteDropIndicator | null>(null);
   const routeGroups = routeGroupsFor(routeRounds);
+  const plannedBusDepartures = (["A", "B"] as BusId[]).reduce(
+    (departures, bus) => {
+      const firstRoute = routeRounds.find(
+        (route) => busIdFromVehicleName(route.vehicle) === bus
+      );
+      departures[bus] = formatClockMinute(
+        clockMinuteFromText(firstRoute?.departure || "") ??
+          defaultRouteDepartureMinute
+      );
+      return departures;
+    },
+    { A: "08:05", B: "08:05" } as Record<BusId, string>
+  );
 
   function handleStopDragStart(
     event: React.DragEvent<HTMLLIElement>,
@@ -12316,6 +12360,31 @@ function RoutesPanel({
         )}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#d8d1c8] bg-white px-2.5 py-2 shadow-sm">
+        <span className="flex items-center gap-1.5 text-[0.66rem] font-black tracking-normal text-[#4a4540]">
+          <ClockIcon /> Vertrektijd
+        </span>
+        {(["A", "B"] as BusId[]).map((bus) => (
+          <label
+            key={bus}
+            className="flex items-center gap-1.5 text-[0.64rem] font-bold tracking-normal text-[#6b645b]"
+          >
+            Bus {bus}
+            <input
+              type="time"
+              value={plannedBusDepartures[bus]}
+              onChange={(event) =>
+                onPlannedDepartureChange(bus, event.target.value)
+              }
+              className="h-8 w-[5.6rem] rounded-md border border-[#d8d1c8] bg-[#faf8f5] px-2 text-xs font-black tabular-nums tracking-normal text-[#1a1815] outline-none focus:border-[#ef5737]"
+            />
+          </label>
+        ))}
+        <span className="text-[0.6rem] font-semibold italic tracking-normal text-[#7b746c]">
+          aankomst- en terugtijden rekenen direct mee
+        </span>
+      </div>
+
       <div className="flex items-center gap-1.5 rounded-lg border border-[#d6e5d8] bg-[#f6faf4] px-2.5 py-1.5 text-[0.62rem] font-semibold tracking-normal text-[#52654f]">
         <ClockIcon />
         <strong>Richttijden</strong>
@@ -12348,7 +12417,7 @@ function RoutesPanel({
               ? "border-[#abc6a8] bg-[#e4eee0] text-[#315641]"
               : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]";
           const busId = busIdFromVehicleName(group.vehicle);
-          const departureOverride = busId ? busDepartures[busId] : "";
+          const departureOverride = busId ? plannedBusDepartures[busId] : "";
           const routeTimings = buildRouteGroupTimings(
             group.routes,
             departureOverride
