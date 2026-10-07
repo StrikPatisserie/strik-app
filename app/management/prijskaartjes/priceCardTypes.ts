@@ -1,9 +1,10 @@
 export const PRICE_CARD_CATEGORIES = [
-  "stukwerk",
-  "gebak",
+  "hartig",
+  "chocolade",
   "taart",
-  "sint",
-  "kerst",
+  "gebak",
+  "koek_cake_zout",
+  "petit_fours",
   "overig",
 ] as const;
 
@@ -131,6 +132,24 @@ export function isPriceCardCategory(value: unknown): value is PriceCardCategory 
   return PRICE_CARD_CATEGORIES.includes(value as PriceCardCategory);
 }
 
+export function normalizePriceCardCategory(
+  value: unknown,
+  productHint = ""
+): PriceCardCategory {
+  if (isPriceCardCategory(value)) return value;
+  const legacyCategory = cleanString(value, 40).toLowerCase();
+  if (legacyCategory === "stukwerk") return "koek_cake_zout";
+  if (legacyCategory === "sint" || legacyCategory === "kerst") {
+    const hint = productHint.toLowerCase();
+    if (/chocol|bonbon|praline|truffel|letter/.test(hint)) return "chocolade";
+    if (/speculaas|koek|cake|brownie|stol|krans/.test(hint)) return "koek_cake_zout";
+    if (/petit|macaron/.test(hint)) return "petit_fours";
+    if (/taart|slof|vlaai/.test(hint)) return "taart";
+    if (/gebak|tompouce|moorkop/.test(hint)) return "gebak";
+  }
+  return "overig";
+}
+
 export function isAllergenKey(value: unknown): value is AllergenKey {
   return ALLERGEN_KEYS.includes(value as AllergenKey);
 }
@@ -154,6 +173,8 @@ export function normalizePriceCard(value: unknown): PriceCard | null {
   const name = cleanString(raw.name, 120);
   if (!id || !name) return null;
   const priceOptions = normalizePriceOptions(raw.priceOptions);
+  const sourcePath = cleanString(raw.sourcePath, 500);
+  const sourceProductName = cleanString(raw.sourceProductName, 160);
 
   return {
     id,
@@ -162,15 +183,18 @@ export function normalizePriceCard(value: unknown): PriceCard | null {
     priceCents: priceOptions[0]?.priceCents || Math.max(0, Math.round(Number(raw.priceCents) || 0)),
     pricePrefix: cleanString(raw.pricePrefix, 30),
     priceOptions,
-    category: isPriceCardCategory(raw.category) ? raw.category : "overig",
+    category: normalizePriceCardCategory(
+      raw.category,
+      `${name} ${sourcePath} ${sourceProductName}`
+    ),
     theme:
       raw.theme === "sint" || raw.theme === "kerst" ? raw.theme : "geen",
     allergens: Array.isArray(raw.allergens)
       ? [...new Set(raw.allergens.filter(isAllergenKey))]
       : [],
-    sourcePath: cleanString(raw.sourcePath, 500),
+    sourcePath,
     sourceUrl: cleanString(raw.sourceUrl, 700),
-    sourceProductName: cleanString(raw.sourceProductName, 160),
+    sourceProductName,
     createdAt: cleanDate(raw.createdAt),
     updatedAt: cleanDate(raw.updatedAt),
     lastPrintedAt: cleanDate(raw.lastPrintedAt),
@@ -227,7 +251,6 @@ export function normalizePriceCardState(value: unknown): PriceCardState {
 }
 
 export function themeForCategory(category: PriceCardCategory): PriceCardTheme {
-  if (category === "sint") return "sint";
-  if (category === "kerst") return "kerst";
+  void category;
   return "geen";
 }

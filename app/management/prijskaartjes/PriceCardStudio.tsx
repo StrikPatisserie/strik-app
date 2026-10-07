@@ -18,11 +18,12 @@ import {
 } from "./priceCardTypes";
 
 const CATEGORY_LABELS: Record<PriceCardCategory, string> = {
-  stukwerk: "Stukwerk",
-  gebak: "Gebak",
+  hartig: "Hartig",
+  chocolade: "Chocolade",
   taart: "Taart",
-  sint: "Sinterklaas",
-  kerst: "Kerst",
+  gebak: "Gebak",
+  koek_cake_zout: "Koek/cake/zout",
+  petit_fours: "Petit fours",
   overig: "Overig",
 };
 

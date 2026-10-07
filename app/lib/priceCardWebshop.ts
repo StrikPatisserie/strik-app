@@ -50,11 +50,14 @@ function absolutePath(value: string) {
 
 function categoryFromPath(path: string, name = ""): PriceCardCategory {
   const normalized = `${path} ${name}`.toLowerCase();
-  if (/sint|speculaas|chocoladeletter/.test(normalized)) return "sint";
-  if (/kerst|stol|kransjes|sneeuwster/.test(normalized)) return "kerst";
-  if (/gebak/.test(normalized)) return "gebak";
+  if (/petit[\s_-]?four|macaron/.test(normalized)) return "petit_fours";
+  if (/hartig|quiche|saucij|worstenbrood|kaasstengel/.test(normalized)) return "hartig";
+  if (/chocol|bonbon|praline|truffel|chocoladeletter/.test(normalized)) return "chocolade";
   if (/taart|slof|vlaai/.test(normalized)) return "taart";
-  if (/stukwerk|brood|koek|cake|hartig|zoutjes/.test(normalized)) return "stukwerk";
+  if (/gebak|tompouce|moorkop|soes/.test(normalized)) return "gebak";
+  if (/koek|cake|brownie|speculaas|stol|krans|zout|muffin|cupcake/.test(normalized)) {
+    return "koek_cake_zout";
+  }
   return "overig";
 }
 
