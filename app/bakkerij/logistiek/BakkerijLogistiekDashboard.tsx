@@ -139,6 +139,18 @@ type RouteStop = {
   badges: string[];
 };
 
+type RouteStopTiming = {
+  arrivalMinute: number;
+  travelMinutes: number;
+  serviceMinutes: number;
+};
+
+type RouteTiming = {
+  departureMinute: number;
+  returnMinute: number;
+  stops: RouteStopTiming[];
+};
+
 type RouteDragState = {
   sourceRouteId: string;
   stopId: string;
@@ -4889,6 +4901,7 @@ function openPreparationSheet(
 function createBusRoutePrintHtml(input: {
   plan: DayPlan;
   routeGroup: RouteGroup;
+  departureOverride?: string;
 }) {
   const printableRoutes = input.routeGroup.routes.filter(
     (route) => route.stops.length > 0
@@ -4900,6 +4913,10 @@ function createBusRoutePrintHtml(input: {
   const title = `${routeGroupDisplayTitle(input.routeGroup.vehicle)} · ${formatDateLabel(
     input.plan.date
   )}`;
+  const routeTimings = buildRouteGroupTimings(
+    input.routeGroup.routes,
+    input.departureOverride
+  );
   const printPages = printableRoutes.reduce<RouteRound[][]>((pages, route) => {
     const currentPage = pages.at(-1);
     const routePrintUnits = (routes: RouteRound[]) =>
@@ -4927,10 +4944,19 @@ function createBusRoutePrintHtml(input: {
       const nextPage = printPages[pageIndex + 1];
       const routeSectionsHtml = pageRoutes
         .map((route) => {
+          const routeTiming = routeTimings.get(route.id);
           const rowsHtml = route.stops
             .map((stop, index) => {
               const detailParts = routePrintTimeParts(stop);
               const timeBadge = routePrintTimeBadgeHtml(stop);
+              const stopTiming = routeTiming?.stops[index];
+              const planningLine = stopTiming
+                ? `<p class="planned-time"><b>RICHTTIJD ±${formatClockMinute(
+                    stopTiming.arrivalMinute
+                  )}</b> · ${stopTiming.travelMinutes} min rijden · ${
+                    stopTiming.serviceMinutes
+                  } min stop</p>`
+                : "";
 
               return `
                 <article class="stop-card">
@@ -4941,8 +4967,9 @@ function createBusRoutePrintHtml(input: {
                       ${timeBadge}
                     </div>
                     <p>${escapeHtml(detailParts.detail || "Adres controleren")}</p>
+                    ${planningLine}
                     <div class="write-fields">
-                      <span><b>Aankomst</b></span>
+                      <span><b>Aankomst werkelijk</b></span>
                       <span class="note-line"><b>Opmerking</b></span>
                     </div>
                   </div>
@@ -4957,7 +4984,13 @@ function createBusRoutePrintHtml(input: {
               <div class="route-title">
                 <div>
                   <h2>${escapeHtml(route.title)}</h2>
-                  <p>${escapeHtml(route.departure)} · ${escapeHtml(route.badge)} · ${route.stops.length} stops</p>
+                  <p>${escapeHtml(route.departure)} · ${escapeHtml(route.badge)} · ${route.stops.length} stops${
+                    routeTiming
+                      ? ` · richtlijn ${formatClockMinute(
+                          routeTiming.departureMinute
+                        )}–${formatClockMinute(routeTiming.returnMinute)}`
+                      : ""
+                  }</p>
                 </div>
                 <strong>${escapeHtml(route.load)}</strong>
               </div>
@@ -5201,6 +5234,11 @@ function createBusRoutePrintHtml(input: {
         line-height: 1.2;
         margin: 0.4mm 0 0;
       }
+      .stop-content .planned-time {
+        color: #426145;
+        font-size: 9.5px;
+        margin-top: 0.5mm;
+      }
       .time-badge {
         background: #111;
         border: 2px solid #111;
@@ -5325,13 +5363,21 @@ function createBusRoutePrintHtml(input: {
 </html>`;
 }
 
-function openBusRouteSheet(plan: DayPlan, routeGroup: RouteGroup) {
+function openBusRouteSheet(
+  plan: DayPlan,
+  routeGroup: RouteGroup,
+  departureOverride = ""
+) {
   if (!routeGroup.routes.some((route) => route.stops.length > 0)) {
     window.alert("Geen routes gevonden voor deze bus.");
     return;
   }
 
-  const printHtml = createBusRoutePrintHtml({ plan, routeGroup });
+  const printHtml = createBusRoutePrintHtml({
+    plan,
+    routeGroup,
+    departureOverride,
+  });
   const printUrl = URL.createObjectURL(
     new Blob([printHtml], { type: "text/html;charset=utf-8" })
   );
@@ -6624,11 +6670,8 @@ function routePointForShopKey(shopKey: ShopKey | "") {
   return shopRouteMeta[shopKey].point;
 }
 
-function receiptRoutePoint(receipt: ReceiptSummary): RoutePoint {
-  const shopPoint = routePointForShopKey(shopKeyForReceipt(receipt));
-  if (shopPoint) return shopPoint;
-
-  const text = normalizeMatchText(receiptSearchText(receipt));
+function routePointForSearchText(value: string): RoutePoint {
+  const text = normalizeMatchText(value);
 
   if (/dries|elst/.test(text)) return { x: -0.2, y: 8.1 };
   if (/gendt|huigensstraat|bemmel|arnhem/.test(text)) return { x: 1.1, y: 8.8 };
@@ -6660,6 +6703,130 @@ function receiptRoutePoint(receipt: ReceiptSummary): RoutePoint {
   }
 
   return { x: 0.4, y: 3.0 };
+}
+
+function receiptRoutePoint(receipt: ReceiptSummary): RoutePoint {
+  const shopPoint = routePointForShopKey(shopKeyForReceipt(receipt));
+  if (shopPoint) return shopPoint;
+
+  return routePointForSearchText(receiptSearchText(receipt));
+}
+
+function routePointForStop(stop: RouteStop): RoutePoint {
+  const sourceText = `${stop.sourceId} ${stop.learningKey || ""}`;
+  const shopKey = (Object.keys(shopRouteMeta) as ShopKey[]).find((key) =>
+    sourceText.includes(`shop:${key}`)
+  );
+  if (shopKey) return shopRouteMeta[shopKey].point;
+
+  return routePointForSearchText(
+    [stop.label, stop.learningLabel || "", stop.learningTarget || "", stop.detail].join(
+      " "
+    )
+  );
+}
+
+const defaultRouteDepartureMinute = 8 * 60;
+const betweenRouteLoadBufferMinutes = 10;
+
+function clockMinuteFromText(value: string) {
+  const match = value.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (!match) return null;
+
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+
+  return hour * 60 + minute;
+}
+
+function formatClockMinute(value: number) {
+  const normalized = ((Math.round(value) % 1440) + 1440) % 1440;
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function formatRouteDuration(value: number) {
+  const minutes = Math.max(0, Math.round(value));
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+
+  if (!hours) return `${remainder} min`;
+  if (!remainder) return `${hours}u`;
+
+  return `${hours}u ${remainder}m`;
+}
+
+function estimatedTravelMinutes(from: RoutePoint, to: RoutePoint) {
+  const distance = routeDistance(from, to);
+  if (distance < 0.15) return 0;
+
+  return Math.max(4, Math.ceil(distance * 4.2 + 2));
+}
+
+function estimatedServiceMinutes(stop: RouteStop) {
+  if (isLentEmballageStop(stop)) return 7;
+  if (stop.learningKind === "shop") return 8;
+  if (stop.learningKind === "ice") return 5;
+  if (stop.learningKind === "check") return 4;
+  if (stop.badges.includes("druk") || stop.badges.includes("groot")) return 8;
+
+  return 5;
+}
+
+function buildRouteTiming(route: RouteRound, departureMinute: number): RouteTiming {
+  let currentMinute = departureMinute;
+  let currentPoint = depotRoutePoint;
+  const stops = route.stops.map((stop) => {
+    const nextPoint = routePointForStop(stop);
+    const travelMinutes = estimatedTravelMinutes(currentPoint, nextPoint);
+    const arrivalMinute = currentMinute + travelMinutes;
+    const serviceMinutes = estimatedServiceMinutes(stop);
+
+    currentMinute = arrivalMinute + serviceMinutes;
+    currentPoint = nextPoint;
+
+    return { arrivalMinute, travelMinutes, serviceMinutes };
+  });
+  const returnMinute = currentMinute + estimatedTravelMinutes(
+    currentPoint,
+    depotRoutePoint
+  );
+
+  return {
+    departureMinute,
+    returnMinute,
+    stops,
+  };
+}
+
+function buildRouteGroupTimings(
+  routes: RouteRound[],
+  departureOverride = ""
+) {
+  const timings = new Map<string, RouteTiming>();
+  let nextDepartureMinute =
+    clockMinuteFromText(departureOverride) ?? defaultRouteDepartureMinute;
+
+  routes.forEach((route, index) => {
+    const explicitDeparture = clockMinuteFromText(route.departure);
+    const departureMinute =
+      index === 0
+        ? clockMinuteFromText(departureOverride) ??
+          explicitDeparture ??
+          defaultRouteDepartureMinute
+        : explicitDeparture ?? nextDepartureMinute;
+    const timing = buildRouteTiming(route, departureMinute);
+
+    timings.set(route.id, timing);
+    if (route.stops.length > 0) {
+      nextDepartureMinute = timing.returnMinute + betweenRouteLoadBufferMinutes;
+    }
+  });
+
+  return timings;
 }
 
 function isRadboudReceipt(receipt: ReceiptSummary) {
@@ -10923,6 +11090,7 @@ export default function BakkerijLogistiekDashboard() {
       <div className="mt-2">
         {activeTab === "routes" && (
           <RoutesPanel
+            busDepartures={operationsDraft.busDepartures}
             deletedRouteStopLabel={deletedRouteStopSnapshot?.stopLabel || ""}
             onRouteAdd={addRouteRound}
             onRouteDelete={deleteRouteRound}
@@ -11921,6 +12089,7 @@ function eventHasRouteDragState(
 }
 
 function RoutesPanel({
+  busDepartures,
   deletedRouteStopLabel,
   onRouteAdd,
   onRouteDelete,
@@ -11937,6 +12106,7 @@ function RoutesPanel({
   routesEdited,
   selectedPlan,
 }: Readonly<{
+  busDepartures: Record<BusId, string>;
   deletedRouteStopLabel: string;
   onRouteAdd: (vehicle: string) => void;
   onRouteDelete: (routeId: string) => void;
@@ -12095,6 +12265,14 @@ function RoutesPanel({
         )}
       </div>
 
+      <div className="flex items-center gap-1.5 rounded-lg border border-[#d6e5d8] bg-[#f6faf4] px-2.5 py-1.5 text-[0.62rem] font-semibold tracking-normal text-[#52654f]">
+        <ClockIcon />
+        <strong>Richttijden</strong>
+        <span>
+          op basis van routeafstand, lostijd en 10 min laadbuffer tussen rondes · geen live verkeer
+        </span>
+      </div>
+
       <div
         className={`grid gap-2.5 md:grid-cols-2 ${
           routeGroups.length >= 3 ? "xl:grid-cols-3" : ""
@@ -12118,6 +12296,12 @@ function RoutesPanel({
             : isElectricBus
               ? "border-[#abc6a8] bg-[#e4eee0] text-[#315641]"
               : "border-[#ead178] bg-[#fff0b8] text-[#6f5212]";
+          const busId = busIdFromVehicleName(group.vehicle);
+          const departureOverride = busId ? busDepartures[busId] : "";
+          const routeTimings = buildRouteGroupTimings(
+            group.routes,
+            departureOverride
+          );
 
           return (
             <article
@@ -12152,7 +12336,13 @@ function RoutesPanel({
                   <RoutePrintButton
                     disabled={printableRouteCount === 0}
                     label={`Route printen voor ${group.vehicle}`}
-                    onClick={() => openBusRouteSheet(selectedPlan, group)}
+                    onClick={() =>
+                      openBusRouteSheet(
+                        selectedPlan,
+                        group,
+                        departureOverride
+                      )
+                    }
                     tone={
                       isSchoolRoute
                         ? "purple"
@@ -12164,8 +12354,11 @@ function RoutesPanel({
                 </div>
               </div>
               <div className="mt-2 grid gap-2">
-                {group.routes.map((route) => (
-                  <section
+                {group.routes.map((route) => {
+                  const routeTiming = routeTimings.get(route.id);
+
+                  return (
+                    <section
                     key={route.id}
                     onDragOver={(event) => handleRouteDragOver(event, route.id)}
                     onDrop={(event) => handleRouteDrop(event, route.id)}
@@ -12178,9 +12371,24 @@ function RoutesPanel({
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="min-w-0 text-[0.68rem] font-bold italic leading-none tracking-normal text-[#4a4540]">
-                        {route.title}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="text-[0.68rem] font-bold italic leading-none tracking-normal text-[#4a4540]">
+                          {route.title}
+                        </p>
+                        {routeTiming && route.stops.length > 0 && (
+                          <p className="mt-1 flex flex-wrap items-center gap-x-1 text-[0.62rem] font-black tracking-normal text-[#426145]">
+                            <ClockIcon />
+                            Richtlijn {formatClockMinute(routeTiming.departureMinute)}
+                            <span>→ terug ±{formatClockMinute(routeTiming.returnMinute)}</span>
+                            <span className="font-semibold text-[#6b7468]">
+                              · norm {formatRouteDuration(
+                                routeTiming.returnMinute -
+                                  routeTiming.departureMinute
+                              )}
+                            </span>
+                          </p>
+                        )}
+                      </div>
                       {!isStandardRouteRound(route) && (
                         <button
                           type="button"
@@ -12203,8 +12411,11 @@ function RoutesPanel({
                           Leeg
                         </li>
                       )}
-                      {route.stops.map((stop, index) => (
-                        <li
+                      {route.stops.map((stop, index) => {
+                        const stopTiming = routeTiming?.stops[index];
+
+                        return (
+                          <li
                           key={stop.id}
                           draggable
                           aria-grabbed={dragging?.stopId === stop.id}
@@ -12248,6 +12459,18 @@ function RoutesPanel({
                             <span className="mt-0.5 block truncate text-[0.72rem] font-normal leading-tight tracking-normal text-[#6b645b]">
                               {routeStopAddressLabel(stop)}
                             </span>
+                            {stopTiming && (
+                              <span className="mt-0.5 flex items-center gap-1 text-[0.59rem] font-bold leading-tight tracking-normal text-[#527057]">
+                                <ClockIcon />
+                                ±{formatClockMinute(stopTiming.arrivalMinute)} aankomst
+                                <span className="text-[#7b8277]">
+                                  · {stopTiming.travelMinutes
+                                    ? `${stopTiming.travelMinutes} min rijden`
+                                    : "zelfde locatie"}
+                                  {` · ${stopTiming.serviceMinutes} min stop`}
+                                </span>
+                              </span>
+                            )}
                           </span>
                           {isLentEmballageStop(stop) ? (
                             <span
@@ -12274,8 +12497,9 @@ function RoutesPanel({
                           >
                             X
                           </button>
-                        </li>
-                      ))}
+                          </li>
+                        );
+                      })}
                       {route.stops.length > 0 &&
                         dropIndicator?.routeId === route.id &&
                         dropIndicator.position === "end" && (
@@ -12296,8 +12520,9 @@ function RoutesPanel({
                       </span>
                       Adres toevoegen
                     </button>
-                  </section>
-                ))}
+                    </section>
+                  );
+                })}
               </div>
             </article>
           );
@@ -14411,6 +14636,24 @@ function WarningIcon() {
     >
       <path d="M10.2 4.2 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.8 4.2a2 2 0 0 0-3.6 0Z" />
       <path d="M12 9v5M12 18h.01" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-3.5 w-3.5 shrink-0"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
     </svg>
   );
 }
