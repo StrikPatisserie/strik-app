@@ -235,22 +235,22 @@ async function renderCard(card: PriceCard) {
   context.fillStyle = "#ffffff";
   context.textBaseline = "middle";
   if (card.pricePrefix) {
-    context.font = '24px "StrikGothamBold"';
+    context.font = '28px "StrikGothamBold"';
     context.textAlign = "center";
     context.fillText(
       card.pricePrefix.toLocaleUpperCase("nl-NL"),
       priceBlockWidth / 2,
-      520
+      514
     );
   }
   context.font = '80px "StrikGothamBlack"';
   context.textAlign = "left";
-  context.fillText(mainPrice, priceLeft, card.pricePrefix ? 578 : 568);
+  context.fillText(mainPrice, priceLeft, card.pricePrefix ? 590 : 568);
   context.font = '38px "StrikGothamBlack"';
   context.fillText(
     centsPrice,
     priceLeft + mainPriceWidth + 4,
-    card.pricePrefix ? 558 : 548
+    card.pricePrefix ? 570 : 548
   );
 
   if (allergenIcons.length) {
