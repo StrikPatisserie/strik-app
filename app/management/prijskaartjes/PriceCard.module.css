@@ -77,11 +77,13 @@
   bottom: -0.2cqw;
   left: -0.2cqw;
   display: flex;
-  width: 26.5cqw;
+  width: max-content;
+  min-width: 22cqw;
   height: 14.7cqw;
+  padding: 0 2cqw 0 1.7cqw;
   box-sizing: border-box;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   border-radius: 0 2cqw 0 0;
   background: #161616;
@@ -89,6 +91,7 @@
 }
 
 .pricePrefix {
+  align-self: center;
   margin-bottom: -1.2cqw;
   font-size: 2.15cqw;
   font-weight: 800;
@@ -137,17 +140,17 @@
   bottom: 15.5cqw;
   left: 6cqw;
   display: flex;
-  height: 9.6cqw;
+  height: 10.5cqw;
   align-items: center;
   justify-content: center;
-  gap: 1.2cqw;
+  gap: 0.55cqw;
 }
 
 .allergenIcon {
   display: flex;
   min-width: 0;
-  max-width: 9.6cqw;
-  height: 9.6cqw;
+  max-width: 10.5cqw;
+  height: 10.5cqw;
   flex: 1 1 0;
   align-items: center;
   justify-content: center;
@@ -155,20 +158,20 @@
 
 .allergenCircle {
   display: flex;
-  width: 8.8cqw;
-  height: 8.8cqw;
-  flex: 0 0 8.8cqw;
+  width: 10.1cqw;
+  height: 10.1cqw;
+  flex: 0 0 10.1cqw;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  border: 0.34cqw solid #161616;
+  border: 0.38cqw solid #161616;
   border-radius: 50%;
 }
 
 .allergenCircle img {
   display: block;
-  width: 5.7cqw;
-  height: 5.7cqw;
+  width: 6.55cqw;
+  height: 6.55cqw;
   object-fit: contain;
 }
 

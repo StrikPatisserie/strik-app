@@ -213,35 +213,54 @@ async function renderCard(card: PriceCard) {
     );
   }
 
+  const price = formatPrice(card.priceCents);
+  const mainPrice = `€ ${price.euros}`;
+  const centsPrice = `,${price.cents}`;
+  const priceLeft = 22;
+  context.font = '80px "StrikGothamBlack"';
+  const mainPriceWidth = context.measureText(mainPrice).width;
+  context.font = '38px "StrikGothamBlack"';
+  const centsPriceWidth = context.measureText(centsPrice).width;
+  const priceBlockWidth = Math.max(
+    235,
+    Math.ceil(priceLeft + mainPriceWidth + 4 + centsPriceWidth + 20)
+  );
+
   context.fillStyle = "#161616";
-  roundedRect(context, 2, 493, 292, 155, 22);
+  roundedRect(context, 2, 493, priceBlockWidth, 155, 22);
   context.fill();
-  context.fillRect(2, 555, 292, 93);
+  context.fillRect(2, 555, priceBlockWidth, 93);
   context.fillRect(2, 493, 70, 155);
 
-  const price = formatPrice(card.priceCents);
   context.fillStyle = "#ffffff";
-  context.textAlign = "center";
   context.textBaseline = "middle";
   if (card.pricePrefix) {
     context.font = '24px "StrikGothamBold"';
-    context.fillText(card.pricePrefix.toLocaleUpperCase("nl-NL"), 138, 520);
+    context.textAlign = "center";
+    context.fillText(
+      card.pricePrefix.toLocaleUpperCase("nl-NL"),
+      priceBlockWidth / 2,
+      520
+    );
   }
   context.font = '80px "StrikGothamBlack"';
-  context.fillText(`€ ${price.euros}`, 130, card.pricePrefix ? 578 : 568);
-  const wholeWidth = context.measureText(`€ ${price.euros}`).width;
-  context.font = '38px "StrikGothamBlack"';
   context.textAlign = "left";
-  context.fillText(`,${price.cents}`, 130 + wholeWidth / 2 + 4, card.pricePrefix ? 558 : 548);
+  context.fillText(mainPrice, priceLeft, card.pricePrefix ? 578 : 568);
+  context.font = '38px "StrikGothamBlack"';
+  context.fillText(
+    centsPrice,
+    priceLeft + mainPriceWidth + 4,
+    card.pricePrefix ? 558 : 548
+  );
 
   if (allergenIcons.length) {
     const groupWidth = 860;
-    const gap = 15;
+    const gap = 6;
     const slotWidth = Math.min(
-      110,
+      100,
       (groupWidth - (allergenIcons.length - 1) * gap) / allergenIcons.length
     );
-    const circleSize = Math.min(80, slotWidth - 4);
+    const circleSize = Math.min(92, slotWidth - 4);
     const totalWidth = allergenIcons.length * slotWidth + (allergenIcons.length - 1) * gap;
     const startX = (PIXEL_WIDTH - totalWidth) / 2;
     const circleY = 398;
