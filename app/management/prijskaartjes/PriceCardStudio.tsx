@@ -13,6 +13,8 @@ import {
   type PriceCard,
   type PriceCardCategory,
   type PriceCardState,
+  type RecipeProductDetail,
+  type RecipeProductSummary,
   type WebshopProductDetail,
   type WebshopProductSummary,
 } from "./priceCardTypes";
@@ -66,6 +68,7 @@ function blankCard(name = ""): PriceCard {
     sourcePath: "",
     sourceUrl: "",
     sourceProductName: "",
+    sourceRecipeId: "",
     createdAt: "",
     updatedAt: "",
     lastPrintedAt: "",
@@ -84,6 +87,40 @@ function cardFromProduct(product: WebshopProductDetail): PriceCard {
     sourceUrl: product.sourceUrl,
     sourceProductName: product.name,
   };
+}
+
+function cardFromRecipe(recipe: RecipeProductDetail): PriceCard {
+  return {
+    ...blankCard(recipe.name),
+    priceCents: recipe.priceCents,
+    category: recipe.category,
+    theme: themeForCategory(recipe.category),
+    allergens: recipe.allergens,
+    sourceProductName: recipe.name,
+    sourceRecipeId: recipe.id,
+  };
+}
+
+async function requestDescriptionSuggestion(
+  name: string,
+  webshopDescription: string,
+  recipeId = ""
+) {
+  const response = await fetch("/api/price-cards/suggest-description", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, webshopDescription, recipeId }),
+  });
+  const data = (await response.json()) as {
+    description?: string;
+    basis?: "webshop" | "recept" | "algemene_productkennis";
+    recipeName?: string;
+    message?: string;
+  };
+  if (!response.ok || !data.description) {
+    throw new Error(data.message || "Tekst voorstellen is mislukt.");
+  }
+  return data;
 }
 
 function priceText(priceCents: number) {
@@ -114,6 +151,7 @@ export default function PriceCardStudio() {
   const [categoryFilter, setCategoryFilter] = useState<PriceCardCategory | "alle">("alle");
   const [webshopQuery, setWebshopQuery] = useState("");
   const [webshopResults, setWebshopResults] = useState<WebshopProductSummary[]>([]);
+  const [recipeResults, setRecipeResults] = useState<RecipeProductSummary[]>([]);
   const [searched, setSearched] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -204,6 +242,8 @@ export default function PriceCardStudio() {
     setPrice("0,00");
     setPriceOptionDrafts([]);
     setWebshopResults([]);
+    setRecipeResults([]);
+    setSearched(false);
     setMessage("Handmatig kaartje gestart.");
     setError("");
   }
@@ -220,11 +260,13 @@ export default function PriceCardStudio() {
     return data.state;
   }
 
-  async function searchWebshop() {
+  async function searchProducts() {
     const query = webshopQuery.trim();
     if (query.length < 2) return;
     setSearching(true);
     setSearched(false);
+    setWebshopResults([]);
+    setRecipeResults([]);
     setError("");
     setMessage("");
     try {
@@ -233,13 +275,17 @@ export default function PriceCardStudio() {
       });
       const data = (await response.json()) as {
         products?: WebshopProductSummary[];
+        recipes?: RecipeProductSummary[];
+        partial?: boolean;
         message?: string;
       };
-      if (!response.ok) throw new Error(data.message || "Webshop zoeken is mislukt.");
+      if (!response.ok) throw new Error(data.message || "Zoeken is mislukt.");
       setWebshopResults(data.products || []);
+      setRecipeResults(data.recipes || []);
       setSearched(true);
+      if (data.partial) setMessage("Eén bron was tijdelijk niet bereikbaar; de beschikbare resultaten staan hieronder.");
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "Webshop zoeken is mislukt.");
+      setError(searchError instanceof Error ? searchError.message : "Zoeken is mislukt.");
       setSearched(true);
     } finally {
       setSearching(false);
@@ -263,6 +309,8 @@ export default function PriceCardStudio() {
       setPrice(priceText(card.priceCents));
       setPriceOptionDrafts([]);
       setWebshopResults([]);
+      setRecipeResults([]);
+      setSearched(false);
       setMessage(
         card.description
           ? "Webshopgegevens zijn ingevuld. Controleer het kaartje en sla het op."
@@ -270,6 +318,51 @@ export default function PriceCardStudio() {
       );
     } catch (importError) {
       setError(importError instanceof Error ? importError.message : "Product laden is mislukt.");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function importRecipe(recipeId: string) {
+    setSearching(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(`/api/price-cards/products?recipe=${encodeURIComponent(recipeId)}`, {
+        cache: "no-store",
+      });
+      const data = (await response.json()) as { recipe?: RecipeProductDetail; message?: string };
+      if (!response.ok || !data.recipe) {
+        throw new Error(data.message || "Recept laden is mislukt.");
+      }
+      const recipe = data.recipe;
+      const card = cardFromRecipe(recipe);
+      let description = "";
+      try {
+        const suggestion = await requestDescriptionSuggestion(recipe.name, "", recipe.id);
+        description = suggestion.description || "";
+      } catch (suggestionError) {
+        setError(
+          suggestionError instanceof Error
+            ? `Recept geladen, maar de omschrijving lukte niet: ${suggestionError.message}`
+            : "Recept geladen, maar de omschrijving kon niet worden gemaakt."
+        );
+      }
+      const completedCard = { ...card, description };
+      setSelectedId("");
+      setDraft(completedCard);
+      setPrice(priceText(recipe.priceCents));
+      setPriceOptionDrafts([]);
+      setWebshopResults([]);
+      setRecipeResults([]);
+      setSearched(false);
+      setMessage(
+        recipe.priceCents > 0
+          ? "Recept gevonden: verkoopprijs, allergenen en AI-omschrijving zijn ingevuld."
+          : "Recept gevonden: allergenen en AI-omschrijving zijn ingevuld. Dit recept heeft nog geen verkoopprijs; vul die handmatig in."
+      );
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : "Recept laden is mislukt.");
     } finally {
       setSearching(false);
     }
@@ -327,23 +420,11 @@ export default function PriceCardStudio() {
     setError("");
     setMessage("");
     try {
-      const response = await fetch("/api/price-cards/suggest-description", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: draft.name,
-          webshopDescription: draft.description,
-        }),
-      });
-      const data = (await response.json()) as {
-        description?: string;
-        basis?: "webshop" | "recept" | "algemene_productkennis";
-        recipeName?: string;
-        message?: string;
-      };
-      if (!response.ok || !data.description) {
-        throw new Error(data.message || "Tekst voorstellen is mislukt.");
-      }
+      const data = await requestDescriptionSuggestion(
+        draft.name,
+        draft.description,
+        draft.sourceRecipeId
+      );
       setDraft((current) => ({ ...current, description: data.description || "" }));
       const source = data.basis === "recept" && data.recipeName
         ? `recept “${data.recipeName}”`
@@ -494,40 +575,66 @@ export default function PriceCardStudio() {
       <section className={styles.searchBar}>
         <div className={styles.searchIntro}>
           <strong>Slim kaartje maken</strong>
-          <span>Zoek eerst in de webshop; wat ontbreekt vul je zelf in.</span>
+          <span>Zoek in de webshop en het receptenarchief; wat ontbreekt vul je zelf in.</span>
         </div>
         <form
           className={styles.webshopSearch}
           onSubmit={(event) => {
             event.preventDefault();
-            void searchWebshop();
+            void searchProducts();
           }}
         >
           <input
             value={webshopQuery}
             onChange={(event) => setWebshopQuery(event.target.value)}
             placeholder="Bijv. gevulde koek"
-            aria-label="Zoek product in webshop"
+            aria-label="Zoek product in webshop en receptenarchief"
           />
           <button type="submit" disabled={searching || webshopQuery.trim().length < 2}>
-            {searching ? "Zoeken…" : "Zoek webshop"}
+            {searching ? "Zoeken…" : "Zoeken"}
           </button>
           <button type="button" className={styles.lightButton} onClick={() => startManual()}>
             + Handmatig
           </button>
         </form>
-        {webshopResults.length > 0 ? (
+        {webshopResults.length > 0 || recipeResults.length > 0 ? (
           <div className={styles.searchResults}>
-            {webshopResults.map((product) => (
-              <button key={product.path} type="button" onClick={() => void importProduct(product.path)}>
-                <span><strong>{product.name}</strong><small>{CATEGORY_LABELS[product.category]}</small></span>
-                <b>{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(product.priceCents / 100)}</b>
-              </button>
-            ))}
+            {webshopResults.length > 0 ? (
+              <section className={styles.searchResultGroup}>
+                <strong className={styles.resultSource}>Webshop</strong>
+                {webshopResults.map((product) => (
+                  <button key={product.path} type="button" onClick={() => void importProduct(product.path)}>
+                    <span><strong>{product.name}</strong><small>{CATEGORY_LABELS[product.category]}</small></span>
+                    <b>{new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(product.priceCents / 100)}</b>
+                  </button>
+                ))}
+              </section>
+            ) : null}
+            {recipeResults.length > 0 ? (
+              <section className={styles.searchResultGroup}>
+                <strong className={styles.resultSource}>Receptenarchief</strong>
+                {recipeResults.map((recipe) => (
+                  <button key={recipe.id} type="button" onClick={() => void importRecipe(recipe.id)}>
+                    <span>
+                      <strong>{recipe.name}</strong>
+                      <small>
+                        {CATEGORY_LABELS[recipe.category]}
+                        {recipe.portionLabel ? ` · ${recipe.portionLabel}` : " · recept"}
+                      </small>
+                    </span>
+                    <b>
+                      {recipe.priceCents > 0
+                        ? new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(recipe.priceCents / 100)
+                        : "prijs invullen"}
+                    </b>
+                  </button>
+                ))}
+              </section>
+            ) : null}
           </div>
         ) : searched && !searching ? (
           <div className={styles.notFound}>
-            Niet gevonden in de webshop.
+            Niet gevonden in de webshop of het receptenarchief.
             <button type="button" onClick={() => startManual()}>Maak “{webshopQuery.trim()}” handmatig</button>
           </div>
         ) : null}

@@ -70,6 +70,7 @@ export type PriceCard = {
   sourcePath: string;
   sourceUrl: string;
   sourceProductName: string;
+  sourceRecipeId: string;
   createdAt: string;
   updatedAt: string;
   lastPrintedAt: string;
@@ -109,6 +110,19 @@ export type WebshopProductDetail = WebshopProductSummary & {
   description: string;
   allergens: AllergenKey[];
   sourceUrl: string;
+};
+
+export type RecipeProductSummary = {
+  id: string;
+  name: string;
+  priceCents: number;
+  category: PriceCardCategory;
+  portionLabel: string;
+};
+
+export type RecipeProductDetail = RecipeProductSummary & {
+  allergens: AllergenKey[];
+  ingredientNames: string[];
 };
 
 export function emptyPriceCardState(): PriceCardState {
@@ -197,6 +211,7 @@ export function normalizePriceCard(value: unknown): PriceCard | null {
     sourcePath,
     sourceUrl: cleanString(raw.sourceUrl, 700),
     sourceProductName,
+    sourceRecipeId: cleanString(raw.sourceRecipeId, 180),
     createdAt: cleanDate(raw.createdAt),
     updatedAt: cleanDate(raw.updatedAt),
     lastPrintedAt: cleanDate(raw.lastPrintedAt),

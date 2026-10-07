@@ -114,6 +114,7 @@ export async function POST(request: Request) {
       sourcePath: cleanText(input.sourcePath, 500),
       sourceUrl: cleanText(input.sourceUrl, 700),
       sourceProductName: cleanText(input.sourceProductName, 160),
+      sourceRecipeId: cleanText(input.sourceRecipeId, 180),
       createdAt: existing?.createdAt || now,
       updatedAt: now,
       lastPrintedAt: existing?.lastPrintedAt || "",

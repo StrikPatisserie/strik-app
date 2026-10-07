@@ -122,6 +122,27 @@
   box-shadow: 0 16px 38px rgba(47, 35, 28, 0.18);
 }
 
+.searchResultGroup {
+  display: grid;
+}
+
+.searchResultGroup + .searchResultGroup {
+  border-top: 2px solid #e8e1d8;
+}
+
+.resultSource {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f5f1ec;
+  padding: 0.42rem 0.8rem;
+  color: #766d63;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .searchResults button {
   display: flex;
   align-items: center;
