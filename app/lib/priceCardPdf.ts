@@ -3,9 +3,11 @@ import "server-only";
 import path from "node:path";
 import { createCanvas, GlobalFonts, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
 import { PDFDocument } from "pdf-lib";
-import type {
-  PriceCard,
-  PriceCardPrintSession,
+import {
+  ALLERGEN_LABELS,
+  type AllergenKey,
+  type PriceCard,
+  type PriceCardPrintSession,
 } from "../management/prijskaartjes/priceCardTypes";
 
 const CARD_WIDTH_MM = 85;
@@ -163,7 +165,7 @@ async function renderCard(card: PriceCard) {
     }
   }
 
-  const titleLeft = 62;
+  const titleLeft = card.theme === "geen" ? 62 : 178;
   const titleRight = 942;
   const titleCenter = (titleLeft + titleRight) / 2;
   const title = fitLines({
@@ -193,7 +195,7 @@ async function renderCard(card: PriceCard) {
   const titleHeight = title.lines.length * title.size * 0.94;
   const descriptionHeight = description.lines.length * description.size * 1.08;
   const copyHeight = titleHeight + (description.lines.length ? 26 + descriptionHeight : 0);
-  const copyTop = Math.max(142, 318 - copyHeight / 2);
+  const copyTop = Math.max(82, 248 - copyHeight / 2);
 
   context.fillStyle = "#161616";
   context.textAlign = "center";
@@ -235,27 +237,53 @@ async function renderCard(card: PriceCard) {
   context.fillText(`,${price.cents}`, 150 + wholeWidth / 2 + 4, card.pricePrefix ? 558 : 548);
 
   if (allergenIcons.length) {
-    const gap = 7;
-    const iconBoxWidth = Math.min(
-      72,
-      (405 - (allergenIcons.length - 1) * gap) / allergenIcons.length
+    const groupWidth = 860;
+    const gap = 15;
+    const slotWidth = Math.min(
+      96,
+      (groupWidth - (allergenIcons.length - 1) * gap) / allergenIcons.length
     );
-    const iconBoxHeight = 84;
-    const totalWidth = allergenIcons.length * iconBoxWidth + (allergenIcons.length - 1) * gap;
-    let x = 367 + Math.max(0, (405 - totalWidth) / 2);
-    for (const icon of allergenIcons) {
-      const ratio = icon.width / icon.height;
-      const width = Math.min(iconBoxWidth, iconBoxHeight * ratio);
-      const height = width / ratio;
+    const circleSize = Math.min(64, slotWidth - 4);
+    const totalWidth = allergenIcons.length * slotWidth + (allergenIcons.length - 1) * gap;
+    const startX = (PIXEL_WIDTH - totalWidth) / 2;
+    const circleY = 398;
+
+    allergenIcons.forEach((icon, index) => {
+      const x = startX + index * (slotWidth + gap);
+      const centerX = x + slotWidth / 2;
+      context.strokeStyle = "#161616";
+      context.lineWidth = 4;
+      context.beginPath();
+      context.arc(centerX, circleY + circleSize / 2, circleSize / 2, 0, Math.PI * 2);
+      context.stroke();
+
+      const symbolSize = circleSize * 0.58;
       context.drawImage(
         icon,
-        x + (iconBoxWidth - width) / 2,
-        536 + (iconBoxHeight - height) / 2,
-        width,
-        height
+        centerX - symbolSize / 2,
+        circleY + (circleSize - symbolSize) / 2,
+        symbolSize,
+        symbolSize
       );
-      x += iconBoxWidth + gap;
-    }
+
+      const allergen = shownAllergens[index] as AllergenKey;
+      const label = fitLines({
+        context,
+        text: ALLERGEN_LABELS[allergen].toLocaleUpperCase("nl-NL"),
+        maxWidth: slotWidth,
+        maxLines: 1,
+        startSize: 15,
+        minSize: 9,
+        family: "StrikGothamBold",
+        lineHeight: 1,
+        maxHeight: 16,
+      });
+      context.fillStyle = "#161616";
+      context.textAlign = "center";
+      context.textBaseline = "top";
+      context.font = `${label.size}px "StrikGothamBold"`;
+      context.fillText(label.lines[0] ?? "", centerX, circleY + circleSize + 7);
+    });
   }
 
   context.drawImage(logo, 842, 522, 120, 120);

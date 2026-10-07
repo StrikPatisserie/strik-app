@@ -3,26 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useCallback, useLayoutEffect, useRef } from "react";
 import styles from "./PriceCard.module.css";
-import type { AllergenKey, PriceCard } from "./priceCardTypes";
-
-const ALLERGEN_LABELS: Record<AllergenKey, string> = {
-  selderij: "Selderij",
-  vis: "Vis",
-  schaaldier: "Schaaldieren",
-  mosterd: "Mosterd",
-  sulfiet: "Sulfiet",
-  weekdier: "Weekdieren",
-  lupine: "Lupine",
-  pinda: "Pinda",
-  soja: "Soja",
-  noten: "Noten",
-  sesam: "Sesam",
-  lactose: "Lactose",
-  gluten: "Gluten",
-  alcohol: "Alcohol",
-  ei: "Ei",
-  vegetarisch: "Vegetarisch",
-};
+import { ALLERGEN_LABELS, type AllergenKey, type PriceCard } from "./priceCardTypes";
 
 function formatPriceParts(priceCents: number) {
   return {
@@ -34,10 +15,10 @@ function formatPriceParts(priceCents: number) {
 function AllergenIcon({ allergen }: { allergen: AllergenKey }) {
   return (
     <span className={styles.allergenIcon} title={ALLERGEN_LABELS[allergen]}>
-      <img
-        src={`/allergens/${allergen}.svg`}
-        alt={ALLERGEN_LABELS[allergen]}
-      />
+      <span className={styles.allergenCircle} aria-hidden="true">
+        <img src={`/allergens/${allergen}.svg`} alt="" />
+      </span>
+      <span className={styles.allergenLabel}>{ALLERGEN_LABELS[allergen]}</span>
     </span>
   );
 }
@@ -98,7 +79,9 @@ export default function PriceCardPreview({
   const price = formatPriceParts(card.priceCents);
 
   return (
-    <article className={`${styles.card} ${className}`}>
+    <article
+      className={`${styles.card} ${card.theme === "geen" ? "" : styles.hasTheme} ${className}`}
+    >
       {card.theme !== "geen" ? (
         <span className={`${styles.themeBadge} ${styles[card.theme]}`} aria-hidden="true">
           <img

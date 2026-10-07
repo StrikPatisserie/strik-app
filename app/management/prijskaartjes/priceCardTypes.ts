@@ -31,6 +31,25 @@ export const ALLERGEN_KEYS = [
 
 export type AllergenKey = (typeof ALLERGEN_KEYS)[number];
 
+export const ALLERGEN_LABELS: Record<AllergenKey, string> = {
+  selderij: "Selderij",
+  vis: "Vis",
+  schaaldier: "Schaaldier",
+  mosterd: "Mosterd",
+  sulfiet: "Sulfiet",
+  weekdier: "Weekdier",
+  lupine: "Lupine",
+  pinda: "Pinda",
+  soja: "Soja",
+  noten: "Noten",
+  sesam: "Sesam",
+  lactose: "Lactose",
+  gluten: "Gluten",
+  alcohol: "Alcohol",
+  ei: "Ei",
+  vegetarisch: "Vegetarisch",
+};
+
 export type PriceCard = {
   id: string;
   name: string;

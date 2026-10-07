@@ -14,12 +14,12 @@
 
 .cardCopy {
   position: absolute;
-  inset: 13cqw 5.5cqw 17cqw;
+  inset: 7.5cqw 5.5cqw 25cqw;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2.3cqw;
+  gap: 1.8cqw;
   text-align: center;
 }
 
@@ -43,6 +43,11 @@
 
 .noDescription .titleFrame {
   height: 18cqw;
+}
+
+.hasTheme .titleFrame {
+  width: 82%;
+  align-self: flex-end;
 }
 
 .titleFrame h2 {
@@ -128,29 +133,58 @@
 
 .allergens {
   position: absolute;
-  right: 20.2cqw;
-  bottom: 3.2cqw;
-  left: 31.5cqw;
+  right: 6cqw;
+  bottom: 15.5cqw;
+  left: 6cqw;
   display: flex;
-  min-height: 8.3cqw;
+  height: 9.2cqw;
   align-items: center;
   justify-content: center;
-  gap: 0.65cqw;
+  gap: 1.2cqw;
 }
 
 .allergenIcon {
-  display: block;
+  display: flex;
   min-width: 0;
-  max-width: 7.4cqw;
-  aspect-ratio: 102 / 107;
+  max-width: 8.2cqw;
+  height: 9.2cqw;
   flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.45cqw;
 }
 
-.allergenIcon img {
+.allergenCircle {
+  display: flex;
+  width: 6.8cqw;
+  height: 6.8cqw;
+  flex: 0 0 6.8cqw;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 0.32cqw solid #161616;
+  border-radius: 50%;
+}
+
+.allergenCircle img {
+  display: block;
+  width: 4.3cqw;
+  height: 4.3cqw;
+  object-fit: contain;
+}
+
+.allergenLabel {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  overflow: hidden;
+  font-size: 0.95cqw;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .themeBadge {
