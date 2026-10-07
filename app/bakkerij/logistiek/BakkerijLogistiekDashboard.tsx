@@ -185,6 +185,7 @@ type RouteStopDeleteChoice = {
 
 type BusId = "A" | "B";
 type ShopKey = "heyendaalseweg" | "daalseweg" | "ziekerstraat" | "lent";
+type NijmegenRouteZone = "city-red" | "outside-blue" | "flex-yellow";
 type ReceiptTone =
   | "neutral"
   | "delivery"
@@ -6566,12 +6567,6 @@ function routeStopForRadboudUniversity(
   };
 }
 
-function isWeekdayOutsideSecondRoundReceipt(receipt: ReceiptSummary) {
-  const cluster = outsideClusterKeyForReceipt(receipt);
-
-  return Boolean(cluster && cluster !== "jonkerbos" && cluster !== "noord-buiten");
-}
-
 function busForShopKey(key: string): BusId | "" {
   if (key === "daalseweg" || key === "lent") return "A";
   if (key === "heyendaalseweg" || key === "ziekerstraat") return "B";
@@ -6587,7 +6582,87 @@ function isCenterRouteText(text: string) {
   );
 }
 
+const cityRoutePostcodes = new Set([
+  "6521",
+  "6522",
+  "6523",
+  "6524",
+  "6525",
+  "6526",
+  "6571",
+  "6572",
+]);
+const outsideRoutePostcodes = new Set([
+  "6511",
+  "6512",
+  "6531",
+  "6532",
+  "6533",
+  "6534",
+  "6535",
+  "6536",
+  "6537",
+  "6538",
+  "6541",
+  "6542",
+  "6543",
+  "6544",
+  "6545",
+  "6546",
+  "6663",
+  "6678",
+  "6681",
+]);
+
+function routePostcodeForText(value: string) {
+  return value.match(/(?:^|\D)(\d{4})\s?[a-z]{2}(?:\D|$)/i)?.[1] || "";
+}
+
+function isCityRouteEfficiencyException(receipt: ReceiptSummary) {
+  return /(?:^| )(?:bakkerij )?koenen(?: |$)/.test(
+    receiptRouteIdentityText(receipt)
+  );
+}
+
+function nijmegenRouteZoneForReceipt(
+  receipt: ReceiptSummary
+): NijmegenRouteZone {
+  const identityText = receiptRouteIdentityText(receipt);
+  const postcode = routePostcodeForText(receiptSearchText(receipt));
+
+  // De routekaart is de basis, maar een adres dat logisch op de doorsteek ligt
+  // mag met de efficiënte route mee. Koenen ligt tussen Heyendaal en Daalseweg.
+  if (isCityRouteEfficiencyException(receipt)) return "city-red";
+
+  if (
+    /(?:^| )(?:radboud|heyendaal|heyendaalseweg|daalseweg|han|kapittelweg|geert groote|brakkenstein|galgenveld|hunnerberg|nijmegen oost|maartenskliniek|sint maartens|berg en dal|beek ubbergen|ubbergen|oude kleefsebaan)(?: |$)/.test(
+      identityText
+    ) || cityRoutePostcodes.has(postcode)
+  ) {
+    return "city-red";
+  }
+
+  if (
+    isCenterRouteText(identityText) ||
+    /(?:^| )(?:ziekerstraat|nijmegen west|waterkwartier|wolfskuil|hees|heseveld|neerbosch|dukenburg|lindenholt|hatert|hazenkamp|goffert|jonkerbos|sanadome|cwz|lent|oosterhout|bemmel|dries en co|dries co|elst)(?: |$)/.test(
+      identityText
+    ) ||
+    outsideRoutePostcodes.has(postcode)
+  ) {
+    return "outside-blue";
+  }
+
+  // Sint Annastraat zelf en de verder gelegen gele gebieden blijven bewust
+  // flexibel. Hun indeling wordt hieronder berekend op extra rijtijd en
+  // verwachte terugkomst, niet op een vaste windrichting.
+  return "flex-yellow";
+}
+
 function preferredBusForReceipt(receipt: ReceiptSummary): BusId | "" {
+  const routeZone = nijmegenRouteZoneForReceipt(receipt);
+  if (routeZone === "city-red") return "A";
+  if (routeZone === "outside-blue") return "B";
+
   const text = receiptSearchText(receipt);
   if (isCenterRouteText(text)) return "B";
 
@@ -6684,10 +6759,14 @@ function routePointForShopKey(shopKey: ShopKey | "") {
 
 function routePointForSearchText(value: string): RoutePoint {
   const text = normalizeMatchText(value);
+  const postcode = routePostcodeForText(value);
 
   if (/dries|elst/.test(text)) return { x: -0.2, y: 8.1 };
   if (/gendt|huigensstraat|bemmel|arnhem/.test(text)) return { x: 1.1, y: 8.8 };
   if (/lent|oosterhout/.test(text)) return { x: 0.1, y: 5.9 };
+  if (/(?:^| )(?:bakkerij )?koenen(?: |$)/.test(text)) {
+    return { x: 0.55, y: 3.15 };
+  }
   if (/credible|restaurant steven|centrum|hertogstraat|grote markt|waalkade/.test(text)) {
     return { x: -0.1, y: 3.7 };
   }
@@ -6713,8 +6792,12 @@ function routePointForSearchText(value: string): RoutePoint {
   if (/wijchen|beuningen|berendonck|thermen/.test(text)) {
     return { x: -2.5, y: 2.0 };
   }
+  if (cityRoutePostcodes.has(postcode)) return { x: 0.85, y: 3.2 };
+  if (outsideRoutePostcodes.has(postcode)) return { x: -0.65, y: 3.25 };
 
-  return { x: 0.4, y: 3.0 };
+  // Onbekende en gele adressen starten op de scheidslijn. Zo duwt een
+  // ontbrekende straatmatch ze niet stilzwijgend naar de oostkant.
+  return { x: 0, y: 3.0 };
 }
 
 function receiptRoutePoint(receipt: ReceiptSummary): RoutePoint {
@@ -6776,6 +6859,124 @@ function estimatedTravelMinutes(from: RoutePoint, to: RoutePoint) {
   if (distance < 0.15) return 0;
 
   return Math.max(4, Math.ceil(distance * 4.2 + 2));
+}
+
+type EstimatedRouteVisit = {
+  key: string;
+  point: RoutePoint;
+  serviceMinutes: number;
+};
+
+function estimatedAssignmentRouteMinutes(
+  shopKeys: ShopKey[],
+  receipts: ReceiptSummary[]
+) {
+  const visits = new Map<string, EstimatedRouteVisit>();
+
+  shopKeys.forEach((shopKey) => {
+    visits.set(`shop:${shopKey}`, {
+      key: `shop:${shopKey}`,
+      point: shopRouteMeta[shopKey].point,
+      serviceMinutes: 15,
+    });
+  });
+  receipts.forEach((receipt) => {
+    const targetKey =
+      normalizeMatchText(receiptTargetLine(receipt)) || `receipt:${receipt.id}`;
+    const key = `receipt:${targetKey}`;
+    const serviceMinutes = isLargeReceipt(receipt) ? 8 : 5;
+    const previousVisit = visits.get(key);
+
+    visits.set(key, {
+      key,
+      point: receiptRoutePoint(receipt),
+      serviceMinutes: Math.max(
+        serviceMinutes,
+        previousVisit?.serviceMinutes || 0
+      ),
+    });
+  });
+
+  const remaining = [...visits.values()];
+  let currentPoint = depotRoutePoint;
+  let minutes = 0;
+
+  while (remaining.length) {
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    remaining.forEach((visit, index) => {
+      const distance = routeDistance(currentPoint, visit.point);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+
+    const [visit] = remaining.splice(bestIndex, 1);
+    minutes += estimatedTravelMinutes(currentPoint, visit.point);
+    minutes += visit.serviceMinutes;
+    currentPoint = visit.point;
+  }
+
+  return minutes + estimatedTravelMinutes(currentPoint, depotRoutePoint);
+}
+
+function chooseBusByEstimatedRouteReturn(input: {
+  receipt: ReceiptSummary;
+  shopKeys: Record<BusId, ShopKey[]>;
+  receipts: Record<BusId, ReceiptSummary[]>;
+}) {
+  const baseA = estimatedAssignmentRouteMinutes(
+    input.shopKeys.A,
+    input.receipts.A
+  );
+  const baseB = estimatedAssignmentRouteMinutes(
+    input.shopKeys.B,
+    input.receipts.B
+  );
+  const withA = estimatedAssignmentRouteMinutes(input.shopKeys.A, [
+    ...input.receipts.A,
+    input.receipt,
+  ]);
+  const withB = estimatedAssignmentRouteMinutes(input.shopKeys.B, [
+    ...input.receipts.B,
+    input.receipt,
+  ]);
+
+  // Totale rijtijd weegt het zwaarst. De laatste 20% voorkomt dat één bus
+  // veel later terugkomt wanneer beide opties vrijwel even efficiënt zijn.
+  const scoreA = withA + baseB + Math.max(withA, baseB) * 0.2;
+  const scoreB = baseA + withB + Math.max(baseA, withB) * 0.2;
+
+  if (Math.abs(scoreA - scoreB) < 0.75) {
+    return baseA <= baseB ? "A" : "B";
+  }
+
+  return scoreA < scoreB ? "A" : "B";
+}
+
+function splitReceiptsByEstimatedRouteReturn(input: {
+  receipts: ReceiptSummary[];
+  shopKeys: Record<BusId, ShopKey[]>;
+  baseReceipts: Record<BusId, ReceiptSummary[]>;
+}) {
+  const assigned: Record<BusId, ReceiptSummary[]> = { A: [], B: [] };
+
+  sortDeliveryReceipts(input.receipts).forEach((receipt) => {
+    const bus = chooseBusByEstimatedRouteReturn({
+      receipt,
+      shopKeys: input.shopKeys,
+      receipts: {
+        A: [...input.baseReceipts.A, ...assigned.A],
+        B: [...input.baseReceipts.B, ...assigned.B],
+      },
+    });
+
+    assigned[bus].push(receipt);
+  });
+
+  return assigned;
 }
 
 function estimatedServiceMinutes(stop: RouteStop) {
@@ -7411,6 +7612,7 @@ function routeAssignmentCostForReceipt(
   busId: BusId | "" = ""
 ) {
   const point = receiptRoutePoint(receipt);
+  const routeZone = nijmegenRouteZoneForReceipt(receipt);
   const nearestShopDistance = Math.min(
     ...shopKeys.map((shopKey) => routeDistance(point, shopRouteMeta[shopKey].point))
   );
@@ -7447,7 +7649,13 @@ function routeAssignmentCostForReceipt(
   if (isFlexibleLateDelivery(receipt, date)) {
     cost += 0.8;
   }
-  if (learnedBus && busId) {
+  if (routeZone === "city-red" && busId) {
+    cost += busId === "A" ? -12 : 12;
+  }
+  if (routeZone === "outside-blue" && busId) {
+    cost += busId === "B" ? -12 : 12;
+  }
+  if (learnedBus && busId && routeZone === "flex-yellow") {
     const learningWeight = Math.min(7, 2.2 + learnedBus.samples * 0.85);
     cost += learnedBus.bus === busId ? -learningWeight : learningWeight * 1.1;
   }
@@ -7601,6 +7809,35 @@ function chooseBusForReceipt(input: {
       input.buses[bus].shopKeys.includes(shopKey)
     );
     if (shopBus) return shopBus;
+  }
+
+  const routeZone = nijmegenRouteZoneForReceipt(input.receipt);
+  if (routeZone === "city-red") return "A";
+  if (routeZone === "outside-blue") return "B";
+  if (routeZone === "flex-yellow") {
+    return chooseBusByEstimatedRouteReturn({
+      receipt: input.receipt,
+      shopKeys: {
+        A: input.buses.A.shopKeys,
+        B: input.buses.B.shopKeys,
+      },
+      receipts: {
+        A: [
+          ...input.buses.A.early,
+          ...input.buses.A.first,
+          ...input.buses.A.firstIce,
+          ...input.buses.A.second,
+          ...input.buses.A.ice,
+        ],
+        B: [
+          ...input.buses.B.early,
+          ...input.buses.B.first,
+          ...input.buses.B.firstIce,
+          ...input.buses.B.second,
+          ...input.buses.B.ice,
+        ],
+      },
+    });
   }
 
   const routeCostA = routeAssignmentCostForReceipt(
@@ -7913,13 +8150,64 @@ function buildWeekdayFixedRouteRounds(
   const addLentEmballageStop =
     driesReceipts.length > 0 || lentEmballageAreaReceipts.length > 0;
   const sanadomeReceipts = takeReceipts(isSanadomeReceipt);
-  const cityReceipts = takeReceipts(
-    (receipt) => !isOutsideRouteReceipt(receipt)
+  const cityBridgeReceipts = takeReceipts(isCityRouteEfficiencyException);
+  const fixedCityReceipts = takeReceipts(
+    (receipt) => nijmegenRouteZoneForReceipt(receipt) === "city-red"
   );
-  const outsideSecondRoundReceipts = takeReceipts(
-    isWeekdayOutsideSecondRoundReceipt
+  const fixedOutsideReceipts = takeReceipts(
+    (receipt) => nijmegenRouteZoneForReceipt(receipt) === "outside-blue"
   );
-  const remainingOutsideReceipts = takeReceipts(() => true);
+  const flexibleReceipts = takeReceipts(() => true);
+  const fixedCityFirstReceipts = fixedCityReceipts.filter(
+    isPriorityEarlyDelivery
+  );
+  const fixedCitySecondReceipts = fixedCityReceipts.filter(
+    (receipt) => !fixedCityFirstReceipts.includes(receipt)
+  );
+  const weekdayShopKeys: Record<BusId, ShopKey[]> = {
+    A: ["heyendaalseweg", "daalseweg"],
+    B: ["ziekerstraat", "lent"],
+  };
+  const baseWeekdayReceipts: Record<BusId, ReceiptSummary[]> = {
+    A: [
+      ...vermaatReceipts,
+      ...sintMaartenskliniekReceipts,
+      ...radboudUniversityReceipts,
+      ...radboudUmcReceipts,
+      ...hanReceipts,
+      ...cityBridgeReceipts,
+      ...fixedCityReceipts,
+    ],
+    B: [
+      ...driesReceipts,
+      ...lentEmballageAreaReceipts,
+      ...sanadomeReceipts,
+      ...fixedOutsideReceipts,
+    ],
+  };
+  const flexibleAssignments = splitReceiptsByEstimatedRouteReturn({
+    receipts: flexibleReceipts,
+    shopKeys: weekdayShopKeys,
+    baseReceipts: baseWeekdayReceipts,
+  });
+  const busAFlexibleFirstReceipts = flexibleAssignments.A.filter(
+    isPriorityEarlyDelivery
+  );
+  const busAFlexibleSecondReceipts = flexibleAssignments.A.filter(
+    (receipt) => !busAFlexibleFirstReceipts.includes(receipt)
+  );
+  const busBFlexibleFirstReceipts = flexibleAssignments.B.filter((receipt) => {
+    const cluster = outsideClusterKeyForReceipt(receipt);
+
+    return (
+      isPriorityEarlyDelivery(receipt) ||
+      cluster === "jonkerbos" ||
+      cluster === "noord-buiten"
+    );
+  });
+  const busBFlexibleSecondReceipts = flexibleAssignments.B.filter(
+    (receipt) => !busBFlexibleFirstReceipts.includes(receipt)
+  );
 
   const looseIceReceipts = sortDeliveryReceipts(
     receipts.filter(
@@ -7927,26 +8215,58 @@ function buildWeekdayFixedRouteRounds(
         isIceReceiptSummary(receipt) &&
         !(["heyendaalseweg", "daalseweg", "lent"] as ShopKey[]).includes(
           shopKeyForReceipt(receipt) as ShopKey
-        )
+      )
     )
   );
-  const busBSecondIceReceipts = looseIceReceipts.filter(
-    isWeekdayOutsideSecondRoundReceipt
+  const fixedCityIceReceipts = looseIceReceipts.filter(
+    (receipt) => nijmegenRouteZoneForReceipt(receipt) === "city-red"
   );
-  const busBFirstIceReceipts = looseIceReceipts.filter((receipt) => {
+  const fixedOutsideIceReceipts = looseIceReceipts.filter(
+    (receipt) =>
+      nijmegenRouteZoneForReceipt(receipt) === "outside-blue"
+  );
+  const flexibleIceReceipts = looseIceReceipts.filter(
+    (receipt) =>
+      !fixedCityIceReceipts.includes(receipt) &&
+      !fixedOutsideIceReceipts.includes(receipt)
+  );
+  const flexibleIceAssignments = splitReceiptsByEstimatedRouteReturn({
+    receipts: flexibleIceReceipts,
+    shopKeys: weekdayShopKeys,
+    baseReceipts: {
+      A: [...baseWeekdayReceipts.A, ...flexibleAssignments.A],
+      B: [...baseWeekdayReceipts.B, ...flexibleAssignments.B],
+    },
+  });
+  const busACityIceReceipts = [
+    ...fixedCityIceReceipts,
+    ...flexibleIceAssignments.A,
+  ];
+  const busBAllIceReceipts = [
+    ...fixedOutsideIceReceipts,
+    ...flexibleIceAssignments.B,
+  ];
+  const busBFirstIceReceipts = busBAllIceReceipts.filter((receipt) => {
     const cluster = outsideClusterKeyForReceipt(receipt);
 
     return (
-      !busBSecondIceReceipts.includes(receipt) &&
-      (shopKeyForReceipt(receipt) === "ziekerstraat" ||
-        cluster === "jonkerbos" ||
-        cluster === "noord-buiten")
+      nijmegenRouteZoneForReceipt(receipt) === "outside-blue" ||
+      cluster === "jonkerbos" ||
+      cluster === "noord-buiten"
     );
   });
-  const busACityIceReceipts = looseIceReceipts.filter(
-    (receipt) =>
-      !busBSecondIceReceipts.includes(receipt) &&
-      !busBFirstIceReceipts.includes(receipt)
+  const busBSecondIceReceipts = busBAllIceReceipts.filter(
+    (receipt) => !busBFirstIceReceipts.includes(receipt)
+  );
+  const busASecondRouteReceipts = sortReceiptsAlongRoute(
+    [...fixedCitySecondReceipts, ...busAFlexibleSecondReceipts],
+    shopRouteMeta.daalseweg.point,
+    null
+  );
+  const busBSecondRouteReceipts = sortReceiptsAlongRoute(
+    busBFlexibleSecondReceipts,
+    depotRoutePoint,
+    null
   );
 
   const busAFirstStops: RouteStop[] = [
@@ -7957,6 +8277,7 @@ function buildWeekdayFixedRouteRounds(
       load: "fresh",
       label: "Winkel Heyendaalseweg vers",
     }),
+    ...asStops(cityBridgeReceipts, "A-city-bridge-"),
     ...asStops(busASchoolReceipts.slice(0, 1), "A-school-south-"),
     ...asStops(vermaatReceipts, "A-vermaat-"),
     ...asStops(busASchoolReceipts.slice(1), "A-school-east-"),
@@ -7972,6 +8293,8 @@ function buildWeekdayFixedRouteRounds(
     ),
     ...asStops(radboudUmcReceipts, "A-umc-"),
     ...asStops(hanReceipts, "A-han-"),
+    ...asStops(fixedCityFirstReceipts, "A-map-red-early-"),
+    ...asStops(busAFlexibleFirstReceipts, "A-map-yellow-early-"),
   ];
   const busASecondStops: RouteStop[] = [
     fixedShopStop({
@@ -7996,7 +8319,7 @@ function buildWeekdayFixedRouteRounds(
       shopKey: "daalseweg",
       label: "IJs Daalseweg",
     }),
-    ...asStops(cityReceipts, "A-city-"),
+    ...asStops(busASecondRouteReceipts, "A-map-route-"),
     ...busACityIceReceipts.map(iceStopForReceipt),
   ];
   const busBFirstStops: RouteStop[] = placeLentEmballageAfterLastAreaStop([
@@ -8018,11 +8341,12 @@ function buildWeekdayFixedRouteRounds(
     ...asStops(lentEmballageAreaReceipts, "B-lent-area-"),
     ...(addLentEmballageStop ? [lentEmballageStop()] : []),
     ...asStops(sanadomeReceipts, "B-sanadome-"),
-    ...asStops(remainingOutsideReceipts, "B-rest-"),
+    ...asStops(fixedOutsideReceipts, "B-map-blue-"),
+    ...asStops(busBFlexibleFirstReceipts, "B-map-yellow-early-"),
     ...busBFirstIceReceipts.map(iceStopForReceipt),
   ]);
   const busBSecondStops: RouteStop[] = [
-    ...asStops(outsideSecondRoundReceipts, "B-outside-"),
+    ...asStops(busBSecondRouteReceipts, "B-map-yellow-"),
     ...asStops(busBSecondProCollegeReceipts, "B-pro-college-south-"),
     ...busBSecondIceReceipts.map(iceStopForReceipt),
   ];
@@ -8039,7 +8363,8 @@ function buildWeekdayFixedRouteRounds(
       departure: plan.isFuture ? "advies 08:05" : "08:05",
       tone: busRouteMeta.A.tone,
       stops: busAFirstStops,
-      reason: "Vaste stadroute: verse winkels en vroege vaste adressen.",
+      reason:
+        "Stadroute rood: verse winkels, vroege adressen en efficiënte doorsteken langs de Sint Annastraat.",
       load: routeLoadLineForStops(busAFirstStops),
       loadProfile,
     }),
@@ -8050,7 +8375,8 @@ function buildWeekdayFixedRouteRounds(
       departure: "na ronde 1",
       tone: "border-[#efc7b8] bg-[#fff3ed]",
       stops: busASecondStops,
-      reason: "Vaste stadroute: houdbaar, winkelijs en resterende stadsbonnen.",
+      reason:
+        "Stadroute rood met gele adressen die hier de minste extra rijtijd en beste terugkomst geven.",
       load: routeLoadLineForStops(busASecondStops),
       loadProfile,
     }),
@@ -8061,7 +8387,8 @@ function buildWeekdayFixedRouteRounds(
       departure: plan.isFuture ? "advies 08:05" : "08:05",
       tone: busRouteMeta.B.tone,
       stops: busBFirstStops,
-      reason: "Vaste buitenroute: Ziekerstraat, Lent en vaste adressen onderweg.",
+      reason:
+        "Buitenroute blauw: Ziekerstraat, Lent en adressen links van de Sint Annastraat.",
       load: routeLoadLineForStops(busBFirstStops),
       loadProfile,
     }),
@@ -8072,7 +8399,8 @@ function buildWeekdayFixedRouteRounds(
       departure: "na ronde 1",
       tone: "border-[#efc7b8] bg-[#fff3ed]",
       stops: busBSecondStops,
-      reason: "Buitenronde voor Malden, Molenhoek, Grave, Groesbeek, Gennep en vergelijkbare adressen.",
+      reason:
+        "Flexronde geel: verdere adressen alleen wanneer deze indeling de route en verwachte terugkomst verbetert.",
       load: routeLoadLineForStops(busBSecondStops),
       loadProfile,
     }),
