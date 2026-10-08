@@ -74,6 +74,8 @@ type GiftcardDayAllocation = {
   issueCountIce: number;
 };
 
+const GIFTCARD_MONTH_TOLERANCE = 1;
+
 const euroFormatter = new Intl.NumberFormat("nl-NL", {
   currency: "EUR",
   style: "currency",
@@ -262,14 +264,15 @@ function icePinPaidAmount(record: RevenueCashRecord) {
 }
 
 function iceTotalRevenueAmount(record: RevenueCashRecord) {
-  return (
-    record.iceTotalRevenue ??
-    roundMoney(
+  if (record.icePinRevenue !== undefined) {
+    return roundMoney(
       iceCashPaidAmount(record) +
         icePinPaidAmount(record) +
         iceGiftcardAmount(record)
-    )
-  );
+    );
+  }
+
+  return record.iceTotalRevenue ?? iceCashPaidAmount(record);
 }
 
 function iceCheckedCash(record: RevenueCashRecord | undefined) {
@@ -689,6 +692,22 @@ function buildIceLine(input: {
         `${dayLabel(record.date)}: ijs pin/overig en totale omzet ontbreken.`
       );
     }
+    if (
+      record.icePinRevenue !== undefined &&
+      record.iceTotalRevenue !== undefined &&
+      Math.abs(
+        record.iceTotalRevenue -
+          roundMoney(
+            iceCashPaidAmount(record) +
+              record.icePinRevenue +
+              iceGiftcardAmount(record)
+          )
+      ) > 0.01
+    ) {
+      input.warnings.push(
+        `${dayLabel(record.date)}: ijsbetaalvormen moeten opnieuw worden ververst.`
+      );
+    }
     if (record.iceNote?.trim()) {
       input.comments.push(`${dayLabel(record.date)}: ijs opmerking: ${record.iceNote.trim()}`);
     }
@@ -851,6 +870,7 @@ function buildCsv(
   cashRecords: RevenueCashRecord[],
   giftcardControl: LeatGiftcardControlResponse | null
 ) {
+  const compareWithLeat = kind === "patisserie" && giftcardControl?.available;
   const rows = [
     [
       "Maand",
@@ -899,13 +919,13 @@ function buildCsv(
       lineCsvValue(line.cashPaid),
       lineCsvValue(line.pinPaid),
       lineCsvValue(line.giftCards),
-      giftcardControl?.available
+      compareWithLeat
         ? lineCsvValue(giftcardTotals.leatRedeemed)
         : "",
-      giftcardControl?.available
+      compareWithLeat
         ? lineCsvValue(giftcardTotals.difference)
         : "",
-      giftcardControl?.available
+      compareWithLeat
         ? lineCsvValue(giftcardTotals.leatIssued)
         : "",
       lineCsvValue(line.cashOut),
@@ -1299,10 +1319,44 @@ function GiftcardControlPanel({
     control,
   });
   const totals = giftcardComparisonTotals(rows);
+  const monthTotals = giftcardComparisonTotals(
+    revenueShops.flatMap((shop) =>
+      buildGiftcardDayComparisons({
+        month,
+        shop,
+        kind,
+        cashRecords,
+        control,
+      })
+    )
+  );
   const mismatchCount = rows.filter(
     (row) => Math.abs(row.difference) > 0.01
   ).length;
   const ready = Boolean(control?.available && !loading);
+
+  if (kind === "ice") {
+    return (
+      <section className="rounded-lg border border-[#dce6d8] bg-white/95 px-3 py-3 shadow-sm">
+        <p className="text-[0.58rem] font-black uppercase tracking-normal text-[#71806c]">
+          IJsbonnen
+        </p>
+        <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm font-bold text-[#4a433b]">
+            Cash-it is leidend voor het ijskasboek. Leat kan historische
+            transacties niet betrouwbaar tussen winkel en ijs verdelen en is
+            daarom hier informatief, niet blokkerend.
+          </p>
+          <strong className="text-base text-[#1a1815]">
+            {formatMoney(totals.cashItRedeemed)}
+          </strong>
+        </div>
+      </section>
+    );
+  }
+
+  const monthMatches =
+    Math.abs(monthTotals.difference) <= GIFTCARD_MONTH_TOLERANCE;
 
   return (
     <section className="rounded-lg border border-[#dce6d8] bg-white/95 shadow-sm">
@@ -1312,7 +1366,7 @@ function GiftcardControlPanel({
             Automatische cadeauboncontrole
           </p>
           <h2 className="text-base font-black text-[#1a1815]">
-            Cash-it ↔ Leat · {selectedShop} {kind === "ice" ? "IJs" : "Patisserie"}
+            Cash-it ↔ Leat · {selectedShop} Patisserie
           </h2>
           <p className="mt-0.5 text-[0.68rem] font-bold text-[#7c746b]">
             Cash-it registreert wat aan de kassa is afgerekend; Leat bevestigt wat werkelijk is ingewisseld.
@@ -1322,7 +1376,7 @@ function GiftcardControlPanel({
           className={`rounded-full px-2 py-1 text-[0.62rem] font-black uppercase tracking-normal ${
             loading
               ? "bg-[#f4f1ed] text-[#70685f]"
-              : ready && mismatchCount === 0
+              : ready && monthMatches
                 ? "bg-[#edf7ec] text-[#1f4f35]"
                 : "bg-[#fff4cf] text-[#8a5a10]"
           }`}
@@ -1331,11 +1385,25 @@ function GiftcardControlPanel({
             ? "Leat laden"
             : !control?.available
               ? "Niet gecontroleerd"
-              : mismatchCount > 0
-                ? `${mismatchCount} verschil${mismatchCount === 1 ? "" : "len"}`
+              : monthMatches
+                ? mismatchCount > 0
+                  ? `Maand klopt · ${mismatchCount} dagverschil${mismatchCount === 1 ? "" : "len"}`
+                  : "Klopt"
+                : mismatchCount > 0
+                  ? `${mismatchCount} verschil${mismatchCount === 1 ? "" : "len"}`
                 : "Klopt"}
         </span>
       </div>
+
+      {ready && monthMatches && mismatchCount > 0 && (
+        <p className="m-3 rounded-md border border-[#cfe1ca] bg-[#f2f8f0] px-2 py-1.5 text-xs font-bold text-[#315f39]">
+          Het totale maandverschil is {formatMoney(monthTotals.difference)} en
+          valt binnen de afrondtolerantie van{" "}
+          {formatMoney(GIFTCARD_MONTH_TOLERANCE)}. De dag- en
+          locatieverschillen blijven hieronder zichtbaar, maar blokkeren de
+          maandboeking niet.
+        </p>
+      )}
 
       <div className="grid gap-px bg-[#e7eee4] sm:grid-cols-4">
         {[
@@ -1640,18 +1708,17 @@ export default function KasboekMaandrapportClient() {
     () => giftcardComparisonTotals(allGiftcardRows),
     [allGiftcardRows]
   );
-  const giftcardMismatchCount = allGiftcardRows.filter(
-    (row) => Math.abs(row.difference) > 0.01
-  ).length;
-  const giftcardControlCount = giftcardLoading
-    ? 1
-    : giftcardControl?.available
-      ? giftcardMismatchCount +
-        (cashbookKind === "patisserie" &&
-        giftcardControl.unmappedShops.length > 0
-          ? 1
-          : 0)
-      : 1;
+  const giftcardMonthMismatch =
+    Math.abs(allGiftcardTotals.difference) > GIFTCARD_MONTH_TOLERANCE;
+  const giftcardControlCount =
+    cashbookKind === "ice"
+      ? 0
+      : giftcardLoading
+        ? 1
+        : giftcardControl?.available
+          ? (giftcardMonthMismatch ? 1 : 0) +
+            (giftcardControl.unmappedShops.length > 0 ? 1 : 0)
+          : 1;
   const warningCount = revenueWarningCount + giftcardControlCount;
 
   async function markCashbookBooked() {
@@ -1941,7 +2008,9 @@ export default function KasboekMaandrapportClient() {
           <MetricCell
             label="Bonnen Leat"
             value={
-              giftcardControl?.available
+              cashbookKind === "ice"
+                ? "n.v.t."
+                : giftcardControl?.available
                 ? formatMoney(allGiftcardTotals.leatRedeemed)
                 : "-"
             }
@@ -1949,19 +2018,23 @@ export default function KasboekMaandrapportClient() {
           <MetricCell
             label="Bonverschil"
             value={
-              giftcardControl?.available
+              cashbookKind === "ice"
+                ? "n.v.t."
+                : giftcardControl?.available
                 ? formatMoney(allGiftcardTotals.difference)
                 : "-"
             }
             warn={
-              !giftcardControl?.available ||
-              Math.abs(allGiftcardTotals.difference) > 0.01
+              cashbookKind === "patisserie" &&
+              (!giftcardControl?.available || giftcardMonthMismatch)
             }
           />
           <MetricCell
             label="Bonnen uitgegeven"
             value={
-              giftcardControl?.available
+              cashbookKind === "ice"
+                ? "n.v.t."
+                : giftcardControl?.available
                 ? formatMoney(allGiftcardTotals.leatIssued)
                 : "-"
             }

@@ -225,12 +225,12 @@ export async function upsertRevenueCashRecords(cashRecords: RevenueCashRecord[])
       return [];
     }
 
-    const icePinRevenue = existing.icePinRevenue ?? record.icePinRevenue;
-    const iceTotalRevenue = existing.iceTotalRevenue ?? record.iceTotalRevenue;
-    const iceReceipts =
-      existing.iceReceipts && existing.iceReceipts > 0
-        ? existing.iceReceipts
-        : record.iceReceipts ?? existing.iceReceipts;
+    // A repair import may replace only the derived payment split. Counted
+    // cash, start money, checked amounts, notes and closed-week state remain
+    // sourced from the existing record below.
+    const icePinRevenue = record.icePinRevenue ?? existing.icePinRevenue;
+    const iceTotalRevenue = record.iceTotalRevenue ?? existing.iceTotalRevenue;
+    const iceReceipts = record.iceReceipts ?? existing.iceReceipts;
     const changed =
       icePinRevenue !== existing.icePinRevenue ||
       iceTotalRevenue !== existing.iceTotalRevenue ||
@@ -238,9 +238,8 @@ export async function upsertRevenueCashRecords(cashRecords: RevenueCashRecord[])
 
     if (!changed) return [];
 
-    // Een bestaand ijsrecord is financieel leidend, óók als de week nog open is.
-    // Herimport vult uitsluitend ontbrekende betaalvormen aan, zodat tellingen,
-    // startgeld, kluisbedragen en handmatige correcties nooit teruggezet worden.
+    // Een bestaand ijsrecord blijft financieel leidend voor de telling. Alleen
+    // de betaalvormen worden door de herstelimport opnieuw afgeleid.
     return [
       {
         ...existing,

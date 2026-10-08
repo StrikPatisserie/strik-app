@@ -97,7 +97,7 @@ type CashItTemplateAmounts = {
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
-const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v6-ice-payment-fallback";
+const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v7-ice-payment-refresh";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,

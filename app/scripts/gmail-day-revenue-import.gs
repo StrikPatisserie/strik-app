@@ -29,7 +29,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-window-v13-ice-direct-payments',
+  SCRIPT_VERSION: 'gmail-window-v14-ice-september-reconciliation',
 };
 
 function importDagomzet() {
@@ -225,14 +225,14 @@ function herimporteerEnImporteerLaatsteDagomzet() {
   herimporteerLaatsteDagomzet();
 }
 
-// Eenmalige, gerichte verrijking voor het ijskasboek vanaf week 37 van 2026.
+// Eenmalige, gerichte verrijking voor het ijskasboek vanaf 1 september 2026.
 // De server vult bij reeds gecontroleerde/gesloten dagen uitsluitend de nieuwe
 // betaalvelden aan; tellingen, startgeld, kluisbedragen en verschillen blijven staan.
 function verrijkIjsBetaalvormenVanafWeek37() {
-  const fromDate = new Date('2026-09-07T00:00:00+02:00');
+  const fromDate = new Date('2026-09-01T00:00:00+02:00');
   const queries = [
-    'after:2026/09/06 -label:"Fout" subject:"Dag Rapport ijs"',
-    'after:2026/09/06 -label:"Fout" subject:"Dagafsluiting email-Filiaal" subject:ijs',
+    'after:2026/08/31 -label:"Fout" subject:"Dag Rapport ijs"',
+    'after:2026/08/31 -label:"Fout" subject:"Dagafsluiting email-Filiaal" subject:ijs',
   ];
   const threads = searchDagomzetThreads_(150, queries);
   const props = PropertiesService.getScriptProperties();
@@ -305,6 +305,12 @@ function verrijkIjsBetaalvormenVanafWeek37() {
       `${batch.length} thread(s) in deze batch, ` +
       `${remainingThreads.length} thread(s) nog te gaan.`
   );
+}
+
+// Duidelijke alias voor deze septemberreparatie. De oude functienaam blijft
+// bestaan zodat een al ingestelde vervolgtrigger gewoon door kan lopen.
+function herstelIjsBetaalvormenSeptember2026() {
+  verrijkIjsBetaalvormenVanafWeek37();
 }
 
 // Eenmalig herstel voor het ontbrekende ijs-kasrapport van Daalseweg op 16-08-2026.
