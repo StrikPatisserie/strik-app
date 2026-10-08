@@ -97,7 +97,8 @@ type CashItTemplateAmounts = {
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
-const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v7-ice-payment-refresh";
+const DAY_IMPORT_PARSER_VERSION =
+  "cash-it-template-v8-ice-authoritative-payment-total";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -782,9 +783,29 @@ function deriveIceElectronicPaymentAmount(
   return undefined;
 }
 
+function deriveIceCashPaymentAmount(
+  amounts: ReturnType<typeof extractPaymentFormAmounts>
+) {
+  const electronic = deriveIceElectronicPaymentAmount(amounts);
+
+  // Cash-it's total in the payment-method section is authoritative. Some PDF
+  // text layers put the amount beside "Contant" in the wrong column, while
+  // pin and total are still extracted correctly. Deriving cash from the
+  // authoritative total keeps the split internally reconcilable.
+  if (amounts.total !== undefined && electronic !== undefined) {
+    return roundPaymentAmount(
+      Math.max(0, amounts.total - electronic - (amounts.vouchers || 0))
+    );
+  }
+
+  return amounts.cash;
+}
+
 function deriveTotalPaymentAmount(
   amounts: ReturnType<typeof extractPaymentFormAmounts>
 ) {
+  if (amounts.total !== undefined) return amounts.total;
+
   const electronic = deriveIceElectronicPaymentAmount(amounts);
 
   if (amounts.cash !== undefined && electronic !== undefined) {
@@ -1167,7 +1188,7 @@ function extractIceCashDetails(text: string): IceCashDetails {
     text
   );
   const cashRevenue = firstNumber(
-    paymentForms.cash,
+    deriveIceCashPaymentAmount(paymentForms),
     extractFirstIceAmount(
       [
         /\b(?:Contante?\s+omzet|Omzet\s+contant|Cash\s+omzet|Contant\s+ijs|Contant\s+geld|Cash)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
@@ -1290,7 +1311,7 @@ function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
     )
   );
   const cashRevenue = firstNumber(
-    paymentForms.cash,
+    deriveIceCashPaymentAmount(paymentForms),
     closeTableAmounts[4]?.amount,
     depositedAmounts[0]?.amount
   );

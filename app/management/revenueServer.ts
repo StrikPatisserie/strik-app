@@ -218,6 +218,7 @@ export async function upsertRevenueCashRecords(cashRecords: RevenueCashRecord[])
       return isCashImportLocked(stored.data, record) ? [] : [record];
     }
     if (
+      record.iceCashRevenue === undefined &&
       record.icePinRevenue === undefined &&
       record.iceTotalRevenue === undefined &&
       !(record.iceReceipts && record.iceReceipts > 0)
@@ -228,10 +229,13 @@ export async function upsertRevenueCashRecords(cashRecords: RevenueCashRecord[])
     // A repair import may replace only the derived payment split. Counted
     // cash, start money, checked amounts, notes and closed-week state remain
     // sourced from the existing record below.
+    const iceCashRevenue =
+      record.iceCashRevenue ?? existing.iceCashRevenue;
     const icePinRevenue = record.icePinRevenue ?? existing.icePinRevenue;
     const iceTotalRevenue = record.iceTotalRevenue ?? existing.iceTotalRevenue;
     const iceReceipts = record.iceReceipts ?? existing.iceReceipts;
     const changed =
+      iceCashRevenue !== existing.iceCashRevenue ||
       icePinRevenue !== existing.icePinRevenue ||
       iceTotalRevenue !== existing.iceTotalRevenue ||
       iceReceipts !== existing.iceReceipts;
@@ -243,6 +247,7 @@ export async function upsertRevenueCashRecords(cashRecords: RevenueCashRecord[])
     return [
       {
         ...existing,
+        iceCashRevenue,
         icePinRevenue,
         iceTotalRevenue,
         iceReceipts,
