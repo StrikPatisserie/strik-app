@@ -22,6 +22,8 @@ const DAGOMZET_IMPORT_CONFIG = {
   ],
   MAX_THREADS: 10,
   RECOVERY_MAX_THREADS: 80,
+  ICE_BACKFILL_BATCH_THREADS: 3,
+  ICE_BACKFILL_CONTINUE_AFTER_MS: 60000,
   CLEANUP_MAX_THREADS: 100,
   CLEANUP_INTERVAL_HOURS: 24,
   MAX_PDF_ATTACHMENTS: 5,
@@ -234,6 +236,8 @@ function verrijkIjsBetaalvormenVanafWeek37() {
   ];
   const threads = searchDagomzetThreads_(150, queries);
   const props = PropertiesService.getScriptProperties();
+  const resetKey =
+    `dagomzet:ice-payment-backfill:${DAGOMZET_IMPORT_CONFIG.SCRIPT_VERSION}:reset`;
   const isTargetMessage = (message) => {
     const subject = String(message.getSubject() || '').toLowerCase();
     const isIce =
@@ -245,20 +249,61 @@ function verrijkIjsBetaalvormenVanafWeek37() {
   };
   let resetCount = 0;
 
-  threads.forEach((thread) => {
-    thread.getMessages().forEach((message) => {
-      if (!isTargetMessage(message)) return;
+  if (!props.getProperty(resetKey)) {
+    threads.forEach((thread) => {
+      thread.getMessages().forEach((message) => {
+        if (!isTargetMessage(message)) return;
 
-      props.deleteProperty(
-        `dagomzet:${DAGOMZET_IMPORT_CONFIG.IMPORT_VERSION}:${message.getId()}`
-      );
-      resetCount += 1;
+        props.deleteProperty(
+          `dagomzet:${DAGOMZET_IMPORT_CONFIG.IMPORT_VERSION}:${message.getId()}`
+        );
+        resetCount += 1;
+      });
     });
-  });
+    props.setProperty(resetKey, new Date().toISOString());
+  }
 
-  importDagomzetThreads_(threads, isTargetMessage);
+  const pendingThreads = threads.filter((thread) =>
+    thread.getMessages().some((message) => {
+      if (!isTargetMessage(message)) return false;
+      const importId =
+        `dagomzet:${DAGOMZET_IMPORT_CONFIG.IMPORT_VERSION}:${message.getId()}`;
+      return !props.getProperty(importId);
+    })
+  );
+  const batch = pendingThreads.slice(
+    0,
+    DAGOMZET_IMPORT_CONFIG.ICE_BACKFILL_BATCH_THREADS
+  );
+
+  if (batch.length) importDagomzetThreads_(batch, isTargetMessage);
+
+  const remainingThreads = threads.filter((thread) =>
+    thread.getMessages().some((message) => {
+      if (!isTargetMessage(message)) return false;
+      const importId =
+        `dagomzet:${DAGOMZET_IMPORT_CONFIG.IMPORT_VERSION}:${message.getId()}`;
+      return !props.getProperty(importId);
+    })
+  );
+
+  ScriptApp.getProjectTriggers()
+    .filter((trigger) =>
+      trigger.getHandlerFunction() === 'verrijkIjsBetaalvormenVanafWeek37'
+    )
+    .forEach((trigger) => ScriptApp.deleteTrigger(trigger));
+
+  if (remainingThreads.length) {
+    ScriptApp.newTrigger('verrijkIjsBetaalvormenVanafWeek37')
+      .timeBased()
+      .after(DAGOMZET_IMPORT_CONFIG.ICE_BACKFILL_CONTINUE_AFTER_MS)
+      .create();
+  }
+
   Logger.log(
-    `IJs betaalvormen vanaf week 37 verrijkt uit ${resetCount} bericht(en).`
+    `IJs betaalvormen: ${resetCount} bericht(en) gereset, ` +
+      `${batch.length} thread(s) in deze batch, ` +
+      `${remainingThreads.length} thread(s) nog te gaan.`
   );
 }
 
