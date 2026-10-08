@@ -97,7 +97,7 @@ type CashItTemplateAmounts = {
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
-const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v4-ice-payments";
+const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v5-ice-direct-payments";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -754,6 +754,48 @@ function deriveElectronicPaymentAmount(
   );
 }
 
+function deriveIceElectronicPaymentAmount(
+  amounts: ReturnType<typeof extractPaymentFormAmounts>
+) {
+  const electronicAmounts = [
+    amounts.pin,
+    amounts.chip,
+    amounts.cashless,
+    amounts.ideal,
+    amounts.creditcard,
+    amounts.points,
+    amounts.other,
+  ].filter((amount): amount is number => amount !== undefined);
+
+  if (electronicAmounts.length) {
+    return roundPaymentAmount(
+      electronicAmounts.reduce((total, amount) => total + amount, 0)
+    );
+  }
+
+  if (amounts.total !== undefined && amounts.cash !== undefined) {
+    return roundPaymentAmount(
+      Math.max(0, amounts.total - amounts.cash - (amounts.vouchers || 0))
+    );
+  }
+
+  return undefined;
+}
+
+function deriveTotalPaymentAmount(
+  amounts: ReturnType<typeof extractPaymentFormAmounts>
+) {
+  const electronic = deriveIceElectronicPaymentAmount(amounts);
+
+  if (amounts.cash !== undefined && electronic !== undefined) {
+    return roundPaymentAmount(
+      amounts.cash + electronic + (amounts.vouchers || 0)
+    );
+  }
+
+  return amounts.total;
+}
+
 function extractPaymentFormBlock(sectionText: string) {
   const startIndex = sectionText.search(/\bBetaalvormen\b/i);
   const source = startIndex >= 0 ? sectionText.slice(startIndex) : sectionText;
@@ -762,6 +804,35 @@ function extractPaymentFormBlock(sectionText: string) {
   );
 
   return endIndex >= 0 ? source.slice(0, endIndex) : source;
+}
+
+function extractIcePaymentFormAmounts(text: string) {
+  const block = extractPaymentFormBlock(text);
+  const directVouchers = extractPaymentFormAmount(
+    block,
+    voucherPaymentLabelPattern
+  );
+  const amounts = {
+    cash: extractPaymentFormAmount(block, "Contant"),
+    pin: extractPaymentFormAmount(block, "Pin"),
+    chip: extractPaymentFormAmount(block, "Chip"),
+    cashless: extractPaymentFormAmount(block, "Cashless"),
+    ideal: extractPaymentFormAmount(block, "Ideal"),
+    creditcard: extractPaymentFormAmount(block, "Creditcard"),
+    points: extractPaymentFormAmount(block, "Spaarpunten"),
+    vouchers: directVouchers,
+    other: extractPaymentFormAmount(block, "Overig"),
+    total: extractPaymentFormAmount(block, "Totaal"),
+  };
+  const derivedVouchers = deriveVoucherPaymentAmount(amounts);
+
+  return {
+    ...amounts,
+    vouchers:
+      directVouchers !== undefined && directVouchers > 0
+        ? directVouchers
+        : derivedVouchers ?? directVouchers,
+  };
 }
 
 function usablePaymentAmounts(text: string) {
@@ -1057,7 +1128,7 @@ function extractFirstIceAmount(patterns: RegExp[], text: string) {
 }
 
 function extractIceCashDetails(text: string): IceCashDetails {
-  const paymentForms = extractPaymentFormAmounts(text);
+  const paymentForms = extractIcePaymentFormAmounts(text);
   const startCash = extractFirstIceAmount(
     [
       /\b(?:Startgeld|Start\s*geld|Begingeld|Begin\s*geld|Start\s*kas|Openingsgeld|Wisselgeld)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
@@ -1115,8 +1186,8 @@ function extractIceCashDetails(text: string): IceCashDetails {
     startCash,
     countedCash,
     cashRevenue,
-    pinRevenue: deriveElectronicPaymentAmount(paymentForms),
-    totalRevenue: paymentForms.total,
+    pinRevenue: deriveIceElectronicPaymentAmount(paymentForms),
+    totalRevenue: deriveTotalPaymentAmount(paymentForms),
     cashOut,
     receipts,
     expectedCash: firstNumber(explicitExpectedCash, derivedExpectedCash),
@@ -1149,7 +1220,7 @@ function extractSignedAmountsAfter(
 }
 
 function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
-  const paymentForms = extractPaymentFormAmounts(sectionText);
+  const paymentForms = extractIcePaymentFormAmounts(sectionText);
   const weekdayPattern =
     /\b(?:maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\b/i;
   const closeTableAmounts = extractSignedAmountsAfter(
@@ -1211,8 +1282,8 @@ function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
     startCash,
     countedCash,
     cashRevenue,
-    pinRevenue: deriveElectronicPaymentAmount(paymentForms),
-    totalRevenue: paymentForms.total,
+    pinRevenue: deriveIceElectronicPaymentAmount(paymentForms),
+    totalRevenue: deriveTotalPaymentAmount(paymentForms),
     cashOut,
     receipts: firstNumber(
       paymentForms.vouchers,
@@ -1605,6 +1676,8 @@ function cashRecordsTemplateDetails(
       dailyRevenue: dayAmount?.amount,
       startCash: record.startCash,
       cashRevenue: record.cashRevenue,
+      pinRevenue: record.icePinRevenue,
+      totalRevenue: record.iceTotalRevenue,
       cashOut: record.cashOut,
       receipts: record.receipts,
       countedCash: record.countedCash,

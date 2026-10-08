@@ -27,7 +27,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-window-v12-ice-payments',
+  SCRIPT_VERSION: 'gmail-window-v13-ice-direct-payments',
 };
 
 function importDagomzet() {
@@ -545,6 +545,8 @@ function logDagomzetImportResult_(responseText) {
               shop,
               `omzet ${formatDagomzetEuro_(detail.dailyRevenue)}`,
               `kas ${formatDagomzetEuro_(detail.cashRevenue)}`,
+              `pin ${formatDagomzetEuro_(detail.pinRevenue)}`,
+              `totaal ${formatDagomzetEuro_(detail.totalRevenue)}`,
               `bonnen ${formatDagomzetEuro_(detail.receipts)}`,
               `geteld ${formatDagomzetEuro_(detail.countedCash)}`,
             ].join(' ');
