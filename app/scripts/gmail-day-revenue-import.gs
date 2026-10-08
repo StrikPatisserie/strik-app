@@ -27,7 +27,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-window-v11',
+  SCRIPT_VERSION: 'gmail-window-v12-ice-payments',
 };
 
 function importDagomzet() {
@@ -71,7 +71,7 @@ function importDagomzetHerstel() {
   );
 }
 
-function importDagomzetThreads_(threads) {
+function importDagomzetThreads_(threads, messagePredicate) {
   const props = PropertiesService.getScriptProperties();
 
   console.log(
@@ -99,6 +99,8 @@ function importDagomzetThreads_(threads) {
     let failed = false;
 
     thread.getMessages().forEach((message) => {
+      if (messagePredicate && !messagePredicate(message)) return;
+
       const importId = `dagomzet:${DAGOMZET_IMPORT_CONFIG.IMPORT_VERSION}:${message.getId()}`;
       if (props.getProperty(importId)) return;
 
@@ -219,6 +221,45 @@ function herimporteerLaatsteDagomzet() {
 
 function herimporteerEnImporteerLaatsteDagomzet() {
   herimporteerLaatsteDagomzet();
+}
+
+// Eenmalige, gerichte verrijking voor het ijskasboek vanaf week 37 van 2026.
+// De server vult bij reeds gecontroleerde/gesloten dagen uitsluitend de nieuwe
+// betaalvelden aan; tellingen, startgeld, kluisbedragen en verschillen blijven staan.
+function verrijkIjsBetaalvormenVanafWeek37() {
+  const fromDate = new Date('2026-09-07T00:00:00+02:00');
+  const queries = [
+    'after:2026/09/06 subject:"Dag Rapport ijs"',
+    'after:2026/09/06 subject:"Dagafsluiting email-Filiaal" subject:ijs',
+  ];
+  const threads = searchDagomzetThreads_(150, queries);
+  const props = PropertiesService.getScriptProperties();
+  const isTargetMessage = (message) => {
+    const subject = String(message.getSubject() || '').toLowerCase();
+    const isIce =
+      subject.indexOf('dag rapport ijs') >= 0 ||
+      (subject.indexOf('dagafsluiting email-filiaal') >= 0 &&
+        subject.indexOf('ijs') >= 0);
+
+    return isIce && message.getDate().getTime() >= fromDate.getTime();
+  };
+  let resetCount = 0;
+
+  threads.forEach((thread) => {
+    thread.getMessages().forEach((message) => {
+      if (!isTargetMessage(message)) return;
+
+      props.deleteProperty(
+        `dagomzet:${DAGOMZET_IMPORT_CONFIG.IMPORT_VERSION}:${message.getId()}`
+      );
+      resetCount += 1;
+    });
+  });
+
+  importDagomzetThreads_(threads, isTargetMessage);
+  Logger.log(
+    `IJs betaalvormen vanaf week 37 verrijkt uit ${resetCount} bericht(en).`
+  );
 }
 
 // Eenmalig herstel voor het ontbrekende ijs-kasrapport van Daalseweg op 16-08-2026.

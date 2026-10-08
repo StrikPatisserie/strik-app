@@ -238,6 +238,39 @@ function iceExpectedCash(record: RevenueCashRecord | undefined) {
   return record.iceExpectedCash ?? record.iceCash ?? record.iceCashRevenue ?? 0;
 }
 
+function iceCashPaidAmount(record: RevenueCashRecord) {
+  return record.iceCashRevenue ?? iceExpectedCash(record);
+}
+
+function iceGiftcardAmount(record: RevenueCashRecord) {
+  return record.iceReceipts ?? 0;
+}
+
+function icePinPaidAmount(record: RevenueCashRecord) {
+  if (record.icePinRevenue !== undefined) return record.icePinRevenue;
+  if (record.iceTotalRevenue === undefined) return 0;
+
+  return Math.max(
+    0,
+    roundMoney(
+      record.iceTotalRevenue -
+        iceCashPaidAmount(record) -
+        iceGiftcardAmount(record)
+    )
+  );
+}
+
+function iceTotalRevenueAmount(record: RevenueCashRecord) {
+  return (
+    record.iceTotalRevenue ??
+    roundMoney(
+      iceCashPaidAmount(record) +
+        icePinPaidAmount(record) +
+        iceGiftcardAmount(record)
+    )
+  );
+}
+
 function iceCheckedCash(record: RevenueCashRecord | undefined) {
   if (!record) return 0;
 
@@ -346,8 +379,10 @@ function buildMonthCashTotals(cashRecords: RevenueCashRecord[], month: string) {
     ),
     iceCashRevenue: sumMoney(
       iceRecords,
-      (record) => record.iceCashRevenue ?? iceExpectedCash(record)
+      iceCashPaidAmount
     ),
+    icePinRevenue: sumMoney(iceRecords, icePinPaidAmount),
+    iceTotalRevenue: sumMoney(iceRecords, iceTotalRevenueAmount),
     checkedPatisserieCash: sumMoney(checkedPatisserieRecords, safeCheckedCash),
     checkedIceCash: sumMoney(checkedIceRecords, iceCheckedCash),
     patisserieReceipts,
@@ -627,6 +662,14 @@ function buildIceLine(input: {
     if (!record.iceCheckedAt) {
       input.warnings.push(`${dayLabel(record.date)}: ijstelling nog niet afgevinkt.`);
     }
+    if (
+      record.icePinRevenue === undefined &&
+      record.iceTotalRevenue === undefined
+    ) {
+      input.warnings.push(
+        `${dayLabel(record.date)}: ijs pin/overig en totale omzet ontbreken.`
+      );
+    }
     if (record.iceNote?.trim()) {
       input.comments.push(`${dayLabel(record.date)}: ijs opmerking: ${record.iceNote.trim()}`);
     }
@@ -658,15 +701,15 @@ function buildIceLine(input: {
     daysWithData: input.cashRecords.length,
     expectedDays: input.cashRecords.length,
     checkedDays: checkedRecords.length,
-    revenue: null,
+    revenue: sumMoney(input.cashRecords, iceTotalRevenueAmount),
     cashPaid: sumMoney(
       input.cashRecords,
-      (record) => record.iceCashRevenue ?? iceExpectedCash(record)
+      iceCashPaidAmount
     ),
     expectedDeposit: sumMoney(input.cashRecords, iceExpectedCash),
     deposited: sumMoney(checkedRecords, iceCheckedCash),
-    pinPaid: null,
-    giftCards: sumMoney(input.cashRecords, (record) => record.iceReceipts),
+    pinPaid: sumMoney(input.cashRecords, icePinPaidAmount),
+    giftCards: sumMoney(input.cashRecords, iceGiftcardAmount),
     cashOut: sumMoney(input.cashRecords, (record) => record.iceCashOut),
     cashDifference: sumMoney(checkedRecords, iceSafeDifference),
     hasData: input.cashRecords.length > 0,
@@ -905,19 +948,15 @@ function ReportLineRow({
       <td className="px-2 py-2 text-xs font-bold text-[#6b645b]">
         {line.checkedDays}/{line.expectedDays || "-"}
       </td>
-      {kind === "patisserie" && (
-        <td className="px-2 py-2 text-right text-xs font-black">
-          {formatMoney(line.revenue)}
-        </td>
-      )}
+      <td className="px-2 py-2 text-right text-xs font-black">
+        {formatMoney(line.revenue)}
+      </td>
       <td className="px-2 py-2 text-right text-xs font-black">
         {formatMoney(line.cashPaid)}
       </td>
-      {kind === "patisserie" && (
-        <td className="px-2 py-2 text-right text-xs font-black">
-          {formatMoney(line.pinPaid)}
-        </td>
-      )}
+      <td className="px-2 py-2 text-right text-xs font-black">
+        {formatMoney(line.pinPaid)}
+      </td>
       <td className="px-2 py-2 text-right text-xs font-black">
         {formatMoney(line.giftCards)}
       </td>
@@ -982,15 +1021,15 @@ function ReportTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className={`w-full ${kind === "ice" ? "min-w-[48rem]" : "min-w-[62rem]"} border-collapse text-left`}>
+        <table className="w-full min-w-[62rem] border-collapse text-left">
           <thead>
             <tr className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
               <th className="sticky left-0 bg-white px-2 py-2 text-left">Soort</th>
               <th className="px-2 py-2 text-left">Dagen</th>
               <th className="px-2 py-2 text-left">Controle</th>
-              {kind === "patisserie" && <th className="px-2 py-2 text-right">Omzet</th>}
+              <th className="px-2 py-2 text-right">Omzet</th>
               <th className="px-2 py-2 text-right">{kind === "ice" ? "Kasomzet" : "Contant"}</th>
-              {kind === "patisserie" && <th className="px-2 py-2 text-right">Pin/overig</th>}
+              <th className="px-2 py-2 text-right">Pin/overig</th>
               <th className="px-2 py-2 text-right">Kadobonnen</th>
               <th className="px-2 py-2 text-right">Kas-uit</th>
               <th className="px-2 py-2 text-right">Verwacht bank</th>
@@ -1080,22 +1119,16 @@ function MonthShopOverview({
       </div>
       <div className="overflow-x-auto">
         <table
-          className={`w-full ${
-            kind === "ice" ? "min-w-[52rem]" : "min-w-[68rem]"
-          } border-collapse text-left print:min-w-0`}
+          className="w-full min-w-[68rem] border-collapse text-left print:min-w-0"
         >
           <thead>
             <tr className="text-[0.55rem] font-black uppercase tracking-normal text-[#8b8278]">
               <th className="px-3 py-1.5">Locatie</th>
-              {kind === "patisserie" && (
-                <th className="px-2 py-1.5 text-right">Omzet</th>
-              )}
+              <th className="px-2 py-1.5 text-right">Omzet</th>
               <th className="px-2 py-1.5 text-right">
                 {kind === "ice" ? "Kasomzet" : "Contant"}
               </th>
-              {kind === "patisserie" && (
-                <th className="px-2 py-1.5 text-right">Pin/overig</th>
-              )}
+              <th className="px-2 py-1.5 text-right">Pin/overig</th>
               <th className="px-2 py-1.5 text-right">Kadobonnen</th>
               <th className="px-2 py-1.5 text-right">Kas-uit</th>
               <th className="px-2 py-1.5 text-right">Verwacht bank</th>
@@ -1134,19 +1167,15 @@ function MonthShopOverview({
                       )}
                     </span>
                   </th>
-                  {kind === "patisserie" && (
-                    <td className="px-2 py-1.5 text-right font-black">
-                      {formatMoney(line.revenue)}
-                    </td>
-                  )}
+                  <td className="px-2 py-1.5 text-right font-black">
+                    {formatMoney(line.revenue)}
+                  </td>
                   <td className="px-2 py-1.5 text-right">
                     {formatMoney(line.cashPaid)}
                   </td>
-                  {kind === "patisserie" && (
-                    <td className="px-2 py-1.5 text-right">
-                      {formatMoney(line.pinPaid)}
-                    </td>
-                  )}
+                  <td className="px-2 py-1.5 text-right">
+                    {formatMoney(line.pinPaid)}
+                  </td>
                   <td className="px-2 py-1.5 text-right">
                     {formatMoney(line.giftCards)}
                   </td>
@@ -1181,19 +1210,15 @@ function MonthShopOverview({
             })}
             <tr className="border-t-2 border-[#d9d0c6] bg-[#f8f6f3] text-xs font-black text-[#1a1815]">
               <th className="px-3 py-1.5 text-left">Totaal</th>
-              {kind === "patisserie" && (
-                <td className="px-2 py-1.5 text-right">
-                  {formatMoney(total.revenue)}
-                </td>
-              )}
+              <td className="px-2 py-1.5 text-right">
+                {formatMoney(total.revenue)}
+              </td>
               <td className="px-2 py-1.5 text-right">
                 {formatMoney(total.cashPaid)}
               </td>
-              {kind === "patisserie" && (
-                <td className="px-2 py-1.5 text-right">
-                  {formatMoney(total.pinPaid)}
-                </td>
-              )}
+              <td className="px-2 py-1.5 text-right">
+                {formatMoney(total.pinPaid)}
+              </td>
               <td className="px-2 py-1.5 text-right">
                 {formatMoney(total.giftCards)}
               </td>
@@ -1837,9 +1862,14 @@ export default function KasboekMaandrapportClient() {
 
       <section className="rounded-lg border border-[#e7e0d8] bg-white/95 p-2 shadow-sm print:hidden">
         <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-          {cashbookKind === "patisserie" && (
-            <MetricCell label="Omzet patisserie" value={formatMoney(totalWinkel.revenue)} />
-          )}
+          <MetricCell
+            label={cashbookKind === "ice" ? "Omzet ijs" : "Omzet patisserie"}
+            value={formatMoney(
+              cashbookKind === "ice"
+                ? monthCashTotals.iceTotalRevenue
+                : totalWinkel.revenue
+            )}
+          />
           <MetricCell
             label={cashbookKind === "ice" ? "Kasomzet ijs" : "Contant patisserie"}
             value={formatMoney(
@@ -1848,12 +1878,14 @@ export default function KasboekMaandrapportClient() {
                 : monthCashTotals.cashRevenue
             )}
           />
-          {cashbookKind === "patisserie" && (
-            <MetricCell
-              label="Pin/overig patisserie"
-              value={formatMoney(totalWinkel.pinPaid)}
-            />
-          )}
+          <MetricCell
+            label={cashbookKind === "ice" ? "Pin/overig ijs" : "Pin/overig patisserie"}
+            value={formatMoney(
+              cashbookKind === "ice"
+                ? monthCashTotals.icePinRevenue
+                : totalWinkel.pinPaid
+            )}
+          />
           <MetricCell
             label={`Bonnen Cash-it ${cashbookKind === "ice" ? "ijs" : "patisserie"}`}
             value={formatMoney(

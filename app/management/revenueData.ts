@@ -75,6 +75,8 @@ export type RevenueCashRecord = {
   iceStartCash?: number;
   iceCountedCash?: number;
   iceCashRevenue?: number;
+  icePinRevenue?: number;
+  iceTotalRevenue?: number;
   iceCashOut?: number;
   iceReceipts?: number;
   iceExpectedCash?: number;
@@ -238,6 +240,8 @@ function compactCashRecordPayload(record: RevenueCashRecord) {
     isc: record.iceStartCash,
     icc: record.iceCountedCash,
     icr: record.iceCashRevenue,
+    ipr: record.icePinRevenue,
+    itr: record.iceTotalRevenue,
     icu: record.iceCashOut,
     irc: record.iceReceipts,
     iec: record.iceExpectedCash,
@@ -293,6 +297,8 @@ function expandCashRecordPayload(
     iceStartCash: payload.iceStartCash ?? payload.isc,
     iceCountedCash: payload.iceCountedCash ?? payload.icc,
     iceCashRevenue: payload.iceCashRevenue ?? payload.icr,
+    icePinRevenue: payload.icePinRevenue ?? payload.ipr,
+    iceTotalRevenue: payload.iceTotalRevenue ?? payload.itr,
     iceCashOut: payload.iceCashOut ?? payload.icu,
     iceReceipts: payload.iceReceipts ?? payload.irc,
     iceExpectedCash: payload.iceExpectedCash ?? payload.iec,
@@ -770,6 +776,14 @@ export function normalizeRevenueCashRecord(
       value.iceCashRevenue === undefined
         ? undefined
         : positiveMoneyFrom(value.iceCashRevenue),
+    icePinRevenue:
+      value.icePinRevenue === undefined
+        ? undefined
+        : positiveMoneyFrom(value.icePinRevenue),
+    iceTotalRevenue:
+      value.iceTotalRevenue === undefined
+        ? undefined
+        : positiveMoneyFrom(value.iceTotalRevenue),
     iceCashOut:
       value.iceCashOut === undefined
         ? undefined
@@ -1152,6 +1166,8 @@ export function mergeRevenueCashRecords(
       iceStartCash: record.iceStartCash ?? existing?.iceStartCash,
       iceCountedCash: record.iceCountedCash ?? existing?.iceCountedCash,
       iceCashRevenue: record.iceCashRevenue ?? existing?.iceCashRevenue,
+      icePinRevenue: record.icePinRevenue ?? existing?.icePinRevenue,
+      iceTotalRevenue: record.iceTotalRevenue ?? existing?.iceTotalRevenue,
       iceCashOut: record.iceCashOut ?? existing?.iceCashOut,
       iceReceipts: record.iceReceipts ?? existing?.iceReceipts,
       iceExpectedCash: record.iceExpectedCash ?? existing?.iceExpectedCash,

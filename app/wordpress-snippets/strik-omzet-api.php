@@ -216,6 +216,8 @@ function strik_revenue_normalize_cash_record($record) {
         'iceStartCash' => isset($record['iceStartCash']) ? round((float) $record['iceStartCash'], 2) : null,
         'iceCountedCash' => isset($record['iceCountedCash']) ? round((float) $record['iceCountedCash'], 2) : null,
         'iceCashRevenue' => isset($record['iceCashRevenue']) ? round((float) $record['iceCashRevenue'], 2) : null,
+        'icePinRevenue' => isset($record['icePinRevenue']) ? round((float) $record['icePinRevenue'], 2) : null,
+        'iceTotalRevenue' => isset($record['iceTotalRevenue']) ? round((float) $record['iceTotalRevenue'], 2) : null,
         'iceCashOut' => isset($record['iceCashOut']) ? round((float) $record['iceCashOut'], 2) : null,
         'iceReceipts' => isset($record['iceReceipts']) ? round((float) $record['iceReceipts'], 2) : null,
         'iceExpectedCash' => isset($record['iceExpectedCash']) ? round((float) $record['iceExpectedCash'], 2) : null,

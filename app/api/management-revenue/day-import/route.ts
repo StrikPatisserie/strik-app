@@ -57,6 +57,8 @@ type IceCashCandidate = ShopAmountCandidate & {
   startCash?: number;
   countedCash?: number;
   cashRevenue?: number;
+  pinRevenue?: number;
+  totalRevenue?: number;
   cashOut?: number;
   receipts?: number;
   expectedCash?: number;
@@ -95,7 +97,7 @@ type CashItTemplateAmounts = {
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
-const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v3";
+const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v4-ice-payments";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -557,10 +559,6 @@ function extractFirstSignedAmount(pattern: RegExp, text: string) {
   return parseSignedDutchAmount(match[1] || match[0]) ?? undefined;
 }
 
-function extractVoucherPaymentAmount(text: string) {
-  return extractPaymentFormAmounts(text).vouchers;
-}
-
 function extractPaymentFormAmount(text: string, labelPattern: string) {
   return firstNumber(
     extractPaymentFormAmountNearLabel(text, labelPattern),
@@ -728,6 +726,32 @@ function extractPaymentFormAmounts(text: string) {
         ? directVouchers
         : derivedVouchers ?? directVouchers,
   };
+}
+
+function deriveElectronicPaymentAmount(
+  amounts: ReturnType<typeof extractPaymentFormAmounts>
+) {
+  if (amounts.total !== undefined && amounts.cash !== undefined) {
+    return roundPaymentAmount(
+      Math.max(0, amounts.total - amounts.cash - (amounts.vouchers || 0))
+    );
+  }
+
+  const electronicAmounts = [
+    amounts.pin,
+    amounts.chip,
+    amounts.cashless,
+    amounts.ideal,
+    amounts.creditcard,
+    amounts.points,
+    amounts.other,
+  ].filter((amount): amount is number => amount !== undefined);
+
+  if (!electronicAmounts.length) return undefined;
+
+  return roundPaymentAmount(
+    electronicAmounts.reduce((total, amount) => total + amount, 0)
+  );
 }
 
 function extractPaymentFormBlock(sectionText: string) {
@@ -1033,6 +1057,7 @@ function extractFirstIceAmount(patterns: RegExp[], text: string) {
 }
 
 function extractIceCashDetails(text: string): IceCashDetails {
+  const paymentForms = extractPaymentFormAmounts(text);
   const startCash = extractFirstIceAmount(
     [
       /\b(?:Startgeld|Start\s*geld|Begingeld|Begin\s*geld|Start\s*kas|Openingsgeld|Wisselgeld)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
@@ -1045,12 +1070,15 @@ function extractIceCashDetails(text: string): IceCashDetails {
     ],
     text
   );
-  const cashRevenue = extractFirstIceAmount(
-    [
-      /\b(?:Contante?\s+omzet|Omzet\s+contant|Cash\s+omzet|Contant\s+ijs|Contant\s+geld|Cash)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
-      /\b(?:Ijs|IJsloket)[^\n]*(?:contant|cash)[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
-    ],
-    text
+  const cashRevenue = firstNumber(
+    paymentForms.cash,
+    extractFirstIceAmount(
+      [
+        /\b(?:Contante?\s+omzet|Omzet\s+contant|Cash\s+omzet|Contant\s+ijs|Contant\s+geld|Cash)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+        /\b(?:Ijs|IJsloket)[^\n]*(?:contant|cash)[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
+      ],
+      text
+    )
   );
   const cashOut = extractFirstIceAmount(
     [
@@ -1058,7 +1086,7 @@ function extractIceCashDetails(text: string): IceCashDetails {
     ],
     text
   );
-  const receipts = extractVoucherPaymentAmount(text);
+  const receipts = paymentForms.vouchers;
   const explicitExpectedCash = extractFirstIceAmount(
     [
       /\b(?:Naar\s+kluis|Kluis|Afstort(?:ing)?|Afstorten|Stort(?:ing)?|Te\s+storten|Naar\s+bank)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
@@ -1087,6 +1115,8 @@ function extractIceCashDetails(text: string): IceCashDetails {
     startCash,
     countedCash,
     cashRevenue,
+    pinRevenue: deriveElectronicPaymentAmount(paymentForms),
+    totalRevenue: paymentForms.total,
     cashOut,
     receipts,
     expectedCash: firstNumber(explicitExpectedCash, derivedExpectedCash),
@@ -1119,6 +1149,7 @@ function extractSignedAmountsAfter(
 }
 
 function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
+  const paymentForms = extractPaymentFormAmounts(sectionText);
   const weekdayPattern =
     /\b(?:maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag)\b/i;
   const closeTableAmounts = extractSignedAmountsAfter(
@@ -1163,6 +1194,7 @@ function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
     )
   );
   const cashRevenue = firstNumber(
+    paymentForms.cash,
     closeTableAmounts[4]?.amount,
     depositedAmounts[0]?.amount
   );
@@ -1179,9 +1211,11 @@ function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
     startCash,
     countedCash,
     cashRevenue,
+    pinRevenue: deriveElectronicPaymentAmount(paymentForms),
+    totalRevenue: paymentForms.total,
     cashOut,
     receipts: firstNumber(
-      extractVoucherPaymentAmount(sectionText),
+      paymentForms.vouchers,
       voucherAmounts[2]?.amount
     ),
     expectedCash,
@@ -1229,6 +1263,8 @@ function buildIceCashRecord(
     iceStartCash: item.startCash,
     iceCountedCash: item.countedCash,
     iceCashRevenue: item.cashRevenue,
+    icePinRevenue: item.pinRevenue,
+    iceTotalRevenue: item.totalRevenue,
     iceCashOut: item.cashOut,
     iceReceipts: item.receipts,
     iceExpectedCash: item.expectedCash ?? item.amount,
@@ -1255,6 +1291,8 @@ function mergeIceCashRecordDetails(
     iceStartCash: primary.iceStartCash ?? fallback.iceStartCash,
     iceCountedCash: primary.iceCountedCash ?? fallback.iceCountedCash,
     iceCashRevenue: primary.iceCashRevenue ?? fallback.iceCashRevenue,
+    icePinRevenue: primary.icePinRevenue ?? fallback.icePinRevenue,
+    iceTotalRevenue: primary.iceTotalRevenue ?? fallback.iceTotalRevenue,
     iceCashOut: primary.iceCashOut ?? fallback.iceCashOut,
     iceReceipts: primary.iceReceipts ?? fallback.iceReceipts,
     iceExpectedCash: primary.iceExpectedCash ?? fallback.iceExpectedCash,
@@ -1286,6 +1324,8 @@ function extractIceCashRecordsFromCashSections(
       sectionDetails.startCash ?? amounts.startCash ?? details.startCash;
     const cashRevenue =
       sectionDetails.cashRevenue ?? amounts.cashRevenue ?? details.cashRevenue;
+    const pinRevenue = sectionDetails.pinRevenue ?? details.pinRevenue;
+    const totalRevenue = sectionDetails.totalRevenue ?? details.totalRevenue;
     const cashOut = sectionDetails.cashOut ?? amounts.cashOut ?? details.cashOut;
     const receipts =
       sectionDetails.receipts ?? amounts.receipts ?? details.receipts;
@@ -1319,6 +1359,8 @@ function extractIceCashRecordsFromCashSections(
         startCash,
         countedCash,
         cashRevenue,
+        pinRevenue,
+        totalRevenue,
         cashOut,
         receipts,
         expectedCash,
@@ -1438,6 +1480,8 @@ function extractIceCashAmountsByShop(text: string) {
     startCash: candidate.startCash,
     countedCash: candidate.countedCash,
     cashRevenue: candidate.cashRevenue,
+    pinRevenue: candidate.pinRevenue,
+    totalRevenue: candidate.totalRevenue,
     cashOut: candidate.cashOut,
     receipts: candidate.receipts,
     expectedCash: candidate.expectedCash,
@@ -1481,6 +1525,8 @@ function extractIceCashRecords(
               startCash: singleCandidate.startCash,
               countedCash: singleCandidate.countedCash,
               cashRevenue: singleCandidate.cashRevenue,
+              pinRevenue: singleCandidate.pinRevenue,
+              totalRevenue: singleCandidate.totalRevenue,
               cashOut: singleCandidate.cashOut,
               receipts: singleCandidate.receipts,
               expectedCash: singleCandidate.expectedCash,

@@ -198,14 +198,64 @@ export async function upsertRevenueCashRecords(cashRecords: RevenueCashRecord[])
     const normalized = normalizeRevenueCashRecord(record);
     return normalized ? [normalized] : [];
   });
-  const unlockedCashRecords = normalizedCashRecords.filter(
-    (record) => !isCashImportLocked(stored.data, record)
-  );
+  const importableCashRecords = normalizedCashRecords.flatMap((record) => {
+    const existing = (stored.data.cashRecords || []).find(
+      (item) =>
+        createRevenueCashKey(item.date, item.shop) ===
+        createRevenueCashKey(record.date, record.shop)
+    );
+    const existingHasIceData = Boolean(
+      existing &&
+        (existing.cashImportKind === "ice" ||
+          existing.iceCash !== undefined ||
+          existing.iceStartCash !== undefined ||
+          existing.iceCountedCash !== undefined ||
+          existing.iceCashRevenue !== undefined ||
+          existing.iceExpectedCash !== undefined)
+    );
+
+    if (record.cashImportKind !== "ice" || !existing || !existingHasIceData) {
+      return isCashImportLocked(stored.data, record) ? [] : [record];
+    }
+    if (
+      record.icePinRevenue === undefined &&
+      record.iceTotalRevenue === undefined &&
+      !(record.iceReceipts && record.iceReceipts > 0)
+    ) {
+      return [];
+    }
+
+    const icePinRevenue = existing.icePinRevenue ?? record.icePinRevenue;
+    const iceTotalRevenue = existing.iceTotalRevenue ?? record.iceTotalRevenue;
+    const iceReceipts =
+      existing.iceReceipts && existing.iceReceipts > 0
+        ? existing.iceReceipts
+        : record.iceReceipts ?? existing.iceReceipts;
+    const changed =
+      icePinRevenue !== existing.icePinRevenue ||
+      iceTotalRevenue !== existing.iceTotalRevenue ||
+      iceReceipts !== existing.iceReceipts;
+
+    if (!changed) return [];
+
+    // Een bestaand ijsrecord is financieel leidend, óók als de week nog open is.
+    // Herimport vult uitsluitend ontbrekende betaalvormen aan, zodat tellingen,
+    // startgeld, kluisbedragen en handmatige correcties nooit teruggezet worden.
+    return [
+      {
+        ...existing,
+        icePinRevenue,
+        iceTotalRevenue,
+        iceReceipts,
+        updatedAt: record.updatedAt || existing.updatedAt,
+      },
+    ];
+  });
   const nextData = normalizeRevenueData({
     ...stored.data,
     cashRecords: mergeImportedRevenueCashRecords(
       stored.data.cashRecords || [],
-      unlockedCashRecords
+      importableCashRecords
     ),
   });
 
