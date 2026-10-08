@@ -28,6 +28,7 @@ type ReportLine = {
   daysWithData: number;
   expectedDays: number;
   checkedDays: number;
+  estimatedDepositDays: number;
   revenue: number | null;
   cashPaid: number | null;
   expectedDeposit: number | null;
@@ -542,6 +543,9 @@ function giftcardComparisonTotals(rows: GiftcardDayComparison[]) {
 
 function reportLineStatus(line: ReportLine) {
   if (!line.expectedDays && !line.hasData) return "Geen data";
+  if (line.estimatedDepositDays > 0) {
+    return `Voorlopig · ${line.estimatedDepositDays}× verwacht`;
+  }
   if (line.expectedDays && line.checkedDays < line.expectedDays) {
     return `Voorlopig · ${line.checkedDays}/${line.expectedDays}`;
   }
@@ -589,7 +593,9 @@ function buildWinkelLine(input: {
       return;
     }
     if (!cashRecord.checkedAt) {
-      input.warnings.push(`${dayLabel(date)}: geldtelling nog niet afgevinkt.`);
+      input.comments.push(
+        `${dayLabel(date)}: geldtelling nog niet afgevinkt; verwacht bankbedrag ${formatMoney(safeExpectedCash(cashRecord))} gebruikt.`
+      );
     }
 
     const note = visibleCashNote(cashRecord.note);
@@ -632,8 +638,16 @@ function buildWinkelLine(input: {
     }, 0)
   );
 
-  const checkedRecords = input.cashRecords.filter(
+  const reportCashRecords = input.cashRecords.filter(
+    (record) =>
+      expectedDates.includes(record.date) &&
+      !dailyByDate.get(record.date)?.shopClosed
+  );
+  const checkedRecords = reportCashRecords.filter(
     (record) => hasPatisserieCashRecord(record) && record.checkedAt
+  );
+  const estimatedRecords = reportCashRecords.filter(
+    (record) => hasPatisserieCashRecord(record) && !record.checkedAt
   );
 
   return {
@@ -641,10 +655,13 @@ function buildWinkelLine(input: {
     daysWithData: input.dailyRecords.length,
     expectedDays: expectedDates.length,
     checkedDays: checkedRecords.length + closedDates.length,
+    estimatedDepositDays: estimatedRecords.length,
     revenue: sumMoney(input.dailyRecords, (record) => record.amount),
     cashPaid: sumMoney(input.cashRecords, cashPaidAmount),
-    expectedDeposit: sumMoney(input.cashRecords, safeExpectedCash),
-    deposited: sumMoney(checkedRecords, safeCheckedCash),
+    expectedDeposit: sumMoney(reportCashRecords, safeExpectedCash),
+    deposited: sumMoney(reportCashRecords, (record) =>
+      record.checkedAt ? safeCheckedCash(record) : safeExpectedCash(record)
+    ),
     pinPaid,
     giftCards: sumMoney(input.cashRecords, receiptAmount),
     cashOut: sumMoney(input.cashRecords, cashOutAmount),
@@ -660,7 +677,9 @@ function buildIceLine(input: {
 }) {
   input.cashRecords.forEach((record) => {
     if (!record.iceCheckedAt) {
-      input.warnings.push(`${dayLabel(record.date)}: ijstelling nog niet afgevinkt.`);
+      input.comments.push(
+        `${dayLabel(record.date)}: ijstelling nog niet afgevinkt; verwacht bankbedrag ${formatMoney(iceExpectedCash(record))} gebruikt.`
+      );
     }
     if (
       record.icePinRevenue === undefined &&
@@ -695,19 +714,25 @@ function buildIceLine(input: {
   });
 
   const checkedRecords = input.cashRecords.filter((record) => record.iceCheckedAt);
+  const estimatedRecords = input.cashRecords.filter(
+    (record) => !record.iceCheckedAt
+  );
 
   return {
     label: "IJs",
     daysWithData: input.cashRecords.length,
     expectedDays: input.cashRecords.length,
     checkedDays: checkedRecords.length,
+    estimatedDepositDays: estimatedRecords.length,
     revenue: sumMoney(input.cashRecords, iceTotalRevenueAmount),
     cashPaid: sumMoney(
       input.cashRecords,
       iceCashPaidAmount
     ),
     expectedDeposit: sumMoney(input.cashRecords, iceExpectedCash),
-    deposited: sumMoney(checkedRecords, iceCheckedCash),
+    deposited: sumMoney(input.cashRecords, (record) =>
+      record.iceCheckedAt ? iceCheckedCash(record) : iceExpectedCash(record)
+    ),
     pinPaid: sumMoney(input.cashRecords, icePinPaidAmount),
     giftCards: sumMoney(input.cashRecords, iceGiftcardAmount),
     cashOut: sumMoney(input.cashRecords, (record) => record.iceCashOut),
@@ -791,6 +816,10 @@ function totalReportLine(label: ReportLine["label"], lines: ReportLine[]) {
     daysWithData: lines.reduce((total, line) => total + line.daysWithData, 0),
     expectedDays: lines.reduce((total, line) => total + line.expectedDays, 0),
     checkedDays: lines.reduce((total, line) => total + line.checkedDays, 0),
+    estimatedDepositDays: lines.reduce(
+      (total, line) => total + line.estimatedDepositDays,
+      0
+    ),
     revenue: sumNullable((line) => line.revenue),
     cashPaid: sumNullable((line) => line.cashPaid),
     expectedDeposit: sumNullable((line) => line.expectedDeposit),
@@ -839,7 +868,7 @@ function buildCsv(
       "Leat uitgegeven",
       "Kas-uit",
       "Verwacht naar bank",
-      "Geteld naar bank",
+      "Boekingsbedrag naar bank (geteld of verwacht)",
       "Kasverschil telling",
       "Status",
       "Opmerkingen",
@@ -1033,7 +1062,7 @@ function ReportTable({
               <th className="px-2 py-2 text-right">Kadobonnen</th>
               <th className="px-2 py-2 text-right">Kas-uit</th>
               <th className="px-2 py-2 text-right">Verwacht bank</th>
-              <th className="px-2 py-2 text-right">Geteld bank</th>
+              <th className="px-2 py-2 text-right">Boekingsbedrag</th>
               <th className="px-2 py-2 text-right">Verschil</th>
               <th className="px-2 py-2 text-left">Status</th>
             </tr>
@@ -1132,7 +1161,7 @@ function MonthShopOverview({
               <th className="px-2 py-1.5 text-right">Kadobonnen</th>
               <th className="px-2 py-1.5 text-right">Kas-uit</th>
               <th className="px-2 py-1.5 text-right">Verwacht bank</th>
-              <th className="px-2 py-1.5 text-right">Geteld bank</th>
+              <th className="px-2 py-1.5 text-right">Boekingsbedrag</th>
               <th className="px-2 py-1.5 text-right">Verschil</th>
               <th className="px-3 py-1.5">Status</th>
             </tr>
@@ -1549,6 +1578,10 @@ export default function KasboekMaandrapportClient() {
     () => totalReportLine("IJs", reports.map((report) => report.ijs)),
     [reports]
   );
+  const estimatedDepositDays =
+    cashbookKind === "ice"
+      ? totalIjs.estimatedDepositDays
+      : totalWinkel.estimatedDepositDays;
   const selectedReport =
     reports.find((report) => report.shop === selectedShop) || reports[0];
   const monthCashTotals = useMemo(
@@ -1642,9 +1675,12 @@ export default function KasboekMaandrapportClient() {
     const confirmed = window.confirm(
       [
         `Heb je het ${cashbookKind === "ice" ? "ijskasboek" : "patisseriekasboek"} van ${monthLabel(month)} in Exact geboekt?`,
+        estimatedDepositDays > 0
+          ? `Voor ${estimatedDepositDays} nog niet getelde dag${estimatedDepositDays === 1 ? "" : "en"} gebruikt dit rapport het verwachte bankbedrag.`
+          : "",
         "",
         "Na bevestigen wordt deze maand in de Strik app gesloten.",
-      ].join("\n")
+      ].filter(Boolean).join("\n")
     );
     if (!confirmed) return;
 
@@ -1844,6 +1880,14 @@ export default function KasboekMaandrapportClient() {
             {storage.message} Het rapport gebruikt dan mogelijk alleen seeddata.
           </p>
         )}
+        {estimatedDepositDays > 0 && (
+          <p className="mt-2 rounded-md border border-[#ead59d] bg-[#fff8d8] px-2 py-1.5 text-xs font-bold text-[#7a5417]">
+            Voor {estimatedDepositDays} nog niet getelde dag
+            {estimatedDepositDays === 1 ? "" : "en"} gebruikt het
+            boekingsbedrag de verwachte kasomzet. Reeds getelde en
+            gecorrigeerde bedragen blijven leidend.
+          </p>
+        )}
         {status && (
           <p className="mt-2 rounded-md bg-[#f8f6f3] px-2 py-1.5 text-xs font-bold text-[#6b645b]">
             {status}
@@ -1932,12 +1976,13 @@ export default function KasboekMaandrapportClient() {
             warn={warningCount > 0}
           />
           <MetricCell
-            label={`Geteld ${cashbookKind === "ice" ? "ijs" : "patisserie"}`}
+            label={`Boekingsbedrag ${cashbookKind === "ice" ? "ijs" : "patisserie"}`}
             value={formatMoney(
               cashbookKind === "ice"
                 ? totalIjs.deposited
                 : totalWinkel.deposited
             )}
+            warn={estimatedDepositDays > 0}
           />
           <MetricCell
             label={`Kas-uit ${cashbookKind === "ice" ? "ijs" : "patisserie"}`}
