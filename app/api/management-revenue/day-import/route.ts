@@ -97,7 +97,7 @@ type CashItTemplateAmounts = {
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
-const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v5-ice-direct-payments";
+const DAY_IMPORT_PARSER_VERSION = "cash-it-template-v6-ice-payment-fallback";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -808,20 +808,45 @@ function extractPaymentFormBlock(sectionText: string) {
 
 function extractIcePaymentFormAmounts(text: string) {
   const block = extractPaymentFormBlock(text);
-  const directVouchers = extractPaymentFormAmount(
-    block,
-    voucherPaymentLabelPattern
+  const templateAmounts = extractCashItTemplateAmounts(text);
+  const directVouchers = firstNumber(
+    extractPaymentFormAmount(block, voucherPaymentLabelPattern),
+    templateAmounts.vouchers
   );
   const amounts = {
-    cash: extractPaymentFormAmount(block, "Contant"),
-    pin: extractPaymentFormAmount(block, "Pin"),
-    chip: extractPaymentFormAmount(block, "Chip"),
-    cashless: extractPaymentFormAmount(block, "Cashless"),
-    ideal: extractPaymentFormAmount(block, "Ideal"),
-    creditcard: extractPaymentFormAmount(block, "Creditcard"),
-    points: extractPaymentFormAmount(block, "Spaarpunten"),
+    cash: firstNumber(
+      extractPaymentFormAmount(block, "Contant"),
+      templateAmounts.cash
+    ),
+    pin: firstNumber(
+      extractPaymentFormAmount(block, "Pin"),
+      templateAmounts.pin
+    ),
+    chip: firstNumber(
+      extractPaymentFormAmount(block, "Chip"),
+      templateAmounts.chip
+    ),
+    cashless: firstNumber(
+      extractPaymentFormAmount(block, "Cashless"),
+      templateAmounts.cashless
+    ),
+    ideal: firstNumber(
+      extractPaymentFormAmount(block, "Ideal"),
+      templateAmounts.ideal
+    ),
+    creditcard: firstNumber(
+      extractPaymentFormAmount(block, "Creditcard"),
+      templateAmounts.creditcard
+    ),
+    points: firstNumber(
+      extractPaymentFormAmount(block, "Spaarpunten"),
+      templateAmounts.points
+    ),
     vouchers: directVouchers,
-    other: extractPaymentFormAmount(block, "Overig"),
+    other: firstNumber(
+      extractPaymentFormAmount(block, "Overig"),
+      templateAmounts.other
+    ),
     total: extractPaymentFormAmount(block, "Totaal"),
   };
   const derivedVouchers = deriveVoucherPaymentAmount(amounts);
