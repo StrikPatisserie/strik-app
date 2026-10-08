@@ -33,6 +33,8 @@ import {
   specialProCollegeVehicleForReceipt,
 } from "./specialProCollegeDelivery";
 import type {
+  LogisticsAcquisitionCampaign,
+  LogisticsAcquisitionStop,
   LogisticsBatch,
   LogisticsBatchStatus,
   LogisticsDayFeedback,
@@ -212,6 +214,17 @@ type RouteDraftSummary = LogisticsRouteDraft;
 type RouteLearningSummary = LogisticsRouteLearning;
 type FixedCustomerSummary = LogisticsFixedCustomer;
 type PreparationProductSummary = LogisticsPreparationProduct;
+type AcquisitionCampaignSummary = LogisticsAcquisitionCampaign;
+type AcquisitionRouteCluster = LogisticsAcquisitionStop["routeCluster"];
+type AcquisitionSuggestion = {
+  stop: LogisticsAcquisitionStop;
+  routeId: string;
+  routeTitle: string;
+  vehicle: string;
+  afterStopId: string;
+  nearbyLabel: string;
+  exactMatch: boolean;
+};
 type OperationsDraft = Required<
   Pick<LogisticsDayOperations, "teamStartTime" | "teamEndTime" | "teamMembers">
 > & {
@@ -4960,6 +4973,7 @@ function createBusRoutePrintHtml(input: {
             .map((stop, index) => {
               const detailParts = routePrintTimeParts(stop);
               const timeBadge = routePrintTimeBadgeHtml(stop);
+              const isAcquisitionStop = stop.badges.includes("acquisitie");
               const stopTiming = routeTiming?.stops[index];
               const missesDeadline = routeStopMissesDeadline(stop, stopTiming);
               const planningLine = stopTiming
@@ -4975,13 +4989,18 @@ function createBusRoutePrintHtml(input: {
                 : "";
 
               return `
-                <article class="stop-card${missesDeadline ? " missed-deadline" : ""}">
+                <article class="stop-card${missesDeadline ? " missed-deadline" : ""}${isAcquisitionStop ? " acquisition" : ""}">
                   <div class="stop-number">${index + 1}</div>
                   <div class="stop-content">
                     <div class="stop-heading">
                       <strong>${escapeHtml(stop.label)}</strong>
                       ${timeBadge}
                     </div>
+                    ${
+                      isAcquisitionStop
+                        ? '<span class="acquisition-label">ACQUISITIE · SINTERKLAASFOLDER</span>'
+                        : ""
+                    }
                     <p>${escapeHtml(detailParts.detail || "Adres controleren")}</p>
                     ${planningLine}
                     <div class="write-fields">
@@ -5224,6 +5243,22 @@ function createBusRoutePrintHtml(input: {
       }
       .stop-card.missed-deadline {
         border-color: #a92f20;
+      }
+      .stop-card.acquisition {
+        background: #fff0d7;
+        border: 3px solid #8c3f25;
+        border-left-width: 8px;
+      }
+      .acquisition-label {
+        background: #8c3f25;
+        border-radius: 1mm;
+        color: #fff;
+        display: inline-block;
+        font-size: 8px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        margin-top: 0.5mm;
+        padding: 0.7mm 1.2mm;
       }
       .stop-number {
         align-items: center;
@@ -6889,6 +6924,140 @@ function routePointForStop(stop: RouteStop): RoutePoint {
       " "
     )
   );
+}
+
+function acquisitionRouteClusterForStop(
+  stop: RouteStop
+): AcquisitionRouteCluster | "" {
+  const sourceKey = routeStopSourceKey(stop);
+  if (sourceKey.includes("shop:lent")) return "north";
+  if (sourceKey.includes("shop:ziekerstraat")) return "center";
+  if (
+    sourceKey.includes("shop:heyendaalseweg") ||
+    sourceKey.includes("shop:daalseweg")
+  ) {
+    return "east";
+  }
+
+  const searchText = [
+    stop.label,
+    stop.learningLabel || "",
+    stop.learningTarget || "",
+    stop.detail,
+  ].join(" ");
+  const postcode = routePostcodeForText(searchText);
+
+  if (postcode === "6511") return "center";
+  if (postcode === "6512") return "station";
+  if (postcode === "6515") return "north";
+  if (["6523", "6524", "6525", "6526"].includes(postcode)) return "east";
+  if (["6531", "6532", "6533", "6534", "6535", "6536"].includes(postcode)) {
+    return "south";
+  }
+  if (["6537", "6538"].includes(postcode)) return "dukenburg";
+  if (["6541", "6542", "6543", "6544"].includes(postcode)) return "west";
+  if (["6545", "6546"].includes(postcode)) return "west-hightech";
+  if (["6551", "6641"].includes(postcode)) return "beuningen-weurt";
+
+  const normalized = normalizeMatchText(searchText);
+  if (/waalkade|oranjesingel|centrum|grote markt/.test(normalized)) return "center";
+  if (/station|campusbaan/.test(normalized)) return "station";
+  if (/lent|wendelring/.test(normalized)) return "north";
+  if (/groesbeekseweg|heyendaal|wundtlaan/.test(normalized)) return "east";
+  if (/jonkerbos|goffert|stadionplein|groenestraat/.test(normalized)) return "south";
+  if (/wijchenseweg|takenhofplein|dukenburg/.test(normalized)) return "dukenburg";
+  if (/microweg|lagelandseweg|vlotkampweg|kerkenbos/.test(normalized)) {
+    return "west-hightech";
+  }
+  if (/weurt|beuningen|goudwerf|pieckelaan/.test(normalized)) {
+    return "beuningen-weurt";
+  }
+  if (/energieweg|kanaalstraat|nijverheidsweg|winselingseweg|weurtseweg/.test(normalized)) {
+    return "west";
+  }
+
+  return "";
+}
+
+const acquisitionAdjacentClusters: Record<
+  AcquisitionRouteCluster,
+  AcquisitionRouteCluster[]
+> = {
+  center: ["station"],
+  station: ["center"],
+  east: ["south"],
+  south: ["east", "dukenburg"],
+  dukenburg: ["south", "west"],
+  west: ["dukenburg", "west-hightech", "beuningen-weurt"],
+  "west-hightech": ["west", "beuningen-weurt"],
+  north: [],
+  "beuningen-weurt": ["west", "west-hightech"],
+};
+
+function isAcquisitionCampaignDate(
+  date: string,
+  campaign: AcquisitionCampaignSummary | null
+) {
+  return Boolean(
+    campaign && date >= campaign.startDate && date <= campaign.endDate
+  );
+}
+
+function buildAcquisitionSuggestions(
+  campaign: AcquisitionCampaignSummary | null,
+  routeRounds: RouteRound[],
+  date: string
+): AcquisitionSuggestion[] {
+  if (!campaign || !isAcquisitionCampaignDate(date, campaign)) return [];
+
+  const deliveredStopIds = new Set(
+    campaign.deliveries.map((delivery) => delivery.stopId)
+  );
+  const routedStopIds = new Set(
+    routeRounds.flatMap((route) =>
+      route.stops.flatMap((stop) => {
+        const sourceKey = routeStopSourceKey(stop);
+        return sourceKey.startsWith("acquisition:")
+          ? [sourceKey.slice("acquisition:".length)]
+          : [];
+      })
+    )
+  );
+  const routeMatches = routeRounds.flatMap((route) =>
+    route.stops.flatMap((stop) => {
+      const cluster = acquisitionRouteClusterForStop(stop);
+      return cluster ? [{ route, stop, cluster }] : [];
+    })
+  );
+
+  return campaign.stops
+    .filter(
+      (stop) =>
+        !deliveredStopIds.has(stop.id) && !routedStopIds.has(stop.id)
+    )
+    .flatMap((stop) => {
+      const exactMatch = routeMatches.find(
+        (match) => match.cluster === stop.routeCluster
+      );
+      const nearbyMatch =
+        exactMatch ||
+        routeMatches.find((match) =>
+          acquisitionAdjacentClusters[stop.routeCluster].includes(match.cluster)
+        );
+      if (!nearbyMatch) return [];
+
+      return [{
+        stop,
+        routeId: nearbyMatch.route.id,
+        routeTitle: nearbyMatch.route.title,
+        vehicle: nearbyMatch.route.vehicle,
+        afterStopId: nearbyMatch.stop.id,
+        nearbyLabel: nearbyMatch.stop.label,
+        exactMatch: Boolean(exactMatch),
+      }];
+    })
+    .sort((first, second) => Number(second.exactMatch) - Number(first.exactMatch))
+    .slice(0, 6);
 }
 
 const defaultRouteDepartureMinute = 8 * 60 + 5;
@@ -9168,7 +9337,10 @@ function reconcileRouteDraftRounds(
       .map((draftStop) => {
         const sourceKey = draftStop.sourceId || draftStop.id;
         if (excludedSourceIds.has(sourceKey)) return null;
-        if (sourceKey.startsWith("manual:")) {
+        if (
+          sourceKey.startsWith("manual:") ||
+          sourceKey.startsWith("acquisition:")
+        ) {
           usedSourceKeys.add(sourceKey);
           return draftStop;
         }
@@ -9739,6 +9911,12 @@ export default function BakkerijLogistiekDashboard() {
   const [preparationProducts, setPreparationProducts] = useState<
     PreparationProductSummary[]
   >([]);
+  const [acquisitionCampaign, setAcquisitionCampaign] =
+    useState<AcquisitionCampaignSummary | null>(null);
+  const [acquisitionOverviewOpen, setAcquisitionOverviewOpen] = useState(false);
+  const [acquisitionUpdatingStopId, setAcquisitionUpdatingStopId] =
+    useState("");
+  const [acquisitionMessage, setAcquisitionMessage] = useState("");
   const [preparationProductManagerCategory, setPreparationProductManagerCategory] =
     useState<PreparationCategory | null>(null);
   const [preparationProductMessage, setPreparationProductMessage] = useState("");
@@ -9924,6 +10102,25 @@ export default function BakkerijLogistiekDashboard() {
   const [routesEdited, setRoutesEdited] = useState(false);
   const [routeHasUnsavedChanges, setRouteHasUnsavedChanges] = useState(false);
   const routeRounds = manualRouteRounds || automaticRouteRounds;
+  const acquisitionSuggestions = useMemo(
+    () =>
+      buildAcquisitionSuggestions(
+        acquisitionCampaign,
+        routeRounds,
+        selectedPlan.date
+      ),
+    [acquisitionCampaign, routeRounds, selectedPlan.date]
+  );
+  const acquisitionDeliveredCount = acquisitionCampaign?.deliveries.length || 0;
+  const acquisitionTotalCount = acquisitionCampaign?.stops.length || 0;
+  const acquisitionRemainingCount = Math.max(
+    0,
+    acquisitionTotalCount - acquisitionDeliveredCount
+  );
+  const showAcquisitionCampaign = isAcquisitionCampaignDate(
+    selectedPlan.date,
+    acquisitionCampaign
+  );
   const routeCanSave =
     routeHasUnsavedChanges || (routesEdited && routeDraft?.isFinal !== true);
   const marzipanPrintItems = useMemo(
@@ -10155,6 +10352,10 @@ export default function BakkerijLogistiekDashboard() {
   }, [automaticRouteRounds, loadProfile, routeDraft, selectedPlan.date]);
 
   useEffect(() => {
+    setAcquisitionMessage("");
+  }, [selectedPlan.date]);
+
+  useEffect(() => {
     let ignoreResult = false;
     const manualRefresh = manualBatchRefreshRef.current;
 
@@ -10177,6 +10378,7 @@ export default function BakkerijLogistiekDashboard() {
           routeLearning?: RouteLearningSummary | null;
           fixedCustomers?: FixedCustomerSummary[];
           preparationProducts?: PreparationProductSummary[];
+          acquisitionCampaign?: AcquisitionCampaignSummary | null;
           message?: string;
         };
 
@@ -10207,6 +10409,7 @@ export default function BakkerijLogistiekDashboard() {
         setRouteLearning(data.routeLearning || null);
         setFixedCustomers(data.fixedCustomers || []);
         setPreparationProducts(data.preparationProducts || []);
+        setAcquisitionCampaign(data.acquisitionCampaign || null);
         setRecentDayFeedback(data.recentDayFeedback || []);
         setFeedbackByDate((current) => ({
           ...current,
@@ -10402,11 +10605,13 @@ export default function BakkerijLogistiekDashboard() {
           ? `route opgeslagen om ${getUploadTime()}`
           : `routeconcept bewaard om ${getUploadTime()}`
       );
+      return true;
     } catch (error) {
       setRouteSaveState("error");
       setRouteSaveMessage(
         error instanceof Error ? error.message : "Route opslaan is niet gelukt."
       );
+      return false;
     }
   }
 
@@ -10511,6 +10716,172 @@ export default function BakkerijLogistiekDashboard() {
     void saveRouteDraft(nextRoutes, false);
   }
 
+  async function addAcquisitionSuggestion(
+    suggestion: AcquisitionSuggestion
+  ) {
+    if (acquisitionUpdatingStopId) return;
+
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const sourceId = `acquisition:${suggestion.stop.id}`;
+    if (
+      currentRoutes.some((route) =>
+        route.stops.some((stop) => routeStopSourceKey(stop) === sourceId)
+      )
+    ) {
+      return;
+    }
+
+    const acquisitionStop: RouteStop = {
+      id: `acquisition-${suggestion.stop.id}`,
+      sourceId,
+      learningKey: sourceId,
+      learningLabel: suggestion.stop.company,
+      learningTarget: `${suggestion.stop.street}, ${suggestion.stop.postalCode} ${suggestion.stop.city}`,
+      learningKind: "check",
+      label: `Sinterklaasfolder · ${suggestion.stop.company}`,
+      detail: `ACQUISITIE · ${suggestion.stop.street}, ${suggestion.stop.postalCode} ${suggestion.stop.city} · t.a.v. ${suggestion.stop.attention}`,
+      badges: ["acquisitie", "sinterklaasfolder"],
+    };
+    const nextRoutes = currentRoutes.map((route) => {
+      if (route.id !== suggestion.routeId) return route;
+
+      const stops = [...route.stops];
+      const nearbyIndex = stops.findIndex(
+        (stop) => stop.id === suggestion.afterStopId
+      );
+      stops.splice(nearbyIndex >= 0 ? nearbyIndex + 1 : stops.length, 0, acquisitionStop);
+
+      return refreshRouteRoundAfterManualMove({ ...route, stops }, loadProfile);
+    });
+
+    setAcquisitionUpdatingStopId(suggestion.stop.id);
+    setAcquisitionMessage(`${suggestion.stop.company} wordt aan de route toegevoegd...`);
+    setManualRouteRounds(nextRoutes);
+    setDeletedRouteStopSnapshot(null);
+    setRoutesEdited(true);
+    setRouteHasUnsavedChanges(true);
+    setRouteSaveState("idle");
+
+    try {
+      const routeSaved = await saveRouteDraft(nextRoutes, false);
+      if (!routeSaved) {
+        throw new Error("De route kon niet worden bewaard.");
+      }
+
+      const response = await fetch(
+        "/api/bakkerij-logistiek/acquisition-campaign",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "deliver",
+            stopId: suggestion.stop.id,
+            date: selectedPlan.date,
+            routeId: suggestion.routeId,
+            routeTitle: suggestion.routeTitle,
+            vehicle: suggestion.vehicle,
+          }),
+        }
+      );
+      const data = (await response.json()) as {
+        ok?: boolean;
+        campaign?: AcquisitionCampaignSummary;
+        message?: string;
+      };
+      if (!response.ok || !data.ok || !data.campaign) {
+        throw new Error(
+          data.message || "De campagnevoortgang kon niet worden bijgewerkt."
+        );
+      }
+
+      setAcquisitionCampaign(data.campaign);
+      setAcquisitionMessage(
+        `${suggestion.stop.company} staat opvallend in ${suggestion.routeTitle}.`
+      );
+    } catch (error) {
+      setAcquisitionMessage(
+        error instanceof Error
+          ? error.message
+          : "Het acquisitieadres toevoegen is niet gelukt."
+      );
+    } finally {
+      setAcquisitionUpdatingStopId("");
+    }
+  }
+
+  async function removeAcquisitionRouteStop(
+    routeId: string,
+    stopId: string,
+    acquisitionStopId: string
+  ) {
+    if (acquisitionUpdatingStopId) return;
+
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const stop = currentRoutes
+      .find((route) => route.id === routeId)
+      ?.stops.find((item) => item.id === stopId);
+    if (!stop) return;
+
+    const nextRoutes = compactEmptyRouteRounds(
+      currentRoutes.map((route) =>
+        route.id === routeId
+          ? refreshRouteRoundAfterManualMove(
+              {
+                ...route,
+                stops: route.stops.filter((item) => item.id !== stopId),
+              },
+              loadProfile
+            )
+          : route
+      )
+    );
+
+    setAcquisitionUpdatingStopId(acquisitionStopId);
+    setAcquisitionMessage(`${stop.label} wordt uit de route gehaald...`);
+    setManualRouteRounds(nextRoutes);
+    setDeletedRouteStopSnapshot(null);
+    setRoutesEdited(true);
+    setRouteHasUnsavedChanges(true);
+    setRouteSaveState("idle");
+
+    try {
+      const routeSaved = await saveRouteDraft(nextRoutes, false);
+      if (!routeSaved) {
+        throw new Error("De aangepaste route kon niet worden bewaard.");
+      }
+
+      const response = await fetch(
+        "/api/bakkerij-logistiek/acquisition-campaign",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "undo", stopId: acquisitionStopId }),
+        }
+      );
+      const data = (await response.json()) as {
+        ok?: boolean;
+        campaign?: AcquisitionCampaignSummary;
+        message?: string;
+      };
+      if (!response.ok || !data.ok || !data.campaign) {
+        throw new Error(
+          data.message || "De campagnevoortgang kon niet worden teruggedraaid."
+        );
+      }
+
+      setAcquisitionCampaign(data.campaign);
+      setAcquisitionMessage(`${stop.label} staat weer bij de suggesties.`);
+    } catch (error) {
+      setAcquisitionMessage(
+        error instanceof Error
+          ? error.message
+          : "Het acquisitieadres verwijderen is niet gelukt."
+      );
+    } finally {
+      setAcquisitionUpdatingStopId("");
+    }
+  }
+
   function removeRouteStopOnly(routeId: string, stopId: string) {
     const currentRoutes = manualRouteRounds || automaticRouteRounds;
     const sourceRoute = currentRoutes.find((route) => route.id === routeId);
@@ -10518,7 +10889,8 @@ export default function BakkerijLogistiekDashboard() {
     if (!sourceRoute || !stop) return;
 
     const sourceKey = routeStopSourceKey(stop);
-    const nextExcludedSourceIds = sourceKey.startsWith("manual:")
+    const nextExcludedSourceIds =
+      sourceKey.startsWith("manual:") || sourceKey.startsWith("acquisition:")
       ? excludedRouteStopSourceIds
       : Array.from(new Set([...excludedRouteStopSourceIds, sourceKey]));
     const nextRoutes = compactEmptyRouteRounds(
@@ -10556,6 +10928,21 @@ export default function BakkerijLogistiekDashboard() {
     const sourceRoute = currentRoutes.find((route) => route.id === routeId);
     const stop = sourceRoute?.stops.find((item) => item.id === stopId);
     if (!sourceRoute || !stop) return;
+
+    const sourceKey = routeStopSourceKey(stop);
+    if (sourceKey.startsWith("acquisition:")) {
+      const confirmed = window.confirm(
+        `Wil je "${stop.label}" uit de route halen en weer beschikbaar maken als suggestie?`
+      );
+      if (confirmed) {
+        void removeAcquisitionRouteStop(
+          routeId,
+          stopId,
+          sourceKey.slice("acquisition:".length)
+        );
+      }
+      return;
+    }
 
     const receiptId = receiptIdForRouteStop(stop);
     const canDeleteReceipt = receiptSummaries.some(
@@ -10705,6 +11092,14 @@ export default function BakkerijLogistiekDashboard() {
   }
 
   async function resetRouteDraft() {
+    const currentRoutes = manualRouteRounds || automaticRouteRounds;
+    const acquisitionPlacements = currentRoutes.flatMap((route) =>
+      route.stops
+        .filter((stop) =>
+          routeStopSourceKey(stop).startsWith("acquisition:")
+        )
+        .map((stop) => ({ routeId: route.id, vehicle: route.vehicle, stop }))
+    );
     setManualRouteRounds(null);
     setExcludedRouteStopSourceIds([]);
     setDeletedRouteStopSnapshot(null);
@@ -10734,6 +11129,42 @@ export default function BakkerijLogistiekDashboard() {
       }
 
       setRouteLearning(data.routeLearning || null);
+      if (acquisitionPlacements.length > 0) {
+        const recalculatedRoutes = cloneRouteRounds(automaticRouteRounds);
+        acquisitionPlacements.forEach((placement) => {
+          const targetRoute =
+            recalculatedRoutes.find((route) => route.id === placement.routeId) ||
+            recalculatedRoutes.find(
+              (route) => route.vehicle === placement.vehicle
+            );
+          if (
+            !targetRoute ||
+            targetRoute.stops.some(
+              (stop) =>
+                routeStopSourceKey(stop) ===
+                routeStopSourceKey(placement.stop)
+            )
+          ) {
+            return;
+          }
+          targetRoute.stops.push(placement.stop);
+          Object.assign(
+            targetRoute,
+            refreshRouteRoundAfterManualMove(targetRoute, loadProfile)
+          );
+        });
+
+        setManualRouteRounds(recalculatedRoutes);
+        setRoutesEdited(true);
+        setRouteHasUnsavedChanges(true);
+        const saved = await saveRouteDraft(recalculatedRoutes, false, []);
+        if (saved) {
+          setRouteSaveMessage(
+            "route opnieuw berekend · Sinterklaasfolder-stops behouden"
+          );
+        }
+        return;
+      }
       setRouteSaveState("idle");
       setRouteSaveMessage("automatische route actief · leerdata bewaard");
     } catch (error) {
@@ -11365,6 +11796,33 @@ export default function BakkerijLogistiekDashboard() {
 
           <div className="flex flex-wrap items-center justify-between gap-2 md:h-full md:flex-col md:items-end">
             <div className="flex flex-wrap items-center justify-end gap-1.5">
+              {showAcquisitionCampaign && acquisitionCampaign && (
+                <div className="flex h-9 overflow-hidden rounded-xl border border-[#d46b3f] bg-[#fff0d7] text-[#713519] shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setAcquisitionOverviewOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-2.5 text-[0.64rem] font-black leading-none transition hover:bg-[#ffe1b2] sm:px-3 sm:text-[0.7rem]"
+                  >
+                    <GiftIcon />
+                    <span className="sm:hidden">
+                      {acquisitionDeliveredCount}/{acquisitionTotalCount} bezorgd
+                    </span>
+                    <span className="hidden sm:inline">
+                      Acquisitie Sinterklaasfolder · {acquisitionDeliveredCount}/
+                      {acquisitionTotalCount} bezorgd · nog {acquisitionRemainingCount}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Bekijk bezorgde en resterende acquisitieadressen"
+                    title="Campagne-overzicht"
+                    onClick={() => setAcquisitionOverviewOpen(true)}
+                    className="flex w-8 items-center justify-center border-l border-[#dca37f] bg-white/45 text-xs font-black transition hover:bg-white/75"
+                  >
+                    i
+                  </button>
+                </div>
+              )}
               {showSpecialSchoolDelivery && (
                 <button
                   type="button"
@@ -11570,7 +12028,11 @@ export default function BakkerijLogistiekDashboard() {
       <div className="mt-2">
         {activeTab === "routes" && (
           <RoutesPanel
+            acquisitionMessage={acquisitionMessage}
+            acquisitionSuggestions={acquisitionSuggestions}
+            acquisitionUpdatingStopId={acquisitionUpdatingStopId}
             deletedRouteStopLabel={deletedRouteStopSnapshot?.stopLabel || ""}
+            onAcquisitionAdd={addAcquisitionSuggestion}
             onPlannedDepartureChange={updatePlannedBusDeparture}
             onRouteAdd={addRouteRound}
             onRouteDelete={deleteRouteRound}
@@ -11775,10 +12237,145 @@ export default function BakkerijLogistiekDashboard() {
             sourceReceipt={proCollegeDeliverySourceReceipt}
           />
         )}
+        {acquisitionOverviewOpen && acquisitionCampaign && (
+          <AcquisitionCampaignModal
+            campaign={acquisitionCampaign}
+            onClose={() => setAcquisitionOverviewOpen(false)}
+          />
+        )}
       </div>
       </>
       )}
     </StrikShell>
+  );
+}
+
+function AcquisitionCampaignModal({
+  campaign,
+  onClose,
+}: Readonly<{
+  campaign: AcquisitionCampaignSummary;
+  onClose: () => void;
+}>) {
+  const deliveryByStopId = new Map(
+    campaign.deliveries.map((delivery) => [delivery.stopId, delivery])
+  );
+  const deliveredStops = campaign.stops
+    .filter((stop) => deliveryByStopId.has(stop.id))
+    .sort((first, second) =>
+      (deliveryByStopId.get(second.id)?.deliveredAt || "").localeCompare(
+        deliveryByStopId.get(first.id)?.deliveredAt || ""
+      )
+    );
+  const remainingStops = campaign.stops.filter(
+    (stop) => !deliveryByStopId.has(stop.id)
+  );
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-3 sm:p-5">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="acquisition-campaign-title"
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border-2 border-[#d46b3f] bg-[#fffaf2] shadow-2xl"
+      >
+        <header className="flex items-start justify-between gap-3 bg-[#8c3f25] px-4 py-4 text-white sm:px-5">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#fff0d7] text-[#713519]">
+              <GiftIcon />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[0.62rem] font-black uppercase tracking-[0.15em] text-[#ffd9bc]">
+                Eigen bezorgroutes · t/m zaterdag 17 oktober
+              </p>
+              <h2
+                id="acquisition-campaign-title"
+                className="mt-0.5 text-xl font-black leading-tight"
+              >
+                Acquisitie Sinterklaasfolder
+              </h2>
+              <p className="mt-1 text-xs font-bold text-[#ffe8d7]">
+                {deliveredStops.length}/{campaign.stops.length} bezorgd · nog {remainingStops.length} te gaan
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Campagne-overzicht sluiten"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/35 bg-white/10 text-xl font-black transition hover:bg-white/20"
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-3 sm:grid-cols-2 sm:p-4">
+          <section className="min-w-0 rounded-2xl border border-[#bad2b8] bg-[#f0f7ed] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-black text-[#284b32]">Bezorgd</h3>
+              <span className="rounded-full bg-[#dbead7] px-2 py-1 text-[0.62rem] font-black text-[#284b32]">
+                {deliveredStops.length}
+              </span>
+            </div>
+            <div className="mt-2 grid gap-1.5">
+              {deliveredStops.length === 0 && (
+                <p className="rounded-xl bg-white/70 px-3 py-3 text-xs font-semibold italic text-[#62705d]">
+                  Nog niets bezorgd. Voeg de eerste suggestie toe aan een route.
+                </p>
+              )}
+              {deliveredStops.map((stop) => {
+                const delivery = deliveryByStopId.get(stop.id)!;
+                return (
+                  <article
+                    key={stop.id}
+                    className="rounded-xl border border-[#d5e5d2] bg-white px-3 py-2"
+                  >
+                    <p className="text-xs font-black text-[#1a1815]">
+                      ✓ {stop.company}
+                    </p>
+                    <p className="mt-0.5 text-[0.64rem] font-semibold text-[#6b645b]">
+                      {stop.street} · {stop.postalCode} {stop.city}
+                    </p>
+                    <p className="mt-1 text-[0.6rem] font-bold italic text-[#4f6e54]">
+                      {formatDateLabel(delivery.date)} · {delivery.vehicle} · {delivery.routeTitle}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="min-w-0 rounded-2xl border border-[#edc7a8] bg-[#fff3e2] p-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-black text-[#713519]">Nog te gaan</h3>
+              <span className="rounded-full bg-[#ffe1b8] px-2 py-1 text-[0.62rem] font-black text-[#713519]">
+                {remainingStops.length}
+              </span>
+            </div>
+            <div className="mt-2 grid gap-1.5">
+              {remainingStops.length === 0 && (
+                <p className="rounded-xl bg-white/75 px-3 py-3 text-xs font-black text-[#284b32]">
+                  Alles bezorgd — campagne compleet!
+                </p>
+              )}
+              {remainingStops.map((stop) => (
+                <article
+                  key={stop.id}
+                  className="rounded-xl border border-[#f0d5bc] bg-white px-3 py-2"
+                >
+                  <p className="text-xs font-black text-[#1a1815]">
+                    {stop.company}
+                  </p>
+                  <p className="mt-0.5 text-[0.64rem] font-semibold text-[#6b645b]">
+                    {stop.street} · {stop.postalCode} {stop.city}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -12569,7 +13166,11 @@ function eventHasRouteDragState(
 }
 
 function RoutesPanel({
+  acquisitionMessage,
+  acquisitionSuggestions,
+  acquisitionUpdatingStopId,
   deletedRouteStopLabel,
+  onAcquisitionAdd,
   onPlannedDepartureChange,
   onRouteAdd,
   onRouteDelete,
@@ -12586,7 +13187,11 @@ function RoutesPanel({
   routesEdited,
   selectedPlan,
 }: Readonly<{
+  acquisitionMessage: string;
+  acquisitionSuggestions: AcquisitionSuggestion[];
+  acquisitionUpdatingStopId: string;
   deletedRouteStopLabel: string;
+  onAcquisitionAdd: (suggestion: AcquisitionSuggestion) => Promise<void>;
   onPlannedDepartureChange: (bus: BusId, value: string) => void;
   onRouteAdd: (vehicle: string) => void;
   onRouteDelete: (routeId: string) => void;
@@ -12757,6 +13362,73 @@ function RoutesPanel({
           </span>
         )}
       </div>
+
+      {(acquisitionSuggestions.length > 0 || acquisitionMessage) && (
+        <section className="overflow-hidden rounded-2xl border-2 border-[#d46b3f] bg-[#fff7e9] shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 bg-[#8c3f25] px-3 py-2 text-white">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#fff0d7] text-[#713519]">
+                <GiftIcon />
+              </span>
+              <div>
+                <p className="text-[0.6rem] font-black uppercase tracking-[0.14em] text-[#ffd9bc]">
+                  Extra stop · opvallend op de routeprint
+                </p>
+                <h3 className="text-sm font-black leading-tight">
+                  Sinterklaasfolders langs de route van vandaag
+                </h3>
+              </div>
+            </div>
+            <span className="rounded-full bg-white/15 px-2 py-1 text-[0.62rem] font-black">
+              {acquisitionSuggestions.length} slimme suggestie
+              {acquisitionSuggestions.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          {acquisitionSuggestions.length > 0 && (
+            <div className="grid gap-2 p-2 sm:grid-cols-2 xl:grid-cols-3">
+              {acquisitionSuggestions.map((suggestion) => (
+                <article
+                  key={suggestion.stop.id}
+                  className="flex min-w-0 items-center gap-2 rounded-xl border border-[#edc7a8] bg-white p-2"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fff0d7] text-[#8c3f25]">
+                    <GiftIcon />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[0.76rem] font-black text-[#1a1815]">
+                      {suggestion.stop.company}
+                    </p>
+                    <p className="truncate text-[0.64rem] font-semibold text-[#6b645b]">
+                      {suggestion.stop.street} · {suggestion.stop.postalCode}
+                    </p>
+                    <p className="mt-0.5 truncate text-[0.58rem] font-bold italic text-[#9a4f2e]">
+                      {suggestion.exactMatch ? "Langs" : "Vlak bij"} {suggestion.nearbyLabel} · {suggestion.routeTitle}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={Boolean(acquisitionUpdatingStopId)}
+                    onClick={() => void onAcquisitionAdd(suggestion)}
+                    className="h-8 shrink-0 rounded-lg bg-[#ef6a37] px-2.5 text-[0.64rem] font-black text-white transition hover:bg-[#d95325] disabled:cursor-wait disabled:opacity-45"
+                  >
+                    {acquisitionUpdatingStopId === suggestion.stop.id
+                      ? "Bezig..."
+                      : "+ In route"}
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+          {acquisitionMessage && (
+            <p
+              aria-live="polite"
+              className="border-t border-[#edc7a8] px-3 py-1.5 text-[0.64rem] font-bold text-[#713519]"
+            >
+              {acquisitionMessage}
+            </p>
+          )}
+        </section>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#d8d1c8] bg-white px-2.5 py-2 shadow-sm">
         <span className="flex items-center gap-1.5 text-[0.66rem] font-black tracking-normal text-[#4a4540]">
@@ -12956,6 +13628,8 @@ function RoutesPanel({
                           stop,
                           stopTiming
                         );
+                        const isAcquisitionStop =
+                          stop.badges.includes("acquisitie");
 
                         return (
                           <li
@@ -12976,7 +13650,9 @@ function RoutesPanel({
                             handleStopDrop(event, route.id, stop.id)
                           }
                           className={`relative grid cursor-grab grid-cols-[1rem_1.45rem_minmax(0,1fr)_auto_1.5rem] items-center gap-1.5 rounded-md border px-1.5 py-1.5 transition hover:shadow-sm active:cursor-grabbing ${
-                            missesDeadline
+                            isAcquisitionStop
+                              ? "border-2 border-[#d96a3c] bg-[#fff0d7] shadow-[inset_5px_0_0_#8c3f25] hover:border-[#b94f27]"
+                              : missesDeadline
                               ? "border-[#ef9d8f] bg-[#fff4f1] hover:border-[#d86755]"
                               : "border-white/80 bg-white hover:border-[#d7cec4]"
                           } ${
@@ -13021,7 +13697,13 @@ function RoutesPanel({
                               </span>
                             )}
                           </span>
-                          {isLentEmballageStop(stop) ? (
+                          {isAcquisitionStop ? (
+                            <span className="flex items-center gap-1 whitespace-nowrap rounded-full border border-[#d96a3c] bg-[#8c3f25] px-1.5 py-1 text-[0.58rem] font-black tracking-normal text-white">
+                              <GiftIcon />
+                              <span className="sm:hidden">SINT</span>
+                              <span className="hidden sm:inline">SINT FOLDER</span>
+                            </span>
+                          ) : isLentEmballageStop(stop) ? (
                             <span
                               title="Alleen meenemen indien er tijd is"
                               className="flex items-center gap-1 whitespace-nowrap rounded-full border border-[#e3c45d] bg-[#fff4bf] px-1.5 py-1 text-[0.6rem] font-black tracking-normal text-[#705510]"
@@ -15147,6 +15829,25 @@ function SchoolIcon() {
     >
       <path d="M3 21h18M5 21V9h14v12M3 9l9-6 9 6" />
       <path d="M9 21v-5h6v5M8 12h.01M12 12h.01M16 12h.01" />
+    </svg>
+  );
+}
+
+function GiftIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4 shrink-0"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.9"
+    >
+      <path d="M3 9h18v12H3zM2 5h20v4H2zM12 5v16" />
+      <path d="M12 5H7.8C6.2 5 5 4.2 5 3.1 5 2 6 1.4 7.2 1.7 9.2 2.1 10.8 3.5 12 5Z" />
+      <path d="M12 5h4.2C17.8 5 19 4.2 19 3.1 19 2 18 1.4 16.8 1.7 14.8 2.1 13.2 3.5 12 5Z" />
     </svg>
   );
 }

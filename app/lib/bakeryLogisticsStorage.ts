@@ -1,6 +1,8 @@
 import "server-only";
 
 import type {
+  LogisticsAcquisitionCampaign,
+  LogisticsAcquisitionDelivery,
   LogisticsBatch,
   LogisticsDayFeedback,
   LogisticsDayOperations,
@@ -19,6 +21,11 @@ import type {
   LogisticsRouteLearningStop,
   LogisticsWebshopImage,
 } from "@/app/bakkerij/logistiek/logisticsTypes";
+import {
+  emptySinterklaasAcquisitionCampaign,
+  sinterklaasAcquisitionCampaignId,
+  sinterklaasAcquisitionStops,
+} from "@/app/bakkerij/logistiek/sinterklaasAcquisitionCampaign";
 import { createAdminClient } from "./supabase/admin";
 import type { Json } from "./supabase/types";
 
@@ -32,6 +39,8 @@ const LOGISTICS_ROUTE_LEARNING_SETTING_KEY = "bakery_logistics_route_learning";
 const LOGISTICS_FIXED_CUSTOMERS_SETTING_KEY = "bakery_logistics_fixed_customers";
 const LOGISTICS_PREPARATION_PRODUCTS_SETTING_KEY =
   "bakery_logistics_preparation_products";
+const LOGISTICS_ACQUISITION_CAMPAIGN_SETTING_KEY =
+  "bakery_logistics_acquisition_campaign";
 const MAX_STORED_BATCHES = 80;
 const MAX_STORED_WEBSHOP_IMAGES = 1200;
 const MAX_STORED_WEBSHOP_IMAGES_JSON_BYTES = 5_500_000;
@@ -77,6 +86,12 @@ type LogisticsFixedCustomersState = {
 
 type LogisticsPreparationProductsState = {
   products: LogisticsPreparationProduct[];
+  updatedAt: string;
+};
+
+type LogisticsAcquisitionCampaignState = {
+  campaignId: string;
+  deliveries: LogisticsAcquisitionDelivery[];
   updatedAt: string;
 };
 
@@ -348,6 +363,14 @@ function emptyLogisticsPreparationProductsState(): LogisticsPreparationProductsS
   return {
     products: DEFAULT_LOGISTICS_PREPARATION_PRODUCTS,
     updatedAt: DEFAULT_LOGISTICS_PREPARATION_PRODUCT_UPDATED_AT,
+  };
+}
+
+function emptyLogisticsAcquisitionCampaignState(): LogisticsAcquisitionCampaignState {
+  return {
+    campaignId: sinterklaasAcquisitionCampaignId,
+    deliveries: [],
+    updatedAt: new Date(0).toISOString(),
   };
 }
 
@@ -916,6 +939,68 @@ function normalizeLogisticsRouteDraftsState(
   };
 }
 
+function normalizeLogisticsAcquisitionCampaignState(
+  value: unknown
+): LogisticsAcquisitionCampaignState {
+  if (!value || typeof value !== "object") {
+    return emptyLogisticsAcquisitionCampaignState();
+  }
+
+  const raw = value as {
+    campaignId?: unknown;
+    deliveries?: unknown;
+    updatedAt?: unknown;
+  };
+  if (raw.campaignId !== sinterklaasAcquisitionCampaignId) {
+    return emptyLogisticsAcquisitionCampaignState();
+  }
+
+  const validStopIds = new Set(sinterklaasAcquisitionStops.map((stop) => stop.id));
+  const deliveriesByStopId = new Map<string, LogisticsAcquisitionDelivery>();
+
+  if (Array.isArray(raw.deliveries)) {
+    raw.deliveries.forEach((value) => {
+      if (!value || typeof value !== "object") return;
+
+      const delivery = value as Partial<LogisticsAcquisitionDelivery>;
+      const stopId = String(delivery.stopId || "").trim();
+      const date = String(delivery.date || "").trim();
+      const deliveredAt = String(delivery.deliveredAt || "").trim();
+      if (
+        !validStopIds.has(stopId) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        !deliveredAt
+      ) {
+        return;
+      }
+
+      const normalized: LogisticsAcquisitionDelivery = {
+        stopId,
+        date,
+        routeId: String(delivery.routeId || "").trim().slice(0, 120),
+        routeTitle: String(delivery.routeTitle || "").trim().slice(0, 120),
+        vehicle: String(delivery.vehicle || "").trim().slice(0, 80),
+        deliveredAt,
+      };
+      const existing = deliveriesByStopId.get(stopId);
+      if (!existing || existing.deliveredAt < normalized.deliveredAt) {
+        deliveriesByStopId.set(stopId, normalized);
+      }
+    });
+  }
+
+  return {
+    campaignId: sinterklaasAcquisitionCampaignId,
+    deliveries: Array.from(deliveriesByStopId.values()).sort((first, second) =>
+      first.deliveredAt.localeCompare(second.deliveredAt)
+    ),
+    updatedAt:
+      typeof raw.updatedAt === "string" && raw.updatedAt
+        ? raw.updatedAt
+        : new Date(0).toISOString(),
+  };
+}
+
 function normalizeLogisticsRouteLearningState(
   value: unknown
 ): LogisticsRouteLearningState {
@@ -1058,6 +1143,7 @@ function toJson(
     | LogisticsRouteLearningState
     | LogisticsFixedCustomersState
     | LogisticsPreparationProductsState
+    | LogisticsAcquisitionCampaignState
 ): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
 }
@@ -1796,6 +1882,35 @@ export async function readLogisticsRouteLearningState() {
   return normalizeLogisticsRouteLearningState(data.value);
 }
 
+export async function readLogisticsAcquisitionCampaignState() {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", LOGISTICS_ACQUISITION_CAMPAIGN_SETTING_KEY)
+    .maybeSingle();
+
+  if (error || !data) return emptyLogisticsAcquisitionCampaignState();
+
+  return normalizeLogisticsAcquisitionCampaignState(data.value);
+}
+
+async function writeLogisticsAcquisitionCampaignState(
+  state: LogisticsAcquisitionCampaignState
+) {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key: LOGISTICS_ACQUISITION_CAMPAIGN_SETTING_KEY,
+      value: toJson(state),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
+
+  if (error) throw new Error(error.message);
+}
+
 async function writeLogisticsFixedCustomersState(
   state: LogisticsFixedCustomersState
 ) {
@@ -1926,6 +2041,50 @@ export async function getLogisticsFixedCustomers() {
   const state = await readLogisticsFixedCustomersState();
 
   return state.customers;
+}
+
+export async function getLogisticsAcquisitionCampaign(): Promise<LogisticsAcquisitionCampaign> {
+  const [campaign, state] = await Promise.all([
+    Promise.resolve(emptySinterklaasAcquisitionCampaign()),
+    readLogisticsAcquisitionCampaignState(),
+  ]);
+
+  return {
+    ...campaign,
+    deliveries: state.deliveries,
+    updatedAt: state.updatedAt,
+  };
+}
+
+export async function markLogisticsAcquisitionDelivered(
+  delivery: LogisticsAcquisitionDelivery
+) {
+  const state = await readLogisticsAcquisitionCampaignState();
+  const updatedAt = new Date().toISOString();
+  const deliveries = [
+    { ...delivery, deliveredAt: delivery.deliveredAt || updatedAt },
+    ...state.deliveries.filter((item) => item.stopId !== delivery.stopId),
+  ];
+  const nextState: LogisticsAcquisitionCampaignState = {
+    campaignId: sinterklaasAcquisitionCampaignId,
+    deliveries,
+    updatedAt,
+  };
+
+  await writeLogisticsAcquisitionCampaignState(nextState);
+  return getLogisticsAcquisitionCampaign();
+}
+
+export async function undoLogisticsAcquisitionDelivery(stopId: string) {
+  const state = await readLogisticsAcquisitionCampaignState();
+  const nextState: LogisticsAcquisitionCampaignState = {
+    campaignId: sinterklaasAcquisitionCampaignId,
+    deliveries: state.deliveries.filter((item) => item.stopId !== stopId),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await writeLogisticsAcquisitionCampaignState(nextState);
+  return getLogisticsAcquisitionCampaign();
 }
 
 export async function replaceLogisticsFixedCustomers(

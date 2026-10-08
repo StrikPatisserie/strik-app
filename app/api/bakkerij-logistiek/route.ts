@@ -3,6 +3,7 @@ import { canAccessLogisticsRequest } from "@/app/lib/bakeryLogisticsAuth";
 import { withCatalogArticleNumbers } from "@/app/bakkerij/logistiek/catalogMatching";
 import {
   getLogisticsBatchForDate,
+  getLogisticsAcquisitionCampaign,
   getLogisticsDayFeedbackForDate,
   getLogisticsFixedCustomers,
   getLogisticsPreparationProducts,
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
       routeLearning,
       fixedCustomers,
       preparationProducts,
+      acquisitionCampaign,
     ] =
       await Promise.all([
         getLogisticsBatchForDate(date),
@@ -56,6 +58,7 @@ export async function GET(request: Request) {
         getLogisticsRouteLearning(),
         getLogisticsFixedCustomers(),
         getLogisticsPreparationProducts(),
+        getLogisticsAcquisitionCampaign(),
       ]);
 
     if (debug) {
@@ -107,6 +110,7 @@ export async function GET(request: Request) {
       routeLearning,
       fixedCustomers,
       preparationProducts,
+      acquisitionCampaign,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

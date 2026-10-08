@@ -40,6 +40,44 @@ export type LogisticsPreparationProduct = {
   updatedAt: string;
 };
 
+export type LogisticsAcquisitionStop = {
+  id: string;
+  company: string;
+  attention: string;
+  street: string;
+  postalCode: string;
+  city: string;
+  routeCluster:
+    | "center"
+    | "station"
+    | "east"
+    | "south"
+    | "dukenburg"
+    | "west"
+    | "west-hightech"
+    | "north"
+    | "beuningen-weurt";
+};
+
+export type LogisticsAcquisitionDelivery = {
+  stopId: string;
+  date: string;
+  routeId: string;
+  routeTitle: string;
+  vehicle: string;
+  deliveredAt: string;
+};
+
+export type LogisticsAcquisitionCampaign = {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  stops: LogisticsAcquisitionStop[];
+  deliveries: LogisticsAcquisitionDelivery[];
+  updatedAt: string;
+};
+
 export type LogisticsReceipt = {
   id: string;
   receiptNumber: string;

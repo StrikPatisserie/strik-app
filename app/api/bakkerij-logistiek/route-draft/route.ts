@@ -182,6 +182,8 @@ function routeLearningObservationFromDraft(
   const stops = draft.routes.flatMap((route, routeIndex) =>
     route.stops
       .map((stop, stopIndex) => {
+        if (stop.sourceId.startsWith("acquisition:")) return null;
+
         const key = routeStopLearningKey(stop);
         if (!key) return null;
 
