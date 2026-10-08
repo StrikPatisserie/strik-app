@@ -231,8 +231,8 @@ function herimporteerEnImporteerLaatsteDagomzet() {
 function verrijkIjsBetaalvormenVanafWeek37() {
   const fromDate = new Date('2026-09-07T00:00:00+02:00');
   const queries = [
-    'after:2026/09/06 subject:"Dag Rapport ijs"',
-    'after:2026/09/06 subject:"Dagafsluiting email-Filiaal" subject:ijs',
+    'after:2026/09/06 -label:"Fout" subject:"Dag Rapport ijs"',
+    'after:2026/09/06 -label:"Fout" subject:"Dagafsluiting email-Filiaal" subject:ijs',
   ];
   const threads = searchDagomzetThreads_(150, queries);
   const props = PropertiesService.getScriptProperties();
