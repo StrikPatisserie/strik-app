@@ -29,7 +29,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-window-v15-ice-authoritative-payment-total',
+  SCRIPT_VERSION: 'gmail-window-v16-ice-payment-components',
 };
 
 function importDagomzet() {

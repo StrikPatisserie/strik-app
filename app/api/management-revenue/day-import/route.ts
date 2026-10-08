@@ -98,7 +98,7 @@ const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
 const DAY_IMPORT_PARSER_VERSION =
-  "cash-it-template-v8-ice-authoritative-payment-total";
+  "cash-it-template-v9-ice-payment-components";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -786,12 +786,13 @@ function deriveIceElectronicPaymentAmount(
 function deriveIceCashPaymentAmount(
   amounts: ReturnType<typeof extractPaymentFormAmounts>
 ) {
+  if (amounts.cash !== undefined) return amounts.cash;
+
   const electronic = deriveIceElectronicPaymentAmount(amounts);
 
-  // Cash-it's total in the payment-method section is authoritative. Some PDF
-  // text layers put the amount beside "Contant" in the wrong column, while
-  // pin and total are still extracted correctly. Deriving cash from the
-  // authoritative total keeps the split internally reconcilable.
+  // Only derive cash when the named Contant row is absent. Historical PDF
+  // text layers can couple a generic Totaal to the cash-count table instead of
+  // the payment table, so an explicit payment row always wins.
   if (amounts.total !== undefined && electronic !== undefined) {
     return roundPaymentAmount(
       Math.max(0, amounts.total - electronic - (amounts.vouchers || 0))
@@ -804,8 +805,6 @@ function deriveIceCashPaymentAmount(
 function deriveTotalPaymentAmount(
   amounts: ReturnType<typeof extractPaymentFormAmounts>
 ) {
-  if (amounts.total !== undefined) return amounts.total;
-
   const electronic = deriveIceElectronicPaymentAmount(amounts);
 
   if (amounts.cash !== undefined && electronic !== undefined) {

@@ -106,6 +106,13 @@ export type RevenueCashRecord = {
   updatedAt?: string;
 };
 
+export type RevenueIcePaymentBreakdown = {
+  cash: number;
+  pin: number;
+  giftCards: number;
+  total: number;
+};
+
 export type RevenueCashDeposit = {
   id: string;
   year: number;
@@ -569,6 +576,43 @@ export function cashDenominationTotal(counts: CashDenominationCounts) {
       }, 0)
       .toFixed(2)
   );
+}
+
+function roundRevenueMoney(value: number) {
+  return Number(value.toFixed(2));
+}
+
+export function revenueIcePaymentBreakdown(
+  record: RevenueCashRecord
+): RevenueIcePaymentBreakdown {
+  const cash =
+    record.iceCashRevenue ??
+    record.iceExpectedCash ??
+    record.iceCash ??
+    0;
+  const giftCards = record.iceReceipts ?? 0;
+  const pin =
+    record.icePinRevenue ??
+    (record.iceTotalRevenue === undefined
+      ? 0
+      : Math.max(
+          0,
+          roundRevenueMoney(record.iceTotalRevenue - cash - giftCards)
+        ));
+
+  return {
+    cash,
+    pin,
+    giftCards,
+    // The named payment rows are the reliable source. Historical Cash-it PDF
+    // text layers sometimes coupled "Totaal" to the cash-count table instead
+    // of the payment table. Rebuilding the total avoids changing counted cash,
+    // safe corrections or a checked week.
+    total:
+      record.icePinRevenue !== undefined
+        ? roundRevenueMoney(cash + pin + giftCards)
+        : record.iceTotalRevenue ?? roundRevenueMoney(cash + giftCards),
+  };
 }
 
 function normalizeCashDenominations(

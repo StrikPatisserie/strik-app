@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  revenueIcePaymentBreakdown,
   revenueShops,
   type RevenueCashDeposit,
   type RevenueCashRecord,
@@ -242,37 +243,19 @@ function iceExpectedCash(record: RevenueCashRecord | undefined) {
 }
 
 function iceCashPaidAmount(record: RevenueCashRecord) {
-  return record.iceCashRevenue ?? iceExpectedCash(record);
+  return revenueIcePaymentBreakdown(record).cash;
 }
 
 function iceGiftcardAmount(record: RevenueCashRecord) {
-  return record.iceReceipts ?? 0;
+  return revenueIcePaymentBreakdown(record).giftCards;
 }
 
 function icePinPaidAmount(record: RevenueCashRecord) {
-  if (record.icePinRevenue !== undefined) return record.icePinRevenue;
-  if (record.iceTotalRevenue === undefined) return 0;
-
-  return Math.max(
-    0,
-    roundMoney(
-      record.iceTotalRevenue -
-        iceCashPaidAmount(record) -
-        iceGiftcardAmount(record)
-    )
-  );
+  return revenueIcePaymentBreakdown(record).pin;
 }
 
 function iceTotalRevenueAmount(record: RevenueCashRecord) {
-  if (record.icePinRevenue !== undefined) {
-    return roundMoney(
-      iceCashPaidAmount(record) +
-        icePinPaidAmount(record) +
-        iceGiftcardAmount(record)
-    );
-  }
-
-  return record.iceTotalRevenue ?? iceCashPaidAmount(record);
+  return revenueIcePaymentBreakdown(record).total;
 }
 
 function iceCheckedCash(record: RevenueCashRecord | undefined) {
@@ -690,22 +673,6 @@ function buildIceLine(input: {
     ) {
       input.warnings.push(
         `${dayLabel(record.date)}: ijs pin/overig en totale omzet ontbreken.`
-      );
-    }
-    if (
-      record.icePinRevenue !== undefined &&
-      record.iceTotalRevenue !== undefined &&
-      Math.abs(
-        record.iceTotalRevenue -
-          roundMoney(
-            iceCashPaidAmount(record) +
-              record.icePinRevenue +
-              iceGiftcardAmount(record)
-          )
-      ) > 0.01
-    ) {
-      input.warnings.push(
-        `${dayLabel(record.date)}: ijsbetaalvormen moeten opnieuw worden ververst.`
       );
     }
     if (record.iceNote?.trim()) {

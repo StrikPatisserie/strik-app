@@ -7,6 +7,7 @@ import {
   cashDenominations,
   createRevenueCashDepositKey,
   mergeRevenueCashDeposits,
+  revenueIcePaymentBreakdown,
   revenueShops,
   type CashDenominationKey,
   type RevenueCashDeposit,
@@ -825,24 +826,22 @@ export default function CashCountManager() {
         );
         const includedIceCashRevenue = checkedIceRecords.reduce(
           (total, record) =>
-            total + (record.iceCashRevenue ?? iceExpectedCash(record)),
+            total + revenueIcePaymentBreakdown(record).cash,
           0
         );
         const includedIcePinRevenue = checkedIceRecords.reduce(
-          (total, record) => total + (record.icePinRevenue || 0),
+          (total, record) =>
+            total + revenueIcePaymentBreakdown(record).pin,
           0
         );
         const includedIceReceipts = checkedIceRecords.reduce(
-          (total, record) => total + (record.iceReceipts || 0),
+          (total, record) =>
+            total + revenueIcePaymentBreakdown(record).giftCards,
           0
         );
         const includedIceTotalRevenue = checkedIceRecords.reduce(
           (total, record) =>
-            total +
-            (record.iceTotalRevenue ??
-              (record.iceCashRevenue ?? iceExpectedCash(record)) +
-                (record.icePinRevenue || 0) +
-                (record.iceReceipts || 0)),
+            total + revenueIcePaymentBreakdown(record).total,
           0
         );
         const includedIceCashOut = checkedIceRecords.reduce(
@@ -3761,6 +3760,7 @@ function IceCashSummary({
 }>) {
   const expectedCash = iceExpectedCash(record);
   const countedCash = iceReportedCountedCash(record);
+  const paymentBreakdown = revenueIcePaymentBreakdown(record);
   const differenceTone =
     record.iceDifference !== undefined && Math.abs(record.iceDifference) > 0.05
       ? "warn"
@@ -3811,15 +3811,15 @@ function IceCashSummary({
           />
           <AmountCell
             label="Contant"
-            value={formatOptionalMoney(record.iceCashRevenue)}
+            value={formatMoney(paymentBreakdown.cash)}
           />
           <AmountCell
             label="Pin"
-            value={formatOptionalMoney(record.icePinRevenue)}
+            value={formatMoney(paymentBreakdown.pin)}
           />
           <AmountCell
             label="Bonnen"
-            value={formatOptionalMoney(record.iceReceipts)}
+            value={formatMoney(paymentBreakdown.giftCards)}
             tone={
               record.iceReceipts !== undefined && Math.abs(record.iceReceipts) > 0.01
                 ? "warn"
@@ -3828,7 +3828,7 @@ function IceCashSummary({
           />
           <AmountCell
             label="Totale omzet"
-            value={formatOptionalMoney(record.iceTotalRevenue)}
+            value={formatMoney(paymentBreakdown.total)}
           />
           <AmountCell
             label="Kas-uit"
