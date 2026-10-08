@@ -3843,8 +3843,7 @@ function createMarzipanPhotoPrintHtml(input: {
     <meta charset="utf-8">
     <title>${escapeHtml(title)}</title>
     <style>
-      @page { margin: 3mm 3mm 60mm; size: A4 portrait; }
-      @page:first { margin-top: 8mm; }
+      @page { margin: 0; size: A4 portrait; }
       * { box-sizing: border-box; }
       :root {
         --petit-four-size: 37.8mm;
@@ -3925,7 +3924,9 @@ function createMarzipanPhotoPrintHtml(input: {
         display: block;
       }
       .square-group {
+        break-inside: avoid-page;
         margin-bottom: 1mm;
+        page-break-inside: avoid;
       }
       .square-group-label {
         align-items: baseline;
@@ -4056,11 +4057,19 @@ function createMarzipanPhotoPrintHtml(input: {
         border-style: solid;
       }
       @media print {
+        html,
+        body {
+          height: auto;
+          margin: 0;
+          padding: 0;
+          width: 210mm;
+        }
         .screen-actions { display: none; }
         main {
           max-width: none;
-          padding: 0;
-          width: 200mm;
+          margin: 0;
+          padding: 5mm;
+          width: 210mm;
         }
         .sheet-header {
           display: none;
@@ -5059,7 +5068,7 @@ function createBusRoutePrintHtml(input: {
     <meta charset="utf-8">
     <title>${escapeHtml(title)}</title>
     <style>
-      @page { margin: 7mm; size: A4 portrait; }
+      @page { margin: 0; size: A4 portrait; }
       * { box-sizing: border-box; }
       body {
         background: #e9e9e9;
@@ -5336,22 +5345,83 @@ function createBusRoutePrintHtml(input: {
         font-size: 13px;
       }
       @media print {
-        body { background: #fff; }
-        .screen-actions { display: none; }
-        .route-page {
-          break-inside: avoid;
-          break-after: page;
-          display: block;
+        html,
+        body {
+          background: #fff;
           height: auto;
           margin: 0;
-          min-height: 0;
+          padding: 0;
+          width: 210mm;
+        }
+        .screen-actions { display: none; }
+        .route-page {
+          break-inside: avoid-page;
+          break-after: page;
+          display: flex;
+          flex-direction: column;
+          height: 296mm;
+          margin: 0;
+          max-height: 296mm;
+          min-height: 296mm;
           page-break-after: always;
           page-break-inside: avoid;
-          padding: 0;
-          width: auto;
+          padding: 7mm;
+          width: 210mm;
+        }
+        .sheet-header {
+          margin-bottom: 1.5mm;
+          padding-bottom: 1.5mm;
+        }
+        .route-sections {
+          gap: 1.5mm;
+        }
+        .route-block {
+          break-inside: auto;
+          page-break-inside: auto;
+        }
+        .route-title {
+          padding: 1.1mm 2.2mm;
+        }
+        .depot-line {
+          padding: 0.8mm 2.2mm;
+        }
+        .stops {
+          display: block;
+          margin-top: 1mm;
+        }
+        .stop-card {
+          break-inside: avoid-page !important;
+          min-height: 0;
+          page-break-inside: avoid !important;
+        }
+        .stop-card + .stop-card {
+          margin-top: 0.8mm;
+        }
+        .stop-content {
+          padding-bottom: 0.6mm;
+          padding-top: 0.8mm;
+        }
+        .write-fields {
+          margin-top: 0.5mm;
+        }
+        .write-fields span {
+          min-height: 2.2mm;
+        }
+        .general-notes {
+          break-inside: avoid-page;
+          margin-top: 1.2mm;
+          page-break-inside: avoid;
+          padding-bottom: 0.8mm;
+          padding-top: 0.8mm;
+        }
+        .general-notes div {
+          height: 2.8mm;
         }
         .page-footer {
-          margin-top: 3mm;
+          break-inside: avoid-page;
+          margin-top: auto;
+          page-break-inside: avoid;
+          padding-top: 1mm;
         }
         .route-page:last-child {
           break-after: auto;

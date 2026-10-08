@@ -4,6 +4,7 @@ import { excelRevenueSeed } from "./revenueSeed";
 import {
   createWeeklyRevenueRecordsFromDays,
   createRevenueCashKey,
+  createRevenueDayKey,
   embedRevenueCashDataInNotes,
   mergeRevenueCashDeposits,
   mergeRevenueCashRecords,
@@ -17,6 +18,7 @@ import {
   type RevenueCashRecord,
   type RevenueDayRecord,
   type RevenueData,
+  type RevenueShop,
 } from "./revenueData";
 
 const WORDPRESS_REVENUE_API_URL =
@@ -176,11 +178,14 @@ export async function upsertRevenueDayRecords(dayRecords: RevenueDayRecord[]) {
     const normalized = normalizeRevenueDayRecord(record);
     return normalized ? [normalized] : [];
   });
+  const unlockedDayRecords = normalizedDayRecords.filter(
+    (record) => !isPatisserieDayImportLocked(stored.data, record)
+  );
   const nextData = normalizeRevenueData({
     ...stored.data,
     dailyRecords: mergeRevenueDayRecords(
       stored.data.dailyRecords || [],
-      normalizedDayRecords
+      unlockedDayRecords
     ),
   });
 
@@ -193,15 +198,83 @@ export async function upsertRevenueCashRecords(cashRecords: RevenueCashRecord[])
     const normalized = normalizeRevenueCashRecord(record);
     return normalized ? [normalized] : [];
   });
+  const unlockedCashRecords = normalizedCashRecords.filter(
+    (record) => !isCashImportLocked(stored.data, record)
+  );
   const nextData = normalizeRevenueData({
     ...stored.data,
     cashRecords: mergeImportedRevenueCashRecords(
       stored.data.cashRecords || [],
-      normalizedCashRecords
+      unlockedCashRecords
     ),
   });
 
   return saveRevenueData(nextData);
+}
+
+function findRevenueDeposit(
+  data: RevenueData,
+  year: number,
+  week: number,
+  shop: RevenueShop
+) {
+  return (data.cashDeposits || []).find(
+    (deposit) =>
+      deposit.year === year && deposit.week === week && deposit.shop === shop
+  );
+}
+
+function isPatisserieDepositLocked(deposit: RevenueCashDeposit | undefined) {
+  return Boolean(
+    deposit &&
+      (deposit.patisserieClosedAt ||
+        deposit.closedAt ||
+        deposit.patisserieCashbookBookedAt ||
+        deposit.cashbookBookedAt)
+  );
+}
+
+function isIceDepositLocked(deposit: RevenueCashDeposit | undefined) {
+  return Boolean(
+    deposit &&
+      (deposit.iceDepositClosedAt ||
+        deposit.closedAt ||
+        deposit.iceCashbookBookedAt ||
+        deposit.cashbookBookedAt)
+  );
+}
+
+function isPatisserieDayImportLocked(
+  data: RevenueData,
+  record: RevenueDayRecord
+) {
+  const dayKey = createRevenueDayKey(record.date, record.shop);
+  const cashKey = createRevenueCashKey(record.date, record.shop);
+  const existingDayRecord = (data.dailyRecords || []).find(
+    (item) => createRevenueDayKey(item.date, item.shop) === dayKey
+  );
+  const existingCashRecord = (data.cashRecords || []).find(
+    (item) => createRevenueCashKey(item.date, item.shop) === cashKey
+  );
+  const deposit = findRevenueDeposit(data, record.year, record.week, record.shop);
+
+  return Boolean(
+    existingDayRecord?.shopClosed ||
+      existingCashRecord?.checkedAt ||
+      isPatisserieDepositLocked(deposit)
+  );
+}
+
+function isCashImportLocked(data: RevenueData, record: RevenueCashRecord) {
+  const key = createRevenueCashKey(record.date, record.shop);
+  const existing = (data.cashRecords || []).find(
+    (item) => createRevenueCashKey(item.date, item.shop) === key
+  );
+  const deposit = findRevenueDeposit(data, record.year, record.week, record.shop);
+
+  return record.cashImportKind === "ice"
+    ? Boolean(existing?.iceCheckedAt || isIceDepositLocked(deposit))
+    : Boolean(existing?.checkedAt || isPatisserieDepositLocked(deposit));
 }
 
 function preservePositiveAmountWhenImportReadsZero(
