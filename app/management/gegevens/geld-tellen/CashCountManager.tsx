@@ -828,8 +828,21 @@ export default function CashCountManager() {
             total + (record.iceCashRevenue ?? iceExpectedCash(record)),
           0
         );
+        const includedIcePinRevenue = checkedIceRecords.reduce(
+          (total, record) => total + (record.icePinRevenue || 0),
+          0
+        );
         const includedIceReceipts = checkedIceRecords.reduce(
           (total, record) => total + (record.iceReceipts || 0),
+          0
+        );
+        const includedIceTotalRevenue = checkedIceRecords.reduce(
+          (total, record) =>
+            total +
+            (record.iceTotalRevenue ??
+              (record.iceCashRevenue ?? iceExpectedCash(record)) +
+                (record.icePinRevenue || 0) +
+                (record.iceReceipts || 0)),
           0
         );
         const includedIceCashOut = checkedIceRecords.reduce(
@@ -884,7 +897,9 @@ export default function CashCountManager() {
           iceCash,
           includedIceCash,
           includedIceCashRevenue,
+          includedIcePinRevenue,
           includedIceReceipts,
+          includedIceTotalRevenue,
           includedIceCashOut,
           includedIceCashDifference,
           iceCount: iceRecords.length,
@@ -3353,27 +3368,31 @@ export default function CashCountManager() {
                 {cashLocationLabel("ice", selectedShopRow.shop)}
               </h2>
             </div>
-            <div className="grid w-full grid-cols-3 gap-3 lg:w-auto lg:min-w-[28rem]">
+            <div className="grid w-full grid-cols-2 gap-3 sm:grid-cols-3 lg:w-auto lg:min-w-[46rem] lg:grid-cols-5">
               <AmountCell
                 label="Compleet"
                 value={`${selectedShopRow.iceCheckedCount}/${selectedShopRow.iceCount}`}
               />
               <AmountCell
-                label="Kasomzet"
+                label="Contant"
                 value={formatMoney(selectedShopRow.includedIceCashRevenue)}
               />
               <AmountCell
-                label="Weektotaal"
-                value={formatMoney(selectedShopRow.includedIceCash)}
+                label="Pin"
+                value={formatMoney(selectedShopRow.includedIcePinRevenue)}
+              />
+              <AmountCell
+                label="Bonnen"
+                value={formatMoney(selectedShopRow.includedIceReceipts)}
+              />
+              <AmountCell
+                label="Totale omzet"
+                value={formatMoney(selectedShopRow.includedIceTotalRevenue)}
               />
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl border border-[#c8ddd2] bg-white/70 p-3 md:grid-cols-4">
-            <AmountCell
-              label="Bonnen"
-              value={formatMoney(selectedShopRow.includedIceReceipts)}
-            />
+          <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl border border-[#c8ddd2] bg-white/70 p-3 md:grid-cols-3">
             <AmountCell
               label="Kas uit"
               value={formatMoney(selectedShopRow.includedIceCashOut)}
@@ -3781,7 +3800,7 @@ function IceCashSummary({
           </span>
         </label>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 xl:grid-cols-9">
           <AmountCell
             label="Start"
             value={formatOptionalMoney(record.iceStartCash)}
@@ -3791,19 +3810,31 @@ function IceCashSummary({
             value={formatOptionalMoney(countedCash)}
           />
           <AmountCell
-            label="Kas-uit"
-            value={formatOptionalMoney(record.iceCashOut)}
-            tone={
-              record.iceCashOut !== undefined && Math.abs(record.iceCashOut) > 0.01
-                ? "warn"
-                : "normal"
-            }
+            label="Contant"
+            value={formatOptionalMoney(record.iceCashRevenue)}
+          />
+          <AmountCell
+            label="Pin"
+            value={formatOptionalMoney(record.icePinRevenue)}
           />
           <AmountCell
             label="Bonnen"
             value={formatOptionalMoney(record.iceReceipts)}
             tone={
               record.iceReceipts !== undefined && Math.abs(record.iceReceipts) > 0.01
+                ? "warn"
+                : "normal"
+            }
+          />
+          <AmountCell
+            label="Totale omzet"
+            value={formatOptionalMoney(record.iceTotalRevenue)}
+          />
+          <AmountCell
+            label="Kas-uit"
+            value={formatOptionalMoney(record.iceCashOut)}
+            tone={
+              record.iceCashOut !== undefined && Math.abs(record.iceCashOut) > 0.01
                 ? "warn"
                 : "normal"
             }
