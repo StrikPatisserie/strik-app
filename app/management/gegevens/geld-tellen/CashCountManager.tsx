@@ -3818,13 +3818,8 @@ function IceCashSummary({
             value={formatMoney(paymentBreakdown.pin)}
           />
           <AmountCell
-            label="Bonnen"
-            value={formatMoney(paymentBreakdown.giftCards)}
-            tone={
-              record.iceReceipts !== undefined && Math.abs(record.iceReceipts) > 0.01
-                ? "warn"
-                : "normal"
-            }
+            label="Kadobonnen"
+            value="n.v.t."
           />
           <AmountCell
             label="Totale omzet"

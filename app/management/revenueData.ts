@@ -590,7 +590,10 @@ export function revenueIcePaymentBreakdown(
     record.iceExpectedCash ??
     record.iceCash ??
     0;
-  const giftCards = record.iceReceipts ?? 0;
+  // Strik accepts no gift cards at the ice counters. Cash-it PDF text can
+  // expose a voucher amount from another table/register; never count that as
+  // ice revenue.
+  const giftCards = 0;
   const pin =
     record.icePinRevenue ??
     (record.iceTotalRevenue === undefined

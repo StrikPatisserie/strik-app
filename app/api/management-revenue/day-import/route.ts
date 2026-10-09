@@ -98,7 +98,7 @@ const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_PDF_BYTES = 6 * 1024 * 1024;
 const ICE_REPORT_PREVIOUS_DAY_FALLBACK_HOUR = 5;
 const DAY_IMPORT_PARSER_VERSION =
-  "cash-it-template-v9-ice-payment-components";
+  "cash-it-template-v10-ice-no-giftcards";
 const dutchMonths: Record<string, number> = {
   januari: 1,
   februari: 2,
@@ -1202,7 +1202,7 @@ function extractIceCashDetails(text: string): IceCashDetails {
     ],
     text
   );
-  const receipts = paymentForms.vouchers;
+  const receipts = 0;
   const explicitExpectedCash = extractFirstIceAmount(
     [
       /\b(?:Naar\s+kluis|Kluis|Afstort(?:ing)?|Afstorten|Stort(?:ing)?|Te\s+storten|Naar\s+bank)\b[^\n\d-]*(?:€|\bEUR\b)?\s*([-\d.,]+)/i,
@@ -1286,12 +1286,6 @@ function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
     weekdayPattern,
     600
   );
-  const voucherAmounts = extractSignedAmountsAfter(
-    sectionText,
-    /\bCreditcard\s*:/i,
-    /\b(?:Start\s+Telling|Ideal|Cashless|Niet\s+gekoppeld|Pagina)\b/i,
-    900
-  );
   const startCash = firstNumber(
     extractFirstSignedAmount(
       /\bStart\s+Telling[\s\S]*?\bTotaal\s*:\s*([-\d.,]+)/i,
@@ -1330,10 +1324,7 @@ function extractIceCashSectionAmounts(sectionText: string): IceCashDetails {
     pinRevenue: deriveIceElectronicPaymentAmount(paymentForms),
     totalRevenue: deriveTotalPaymentAmount(paymentForms),
     cashOut,
-    receipts: firstNumber(
-      paymentForms.vouchers,
-      voucherAmounts[2]?.amount
-    ),
+    receipts: 0,
     expectedCash,
     difference: closeTableAmounts[2]?.amount,
   };
