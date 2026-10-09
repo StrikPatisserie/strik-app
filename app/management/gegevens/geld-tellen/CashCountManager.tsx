@@ -844,10 +844,7 @@ export default function CashCountManager() {
             total + revenueIcePaymentBreakdown(record).total,
           0
         );
-        const includedIceCashOut = checkedIceRecords.reduce(
-          (total, record) => total + (record.iceCashOut || 0),
-          0
-        );
+        const includedIceCashOut = 0;
         const includedIceCashDifference = checkedIceRecords.reduce(
           (total, record) => total + (record.iceDifference || 0),
           0
@@ -1649,7 +1646,7 @@ export default function CashCountManager() {
     const now = new Date().toISOString();
     const expectedCash = safeExpectedCashFromValues(startCash, countedCash);
     const sourceCashRevenue = record.iceCashRevenue ?? expectedCash;
-    const sourceExpectedTotal = startCash + sourceCashRevenue - (record.iceCashOut || 0);
+    const sourceExpectedTotal = startCash + sourceCashRevenue;
     const correctionNotes = [
       changedStart ? "startbedrag gewijzigd" : "",
       changedCounted ? "sluitbedrag gewijzigd" : "",
@@ -3382,7 +3379,7 @@ export default function CashCountManager() {
               />
               <AmountCell
                 label="Bonnen"
-                value={formatMoney(selectedShopRow.includedIceReceipts)}
+                value="n.v.t."
               />
               <AmountCell
                 label="Totale omzet"
@@ -3394,7 +3391,7 @@ export default function CashCountManager() {
           <div className="mt-3 grid grid-cols-2 gap-3 rounded-2xl border border-[#c8ddd2] bg-white/70 p-3 md:grid-cols-3">
             <AmountCell
               label="Kas uit"
-              value={formatMoney(selectedShopRow.includedIceCashOut)}
+              value="n.v.t."
             />
             <AmountCell
               label="Kasverschil"
@@ -3827,12 +3824,7 @@ function IceCashSummary({
           />
           <AmountCell
             label="Kas-uit"
-            value={formatOptionalMoney(record.iceCashOut)}
-            tone={
-              record.iceCashOut !== undefined && Math.abs(record.iceCashOut) > 0.01
-                ? "warn"
-                : "normal"
-            }
+            value="n.v.t."
           />
           <AmountCell
             label="Naar kluis"

@@ -264,10 +264,7 @@ function iceCheckedCash(record: RevenueCashRecord | undefined) {
 }
 
 function iceProvisionalDeposit(record: RevenueCashRecord) {
-  return Math.max(
-    0,
-    roundMoney(iceCashPaidAmount(record) - (record.iceCashOut || 0))
-  );
+  return Math.max(0, roundMoney(iceCashPaidAmount(record)));
 }
 
 function isCashExpectedForShopDate(shop: RevenueShop, date: string) {
@@ -354,7 +351,7 @@ function buildMonthCashTotals(cashRecords: RevenueCashRecord[], month: string) {
     (record) => revenueIcePaymentBreakdown(record).giftCards
   );
   const patisserieCashOut = sumMoney(patisserieRecords, cashOutAmount);
-  const iceCashOut = sumMoney(iceRecords, (record) => record.iceCashOut);
+  const iceCashOut = 0;
   const patisserieCashDifference = sumMoney(
     checkedPatisserieRecords,
     safeDifference
@@ -363,9 +360,7 @@ function buildMonthCashTotals(cashRecords: RevenueCashRecord[], month: string) {
   const iceDeposited = sumMoney(iceRecords, (record) =>
     record.iceCheckedAt ? iceCheckedCash(record) : iceProvisionalDeposit(record)
   );
-  const iceCashDifference = roundMoney(
-    iceDeposited + iceCashOut - iceCashRevenue
-  );
+  const iceCashDifference = roundMoney(iceDeposited - iceCashRevenue);
 
   return {
     cashRevenue: sumMoney(
@@ -685,11 +680,6 @@ function buildIceLine(input: {
     if (record.iceNote?.trim()) {
       input.comments.push(`${dayLabel(record.date)}: ijs opmerking: ${record.iceNote.trim()}`);
     }
-    if ((record.iceCashOut || 0) > 0) {
-      input.comments.push(
-        `${dayLabel(record.date)}: ijs kas-uit ${formatMoney(record.iceCashOut)}.`
-      );
-    }
     if (record.iceDifference !== undefined && Math.abs(record.iceDifference) > 0.01) {
       input.comments.push(
         `${dayLabel(record.date)}: telverschil in het Cash-it-dagrapport ${formatMoney(record.iceDifference)}.`
@@ -697,9 +687,7 @@ function buildIceLine(input: {
     }
     if (record.iceCheckedAt) {
       const bookedDifference = roundMoney(
-        iceCheckedCash(record) +
-          (record.iceCashOut || 0) -
-          iceCashPaidAmount(record)
+        iceCheckedCash(record) - iceCashPaidAmount(record)
       );
       if (Math.abs(bookedDifference) <= 0.01) return;
 
@@ -714,7 +702,7 @@ function buildIceLine(input: {
     (record) => !record.iceCheckedAt
   );
   const cashPaid = sumMoney(input.cashRecords, iceCashPaidAmount);
-  const cashOut = sumMoney(input.cashRecords, (record) => record.iceCashOut);
+  const cashOut = 0;
   const deposited = sumMoney(input.cashRecords, (record) =>
     record.iceCheckedAt ? iceCheckedCash(record) : iceProvisionalDeposit(record)
   );
@@ -731,7 +719,7 @@ function buildIceLine(input: {
     pinPaid: sumMoney(input.cashRecords, icePinPaidAmount),
     giftCards: sumMoney(input.cashRecords, iceGiftcardAmount),
     cashOut,
-    cashDifference: roundMoney(deposited + cashOut - cashPaid),
+    cashDifference: roundMoney(deposited - cashPaid),
     hasData: input.cashRecords.length > 0,
   } satisfies ReportLine;
 }
@@ -866,7 +854,7 @@ function buildCsv(
         ? "Daadwerkelijk gestort (of voorlopig bij open telling)"
         : "Daadwerkelijk geboekt (of voorlopig bij open telling)",
       kind === "ice"
-        ? "Kasverschil (gestort + kas-uit - kasomzet)"
+        ? "Kasverschil (gestort - kasomzet)"
         : "Kasverschil (geboekt + kas-uit - contant betaald)",
       "Status",
       "Opmerkingen",
@@ -906,7 +894,7 @@ function buildCsv(
       compareWithLeat
         ? lineCsvValue(giftcardTotals.leatIssued)
         : "",
-      lineCsvValue(line.cashOut),
+      kind === "ice" ? "" : lineCsvValue(line.cashOut),
       lineCsvValue(line.deposited),
       lineCsvValue(line.cashDifference),
       reportLineStatus(line),
@@ -987,7 +975,7 @@ function ReportLineRow({
         {kind === "ice" ? "n.v.t." : formatMoney(line.giftCards)}
       </td>
       <td className="px-2 py-2 text-right text-xs font-black">
-        {formatMoney(line.cashOut)}
+        {kind === "ice" ? "n.v.t." : formatMoney(line.cashOut)}
       </td>
       <td className="px-2 py-2 text-right text-xs font-black">
         {formatMoney(line.deposited)}
@@ -1205,7 +1193,7 @@ function MonthShopOverview({
                     {kind === "ice" ? "n.v.t." : formatMoney(line.giftCards)}
                   </td>
                   <td className="px-2 py-1.5 text-right">
-                    {formatMoney(line.cashOut)}
+                    {kind === "ice" ? "n.v.t." : formatMoney(line.cashOut)}
                   </td>
                   <td className="px-2 py-1.5 text-right">
                     {formatMoney(line.deposited)}
@@ -1245,7 +1233,7 @@ function MonthShopOverview({
                 {kind === "ice" ? "n.v.t." : formatMoney(total.giftCards)}
               </td>
               <td className="px-2 py-1.5 text-right">
-                {formatMoney(total.cashOut)}
+                {kind === "ice" ? "n.v.t." : formatMoney(total.cashOut)}
               </td>
               <td className="px-2 py-1.5 text-right">
                 {formatMoney(total.deposited)}
@@ -2035,11 +2023,11 @@ export default function KasboekMaandrapportClient() {
           />
           <MetricCell
             label={`Kas-uit ${cashbookKind === "ice" ? "ijs" : "patisserie"}`}
-            value={formatMoney(
+            value={
               cashbookKind === "ice"
-                ? monthCashTotals.iceCashOut
-                : monthCashTotals.patisserieCashOut
-            )}
+                ? "n.v.t."
+                : formatMoney(monthCashTotals.patisserieCashOut)
+            }
           />
           <MetricCell
             label={
