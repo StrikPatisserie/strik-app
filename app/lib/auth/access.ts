@@ -40,6 +40,25 @@ export const VIERDAAGSE_PERMISSION_OPTIONS = [
 ];
 
 const FULL_ACCESS_ROLES = new Set(["admin", "manager", "management"]);
+const WINKEL_IPAD_ACCOUNT_EMAILS = new Set([
+  "strikpatisseriedaalseweg@gmail.com",
+  "strikpatisserieheyendaalseweg@gmail.com",
+  "strikpatisserielent@gmail.com",
+  "strikpatisserieziekerstraat@gmail.com",
+]);
+const DEPARTMENT_ACCOUNT_BY_EMAIL = new Map<
+  string,
+  { id: "bakkerij" | "chocolaterie"; label: string }
+>([
+  [
+    "strikpatisserie1937@gmail.com",
+    { id: "bakkerij", label: "Bakkerij & logistiek" },
+  ],
+  [
+    "zakelijk@strik-patisserie.nl",
+    { id: "chocolaterie", label: "Chocolaterie" },
+  ],
+]);
 const BAKERY_DEPARTMENT_PERMISSION_IDS = BAKERY_DEPARTMENT_PERMISSION_OPTIONS.map(
   (permission) => permission.id
 );
@@ -117,6 +136,36 @@ export function hasFullAccess(profile: UserProfile | null | undefined) {
     profile?.active &&
       (isFullAccessRole(profile.role) || hasPermission(profile, "app.all"))
   );
+}
+
+export function isWinkelIpadAccount(
+  profile: UserProfile | null | undefined
+) {
+  return WINKEL_IPAD_ACCOUNT_EMAILS.has(
+    String(profile?.email || "").trim().toLowerCase()
+  );
+}
+
+export function getDepartmentAccount(
+  profile: UserProfile | null | undefined
+) {
+  return (
+    DEPARTMENT_ACCOUNT_BY_EMAIL.get(
+      String(profile?.email || "").trim().toLowerCase()
+    ) || null
+  );
+}
+
+export function isDepartmentAccount(
+  profile: UserProfile | null | undefined
+) {
+  return Boolean(getDepartmentAccount(profile));
+}
+
+export function isBakeryLogisticsAccount(
+  profile: UserProfile | null | undefined
+) {
+  return getDepartmentAccount(profile)?.id === "bakkerij";
 }
 
 export function getDefaultPathForRole(role: string | null | undefined) {
@@ -238,6 +287,37 @@ function isSinterklaasPath(pathname: string) {
   return pathname === "/sinterklaas" || pathname.startsWith("/sinterklaas/");
 }
 
+function isWinkelSinterklaasPath(pathname: string) {
+  return (
+    pathname === "/sinterklaas" ||
+    pathname === "/sinterklaas/letters" ||
+    pathname === "/sinterklaas/letters/winkel"
+  );
+}
+
+function isDepartmentSinterklaasPath(pathname: string) {
+  return (
+    pathname === "/sinterklaas" ||
+    pathname === "/sinterklaas/letters" ||
+    pathname === "/sinterklaas/letters/winkel" ||
+    pathname.startsWith("/sinterklaas/letters/winkel/") ||
+    pathname === "/sinterklaas/letters/online" ||
+    pathname.startsWith("/sinterklaas/letters/online/") ||
+    pathname === "/sinterklaas/letters/productie" ||
+    pathname.startsWith("/sinterklaas/letters/productie/") ||
+    pathname === "/sinterklaas/letters/productie-overzicht" ||
+    pathname === "/sinterklaas/letters/centrale-productie"
+  );
+}
+
+function isBakeryLogisticsSinterklaasPath(pathname: string) {
+  return (
+    isSinterklaasPath(pathname) &&
+    pathname !== "/sinterklaas/letters/management" &&
+    !pathname.startsWith("/sinterklaas/letters/management/")
+  );
+}
+
 function isBakkerijDataPath(pathname: string) {
   return pathname === "/bakkerij/management" || pathname.startsWith("/bakkerij/management/");
 }
@@ -305,6 +385,7 @@ export function canAccessLogistiek(profile: UserProfile | null | undefined) {
   if (!profile?.active) return false;
 
   return (
+    isBakeryLogisticsAccount(profile) ||
     normalizeRole(profile.role) === "logistiek" ||
     hasPermission(profile, "bakkerij.logistiek")
   );
@@ -322,7 +403,28 @@ export function canAccessWeddingCakes(profile: UserProfile | null | undefined) {
 }
 
 export function canAccessSinterklaas(profile: UserProfile | null | undefined) {
+  return canAccessSinterklaasPath(profile, "/sinterklaas");
+}
+
+export function canAccessSinterklaasPath(
+  profile: UserProfile | null | undefined,
+  pathname: string
+) {
   if (!profile?.active) return false;
+
+  if (hasFullAccess(profile)) return true;
+
+  if (isBakeryLogisticsAccount(profile)) {
+    return isBakeryLogisticsSinterklaasPath(pathname);
+  }
+
+  if (isDepartmentAccount(profile)) {
+    return isDepartmentSinterklaasPath(pathname);
+  }
+
+  if (normalizeRole(profile.role) === "winkel") {
+    return isWinkelSinterklaasPath(pathname);
+  }
 
   return hasPermission(profile, "sinterklaas.view");
 }
@@ -352,7 +454,7 @@ export function canAccessPath(
   }
 
   if (isSinterklaasPath(pathname)) {
-    return canAccessSinterklaas(profile);
+    return canAccessSinterklaasPath(profile, pathname);
   }
 
   if (hasFullAccess(profile)) return true;

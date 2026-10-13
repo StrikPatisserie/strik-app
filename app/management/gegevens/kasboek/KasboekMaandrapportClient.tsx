@@ -1507,18 +1507,12 @@ export default function KasboekMaandrapportClient() {
         const nextCashDeposits = Array.isArray(data.cashDeposits)
           ? data.cashDeposits
           : [];
-        const latestDate =
-          [...nextDailyRecords, ...nextCashRecords]
-            .map((record) => record.date)
-            .sort()
-            .at(-1) || localIsoDate();
 
         setRecords(Array.isArray(data.records) ? data.records : []);
         setDailyRecords(nextDailyRecords);
         setCashRecords(nextCashRecords);
         setCashDeposits(nextCashDeposits);
         setStorage(data.storage);
-        setMonth(latestDate.slice(0, 7));
         setState("ready");
       } catch (error) {
         if (!ignoreResult) {

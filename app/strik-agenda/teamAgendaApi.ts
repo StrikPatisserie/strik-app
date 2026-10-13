@@ -74,6 +74,35 @@ export function getEventTypeLabel(type: TeamAgendaEventType) {
   );
 }
 
+const holidayIconRules = [
+  { words: ["sinterklaas", "pakjesavond", "sint nicolaas"], icon: "🎁" },
+  { words: ["kerst"], icon: "🎄" },
+  { words: ["nieuwjaar", "oudejaar", "oud en nieuw"], icon: "🎆" },
+  { words: ["paas"], icon: "🐣" },
+  { words: ["koningsdag"], icon: "👑" },
+  { words: ["bevrijdingsdag"], icon: "🇳🇱" },
+  { words: ["dodenherdenking"], icon: "🕯️" },
+  { words: ["hemelvaart"], icon: "☁️" },
+  { words: ["pinkster"], icon: "🕊️" },
+  { words: ["goede vrijdag"], icon: "✝️" },
+  { words: ["carnaval"], icon: "🎭" },
+  { words: ["valentijn"], icon: "❤️" },
+  { words: ["moederdag"], icon: "💐" },
+  { words: ["vaderdag"], icon: "👔" },
+  { words: ["halloween"], icon: "🎃" },
+  { words: ["sint maarten"], icon: "🏮" },
+] as const;
+
+export function getHolidayIcon(title: string) {
+  const normalizedTitle = title.trim().toLocaleLowerCase("nl-NL");
+
+  return (
+    holidayIconRules.find((rule) =>
+      rule.words.some((word) => normalizedTitle.includes(word))
+    )?.icon || "✨"
+  );
+}
+
 export function getAudienceLabel(audience: TeamAgendaAudience) {
   return (
     teamAgendaAudiences.find((item) => item.value === audience)?.label ||

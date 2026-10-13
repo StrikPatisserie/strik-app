@@ -1,5 +1,7 @@
 import DepartmentHub from "../DepartmentHub";
 import { strikIcons } from "../StrikUI";
+import { filterAllowedItems } from "../lib/auth/access";
+import { getCurrentProfile } from "../lib/auth/session";
 
 const items = [
   {
@@ -18,14 +20,19 @@ const items = [
   },
 ];
 
-export default function SinterklaasPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SinterklaasPage() {
+  const profile = await getCurrentProfile();
+  const visibleItems = filterAllowedItems(items, profile);
+
   return (
     <DepartmentHub
       eyebrow="Seizoen"
       title="Sinterklaas"
       description="Alle chocoladeletters en zakelijke bestellingen bij elkaar."
       icon={strikIcons.sinterklaas}
-      items={items}
+      items={visibleItems}
       tone="yellow"
     />
   );

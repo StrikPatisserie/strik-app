@@ -16,6 +16,7 @@ import newsletterDefaultImage from "./nieuws/newsletter-default.png";
 import {
   type TeamAgendaEvent,
   getEventTypeLabel,
+  getHolidayIcon,
   getTeamAgendaUrl,
   normalizeTeamAgenda,
 } from "./strik-agenda/teamAgendaApi";
@@ -311,17 +312,33 @@ export default function WelcomeHighlights() {
 
         <div className="mt-3 max-h-[12rem] space-y-2 overflow-y-auto pr-0.5">
           {visibleAgendaEvents.length ? (
-            visibleAgendaEvents.map((event) => (
-              <div key={`${event.id}-${event.displayDate.toISOString()}`} className="rounded-xl border border-[#e4d7cc] bg-[#f5ede3] px-3 py-2 text-xs">
-                <span className="flex items-center justify-between gap-2">
-                  <span className="font-black text-[#d75a48]">{formatShortDate(event.displayDate)}</span>
-                  <span className="text-[0.54rem] font-black uppercase tracking-[0.08em] text-[#a27a8e]">
-                    {getEventTypeLabel(event.type)}
+            visibleAgendaEvents.map((event) => {
+              const isHoliday = event.type === "holiday";
+
+              return (
+                <div
+                  key={`${event.id}-${event.displayDate.toISOString()}`}
+                  className={`rounded-xl border px-3 py-2 text-xs ${
+                    isHoliday
+                      ? "border-[#e6c458] bg-[#fff3bd] shadow-[inset_4px_0_0_#d79a24]"
+                      : "border-[#e4d7cc] bg-[#f5ede3]"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className={`font-black ${isHoliday ? "text-[#9a6307]" : "text-[#d75a48]"}`}>{formatShortDate(event.displayDate)}</span>
+                    <span className={`flex items-center gap-1 text-[0.54rem] font-black uppercase tracking-[0.08em] ${isHoliday ? "text-[#8a5a09]" : "text-[#a27a8e]"}`}>
+                      {getEventTypeLabel(event.type)}
+                      {isHoliday && (
+                        <span className="text-sm leading-none" aria-hidden="true">
+                          {getHolidayIcon(event.title)}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                </span>
-                <span className="mt-1 block line-clamp-2 font-bold leading-snug text-[#49342d]">{event.title}</span>
-              </div>
-            ))
+                  <span className="mt-1 block line-clamp-2 font-bold leading-snug text-[#49342d]">{event.title}</span>
+                </div>
+              );
+            })
           ) : (
             <p className="py-4 text-center text-xs font-semibold text-[#76655e]">
               {agendaStatus ||

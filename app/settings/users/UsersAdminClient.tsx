@@ -28,6 +28,9 @@ import {
   SEASONAL_MENU_PERMISSION_OPTIONS,
   VIERDAAGSE_PERMISSION_OPTIONS,
   WINKEL_STORE_PERMISSION_OPTIONS,
+  getDepartmentAccount,
+  isDepartmentAccount,
+  isWinkelIpadAccount,
 } from "../../lib/auth/access";
 
 const initialState: UserAdminActionState = {};
@@ -320,6 +323,42 @@ function PencilIcon() {
   );
 }
 
+function TabletIcon({ className = "h-4 w-4" }: Readonly<{ className?: string }>) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="5" y="2.5" width="14" height="19" rx="2.5" />
+      <path d="M10 18.5h4" />
+    </svg>
+  );
+}
+
+function DepartmentIcon({ className = "h-4 w-4" }: Readonly<{ className?: string }>) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 21V10l6 3V9l6 3V4h6v17H3Z" />
+      <path d="M7 17h2M13 17h2M18 8h1" />
+    </svg>
+  );
+}
+
 function Modal({
   title,
   children,
@@ -430,14 +469,53 @@ function EditUserModal({
   );
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmEmail, setConfirmEmail] = useState("");
+  const departmentAccount = getDepartmentAccount(profile);
+  const accountTitlePrefix = isWinkelIpadAccount(profile)
+    ? "Winkel-iPad · "
+    : departmentAccount
+      ? `${departmentAccount.label} · `
+      : "";
 
   useEffect(() => {
     if (deleteState.ok) onClose();
   }, [deleteState.ok, onClose]);
 
   return (
-    <Modal title={getProfileDisplayName(profile)} onClose={onClose}>
+    <Modal
+      title={`${accountTitlePrefix}${getProfileDisplayName(profile)}`}
+      onClose={onClose}
+    >
       <div className="space-y-4">
+        {isWinkelIpadAccount(profile) && (
+          <div className="flex items-start gap-3 rounded-md border border-[#b9cfb6] bg-[#eef7ec] p-3 text-[#1f4f35]">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#d8e8d4]">
+              <TabletIcon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-black">Vast winkel-iPad account</p>
+              <p className="mt-0.5 text-xs font-semibold text-[#52715b]">
+                Dit account hoort bij de iPad van {getStoreLabel(profile.store) || "de winkel"}.
+              </p>
+            </div>
+          </div>
+        )}
+        {departmentAccount && (
+          <div className="flex items-start gap-3 rounded-md border border-[#e2c998] bg-[#fff7e4] p-3 text-[#704d16]">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#f2dfb7]">
+              <DepartmentIcon className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-black">
+                Vast afdelingsaccount · {departmentAccount.label}
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-[#846631]">
+                {departmentAccount.id === "bakkerij"
+                  ? "Heeft toegang tot Bakkerij, Logistiek en alle Sinterklaasonderdelen inclusief B2B; niet tot Winkel of Management."
+                  : "Heeft binnen Chocoladeletters toegang tot Winkel, Webshop en Productie."}
+              </p>
+            </div>
+          </div>
+        )}
         <div className="grid gap-2">
           <Message state={updateState} />
           <Message state={activeState} />
@@ -528,11 +606,17 @@ function normalizeSearch(value: string) {
 function matchesSearch(profile: UserProfile, search: string) {
   if (!search) return true;
 
+  const departmentAccount = getDepartmentAccount(profile);
+
   return [
     profile.full_name,
     profile.email,
     getRoleLabel(profile.role),
     getStoreLabel(profile.store),
+    isWinkelIpadAccount(profile) ? "winkel ipad winkel-iPad" : "",
+    departmentAccount
+      ? `afdeling afdelingsaccount productie ${departmentAccount.label}`
+      : "",
   ]
     .join(" ")
     .toLocaleLowerCase("nl-NL")
@@ -557,16 +641,39 @@ function UserListRow({
   onOpen,
 }: Readonly<{ profile: UserProfile; onOpen: () => void }>) {
   const storeLabel = getStoreLabel(profile.store);
+  const winkelIpad = isWinkelIpadAccount(profile);
+  const departmentAccount = getDepartmentAccount(profile);
+  const accountLabel = winkelIpad
+    ? "Winkel-iPad"
+    : departmentAccount
+      ? `Afdeling ${departmentAccount.label}`
+      : null;
 
   return (
-    <tr className="h-8 border-b border-[#eee8df] last:border-b-0 even:bg-[#fcfaf7] hover:bg-[#ecf4ed]">
+    <tr className={`h-8 border-b border-[#eee8df] last:border-b-0 hover:bg-[#ecf4ed] ${winkelIpad ? "bg-[#eef7ec]" : departmentAccount ? "bg-[#fff7e4]" : "even:bg-[#fcfaf7]"}`}>
       <td className="max-w-0 px-2 py-1">
-        <button type="button" onClick={onOpen} title={getProfileDisplayName(profile)} className="block w-full truncate text-left text-xs font-bold text-[#1a1815] hover:underline">
-          {getProfileDisplayName(profile)}
+        <button type="button" onClick={onOpen} title={accountLabel ? `${accountLabel} · ${getProfileDisplayName(profile)}` : getProfileDisplayName(profile)} className="flex w-full items-center gap-1.5 overflow-hidden text-left text-xs font-bold text-[#1a1815] hover:underline">
+          {winkelIpad && (
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#d8e8d4] text-[#1f4f35]">
+              <TabletIcon className="h-3.5 w-3.5" />
+            </span>
+          )}
+          {departmentAccount && (
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#f2dfb7] text-[#704d16]">
+              <DepartmentIcon className="h-3.5 w-3.5" />
+            </span>
+          )}
+          <span className="truncate">{getProfileDisplayName(profile)}</span>
         </button>
       </td>
       <td className="max-w-0 truncate px-2 py-1 text-xs text-[#6f665c]" title={profile.email}>{profile.email}</td>
-      <td className="max-w-0 truncate px-2 py-1 text-xs text-[#6f665c]" title={getRoleLabel(profile.role)}>{getRoleLabel(profile.role)}</td>
+      <td className="max-w-0 px-2 py-1 text-xs text-[#6f665c]" title={accountLabel || getRoleLabel(profile.role)}>
+        <span className="flex items-center gap-1.5">
+          <span className="truncate">{departmentAccount?.label || getRoleLabel(profile.role)}</span>
+          {winkelIpad && <span className="shrink-0 rounded-full bg-[#d8e8d4] px-1.5 py-0.5 text-[0.58rem] font-black uppercase text-[#1f4f35]">iPad</span>}
+          {departmentAccount && <span className="shrink-0 rounded-full bg-[#f2dfb7] px-1.5 py-0.5 text-[0.58rem] font-black uppercase text-[#704d16]">Vast</span>}
+        </span>
+      </td>
       <td className="max-w-0 truncate px-2 py-1 text-xs text-[#6f665c]" title={storeLabel || "Alle winkels"}>{storeLabel || "—"}</td>
       <td className="px-2 py-1 text-xs">
         <span className={`font-bold ${profile.active ? "text-[#52715b]" : "text-[#a25c19]"}`}>{profile.active ? "Actief" : "Niet actief"}</span>
@@ -585,6 +692,9 @@ export default function UsersAdminClient({
   initialProfileId,
 }: Readonly<{ profiles: UserProfile[]; initialProfileId?: string }>) {
   const [search, setSearch] = useState("");
+  const [accountFilter, setAccountFilter] = useState<
+    "all" | "winkel-ipads" | "departments"
+  >("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     profiles.some((profile) => profile.id === initialProfileId) ? initialProfileId || null : null
@@ -594,18 +704,24 @@ export default function UsersAdminClient({
     profiles.find((profile) => profile.id === selectedProfileId) || null;
   const visibleProfiles = useMemo(
     () =>
-      sortProfiles(profiles).filter((profile) =>
-        matchesSearch(profile, normalizedSearch)
+      sortProfiles(profiles).filter(
+        (profile) =>
+          (accountFilter === "all" ||
+            (accountFilter === "winkel-ipads" && isWinkelIpadAccount(profile)) ||
+            (accountFilter === "departments" && isDepartmentAccount(profile))) &&
+          matchesSearch(profile, normalizedSearch)
       ),
-    [profiles, normalizedSearch]
+    [accountFilter, profiles, normalizedSearch]
   );
   const inactiveCount = profiles.filter((profile) => !profile.active).length;
+  const winkelIpadCount = profiles.filter(isWinkelIpadAccount).length;
+  const departmentAccountCount = profiles.filter(isDepartmentAccount).length;
 
   return (
     <div>
       <section className="overflow-hidden rounded-lg border border-[#e4ded5] bg-white/92 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#eee8df] px-3 py-2">
-          <p className="text-sm font-black text-[#1a1815]">Gebruikers <span className="ml-1 text-xs font-semibold text-[#7b7268]">{profiles.length} totaal{inactiveCount ? ` · ${inactiveCount} niet actief` : ""}</span></p>
+          <p className="text-sm font-black text-[#1a1815]">Gebruikers <span className="ml-1 text-xs font-semibold text-[#7b7268]">{profiles.length} totaal · {winkelIpadCount} winkel-iPads · {departmentAccountCount} afdelingen{inactiveCount ? ` · ${inactiveCount} niet actief` : ""}</span></p>
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
@@ -617,8 +733,8 @@ export default function UsersAdminClient({
           </button>
         </div>
 
-        <div className="border-b border-[#eee8df] px-3 py-2">
-          <label className="relative block">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#eee8df] px-3 py-2">
+          <label className="relative min-w-[15rem] flex-1">
             <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[#7b7268]">
               <SearchIcon />
             </span>
@@ -629,6 +745,34 @@ export default function UsersAdminClient({
               className="h-8 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] pl-8 pr-3 text-xs font-semibold outline-none placeholder:text-[#a39c91] focus:border-[#1f4f35]"
             />
           </label>
+          <div className="flex shrink-0 rounded-md bg-[#f4f0ea] p-0.5" aria-label="Accountfilter">
+            <button
+              type="button"
+              onClick={() => setAccountFilter("all")}
+              aria-pressed={accountFilter === "all"}
+              className={`h-7 rounded px-2.5 text-[0.68rem] font-black ${accountFilter === "all" ? "bg-white text-[#1f4f35] shadow-sm" : "text-[#7b7268]"}`}
+            >
+              Alle
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountFilter("winkel-ipads")}
+              aria-pressed={accountFilter === "winkel-ipads"}
+              className={`flex h-7 items-center gap-1 rounded px-2.5 text-[0.68rem] font-black ${accountFilter === "winkel-ipads" ? "bg-[#d8e8d4] text-[#1f4f35] shadow-sm" : "text-[#7b7268]"}`}
+            >
+              <TabletIcon className="h-3.5 w-3.5" />
+              Winkel-iPads ({winkelIpadCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountFilter("departments")}
+              aria-pressed={accountFilter === "departments"}
+              className={`flex h-7 items-center gap-1 rounded px-2.5 text-[0.68rem] font-black ${accountFilter === "departments" ? "bg-[#f2dfb7] text-[#704d16] shadow-sm" : "text-[#7b7268]"}`}
+            >
+              <DepartmentIcon className="h-3.5 w-3.5" />
+              Afdelingen ({departmentAccountCount})
+            </button>
+          </div>
         </div>
 
         <div className="max-h-[34rem] overflow-auto">

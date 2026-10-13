@@ -679,14 +679,6 @@ export default function CashCountManager() {
         const nextCashRecords = Array.isArray(data.cashRecords)
           ? data.cashRecords
           : [];
-        const latestDate =
-          nextCashRecords
-            .map((record) => record.date)
-            .sort()
-            .at(-1) || localIsoDate();
-        const latestRecord = [...nextCashRecords].sort((first, second) =>
-          first.date.localeCompare(second.date)
-        ).at(-1);
 
         setRecords(Array.isArray(data.records) ? data.records : []);
         setDailyRecords(Array.isArray(data.dailyRecords) ? data.dailyRecords : []);
@@ -695,15 +687,6 @@ export default function CashCountManager() {
           Array.isArray(data.cashDeposits) ? data.cashDeposits : []
         );
         setStorage(data.storage);
-        setSelectedDate(latestDate);
-        if (latestRecord) {
-          setSelectedShop(latestRecord.shop);
-          setSelectedCashLocationKind(
-            hasIceCashRecord(latestRecord) && !hasPatisserieCashRecord(latestRecord)
-              ? "ice"
-              : "patisserie"
-          );
-        }
         setState("ready");
       } catch (error) {
         if (!ignoreResult) {

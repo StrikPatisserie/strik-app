@@ -84,7 +84,9 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
   const [pickupDate, setPickupDate] = useState(initialOrder?.pickupDate || "");
   const [availableDates, setAvailableDates] = useState(pickupDates);
   const [refreshingDates, setRefreshingDates] = useState(false);
-  const [shop, setShop] = useState(initialOrder?.shop || defaultShop);
+  const [shop, setShop] = useState(
+    initialOrder?.shop || initialOrder?.pickupLocation || defaultShop
+  );
   const [giftWrap, setGiftWrap] = useState(initialOrder?.giftWrap || false);
   const [paid, setPaid] = useState(initialOrder?.paid || false);
   const [review, setReview] = useState(false);

@@ -7,6 +7,7 @@ import {
   TeamAgendaEvent,
   TeamAgendaEventType,
   getEventTypeLabel,
+  getHolidayIcon,
   getEventSourceLabel,
   getTeamAgendaUrl,
   normalizeTeamAgenda,
@@ -105,16 +106,6 @@ function expandUpcomingEvents(events: TeamAgendaEvent[]) {
     .sort((a, b) => a.displayDate.getTime() - b.displayDate.getTime());
 }
 
-function groupByDate(events: DisplayEvent[]) {
-  return events.reduce<Record<string, DisplayEvent[]>>((acc, event) => {
-    const key = formatDateKey(event.displayDate);
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(event);
-
-    return acc;
-  }, {});
-}
-
 async function fetchWordPressAgendaEvents() {
   const res = await fetch(getTeamAgendaUrl(), { cache: "no-store" });
   const data = (await res.json().catch(() => null)) as unknown;
@@ -155,11 +146,19 @@ async function fetchDrivePersonnelEvents() {
 }
 
 function EventCard({ event }: { event: DisplayEvent }) {
+  const isHoliday = event.type === "holiday";
+
   return (
-    <article className="rounded-lg border border-[#e7e0d8] bg-white px-2 py-2 shadow-sm sm:px-3">
+    <article
+      className={`rounded-lg border px-2 py-2 shadow-sm sm:px-3 ${
+        isHoliday
+          ? "border-[#e6c458] bg-[#fff7d6] shadow-[inset_4px_0_0_#d79a24]"
+          : "border-[#e7e0d8] bg-white"
+      }`}
+    >
       <div className="flex items-start gap-2 sm:gap-3">
-        <div className="w-10 shrink-0 rounded-lg bg-[#f8f6f3] px-1.5 py-1.5 text-center sm:w-12">
-          <p className="text-[0.52rem] font-black uppercase leading-none text-[#2d2a26]/45 sm:text-[0.62rem]">
+        <div className={`w-10 shrink-0 rounded-lg px-1.5 py-1.5 text-center sm:w-12 ${isHoliday ? "bg-[#f3d985] text-[#6f4b0d]" : "bg-[#f8f6f3]"}`}>
+          <p className={`text-[0.52rem] font-black uppercase leading-none sm:text-[0.62rem] ${isHoliday ? "text-[#6f4b0d]/70" : "text-[#2d2a26]/45"}`}>
             {event.displayDate.toLocaleDateString("nl-NL", {
               month: "short",
             })}
@@ -177,6 +176,11 @@ function EventCard({ event }: { event: DisplayEvent }) {
               }`}
             >
               {getEventTypeLabel(event.type)}
+              {isHoliday && (
+                <span className="ml-1 text-sm leading-none" aria-hidden="true">
+                  {getHolidayIcon(event.title)}
+                </span>
+              )}
             </span>
             <span className="rounded-full bg-[#f8f6f3] px-2 py-0.5 text-[0.58rem] font-black text-[#2d2a26]/55 sm:text-[0.68rem]">
               {getEventSourceLabel(event)}
@@ -192,7 +196,7 @@ function EventCard({ event }: { event: DisplayEvent }) {
           </p>
 
           {event.description && (
-            <p className="mt-1.5 rounded-lg bg-[#f8f6f3] px-2 py-1.5 text-xs leading-snug text-[#6b645b] sm:text-sm">
+            <p className={`mt-1.5 rounded-lg px-2 py-1.5 text-xs leading-snug text-[#6b645b] sm:text-sm ${isHoliday ? "bg-white/60" : "bg-[#f8f6f3]"}`}>
               {event.description}
             </p>
           )}
