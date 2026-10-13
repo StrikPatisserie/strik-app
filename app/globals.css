@@ -795,8 +795,9 @@ select:focus {
   }
 
   body:has(.cashbook-print-bundle) .cashbook-print-report + .cashbook-print-report {
-    break-before: page;
-    page-break-before: always;
+    margin-top: 8mm !important;
+    padding-top: 5mm !important;
+    border-top: 1pt solid #d9d0c6 !important;
   }
 
   body:has(.cashbook-print-bundle) .cashbook-print-report table {

@@ -1116,11 +1116,14 @@ function MonthShopOverview({
     >
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[#ece5dc] px-3 py-1.5">
         <div>
-          <p className="text-[0.52rem] font-black uppercase tracking-normal text-[#8b8278]">
+          <p className="text-[0.58rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
             {kind === "ice" ? "IJskasboek" : "Patisseriekasboek"}
           </p>
-          <h2 className="text-sm font-black leading-tight text-[#1a1815]">
-            Maandcijfers in één overzicht
+          <h2 className="text-base font-black leading-tight text-[#1a1815]">
+            {kind === "ice" ? "IJs" : "Patisserie"}
+            <span className="ml-1.5 text-xs font-bold text-[#6b645b]">
+              · maandcijfers in één overzicht
+            </span>
           </h2>
         </div>
         <p className="text-xs font-black capitalize text-[#4b433c]">
