@@ -736,7 +736,7 @@ select:focus {
   .allergen-print-sheet footer { position: fixed; bottom: 0; width: 100%; border-top: .5pt solid #aaa; padding-top: 2mm; text-align: center; font-size: 7pt; color: #666; }
 }
 
-/* Kasboek: print uitsluitend het compacte maandoverzicht. */
+/* Kasboek: print uitsluitend de gekozen compacte maandoverzichten. */
 .cashbook-print-report {
   page: cashbook-report;
 }
@@ -747,30 +747,41 @@ select:focus {
 }
 
 @media print {
-  body:has(.cashbook-print-report) * {
+  body:has(.cashbook-print-bundle) * {
     visibility: hidden !important;
   }
 
-  body:has(.cashbook-print-report),
-  body:has(.cashbook-print-report) main {
+  body:has(.cashbook-print-bundle),
+  body:has(.cashbook-print-bundle) main {
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
     background: #fff !important;
   }
 
-  body:has(.cashbook-print-report) main {
+  body:has(.cashbook-print-bundle) main {
     padding: 0 !important;
   }
 
-  body:has(.cashbook-print-report) .cashbook-print-report,
-  body:has(.cashbook-print-report) .cashbook-print-report * {
+  body:has(.cashbook-print-bundle) .cashbook-print-bundle,
+  body:has(.cashbook-print-bundle) .cashbook-print-bundle *,
+  body:has(.cashbook-print-bundle) .cashbook-print-report,
+  body:has(.cashbook-print-bundle) .cashbook-print-report * {
     visibility: visible !important;
   }
 
-  body:has(.cashbook-print-report) .cashbook-print-report {
+  body:has(.cashbook-print-bundle) .cashbook-print-bundle {
     position: absolute !important;
     inset: 0 auto auto 0 !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  body:has(.cashbook-print-bundle) .cashbook-print-report {
+    position: static !important;
     display: block !important;
     width: 100% !important;
     max-width: none !important;
@@ -783,14 +794,19 @@ select:focus {
     -webkit-print-color-adjust: exact;
   }
 
-  body:has(.cashbook-print-report) .cashbook-print-report table {
+  body:has(.cashbook-print-bundle) .cashbook-print-report + .cashbook-print-report {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  body:has(.cashbook-print-bundle) .cashbook-print-report table {
     width: 100% !important;
     min-width: 0 !important;
     table-layout: auto;
   }
 
-  body:has(.cashbook-print-report) .cashbook-print-report th,
-  body:has(.cashbook-print-report) .cashbook-print-report td {
+  body:has(.cashbook-print-bundle) .cashbook-print-report th,
+  body:has(.cashbook-print-bundle) .cashbook-print-report td {
     padding: 2mm 1.5mm !important;
     white-space: nowrap;
   }

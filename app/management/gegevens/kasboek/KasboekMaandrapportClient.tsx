@@ -15,6 +15,7 @@ import type { LeatGiftcardControlResponse } from "@/app/management/leatGiftcardT
 
 type LoadState = "loading" | "ready" | "saving" | "error";
 type CashbookKind = "patisserie" | "ice";
+type PrintCashbookKind = CashbookKind | "both";
 
 type RevenueResponse = RevenueData & {
   storage?: {
@@ -1097,12 +1098,12 @@ function MonthShopOverview({
   reports,
   kind,
   month,
-  selectedShop,
+  printOnly = false,
 }: Readonly<{
   reports: ShopReport[];
   kind: CashbookKind;
   month: string;
-  selectedShop: RevenueShop;
+  printOnly?: boolean;
 }>) {
   const total = totalReportLine(
     kind === "ice" ? "IJs" : "Winkel",
@@ -1110,7 +1111,9 @@ function MonthShopOverview({
   );
 
   return (
-    <section className="cashbook-print-report rounded-lg border border-[#e7e0d8] bg-white/95 shadow-sm print:border-0 print:shadow-none">
+    <section
+      className={`${printOnly ? "cashbook-print-report" : "print:hidden"} rounded-lg border border-[#e7e0d8] bg-white/95 shadow-sm print:border-0 print:shadow-none`}
+    >
       <div className="flex flex-wrap items-end justify-between gap-2 border-b border-[#ece5dc] px-3 py-1.5">
         <div>
           <p className="text-[0.52rem] font-black uppercase tracking-normal text-[#8b8278]">
@@ -1166,19 +1169,10 @@ function MonthShopOverview({
               return (
                 <tr
                   key={report.shop}
-                  className={`border-t border-[#ece5dc] text-xs font-bold ${
-                    report.shop === selectedShop ? "bg-[#fff3a8]" : ""
-                  }`}
+                  className="border-t border-[#ece5dc] text-xs font-bold"
                 >
                   <th className="px-3 py-1.5 text-left font-black text-[#1a1815]">
-                    <span className="inline-flex items-center gap-1.5">
-                      {report.shop}
-                      {report.shop === selectedShop && (
-                        <span className="rounded-full bg-[#fed500] px-1.5 py-0.5 text-[0.5rem] font-black uppercase text-[#332c25] print:hidden">
-                          geselecteerd
-                        </span>
-                      )}
-                    </span>
+                    {report.shop}
                   </th>
                   <td className="px-2 py-1.5 text-right font-black">
                     {formatMoney(line.revenue)}
@@ -1470,6 +1464,8 @@ export default function KasboekMaandrapportClient() {
   const [month, setMonth] = useState(localMonthKey());
   const [cashbookKind, setCashbookKind] =
     useState<CashbookKind>("patisserie");
+  const [printCashbookKind, setPrintCashbookKind] =
+    useState<PrintCashbookKind>("both");
   const [selectedShop, setSelectedShop] = useState<RevenueShop>(revenueShops[0]);
   const [records, setRecords] = useState<RevenueRecord[]>([]);
   const [dailyRecords, setDailyRecords] = useState<RevenueDayRecord[]>([]);
@@ -1846,14 +1842,35 @@ export default function KasboekMaandrapportClient() {
             >
               Boekings-CSV
             </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              disabled={state !== "ready"}
-              className="rounded-md border border-[#d8d0c7] bg-white px-3 py-2 text-xs font-black uppercase tracking-normal text-[#1a1815] disabled:opacity-50"
-            >
-              Print maand {monthLabel(month).replace(/\s+\d{4}$/, "")}
-            </button>
+            <div className="inline-flex overflow-hidden rounded-md border border-[#d8d0c7] bg-white">
+              <label className="sr-only" htmlFor="cashbook-print-kind">
+                Kies welke kasboeken je wilt printen
+              </label>
+              <select
+                id="cashbook-print-kind"
+                value={printCashbookKind}
+                onChange={(event) =>
+                  setPrintCashbookKind(
+                    event.target.value as PrintCashbookKind
+                  )
+                }
+                disabled={state !== "ready"}
+                className="border-0 border-r border-[#d8d0c7] bg-[#f8f6f3] px-2 py-2 text-xs font-black text-[#1a1815] outline-none disabled:opacity-50"
+                title="Kies het maandrapport voor de print"
+              >
+                <option value="both">Patisserie + ijs</option>
+                <option value="patisserie">Alleen patisserie</option>
+                <option value="ice">Alleen ijs</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                disabled={state !== "ready"}
+                className="bg-white px-3 py-2 text-xs font-black uppercase tracking-normal text-[#1a1815] disabled:opacity-50"
+              >
+                Print maand {monthLabel(month).replace(/\s+\d{4}$/, "")}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1927,8 +1944,24 @@ export default function KasboekMaandrapportClient() {
           reports={reports}
           kind={cashbookKind}
           month={month}
-          selectedShop={selectedShop}
         />
+      )}
+
+      {state !== "loading" && (
+        <div className="cashbook-print-bundle hidden">
+          {(printCashbookKind === "both"
+            ? (["patisserie", "ice"] as const)
+            : [printCashbookKind]
+          ).map((kind) => (
+            <MonthShopOverview
+              key={kind}
+              reports={reports}
+              kind={kind}
+              month={month}
+              printOnly
+            />
+          ))}
+        </div>
       )}
 
       <section className="rounded-lg border border-[#e7e0d8] bg-white/95 p-2 shadow-sm print:hidden">
