@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import PresentationDayStartBanner from "../presentatie/PresentationDayStartBanner";
 import type {
   WinkelWorkPlanDefinition,
   WinkelWorkPlanStoreId,
@@ -485,6 +486,12 @@ export default function WinkelWorkPlanChecklist({
           </div>
         )}
       </section>
+
+      {!previewMode &&
+      currentDefinition?.id === "opstartplan" &&
+      currentDefinition.storeId === "heyendaal" ? (
+        <PresentationDayStartBanner />
+      ) : null}
 
       {!currentDefinition ? (
         <section className="border border-[#e8e4de] bg-white p-4 shadow-sm">

@@ -35,6 +35,7 @@ const PUBLIC_API_PATHS = new Set([
 
 function isPublicPath(pathname: string) {
   return (
+    (process.env.NODE_ENV === "development" && pathname === "/preview/winkelpresentatie") ||
     PUBLIC_PATHS.has(pathname) ||
     pathname.startsWith("/auth/callback/") ||
     pathname.startsWith("/fonts/") ||

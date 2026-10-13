@@ -74,6 +74,14 @@ const managementItems = [
     ...managementIconAppearance,
   },
   {
+    href: "/management/winkelpresentatie",
+    label: "Winkels",
+    title: "Winkelpresentatie",
+    description: "Bepaal per aanbieding de vaste plek in de winkel.",
+    icon: strikIcons.winkel,
+    ...managementIconAppearance,
+  },
+  {
     href: "/settings",
     label: "Beheer",
     title: "Gebruikers & app",

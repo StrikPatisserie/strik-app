@@ -1,10 +1,17 @@
 import CompactStaffOverview from "../CompactStaffOverview";
 import DepartmentHub from "../DepartmentHub";
 import { strikIcons } from "../StrikUI";
-import { filterAllowedItems } from "../lib/auth/access";
+import { canAccessStorePresentation, filterAllowedItems } from "../lib/auth/access";
 import { getCurrentProfile } from "../lib/auth/session";
 
 const winkelItems = [
+  {
+    href: "/winkel/presentatie",
+    title: "Winkelpresentatie",
+    description: "Bekijk waar de aanbieding deze week hoort te staan.",
+    icon: strikIcons.winkel,
+    accent: "yellow" as const,
+  },
   {
     href: "/winkel/haccp",
     title: "HACCP & werkplannen",
@@ -32,7 +39,12 @@ export const dynamic = "force-dynamic";
 
 export default async function WinkelPage() {
   const profile = await getCurrentProfile();
-  const visibleItems = filterAllowedItems(winkelItems, profile);
+  const storeScopedItems = winkelItems.filter(
+    (item) =>
+      item.href !== "/winkel/presentatie" ||
+      canAccessStorePresentation(profile)
+  );
+  const visibleItems = filterAllowedItems(storeScopedItems, profile);
 
   return (
     <DepartmentHub

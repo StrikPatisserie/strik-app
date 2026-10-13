@@ -24,6 +24,13 @@ const items = [
     accent: "yellow" as const,
   },
   {
+    href: "/management/winkelpresentatie",
+    title: "Winkelpresentatie",
+    description: "Vaste plaatsing per week en winkel.",
+    icon: strikIcons.winkel,
+    accent: "yellow" as const,
+  },
+  {
     href: "/management/nieuws",
     title: "Nieuws",
     description: "",

@@ -215,6 +215,16 @@ export function getAllowedWinkelStoreIds(profile: UserProfile | null | undefined
   return WINKEL_STORE_IDS.filter((storeId) => canAccessWinkelStore(profile, storeId));
 }
 
+export function canAccessStorePresentation(profile: UserProfile | null | undefined) {
+  if (hasFullAccess(profile)) return true;
+  if (!canAccessWinkelStore(profile, "heyendaal")) return false;
+  return (
+    profile?.email?.trim().toLowerCase() === "strikpatisserieheyendaalseweg@gmail.com" ||
+    normalizeStore(profile?.store) === "heyendaal" ||
+    hasPermission(profile, "stores.heyendaal")
+  );
+}
+
 export function filterAllowedWinkelOptions<T extends { id: string }>(
   options: readonly T[],
   profile: UserProfile | null | undefined
