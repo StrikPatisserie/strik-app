@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { saveFolderContact } from "@/app/lib/businessFolderContacts";
 import { b2bCustomers2024 } from "@/app/api/sinterklaas-mailing/seed2024";
 
 export const runtime = "nodejs";
@@ -44,6 +45,7 @@ type SignupInput = {
   email?: unknown;
   consent?: unknown;
   website?: unknown;
+  kind?: unknown;
 };
 
 function seedCustomers(): MailingCustomer[] {
@@ -131,11 +133,14 @@ function mergeSignup(input: {
   contactName: string;
   email: string;
   consentAt: string;
+  consent: boolean;
+  quote: boolean;
 }) {
   const customers = Array.isArray(input.campaign.customers)
     ? input.campaign.customers
     : [];
-  const consentLabel = `Website-aanmelding Sint + kerst op ${input.consentAt}`;
+  const consentLabel = input.quote ? `Offerteaanvraag Sint: contact opgeslagen op ${input.consentAt}${input.consent ? " · Toestemming Sint + kerst" : ""}` : `Website-aanmelding Sint + kerst op ${input.consentAt}`;
+  const source = input.quote ? "/sint-voor-bedrijven" : "/kerst-voor-bedrijven";
   let matched = false;
 
   const nextCustomers = customers.map((customer) => {
@@ -158,10 +163,7 @@ function mergeSignup(input: {
               contactName:
                 cleanText(recipient.contactName, 160) || input.contactName,
               email: input.email,
-              doNotEmail: false,
-              interests: ["sint", "kerst"],
-              consentAt: input.consentAt,
-              consentSource: "/kerst-voor-bedrijven",
+              ...(input.consent ? { doNotEmail: false, interests: ["sint", "kerst"], consentAt: input.consentAt, consentSource: source } : {}),
             }
           : recipient
       ),
@@ -173,29 +175,20 @@ function mergeSignup(input: {
   }
 
   const id = crypto.randomUUID();
-  return {
-    customers: [
-      {
-        id: `folderlead-${id}`,
-        company: input.company,
-        notes: consentLabel,
-        recipients: [
-          {
-            id: `folderadres-${id}`,
-            contactName: input.contactName,
-            email: input.email,
-            doNotEmail: false,
-            sent: [],
-            interests: ["sint", "kerst"],
-            consentAt: input.consentAt,
-            consentSource: "/kerst-voor-bedrijven",
-          },
-        ],
-      },
-      ...nextCustomers,
-    ],
-    alreadyRegistered: false,
+  const recipient: MailingRecipient = {
+    id: `folderadres-${id}`,
+    contactName: input.contactName,
+    email: input.email,
+    doNotEmail: !input.consent,
+    sent: [],
+    interests: input.consent ? ["sint", "kerst"] : [],
+    ...(input.consent ? { consentAt: input.consentAt, consentSource: source } : {}),
   };
+  const sameCompany = nextCustomers.findIndex((customer) => customer.company.trim().toLowerCase() === input.company.trim().toLowerCase());
+  if (sameCompany >= 0) {
+    return { customers: nextCustomers.map((customer, index) => index === sameCompany ? { ...customer, notes: appendSignupNote(customer.notes, consentLabel), recipients: [...customer.recipients, recipient] } : customer), alreadyRegistered: false };
+  }
+  return { customers: [{ id: `folderlead-${id}`, company: input.company, notes: consentLabel, recipients: [recipient] }, ...nextCustomers], alreadyRegistered: false };
 }
 
 export async function POST(request: Request) {
@@ -232,14 +225,15 @@ export async function POST(request: Request) {
   if (!email) {
     return NextResponse.json({ message: "Vul een geldig e-mailadres in." }, { status: 400 });
   }
-  if (!consent) {
+  const quote = input.kind === "quote";
+  if (!consent && !quote) {
     return NextResponse.json(
       { message: "Geef toestemming om de foldermails te ontvangen." },
       { status: 400 }
     );
   }
 
-  const year = String(new Date().getFullYear());
+  const year = new Intl.DateTimeFormat("en", { timeZone: "Europe/Amsterdam", year: "numeric" }).format(new Date());
   const consentAt = new Date().toISOString();
 
   try {
@@ -250,6 +244,8 @@ export async function POST(request: Request) {
       contactName,
       email,
       consentAt,
+      consent,
+      quote,
     });
 
     await saveCampaign(year, {
@@ -257,6 +253,10 @@ export async function POST(request: Request) {
       year,
       customers: merged.customers,
     });
+
+    const customer = merged.customers.find((customer) => customer.recipients.some((recipient) => recipient.email.toLowerCase() === email));
+    if (!customer) throw new Error("Contact ontbreekt na opslaan.");
+    await saveFolderContact(customer, email, consent);
 
     return NextResponse.json({
       ok: true,

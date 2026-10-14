@@ -517,6 +517,11 @@ export default function SintB2BConcept() {
   const [company, setCompany] = useState("");
   const [contact, setContact] = useState("");
   const [email, setEmail] = useState("");
+  const [newsletterConsent, setNewsletterConsent] = useState(false);
+  const [quoteSaving, setQuoteSaving] = useState(false);
+  const [quoteSavedSignature, setQuoteSavedSignature] = useState("");
+  const [quoteSaveError, setQuoteSaveError] = useState("");
+  const [website, setWebsite] = useState("");
   const [phone, setPhone] = useState("");
   const [wishes, setWishes] = useState("");
 
@@ -604,6 +609,22 @@ export default function SintB2BConcept() {
   const hasRequestedDeliveryMoment = deliveryMomentType === "date" ? Boolean(requestedDeliveryDate) : Boolean(selectedDeliveryWeek);
   const hasValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const canOpenEmail = Boolean(company.trim() && hasValidEmail && hasRequestedDeliveryMoment);
+  const quoteSignature = JSON.stringify([company.trim(), contact.trim(), email.trim().toLowerCase(), newsletterConsent]);
+  const quoteContactSaved = quoteSavedSignature === quoteSignature;
+  async function saveQuoteContact() {
+    if (!canOpenEmail || quoteSaving) return;
+    setQuoteSaving(true); setQuoteSaveError("");
+    try {
+      const response = await fetch("/api/business-folder-signup", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "quote", company, contactName: contact, email, consent: newsletterConsent, website }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Contactgegevens opslaan is niet gelukt.");
+      setQuoteSavedSignature(quoteSignature);
+    } catch (err) { setQuoteSaveError(err instanceof Error ? err.message : "Contactgegevens opslaan is niet gelukt."); }
+    finally { setQuoteSaving(false); }
+  }
   const missingQuoteDetails = [
     !company.trim() ? "de bedrijfsnaam" : "",
     !hasValidEmail ? "een geldig e-mailadres" : "",
@@ -808,8 +829,12 @@ export default function SintB2BConcept() {
         <div className="mt-4 flex justify-between gap-3 border-t-2 border-[#60190f] pt-4 text-xl font-black"><span>Producttotaal {includeVat ? "incl." : "excl."} btw</span><span className="text-right">{money(total)}{delivery !== "pickup" && <small className="block text-xs">+ bezorgkosten</small>}</span></div>
         <p className="mt-1 text-right text-xs font-bold text-[#8b7669]">Ook {includeVat ? `${money(totalEx)} excl. btw` : `${money(totalIncl)} incl. btw`}</p>
         <div className="mt-6 grid gap-3 sm:grid-cols-2"><input aria-label="Bedrijfsnaam" value={company} onChange={(event) => setCompany(event.target.value)} placeholder="Bedrijfsnaam" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Contactpersoon" value={contact} onChange={(event) => setContact(event.target.value)} placeholder="Contactpersoon" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="E-mailadres" value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="E-mailadres" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><input aria-label="Telefoonnummer" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" placeholder="Telefoonnummer" className="h-12 rounded-xl border border-[#dfd0b7] bg-white px-4 font-bold"/><textarea aria-label="Overige wensen" value={wishes} onChange={(event) => setWishes(event.target.value)} placeholder="Verpakking, personalisatie of andere wensen" className="min-h-28 rounded-xl border border-[#dfd0b7] bg-white p-4 font-bold sm:col-span-2"/></div>
+        <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[#eadbc3] bg-white p-4 text-sm font-bold text-[#60190f]"><input type="checkbox" checked={newsletterConsent} onChange={(event) => setNewsletterConsent(event.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-[#d62d1d]"/><span>Ja, ik ontvang graag toekomstige zakelijke Sinterklaas- en kerstfolders per e-mail, ook volgend jaar.<small className="mt-1 block font-normal">Optioneel. Je kunt je altijd afmelden.</small></span></label>
+        <label aria-hidden="true" className="hidden">Website<input tabIndex={-1} autoComplete="off" value={website} onChange={(event) => setWebsite(event.target.value)} /></label>
         <details className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><summary className="cursor-pointer text-sm font-black text-[#60190f]">Bekijk eerst de e-mailtekst</summary><pre className="mt-4 whitespace-pre-wrap break-words border-t border-[#eadbc3] pt-4 font-sans text-xs leading-relaxed text-[#5a4038]">{offerText}</pre></details>
-        {canOpenEmail ? <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sinterklaas 2026 - ${company.trim()}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a> : <div className="mt-5"><button type="button" disabled className="w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white opacity-45">Open aanvraag in mijn e-mailapp →</button><p className="mt-2 text-center text-xs font-bold text-[#9a3d21]">Vul eerst {missingQuoteDetails} in.</p></div>}
+        {canOpenEmail && quoteContactSaved ? <a href={`mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Sinterklaas 2026 - ${company.trim()}`)}&body=${encodeURIComponent(offerText)}`} className="mt-5 block w-full rounded-full bg-[#d62d1d] px-6 py-4 text-center font-black text-white">Open aanvraag in mijn e-mailapp →</a> : <div className="mt-5"><button type="button" disabled={!canOpenEmail || quoteSaving} onClick={() => void saveQuoteContact()} className="w-full rounded-full bg-[#d62d1d] px-6 py-4 font-black text-white disabled:opacity-45">{quoteSaving ? "Contactgegevens opslaan…" : "Contact opslaan en e-mail klaarzetten →"}</button>{!canOpenEmail ? <p className="mt-2 text-center text-xs font-bold text-[#9a3d21]">Vul eerst {missingQuoteDetails} in.</p> : null}</div>}
+        {quoteSaveError ? <p role="alert" className="mt-3 text-sm font-bold text-[#9a3d21]">{quoteSaveError}</p> : null}
+        {quoteContactSaved ? <p role="status" className="mt-3 text-sm font-bold text-[#557965]">Je contactgegevens zijn opgeslagen. Open nu je e-mailapp en verstuur de aanvraag.{newsletterConsent ? " Je bent ook aangemeld voor toekomstige Sint- en kerstfolders." : " Je bent hiermee niet aangemeld voor foldermails."}</p> : null}
         <p className="mt-3 text-center text-xs font-bold text-[#8b7669]">Je e-mailapp opent met een overzichtelijke aanvraag. Je verstuurt hem zelf; er gaat niet automatisch iets weg. De overige producten en bezorgkosten zijn nog conceptprijzen.</p>
       </section></div>}
       {productInfo && <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#391008]/60 p-0 sm:items-center sm:p-5" onClick={() => setProductInfo(null)}>
