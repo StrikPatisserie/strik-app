@@ -43,6 +43,7 @@ export type BakeryHomeData = {
 };
 
 export type Ingredient = {
+  specification?: IngredientSpecification;
   id: string;
   name: string;
   supplier: string;
@@ -139,6 +140,7 @@ export type ManualProductionPlanningItem = {
 };
 
 export type Recipe = {
+  labeling?: RecipeLabeling;
   id: string;
   name: string;
   strikArticleNumber?: string;
@@ -186,6 +188,29 @@ export type Recipe = {
   lastProducedQuantity?: number;
   productionLog?: ProductionLogEntry[];
   productionRequests?: ProductionRequest[];
+};
+
+export type NutritionKey = "energyKj" | "energyKcal" | "fat" | "saturates" | "carbohydrates" | "sugars" | "protein" | "salt";
+export type IngredientSpecification = {
+  specsPlazaId?: string;
+  specificationVersion?: string;
+  ingredientsText?: string;
+  allergensConfirmed?: boolean;
+  nutritionPer100g?: Partial<Record<NutritionKey, number>>;
+  densityGramsPerMl?: number;
+  pieceWeightGrams?: number;
+  source?: string;
+  updatedAt?: string;
+};
+export type RecipeLabeling = {
+  productName?: string;
+  ingredientsText?: string;
+  finalBatchWeightGrams?: number;
+  netQuantity?: string;
+  storageInstructions?: string;
+  shelfLifeText?: string;
+  operatorDetails?: string;
+  notes?: string;
 };
 
 export type InvoiceLine = {

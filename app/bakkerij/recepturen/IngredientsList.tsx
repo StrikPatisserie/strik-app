@@ -1,4 +1,5 @@
 import { type ReactNode, useMemo, useState } from "react";
+import IngredientSpecificationEditor from "./IngredientSpecificationEditor";
 import type { Ingredient, Recipe, RecipeUnit } from "./types";
 import {
   EmptyState,
@@ -425,6 +426,7 @@ export function IngredientDetail({
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#2d2a26]/35 px-3 py-5 backdrop-blur-sm">
       <div className="mx-auto max-w-3xl border border-[#d9d2c9] bg-[#f4f0ea] p-3 shadow-2xl">
+        <IngredientSpecificationEditor key={ingredient.id} ingredient={ingredient} onSave={onUpdateIngredient} />
         <div className="sticky top-3 z-10 border border-[#d9d2c9] bg-white px-3 py-2 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
