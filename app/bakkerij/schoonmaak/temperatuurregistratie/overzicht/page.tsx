@@ -8,7 +8,7 @@ export default function BakkerijTemperatuurregistratieOverzichtPage() {
   return (
     <TemperatureRegistrationOverviewPage
       title="Temperatuurregistratie"
-      kicker="Bakkerij HACCP maandrapport"
+      kicker="Bakkerij HACCP week- en maandoverzicht"
       locationOptions={bakkerijTemperatureOptions}
       rowsByLocation={bakkerijTemperatureRows}
       defaultLocationId="bakkerij"

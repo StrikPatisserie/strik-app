@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { dateInput, weekRange, periodDates, daySummary } from "./overviewPeriod";
 import { useEffect, useMemo, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
 import {
@@ -24,7 +25,6 @@ import {
   type TemperatureDeviceConfig,
   type TemperatureDeviceType,
   type TemperatureLocationOption,
-  type TemperatureRegistration,
   type TemperatureRecord,
   type TemperatureStatus,
 } from "../temperatureRegistrationShared";
@@ -75,6 +75,7 @@ function formatDutchDateHeading(date: string) {
 
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
     .toLocaleDateString("nl-NL", {
+      weekday: "long",
       day: "numeric",
       month: "long",
     });
@@ -136,17 +137,6 @@ function getCleaningItemLocationId(
   return getLocationIdFromName(item.winkel || "", locationOptions);
 }
 
-function registrationHasContent(registration: TemperatureRegistration) {
-  return Boolean(
-    registration.inactive ||
-      registration.status === "inactive" ||
-      getMeasuredTemperature(registration).trim() ||
-      (registration.displayTemperatuur || "").trim() ||
-      (registration.actionTaken || "").trim() ||
-      (registration.note || "").trim()
-  );
-}
-
 function groupRowsByDate(rows: OverviewRow[]) {
   const groups = new Map<string, OverviewRow[]>();
 
@@ -202,8 +192,8 @@ function buildRows(
   records: TemperatureRecord[],
   cleaningItems: CleaningItem[],
   locationFilter: LocationFilter,
-  month: number,
-  year: number,
+  periodStart: string,
+  periodEnd: string,
   includeMissingRows: boolean,
   allowedLocationOptions: readonly TemperatureLocationOption[],
   rowsByLocation: Record<string, TemperatureDeviceConfig[]>,
@@ -221,9 +211,7 @@ function buildRows(
     const dateParts = recordDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!dateParts) return;
 
-    const recordYear = Number(dateParts[1]);
-    const recordMonth = Number(dateParts[2]) - 1;
-    if (recordYear !== year || recordMonth !== month) return;
+    if (recordDate < periodStart || recordDate > periodEnd) return;
 
     const locationId = getRecordLocationId(record, allowedLocationOptions);
     const locationMatches =
@@ -242,7 +230,6 @@ function buildRows(
       : [];
 
     registrations
-      .filter(registrationHasContent)
       .forEach((registration, registrationIndex) => {
         const deviceName = registration.naam || "Onbekend meetpunt";
         const deviceType = normalizeTemperatureDeviceType(
@@ -312,9 +299,7 @@ function buildRows(
     const dateParts = recordDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!dateParts) return;
 
-    const recordYear = Number(dateParts[1]);
-    const recordMonth = Number(dateParts[2]) - 1;
-    if (recordYear !== year || recordMonth !== month) return;
+    if (recordDate < periodStart || recordDate > periodEnd) return;
 
     const locationId = getCleaningItemLocationId(item, allowedLocationOptions);
     const locationMatches =
@@ -365,54 +350,36 @@ function buildRows(
           )}`
       )
     );
-    const today = getTodayParts();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const isFutureMonth =
-      year > today.year || (year === today.year && month > today.month);
-    const lastDay =
-      year === today.year && month === today.month ? today.day : daysInMonth;
-
-    if (!isFutureMonth) {
-      selectedLocationIds.forEach((locationId) => {
-        (rowsByLocation[locationId] || []).forEach((device) => {
+    const dates = periodDates(periodStart, periodEnd, dateInput(new Date()));
+    selectedLocationIds.forEach((locationId) => {
+      dates.forEach((date) => {
+        // Partial saves omit empty rows, so keep the configured inventory in the denominator.
+        const history = records.filter((record) => record.datum <= date && getRecordLocationId(record, allowedLocationOptions) === locationId)
+          .sort((a, b) => b.datum.localeCompare(a.datum));
+        const knownDevices = history.flatMap((record) => record.temperatuurRegistraties || []);
+        const expectedDevices: TemperatureDeviceConfig[] = [...(rowsByLocation[locationId] || [])];
+        const expectedNames = new Set(expectedDevices.map((device) => normalizeDeviceName(getTemperatureDeviceName(device))));
+        for (const item of knownDevices) {
+          if (!item.naam || expectedNames.has(normalizeDeviceName(item.naam))) continue;
+          expectedNames.add(normalizeDeviceName(item.naam));
+          expectedDevices.push({ name: item.naam, deviceType: normalizeTemperatureDeviceType(item.deviceType, item.naam) });
+        }
+        expectedDevices.forEach((device) => {
           const deviceName = getTemperatureDeviceName(device);
-          const deviceType =
-            typeof device === "string"
-              ? inferDeviceType(deviceName)
-              : device.deviceType || inferDeviceType(deviceName);
-
-          for (let day = 1; day <= lastDay; day += 1) {
-            const date = toDateInput(year, month, day);
-            const key = `${date}|${locationId}|${normalizeDeviceName(
-              deviceName
-            )}`;
-
-            if (existingRows.has(key)) continue;
-
-            rows.push({
-              key: `missing-${locationId}-${date}-${normalizeDeviceName(
-                deviceName
-              )}`,
-              date,
-              time: "-",
-              locationId,
-              location: getLocationLabel(locationId, allowedLocationOptions),
-              deviceName,
-              deviceType,
-              displayTemperature: "",
-              temperature: "",
-              status: "missing",
-              statusLabel: "Geen registratie gevonden",
-              actionTaken: "",
-              enteredBy: "",
-              note: "",
-              createdAt: "",
-              source: "missing",
-            });
-          }
+          const deviceType = typeof device === "string" ? inferDeviceType(deviceName) : device.deviceType || inferDeviceType(deviceName);
+          const key = `${date}|${locationId}|${normalizeDeviceName(deviceName)}`;
+          if (existingRows.has(key)) return;
+          rows.push({
+            key: `missing-${locationId}-${date}-${normalizeDeviceName(deviceName)}`,
+            date, time: "-", locationId,
+            location: getLocationLabel(locationId, allowedLocationOptions),
+            deviceName, deviceType, displayTemperature: "", temperature: "",
+            status: "missing", statusLabel: "Geen registratie gevonden",
+            actionTaken: "", enteredBy: "", note: "", createdAt: "", source: "missing",
+          });
         });
       });
-    }
+    });
   }
 
   return rows.sort((first, second) => {
@@ -454,6 +421,8 @@ export function TemperatureRegistrationOverviewPage({
   const [cleaningItems, setCleaningItems] = useState<CleaningItem[]>([]);
   const [locationFilter, setLocationFilter] =
     useState<LocationFilter>(initialLocationId || "all");
+  const [periodMode, setPeriodMode] = useState<"month" | "week">("month");
+  const [weekDate, setWeekDate] = useState(dateInput(new Date()));
   const [month, setMonth] = useState(today.month);
   const [year, setYear] = useState(today.year);
   const [deviceFilter, setDeviceFilter] = useState("all");
@@ -461,10 +430,11 @@ export function TemperatureRegistrationOverviewPage({
     TemperatureDeviceType | "all"
   >("all");
   const [onlyProblems, setOnlyProblems] = useState(false);
-  const [includeMissingRows, setIncludeMissingRows] = useState(false);
+  const [includeMissingRows, setIncludeMissingRows] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [registrationsLoaded, setRegistrationsLoaded] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -517,6 +487,7 @@ export function TemperatureRegistrationOverviewPage({
 
     async function loadRegistrations() {
       setLoading(true);
+      setRegistrationsLoaded(false);
       setStatus("");
 
       try {
@@ -535,6 +506,7 @@ export function TemperatureRegistrationOverviewPage({
         }
 
         setRecords(temperatureResult.ok ? temperatureResult.data : []);
+        setRegistrationsLoaded(temperatureResult.ok);
         setCleaningItems(cleaningResult.ok ? cleaningResult.data : []);
 
         if (!temperatureResult.ok) {
@@ -560,55 +532,20 @@ export function TemperatureRegistrationOverviewPage({
     };
   }, [loadCleaningFallback]);
 
-  const rows = useMemo(
-    () =>
-      buildRows(
-        records,
-        cleaningItems,
-        locationFilter,
-        month,
-        year,
-        includeMissingRows,
-        allowedLocationOptions,
-        rowsByLocation,
-        loadCleaningFallback
-      ).filter((row) => {
-        if (
-          deviceFilter !== "all" &&
-          normalizeDeviceName(row.deviceName) !== deviceFilter
-        ) {
-          return false;
-        }
-
-        if (deviceTypeFilter !== "all" && row.deviceType !== deviceTypeFilter) {
-          return false;
-        }
-
-        if (
-          onlyProblems &&
-          !isAttentionOrDeviationStatus(row.status) &&
-          row.status !== "missing"
-        ) {
-          return false;
-        }
-
-        return true;
-      }),
-    [
-      records,
-      cleaningItems,
-      locationFilter,
-      month,
-      year,
-      includeMissingRows,
-      deviceFilter,
-      deviceTypeFilter,
-      onlyProblems,
-      allowedLocationOptions,
-      rowsByLocation,
-      loadCleaningFallback,
-    ]
-  );
+  const period = periodMode === "week" ? weekRange(weekDate) : {
+    start: toDateInput(year, month, 1),
+    end: toDateInput(year, month, new Date(year, month + 1, 0).getDate()),
+  };
+  const allRows = useMemo(() => buildRows(
+    records, cleaningItems, locationFilter, period.start, period.end, true,
+    allowedLocationOptions, rowsByLocation, loadCleaningFallback
+  ).filter((row) => (deviceFilter === "all" || normalizeDeviceName(row.deviceName) === deviceFilter) &&
+    (deviceTypeFilter === "all" || row.deviceType === deviceTypeFilter)),
+    [records, cleaningItems, locationFilter, period.start, period.end, allowedLocationOptions, rowsByLocation, loadCleaningFallback, deviceFilter, deviceTypeFilter]);
+  const rows = useMemo(() => allRows.filter((row) =>
+    (includeMissingRows || row.status !== "missing") &&
+    (!onlyProblems || isAttentionOrDeviationStatus(row.status) || row.status === "missing")
+  ), [allRows, includeMissingRows, onlyProblems]);
 
   const deviceOptions = useMemo(() => {
     const names = new Set<string>();
@@ -632,7 +569,7 @@ export function TemperatureRegistrationOverviewPage({
     );
   }, [allowedLocationOptions, locationFilter, rows, rowsByLocation]);
 
-  const periodLabel = `${
+  const periodLabel = periodMode === "week" ? `${formatDutchDateHeading(period.start)} t/m ${formatDutchDateHeading(period.end)}` : `${
     monthOptions.find((option) => option.value === month)?.label || ""
   } ${year}`;
   const locationLabel =
@@ -640,12 +577,18 @@ export function TemperatureRegistrationOverviewPage({
       ? allLocationsLabel
       : getLocationLabel(locationFilter, allowedLocationOptions);
   const reportRows = useMemo(
-    () => rows.filter((row) => row.source === "registration"),
+    () => rows,
     [rows]
   );
-  const groupedRows = useMemo(() => groupRowsByDate(rows), [rows]);
+  const groupedRows = useMemo(() => groupRowsByDate(allRows).filter((group) => !onlyProblems || daySummary(group.rows).missing > 0 || daySummary(group.rows).problems > 0), [allRows, onlyProblems]);
 
   function updateMonth(delta: number) {
+    if (periodMode === "week") {
+      const next = new Date(`${weekDate}T12:00:00`);
+      next.setDate(next.getDate() + delta * 7);
+      setWeekDate(dateInput(next));
+      return;
+    }
     const next = new Date(year, month + delta, 1);
     setYear(next.getFullYear());
     setMonth(next.getMonth());
@@ -696,7 +639,7 @@ export function TemperatureRegistrationOverviewPage({
       .replace(/[^a-z0-9]+/g, "-")}-${year}-${String(month + 1).padStart(
       2,
       "0"
-    )}.csv`;
+    )}-${periodMode === "week" ? period.start : "maand"}.csv`;
     link.click();
     window.URL.revokeObjectURL(url);
   }
@@ -821,7 +764,7 @@ export function TemperatureRegistrationOverviewPage({
           />
           <Link
             href={registrationHref}
-            className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
+            className="min-h-12 touch-manipulation rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#ef5737] shadow-sm ring-1 ring-[#e8e4de]"
           >
             Terug
           </Link>
@@ -841,14 +784,14 @@ export function TemperatureRegistrationOverviewPage({
               <button
                 type="button"
                 onClick={downloadPdf}
-                className="rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black shadow-sm"
+                className="min-h-12 touch-manipulation rounded-full bg-[#f8f6f3] px-4 py-2.5 text-sm font-black shadow-sm"
               >
-                Maandrapport openen
+                {periodMode === "week" ? "Weekrapport openen" : "Maandrapport openen"}
               </button>
               <button
                 type="button"
                 onClick={downloadCsv}
-                className="rounded-full bg-[#d95749] px-4 py-2.5 text-sm font-black text-white shadow-sm"
+                className="min-h-12 touch-manipulation rounded-full bg-[#d95749] px-4 py-2.5 text-sm font-black text-white shadow-sm"
               >
                 Download CSV/Excel
               </button>
@@ -857,12 +800,19 @@ export function TemperatureRegistrationOverviewPage({
         </section>
 
         <section className="rounded-[1.25rem] border border-[#e7e0d8] bg-white/90 p-4 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <div className="flex gap-2" aria-label="Periode kiezen">
+              {(["month", "week"] as const).map((mode) => <button key={mode} type="button" aria-pressed={periodMode === mode} onClick={() => setPeriodMode(mode)} className={`min-h-12 touch-manipulation rounded-xl px-5 text-sm font-black ${periodMode === mode ? "bg-[#315e42] text-white" : "bg-[#f8f6f3]"}`}>{mode === "month" ? "Maand" : "Week"}</button>)}
+            </div>
+            {periodMode === "week" ? <label className="flex items-center gap-2 text-sm font-bold">Week van <input type="date" value={weekDate} onChange={(event) => { if (event.target.value) setWeekDate(event.target.value); }} className="min-h-12 rounded-xl border p-2" /></label> : null}
+            <p className="text-sm font-bold">{periodLabel}</p>
+          </div>
           <div className="flex items-center justify-between gap-3 lg:hidden">
             <p className="text-sm font-black text-[#1a1815]">Filters</p>
             <button
               type="button"
               onClick={() => setFiltersOpen((current) => !current)}
-              className="rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black"
+              className="min-h-12 touch-manipulation rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black"
             >
               {filtersOpen ? "Sluit filters" : "Toon filters"}
             </button>
@@ -893,6 +843,7 @@ export function TemperatureRegistrationOverviewPage({
                 ))}
               </select>
             </label>
+            {periodMode === "month" ? <>
             <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
               Maand
               <select
@@ -916,6 +867,7 @@ export function TemperatureRegistrationOverviewPage({
                 className="rounded-2xl border border-[#e7e0d8] bg-white p-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26]"
               />
             </label>
+            </> : null}
             <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
               Apparaat
               <select
@@ -960,16 +912,16 @@ export function TemperatureRegistrationOverviewPage({
               <button
                 type="button"
                 onClick={() => updateMonth(-1)}
-                className="rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black shadow-sm"
+                className="min-h-12 touch-manipulation rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black shadow-sm"
               >
-                Vorige maand
+                {periodMode === "week" ? "Vorige week" : "Vorige maand"}
               </button>
               <button
                 type="button"
                 onClick={() => updateMonth(1)}
-                className="rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black shadow-sm"
+                className="min-h-12 touch-manipulation rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black shadow-sm"
               >
-                Volgende maand
+                {periodMode === "week" ? "Volgende week" : "Volgende maand"}
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -980,7 +932,7 @@ export function TemperatureRegistrationOverviewPage({
                   onChange={(event) => setOnlyProblems(event.target.checked)}
                   className="h-4 w-4 accent-[#6d9caf]"
                 />
-                Alleen afwijkingen
+                Afwijkingen / ontbrekend
               </label>
               <label className="flex items-center gap-2 rounded-full bg-[#f8f6f3] px-4 py-2 text-sm font-black">
                 <input
@@ -1003,9 +955,26 @@ export function TemperatureRegistrationOverviewPage({
           )}
         </section>
 
-        <section className="overflow-hidden rounded-[1.75rem] border border-[#e7e0d8] bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="min-w-[72rem] w-full border-collapse text-left text-xs">
+        <section className="space-y-3" aria-label="Registraties per dag">
+          <p className="text-xs font-bold text-[#6b645b]">Klik op een dag om alle metingen te bekijken. Tijdelijk uitgezette apparaten tellen niet mee als ontbrekende meting.</p>
+          {!loading && registrationsLoaded && groupedRows.length ? groupedRows.map((group) => {
+            const summary = daySummary(group.rows);
+            const visibleRows = group.rows.filter((row) => (includeMissingRows || row.status !== "missing") && (!onlyProblems || isAttentionOrDeviationStatus(row.status) || row.status === "missing"));
+            return (
+              <details key={`${periodMode}-${period.start}-${locationFilter}-${group.date}`} className="overflow-hidden rounded-2xl border border-[#e7e0d8] bg-white shadow-sm">
+                <summary className="flex min-h-16 cursor-pointer touch-manipulation list-none flex-wrap items-center justify-between gap-3 p-4 text-sm font-black text-[#1a1815]">
+                  <span>{formatDutchDateHeading(group.date)}</span>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-3 py-2 ${summary.missing ? "bg-[#fff5d8] text-[#7a5a18]" : "bg-[#edf7ea] text-[#3f6b36]"}`}>
+                      {summary.total === 0 ? "Geen actieve apparaten" : <>{summary.missing ? "! " : "✓ "}{summary.filled} van {summary.total} ingevuld{summary.missing === 0 ? " · Compleet" : ""}</>}
+                    </span>
+                    {summary.problems ? <span className="min-h-12 touch-manipulation rounded-full bg-[#fff0ed] px-3 py-2 text-[#a0382f]">! {summary.problems} afwijkingen</span> : null}
+                    {summary.inactive ? <span className="text-xs text-[#6b645b]">{summary.inactive} tijdelijk uit</span> : null}
+                    <span aria-hidden="true">⌄</span>
+                  </span>
+                </summary>
+                <div className="overflow-x-auto border-t border-[#e7e0d8]">
+                  <table className="min-w-[72rem] w-full border-collapse text-left text-xs">
               <thead className="bg-[#f8f6f3] text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
                 <tr>
                   <th className="px-3 py-2">Tijd</th>
@@ -1020,18 +989,8 @@ export function TemperatureRegistrationOverviewPage({
                   <th className="px-3 py-2">Opmerking</th>
                 </tr>
               </thead>
-              {groupedRows.length ? (
-                groupedRows.map((group) => (
-                  <tbody key={group.date}>
-                    <tr className="border-t border-[#d8d0c7] bg-[#efeae3]">
-                      <td
-                        colSpan={10}
-                        className="px-3 py-2 text-sm font-black text-[#1a1815]"
-                      >
-                        {formatDutchDateHeading(group.date)}
-                      </td>
-                    </tr>
-                    {group.rows.map((row) => (
+                    <tbody>
+                      {visibleRows.map((row) => (
                     <tr key={row.key} className="border-t border-[#eee7de]">
                       <td className="px-3 py-2">{row.time}</td>
                       <td className="px-3 py-2">{row.location}</td>
@@ -1062,23 +1021,13 @@ export function TemperatureRegistrationOverviewPage({
                         {row.note || "-"}
                       </td>
                     </tr>
-                    ))}
-                  </tbody>
-                ))
-              ) : (
-                <tbody>
-                  <tr>
-                    <td
-                      colSpan={10}
-                      className="px-4 py-8 text-center text-sm font-bold text-[#2d2a26]/55"
-                    >
-                      Geen temperatuurregistraties gevonden voor deze periode.
-                    </td>
-                  </tr>
-                </tbody>
-              )}
-            </table>
-          </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            );
+          }) : !loading && registrationsLoaded ? <p className="rounded-2xl bg-white p-6 text-sm font-bold text-[#6b645b]">Geen dagen gevonden voor deze selectie.</p> : null}
         </section>
       </div>
     </StrikShell>

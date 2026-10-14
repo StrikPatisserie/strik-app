@@ -1086,9 +1086,9 @@ export function TemperatureRegistrationPage({
               {currentOverviewHref && (
                 <Link
                   href={currentOverviewHref}
-                  className="flex h-10 items-center rounded-full border border-[#d8d0c7] bg-white px-3 text-[0.64rem] font-black text-[#55704d]"
+                  className="relative z-10 inline-flex min-h-12 touch-manipulation items-center justify-center rounded-xl border border-[#d8d0c7] bg-white px-5 text-sm font-black text-[#55704d]"
                 >
-                  Maandoverzicht
+                  Maand / weekoverzicht
                 </Link>
               )}
             </div>
