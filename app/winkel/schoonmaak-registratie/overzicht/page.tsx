@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { dateInput, weekRange, periodDates, daySummary } from "./overviewPeriod";
+import { dateInput, weekRange, periodDates, daySummary, recordedDays } from "./overviewPeriod";
 import { useEffect, useMemo, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
 import {
@@ -382,7 +382,7 @@ function buildRows(
     });
   }
 
-  return rows.sort((first, second) => {
+  return recordedDays(rows).sort((first, second) => {
     if (first.date !== second.date) return second.date.localeCompare(first.date);
     if (first.location !== second.location) {
       return first.location.localeCompare(second.location);
@@ -956,7 +956,7 @@ export function TemperatureRegistrationOverviewPage({
         </section>
 
         <section className="space-y-3" aria-label="Registraties per dag">
-          <p className="text-xs font-bold text-[#6b645b]">Klik op een dag om alle metingen te bekijken. Tijdelijk uitgezette apparaten tellen niet mee als ontbrekende meting.</p>
+          <p className="text-xs font-bold text-[#6b645b]">Alleen dagen met ingevulde metingen worden getoond. Klik op een dag om alle metingen te bekijken. Tijdelijk uitgezette apparaten tellen niet mee als ontbrekende meting.</p>
           {!loading && registrationsLoaded && groupedRows.length ? groupedRows.map((group) => {
             const summary = daySummary(group.rows);
             const visibleRows = group.rows.filter((row) => (includeMissingRows || row.status !== "missing") && (!onlyProblems || isAttentionOrDeviationStatus(row.status) || row.status === "missing"));

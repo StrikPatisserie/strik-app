@@ -35,3 +35,8 @@ export function daySummary(rows: { location: string; deviceName: string; status:
   const filled = active.filter((item) => item.measured).length;
   return { total: active.length, filled, missing: active.length - filled, problems: active.filter((item) => item.problem).length, inactive: devices.size - active.length };
 }
+
+export function recordedDays<T extends { date: string; source: string; temperature: string; status: string }>(rows: T[]) {
+  const dates = new Set(rows.filter((row) => row.source === "registration" && row.temperature.trim() && row.status !== "missing" && row.status !== "inactive").map((row) => row.date));
+  return rows.filter((row) => dates.has(row.date));
+}
