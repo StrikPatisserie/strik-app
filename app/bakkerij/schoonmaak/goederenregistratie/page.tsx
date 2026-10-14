@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { goodsChecks, missingGoodsExplanation } from "../../../winkel/schoonmaak-registratie/goodsValidation";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
 import {
   fetchTemperatureRegistrations,
@@ -26,6 +27,9 @@ type GoodsRegistrationEntry = {
   thtOk: YesNo;
   packagingOk: YesNo;
   labelOk: YesNo;
+  thtExplanation: string;
+  packagingExplanation: string;
+  labelExplanation: string;
 };
 
 const GOODS_LOCATION = "Bakkerij goederenregistratie";
@@ -82,6 +86,9 @@ function parseStoredGoodsEntry(
       thtOk: data.thtOk === "nee" ? "nee" : "ja",
       packagingOk: data.packagingOk === "nee" ? "nee" : "ja",
       labelOk: data.labelOk === "nee" ? "nee" : "ja",
+      thtExplanation: typeof data.thtExplanation === "string" ? data.thtExplanation : "",
+      packagingExplanation: typeof data.packagingExplanation === "string" ? data.packagingExplanation : "",
+      labelExplanation: typeof data.labelExplanation === "string" ? data.labelExplanation : "",
     };
   } catch {
     return null;
@@ -107,7 +114,7 @@ function goodsEntryToRegistration(
     temperatuur: entry.actualTemperature,
     deviceType: entry.temperatureType === "vries" ? "vriezer" : "koeling",
     status: hasDeviation ? "deviation" : "ok",
-    actionTaken: "",
+    actionTaken: goodsChecks.filter((check) => entry[check.key] === "nee").map((check) => `${check.label}: ${entry[check.explanation]}`).join("; "),
     note: JSON.stringify({
       kind: GOODS_PAYLOAD_KIND,
       ...entry,
@@ -186,6 +193,9 @@ export default function GoederenregistratiePage() {
   const [thtOk, setThtOk] = useState<YesNo>("ja");
   const [packagingOk, setPackagingOk] = useState<YesNo>("ja");
   const [labelOk, setLabelOk] = useState<YesNo>("ja");
+  const [thtExplanation, setThtExplanation] = useState("");
+  const [packagingExplanation, setPackagingExplanation] = useState("");
+  const [labelExplanation, setLabelExplanation] = useState("");
   const [records, setRecords] = useState<TemperatureRecord[]>([]);
   const [listDate, setListDate] = useState("");
   const [sortDirection, setSortDirection] = useState<"desc" | "asc">("desc");
@@ -239,6 +249,9 @@ export default function GoederenregistratiePage() {
       return;
     }
 
+    const missingExplanation = missingGoodsExplanation({ thtOk, packagingOk, labelOk, thtExplanation, packagingExplanation, labelExplanation });
+    if (missingExplanation) { setStatus(missingExplanation); return; }
+
     setIsSaving(true);
     setStatus("Opslaan...");
 
@@ -257,6 +270,9 @@ export default function GoederenregistratiePage() {
       thtOk,
       packagingOk,
       labelOk,
+      thtExplanation: thtOk === "nee" ? thtExplanation.trim() : "",
+      packagingExplanation: packagingOk === "nee" ? packagingExplanation.trim() : "",
+      labelExplanation: labelOk === "nee" ? labelExplanation.trim() : "",
     };
     const payload = {
       winkel: GOODS_LOCATION,
@@ -285,6 +301,9 @@ export default function GoederenregistratiePage() {
     setThtOk("ja");
     setPackagingOk("ja");
     setLabelOk("ja");
+    setThtExplanation("");
+    setPackagingExplanation("");
+    setLabelExplanation("");
     setStatus("Goederenregistratie opgeslagen.");
     await loadRecords();
   }
@@ -357,16 +376,20 @@ export default function GoederenregistratiePage() {
           </div>
 
           <div className="mt-2 grid gap-2 sm:grid-cols-3">
-            <YesNoControl label="THT klopt" value={thtOk} onChange={setThtOk} />
+            <YesNoControl label="THT klopt" value={thtOk} onChange={setThtOk} explanation={thtExplanation} onExplanationChange={setThtExplanation} />
             <YesNoControl
               label="Verpakking heel en schoon"
               value={packagingOk}
               onChange={setPackagingOk}
+              explanation={packagingExplanation}
+              onExplanationChange={setPackagingExplanation}
             />
             <YesNoControl
               label="Etiket leesbaar"
               value={labelOk}
               onChange={setLabelOk}
+              explanation={labelExplanation}
+              onExplanationChange={setLabelExplanation}
             />
           </div>
 
@@ -466,6 +489,7 @@ export default function GoederenregistratiePage() {
                   >
                     Etiket {yesNoLabel(entry.labelOk)}
                   </span>
+                  {goodsChecks.filter((check) => entry[check.key] === "nee").map((check) => <p key={check.key} className="rounded-lg bg-[#fff0ed] px-3 py-2 text-sm text-[#a0382f] md:col-span-7"><strong>Verklaring {check.label}:</strong> {entry[check.explanation] || "Geen verklaring vastgelegd bij deze oudere registratie."}</p>)}
                 </div>
               ))
             ) : (
@@ -508,10 +532,14 @@ function YesNoControl({
   label,
   onChange,
   value,
+  explanation,
+  onExplanationChange,
 }: Readonly<{
   label: string;
   onChange: (value: YesNo) => void;
   value: YesNo;
+  explanation: string;
+  onExplanationChange: (value: string) => void;
 }>) {
   return (
     <div className="grid gap-1 text-xs font-black uppercase tracking-[0.1em] text-[#30462f]/55">
@@ -534,6 +562,7 @@ function YesNoControl({
           </button>
         ))}
       </div>
+      {value === "nee" ? <label className="mt-2 grid gap-1 text-xs font-bold normal-case tracking-normal text-[#a0382f]">Verklaring (verplicht)<textarea required aria-required="true" aria-label={`Verklaring bij ${label}`} maxLength={2000} value={explanation} onChange={(event) => onExplanationChange(event.target.value)} placeholder="Wat is er niet in orde en wat is ermee gedaan?" className="min-h-24 rounded-xl border border-[#efb4aa] bg-white p-3 text-sm font-semibold text-[#2d2a26] outline-none focus:ring-2 focus:ring-[#d95749]" /></label> : null}
     </div>
   );
 }

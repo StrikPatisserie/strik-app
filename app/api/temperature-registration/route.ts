@@ -7,6 +7,7 @@ import {
 } from "../../lib/winkelLocationAccess";
 import type { UserProfile } from "../../lib/supabase/types";
 import { encodeTemperatureInventory, decodeTemperatureInventory } from "../../winkel/schoonmaak-registratie/temperatureStorageMetadata";
+import { goodsChecks, missingGoodsExplanation } from "../../winkel/schoonmaak-registratie/goodsValidation";
 
 export const dynamic = "force-dynamic";
 
@@ -200,6 +201,36 @@ export async function POST(request: Request) {
       !canAccessWinkelLocation(profile, payloadLocation)
     ) {
       return forbiddenResponse();
+    }
+
+    if (payloadLocation === "Bakkerij goederenregistratie") {
+      const payload = parsedBody as { datum?: string; temperatuurRegistraties?: { id?: string; note?: string }[] };
+      if (!Array.isArray(payload.temperatuurRegistraties) || !payload.temperatuurRegistraties.length) {
+        return NextResponse.json({ message: "Voeg een goederenregistratie toe." }, { status: 400 });
+      }
+      const existingResponse = await fetchWordPressTemperature();
+      if (!existingResponse.ok) return createWordPressErrorResponse(existingResponse.status);
+      const existingData = await readWordPressResponse(existingResponse);
+      if (!Array.isArray(existingData)) return createWordPressErrorResponse(502);
+      const record = existingData.find((item) => item.winkel === payloadLocation && item.datum === payload.datum);
+      const existing = new Map<string, { id: string; note?: string }>((record?.temperatuurRegistraties || []).map((item: { id: string; note?: string }) => [item.id, item]));
+      for (const registration of payload.temperatuurRegistraties) {
+        if (typeof registration.id !== "string" || !registration.id.trim()) return NextResponse.json({ message: "Goederenregistratie mist een ID." }, { status: 400 });
+        // Preserve unchanged historical entries, including older entries without an explanation.
+        const previous = existing.get(registration.id);
+        if (previous && previous.note === registration.note) continue;
+        let entry: Record<string, unknown>;
+        try { entry = JSON.parse(registration.note || "{}"); }
+        catch { return NextResponse.json({ message: "Goederenregistratie kon niet worden gelezen." }, { status: 400 }); }
+        if (!entry || entry.kind !== "bakery-goods-registration" || goodsChecks.some((check) => entry[check.key] !== "ja" && entry[check.key] !== "nee")) {
+          return NextResponse.json({ message: "Vul de drie goederencontroles in." }, { status: 400 });
+        }
+        const message = missingGoodsExplanation(entry);
+        if (message) return NextResponse.json({ message }, { status: 400 });
+        if (registration.id) existing.set(registration.id, registration as { id: string; note?: string });
+      }
+      // Keep entries added since this browser last loaded the day.
+      parsedBody = { ...payload, ...parsedBody as object, temperatuurRegistraties: [...existing.values()] };
     }
 
     const response = await fetch(getWordPressTemperatureUrl(), {
