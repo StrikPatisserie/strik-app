@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useDeviceOrder } from "./useDeviceOrder";
 import { useEffect, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import {
@@ -590,6 +591,7 @@ type TemperatureRegistrationPageProps = {
   overviewHref?: string | ((locationId: string) => string | null) | null;
   loadCleaningFallback?: boolean;
   lockLocation?: boolean;
+  allowReorder?: boolean;
 };
 
 export function TemperatureRegistrationPage({
@@ -602,6 +604,7 @@ export function TemperatureRegistrationPage({
     `/winkel/schoonmaak-registratie/overzicht?winkel=${locationId}`,
   loadCleaningFallback = true,
   lockLocation = false,
+  allowReorder = false,
 }: Readonly<TemperatureRegistrationPageProps> = {}) {
   const allowedLocationOptions = useAllowedWinkelOptions(locationOptions);
   const initialLocationId =
@@ -617,6 +620,8 @@ export function TemperatureRegistrationPage({
     ),
   });
   const [status, setStatus] = useState("");
+  const deviceOrder = useDeviceOrder(winkelId, allowReorder, form.temperatuurRegistraties.map((item) => item.id));
+  const orderedRegistrations = deviceOrder.orderedIds.map((id) => form.temperatuurRegistraties.find((item) => item.id === id)!);
   const [ladenBezig, setLadenBezig] = useState(false);
   const [opslaanBezig, setOpslaanBezig] = useState(false);
   const autoSaveTimerRef = useRef<number | null>(null);
@@ -1145,8 +1150,10 @@ export function TemperatureRegistrationPage({
             </p>
           )}
 
+          {allowReorder ? <p className="mt-3 text-xs font-bold text-[#6b645b]">Sleep met ⠿ om de apparaten in je eigen volgorde te zetten. De volgorde blijft op dit apparaat bewaard, ook voor andere dagen.</p> : null}
+
           <div className="mt-3 grid gap-2">
-            {form.temperatuurRegistraties.map((item, index) => {
+            {orderedRegistrations.map((item, index) => {
               const isDefaultRow = isDefaultTemperatureRow(
                 winkelId,
                 item,
@@ -1178,6 +1185,7 @@ export function TemperatureRegistrationPage({
               return (
                 <div
                   key={item.id}
+                  data-temperature-row={item.id}
                   ref={(element) => {
                     registrationRowRefs.current[item.id] = element;
                   }}
@@ -1186,10 +1194,22 @@ export function TemperatureRegistrationPage({
                   )} ${isInactive ? "border-dashed opacity-55" : "border-[#e8e4de]"}`}
                 >
                   <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {allowReorder ? <button type="button" {...deviceOrder.handleProps(item.id)}
+                        onKeyDown={(event) => {
+                          if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                          event.preventDefault();
+                          const target = orderedRegistrations[index + (event.key === "ArrowUp" ? -1 : 1)];
+                          if (target) deviceOrder.move(item.id, target.id);
+                        }}
+                        aria-label={`Versleep ${item.naam || "apparaat"}; gebruik de pijltjestoetsen om te verplaatsen`}
+                        title="Sleep om de volgorde te wijzigen"
+                        className={`flex h-11 w-11 touch-none select-none items-center justify-center rounded-lg border text-xl ${deviceOrder.draggingId === item.id ? "cursor-grabbing bg-[#c3d3bc]" : "cursor-grab bg-white"}`}>⠿</button> : null}
                     <p className="text-[0.52rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
                       Apparaat {index + 1}
                       {item.department ? ` · ${item.department}` : ""}
                     </p>
+                    </div>
                     <div className="flex items-center gap-2">
                       {Number.isFinite(item.maxTemperature) && (
                         <span className="text-[0.68rem] font-black text-[#a0382f]">
