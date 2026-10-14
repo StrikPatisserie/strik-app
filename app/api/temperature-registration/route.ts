@@ -6,6 +6,7 @@ import {
   getWinkelStoreIdFromLocation,
 } from "../../lib/winkelLocationAccess";
 import type { UserProfile } from "../../lib/supabase/types";
+import { encodeTemperatureInventory, decodeTemperatureInventory } from "../../winkel/schoonmaak-registratie/temperatureStorageMetadata";
 
 export const dynamic = "force-dynamic";
 
@@ -137,7 +138,7 @@ export async function GET() {
     }
 
     const response = await fetchWordPressTemperature();
-    const data = await readWordPressResponse(response);
+    const data = decodeTemperatureInventory(await readWordPressResponse(response));
 
     if (!response.ok) {
       return createWordPressErrorResponse(response.status);
@@ -207,9 +208,9 @@ export async function POST(request: Request) {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
-      body,
+      body: JSON.stringify(encodeTemperatureInventory(parsedBody)),
     });
-    const data = await readWordPressResponse(response);
+    const data = decodeTemperatureInventory(await readWordPressResponse(response));
 
     if (!response.ok) {
       return createWordPressErrorResponse(response.status);

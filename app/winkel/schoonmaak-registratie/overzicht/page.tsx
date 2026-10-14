@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useDeviceInventory } from "../useDeviceInventory";
+import { configuredDeviceId, inventoryForDate, type InventoryChange } from "../deviceInventory";
 import { dateInput, weekRange, periodDates, daySummary, recordedDays } from "./overviewPeriod";
 import { useEffect, useMemo, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
@@ -38,6 +40,7 @@ type OverviewRow = {
   date: string;
   time: string;
   locationId?: string;
+  deviceId: string;
   location: string;
   deviceName: string;
   deviceType: TemperatureDeviceType;
@@ -197,7 +200,8 @@ function buildRows(
   includeMissingRows: boolean,
   allowedLocationOptions: readonly TemperatureLocationOption[],
   rowsByLocation: Record<string, TemperatureDeviceConfig[]>,
-  loadCleaningFallback: boolean
+  loadCleaningFallback: boolean,
+  inventoryChanges: InventoryChange[] = []
 ) {
   const selectedLocationIds =
     locationFilter === "all"
@@ -259,6 +263,7 @@ function buildRows(
           date: recordDate,
           time: formatDutchTime(createdAt),
           locationId,
+          deviceId: registration.id || normalizeDeviceName(deviceName),
           location: locationId
             ? getLocationLabel(locationId, allowedLocationOptions)
             : record.winkel,
@@ -323,6 +328,7 @@ function buildRows(
         date: recordDate,
         time: "-",
         locationId,
+        deviceId: normalizeDeviceName(deviceName),
         location: locationId
           ? getLocationLabel(locationId, allowedLocationOptions)
           : item.winkel,
@@ -353,25 +359,16 @@ function buildRows(
     const dates = periodDates(periodStart, periodEnd, dateInput(new Date()));
     selectedLocationIds.forEach((locationId) => {
       dates.forEach((date) => {
-        // Partial saves omit empty rows, so keep the configured inventory in the denominator.
-        const history = records.filter((record) => record.datum <= date && getRecordLocationId(record, allowedLocationOptions) === locationId)
-          .sort((a, b) => b.datum.localeCompare(a.datum));
-        const knownDevices = history.flatMap((record) => record.temperatuurRegistraties || []);
-        const expectedDevices: TemperatureDeviceConfig[] = [...(rowsByLocation[locationId] || [])];
-        const expectedNames = new Set(expectedDevices.map((device) => normalizeDeviceName(getTemperatureDeviceName(device))));
-        for (const item of knownDevices) {
-          if (!item.naam || expectedNames.has(normalizeDeviceName(item.naam))) continue;
-          expectedNames.add(normalizeDeviceName(item.naam));
-          expectedDevices.push({ name: item.naam, deviceType: normalizeTemperatureDeviceType(item.deviceType, item.naam) });
-        }
-        expectedDevices.forEach((device) => {
+        const expectedDevices = locationId === "bakkerij" ? inventoryForDate(rowsByLocation[locationId] || [], inventoryChanges, date, locationId) : rowsByLocation[locationId] || [];
+        expectedDevices.forEach((device, index) => {
           const deviceName = getTemperatureDeviceName(device);
           const deviceType = typeof device === "string" ? inferDeviceType(deviceName) : device.deviceType || inferDeviceType(deviceName);
           const key = `${date}|${locationId}|${normalizeDeviceName(deviceName)}`;
-          if (existingRows.has(key)) return;
+          const deviceId = configuredDeviceId(locationId, device, index);
+          if (existingRows.has(key) || rows.some((row) => row.date === date && row.locationId === locationId && row.deviceId === deviceId)) return;
           rows.push({
             key: `missing-${locationId}-${date}-${normalizeDeviceName(deviceName)}`,
-            date, time: "-", locationId,
+            date, time: "-", locationId, deviceId,
             location: getLocationLabel(locationId, allowedLocationOptions),
             deviceName, deviceType, displayTemperature: "", temperature: "",
             status: "missing", statusLabel: "Geen registratie gevonden",
@@ -414,6 +411,7 @@ export function TemperatureRegistrationOverviewPage({
   allLocationsLabel = "Alle winkels",
 }: Readonly<TemperatureRegistrationOverviewPageProps> = {}) {
   const today = getTodayParts();
+  const inventory = useDeviceInventory(defaultLocationId === "bakkerij");
   const allowedLocationOptions = useAllowedWinkelOptions(locationOptions);
   const initialLocationId =
     defaultLocationId || allowedLocationOptions[0]?.id || locationOptions[0]?.id;
@@ -538,10 +536,10 @@ export function TemperatureRegistrationOverviewPage({
   };
   const allRows = useMemo(() => buildRows(
     records, cleaningItems, locationFilter, period.start, period.end, true,
-    allowedLocationOptions, rowsByLocation, loadCleaningFallback
+    allowedLocationOptions, rowsByLocation, loadCleaningFallback, inventory.changes
   ).filter((row) => (deviceFilter === "all" || normalizeDeviceName(row.deviceName) === deviceFilter) &&
     (deviceTypeFilter === "all" || row.deviceType === deviceTypeFilter)),
-    [records, cleaningItems, locationFilter, period.start, period.end, allowedLocationOptions, rowsByLocation, loadCleaningFallback, deviceFilter, deviceTypeFilter]);
+    [records, cleaningItems, locationFilter, period.start, period.end, allowedLocationOptions, rowsByLocation, loadCleaningFallback, deviceFilter, deviceTypeFilter, inventory.changes]);
   const rows = useMemo(() => allRows.filter((row) =>
     (includeMissingRows || row.status !== "missing") &&
     (!onlyProblems || isAttentionOrDeviationStatus(row.status) || row.status === "missing")
@@ -948,16 +946,16 @@ export function TemperatureRegistrationOverviewPage({
             </div>
           </div>
 
-          {(status || loading) && (
+          {(status || loading || inventory.error) && (
             <p className="mt-4 rounded-2xl bg-[#f8f6f3] p-3 text-sm font-bold text-[#2d2a26]/60">
-              {loading ? "Laden..." : status}
+              {loading ? "Laden..." : inventory.error || status}
             </p>
           )}
         </section>
 
         <section className="space-y-3" aria-label="Registraties per dag">
           <p className="text-xs font-bold text-[#6b645b]">Alleen dagen met ingevulde metingen worden getoond. Klik op een dag om alle metingen te bekijken. Tijdelijk uitgezette apparaten tellen niet mee als ontbrekende meting.</p>
-          {!loading && registrationsLoaded && groupedRows.length ? groupedRows.map((group) => {
+          {!loading && registrationsLoaded && inventory.ready && groupedRows.length ? groupedRows.map((group) => {
             const summary = daySummary(group.rows);
             const visibleRows = group.rows.filter((row) => (includeMissingRows || row.status !== "missing") && (!onlyProblems || isAttentionOrDeviationStatus(row.status) || row.status === "missing"));
             return (
@@ -968,33 +966,28 @@ export function TemperatureRegistrationOverviewPage({
                     <span className={`rounded-full px-3 py-2 ${summary.missing ? "bg-[#fff5d8] text-[#7a5a18]" : "bg-[#edf7ea] text-[#3f6b36]"}`}>
                       {summary.total === 0 ? "Geen actieve apparaten" : <>{summary.missing ? "! " : "✓ "}{summary.filled} van {summary.total} ingevuld{summary.missing === 0 ? " · Compleet" : ""}</>}
                     </span>
-                    {summary.problems ? <span className="min-h-12 touch-manipulation rounded-full bg-[#fff0ed] px-3 py-2 text-[#a0382f]">! {summary.problems} afwijkingen</span> : null}
+                    {summary.problems ? <span className="rounded-full bg-[#fff0ed] px-3 py-2 text-[#a0382f]">! {summary.problems} afwijkingen</span> : null}
                     {summary.inactive ? <span className="text-xs text-[#6b645b]">{summary.inactive} tijdelijk uit</span> : null}
                     <span aria-hidden="true">⌄</span>
                   </span>
                 </summary>
                 <div className="overflow-x-auto border-t border-[#e7e0d8]">
-                  <table className="min-w-[72rem] w-full border-collapse text-left text-xs">
+                  <table className="min-w-[48rem] w-full border-collapse text-left text-xs">
               <thead className="bg-[#f8f6f3] text-xs font-black uppercase tracking-[0.08em] text-[#2d2a26]/45">
                 <tr>
-                  <th className="px-3 py-2">Tijd</th>
-                  <th className="px-3 py-2">Locatie</th>
                   <th className="px-3 py-2">Apparaatnaam</th>
                   <th className="px-3 py-2">Type</th>
                   <th className="px-3 py-2">Display</th>
                   <th className="px-3 py-2">Handmeting</th>
                   <th className="px-3 py-2">Akkoord / afwijking</th>
                   <th className="px-3 py-2">Actie bij afwijking</th>
-                  <th className="px-3 py-2">Ingevuld door</th>
-                  <th className="px-3 py-2">Opmerking</th>
+                                    <th className="px-3 py-2">Opmerking</th>
                 </tr>
               </thead>
                     <tbody>
                       {visibleRows.map((row) => (
                     <tr key={row.key} className="border-t border-[#eee7de]">
-                      <td className="px-3 py-2">{row.time}</td>
-                      <td className="px-3 py-2">{row.location}</td>
-                      <td className="px-3 py-2 font-bold">{row.deviceName}</td>
+                                            <td className="px-3 py-2 font-bold">{row.deviceName}</td>
                       <td className="px-3 py-2">
                         {getDeviceTypeLabel(row.deviceType)}
                       </td>
@@ -1016,8 +1009,9 @@ export function TemperatureRegistrationOverviewPage({
                       <td className="max-w-[16rem] px-3 py-2 text-[#2d2a26]/70">
                         {row.actionTaken || "-"}
                       </td>
-                      <td className="px-3 py-2">{row.enteredBy || "-"}</td>
                       <td className="max-w-[16rem] px-3 py-2 text-[#2d2a26]/70">
+                        {row.enteredBy ? <span className="block font-bold">{row.enteredBy} · {row.time}</span> : null}
+                        {locationFilter === "all" ? <span className="block">{row.location}</span> : null}
                         {row.note || "-"}
                       </td>
                     </tr>
@@ -1027,7 +1021,7 @@ export function TemperatureRegistrationOverviewPage({
                 </div>
               </details>
             );
-          }) : !loading && registrationsLoaded ? <p className="rounded-2xl bg-white p-6 text-sm font-bold text-[#6b645b]">Geen dagen gevonden voor deze selectie.</p> : null}
+          }) : !loading && registrationsLoaded && inventory.ready ? <p className="rounded-2xl bg-white p-6 text-sm font-bold text-[#6b645b]">Geen dagen gevonden voor deze selectie.</p> : null}
         </section>
       </div>
     </StrikShell>

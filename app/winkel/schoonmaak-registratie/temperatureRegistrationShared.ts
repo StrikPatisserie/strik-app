@@ -61,6 +61,7 @@ export const deviceTypeOptions: {
 export type TemperatureDeviceConfig =
   | string
   | {
+      id?: string;
       name: string;
       department?: string;
       deviceType?: TemperatureDeviceType;

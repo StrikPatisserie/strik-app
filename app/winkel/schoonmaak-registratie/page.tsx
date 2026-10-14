@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useDeviceOrder } from "./useDeviceOrder";
-import { useEffect, useRef, useState } from "react";
+import { useDeviceInventory } from "./useDeviceInventory";
+import { configuredDeviceId, inventoryForDate, isConfiguredDevice } from "./deviceInventory";
+import DeviceEditorDialog, { RemoveDeviceDialog } from "./DeviceEditorDialog";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import {
   fetchCleaningItems,
@@ -89,7 +92,7 @@ function createTemperatureRow(
   const naam = config.name;
 
   return {
-    id,
+    id: config.id || id,
     naam,
     displayTemperatuur: "",
     handTemperatuur: "",
@@ -180,7 +183,7 @@ function normalizeRegistrations(
   const rowsWithDefaults = defaultRows.map((defaultRow) => {
     const matchingItem = normalizedItems.find(
       (item) =>
-        normalizeDeviceName(item.naam) === normalizeDeviceName(defaultRow.naam)
+        item.id === defaultRow.id || normalizeDeviceName(item.naam) === normalizeDeviceName(defaultRow.naam)
     );
 
     if (!matchingItem) return defaultRow;
@@ -189,6 +192,8 @@ function normalizeRegistrations(
 
     return {
       ...defaultRow,
+      naam: matchingItem.naam || defaultRow.naam,
+      inactive: matchingItem.inactive,
       displayTemperatuur: matchingItem.displayTemperatuur,
       handTemperatuur: matchingItem.handTemperatuur,
       deviceType: matchingItem.deviceType || defaultRow.deviceType,
@@ -243,15 +248,7 @@ function cleanRegistrations(items: TemperatureRegistration[]) {
         inactive,
       };
     })
-    .filter(
-      (item) =>
-        item.inactive ||
-        item.displayTemperatuur ||
-        item.handTemperatuur ||
-        item.temperature ||
-        item.actionTaken ||
-        item.note
-    );
+    .filter((item) => Boolean(item.naam || item.inactive || item.temperature || item.actionTaken || item.note));
 }
 
 function makeSignature(payload: TemperaturePayload) {
@@ -352,7 +349,8 @@ function payloadHasDraftContent(payload: TemperaturePayload) {
           (item.temperatuur || "").trim() ||
           (item.actionTaken || "").trim() ||
           (item.note || "").trim() ||
-          item.inactive
+          item.inactive ||
+          (item.id.startsWith("device-") && Boolean(item.naam.trim()))
       )
   );
 }
@@ -372,7 +370,8 @@ function payloadHasRegistrationContent(payload: TemperaturePayload) {
           (item.temperatuur || "").trim() ||
           (item.actionTaken || "").trim() ||
           (item.note || "").trim() ||
-          item.inactive
+          item.inactive ||
+          (item.id.startsWith("device-") && Boolean(item.naam.trim()))
       )
   );
 }
@@ -598,7 +597,7 @@ export function TemperatureRegistrationPage({
   title = "Temperatuur registratie",
   kicker = "HACCP",
   locationOptions = winkelOptions,
-  rowsByLocation = temperatureRowsByWinkel,
+  rowsByLocation: baseRowsByLocation = temperatureRowsByWinkel,
   defaultLocationId,
   overviewHref = (locationId) =>
     `/winkel/schoonmaak-registratie/overzicht?winkel=${locationId}`,
@@ -611,6 +610,12 @@ export function TemperatureRegistrationPage({
     defaultLocationId || allowedLocationOptions[0]?.id || "ziekerstraat";
   const [winkelId, setWinkelId] = useState(initialLocationId);
   const [datum, setDatum] = useState(getVandaag);
+  const manageDevices = allowReorder && winkelId === "bakkerij";
+  const inventory = useDeviceInventory(manageDevices);
+  const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
+  const [promotingDevice, setPromotingDevice] = useState<TemperatureRegistration | null>(null);
+  const [removingDevice, setRemovingDevice] = useState<TemperatureRegistration | null>(null);
+  const rowsByLocation = useMemo(() => manageDevices ? { ...baseRowsByLocation, [winkelId]: inventoryForDate(baseRowsByLocation[winkelId] || [], inventory.changes, datum, winkelId) } : baseRowsByLocation, [baseRowsByLocation, manageDevices, winkelId, inventory.changes, datum]);
   const [form, setForm] = useState<FormState>({
     naam: "",
     opmerking: "",
@@ -619,6 +624,10 @@ export function TemperatureRegistrationPage({
       rowsByLocation
     ),
   });
+  const formRef = useRef(form);
+  useEffect(() => { formRef.current = form; }, [form]);
+  const inventoryMutationRef = useRef(false);
+  const lastInventoryRef = useRef(inventory.changes);
   const [status, setStatus] = useState("");
   const deviceOrder = useDeviceOrder(winkelId, allowReorder, form.temperatuurRegistraties.map((item) => item.id));
   const orderedRegistrations = deviceOrder.orderedIds.map((id) => form.temperatuurRegistraties.find((item) => item.id === id)!);
@@ -717,16 +726,16 @@ export function TemperatureRegistrationPage({
     const hasRegistrationContent = payloadHasRegistrationContent(payload);
     const signature = makeSignature(payload);
 
-    if (options.allowPartial && !hasContent) return;
+    if (options.allowPartial && !hasContent) return true;
 
     if (!options.allowPartial && !payload.naam.trim()) {
       setStatus("Vul eerst je naam in.");
-      return;
+      return false;
     }
 
     if (!options.allowPartial && !hasTemperature) {
       setStatus("Vul minimaal één temperatuur in.");
-      return;
+      return false;
     }
 
     if (!options.allowPartial) {
@@ -753,18 +762,18 @@ export function TemperatureRegistrationPage({
         setStatus(
           `Vul eerst de actie bij afwijking in voor ${missingAction.naam}.`
         );
-        return;
+        return false;
       }
     }
 
     if (options.skipIfUnchanged && signature === verzondenSignatuurRef.current) {
-      return;
+      return true;
     }
 
     saveLocalDraft(winkelId, payload);
 
     if (options.allowPartial && !hasRegistrationContent) {
-      return;
+      return true;
     }
 
     if (!options.silent) {
@@ -777,13 +786,15 @@ export function TemperatureRegistrationPage({
 
       if (!result.ok) {
         setStatus(`Lokaal opgeslagen. ${result.message}`);
-        return;
+        return false;
       }
 
       verzondenSignatuurRef.current = signature;
       setStatus(options.silent ? "Automatisch opgeslagen." : "Opgeslagen.");
+      return true;
     } catch {
       setStatus("Lokaal opgeslagen. Kan geen verbinding maken met WordPress.");
+      return false;
     } finally {
       if (!options.silent) setOpslaanBezig(false);
     }
@@ -805,6 +816,7 @@ export function TemperatureRegistrationPage({
   }
 
   function updateForm(nextForm: FormState) {
+    formRef.current = nextForm;
     setForm(nextForm);
     planAutoSave(nextForm);
   }
@@ -859,6 +871,62 @@ export function TemperatureRegistrationPage({
         firstInput?.focus({ preventScroll: true });
       });
     });
+  }
+
+  async function saveDeviceConfig(id: string, device: Exclude<TemperatureDeviceConfig, string> | null) {
+    inventoryMutationRef.current = true;
+    try { await inventory.save(id, device); }
+    catch (err) { inventoryMutationRef.current = false; throw err; }
+  }
+
+  async function addDevice(name: string, deviceType: TemperatureDeviceType, permanent: boolean) {
+    if (form.temperatuurRegistraties.some((item) => item.id !== promotingDevice?.id && normalizeDeviceName(item.naam) === normalizeDeviceName(name))) throw new Error("Er staat al een apparaat met deze naam.");
+    const id = promotingDevice?.id || `device-${crypto.randomUUID()}`;
+    if (permanent) {
+      clearAutoSaveTimer();
+      if (!await submitPayload(createPayload(), { allowPartial: true, silent: true })) throw new Error("De huidige metingen konden niet worden opgeslagen. Probeer opnieuw.");
+      await saveDeviceConfig(id, { id, name, deviceType });
+      if (datum >= getVandaag()) {
+        const current = formRef.current;
+        updateForm({ ...current, temperatuurRegistraties: promotingDevice ? current.temperatuurRegistraties.map((item) => item.id === id ? { ...item, naam: name, deviceType } : item) : [...current.temperatuurRegistraties, createTemperatureRow({ id, name, deviceType }, id)] });
+      }
+      setAddFeedback("Apparaat standaard toegevoegd vanaf vandaag.");
+    } else {
+      updateForm({ ...form, temperatuurRegistraties: promotingDevice ? form.temperatuurRegistraties.map((item) => item.id === id ? { ...item, naam: name, deviceType } : item) : [...form.temperatuurRegistraties, createTemperatureRow({ name, deviceType }, id)] });
+      setAddFeedback("Apparaat toegevoegd voor alleen deze dag.");
+    }
+  }
+
+  async function persistDeviceDefinition(item: TemperatureRegistration) {
+    if (!manageDevices || !inventory.ready || !item.naam.trim()) return;
+    const configs = rowsByLocation[winkelId] || [];
+    const index = configs.findIndex((device, index) => configuredDeviceId(winkelId, device, index) === item.id);
+    if (index < 0) return;
+    const config = normalizeDeviceConfig(configs[index]);
+    if (config.name === item.naam.trim() && config.deviceType === item.deviceType) return;
+    try {
+      clearAutoSaveTimer();
+      if (!await submitPayload(createPayload(), { allowPartial: true, silent: true })) throw new Error("De huidige metingen konden niet worden opgeslagen.");
+      await saveDeviceConfig(item.id, { ...config, name: item.naam.trim(), deviceType: normalizeTemperatureDeviceType(item.deviceType, item.naam) });
+    } catch (err) { setStatus(err instanceof Error ? err.message : "Apparaat wijzigen mislukt."); }
+  }
+
+  async function removeStandardDevice() {
+    if (!removingDevice) return;
+    try {
+      clearAutoSaveTimer();
+      if (!await submitPayload(createPayload(), { allowPartial: true, silent: true })) throw new Error("De huidige metingen konden niet worden opgeslagen. Probeer opnieuw.");
+      const configs = rowsByLocation[winkelId] || [];
+      const index = configs.findIndex((config, index) => configuredDeviceId(winkelId, config, index) === removingDevice.id || normalizeDeviceName(typeof config === "string" ? config : config.name) === normalizeDeviceName(removingDevice.naam));
+      if (index < 0) throw new Error("Apparaat staat niet meer in de vaste lijst.");
+      await saveDeviceConfig(configuredDeviceId(winkelId, configs[index], index), null);
+      const current = formRef.current;
+      if (datum >= getVandaag() && !getMeasuredTemperature(current.temperatuurRegistraties.find((item) => item.id === removingDevice.id) || removingDevice).trim()) {
+        updateForm({ ...current, temperatuurRegistraties: current.temperatuurRegistraties.filter((item) => item.id !== removingDevice.id) });
+      }
+      setAddFeedback("Uit de vaste lijst verwijderd vanaf vandaag. Eerdere metingen blijven bewaard.");
+      setRemovingDevice(null);
+    } catch (err) { setStatus(err instanceof Error ? err.message : "Verwijderen mislukt."); throw err; }
   }
 
   function removeRegistrationRow(id: string) {
@@ -1025,19 +1093,30 @@ export function TemperatureRegistrationPage({
       }
     }
 
+    if (!inventory.ready && manageDevices) return;
+    const inventoryChanged = lastInventoryRef.current !== inventory.changes;
+    lastInventoryRef.current = inventory.changes;
+    if (inventoryChanged && inventoryMutationRef.current) {
+      inventoryMutationRef.current = false;
+      return;
+    }
     void loadRegistration();
 
     return () => {
       negeerResultaat = true;
     };
-  }, [datum, loadCleaningFallback, rowsByLocation, selectedWinkel.label, winkelId]);
+  }, [datum, loadCleaningFallback, rowsByLocation, selectedWinkel.label, winkelId, inventory.ready, inventory.changes, manageDevices]);
 
   return (
     <StrikShell wide>
       <div className="space-y-3">
         <StrikPageHeader title={title} kicker={kicker} icon={strikIcons.cleaning} />
+        {manageDevices && !inventory.ready && !inventory.error ? <p className="text-sm font-bold">Vaste apparatenlijst laden…</p> : null}
+        {inventory.error ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{inventory.error} Ververs de pagina om opnieuw te laden.</p> : null}
+        {deviceDialogOpen ? <DeviceEditorDialog initialDevice={promotingDevice ? { name: promotingDevice.naam, type: normalizeTemperatureDeviceType(promotingDevice.deviceType, promotingDevice.naam) } : undefined} onClose={() => { setDeviceDialogOpen(false); setPromotingDevice(null); }} onSave={addDevice} /> : null}
+        {removingDevice ? <RemoveDeviceDialog name={removingDevice.naam} onClose={() => setRemovingDevice(null)} onRemove={removeStandardDevice} /> : null}
 
-        <section className="mt-4 rounded-2xl border border-[#c3d3bc] bg-white p-3 shadow-[0_8px_24px_rgba(74,109,90,.08)] sm:p-4">
+        <section inert={manageDevices && (!inventory.ready || ladenBezig)} aria-busy={manageDevices && (!inventory.ready || ladenBezig)} className="mt-4 rounded-2xl border border-[#c3d3bc] bg-white p-3 shadow-[0_8px_24px_rgba(74,109,90,.08)] sm:p-4">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#e8e4de] pb-3">
             <div>
               <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#8b8278]">
@@ -1136,10 +1215,11 @@ export function TemperatureRegistrationPage({
               </span>
               <button
                 type="button"
-                onClick={addRegistrationRow}
+                disabled={manageDevices && !inventory.ready}
+                onClick={() => manageDevices ? setDeviceDialogOpen(true) : addRegistrationRow()}
                 className="rounded-full bg-[#1a1815] px-4 py-2.5 text-xs font-black text-white"
               >
-                + Meetpunt
+                {manageDevices ? "+ Koeling / vriezer" : "+ Meetpunt"}
               </button>
             </div>
           </div>
@@ -1154,11 +1234,7 @@ export function TemperatureRegistrationPage({
 
           <div className="mt-3 grid gap-2">
             {orderedRegistrations.map((item, index) => {
-              const isDefaultRow = isDefaultTemperatureRow(
-                winkelId,
-                item,
-                rowsByLocation
-              );
+              const isDefaultRow = manageDevices ? isConfiguredDevice(item, rowsByLocation[winkelId] || [], winkelId) : isDefaultTemperatureRow(winkelId, item, rowsByLocation);
               const deviceType = normalizeTemperatureDeviceType(
                 item.deviceType,
                 item.naam
@@ -1189,11 +1265,11 @@ export function TemperatureRegistrationPage({
                   ref={(element) => {
                     registrationRowRefs.current[item.id] = element;
                   }}
-                  className={`rounded-2xl border border-l-8 bg-[#fffdfb] p-2.5 transition ${temperatureBorderClass(
+                  className={`rounded-2xl border border-l-4 bg-[#fffdfb] p-2.5 transition ${manageDevices ? "md:grid md:grid-cols-[minmax(12rem,1fr)_minmax(16rem,1.3fr)] md:gap-x-4" : ""} ${temperatureBorderClass(
                     evaluation.status
                   )} ${isInactive ? "border-dashed opacity-55" : "border-[#e8e4de]"}`}
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2 md:col-span-2">
                     <div className="flex items-center gap-2">
                       {allowReorder ? <button type="button" {...deviceOrder.handleProps(item.id)}
                         onKeyDown={(event) => {
@@ -1208,6 +1284,7 @@ export function TemperatureRegistrationPage({
                     <p className="text-[0.52rem] font-black uppercase tracking-[0.14em] text-[#8b8278]">
                       Apparaat {index + 1}
                       {item.department ? ` · ${item.department}` : ""}
+                      {manageDevices ? ` · ${isDefaultRow ? "Vast apparaat" : "Alleen deze dag"}` : ""}
                     </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1237,6 +1314,7 @@ export function TemperatureRegistrationPage({
                       <span className="sr-only">Naam apparaat</span>
                     <input
                       value={item.naam}
+                      onBlur={() => void persistDeviceDefinition(item)}
                       onChange={(event) =>
                         updateRegistration(item.id, "naam", event.target.value)
                       }
@@ -1253,6 +1331,7 @@ export function TemperatureRegistrationPage({
                     <span className="sr-only">Type</span>
                     <select
                       value={deviceType}
+                      onBlur={() => void persistDeviceDefinition(item)}
                       onChange={(event) =>
                         updateRegistration(
                           item.id,
@@ -1280,17 +1359,19 @@ export function TemperatureRegistrationPage({
                   />
                   </div>
 
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-2 md:col-span-2">
                     <span className={`rounded-full border px-3 py-1.5 text-[0.62rem] font-black ${statusPillClass(
                       evaluation.status
                     )}`}>
                       {evaluation.label}
                     </span>
+                  {manageDevices && !isDefaultRow ? <button type="button" disabled={!inventory.ready} onClick={() => { setPromotingDevice(item); setDeviceDialogOpen(true); }} className="min-h-11 rounded-lg border px-3 text-xs font-bold text-[#315e42]">Standaard toevoegen</button> : null}
+                  {manageDevices && isDefaultRow ? <button type="button" onClick={() => setRemovingDevice(item)} className="min-h-11 rounded-lg border px-3 text-xs font-bold text-[#c94f43]">Uit vaste lijst</button> : null}
                   {isDefaultRow ? (
                     <button
                       type="button"
                       onClick={() => toggleRegistrationInactive(item.id)}
-                      className={`rounded-full px-3 py-1.5 text-[0.62rem] font-black shadow-sm ${
+                      className={`min-h-11 rounded-lg border px-3 text-xs font-bold ${
                         isInactive
                           ? "bg-[#dbe9ee] text-[#214456]"
                           : "bg-white text-[#8a6a3d]"
@@ -1302,15 +1383,15 @@ export function TemperatureRegistrationPage({
                     <button
                       type="button"
                       onClick={() => removeRegistrationRow(item.id)}
-                      className="rounded-full bg-white px-3 py-1.5 text-[0.62rem] font-black text-[#c94f43] shadow-sm"
+                      className="min-h-11 rounded-lg border bg-white px-3 text-xs font-bold text-[#c94f43]"
                     >
-                      Verwijder
+                      {manageDevices ? "Verwijder van deze dag" : "Verwijder"}
                     </button>
                   )}
                   </div>
 
                   {detailsOpen && (
-                    <div className="mt-2 grid gap-2 border-t border-[#eee6dd] pt-2 md:grid-cols-2">
+                    <div className="mt-2 grid gap-2 border-t border-[#eee6dd] pt-2 md:col-span-2 md:grid-cols-2">
                     {isActionRequiredStatus(evaluation.status) && (
                     <label className="grid gap-1 text-[0.52rem] font-black uppercase tracking-[0.1em] text-[#8b8278]">
                       Actie bij afwijking
