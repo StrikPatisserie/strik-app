@@ -44,6 +44,29 @@ function friendlyDate(date: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.split("-").reverse().join("-") : date;
 }
 
+function formatPickupDeadline(value: string) {
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const deadline = new Date(dateOnly ? `${value}T12:00:00Z` : value);
+  if (Number.isNaN(deadline.getTime())) return "";
+
+  const dateLabel = new Intl.DateTimeFormat("nl-NL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "Europe/Amsterdam",
+  }).format(deadline);
+  const timeLabel = dateOnly
+    ? "20:00"
+    : new Intl.DateTimeFormat("nl-NL", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "Europe/Amsterdam",
+      }).format(deadline);
+
+  return `${dateLabel} om ${timeLabel}`;
+}
+
 function customerLineSignature(line: ChocolateLetterLine) {
   return [line.letter, line.chocolate, line.size, line.style, line.quantity, line.logo, line.specialRequests || []];
 }
@@ -62,10 +85,11 @@ function makeLine(product: Product, letter: string, size: ChocolateLetterSize, q
   };
 }
 
-export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pickupDates, onSaved, onCancel }: Readonly<{
+export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pickupDates, pickupDeadlines, onSaved, onCancel }: Readonly<{
   initialOrder?: ChocolateLetterOrder | null;
   defaultShop?: string;
   pickupDates: string[];
+  pickupDeadlines: Record<string, string>;
   onSaved: (order: ChocolateLetterOrder) => void;
   onCancel: () => void;
 }>) {
@@ -83,6 +107,7 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
   const [email, setEmail] = useState(initialOrder?.customerEmail || "");
   const [pickupDate, setPickupDate] = useState(initialOrder?.pickupDate || "");
   const [availableDates, setAvailableDates] = useState(pickupDates);
+  const [availableDeadlines, setAvailableDeadlines] = useState(pickupDeadlines);
   const [refreshingDates, setRefreshingDates] = useState(false);
   const [shop, setShop] = useState(
     initialOrder?.shop || initialOrder?.pickupLocation || defaultShop
@@ -109,6 +134,9 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
   const linesChanged = Boolean(initialOrder && JSON.stringify(initialOrder.lines) !== JSON.stringify(lines));
   const customerLinesChanged = Boolean(initialOrder && JSON.stringify(initialOrder.lines.map(customerLineSignature)) !== JSON.stringify(lines.map(customerLineSignature)));
   const reopenProduction = Boolean((initialOrder?.productionDone || initialOrder?.status === "klaar") && !initialOrder?.pickedUp && linesChanged);
+  const selectedDeadline = pickupDate
+    ? formatPickupDeadline(availableDeadlines[pickupDate] || "")
+    : "";
   const inputClass = "h-12 w-full rounded-xl border border-[#d5ddd0] bg-white px-3 text-base font-semibold text-[#263b2b] outline-none focus:border-[#547762]";
 
   async function refreshAvailableDates() {
@@ -116,9 +144,17 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
     try {
       const response = await fetch("/api/lettershop/pickup-dates", { cache: "no-store" });
       if (!response.ok) throw new Error("Beschikbare datums konden niet worden geladen. Probeer opnieuw.");
-      const data = await response.json() as { dates?: string[] };
+      const data = await response.json() as {
+        dates?: string[];
+        deadlines?: Record<string, string>;
+      };
       const dates = Array.isArray(data.dates) ? data.dates : [];
       setAvailableDates(dates);
+      setAvailableDeadlines(
+        data.deadlines && typeof data.deadlines === "object"
+          ? data.deadlines
+          : {}
+      );
       return dates;
     } finally {
       setRefreshingDates(false);
@@ -246,7 +282,15 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
             {availableDates.map((date) => <option key={date} value={date}>{formatPickupDate(date)}</option>)}
           </select>
           <div className="mt-1 flex items-center justify-between gap-2 text-xs font-medium text-[#6b645b]">
-            <span>{availableDates.length ? "Dezelfde rondes als online · deadline zondag 20:00." : "Geen nieuwe afhaaldatums beschikbaar."}</span>
+            <span>
+              {!availableDates.length
+                ? "Geen nieuwe afhaaldatums beschikbaar."
+                : selectedDeadline
+                  ? <>Dezelfde rondes als online · <strong className="text-[#385846]">bestellen uiterlijk {selectedDeadline}.</strong></>
+                  : pickupDate
+                    ? "De deadline voor deze bestaande afhaaldatum is verstreken."
+                    : "Kies een afhaaldatum; daarna zie je de bijbehorende deadline."}
+            </span>
             <button type="button" disabled={refreshingDates} onClick={() => void refreshAvailableDates().catch((refreshError) => setError(refreshError instanceof Error ? refreshError.message : "Datums verversen is mislukt."))} className="shrink-0 font-bold text-[#547762] underline disabled:opacity-50">{refreshingDates ? "Laden..." : "Ververs"}</button>
           </div>
         </div>

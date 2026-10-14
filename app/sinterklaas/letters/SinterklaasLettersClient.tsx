@@ -949,6 +949,7 @@ function LetterOrderDialog({
   mode,
   defaultShop,
   pickupDates,
+  pickupDeadlines,
   onClose,
   onSaved,
 }: Readonly<{
@@ -956,6 +957,7 @@ function LetterOrderDialog({
   mode: Mode;
   defaultShop?: string;
   pickupDates?: string[];
+  pickupDeadlines?: Record<string, string>;
   onClose: () => void;
   onSaved: (order: ChocolateLetterOrder) => void;
 }>) {
@@ -985,7 +987,7 @@ function LetterOrderDialog({
           </button>
         </div>
 
-        {mode === "winkel" ? <StoreLetterShopForm key={order?.id || "new-store-order"} initialOrder={order} defaultShop={defaultShop} pickupDates={pickupDates || []} onSaved={onSaved} onCancel={onClose} /> : <LetterOrderForm key={order?.id || "new-letter-order"} initialOrder={order} mode={mode} onSaved={onSaved} onCancel={onClose} />}
+        {mode === "winkel" ? <StoreLetterShopForm key={order?.id || "new-store-order"} initialOrder={order} defaultShop={defaultShop} pickupDates={pickupDates || []} pickupDeadlines={pickupDeadlines || {}} onSaved={onSaved} onCancel={onClose} /> : <LetterOrderForm key={order?.id || "new-letter-order"} initialOrder={order} mode={mode} onSaved={onSaved} onCancel={onClose} />}
       </div>
     </div>
   );
@@ -1135,7 +1137,13 @@ export default function SinterklaasLettersClient({
   mode,
   defaultShop,
   pickupDates,
-}: Readonly<{ mode: Mode; defaultShop?: string; pickupDates?: string[] }>) {
+  pickupDeadlines,
+}: Readonly<{
+  mode: Mode;
+  defaultShop?: string;
+  pickupDates?: string[];
+  pickupDeadlines?: Record<string, string>;
+}>) {
   const [year, setYear] = useState(() => currentYear());
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<ChocolateLetterOrder[]>([]);
@@ -1659,6 +1667,7 @@ export default function SinterklaasLettersClient({
           mode={mode}
           defaultShop={defaultShop}
           pickupDates={pickupDates}
+          pickupDeadlines={pickupDeadlines}
           onClose={closeOrderDialog}
           onSaved={handleSavedOrder}
         />

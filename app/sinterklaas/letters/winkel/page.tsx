@@ -1,7 +1,7 @@
 import { StrikPageHeader, StrikShell, strikIcons } from "../../../StrikUI";
 import { requireCurrentProfile } from "@/app/lib/auth/session";
 import SinterklaasLettersClient from "../SinterklaasLettersClient";
-import { getLettershopPickupDates } from "@/app/lettershop/getPickupDates";
+import { getLettershopPickupDateOptions } from "@/app/lettershop/getPickupDates";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,11 @@ export default async function SinterklaasLettersWinkelPage() {
   const profile = await requireCurrentProfile();
   const profileStore = String(profile.store || "").trim().toLowerCase();
   const defaultShop = SHOP_FROM_PROFILE[profileStore] || "";
-  const pickupDates = await getLettershopPickupDates().catch(() => []);
+  const pickupDateOptions = await getLettershopPickupDateOptions().catch(() => []);
+  const pickupDates = pickupDateOptions.map((option) => option.date);
+  const pickupDeadlines = Object.fromEntries(
+    pickupDateOptions.map((option) => [option.date, option.deadlineAt])
+  );
   return (
     <StrikShell wide>
       <StrikPageHeader
@@ -24,7 +28,12 @@ export default async function SinterklaasLettersWinkelPage() {
         description="Letters bestellen voor afhalen in de winkel. Afrekenen gebeurt bij ophalen in Bake-it."
         icon={strikIcons.sinterklaasLetter}
       />
-      <SinterklaasLettersClient mode="winkel" defaultShop={defaultShop} pickupDates={pickupDates} />
+      <SinterklaasLettersClient
+        mode="winkel"
+        defaultShop={defaultShop}
+        pickupDates={pickupDates}
+        pickupDeadlines={pickupDeadlines}
+      />
     </StrikShell>
   );
 }
