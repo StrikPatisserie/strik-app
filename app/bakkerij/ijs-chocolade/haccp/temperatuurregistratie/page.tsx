@@ -13,7 +13,7 @@ import {
   type TemperatureStatus,
 } from "../../../../winkel/schoonmaak-registratie/temperatureRegistrationShared";
 
-type KettleStepId = "after1Hour" | "after3Hours" | "after4Hours";
+type KettleStepId = "after1Hour" | "after3Hours" | "after4Hours" | "after5Hours";
 type KettleRuleDirection = "above" | "below";
 
 type KettleStep = {
@@ -49,6 +49,13 @@ const kettleSteps: KettleStep[] = [
     threshold: 20,
     direction: "below",
   },
+  {
+    id: "after5Hours",
+    label: "Na 5 uur",
+    ruleLabel: "lager dan 7 graden",
+    threshold: 7,
+    direction: "below",
+  },
 ];
 
 type KettleValues = Record<KettleStepId, string>;
@@ -68,6 +75,7 @@ function emptyKettleValues(): KettleValues {
     after1Hour: "",
     after3Hours: "",
     after4Hours: "",
+    after5Hours: "",
   };
 }
 
@@ -260,7 +268,7 @@ export default function IjsChocoladeTemperatuurregistratiePage() {
     );
 
     if (hasMissingValue) {
-      setStatus("Vul alle drie de temperaturen in.");
+      setStatus("Vul alle vier de temperaturen in.");
       return;
     }
 
@@ -393,7 +401,7 @@ export default function IjsChocoladeTemperatuurregistratiePage() {
                     key={`${record.id || record.datum}`}
                     type="button"
                     onClick={() => setDate(record.datum)}
-                    className="grid gap-1 border border-[#e7e0d8] bg-[#faf8f5] px-3 py-2 text-left text-sm transition hover:bg-white md:grid-cols-[7rem_1fr_1fr_1fr]"
+                    className="grid gap-1 border border-[#e7e0d8] bg-[#faf8f5] px-3 py-2 text-left text-sm transition hover:bg-white md:grid-cols-[7rem_1fr_1fr_1fr_1fr]"
                   >
                     <span className="font-black text-[#2d2a26]/55">
                       {record.datum}
