@@ -1322,6 +1322,21 @@ export function mergeRevenueCashDeposits(
   );
 }
 
+// Management archived the bookkeeping preceding the week-37 rollout.
+// An older open cash-count screen must not remove or reopen these entries.
+export function preserveArchivedCashDeposits(
+  incoming: RevenueCashDeposit[],
+  stored: RevenueCashDeposit[]
+) {
+  const archived = stored.filter((deposit) =>
+    (deposit.year < 2026 || (deposit.year === 2026 && deposit.week < 37)) &&
+    Boolean(deposit.cashbookBookedAt || (
+      deposit.closedAt && deposit.patisserieReportedAt && deposit.iceReportedAt
+    ))
+  );
+  return mergeRevenueCashDeposits(incoming, archived);
+}
+
 export function createWeeklyRevenueRecordsFromDays(
   dailyRecords: RevenueDayRecord[]
 ): RevenueRecord[] {

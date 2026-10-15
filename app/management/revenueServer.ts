@@ -14,6 +14,7 @@ import {
   normalizeRevenueCashRecord,
   normalizeRevenueDayRecord,
   normalizeRevenueData,
+  preserveArchivedCashDeposits,
   type RevenueCashDeposit,
   type RevenueCashRecord,
   type RevenueDayRecord,
@@ -146,7 +147,17 @@ export async function getMergedRevenueData() {
 }
 
 export async function saveRevenueData(data: RevenueData) {
-  const normalized = embedRevenueCashDataInNotes(normalizeRevenueData(data));
+  const stored = await getStoredRevenueData();
+  if (stored.storage.status !== "wordpress") {
+    return {
+      ok: false as const,
+      status: stored.storage.wordpressStatus || 502,
+      message: "Bestaande stortingen konden niet worden gecontroleerd. Probeer opnieuw; er is niets overschreven.",
+    };
+  }
+  const incoming = normalizeRevenueData(data);
+  incoming.cashDeposits = preserveArchivedCashDeposits(incoming.cashDeposits || [], stored.data.cashDeposits || []);
+  const normalized = embedRevenueCashDataInNotes(incoming);
   const response = await fetch(getWordPressRevenueUrl(), {
     method: "PUT",
     headers: {
