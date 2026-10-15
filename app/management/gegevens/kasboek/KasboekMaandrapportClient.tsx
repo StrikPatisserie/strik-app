@@ -1,5 +1,6 @@
 "use client";
 
+import MolliePayouts from "./MolliePayouts";
 import { useEffect, useMemo, useState } from "react";
 import {
   revenueIcePaymentBreakdown,
@@ -1935,6 +1936,8 @@ export default function KasboekMaandrapportClient() {
           </p>
         )}
       </section>
+
+      <MolliePayouts month={month} />
 
       {state !== "loading" && (
         <MonthShopOverview
