@@ -168,7 +168,16 @@ function normalizeReportEntries(entries: unknown) {
   });
 }
 
-function createBatchMailBody(entries: ReturnType<typeof normalizeReportEntries>) {
+function formatReportedDate(date: Date) {
+  return new Intl.DateTimeFormat("nl-NL", {
+    timeZone: "Europe/Amsterdam",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function createBatchMailBody(entries: ReturnType<typeof normalizeReportEntries>, reportedAt: Date) {
   const byWeek = new Map<string, typeof entries>();
   for (const entry of entries) {
     const key = `${entry.year}-W${String(entry.week).padStart(2, "0")}`;
@@ -176,16 +185,28 @@ function createBatchMailBody(entries: ReturnType<typeof normalizeReportEntries>)
   }
   const totalDeposit = entries.reduce((total, entry) => total + entry.amount, 0);
   const lines = [
-    "Storting gemeld",
+    `Storting gemeld op ${formatReportedDate(reportedAt)}`,
     "",
   ];
 
   for (const weekEntries of byWeek.values()) {
     const first = weekEntries[0];
     lines.push(`Week ${first.week} ${first.year} - ${first.weekLabel}`);
-    weekEntries.forEach((entry) => {
-      lines.push(`- ${entry.label}: ${formatMoney(entry.amount)}`);
-    });
+    const byShop = new Map<string, typeof entries>();
+    for (const entry of weekEntries) {
+      byShop.set(entry.shop, [...(byShop.get(entry.shop) || []), entry]);
+    }
+    for (const [shop, shopEntries] of byShop) {
+      const total = shopEntries.reduce((sum, entry) => sum + entry.amount, 0);
+      const breakdown = (["ice", "patisserie"] as const).flatMap((kind) => {
+        const selected = shopEntries.filter((entry) => entry.kind === kind);
+        return selected.length
+          ? [`${formatMoney(selected.reduce((sum, entry) => sum + entry.amount, 0))} = ${kind === "ice" ? "ijs" : "patisserie"}`]
+          : [];
+      });
+      lines.push(`${shop}: ${formatMoney(total)} totaal gestort`);
+      lines.push(`  ${breakdown.join(" · ")}`);
+    }
     lines.push("");
   }
 
@@ -200,11 +221,12 @@ function createMailBody(
   year: number,
   week: number,
   weekLabel: string,
-  rows: ReturnType<typeof normalizeRows>
+  rows: ReturnType<typeof normalizeRows>,
+  reportedAt: Date
 ) {
   const totalDeposit = rows.reduce((total, row) => total + row.depositAmount, 0);
   const lines = [
-    `Weekstorting`,
+    `Storting gemeld op ${formatReportedDate(reportedAt)}`,
     `Week ${week} ${year} - ${weekLabel}`,
     "",
   ];
@@ -227,19 +249,22 @@ export async function POST(request: Request) {
       | CashDepositMailInput
       | null;
     const reportEntries = normalizeReportEntries(input?.entries);
+    const reportedAt = new Date();
 
     if (reportEntries.length) {
       const totalDeposit = reportEntries.reduce(
         (total, entry) => total + entry.amount,
         0
       );
-      const body = createBatchMailBody(reportEntries);
+      const body = createBatchMailBody(reportEntries, reportedAt);
       const hash = createHash("sha1")
         .update(JSON.stringify(reportEntries))
         .digest("hex")
         .slice(0, 12);
-      const today = new Date().toISOString().slice(0, 10);
-      const subject = `Storting gemeld - ${reportEntries.length} locatie${reportEntries.length === 1 ? "" : "s"} - ${formatMoney(totalDeposit)}`;
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit" }).format(reportedAt);
+      const weeks = [...new Set(reportEntries.map((entry) => `${entry.week} ${entry.year}`))];
+      const locationCount = new Set(reportEntries.map((entry) => entry.shop)).size;
+      const subject = `Storting week ${weeks.join(", ")} - ${locationCount} locatie${locationCount === 1 ? "" : "s"} - ${formatMoney(totalDeposit)}`;
       const order: PersonnelMailOrder = {
         id: `cash-deposit-report-${hash}`,
         mailType: "cash-deposit-summary",
@@ -297,7 +322,7 @@ export async function POST(request: Request) {
       return jsonError("Weekstorting is nog niet compleet.", 409);
     }
 
-    const body = createMailBody(year, week, weekLabel, rows);
+    const body = createMailBody(year, week, weekLabel, rows, reportedAt);
     const hash = createHash("sha1")
       .update(JSON.stringify({ year, week, rows }))
       .digest("hex")
