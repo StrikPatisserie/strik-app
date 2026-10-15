@@ -214,6 +214,7 @@ export default function PriceCardStudio() {
       .map((card) => ({ card, quantity: quantities[card.id] })),
     [quantities, state.cards]
   );
+  const categoryPrintCards = state.cards.filter((card) => categoryFilter === "alle" || card.category === categoryFilter);
   const totalPrintCards = selectedPrintItems.reduce((sum, item) => sum + item.quantity, 0);
   const hasMultiplePrices = priceOptionDrafts.length >= 2;
   const previewPriceOptions = hasMultiplePrices
@@ -507,6 +508,18 @@ export default function PriceCardStudio() {
     }));
   }
 
+  function addCategoryToPrint() {
+    setQuantities((current) => {
+      const next = { ...current };
+      categoryPrintCards.forEach((card) => {
+        next[card.id] = Math.max(1, current[card.id] || 0);
+      });
+      return next;
+    });
+    setMessage(`${categoryPrintCards.length} kaartjes uit ${categoryFilter === "alle" ? "de hele bibliotheek" : CATEGORY_LABELS[categoryFilter]} staan in de printlijst. Bestaande aantallen zijn behouden.`);
+    setError("");
+  }
+
   async function createPrintSession() {
     if (selectedPrintItems.length === 0) return;
     const printWindow = window.open("", "_blank");
@@ -676,6 +689,14 @@ export default function PriceCardStudio() {
               >{CATEGORY_LABELS[category]}</button>
             ))}
           </div>
+          <button
+            type="button"
+            className={styles.categoryPrintButton}
+            disabled={loading || saving || categoryPrintCards.length === 0}
+            onClick={addCategoryToPrint}
+          >
+            + {categoryFilter === "alle" ? "Alle kaartjes" : `Hele categorie ${CATEGORY_LABELS[categoryFilter]}`} aan printlijst · {categoryPrintCards.length}
+          </button>
           <div className={styles.cardList}>
             {loading ? <p className={styles.empty}>Kaartjes laden…</p> : null}
             {!loading && filteredCards.length === 0 ? (

@@ -256,6 +256,26 @@
   font-size: 0.78rem;
 }
 
+.categoryPrintButton {
+  display: block;
+  width: calc(100% - 1.5rem);
+  min-height: 44px;
+  margin: 0.5rem 0.75rem;
+  padding: 0.65rem;
+  border: 1px solid #b8cab5;
+  border-radius: 8px;
+  background: #edf4eb;
+  color: #24551d;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.categoryPrintButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .filters {
   display: flex;
   gap: 0.25rem;
