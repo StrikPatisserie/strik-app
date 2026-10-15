@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteB2BOrder,
   fetchB2BOrders,
@@ -822,13 +822,43 @@ function B2BOrderForm({
   const [letterDraft, setLetterDraft] = useState<B2BLetterLine>(() => newB2BLetterLine());
   const [addFeedback, setAddFeedback] = useState("");
 
+  const draftKey = `strik-b2b-order-draft-v1-${initialOrder?.id || "new"}`;
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftNotice, setDraftNotice] = useState("");
+  const messageRef = useRef<HTMLParagraphElement>(null);
+
   useEffect(() => {
-    setForm(formStateFromOrder(initialOrder));
-    setManualTotal(usesManualTotal(initialOrder));
-    setProductDraft(newProductLine());
-    setLetterDraft(newB2BLetterLine());
-    setAddFeedback("");
-  }, [initialOrder]);
+    try {
+      const stored = sessionStorage.getItem(draftKey);
+      const draft = stored ? JSON.parse(stored) : null;
+      if (draft?.form && typeof draft.form.customerName === "string" && Array.isArray(draft.form.productLines) && Array.isArray(draft.form.letterLines)) {
+        setForm({ ...formStateFromOrder(initialOrder), ...draft.form });
+        setManualTotal(Boolean(draft.manualTotal));
+        if (draft.productDraft) setProductDraft(draft.productDraft);
+        if (draft.letterDraft) setLetterDraft(draft.letterDraft);
+        setDraftNotice("Je niet-opgeslagen invoer is teruggezet. Controleer deze en druk op Opslaan.");
+      }
+    } catch {
+      setDraftNotice("Een eerder concept kon niet worden teruggezet.");
+    }
+    setDraftReady(true);
+  }, [draftKey, initialOrder]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify({ form, manualTotal, productDraft, letterDraft }));
+    } catch {
+      setDraftNotice("Dit tabblad kan geen reserveconcept bewaren. Houd het formulier open totdat opslaan is gelukt.");
+    }
+  }, [draftKey, draftReady, form, manualTotal, productDraft, letterDraft]);
+
+  useEffect(() => {
+    if (message) {
+      messageRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      messageRef.current?.focus();
+    }
+  }, [message]);
 
   function setField<K extends keyof B2BFormState>(key: K, value: B2BFormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -980,6 +1010,17 @@ function B2BOrderForm({
   async function submitOrder(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    if (saving) return;
+    const invalid = Array.from(event.currentTarget.elements).find((element) =>
+      (element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement) &&
+      !element.hasAttribute("data-order-draft") && !element.validity.valid
+    ) as HTMLInputElement | undefined;
+    if (invalid) {
+      invalid.closest("details")?.setAttribute("open", "");
+      const label = invalid.getAttribute("aria-label") || invalid.getAttribute("placeholder") || invalid.closest("label")?.textContent?.trim() || "invoerveld";
+      setMessage(`Controleer ${label}: ${invalid.validationMessage}`);
+      return;
+    }
 
     const orderText = serializeOrderText(form.productLines, form.orderText);
 
@@ -1012,11 +1053,11 @@ function B2BOrderForm({
       return;
     }
     if (form.status === "akkoord" && (!form.deliveryDate || !orderText.trim())) {
-      setMessage("Voor definitief zijn de bestelling en een vaste leverdatum nodig.");
+      setMessage("Voor definitief zijn een bestelling en een vaste leverdatum nodig. Voeg gekozen producten eerst toe met + Product toevoegen of + Letter toevoegen.");
       return;
     }
     if (form.status === "akkoord" && form.department !== "bakkerij" && form.letterLines.length === 0 && initialOrder?.status !== "akkoord") {
-      setMessage("Voeg voor een definitieve chocoladeletterbestelling minimaal één letterregel toe.");
+      setMessage("Voeg minimaal één letterregel toe met + Letter toevoegen. Bestel je alleen overige producten? Kies bij afdeling Overig.");
       return;
     }
     if (form.letterLines.some((line) => !Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > 10000)) {
@@ -1067,10 +1108,11 @@ function B2BOrderForm({
         source: initialOrder?.source || "handmatig",
         sourceSheet: initialOrder?.sourceSheet || "",
       });
+      try { sessionStorage.removeItem(draftKey); } catch { /* The order is saved even if browser storage is unavailable. */ }
       onSaved(saved);
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "B2B-bestelling opslaan is mislukt."
+        error instanceof TypeError ? "Geen verbinding met de opslag. Controleer je internetverbinding en probeer opnieuw." : error instanceof Error ? error.message : "B2B-bestelling opslaan is mislukt."
       );
     } finally {
       setSaving(false);
@@ -1080,6 +1122,8 @@ function B2BOrderForm({
   return (
     <form
       onSubmit={submitOrder}
+      noValidate
+      aria-busy={saving}
       className="grid gap-3 text-xs xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start"
     >
       <section className="overflow-hidden rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] xl:col-start-1 xl:row-start-1">
@@ -1269,11 +1313,11 @@ function B2BOrderForm({
         </div>
 
       {form.department !== "bakkerij" && (
-        <div className="border-b-2 border-[#5f8458] bg-white">
-          <div className="flex items-center justify-between bg-[#cfe5ca] px-3 py-2">
+        <details open={form.letterLines.length > 0 || Boolean(form.letterOrderText) || undefined} className="border-b-2 border-[#5f8458] bg-white">
+          <summary className="flex cursor-pointer items-center justify-between bg-[#cfe5ca] px-3 py-2">
             <div className="text-sm font-semibold text-[#24451f]">Chocoladeletters</div>
-            <span className="text-xs font-semibold text-[#365b30]">{b2bLetterTotal(form.letterLines)} stuks</span>
-          </div>
+            <span className="text-xs font-semibold text-[#365b30]">{b2bLetterTotal(form.letterLines)} stuks · uitklappen ▾</span>
+          </summary>
 
           <div className="hidden grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] border-y border-[#c9d8c6] bg-[#edf4eb] py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.06em] text-[#6b645b] xl:grid">
             <span className="px-2">Letter</span>
@@ -1312,7 +1356,7 @@ function B2BOrderForm({
             </label>
             <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
               <span className="xl:hidden">Aantal</span>
-              <input aria-label="Aantal" type="number" min="1" max="10000" value={letterDraft.quantity} onChange={(event) => updateLetterDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 text-right !text-sm font-semibold outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent" />
+              <input data-order-draft aria-label="Aantal" type="number" min="1" max="10000" value={letterDraft.quantity} onChange={(event) => updateLetterDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 text-right !text-sm font-semibold outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent" />
             </label>
             <fieldset className="col-span-2 rounded-md border border-[#c9d8c6] px-2 py-2 sm:col-span-3 xl:col-span-1 xl:rounded-none xl:border-0 xl:px-2 xl:py-0">
               <legend className="px-1 text-[0.65rem] font-semibold text-[#6b645b] xl:hidden">Vrij van</legend>
@@ -1344,14 +1388,15 @@ function B2BOrderForm({
             {form.letterLines.length === 0 && <p className="px-3 py-2 text-xs font-medium text-[#8b8278]">Nog geen letters toegevoegd.</p>}
           </div>
           {form.letterOrderText && <details className="border-t border-[#d7e3d4] px-3 py-2 text-xs"><summary className="cursor-pointer font-bold text-[#6b645b]">Oude vrije letteromschrijving</summary><p className="mt-1 whitespace-pre-wrap">{form.letterOrderText}</p></details>}
-        </div>
+        </details>
       )}
 
       <div className="bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-1 bg-[#f3dfa2] px-3 py-2">
+        <details open={form.productLines.some((line) => line.productId !== "chocoladeletter" && line.productId !== "chocolade-vormletter") || undefined}>
+        <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-1 bg-[#f3dfa2] px-3 py-2">
           <div className="text-sm font-semibold text-[#5a4300]">Overige producten</div>
-          <span className="text-[0.68rem] font-medium text-[#705a18]">folderprijs automatisch · handmatig aanpasbaar</span>
-        </div>
+          <span className="text-[0.68rem] font-medium text-[#705a18]">folderprijs automatisch · handmatig aanpasbaar · uitklappen ▾</span>
+        </summary>
 
         <div className="grid grid-cols-2 gap-2 bg-[#fff9e9] p-3 lg:grid-cols-[minmax(14rem,1.5fr)_minmax(10rem,1fr)_5rem_7rem_auto_auto] lg:items-end">
           <label className="col-span-2 grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b] lg:col-span-1">
@@ -1393,11 +1438,11 @@ function B2BOrderForm({
 
           <label className="grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
             Aantal
-            <input type="number" min="1" max="10000" value={productDraft.quantity} onChange={(event) => updateProductDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
+            <input data-order-draft type="number" min="1" max="10000" value={productDraft.quantity} onChange={(event) => updateProductDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
           </label>
           <label className="grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
             Prijs p.s. ex
-            <input type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={(event) => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
+            <input data-order-draft type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={(event) => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
           </label>
           <label className={`flex h-10 items-center gap-2 self-end whitespace-nowrap text-xs font-bold ${draftProduct && productSupportsLogo(draftProduct, productDraft.choice) ? "" : "invisible"}`}>
             <input className="h-4 w-4" type="checkbox" checked={productDraft.withLogo} onChange={(event) => updateProductDraft({ withLogo: event.target.checked })} /> Logo
@@ -1433,6 +1478,7 @@ function B2BOrderForm({
           {form.productLines.length === 0 && <p className="px-3 py-2 text-xs font-bold text-[#8b8278]">Nog geen producten toegevoegd.</p>}
         </div>
 
+        </details>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#d0b96e] bg-[#f3dfa2] px-3 py-2">
           <details className="min-w-[14rem] flex-1 text-xs">
             <summary className="cursor-pointer font-semibold text-[#6b645b]">Aanvullende orderafspraken{form.orderText.trim() ? " · ingevuld" : ""}</summary>
@@ -1466,13 +1512,10 @@ function B2BOrderForm({
         </div>
       </details>
 
-      {message && (
-        <p className="rounded-lg border border-[#d6e5d8] bg-white px-3 py-2 text-xs font-medium text-[#24551d] xl:col-span-2">
-          {message}
-        </p>
-      )}
-
-      <div className="sticky bottom-0 z-30 flex flex-col gap-2 rounded-lg border border-[#d8d2ca] bg-[#f3f0ec]/95 p-2 backdrop-blur sm:flex-row sm:justify-end xl:col-span-2">
+      <div className="sticky bottom-0 z-30 flex flex-wrap items-center justify-end gap-2 rounded-lg border border-[#d8d2ca] bg-[#f3f0ec]/95 p-2 backdrop-blur xl:col-span-2">
+        {form.productLines.length === 0 && !form.orderText.trim() && <p className="w-full text-xs font-semibold text-[#6b645b]">Nog geen bestelregels toegevoegd. Klap een productblok uit en kies + Letter toevoegen of + Product toevoegen.</p>}
+        {draftNotice && <p role="status" className="w-full text-xs font-semibold text-[#6b645b]">{draftNotice}</p>}
+        {message && <p ref={messageRef} tabIndex={-1} role="alert" className="w-full rounded-lg border border-[#efb5a5] bg-[#fff1e8] px-3 py-2 text-sm font-bold text-[#9a3412]">Niet opgeslagen: {message} Je invoer blijft in dit formulier staan.</p>}
         <button
           type="button"
           onClick={onCancel}
@@ -1482,7 +1525,7 @@ function B2BOrderForm({
         </button>
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || !draftReady}
           className="h-10 rounded-md bg-[#315d2a] px-4 text-xs font-semibold text-white shadow-sm disabled:opacity-60"
         >
           {saving
@@ -1744,6 +1787,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   const [orders, setOrders] = useState<SinterklaasB2BOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [saveNotice, setSaveNotice] = useState("");
   const [updatingId, setUpdatingId] = useState("");
   const [importPreview, setImportPreview] = useState<B2BFormState[]>([]);
   const [importing, setImporting] = useState(false);
@@ -1870,11 +1914,13 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   }
 
   function openNewOrderDialog() {
+    setSaveNotice("");
     setEditingOrder(null);
     setFormOpen(true);
   }
 
   function openEditOrderDialog(order: SinterklaasB2BOrder) {
+    setSaveNotice("");
     setEditingOrder(order);
     setFormOpen(true);
   }
@@ -1885,6 +1931,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   }
 
   function handleSavedOrder(order: SinterklaasB2BOrder) {
+    setSaveNotice(`Bestelling voor ${order.customerName} is opgeslagen.`);
     setOrders((current) => updateOrderList(current, order));
     if (order.status === "akkoord" && order.confirmationEmailError) setError(order.confirmationEmailError);
     closeOrderDialog();
@@ -2103,6 +2150,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
         </div>
       </section>
 
+      {saveNotice && <p role="status" className="rounded-lg border border-[#b8cab5] bg-[#edf4eb] px-3 py-2 text-sm font-bold text-[#24551d]">{saveNotice}</p>}
       {error && (
         <p className="border border-[#f1b8a8] bg-[#fff4ef] px-3 py-2 text-sm font-black text-[#9a3412]">
           {error}
