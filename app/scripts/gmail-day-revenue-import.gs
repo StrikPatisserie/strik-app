@@ -9,16 +9,16 @@ const DAGOMZET_IMPORT_CONFIG = {
   QUERY: 'label:"Dagomzet" newer_than:7d -label:"Ingelezen" -label:"Fout"',
   SEARCH_QUERIES: [
     'label:"Dagomzet" newer_than:7d -label:"Ingelezen" -label:"Fout"',
-    'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Cash-it Filiaal Dag Rapport"',
+    'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Filiaal Dag Rapport"',
     'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Dag Rapport ijs"',
-    'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Dagafsluiting email-Filiaal" subject:ijs',
+    'newer_than:7d -label:"Ingelezen" -label:"Fout" subject:"Filiaal" subject:"Dag Rapport" subject:ijs',
   ],
   RECOVERY_QUERY: 'label:"Dagomzet" newer_than:45d',
   RECOVERY_SEARCH_QUERIES: [
     'label:"Dagomzet" newer_than:45d',
-    'newer_than:45d subject:"Cash-it Filiaal Dag Rapport"',
+    'newer_than:45d subject:"Filiaal Dag Rapport"',
     'newer_than:45d subject:"Dag Rapport ijs"',
-    'newer_than:45d subject:"Dagafsluiting email-Filiaal" subject:ijs',
+    'newer_than:45d subject:"Filiaal" subject:"Dag Rapport" subject:ijs',
   ],
   MAX_THREADS: 10,
   RECOVERY_MAX_THREADS: 80,
@@ -29,7 +29,7 @@ const DAGOMZET_IMPORT_CONFIG = {
   MAX_PDF_ATTACHMENTS: 5,
   MAX_PDF_ATTACHMENT_BYTES: 6000000,
   IMPORT_VERSION: 'dagomzet-v1',
-  SCRIPT_VERSION: 'gmail-window-v18-ice-cash-only',
+  SCRIPT_VERSION: 'gmail-window-v19-custom-subjects',
 };
 
 function importDagomzet() {
@@ -232,7 +232,7 @@ function verrijkIjsBetaalvormenVanafWeek37() {
   const fromDate = new Date('2026-09-01T00:00:00+02:00');
   const queries = [
     'after:2026/08/31 -label:"Fout" subject:"Dag Rapport ijs"',
-    'after:2026/08/31 -label:"Fout" subject:"Dagafsluiting email-Filiaal" subject:ijs',
+    'after:2026/08/31 -label:"Fout" subject:"Filiaal" subject:"Dag Rapport" subject:ijs',
   ];
   const threads = searchDagomzetThreads_(150, queries);
   const props = PropertiesService.getScriptProperties();
@@ -242,7 +242,7 @@ function verrijkIjsBetaalvormenVanafWeek37() {
     const subject = String(message.getSubject() || '').toLowerCase();
     const isIce =
       subject.indexOf('dag rapport ijs') >= 0 ||
-      (subject.indexOf('dagafsluiting email-filiaal') >= 0 &&
+      (subject.indexOf('filiaal') >= 0 &&
         subject.indexOf('ijs') >= 0);
 
     return isIce && message.getDate().getTime() >= fromDate.getTime();
@@ -478,8 +478,8 @@ function verplaatsDagomzetIngelezenThreads_() {
   const queries = [
     `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL}" label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}"`,
     `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}" subject:"Dag Rapport ijs"`,
-    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}" subject:"Dagafsluiting email-Filiaal" subject:ijs`,
-    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}" subject:"Cash-it Filiaal Dag Rapport"`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}" subject:"Filiaal" subject:"Dag Rapport" subject:ijs`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.PROCESSED_LABEL}" subject:"Filiaal Dag Rapport"`,
   ];
   const threadByKey = {};
   const threads = [];
@@ -522,8 +522,8 @@ function verplaatsDagomzetFoutThreads_() {
   const queries = [
     `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" label:"${DAGOMZET_IMPORT_CONFIG.SOURCE_LABEL}"`,
     `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" subject:"Dag Rapport ijs"`,
-    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" subject:"Dagafsluiting email-Filiaal" subject:ijs`,
-    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" subject:"Cash-it Filiaal Dag Rapport"`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" subject:"Filiaal" subject:"Dag Rapport" subject:ijs`,
+    `newer_than:45d in:inbox label:"${DAGOMZET_IMPORT_CONFIG.ERROR_LABEL}" subject:"Filiaal Dag Rapport"`,
   ];
   const threadByKey = {};
   const threads = [];

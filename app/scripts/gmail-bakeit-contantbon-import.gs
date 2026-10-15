@@ -30,7 +30,7 @@ const BAKEIT_CONTANTBON_CONFIG = {
   DEFINITIVE_MAIL_START_HOUR: 20,
   DEFINITIVE_MAIL_START_MINUTE: 15,
   IMPORT_VERSION: 'split-mails-v1',
-  SCRIPT_VERSION: 'gmail-archive-v8-timewindows',
+  SCRIPT_VERSION: 'gmail-archive-v9-custom-subjects',
 };
 
 function importBakeItContantbonnen() {
@@ -476,13 +476,14 @@ function isBakeItContantbonCandidate_(message) {
 
   return (
     haystack.indexOf('contantbon') >= 0 ||
-    /orders\s+email/i.test(subject)
+    /(?:orders?\s+email|custom[_\s-]*orders?)/i.test(subject)
   );
 }
 
 function normalizeBakeItSubjectForWave_(subject) {
   return String(subject || '')
     .toLowerCase()
+    .replace(/\b(?:custom[_\s-]*orders?|orders?\s+email)\b/g, 'orders email')
     .replace(/\bemail[\s-]*\d+(?:\s*(?:van|of|\/)\s*\d+)?\b/g, 'email')
     .replace(/\b(?:deel|part)[\s-]*\d+(?:\s*(?:van|of|\/)\s*\d+)?\b/g, '')
     .replace(/\(\s*\d+\s*\/\s*\d+\s*\)/g, '')
@@ -740,7 +741,7 @@ function herimporteerLaatsteBakeItContantbonnen_() {
 function isBakeItOrdersEmailContantbonMail_(message) {
   const subject = String(message.getSubject() || '');
 
-  return /orders\s+email(?:[-\s]*\d+)?[-\s]+contantbon(?:nen)?(?:\s+a5)?/i.test(
+  return /(?:orders?\s+email|custom[_\s-]*orders?)(?:[-\s]*\d+)?[-\s]+contantbon(?:nen)?(?:\s+a5)?/i.test(
     subject
   );
 }
