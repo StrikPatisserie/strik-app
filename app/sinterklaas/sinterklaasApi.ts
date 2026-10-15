@@ -270,6 +270,10 @@ function withDeliveryWindowFallback<T extends Partial<SinterklaasB2BOrder>>(
 
   return {
     ...order,
+    // Older WordPress versions require date mode for confirmed orders.
+    // Keep the actual window in the existing lossless marker; the start/end
+    // dates remain available to confirmation emails and production planning.
+    ...(order.status === "akkoord" ? { deliveryWindowType: "date" as const } : {}),
     sourceSheet: `${sourceSheet}${DELIVERY_WINDOW_MARKER}${order.deliveryWindowType}|${order.deliveryDateEnd || ""}|${order.deliveryWeek || ""}`,
   };
 }

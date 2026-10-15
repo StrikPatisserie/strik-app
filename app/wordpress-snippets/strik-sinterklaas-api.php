@@ -672,7 +672,7 @@ function strik_sinterklaas_sanitize_b2b_order($order, $existing = array()) {
     $now = wp_date(DATE_ATOM);
     $status = isset($order['status']) ? strik_sinterklaas_text($order['status'], 20) : 'akkoord';
     if (!in_array($status, array('aanvraag', 'offerte', 'akkoord', 'afgewezen'), true)) $status = 'aanvraag';
-    if ($status === 'akkoord' && ($delivery_window_type !== 'date' || $delivery_date === '' || $order_text === '')) return null;
+    if ($status === 'akkoord' && ($delivery_date === '' || $order_text === '')) return null;
     $department = isset($order['department']) ? strik_sinterklaas_text($order['department'], 80) : 'chocolade';
     if ($status === 'akkoord' && $department !== 'bakkerij' && empty($letter_lines) && (empty($existing) || (isset($existing['status']) && $existing['status'] !== 'akkoord')) && (!isset($order['source']) || $order['source'] !== 'excel')) return null;
 

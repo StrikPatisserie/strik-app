@@ -1046,14 +1046,8 @@ function B2BOrderForm({
       setMessage("Kies de gewenste leverweek.");
       return;
     }
-    if (form.status === "akkoord" && form.deliveryWindowType !== "date") {
-      setMessage(
-        "Kies voor een definitieve bestelling één vaste leverdatum. Een periode of week kan bij een aanvraag of offerte."
-      );
-      return;
-    }
     if (form.status === "akkoord" && (!form.deliveryDate || !orderText.trim())) {
-      setMessage("Voor definitief zijn een bestelling en een vaste leverdatum nodig. Voeg gekozen producten eerst toe met + Product toevoegen of + Letter toevoegen.");
+      setMessage("Voor definitief zijn een bestelling en een leverdatum, leverperiode of leverweek nodig. Voeg gekozen producten eerst toe met + Product toevoegen of + Letter toevoegen.");
       return;
     }
     if (form.status === "akkoord" && form.department !== "bakkerij" && form.letterLines.length === 0 && initialOrder?.status !== "akkoord") {
