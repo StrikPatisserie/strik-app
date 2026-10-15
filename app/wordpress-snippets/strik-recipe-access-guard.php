@@ -5,7 +5,7 @@
  * Validates each bearer session with Supabase and reads the current profile.
  * Shared legacy WordPress keys alone no longer authorize recipe access.
  */
-if (function_exists('strik_recipe_guard_identity')) return;
+if (!function_exists('strik_recipe_guard_identity')) {
 
 function strik_recipe_guard_identity($request) {
     static $identities = array();
@@ -89,10 +89,13 @@ add_filter('rest_pre_dispatch', function($result, $server, $request) {
 }, 1, 3);
 
 add_filter('rest_post_dispatch', function($response, $server, $request) {
-    if ($request->get_route() !== '/strik/v1/recepturen' || is_wp_error($response) || !is_object($response) || !method_exists($response, 'get_data') || $response->get_status() >= 400) return $response;
+    if (!preg_match('#^/strik/v1/recepturen(?:$|/|-)#', $request->get_route()) || is_wp_error($response) || !is_object($response) || !method_exists($response, 'get_data') || $response->get_status() >= 400) return $response;
     $identity = strik_recipe_guard_identity($request);
     if (is_wp_error($identity)) return $identity;
-    if (!$identity['manager']) $response->set_data(strik_recipe_guard_production($response->get_data()));
+    if (!$identity['manager'] && $request->get_route() === '/strik/v1/recepturen') $response->set_data(strik_recipe_guard_production($response->get_data()));
     $response->header('Cache-Control', 'private, no-store');
+    $response->header('Vary', 'X-Strik-User-Token', false);
     return $response;
 }, 99, 3);
+
+}
