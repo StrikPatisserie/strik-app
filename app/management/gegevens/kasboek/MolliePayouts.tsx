@@ -39,21 +39,26 @@ function PayoutDetail({ payout }: { payout: Payout }) {
   </details>;
 }
 function MonthPayouts({ month }: { month: string }) {
+  // De maandafrekening wordt in de daaropvolgende maand uitbetaald.
+  // De volledige afrekening blijft bij elkaar, inclusief oudere correcties.
+  const [year, monthNumber] = month.split('-').map(Number);
+  const payoutMonth = `${year + (monthNumber === 12 ? 1 : 0)}-${String(monthNumber === 12 ? 1 : monthNumber + 1).padStart(2, '0')}`;
+  const payoutMonthLabel = new Date(`${payoutMonth}-01T12:00:00`).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
   const [entries, setEntries] = useState<Payout[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function retrieve() {
     setBusy(true); setError('');
-    try { const data = await load(`month=${encodeURIComponent(month)}`); setEntries(data.settlements); }
+    try { const data = await load(`month=${encodeURIComponent(payoutMonth)}`); setEntries(data.settlements); }
     catch (e) { setError(e instanceof Error ? e.message : 'Ophalen mislukt.'); }
     finally { setBusy(false); }
   }
   return <details className="my-5 rounded-2xl bg-white/80 p-4 print:hidden" onToggle={event => { if (event.currentTarget.open && entries === null && !busy && !error) void retrieve(); }}>
     <summary className="cursor-pointer py-2 font-bold text-lg">Mollie-uitbetalingen · {new Date(`${month}-01T12:00:00`).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })}</summary>
-    <p className="my-2 text-sm text-stone-600">Alle profielen samen, op uitbetaaldatum. Open een uitbetaling voor de verdeling over grootboek 8140, 8142 en 4800.</p>
+    <p className="my-2 text-sm text-stone-600">Afrekening over deze rapportmaand, uitbetaald in {payoutMonthLabel}. De werkelijke uitbetaaldatum staat bij het bedrag. Open de afrekening voor de verdeling over grootboek 8140, 8142 en 4800.</p>
     {busy && <p role="status">Uitbetalingen ophalen…</p>}
     {error && <p role="alert" className="text-red-800">{error} <button type="button" className="underline p-2" onClick={() => void retrieve()}>Opnieuw proberen</button></p>}
-    {entries?.length === 0 && <p>Geen uitbetalingen gevonden in deze maand.</p>}
+    {entries?.length === 0 && <p>Nog geen uitbetaling gevonden voor deze maandafrekening. De uitbetaling volgt in {payoutMonthLabel}.</p>}
     <div className="space-y-2">{entries?.map(payout => <PayoutDetail key={payout.id} payout={payout} />)}</div>
   </details>;
 }
