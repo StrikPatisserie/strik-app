@@ -1,3 +1,4 @@
+import { recipeStorageAuthHeaders } from "@/app/lib/recipeStorageAuth";
 import "server-only";
 
 import type { Recipe } from "@/app/bakkerij/recepturen/types";
@@ -44,7 +45,7 @@ export async function getEvaluationRecipeOptions(): Promise<
 
     const response = await fetch(url, {
       cache: "no-store",
-      headers: { Accept: "application/json" },
+      headers: await recipeStorageAuthHeaders(),
     });
     const data = (await response.json().catch(() => null)) as {
       recipes?: Recipe[];

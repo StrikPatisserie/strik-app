@@ -1,3 +1,4 @@
+import { recipeStorageAuthHeaders } from "@/app/lib/recipeStorageAuth";
 import "server-only";
 
 import type {
@@ -48,7 +49,7 @@ async function fetchRecipeArchive(): Promise<RecipeArchive> {
       url.searchParams.set("key", RECEPTUREN_API_KEY);
       const response = await fetch(url, {
         cache: "no-store",
-        headers: { Accept: "application/json" },
+        headers: await recipeStorageAuthHeaders(),
         signal: AbortSignal.timeout(15_000),
       });
       const data = (await response.json().catch(() => null)) as Partial<RecipeArchive> | null;

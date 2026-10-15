@@ -134,7 +134,7 @@ export function isFullAccessRole(role: string | null | undefined) {
 export function hasFullAccess(profile: UserProfile | null | undefined) {
   return Boolean(
     profile?.active &&
-      (isFullAccessRole(profile.role) || hasPermission(profile, "app.all"))
+      isFullAccessRole(profile.role)
   );
 }
 
@@ -487,7 +487,7 @@ export function canAccessPath(
 
   if (isBakkerijPath(pathname)) {
     if (isBakkerijDataPath(pathname)) {
-      return hasPermission(profile, "bakkerij.data");
+      return false;
     }
 
     if (isBakkerijIjsChocoladePath(pathname)) {

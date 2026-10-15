@@ -1,3 +1,5 @@
+import { getCurrentProfile } from "@/app/lib/auth/session";
+import { hasFullAccess } from "@/app/lib/auth/access";
 import { NextResponse } from "next/server";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
@@ -1588,6 +1590,7 @@ async function parseImportFile(
 }
 
 export async function POST(request: Request) {
+  if (!hasFullAccess(await getCurrentProfile())) return Response.json({ message: "Alleen managers kunnen deze gegevens beheren." }, { status: 403 });
   let formData: FormData;
 
   try {

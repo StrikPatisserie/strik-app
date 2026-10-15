@@ -31,6 +31,7 @@ import {
   getDepartmentAccount,
   isDepartmentAccount,
   isWinkelIpadAccount,
+  isFullAccessRole,
 } from "../../lib/auth/access";
 
 const initialState: UserAdminActionState = {};
@@ -74,7 +75,7 @@ function RoleSelect({ defaultValue }: Readonly<{ defaultValue?: string }>) {
   return (
     <select
       name="role"
-      defaultValue={defaultValue || "medewerker"}
+      defaultValue={defaultValue === "management" ? "manager" : defaultValue || "medewerker"}
       className={inputClass}
     >
       {USER_ROLES.map((role) => (
@@ -188,7 +189,7 @@ function UserFields({ profile }: Readonly<{ profile?: UserProfile }>) {
             className={inputClass}
           />
         </Field>
-        <Field label="Rol">
+        <Field label="Rol (management alleen voor managers en admins)">
           <RoleSelect defaultValue={profile?.role} />
         </Field>
         <Field label="Winkel">
@@ -693,7 +694,7 @@ export default function UsersAdminClient({
 }: Readonly<{ profiles: UserProfile[]; initialProfileId?: string }>) {
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<
-    "all" | "winkel-ipads" | "departments"
+    "all" | "winkel-ipads" | "departments" | "managers"
   >("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
@@ -708,11 +709,13 @@ export default function UsersAdminClient({
         (profile) =>
           (accountFilter === "all" ||
             (accountFilter === "winkel-ipads" && isWinkelIpadAccount(profile)) ||
-            (accountFilter === "departments" && isDepartmentAccount(profile))) &&
+            (accountFilter === "departments" && isDepartmentAccount(profile)) ||
+            (accountFilter === "managers" && isFullAccessRole(profile.role))) &&
           matchesSearch(profile, normalizedSearch)
       ),
     [accountFilter, profiles, normalizedSearch]
   );
+  const managerCount = profiles.filter(profile => isFullAccessRole(profile.role)).length;
   const inactiveCount = profiles.filter((profile) => !profile.active).length;
   const winkelIpadCount = profiles.filter(isWinkelIpadAccount).length;
   const departmentAccountCount = profiles.filter(isDepartmentAccount).length;
@@ -745,7 +748,8 @@ export default function UsersAdminClient({
               className="h-8 w-full rounded-md border border-[#ded8cf] bg-[#faf8f5] pl-8 pr-3 text-xs font-semibold outline-none placeholder:text-[#a39c91] focus:border-[#1f4f35]"
             />
           </label>
-          <div className="flex shrink-0 rounded-md bg-[#f4f0ea] p-0.5" aria-label="Accountfilter">
+          <div className="flex flex-wrap shrink-0 rounded-md bg-[#f4f0ea] p-0.5" aria-label="Accountfilter">
+            <button type="button" onClick={() => setAccountFilter("managers")} aria-pressed={accountFilter === "managers"} className={`h-7 rounded px-2.5 text-[0.68rem] font-black ${accountFilter === "managers" ? "bg-white text-[#1f4f35] shadow-sm" : "text-[#7b7268]"}`}>Managers ({managerCount}) · 2-staps verplicht</button>
             <button
               type="button"
               onClick={() => setAccountFilter("all")}

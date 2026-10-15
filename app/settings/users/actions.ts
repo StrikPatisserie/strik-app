@@ -8,6 +8,8 @@ import {
   sendPasswordResetEmail,
 } from "../../lib/supabase/passwordReset";
 import { requireAdminProfile } from "../../lib/auth/session";
+import { PERMISSION_OPTIONS, USER_ROLES } from "../../lib/supabase/types";
+import { isFullAccessRole } from "../../lib/auth/access";
 import type { UserPermissions } from "../../lib/supabase/types";
 
 export type UserAdminActionState = {
@@ -27,7 +29,7 @@ function getPermissions(formData: FormData): UserPermissions {
   return formData
     .getAll("permissions")
     .map((permission) => cleanText(permission))
-    .filter(Boolean)
+    .filter(permission => PERMISSION_OPTIONS.some(option => option.id === permission))
     .reduce<UserPermissions>((permissions, permission) => {
       permissions[permission] = true;
       return permissions;
@@ -38,7 +40,7 @@ function getProfilePayload(formData: FormData) {
   return {
     fullName: cleanText(formData.get("full_name")),
     email: cleanEmail(formData.get("email")),
-    role: cleanText(formData.get("role")) || "medewerker",
+    role: USER_ROLES.some(role => role.id === cleanText(formData.get("role"))) ? cleanText(formData.get("role")) : "medewerker",
     store: cleanText(formData.get("store")),
     permissions: getPermissions(formData),
     active: formData.get("active") === "on",
@@ -183,8 +185,8 @@ export async function updateUserProfileAction(
     return { message: "E-mail is verplicht." };
   }
 
-  if (actor.id === userId && !payload.active) {
-    return { message: "Je kunt je eigen beheerdersaccount niet deactiveren." };
+  if (actor.id === userId && (!payload.active || !isFullAccessRole(payload.role))) {
+    return { message: "Je kunt je eigen beheerdersaccount niet deactiveren of de managerrol verwijderen." };
   }
 
   try {
@@ -227,7 +229,7 @@ export async function setUserActiveAction(
   const actor = await requireAdminProfile();
 
   if (!active && actor.id === userId) {
-    return { message: "Je kunt je eigen beheerdersaccount niet deactiveren." };
+    return { message: "Je kunt je eigen beheerdersaccount niet deactiveren of de managerrol verwijderen." };
   }
 
   try {

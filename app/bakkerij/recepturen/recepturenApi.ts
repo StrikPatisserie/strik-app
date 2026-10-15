@@ -14,6 +14,7 @@ import type { CustomerAllergenList } from "../allergenen/types";
 import { canonicalStrikArticleNumber } from "@/app/lib/strikArticles";
 
 export type RecepturenData = {
+  financialAccess?: boolean;
   ingredients: Ingredient[];
   recipes: Recipe[];
   packagingItems?: PackagingItem[];
@@ -30,9 +31,6 @@ type RecepturenApiResult<T> =
   | { ok: false; message: string; status?: number };
 
 const APP_RECEPTUREN_API_URL = "/api/recepturen";
-const WORDPRESS_RECEPTUREN_API_URL =
-  "https://strik-patisserie.nl/wp-json/strik/v1/recepturen";
-const WORDPRESS_RECEPTUREN_API_KEY = "schoonmaak-ijs-strik";
 const MAX_STORED_INVOICE_IMPORTS = 32;
 const MAX_REVIEW_INVOICE_IMPORTS = 8;
 const MAX_PROCESSED_INVOICE_IMPORTS = 14;
@@ -48,13 +46,6 @@ export const emptyBakeryHomeData: BakeryHomeData = {
   notes: [],
   offers: [],
 };
-
-function getWordPressRecepturenUrl() {
-  const url = new URL(WORDPRESS_RECEPTUREN_API_URL);
-  url.searchParams.set("key", WORDPRESS_RECEPTUREN_API_KEY);
-
-  return url.toString();
-}
 
 async function readJson(response: Response) {
   return (await response.json().catch(() => null)) as unknown;
@@ -84,6 +75,7 @@ function normalizeRecepturenData(data: unknown): RecepturenData | null {
       : emptyBakeryHomeData;
 
   return removeLegacyHalfFabricateIngredients({
+    financialAccess: record.financialAccess === true,
     ingredients: Array.isArray(record.ingredients) ? record.ingredients : [],
     recipes: normalizeStoredRecipes(record.recipes),
     packagingItems: Array.isArray(record.packagingItems)
@@ -345,19 +337,9 @@ export async function fetchRecepturenData(): Promise<
   RecepturenApiResult<RecepturenData>
 > {
   try {
-    const appResult = await fetchRecepturenDataFrom(APP_RECEPTUREN_API_URL);
-    if (appResult.ok) return appResult;
+    return await fetchRecepturenDataFrom(APP_RECEPTUREN_API_URL);
   } catch {
-    // Probeer WordPress direct als de app-route tijdelijk hapert.
-  }
-
-  try {
-    return await fetchRecepturenDataFrom(getWordPressRecepturenUrl());
-  } catch {
-    return {
-      ok: false,
-      message: "Kan geen verbinding maken met WordPress recepturenopslag.",
-    };
+    return { ok: false, message: "Recepturen konden niet veilig via de app geladen worden. Probeer opnieuw." };
   }
 }
 
@@ -392,19 +374,8 @@ export async function saveRecepturenData(
   data: RecepturenData
 ): Promise<RecepturenApiResult<RecepturenData>> {
   try {
-    const appResult = await saveRecepturenDataTo(APP_RECEPTUREN_API_URL, data);
-    if (appResult.ok) return appResult;
-    if (appResult.status && appResult.status < 500) return appResult;
+    return await saveRecepturenDataTo(APP_RECEPTUREN_API_URL, data);
   } catch {
-    // Probeer WordPress direct als de app-route tijdelijk hapert.
-  }
-
-  try {
-    return await saveRecepturenDataTo(getWordPressRecepturenUrl(), data);
-  } catch {
-    return {
-      ok: false,
-      message: "Kan geen verbinding maken met WordPress recepturenopslag.",
-    };
+    return { ok: false, message: "Opslaan via de app is mislukt. Je wijzigingen zijn niet opgeslagen." };
   }
 }

@@ -11,6 +11,7 @@ import {
 
 export default function RecipesList({
   recipes,
+  canManage = true,
   scope = "all",
   onOpenRecipe,
   onCreateRecipe,
@@ -18,6 +19,7 @@ export default function RecipesList({
   onRecalculateAll,
 }: Readonly<{
   recipes: Recipe[];
+  canManage?: boolean;
   scope?: RecipeListScope;
   onOpenRecipe: (recipe: Recipe) => void;
   onCreateRecipe: () => void;
@@ -122,12 +124,12 @@ export default function RecipesList({
           </h2>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <ToolbarButton label="Nieuw recept" onClick={onCreateRecipe}>
+          {canManage && <ToolbarButton label="Nieuw recept" onClick={onCreateRecipe}>
             <PlusIcon />
-          </ToolbarButton>
-          <ToolbarButton label="Bestand uploaden" onClick={onOpenImport}>
+          </ToolbarButton>}
+          {canManage && <ToolbarButton label="Bestand uploaden" onClick={onOpenImport}>
             <UploadIcon />
-          </ToolbarButton>
+          </ToolbarButton>}
           <ToolbarButton
             label="Sorteren en filteren"
             onClick={() => setFiltersOpen((current) => !current)}

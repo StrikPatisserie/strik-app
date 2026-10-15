@@ -27,6 +27,8 @@ export async function getCurrentProfile() {
       .eq("id", claimsData.claims.sub)
       .maybeSingle();
 
+    // A manager profile must never authorize sensitive server actions at AAL1.
+    if (profile && hasFullAccess(profile as UserProfile) && claimsData.claims.aal !== "aal2") return null;
     return (profile as UserProfile | null) || null;
   } catch {
     return null;

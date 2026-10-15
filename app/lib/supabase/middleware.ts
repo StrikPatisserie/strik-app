@@ -3,12 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "./types";
 import type { UserProfile } from "./types";
 import { getSupabasePublicConfig } from "./config";
-import { canAccessPath, getDefaultPathForProfile } from "../auth/access";
+import { canAccessPath, getDefaultPathForProfile, hasFullAccess } from "../auth/access";
 
 const PUBLIC_PATHS = new Set([
   "/login",
   "/reset-password",
   "/update-password",
+  "/auth/mfa",
   "/auth/callback",
   "/auth/signout",
   "/sint-voor-bedrijven",
@@ -130,6 +131,23 @@ export async function updateSession(request: NextRequest) {
     }
 
     const currentProfile = profile as UserProfile | null;
+    const manager = hasFullAccess(currentProfile);
+    if (manager && claims.aal !== "aal2") {
+      if (isApi) return NextResponse.json({ message: "Bevestig je tweede verificatiestap.", code: "MFA_REQUIRED" }, { status: 403, headers: { "Cache-Control": "no-store" } });
+      const mfaUrl = new URL("/auth/mfa", request.url);
+      mfaUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
+      return NextResponse.redirect(mfaUrl);
+    }
+    const managementApi =
+      pathname === "/api/management-dashboard" ||
+      pathname === "/api/management-revenue" || pathname.startsWith("/api/management-revenue/") ||
+      pathname === "/api/tamigo-labor-costs" || pathname === "/api/tamigo-week-schedule" ||
+      pathname === "/api/christmas-letters" || pathname.startsWith("/api/christmas-letters/") ||
+      (pathname === "/api/price-cards" || pathname.startsWith("/api/price-cards/")) ||
+      pathname === "/api/leat-insights" || pathname === "/api/wordpress-status" ||
+      pathname === "/api/recepturen/data-import" ||
+      (pathname === "/api/tamigo-employees" && (request.nextUrl.searchParams.get("view") === "management" || request.nextUrl.searchParams.get("mode") === "connection"));
+    if (isApi && managementApi && !manager) return NextResponse.json({ message: "Alleen managers hebben toegang tot deze gegevens." }, { status: 403, headers: { "Cache-Control": "no-store" } });
     if (!isApi && !canAccessPath(currentProfile, pathname)) {
       const fallbackPath = getDefaultPathForProfile(currentProfile);
       const fallbackUrl = new URL(fallbackPath, request.url);
@@ -140,5 +158,6 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  if (!isPublic) response.headers.set("Cache-Control", "private, no-store");
   return response;
 }

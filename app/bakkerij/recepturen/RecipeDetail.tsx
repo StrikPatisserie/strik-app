@@ -115,6 +115,7 @@ export default function RecipeDetail({
   packagingItems,
   recipes,
   startInEditMode = false,
+  financialAccess = true,
   onClose,
   onSaveRecipe,
   onDeleteRecipe,
@@ -128,6 +129,7 @@ export default function RecipeDetail({
   packagingItems: PackagingItem[];
   recipes: Recipe[];
   startInEditMode?: boolean;
+  financialAccess?: boolean;
   onClose: () => void;
   onSaveRecipe: (recipe: Recipe) => void;
   onDeleteRecipe: (recipe: Recipe) => void;
@@ -142,7 +144,7 @@ export default function RecipeDetail({
   ) => void;
   onOpenRecipe?: (recipe: Recipe) => void;
 }>) {
-  const [isEditing, setIsEditing] = useState(startInEditMode);
+  const [isEditing, setIsEditing] = useState(startInEditMode && financialAccess);
   const [activeEditSection, setActiveEditSection] =
     useState<RecipeEditSection>("basis");
   const [feedback, setFeedback] = useState("");
@@ -1233,7 +1235,7 @@ export default function RecipeDetail({
     return (
       <>
       <BakkerRecipeCard
-        labeling={<RecipeLabelPanel key={recipe.id} recipe={recipe} ingredients={ingredients} recipes={recipes} onSave={onSaveRecipe} onSaveIngredient={onSaveIngredient} />}
+        labeling={financialAccess ? <RecipeLabelPanel key={recipe.id} recipe={recipe} ingredients={ingredients} recipes={recipes} onSave={onSaveRecipe} onSaveIngredient={onSaveIngredient} /> : undefined}
         recipe={previewRecipe}
         ingredients={ingredients}
         recipes={recipes}
@@ -1246,8 +1248,8 @@ export default function RecipeDetail({
         onScaleFromIngredient={scaleCardFromIngredient}
         onStart={startRecipeCard}
         onMarkMade={markRecipeCardMade}
-        onPrint={() => setIsPrintChoiceOpen(true)}
-        onEdit={() => startEditing("basis")}
+        onPrint={() => financialAccess ? setIsPrintChoiceOpen(true) : printProductionCard("work")}
+        onEdit={financialAccess ? () => startEditing("basis") : undefined}
         onClose={onClose}
         onOpenRecipe={onOpenRecipe}
       />
@@ -4120,7 +4122,7 @@ function BakkerRecipeCard({
   onStart: () => void;
   onMarkMade: () => void;
   onPrint: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
   onClose: () => void;
   onOpenRecipe?: (recipe: Recipe) => void;
 }>) {
@@ -4257,14 +4259,14 @@ function BakkerRecipeCard({
                   >
                     Print
                   </button>
-                  <button
+                  {onEdit && <button
                     type="button"
                     onClick={onEdit}
                     className="px-1.5 py-2 text-xl leading-none"
                     aria-label="Aanpassen"
                   >
                     ✎
-                  </button>
+                  </button>}
                 </div>
               </div>
 

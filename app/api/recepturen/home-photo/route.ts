@@ -1,3 +1,6 @@
+import { recipeStorageAuthHeaders } from "@/app/lib/recipeStorageAuth";
+import { getCurrentProfile } from "@/app/lib/auth/session";
+import { hasFullAccess } from "@/app/lib/auth/access";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -49,13 +52,12 @@ async function uploadToWordPress(formData: FormData, endpoint: string) {
   return fetch(getWordPressHomePhotoUrl(endpoint), {
     method: "POST",
     body: formData,
-    headers: {
-      Accept: "application/json",
-    },
+    headers: await recipeStorageAuthHeaders(),
   });
 }
 
 export async function POST(request: Request) {
+  if (!hasFullAccess(await getCurrentProfile())) return Response.json({ message: "Alleen managers kunnen deze gegevens beheren." }, { status: 403 });
   const incoming = await request.formData().catch(() => null);
 
   if (!incoming) {

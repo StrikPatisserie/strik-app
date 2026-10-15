@@ -1,3 +1,5 @@
+import { getCurrentProfile } from "@/app/lib/auth/session";
+import { hasFullAccess } from "@/app/lib/auth/access";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -1790,6 +1792,7 @@ async function parseInvoiceImageFiles(
 }
 
 export async function POST(request: Request) {
+  if (!hasFullAccess(await getCurrentProfile())) return Response.json({ message: "Alleen managers kunnen deze gegevens beheren." }, { status: 403 });
   let formData: FormData;
 
   try {

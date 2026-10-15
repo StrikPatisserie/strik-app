@@ -39,7 +39,7 @@ export type AppSetting = {
 
 export const USER_ROLES: { id: UserRole; label: string }[] = [
   { id: "admin", label: "Admin" },
-  { id: "manager", label: "Management" },
+  { id: "manager", label: "Manager" },
   { id: "winkel", label: "Winkel" },
   { id: "ijs", label: "IJssalon" },
   { id: "bakkerij", label: "Bakkerij" },
@@ -61,13 +61,6 @@ export const USER_STORES = [
 ];
 
 export const PERMISSION_OPTIONS = [
-  { id: "app.all", label: "Alles bekijken en beheren" },
-  { id: "management.view", label: "Management bekijken" },
-  { id: "management.users", label: "Gebruikers beheren" },
-  { id: "management.revenue", label: "Omzet beheren" },
-  { id: "management.news", label: "Nieuws beheren" },
-  { id: "management.agenda", label: "Agenda beheren" },
-  { id: "management.notes", label: "Notities beheren" },
   { id: "winkel.view", label: "Winkel bekijken" },
   { id: "bruidstaarten.view", label: "Bruidstaarten bekijken" },
   { id: "stores.ziekerstraat", label: "Winkel Ziekerstraat" },
@@ -84,7 +77,6 @@ export const PERMISSION_OPTIONS = [
   { id: "bakkerij.patisserie", label: "Bakkerij Patisserie" },
   { id: "bakkerij.ijs_chocolade", label: "Bakkerij IJs & chocolade" },
   { id: "bakkerij.logistiek", label: "Logistiek bekijken" },
-  { id: "bakkerij.data", label: "Bakkerij data bekijken" },
   { id: "recepturen.manage", label: "Recepturen beheren" },
   { id: "schoonmaak.manage", label: "Schoonmaak beheren" },
 ];

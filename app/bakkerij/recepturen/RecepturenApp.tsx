@@ -618,6 +618,7 @@ export default function RecepturenApp({
   profile = null,
 }: Readonly<RecepturenAppProps> = {}) {
   const pathname = usePathname();
+  const [financialAccess, setFinancialAccess] = useState(false);
   const [mainTab, setMainTab] = useState<MainTabId>(() =>
     lockedTab || initialTab || mainTabForPath(pathname)
   );
@@ -776,6 +777,7 @@ export default function RecepturenApp({
 
       const result = await fetchRecepturenData();
       if (ignoreResult) return;
+      setFinancialAccess(result.ok && result.data.financialAccess === true);
 
       if (result.ok && hasStoredRecepturenData(result.data)) {
         const loadedIngredients = result.data.ingredients.length
@@ -2218,7 +2220,7 @@ export default function RecepturenApp({
     <main className="h-[calc(100dvh-8.5rem)] overflow-hidden bg-[#c3d3bc] text-[#111111] md:h-screen md:h-[100dvh]">
       <div className="flex h-[calc(100dvh-8.5rem)] min-w-0 flex-col overflow-hidden md:h-screen md:h-[100dvh]">
         {!hideTopNav && (
-          <BakkerijTopNav active={mainTab} onSelect={openMainTab} />
+          <BakkerijTopNav active={mainTab} onSelect={openMainTab} canManage={financialAccess} />
         )}
 
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -2240,6 +2242,7 @@ export default function RecepturenApp({
           {mainTab === "recepten" && (
             <div className="h-full w-full px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
               <RecipesList
+                canManage={financialAccess}
                 recipes={scopedRecipeItems}
                 scope={scope}
                 onOpenRecipe={openRecipe}
@@ -2273,7 +2276,7 @@ export default function RecepturenApp({
             </div>
           )}
 
-          {mainTab === "beheer" && (
+          {mainTab === "beheer" && financialAccess && (
             <div className="h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
               <div
                 className={
@@ -2289,6 +2292,7 @@ export default function RecepturenApp({
         {selectedRecipe && (
           <RecipeDetail
             key={selectedRecipe.id}
+            financialAccess={financialAccess}
             recipe={selectedRecipe}
             ingredients={ingredientItems}
             recipes={recipeItems}
@@ -2332,8 +2336,10 @@ export default function RecepturenApp({
 function BakkerijTopNav({
   active,
   onSelect,
+  canManage,
 }: Readonly<{
   active: MainTabId;
+  canManage: boolean;
   onSelect: (tab: MainTabId) => void;
 }>) {
   if (active === "start") {
@@ -2369,7 +2375,7 @@ function BakkerijTopNav({
   return (
     <header className="flex h-[clamp(4.6rem,6vw,5.8rem)] shrink-0 items-center border-b border-white/25 px-4">
       <div className="flex min-w-0 gap-2 rounded-full border border-[#d6e5d8] bg-white/85 p-1 shadow-sm">
-      {tabs.map((tab) => (
+      {tabs.filter(tab => tab.id !== "beheer" || canManage).map((tab) => (
         <button
           key={tab.id}
           type="button"

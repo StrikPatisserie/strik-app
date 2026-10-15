@@ -1,3 +1,4 @@
+import { recipeStorageAuthHeaders } from "@/app/lib/recipeStorageAuth";
 import { NextResponse } from "next/server";
 import type { CustomerAllergenList } from "@/app/bakkerij/allergenen/types";
 
@@ -24,7 +25,7 @@ async function relay(response: Response) {
 
 export async function GET() {
   try {
-    return relay(await fetch(wordpressUrl(), { cache: "no-store" }));
+    return relay(await fetch(wordpressUrl(), { cache: "no-store", headers: await recipeStorageAuthHeaders() }));
   } catch {
     return NextResponse.json({ message: "Kan het allergenenarchief niet laden." }, { status: 502 });
   }
@@ -38,7 +39,7 @@ export async function PUT(request: Request) {
   try {
     return relay(await fetch(wordpressUrl(), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...await recipeStorageAuthHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ lists: body.lists }),
       cache: "no-store",
     }));
