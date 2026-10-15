@@ -181,17 +181,6 @@ function weekKey(year: number, week: number) {
   return `${year}-W${String(week).padStart(2, "0")}`;
 }
 
-function parseWeekKey(value: string) {
-  const match = value.match(/^(\d{4})-W(\d{1,2})$/);
-
-  if (!match) return null;
-
-  return {
-    year: Number(match[1]),
-    week: Number(match[2]),
-  };
-}
-
 function weekRangeLabel(year: number, week: number) {
   const start = dateFromIsoWeekParts(year, week);
   const end = new Date(start);
@@ -2337,36 +2326,39 @@ export default function CashCountManager() {
 
       <section className="rounded-3xl border border-[#d9cbb8] bg-[#fbf7ef]/95 p-2.5 shadow-sm sm:p-3">
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(8rem,9.5rem)_minmax(0,1fr)_minmax(8rem,9.5rem)_minmax(21rem,24rem)] xl:items-end">
-          <label className="relative flex h-12 min-w-0 cursor-pointer items-center gap-1.5 rounded-xl border border-[#cad9c5] bg-[#eef6eb] px-2.5 text-[#1f4f35] shadow-sm">
-            <span className="text-[0.52rem] font-black uppercase tracking-[0.06em]">
-              Weeknr.
-            </span>
-            <strong className="text-2xl font-black leading-none tabular-nums">
-              {selectedWeek.week}
-            </strong>
-            <span className="ml-auto text-[0.52rem] font-bold text-[#71806d]">
-              {selectedWeek.year}
-            </span>
-            <select
-              aria-label="Kies weeknummer"
-              value={depositWeekKey}
-              onChange={(event) => {
-                const parts = parseWeekKey(event.target.value);
-                if (!parts) return;
-
-                setSelectedDate(
-                  isoDateFromDate(dateFromIsoWeekParts(parts.year, parts.week))
-                );
-              }}
-              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            >
-              {availableWeeks.map((week) => (
-                <option key={week.key} value={week.key}>
-                  Week {week.week} · {week.year}
-                </option>
-              ))}
-            </select>
-          </label>
+          <details className="relative min-w-0" onKeyDown={(event) => {
+            if (event.key === "Escape") event.currentTarget.removeAttribute("open");
+          }}>
+            <summary aria-label="Kies weeknummer" className="flex h-12 cursor-pointer list-none items-center gap-1.5 rounded-xl border border-[#cad9c5] bg-[#eef6eb] px-2.5 text-[#1f4f35] shadow-sm [&::-webkit-details-marker]:hidden">
+              <span className="text-[0.52rem] font-black uppercase tracking-[0.06em]">Weeknr.</span>
+              <strong className="text-2xl font-black leading-none tabular-nums">{selectedWeek.week}</strong>
+              {isSelectedCashLocationReported && <span title="Storting gemeld" className="rounded bg-[#1f4f35] px-1.5 py-0.5 text-xs font-black text-white">S</span>}
+              <span className="ml-auto text-[0.52rem] font-bold text-[#71806d]">{selectedWeek.year}</span>
+              <span aria-hidden="true" className="text-xs">▾</span>
+            </summary>
+            <div className="absolute left-0 top-full z-30 mt-1 max-h-80 w-full min-w-44 overflow-y-auto rounded-xl border border-[#cad9c5] bg-white p-1 shadow-xl">
+              <p className="px-2 py-1 text-[0.6rem] text-[#71806d]">S = storting gemeld · gekozen locatie</p>
+              {availableWeeks.map((week) => {
+                const deposit = cashDeposits.find((item) => item.year === week.year && item.week === week.week && item.shop === selectedShop);
+                const reported = selectedCashLocationKind === "ice" ? isIceDepositReported(deposit) : isPatisserieDepositReported(deposit);
+                return <button
+                  key={week.key}
+                  type="button"
+                  aria-current={week.key === depositWeekKey ? "true" : undefined}
+                  onClick={(event) => {
+                    setSelectedDate(isoDateFromDate(dateFromIsoWeekParts(week.year, week.week)));
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    event.currentTarget.closest("details")?.querySelector("summary")?.focus();
+                  }}
+                  className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm hover:bg-[#eef6eb] ${reported ? "font-black text-[#1f6b35]" : "font-semibold text-[#49342d]"} ${week.key === depositWeekKey ? "bg-[#eef6eb]" : ""}`}
+                >
+                  <span>Week {week.week}</span>
+                  {reported && <span title="Storting gemeld" className="rounded bg-[#e0efdc] px-1.5 py-0.5 text-xs font-black">S</span>}
+                  <span className="ml-auto text-[0.6rem] font-normal text-[#71806d]">{week.year}</span>
+                </button>;
+              })}
+            </div>
+          </details>
 
           <label className="grid min-w-0 gap-0.5 text-[0.54rem] font-black uppercase tracking-[0.08em] text-[#766b5f]">
             Locatie
