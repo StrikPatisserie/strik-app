@@ -53,8 +53,9 @@ function categoryFromPath(path: string, name = ""): PriceCardCategory {
   if (/petit[\s_-]?four|macaron/.test(normalized)) return "petit_fours";
   if (/hartig|quiche|saucij|worstenbrood|kaasstengel/.test(normalized)) return "hartig";
   if (/brood|baguette|pistolet|bolletjes?|croissant|krentenbol/.test(normalized)) return "brood";
+  if (/slof|schnitt/.test(normalized)) return "sloff_schnitt";
   if (/chocol|bonbon|praline|truffel|chocoladeletter/.test(normalized)) return "chocolade";
-  if (/taart|slof|vlaai/.test(normalized)) return "taart";
+  if (/taart|vlaai/.test(normalized)) return "taart";
   if (/gebak|tompouce|moorkop|soes/.test(normalized)) return "gebak";
   if (/koek|cake|brownie|speculaas|stol|krans|zout|muffin|cupcake/.test(normalized)) {
     return "koek_cake_zout";

@@ -24,6 +24,7 @@ const CATEGORY_LABELS: Record<PriceCardCategory, string> = {
   hartig: "Hartig",
   chocolade: "Chocolade",
   taart: "Taart",
+  sloff_schnitt: "Sloff & Schnitt",
   gebak: "Gebak",
   koek_cake_zout: "Koek/cake/zout",
   petit_fours: "Petit fours",

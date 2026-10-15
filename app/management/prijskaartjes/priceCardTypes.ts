@@ -3,6 +3,7 @@ export const PRICE_CARD_CATEGORIES = [
   "hartig",
   "chocolade",
   "taart",
+  "sloff_schnitt",
   "gebak",
   "koek_cake_zout",
   "petit_fours",
@@ -158,6 +159,7 @@ export function normalizePriceCardCategory(
   const hint = productHint.toLowerCase();
   if (/brood|baguette|pistolet|bolletjes?|croissant|krentenbol/.test(hint)) return "brood";
   if (legacyCategory === "sint" || legacyCategory === "kerst") {
+    if (/slof|schnitt/.test(hint)) return "sloff_schnitt";
     if (/chocol|bonbon|praline|truffel|letter/.test(hint)) return "chocolade";
     if (/speculaas|koek|cake|brownie|stol|krans/.test(hint)) return "koek_cake_zout";
     if (/petit|macaron/.test(hint)) return "petit_fours";

@@ -70,8 +70,9 @@ function categoryFromRecipe(recipe: Recipe): PriceCardCategory {
   if (/petit four|petit gateau|macaron/.test(value)) return "petit_fours";
   if (/hartig|quiche|saucij|worstenbrood|kaasstengel/.test(value)) return "hartig";
   if (/brood|baguette|pistolet|bolletje|croissant|krentenbol/.test(value)) return "brood";
+  if (/slof|schnitt/.test(value)) return "sloff_schnitt";
   if (/chocol|bonbon|praline|truffel|chocoladeletter/.test(value)) return "chocolade";
-  if (/taart|slof|vlaai/.test(value)) return "taart";
+  if (/taart|vlaai/.test(value)) return "taart";
   if (/gebak|tompouce|moorkop|soes|gateau/.test(value)) return "gebak";
   if (/koek|cake|brownie|speculaas|stol|krans|zout|muffin|cupcake/.test(value)) {
     return "koek_cake_zout";
