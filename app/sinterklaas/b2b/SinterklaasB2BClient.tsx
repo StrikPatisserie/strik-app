@@ -10,7 +10,7 @@ import {
 } from "../sinterklaasApi";
 import type { SinterklaasB2BOrder } from "../types";
 import type { B2BLetterLine } from "../types";
-import { B2B_LETTER_EXCEPTIONS, B2B_SPUIT_LETTERS, B2B_VORM_LETTERS, b2bLetterLineLabel, b2bLetterTotal, newB2BLetterLine } from "../b2bLetterLines";
+import { B2B_LETTER_EXCEPTIONS, B2B_SPUIT_LETTERS, B2B_VORM_LETTERS, b2bLetterLineLabel, b2bLetterTotal } from "../b2bLetterLines";
 import B2BLetterLineBadges from "../B2BLetterLineBadges";
 import {
   defaultProductChoice,
@@ -40,6 +40,20 @@ type B2BProductLine = {
   manualPrice: boolean;
   withLogo: boolean;
 };
+
+type LetterDraft = Omit<B2BLetterLine, "chocolate" | "style" | "size"> & {
+  chocolate: B2BLetterLine["chocolate"] | "";
+  style: B2BLetterLine["style"] | "";
+  size: B2BLetterLine["size"] | "";
+};
+
+function emptyLetterDraft(): LetterDraft {
+  return { id: "", letter: "", chocolate: "", style: "", size: "", quantity: 0, exceptions: [] };
+}
+
+function emptyProductDraft(): B2BProductLine {
+  return { id: "", productId: "", choice: "__unset__", description: "", quantity: 0, unitPriceEx: "", manualPrice: false, withLogo: false };
+}
 
 type B2BFormState = {
   customerName: string;
@@ -818,8 +832,8 @@ function B2BOrderForm({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [manualTotal, setManualTotal] = useState(() => usesManualTotal(initialOrder));
-  const [productDraft, setProductDraft] = useState<B2BProductLine>(() => newProductLine());
-  const [letterDraft, setLetterDraft] = useState<B2BLetterLine>(() => newB2BLetterLine());
+  const [productDraft, setProductDraft] = useState<B2BProductLine>(emptyProductDraft);
+  const [letterDraft, setLetterDraft] = useState<LetterDraft>(emptyLetterDraft);
   const [addFeedback, setAddFeedback] = useState("");
 
   const draftKey = `strik-b2b-order-draft-v1-${initialOrder?.id || "new"}`;
@@ -834,8 +848,8 @@ function B2BOrderForm({
       if (draft?.form && typeof draft.form.customerName === "string" && Array.isArray(draft.form.productLines) && Array.isArray(draft.form.letterLines)) {
         setForm({ ...formStateFromOrder(initialOrder), ...draft.form });
         setManualTotal(Boolean(draft.manualTotal));
-        if (draft.productDraft) setProductDraft(draft.productDraft);
-        if (draft.letterDraft) setLetterDraft(draft.letterDraft);
+        if (draft.selectionVersion === 2 && draft.productDraft) setProductDraft(draft.productDraft);
+        if (draft.selectionVersion === 2 && draft.letterDraft) setLetterDraft(draft.letterDraft);
         setDraftNotice("Je niet-opgeslagen invoer is teruggezet. Controleer deze en druk op Opslaan.");
       }
     } catch {
@@ -847,7 +861,7 @@ function B2BOrderForm({
   useEffect(() => {
     if (!draftReady) return;
     try {
-      sessionStorage.setItem(draftKey, JSON.stringify({ form, manualTotal, productDraft, letterDraft }));
+      sessionStorage.setItem(draftKey, JSON.stringify({ form, manualTotal, productDraft, letterDraft, selectionVersion: 2 }));
     } catch {
       setDraftNotice("Dit tabblad kan geen reserveconcept bewaren. Houd het formulier open totdat opslaan is gelukt.");
     }
@@ -909,12 +923,30 @@ function B2BOrderForm({
       const next = { ...current, ...patch };
       const product = catalogProduct(next.productId);
       if (product && !productSupportsLogo(product, next.choice)) next.withLogo = false;
+      if (!product || !choicesForProduct(product).includes(next.choice)) return { ...next, unitPriceEx: next.manualPrice ? next.unitPriceEx : "" };
       return repriceProductLines([next])[0];
     });
     setAddFeedback("");
   }
 
   function addProductToOrder() {
+    const product = catalogProduct(productDraft.productId);
+    if (!productDraft.productId) {
+      setAddFeedback("Kies eerst een product.");
+      return;
+    }
+    if (product && !choicesForProduct(product).includes(productDraft.choice)) {
+      setAddFeedback("Kies eerst een variant.");
+      return;
+    }
+    if (!Number.isInteger(productDraft.quantity) || productDraft.quantity < 1 || productDraft.quantity > 10000) {
+      setAddFeedback("Vul een aantal tussen 1 en 10.000 in.");
+      return;
+    }
+    if (!productDraft.unitPriceEx.trim() || !Number.isFinite(Number(productDraft.unitPriceEx.replace(",", "."))) || Number(productDraft.unitPriceEx.replace(",", ".")) < 0) {
+      setAddFeedback("Vul een geldige prijs in.");
+      return;
+    }
     const description = lineDescription(productDraft);
     if (!description) {
       setAddFeedback("Vul eerst een omschrijving in.");
@@ -943,15 +975,15 @@ function B2BOrderForm({
       return { ...current, productLines: repriceProductLines(productLines) };
     });
     setAddFeedback(`Toegevoegd: ${lineToAdd.quantity}× ${description}`);
-    setProductDraft(newProductLine(productDraft.productId));
+    setProductDraft(emptyProductDraft());
   }
 
-  function updateLetterDraft(patch: Partial<B2BLetterLine>) {
+  function updateLetterDraft(patch: Partial<LetterDraft>) {
     setLetterDraft((current) => {
       const next = { ...current, ...patch };
-      if (next.style === "vorm") {
-        next.letter = "S";
-        next.size = "groot";
+      if (patch.style !== undefined && patch.style !== current.style) {
+        if (next.style === "vorm" && next.letter !== "S") next.letter = "";
+        if (next.style === "vorm" && next.size !== "groot") next.size = "";
       }
       return next;
     });
@@ -959,12 +991,23 @@ function B2BOrderForm({
   }
 
   function addLetterToOrder() {
+    const { chocolate, style, size } = letterDraft;
+    if (!chocolate || !style || !size || !(style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).includes(letterDraft.letter)) {
+      setAddFeedback("Kies eerst letter, smaak, soort en formaat.");
+      return;
+    }
+    if (!Number.isInteger(letterDraft.quantity) || letterDraft.quantity < 1 || letterDraft.quantity > 10000) {
+      setAddFeedback("Vul een aantal tussen 1 en 10.000 in.");
+      return;
+    }
     const lineToAdd: B2BLetterLine = {
       ...letterDraft,
+      chocolate,
+      style,
+      size,
       id: `b2b-letter-${crypto.randomUUID()}`,
       letter: letterDraft.style === "vorm" ? "S" : letterDraft.letter,
-      size: letterDraft.style === "vorm" ? "groot" : letterDraft.size,
-      quantity: Math.max(1, Math.min(10000, letterDraft.quantity || 1)),
+      quantity: letterDraft.quantity,
     };
     setForm((current) => {
       const matchingIndex = current.letterLines.findIndex((line) =>
@@ -986,7 +1029,7 @@ function B2BOrderForm({
       };
     });
     setAddFeedback(`Toegevoegd: ${b2bLetterLineLabel(lineToAdd)}`);
-    setLetterDraft({ ...lineToAdd, id: `b2b-letter-${crypto.randomUUID()}`, quantity: 1, exceptions: [] });
+    setLetterDraft(emptyLetterDraft());
   }
 
   const calculatedTotalEx = productLinesTotal(form.productLines);
@@ -1326,31 +1369,32 @@ function B2BOrderForm({
           <div className="grid grid-cols-2 gap-2 bg-white p-3 sm:grid-cols-3 xl:grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] xl:items-end xl:gap-0 xl:p-0">
             <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
               <span className="xl:hidden">Letter</span>
-              <select aria-label="Letter" value={letterDraft.style === "vorm" ? "S" : letterDraft.letter} disabled={letterDraft.style === "vorm"} onChange={(event) => updateLetterDraft({ letter: event.target.value })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-semibold outline-none disabled:text-[#8b8278] xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
+              <select aria-label="Letter" value={letterDraft.letter} onChange={(event) => updateLetterDraft({ letter: event.target.value })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-semibold outline-none disabled:text-[#8b8278] xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
+                <option value="" disabled>Letter</option>
                 {(letterDraft.style === "vorm" ? B2B_VORM_LETTERS : B2B_SPUIT_LETTERS).map((letter) => <option key={letter} value={letter}>{letter}</option>)}
               </select>
             </label>
             <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
               <span className="xl:hidden">Chocolade</span>
               <select aria-label="Chocolade" value={letterDraft.chocolate} onChange={(event) => updateLetterDraft({ chocolate: event.target.value as B2BLetterLine["chocolate"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
-                <option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option>
+                <option value="" disabled>Smaak</option><option value="melk">Melk</option><option value="puur">Puur</option><option value="wit">Wit</option>
               </select>
             </label>
             <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
               <span className="xl:hidden">Soort</span>
               <select aria-label="Soort" value={letterDraft.style} onChange={(event) => updateLetterDraft({ style: event.target.value as B2BLetterLine["style"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
-                <option value="spuit">Spuit</option><option value="vorm">Vorm (S)</option>
+                <option value="" disabled>Soort</option><option value="spuit">Spuit</option><option value="vorm">Vorm (S)</option>
               </select>
             </label>
             <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
               <span className="xl:hidden">Formaat</span>
-              <select aria-label="Formaat" value={letterDraft.size} disabled={letterDraft.style === "vorm"} onChange={(event) => updateLetterDraft({ size: event.target.value as B2BLetterLine["size"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none disabled:text-[#8b8278] xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
-                <option value="groot">Groot</option><option value="klein">Klein</option>
+              <select aria-label="Formaat" value={letterDraft.size} onChange={(event) => updateLetterDraft({ size: event.target.value as B2BLetterLine["size"] })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 !text-sm font-medium outline-none disabled:text-[#8b8278] xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent">
+                <option value="" disabled>Formaat</option><option value="groot">Groot</option>{letterDraft.style !== "vorm" && <option value="klein">Klein</option>}
               </select>
             </label>
             <label className="grid gap-1 text-[0.65rem] font-semibold text-[#6b645b] xl:block">
               <span className="xl:hidden">Aantal</span>
-              <input data-order-draft aria-label="Aantal" type="number" min="1" max="10000" value={letterDraft.quantity} onChange={(event) => updateLetterDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 text-right !text-sm font-semibold outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent" />
+              <input data-order-draft aria-label="Aantal" type="number" min="1" max="10000" placeholder="Aantal" value={letterDraft.quantity || ""} onChange={(event) => updateLetterDraft({ quantity: Number(event.target.value) })} className="!h-10 !w-full !min-w-0 !border-[#c9d8c6] !bg-white !px-2 !py-0 text-right !text-sm font-semibold outline-none xl:!h-9 xl:!rounded-none xl:!border-0 xl:!bg-transparent" />
             </label>
             <fieldset className="col-span-2 rounded-md border border-[#c9d8c6] px-2 py-2 sm:col-span-3 xl:col-span-1 xl:rounded-none xl:border-0 xl:px-2 xl:py-0">
               <legend className="px-1 text-[0.65rem] font-semibold text-[#6b645b] xl:hidden">Vrij van</legend>
@@ -1365,9 +1409,9 @@ function B2BOrderForm({
 
           <div className="divide-y divide-[#e2e9df] border-t border-[#dbe6d8]">
             {form.letterLines.map((line) => (
-              <div key={line.id} className="grid grid-cols-[minmax(0,1fr)_5rem_auto] items-center gap-2 px-3 py-2 text-xs xl:grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] xl:gap-0 xl:px-0">
+              <div key={line.id} className="grid bg-[#eeefec] text-[#555b52] grid-cols-[minmax(0,1fr)_5rem_auto] items-center gap-2 px-3 py-2 text-xs xl:grid-cols-[4.5rem_8rem_7rem_6rem_5rem_minmax(18rem,1fr)_8rem] xl:gap-0 xl:px-0">
                 <span className="min-w-0 font-semibold xl:px-2">
-                  {line.letter}
+                  {line.letter}<span className="ml-1 text-[0.52rem] font-semibold text-[#697563]">✓ Toegevoegd</span>
                   <span className="ml-1 font-medium capitalize text-[#6b645b] xl:hidden">· {line.chocolate} · {line.style} · {line.size}</span>
                   {line.exceptions.length > 0 && <span className="mt-0.5 block truncate font-medium text-[#705000] xl:hidden">Vrij van: {line.exceptions.join(", ")}</span>}
                 </span>
@@ -1402,15 +1446,16 @@ function B2BOrderForm({
                 const nextProduct = catalogProduct(productId);
                 updateProductDraft({
                   productId,
-                  choice: nextProduct ? defaultProductChoice(nextProduct) : "",
+                  choice: "__unset__",
                   description: nextProduct?.name || "",
-                  unitPriceEx: nextProduct ? "0.00" : "0.00",
+                  unitPriceEx: "",
                   manualPrice: !nextProduct,
                   withLogo: false,
                 });
               }}
               className="h-10 min-w-0 border border-[#d0b96e] bg-white px-2 text-sm font-semibold normal-case tracking-normal text-[#1a1815]"
             >
+              <option value="" disabled>Product</option>
               {MANUAL_PRODUCT_CATALOG.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               <option value={CUSTOM_PRODUCT_ID}>Anders / niet in folder</option>
             </select>
@@ -1424,7 +1469,8 @@ function B2BOrderForm({
           ) : (
             <label className="col-span-2 grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b] sm:col-span-1">
               Variant
-              <select value={productDraft.choice} onChange={(event) => updateProductDraft({ choice: event.target.value })} className="h-10 min-w-0 border border-[#d0b96e] bg-white px-2 text-sm font-medium normal-case tracking-normal text-[#1a1815]">
+              <select disabled={!productDraft.productId} value={productDraft.choice} onChange={(event) => updateProductDraft({ choice: event.target.value })} className="h-10 min-w-0 border border-[#d0b96e] bg-white px-2 text-sm font-medium normal-case tracking-normal text-[#1a1815]">
+                <option value="__unset__" disabled>Variant</option>
                 {draftChoices.map((choice) => <option key={choice} value={choice}>{internalChoiceLabel(draftProduct!, choice)}</option>)}
               </select>
             </label>
@@ -1432,11 +1478,11 @@ function B2BOrderForm({
 
           <label className="grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
             Aantal
-            <input data-order-draft type="number" min="1" max="10000" value={productDraft.quantity} onChange={(event) => updateProductDraft({ quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
+            <input data-order-draft type="number" min="1" max="10000" placeholder="Aantal" value={productDraft.quantity || ""} onChange={(event) => updateProductDraft({ quantity: Number(event.target.value) })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
           </label>
           <label className="grid gap-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
             Prijs p.s. ex
-            <input data-order-draft type="number" min="0" step="0.01" value={productDraft.unitPriceEx} onChange={(event) => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
+            <input data-order-draft type="number" min="0" step="0.01" placeholder="Prijs" value={productDraft.unitPriceEx} onChange={(event) => updateProductDraft({ unitPriceEx: event.target.value, manualPrice: true })} className="h-10 border border-[#d0b96e] px-2 text-right text-sm font-semibold" />
           </label>
           <label className={`flex h-10 items-center gap-2 self-end whitespace-nowrap text-xs font-bold ${draftProduct && productSupportsLogo(draftProduct, productDraft.choice) ? "" : "invisible"}`}>
             <input className="h-4 w-4" type="checkbox" checked={productDraft.withLogo} onChange={(event) => updateProductDraft({ withLogo: event.target.checked })} /> Logo
@@ -1449,9 +1495,9 @@ function B2BOrderForm({
             const product = catalogProduct(line.productId);
             const isLetterProduct = line.productId === "chocoladeletter" || line.productId === "chocolade-vormletter";
             return (
-              <div key={line.id} className="grid grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_5.5rem_2rem] items-center gap-2 px-3 py-2">
+              <div key={line.id} className="grid bg-[#eeefec] text-[#555b52] grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_5.5rem_2rem] items-center gap-2 px-3 py-2">
                 <div className="min-w-0 text-xs font-bold">
-                  <span className="font-semibold">{lineDescription(line)}</span>
+                  <span className="font-semibold">{lineDescription(line)}</span><span className="ml-2 text-[0.6rem] font-semibold text-[#697563]">✓ Toegevoegd</span>
                   {isLetterProduct && <span className="ml-1 text-[0.68rem] text-[#6b645b]">via letterregels</span>}
                   {product && productSupportsLogo(product, line.choice) && !isLetterProduct && <label className="ml-2 inline-flex items-center gap-1 text-[0.68rem]"><input className="h-4 w-4" type="checkbox" checked={line.withLogo} onChange={(event) => updateProductLine(line.id, { withLogo: event.target.checked })} />Logo</label>}
                 </div>
@@ -1474,10 +1520,6 @@ function B2BOrderForm({
 
         </details>
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#d0b96e] bg-[#f3dfa2] px-3 py-2">
-          <details className="min-w-[14rem] flex-1 text-xs">
-            <summary className="cursor-pointer font-semibold text-[#6b645b]">Aanvullende orderafspraken{form.orderText.trim() ? " · ingevuld" : ""}</summary>
-            <textarea value={form.orderText} onChange={(event) => setField("orderText", event.target.value)} placeholder="Alleen wat niet al in de productregels staat" rows={3} className="mt-2 min-h-20 w-full border border-[#d0b96e] bg-white px-2 py-2 text-sm font-medium text-[#1a1815]" />
-          </details>
           <label className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6b645b]">
             Totaal ex btw
             <input value={displayedTotalEx} onChange={(event) => { setManualTotal(true); setField("totalExVat", event.target.value); }} placeholder="0,00" className="h-10 w-28 border border-[#d0b96e] bg-white px-2 text-right text-sm font-semibold normal-case tracking-normal text-[#1a1815]" />
@@ -1492,6 +1534,11 @@ function B2BOrderForm({
         </p>
       )}
       </section>
+
+      <details open={Boolean(form.orderText.trim()) || undefined} className="rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] xl:col-start-2">
+        <summary className="cursor-pointer rounded-xl bg-[#e5e0d9] px-3 py-2.5 text-sm font-semibold text-[#4d463d]">Aanvullende orderafspraken{form.orderText.trim() ? " · ingevuld" : ""}</summary>
+        <textarea value={form.orderText} onChange={(event) => setField("orderText", event.target.value)} placeholder="Aanvullende afspraken bij deze bestelling" rows={3} className="min-h-20 w-full rounded-b-xl border-t border-[#d8d2ca] bg-white px-3 py-2 text-sm font-medium text-[#1a1815]" />
+      </details>
 
       <details className="overflow-hidden rounded-xl border border-[#d8d2ca] bg-[#f3f0ec] xl:col-start-1 xl:row-start-2">
         <summary className="cursor-pointer bg-[#e5e0d9] px-3 py-2.5 text-sm font-semibold text-[#4d463d]">Extra gegevens{extraDataCount ? ` · ${extraDataCount} ingevuld` : ""}</summary>
