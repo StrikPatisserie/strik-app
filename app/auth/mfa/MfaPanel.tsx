@@ -34,7 +34,8 @@ export default function MfaPanel({ next }: { next: string }) {
         const removed = await auth.mfa.unenroll({ factorId: factor.id });
         if (removed.error) throw removed.error;
       }
-      const result = await auth.mfa.enroll({ factorType: "totp", friendlyName: "Strik management", issuer: "Strik Team app" });
+      // Authy uses the issuer as its logo search term; use the actual business name.
+      const result = await auth.mfa.enroll({ factorType: "totp", friendlyName: "Strik management", issuer: "Strik Patisserie" });
       if (result.error) throw result.error;
       setFactorId(result.data.id);
       const value = result.data.totp.qr_code;
