@@ -1,3 +1,5 @@
+import { getCurrentProfile } from "@/app/lib/auth/session";
+import { hasFullAccess } from "@/app/lib/auth/access";
 import {
   getTamigoStatusCode,
   getWeekLaborCostSchedule,
@@ -28,6 +30,7 @@ function getErrorMessage(error: unknown, status: number) {
 }
 
 export async function GET(request: Request) {
+  if (!hasFullAccess(await getCurrentProfile())) return Response.json({ message: "Geen toegang." }, { status: 403, headers: { "Cache-Control": "no-store" } });
   try {
     return Response.json(await getWeekLaborCostSchedule(getWeekOffset(request)), {
       headers: {

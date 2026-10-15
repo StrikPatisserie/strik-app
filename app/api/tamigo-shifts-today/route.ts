@@ -1,3 +1,4 @@
+import { getCurrentProfile } from "@/app/lib/auth/session";
 import {
   getTamigoStatusCode,
   getTodayStaffSchedule,
@@ -19,6 +20,7 @@ function getErrorMessage(error: unknown, status: number) {
 }
 
 export async function GET() {
+  if (!(await getCurrentProfile())?.active) return Response.json({ message: "Niet ingelogd." }, { status: 401, headers: { "Cache-Control": "no-store" } });
   try {
     return Response.json(await getTodayStaffSchedule(), {
       headers: {

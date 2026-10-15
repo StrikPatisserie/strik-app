@@ -1,3 +1,5 @@
+import { getCurrentProfile } from "@/app/lib/auth/session";
+import { hasFullAccess } from "@/app/lib/auth/access";
 import {
   getPersonnelAgenda,
   getTamigoStatusCode,
@@ -37,6 +39,11 @@ function getErrorMessage(error: unknown) {
 }
 
 export async function GET(request: Request) {
+  const profile = await getCurrentProfile();
+  if (!profile?.active) return Response.json({ message: "Niet ingelogd." }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  if ((getView(request) === "management" || getMode(request) === "connection") && !hasFullAccess(profile)) {
+    return Response.json({ message: "Geen toegang." }, { status: 403, headers: { "Cache-Control": "no-store" } });
+  }
   try {
     if (getMode(request) === "connection") {
       return Response.json(await testTamigoEmployeeConnection());

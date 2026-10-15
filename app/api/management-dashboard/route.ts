@@ -1,3 +1,5 @@
+import { getCurrentProfile } from "@/app/lib/auth/session";
+import { hasFullAccess } from "@/app/lib/auth/access";
 import { NextResponse } from "next/server";
 import {
   getTamigoStatusCode,
@@ -453,6 +455,7 @@ function sumLaborForShop(
 }
 
 export async function GET(request: Request) {
+  if (!hasFullAccess(await getCurrentProfile())) return Response.json({ message: "Geen toegang." }, { status: 403, headers: { "Cache-Control": "no-store" } });
   const now = new Date();
   const url = new URL(request.url);
   const period = getPeriod(url);

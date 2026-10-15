@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { TeamAgendaEvent } from "./strik-agenda/teamAgendaApi";
 import {
   formatJubileeYears,
