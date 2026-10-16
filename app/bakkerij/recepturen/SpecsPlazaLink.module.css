@@ -1,0 +1,49 @@
+.flow { display: grid; min-width: 0; gap: 8px; font-size: 12px; line-height: 1.4; }
+.flow h3, .flow h4 { font-size: 13px; line-height: 1.3; }
+.flow button:disabled { cursor: default; opacity: .5; }
+.flow button:focus-visible, .flow summary:focus-visible { outline: 2px solid #315e42; outline-offset: 2px; }
+.search { display: grid; grid-template-columns: 92px minmax(0,1fr) auto; gap: 6px; }
+.search input, .search select, .manual input:not([type=checkbox]), .manual textarea { min-width: 0; width: 100%; min-height: 34px; padding: 6px 8px; border: 1px solid #dfdfd3; border-radius: 8px; background: white; font-size: 12px; line-height: 1.35; }
+.search select { padding-right: 20px; }
+.primary, .secondary { display: inline-flex; min-height: 32px; align-items: center; justify-content: center; padding: 6px 10px; border-radius: 8px; font-size: 12px; line-height: 1.3; font-weight: 700; white-space: nowrap; }
+.primary { background: #315e42; color: white; }
+.secondary { border: 1px solid #dfdfd3; background: white; }
+.textButton { width: fit-content; min-height: 28px; color: #315e42; font-size: 11px; font-weight: 700; text-align: left; }
+.muted { font-size: 11px; line-height: 1.4; color: #82786e; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; }
+.test, .tag { border-radius: 5px; padding: 2px 6px; font-size: 10px; font-weight: 700; background: #edf3e8; color: #315e42; }
+.test { background: #fff4d8; color: #805d19; }
+.results { display: grid; min-width: 0; gap: 6px; }
+.resultList { overflow: hidden; border: 1px solid #e5e1d8; border-radius: 10px; }
+.resultList > li + li { border-top: 1px solid #e5e1d8; }
+.resultRow { display: flex; align-items: center; gap: 10px; padding: 8px; }
+.product { display: grid; min-width: 0; flex: 1; gap: 3px; text-align: left; }
+.product strong { font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.product:hover strong { color: #315e42; }
+.linked { display: grid; min-width: 0; gap: 4px; border: 1px solid #c3d3bc; border-radius: 10px; padding: 10px; background: #f6faf4; }
+.linked > strong { font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.linkedStatus { color: #315e42; font-size: 11px; font-weight: 700; }
+.specDetails { border-top: 1px solid #dce5d6; padding-top: 4px; }
+.specDetails summary, .specBody summary, .manual > summary { min-height: 28px; align-content: center; cursor: pointer; font-size: 11px; font-weight: 700; }
+.preview { border-top: 1px solid #e5e1d8; padding: 8px; background: #f8faf5; }
+.specBody { display: grid; gap: 6px; padding: 4px 0; font-size: 11px; }
+.specBody ul { display: grid; gap: 3px; padding: 4px 0; }
+.specBody table { width: 100%; font-size: 11px; }
+.specBody th, .specBody td { padding: 4px 0; border-top: 1px solid #e5e1d8; }
+.specBody th { text-align: left; font-weight: 400; }
+.specBody td { padding-left: 8px; text-align: right; }
+.error { border-radius: 8px; padding: 8px; background: #fff1ed; color: #a43b2f; font-size: 12px; }
+.feedback { font-size: 11px; font-weight: 700; color: #315e42; }
+.editor { display: grid; min-width: 0; gap: 10px; }
+.manual { border-top: 1px solid #e5e1d8; padding-top: 4px; }
+.manual form { display: grid; gap: 10px; padding: 8px 0; }
+.manual label { display: grid; min-width: 0; gap: 4px; font-size: 11px; font-weight: 600; }
+.manual .checkbox { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.manual h3 { font-size: 12px; line-height: 1.3; }
+.manual textarea { min-height: 70px; }
+.grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.panel { min-width: 0; }
+.panel h3 { font-size: 18px; line-height: 1.25; }
+.panel h4 { font-size: 13px; line-height: 1.3; }
+@media(max-width:420px) { .search { grid-template-columns: 76px minmax(0,1fr) auto; gap: 4px; } .primary { padding-inline: 8px; } }
+@media(pointer:coarse) { .search input, .search select, .manual input:not([type=checkbox]), .manual textarea { font-size: 16px; } .primary, .secondary, .product, .specDetails summary, .manual > summary { min-height: 44px; } }

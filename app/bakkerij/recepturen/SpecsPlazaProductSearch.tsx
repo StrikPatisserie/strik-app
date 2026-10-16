@@ -1,163 +1,155 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type {
-  SpecsPlazaProduct,
-  SpecsPlazaProductResult,
-  SpecsPlazaSearchField,
-  SpecsPlazaSearchResult,
-} from "@/app/lib/specsplaza/types";
+import type { SpecsPlazaProduct, SpecsPlazaProductResult, SpecsPlazaSearchField, SpecsPlazaSearchResult } from "@/app/lib/specsplaza/types";
+import type { IngredientSpecification } from "./types";
+import styles from "./SpecsPlazaLink.module.css";
 
-const allergenStatuses = {
-  Absent: "Afwezig",
-  Present: "Aanwezig",
-  RiskCrossContamination: "Risico op kruisbesmetting",
-  Unknown: "Onbekend",
-  NotFilledIn: "Niet ingevuld",
-};
-const fieldClass = "min-h-9 w-full min-w-0 rounded-lg border border-[#e4ded5] bg-white px-2.5 py-2 text-xs";
+const allergenStatuses = { Absent: "Afwezig", Present: "Aanwezig", RiskCrossContamination: "Risico op kruisbesmetting", Unknown: "Onbekend", NotFilledIn: "Niet ingevuld" };
+type Link = IngredientSpecification["specsPlazaLink"];
 
-export default function SpecsPlazaProductSearch({ articleNumber }: Readonly<{ articleNumber: string }>) {
-  const [query, setQuery] = useState("");
+export default function SpecsPlazaProductSearch({ ingredientName, articleNumber, link, onLink }: Readonly<{
+  ingredientName: string;
+  articleNumber: string;
+  link?: Link;
+  onLink: (result: SpecsPlazaProductResult) => Promise<void>;
+}>) {
+  const [query, setQuery] = useState(ingredientName);
   const [field, setField] = useState<SpecsPlazaSearchField>("name");
+  const [changing, setChanging] = useState(!link);
   const [searched, setSearched] = useState<{ query: string; field: SpecsPlazaSearchField } | null>(null);
   const [result, setResult] = useState<SpecsPlazaSearchResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [selected, setSelected] = useState<SpecsPlazaProduct | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<SpecsPlazaProductResult | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const searchRequest = useRef<AbortController | null>(null);
   const detailRequest = useRef<AbortController | null>(null);
+  const saving = useRef(false);
+  const mounted = useRef(true);
 
-  useEffect(() => () => {
-    searchRequest.current?.abort();
-    detailRequest.current?.abort();
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; searchRequest.current?.abort(); detailRequest.current?.abort(); };
   }, []);
 
   async function search(append = false, override?: { query: string; field: SpecsPlazaSearchField }) {
+    if (saving.current) return;
     const terms = override || (append ? searched : { query: query.trim(), field });
-    if (!terms || terms.query.trim().length < 2) {
-      setError("Vul minimaal twee tekens in, bijvoorbeeld framboos puree.");
-      return;
-    }
+    if (!terms || terms.query.trim().length < 2) { setError("Vul minimaal twee tekens in."); return; }
     searchRequest.current?.abort();
     const controller = new AbortController();
     searchRequest.current = controller;
-    setLoading(true);
-    setError("");
+    setLoading(true); setError(""); setFeedback("");
     if (!append) {
-      detailRequest.current?.abort();
-      setResult(null);
-      setSelected(null);
-      setDetail(null);
-      setDetailError("");
-      setDetailLoading(false);
-      setSearched(terms);
+      detailRequest.current?.abort(); setResult(null); setSelectedId(null); setDetail(null); setDetailError(""); setDetailLoading(false); setSearched(terms);
     }
     try {
       const params = new URLSearchParams({ q: terms.query, field: terms.field, skip: String(append ? result?.nextSkip || 0 : 0) });
       const response = await fetch(`/api/recepturen/specsplaza/search?${params}`, { signal: controller.signal });
       const data = await response.json() as SpecsPlazaSearchResult & { message?: string };
-      if (!response.ok) throw new Error(data.message || "Zoeken in SpecsPlaza is mislukt.");
-      if (controller.signal.aborted) return;
-      setResult((current) => append && current ? {
-        ...data,
-        products: [...new Map([...current.products, ...data.products].map((product) => [product.id, product])).values()],
-      } : data);
+      if (!response.ok) throw new Error(data.message || "Zoeken is mislukt. Probeer opnieuw.");
+      if (controller.signal.aborted || !mounted.current) return;
+      if (append && result && result.environment !== data.environment) throw new Error("De SpecsPlaza-omgeving is gewijzigd. Start een nieuwe zoekopdracht.");
+      setResult((current) => append && current ? { ...data, products: [...new Map([...current.products, ...data.products].map((product) => [product.id, product])).values()] } : data);
     } catch (cause) {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Zoeken in SpecsPlaza is mislukt.");
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
+      if (!controller.signal.aborted && mounted.current) setError(cause instanceof Error ? cause.message : "Zoeken is mislukt.");
+    } finally { if (!controller.signal.aborted && mounted.current) setLoading(false); }
+  }
+
+  async function fetchProduct(product: SpecsPlazaProduct, signal?: AbortSignal) {
+    const response = await fetch(`/api/recepturen/specsplaza/product?${new URLSearchParams({ id: product.id })}`, { signal });
+    const data = await response.json() as SpecsPlazaProductResult & { message?: string };
+    if (!response.ok) throw new Error(data.message || "De specificatie kon niet worden opgehaald.");
+    if (data.product.id !== product.id) throw new Error("De ontvangen specificatie hoort bij een ander product. Zoek opnieuw.");
+    if (result && result.environment !== data.environment) throw new Error("De SpecsPlaza-omgeving is gewijzigd. Zoek het product opnieuw.");
+    return data;
   }
 
   async function viewProduct(product: SpecsPlazaProduct) {
+    if (saving.current) return;
     detailRequest.current?.abort();
-    const controller = new AbortController();
-    detailRequest.current = controller;
-    setSelected(product);
-    setDetail(null);
-    setDetailError("");
-    setDetailLoading(true);
+    if (selectedId === product.id) { setSelectedId(null); return; }
+    const controller = new AbortController(); detailRequest.current = controller;
+    setSelectedId(product.id); setDetail(null); setDetailError(""); setDetailLoading(true);
     try {
-      const params = new URLSearchParams({ id: product.id });
-      const response = await fetch(`/api/recepturen/specsplaza/product?${params}`, { signal: controller.signal });
-      const data = await response.json() as SpecsPlazaProductResult & { message?: string };
-      if (!response.ok) throw new Error(data.message || "De specificatie kon niet worden opgehaald.");
-      if (!controller.signal.aborted) setDetail(data);
+      const data = await fetchProduct(product, controller.signal);
+      if (!controller.signal.aborted && mounted.current) setDetail(data);
     } catch (cause) {
-      if (!controller.signal.aborted) setDetailError(cause instanceof Error ? cause.message : "De specificatie kon niet worden opgehaald.");
-    } finally {
-      if (!controller.signal.aborted) setDetailLoading(false);
-    }
+      if (!controller.signal.aborted && mounted.current) setDetailError(cause instanceof Error ? cause.message : "Ophalen is mislukt.");
+    } finally { if (!controller.signal.aborted && mounted.current) setDetailLoading(false); }
   }
 
-  const preview = selected ? <section className="grid gap-2 rounded-xl border border-[#c3d3bc] bg-[#f6faf4] p-3" aria-label={`Specificatie van ${selected.name}`} aria-busy={detailLoading}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0"><h4 className="break-words text-xs font-extrabold">{selected.name}</h4><p className="mt-1 break-words text-[0.7rem] text-[#82786e]">{[selected.supplier, selected.articleNumber].filter(Boolean).join(" · ")}</p></div>
-          <button type="button" aria-label="Specificatie sluiten" onClick={() => { detailRequest.current?.abort(); setSelected(null); setDetail(null); setDetailLoading(false); }} className="min-h-8 min-w-8 shrink-0 text-lg text-[#82786e]">×</button>
-        </div>
-        {detailLoading && <p role="status" className="text-xs">Specificatie ophalen…</p>}
-        {detailError && <p role="alert" className="text-xs font-bold text-[#a43b2f]">{detailError}</p>}
-        {detail && <>
-          <p className="text-[0.7rem] font-bold text-[#805d19]">{detail.environment === "test" ? "Testgegevens" : "Leveranciersgegevens"} · er wordt niets aan jullie grondstof gewijzigd.</p>
-          {!detail.sample ? <p className="text-xs">Er is voor dit product geen specificatieversie beschikbaar.</p> : <>
-            <p className="text-[0.7rem] text-[#82786e]">Versie {detail.sample.versionNumber ?? "onbekend"}{detail.sample.validationDate ? ` · gevalideerd ${new Date(detail.sample.validationDate).toLocaleDateString("nl-NL")}` : ""}</p>
-            <details open><summary className="min-h-8 cursor-pointer content-center text-xs font-extrabold">Allergenen volgens leverancier</summary>
-              {detail.sample.allergens.length ? <ul className="grid gap-1 py-1 text-xs">{detail.sample.allergens.map((item, index) => <li key={index}>{item.name}: <strong>{allergenStatuses[item.status]}</strong></li>)}</ul> : <p className="text-xs">Geen allergeengegevens ontvangen.</p>}
-            </details>
-            <details><summary className="min-h-8 cursor-pointer content-center text-xs font-extrabold">Voedingswaarden volgens leverancier</summary>
-              {detail.sample.nutritionalValues.length ? <table className="w-full text-xs"><tbody>{detail.sample.nutritionalValues.map((item, index) => <tr key={index} className="border-b border-[#dbe4d6]"><th scope="row" className="py-1.5 text-left font-normal">{item.name}</th><td className="py-1.5 pl-2 text-right tabular-nums">{item.value === null ? "Onbekend" : item.value.toLocaleString("nl-NL")} {item.unit}</td></tr>)}</tbody></table> : <p className="text-xs">Geen voedingswaarden ontvangen.</p>}
-            </details>
-          </>}
-        </>}
-      </section> : null;
+  async function selectProduct(product: SpecsPlazaProduct) {
+    if (saving.current || loading) return;
+    saving.current = true; setSavingId(product.id); setError(""); setFeedback("");
+    try {
+      // Read the current version when linking, rather than saving an old preview.
+      const data = await fetchProduct(product);
+      await onLink(data);
+      if (mounted.current) {
+        setChanging(false); setResult(null); setSelectedId(null); setDetail(null);
+        setFeedback("Koppeling opgeslagen voor alle recepten met deze grondstof.");
+      }
+    } catch (cause) {
+      if (mounted.current) setError(`Niet gekoppeld: ${cause instanceof Error ? cause.message : "opslaan is mislukt. Probeer opnieuw."}`);
+    } finally { saving.current = false; if (mounted.current) setSavingId(null); }
+  }
 
-  return (
-    <section aria-label="Zoeken in SpecsPlaza" className="grid min-w-0 gap-3">
-      <div>
-        <h4 className="text-sm font-extrabold">Zoeken in SpecsPlaza</h4>
-        <p className="mt-1 text-xs leading-relaxed text-[#82786e]">Zoek in alle actieve producten die voor jullie account beschikbaar zijn.</p>
-      </div>
-      <form className="grid gap-2" onSubmit={(event) => { event.preventDefault(); void search(); }}>
-        <label className="grid gap-1 text-xs font-bold">Zoeken op
-          <select className={fieldClass} value={field} onChange={(event) => setField(event.target.value as SpecsPlazaSearchField)}>
-            <option value="name">Productnaam</option>
-            <option value="articleNumber">Artikelnummer</option>
-            <option value="supplierCompanyName">Leverancier</option>
-          </select>
-        </label>
-        <label className="grid gap-1 text-xs font-bold">Zoekterm
-          <input className={fieldClass} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Bijv. framboos puree" minLength={2} maxLength={120} required />
-        </label>
-        <button type="submit" disabled={loading} className="min-h-9 rounded-lg bg-[#315e42] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{loading ? "Zoeken…" : "Zoek in SpecsPlaza"}</button>
+  return <section className={styles.flow} aria-label="Koppelen aan SpecsPlaza" aria-busy={!!savingId}>
+    {link && <div className={styles.linked}>
+      <div className={styles.meta}><span className={styles.linkedStatus}>✓ Gekoppeld</span><span className={link.environment === "test" ? styles.test : styles.tag}>{link.environment === "test" ? "Test" : "Productie"}</span></div>
+      <strong>{link.product.name}</strong>
+      <p className={styles.muted}>{[link.product.supplier, link.product.articleNumber].filter(Boolean).join(" · ")}</p>
+      <div className={styles.meta}><span className={styles.muted}>Voor alle recepten met deze grondstof</span><button type="button" className={styles.textButton} disabled={!!savingId} onClick={() => { setChanging(!changing); setError(""); setFeedback(""); }}>{changing ? "Annuleren" : "Wijzigen"}</button></div>
+      <details className={styles.specDetails}><summary>Specificatie bekijken</summary><SpecificationDetails result={link} /></details>
+    </div>}
+
+    {(!link || changing) && <>
+      <form className={styles.search} onSubmit={(event) => { event.preventDefault(); void search(); }}>
+        <select aria-label="Zoeken op" value={field} disabled={!!savingId || loading} onChange={(event) => setField(event.target.value as SpecsPlazaSearchField)}>
+          <option value="name">Naam</option><option value="articleNumber">Artikel</option><option value="supplierCompanyName">Leverancier</option>
+        </select>
+        <input aria-label="Zoek in SpecsPlaza" value={query} disabled={!!savingId} onChange={(event) => setQuery(event.target.value)} placeholder="Zoek een product…" minLength={2} maxLength={120} required />
+        <button type="submit" className={styles.primary} disabled={loading || !!savingId}>{loading ? "Zoeken…" : "Zoek"}</button>
       </form>
-      {articleNumber && <button type="button" disabled={loading} onClick={() => {
-        const terms = { query: articleNumber, field: "articleNumber" as const };
-        setQuery(articleNumber); setField("articleNumber"); void search(false, terms);
-      }} className="min-h-8 w-fit text-left text-xs font-bold text-[#315e42] underline underline-offset-2 disabled:opacity-50">Zoek op artikelnummer {articleNumber}</button>}
-      {error && <p role="alert" className="rounded-lg bg-[#fff1ed] p-2.5 text-xs font-bold text-[#a43b2f]">{error}</p>}
-      {result && <div className="grid gap-2" aria-busy={loading}>
-        <p className={`rounded-lg px-2.5 py-2 text-xs font-bold ${result.environment === "test" ? "bg-[#fff4d8] text-[#805d19]" : "bg-[#edf3e8] text-[#315e42]"}`}>
-          {result.environment === "test" ? "Testomgeving · alleen bekijken" : "Productieomgeving · alleen bekijken"}
-        </p>
-        <p aria-live="polite" className="break-words text-xs text-[#82786e]">{result.products.length} resultaten getoond voor ‘{searched?.query}’.</p>
-        {!result.products.length && <p className="text-xs leading-relaxed text-[#75685f]">{result.hasMore ? "Nog geen overeenkomst in deze resultaten. Zoek verder met de knop hieronder." : "Geen overeenkomst gevonden. Probeer een kortere naam, een artikelnummer of de naam van de producent. Leveranciers moeten specificaties voor jullie account beschikbaar stellen."}</p>}
-        <ul className="divide-y divide-[#e5e1d8] rounded-lg border border-[#e5e1d8]">
-          {result.products.map((product) => <li key={product.id}>
-            <button type="button" aria-pressed={selected?.id === product.id} onClick={() => void viewProduct(product)} className={`grid min-h-12 w-full gap-0.5 px-2.5 py-2 text-left ${selected?.id === product.id ? "bg-[#edf3e8]" : "hover:bg-[#f6f8f2]"}`}>
-              <span className="break-words text-xs font-extrabold">{product.name}</span>
-              <span className="break-words text-[0.7rem] text-[#82786e]">{[product.supplier, product.articleNumber].filter(Boolean).join(" · ") || "Leveranciersgegevens niet ingevuld"}</span>
-              <span className="text-[0.7rem] font-bold text-[#315e42]">Specificatie bekijken ›</span>
-            </button>
-            {selected?.id === product.id && preview}
-          </li>)}
-        </ul>
-        {result.hasMore && <button type="button" disabled={loading} onClick={() => void search(true)} className="min-h-9 rounded-lg border border-[#e4ded5] px-3 py-2 text-xs font-bold disabled:opacity-50">{loading ? "Meer resultaten ophalen…" : result.products.length ? "Meer resultaten" : "Verder zoeken"}</button>}
+      {articleNumber && <button type="button" disabled={loading || !!savingId} className={styles.textButton} onClick={() => { const terms = { query: articleNumber, field: "articleNumber" as const }; setQuery(articleNumber); setField("articleNumber"); void search(false, terms); }}>Zoek artikel {articleNumber}</button>}
+      {result && <div className={styles.results} aria-busy={loading}>
+        <div className={styles.meta}><span className={styles.muted} aria-live="polite">{result.products.length} resultaten</span><span className={result.environment === "test" ? styles.test : styles.tag}>{result.environment === "test" ? "Test" : "Productie"}</span></div>
+        {!result.products.length && <p className={styles.muted}>{result.hasMore ? "Nog geen resultaat. Zoek verder hieronder." : "Geen resultaat. Probeer een kortere naam of het artikelnummer van de producent."}</p>}
+        <ul className={styles.resultList}>{result.products.map((product) => {
+          const alreadyLinked = link?.product.id === product.id && link.environment === result.environment;
+          return <li key={product.id}>
+            <div className={styles.resultRow}>
+              <button type="button" disabled={!!savingId} className={styles.product} aria-expanded={selectedId === product.id} aria-label={`Bekijk specificatie ${product.name}`} onClick={() => void viewProduct(product)}><strong>{product.name}</strong><span className={styles.muted}>{[product.supplier, product.articleNumber].filter(Boolean).join(" · ")}</span></button>
+              <button type="button" className={styles.primary} disabled={!!savingId || loading || alreadyLinked} aria-label={`${product.name} koppelen`} onClick={() => void selectProduct(product)}>{savingId === product.id ? "Opslaan…" : alreadyLinked ? "Gekoppeld" : "Koppelen"}</button>
+            </div>
+            {selectedId === product.id && <div className={styles.preview}>
+              {detailLoading && <p role="status">Specificatie ophalen…</p>}
+              {detailError && <p role="alert" className={styles.error}>{detailError}</p>}
+              {detail && <SpecificationDetails result={detail} />}
+            </div>}
+          </li>;
+        })}</ul>
+        {result.hasMore && <button type="button" className={styles.secondary} disabled={loading || !!savingId} onClick={() => void search(true)}>{loading ? "Zoeken…" : "Meer resultaten"}</button>}
       </div>}
+    </>}
+    {error && <p role="alert" className={styles.error}>{error}</p>}
+    {feedback && <p role="status" className={styles.feedback}>{feedback}</p>}
+  </section>;
+}
 
-    </section>
-  );
+function SpecificationDetails({ result }: { result: SpecsPlazaProductResult }) {
+  const sample = result.sample;
+  if (!sample) return <p className={styles.muted}>Geen specificatie beschikbaar.</p>;
+  return <div className={styles.specBody}>
+    <p className={styles.muted}>Versie {sample.versionNumber ?? "onbekend"}{sample.validationDate ? ` · ${new Date(sample.validationDate).toLocaleDateString("nl-NL")}` : ""}</p>
+    {result.environment === "test" && <p className={styles.muted}>Testgegevens · etikettering blijft concept.</p>}
+    <details><summary>Allergenen</summary>{sample.allergens.length ? <ul>{sample.allergens.map((item, index) => <li key={index}>{item.name}: <strong>{allergenStatuses[item.status]}</strong></li>)}</ul> : <p>Geen gegevens ontvangen.</p>}</details>
+    <details><summary>Voedingswaarden</summary>{sample.nutritionalValues.length ? <table><tbody>{sample.nutritionalValues.map((item, index) => <tr key={index}><th scope="row">{item.name}</th><td>{item.value === null ? "Onbekend" : item.value.toLocaleString("nl-NL")} {item.unit}</td></tr>)}</tbody></table> : <p>Geen gegevens ontvangen.</p>}</details>
+  </div>;
 }

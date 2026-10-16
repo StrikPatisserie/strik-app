@@ -1,4 +1,4 @@
-# SpecsPlaza: verbinding, zoeken en specificaties bekijken
+# SpecsPlaza: verbinding, zoeken en koppelen
 
 De verbindingstest staat ingeklapt bij Bakkerij → Beheer → Grondstoffen.
 Alleen actieve managers met de bestaande tweestapsverificatie kunnen de testroute aanroepen.
@@ -17,9 +17,26 @@ Productvoorbeelden tonen dezelfde gecontroleerde versie-, allergeen- en voedings
 - `GET /api/recepturen/specsplaza/product?id=...`
 
 Beide routes vereisen een actieve manager met de bestaande tweestapsverificatie.
-De gekozen test- of productieomgeving wordt zichtbaar bij de resultaten vermeld.
-Zoeken en bekijken slaan geen koppelingen, allergenen of voedingswaarden op in de bestaande grondstoffen.
-De eigen productspecificatie blijft onder een afzonderlijk onderdeel handmatig te bewerken.
+De gekozen test- of productieomgeving wordt als klein label bij de resultaten vermeld.
+De flow is grondstof → SpecsPlaza → zoeken → Koppelen. Het gekozen product wordt pas als gekoppeld getoond nadat de opslag dit heeft bevestigd.
+De uitgebreide specificatie en eigen handmatige gegevens staan standaard ingeklapt.
+
+## Opslag van een koppeling
+
+De koppeling staat één keer op de bestaande gedeelde grondstof, niet op elke receptregel.
+Alle recepten en halffabricaten die deze grondstof gebruiken, zien dezelfde koppeling.
+`IngredientSpecification.specsPlazaLink` bevat de omgeving, productidentiteit, leverancier, producentartikel, opgehaalde versie, datums en het leveranciersvoorbeeld met alle allergeenstatussen en voedingswaarden.
+`specsPlazaId` en `specificationVersion` blijven voor bestaande weergaven beschikbaar.
+
+De leveranciersgegevens zijn een afzonderlijke momentopname. Koppelen vervangt of bevestigt geen eigen gecontroleerde ingrediëntenverklaring, allergenen of voedingswaarden.
+Testkoppelingen blijven zichtbaar als Test en geven een controlepunt in de etikettering van elk betrokken recept.
+Onbekende waarden en kruisbesmettingsrisico's blijven in de momentopname onderscheiden. Bij een overstap naar productie moet de productidentiteit opnieuw worden gekozen en gecontroleerd.
+
+Opslaan leest eerst de actuele gedeelde opslag en wijzigt alleen de specificatie en eventueel handmatig bewerkte allergenen van de gekozen grondstof.
+Actuele prijzen, factuurgegevens, andere grondstoffen en receptverwijzingen blijven behouden.
+De functie weigert ontbrekende/dubbele grondstof-ID's en specificaties die sinds het openen zijn gewijzigd.
+Fouten bij ophalen of bewaren verschijnen bij de koppeling; de bestaande koppeling blijft dan staan.
+De bestaande managerautorisatie en tweestapsverificatie van `/api/recepturen` blijven van toepassing.
 
 ## Instellen in Vercel
 
@@ -52,10 +69,11 @@ Foutmeldingen tonen geen upstream response bodies, wachtwoorden of tokens.
 
 Allergeenstatussen aanwezig, afwezig, kruisbesmettingsrisico en onbekend blijven onderscheiden.
 Ontbrekende voedingswaarden worden niet als nul weergegeven.
-Dit voorbeeld is nog geen import of definitief etiket; de volgende stap is een gecontroleerde koppeling met een bestaande grondstof, inclusief specificatieversie en brongegevens.
+Een opgeslagen koppeling is nog geen gecontroleerde import of definitief etiket. De volgende stap is het gecontroleerd verwerken van volledige leveranciersverklaringen in de eigen etiketteringsgegevens.
 Testaccounts kunnen door FoodBase bij een verversing van de ontwikkelomgeving worden verwijderd; bestaande recepten blijven daarbij onafhankelijk opgeslagen.
 
 ## Validatie
 
 `node --test scripts/specsplaza.test.cjs` test met gesimuleerde antwoorden de verbinding, zoekfilters, samengestelde namen, paginering, invoervalidatie, credential-afscherming, managerautorisatie, productidentiteit en onbekende voedings-/allergeengegevens.
+`node --test scripts/specsplaza-link.test.cjs` controleert gedeelde opslag, versie/omgeving, behoud van bestaande gegevens, stale/dubbele ID's, autorisatie, fouten, bevestigde opslag en de compacte ingeklapte weergave.
 Een echte verbinding is pas bevestigd na een geslaagde test met het ontwikkelaccount.

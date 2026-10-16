@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from "react";
 import IngredientSpecificationEditor from "./IngredientSpecificationEditor";
 import IngredientsOverview from "./IngredientsOverview";
-import type { Ingredient, Recipe, RecipeUnit } from "./types";
+import type { Ingredient, IngredientSpecificationSaver, Recipe, RecipeUnit } from "./types";
 import {
   changeBadgeClass,
   formatDate,
@@ -42,6 +42,7 @@ export default function IngredientsList({
   ingredients,
   recipes,
   onUpdateIngredient,
+  onUpdateSpecification,
   onOpenImport,
   onDeleteIngredient,
   onMergeIngredient,
@@ -49,6 +50,7 @@ export default function IngredientsList({
   ingredients: Ingredient[];
   recipes: Recipe[];
   onUpdateIngredient: (ingredient: Ingredient) => void;
+  onUpdateSpecification: IngredientSpecificationSaver;
   onOpenImport: () => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
   onMergeIngredient: (sourceIngredient: Ingredient, targetIngredient: Ingredient) => void;
@@ -63,7 +65,7 @@ export default function IngredientsList({
         recipes={recipes}
         onEditIngredient={(ingredient) => setEditingIngredient(ingredient || createBlankIngredient())}
         onOpenImport={onOpenImport}
-        onUpdateIngredient={onUpdateIngredient}
+        onUpdateSpecification={onUpdateSpecification}
       />
       {editingIngredient && (
         <IngredientDetail
@@ -71,6 +73,11 @@ export default function IngredientsList({
           ingredient={editingIngredient}
           ingredients={ingredients}
           recipes={recipes}
+          onUpdateSpecification={async (updated, expected) => {
+            const stored = await onUpdateSpecification(updated, expected);
+            setEditingIngredient(stored);
+            return stored;
+          }}
           onUpdateIngredient={(ingredient) => {
             onUpdateIngredient(ingredient);
             setEditingIngredient(ingredient);
@@ -95,6 +102,7 @@ export function IngredientDetail({
   ingredients,
   recipes,
   onUpdateIngredient,
+  onUpdateSpecification,
   onMergeIngredient,
   onDeleteIngredient,
   onClose,
@@ -103,6 +111,7 @@ export function IngredientDetail({
   ingredients: Ingredient[];
   recipes: Recipe[];
   onUpdateIngredient: (ingredient: Ingredient) => void;
+  onUpdateSpecification: IngredientSpecificationSaver;
   onMergeIngredient: (
     sourceIngredient: Ingredient,
     targetIngredient: Ingredient
@@ -218,7 +227,7 @@ export function IngredientDetail({
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#2d2a26]/35 px-3 py-5 backdrop-blur-sm">
       <div className="mx-auto max-w-3xl border border-[#d9d2c9] bg-[#f4f0ea] p-3 shadow-2xl">
-        <IngredientSpecificationEditor key={ingredient.id} ingredient={ingredient} onSave={onUpdateIngredient} />
+        <IngredientSpecificationEditor key={ingredient.id} ingredient={ingredient} onSave={onUpdateSpecification} />
         <div className="sticky top-3 z-10 border border-[#d9d2c9] bg-white px-3 py-2 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

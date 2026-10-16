@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Ingredient, Recipe, RecipeLabeling } from "./types";
+import type { Ingredient, IngredientSpecificationSaver, Recipe, RecipeLabeling } from "./types";
 import { calculateLabel, nutritionFields } from "./labeling";
 import IngredientSpecificationEditor from "./IngredientSpecificationEditor";
 import styles from "./RecipeScreens.module.css";
@@ -11,7 +11,7 @@ export default function RecipeLabelPanel({ recipe, ingredients, recipes, onSave,
   ingredients: Ingredient[];
   recipes: Recipe[];
   onSave: (recipe: Recipe) => void;
-  onSaveIngredient?: (ingredient: Ingredient) => void;
+  onSaveIngredient?: IngredientSpecificationSaver;
 }) {
   const [draft, setDraft] = useState<RecipeLabeling>(recipe.labeling || {});
   const [weight, setWeight] = useState(String(draft.finalBatchWeightGrams || ""));
@@ -39,7 +39,7 @@ export default function RecipeLabelPanel({ recipe, ingredients, recipes, onSave,
           {result.usedIngredients.map((ingredient) => <details key={ingredient.id} className="py-1">
             <summary className="flex min-h-9 cursor-pointer items-center justify-between gap-3 text-xs">
               <span className="min-w-0"><strong className="block">{ingredient.name}</strong><span className="block text-[0.7rem] text-[#82786e]">{[ingredient.supplier, ingredient.supplierArticleNumber].filter(Boolean).join(" · ") || "Leveranciersgegevens aanvullen"}</span></span>
-              <span className={`shrink-0 text-[0.7rem] font-semibold ${ingredient.specification?.allergensConfirmed ? "text-[#315e42]" : "text-[#805d19]"}`}>{ingredient.specification?.allergensConfirmed ? "Gecontroleerd" : "Controleren"} ▸</span>
+              <span className={`shrink-0 text-[0.7rem] font-semibold ${ingredient.specification?.allergensConfirmed ? "text-[#315e42]" : "text-[#805d19]"}`}>{ingredient.specification?.specsPlazaLink ? ingredient.specification.specsPlazaLink.environment === "test" ? "Testkoppeling" : "Gekoppeld" : ingredient.specification?.allergensConfirmed ? "Gecontroleerd" : "Controleren"} ▸</span>
             </summary>
             <div className="py-2"><IngredientSpecificationEditor ingredient={ingredient} onSave={onSaveIngredient} embedded /></div>
           </details>)}

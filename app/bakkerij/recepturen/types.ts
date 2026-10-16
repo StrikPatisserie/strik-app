@@ -190,9 +190,11 @@ export type Recipe = {
   productionRequests?: ProductionRequest[];
 };
 
+export type IngredientSpecificationSaver = (updated: Ingredient, expected: Ingredient) => Promise<Ingredient>;
 export type NutritionKey = "energyKj" | "energyKcal" | "fat" | "saturates" | "carbohydrates" | "sugars" | "protein" | "salt";
 export type IngredientSpecification = {
   specsPlazaId?: string;
+  specsPlazaLink?: import("@/app/lib/specsplaza/types").SpecsPlazaProductResult & { linkedAt: string };
   specificationVersion?: string;
   ingredientsText?: string;
   allergensConfirmed?: boolean;

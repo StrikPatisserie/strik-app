@@ -19,6 +19,7 @@ export function calculateLabel(recipe: Recipe, ingredients: Ingredient[], recipe
     for (const line of current.ingredients || []) {
       usedIngredients.add(line.ingredientId);
       const ingredient = ingredients.find((item) => item.id === line.ingredientId);
+      if (ingredient?.specification?.specsPlazaLink?.environment === "test") warnings.add(`SpecsPlaza-testkoppeling nog controleren: ${ingredient.name}`);
       if (!(line.quantity > 0)) warnings.add(`Hoeveelheid ontbreekt: ${ingredient?.name || line.ingredientId}`);
       ingredient?.allergens?.forEach((item) => allergens.add(item));
       if (ingredient && !ingredient.specification?.allergensConfirmed) warnings.add(`Allergenen nog niet gecontroleerd: ${ingredient.name}`);

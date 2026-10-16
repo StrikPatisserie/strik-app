@@ -123,6 +123,7 @@ export default function RecipeDetail({
   onDeleteRecipe,
   onDuplicateRecipe,
   onSaveIngredient,
+  onSaveSpecification,
   onMarkProduced,
   onOpenRecipe,
 }: Readonly<{
@@ -137,6 +138,7 @@ export default function RecipeDetail({
   onDeleteRecipe: (recipe: Recipe) => void;
   onDuplicateRecipe?: (recipe: Recipe) => void;
   onSaveIngredient: (ingredient: Ingredient) => void;
+  onSaveSpecification: import("./types").IngredientSpecificationSaver;
   onSaveIngredients?: (ingredients: Ingredient[], message?: string) => void;
   onMarkProduced: (
     recipe: Recipe,
@@ -1237,7 +1239,7 @@ export default function RecipeDetail({
     return (
       <>
       <BakkerRecipeCard
-        labeling={financialAccess ? <RecipeLabelPanel key={recipe.id} recipe={recipe} ingredients={ingredients} recipes={recipes} onSave={onSaveRecipe} onSaveIngredient={onSaveIngredient} /> : undefined}
+        labeling={financialAccess ? <RecipeLabelPanel key={recipe.id} recipe={recipe} ingredients={ingredients} recipes={recipes} onSave={onSaveRecipe} onSaveIngredient={onSaveSpecification} /> : undefined}
         recipe={previewRecipe}
         ingredients={ingredients}
         recipes={recipes}

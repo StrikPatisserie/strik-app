@@ -11,6 +11,7 @@ import type { UserProfile } from "../../lib/supabase/types";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList, { IngredientDetail } from "./IngredientsList";
+import { persistIngredientSpecification } from "./specsPlazaLink";
 import MargeOverzicht from "./MargeOverzicht";
 import {
   ingredients,
@@ -1294,6 +1295,20 @@ export default function RecepturenApp({
     );
   }
 
+  async function saveIngredientSpecification(updated: Ingredient, expected: Ingredient) {
+    setSyncStatus("Productspecificatie opslaan…");
+    try {
+      const stored = await persistIngredientSpecification(updated, expected);
+      setIngredientItems((current) => current.map((item) => item.id === stored.id ? stored : item));
+      setInvoiceIngredientEditor((current) => current?.id === stored.id ? stored : current);
+      setSyncStatus("Productspecificatie opgeslagen voor alle gekoppelde recepten.");
+      return stored;
+    } catch (cause) {
+      setSyncStatus(`Niet opgeslagen: ${cause instanceof Error ? cause.message : "opslaan is mislukt."}`);
+      throw cause;
+    }
+  }
+
   function saveIngredients(
     updatedIngredients: Ingredient[],
     successMessage = "Grondstoffen opgeslagen en kostprijzen opnieuw berekend."
@@ -2166,6 +2181,7 @@ export default function RecepturenApp({
             ingredients={ingredientItems}
             recipes={recipeItems}
             onUpdateIngredient={saveIngredient}
+            onUpdateSpecification={saveIngredientSpecification}
             onDeleteIngredient={deleteIngredient}
             onMergeIngredient={mergeDuplicateIngredient}
             onOpenImport={() => openDataImport("ingredients")}
@@ -2303,6 +2319,7 @@ export default function RecepturenApp({
             onDeleteRecipe={deleteRecipe}
             onDuplicateRecipe={duplicateRecipe}
             onSaveIngredient={saveIngredient}
+            onSaveSpecification={saveIngredientSpecification}
             onSaveIngredients={saveIngredients}
             onMarkProduced={markRecipeProduced}
             onOpenRecipe={(recipe) =>
@@ -2317,6 +2334,7 @@ export default function RecepturenApp({
             ingredients={ingredientItems}
             recipes={recipeItems}
             onUpdateIngredient={saveIngredient}
+            onUpdateSpecification={saveIngredientSpecification}
             onMergeIngredient={(sourceIngredient, targetIngredient) => {
               mergeDuplicateIngredient(sourceIngredient, targetIngredient);
               setInvoiceIngredientEditor(null);

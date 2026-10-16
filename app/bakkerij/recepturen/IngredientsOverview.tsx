@@ -4,7 +4,8 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import IngredientSpecificationEditor from "./IngredientSpecificationEditor";
 import SpecsPlazaConnectionPanel from "./SpecsPlazaConnectionPanel";
 import { EmptyState, FilterSelect, Panel, SearchInput } from "./RecepturenShared";
-import type { Ingredient, Recipe } from "./types";
+import type { Ingredient, IngredientSpecificationSaver, Recipe } from "./types";
+import styles from "./SpecsPlazaLink.module.css";
 import {
   changeBadgeClass,
   formatDate,
@@ -24,7 +25,7 @@ type DetailTab = "overview" | "specification" | "recipes";
 const statusLabels: Record<SpecificationStatus, string> = {
   unlinked: "Te koppelen",
   incomplete: "Gegevens aanvullen",
-  registered: "ID vastgelegd",
+  registered: "Gekoppeld",
 };
 
 function specificationStatus(ingredient: Ingredient): SpecificationStatus {
@@ -42,7 +43,7 @@ function SpecificationBadge({ ingredient }: Readonly<{ ingredient: Ingredient }>
       status === "registered" ? "text-[#315e42]" : status === "incomplete" ? "text-[#805d19]" : "text-[#82786e]"
     }`}>
       <span aria-hidden="true">{status === "registered" ? "✓" : status === "incomplete" ? "!" : "↗"}</span>
-      {statusLabels[status]}
+      {ingredient.specification?.specsPlazaLink?.environment === "test" ? "Testkoppeling" : status === "registered" && !ingredient.specification?.specsPlazaLink ? "ID vastgelegd" : statusLabels[status]}
     </span>
   );
 }
@@ -52,13 +53,13 @@ export default function IngredientsOverview({
   recipes,
   onEditIngredient,
   onOpenImport,
-  onUpdateIngredient,
+  onUpdateSpecification,
 }: Readonly<{
   ingredients: Ingredient[];
   recipes: Recipe[];
   onEditIngredient: (ingredient?: Ingredient) => void;
   onOpenImport: () => void;
-  onUpdateIngredient: (ingredient: Ingredient) => void;
+  onUpdateSpecification: IngredientSpecificationSaver;
 }>) {
   const [search, setSearch] = useState("");
   const [supplier, setSupplier] = useState("all");
@@ -107,7 +108,7 @@ export default function IngredientsOverview({
     (ingredient) => status === "all" || specificationStatus(ingredient) === status
   );
   const filters = [
-    ["all", "Alle"], ["unlinked", "Te koppelen"], ["incomplete", "Aanvullen"], ["registered", "ID vastgelegd"],
+    ["all", "Alle"], ["unlinked", "Te koppelen"], ["incomplete", "Aanvullen"], ["registered", "Gekoppeld"],
   ] as const;
   const extraFilterCount = Number(allergen !== "all") + Number(priceChange !== "all");
 
@@ -116,7 +117,6 @@ export default function IngredientsOverview({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-black tracking-tight text-[#2d2a26]">Grondstoffen</h2>
-          <p className="mt-0.5 text-xs text-[#82786e]">Inkoop, recepten en productspecificaties bij elkaar.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={onOpenImport} className="min-h-9 rounded-lg border border-[#e4ded5] bg-white px-3 py-1.5 text-xs font-bold text-[#75685f]">Bestand uploaden</button>
@@ -184,7 +184,7 @@ export default function IngredientsOverview({
         </div>
         {selectedIngredient && (
           <div ref={detailRef} className="order-first scroll-mt-24 xl:order-none xl:sticky xl:top-4">
-            <IngredientOverviewPanel key={selectedIngredient.id} ingredient={selectedIngredient} recipes={recipesUsingIngredient(recipes, selectedIngredient.id)} onClose={() => setSelectedId(null)} onEdit={() => onEditIngredient(selectedIngredient)} onSave={onUpdateIngredient} />
+            <IngredientOverviewPanel key={selectedIngredient.id} ingredient={selectedIngredient} recipes={recipesUsingIngredient(recipes, selectedIngredient.id)} onClose={() => setSelectedId(null)} onEdit={() => onEditIngredient(selectedIngredient)} onSave={onUpdateSpecification} />
           </div>
         )}
       </div>
@@ -198,16 +198,15 @@ function IngredientOverviewPanel({ ingredient, recipes, onClose, onEdit, onSave 
   recipes: Recipe[];
   onClose: () => void;
   onEdit: () => void;
-  onSave: (ingredient: Ingredient) => void;
+  onSave: IngredientSpecificationSaver;
 }>) {
   const [tab, setTab] = useState<DetailTab>("overview");
   const tabId = useId();
   const tabs = [["overview", "Overzicht"], ["specification", "SpecsPlaza"], ["recipes", "Recepten"]] as const;
   return (
-    <section className="min-w-0 rounded-xl border border-[#e5e1d8] bg-white p-3" aria-label={`Gegevens van ${ingredient.name}`}>
+    <section className={`${styles.panel} rounded-xl border border-[#e5e1d8] bg-white p-3`} aria-label={`Gegevens van ${ingredient.name}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[0.68rem] text-[#82786e]">Grondstof</p>
           <h3 className="mt-0.5 break-words text-lg font-black leading-tight">{ingredient.name}</h3>
           <p className="mt-1 break-words text-xs text-[#82786e]">{[ingredient.supplier, ingredient.supplierArticleNumber].filter(Boolean).join(" · ") || "Leveranciersgegevens aanvullen"}</p>
         </div>
@@ -229,6 +228,7 @@ function IngredientOverviewPanel({ ingredient, recipes, onClose, onEdit, onSave 
           <div className="border-t border-[#e5e1d8] pt-3">
             <p className="mb-1 text-[0.68rem] text-[#82786e]">Productspecificatie</p>
             <SpecificationBadge ingredient={ingredient} />
+            <button type="button" onClick={() => setTab("specification")} className="ml-3 min-h-8 text-xs font-bold text-[#315e42] underline underline-offset-2">{ingredient.specification?.specsPlazaLink ? "Koppeling bekijken" : "Koppelen aan SpecsPlaza"}</button>
             <p className="mt-2 text-xs text-[#75685f]">{ingredient.allergens.length ? `Allergenen: ${ingredient.allergens.join(", ")}` : ingredient.specification?.allergensConfirmed ? "Geen allergenen volgens gecontroleerde specificatie." : "Allergeengegevens nog niet gecontroleerd."}</p>
           </div>
           <p className="break-words text-[0.68rem] text-[#82786e]">Laatste factuur: {ingredient.lastInvoice || "Nog geen factuur gekoppeld"}</p>
@@ -237,7 +237,6 @@ function IngredientOverviewPanel({ ingredient, recipes, onClose, onEdit, onSave 
         </div>}
         {tab === "specification" && <div className="grid gap-3">
           <IngredientSpecificationEditor ingredient={ingredient} onSave={onSave} embedded />
-          <SpecsPlazaConnectionPanel compact />
         </div>}
         {tab === "recipes" && <div>
           <p className="mb-1 text-xs font-bold">Gebruikt in {recipes.length} recept{recipes.length === 1 ? "" : "en"}</p>
