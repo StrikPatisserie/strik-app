@@ -8,6 +8,7 @@ import {
   SectionTitle,
 } from "./RecepturenShared";
 import { formatEuro, normalizeSearch } from "./utils";
+import styles from "./ManagementScreens.module.css";
 
 type PackagingDraft = {
   id: string;
@@ -123,15 +124,11 @@ export default function PackagingList({
 
   return (
     <Panel>
-      <div className="grid gap-4">
-        <SectionTitle
-          eyebrow="Verpakkingen"
-          title="Verpakkingskosten"
-          description="Beheer dozen, bodems, deksels en schuifjes. In recepten kun je meerdere verpakkingen combineren."
-        />
+      <div className="grid gap-3">
+        <SectionTitle title="Verpakkingen" />
 
-        <div className="rounded-[1.15rem] border border-[#dfe9d8] bg-[#f7faf5] p-4">
-          <div className="grid gap-3 lg:grid-cols-4">
+        <div className={styles.form}>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <InputField
               label="Naam"
               value={draft.name}
@@ -165,14 +162,13 @@ export default function PackagingList({
               onChange={(value) => updateDraft({ packagePrice: value })}
               inputMode="decimal"
             />
-            <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+            <label className={styles.field}>
               Status
               <select
                 value={draft.status}
                 onChange={(event) =>
                   updateDraft({ status: event.target.value as PackagingStatus })
                 }
-                className="rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
               >
                 <option value="active">Actief</option>
                 <option value="inactive">Inactief</option>
@@ -194,7 +190,7 @@ export default function PackagingList({
             <button
               type="button"
               onClick={saveDraft}
-              className="rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
+              className={`${styles.action} ${styles.primaryAction}`}
             >
               {draft.id ? "Verpakking opslaan" : "Verpakking toevoegen"}
             </button>
@@ -202,7 +198,7 @@ export default function PackagingList({
               <button
                 type="button"
                 onClick={() => setDraft(createPackagingDraft())}
-                className="rounded-full bg-white px-4 py-2.5 text-sm font-black text-[#2d2a26]/60 shadow-sm"
+                className={styles.action}
               >
                 Nieuwe invoer
               </button>
@@ -231,8 +227,8 @@ export default function PackagingList({
         </div>
 
         {filteredItems.length ? (
-          <div className="overflow-x-auto border border-[#e7e0d8]">
-            <div className="hidden grid-cols-[minmax(14rem,1.3fr)_8rem_8rem_8rem_8rem_7rem_10rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 lg:grid lg:min-w-[64rem]">
+          <div className={styles.table}>
+            <div className={`${styles.tableHeading} hidden grid-cols-[minmax(14rem,1.3fr)_7rem_7rem_7rem_6rem_6rem_10rem] gap-3 lg:grid lg:min-w-[60rem]`}>
               <span>Verpakking</span>
               <span>Leverancier</span>
               <span>Artikel</span>
@@ -248,35 +244,38 @@ export default function PackagingList({
                 return (
                   <div
                     key={item.id}
-                    className="grid gap-3 px-4 py-2.5 lg:min-w-[64rem] lg:grid-cols-[minmax(14rem,1.3fr)_8rem_8rem_8rem_8rem_7rem_10rem] lg:items-center"
+                    className={`${styles.tableRow} grid lg:min-w-[60rem] lg:grid-cols-[minmax(14rem,1.3fr)_7rem_7rem_7rem_6rem_6rem_10rem] lg:items-center`}
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-base font-black">{item.name}</p>
-                      <p className="text-xs font-bold text-[#2d2a26]/45">
+                      <p className={`${styles.rowTitle} truncate`}>{item.name}</p>
+                      <p className={styles.rowMeta}>
                         {item.packageSize} · {item.status === "active" ? "actief" : "inactief"}
                       </p>
+                      <p className={`${styles.rowMeta} lg:hidden`}>
+                        {item.supplier} · {item.articleNumber} · {formatEuro(item.packagePrice)} per doos · {formatEuro(item.unitPrice)} per stuk · {usageCount} recepten
+                      </p>
                     </div>
-                    <p className="text-sm font-bold text-[#2d2a26]/62">
+                    <p className="hidden text-sm font-bold text-[#2d2a26]/62 lg:block">
                       {item.supplier}
                     </p>
-                    <p className="text-sm font-bold">{item.articleNumber}</p>
-                    <p className="text-sm font-black">{formatEuro(item.packagePrice)}</p>
-                    <p className="text-sm font-black">{formatEuro(item.unitPrice)}</p>
-                    <p className="text-sm font-bold text-[#2d2a26]/62">
+                    <p className="hidden text-sm font-bold lg:block">{item.articleNumber}</p>
+                    <p className="hidden text-sm font-black lg:block">{formatEuro(item.packagePrice)}</p>
+                    <p className="hidden text-sm font-black lg:block">{formatEuro(item.unitPrice)}</p>
+                    <p className="hidden text-sm font-bold text-[#2d2a26]/62 lg:block">
                       {usageCount} recept{usageCount === 1 ? "" : "en"}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => editPackaging(item)}
-                        className="rounded-full bg-[#c3d3bc] px-3 py-2 text-xs font-black shadow-sm"
+                        className={styles.action}
                       >
                         Bewerk
                       </button>
                       <button
                         type="button"
                         onClick={() => deletePackaging(item)}
-                        className="rounded-full bg-[#fff4f1] px-3 py-2 text-xs font-black text-[#a83e31] shadow-sm"
+                        className={`${styles.action} ${styles.dangerAction}`}
                       >
                         Verwijder
                       </button>
@@ -308,14 +307,13 @@ function InputField({
   inputMode?: "decimal";
 }>) {
   return (
-    <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
+    <label className={styles.field}>
       {label}
       <input
         value={value}
         placeholder={placeholder}
         inputMode={inputMode}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 rounded-2xl border border-[#cfdcc8] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
       />
     </label>
   );
@@ -323,7 +321,7 @@ function InputField({
 
 function MiniMetric({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
-    <div className="rounded-2xl bg-white px-3 py-2.5">
+    <div className="rounded-lg bg-white px-3 py-2">
       <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/45">
         {label}
       </p>

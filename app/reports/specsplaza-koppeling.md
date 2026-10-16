@@ -32,9 +32,11 @@ De leveranciersgegevens zijn een afzonderlijke momentopname. Koppelen vervangt o
 Testkoppelingen blijven zichtbaar als Test en geven een controlepunt in de etikettering van elk betrokken recept.
 Onbekende waarden en kruisbesmettingsrisico's blijven in de momentopname onderscheiden. Bij een overstap naar productie moet de productidentiteit opnieuw worden gekozen en gecontroleerd.
 
-Opslaan leest eerst de actuele gedeelde opslag en wijzigt alleen de specificatie en eventueel handmatig bewerkte allergenen van de gekozen grondstof.
+Opslaan leest eerst de actuele gedeelde opslag. De expliciete modus `specsplaza-link` wijzigt uitsluitend de koppeling, versie en leveranciersmomentopname op de gekozen grondstof.
+Nieuwe handmatige gegevens over samenstelling, allergenen en voedingswaarden blijven behouden, ook als die na het openen van het scherm zijn gewijzigd.
+Een intussen gewijzigde SpecsPlaza-koppeling blokkeert het koppelen wel. Handmatig bewaren gebruikt de standaardmodus `specification`; die weigert nog steeds een verouderde specificatie of allergenenlijst.
 Actuele prijzen, factuurgegevens, andere grondstoffen en receptverwijzingen blijven behouden.
-De functie weigert ontbrekende/dubbele grondstof-ID's en specificaties die sinds het openen zijn gewijzigd.
+De functie weigert ontbrekende/dubbele grondstof-ID's. Een echte wijzigingsconflict vraagt om de pagina te verversen zodat de volledige grondstoffenlijst opnieuw wordt geladen.
 Fouten bij ophalen of bewaren verschijnen bij de koppeling; de bestaande koppeling blijft dan staan.
 De bestaande managerautorisatie en tweestapsverificatie van `/api/recepturen` blijven van toepassing.
 

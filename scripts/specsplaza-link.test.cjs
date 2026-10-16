@@ -73,6 +73,51 @@ test("merging a specification preserves newer ingredient prices and invoice fiel
   assert.throws(() => mergeIngredientSpecification({ ...current, id: "wrong" }, linked, original), /grondstof is veranderd/);
 });
 
+test("link-only saves preserve manual specification and allergen edits made after the screen opened", () => {
+  const current = {
+    ...original, lastPrice: 8.5, allergens: ["Melk", "Ei"],
+    specification: { source: "Nieuw gecontroleerd document", ingredientsText: "nieuwe samenstelling", allergensConfirmed: true, nutritionPer100g: { fat: 82, salt: 0.1 }, updatedAt: "2026-10-16T15:00:00Z" },
+  };
+  const merged = mergeIngredientSpecification(current, linked, original, "specsplaza-link");
+  assert.equal(merged.lastPrice, current.lastPrice);
+  assert.deepEqual(merged.allergens, current.allergens);
+  for (const key of ["source", "ingredientsText", "allergensConfirmed", "nutritionPer100g"]) assert.deepEqual(merged.specification[key], current.specification[key]);
+  assert.equal(merged.specification.specsPlazaId, id);
+  assert.equal(merged.specification.specsPlazaLink.environment, "test");
+  assert.throws(() => mergeIngredientSpecification(current, linked, original), /ondertussen gewijzigd/);
+});
+
+test("link-only saves still reject concurrent link changes, wrong ingredients and incomplete links", () => {
+  assert.throws(() => mergeIngredientSpecification(linked, linked, original, "specsplaza-link"), /koppeling is ondertussen gewijzigd/);
+  const legacy = { ...original, specification: { ...original.specification, specsPlazaId: "another-product" } };
+  assert.throws(() => mergeIngredientSpecification(legacy, linked, original, "specsplaza-link"), /koppeling is ondertussen gewijzigd/);
+  assert.throws(() => mergeIngredientSpecification({ ...original, id: "other" }, linked, original, "specsplaza-link"), /grondstof is veranderd/);
+  assert.throws(() => mergeIngredientSpecification(original, original, original, "specsplaza-link"), /niet volledig/);
+});
+
+test("link-only persistence sends and confirms the current manual values instead of the stale editor snapshot", async () => {
+  const data = storedData();
+  data.ingredients[0].specification = { source: "Nieuw bronbestand", nutritionPer100g: { fat: 82 }, allergensConfirmed: true };
+  data.ingredients[0].allergens = ["Melk", "Ei"];
+  let wrote = false;
+  const { persistIngredientSpecification } = load(modulePath, async (_, init) => {
+    if (init?.method !== "PUT") return json(data);
+    wrote = true;
+    const body = JSON.parse(init.body);
+    assert.deepEqual(body.ingredients[0].allergens, data.ingredients[0].allergens);
+    assert.equal(body.ingredients[0].specification.source, "Nieuw bronbestand");
+    assert.deepEqual(body.ingredients[0].specification.nutritionPer100g, { fat: 82 });
+    assert.equal(body.ingredients[0].specification.specsPlazaId, id);
+    assert.deepEqual(body.recipes, data.recipes);
+    assert.deepEqual(body.invoiceImports, data.invoiceImports);
+    return json({ ...body, financialAccess: true });
+  });
+  const stored = await persistIngredientSpecification(linked, original, "specsplaza-link");
+  assert(wrote);
+  assert.deepEqual(plain(stored.allergens), ["Melk", "Ei"]);
+  assert.equal(stored.specification.specsPlazaLink.product.id, id);
+});
+
 test("persist reads current storage, updates one shared ingredient and leaves all recipe references intact", async () => {
   const data = storedData();
   const calls = [];

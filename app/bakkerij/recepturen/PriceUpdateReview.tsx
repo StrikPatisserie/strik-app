@@ -1,3 +1,4 @@
+import managementStyles from "./ManagementScreens.module.css";
 import { useState } from "react";
 import type { Ingredient, InvoiceImport, InvoiceLine } from "./types";
 import { EmptyState } from "./RecepturenShared";
@@ -118,7 +119,7 @@ export default function PriceUpdateReview({
               type="button"
               onClick={() => onIgnoreInvoice(invoice.id)}
               disabled={!canIgnoreInvoice}
-              className="rounded-full bg-[#f5f2ee] px-3 py-1.5 text-xs font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+              className={managementStyles.action}
             >
               factuur negeren
             </button>
@@ -126,14 +127,14 @@ export default function PriceUpdateReview({
               type="button"
               onClick={() => onRevertInvoice(invoice.id)}
               disabled={!canRevertInvoice}
-              className="rounded-full bg-[#fee2e2] px-3 py-1.5 text-xs font-black text-[#c42828] disabled:cursor-not-allowed disabled:opacity-45"
+              className={`${managementStyles.action} ${managementStyles.dangerAction}`}
             >
               terugdraaien
             </button>
             <button
               type="button"
               onClick={() => onDeleteInvoice(invoice.id)}
-              className="rounded-full border border-[#efc2bb] bg-white px-3 py-1.5 text-xs font-black text-[#a83e31] shadow-sm"
+              className={`${managementStyles.action} ${managementStyles.dangerAction}`}
             >
               verwijderen
             </button>
@@ -469,7 +470,7 @@ function IngredientMatchEditor({
           <button
             type="button"
             onClick={() => onEditIngredient(selectedIngredient)}
-            className="rounded-full bg-[#fff8e3] px-3 py-1.5 text-xs font-black text-[#7a5a18] shadow-sm"
+            className={managementStyles.action}
           >
             Grondstof aanpassen
           </button>
@@ -482,14 +483,14 @@ function IngredientMatchEditor({
             onMatch(invoiceId, line, ingredientId);
             onMatched();
           }}
-          className="rounded-full bg-[#c3d3bc] px-3 py-1.5 text-xs font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-45"
+          className={`${managementStyles.action} ${managementStyles.primaryAction}`}
         >
           Opslaan
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-full bg-[#f5f2ee] px-3 py-1.5 text-xs font-black text-[#a39c91]"
+          className={managementStyles.action}
         >
           Annuleer
         </button>

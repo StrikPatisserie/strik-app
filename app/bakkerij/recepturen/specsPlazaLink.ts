@@ -1,5 +1,5 @@
 import type { SpecsPlazaProductResult } from "@/app/lib/specsplaza/types";
-import type { Ingredient } from "./types";
+import type { Ingredient, IngredientSpecificationSaveMode } from "./types";
 import type { RecepturenData } from "./recepturenApi";
 
 // Keep the supplier snapshot separate from the user's checked labeling data.
@@ -28,16 +28,43 @@ function same(first: unknown, second: unknown): boolean {
   return JSON.stringify(canonical(first)) === JSON.stringify(canonical(second));
 }
 
-export function mergeIngredientSpecification(current: Ingredient, updated: Ingredient, expected: Ingredient): Ingredient {
+function linkedSpecification(ingredient: Ingredient) {
+  return {
+    specsPlazaId: ingredient.specification?.specsPlazaId,
+    specificationVersion: ingredient.specification?.specificationVersion,
+    specsPlazaLink: ingredient.specification?.specsPlazaLink,
+  };
+}
+
+export function mergeIngredientSpecification(current: Ingredient, updated: Ingredient, expected: Ingredient, mode: IngredientSpecificationSaveMode = "specification"): Ingredient {
   if (current.id !== updated.id || current.id !== expected.id) throw new Error("De grondstof is veranderd. Open deze opnieuw.");
+  if (mode === "specsplaza-link") {
+    if (!updated.specification?.specsPlazaLink || updated.specification.specsPlazaId !== updated.specification.specsPlazaLink.product.id) {
+      throw new Error("De SpecsPlaza-koppeling is niet volledig. Kies het product opnieuw.");
+    }
+    if (!same(linkedSpecification(current), linkedSpecification(expected))) {
+      throw new Error("De SpecsPlaza-koppeling is ondertussen gewijzigd. Ververs de pagina om de nieuwste koppeling te bekijken.");
+    }
+    // A link changes only supplier identity/snapshot fields. Rebase it on the
+    // latest manually checked composition, nutrients and allergens, even when
+    // those were edited after this screen was opened.
+    return {
+      ...current,
+      specification: {
+        ...current.specification,
+        ...linkedSpecification(updated),
+        updatedAt: updated.specification.updatedAt,
+      },
+    };
+  }
   if (!same(current.specification || {}, expected.specification || {}) || !same(current.allergens, expected.allergens)) {
-    throw new Error("De specificatie is ondertussen gewijzigd. Open de grondstof opnieuw voordat je opslaat.");
+    throw new Error("De specificatie is ondertussen gewijzigd. Ververs de pagina voordat je opslaat.");
   }
   // Preserve newer prices, names and invoice data from the current shared storage.
   return { ...current, specification: updated.specification, allergens: updated.allergens };
 }
 
-export async function persistIngredientSpecification(updated: Ingredient, expected: Ingredient): Promise<Ingredient> {
+export async function persistIngredientSpecification(updated: Ingredient, expected: Ingredient, mode: IngredientSpecificationSaveMode = "specification"): Promise<Ingredient> {
   async function request(init?: RequestInit) {
     const response = await fetch("/api/recepturen", { cache: "no-store", ...init });
     const data = await response.json().catch(() => null);
@@ -51,7 +78,7 @@ export async function persistIngredientSpecification(updated: Ingredient, expect
   const live = await request();
   const matches = live.ingredients.filter((item) => item.id === updated.id);
   if (matches.length !== 1) throw new Error("De grondstof ontbreekt of heeft een dubbel ID. Herlaad de grondstoffenlijst.");
-  const next = mergeIngredientSpecification(matches[0], updated, expected);
+  const next = mergeIngredientSpecification(matches[0], updated, expected, mode);
   const payload = { ...live, ingredients: live.ingredients.map((item) => item.id === next.id ? next : item) };
   delete payload.financialAccess;
   const saved = await request({ method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });

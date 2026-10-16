@@ -1,3 +1,4 @@
+import managementStyles from "./ManagementScreens.module.css";
 import { useEffect, useState } from "react";
 import type { Ingredient, Recipe } from "./types";
 import { EmptyState, Panel, SectionTitle } from "./RecepturenShared";
@@ -92,23 +93,23 @@ export default function RecipeDataImport({
 
   return (
     <Panel>
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <SectionTitle
-            eyebrow="Import"
-            title="Recepten en grondstoffen inladen"
+            title="Bestand inladen"
             description="Lees een Excel, CSV of tekst-PDF in. Het bestand zelf wordt niet opgeslagen."
           />
-          <div className="rounded-full bg-[#2d2a26] p-1 shadow-sm">
+          <div className="rounded-xl border border-[#e2ddd6] bg-[#f7f7f1] p-1">
             {(["recipes", "ingredients"] as const).map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => setKind(option)}
-                className={`rounded-full px-4 py-2 text-sm font-black transition ${
+                aria-pressed={kind === option}
+                className={`min-h-8 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
                   kind === option
-                    ? "bg-[#c3d3bc] text-[#2d2a26]"
-                    : "text-white/65"
+                    ? "bg-[#e4ecdf] text-[#315e42]"
+                    : "text-[#82786e]"
                 }`}
               >
                 {option === "recipes" ? "Recepten" : "Grondstoffen"}
@@ -118,18 +119,18 @@ export default function RecipeDataImport({
         </div>
 
         <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-[1.15rem] border border-[#e7e0d8] bg-[#fffdf8] p-4">
+          <div className={managementStyles.form}>
             <p className="text-sm font-black">
               {kind === "recipes"
                 ? "Receptbestand uploaden"
                 : "Grondstoffenlijst uploaden"}
             </p>
-            <p className="mt-1 text-sm font-bold leading-relaxed text-[#2d2a26]/55">
+            <p className="mt-1 text-xs leading-relaxed text-[#82786e]">
               {kind === "recipes"
                 ? "Kolommen zoals recept, grondstof, hoeveelheid, eenheid en stap worden automatisch herkend."
                 : "Kolommen zoals naam, leverancier, artikelnummer, verpakking en prijs/kg worden automatisch herkend."}
             </p>
-            <label className="mt-4 inline-flex cursor-pointer rounded-full bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm transition active:scale-[0.98]">
+            <label className={`${managementStyles.action} ${managementStyles.primaryAction} mt-3`}>
               {isUploading ? "Lezen..." : "Bestand kiezen"}
               <input
                 type="file"
@@ -144,9 +145,9 @@ export default function RecipeDataImport({
             </label>
           </div>
 
-          <div className="rounded-[1.15rem] border border-[#e7e0d8] bg-white p-4">
+          <div className="rounded-xl border border-[#e7e0d8] bg-white p-3">
             <p className="text-sm font-black">Wat gebeurt er daarna?</p>
-            <div className="mt-3 grid gap-2 text-sm font-bold leading-relaxed text-[#2d2a26]/60">
+            <div className="mt-2 grid gap-2 text-xs leading-relaxed text-[#82786e]">
               <p>1. Bestaande grondstoffen worden gematcht op naam of artikelnummer.</p>
               <p>2. Nieuwe regels worden toegevoegd aan de database.</p>
               <p>3. Alle receptkostprijzen worden direct opnieuw berekend.</p>

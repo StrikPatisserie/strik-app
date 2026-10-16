@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Recipe } from "./types";
+import styles from "./ManagementScreens.module.css";
 import { EmptyState, FilterSelect } from "./RecepturenShared";
 import {
   calculateMargin,
@@ -96,12 +97,9 @@ export default function MargeOverzicht({
   }
 
   return (
-    <section className="grid min-h-[calc(100dvh-13rem)] grid-rows-[auto_auto_minmax(0,1fr)] gap-3 border border-[#c3d3bc] bg-white p-4">
+    <section className={`${styles.panel} grid gap-3`}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
-            Marge
-          </p>
           <h2 className="text-xl font-black">Marge eindproducten</h2>
           <p className="mt-1 max-w-2xl text-xs font-bold leading-relaxed text-[#707070]">
             Verkoopprijzen zijn incl. 9% btw. Kostprijzen en marges rekenen ex btw.
@@ -114,7 +112,7 @@ export default function MargeOverzicht({
           <button
             type="button"
             onClick={printMarginOverview}
-            className="rounded-full border border-[#c3d3bc] bg-[#ecf4ed] px-4 py-2 text-xs font-black text-[#30462f] shadow-sm hover:bg-[#dce8d6]"
+            className={styles.action}
           >
             Print
           </button>
@@ -146,9 +144,9 @@ export default function MargeOverzicht({
       </div>
 
       {filteredRecipes.length ? (
-        <div className="min-h-0 overflow-auto border border-[#d8d8d4]">
+        <div className={`${styles.table} max-h-[calc(100dvh-17rem)] overflow-y-auto`}>
           <div className="min-w-[42rem] lg:min-w-[64rem]">
-            <div className="grid grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 border-b border-[#d8d8d4] bg-[#f5f5f3] px-3 py-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8c8c8c] lg:grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)_11rem]">
+            <div className={`${styles.tableHeading} sticky top-0 z-10 grid grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 border-b border-[#e5e2da] lg:grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)_11rem]`}>
               <span>Product</span>
               <span>Kost ex.</span>
               <span>Verkoop incl.</span>
@@ -170,13 +168,13 @@ export default function MargeOverzicht({
                 return (
                   <div
                     key={recipe.id}
-                    className="grid w-full grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] gap-3 px-3 py-2 text-left text-sm hover:bg-[#f8f8f6] lg:grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)_11rem]"
+                    className={`${styles.tableRow} grid w-full grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)] items-center text-left lg:grid-cols-[minmax(12rem,1.35fr)_6rem_6rem_6rem_6rem_minmax(8rem,1fr)_11rem]`}
                   >
                     <span className="min-w-0">
                       <button
                         type="button"
                         onClick={() => onOpenRecipe(recipe)}
-                        className="block max-w-full truncate text-left text-[0.82rem] font-black leading-tight hover:text-[#ef5737] md:text-[1rem] lg:text-[1.05rem]"
+                        className={`${styles.rowLink} block max-w-full truncate text-left leading-tight`}
                       >
                         {recipe.name}
                       </button>

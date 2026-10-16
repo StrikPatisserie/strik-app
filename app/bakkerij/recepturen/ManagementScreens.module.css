@@ -1,0 +1,77 @@
+.menu { display: grid; gap: 12px; padding: 4px 0; color: #49342d; }
+.menuHeader { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.tile { display: grid; min-width: 0; min-height: 64px; grid-template-columns: 40px minmax(0, 1fr) 26px; align-items: center; gap: 10px; border: 1px solid #e0e3d9; border-radius: 16px; padding: 10px; background: #ffffffed; text-align: left; box-shadow: 0 5px 14px #49342d0d; transition: background .15s, border-color .15s; }
+.tile:hover { border-color: #aebfa7; background: #f7faf5; }
+.tileIcon { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 12px; background: #e4ecdf; color: #45663b; }
+.tileIcon > span { width: 23px; height: 23px; background: currentColor; }
+.coral { background: #f6e7e1; color: #a65b49; }
+.yellow { background: #f7edce; color: #8b712c; }
+.plum { background: #eee5eb; color: #856175; }
+.tileTitle { min-width: 0; font-size: 14px; line-height: 1.35; font-weight: 800; overflow-wrap: anywhere; }
+.chevron { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 50%; background: #f1e9df; color: #75665c; }
+.menuFooter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.action, .backButton { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 7px; border: 1px solid #e2ddd6; border-radius: 10px; padding: 6px 10px; background: white; color: #6f655c; font-size: 12px; line-height: 1.35; font-weight: 700; text-decoration: none; cursor: pointer; transition: background .15s; }
+.action:hover, .backButton:hover { background: #f7f5f0; }
+.action:has(input:focus-visible) { outline: 2px solid #315e42; outline-offset: 2px; }
+.action:disabled { cursor: not-allowed; opacity: .45; }
+.primaryAction { border-color: #315e42; background: #315e42; color: white; }
+.primaryAction:hover { background: #264c34; }
+.dangerAction { border-color: #eed5cd; background: #fff6f2; color: #a04e3d; }
+.dangerAction:hover { background: #f9e9e2; }
+.backButton { flex-shrink: 0; background: #ffffffed; }
+.backButton > img { width: 15px; height: 15px; }
+.downloads { position: relative; }
+.downloads > summary { list-style: none; }
+.downloads > summary::-webkit-details-marker { display: none; }
+.downloadMenu { position: absolute; right: 0; z-index: 20; display: grid; width: 190px; gap: 2px; margin-top: 6px; padding: 5px; border: 1px solid #e2ddd6; border-radius: 12px; background: white; box-shadow: 0 8px 24px #49342d1a; }
+.downloadMenu button { min-height: 34px; border-radius: 8px; padding: 6px 9px; text-align: left; font-size: 12px; font-weight: 600; }
+.downloadMenu button:hover { background: #f3f6ef; }
+.meta, .status { font-size: 11px; line-height: 1.5; color: #706b60; }
+.status:empty { display: none; }
+.statusError { border: 1px solid #eed5cd; border-radius: 9px; padding: 6px 9px; background: #fff6f2; color: #a04e3d; }
+.screen { display: grid; gap: 10px; color: #2d2a26; }
+.screen h2 { font-size: 22px; line-height: 1.25; font-weight: 800; }
+.screen h3, .screen h4 { font-size: 14px; line-height: 1.35; font-weight: 800; }
+.screenHeader { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.panel { min-width: 0; border: 1px solid #e2e2d7; border-radius: 16px; padding: 12px; background: #fffefa; }
+.sharedPanel { min-width: 0; border-radius: 16px; padding: 12px; }
+.sectionTitle h2 { margin-top: 0; font-size: 22px; line-height: 1.25; font-weight: 800; }
+.sectionTitle > p { margin-top: 4px; font-size: 12px; line-height: 1.5; }
+.sectionTitle > p:first-child:not(:last-child) { margin-top: 0; margin-bottom: 4px; font-size: 10px; }
+.table { overflow-x: auto; border: 1px solid #e5e2da; border-radius: 12px; }
+.tableHeading { padding: 7px 10px; background: #f7f7f1; font-size: 10px; line-height: 1.3; font-weight: 700; letter-spacing: .03em; color: #82786e; }
+.tableRow { gap: 10px; padding: 7px 10px; font-size: 12px; line-height: 1.4; }
+.tableRow:hover { background: #f3f6ef; }
+.tableRow p, .tableRow > span { font-size: 12px; }
+.tableRow p { font-weight: 600; }
+.tableRow .rowTitle { font-size: 13px; font-weight: 700; }
+.tableRow .rowMeta { font-size: 11px; font-weight: 400; }
+.rowLink { font-size: 13px; font-weight: 700; }
+.rowLink:hover { color: #315e42; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid #e5e2da; border-radius: 12px; background: #f7f7f1; }
+.metric { min-width: 0; padding: 8px 10px; }
+.metric + .metric { border-left: 1px solid #e5e2da; }
+.metric > p:first-child { color: #82786e; font-size: 10px; line-height: 1.4; font-weight: 600; }
+.metric > p:last-child { margin-top: 2px; font-size: 16px; line-height: 1.4; font-weight: 800; font-variant-numeric: tabular-nums; }
+.form { border: 1px solid #e5e2da; border-radius: 12px; padding: 10px; background: #f7f8f2; }
+.field { display: grid; min-width: 0; gap: 4px; color: #82786e; font-size: 11px; line-height: 1.4; font-weight: 600; }
+.field input, .field select { min-width: 0; min-height: 34px; width: 100%; border: 1px solid #e2ddd6; border-radius: 9px; padding: 6px 9px; background: white; color: #2d2a26; font-size: 12px; line-height: 1.4; font-weight: 500; }
+.field input:focus, .field select:focus { outline: 2px solid #c3d3bc; outline-offset: 1px; }
+@media (max-width: 639px) {
+  .tiles { grid-template-columns: 1fr; gap: 8px; }
+  .tile { min-height: 58px; grid-template-columns: 36px minmax(0, 1fr) 26px; padding: 8px; }
+  .tileIcon { width: 36px; height: 36px; border-radius: 11px; }
+  .menuFooter { align-items: flex-start; flex-direction: column; }
+  .downloadMenu { right: auto; left: 0; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric:nth-child(3) { border-left: 0; }
+  .metric:nth-child(n+3) { border-top: 1px solid #e5e2da; }
+  .screen h2, .sectionTitle h2 { font-size: 20px; }
+}
+@media (pointer: coarse) {
+  .action, .backButton, .downloadMenu button, .field input, .field select { min-height: 44px; }
+  .field input, .field select { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .tile, .action, .backButton { transition: none; } }

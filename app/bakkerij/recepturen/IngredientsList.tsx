@@ -73,8 +73,8 @@ export default function IngredientsList({
           ingredient={editingIngredient}
           ingredients={ingredients}
           recipes={recipes}
-          onUpdateSpecification={async (updated, expected) => {
-            const stored = await onUpdateSpecification(updated, expected);
+          onUpdateSpecification={async (updated, expected, mode) => {
+            const stored = await onUpdateSpecification(updated, expected, mode);
             setEditingIngredient(stored);
             return stored;
           }}

@@ -1,5 +1,6 @@
 import type { MarginStatus, RecipeStatus } from "./types";
 import { marginStatusLabel, recipeStatusLabel } from "./utils";
+import styles from "./ManagementScreens.module.css";
 
 export function Panel({
   children,
@@ -7,7 +8,7 @@ export function Panel({
 }: Readonly<{ children: React.ReactNode; className?: string }>) {
   return (
     <section
-      className={`border border-[#e8e4de] bg-white rounded-lg p-4 ${className}`}
+      className={`${styles.sharedPanel} border border-[#e8e4de] bg-white ${className}`}
     >
       {children}
     </section>
@@ -24,7 +25,7 @@ export function SectionTitle({
   description?: string;
 }>) {
   return (
-    <div>
+    <div className={styles.sectionTitle}>
       {eyebrow && (
         <p className="text-xs font-semibold uppercase tracking-wider text-[#8b8278]">
           {eyebrow}
@@ -119,12 +120,11 @@ export function FilterSelect({
   options: Array<{ value: string; label: string }>;
 }>) {
   return (
-    <label className="grid gap-1 text-xs font-semibold uppercase tracking-wider text-[#8b8278]">
+    <label className={styles.field}>
       {label}
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-w-0 border border-[#e8e4de] bg-white rounded-md px-3 py-2 text-sm font-medium normal-case tracking-normal text-[#1a1815] focus:outline-none focus:ring-2 focus:ring-[#ecf4ed]"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -146,13 +146,12 @@ export function SearchInput({
   placeholder: string;
 }>) {
   return (
-    <label className="grid gap-1 text-xs font-semibold uppercase tracking-wider text-[#8b8278]">
+    <label className={styles.field}>
       Zoeken
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="min-w-0 border border-[#e8e4de] bg-white rounded-md px-3 py-2 text-sm font-medium normal-case tracking-normal text-[#1a1815] placeholder:text-[#a39c91] focus:outline-none focus:ring-2 focus:ring-[#ecf4ed]"
       />
     </label>
   );

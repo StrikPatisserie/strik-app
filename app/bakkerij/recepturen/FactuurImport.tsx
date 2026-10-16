@@ -1,3 +1,4 @@
+import managementStyles from "./ManagementScreens.module.css";
 import { useRef, useState } from "react";
 import type { Ingredient, InvoiceImport, InvoiceLine } from "./types";
 import { parseBekoInvoiceFile } from "./invoiceImportParser";
@@ -79,9 +80,6 @@ export default function FactuurImport({
     <div className="grid gap-3">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
         <div>
-          <p className="text-[0.7rem] font-black uppercase tracking-[0.14em] text-[#ef4b34]">
-            Factuurimport
-          </p>
           <h2 className="mt-1 text-2xl font-black leading-tight text-[#2d2a26]">
             Factuur inladen
           </h2>
@@ -121,7 +119,7 @@ export default function FactuurImport({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isImporting}
-              className="shrink-0 rounded-full bg-[#c3d3bc] px-3 py-1.5 text-xs font-black shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              className={`${managementStyles.action} ${managementStyles.primaryAction}`}
             >
               {isImporting ? "Lezen..." : "Kies"}
             </button>

@@ -16,7 +16,7 @@ export default function IngredientSpecificationEditor({ ingredient, onSave, embe
   const content = <div className={styles.editor}>
     <SpecsPlazaProductSearch ingredientName={ingredient.name} articleNumber={ingredient.supplierArticleNumber} link={ingredient.specification?.specsPlazaLink} onLink={async (result) => {
       setFeedback("");
-      await onSave(linkSpecsPlazaProduct(ingredient, result), ingredient);
+      await onSave(linkSpecsPlazaProduct(ingredient, result), ingredient, "specsplaza-link");
     }} />
     <details className={styles.manual}>
       <summary>Handmatig aanvullen</summary>

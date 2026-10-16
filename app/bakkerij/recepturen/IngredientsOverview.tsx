@@ -1,5 +1,7 @@
 "use client";
 
+import managementStyles from "./ManagementScreens.module.css";
+
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import IngredientSpecificationEditor from "./IngredientSpecificationEditor";
 import SpecsPlazaConnectionPanel from "./SpecsPlazaConnectionPanel";
@@ -119,8 +121,8 @@ export default function IngredientsOverview({
           <h2 className="text-2xl font-black tracking-tight text-[#2d2a26]">Grondstoffen</h2>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={onOpenImport} className="min-h-9 rounded-lg border border-[#e4ded5] bg-white px-3 py-1.5 text-xs font-bold text-[#75685f]">Bestand uploaden</button>
-          <button type="button" onClick={() => onEditIngredient()} className="min-h-9 rounded-lg bg-[#315e42] px-3 py-1.5 text-xs font-bold text-white">+ Nieuwe grondstof</button>
+          <button type="button" onClick={onOpenImport} className={managementStyles.action}>Bestand uploaden</button>
+          <button type="button" onClick={() => onEditIngredient()} className={`${managementStyles.action} ${managementStyles.primaryAction}`}>+ Nieuwe grondstof</button>
         </div>
       </div>
 

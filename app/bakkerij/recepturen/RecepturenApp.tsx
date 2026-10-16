@@ -13,6 +13,7 @@ import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList, { IngredientDetail } from "./IngredientsList";
 import { persistIngredientSpecification } from "./specsPlazaLink";
 import MargeOverzicht from "./MargeOverzicht";
+import managementStyles from "./ManagementScreens.module.css";
 import {
   ingredients,
   invoiceImports,
@@ -64,6 +65,7 @@ import type {
   BakeryHomeOffer,
   HefeOrderHistoryEntry,
   Ingredient,
+  IngredientSpecificationSaveMode,
   InvoiceImport,
   InvoiceLine,
   ManualProductionPlanningItem,
@@ -1295,10 +1297,10 @@ export default function RecepturenApp({
     );
   }
 
-  async function saveIngredientSpecification(updated: Ingredient, expected: Ingredient) {
+  async function saveIngredientSpecification(updated: Ingredient, expected: Ingredient, mode?: IngredientSpecificationSaveMode) {
     setSyncStatus("Productspecificatie opslaan…");
     try {
-      const stored = await persistIngredientSpecification(updated, expected);
+      const stored = await persistIngredientSpecification(updated, expected, mode);
       setIngredientItems((current) => current.map((item) => item.id === stored.id ? stored : item));
       setInvoiceIngredientEditor((current) => current?.id === stored.id ? stored : current);
       setSyncStatus("Productspecificatie opgeslagen voor alle gekoppelde recepten.");
@@ -2128,19 +2130,17 @@ export default function RecepturenApp({
     }
 
     return (
-      <section className="grid gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className={managementStyles.screen}>
+        <div className={managementStyles.screenHeader}>
           <button
             type="button"
             onClick={() => setBeheerView("menu")}
-            className="inline-flex items-center gap-2 border border-[#c3d3bc] bg-white px-4 py-3 text-sm font-black text-[#252525]"
+            className={managementStyles.backButton}
           >
             <img src="/UI-apps_terug.svg" alt="" className="h-5 w-5" />
             Terug naar data
           </button>
-          <p className="text-xs font-bold text-[#707070]">
-            {isLoadingData ? "Laden..." : syncStatus}
-          </p>
+          <ManagementSyncStatus status={syncStatus} isLoading={isLoadingData} />
         </div>
 
         {beheerView === "dashboard" && (
@@ -2296,7 +2296,7 @@ export default function RecepturenApp({
             <div className="h-full w-full overflow-y-auto px-2 py-2 sm:px-4 sm:py-3 lg:px-6">
               <div
                 className={
-                  beheerView === "menu" ? "mx-auto w-full max-w-6xl" : "w-full"
+                  beheerView === "menu" ? "mx-auto w-full max-w-[72rem] py-1 sm:py-2" : "w-full"
                 }
               >
                 {renderBeheerContent()}
@@ -3178,6 +3178,24 @@ function ChevronIcon({
   );
 }
 
+function ManagementSyncStatus({
+  status,
+  isLoading,
+}: Readonly<{ status: string; isLoading: boolean }>) {
+  const message = isLoading
+    ? "Gegevens laden…"
+    : status === "Recepturen uit WordPress geladen." || status === "Lokale receptuurdata geladen."
+      ? ""
+      : status.replace("Opslaan naar WordPress...", "Opslaan…").replace("Recepturen opgeslagen in WordPress.", "Opgeslagen.");
+  const needsAttention = /niet opgeslagen|mislukt|kon niet|lokaal bijgewerkt|lokale startdata/i.test(message);
+
+  return (
+    <p role="status" aria-live="polite" className={`${managementStyles.status} ${needsAttention ? managementStyles.statusError : ""}`}>
+      {message}
+    </p>
+  );
+}
+
 function BeheerHome({
   syncStatus,
   isLoadingData,
@@ -3193,112 +3211,65 @@ function BeheerHome({
   onDownloadExcel: () => void;
   onDownloadJson: () => void;
 }>) {
-  const [downloadsOpen, setDownloadsOpen] = useState(false);
   const dataTiles = [
-    {
-      title: "Grondstoffen",
-      icon: "/UI-apps_data.svg",
-      onClick: () => onOpen("ingredienten" as TabId),
-    },
-    {
-      title: "Halffabricaten",
-      icon: "/UI-apps_productie.svg",
-      onClick: () => onOpen("halffabricaten" as TabId),
-    },
-    {
-      title: "Verpakkingen",
-      icon: "/UI-apps_data.svg",
-      onClick: () => onOpen("verpakkingen" as TabId),
-    },
-  ];
+    { title: "Marge overzicht", icon: strikIcons.data, view: "marge", tone: "coral" },
+    { title: "Grondstoffen", icon: "/UI-apps_data.svg", view: "ingredienten", tone: "green" },
+    { title: "Halffabricaten", icon: "/UI-apps_productie.svg", view: "halffabricaten", tone: "yellow" },
+    { title: "Verpakkingen", icon: "/UI-apps_data.svg", view: "verpakkingen", tone: "plum" },
+  ] as const;
 
   return (
-    <section className="grid gap-2.5 sm:gap-3">
-      <StrikPageHeading title="Data" icon={strikIcons.data} className="mb-1 pb-1" />
-
-      <div className="grid gap-2.5">
-        <button
-          type="button"
-          onClick={() => onOpen("marge" as TabId)}
-          className="group flex min-h-14 items-center justify-between gap-3 rounded-lg border border-[#ef5737]/30 bg-[#fff4f1] px-3 py-2.5 text-left shadow-sm transition hover:bg-[#fff0eb] active:scale-[0.99] sm:min-h-16 sm:px-4"
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#ef5737] sm:h-10 sm:w-10">
-              <span
-                aria-hidden="true"
-                className="block h-5 w-5 bg-white"
-                style={{
-                  WebkitMask: `url("${strikIcons.data}") center / contain no-repeat`,
-                  mask: `url("${strikIcons.data}") center / contain no-repeat`,
-                }}
-              />
-            </span>
-            <span className="truncate text-xl font-black leading-tight text-[#1a1815] sm:text-2xl">
-              Marge overzicht
-            </span>
-          </span>
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#ef5737] text-xl font-black text-white shadow-sm transition group-active:scale-[0.96] sm:h-10 sm:w-10">
-            &gt;
-          </span>
-        </button>
-
-        <div className="grid gap-2 sm:grid-cols-3">
-          {dataTiles.map((tile) => (
-            <DataTileButton
-              key={tile.title}
-              title={tile.title}
-              icon={tile.icon}
-              onClick={tile.onClick}
-            />
-          ))}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-          <div className="relative min-w-0 sm:w-[12rem]">
-            <DataIconButton
-              title="Download recepten"
-              icon={<DownloadIcon />}
-              onClick={() => setDownloadsOpen((current) => !current)}
-            />
-            {downloadsOpen && (
-              <div className="absolute left-0 right-0 z-20 mt-2 grid gap-1 rounded-lg border border-[#dbe9ee] bg-white p-1.5 shadow-lg sm:left-auto sm:right-0 sm:top-full sm:w-[13rem]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDownloadsOpen(false);
-                    onDownloadExcel();
-                  }}
-                  className="rounded-md px-3 py-2 text-left text-xs font-black text-[#1a1815] hover:bg-[#f4f9fb]"
-                >
-                  Excel downloaden
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDownloadsOpen(false);
-                    onDownloadJson();
-                  }}
-                  className="rounded-md px-3 py-2 text-left text-xs font-black text-[#1a1815] hover:bg-[#f4f9fb]"
-                >
-                  Herstelbestand
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="min-w-0 sm:w-[12rem]">
-            <DataIconButton
-              title="Facturen inladen"
-              icon={<UploadIcon />}
-              onClick={() => onOpen("factuurimport" as TabId)}
-            />
-          </div>
-        </div>
+    <section className={managementStyles.menu}>
+      <div className={managementStyles.menuHeader}>
+        <StrikPageHeading title="Data & management" icon={strikIcons.data} />
+        <Link href="/bakkerij" className={managementStyles.backButton}>
+          <img src="/UI-apps_terug.svg" alt="" />
+          Productie
+        </Link>
       </div>
 
-      <p className="text-xs font-bold leading-relaxed text-[#707070]">
-        {isLoadingData ? "Laden..." : syncStatus}
-        {latestInvoiceNumber ? ` Laatste factuur: ${latestInvoiceNumber}.` : ""}
-      </p>
+      <div className={managementStyles.tiles}>
+        {dataTiles.map((tile) => (
+          <DataTileButton key={tile.view} title={tile.title} icon={tile.icon} tone={tile.tone} onClick={() => onOpen(tile.view)} />
+        ))}
+      </div>
+
+      <div className={managementStyles.menuFooter}>
+        <p className={managementStyles.meta}>
+          {latestInvoiceNumber ? `Laatste factuur · ${latestInvoiceNumber}` : ""}
+        </p>
+        <div className={managementStyles.actions}>
+          <details className={managementStyles.downloads} onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }
+          }}>
+            <summary className={managementStyles.action}>
+              <DownloadIcon />
+              Download recepten
+              <ChevronIcon direction="down" />
+            </summary>
+            <div className={managementStyles.downloadMenu}>
+              <button type="button" onClick={(event) => {
+                const details = event.currentTarget.closest("details");
+                if (details) details.open = false;
+                onDownloadExcel();
+              }}>Excel downloaden</button>
+              <button type="button" onClick={(event) => {
+                const details = event.currentTarget.closest("details");
+                if (details) details.open = false;
+                onDownloadJson();
+              }}>Herstelbestand</button>
+            </div>
+          </details>
+          <button type="button" className={managementStyles.action} onClick={() => onOpen("factuurimport")}>
+            <UploadIcon />
+            Facturen inladen
+          </button>
+        </div>
+      </div>
+      <ManagementSyncStatus status={syncStatus} isLoading={isLoadingData} />
     </section>
   );
 }
@@ -3306,52 +3277,21 @@ function BeheerHome({
 function DataTileButton({
   title,
   icon,
+  tone,
   onClick,
 }: Readonly<{
   title: string;
   icon: string;
+  tone: "green" | "yellow" | "coral" | "plum";
   onClick: () => void;
 }>) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex min-h-10 items-center justify-between gap-2 rounded-lg border border-[#dbe9ee] bg-white px-2.5 py-2 text-left shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99] sm:min-h-11"
-    >
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#b9d7ea] sm:h-8 sm:w-8">
-          <img src={icon} alt="" className="h-4 w-4 object-contain sm:h-5 sm:w-5" />
-        </span>
-        <span className="truncate text-sm font-black leading-tight text-[#1a1815] sm:text-base">
-          {title}
-        </span>
+    <button type="button" onClick={onClick} className={managementStyles.tile}>
+      <span className={`${managementStyles.tileIcon} ${tone === "green" ? "" : managementStyles[tone]}`}>
+        <span aria-hidden="true" style={{ WebkitMask: `url("${icon}") center / contain no-repeat`, mask: `url("${icon}") center / contain no-repeat` }} />
       </span>
-      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#e8f3f8] text-sm font-black transition group-active:scale-[0.96]">
-        &gt;
-      </span>
-    </button>
-  );
-}
-
-function DataIconButton({
-  title,
-  icon,
-  onClick,
-}: Readonly<{
-  title: string;
-  icon: ReactNode;
-  onClick: () => void;
-}>) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex min-h-11 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-[#dbe9ee] bg-white px-2.5 py-2 text-xs font-black text-[#1a1815] shadow-sm transition hover:bg-[#f4f9fb] active:scale-[0.99]"
-    >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#b9d7ea] text-[#1a1815]">
-        {icon}
-      </span>
-      <span className="truncate">{title}</span>
+      <span className={managementStyles.tileTitle}>{title}</span>
+      <span aria-hidden="true" className={managementStyles.chevron}><ChevronIcon direction="right" /></span>
     </button>
   );
 }
