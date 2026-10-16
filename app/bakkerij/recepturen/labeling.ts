@@ -17,15 +17,15 @@ export function calculateLabel(recipe: Recipe, ingredients: Ingredient[], recipe
     const next = new Set([...path, current.id]);
     current.allergens?.forEach((item) => allergens.add(item));
     for (const line of current.ingredients || []) {
-      if (!line.quantity) continue;
       usedIngredients.add(line.ingredientId);
       const ingredient = ingredients.find((item) => item.id === line.ingredientId);
+      if (!(line.quantity > 0)) warnings.add(`Hoeveelheid ontbreekt: ${ingredient?.name || line.ingredientId}`);
       ingredient?.allergens?.forEach((item) => allergens.add(item));
       if (ingredient && !ingredient.specification?.allergensConfirmed) warnings.add(`Allergenen nog niet gecontroleerd: ${ingredient.name}`);
     }
     for (const line of current.semiFinishedItems || []) {
-      if (!line.quantity) continue;
       const semi = recipes.find((item) => item.id === line.semiFinishedRecipeId);
+      if (!(line.quantity > 0)) warnings.add(`Hoeveelheid halffabricaat ontbreekt: ${semi?.name || line.semiFinishedRecipeId}`);
       if (semi) collectAllergens(semi, next);
     }
   }

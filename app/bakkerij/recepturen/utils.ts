@@ -1169,6 +1169,12 @@ export function findRecipe(recipes: Recipe[], id: string) {
   return recipes.find((recipe) => recipe.id === id);
 }
 
+export function recipeHasMissingQuantities(recipe: Pick<Recipe, "ingredients" | "semiFinishedItems">) {
+  return [...recipe.ingredients, ...recipe.semiFinishedItems].some(
+    (line) => !Number.isFinite(line.quantity) || line.quantity <= 0
+  );
+}
+
 export function linkedFinalProducts(recipes: Recipe[], semiFinishedId: string) {
   return recipes.filter((recipe) =>
     recipe.semiFinishedItems.some((item) => item.semiFinishedRecipeId === semiFinishedId)

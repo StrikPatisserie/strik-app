@@ -492,7 +492,7 @@ function addImportedRecipeComponent(
   sourceLine: string,
   context?: ImportResolutionContext
 ) {
-  if (!name || !quantity) return false;
+  if (!name || !Number.isFinite(quantity) || quantity < 0) return false;
 
   const matchingSemiFinished = context
     ? findMatchingSemiFinished(name, context.availableRecipes)
@@ -1012,7 +1012,7 @@ function parseRecipeRows(
       }
     }
 
-    if (ingredientName && quantity) {
+    if (ingredientName && getCell(row, map.quantity) !== "") {
       addImportedRecipeComponent(
         recipe,
         ingredientName,

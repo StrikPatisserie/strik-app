@@ -40,6 +40,7 @@ import {
   productionNeedForRecipe,
   productionNeedLabel,
   quantityLabel,
+  recipeHasMissingQuantities,
   recipeTypeLabel,
   recipeCostChange,
   recipeCostDelta,
@@ -2627,7 +2628,7 @@ export default function RecipeDetail({
                         <LineItem
                           key={`${item.ingredientId}-${index}`}
                           title={ingredient?.name || item.ingredientId}
-                          meta={quantityLabel(item.quantity, item.unit)}
+                          meta={item.quantity > 0 ? quantityLabel(item.quantity, item.unit) : "Hoeveelheid nog invullen"}
                           value={formatEuro(item.costContribution)}
                         />
                       );
@@ -2654,7 +2655,7 @@ export default function RecipeDetail({
                         <LineItem
                           key={`${item.semiFinishedRecipeId}-${index}`}
                           title={linkedRecipe?.name || item.semiFinishedRecipeId}
-                          meta={quantityLabel(item.quantity, item.unit)}
+                          meta={item.quantity > 0 ? quantityLabel(item.quantity, item.unit) : "Hoeveelheid nog invullen"}
                           value={formatEuro(item.costContribution)}
                         />
                       );
@@ -3188,7 +3189,7 @@ function buildRecipeFromDraft(
     previousCostPrice: recipe.costPrice,
     targetMargin: isSemiFinished ? 0 : parseDutchNumber(draft.targetMargin),
     currentMargin: isSemiFinished ? 0 : calculateMargin(salesPrice, costPrice),
-    status: draft.status,
+    status: recipeHasMissingQuantities({ ingredients: recipeIngredients, semiFinishedItems }) ? "draft" : draft.status,
     ingredients: recipeIngredients,
     semiFinishedItems,
     packagingItems: isSemiFinished ? [] : packagingItems,
@@ -3272,7 +3273,7 @@ function normalizeIngredientDrafts(
 ): RecipeIngredient[] {
   return lines
     .map((line) => normalizeIngredientDraft(line, ingredients))
-    .filter((line) => line.ingredientId && line.quantity > 0);
+    .filter((line) => line.ingredientId && Number.isFinite(line.quantity) && line.quantity >= 0);
 }
 
 function normalizeIngredientDraft(
@@ -3299,7 +3300,7 @@ function normalizeSemiFinishedDrafts(
 ): SemiFinishedUsage[] {
   return lines
     .map((line) => normalizeSemiFinishedDraft(line, recipes))
-    .filter((line) => line.semiFinishedRecipeId && line.quantity > 0);
+    .filter((line) => line.semiFinishedRecipeId && Number.isFinite(line.quantity) && line.quantity >= 0);
 }
 
 function normalizeSemiFinishedDraft(
@@ -3938,8 +3939,9 @@ function createRecipePrintHtml(
   batchQuantity = recipe.standardBatchQuantity || getBatchInfo(recipe)?.quantity || 1,
   variant: RecipePrintVariant = "work"
 ) {
-  const multiplier = batchQuantity > 0 ? quantity / batchQuantity : 1;
-  const isCalculation = variant === "calculation";
+  const incomplete = recipeHasMissingQuantities(recipe);
+  const multiplier = !incomplete && batchQuantity > 0 ? quantity / batchQuantity : 1;
+  const isCalculation = variant === "calculation" && !incomplete;
   const calculationRows = recipeCalculationPrintRows(
     recipe,
     ingredients,
@@ -3950,7 +3952,7 @@ function createRecipePrintHtml(
     .map(
       (item) =>
         `<tr><td>${escapeHtml(item.name)}</td><td>${escapeHtml(
-          formatRecipeCardQuantity(item.quantity)
+          item.quantity > 0 ? formatRecipeCardQuantity(item.quantity) : "Nog invullen"
         )}</td><td>${escapeHtml(shortUnitLabel(item.unit))}</td><td>${escapeHtml(
           item.isSemiFinished ? "halffabricaat" : ""
         )}</td>${
@@ -4059,7 +4061,7 @@ function createRecipePrintHtml(
         <h1>${escapeHtml(recipe.name)}</h1>
         <p class="type">${escapeHtml(recipe.productGroup || recipeTypeLabel(recipe.type))}</p>
         ${articleNumberMeta}
-        <p class="qty">${escapeHtml(formatInputNumber(quantity))} ${escapeHtml(unitLabelText(unit))}</p>
+        <p class="qty">${incomplete ? "Concept: hoeveelheden en batchgrootte nog aanvullen. Hieronder staan de ongeschaalde bronhoeveelheden." : `${escapeHtml(formatInputNumber(quantity))} ${escapeHtml(unitLabelText(unit))}`}</p>
         ${summaryCards}
         <section class="box">
           <h2>Ingredienten</h2>
@@ -4127,7 +4129,8 @@ function BakkerRecipeCard({
   onOpenRecipe?: (recipe: Recipe) => void;
 }>) {
   const baseQuantity = batchQuantity || getBatchInfo(recipe)?.quantity || 1;
-  const multiplier = baseQuantity > 0 ? quantity / baseQuantity : 1;
+  const incomplete = recipeHasMissingQuantities(recipe);
+  const multiplier = !incomplete && baseQuantity > 0 ? quantity / baseQuantity : 1;
   const rows = recipeCardIngredientRows(recipe, ingredients, recipes, multiplier);
   const baseRows = recipeCardIngredientRows(recipe, ingredients, recipes, 1);
   const scalableRows = recipe.type === "semiFinished" ? baseRows : [];
@@ -4236,6 +4239,8 @@ function BakkerRecipeCard({
                   <button
                     type="button"
                     onClick={onStart}
+                    disabled={incomplete}
+                    title={incomplete ? "Vul eerst de ontbrekende hoeveelheden en batchgrootte in." : undefined}
                     className={`border-r border-[#c3d3bc] px-1.5 py-2 ${
                       isStarted ? "bg-[#c3d3bc]" : "bg-white"
                     }`}
@@ -4245,6 +4250,7 @@ function BakkerRecipeCard({
                   <button
                     type="button"
                     onClick={onMarkMade}
+                    disabled={incomplete}
                     className={`border-r border-[#c3d3bc] px-1.5 py-1.5 text-xl leading-none ${
                       madeToday ? "bg-[#c3d3bc]" : "bg-white"
                     }`}
@@ -4270,7 +4276,7 @@ function BakkerRecipeCard({
                 </div>
               </div>
 
-              <div className="mt-2 flex items-center gap-1.5 pl-0.5">
+              {incomplete ? <p role="status" className="mt-3 rounded-lg bg-[#fff3cf] p-3 text-sm font-bold text-[#7a5a18]">Concept: hoeveelheden en batchgrootte nog aanvullen. Hieronder staan de ongeschaalde hoeveelheden uit het bronrecept.</p> : <div className="mt-2 flex items-center gap-1.5 pl-0.5">
                 <button
                   type="button"
                   onClick={() => onQuantityStep(-1)}
@@ -4299,9 +4305,9 @@ function BakkerRecipeCard({
                 >
                   +
                 </button>
-              </div>
+              </div>}
 
-              {recipe.type === "semiFinished" && scalableRows.length > 0 && (
+              {!incomplete && recipe.type === "semiFinished" && scalableRows.length > 0 && (
                 <div className="mt-3 grid gap-2 border border-[#c3d3bc] bg-white p-3 sm:grid-cols-[minmax(0,1.15fr)_9rem_auto] sm:items-end">
                   <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
                     Stuur op ingredient
@@ -4362,7 +4368,7 @@ function BakkerRecipeCard({
                     Kostprijs ex.
                   </p>
                   <p className="mt-0.5 text-sm font-black text-[#1a1815]">
-                    {formatEuro(recipe.costPrice)}
+                    {incomplete ? "Nog onvolledig" : formatEuro(recipe.costPrice)}
                   </p>
                 </div>
                 <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
@@ -4370,7 +4376,7 @@ function BakkerRecipeCard({
                     Marge ex.
                   </p>
                   <p className="mt-0.5 text-sm font-black text-[#1a1815]">
-                    {cardMargin ? formatPercent(cardMargin) : "-"}
+                    {!incomplete && cardMargin ? formatPercent(cardMargin) : "-"}
                   </p>
                 </div>
               </div>
@@ -4388,7 +4394,7 @@ function BakkerRecipeCard({
                       >
                         <span className="truncate font-black text-[#1a1815]">{row.name}</span>
                         <span className="text-right font-black text-[#30462f]">
-                          {formatRecipeCardQuantity(row.quantity)}
+                          {row.quantity > 0 ? formatRecipeCardQuantity(row.quantity) : "Nog invullen"}
                         </span>
                         <span className="font-black text-[#30462f]/80">{shortUnitLabel(row.unit)}</span>
                         <span className="flex min-w-0 justify-end">

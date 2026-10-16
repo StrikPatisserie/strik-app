@@ -12,6 +12,7 @@ import {
   formatBatchWeight,
   formatDate,
   normalizeSearch,
+  recipeHasMissingQuantities,
   scaledRecipeBatchWeightKg,
   todayIsoDate,
 } from "./utils";
@@ -224,7 +225,7 @@ function createPrintHtml(
   const ingredientRows = combineWorkIngredientLines(ingredients, semiFinished)
     .map(
       (item) =>
-        `<tr><td>${escapeHtml(formatAmount(item.quantity, item.unit))}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(
+        `<tr><td>${escapeHtml(item.quantity > 0 ? formatAmount(item.quantity, item.unit) : "Nog invullen")}</td><td>${escapeHtml(item.name)}</td><td>${escapeHtml(
           item.kind === "semi" ? "Halffabricaat" : "Grondstof"
         )}</td></tr>`
     )
@@ -660,6 +661,7 @@ export function WorkRecipeDetail({
   onClose: () => void;
 }>) {
   const standardBatch = getStandardBatch(recipe);
+  const incomplete = recipeHasMissingQuantities(recipe);
   const [batchQuantity, setBatchQuantity] = useState(
     initialQuantity || standardBatch.quantity
   );
@@ -678,7 +680,7 @@ export function WorkRecipeDetail({
   const [isRegisteringProduction, setIsRegisteringProduction] = useState(false);
   const [areStepsOpen, setAreStepsOpen] = useState(false);
   const activeBatch = { ...standardBatch, quantity: batchQuantity };
-  const multiplier = standardBatch.quantity
+  const multiplier = !incomplete && standardBatch.quantity
     ? batchQuantity / standardBatch.quantity
     : 1;
   const batchWeightKg = scaledRecipeBatchWeightKg(recipe, multiplier);
@@ -759,8 +761,7 @@ export function WorkRecipeDetail({
                   {recipe.name}
                 </h2>
                 <p className="mt-2 text-sm font-bold text-[#2d2a26]/55">
-                  {recipe.productGroup} - {getRecipeTypeLabel(recipe)} - standaard{" "}
-                  {formatBatch(standardBatch)}
+                  {recipe.productGroup} - {getRecipeTypeLabel(recipe)} - {incomplete ? "concept, hoeveelheden nog aanvullen" : `standaard ${formatBatch(standardBatch)}`}
                 </p>
               </div>
               <button
@@ -776,7 +777,8 @@ export function WorkRecipeDetail({
             )}
           </div>
 
-          <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          {incomplete && <p role="status" className="mt-4 rounded-xl bg-[#fff3cf] p-3 text-sm font-bold text-[#7a5a18]">Concept: vul de ontbrekende hoeveelheden en batchgrootte in voordat je schaalt of produceert. De ingrediënten hieronder tonen de ongeschaalde bronhoeveelheden.</p>}
+          <fieldset disabled={incomplete} className={`mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end ${incomplete ? "hidden" : ""}`}>
             <div>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/42">
                 Batch schalen
@@ -890,7 +892,7 @@ export function WorkRecipeDetail({
                 Print productiekaart
               </button>
             </div>
-          </div>
+          </fieldset>
         </div>
 
         <div className="mt-4 grid gap-4">
@@ -903,7 +905,7 @@ export function WorkRecipeDetail({
                     className="grid gap-2 border-b border-[#e2dbcf] px-3 py-2 text-sm last:border-b-0 sm:grid-cols-[7rem_minmax(0,1fr)_auto] sm:items-center"
                   >
                     <span className="font-black text-[#45663b]">
-                      {formatAmount(item.quantity, item.unit)}
+                      {item.quantity > 0 ? formatAmount(item.quantity, item.unit) : "Nog invullen"}
                     </span>
                     <span className="min-w-0 font-black">{item.name}</span>
                     {item.kind === "semi" ? (
@@ -1000,7 +1002,7 @@ export function WorkRecipeDetail({
         </div>
       </div>
 
-      {isProducing && (
+      {isProducing && !incomplete && (
         <ProductionMode
           recipe={recipe}
           batch={activeBatch}
@@ -1023,7 +1025,7 @@ export function WorkRecipeDetail({
           }}
         />
       )}
-      {isRegisteringProduction && (
+      {isRegisteringProduction && !incomplete && (
         <ProductionRegistrationDialog
           title="Product gemaakt opslaan"
           quantity={batchQuantity}
