@@ -6,6 +6,7 @@ import {
   formatDate,
   normalizeSearch,
   productionLogForRecipe,
+  recipeHasMissingQuantities,
   recipeTypeLabel,
 } from "./utils";
 
@@ -287,7 +288,7 @@ export default function RecipesList({
                       {recipe.productGroup || "-"}
                     </p>
                     <p className="hidden truncate px-2 text-[0.62rem] font-bold text-[#707070] md:block">
-                      {recipe.batchSize || "-"}
+                      {recipeHasMissingQuantities(recipe) ? "Concept" : recipe.batchSize || "-"}
                     </p>
                     <p className="hidden truncate px-2 text-[0.62rem] font-bold text-[#707070] md:block">
                       {latestProductionLabel(recipe)}

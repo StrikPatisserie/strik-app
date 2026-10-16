@@ -3979,7 +3979,7 @@ function createRecipePrintHtml(
     ? calculateMargin(recipe.salesPrice, recipe.costPrice)
     : 0;
   const printTitle =
-    variant === "calculation" ? "Calculatiekaart" : "Recept / werkkaart";
+    isCalculation ? "Calculatiekaart" : "Recept / werkkaart";
   const summaryCards = isCalculation
     ? `<section class="summary">
         <div><span>Kostprijs ex.</span><strong>${escapeHtml(
