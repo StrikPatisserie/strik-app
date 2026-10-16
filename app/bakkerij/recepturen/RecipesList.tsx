@@ -2,6 +2,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { productGroups } from "./mockData";
 import type { Recipe } from "./types";
 import { EmptyState } from "./RecepturenShared";
+import styles from "./RecipeScreens.module.css";
 import {
   formatDate,
   normalizeSearch,
@@ -114,13 +115,10 @@ export default function RecipesList({
   }, [activeGroup, recipes, search, sortBy, status, type]);
 
   return (
-    <section className="flex h-full min-h-0 flex-col gap-2 overflow-hidden">
-      <div className="flex items-center justify-between gap-2">
+    <section className={styles.list}>
+      <div className={styles.listHeader}>
         <div className="min-w-0">
-          <p className="text-[0.62rem] font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
-            Recept
-          </p>
-          <h2 className="truncate text-2xl font-black leading-none text-[#111111] md:text-3xl">
+          <h2 className="truncate">
             Recepten
           </h2>
         </div>
@@ -141,25 +139,18 @@ export default function RecipesList({
         </div>
       </div>
 
-      <label className="grid gap-1 border border-[#c3d3bc] bg-white p-2 shadow-sm">
-        <span className="text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c]">
-          Zoek recept
-        </span>
-        <span className="grid h-9 grid-cols-[2.2rem_minmax(0,1fr)] border border-[#c3d3bc]">
-          <span className="flex items-center justify-center bg-[#c3d3bc] text-base">
-            <SearchIcon />
-          </span>
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="typ om snel te zoeken"
-            className="min-w-0 px-2 text-sm font-light outline-none placeholder:text-[#9a9a9a]"
-          />
-        </span>
+      <label className={styles.search}>
+        <SearchIcon />
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Zoek recept of artikelnummer"
+          aria-label="Zoek recept of artikelnummer"
+        />
       </label>
 
       {filtersOpen && (
-        <div className="grid gap-2 border border-[#c3d3bc] bg-white p-2 shadow-sm md:ml-auto md:w-[min(100%,38rem)] md:grid-cols-[1fr_1fr_auto] md:items-end">
+        <div className={styles.filterPanel}>
           <CompactSelect
             label="Categorie"
             value={activeGroup}
@@ -211,16 +202,16 @@ export default function RecipesList({
                   setType("all");
                   setSortBy("name");
                 }}
-                className="h-8 border border-[#e7e0d8] bg-[#fffdf8] px-3 text-xs font-black text-[#707070]"
+                className="h-8 rounded-lg border border-[#e7e0d8] bg-white px-3 text-xs font-bold text-[#756b60]"
               >
                 Reset
               </button>
               <button
                 type="button"
                 onClick={() => setFiltersOpen(false)}
-                className="h-8 border border-[#c3d3bc] bg-[#c3d3bc] px-4 text-xs font-black text-[#24401f]"
+                className="h-8 rounded-lg bg-[#315e42] px-3 text-xs font-bold text-white"
               >
-                Ga
+                Sluiten
               </button>
             </div>
             <div className="flex items-center gap-2">
@@ -248,49 +239,49 @@ export default function RecipesList({
         </div>
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col border border-[#c3d3bc] bg-white">
+      <div className={styles.table}>
         {filteredRecipes.length ? (
           <>
-            <div className="hidden shrink-0 border-b border-[#c3d3bc] bg-[#f5f5f3] text-[0.56rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c] md:grid md:grid-cols-[1.25rem_minmax(11rem,1fr)_5.5rem_6.5rem_6rem_5rem_7.25rem] lg:grid-cols-[1.25rem_minmax(16rem,40rem)_6rem_7.5rem_7rem_6rem_8rem] xl:grid-cols-[1.25rem_minmax(18rem,44rem)_6.5rem_8rem_7.5rem_6rem_8rem]">
+            <div className={styles.tableHeader}>
               <span />
               <span>Recept</span>
               <span>Artikel</span>
-              <span>Soort</span>
+              <span className={styles.kind}>Soort</span>
               <span>Categorie</span>
               <span>Batch</span>
               <span>Laatste productie</span>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+            <div className={styles.rows}>
               {filteredRecipes.map((recipe) => {
                 return (
                   <button
                     key={recipe.id}
                     type="button"
                     onClick={() => onOpenRecipe(recipe)}
-                    className="grid w-full grid-cols-[1.25rem_minmax(0,1fr)] items-center border-b border-[#c3d3bc] text-left transition hover:bg-[#f8f8f6] md:grid-cols-[1.25rem_minmax(11rem,1fr)_5.5rem_6.5rem_6rem_5rem_7.25rem] lg:grid-cols-[1.25rem_minmax(16rem,40rem)_6rem_7.5rem_7rem_6rem_8rem] xl:grid-cols-[1.25rem_minmax(18rem,44rem)_6.5rem_8rem_7.5rem_6rem_8rem]"
+                    className={styles.row}
                   >
-                    <span className={`h-full min-h-[3rem] md:min-h-[2.15rem] ${recipeStripeClass(recipe)}`} />
-                    <div className="min-w-0 px-2 py-1.5 md:py-0.5">
-                      <p className="truncate text-[clamp(0.72rem,1.55vw,1rem)] font-light leading-tight text-[#111111] md:text-[0.88rem]">
+                    <span className={`${styles.stripe} ${recipeStripeClass(recipe)}`} />
+                    <div className={styles.recipeName}>
+                      <p title={recipe.name}>
                         {recipe.name}
                       </p>
-                      <p className="mt-0.5 truncate text-[0.5rem] font-bold text-[#707070] sm:text-[0.6rem] md:hidden">
+                      <p className={styles.mobileMeta}>
                         {compactRecipeMeta(recipe)}
                       </p>
                     </div>
-                    <p className="hidden truncate px-2 text-[0.62rem] font-black text-[#707070] md:block">
+                    <p className={styles.cell}>
                       {recipe.strikArticleNumber || "-"}
                     </p>
-                    <p className="hidden truncate px-2 text-[0.62rem] font-black text-[#707070] md:block">
+                    <p className={`${styles.cell} ${styles.kind}`}>
                       {recipeTypeLabel(recipe.type)}
                     </p>
-                    <p className="hidden truncate px-2 text-[0.62rem] font-bold text-[#707070] md:block">
+                    <p className={styles.cell}>
                       {recipe.productGroup || "-"}
                     </p>
-                    <p className="hidden truncate px-2 text-[0.62rem] font-bold text-[#707070] md:block">
+                    <p className={styles.cell}>
                       {recipeHasMissingQuantities(recipe) ? "Concept" : recipe.batchSize || "-"}
                     </p>
-                    <p className="hidden truncate px-2 text-[0.62rem] font-bold text-[#707070] md:block">
+                    <p className={styles.cell}>
                       {latestProductionLabel(recipe)}
                     </p>
                   </button>
@@ -391,7 +382,7 @@ function compactRecipeMeta(recipe: Recipe) {
 }
 
 function ToolbarButton({
-  active = false,
+  active,
   children,
   label,
   onClick,
@@ -407,11 +398,8 @@ function ToolbarButton({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`flex h-9 w-9 items-center justify-center border text-[#111111] shadow-sm transition active:scale-95 md:h-10 md:w-10 ${
-        active
-          ? "border-[#ef4d37] bg-[#ef4d37] text-white"
-          : "border-[#c3d3bc] bg-white hover:bg-[#f8f8f6]"
-      }`}
+      className={styles.toolbarButton}
+      aria-pressed={active}
     >
       {children}
     </button>
@@ -430,12 +418,11 @@ function CompactSelect({
   options: Array<{ value: string; label: string }>;
 }>) {
   return (
-    <label className="grid gap-1 text-[0.58rem] font-black uppercase tracking-[0.14em] text-[#8c8c8c]">
+    <label className={styles.selectLabel}>
       <span>{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-9 min-w-0 border border-[#c3d3bc] bg-white px-2 text-sm font-bold normal-case tracking-normal text-[#111111] outline-none"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -460,7 +447,8 @@ function TinyToggle({
     <button
       type="button"
       onClick={onClick}
-      className={`h-9 border px-2 text-xs font-black transition active:scale-[0.98] ${
+      aria-pressed={active}
+      className={`${styles.tinyToggle} ${
         active
           ? "border-[#c3d3bc] bg-[#c3d3bc] text-[#24401f]"
           : "border-[#e7e0d8] bg-[#fffdf8] text-[#707070]"

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import RecipeLabelPanel from "./RecipeLabelPanel";
+import styles from "./RecipeScreens.module.css";
 import type {
   Ingredient,
   PackagingItem,
@@ -1294,7 +1295,7 @@ export default function RecipeDetail({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#c3d3bc] px-3 py-4 text-[#49342d] sm:px-6 sm:py-6 lg:px-8">
+    <div className={`${styles.editor} fixed inset-0 z-[70] overflow-y-auto bg-[#c3d3bc] px-3 py-3 text-[#49342d] sm:px-5 sm:py-4`}>
       <span
         aria-hidden="true"
         className="pointer-events-none fixed -right-[22rem] top-12 h-[34rem] w-[46rem] rotate-[-9deg] bg-[#dce6d8] opacity-55 sm:-right-[28rem] sm:-top-40 sm:h-[68rem] sm:w-[90rem]"
@@ -1500,11 +1501,8 @@ export default function RecipeDetail({
               <section className="-mx-3 border-y border-[#e6ddd2] bg-white sm:-mx-5">
                 <div className="flex flex-wrap items-end justify-between gap-2 px-4 py-3 sm:px-5">
                   <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <p className="font-[Butterscotch] text-[2.2rem] font-normal leading-[0.78] text-[#55704d]/75 sm:text-[2.55rem]">
+                    <p className="text-sm font-bold text-[#315e42]">
                       Recept
-                    </p>
-                    <p className="text-[0.58rem] font-normal italic tracking-[0.02em] text-[#49342d]/35">
-                      Grondstoffen en halffabricaten in bereidingsvolgorde
                     </p>
                   </div>
                   <p className="text-[0.62rem] font-black text-[#55704d]">
@@ -4185,361 +4183,82 @@ function BakkerRecipeCard({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-white/70 px-2 py-2 backdrop-blur-[1px] sm:py-4">
-      <div className="mx-auto w-[min(60rem,calc(100vw-0.75rem))] border border-[#d7d2cb] bg-white px-3 py-3 shadow-2xl sm:px-5">
-        {labeling}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex h-7 items-center gap-1 border border-[#c3d3bc] bg-white px-2 text-[0.68rem] font-black"
-            >
-              <img src="/UI-apps_terug.svg" alt="" className="h-4 w-4" />
-              Terug
-            </button>
-            <p className="text-xs italic text-[#111111]/60">Recept kaart</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-3xl font-light leading-none text-[#111111]"
-            aria-label="Sluit receptkaart"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-[0.65rem_minmax(0,1fr)]">
-          <div className={`hidden sm:block ${recipeCardStripeClass(recipe)}`} />
-          <div
-            className={`grid gap-3 ${
-              recipe.type === "finalProduct"
-                ? "lg:grid-cols-[minmax(0,1.4fr)_10rem]"
-                : ""
-            }`}
-          >
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h2 className="truncate text-[clamp(1.25rem,3.2vw,1.8rem)] font-light leading-none">
-                    {recipe.name}
-                  </h2>
-                  <p className="mt-1 text-xs italic text-[#555555]">
-                    {recipe.productGroup || recipeTypeLabel(recipe.type)}
-                  </p>
-                  {recipe.strikArticleNumber && (
-                    <p className="mt-1 text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#45663b]">
-                      art. {recipe.strikArticleNumber}
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-[3.35rem_2.35rem_2.6rem_2.35rem] border border-[#c3d3bc] text-center text-[0.58rem] uppercase tracking-[0.08em]">
-                  <button
-                    type="button"
-                    onClick={onStart}
-                    disabled={incomplete}
-                    title={incomplete ? "Vul eerst de ontbrekende hoeveelheden en batchgrootte in." : undefined}
-                    className={`border-r border-[#c3d3bc] px-1.5 py-2 ${
-                      isStarted ? "bg-[#c3d3bc]" : "bg-white"
-                    }`}
-                  >
-                    Start
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onMarkMade}
-                    disabled={incomplete}
-                    className={`border-r border-[#c3d3bc] px-1.5 py-1.5 text-xl leading-none ${
-                      madeToday ? "bg-[#c3d3bc]" : "bg-white"
-                    }`}
-                    aria-label="Gemaakt"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onPrint}
-                    className="border-r border-[#c3d3bc] px-1.5 py-2 text-[0.58rem] font-black tracking-normal"
-                  >
-                    Print
-                  </button>
-                  {onEdit && <button
-                    type="button"
-                    onClick={onEdit}
-                    className="px-1.5 py-2 text-xl leading-none"
-                    aria-label="Aanpassen"
-                  >
-                    ✎
-                  </button>}
-                </div>
-              </div>
-
-              {incomplete ? <p role="status" className="mt-3 rounded-lg bg-[#fff3cf] p-3 text-sm font-bold text-[#7a5a18]">Concept: hoeveelheden en batchgrootte nog aanvullen. Hieronder staan de ongeschaalde hoeveelheden uit het bronrecept.</p> : <div className="mt-2 flex items-center gap-1.5 pl-0.5">
-                <button
-                  type="button"
-                  onClick={() => onQuantityStep(-1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xl shadow"
-                  aria-label="Hoeveelheid verlagen"
-                >
-                  -
-                </button>
-                <input
-                  value={quantityInput}
-                  onChange={(event) => changeQuantityInput(event.target.value)}
-                  onFocus={() => setQuantityInputFocused(true)}
-                  onBlur={finishQuantityInput}
-                  inputMode="decimal"
-                  className="h-8 w-20 rounded-lg border border-[#e4d8cb] bg-white text-center text-xs font-black outline-none"
-                  aria-label="Hoeveelheid"
-                />
-                <span className="text-xs font-black text-[#707070]">
-                  {unitLabelText(getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk")}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onQuantityStep(1)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xl shadow"
-                  aria-label="Hoeveelheid verhogen"
-                >
-                  +
-                </button>
-              </div>}
-
-              {!incomplete && recipe.type === "semiFinished" && scalableRows.length > 0 && (
-                <div className="mt-3 grid gap-2 border border-[#c3d3bc] bg-white p-3 sm:grid-cols-[minmax(0,1.15fr)_9rem_auto] sm:items-end">
-                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
-                    Stuur op ingredient
-                    <select
-                      value={selectedScaleRow?.id || ""}
-                      onChange={(event) => {
-                        setScaleIngredientId(event.target.value);
-                        const parsed = parseDutchNumber(scaleAmount);
-                        if (parsed > 0) onScaleFromIngredient(event.target.value, parsed);
-                      }}
-                      className="min-w-0 border border-[#c3d3bc] bg-white px-2 py-2 text-sm font-black normal-case tracking-normal text-[#111111]"
-                    >
-                      {scalableRows.map((row) => (
-                        <option key={row.id} value={row.id}>
-                          {row.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
-                    Hoeveelheid
-                    <input
-                      value={scaleAmount}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setScaleAmount(value);
-                        onScaleFromIngredient(
-                          selectedScaleRow?.id || "",
-                          parseDutchNumber(value)
-                        );
-                      }}
-                      inputMode="decimal"
-                      placeholder={
-                        selectedScaleRow
-                          ? formatInputNumber(selectedScaleRow.quantity)
-                          : "0"
-                      }
-                      className="min-w-0 border border-[#c3d3bc] bg-white px-2 py-2 text-sm font-black normal-case tracking-normal text-[#111111] outline-none"
-                    />
-                  </label>
-                  <span className="pb-2 text-xs font-black text-[#707070]">
-                    {selectedScaleRow ? shortUnitLabel(selectedScaleRow.unit) : ""}
-                  </span>
-                </div>
-              )}
-
-              <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-[0.95rem] border border-[#dfe9d8] bg-white p-2">
-                <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
-                  <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
-                    Winkelprijs incl.
-                  </p>
-                  <p className="mt-0.5 text-sm font-black text-[#1a1815]">
-                    {recipe.salesPrice ? formatEuro(recipe.salesPrice) : "-"}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
-                  <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
-                    Kostprijs ex.
-                  </p>
-                  <p className="mt-0.5 text-sm font-black text-[#1a1815]">
-                    {incomplete ? "Nog onvolledig" : formatEuro(recipe.costPrice)}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-[#f8fbf5] px-2 py-1.5">
-                  <p className="text-[0.58rem] font-black uppercase tracking-[0.1em] text-[#2d2a26]/45">
-                    Marge ex.
-                  </p>
-                  <p className="mt-0.5 text-sm font-black text-[#1a1815]">
-                    {!incomplete && cardMargin ? formatPercent(cardMargin) : "-"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3 rounded-[0.95rem] border border-[#c3d3bc] bg-[#edf5ea] p-2.5">
-                <h3 className="text-[0.72rem] font-black uppercase tracking-[0.12em] text-[#30462f]">
-                  Ingredienten
-                </h3>
-                <div className="mt-2 grid gap-1.5">
-                  {rows.length ? (
-                    rows.map((row) => (
-                      <div
-                        key={row.id}
-                        className="grid grid-cols-[minmax(0,1fr)_3.3rem_2.35rem_minmax(4.5rem,auto)] items-center gap-2 rounded-lg bg-white/78 px-2 py-1.5 text-xs sm:grid-cols-[minmax(0,1fr)_4rem_2.8rem_minmax(5.7rem,auto)] sm:text-sm"
-                      >
-                        <span className="truncate font-black text-[#1a1815]">{row.name}</span>
-                        <span className="text-right font-black text-[#30462f]">
-                          {row.quantity > 0 ? formatRecipeCardQuantity(row.quantity) : "Nog invullen"}
-                        </span>
-                        <span className="font-black text-[#30462f]/80">{shortUnitLabel(row.unit)}</span>
-                        <span className="flex min-w-0 justify-end">
-                          {row.linkedRecipe && onOpenRecipe ? (
-                            <button
-                              type="button"
-                              onClick={() => onOpenRecipe(row.linkedRecipe!)}
-                              className="inline-flex min-w-0 items-center justify-end gap-1 text-right text-[0.68rem] italic text-[#555555] sm:text-xs"
-                            >
-                              <span className="truncate">halffabricaat</span>
-                              <img
-                                src="/UI-apps_ga naar.svg"
-                                alt=""
-                              className="h-3.5 w-3.5 shrink-0"
-                              />
-                            </button>
-                          ) : row.isSemiFinished ? (
-                            <span className="truncate text-right text-[0.68rem] italic text-[#555555] sm:text-xs">
-                              halffabricaat
-                            </span>
-                          ) : null}
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="rounded-lg bg-white/70 p-2 text-xs font-bold text-[#707070]">
-                      Nog geen ingredienten.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-2 border border-[#dfe9d8] bg-white/70 px-2 py-1.5 text-[0.68rem] font-bold text-[#2d2a26]/58">
-                <p className="font-black uppercase tracking-[0.12em] text-[#45663b]">
-                  Productie geschiedenis
-                </p>
-                {productionHistory.length ? (
-                  <div className="mt-1 grid gap-1">
-                    {productionHistory.map((entry) => (
-                      <div
-                        key={entry.id}
-                        className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-2"
-                      >
-                        <span>{formatDate(entry.date)}</span>
-                        <span className="truncate italic">
-                          {entry.note || "Gemaakt"}
-                        </span>
-                        <span className="font-black text-[#30462f]">
-                          {quantityLabel(entry.quantity, productionUnit)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-1 italic">Nog geen productie geregistreerd.</p>
-                )}
-              </div>
-
-              {steps.length > 0 && (
-                <details className="mt-2 border border-[#e1ddd6] bg-[#f8f6f3] px-2 py-1.5 text-xs font-semibold leading-snug text-[#2d2a26]/72 sm:text-sm">
-                  <summary className="cursor-pointer text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#2d2a26]/52">
-                    Stappen ({steps.length})
-                  </summary>
-                  <ol className="mt-2 grid gap-1.5">
-                    {steps.map((step, index) => (
-                      <li key={`${step}-${index}`}>
-                        {index + 1}. {step}
-                      </li>
-                    ))}
-                  </ol>
-                </details>
-              )}
-              {recipe.type === "semiFinished" && feedback && (
-                <p className="mt-3 text-xs font-black text-[#45663b]">
-                  {feedback}
-                </p>
-              )}
+    <div className={`${styles.overlay} fixed inset-0`}>
+      <div className={styles.card}>
+        <header className={styles.cardHeader}>
+          <div className="flex min-w-0 items-start gap-3">
+            {recipe.photoPreviewDataUrl && <img src={recipe.photoPreviewDataUrl} alt={recipe.photoHint || recipe.name} className={styles.photo} />}
+            <div className={styles.cardTitle}>
+              <h2>{recipe.name}</h2>
+              <p className={styles.cardMeta}>{[recipe.productGroup || recipeTypeLabel(recipe.type), recipe.strikArticleNumber ? `Art. ${recipe.strikArticleNumber}` : ""].filter(Boolean).join(" · ")}</p>
             </div>
-
-            {recipe.type === "finalProduct" && (
-            <aside className="grid max-w-40 content-start gap-2 justify-self-end text-right text-[0.72rem] italic text-[#555555]">
-              {recipe.photoPreviewDataUrl ? (
-                <img
-                  src={recipe.photoPreviewDataUrl}
-                  alt={recipe.photoHint || recipe.name}
-                  className="aspect-square w-full rounded-lg object-cover"
-                />
-              ) : (
-                <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-[#efefef] text-2xl font-black not-italic text-[#8c8c8c]">
-                  R
-                </div>
-              )}
-              <p>
-                categorie: <strong>{recipe.productGroup || recipeTypeLabel(recipe.type)}</strong>
-              </p>
-              <p>
-                laatst gewijzigd: <strong>{formatDate(recipe.lastUpdated)}</strong>
-              </p>
-              {latestMadeEntry ? (
-                <p>
-                  laatst gemaakt op:{" "}
-                  <strong>
-                    {formatDate(latestMadeEntry.date)}
-                  </strong>
-                </p>
-              ) : null}
-              {latestMadeEntry ? (
-                <p>
-                  hoeveelheid:{" "}
-                  <strong>
-                    {quantityLabel(latestMadeEntry.quantity, productionUnit)}
-                  </strong>
-                </p>
-              ) : null}
-              {recipe.averageSalesQuantity ? (
-                <p>
-                  gemiddeld per periode:{" "}
-                  <strong>
-                    {formatInputNumber(recipe.averageSalesQuantity)}/
-                    {salesPeriodText(recipe.averageSalesPeriod || "week")}
-                  </strong>
-                </p>
-              ) : null}
-              {feedback && (
-                <p className="mt-2 text-left text-xs font-black not-italic text-[#45663b]">
-                  {feedback}
-                </p>
-              )}
-            </aside>
-            )}
           </div>
-        </div>
+          <div className={styles.actions}>
+            <button type="button" onClick={onStart} disabled={incomplete} title={incomplete ? "Vul eerst de ontbrekende hoeveelheden en batchgrootte in." : undefined} className={`${styles.action} ${isStarted ? styles.primaryAction : ""}`}>Start</button>
+            <button type="button" onClick={onMarkMade} disabled={incomplete} className={`${styles.action} ${madeToday ? styles.primaryAction : ""}`}>✓ Gemaakt</button>
+            <button type="button" onClick={onPrint} className={styles.action}>Print</button>
+            {onEdit && <button type="button" onClick={onEdit} className={styles.action}>Bewerken</button>}
+            <button type="button" onClick={onClose} className={styles.action} aria-label="Sluit receptkaart">×</button>
+          </div>
+        </header>
+
+        {incomplete ? <p role="status" className={styles.notice}>Concept: hoeveelheden en batchgrootte nog aanvullen. De hoeveelheden hieronder zijn nog niet geschaald.</p> : <div className={styles.quantityRow}>
+          <span className="text-[#82786e]">Batch</span>
+          <button type="button" onClick={() => onQuantityStep(-1)} className={styles.action} aria-label="Hoeveelheid verlagen">−</button>
+          <input value={quantityInput} onChange={(event) => changeQuantityInput(event.target.value)} onFocus={() => setQuantityInputFocused(true)} onBlur={finishQuantityInput} inputMode="decimal" aria-label="Hoeveelheid" />
+          <span>{unitLabelText(getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk")}</span>
+          <button type="button" onClick={() => onQuantityStep(1)} className={styles.action} aria-label="Hoeveelheid verhogen">+</button>
+        </div>}
+
+        {!incomplete && recipe.type === "semiFinished" && scalableRows.length > 0 && <details className={styles.compactDetails}>
+          <summary>Schalen op grondstof</summary>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto] sm:items-end">
+            <label className="grid min-w-0 gap-1 text-xs font-bold">Grondstof
+              <select value={selectedScaleRow?.id || ""} onChange={(event) => { setScaleIngredientId(event.target.value); const parsed = parseDutchNumber(scaleAmount); if (parsed > 0) onScaleFromIngredient(event.target.value, parsed); }} className="min-w-0 rounded-lg border border-[#dfdfd3] bg-white p-2 text-xs">
+                {scalableRows.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+              </select>
+            </label>
+            <label className="grid min-w-0 gap-1 text-xs font-bold">Hoeveelheid
+              <input value={scaleAmount} onChange={(event) => { setScaleAmount(event.target.value); onScaleFromIngredient(selectedScaleRow?.id || "", parseDutchNumber(event.target.value)); }} inputMode="decimal" placeholder={selectedScaleRow ? formatInputNumber(selectedScaleRow.quantity) : "0"} className="min-w-0 rounded-lg border border-[#dfdfd3] bg-white p-2 text-xs" />
+            </label>
+            <span className="pb-2 text-xs text-[#82786e]">{selectedScaleRow ? shortUnitLabel(selectedScaleRow.unit) : ""}</span>
+          </div>
+        </details>}
+
+        <dl className={styles.metrics}>
+          <div><dt>Winkelprijs incl.</dt><dd>{recipe.salesPrice ? formatEuro(recipe.salesPrice) : "—"}</dd></div>
+          <div><dt>Kostprijs ex.</dt><dd>{incomplete ? "Onvolledig" : formatEuro(recipe.costPrice)}</dd></div>
+          <div><dt>Marge ex.</dt><dd>{!incomplete && cardMargin ? formatPercent(cardMargin) : "—"}</dd></div>
+        </dl>
+
+        {labeling}
+
+        <section className={styles.ingredients} aria-label="Ingrediënten">
+          <div className={styles.sectionHeading}><h3>Ingrediënten</h3><span>{rows.length} regels</span></div>
+          {rows.length ? <ul>{rows.map((row) => <li key={row.id} className={styles.ingredientRow}>
+            <span title={row.name}>{row.name}</span>
+            <span className={styles.ingredientQuantity}>{row.quantity > 0 ? `${formatRecipeCardQuantity(row.quantity)} ${shortUnitLabel(row.unit)}` : "Nog invullen"}</span>
+            <span className={styles.componentLink}>{row.linkedRecipe && onOpenRecipe ? <button type="button" onClick={() => onOpenRecipe(row.linkedRecipe!)} title={`Open ${row.name}`}>Halffabr. ↗</button> : row.isSemiFinished ? "Halffabr." : null}</span>
+          </li>)}</ul> : <p className="p-3 text-xs text-[#82786e]">Nog geen ingrediënten.</p>}
+        </section>
+
+        {steps.length > 0 && <details className={styles.compactDetails}>
+          <summary>Bereiding · {steps.length} stappen</summary>
+          <ol className="grid gap-2">{steps.map((step, index) => <li key={`${step}-${index}`} className="flex gap-2"><span className="font-bold text-[#315e42]">{index + 1}.</span><span>{step}</span></li>)}</ol>
+        </details>}
+
+        <details className={styles.compactDetails}>
+          <summary>Productie{latestMadeEntry ? ` · ${formatDate(latestMadeEntry.date)}` : ""}</summary>
+          {productionHistory.length ? <div className="grid gap-2">{productionHistory.map((entry) => <div key={entry.id} className="grid grid-cols-[5rem_minmax(0,1fr)_auto] gap-2">
+            <span>{formatDate(entry.date)}</span><span className="truncate text-[#82786e]">{entry.note || "Gemaakt"}</span><strong>{quantityLabel(entry.quantity, productionUnit)}</strong>
+          </div>)}</div> : <p className="text-[#82786e]">Nog geen productie geregistreerd.</p>}
+          {recipe.averageSalesQuantity ? <p className="mt-2 text-[#82786e]">Gemiddeld {formatInputNumber(recipe.averageSalesQuantity)} / {salesPeriodText(recipe.averageSalesPeriod || "week")}</p> : null}
+        </details>
+
+        <footer className={styles.footer}><span>Bijgewerkt {formatDate(recipe.lastUpdated)}</span>{feedback && <span role="status" className="font-bold text-[#315e42]">{feedback}</span>}</footer>
       </div>
     </div>
   );
-}
-
-function recipeCardStripeClass(recipe: Recipe) {
-  if (recipe.type === "semiFinished") return "bg-[#f6f2a4]";
-
-  const normalizedGroup = recipe.productGroup.toLocaleLowerCase("nl-NL");
-  if (normalizedGroup.includes("ijs")) return "bg-[#9fd0dc]";
-  if (normalizedGroup.includes("taart")) return "bg-[#e9c5dc]";
-
-  return "bg-[#c3d3bc]";
 }
 
 function ProductionHistoryPanel({
