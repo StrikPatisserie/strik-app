@@ -1,5 +1,6 @@
 import { type ReactNode, useMemo, useState } from "react";
 import IngredientSpecificationEditor from "./IngredientSpecificationEditor";
+import SpecsPlazaConnectionPanel from "./SpecsPlazaConnectionPanel";
 import type { Ingredient, Recipe, RecipeUnit } from "./types";
 import {
   EmptyState,
@@ -166,6 +167,8 @@ export default function IngredientsList({
             ]}
           />
         </div>
+
+        <SpecsPlazaConnectionPanel />
 
         {filteredIngredients.length ? (
           <div className="overflow-x-auto border border-[#e7e0d8]">
