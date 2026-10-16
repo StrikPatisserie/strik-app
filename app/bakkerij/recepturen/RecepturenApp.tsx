@@ -3286,12 +3286,12 @@ function DataTileButton({
   onClick: () => void;
 }>) {
   return (
-    <button type="button" onClick={onClick} className={managementStyles.tile}>
-      <span className={`${managementStyles.tileIcon} ${tone === "green" ? "" : managementStyles[tone]}`}>
+    <button type="button" onClick={onClick} data-tone={tone} className={managementStyles.tile}>
+      <span className={managementStyles.tileIcon}>
         <span aria-hidden="true" style={{ WebkitMask: `url("${icon}") center / contain no-repeat`, mask: `url("${icon}") center / contain no-repeat` }} />
       </span>
       <span className={managementStyles.tileTitle}>{title}</span>
-      <span aria-hidden="true" className={managementStyles.chevron}><ChevronIcon direction="right" /></span>
+      <span aria-hidden="true" className={managementStyles.chevron}>&gt;</span>
     </button>
   );
 }
