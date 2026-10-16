@@ -1,7 +1,13 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import type { SpecsPlazaConnectionResult, SpecsPlazaProduct } from "./types";
+import type {
+  SpecsPlazaConnectionResult,
+  SpecsPlazaProduct,
+  SpecsPlazaProductResult,
+  SpecsPlazaSearchField,
+  SpecsPlazaSearchResult,
+} from "./types";
 
 const TEST_ORIGIN = "https://api-accp.specsplaza.nl";
 const PRODUCTION_ORIGIN = "https://api.specsplaza.nl";
@@ -53,6 +59,12 @@ function optionalNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0
     ? value
     : null;
+}
+
+function searchText(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("nl-NL").replace(/frambo(?:os|zen)/g, "frambo")
+    .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
 type Fetcher = typeof fetch;
@@ -175,32 +187,93 @@ export class SpecsPlazaClient {
     });
   }
 
-  async testConnection(): Promise<SpecsPlazaConnectionResult> {
-    // isActive comes from the current Customer OpenAPI schema; the older
-    // Insomnia example still calls this filter onlyActive.
-    const query = new URLSearchParams({ isActive: "true", canViewDetails: "true", "$take": "5", "$skip": "0" });
+  private get environment() {
+    return this.origin === TEST_ORIGIN ? "test" as const : "production" as const;
+  }
+
+  private async productPage(query: URLSearchParams, take: number) {
     const page = await this.customerGet(`${CUSTOMER_PATH}?${query}`);
     if (page.Content !== null && !Array.isArray(page.Content)) {
       throw new SpecsPlazaError("De productlijst van SpecsPlaza heeft een onverwacht formaat.");
     }
     const items = (page.Content || []) as unknown[];
-    if (items.length > 5) {
+    if (items.length > take) {
       throw new SpecsPlazaError("SpecsPlaza heeft de gevraagde paginagrootte niet toegepast.");
     }
-    const products = items.map(product);
+    return { products: items.map(product), total: optionalNumber(page.TotalCount) };
+  }
+
+  async searchProducts(
+    input: string,
+    field: SpecsPlazaSearchField = "name",
+    skip = 0,
+  ): Promise<SpecsPlazaSearchResult> {
+    const term = input.trim();
+    if (term.length < 2 || term.length > 120 ||
+        !["name", "articleNumber", "supplierCompanyName"].includes(field) ||
+        !Number.isInteger(skip) || skip < 0 || skip > 100_000) {
+      throw new SpecsPlazaError("Gebruik een zoekterm van 2 tot 120 tekens en een geldige resultatenpagina.", 400);
+    }
+    const words = term.split(/\s+/).map(searchText).filter(Boolean);
+    if (!words.length) throw new SpecsPlazaError("Vul een productnaam, artikelnummer of leverancier in.", 400);
+    // A broad name prefix lets a spaced phrase also find compound product names.
+    // Match every requested word locally; paginate the authorized catalogue rather
+    // than searching just the five products used by the connection test.
+    const upstreamTerm = field === "name" ? words[0].slice(0, 4) : term;
+    const products: SpecsPlazaProduct[] = [];
+    let nextSkip = skip;
+    let hasMore = false;
+    const take = 50;
+    for (let pageNumber = 0; pageNumber < 3; pageNumber++) {
+      const query = new URLSearchParams({
+        isActive: "true", canViewDetails: "true", [field]: upstreamTerm,
+        "$take": String(take), "$skip": String(nextSkip),
+        "$orderbyexpression": "Name ascending",
+      });
+      const page = await this.productPage(query, take);
+      nextSkip += page.products.length;
+      hasMore = page.products.length > 0 && (page.total !== null
+        ? nextSkip < page.total : page.products.length === take);
+      for (const item of page.products) {
+        const value = field === "name" ? item.name : field === "articleNumber" ? item.articleNumber : item.supplier;
+        const normalized = searchText(value);
+        if (words.every((word) => normalized.includes(word))) products.push(item);
+      }
+      if (products.length || !hasMore) break;
+    }
+    return { environment: this.environment, checkedAt: new Date().toISOString(), products, nextSkip, hasMore };
+  }
+
+  async testConnection(): Promise<SpecsPlazaConnectionResult> {
+    // isActive comes from the current schema; the old example says onlyActive.
+    const query = new URLSearchParams({ isActive: "true", canViewDetails: "true", "$take": "5", "$skip": "0" });
+    const page = await this.productPage(query, 5);
     const result: SpecsPlazaConnectionResult = {
-      environment: this.origin === TEST_ORIGIN ? "test" : "production",
+      environment: this.environment,
       checkedAt: new Date().toISOString(),
-      totalProducts: optionalNumber(page.TotalCount),
-      products,
+      totalProducts: page.total,
+      products: page.products,
       sample: null,
     };
-    if (!products.length) return result;
-    const detail = await this.customerGet(`${CUSTOMER_PATH}/${products[0].id}`);
+    if (page.products.length) {
+      result.sample = (await this.getProductSpecification(page.products[0].id)).sample;
+    }
+    return result;
+  }
+
+  async getProductSpecification(productId: string): Promise<SpecsPlazaProductResult> {
+    const id = uuid(productId);
+    const detail = await this.customerGet(`${CUSTOMER_PATH}/${id}`);
     const sampleProduct = product(detail);
-    if (sampleProduct.id !== products[0].id) {
+    if (sampleProduct.id !== id) {
       throw new SpecsPlazaError("SpecsPlaza gaf een andere productspecificatie terug dan gevraagd.");
     }
+    const result: SpecsPlazaProductResult = {
+      environment: this.environment,
+      checkedAt: new Date().toISOString(),
+      product: sampleProduct,
+      sample: null,
+    };
     if (detail.Version === null || detail.Version === undefined) return result;
     const version = object(detail.Version);
     if (uuid(version.ProductSpecificationId) !== sampleProduct.id) {

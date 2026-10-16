@@ -7,6 +7,23 @@ export type SpecsPlazaProduct = {
   supplier: string;
 };
 
+export type SpecsPlazaSearchField = "name" | "articleNumber" | "supplierCompanyName";
+
+export type SpecsPlazaSearchResult = {
+  environment: SpecsPlazaEnvironment;
+  checkedAt: string;
+  products: SpecsPlazaProduct[];
+  nextSkip: number;
+  hasMore: boolean;
+};
+
+export type SpecsPlazaProductResult = {
+  environment: SpecsPlazaEnvironment;
+  checkedAt: string;
+  product: SpecsPlazaProduct;
+  sample: SpecsPlazaConnectionResult["sample"];
+};
+
 export type SpecsPlazaConnectionResult = {
   environment: SpecsPlazaEnvironment;
   checkedAt: string;

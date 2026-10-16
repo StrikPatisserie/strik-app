@@ -148,3 +148,91 @@ test("the route blocks non-manager sessions before creating an API client", asyn
   }
   assert.equal(requests, 0);
 });
+
+test("search finds spaced and compound puree names across suppliers without importing data", async () => {
+  const api = fakeApi({ page: { Content: [
+    { ...product, Name: "Frambozenpuree zonder suiker", SupplierCompanyName: "Producent A" },
+    { ...product, Id: "2b565f2c-63ec-4c71-834d-6e43d034fa74", Name: "Framboospuree 10 kg", SupplierCompanyName: "Producent B" },
+    { ...product, Id: "3b565f2c-63ec-4c71-834d-6e43d034fa74", Name: "Frambozen decoratie" },
+  ], TotalCount: 3 } });
+  const result = await new SpecsPlazaClient(env, api.fetch).searchProducts("framboos puree");
+  assert.equal(result.products.length, 2);
+  assert.equal(result.products[0].supplier, "Producent A");
+  assert.equal(result.products[1].supplier, "Producent B");
+  assert.equal(result.environment, "test");
+  assert.equal(result.hasMore, false);
+  assert.equal(result.nextSkip, 3);
+  assert.equal(api.calls[1].url.searchParams.get("name"), "fram");
+  assert.equal(api.calls[1].url.searchParams.get("supplierCompanyName"), null);
+  assert.equal(api.calls[1].url.searchParams.get("$take"), "50");
+  assert.equal(api.calls.length, 2);
+  assert(!JSON.stringify(result).includes(env.SPECSPLAZA_PASSWORD));
+});
+
+test("search continues beyond the first page and returns an explicit continuation cursor", async () => {
+  const calls = [];
+  const client = new SpecsPlazaClient(env, async (url, init) => {
+    const parsed = new URL(url); calls.push({ url: parsed, init });
+    if (parsed.pathname.endsWith("/token")) return json({ access_token: "token", expires_in: 3600 });
+    const skip = Number(parsed.searchParams.get("$skip"));
+    return json(skip === 0
+      ? { Content: Array(50).fill({ ...product, Name: "Frambozen decoratie" }), TotalCount: 102 }
+      : { Content: [{ ...product, Name: "Frambozenpuree" }], TotalCount: 102 });
+  });
+  const result = await client.searchProducts("framboos puree");
+  assert.equal(result.products.length, 1);
+  assert.equal(result.nextSkip, 51);
+  assert.equal(result.hasMore, true);
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].url.searchParams.get("$skip"), "50");
+});
+
+test("article and supplier searches use their own bounded API filters", async () => {
+  for (const [field, value] of [["articleNumber", "1234"], ["supplierCompanyName", "Testleverancier"]]) {
+    const api = fakeApi();
+    const result = await new SpecsPlazaClient(env, api.fetch).searchProducts(value, field, 50);
+    assert.equal(result.products.length, 1);
+    assert.equal(api.calls[1].url.searchParams.get(field), value);
+    assert.equal(api.calls[1].url.searchParams.get("$skip"), "50");
+    assert.equal(api.calls[1].url.searchParams.get("name"), null);
+  }
+});
+
+test("invalid search arguments and product identifiers never trigger upstream requests", async () => {
+  const client = new SpecsPlazaClient(env, () => { throw Error("network must not run"); });
+  for (const args of [["a"], ["a".repeat(121)], ["!?"], ["framboos", "bad"], ["framboos", "name", -1], ["framboos", "name", 0.5], ["framboos", "name", 100001]]) {
+    await assert.rejects(() => client.searchProducts(...args));
+  }
+  await assert.rejects(() => client.getProductSpecification("../../identity/users"));
+});
+
+test("specification previews retain unknown and cross-contact states and validate identity", async () => {
+  const result = await new SpecsPlazaClient(env, fakeApi().fetch).getProductSpecification(id);
+  assert.equal(result.product.id, id);
+  assert.equal(result.sample.allergens[1].status, "RiskCrossContamination");
+  assert.equal(result.sample.allergens[2].status, "NotFilledIn");
+  assert.equal(result.sample.nutritionalValues[1].value, null);
+  await assert.rejects(() => new SpecsPlazaClient(env, fakeApi({ detail: { ...detail, Id: "2b565f2c-63ec-4c71-834d-6e43d034fa74" } }).fetch).getProductSpecification(id));
+});
+
+test("search and product routes require a manager and validate parameters before network access", async () => {
+  const access = load("app/lib/auth/access.ts");
+  let clients = 0;
+  const dependencies = (profile) => ({
+    "next/server": { NextResponse: { json: (data, init) => json(data, init?.status || 200) } },
+    "@/app/lib/auth/access": access,
+    "@/app/lib/auth/session": { getCurrentProfile: async () => profile },
+    "@/app/lib/specsplaza/client": { SpecsPlazaClient: class { constructor() { clients++; } } },
+  });
+  for (const endpoint of ["search", "product"]) {
+    for (const profile of [null, { active: true, role: "bakkerij" }, { active: false, role: "manager" }]) {
+      const route = load(`app/api/recepturen/specsplaza/${endpoint}/route.ts`, dependencies(profile));
+      assert.equal((await route.GET(new Request(`https://app.example/api/${endpoint}`))).status, 403);
+    }
+  }
+  for (const [endpoint, query] of [["search", "q=a"], ["search", "q=framboos&field=wrong"], ["search", "q=framboos&skip=-1"], ["search", "q=framboos&skip=1e3"], ["product", "id=../users"]]) {
+    const route = load(`app/api/recepturen/specsplaza/${endpoint}/route.ts`, dependencies({ active: true, role: "manager" }));
+    assert.equal((await route.GET(new Request(`https://app.example/api/${endpoint}?${query}`))).status, 400);
+  }
+  assert.equal(clients, 0);
+});

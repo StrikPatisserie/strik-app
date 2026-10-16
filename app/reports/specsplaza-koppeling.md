@@ -1,9 +1,25 @@
-# SpecsPlaza: eerste verbindingstest
+# SpecsPlaza: verbinding, zoeken en specificaties bekijken
 
 De verbindingstest staat ingeklapt bij Bakkerij → Beheer → Grondstoffen.
 Alleen actieve managers met de bestaande tweestapsverificatie kunnen de testroute aanroepen.
 De test leest maximaal vijf toegankelijke actieve artikelen en de specificatie van het eerste artikel.
 Er worden geen grondstoffen, recepturen of specificaties gewijzigd.
+
+## Zoeken bij een grondstof
+
+In het SpecsPlaza-tabblad staat een zoekveld voor productnaam, artikelnummer of leverancier.
+Er wordt gezocht in de toegankelijke actieve productspecificaties, los van de vijf artikelen van de verbindingstest.
+De naamzoekfunctie gebruikt een brede voorselectie en controleert daarna alle zoekwoorden, ook bij samengestelde namen zoals frambozenpuree.
+Een verzoek leest maximaal drie pagina's van vijftig producten; met de vervolgknop worden verdere pagina's opgehaald.
+Productvoorbeelden tonen dezelfde gecontroleerde versie-, allergeen- en voedingsgegevens als de verbindingstest.
+
+- `GET /api/recepturen/specsplaza/search?q=...&field=name&skip=0`
+- `GET /api/recepturen/specsplaza/product?id=...`
+
+Beide routes vereisen een actieve manager met de bestaande tweestapsverificatie.
+De gekozen test- of productieomgeving wordt zichtbaar bij de resultaten vermeld.
+Zoeken en bekijken slaan geen koppelingen, allergenen of voedingswaarden op in de bestaande grondstoffen.
+De eigen productspecificatie blijft onder een afzonderlijk onderdeel handmatig te bewerken.
 
 ## Instellen in Vercel
 
@@ -41,5 +57,5 @@ Testaccounts kunnen door FoodBase bij een verversing van de ontwikkelomgeving wo
 
 ## Validatie
 
-`node --test scripts/specsplaza.test.cjs` test de verbinding met gesimuleerde antwoorden en controleert authenticatie, credential-afscherming, managerautorisatie, productidentiteit en onbekende voedings-/allergeengegevens.
+`node --test scripts/specsplaza.test.cjs` test met gesimuleerde antwoorden de verbinding, zoekfilters, samengestelde namen, paginering, invoervalidatie, credential-afscherming, managerautorisatie, productidentiteit en onbekende voedings-/allergeengegevens.
 Een echte verbinding is pas bevestigd na een geslaagde test met het ontwikkelaccount.

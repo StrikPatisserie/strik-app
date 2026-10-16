@@ -236,8 +236,8 @@ function IngredientOverviewPanel({ ingredient, recipes, onClose, onEdit, onSave 
           <button type="button" onClick={onEdit} className="min-h-9 w-fit rounded-lg border border-[#e4ded5] px-3 py-1.5 text-xs font-bold">Grondstof bewerken</button>
         </div>}
         {tab === "specification" && <div className="grid gap-3">
-          <SpecsPlazaConnectionPanel compact />
           <IngredientSpecificationEditor ingredient={ingredient} onSave={onSave} embedded />
+          <SpecsPlazaConnectionPanel compact />
         </div>}
         {tab === "recipes" && <div>
           <p className="mb-1 text-xs font-bold">Gebruikt in {recipes.length} recept{recipes.length === 1 ? "" : "en"}</p>

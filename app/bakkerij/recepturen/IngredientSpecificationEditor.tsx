@@ -2,6 +2,7 @@
 import { useState } from "react";
 import type { Ingredient, IngredientSpecification } from "./types";
 import { nutritionFields } from "./labeling";
+import SpecsPlazaProductSearch from "./SpecsPlazaProductSearch";
 
 export default function IngredientSpecificationEditor({ ingredient, onSave, embedded = false }: { ingredient: Ingredient; onSave: (ingredient: Ingredient) => void; embedded?: boolean }) {
   const [spec, setSpec] = useState<IngredientSpecification>(ingredient.specification || {});
@@ -21,7 +22,7 @@ export default function IngredientSpecificationEditor({ ingredient, onSave, embe
       onSave({ ...ingredient, allergens: allergens.split(/[,;\n]/).map((item) => item.trim()).filter(Boolean), specification: { ...spec, nutritionPer100g: Object.fromEntries(values.filter((item) => item[1] !== undefined)), densityGramsPerMl: density, pieceWeightGrams: pieceWeight, updatedAt: new Date().toISOString() } });
       setFeedback("Specificatie opgeslagen.");
     }}>
-      <p className="text-xs leading-relaxed text-[#75685f]">Leg de leveranciersspecificatie en etiketteringsgegevens vast. Een SpecsPlaza-ID is een verwijzing; automatisch ophalen en synchroniseren wordt hierna toegevoegd.</p>
+      <p className="text-xs leading-relaxed text-[#75685f]">Leg hier jullie eigen gecontroleerde specificatie vast. De zoekresultaten hierboven worden alleen bekeken en niet automatisch in deze gegevens overgenomen.</p>
       <div className={gridClass}>{([["specsPlazaId", "SpecsPlaza product-ID"], ["specificationVersion", "Versie specificatie"], ["source", "Bron / leveranciersdocument"]] as const).map(([key, label]) => <label key={key} className={labelClass}>{label}<input value={spec[key] || ""} onChange={(event) => setSpec({ ...spec, [key]: event.target.value })} className={fieldClass} /></label>)}</div>
       <label className={labelClass}>Samenstelling volgens leverancier<textarea value={spec.ingredientsText || ""} onChange={(event) => setSpec({ ...spec, ingredientsText: event.target.value })} className={`${fieldClass} min-h-20`} /></label>
       <label className={labelClass}>Allergenen (bijvoorbeeld tarwe, ei, melk)<input value={allergens} onChange={(event) => setAllergens(event.target.value)} className={fieldClass} /></label>
@@ -32,8 +33,15 @@ export default function IngredientSpecificationEditor({ ingredient, onSave, embe
       <button type="submit" className={`${embedded ? "min-h-9 rounded-lg text-xs" : "min-h-11 rounded-xl"} bg-[#315e42] px-4 py-2 font-bold text-white`}>Specificatie opslaan</button>
       {feedback ? <p role="status" className="text-sm font-bold">{feedback}</p> : null}
     </form>;
-  return embedded ? <section aria-label="Productspecificatie">{form}</section> : <details className="my-3 rounded-2xl border border-[#c3d3bc] bg-white p-4">
+  const content = <div className="grid gap-3">
+    <SpecsPlazaProductSearch articleNumber={ingredient.supplierArticleNumber} />
+    <details className="rounded-xl border border-[#e4ded5] bg-white p-3">
+      <summary className="min-h-8 cursor-pointer content-center text-xs font-bold">Eigen productspecificatie handmatig bewerken</summary>
+      <div className="mt-3">{form}</div>
+    </details>
+  </div>;
+  return embedded ? <section aria-label="Productspecificatie">{content}</section> : <details className="my-3 rounded-2xl border border-[#c3d3bc] bg-white p-4">
     <summary className="min-h-11 cursor-pointer text-base font-black">Etikettering · productspecificatie</summary>
-    {form}
+    <div className="mt-3">{content}</div>
   </details>;
 }
