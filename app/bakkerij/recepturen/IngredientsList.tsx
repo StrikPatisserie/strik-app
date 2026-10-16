@@ -1,14 +1,7 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useState } from "react";
 import IngredientSpecificationEditor from "./IngredientSpecificationEditor";
-import SpecsPlazaConnectionPanel from "./SpecsPlazaConnectionPanel";
+import IngredientsOverview from "./IngredientsOverview";
 import type { Ingredient, Recipe, RecipeUnit } from "./types";
-import {
-  EmptyState,
-  FilterSelect,
-  Panel,
-  SearchInput,
-  SectionTitle,
-} from "./RecepturenShared";
 import {
   changeBadgeClass,
   formatDate,
@@ -17,10 +10,8 @@ import {
   ingredientPackagePrice,
   ingredientPreviousPackagePrice,
   ingredientPriceChange,
-  normalizeSearch,
   packagePriceLabel,
   pricePerBaseUnitFromPackagePrice,
-  quantityLabel,
   recipesUsingIngredient,
 } from "./utils";
 
@@ -63,241 +54,39 @@ export default function IngredientsList({
   onMergeIngredient: (sourceIngredient: Ingredient, targetIngredient: Ingredient) => void;
   onDeleteIngredients?: (ingredients: Ingredient[]) => void;
 }>) {
-  const [search, setSearch] = useState("");
-  const [supplier, setSupplier] = useState("all");
-  const [allergen, setAllergen] = useState("all");
-  const [priceChange, setPriceChange] = useState("all");
-  const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(
-    null
-  );
-  const [linkedIngredient, setLinkedIngredient] = useState<Ingredient | null>(
-    null
-  );
-  const suppliers = Array.from(
-    new Set(ingredients.map((item) => item.supplier))
-  ).filter(Boolean);
-  const allergens = Array.from(
-    new Set(ingredients.flatMap((item) => item.allergens))
-  ).sort((first, second) => first.localeCompare(second, "nl-NL"));
-
-  const filteredIngredients = useMemo(() => {
-    const query = normalizeSearch(search);
-
-    return ingredients.filter((ingredient) => {
-      const matchesSearch =
-        !query ||
-        normalizeSearch(ingredient.name).includes(query) ||
-        normalizeSearch(ingredient.supplierArticleNumber).includes(query) ||
-        ingredient.aliases.some((alias) => normalizeSearch(alias).includes(query));
-      const matchesSupplier =
-        supplier === "all" || ingredient.supplier === supplier;
-      const matchesAllergen =
-        allergen === "all" || ingredient.allergens.includes(allergen);
-      const change = ingredientPriceChange(ingredient);
-      const matchesPrice =
-        priceChange === "all" ||
-        (priceChange === "up" && change > 0) ||
-        (priceChange === "high" && change >= 8) ||
-        (priceChange === "stable" && Math.abs(change) < 2);
-
-      return (
-        matchesSearch && matchesSupplier && matchesAllergen && matchesPrice
-      );
-    });
-  }, [allergen, ingredients, priceChange, search, supplier]);
+  const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
 
   return (
-    <Panel>
-      <div className="grid gap-4">
-        <SectionTitle
-          eyebrow="Grondstoffen"
-          title="Ingredienten"
-          description="Database met leveranciersartikelen, prijshistorie, allergenen en recept-impact."
-        />
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setSelectedIngredient(createBlankIngredient())}
-            className="border border-[#c3d3bc] bg-[#c3d3bc] px-4 py-2.5 text-sm font-black shadow-sm"
-          >
-            Nieuwe grondstof
-          </button>
-          <button
-            type="button"
-            onClick={onOpenImport}
-            className="border border-[#ead7a6] bg-[#fff8e3] px-4 py-2.5 text-sm font-black text-[#7a5a18] shadow-sm"
-          >
-            Bestand uploaden
-          </button>
-        </div>
-
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(10rem,0.7fr))]">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Zoek ingredient, artikelnummer of alias"
-          />
-          <FilterSelect
-            label="Leverancier"
-            value={supplier}
-            onChange={setSupplier}
-            options={[
-              { value: "all", label: "Alle leveranciers" },
-              ...suppliers.map((item) => ({ value: item, label: item })),
-            ]}
-          />
-          <FilterSelect
-            label="Allergeen"
-            value={allergen}
-            onChange={setAllergen}
-            options={[
-              { value: "all", label: "Alle allergenen" },
-              ...allergens.map((item) => ({ value: item, label: item })),
-            ]}
-          />
-          <FilterSelect
-            label="Prijs"
-            value={priceChange}
-            onChange={setPriceChange}
-            options={[
-              { value: "all", label: "Alle wijzigingen" },
-              { value: "up", label: "Prijsstijging" },
-              { value: "high", label: "Sterke stijging" },
-              { value: "stable", label: "Stabiel" },
-            ]}
-          />
-        </div>
-
-        <SpecsPlazaConnectionPanel />
-
-        {filteredIngredients.length ? (
-          <div className="overflow-x-auto border border-[#e7e0d8]">
-            <div className="hidden grid-cols-[minmax(12rem,1.25fr)_7rem_7rem_6.5rem_7rem_6.5rem_7rem_7rem] gap-3 bg-[#f8f6f3] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#2d2a26]/45 lg:grid lg:min-w-[65rem]">
-              <span>Ingredient</span>
-              <span>Leverancier</span>
-              <span>Artikel</span>
-              <span>Eenheid</span>
-              <span>Prijs /kg</span>
-              <span>Wijziging</span>
-              <span>Gekoppeld aan</span>
-              <span>Factuur</span>
-            </div>
-            <div className="divide-y divide-[#e7e0d8] bg-white">
-              {filteredIngredients.map((ingredient) => {
-                const linkedRecipes = recipesUsingIngredient(recipes, ingredient.id);
-
-                return (
-                  <div
-                    key={ingredient.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedIngredient(ingredient)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setSelectedIngredient(ingredient);
-                      }
-                    }}
-                    className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_4.8rem_3.7rem] items-center gap-2 px-2.5 py-1.5 text-left transition hover:bg-[#fffdf8] lg:min-w-[65rem] lg:grid-cols-[minmax(12rem,1.25fr)_7rem_7rem_6.5rem_7rem_6.5rem_7rem_7rem] lg:gap-3 lg:px-4 lg:py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex min-w-0 items-baseline gap-1.5">
-                        <p className="truncate text-[0.82rem] font-black leading-5 lg:text-base lg:leading-normal">
-                          {ingredient.name}
-                        </p>
-                        {ingredient.supplierArticleNumber && (
-                          <span className="hidden shrink-0 text-[0.68rem] font-bold leading-none text-[#2d2a26]/35 sm:inline lg:hidden">
-                            {ingredient.supplierArticleNumber}
-                          </span>
-                        )}
-                      </div>
-                      <p className="hidden text-xs font-bold text-[#2d2a26]/45 lg:block">
-                        {ingredient.allergens.length
-                          ? ingredient.allergens.join(", ")
-                          : "Geen allergenen"}
-                      </p>
-                    </div>
-                    <p className="hidden text-sm font-bold text-[#2d2a26]/62 lg:block">
-                      {ingredient.supplier}
-                    </p>
-                    <p className="hidden text-sm font-bold lg:block">
-                      {ingredient.supplierArticleNumber}
-                    </p>
-                    <p className="hidden text-sm font-bold lg:block">
-                      {ingredient.packageSize}
-                    </p>
-                    <p className="text-right text-[0.78rem] font-black leading-5 tabular-nums lg:text-left lg:text-sm lg:leading-normal">
-                      {formatEuro(ingredientPackagePrice(ingredient))}
-                    </p>
-                    <span
-                      className={`w-fit justify-self-end rounded-full px-1.5 py-0.5 text-[0.66rem] font-black leading-4 lg:justify-self-start lg:px-2.5 lg:py-1 lg:text-xs ${changeBadgeClass(
-                        ingredientPriceChange(ingredient)
-                      )}`}
-                    >
-                      {formatSignedPercent(ingredientPriceChange(ingredient), 1)}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={!linkedRecipes.length}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setLinkedIngredient(ingredient);
-                      }}
-                      className={`hidden w-fit text-left text-xs font-black underline-offset-4 lg:block ${
-                        linkedRecipes.length
-                          ? "text-[#45663b] hover:underline"
-                          : "cursor-default text-[#2d2a26]/35"
-                      }`}
-                    >
-                      {linkedRecipes.length
-                        ? `${linkedRecipes.length} recept${
-                            linkedRecipes.length === 1 ? "" : "en"
-                          }`
-                        : "geen"}
-                    </button>
-                    <p className="hidden text-xs font-bold text-[#2d2a26]/45 lg:block">
-                      {ingredient.lastInvoice}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <EmptyState text="Geen ingredienten gevonden met deze filters." />
-        )}
-      </div>
-
-      {selectedIngredient && (
+    <>
+      <IngredientsOverview
+        ingredients={ingredients}
+        recipes={recipes}
+        onEditIngredient={(ingredient) => setEditingIngredient(ingredient || createBlankIngredient())}
+        onOpenImport={onOpenImport}
+        onUpdateIngredient={onUpdateIngredient}
+      />
+      {editingIngredient && (
         <IngredientDetail
-          key={selectedIngredient.id}
-          ingredient={selectedIngredient}
+          key={editingIngredient.id}
+          ingredient={editingIngredient}
           ingredients={ingredients}
           recipes={recipes}
           onUpdateIngredient={(ingredient) => {
             onUpdateIngredient(ingredient);
-            setSelectedIngredient(ingredient);
+            setEditingIngredient(ingredient);
           }}
-          onMergeIngredient={(sourceIngredient, targetIngredient) => {
-            onMergeIngredient(sourceIngredient, targetIngredient);
-            setSelectedIngredient(null);
+          onMergeIngredient={(source, target) => {
+            onMergeIngredient(source, target);
+            setEditingIngredient(null);
           }}
           onDeleteIngredient={(ingredient) => {
             onDeleteIngredient(ingredient);
-            setSelectedIngredient(null);
+            setEditingIngredient(null);
           }}
-          onClose={() => setSelectedIngredient(null)}
+          onClose={() => setEditingIngredient(null)}
         />
       )}
-
-      {linkedIngredient && (
-        <IngredientRecipeLinks
-          ingredient={linkedIngredient}
-          recipes={recipesUsingIngredient(recipes, linkedIngredient.id)}
-          onClose={() => setLinkedIngredient(null)}
-        />
-      )}
-    </Panel>
+    </>
   );
 }
 
@@ -705,83 +494,6 @@ function createBlankIngredient(): Ingredient {
     lastInvoice: "Handmatig toegevoegd",
     aliases: [],
   };
-}
-
-function IngredientRecipeLinks({
-  ingredient,
-  recipes,
-  onClose,
-}: Readonly<{
-  ingredient: Ingredient;
-  recipes: Recipe[];
-  onClose: () => void;
-}>) {
-  return (
-    <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#2d2a26]/35 px-3 py-5 backdrop-blur-sm">
-      <div className="mx-auto max-w-2xl border border-[#111111] bg-white p-5 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#2d2a26]/45">
-              Gekoppeld aan
-            </p>
-            <h2 className="mt-1 text-2xl font-black leading-tight">
-              {ingredient.name}
-            </h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-3xl font-light leading-none"
-            aria-label="Sluit"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="mt-5 divide-y divide-[#d9d2c9] border-y border-[#d9d2c9]">
-          {recipes.length ? (
-            recipes.map((recipe) => {
-              const linkedLines = recipe.ingredients.filter(
-                (line) => line.ingredientId === ingredient.id
-              );
-              const linkedQuantity = linkedLines
-                .map((line) => quantityLabel(line.quantity, line.unit))
-                .join(" + ");
-
-              return (
-                <div
-                  key={recipe.id}
-                  className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_9rem_8rem] sm:items-center"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-black">
-                      {recipe.name}
-                    </p>
-                    <p className="text-xs font-bold text-[#2d2a26]/45">
-                      {recipe.productGroup || "Geen categorie"} ·{" "}
-                      {recipe.type === "semiFinished"
-                        ? "halffabricaat"
-                        : "eindproduct"}
-                    </p>
-                  </div>
-                  <p className="text-sm font-bold text-[#2d2a26]/60">
-                    {linkedQuantity || "-"}
-                  </p>
-                  <p className="text-sm font-black">
-                    {formatEuro(recipe.costPrice)}
-                  </p>
-                </div>
-              );
-            })
-          ) : (
-            <p className="py-4 text-sm font-bold text-[#2d2a26]/45">
-              Deze grondstof staat nog niet in recepten.
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function DetailIconButton({

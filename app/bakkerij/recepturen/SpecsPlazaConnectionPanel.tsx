@@ -11,7 +11,7 @@ const allergenStatuses = {
   NotFilledIn: "Niet ingevuld",
 };
 
-export default function SpecsPlazaConnectionPanel() {
+export default function SpecsPlazaConnectionPanel({ compact = false }: Readonly<{ compact?: boolean }>) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<SpecsPlazaConnectionResult | null>(null);
@@ -33,8 +33,8 @@ export default function SpecsPlazaConnectionPanel() {
     }
   }
 
-  return <details className="rounded-xl border border-[#c3d3bc] bg-[#f6faf4] p-3">
-    <summary className="min-h-11 cursor-pointer content-center font-bold text-[#315e42]">SpecsPlaza · verbinding testen</summary>
+  return <details className={`rounded-xl border border-[#c3d3bc] bg-[#f6faf4] ${compact ? "p-2.5 text-xs" : "p-3"}`}>
+    <summary className={`${compact ? "min-h-7 text-xs" : "min-h-11"} cursor-pointer content-center font-bold text-[#315e42]`}>SpecsPlaza · verbinding testen</summary>
     <div className="mt-2 grid gap-3">
       <p className="text-sm text-[#75685f]">Lees de beschikbare producten en bekijk één leveranciersspecificatie. Deze test slaat geen wijzigingen op in jullie grondstoffen of recepten.</p>
       <button type="button" disabled={loading} onClick={() => void testConnection()} className="min-h-11 w-fit rounded-xl bg-[#315e42] px-4 py-2 font-bold text-white disabled:opacity-50">{loading ? "Verbinding controleren…" : "Verbinding testen"}</button>
