@@ -36,6 +36,7 @@ export const strikIcons = {
   photo: "/icons_strik_photo.svg",
   recepturen: "/apps%20strik_recepten.svg",
   sinterklaas: "/APP_icons_strik_SINT.svg",
+  kerst: "/evaluation-icons/kerst.svg",
   sinterklaasB2B: "/APP_icons_strik_sinterklaas_b2b%20bestellingen%20sint.svg",
   sinterklaasLetter: "/APP_icons_strik_sinterklaas_chocoladeletter.svg",
   sinterklaasProductie: "/APP_icons_strik%20spuitzak%20letters.svg",

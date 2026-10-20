@@ -19,11 +19,11 @@ export async function GET(request: Request) {
   const existing = Array.isArray(data.orders) ? data.orders : [];
   const existingIds = new Set(existing.map((order: { id?: string }) => order.id));
   const historical = [...b2bOrderHistory, ...b2bOrderHistoryExtra]
-    .filter((order) => order.season === "sint" && order.year === year && !existingIds.has(order.id))
+    .filter((order) => order.year === year && !existingIds.has(order.id))
     .map((order) => {
       const match = order.date.match(/(\d{1,2})\D+(\d{1,2})/);
       const deliveryDate = match ? `${order.year}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}` : "";
-      return { id:order.id,year:order.year,season:"sint",customerName:order.customerName,contactName:"",customerEmail:"",phone:"",deliveryDate,productionDate:"",department:"beide",orderText:order.orderText,logo:"",packaging:"",importantNotes:order.notes,priceAgreement:order.price,totalExVat:order.total,deliveryMethod:order.delivery,deliveryAddress:"",invoiceInfo:"",source:"excel",sourceSheet:order.sourceSheet,entered:true,productionDone:true,packed:true,delivered:true,cancelled:false,productionDoneAt:"",packedAt:"",deliveredAt:"",reminderEmailedAt:"",reminderEmailError:"",createdAt:"",updatedAt:"" };
+      return { id:order.id,year:order.year,season:order.season,customerName:order.customerName,contactName:"",customerEmail:"",phone:"",deliveryDate,productionDate:"",department:"beide",orderText:order.orderText,logo:"",packaging:"",importantNotes:order.notes,priceAgreement:order.price,totalExVat:order.total,deliveryMethod:order.delivery,deliveryAddress:"",invoiceInfo:"",source:"excel",sourceSheet:order.sourceSheet,entered:true,productionDone:true,packed:true,delivered:true,cancelled:false,productionDoneAt:"",packedAt:"",deliveredAt:"",reminderEmailedAt:"",reminderEmailError:"",createdAt:"",updatedAt:"" };
     });
   return NextResponse.json({ ...data, orders: [...existing, ...historical], total: existing.length + historical.length });
 }

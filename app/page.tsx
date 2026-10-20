@@ -53,6 +53,7 @@ const baseSections = [
     icon: strikIcons.sinterklaas,
     variant: "sinterklaas" as const,
   },
+  { href: "/kerst", title: "Kerst", subtitle: "B2B en nieuwsbrief", icon: strikIcons.kerst, variant: "kerst" as const },
 ];
 
 export const dynamic = "force-dynamic";

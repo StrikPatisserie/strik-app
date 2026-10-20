@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import BusinessSeasonNav from "../../BusinessSeasonNav";
+import { orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
+import { christmasProducts } from "../../kerst-voor-bedrijven/christmasProducts";
+import { BUSINESS_FOLDER_PRICE_TIERS } from "../../lib/business-folder-pricing";
 import {
   deleteB2BOrder,
   fetchB2BOrders,
@@ -82,7 +86,8 @@ type B2BFormState = {
   productLines: B2BProductLine[];
 };
 
-const PRODUCT_CATALOG = [products[0], products[1], ...folderProducts];
+const CHRISTMAS_CATALOG: Product[] = christmasProducts.map(product => ({ ...product, id: `kerst-${product.id}`, description: product.detail, image: product.image || "", options: [product.detail], shelfLifeInfo: [], allergens: [], tiers: BUSINESS_FOLDER_PRICE_TIERS, accent: "green" }));
+const PRODUCT_CATALOG = [products[0], products[1], ...folderProducts, ...CHRISTMAS_CATALOG];
 const MANUAL_PRODUCT_CATALOG = PRODUCT_CATALOG.filter(
   (product) => product.id !== "chocoladeletter" && product.id !== "chocolade-vormletter"
 );
@@ -488,8 +493,8 @@ function createFormState(): B2BFormState {
   };
 }
 
-function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined) {
-  if (!order) return createFormState();
+function formStateFromOrder(order: SinterklaasB2BOrder | null | undefined, season: BusinessSeason = "sint") {
+  if (!order) return { ...createFormState(), department: season === "kerst" ? "bakkerij" as const : "chocolade" as const };
   const parsedOrder = parseOrderText(order.orderText);
 
   return {
@@ -694,11 +699,6 @@ function dueSoon(order: SinterklaasB2BOrder) {
   return days >= 0 && days <= 2;
 }
 
-function isProductionDone(order: SinterklaasB2BOrder) {
-  const hasSeparateLetterPart = order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0);
-  return order.productionDone && (!hasSeparateLetterPart || order.letterProductionDone);
-}
-
 function orderWarnings(order: SinterklaasB2BOrder) {
   if (order.status !== "akkoord" || order.cancelled || order.delivered || (order.deliveryDate && order.deliveryDate < addDays(todayIso(), -7))) return [];
   return [
@@ -709,7 +709,7 @@ function orderWarnings(order: SinterklaasB2BOrder) {
   ].filter((warning): warning is string => Boolean(warning));
 }
 
-async function parseB2BExcel(file: File) {
+async function parseB2BExcel(file: File, season: BusinessSeason) {
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(await file.arrayBuffer(), {
     type: "array",
@@ -754,7 +754,7 @@ async function parseB2BExcel(file: File) {
 
       rows.slice(1).forEach((row) => {
         if (!Array.isArray(row)) return;
-        if (seasonIndex >= 0 && !/sint/i.test(textFromCell(row[seasonIndex]))) {
+        if (seasonIndex >= 0 && !new RegExp(season, "i").test(textFromCell(row[seasonIndex]))) {
           return;
         }
 
@@ -819,15 +819,17 @@ async function parseB2BExcel(file: File) {
 
 function B2BOrderForm({
   initialOrder,
+  season,
   onSaved,
   onCancel,
 }: Readonly<{
   initialOrder?: SinterklaasB2BOrder | null;
+  season: BusinessSeason;
   onSaved: (order: SinterklaasB2BOrder) => void;
   onCancel: () => void;
 }>) {
   const [form, setForm] = useState<B2BFormState>(() =>
-    formStateFromOrder(initialOrder)
+    formStateFromOrder(initialOrder, season)
   );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -836,7 +838,7 @@ function B2BOrderForm({
   const [letterDraft, setLetterDraft] = useState<LetterDraft>(emptyLetterDraft);
   const [addFeedback, setAddFeedback] = useState("");
 
-  const draftKey = `strik-b2b-order-draft-v1-${initialOrder?.id || "new"}`;
+  const draftKey = `strik-b2b-order-draft-v1-${initialOrder?.id || `new-${season}`}`;
   const [draftReady, setDraftReady] = useState(false);
   const [draftNotice, setDraftNotice] = useState("");
   const messageRef = useRef<HTMLParagraphElement>(null);
@@ -846,7 +848,7 @@ function B2BOrderForm({
       const stored = sessionStorage.getItem(draftKey);
       const draft = stored ? JSON.parse(stored) : null;
       if (draft?.form && typeof draft.form.customerName === "string" && Array.isArray(draft.form.productLines) && Array.isArray(draft.form.letterLines)) {
-        setForm({ ...formStateFromOrder(initialOrder), ...draft.form });
+        setForm({ ...formStateFromOrder(initialOrder, season), ...draft.form });
         setManualTotal(Boolean(draft.manualTotal));
         if (draft.selectionVersion === 2 && draft.productDraft) setProductDraft(draft.productDraft);
         if (draft.selectionVersion === 2 && draft.letterDraft) setLetterDraft(draft.letterDraft);
@@ -856,7 +858,7 @@ function B2BOrderForm({
       setDraftNotice("Een eerder concept kon niet worden teruggezet.");
     }
     setDraftReady(true);
-  }, [draftKey, initialOrder]);
+  }, [draftKey, initialOrder, season]);
 
   useEffect(() => {
     if (!draftReady) return;
@@ -1141,7 +1143,7 @@ function B2BOrderForm({
             : form.deliveryDate
               ? yearFromDate(form.deliveryDate)
               : initialOrder?.year || currentYear(),
-        season: initialOrder?.season || "sint",
+        season: initialOrder?.season || season,
         source: initialOrder?.source || "handmatig",
         sourceSheet: initialOrder?.sourceSheet || "",
       });
@@ -1432,7 +1434,7 @@ function B2BOrderForm({
       <div className="bg-white">
         <details open={form.productLines.some((line) => line.productId !== "chocoladeletter" && line.productId !== "chocolade-vormletter") || undefined}>
         <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-1 bg-[#f3dfa2] px-3 py-2">
-          <div className="text-sm font-semibold text-[#5a4300]">Overige producten</div>
+          <div className="text-sm font-semibold text-[#5a4300]">{season === "kerst" ? "Kerstproducten en pakketten" : "Overige producten"}</div>
           <span className="text-[0.68rem] font-medium text-[#705a18]">folderprijs automatisch · handmatig aanpasbaar · uitklappen ▾</span>
         </summary>
 
@@ -1456,7 +1458,7 @@ function B2BOrderForm({
               className="h-10 min-w-0 border border-[#d0b96e] bg-white px-2 text-sm font-semibold normal-case tracking-normal text-[#1a1815]"
             >
               <option value="" disabled>Product</option>
-              {MANUAL_PRODUCT_CATALOG.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              {MANUAL_PRODUCT_CATALOG.filter(item => initialOrder?.season === "sint-kerst" || item.id.startsWith("kerst-") === (season === "kerst")).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               <option value={CUSTOM_PRODUCT_ID}>Anders / niet in folder</option>
             </select>
           </label>
@@ -1582,10 +1584,12 @@ function B2BOrderForm({
 
 function B2BOrderDialog({
   order,
+  season,
   onClose,
   onSaved,
 }: Readonly<{
   order: SinterklaasB2BOrder | null;
+  season: BusinessSeason;
   onClose: () => void;
   onSaved: (order: SinterklaasB2BOrder) => void;
 }>) {
@@ -1599,7 +1603,7 @@ function B2BOrderDialog({
         <div className="mb-3 flex items-center justify-between gap-3 border-b border-[#cfc8bf] pb-3">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <p className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
-              Sinterklaas B2B
+              {seasonLabel(order?.season || season)} B2B
             </p>
             <div className="text-lg font-bold text-[#1a1815]">
               {order ? "Bestelling wijzigen" : "Bestelling toevoegen"}
@@ -1618,6 +1622,7 @@ function B2BOrderDialog({
         <B2BOrderForm
           key={order?.id || "new-order"}
           initialOrder={order}
+          season={season}
           onSaved={onSaved}
           onCancel={onClose}
         />
@@ -1704,6 +1709,7 @@ function B2BOrderRow({
               <h3 className="text-base font-black leading-tight text-[#1a1815]">
                 {order.customerName}
               </h3>
+              <span className="rounded-full bg-[#eef2ea] px-2 py-0.5 text-[0.62rem] font-bold text-[#24553d]">{seasonLabel(order.season)}</span>
               <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
                 {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
               </span>
@@ -1822,7 +1828,7 @@ function B2BOrderRow({
   );
 }
 
-export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode?: "sales" | "production" }>) {
+export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ season?: BusinessSeason }>) {
   const [year, setYear] = useState(() => currentYear());
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<SinterklaasB2BOrder[]>([]);
@@ -1839,13 +1845,12 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   const [deleteTarget, setDeleteTarget] = useState<SinterklaasB2BOrder | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteReasonNote, setDeleteReasonNote] = useState("");
-  const [planDrafts, setPlanDrafts] = useState<Record<string, string>>({});
 
   async function loadOrders(nextYear = year) {
     setLoading(true);
     setError("");
     try {
-      setOrders(await fetchB2BOrders(nextYear));
+      setOrders((await fetchB2BOrders(nextYear)).filter(order => orderBelongsToSeason(order, season)));
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -1860,7 +1865,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   useEffect(() => {
     void loadOrders(year);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year]);
+  }, [year, season]);
 
   const visibleOrders = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("nl-NL");
@@ -1934,26 +1939,6 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
     }
   }
 
-  async function saveProductionPlan(order: SinterklaasB2BOrder) {
-    const productionDate = planDrafts[order.id] ?? order.productionDate;
-    if (!productionDate || productionDate > order.deliveryDate) {
-      setError("Kies een productiedatum uiterlijk op de leverdatum.");
-      return;
-    }
-    setUpdatingId(`${order.id}-plan`);
-    setError("");
-    try {
-      const saved = await updateB2BOrder(order.id, { productionDate, productionScheduled: true });
-      setOrders((current) => updateOrderList(current, saved));
-      setPlanDrafts((current) => { const next = { ...current }; delete next[order.id]; return next; });
-      if (saved.confirmationEmailError) setError(saved.confirmationEmailError);
-    } catch (planError) {
-      setError(planError instanceof Error ? planError.message : "Productieplanning opslaan is mislukt.");
-    } finally {
-      setUpdatingId("");
-    }
-  }
-
   function openNewOrderDialog() {
     setSaveNotice("");
     setEditingOrder(null);
@@ -2017,10 +2002,10 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
     if (!file) return;
     setError("");
     try {
-      const parsed = await parseB2BExcel(file);
+      const parsed = await parseB2BExcel(file, season);
       setImportPreview(parsed.slice(0, 300));
       if (parsed.length < 1) {
-        setError("Geen Sinterklaas B2B-rijen gevonden in dit bestand.");
+        setError(`Geen ${seasonLabel(season)} B2B-rijen gevonden in dit bestand.`);
       }
     } catch (parseError) {
       setError(
@@ -2044,7 +2029,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
           customerName: order.customerName.trim(),
           orderText: order.orderText.trim(),
           year: yearFromDate(order.deliveryDate),
-          season: "sint",
+          season,
           source: "excel",
           sourceSheet: "Excel import",
         });
@@ -2069,61 +2054,9 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
   }
 
   const groupedOrders = groupByMonth(visibleOrders);
-  const activeOrders = visibleOrders.filter((order) => order.status === "akkoord" && !order.cancelled && !order.delivered && order.deliveryDate >= addDays(todayIso(), -7));
-  const unfinishedCount = activeOrders.filter((order) => !isProductionDone(order)).length;
-  const productionGroups = Array.from(
-    activeOrders.reduce((groups, order) => {
-      const key = `${order.deliveryDate}|${order.department}`;
-      groups.set(key, [...(groups.get(key) || []), order]);
-      return groups;
-    }, new Map<string, SinterklaasB2BOrder[]>()).entries()
-  ).sort(([a], [b]) => a.localeCompare(b)).map(([key, group]) => [key, group.sort((a, b) => Number(isProductionDone(a)) - Number(isProductionDone(b)))] as const);
-
-  if (mode === "production") return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor="production-year" className="text-sm font-black">Jaar</label>
-        <select id="production-year" value={year} onChange={(event) => setYear(event.target.value)} className="h-9 border border-[#d6e5d8] bg-white px-3 text-sm font-bold">
-          {Array.from({ length: Number(currentYear()) - 2018 }, (_, index) => String(Number(currentYear()) - index)).map((optionYear) => <option key={optionYear} value={optionYear}>{optionYear}</option>)}
-        </select>
-        <button type="button" onClick={() => void loadOrders(year)} className="h-9 border border-[#d6e5d8] bg-white px-3 text-sm font-bold">Ververs</button>
-      </div>
-      {error && <p className="border border-[#f1b8a8] bg-[#fff4ef] p-2 text-sm font-bold text-[#9a3412]">{error}</p>}
-      <p className="border border-[#d6e5d8] bg-[#f6faf4] p-2 text-xs text-[#6b645b]">Gesorteerd op leverdatum en soort. De chef kiest zelf wanneer hij produceert; een productiedag vastleggen is optioneel. Vink vooral af wat klaar is.</p>
-      {!loading && <p className="text-sm font-black text-[#24551d]">{unfinishedCount} nog te produceren · {activeOrders.length - unfinishedCount} geproduceerd</p>}
-      {loading ? <p>Laden...</p> : productionGroups.length === 0 ? <p className="border border-[#e4ded5] bg-white p-3 text-sm">Geen bevestigde B2B-productie in deze periode.</p> : productionGroups.map(([key, group]) => (
-        <section key={key} className="border border-[#d6e5d8] bg-white">
-          <h2 className="bg-[#dcebd8] px-3 py-2 text-sm font-black">Leveren {formatDate(group[0].deliveryDate)} · {DEPARTMENTS.find((department) => department.id === group[0].department)?.label} · {group.filter((order) => !isProductionDone(order)).length} nog te maken</h2>
-          <div className="divide-y divide-[#e4ded5]">
-            {group.map((order) => <article key={order.id} className={`space-y-2 p-3 text-sm ${isProductionDone(order) ? "bg-[#f6faf4]" : ""}`}>
-              <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">{order.customerName}</h3><span className={isProductionDone(order) ? "font-black text-[#24551d]" : "font-black text-[#9a3412]"}>{isProductionDone(order) ? "Geproduceerd" : "Nog te maken"}</span></div>
-              <p className="whitespace-pre-wrap text-xs">{order.orderText}</p>
-              {order.department !== "bakkerij" && <div><p className="mb-1 text-xs font-black text-[#24551d]">Chocoladeletters · {b2bLetterTotal(order.letterLines)} stuks</p>{order.letterLines.length > 0 ? <B2BLetterLineBadges lines={order.letterLines} /> : <p className="text-xs font-bold text-[#9a3412]">Letterregels nog invullen{order.letterOrderText ? ` · oude omschrijving: ${order.letterOrderText}` : ""}</p>}</div>}
-              {order.logo && <p><strong>Logo:</strong> {order.logo} {!order.logoChecked && "· NOG CONTROLEREN"}</p>}
-              {order.textInstructions && <p><strong>Tekst:</strong> {order.textInstructions} {!order.textChecked && "· NOG CONTROLEREN"}</p>}
-              {order.packaging && <p><strong>Verpakking:</strong> {order.packaging} {!order.packagingChecked && "· NOG CONTROLEREN"}</p>}
-              {order.importantNotes && <p><strong>Belangrijk:</strong> {order.importantNotes}</p>}
-              <div className="flex flex-wrap gap-2">
-                {([ ["productionDone", order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0) ? "Overig geproduceerd" : "Geproduceerd"], ...(order.department === "beide" || (order.department === "bakkerij" && order.letterLines.length > 0) ? [["letterProductionDone", "Letters geproduceerd"]] as const : []), ["packed", "Ingepakt"] ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={order[key]} disabled={updatingId === `${order.id}-${key}`} onChange={() => void toggleStatus(order, key)} />{label}</label>)}
-              </div>
-              <details className="border-t border-[#e4ded5] pt-2 text-xs">
-                <summary className="cursor-pointer font-bold text-[#6b645b]">Optioneel: productiedag {order.productionDate ? `· ${formatDate(order.productionDate)}` : "vastleggen"}</summary>
-                <div className="mt-2 flex flex-wrap items-end gap-2">
-                  <label className="grid gap-1 font-bold">Productiedag
-                    <input type="date" value={planDrafts[order.id] ?? order.productionDate ?? ""} max={order.deliveryDate} onChange={(event) => setPlanDrafts((current) => ({ ...current, [order.id]: event.target.value }))} className="h-9 border border-[#d6e5d8] bg-white px-2" />
-                  </label>
-                  <button type="button" disabled={updatingId === `${order.id}-plan` || !(planDrafts[order.id] ?? order.productionDate)} onClick={() => void saveProductionPlan(order)} className="h-9 bg-[#24551d] px-3 font-black text-white disabled:opacity-50">{updatingId === `${order.id}-plan` ? "Opslaan..." : "Datum opslaan"}</button>
-                </div>
-              </details>
-            </article>)}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-
   return (
     <div className="space-y-4">
+      <BusinessSeasonNav season={season} />
       <section className="rounded-2xl border border-[#d7e2d3] bg-white/95 p-3 shadow-sm">
         <div className="grid gap-2 lg:grid-cols-[minmax(14rem,1fr)_6.5rem_auto_auto_auto]">
           <input
@@ -2272,6 +2205,7 @@ export default function SinterklaasB2BClient({ mode = "sales" }: Readonly<{ mode
       {formOpen && (
         <B2BOrderDialog
           order={editingOrder}
+          season={season}
           onClose={closeOrderDialog}
           onSaved={handleSavedOrder}
         />

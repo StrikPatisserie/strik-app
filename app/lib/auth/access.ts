@@ -31,6 +31,7 @@ export const LOGISTICS_PERMISSION_OPTIONS = [
 export const SEASONAL_MENU_PERMISSION_OPTIONS = [
   { id: "vierdaagse.view", label: "Vierdaagse" },
   { id: "sinterklaas.view", label: "Sinterklaas" },
+  { id: "kerst.view", label: "Kerst" },
 ];
 
 export const VIERDAAGSE_PERMISSION_OPTIONS = [
@@ -461,6 +462,10 @@ export function canAccessPath(
 
   if (isVierdaagsePath(pathname)) {
     return canAccessVierdaagsePath(profile, pathname);
+  }
+
+  if (pathname === "/kerst" || pathname.startsWith("/kerst/")) {
+    return hasFullAccess(profile) || hasPermission(profile, "kerst.view");
   }
 
   if (isSinterklaasPath(pathname)) {

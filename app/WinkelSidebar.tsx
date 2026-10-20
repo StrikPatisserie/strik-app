@@ -19,6 +19,7 @@ const mainNavItems = [
   { href: "/management", label: "Management", icon: strikIcons.management },
   { href: "/vierdaagse", label: "Vierdaagse", icon: strikIcons.strikAgenda },
   { href: "/sinterklaas", label: "Sinterklaas", icon: strikIcons.sinterklaas },
+  { href: "/kerst", label: "Kerst", icon: strikIcons.kerst },
 ];
 
 function isActivePath(pathname: string, href: string) {

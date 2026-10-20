@@ -3,11 +3,13 @@ export const FEATURE_VISIBILITY_SETTING_KEY = "feature_visibility";
 export type FeatureVisibilitySettings = {
   vierdaagseNavigation: boolean;
   sinterklaasNavigation: boolean;
+  kerstNavigation: boolean;
 };
 
 export const defaultFeatureVisibility: FeatureVisibilitySettings = {
   vierdaagseNavigation: false,
   sinterklaasNavigation: true,
+  kerstNavigation: true,
 };
 
 export const SEASONAL_NAVIGATION_SETTINGS = [
@@ -21,6 +23,7 @@ export const SEASONAL_NAVIGATION_SETTINGS = [
     href: "/sinterklaas",
     title: "Sinterklaas menu",
   },
+  { key: "kerstNavigation", href: "/kerst", title: "Kerst menu" },
 ] as const satisfies readonly {
   key: keyof FeatureVisibilitySettings;
   href: string;
@@ -37,6 +40,7 @@ export function normalizeFeatureVisibilitySettings(
 
   return {
     vierdaagseNavigation: Boolean(settings.vierdaagseNavigation),
+    kerstNavigation: typeof settings.kerstNavigation === "boolean" ? settings.kerstNavigation : defaultFeatureVisibility.kerstNavigation,
     sinterklaasNavigation:
       typeof settings.sinterklaasNavigation === "boolean"
         ? settings.sinterklaasNavigation

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
-import { canAccessSinterklaas } from "../lib/auth/access";
+import { canAccessPath, canAccessSinterklaas } from "../lib/auth/access";
 import { getCurrentProfile } from "../lib/auth/session";
 
 const WORDPRESS_SINTERKLAAS_API_BASE =
@@ -69,13 +69,13 @@ function createWordPressErrorResponse(endpoint: string, status: number) {
   );
 }
 
-async function ensureSinterklaasAccess() {
+async function ensureSinterklaasAccess(endpoint: string) {
   const profile = await getCurrentProfile();
-  return canAccessSinterklaas(profile);
+  return canAccessSinterklaas(profile) || (["sinterklaas-mailing", "sinterklaas-b2b-orders"].includes(endpoint) && canAccessPath(profile, "/kerst"));
 }
 
 export async function proxySinterklaasGet(request: Request, endpoint: string) {
-  if (!(await ensureSinterklaasAccess())) {
+  if (!(await ensureSinterklaasAccess(endpoint))) {
     return jsonError("Geen toegang tot Sinterklaas.", 403);
   }
 
@@ -106,7 +106,7 @@ export async function proxySinterklaasMutation(
   endpoint: string,
   method: "POST" | "PATCH" | "DELETE"
 ) {
-  if (!(await ensureSinterklaasAccess())) {
+  if (!(await ensureSinterklaasAccess(endpoint))) {
     return jsonError("Geen toegang tot Sinterklaas.", 403);
   }
 

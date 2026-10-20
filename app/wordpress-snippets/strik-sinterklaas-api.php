@@ -1220,67 +1220,138 @@ function strik_sinterklaas_maybe_send_b2b_reminders() {
 
 add_action('init', 'strik_sinterklaas_maybe_send_b2b_reminders');
 
+if (!function_exists('strik_business_mailing_selection')) {
+function strik_business_mailing_selection($value) {
+    return in_array($value, array('sint', 'kerst', 'sint-kerst'), true) ? $value : 'sint';
+}
+function strik_business_mailing_key($year, $selection) {
+    return $selection === 'sint' ? $year : $year . ':' . $selection;
+}
+function strik_business_mailing_contacts($campaigns) {
+    $book = get_option('strik_business_mailing_contacts_v1', null);
+    if (is_array($book) && isset($book['customers'], $book['revision'])) return $book;
+    // Start with the newest saved campaign, retaining contacts from older years.
+    krsort($campaigns);
+    $customers = array();
+    $seen = array();
+    foreach ($campaigns as $campaign) {
+        foreach (isset($campaign['customers']) ? $campaign['customers'] : array() as $customer) {
+            $recipients = array();
+            foreach ($customer['recipients'] as $recipient) {
+                $email = strtolower(trim($recipient['email']));
+                if (isset($seen[$email])) {
+                    // Never lose an unsubscribe when joining historical lists.
+                    if (!empty($recipient['doNotEmail'])) {
+                        foreach ($customers as &$saved_customer) foreach ($saved_customer['recipients'] as &$saved_recipient) {
+                            if (strtolower($saved_recipient['email']) === $email) $saved_recipient['doNotEmail'] = true;
+                        }
+                        unset($saved_customer, $saved_recipient);
+                    }
+                    continue;
+                }
+                $seen[$email] = true;
+                $recipient['sent'] = array();
+                $recipients[] = $recipient;
+            }
+            if (!$recipients) continue;
+            unset($customer['ordered'], $customer['orderedAt']);
+            $customer['recipients'] = $recipients;
+            $customers[] = $customer;
+        }
+    }
+    return array('revision' => 0, 'customers' => strik_business_mailing_address_book($customers));
+}
+function strik_business_mailing_address_book($customers) {
+    $result = array(); $seen = array(); $groups = array();
+    foreach ($customers as $customer) {
+        unset($customer['ordered'], $customer['orderedAt']);
+        $group = strtolower(trim($customer['company']));
+        if ($group === '') $group = $customer['id'];
+        if (!isset($groups[$group])) {
+            $groups[$group] = count($result);
+            $copy = $customer; $copy['recipients'] = array();
+            $result[] = $copy;
+        }
+        $ci = $groups[$group];
+        foreach ($customer['recipients'] as $recipient) {
+            $email = strtolower(trim($recipient['email']));
+            if (isset($seen[$email])) {
+                if (!empty($recipient['doNotEmail'])) {
+                    $indices = $seen[$email];
+                    $result[$indices[0]]['recipients'][$indices[1]]['doNotEmail'] = true;
+                }
+                continue;
+            }
+            $seen[$email] = array($ci, count($result[$ci]['recipients']));
+            $recipient['sent'] = array();
+            $result[$ci]['recipients'][] = $recipient;
+        }
+    }
+    return array_values(array_filter($result, function ($customer) { return !empty($customer['recipients']); }));
+}
+function strik_business_mailing_overlay($campaign, $book) {
+    $history = array(); $states = array();
+    foreach (isset($campaign['customers']) ? $campaign['customers'] : array() as $customer) {
+        foreach ($customer['recipients'] as $recipient) {
+            $email = strtolower(trim($recipient['email']));
+            $history[$email] = isset($recipient['sent']) ? $recipient['sent'] : array();
+            $states[$email] = array('ordered' => !empty($customer['ordered']), 'orderedAt' => isset($customer['orderedAt']) ? $customer['orderedAt'] : '');
+        }
+    }
+    $customers = $book['customers'];
+    foreach ($customers as &$customer) {
+        $customer['ordered'] = false; $customer['orderedAt'] = '';
+        foreach ($customer['recipients'] as &$recipient) {
+            $email = strtolower(trim($recipient['email']));
+            $recipient['sent'] = isset($history[$email]) ? $history[$email] : array();
+            if (!empty($states[$email]['ordered'])) {
+                $customer['ordered'] = true; $customer['orderedAt'] = $states[$email]['orderedAt'];
+            }
+        }
+        unset($recipient);
+    }
+    unset($customer);
+    $campaign['customers'] = $customers;
+    $campaign['contactsRevision'] = $book['revision'];
+    return $campaign;
+}
+}
+
 if (!function_exists('strik_sinterklaas_mailing_clean')) {
 function strik_sinterklaas_mailing_clean($input, $existing = array()) {
-    $year = strik_sinterklaas_year(isset($input['year']) ? $input['year'] : '');
-    $customers = array();
-    $raw_customers = isset($input['customers']) && is_array($input['customers']) ? $input['customers'] : array();
-    foreach (array_slice($raw_customers, 0, 2000) as $customer) {
+    $customers = array(); $history_by_email = array();
+    foreach (isset($existing['customers']) ? $existing['customers'] : array() as $old_customer) foreach ($old_customer['recipients'] as $old_recipient) $history_by_email[strtolower($old_recipient['email'])] = isset($old_recipient['sent']) ? $old_recipient['sent'] : array();
+    foreach (array_slice(isset($input['customers']) && is_array($input['customers']) ? $input['customers'] : array(), 0, 2000) as $customer) {
         if (!is_array($customer)) continue;
         $customer_id = strik_sinterklaas_text(isset($customer['id']) ? $customer['id'] : '', 100);
         if ($customer_id === '') $customer_id = strik_sinterklaas_create_id('mailcustomer', isset($customer['company']) ? $customer['company'] : '');
         $recipients = array();
-        $raw_recipients = isset($customer['recipients']) && is_array($customer['recipients']) ? $customer['recipients'] : array();
-        foreach (array_slice($raw_recipients, 0, 30) as $recipient) {
+        foreach (array_slice(isset($customer['recipients']) && is_array($customer['recipients']) ? $customer['recipients'] : array(), 0, 30) as $recipient) {
             if (!is_array($recipient)) continue;
             $email = strik_sinterklaas_email(isset($recipient['email']) ? $recipient['email'] : '');
             if ($email === '') continue;
             $recipient_id = strik_sinterklaas_text(isset($recipient['id']) ? $recipient['id'] : '', 100);
             if ($recipient_id === '') $recipient_id = strik_sinterklaas_create_id('mailaddress', $email);
-            $sent = array();
-            foreach ((isset($recipient['sent']) && is_array($recipient['sent']) ? array_slice($recipient['sent'], 0, 10) : array()) as $event) {
-                if (!is_array($event)) continue;
-                $kind = strik_sinterklaas_text(isset($event['kind']) ? $event['kind'] : '', 20);
-                if (in_array($kind, array('folder', 'reminder1', 'reminder2'), true)) $sent[] = array('kind' => $kind, 'sentAt' => strik_sinterklaas_text(isset($event['sentAt']) ? $event['sentAt'] : '', 80));
-            }
-            $interests = array();
-            $raw_interests = isset($recipient['interests']) && is_array($recipient['interests']) ? $recipient['interests'] : array();
-            foreach ($raw_interests as $interest) {
-                $interest = strik_sinterklaas_text($interest, 20);
-                if (in_array($interest, array('sint', 'kerst'), true) && !in_array($interest, $interests, true)) $interests[] = $interest;
-            }
-            $recipients[] = array(
-                'id' => $recipient_id,
-                'contactName' => strik_sinterklaas_text(isset($recipient['contactName']) ? $recipient['contactName'] : '', 160),
-                'email' => $email,
-                'doNotEmail' => !empty($recipient['doNotEmail']),
-                'sent' => $sent,
-                'interests' => $interests,
-                'consentAt' => strik_sinterklaas_text(isset($recipient['consentAt']) ? $recipient['consentAt'] : '', 80),
-                'consentSource' => strik_sinterklaas_text(isset($recipient['consentSource']) ? $recipient['consentSource'] : '', 160),
-            );
+            // Delivery history belongs to the server, never to a stale browser.
+            $sent = isset($history_by_email[strtolower($email)]) ? $history_by_email[strtolower($email)] : array();
+            $interests = array_values(array_intersect(array('sint', 'kerst'), isset($recipient['interests']) && is_array($recipient['interests']) ? $recipient['interests'] : array()));
+            $recipients[] = array('id' => $recipient_id, 'contactName' => strik_sinterklaas_text(isset($recipient['contactName']) ? $recipient['contactName'] : '', 160), 'email' => $email, 'doNotEmail' => !empty($recipient['doNotEmail']), 'sent' => $sent, 'interests' => $interests, 'consentAt' => strik_sinterklaas_text(isset($recipient['consentAt']) ? $recipient['consentAt'] : '', 80), 'consentSource' => strik_sinterklaas_text(isset($recipient['consentSource']) ? $recipient['consentSource'] : '', 160));
         }
         $customers[] = array('id' => $customer_id, 'company' => strik_sinterklaas_text(isset($customer['company']) ? $customer['company'] : '', 180), 'notes' => strik_sinterklaas_textarea(isset($customer['notes']) ? $customer['notes'] : '', 1600), 'ordered' => !empty($customer['ordered']), 'orderedAt' => strik_sinterklaas_text(isset($customer['orderedAt']) ? $customer['orderedAt'] : '', 80), 'recipients' => $recipients);
     }
-    return array(
-        'year' => $year,
-        'subject' => strik_sinterklaas_text(isset($input['subject']) ? $input['subject'] : '', 240),
-        'body' => strik_sinterklaas_textarea(isset($input['body']) ? $input['body'] : '', 12000),
-        'reminder1Subject' => strik_sinterklaas_text(isset($input['reminder1Subject']) ? $input['reminder1Subject'] : '', 240),
-        'reminder1Body' => strik_sinterklaas_textarea(isset($input['reminder1Body']) ? $input['reminder1Body'] : '', 12000),
-        'reminder2Subject' => strik_sinterklaas_text(isset($input['reminder2Subject']) ? $input['reminder2Subject'] : '', 240),
-        'reminder2Body' => strik_sinterklaas_textarea(isset($input['reminder2Body']) ? $input['reminder2Body'] : '', 12000),
-        'folderUrl' => esc_url_raw(isset($input['folderUrl']) ? $input['folderUrl'] : ''),
-        'customers' => $customers,
-        'updatedAt' => wp_date(DATE_ATOM),
-    );
+    $result = array('year' => strik_sinterklaas_year(isset($input['year']) ? $input['year'] : ''), 'selection' => strik_business_mailing_selection(isset($input['selection']) ? $input['selection'] : 'sint'), 'customers' => $customers, 'updatedAt' => wp_date(DATE_ATOM));
+    foreach (array('subject', 'reminder1Subject', 'reminder2Subject') as $key) $result[$key] = strik_sinterklaas_text(isset($input[$key]) ? $input[$key] : '', 240);
+    foreach (array('body', 'reminder1Body', 'reminder2Body') as $key) $result[$key] = strik_sinterklaas_textarea(isset($input[$key]) ? $input[$key] : '', 12000);
+    foreach (array('folderUrl', 'kerstFolderUrl') as $key) $result[$key] = esc_url_raw(isset($input[$key]) ? $input[$key] : '');
+    return $result;
 }
 }
 
 if (!function_exists('strik_sinterklaas_mailing_response')) {
 function strik_sinterklaas_mailing_response($campaign) {
     if (!is_array($campaign)) $campaign = array();
-    $campaign['mailTemplateVersion'] = STRIK_SINTERKLAAS_MAIL_TEMPLATE_VERSION;
+    $campaign['mailTemplateVersion'] = 'strik-seasons-v1';
+    $campaign['mailingSeasonsVersion'] = 'shared-v1';
     return rest_ensure_response($campaign);
 }
 }
@@ -1288,8 +1359,37 @@ function strik_sinterklaas_mailing_response($campaign) {
 if (!function_exists('strik_sinterklaas_mailing_get')) {
 function strik_sinterklaas_mailing_get($request) {
     $year = strik_sinterklaas_year($request->get_param('year'));
+    $selection = strik_business_mailing_selection($request->get_param('season'));
     $campaigns = get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, array());
-    return strik_sinterklaas_mailing_response(isset($campaigns[$year]) ? $campaigns[$year] : array('year' => $year, 'customers' => array()));
+    if (!is_array($campaigns)) $campaigns = array();
+    $key = strik_business_mailing_key($year, $selection);
+    $campaign = isset($campaigns[$key]) ? $campaigns[$key] : array('year' => $year, 'selection' => $selection, 'customers' => array());
+    return strik_sinterklaas_mailing_response(strik_business_mailing_overlay($campaign, strik_business_mailing_contacts($campaigns)));
+}
+}
+
+if (!function_exists('strik_business_mailing_prepare')) {
+function strik_business_mailing_prepare($input, $selection) {
+    $campaigns = get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, array());
+    if (!is_array($campaigns)) $campaigns = array();
+    $year = strik_sinterklaas_year(isset($input['year']) ? $input['year'] : '');
+    $key = strik_business_mailing_key($year, $selection);
+    $existing = isset($campaigns[$key]) ? $campaigns[$key] : array();
+    $campaign = strik_sinterklaas_mailing_clean($input, $existing);
+    $campaign['selection'] = $selection;
+    $book = strik_business_mailing_contacts($campaigns);
+    $contacts = strik_business_mailing_address_book($campaign['customers']);
+    $changed = json_encode($contacts) !== json_encode(strik_business_mailing_address_book($book['customers']));
+    $revision = isset($input['contactsRevision']) ? (int) $input['contactsRevision'] : 0;
+    if ($changed && $revision !== (int) $book['revision']) return new WP_Error('contacts_changed', 'De gedeelde contactenlijst is intussen gewijzigd. Ververs de pagina voordat je opslaat; je campagne is niet overschreven.', array('status' => 409));
+    if ($changed || (int) $book['revision'] === 0) {
+        $book = array('revision' => (int) $book['revision'] + 1, 'customers' => $contacts);
+        update_option('strik_business_mailing_contacts_v1', $book, false);
+    }
+    $campaign = strik_business_mailing_overlay($campaign, $book);
+    $campaigns[$key] = $campaign;
+    update_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, $campaigns, false);
+    return $campaign;
 }
 }
 
@@ -1297,93 +1397,75 @@ if (!function_exists('strik_sinterklaas_mailing_save')) {
 function strik_sinterklaas_mailing_save($request) {
     $input = $request->get_json_params();
     if (!is_array($input)) return new WP_Error('invalid_mailing', 'Ongeldige mailing.', array('status' => 400));
-    $campaigns = get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, array());
-    if (!is_array($campaigns)) $campaigns = array();
-    $year = strik_sinterklaas_year(isset($input['year']) ? $input['year'] : '');
-    $campaigns[$year] = strik_sinterklaas_mailing_clean($input, isset($campaigns[$year]) ? $campaigns[$year] : array());
-    update_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, $campaigns, false);
-    return strik_sinterklaas_mailing_response($campaigns[$year]);
+    $campaign = strik_business_mailing_prepare($input, strik_business_mailing_selection($request->get_param('season')));
+    return is_wp_error($campaign) ? $campaign : strik_sinterklaas_mailing_response($campaign);
 }
 }
 
 if (!function_exists('strik_sinterklaas_mailing_send')) {
 function strik_sinterklaas_mailing_paragraphs($body) {
-    $parts = preg_split('/\r?\n\s*\r?\n/', trim((string) $body));
-    $html = '';
-    foreach ($parts as $part) {
-        $part = trim((string) $part);
-        if ($part === '') continue;
-        $html .= '<p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:16px;line-height:1.65;color:#4d4039;">' . nl2br(esc_html($part), false) . '</p>';
-    }
+    $parts = preg_split('/\r?\n\s*\r?\n/', trim((string) $body)); $html = '';
+    foreach ($parts as $part) if (trim($part) !== '') $html .= '<p style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:16px;line-height:1.65;color:#4d4039;">' . nl2br(esc_html(trim($part)), false) . '</p>';
     return $html;
 }
-
-function strik_sinterklaas_mailing_html($body, $folder_url, $kind, $year) {
-    $safe_url = esc_url($folder_url);
-    $button_label = 'Bekijk de folder';
-    $preheader = $kind === 'folder'
-        ? 'Bekijk het zakelijke Sinterklaasassortiment, actuele prijzen en staffels van Strik Patisserie.'
-        : 'Bekijk de digitale zakelijke Sinterklaasfolder van Strik Patisserie.';
-    $cta = $safe_url !== ''
-        ? '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0 20px;"><tr><td bgcolor="#d62d1d" style="border-radius:999px;"><a href="' . $safe_url . '" style="display:inline-block;padding:14px 24px;font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:999px;">' . esc_html($button_label) . ' &rarr;</a></td></tr></table>'
-        : '';
-    return '<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
-        . '<body style="margin:0;padding:0;background:#f4f0e9;">'
-        . '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">' . esc_html($preheader) . '</div>'
-        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f0e9;"><tr><td align="center" style="padding:24px 12px;">'
-        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border-radius:24px;overflow:hidden;box-shadow:0 12px 35px rgba(75,45,24,.10);">'
-        . '<tr><td bgcolor="#efb800" style="padding:26px 30px;">'
-        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td width="58" style="width:58px;vertical-align:middle;">'
-        . '<img src="https://strik-app.vercel.app/strik-logo.png" width="52" height="52" alt="Strik Patisserie" style="display:block;width:52px;height:52px;object-fit:contain;border:0;">'
-        . '</td><td style="padding-left:16px;vertical-align:middle;">'
-        . '<div style="font-family:Arial,sans-serif;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#ffffff;">Zakelijk Sinterklaas ' . esc_html($year) . '</div>'
-        . '<div style="margin-top:3px;font-family:Georgia,serif;font-size:28px;font-style:italic;color:#d62d1d;">Met een Strik</div>'
-        . '</td></tr></table></td></tr>'
+function strik_sinterklaas_mailing_html($body, $folder_url, $kind, $year, $selection = 'sint', $kerst_url = '') {
+    $label = $selection === 'sint-kerst' ? 'Sint & Kerst' : ($selection === 'kerst' ? 'Kerst' : 'Sinterklaas');
+    $header = $selection === 'sint' ? '#efb800' : '#244b37';
+    $accent = $selection === 'sint' ? '#d62d1d' : '#79233c';
+    $heading = $selection === 'sint' ? '#d62d1d' : '#f2d38b';
+    $links = $selection === 'sint-kerst' ? array('Bekijk de Sintfolder' => $folder_url, 'Bekijk de Kerstfolder' => $kerst_url) : array('Bekijk de ' . ($selection === 'kerst' ? 'Kerstfolder' : 'Sintfolder') => $folder_url);
+    $cta = '';
+    foreach ($links as $button_label => $url) {
+        if (!$url) continue;
+        $cta .= '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:16px 0;"><tr><td bgcolor="' . $accent . '" style="border-radius:999px;"><a href="' . esc_url($url) . '" style="display:inline-block;padding:14px 24px;font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:999px;">' . esc_html($button_label) . ' &rarr;</a></td></tr></table>';
+    }
+    return '<!doctype html><html lang="nl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f4f0e9;">'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td align="center" style="padding:24px 12px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background:#ffffff;border-radius:24px;overflow:hidden;">'
+        . '<tr><td bgcolor="' . $header . '" style="padding:26px 30px;"><img src="https://app.strik-patisserie.nl/strik-logo.png" width="52" height="52" alt="Strik Patisserie" style="display:block;border:0;">'
+        . '<div style="margin-top:12px;font-family:Arial,sans-serif;font-size:11px;font-weight:800;letter-spacing:.18em;color:#ffffff;">Zakelijk ' . esc_html($label) . ' ' . esc_html($year) . '</div><div style="font-family:Georgia,serif;font-size:28px;font-style:italic;color:' . $heading . ';">Met een Strik</div></td></tr>'
         . '<tr><td style="padding:30px;">' . strik_sinterklaas_mailing_paragraphs($body) . $cta . '</td></tr>'
-        . '<tr><td bgcolor="#5a170f" style="padding:20px 30px;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#f9e7cd;">'
-        . '<strong style="color:#ffffff;">Strik Patisserie</strong> &middot; Nijmegen &middot; <a href="mailto:info@strik-patisserie.nl" style="color:#ffffff;">info@strik-patisserie.nl</a><br>'
-        . 'Je ontvangt deze zakelijke Sinterklaasmail omdat je contact hebt gehad met Strik Patisserie. Geen mails meer ontvangen? Antwoord op deze e-mail met <strong style="color:#ffffff;">afmelden</strong>.'
-        . '</td></tr></table></td></tr></table></body></html>';
+        . '<tr><td bgcolor="#244b37" style="padding:20px 30px;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;color:#f9e7cd;"><strong>Strik Patisserie</strong> &middot; Nijmegen &middot; <a href="mailto:info@strik-patisserie.nl" style="color:#ffffff;">info@strik-patisserie.nl</a><br>Je ontvangt deze zakelijke mail omdat je contact hebt gehad met Strik Patisserie. Geen mails meer ontvangen? Antwoord met <strong>afmelden</strong>.</td></tr></table></td></tr></table></body></html>';
 }
-
 function strik_sinterklaas_mailing_send($request) {
     $input = $request->get_json_params();
     if (!is_array($input) || empty($input['campaign'])) return new WP_Error('invalid_mailing', 'Ongeldige verzending.', array('status' => 400));
-    $campaigns = get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, array());
-    if (!is_array($campaigns)) $campaigns = array();
-    $year = strik_sinterklaas_year(isset($input['year']) ? $input['year'] : '');
-    $campaign = strik_sinterklaas_mailing_clean($input['campaign'], isset($campaigns[$year]) ? $campaigns[$year] : array());
-    $customer_id = strik_sinterklaas_text(isset($input['customerId']) ? $input['customerId'] : '', 100);
-    $recipient_id = strik_sinterklaas_text(isset($input['recipientId']) ? $input['recipientId'] : '', 100);
+    $selection = strik_business_mailing_selection($request->get_param('season'));
     $kind = strik_sinterklaas_text(isset($input['kind']) ? $input['kind'] : '', 20);
     if (!in_array($kind, array('folder', 'reminder1', 'reminder2'), true)) return new WP_Error('invalid_kind', 'Onbekend mailingtype.', array('status' => 400));
-    foreach ($campaign['customers'] as $customer_index => $customer) {
-      if ($customer['id'] !== $customer_id) continue;
-      foreach ($customer['recipients'] as $recipient_index => $contact) {
-        if ($contact['id'] !== $recipient_id) continue;
-        if ($contact['doNotEmail'] || $contact['email'] === '') return new WP_Error('invalid_recipient', 'Dit contact mag niet worden gemaild.', array('status' => 400));
-        $subject_key = $kind === 'folder' ? 'subject' : ($kind === 'reminder1' ? 'reminder1Subject' : 'reminder2Subject');
-        $body_key = $kind === 'folder' ? 'body' : ($kind === 'reminder1' ? 'reminder1Body' : 'reminder2Body');
-        $name = $contact['contactName'] !== '' ? $contact['contactName'] : 'heer/mevrouw';
-        $subject = isset($input['subject']) ? strik_sinterklaas_text($input['subject'], 240) : $campaign[$subject_key];
-        $mail_body = isset($input['body']) ? strik_sinterklaas_textarea($input['body'], 12000) : $campaign[$body_key];
-        $body = str_replace('{{contactpersoon}}', $name, $mail_body);
-        $html = strik_sinterklaas_mailing_html($body, $campaign['folderUrl'], $kind, $campaign['year']);
-        $headers = array(
-            'Content-Type: text/html; charset=UTF-8',
-            'From: Strik Patisserie <info@strik-patisserie.nl>',
-            'Reply-To: Strik Patisserie <info@strik-patisserie.nl>',
-            'List-Unsubscribe: <mailto:info@strik-patisserie.nl?subject=Afmelden%20B2B%20Sinterklaasmail>',
-        );
-        // Iedere ontvanger krijgt bewust een afzonderlijke mail. Zo zijn adressen
-        // nooit zichtbaar voor andere ontvangers en blijft de aanhef persoonlijk.
-        if (!wp_mail($contact['email'], $subject, $html, $headers)) return new WP_Error('mail_failed', 'WordPress kon de e-mail niet versturen.', array('status' => 502));
-        $campaign['customers'][$customer_index]['recipients'][$recipient_index]['sent'][] = array('kind' => $kind, 'sentAt' => wp_date(DATE_ATOM));
-        $campaign['updatedAt'] = wp_date(DATE_ATOM);
-        $campaigns[$year] = $campaign;
-        update_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, $campaigns, false);
-        return strik_sinterklaas_mailing_response($campaign);
-      }
+    $campaign = strik_business_mailing_prepare($input['campaign'], $selection);
+    if (is_wp_error($campaign)) return $campaign;
+    foreach ($campaign['customers'] as $ci => $customer) {
+        if ($customer['id'] !== $input['customerId']) continue;
+        foreach ($customer['recipients'] as $ri => $contact) {
+            if ($contact['id'] !== $input['recipientId']) continue;
+            $required_interests = $selection === 'sint-kerst' ? array('sint', 'kerst') : array($selection);
+            if ($contact['doNotEmail'] || $contact['email'] === '' || (!empty($contact['interests']) && array_diff($required_interests, $contact['interests']))) return new WP_Error('invalid_recipient', 'Dit contact mag niet voor deze campagne worden gemaild.', array('status' => 400));
+            if (!empty($customer['ordered'])) return new WP_Error('already_ordered', 'Deze klant staat voor deze campagne op besteld.', array('status' => 400));
+            $request_id = strik_sinterklaas_text(isset($input['requestId']) ? $input['requestId'] : '', 160);
+            $has_previous = false; $has_requirement = $kind === 'folder';
+            foreach ($contact['sent'] as $event) {
+                if ($request_id !== '' && isset($event['requestId']) && $event['requestId'] === $request_id) return strik_sinterklaas_mailing_response($campaign);
+                if ($event['kind'] === $kind) $has_previous = true;
+                if ($event['kind'] === ($kind === 'reminder1' ? 'folder' : 'reminder1')) $has_requirement = true;
+            }
+            if ($has_previous && empty($input['includePreviouslySent'])) return strik_sinterklaas_mailing_response($campaign);
+            if (!$has_requirement) return new WP_Error('missing_previous_mail', 'Verstuur eerst de eerdere nieuwsbrief of herinnering.', array('status' => 400));
+            $subject_key = $kind === 'folder' ? 'subject' : ($kind === 'reminder1' ? 'reminder1Subject' : 'reminder2Subject');
+            $body_key = $kind === 'folder' ? 'body' : ($kind === 'reminder1' ? 'reminder1Body' : 'reminder2Body');
+            $subject = isset($input['subject']) ? strik_sinterklaas_text($input['subject'], 240) : $campaign[$subject_key];
+            $body = str_replace('{{contactpersoon}}', $contact['contactName'] !== '' ? $contact['contactName'] : 'heer/mevrouw', isset($input['body']) ? strik_sinterklaas_textarea($input['body'], 12000) : $campaign[$body_key]);
+            $url = isset($campaign['folderUrl']) ? $campaign['folderUrl'] : '';
+            $kerst_url = isset($campaign['kerstFolderUrl']) ? $campaign['kerstFolderUrl'] : '';
+            if (!preg_match('~^https://~i', $url) || ($selection === 'sint-kerst' && !preg_match('~^https://~i', $kerst_url))) return new WP_Error('invalid_folder', 'Controleer de https-folderlinks.', array('status' => 400));
+            $html = strik_sinterklaas_mailing_html($body, $url, $kind, $campaign['year'], $selection, $kerst_url);
+            $headers = array('Content-Type: text/html; charset=UTF-8', 'From: Strik Patisserie <info@strik-patisserie.nl>', 'Reply-To: Strik Patisserie <info@strik-patisserie.nl>', 'List-Unsubscribe: <mailto:info@strik-patisserie.nl?subject=Afmelden%20B2B%20nieuwsbrief>');
+            if (!wp_mail($contact['email'], $subject, $html, $headers)) return new WP_Error('mail_failed', 'WordPress kon de e-mail niet versturen.', array('status' => 502));
+            $campaign['customers'][$ci]['recipients'][$ri]['sent'][] = array('kind' => $kind, 'sentAt' => wp_date(DATE_ATOM), 'requestId' => $request_id);
+            $campaigns = get_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, array());
+            $campaigns[strik_business_mailing_key($campaign['year'], $selection)] = $campaign;
+            update_option(STRIK_SINTERKLAAS_MAILING_OPTION_NAME, $campaigns, false);
+            return strik_sinterklaas_mailing_response($campaign);
+        }
     }
     return new WP_Error('contact_missing', 'Contact niet gevonden.', array('status' => 404));
 }

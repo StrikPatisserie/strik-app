@@ -33,6 +33,7 @@ function Message({ state }: Readonly<{ state: AppSettingsActionState }>) {
 const seasonalIcons: Record<keyof FeatureVisibilitySettings, string> = {
   vierdaagseNavigation: strikIcons.strikAgenda,
   sinterklaasNavigation: strikIcons.sinterklaas,
+  kerstNavigation: strikIcons.kerst,
 };
 
 function SeasonalToggle({

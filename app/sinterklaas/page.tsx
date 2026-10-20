@@ -14,7 +14,7 @@ const items = [
   {
     href: "/sinterklaas/bedrijven",
     title: "B2B bestellingen",
-    description: "Verkoop, bestellingen en productie voor bedrijven.",
+    description: "Bestellingen en nieuwsbrief voor bedrijven.",
     icon: strikIcons.sinterklaasB2B,
     accent: "green" as const,
   },
