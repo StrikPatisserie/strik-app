@@ -2,6 +2,7 @@ import DepartmentHub from "../DepartmentHub";
 import { strikIcons } from "../StrikUI";
 import { filterAllowedItems } from "../lib/auth/access";
 import { getCurrentProfile } from "../lib/auth/session";
+import { businessSeasonColors } from "../lib/businessSeasons";
 
 const items = [
   {
@@ -32,7 +33,7 @@ export default async function SinterklaasPage() {
       title="Sinterklaas"
       description="Alle chocoladeletters en zakelijke bestellingen bij elkaar."
       icon={strikIcons.sinterklaas}
-      items={visibleItems}
+      items={visibleItems.map(item => ({ ...item, iconBackground: businessSeasonColors.sint.pale, iconColor: businessSeasonColors.sint.accent }))}
       tone="yellow"
     />
   );

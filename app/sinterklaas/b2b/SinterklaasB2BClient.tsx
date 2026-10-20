@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import BusinessSeasonNav from "../../BusinessSeasonNav";
-import { orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
+import { businessSeasonColors, orderBelongsToSeason, seasonLabel, type BusinessSeason } from "../../lib/businessSeasons";
 import { christmasProducts } from "../../kerst-voor-bedrijven/christmasProducts";
 import { BUSINESS_FOLDER_PRICE_TIERS } from "../../lib/business-folder-pricing";
 import {
@@ -1683,6 +1683,7 @@ function B2BOrderRow({
   const warnings = orderWarnings(order);
   const confirmationNeedsAttention = order.status === "akkoord" && order.deliveryWindowType === "date" && (!order.confirmationEmailedAt || Boolean(order.confirmationEmailError)) && Boolean(order.deliveryDate) && order.deliveryDate >= todayIso() && !archived;
   const orderSummary = compactOrderText(order.orderText);
+  const seasonColors = order.season === "sint-kerst" ? undefined : businessSeasonColors[order.season];
 
   return (
     <article
@@ -1695,7 +1696,7 @@ function B2BOrderRow({
       }`}
     >
       <div className="grid gap-2 lg:grid-cols-[9.5rem_minmax(0,1fr)_10.5rem]">
-        <div className="border-l-4 border-[#c3d3bc] pl-2">
+        <div className="border-l-4 border-[#c3d3bc] pl-2" style={{ borderColor: seasonColors?.border }}>
           <p className="text-[0.62rem] font-black uppercase tracking-[0.12em] text-[#8b8278]">
             {order.deliveryWindowType === "date" ? "Leverdatum" : "Gewenste levering"}
           </p>
@@ -1715,7 +1716,7 @@ function B2BOrderRow({
               <h3 className="text-base font-black leading-tight text-[#1a1815]">
                 {order.customerName}
               </h3>
-              <span className="rounded-full bg-[#eef2ea] px-2 py-0.5 text-[0.62rem] font-bold text-[#24553d]">{seasonLabel(order.season)}</span>
+              <span className="rounded-full bg-[#eef2ea] px-2 py-0.5 text-[0.62rem] font-bold text-[#24553d]" style={{ backgroundColor: seasonColors?.pale, color: seasonColors?.accent }}>{seasonLabel(order.season)}</span>
               {order.folderQuote && <span className="text-[0.62rem] font-bold text-[#557965]">Via folder · {order.folderQuote.reference}{!order.folderQuote.mailSentAt ? " · Controleer e-mailmelding" : ""}</span>}
               <span className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.12em] ${order.status === "akkoord" ? "bg-[#dcebd8] text-[#24551d]" : "bg-[#fff3c4] text-[#705000]"}`}>
                 {{ aanvraag: "Aanvraag", offerte: "Offerte", akkoord: "Akkoord", afgewezen: "Niet doorgegaan" }[order.status]}
@@ -2181,7 +2182,7 @@ export default function SinterklaasB2BClient({ season = "sint" }: Readonly<{ sea
           {!loading &&
             groupedOrders.map(([key, group]) => (
               <section key={key} className="rounded-2xl border border-[#d7e2d3] bg-white/70 shadow-sm">
-                <div className="rounded-t-2xl bg-[#dcebd8] px-3 py-2">
+                <div className="rounded-t-2xl px-3 py-2" style={{ backgroundColor: businessSeasonColors[season].pale }}>
                   <h3 className="text-sm font-black capitalize text-[#1a1815]">
                     {monthLabel(key)}
                   </h3>

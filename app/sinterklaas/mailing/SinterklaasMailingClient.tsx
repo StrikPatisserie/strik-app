@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { businessSeasons, folderSelectionLabel, type BusinessSeason, type FolderSelection } from "../../lib/businessSeasons";
+import { businessSeasonColors, businessSeasons, folderSelectionLabel, type BusinessSeason, type FolderSelection } from "../../lib/businessSeasons";
 
 type SendKind = "folder" | "reminder1" | "reminder2";
 type Recipient = {
@@ -455,7 +455,7 @@ export default function SinterklaasMailingClient({ season = "sint" }: { season?:
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-[#d7e2d2] bg-white p-4 text-[#49342d]">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black">Welke folder stuur je?</h2><p className="mt-1 text-xs text-[#7b7268]">Eén gedeelde contactenlijst. Verzendingen en ‘besteld’ blijven per campagne apart.</p></div><div className="flex flex-wrap gap-2" role="group" aria-label="Folderkeuze">{(["sint", "kerst", "sint-kerst"] as const).map(value => <button type="button" key={value} disabled={saving} aria-pressed={selection === value} onClick={() => void switchSelection(value)} className={`min-h-10 rounded-xl px-4 text-sm font-bold ${selection === value ? "bg-[#24553d] text-white" : "bg-[#f1e9df]"}`}>{value === "sint-kerst" ? "Beide folders" : folderSelectionLabel(value)}</button>)}</div></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black">Welke folder stuur je?</h2><p className="mt-1 text-xs text-[#7b7268]">Eén gedeelde contactenlijst. Verzendingen en ‘besteld’ blijven per campagne apart.</p></div><div className="flex flex-wrap gap-2" role="group" aria-label="Folderkeuze">{(["sint", "kerst", "sint-kerst"] as const).map(value => <button type="button" key={value} disabled={saving} aria-pressed={selection === value} onClick={() => void switchSelection(value)} className={`min-h-10 rounded-xl px-4 text-sm font-bold ${selection === value ? "bg-[#24553d] text-white" : "bg-[#f1e9df]"}`} style={value === "sint-kerst" ? undefined : { backgroundColor: selection === value ? businessSeasonColors[value].accent : businessSeasonColors[value].pale, color: selection === value ? "#fff" : businessSeasonColors[value].accent }}>{value === "sint-kerst" ? "Beide folders" : folderSelectionLabel(value)}</button>)}</div></div>
       </section>
       {message && <div role="status" className="rounded-xl border border-[#e7c978] bg-[#fff8df] px-4 py-3 text-sm font-bold text-[#692115]">{message}</div>}
 

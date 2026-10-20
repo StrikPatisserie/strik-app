@@ -1,6 +1,11 @@
 export type BusinessSeason = "sint" | "kerst";
 export type FolderSelection = BusinessSeason | "sint-kerst";
 
+export const businessSeasonColors = {
+  sint: { accent: "#a6322d", pale: "#f7e6e1", border: "#e4bdb6" },
+  kerst: { accent: "#202542", pale: "#e7ebf4", border: "#c5cbdc" },
+} as const;
+
 export const businessSeasons = {
   sint: { name: "Sinterklaas", shortName: "Sint", home: "/sinterklaas/bedrijven", orders: "/sinterklaas/b2b", mailing: "/sinterklaas/mailing", folder: "https://app.strik-patisserie.nl/sint-voor-bedrijven" },
   kerst: { name: "Kerst", shortName: "Kerst", home: "/kerst", orders: "/kerst/b2b", mailing: "/kerst/mailing", folder: "https://app.strik-patisserie.nl/kerst-voor-bedrijven" },
