@@ -69,6 +69,7 @@ export function buildBusinessFolderQuote(value: unknown) {
   let totalEx = 0, totalIncl = 0;
   let snapshotSelection: unknown;
   let hasPackaging = false, hasLogo = false;
+  let department = "bakkerij";
 
   if (season === "kerst") {
     const singles = quantities(selection.singles, 9999);
@@ -107,14 +108,15 @@ export function buildBusinessFolderQuote(value: unknown) {
         const details = record(line.letter);
         const style = product.id === "chocoladeletter" ? "spuit" : "vorm";
         const character = text(details.letter, 1).toUpperCase();
-        if (!/^[A-Z]$/.test(character) || (style === "vorm" && character !== "S") || !["klein", "groot"].includes(String(details.size)) || (style === "vorm" && details.size !== "groot") || !["melk", "puur", "wit"].includes(String(details.chocolate))) throw new Error("Controleer de chocoladeletterregels.");
-        if (!Array.isArray(details.exceptions) || details.exceptions.some(value => !["notenvrij", "vegan", "glutenvrij", "lactosevrij"].includes(String(value)))) throw new Error("Controleer de bijzondere wensen voor de letters.");
+        if (!/^[A-Z]$/.test(character) || (style === "vorm" && character !== "S") || typeof details.size !== "string" || !["klein", "groot"].includes(details.size) || (style === "vorm" && details.size !== "groot") || typeof details.chocolate !== "string" || !["melk", "puur", "wit"].includes(details.chocolate)) throw new Error("Controleer de chocoladeletterregels.");
+        if (!Array.isArray(details.exceptions) || details.exceptions.some(value => typeof value !== "string" || !["notenvrij", "vegan", "glutenvrij", "lactosevrij"].includes(value))) throw new Error("Controleer de bijzondere wensen voor de letters.");
         letter = { id: `folder-letter-${index + 1}`, style, letter: character, size: details.size as B2BLetterLine["size"], chocolate: details.chocolate as B2BLetterLine["chocolate"], quantity: amount, exceptions: [...new Set(details.exceptions)] as B2BLetterLine["exceptions"] };
         choice = `${style === "vorm" ? "vormletter S groot" : `spuitletter ${character} ${letter.size}`} · ${letter.chocolate}${letter.exceptions.length ? ` · ${letter.exceptions.join(", ")}` : ""}`;
       } else if (!productChoiceCandidates(product).includes(choice)) throw new Error("Controleer de gekozen productuitvoering.");
       return { product, quantity: amount, choice, customColors, letter, withLogo: line.withLogo === true && productSupportsLogo(product, choice), withGiftWrap: isLetter && line.withGiftWrap === true };
     });
     rows.push("GEKOZEN SINTERKLAASPRODUCTEN");
+    department = lines.some(line => line.letter) ? lines.some(line => !line.letter) ? "beide" : "chocolade" : "bakkerij";
     for (const line of lines) {
       const { product, quantity, choice, customColors, letter, withLogo, withGiftWrap } = line;
       const configured = letter ? { ...product, retailPriceIncl: letter.size === "klein" ? 8.95 : 13.95 } : pricedProduct(product, choice);
@@ -138,6 +140,6 @@ export function buildBusinessFolderQuote(value: unknown) {
   const payloadHash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
   return {
     requestId, reference, payloadHash, snapshot, quoteText, consent,
-    order: { id: `folder-${requestId}`, year: "2026", season, status: "aanvraag", customerName: company, contactName, customerEmail: email, phone, deliveryWindowType: momentType === "week" ? "range" : "date", deliveryDate, deliveryDateEnd, department: letterLines.length ? "beide" : "bakkerij", orderText: quoteText, letterLines, totalExVat: totalEx.toFixed(2), priceAgreement: `Prijsindicatie: ${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw. Extra verpakking en bezorging in overleg.`, deliveryMethod: deliveryLabel, deliveryAddress: address, importantNotes: wishes, logo: hasLogo ? "Eigen logo aangevraagd; bestand en uitvoering nog afstemmen." : "", packaging: hasPackaging ? "Verpakking aangevraagd; zie aanvraag voor inhoud en cadeaupapier." : "", source: "handmatig", sourceSheet: `Website ${season === "kerst" ? "Kerst" : "Sint"} · ${reference}` },
+    order: { id: `folder-${requestId}`, year: "2026", season, status: "aanvraag", customerName: company, contactName, customerEmail: email, phone, deliveryWindowType: momentType === "week" ? "range" : "date", deliveryDate, deliveryDateEnd, department, orderText: quoteText, letterLines, totalExVat: totalEx.toFixed(2), priceAgreement: `Prijsindicatie: ${money(totalEx)} excl. btw / ${money(totalIncl)} incl. btw. Extra verpakking en bezorging in overleg.`, deliveryMethod: deliveryLabel, deliveryAddress: address, importantNotes: wishes, logo: hasLogo ? "Eigen logo aangevraagd; bestand en uitvoering nog afstemmen." : "", packaging: hasPackaging ? "Verpakking aangevraagd; zie aanvraag voor inhoud en cadeaupapier." : "", source: "handmatig", sourceSheet: `Website ${season === "kerst" ? "Kerst" : "Sint"} · ${reference}` },
   };
 }

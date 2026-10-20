@@ -46,11 +46,14 @@ test('Sint letter prices share the quantity tier and retain logo, gift wrap, exc
   const quote = build(input);
   assert.equal(quote.order.totalExVat, '278.65');
   assert.equal(quote.order.letterLines.length, 2);
+  assert.equal(quote.order.department, 'chocolade');
   assert.equal(quote.order.letterLines[1].exceptions[0], 'vegan');
   assert.equal(quote.order.deliveryWindowType, 'range');
   assert.equal(quote.order.deliveryDateEnd, '2026-11-29');
   assert.match(quote.quoteText, /inclusief eigen logo/);
   assert.match(quote.quoteText, /cadeaupapier.*0,25/);
+  input.selection.lines[0].letter.exceptions = [['vegan']];
+  assert.throws(() => build(input), /bijzondere wensen/);
 });
 test('Sint variants retain fixed personalization surcharges and reject unknown selections', () => {
   const input = fixture('sint');
