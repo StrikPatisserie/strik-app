@@ -1239,6 +1239,7 @@ export default function RecipeDetail({
     return (
       <>
       <BakkerRecipeCard
+        financialAccess={financialAccess}
         labeling={financialAccess ? <RecipeLabelPanel key={recipe.id} recipe={recipe} ingredients={ingredients} recipes={recipes} onSave={onSaveRecipe} onSaveIngredient={onSaveSpecification} /> : undefined}
         recipe={previewRecipe}
         ingredients={ingredients}
@@ -4093,6 +4094,7 @@ function escapeHtml(value: string) {
 
 function BakkerRecipeCard({
   recipe,
+  financialAccess,
   labeling,
   ingredients,
   recipes,
@@ -4111,6 +4113,7 @@ function BakkerRecipeCard({
   onOpenRecipe,
 }: Readonly<{
   recipe: Recipe;
+  financialAccess: boolean;
   labeling?: ReactNode;
   ingredients: Ingredient[];
   recipes: Recipe[];
@@ -4162,6 +4165,10 @@ function BakkerRecipeCard({
   const cardMargin = recipe.salesPrice
     ? calculateMargin(recipe.salesPrice, recipe.costPrice)
     : 0;
+  const recommendedPrice = financialAccess && !incomplete &&
+    recipe.type === "finalProduct" && Number.isFinite(recipe.costPrice) && recipe.costPrice > 0
+    ? targetSalesPrice({ ...recipe, targetMargin: 80 })
+    : null;
 
   useEffect(() => {
     if (!quantityInputFocused) {
@@ -4231,6 +4238,12 @@ function BakkerRecipeCard({
           <div><dt>Winkelprijs incl.</dt><dd>{recipe.salesPrice ? formatEuro(recipe.salesPrice) : "—"}</dd></div>
           <div><dt>Kostprijs ex.</dt><dd>{incomplete ? "Onvolledig" : formatEuro(recipe.costPrice)}</dd></div>
           <div><dt>Marge ex.</dt><dd>{!incomplete && cardMargin ? formatPercent(cardMargin) : "—"}</dd></div>
+          {financialAccess && recipe.type === "finalProduct" && (
+            <div className={styles.adviceMetric} title="Verkoopprijs inclusief 9% btw bij 80% marge exclusief btw.">
+              <dt>Advies 80% incl.</dt>
+              <dd>{incomplete ? "Onvolledig" : recommendedPrice === null ? "—" : formatEuro(recommendedPrice)}</dd>
+            </div>
+          )}
         </dl>
 
         {labeling}

@@ -47,6 +47,7 @@
 .metrics > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
 .metrics dt { font-size: 11px; color: #756b60; }
 .metrics dd { font-weight: 800; font-variant-numeric: tabular-nums; }
+.adviceMetric dt, .adviceMetric dd { color: #315e42; }
 .ingredients { margin-top: 12px; overflow: hidden; border: 1px solid #dfdfd3; border-radius: 12px; background: white; }
 .sectionHeading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: #edf3e8; }
 .sectionHeading > span { font-size: 11px; color: #756b60; }
