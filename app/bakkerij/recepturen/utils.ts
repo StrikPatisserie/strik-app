@@ -334,7 +334,17 @@ export function ingredientCostForQuantity(
   quantity: number,
   unit: RecipeUnit
 ) {
-  const baseQuantity = convertQuantityToUnit(quantity, unit, ingredient.recipeUnit);
+  let baseQuantity = convertQuantityToUnit(quantity, unit, ingredient.recipeUnit);
+  const density = ingredient.specification?.densityGramsPerMl;
+  if (density && Number.isFinite(density) && density > 0) {
+    if (isVolumeUnit(unit) && isWeightUnit(ingredient.recipeUnit)) {
+      const grams = (unit === "liter" ? quantity * 1000 : quantity) * density;
+      baseQuantity = ingredient.recipeUnit === "kg" ? grams / 1000 : grams;
+    } else if (isWeightUnit(unit) && isVolumeUnit(ingredient.recipeUnit)) {
+      const liters = (unit === "kg" ? quantity * 1000 : quantity) / (density * 1000);
+      baseQuantity = ingredient.recipeUnit === "ml" ? liters * 1000 : liters;
+    }
+  }
 
   return roundMoney(baseQuantity * ingredient.pricePerBaseUnit);
 }

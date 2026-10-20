@@ -44,6 +44,7 @@ export type BakeryHomeData = {
 
 export type Ingredient = {
   specification?: IngredientSpecification;
+  recipeReplacement?: { kind: "ingredient" | "semiFinished"; id: string };
   id: string;
   name: string;
   supplier: string;

@@ -11,6 +11,7 @@ import type { UserProfile } from "../../lib/supabase/types";
 import FactuurImport from "./FactuurImport";
 import HalffabricatenList from "./HalffabricatenList";
 import IngredientsList, { IngredientDetail } from "./IngredientsList";
+import { replaceIngredientForRecipes, type RecipeReplacement } from "./ingredientReplacement";
 import { persistIngredientSpecification } from "./specsPlazaLink";
 import MargeOverzicht from "./MargeOverzicht";
 import managementStyles from "./ManagementScreens.module.css";
@@ -1384,6 +1385,16 @@ export default function RecepturenApp({
     deleteIngredients([ingredient], `${ingredient.name} verwijderd.`);
   }
 
+  function replaceIngredient(source: Ingredient, replacement: RecipeReplacement) {
+    const result = replaceIngredientForRecipes(source.id, replacement, ingredientItems, recipeItems);
+    const nextRecipes = recalculateAllRecipeCosts(result.recipes, result.ingredients, { markAsUpdated: true }, packagingItems);
+    setIngredientItems(result.ingredients);
+    setRecipeItems(nextRecipes);
+    syncSelectedRecipe(nextRecipes);
+    persistRecepturenData({ ingredients: result.ingredients, recipes: nextRecipes, invoiceImports: invoiceItems },
+      `${source.name} vervangen door ${result.targetName} in ${result.affectedRecipes} recepten. Oude grondstof bewaard bij facturen.`);
+  }
+
   function mergeDuplicateIngredient(
     sourceIngredient: Ingredient,
     targetIngredient: Ingredient
@@ -2185,6 +2196,7 @@ export default function RecepturenApp({
             onUpdateSpecification={saveIngredientSpecification}
             onDeleteIngredient={deleteIngredient}
             onMergeIngredient={mergeDuplicateIngredient}
+            onReplaceIngredient={replaceIngredient}
             onOpenImport={() => openDataImport("ingredients")}
             onDeleteIngredients={(ingredientsToDelete) =>
               deleteIngredients(
@@ -2338,6 +2350,10 @@ export default function RecepturenApp({
             onUpdateSpecification={saveIngredientSpecification}
             onMergeIngredient={(sourceIngredient, targetIngredient) => {
               mergeDuplicateIngredient(sourceIngredient, targetIngredient);
+              setInvoiceIngredientEditor(null);
+            }}
+            onReplaceIngredient={(source, replacement) => {
+              replaceIngredient(source, replacement);
               setInvoiceIngredientEditor(null);
             }}
             onDeleteIngredient={(ingredient) => {

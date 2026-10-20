@@ -20,13 +20,13 @@ export type HefeOrderItem = {
 };
 
 const rawHefeOrderRows: HefeOrderRow[] = [
-  ["F+S Sahne 33% 10kg Eimer - Slagroom 33% onges", "EI 10 KG", "108", 3.19, ""],
+  ["Slagroom 40%", "KT 10 KG", "0000121", 3.2, "LC Ankly Schlagsahne 40% 10 Liter BiB; factuurprijs per kg"],
   ["TK-C.Dough Classic L 10kg", "KT 10 KG", "1100", 7.75, ""],
   ['TK-C.Dough choc.chips "S"', "KT 10 KG", "1109", 8.25, ""],
   ["TK-RF Zitronensaft 500g", "KT 12 PG", "2088", 2.05, ""],
   ["TK-Boiron Passionsfru.Püree", "PG 1 KG", "2155", 10.4, ""],
   ["H-Milch 3,5% Prago 10L Box", "PG 10 LI", "437", 0.79, ""],
-  ["Kristalsuiker extra fijn", "1 kg", "5305", 0.65, ""],
+  ["Kristalsuiker extra fijn", "SA 25 KG", "0005308", 0.65, "Sandzucker EU 400 25kg"],
   ["Cremodan Super", "EI 5 KG", "9976", 0, ""],
   ["Cremodan SE 30", "EI 5 KG", "9978", 28.78, ""],
   ["Cremodan ES", "EI 5 KG", "9980", 0, ""],
@@ -86,7 +86,7 @@ const rawHefeOrderRows: HefeOrderRow[] = [
   ["Inuline", "25kg", "4723", 3.88, ""],
   ["Glukose Roquette", "ZK", "0005384", 1.39, ""],
   ["Fijne hazelnoten 2-4mm", "10kg", "10442", 14.75, ""],
-  ["Butter 10kg karton", "10kg", "0000713", 4.25, ""],
+  ["Roomboter", "KT 10 KG", "0000713", 4.85, "Butter 10kg Karton"],
   ["Dextrose Meritose 200", "25kg", "5321", 0.89, ""],
   ["Carpi lube tube Fett 113gr", "113gr", "287049", 8.9, ""],
 ];

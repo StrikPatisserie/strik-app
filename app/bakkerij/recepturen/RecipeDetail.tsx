@@ -5051,6 +5051,7 @@ function IngredientSearchField({
 
   const normalizedQuery = normalizeIngredientQuery(query);
   const suggestions = ingredients
+    .filter((ingredient) => ingredient.status !== "inactive" || ingredient.id === value)
     .map((ingredient) => ({
       ingredient,
       score: ingredientSearchScore(ingredient, normalizedQuery),

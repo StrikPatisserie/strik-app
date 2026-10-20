@@ -67,6 +67,7 @@ export default function IngredientsOverview({
   const [supplier, setSupplier] = useState("all");
   const [allergen, setAllergen] = useState("all");
   const [priceChange, setPriceChange] = useState("all");
+  const [showInactive, setShowInactive] = useState(false);
   const [status, setStatus] = useState<"all" | SpecificationStatus>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -97,6 +98,7 @@ export default function IngredientsOverview({
     return ingredients.filter((ingredient) => {
       const change = ingredientPriceChange(ingredient);
       return (
+        (showInactive || ingredient.status !== "inactive") &&
         (!query || [ingredient.name, ingredient.supplier, ingredient.supplierArticleNumber, ...ingredient.aliases]
           .some((value) => normalizeSearch(value).includes(query))) &&
         (supplier === "all" || ingredient.supplier === supplier) &&
@@ -105,14 +107,14 @@ export default function IngredientsOverview({
           (priceChange === "high" && change >= 8) || (priceChange === "stable" && Math.abs(change) < 2))
       );
     });
-  }, [allergen, ingredients, priceChange, search, supplier]);
+  }, [allergen, ingredients, priceChange, search, showInactive, supplier]);
   const filteredIngredients = matchingIngredients.filter(
     (ingredient) => status === "all" || specificationStatus(ingredient) === status
   );
   const filters = [
     ["all", "Alle"], ["unlinked", "Te koppelen"], ["incomplete", "Aanvullen"], ["registered", "Gekoppeld"],
   ] as const;
-  const extraFilterCount = Number(allergen !== "all") + Number(priceChange !== "all");
+  const extraFilterCount = Number(allergen !== "all") + Number(priceChange !== "all") + Number(showInactive);
 
   return (
     <Panel className="!rounded-2xl !bg-[#fffefa] !p-3 sm:!p-4">
@@ -134,6 +136,7 @@ export default function IngredientsOverview({
         <details className="relative">
           <summary className="min-h-9 cursor-pointer content-center rounded-lg border border-[#e4ded5] bg-white px-3 py-2 text-xs font-bold text-[#75685f]">Meer filters{extraFilterCount ? ` · ${extraFilterCount}` : ""}</summary>
           <div className="z-10 mt-2 grid gap-3 rounded-xl border border-[#e4ded5] bg-white p-3 shadow-sm sm:absolute sm:right-0 sm:min-w-64">
+            <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} />Toon oude grondstoffen</label>
             <FilterSelect label="Allergeen" value={allergen} onChange={setAllergen} options={[
               { value: "all", label: "Alle allergenen" }, ...allergens.map((item) => ({ value: item, label: item })),
             ]} />
@@ -151,7 +154,7 @@ export default function IngredientsOverview({
           </button>
         ))}
         {(search || supplier !== "all" || extraFilterCount || status !== "all") ? (
-          <button type="button" onClick={() => { setSearch(""); setSupplier("all"); setAllergen("all"); setPriceChange("all"); setStatus("all"); }} className="ml-auto min-h-8 px-2 text-xs font-bold text-[#82786e] underline underline-offset-2">Filters wissen</button>
+          <button type="button" onClick={() => { setSearch(""); setSupplier("all"); setAllergen("all"); setPriceChange("all"); setShowInactive(false); setStatus("all"); }} className="ml-auto min-h-8 px-2 text-xs font-bold text-[#82786e] underline underline-offset-2">Filters wissen</button>
         ) : null}
       </div>
 

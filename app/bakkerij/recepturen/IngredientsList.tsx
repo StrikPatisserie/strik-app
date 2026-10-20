@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from "react";
 import IngredientSpecificationEditor from "./IngredientSpecificationEditor";
 import IngredientsOverview from "./IngredientsOverview";
+import type { RecipeReplacement } from "./ingredientReplacement";
 import type { Ingredient, IngredientSpecificationSaver, Recipe, RecipeUnit } from "./types";
 import {
   changeBadgeClass,
@@ -46,6 +47,7 @@ export default function IngredientsList({
   onOpenImport,
   onDeleteIngredient,
   onMergeIngredient,
+  onReplaceIngredient,
 }: Readonly<{
   ingredients: Ingredient[];
   recipes: Recipe[];
@@ -54,6 +56,7 @@ export default function IngredientsList({
   onOpenImport: () => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
   onMergeIngredient: (sourceIngredient: Ingredient, targetIngredient: Ingredient) => void;
+  onReplaceIngredient: (sourceIngredient: Ingredient, replacement: RecipeReplacement) => void;
   onDeleteIngredients?: (ingredients: Ingredient[]) => void;
 }>) {
   const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null);
@@ -86,6 +89,10 @@ export default function IngredientsList({
             onMergeIngredient(source, target);
             setEditingIngredient(null);
           }}
+          onReplaceIngredient={(source, replacement) => {
+            onReplaceIngredient(source, replacement);
+            setEditingIngredient(null);
+          }}
           onDeleteIngredient={(ingredient) => {
             onDeleteIngredient(ingredient);
             setEditingIngredient(null);
@@ -104,6 +111,7 @@ export function IngredientDetail({
   onUpdateIngredient,
   onUpdateSpecification,
   onMergeIngredient,
+  onReplaceIngredient,
   onDeleteIngredient,
   onClose,
 }: Readonly<{
@@ -116,10 +124,18 @@ export function IngredientDetail({
     sourceIngredient: Ingredient,
     targetIngredient: Ingredient
   ) => void;
+  onReplaceIngredient: (sourceIngredient: Ingredient, replacement: RecipeReplacement) => void;
   onDeleteIngredient: (ingredient: Ingredient) => void;
   onClose: () => void;
 }>) {
   const linkedRecipes = recipesUsingIngredient(recipes, ingredient.id);
+  const [isReplacementOpen, setIsReplacementOpen] = useState(false);
+  const [replacementKind, setReplacementKind] = useState<RecipeReplacement["kind"]>("ingredient");
+  const [replacementId, setReplacementId] = useState("");
+  const [isActive, setIsActive] = useState(ingredient.status !== "inactive");
+  const replacementOptions = replacementKind === "ingredient"
+    ? ingredients.filter((item) => item.id !== ingredient.id && item.status !== "inactive")
+    : recipes.filter((item) => item.type === "semiFinished");
   const mergeCandidates = ingredients
     .filter((item) => item.id !== ingredient.id)
     .sort((first, second) => first.name.localeCompare(second.name, "nl-NL"));
@@ -178,6 +194,8 @@ export function IngredientDetail({
         .map((item) => item.trim())
         .filter(Boolean),
       aliases: nextAliases,
+      status: isActive ? "active" as const : "inactive" as const,
+      recipeReplacement: isActive ? undefined : ingredient.recipeReplacement,
       lastUpdated: new Date().toISOString().slice(0, 10),
       lastInvoice: priceChanged ? "Handmatig aangepast" : ingredient.lastInvoice,
     };
@@ -380,12 +398,12 @@ export function IngredientDetail({
               }`}
             >
               <LinkIcon />
-              Koppelen
+              Zoeknamen
             </button>
           </div>
           {isLinking && (
             <div className="grid gap-2 border-t border-[#d9d2c9] bg-[#fffdf8] p-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-              <CompactInputRow label="Extra alias" boxed>
+              <CompactInputRow label="Extra zoeknaam" boxed>
                 <input
                   value={alias}
                   onChange={(event) => setAlias(event.target.value)}
@@ -394,11 +412,11 @@ export function IngredientDetail({
                 />
               </CompactInputRow>
               <label className="grid gap-1 text-[0.6rem] font-black uppercase tracking-[0.14em] text-[#2d2a26]/45">
-                Aliases
+                Herkennen bij receptinvoer
                 <textarea
                   value={ingredientAliasesInput}
                   onChange={(event) => setIngredientAliasesInput(event.target.value)}
-                  placeholder="Plak ingredientnamen uit Beko, elk op een nieuwe regel"
+                  placeholder="Bijvoorbeeld slagroom of room, elk op een nieuwe regel"
                   className="min-h-24 resize-y border border-[#d9d2c9] bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-[#2d2a26] placeholder:text-[#2d2a26]/35 focus:outline-none focus:ring-2 focus:ring-[#8fb184]"
                 />
               </label>
@@ -444,6 +462,20 @@ export function IngredientDetail({
               )}
             </div>
           )}
+        </section>
+
+        <section className="mt-3 rounded-xl border border-[#d9d2c9] bg-white p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="flex items-center gap-2 text-xs font-bold"><input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />In gebruik voor recepten</label>
+            <button type="button" onClick={() => setIsReplacementOpen((current) => !current)} className="rounded-lg border border-[#d9d2c9] px-3 py-2 text-xs font-bold">Vervangen in recepten</button>
+          </div>
+          {ingredient.recipeReplacement && <p className="mt-2 text-xs text-[#82786e]">Vervangen door {ingredient.recipeReplacement.kind === "ingredient" ? ingredients.find((item) => item.id === ingredient.recipeReplacement?.id)?.name : recipes.find((item) => item.id === ingredient.recipeReplacement?.id)?.name}. Factuurgegevens blijven bij deze grondstof.</p>}
+          {isReplacementOpen && <div className="mt-3 grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)_auto]">
+            <label className="grid gap-1 text-xs font-bold">Vervangen door<select aria-label="Soort vervanging" value={replacementKind} onChange={(event) => { setReplacementKind(event.target.value as RecipeReplacement["kind"]); setReplacementId(""); }} className="min-h-9 rounded-lg border border-[#d9d2c9] bg-white px-2"><option value="ingredient">Grondstof</option><option value="semiFinished">Halffabricaat</option></select></label>
+            <label className="grid min-w-0 gap-1 text-xs font-bold">Nieuwe keuze<select aria-label="Nieuwe grondstof of halffabricaat" value={replacementId} onChange={(event) => setReplacementId(event.target.value)} className="min-h-9 min-w-0 rounded-lg border border-[#d9d2c9] bg-white px-2"><option value="">Kies een vervanging</option>{replacementOptions.slice().sort((a,b) => a.name.localeCompare(b.name, "nl-NL")).map((item) => <option key={item.id} value={item.id}>{item.name}{"supplier" in item ? ` · ${item.supplier}` : ""}</option>)}</select></label>
+            <button type="button" disabled={!replacementId} onClick={() => { try { onReplaceIngredient(ingredient, { kind: replacementKind, id: replacementId }); } catch (error) { setFeedback(error instanceof Error ? error.message : "Vervangen is niet gelukt."); } }} className="min-h-9 self-end rounded-lg bg-[#315e42] px-3 text-xs font-bold text-white disabled:opacity-40">Vervang in {linkedRecipes.length} recepten</button>
+            <p className="text-xs text-[#82786e] sm:col-span-3">Hoeveelheden blijven gelijk. De oude grondstof wordt inactief; facturen blijven bewaard. Nieuwe receptimports herkennen de vervanging.</p>
+          </div>}
         </section>
 
         {isMergeOpen && (

@@ -2,6 +2,7 @@ import { getCurrentProfile } from "@/app/lib/auth/session";
 import { hasFullAccess } from "@/app/lib/auth/access";
 import { NextResponse } from "next/server";
 import Papa from "papaparse";
+import { resolveRecipeReplacement } from "@/app/bakkerij/recepturen/ingredientReplacement";
 import * as XLSX from "xlsx";
 import type {
   Ingredient,
@@ -368,6 +369,7 @@ function ingredientMatchScore(candidateName: string, ingredient: Ingredient) {
 
 function findMatchingIngredient(name: string, ingredients: Ingredient[]) {
   const scored = ingredients
+    .filter((ingredient) => ingredient.status !== "inactive" || ingredient.recipeReplacement)
     .map((ingredient) => ({
       ingredient,
       score: ingredientMatchScore(name, ingredient),
@@ -494,9 +496,19 @@ function addImportedRecipeComponent(
 ) {
   if (!name || !Number.isFinite(quantity) || quantity < 0) return false;
 
+  const configuredIngredient = context ? findMatchingIngredient(name, context.availableIngredients) : undefined;
+  const configuredReplacement = configuredIngredient?.recipeReplacement && context
+    ? resolveRecipeReplacement(configuredIngredient, context.availableIngredients, context.availableRecipes)
+    : undefined;
   const matchingSemiFinished = context
     ? findMatchingSemiFinished(name, context.availableRecipes)
     : undefined;
+  if (configuredReplacement && configuredIngredient && ingredientMatchScore(name, configuredIngredient) >= Math.max(95, matchingSemiFinished ? recipeMatchScore(name, matchingSemiFinished) : 0)) {
+    if (configuredReplacement.kind === "semiFinished") addResolvedSemiFinishedLine(recipe, configuredReplacement.item, quantity, unit);
+    else addResolvedIngredientLine(recipe, configuredReplacement.item, quantity, unit);
+    return true;
+  }
+
   if (matchingSemiFinished) {
     addResolvedSemiFinishedLine(recipe, matchingSemiFinished, quantity, unit);
     return true;
@@ -507,8 +519,9 @@ function addImportedRecipeComponent(
     !shouldSkipIngredientMatch && context
       ? findMatchingIngredient(name, context.availableIngredients)
       : undefined;
-  if (matchingIngredient) {
-    addResolvedIngredientLine(recipe, matchingIngredient, quantity, unit);
+  if (matchingIngredient && (matchingIngredient.status !== "inactive" || configuredReplacement)) {
+    if (configuredReplacement?.kind === "semiFinished") addResolvedSemiFinishedLine(recipe, configuredReplacement.item, quantity, unit);
+    else addResolvedIngredientLine(recipe, configuredReplacement?.kind === "ingredient" ? configuredReplacement.item : matchingIngredient, quantity, unit);
     return true;
   }
 
