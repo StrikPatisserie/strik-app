@@ -3970,6 +3970,10 @@ function createRecipePrintHtml(
   const currentMargin = recipe.salesPrice
     ? calculateMargin(recipe.salesPrice, recipe.costPrice)
     : 0;
+  const recommendedPrice = recipe.type === "finalProduct" &&
+    Number.isFinite(recipe.costPrice) && recipe.costPrice > 0
+    ? targetSalesPrice({ ...recipe, targetMargin: 80 })
+    : null;
   const printTitle =
     isCalculation ? "Calculatiekaart" : "Recept / werkkaart";
   const summaryCards = isCalculation
@@ -3992,6 +3996,9 @@ function createRecipePrintHtml(
         <div><span>Doelmarge</span><strong>${escapeHtml(
           recipe.targetMargin ? formatPercent(recipe.targetMargin, 1) : "-"
         )}</strong></div>
+        ${recipe.type === "finalProduct" ? `<div class="advice"><span>Advies 80% incl. · per ${escapeHtml(unitLabelText(unit))}</span><strong>${escapeHtml(
+          recommendedPrice === null ? "—" : formatEuro(recommendedPrice)
+        )}</strong></div>` : ""}
       </section>`
     : "";
   const tableHeader = isCalculation
@@ -4028,6 +4035,8 @@ function createRecipePrintHtml(
     .summary div { border: 1px solid #c3d3bc; padding: 10px 12px; }
     .summary span { display: block; color: #666; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
     .summary strong { display: block; margin-top: 5px; font-size: 17px; }
+    .summary .advice { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #f3f7ef; }
+    .summary .advice strong { margin-top: 0; white-space: nowrap; }
     table { width: 100%; border-collapse: collapse; }
     th { padding: 0 0 8px; color: #666; font-size: 11px; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
     td { border-top: 1px solid #d8d8d8; padding: 6px 0; font-size: 16px; font-weight: 700; }

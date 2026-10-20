@@ -19,12 +19,12 @@ function load(file, imports = {}, expose = '') {
 }
 
 const utils = load('app/bakkerij/recepturen/utils.ts');
-const { Card } = load('app/bakkerij/recepturen/RecipeDetail.tsx', {
+const { Card, print } = load('app/bakkerij/recepturen/RecipeDetail.tsx', {
   react: React,
   'react/jsx-runtime': require('react/jsx-runtime'),
   './utils': utils,
   './RecipeScreens.module.css': { default: {} },
-}, 'exports.Card = BakkerRecipeCard;');
+}, 'exports.Card = BakkerRecipeCard; exports.print = createRecipePrintHtml;');
 
 const recipe = {
   id: 'test-cake', name: 'Voorbeeldcake', type: 'finalProduct', productGroup: 'Cake',
@@ -71,6 +71,34 @@ test('production accounts and semi-finished recipes never show the new price adv
 test('incomplete recipes and missing costs do not suggest a misleading selling price', () => {
   assert.equal(advice(render({ ingredients: [{ ingredientId: 'flour', quantity: 0, unit: 'gram' }] })), 'Onvolledig');
   assert.equal(advice(render({ costPrice: 0 })), '—');
+});
+
+function printAdvice(html) {
+  return html.match(/<div class="advice"><span>Advies 80% incl\. · per stuk<\/span><strong>(.*?)<\/strong>/)?.[1];
+}
+
+test('calculation print shows the same 80% advice including VAT as the recipe card, per piece when scaling', () => {
+  const original = JSON.stringify(recipe);
+  for (const count of [47, 100]) {
+    const html = print(recipe, [{ id: 'flour', name: 'Bloem' }], [], count, 47, 'calculation');
+    assert.equal(printAdvice(html), advice(render()));
+    assert.match(printAdvice(html), /14,93/);
+  }
+  assert.equal(JSON.stringify(recipe), original);
+  // Screenshot example: €110.10 / 50 = €2.202 actual cost; advice uses unrounded cost.
+  assert.match(printAdvice(print({ ...recipe, costPrice: 2.202, standardBatchQuantity: 50 }, [], [], 50, 50, 'calculation')), /12,00/);
+});
+
+test('work cards and semi-finished calculation prints do not acquire selling-price advice', () => {
+  assert.equal(printAdvice(print(recipe, [], [], 47, 47, 'work')), undefined);
+  assert.equal(printAdvice(print({ ...recipe, type: 'semiFinished' }, [], [], 47, 47, 'calculation')), undefined);
+});
+
+test('calculation prints do not suggest a price from missing quantities or unknown costs', () => {
+  assert.equal(printAdvice(print({ ...recipe, ingredients: [{ ingredientId: 'flour', quantity: 0, unit: 'gram' }] }, [], [], 47, 47, 'calculation')), undefined);
+  for (const costPrice of [0, -1, NaN]) {
+    assert.equal(printAdvice(print({ ...recipe, costPrice }, [], [], 47, 47, 'calculation')), '—');
+  }
 });
 
 function findElement(node, predicate) {

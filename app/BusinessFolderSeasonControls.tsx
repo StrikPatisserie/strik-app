@@ -65,9 +65,11 @@ export function BusinessFolderSeasonNav({
 export function BusinessGiftFinderButton({
   season,
   onClick,
+  description = "Aantal, budget en logo — wij rekenen mee.",
 }: Readonly<{
   season: BusinessFolderSeason;
   onClick: () => void;
+  description?: string;
 }>) {
   const isChristmas = season === "kerst";
 
@@ -125,7 +127,7 @@ export function BusinessGiftFinderButton({
             isChristmas ? "text-[#ddd5dc]" : "text-white"
           }`}
         >
-          Aantal, budget en logo — wij rekenen mee.
+          {description}
         </span>
       </span>
     </button>
@@ -219,11 +221,11 @@ export function BusinessFolderSeasonIntro() {
               <GiftIcon />
             </span>
             <span className="mt-5 block text-[.62rem] font-black uppercase tracking-[.18em] text-[#d8b56d]">
-              Binnenkort gevuld
+              Nu te bekijken
             </span>
             <strong className="mt-1 block text-3xl font-black">Kerst</strong>
             <span className="mt-2 block text-sm font-bold text-[#eee5db]">
-              Bekijk alvast de nieuwe kerstfolder en houd de invulling in de gaten.
+              Ontdek onze kerstcadeaus en stel zelf een pakket op maat samen.
             </span>
             <span className="mt-5 inline-flex rounded-full bg-[#d8b56d] px-4 py-2 text-xs font-black text-[#222849]">
               Open de kerstfolder →

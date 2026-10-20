@@ -9,10 +9,13 @@ import {
 } from "@/app/BusinessFolderSeasonControls";
 import {
   BUSINESS_FOLDER_LOGO_PRICE_INCL,
+  BUSINESS_FOLDER_PRICE_TIERS,
   businessFolderLogoPrice,
+  businessFolderRetailPrice,
 } from "@/app/lib/business-folder-pricing";
 import B2BChocolateLetters, { describeB2BLetter, type B2BLetterLine } from "./B2BChocolateLetters";
 import B2BPriceSummary from "./B2BPriceSummary";
+import { letterGiftWrapPrice } from "@/app/lib/letter-pricing";
 
 export type PriceTier = { min: number; label: string; price?: number; discountPercent?: number };
 type ProductVariant = { label: string; retailPriceIncl: number; fixedSurchargeIncl?: number };
@@ -75,13 +78,7 @@ const ALLERGEN_LABELS: Record<Allergen, string> = {
   soja: "Soja",
   ei: "Ei",
 };
-const chocolateLetterTiers: PriceTier[] = [
-  { min: 1, label: "1–24", discountPercent: 0 },
-  { min: 25, label: "25–50", discountPercent: 5 },
-  { min: 51, label: "51–100", discountPercent: 10 },
-  { min: 101, label: "101–200", discountPercent: 15 },
-  { min: 201, label: ">200", discountPercent: 20 },
-];
+const chocolateLetterTiers: PriceTier[] = BUSINESS_FOLDER_PRICE_TIERS;
 type Delivery = "pickup" | "nijmegen" | "custom";
 type DeliveryMomentType = "date" | "week";
 
@@ -363,9 +360,7 @@ export function tierFor(product: Product, quantity: number) {
 
 export function productUnitPrice(product: Product, tier: PriceTier, includeVat: boolean) {
   if (product.retailPriceIncl !== undefined && tier.discountPercent !== undefined) {
-    const discountedProductIncl = roundUpFiveCents(product.retailPriceIncl * (1 - tier.discountPercent / 100));
-    const totalIncl = roundCents(discountedProductIncl + (product.fixedSurchargeIncl || 0));
-    return includeVat ? totalIncl : roundCents(totalIncl / FOOD_VAT_FACTOR);
+    return businessFolderRetailPrice(product.retailPriceIncl, tier.discountPercent, includeVat, product.fixedSurchargeIncl);
   }
   const priceEx = tier.price || 0;
   return includeVat ? roundUpFiveCents(priceEx * FOOD_VAT_FACTOR) : roundCents(priceEx);
@@ -509,6 +504,7 @@ export default function SintB2BConcept() {
   const [recipientCount, setRecipientCount] = useState(25);
   const [wantsLogo, setWantsLogo] = useState(false);
   const [includeVat, setIncludeVat] = useState(true);
+  const [giftWrap, setGiftWrap] = useState<Record<string, boolean>>({});
   const [delivery, setDelivery] = useState<Delivery>("pickup");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryMomentType, setDeliveryMomentType] = useState<DeliveryMomentType>("date");
@@ -537,6 +533,9 @@ export default function SintB2BConcept() {
       const sharedLetterTier = tierFor(baseProduct, Math.max(1, totalLetters));
       const letterLogoPriceEx = logo[baseProduct.id] ? productLogoPrice(false) : 0;
       const letterLogoPriceIncl = logo[baseProduct.id] ? productLogoPrice(true) : 0;
+      const withGiftWrap = Boolean(giftWrap[baseProduct.id]);
+      const wrapPriceEx = withGiftWrap ? letterGiftWrapPrice(false) : 0;
+      const wrapPriceIncl = withGiftWrap ? letterGiftWrapPrice(true) : 0;
 
       return matchingLines.map((line) => {
         const product = { ...baseProduct, retailPriceIncl: line.size === "klein" ? 8.95 : 13.95 };
@@ -549,8 +548,9 @@ export default function SintB2BConcept() {
           withLogo: Boolean(logo[baseProduct.id]),
           logoPriceEx: letterLogoPriceEx,
           logoPriceIncl: letterLogoPriceIncl,
-          totalEx: roundCents(line.quantity * (productUnitPrice(product, sharedLetterTier, false) + letterLogoPriceEx)),
-          totalIncl: roundCents(line.quantity * (productUnitPrice(product, sharedLetterTier, true) + letterLogoPriceIncl)),
+          withGiftWrap, wrapPriceEx, wrapPriceIncl,
+          totalEx: roundCents(line.quantity * (productUnitPrice(product, sharedLetterTier, false) + letterLogoPriceEx + wrapPriceEx)),
+          totalIncl: roundCents(line.quantity * (productUnitPrice(product, sharedLetterTier, true) + letterLogoPriceIncl + wrapPriceIncl)),
         };
       });
     });
@@ -577,13 +577,14 @@ export default function SintB2BConcept() {
             product: configuredProduct, quantity, tier, logoPriceEx, logoPriceIncl,
             choiceLabel,
             withLogo,
+            withGiftWrap: false, wrapPriceEx: 0, wrapPriceIncl: 0,
             totalEx: roundCents(quantity * (productUnitPrice(configuredProduct, tier, false) + logoPriceEx)),
             totalIncl: roundCents(quantity * (productUnitPrice(configuredProduct, tier, true) + logoPriceIncl)),
           };
         })
         .filter((line) => line.quantity > 0);
     return [...letters, ...otherProducts];
-  }, [choices, customColors, letterLines, logo, quantities]);
+  }, [choices, customColors, letterLines, logo, quantities, giftWrap]);
   const letterTotalIncl = roundCents(selected.filter((line) => line.product.id === chocolateLetterProduct.id).reduce((sum, line) => sum + line.totalIncl, 0));
   const letterTotalEx = roundCents(selected.filter((line) => line.product.id === chocolateLetterProduct.id).reduce((sum, line) => sum + line.totalEx, 0));
   const shapeLetterTotalIncl = roundCents(selected.filter((line) => line.product.id === shapeLetterProduct.id).reduce((sum, line) => sum + line.totalIncl, 0));
@@ -642,10 +643,11 @@ export default function SintB2BConcept() {
     ...(phone.trim() ? [`Telefoon: ${phone.trim()}`] : []),
     "",
     "GEKOZEN PRODUCTEN",
-    ...selected.flatMap(({ product, quantity, tier, choiceLabel, withLogo, logoPriceEx, totalEx: lineTotalEx }, index) => [
+    ...selected.flatMap(({ product, quantity, tier, choiceLabel, withLogo, logoPriceEx, withGiftWrap, wrapPriceEx, totalEx: lineTotalEx }, index) => [
       `${index + 1}. ${quantity} x ${product.name} - ${choiceLabel}`,
       `   Prijs per stuk: ${money(productUnitPrice(product, tier, false))} excl. btw${tier.discountPercent ? ` (${product.fixedOffer ? "vaste aanbieding: " : ""}${tier.discountPercent}% korting)` : ""}`,
       ...(withLogo ? [`   Eigen logo: +${money(logoPriceEx)} per stuk excl. btw`] : []),
+      ...(withGiftWrap ? [`   In cadeaupapier: +${money(wrapPriceEx)} per letter excl. btw (${money(letterGiftWrapPrice())} incl. btw)`] : []),
       `   Regeltotaal: ${money(lineTotalEx)} excl. btw`,
       "",
     ]),
@@ -744,6 +746,8 @@ export default function SintB2BConcept() {
             onChange={(nextLines) => setLetterLines((current) => [...nextLines, ...current.filter((line) => line.style !== "spuit")])}
             withLogo={!!logo[chocolateLetterProduct.id]}
             onLogoChange={(value) => setLogo((current) => ({ ...current, [chocolateLetterProduct.id]: value }))}
+            withGiftWrap={!!giftWrap[chocolateLetterProduct.id]}
+            onGiftWrapChange={(value) => setGiftWrap((current) => ({ ...current, [chocolateLetterProduct.id]: value }))}
             onOpenShelfLife={() => setProductInfo({ product: chocolateLetterProduct, section: "shelfLife" })}
             onOpenAllergens={() => setProductInfo({ product: chocolateLetterProduct, section: "allergens" })}
             tiers={chocolateLetterTiers}
@@ -758,6 +762,8 @@ export default function SintB2BConcept() {
             onChange={(nextLines) => setLetterLines((current) => [...current.filter((line) => line.style !== "vorm"), ...nextLines])}
             withLogo={!!logo[shapeLetterProduct.id]}
             onLogoChange={(value) => setLogo((current) => ({ ...current, [shapeLetterProduct.id]: value }))}
+            withGiftWrap={!!giftWrap[shapeLetterProduct.id]}
+            onGiftWrapChange={(value) => setGiftWrap((current) => ({ ...current, [shapeLetterProduct.id]: value }))}
             onOpenShelfLife={() => setProductInfo({ product: shapeLetterProduct, section: "shelfLife" })}
             onOpenAllergens={() => setProductInfo({ product: shapeLetterProduct, section: "allergens" })}
             tiers={chocolateLetterTiers}
@@ -821,7 +827,7 @@ export default function SintB2BConcept() {
       <BusinessFolderSeasonIntro />
 
       {quoteOpen && <div className="fixed inset-0 z-50 flex items-end justify-center bg-[#391008]/55 p-0 sm:items-center sm:p-5"><section role="dialog" aria-modal="true" aria-labelledby="quote-title" className="max-h-[92dvh] w-full max-w-2xl overflow-auto rounded-t-[2rem] bg-[#fffaf0] p-5 shadow-2xl sm:rounded-[2rem] sm:p-8"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#d62d1d]">Live prijsindicatie</p><h2 id="quote-title" className="mt-1 text-3xl font-black text-[#60190f]">Jouw offerteaanvraag</h2></div><button type="button" aria-label="Sluiten" onClick={() => setQuoteOpen(false)} className="h-10 w-10 rounded-full bg-white text-lg font-black">×</button></div>
-        <div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({key,product,quantity,tier,choiceLabel,withLogo,logoPriceEx,logoPriceIncl,totalEx:lineTotalEx,totalIncl:lineTotalIncl})=><div key={key} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choiceLabel} · {money(productUnitPrice(product,tier,includeVat))} p.s. · {productPricingDescription(product,tier)}</p>{withLogo && <p className="mt-1 font-bold text-[#d62d1d]">Eigen logo: +{money(includeVat ? logoPriceIncl : logoPriceEx)} p.s. ({money(quantity * (includeVat ? logoPriceIncl : logoPriceEx))} totaal)</p>}</div><strong>{money(includeVat ? lineTotalIncl : lineTotalEx)}</strong></div>)}</div>
+        <div className="mt-6 divide-y divide-[#eadbc3]">{selected.map(({key,product,quantity,tier,choiceLabel,withLogo,logoPriceEx,logoPriceIncl,withGiftWrap,wrapPriceEx,wrapPriceIncl,totalEx:lineTotalEx,totalIncl:lineTotalIncl})=><div key={key} className="grid grid-cols-[1fr_auto] gap-3 py-3 text-sm"><div><strong>{quantity}× {product.name}</strong><p className="text-[#7e493c]">{choiceLabel} · {money(productUnitPrice(product,tier,includeVat))} p.s. · {productPricingDescription(product,tier)}</p>{withLogo && <p className="mt-1 font-bold text-[#d62d1d]">Eigen logo: +{money(includeVat ? logoPriceIncl : logoPriceEx)} p.s. ({money(quantity * (includeVat ? logoPriceIncl : logoPriceEx))} totaal)</p>}{withGiftWrap && <p className="mt-1 font-bold text-[#547762]">Cadeaupapier: +{money(includeVat ? wrapPriceIncl : wrapPriceEx)} per letter ({money(roundCents(quantity * (includeVat ? wrapPriceIncl : wrapPriceEx)))} totaal)</p>}</div><strong>{money(includeVat ? lineTotalIncl : lineTotalEx)}</strong></div>)}</div>
         <fieldset className="mt-5 rounded-xl border border-[#eadbc3] bg-white p-4"><legend className="px-1 text-sm font-black text-[#60190f]">Gewenst levermoment <span className="text-[#d62d1d]">*</span></legend><div className="grid gap-2 sm:grid-cols-2">{([{value:"date",label:"Specifieke dag"},{value:"week",label:"Leverweek"}] as const).map((option)=><label key={option.value} className={`cursor-pointer rounded-xl border px-3 py-2 text-sm font-black ${deliveryMomentType===option.value?"border-[#d62d1d] bg-[#fff0e8]":"border-[#dfd0b7] bg-[#fffaf0]"}`}><input type="radio" name="deliveryMomentType" value={option.value} checked={deliveryMomentType===option.value} onChange={()=>setDeliveryMomentType(option.value)} className="mr-2 accent-[#d62d1d]"/>{option.label}</label>)}</div>{deliveryMomentType==="date"?<label className="mt-3 block text-xs font-black text-[#60190f]">Kies je gewenste leverdag<input type="date" value={requestedDeliveryDate} onChange={(event)=>setRequestedDeliveryDate(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-[#dfd0b7] bg-white px-3 text-sm font-bold"/></label>:<label className="mt-3 block text-xs font-black text-[#60190f]">Kies je gewenste leverweek<select value={requestedDeliveryWeek} onChange={(event)=>setRequestedDeliveryWeek(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-[#dfd0b7] bg-white px-3 text-sm font-bold"><option value="">Kies een week</option>{DELIVERY_WEEK_OPTIONS.map((option)=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}<p className="mt-3 rounded-lg bg-[#fff0e8] px-3 py-2 text-[.68rem] font-bold leading-snug text-[#8a3928]">Dit is een voorkeur. Het levermoment is pas definitief nadat Strik Patisserie je aanvraag heeft goedgekeurd.</p></fieldset>
         <fieldset className="mt-5"><legend className="text-sm font-black text-[#60190f]">Hoe wil je jouw cadeaus ontvangen?</legend><div className="mt-2 grid gap-2 sm:grid-cols-3">{([{value:"pickup", label:"Ophalen", detail:"Gratis"},{value:"nijmegen", label:"Bezorgen Nijmegen e.o.", detail:`+ ${NIJMEGEN_DELIVERY_FEE_LABEL} · afhankelijk van adres`},{value:"custom", label:"Overig adres", detail:"Prijs op aanvraag"}] as const).map((option) => <label key={option.value} className={`cursor-pointer rounded-xl border p-3 text-sm ${delivery === option.value ? "border-[#d62d1d] bg-[#fff0e8]" : "border-[#dfd0b7] bg-white"}`}><input type="radio" name="delivery" value={option.value} checked={delivery === option.value} onChange={() => setDelivery(option.value)} className="mr-2 accent-[#d62d1d]"/><strong>{option.label}</strong><span className="mt-1 block pl-5 text-xs text-[#7e493c]">{option.detail}</span></label>)}</div></fieldset>
         {delivery !== "pickup" && <label className="mt-3 block text-sm font-bold text-[#60190f]">Afleveradres<input value={deliveryAddress} onChange={(event) => setDeliveryAddress(event.target.value)} placeholder="Straat, huisnummer, postcode en plaats" className="mt-2 h-12 w-full rounded-xl border border-[#dfd0b7] bg-white px-4"/></label>}

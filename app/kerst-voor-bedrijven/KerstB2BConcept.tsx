@@ -1,390 +1,236 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useState, type FormEvent } from "react";
-import {
-  BusinessFolderSeasonIntro,
-  BusinessFolderSeasonNav,
-  BusinessGiftFinderButton,
-} from "@/app/BusinessFolderSeasonControls";
-import { BUSINESS_FOLDER_LOGO_PRICE_INCL } from "@/app/lib/business-folder-pricing";
+import { useEffect, useRef, useState, type ReactNode, type FormEvent } from "react";
+import { BusinessFolderSeasonIntro, BusinessFolderSeasonNav, BusinessGiftFinderButton } from "@/app/BusinessFolderSeasonControls";
+import { BUSINESS_FOLDER_PRICE_TIERS } from "@/app/lib/business-folder-pricing";
+import { christmasHighlights, christmasImages, christmasPackage, christmasProducts, christmasTier, christmasUnitPrice, money, quantity, roundMoney } from "./christmasProducts";
+import styles from "./ChristmasFolder.module.css";
+import ProductMediaGallery from "./ProductMediaGallery";
 
-const LOGO_PRICE_LABEL = BUSINESS_FOLDER_LOGO_PRICE_INCL.toLocaleString("nl-NL", {
-  style: "currency",
-  currency: "EUR",
-});
+function Counter({ label, value, onChange, min = 0, max = 9999 }: Readonly<{ label: string; value: number; onChange: (value: number) => void; min?: number; max?: number }>) {
+  return <div className={styles.counter}>
+    <button type="button" aria-label={`${label} verminderen`} disabled={value <= min} onClick={() => onChange(quantity(value - 1, min, max))}>−</button>
+    <input aria-label={label} type="number" inputMode="numeric" min={min} max={max} step="1" value={value} onChange={(event) => onChange(quantity(Number(event.target.value), min, max))} />
+    <button type="button" aria-label={`${label} verhogen`} disabled={value >= max} onClick={() => onChange(quantity(value + 1, min, max))}>+</button>
+  </div>;
+}
 
-function ChristmasGiftIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 64 64"
-      className="h-16 w-16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 29h40v27H12zM8 19h48v11H8zM32 19v37" />
-      <path d="M31 19c-7 0-13-3-13-7.5C18 8.5 20.4 6 24 6c5 0 8 7.5 8 13ZM33 19c7 0 13-3 13-7.5C46 8.5 43.6 6 40 6c-5 0-8 7.5-8 13Z" />
-      <path d="m51 5 1.4 3.6L56 10l-3.6 1.4L51 15l-1.4-3.6L46 10l3.6-1.4L51 5Z" />
-    </svg>
-  );
+function FolderDialog({ title, onClose, children }: Readonly<{ title: string; onClose: () => void; children: ReactNode }>) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { dialog?.close(); document.body.style.overflow = previous; };
+  }, []);
+  return <dialog ref={ref} aria-label={title} className={styles.dialog} onCancel={(event) => { event.preventDefault(); onClose(); }} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className={styles.dialogContent}>
+      <header className={styles.dialogHeader}><h2>{title}</h2><button type="button" aria-label="Sluiten" onClick={onClose}>×</button></header>
+      {children}
+    </div>
+  </dialog>;
+}
+
+function VatToggle({ includeVat, onChange }: Readonly<{ includeVat: boolean; onChange: (value: boolean) => void }>) {
+  return <div className={styles.vat} role="group" aria-label="Btw-weergave">
+    <button type="button" aria-pressed={includeVat} onClick={() => onChange(true)}>Incl. btw</button>
+    <button type="button" aria-pressed={!includeVat} onClick={() => onChange(false)}>Excl. btw</button>
+  </div>;
 }
 
 export default function KerstB2BConcept() {
+  const [includeVat, setIncludeVat] = useState(true);
+  const [choices, setChoices] = useState<Record<string, string>>({});
+  const [singles, setSingles] = useState<Record<string, number>>({});
+  const [contents, setContents] = useState<Record<string, number>>({});
+  const [packageCount, setPackageCount] = useState(1);
+  const [vegan, setVegan] = useState(false);
   const [finderOpen, setFinderOpen] = useState(false);
   const [recipientCount, setRecipientCount] = useState(25);
   const [budget, setBudget] = useState(20);
-  const [wantsLogo, setWantsLogo] = useState(false);
-  const [includeVat, setIncludeVat] = useState(true);
-  const [signup, setSignup] = useState({
-    company: "",
-    contactName: "",
-    email: "",
-    consent: false,
-    website: "",
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const [contact, setContact] = useState({ company: "", contactName: "", email: "", phone: "", date: "", delivery: "pickup", address: "", wishes: "", consent: false, website: "" });
+  const [saving, setSaving] = useState(false);
+  const [savedSignature, setSavedSignature] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const vatLabel = includeVat ? "incl. btw" : "excl. btw";
+  const packagePrice = christmasPackage(contents, packageCount, includeVat);
+  const packageIncl = christmasPackage(contents, packageCount, true);
+  const packageExcl = christmasPackage(contents, packageCount, false);
+  const selectedSingles = christmasProducts.filter((product) => singles[product.id] > 0).map((product) => {
+    const count = singles[product.id];
+    return { product, count, unitPrice: christmasUnitPrice(product, count, includeVat), total: roundMoney(christmasUnitPrice(product, count, includeVat) * count) };
   });
-  const [signupState, setSignupState] = useState<
-    "idle" | "sending" | "success" | "error"
-  >("idle");
-  const [signupMessage, setSignupMessage] = useState("");
+  const singleTotal = (vat: boolean) => roundMoney(christmasProducts.reduce((sum, product) => sum + christmasUnitPrice(product, singles[product.id] || 0, vat) * (singles[product.id] || 0), 0));
+  const totalIncl = roundMoney(singleTotal(true) + packageIncl.total);
+  const totalExcl = roundMoney(singleTotal(false) + packageExcl.total);
+  const total = includeVat ? totalIncl : totalExcl;
+  const hasSelection = selectedSingles.length > 0 || packagePrice.lines.length > 0;
+  const contactSignature = JSON.stringify([contact.company.trim(), contact.contactName.trim(), contact.email.trim().toLowerCase(), contact.consent]);
+  const contactSaved = savedSignature === contactSignature;
+  const suggestions = christmasProducts.filter((product) => christmasUnitPrice(product, recipientCount, includeVat) <= budget);
+  const examplePackages: { name: string; contents: Record<string, number> }[] = [
+    { name: "Een klein gebaar", contents: { "stol-klein": 1, kerstkoekjes: 1 } },
+    { name: "Zoete feestdagen", contents: { kruidcake: 1, bonbons: 1, schuimkransjes: 1 } },
+    { name: "Voor de kersttafel", contents: { "stol-groot": 1, tulband: 1, bonbons: 1 } },
+  ];
+  function setSingle(id: string, value: number) { setSingles((current) => ({ ...current, [id]: quantity(value) })); }
+  function setContent(id: string, value: number) { setContents((current) => ({ ...current, [id]: quantity(value, 0, 99) })); }
+  function productName(id: string, name: string) { return id === "krans-puur" && vegan ? `${name} · vegan uitvoering` : name; }
 
-  async function submitFolderSignup(event: FormEvent<HTMLFormElement>) {
+  const offerText = [
+    "Beste Strik Patisserie,", "", "Graag ontvang ik een vrijblijvende offerte voor Kerst 2026.", "",
+    `Bedrijf: ${contact.company.trim()}`, `Contactpersoon: ${contact.contactName.trim()}`, `E-mail: ${contact.email.trim()}`,
+    ...(contact.phone.trim() ? [`Telefoon: ${contact.phone.trim()}`] : []), "",
+    ...(selectedSingles.length ? ["LOSSE KERSTCADEAUS", ...selectedSingles.flatMap(({ product, count }) => [
+      `${count} × ${productName(product.id, product.name)} (${product.detail})`,
+      `  ${money(christmasUnitPrice(product, count, false))} p.s. excl. btw · ${money(roundMoney(christmasUnitPrice(product, count, false) * count))} totaal excl. btw`,
+      `  Staffel: ${christmasTier(count).label} stuks · ${christmasTier(count).discountPercent}% korting`,
+    ]), ""] : []),
+    ...(packageExcl.lines.length ? ["KERSTPAKKET OP MAAT", `${packageCount} gelijke pakketten, met per pakket:`,
+      ...packageExcl.lines.map(({ product, quantity: amount, total: lineTotal }) => `  ${amount} × ${productName(product.id, product.name)} (${product.detail}) · ${money(lineTotal)} excl. btw per pakket`),
+      `Inhoud per pakket: ${money(packageExcl.perPackage)} excl. btw / ${money(packageIncl.perPackage)} incl. btw`,
+      `Totaal pakketinhoud: ${money(packageExcl.total)} excl. btw / ${money(packageIncl.total)} incl. btw`,
+      `Staffel: ${packageExcl.tier.label} pakketten · ${packageExcl.tier.discountPercent}% korting`,
+      "Verpakking: graag in overleg een passende tas of doos; eventuele meerkosten apart bevestigen.", ""] : []),
+    "PRIJSINDICATIE", `Producttotaal: ${money(totalExcl)} excl. btw / ${money(totalIncl)} incl. btw`,
+    "Eventuele extra verpakking en bezorging zijn nog af te stemmen en niet inbegrepen.", "",
+    "LEVERING", contact.delivery === "pickup" ? "Afhalen bij Strik" : `Bezorgen op aanvraag: ${contact.address.trim() || "adres nog af te stemmen"}`,
+    `Gewenste datum: ${contact.date ? new Intl.DateTimeFormat("nl-NL", { dateStyle: "long", timeZone: "UTC" }).format(new Date(`${contact.date}T12:00:00Z`)) : "in overleg"}`,
+    ...(contact.wishes.trim() ? ["", "WENSEN / LOGO / KAARTJE", contact.wishes.trim()] : []), "",
+    "Graag ontvang ik jullie bevestiging van beschikbaarheid, verpakking, definitieve prijs en levermoment. Dit is een aanvraag, nog geen bestelling.", "",
+    "Met vriendelijke groet,", contact.contactName.trim() || contact.company.trim(),
+  ].join("\r\n");
+  const mailHref = `mailto:info@strik-patisserie.nl?subject=${encodeURIComponent(`Offerteaanvraag Kerst 2026 - ${contact.company.trim()}`)}&body=${encodeURIComponent(offerText)}`;
+
+  async function prepareQuote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSignupState("sending");
-    setSignupMessage("");
-
-    try {
-      const response = await fetch("/api/business-folder-signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(signup),
-      });
-      const result = (await response.json().catch(() => null)) as
-        | { message?: string; alreadyRegistered?: boolean }
-        | null;
-
-      if (!response.ok) {
-        throw new Error(result?.message || "Aanmelden is niet gelukt.");
-      }
-
-      setSignupState("success");
-      setSignupMessage(
-        result?.alreadyRegistered
-          ? "Je stond al in onze B2B-lijst. Je voorkeur voor Sint en kerst is bijgewerkt."
-          : "Gelukt! Je krijgt een mail zodra de kerstfolder klaar is."
-      );
-    } catch (error) {
-      setSignupState("error");
-      setSignupMessage(
-        error instanceof Error ? error.message : "Aanmelden is niet gelukt."
-      );
+    if (!hasSelection || saving) return;
+    if (!contact.company.trim() || !contact.contactName.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim())) {
+      setSaveError("Vul je bedrijfsnaam, contactpersoon en een geldig e-mailadres in.");
+      return;
     }
+    setSaving(true); setSaveError("");
+    try {
+      const response = await fetch("/api/business-folder-signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "quote", season: "kerst", company: contact.company, contactName: contact.contactName, email: contact.email, consent: contact.consent, website: contact.website }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Contactgegevens opslaan is niet gelukt.");
+      setSavedSignature(contactSignature);
+    } catch (error) { setSaveError(error instanceof Error ? error.message : "Contactgegevens opslaan is niet gelukt."); }
+    finally { setSaving(false); }
   }
 
-  return (
-    <main className="min-h-dvh overflow-hidden bg-[#171b38] text-[#f8f0df]">
-      <header className="relative overflow-hidden border-b border-[#d8b56d]/30 px-4 py-4 sm:px-8 lg:px-12 lg:py-5">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-[#741f3b]/70 blur-3xl" />
-        <div className="pointer-events-none absolute left-[42%] top-12 h-44 w-44 rounded-full bg-[#4d2857]/45 blur-3xl" />
-        <span className="pointer-events-none absolute right-[10%] top-[32%] text-5xl text-[#d8b56d]/65">✦</span>
-        <span className="pointer-events-none absolute right-[28%] top-[18%] text-xl text-[#d8b56d]/45">✦</span>
-
-        <nav className="relative mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-          <Image
-            src="/strik-logo.png"
-            alt="Strik Patisserie"
-            width={112}
-            height={72}
-            className="h-11 w-auto object-contain brightness-0 invert sm:h-12"
-            priority
-          />
+  return <main className={styles.folder}>
+    <header className={styles.hero}>
+      <div className={styles.container}>
+        <nav className={styles.navigation}>
+          <Image src="/strik-logo.png" alt="Strik Patisserie" width={112} height={72} className={styles.logo} preload />
           <BusinessFolderSeasonNav active="kerst" />
         </nav>
-
-        <div className="relative mx-auto mt-3 grid max-w-7xl items-center gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-8">
-          <div className="min-w-0">
-            <p className="text-[.6rem] font-black uppercase tracking-[.2em] text-[#d8b56d] sm:text-xs sm:tracking-[.24em]">
-              Sinds 1937 · ambacht uit Nijmegen
-            </p>
-            <div className="mt-2 inline-flex min-w-0 flex-col sm:mt-1">
-              <h1 className="text-[clamp(4.5rem,20vw,6.5rem)] font-black leading-[.7] tracking-[-.08em] text-white lg:text-[clamp(6.5rem,12vw,10.5rem)]">
-                KERST
-              </h1>
-              <p className="mt-1 whitespace-nowrap font-[Butterscotch] text-[clamp(2.35rem,10vw,3.2rem)] leading-none text-[#d8b56d] sm:self-end sm:pr-2 lg:text-[clamp(2rem,3.2vw,3.5rem)]">
-                Met een Strik
-              </p>
-            </div>
-            <p className="mt-3 max-w-3xl text-[.72rem] font-bold leading-snug text-[#ddd5dc] sm:text-sm">
-              <span className="block">Ambachtelijke kerstcadeaus voor collega&apos;s en relaties.</span>
-              <span className="block">De feestelijke invulling wordt momenteel met zorg samengesteld.</span>
-            </p>
+        <div className={styles.heroContent}>
+          <div>
+            <p className={styles.eyebrow}>Zakelijk genieten · Kerst 2026</p>
+            <h1>KERST <span>Met een Strik</span></h1>
+            <p className={styles.intro}>Een klein gebaar. Een groots bedankje.<br />Ambachtelijke cadeaus voor collega&apos;s en relaties.</p>
+            <a href="#kerstpakket" className={styles.heroLink}>Stel jouw kerstpakket samen <span aria-hidden="true">↘</span></a>
           </div>
-          <BusinessGiftFinderButton
-            season="kerst"
-            onClick={() => setFinderOpen(true)}
-          />
+          <BusinessGiftFinderButton season="kerst" description="Aantal en budget — wij rekenen mee." onClick={() => setFinderOpen(true)} />
         </div>
-      </header>
+      </div>
+    </header>
 
-      {finderOpen && (
-        <div
-          className="fixed inset-0 z-[65] flex items-end justify-center bg-[#090c21]/80 p-0 sm:items-center sm:p-5"
-          onClick={() => setFinderOpen(false)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="kerst-finder-title"
-            className="max-h-[92dvh] w-full max-w-4xl overflow-auto rounded-t-[2rem] border border-[#d8b56d]/45 bg-[#202542] p-5 shadow-2xl sm:rounded-[2rem] sm:p-7"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[.2em] text-[#d8b56d]">
-                  Interactieve keuzehulp
-                </p>
-                <h2 id="kerst-finder-title" className="mt-1 text-2xl font-black text-white sm:text-3xl">
-                  Welk kerstcadeau past bij jouw team?
-                </h2>
-                <p className="mt-1 text-sm font-semibold text-[#ddd5dc]">
-                  Vul drie dingen in; zodra het assortiment er staat rekenen we meteen met je mee.
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label="Sluiten"
-                onClick={() => setFinderOpen(false)}
-                className="h-10 w-10 shrink-0 rounded-full bg-white text-xl font-black text-[#202542]"
-              >
-                ×
-              </button>
+    <section aria-labelledby="favorites-title" className={styles.container}>
+      <div className={styles.sectionHeading}>
+        <div><p className={styles.eyebrow}>Met zorg gebakken, met plezier gegeven</p><h2 id="favorites-title">Onze kerstfavorieten</h2></div>
+        <VatToggle includeVat={includeVat} onChange={setIncludeVat} />
+      </div>
+      <div className={styles.highlights}>
+        {christmasHighlights.map((highlight) => {
+          const variants = highlight.productIds.map((id) => christmasProducts.find((product) => product.id === id)!);
+          const product = variants.find((item) => item.id === choices[highlight.id]) || variants[0];
+          const count = singles[product.id] || 0;
+          const tier = christmasTier(count);
+          return <article key={highlight.id} id={`product-${highlight.id}`} className={styles.productCard}>
+            <ProductMediaGallery name={product.name} image={product.image!} story={highlight.story} eager={highlight.id === "stol"} imageNote={highlight.id === "bonbons" ? "Beeld ter illustratie" : undefined} />
+            <div className={styles.cardBody}>
+              <p className={styles.cardEyebrow}>{highlight.title}</p><h3>{highlight.id === "stol" ? "Kerststol" : highlight.id === "bonbons" ? "Bonbondoosje" : product.name}</h3>
+              <p className={styles.description}>{highlight.description}</p>
+              {variants.length > 1 ? <select aria-label={`Uitvoering ${highlight.id}`} value={product.id} onChange={(event) => setChoices((current) => ({ ...current, [highlight.id]: event.target.value }))}>{variants.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.detail.split(" · ")[0]}</option>)}</select> : <p className={styles.variantDetail}>{highlight.id === "bonbons" ? "16 bonbons · luxe doosje" : "Feestelijk verpakt"}</p>}
+              <div className={styles.productPrice}><strong>{money(christmasUnitPrice(product, count, includeVat))}</strong><span>per stuk · {vatLabel}</span></div>
+              <div className={styles.quantityRow}><span>Aantal cadeaus</span><Counter label={`Aantal ${product.name} los`} value={count} onChange={(value) => setSingle(product.id, value)} /></div>
+              <div className={styles.cardTotal} aria-live="polite"><span>{tier.discountPercent ? `${tier.discountPercent}% staffelkorting` : "Winkelprijs · staffelkorting vanaf 25 stuks"}</span><strong>{money(roundMoney(christmasUnitPrice(product, count, includeVat) * count))}</strong></div>
             </div>
+          </article>;
+        })}
+      </div>
+      <div className={styles.tiers} aria-label="Zakelijke prijsstaffels"><span>Meer geven, voordeliger genieten</span>{BUSINESS_FOLDER_PRICE_TIERS.map((tier) => <span key={tier.min}><strong>{tier.label} st.</strong> {tier.discountPercent ? `−${tier.discountPercent}%` : "winkelprijs"}</span>)}</div>
+    </section>
 
-            <div className="mt-5 grid gap-5 border-t border-[#d8b56d]/30 pt-5 lg:grid-cols-3">
-              <div className="flex flex-wrap items-center justify-between gap-3 lg:col-span-3">
-                <p className="text-xs font-bold text-[#ddd5dc]">
-                  De keuzehulp gebruikt straks dezelfde btw-weergave als de folder.
-                </p>
-                <div className="inline-flex rounded-full border border-[#d8b56d]/60 bg-[#f8f0df] p-1 text-xs font-black">
-                  <button
-                    type="button"
-                    aria-pressed={includeVat}
-                    onClick={() => setIncludeVat(true)}
-                    className={`rounded-full px-4 py-2 ${includeVat ? "bg-[#741f3b] text-white" : "text-[#202542]"}`}
-                  >
-                    Incl. btw
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={!includeVat}
-                    onClick={() => setIncludeVat(false)}
-                    className={`rounded-full px-4 py-2 ${!includeVat ? "bg-[#741f3b] text-white" : "text-[#202542]"}`}
-                  >
-                    Excl. btw
-                  </button>
-                </div>
-              </div>
-
-              <label className="grid gap-2 text-sm font-black text-white">
-                1. Hoeveel ontvangers?
-                <input
-                  type="number"
-                  min="1"
-                  value={recipientCount}
-                  onChange={(event) => setRecipientCount(Math.max(1, Number(event.target.value) || 1))}
-                  className="h-11 rounded-xl border border-[#d8b56d]/50 bg-[#f8f0df] px-4 text-lg text-[#202542]"
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-black text-white">
-                2. Budget per persoon, {includeVat ? "incl." : "excl."} btw
-                <input
-                  type="number"
-                  min="1"
-                  value={budget}
-                  onChange={(event) => setBudget(Math.max(1, Number(event.target.value) || 1))}
-                  className="h-11 rounded-xl border border-[#d8b56d]/50 bg-[#f8f0df] px-4 text-lg text-[#202542]"
-                />
-              </label>
-              <div className="grid content-end gap-2 text-sm font-black text-white">
-                3. Met eigen logo?
-                <button
-                  type="button"
-                  aria-pressed={wantsLogo}
-                  onClick={() => setWantsLogo(!wantsLogo)}
-                  className={`h-11 rounded-xl border px-4 text-left ${
-                    wantsLogo
-                      ? "border-[#d8b56d] bg-[#741f3b] text-white"
-                      : "border-[#d8b56d]/50 bg-[#f8f0df] text-[#202542]"
-                  }`}
-                >
-                  {wantsLogo ? `Ja, + ${LOGO_PRICE_LABEL} p.s. ✓` : "Nee, zonder logo"}
-                </button>
-              </div>
-
-              <div className="relative overflow-hidden rounded-2xl border border-[#d8b56d]/35 bg-gradient-to-r from-[#351f42] to-[#741f3b] p-5 lg:col-span-3">
-                <span className="pointer-events-none absolute -right-3 -top-8 text-8xl text-[#d8b56d]/10">✦</span>
-                <p className="relative text-xs font-black uppercase tracking-[.16em] text-[#d8b56d]">
-                  Jouw passende kerstcadeaus
-                </p>
-                <p className="relative mt-2 max-w-2xl text-sm font-bold leading-relaxed text-white">
-                  De kerstkeuzehulp staat klaar voor {recipientCount} ontvangers met een budget van maximaal € {budget.toLocaleString("nl-NL", { minimumFractionDigits: 2 })} per persoon{wantsLogo ? ` en een eigen logo van ${LOGO_PRICE_LABEL} p.s. incl. btw` : ""}. Zodra de producten zijn toegevoegd, verschijnen hier automatisch alle passende opties.
-                </p>
-              </div>
-            </div>
-          </section>
+    <section id="kerstpakket" aria-labelledby="package-title" className={`${styles.container} ${styles.packageSection}`}>
+      <div className={styles.packageBanner}>
+        <div className={styles.packagePhoto}><Image src={christmasImages.package} alt="Een feestelijk Strik-cadeau in een pastelgroene doos" fill sizes="(max-width: 700px) 100vw, 320px" className={styles.cover} /></div>
+        <div><p className={styles.eyebrow}>Jij kiest de inhoud, wij maken er een cadeau van</p><h2 id="package-title">Helemaal jouw kerstpakket.</h2><p>Klein of uitbundig, voor één collega of het hele team. Combineer jouw favorieten en zie direct de prijs.</p><p className={styles.packagingNote}>Op basis van de inhoud kiezen we samen een passende tas of doos. Verpakking, eventuele meerkosten en bezorging stemmen we vooraf met je af.</p></div>
+      </div>
+      <div className={styles.builder}>
+        <div className={styles.builderProducts}>
+          <div className={styles.builderHeading}><h3>Wat gaat erin?</h3><span>Aantal per pakket · {vatLabel}</span></div>
+          <div className={styles.examples} aria-label="Pakketvoorbeelden">{examplePackages.map((example) => <button key={example.name} type="button" onClick={() => setContents(example.contents)}><strong>{example.name}</strong><span>{money(christmasPackage(example.contents, packageCount, includeVat).perPackage)} <span aria-hidden="true">↗</span></span></button>)}</div>
+          <div className={styles.catalog}>{christmasProducts.map((product) => <div key={product.id} className={`${styles.catalogItem} ${contents[product.id] ? styles.chosen : ""}`}>
+            {product.image ? <div className={styles.thumbnail}><Image src={product.image} alt="" fill sizes="60px" className={styles.cover} /></div> : <div className={styles.productSymbol} aria-hidden="true">{product.id === "kerstkoekjes" ? "✧" : product.id === "schuimkransjes" ? "❋" : "▧"}</div>}
+            <div className={styles.catalogText}><h4>{product.name}</h4><p>{product.detail}</p><strong>{money(christmasUnitPrice(product, packageCount, includeVat))}</strong>{product.veganOption && <label className={styles.veganChoice}><input type="checkbox" checked={vegan} onChange={(event) => setVegan(event.target.checked)} /> Vegan uitvoering</label>}</div>
+            <Counter label={`Aantal ${product.name} per pakket`} value={contents[product.id] || 0} max={99} onChange={(value) => setContent(product.id, value)} />
+          </div>)}</div>
         </div>
-      )}
+        <aside className={styles.packageSummary} aria-label="Jouw kerstpakket">
+          <p className={styles.eyebrow}>Met liefde samengesteld</p><h3>Jouw kerstpakket</h3>
+          <div className={styles.packageAmount}><span>Aantal gelijke pakketten</span><Counter label="Aantal gelijke pakketten" value={packageCount} min={1} onChange={setPackageCount} /></div>
+          {packagePrice.lines.length ? <>
+            <ul className={styles.packageLines}>{packagePrice.lines.map(({ product, quantity: amount, total: lineTotal }) => <li key={product.id}><span>{amount} × {productName(product.id, product.name)}{product.id === "kerstchocolade" ? ` · ${amount * 100} g` : ""}</span><strong>{money(lineTotal)}</strong></li>)}</ul>
+            <button className={styles.clear} type="button" onClick={() => setContents({})}>Inhoud wissen</button>
+          </> : <p className={styles.empty}>Kies jouw favorieten met de +, of begin met een van onze voorbeelden.</p>}
+          <div className={styles.packageTotals} aria-live="polite"><div><span>Inhoud per pakket</span><strong>{money(packagePrice.perPackage)}</strong></div><div><span>{packageCount} {packageCount === 1 ? "pakket" : "pakketten"}</span><strong>{money(packagePrice.total)}</strong></div><small>{vatLabel}{packagePrice.tier.discountPercent ? ` · inclusief ${packagePrice.tier.discountPercent}% staffelkorting` : ""}</small></div>
+          <p className={styles.smallNote}>Staffel op basis van het aantal gelijke pakketten. Prijs voor de inhoud; eventuele extra verpakking en bezorging in overleg.</p>
+          <button type="button" className={styles.primary} disabled={!packagePrice.lines.length} onClick={() => setQuoteOpen(true)}>Pakket aanvragen <span aria-hidden="true">→</span></button>
+          <p className={styles.smallNote}>Een logo, kaartje of ander idee? Geef je wensen mee in de aanvraag.</p>
+        </aside>
+      </div>
+    </section>
 
-      <section className="relative mx-auto max-w-7xl px-4 pb-6 pt-4 sm:px-8 lg:px-12 lg:pb-8 lg:pt-5">
-        <div className="pointer-events-none absolute -left-32 top-20 h-72 w-72 rounded-full bg-[#741f3b]/30 blur-3xl" />
-        <div className="relative overflow-hidden rounded-[2rem] border border-[#d8b56d]/45 bg-gradient-to-br from-[#222849] via-[#351f42] to-[#621f3d] p-6 shadow-[0_24px_70px_rgba(4,7,24,.45)] sm:p-10 lg:p-14">
-          <span className="pointer-events-none absolute -right-10 -top-16 text-[12rem] leading-none text-[#d8b56d]/10">✦</span>
-          <div className="grid items-center gap-8 lg:grid-cols-[auto_minmax(0,1fr)]">
-            <div className="mx-auto flex h-36 w-36 items-center justify-center rounded-[2.5rem] border border-[#d8b56d]/55 bg-[#171b38]/65 text-[#d8b56d] shadow-2xl sm:h-44 sm:w-44">
-              <ChristmasGiftIcon />
-            </div>
-            <div className="max-w-2xl text-center lg:text-left">
-              <p className="text-xs font-black uppercase tracking-[.2em] text-[#d8b56d]">
-                Binnenkort verkrijgbaar
-              </p>
-              <h3 className="mt-2 text-2xl font-black leading-tight text-white sm:text-4xl">
-                De invulling van de kerstfolder volgt zo spoedig mogelijk.
-              </h3>
-              <p className="mt-3 text-sm font-semibold leading-relaxed text-[#e4dce2] sm:text-base">
-                We stellen op dit moment een feestelijk assortiment samen. Houd deze pagina in de gaten; producten, prijzen en mogelijkheden verschijnen hier zodra ze klaarstaan.
-              </p>
-              <div className="mt-5 rounded-[1.4rem] border border-[#d8b56d]/40 bg-[#171b38]/55 p-4 sm:p-5">
-                <p className="text-xs font-black uppercase tracking-[.16em] text-[#d8b56d]">
-                  Als eerste bekijken
-                </p>
-                <h4 className="mt-1 text-xl font-black text-white sm:text-2xl">
-                  Krijg een seintje zodra de kerstfolder klaar is
-                </h4>
+    <section className={`${styles.container} ${styles.closing}`}><span aria-hidden="true">✦</span><h2>Een cadeau dat bij jullie past.</h2><p>Een speciaal budget, grotere aantallen of bijzondere wensen?<br />We denken graag met je mee.</p><a href="mailto:info@strik-patisserie.nl?subject=Kerstpakket%20op%20maat">Mail ons jouw idee →</a></section>
+    <footer className={styles.footer}>Strik Patisserie · Sinds 1937 · Nijmegen<br /><a href="mailto:info@strik-patisserie.nl">info@strik-patisserie.nl</a></footer>
+    {hasSelection && <div className={styles.orderBar}><div><small>{selectedSingles.length} losse {selectedSingles.length === 1 ? "productkeuze" : "productkeuzes"}{packagePrice.lines.length ? ` + ${packageCount} ${packageCount === 1 ? "kerstpakket" : "kerstpakketten"}` : ""} · {vatLabel}</small><strong>{money(total)}</strong></div><button type="button" className={styles.primary} onClick={() => setQuoteOpen(true)}>Bekijk aanvraag <span aria-hidden="true">→</span></button></div>}
 
-                {signupState === "success" ? (
-                  <div
-                    role="status"
-                    className="mt-4 rounded-xl border border-[#d8b56d]/45 bg-[#d8b56d] px-4 py-3 text-sm font-black text-[#202542]"
-                  >
-                    {signupMessage}
-                  </div>
-                ) : (
-                  <form className="mt-4 grid gap-3" onSubmit={submitFolderSignup}>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="grid gap-1 text-xs font-black text-[#f8f0df]">
-                        Bedrijfsnaam
-                        <input
-                          required
-                          autoComplete="organization"
-                          value={signup.company}
-                          onChange={(event) =>
-                            setSignup((current) => ({
-                              ...current,
-                              company: event.target.value,
-                            }))
-                          }
-                          className="h-11 rounded-xl border border-[#d8b56d]/45 bg-[#f8f0df] px-3 text-sm font-bold text-[#202542] outline-none focus:border-[#d8b56d]"
-                        />
-                      </label>
-                      <label className="grid gap-1 text-xs font-black text-[#f8f0df]">
-                        Contactpersoon <span className="font-semibold opacity-70">(optioneel)</span>
-                        <input
-                          autoComplete="name"
-                          value={signup.contactName}
-                          onChange={(event) =>
-                            setSignup((current) => ({
-                              ...current,
-                              contactName: event.target.value,
-                            }))
-                          }
-                          className="h-11 rounded-xl border border-[#d8b56d]/45 bg-[#f8f0df] px-3 text-sm font-bold text-[#202542] outline-none focus:border-[#d8b56d]"
-                        />
-                      </label>
-                    </div>
-                    <label className="grid gap-1 text-xs font-black text-[#f8f0df]">
-                      E-mailadres
-                      <input
-                        required
-                        type="email"
-                        autoComplete="email"
-                        value={signup.email}
-                        onChange={(event) =>
-                          setSignup((current) => ({
-                            ...current,
-                            email: event.target.value,
-                          }))
-                        }
-                        className="h-11 rounded-xl border border-[#d8b56d]/45 bg-[#f8f0df] px-3 text-sm font-bold text-[#202542] outline-none focus:border-[#d8b56d]"
-                      />
-                    </label>
-                    <label className="sr-only" aria-hidden="true">
-                      Website
-                      <input
-                        tabIndex={-1}
-                        autoComplete="off"
-                        value={signup.website}
-                        onChange={(event) =>
-                          setSignup((current) => ({
-                            ...current,
-                            website: event.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="flex items-start gap-2.5 text-[.68rem] font-semibold leading-relaxed text-[#e4dce2] sm:text-xs">
-                      <input
-                        required
-                        type="checkbox"
-                        checked={signup.consent}
-                        onChange={(event) =>
-                          setSignup((current) => ({
-                            ...current,
-                            consent: event.target.checked,
-                          }))
-                        }
-                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#d8b56d]"
-                      />
-                      <span>
-                        Ja, mail mij zodra de kerstfolder klaar is en houd mij op de hoogte van de zakelijke Sint- en kerstfolders van Strik Patisserie. Afmelden kan altijd.
-                      </span>
-                    </label>
-                    {signupState === "error" && (
-                      <p role="alert" className="text-xs font-bold text-[#ffd6d6]">
-                        {signupMessage}
-                      </p>
-                    )}
-                    <button
-                      type="submit"
-                      disabled={signupState === "sending"}
-                      className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#d8b56d] px-5 py-2.5 text-sm font-black text-[#202542] shadow-lg transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-65 sm:justify-self-start"
-                    >
-                      {signupState === "sending"
-                        ? "Aanmelden..."
-                        : "Houd mij op de hoogte →"}
-                    </button>
-                  </form>
-                )}
-              </div>
-              <Link
-                href="/sint-voor-bedrijven"
-                className="mt-5 inline-flex text-sm font-black text-[#d8b56d] underline decoration-[#d8b56d]/50 underline-offset-4 transition hover:text-white"
-              >
-                Bekijk ondertussen de Sintfolder →
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
+    {finderOpen && <FolderDialog title="Vind jouw kerstcadeau" onClose={() => setFinderOpen(false)}>
+      <p className={styles.dialogIntro}>Voor hoeveel mensen zoek je iets lekkers, en wat wil je per cadeau uitgeven?</p>
+      <div className={styles.finderInputs}><label>Aantal ontvangers<Counter label="Aantal ontvangers" value={recipientCount} min={1} onChange={setRecipientCount} /></label><label>Budget per cadeau · {vatLabel}<input type="number" min="0" step="0.5" value={budget} onChange={(event) => setBudget(Math.max(0, Number(event.target.value) || 0))} /></label></div>
+      <VatToggle includeVat={includeVat} onChange={setIncludeVat} />
+      <p className={styles.finderNote}>Prijzen bij {recipientCount} stuks · {christmasTier(recipientCount).discountPercent}% staffelkorting</p>
+      <div className={styles.suggestions}>{suggestions.map((product) => <button type="button" key={product.id} onClick={() => { setSingle(product.id, recipientCount); setFinderOpen(false); setQuoteOpen(true); }}><span><strong>{product.name}</strong><small>{product.detail}</small></span><strong>{money(christmasUnitPrice(product, recipientCount, includeVat))} <span aria-hidden="true">+</span></strong></button>)}</div>
+      {!suggestions.length && <p className={styles.empty}>Geen los cadeau binnen dit budget. Mail ons, dan kijken we samen naar de mogelijkheden.</p>}
+      <button type="button" className={styles.secondary} onClick={() => { setPackageCount(recipientCount); setFinderOpen(false); document.getElementById("kerstpakket")?.scrollIntoView({ behavior: "smooth" }); }}>Liever zelf een pakket samenstellen →</button>
+    </FolderDialog>}
 
-      <footer className="border-t border-[#d8b56d]/25 bg-[#11152c] px-4 py-6 text-center text-xs font-semibold text-[#cfc7cf]">
-        Strik Patisserie · zakelijke feestdagenfolder 2026
-      </footer>
-
-      <BusinessFolderSeasonIntro />
-    </main>
-  );
+    {quoteOpen && <FolderDialog title="Jouw kerstaanvraag" onClose={() => setQuoteOpen(false)}>
+      <p className={styles.dialogIntro}>Controleer je selectie. We bevestigen de mogelijkheden, verpakking en het levermoment persoonlijk.</p>
+      <div className={styles.quoteSelection}>
+        {selectedSingles.map(({ product, count, unitPrice, total: lineTotal }) => <div key={product.id}><span><strong>{count} × {productName(product.id, product.name)}</strong><small>{product.detail} · {money(unitPrice)} p.s.</small></span><strong>{money(lineTotal)}</strong><button type="button" aria-label={`${product.name} uit aanvraag verwijderen`} onClick={() => setSingle(product.id, 0)}>×</button></div>)}
+        {packagePrice.lines.length > 0 && <div><span><strong>{packageCount} × kerstpakket op maat</strong>{packagePrice.lines.map(({ product, quantity: amount }) => <small key={product.id}>Per pakket: {amount} × {productName(product.id, product.name)}{product.id === "kerstchocolade" ? ` (${amount * 100} g)` : ""}</small>)}<small>{money(packagePrice.perPackage)} per pakket · verpakking in overleg</small></span><strong>{money(packagePrice.total)}</strong></div>}
+      </div>
+      <div className={styles.quoteTotal}><span>Producttotaal · {vatLabel}</span><strong>{money(total)}</strong></div><p className={styles.smallNote}>{money(totalIncl)} incl. btw / {money(totalExcl)} excl. btw. Eventuele extra verpakking en bezorging apart af te stemmen.</p>
+      {!hasSelection ? <p role="status" className={styles.empty}>Je aanvraag is leeg. Kies eerst een cadeau of stel een pakket samen.</p> : <form onSubmit={prepareQuote} className={styles.quoteForm}>
+        <div className={styles.formGrid}><label>Bedrijf<input required autoComplete="organization" maxLength={180} value={contact.company} onChange={(event) => setContact({ ...contact, company: event.target.value })} /></label><label>Contactpersoon<input required autoComplete="name" maxLength={160} value={contact.contactName} onChange={(event) => setContact({ ...contact, contactName: event.target.value })} /></label><label>E-mailadres<input required type="email" autoComplete="email" maxLength={254} value={contact.email} onChange={(event) => setContact({ ...contact, email: event.target.value })} /></label><label>Telefoon · optioneel<input type="tel" autoComplete="tel" value={contact.phone} onChange={(event) => setContact({ ...contact, phone: event.target.value })} /></label><label>Gewenste datum · of in overleg<input type="date" value={contact.date} onChange={(event) => setContact({ ...contact, date: event.target.value })} /></label><label>Afhalen of bezorgen<select value={contact.delivery} onChange={(event) => setContact({ ...contact, delivery: event.target.value })}><option value="pickup">Afhalen bij Strik</option><option value="delivery">Bezorgen · prijs op aanvraag</option></select></label></div>
+        {contact.delivery === "delivery" && <label>Afleveradres<input autoComplete="street-address" value={contact.address} onChange={(event) => setContact({ ...contact, address: event.target.value })} /></label>}
+        <label>Wensen · verpakking, logo of kaartje<textarea rows={3} maxLength={2000} value={contact.wishes} onChange={(event) => setContact({ ...contact, wishes: event.target.value })} placeholder="Vertel ons wat jullie cadeau bijzonder maakt." /></label>
+        <label className={styles.honeypot} aria-hidden="true">Website<input tabIndex={-1} autoComplete="off" value={contact.website} onChange={(event) => setContact({ ...contact, website: event.target.value })} /></label>
+        <label className={styles.consent}><input type="checkbox" checked={contact.consent} onChange={(event) => setContact({ ...contact, consent: event.target.checked })} /><span>Houd mij ook op de hoogte van de zakelijke Sint- en kerstfolders. Optioneel; afmelden kan altijd.</span></label>
+        <details className={styles.mailPreview}><summary>Bekijk eerst de e-mailtekst</summary><pre>{offerText}</pre></details>
+        {saveError && <div role="alert" className={styles.error}>{saveError} <a href={mailHref}>Open je aanvraag rechtstreeks in je e-mailapp →</a></div>}
+        {contactSaved ? <><p role="status" className={styles.ready}>Klaar! Open je e-mailapp en verstuur daar je aanvraag.</p><a href={mailHref} className={styles.primary}>Open aanvraag in mijn e-mailapp →</a></> : <button type="submit" className={styles.primary} disabled={saving}>{saving ? "Contactgegevens opslaan…" : "Contact opslaan en e-mail klaarzetten →"}</button>}
+        <p className={styles.smallNote}>Je verstuurt de aanvraag zelf vanuit je e-mailapp. Een aanvraag is vrijblijvend en nog geen bestelling.</p>
+      </form>}
+    </FolderDialog>}
+    <BusinessFolderSeasonIntro />
+  </main>;
 }

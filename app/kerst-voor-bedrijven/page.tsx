@@ -4,7 +4,7 @@ import KerstB2BConcept from "./KerstB2BConcept";
 export const metadata: Metadata = {
   title: "Kerst voor bedrijven | Strik Patisserie",
   description:
-    "De zakelijke kerstfolder van Strik Patisserie. Het kerstassortiment voor 2026 volgt binnenkort.",
+    "Ambachtelijke kerststollen, tulbanden en kerstcadeaus van Strik Patisserie. Stel je eigen kerstpakket samen en bekijk direct de prijs en zakelijke staffels.",
 };
 
 export default function KerstVoorBedrijvenPage() {

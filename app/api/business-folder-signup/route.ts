@@ -46,6 +46,7 @@ type SignupInput = {
   consent?: unknown;
   website?: unknown;
   kind?: unknown;
+  season?: unknown;
 };
 
 function seedCustomers(): MailingCustomer[] {
@@ -135,12 +136,13 @@ function mergeSignup(input: {
   consentAt: string;
   consent: boolean;
   quote: boolean;
+  season: "sint" | "kerst";
 }) {
   const customers = Array.isArray(input.campaign.customers)
     ? input.campaign.customers
     : [];
-  const consentLabel = input.quote ? `Offerteaanvraag Sint: contact opgeslagen op ${input.consentAt}${input.consent ? " · Toestemming Sint + kerst" : ""}` : `Website-aanmelding Sint + kerst op ${input.consentAt}`;
-  const source = input.quote ? "/sint-voor-bedrijven" : "/kerst-voor-bedrijven";
+  const consentLabel = input.quote ? `Offerteaanvraag ${input.season === "kerst" ? "Kerst" : "Sint"}: contact opgeslagen op ${input.consentAt}${input.consent ? " · Toestemming Sint + kerst" : ""}` : `Website-aanmelding Sint + kerst op ${input.consentAt}`;
+  const source = input.quote ? `/${input.season}-voor-bedrijven` : "/kerst-voor-bedrijven";
   let matched = false;
 
   const nextCustomers = customers.map((customer) => {
@@ -246,6 +248,7 @@ export async function POST(request: Request) {
       consentAt,
       consent,
       quote,
+      season: input.season === "kerst" ? "kerst" : "sint",
     });
 
     await saveCampaign(year, {

@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatPickupDate } from "./formatPickupDate";
 import { LETTERSHOP_SHOPS, lettershopShopLabel } from "./shops";
+import { letterGiftWrapPrice } from "@/app/lib/letter-pricing";
 
 type Flavour = "melk" | "puur" | "wit";
 type Size = "groot" | "klein";
@@ -16,7 +17,7 @@ type CartLine = { style: Style; flavour: Flavour; letter: string; size: Size; qu
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const PRICES: Record<Size, number> = { groot: 13.95, klein: 8.95 };
 const LOGO_PRICE = 0.50;
-const GIFT_WRAP_PRICE = 1;
+const GIFT_WRAP_PRICE = letterGiftWrapPrice();
 const PRODUCTS: { id: string; style: Style; defaultFlavour: Flavour; title: string; description: string; image: string }[] = [
   { id: "spuit-melk", style: "spuit", defaultFlavour: "melk", title: "Spuitletter Melk", description: "Fluweelzacht en romig, met een rijke chocoladesmaak.", image: "/sinterklaas/Melk spuitletter 2026.png" },
   { id: "spuit-puur", style: "spuit", defaultFlavour: "puur", title: "Spuitletter Puur", description: "Fluweelzacht en romig, met een rijke chocoladesmaak.", image: "/sinterklaas/Puur spuitletter 2026.png" },

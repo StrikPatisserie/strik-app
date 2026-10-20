@@ -42,3 +42,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Original local clips; publish the optimized, silent MP4 files instead.
+/public/Kerst/Kerststol IMG_3403_VSCO.MOV
+/public/Kerst/Tulband Video.MP4
+/public/Kerst/Bonbon IMG_5450.MOV

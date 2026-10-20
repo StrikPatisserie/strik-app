@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { formatPickupDate } from "@/app/lettershop/formatPickupDate";
 import { lettershopShopLabel } from "@/app/lettershop/shops";
+import { LETTER_GIFT_WRAP_PRICE_CENTS } from "@/app/lib/letter-pricing";
 import { paidAmountCents as getPaidAmountCents } from "../letterPayments";
 import { saveLetterOrder, updateLetterOrder } from "../sinterklaasApi";
 import type { ChocolateLetterChocolate, ChocolateLetterLine, ChocolateLetterOrder, ChocolateLetterSize, ChocolateLetterStyle } from "../types";
@@ -125,7 +126,12 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
   }, [selected]);
 
   const count = lines.reduce((sum, item) => sum + item.quantity, 0);
-  const totalCents = lines.reduce((sum, item) => sum + item.quantity * (PRICE_CENTS[item.size] + (item.logo ? 50 : 0)), giftWrap ? count * 100 : 0);
+  // Keep a previously agreed wrapping rate when editing an existing order.
+  const originalCount = initialOrder?.lines.reduce((sum, item) => sum + item.quantity, 0) || 0;
+  const originalBaseCents = initialOrder?.lines.reduce((sum, item) => sum + item.quantity * (PRICE_CENTS[item.size] + (item.logo ? 50 : 0)), 0) || 0;
+  const previousWrapCents = initialOrder?.giftWrap && originalCount > 0 ? (initialOrder.totalCents - originalBaseCents) / originalCount : null;
+  const wrapPriceCents = previousWrapCents === 100 || previousWrapCents === LETTER_GIFT_WRAP_PRICE_CENTS ? previousWrapCents : LETTER_GIFT_WRAP_PRICE_CENTS;
+  const totalCents = lines.reduce((sum, item) => sum + item.quantity * (PRICE_CENTS[item.size] + (item.logo ? 50 : 0)), giftWrap ? count * wrapPriceCents : 0);
   const recordedPaidAmountCents = initialOrder ? getPaidAmountCents(initialOrder) : 0;
   const paidAmount = initialOrder ? recordedPaidAmountCents : paid ? totalCents : 0;
   const openAmount = Math.max(0, totalCents - paidAmount);
@@ -298,7 +304,7 @@ export default function StoreLetterShopForm({ initialOrder, defaultShop = "", pi
         <label className="text-sm font-black sm:col-span-2">E-mailadres <span className="font-normal">(optioneel)</span><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="klant@voorbeeld.nl" className={`${inputClass} mt-1`} /><span className="mt-1 block text-xs font-medium text-[#6b645b]">Met e-mailadres sturen we een mooie bestelbevestiging en de dag vóór afhalen een herinnering. Zonder e-mailadres sturen we niets naar de klant.</span></label>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
-        <label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={giftWrap} onChange={(event) => setGiftWrap(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Alles in cadeaupapier · + € 1 per letter</label>
+        <label className="flex items-center gap-2 rounded-xl border border-[#d5ddd0] px-3 py-2 text-sm font-bold"><input type="checkbox" checked={giftWrap} onChange={(event) => setGiftWrap(event.target.checked)} className="h-5 w-5 accent-[#547762]" />Alles in cadeaupapier · + {money(wrapPriceCents)} per letter</label>
         {recordedPaidAmountCents > 0 ? (
           <div className={`min-w-[15rem] rounded-xl border px-3 py-2 text-sm ${totalBelowPaidAmount ? "border-[#eaa08f] bg-[#fff1e9] text-[#a63f2b]" : "border-[#b7d8ad] bg-[#eef8ea] text-[#24551d]"}`}>
             <p className="font-black">{money(recordedPaidAmountCents)} betaald</p>

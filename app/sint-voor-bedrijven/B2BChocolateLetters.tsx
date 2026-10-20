@@ -7,6 +7,7 @@ import {
   businessFolderLogoPrice,
 } from "@/app/lib/business-folder-pricing";
 import B2BPriceSummary from "./B2BPriceSummary";
+import { letterGiftWrapPrice } from "@/app/lib/letter-pricing";
 
 export type B2BLetterLine = {
   id: string;
@@ -59,6 +60,8 @@ export default function B2BChocolateLetters({
   onChange,
   withLogo,
   onLogoChange,
+  withGiftWrap,
+  onGiftWrapChange,
   onOpenShelfLife,
   onOpenAllergens,
   tiers,
@@ -73,6 +76,8 @@ export default function B2BChocolateLetters({
   onChange: (lines: B2BLetterLine[]) => void;
   withLogo: boolean;
   onLogoChange: (value: boolean) => void;
+  withGiftWrap: boolean;
+  onGiftWrapChange: (value: boolean) => void;
   onOpenShelfLife: () => void;
   onOpenAllergens: () => void;
   tiers: Tier[];
@@ -91,7 +96,8 @@ export default function B2BChocolateLetters({
   const selectedRetailPrice = style === "vorm" || size === "groot" ? 13.95 : 8.95;
   const selectedUnitPrice = Math.round((
     tierPrice(selectedRetailPrice, currentTier.discountPercent || 0, includeVat) +
-    (withLogo ? businessFolderLogoPrice(includeVat) : 0)
+    (withLogo ? businessFolderLogoPrice(includeVat) : 0) +
+    (withGiftWrap ? letterGiftWrapPrice(includeVat) : 0)
   ) * 100) / 100;
   const displayedTotal = totalQuantity > 0
     ? total
@@ -153,6 +159,7 @@ export default function B2BChocolateLetters({
         <button type="button" disabled={quantity === 0} onClick={addLine} className="mt-2 h-8 w-full rounded-lg bg-[#d62d1d] px-2 text-[.56rem] font-black text-white disabled:cursor-not-allowed disabled:bg-[#efa189] sm:h-9 sm:rounded-xl sm:px-3 sm:text-[.68rem]">{quantity === 0 ? "Kies eerst een aantal" : "In mandje"}</button>
         {lines.length > 0 && <div className="mt-3 rounded-xl bg-white p-2.5"><p className="mb-1.5 text-xs font-black">Jouw letters · {totalQuantity} stuks</p><div className="space-y-1">{lines.map((line) => <div key={line.id} className="border-t border-[#eee0c4] py-1 text-[.68rem]"><div className="flex items-start gap-1"><span className="min-w-0 flex-1 font-bold">{describeB2BLetter(line)}</span><button type="button" aria-label={`${describeB2BLetter(line)} verwijderen`} onClick={() => onChange(lines.filter((item) => item.id !== line.id))} className="px-1 text-base font-black leading-none text-[#a32b1c]">×</button></div><div className="mt-1 flex items-center gap-1"><button type="button" aria-label={`Minder ${describeB2BLetter(line)}`} onClick={() => onChange(lines.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item))} className="h-6 w-6 shrink-0 rounded-full border border-[#d62d1d] font-black text-[#60190f]">−</button><input aria-label={`Aantal ${describeB2BLetter(line)}`} type="number" inputMode="numeric" min="1" max="10000" value={line.quantity} onChange={(event) => onChange(lines.map((item) => item.id === line.id ? { ...item, quantity: Math.max(1, Math.min(10000, Number(event.target.value) || 1)) } : item))} className="h-7 min-w-0 flex-1 appearance-none rounded-md border border-[#e2c99c] text-center text-xs font-black text-[#60190f]" /><button type="button" aria-label={`Meer ${describeB2BLetter(line)}`} onClick={() => onChange(lines.map((item) => item.id === line.id ? { ...item, quantity: Math.min(10000, item.quantity + 1) } : item))} className="h-6 w-6 shrink-0 rounded-full bg-[#d62d1d] font-black text-white">+</button></div></div>)}</div></div>}
         <label className="mt-2 flex items-start gap-1 text-[.5rem] font-bold leading-snug text-[#60190f] sm:mt-2.5 sm:items-center sm:gap-1.5 sm:text-[.62rem]"><input type="checkbox" checked={withLogo} onChange={(event) => onLogoChange(event.target.checked)} />Eigen logo · +{money(BUSINESS_FOLDER_LOGO_PRICE_INCL)} p.s. incl. btw</label>
+        <label className="mt-2 flex items-start gap-1 text-[.5rem] font-bold leading-snug text-[#60190f] sm:mt-2.5 sm:items-center sm:gap-1.5 sm:text-[.62rem]"><input type="checkbox" checked={withGiftWrap} onChange={(event) => onGiftWrapChange(event.target.checked)} />In cadeaupapier · +{money(letterGiftWrapPrice())} per letter incl. btw</label>
         <B2BPriceSummary
           unitPrice={selectedUnitPrice}
           quantity={priceQuantity}

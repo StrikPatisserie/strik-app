@@ -46,7 +46,8 @@ function strik_lettershop_mail_lines($payload, $for_customer) {
     }
     $lines[] = '';
     if (!empty($payload['gift_wrap'])) {
-        $lines[] = 'Cadeaupapier: alle letters ingepakt - EUR 1,00 per letter';
+        $wrap_cents = isset($payload['gift_wrap_price_cents']) ? max(0, (int) $payload['gift_wrap_price_cents']) : 100;
+        $lines[] = 'Cadeaupapier: alle letters ingepakt - EUR ' . number_format($wrap_cents / 100, 2, ',', '.') . ' per letter';
         $lines[] = 'Toeslag cadeaupapier: EUR ' . number_format(((int) ($payload['gift_wrap_total_cents'] ?? 0)) / 100, 2, ',', '.');
     }
     $lines[] = 'Totaal inclusief 9% btw: EUR ' . number_format(((int) ($payload['total_cents'] ?? 0)) / 100, 2, ',', '.');
