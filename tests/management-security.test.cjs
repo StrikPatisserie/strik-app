@@ -38,6 +38,24 @@ function request(path) {
   nextUrl.clone = () => new URL(nextUrl);
   return { nextUrl, url: nextUrl.href, cookies: { getAll: () => [], set: () => {} } };
 }
+test('published folder videos are accessible without login; other media and private APIs remain protected', async () => {
+  const pricing = load('app/lib/business-folder-pricing.ts', {});
+  const catalog = load('app/kerst-voor-bedrijven/christmasProducts.ts', { '@/app/lib/business-folder-pricing': pricing });
+  const anonymous = middleware(null, 'aal1');
+  for (const highlight of catalog.christmasHighlights) {
+    if (!highlight.story) continue;
+    const result = await anonymous.updateSession(request(highlight.story.src));
+    assert.equal(result.kind, 'next', highlight.story.src);
+    assert.notEqual(result.headers.get('Cache-Control'), 'private, no-store');
+    assert.equal((await middleware(profile('manager'), 'aal1').updateSession(request(highlight.story.src))).kind, 'next');
+  }
+  for (const path of ['/Kerst/interne-video.mp4', '/management/rapport.mp4']) {
+    const result = await anonymous.updateSession(request(path));
+    assert.equal(result.kind, 'redirect');
+    assert.equal(new URL(result.url).pathname, '/login');
+  }
+  assert.equal((await anonymous.updateSession(request('/api/management-revenue/export.mp4'))).status, 401);
+});
 test('AAL1 managers cannot reach pages, APIs, or server-action POST paths', async () => {
   const m = middleware(profile('manager'), 'aal1');
   for (const path of ['/', '/settings', '/management/dashboard', '/bakkerij/recepturen']) {

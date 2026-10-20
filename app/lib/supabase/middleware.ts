@@ -14,6 +14,10 @@ const PUBLIC_PATHS = new Set([
   "/auth/signout",
   "/sint-voor-bedrijven",
   "/kerst-voor-bedrijven",
+  // Only the published product clips are public, just like the folder itself.
+  "/Kerst/kerststol-zo-maken-we-hem.mp4",
+  "/Kerst/tulband-zo-maken-we-hem.mp4",
+  "/Kerst/bonbons-zo-maken-we-ze.mp4",
   "/lettershop",
   "/menu-preview",
 ]);
