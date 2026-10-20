@@ -43,6 +43,7 @@
 .quantityRow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; font-size: 12px; }
 .quantityRow input { width: 80px; min-height: 32px; border: 1px solid #dfdfd3; border-radius: 8px; padding: 5px 8px; background: white; text-align: center; font-size: 12px; line-height: 1.3; font-weight: 700; }
 .quantityRow .action { min-width: 30px; padding: 4px; }
+.quantityRow .batchReset { padding: 5px 9px; color: #315e42; }
 .metrics { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: #edf3e8; font-size: 12px; }
 .metrics > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
 .metrics dt { font-size: 11px; color: #756b60; }

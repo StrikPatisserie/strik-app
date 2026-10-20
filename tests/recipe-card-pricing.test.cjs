@@ -72,3 +72,99 @@ test('incomplete recipes and missing costs do not suggest a misleading selling p
   assert.equal(advice(render({ ingredients: [{ ingredientId: 'flour', quantity: 0, unit: 'gram' }] })), 'Onvolledig');
   assert.equal(advice(render({ costPrice: 0 })), '—');
 });
+
+function findElement(node, predicate) {
+  if (!node || typeof node !== 'object') return undefined;
+  if (Array.isArray(node)) {
+    return node.map(child => findElement(child, predicate)).find(Boolean);
+  }
+  return predicate(node) ? node : findElement(node.props?.children, predicate);
+}
+
+function interactiveCard(changes = {}) {
+  const storedRecipe = { ...recipe, ...changes };
+  let quantity = storedRecipe.standardBatchQuantity;
+  const states = [];
+  let cursor = 0;
+  // Exercise the card's event handlers and local state without a browser session.
+  const hooks = {
+    ...React,
+    useEffect() {},
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial;
+      return [states[index], value => {
+        states[index] = typeof value === 'function' ? value(states[index]) : value;
+      }];
+    },
+  };
+  const { Card: InteractiveCard } = load('app/bakkerij/recepturen/RecipeDetail.tsx', {
+    react: hooks,
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    './utils': utils,
+    './RecipeScreens.module.css': { default: {} },
+  }, 'exports.Card = BakkerRecipeCard;');
+  return {
+    storedRecipe,
+    render() {
+      cursor = 0;
+      return InteractiveCard({
+        recipe: storedRecipe, financialAccess: false,
+        ingredients: [{ id: 'flour', name: 'Bloem' }], recipes: [],
+        quantity, batchQuantity: storedRecipe.standardBatchQuantity,
+        isStarted: false, feedback: '',
+        onQuantityChange(value) { quantity = Number(value.replace(',', '.')); },
+        onScaleFromIngredient(_id, desired) {
+          quantity = storedRecipe.standardBatchQuantity * desired / storedRecipe.ingredients[0].quantity;
+        },
+      });
+    },
+  };
+}
+
+test('batch input scales ingredients to 100 and reset restores the stored 47 without saving', () => {
+  const card = interactiveCard();
+  const original = JSON.stringify(card.storedRecipe);
+  const amountInput = tree => findElement(tree, node => node.props?.['aria-label'] === 'Hoeveelheid');
+  const resetButton = tree => findElement(tree, node => node.type === 'button' && node.props.title?.startsWith('Zet de hoeveelheid'));
+
+  amountInput(card.render()).props.onFocus();
+  amountInput(card.render()).props.onChange({ target: { value: '100' } });
+  let tree = card.render();
+  assert.equal(amountInput(tree).props.value, '100');
+  assert.match(renderToStaticMarkup(tree), /65\.336,2 g/);
+  assert.match(renderToStaticMarkup(resetButton(tree)), /Standaard 47 stuks/);
+
+  // Reset must also replace a temporarily empty input, while it still has focus.
+  amountInput(tree).props.onChange({ target: { value: '' } });
+  resetButton(card.render()).props.onClick();
+  tree = card.render();
+  assert.equal(amountInput(tree).props.value, '47');
+  assert.match(renderToStaticMarkup(tree), /30\.708 g/);
+  assert.equal(JSON.stringify(card.storedRecipe), original);
+});
+
+test('reset retains decimal batch weights and clears scaling by an ingredient', () => {
+  const card = interactiveCard({
+    type: 'semiFinished', standardBatchQuantity: 12.3456, standardBatchUnit: 'kg',
+    batchSize: '12,3456 kg', ingredients: [{ ingredientId: 'flour', quantity: 12345.6, unit: 'gram' }],
+  });
+  const scaleInput = tree => findElement(tree, node => node.type === 'input' && node.props.placeholder);
+  scaleInput(card.render()).props.onChange({ target: { value: '30000' } });
+  let tree = card.render();
+  assert.equal(scaleInput(tree).props.value, '30000');
+  assert.match(renderToStaticMarkup(tree), /30\.000 g/);
+
+  const reset = findElement(tree, node => node.type === 'button' && node.props.title?.startsWith('Zet de hoeveelheid'));
+  assert.match(renderToStaticMarkup(reset), /Standaard 12,3456 kg/);
+  reset.props.onClick();
+  tree = card.render();
+  assert.equal(findElement(tree, node => node.props?.['aria-label'] === 'Hoeveelheid').props.value, '12,3456');
+  assert.equal(scaleInput(tree).props.value, '');
+  assert.match(renderToStaticMarkup(tree), /12\.345,6 g/);
+});
+
+test('incomplete concepts cannot scale or reset unknown batch quantities', () => {
+  const html = render({ ingredients: [{ ingredientId: 'flour', quantity: 0, unit: 'gram' }] });
+  assert.doesNotMatch(html, /Standaard 47|aria-label="Hoeveelheid"/);
+});

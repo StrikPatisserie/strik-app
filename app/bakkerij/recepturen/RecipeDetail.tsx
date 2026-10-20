@@ -4162,6 +4162,7 @@ function BakkerRecipeCard({
     .slice(0, 4);
   const batchInfo = getBatchInfo(recipe);
   const productionUnit = batchInfo?.unit || recipe.standardBatchUnit || "stuk";
+  const standardBatchLabel = `${baseQuantity.toLocaleString("nl-NL", { maximumFractionDigits: 4 })} ${productionUnit === "stuk" && baseQuantity !== 1 ? "stuks" : unitLabelText(productionUnit)}`;
   const cardMargin = recipe.salesPrice
     ? calculateMargin(recipe.salesPrice, recipe.costPrice)
     : 0;
@@ -4191,6 +4192,14 @@ function BakkerRecipeCard({
     setQuantityInput(formatInputNumber(parsed > 0 ? parsed : quantity));
   }
 
+  function resetBatchQuantity() {
+    const value = formatInputNumber(baseQuantity);
+    setQuantityInput(value);
+    setQuantityInputFocused(false);
+    setScaleAmount("");
+    onQuantityChange(value);
+  }
+
   return (
     <div className={`${styles.overlay} fixed inset-0`}>
       <div className={styles.card}>
@@ -4215,8 +4224,11 @@ function BakkerRecipeCard({
           <span className="text-[#82786e]">Batch</span>
           <button type="button" onClick={() => onQuantityStep(-1)} className={styles.action} aria-label="Hoeveelheid verlagen">−</button>
           <input value={quantityInput} onChange={(event) => changeQuantityInput(event.target.value)} onFocus={() => setQuantityInputFocused(true)} onBlur={finishQuantityInput} inputMode="decimal" aria-label="Hoeveelheid" />
-          <span>{unitLabelText(getBatchInfo(recipe)?.unit || recipe.standardBatchUnit || "stuk")}</span>
+          <span>{unitLabelText(productionUnit)}</span>
           <button type="button" onClick={() => onQuantityStep(1)} className={styles.action} aria-label="Hoeveelheid verhogen">+</button>
+          <button type="button" onClick={resetBatchQuantity} className={`${styles.action} ${styles.batchReset}`} title={`Zet de hoeveelheid en ingrediënten terug naar de standaardbatch van ${standardBatchLabel}.`}>
+            <span aria-hidden="true">↺</span> Standaard {standardBatchLabel}
+          </button>
         </div>}
 
         {!incomplete && recipe.type === "semiFinished" && scalableRows.length > 0 && <details className={styles.compactDetails}>
