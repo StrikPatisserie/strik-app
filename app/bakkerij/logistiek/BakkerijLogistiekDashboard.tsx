@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
-import { openRoutePrintWindow } from "./routePrintWindow";
+import { getRoutePrintBlockedReason, openRoutePrintWindow } from "./routePrintWindow";
 import {
   AREND_PRINT_SESSION_KEY,
   AREND_PRINT_SQUARES_PER_SHEET,
@@ -9920,6 +9920,7 @@ export default function BakkerijLogistiekDashboard() {
   const [isSavingPreparationProducts, setIsSavingPreparationProducts] =
     useState(false);
   const [batchLoadState, setBatchLoadState] = useState<BatchLoadState>("idle");
+  const [loadedBatchDate, setLoadedBatchDate] = useState("");
   const [batchReloadCounter, setBatchReloadCounter] = useState(0);
   const [routeSaveState, setRouteSaveState] = useState<RouteSaveState>("idle");
   const [routeSaveMessage, setRouteSaveMessage] = useState("");
@@ -10422,6 +10423,7 @@ export default function BakkerijLogistiekDashboard() {
             data.dayFeedback?.operations
           ),
         }));
+        setLoadedBatchDate(dateState.selectedDate);
         setBatchLoadState("ready");
         if (manualRefresh) {
           setImportMessage(
@@ -11201,6 +11203,10 @@ export default function BakkerijLogistiekDashboard() {
       }
 
       setImportedBatch(data.batch);
+      // Fetch the matching route draft/customer metadata after a manual import;
+      // keep printing disabled until this fresh read has completed.
+      setBatchLoadState("loading");
+      setBatchReloadCounter((current) => current + 1);
       setBatchByDate((current) => ({
         ...current,
         [data.batch!.date]: data.batch!,
@@ -12040,6 +12046,7 @@ export default function BakkerijLogistiekDashboard() {
             onRoutesReset={resetRouteDraft}
             onRoutesSave={saveCurrentRouteDraft}
             routeCanSave={routeCanSave}
+            routePrintBlockedReason={getRoutePrintBlockedReason(batchLoadState, isImporting, loadedBatchDate === selectedPlan.date)}
             routeRounds={routeRounds}
             routeSaveMessage={routeSaveMessage}
             routeSaveState={routeSaveState}
@@ -13178,6 +13185,7 @@ function RoutesPanel({
   onRoutesReset,
   onRoutesSave,
   routeCanSave,
+  routePrintBlockedReason,
   routeRounds,
   routeSaveMessage,
   routeSaveState,
@@ -13199,6 +13207,7 @@ function RoutesPanel({
   onRoutesReset: () => void;
   onRoutesSave: () => void;
   routeCanSave: boolean;
+  routePrintBlockedReason: string;
   routeRounds: RouteRound[];
   routeSaveMessage: string;
   routeSaveState: RouteSaveState;
@@ -13460,6 +13469,11 @@ function RoutesPanel({
         </span>
       </div>
 
+      {routePrintBlockedReason && (
+        <p role="status" className="rounded-xl border border-[#ead7a6] bg-[#fff8e3] px-3 py-2 text-xs font-semibold text-[#7a5417]">
+          {routePrintBlockedReason}
+        </p>
+      )}
       <div
         className={`grid gap-2.5 md:grid-cols-2 ${
           routeGroups.length >= 3 ? "xl:grid-cols-3" : ""
@@ -13521,7 +13535,7 @@ function RoutesPanel({
                     </button>
                   )}
                   <RoutePrintButton
-                    disabled={printableRouteCount === 0}
+                    disabled={Boolean(routePrintBlockedReason) || printableRouteCount === 0}
                     label={`Route printen voor ${group.vehicle}`}
                     onClick={() =>
                       openBusRouteSheet(

@@ -3,6 +3,13 @@ type RoutePrintWindowOptions = {
   expectedStopCount: number;
 };
 
+export function getRoutePrintBlockedReason(loadState: "idle" | "loading" | "ready" | "error", importing: boolean, currentDateLoaded = true) {
+  if (importing) return "Bestelbonnen worden ingelezen. Afdrukken kan zodra de route compleet is.";
+  if (loadState === "error") return "De bestelbonnen konden niet volledig worden opgehaald. Haal de bonnen opnieuw op voordat je de route afdrukt.";
+  if (loadState !== "ready" || !currentDateLoaded) return "Route en bestelbonnen laden… Afdrukken kan zodra het ophalen is afgerond.";
+  return "";
+}
+
 /** Write a fresh, same-origin document in the click handler. In particular, do
  * not leave an iPad print job attached to a temporary/revoked blob document. */
 export function openRoutePrintWindow({ html, expectedStopCount }: RoutePrintWindowOptions) {

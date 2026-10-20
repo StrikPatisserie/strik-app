@@ -14,11 +14,28 @@ const dashboard = 'app/bakkerij/logistiek/BakkerijLogistiekDashboard.tsx';
 const stop = (label, id) => ({ id, sourceId: id, label, detail: 'Voorbeeldstraat 1, Nijmegen', badges: [] });
 function routeInput() {
   return { plan: { date: '2026-10-20' }, routeGroup: { vehicle: 'Bus A', routes: [
-    { id: 'r1', title: 'Ronde 1', departure: '08:05', badge: '6 stops', load: '6 stops', stops: ['Heyendaal vers', 'Vermaat Radboud', 'Daalseweg vers', 'Sint Maartenskliniek Corner', 'Sint Maartenskliniek Rondeel', 'Radboud Universiteit'].map((name, i) => stop(name, 's' + i)) },
-    { id: 'r2', title: 'Ronde 2', departure: '10:38', badge: '4 stops', load: '4 stops', stops: ['Heyendaal houdbaar', 'IJs Heyendaal', 'Daalseweg houdbaar', 'IJs Daalseweg'].map((name, i) => stop(name, 't' + i)) },
+    { id: 'r1', vehicle: 'Bus A', title: 'Ronde 1', departure: '08:05', badge: '6 stops', load: '6 stops', stops: ['Heyendaal vers', 'Vermaat Radboud', 'Daalseweg vers', 'Sint Maartenskliniek Corner', 'Sint Maartenskliniek Rondeel', 'Radboud Universiteit'].map((name, i) => stop(name, 's' + i)) },
+    { id: 'r2', vehicle: 'Bus A', title: 'Ronde 2', departure: '10:38', badge: '4 stops', load: '4 stops', stops: ['Heyendaal houdbaar', 'IJs Heyendaal', 'Daalseweg houdbaar', 'IJs Daalseweg'].map((name, i) => stop(name, 't' + i)) },
   ] } };
 }
 const { render } = load(dashboard, {}, {}, 'exports.render = createBusRoutePrintHtml;');
+test('an initial, loading, failed or importing batch never enables route printing', () => {
+  const { getRoutePrintBlockedReason } = load('app/bakkerij/logistiek/routePrintWindow.ts');
+  for (const state of ['idle', 'loading', 'error']) assert(getRoutePrintBlockedReason(state, false));
+  assert(getRoutePrintBlockedReason('ready', true));
+  assert(getRoutePrintBlockedReason('ready', false, false), 'Een vorige geladen datum mag niet afgedrukt worden');
+  assert.equal(getRoutePrintBlockedReason('ready', false), '');
+});
+test('screen print buttons stay disabled until the latest order data has loaded', () => {
+  const React = require('react');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const { Panel } = load(dashboard, { react: React, 'react/jsx-runtime': require('react/jsx-runtime') }, {}, 'exports.Panel = RoutesPanel;');
+  const props = { acquisitionMessage: '', acquisitionSuggestions: [], acquisitionUpdatingStopId: '', deletedRouteStopLabel: '', routeCanSave: false, routeSaveMessage: '', routeSaveState: 'idle', routesEdited: false, routeRounds: routeInput().routeGroup.routes, selectedPlan: { date: '2026-10-20' } };
+  const blocked = renderToStaticMarkup(React.createElement(Panel, { ...props, routePrintBlockedReason: 'Bestelbonnen laden' }));
+  assert.match(blocked, /aria-label="Route printen voor Bus A"[^>]*disabled=""/);
+  const ready = renderToStaticMarkup(React.createElement(Panel, { ...props, routePrintBlockedReason: '' }));
+  assert.doesNotMatch(ready, /aria-label="Route printen voor Bus A"[^>]*disabled=""/);
+});
 test('all ten screen stops, including the four business addresses, appear on the route print', () => {
   const input = routeInput();
   const html = render(input);
