@@ -4,6 +4,7 @@ import type { Database } from "./types";
 import type { UserProfile } from "./types";
 import { getSupabasePublicConfig } from "./config";
 import { canAccessPath, getDefaultPathForProfile, hasFullAccess } from "../auth/access";
+import { hasRecentMfa } from "../auth/mfa";
 
 const PUBLIC_PATHS = new Set([
   "/login",
@@ -105,6 +106,19 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isApi = pathname.startsWith("/api/");
   const isPublic = isPublicPath(pathname) || PUBLIC_API_PATHS.has(pathname);
+  function withSessionCookies(result: NextResponse) {
+    // A redirect/403 must carry refreshed cookies too. Otherwise the browser
+    // keeps a spent refresh token and loses its already verified MFA session.
+    if (result !== response) {
+      response.cookies.getAll().forEach(cookie => result.cookies.set(cookie));
+      for (const name of ["cache-control", "expires", "pragma"]) {
+        const value = response.headers.get(name);
+        if (value) result.headers.set(name, value);
+      }
+    }
+    if (!isPublic) result.headers.set("Cache-Control", "private, no-store");
+    return result;
+  }
   const { data, error } = await supabase.auth.getClaims();
   const claims = data?.claims;
   const isAuthenticated = Boolean(claims && !error);
@@ -112,13 +126,13 @@ export async function updateSession(request: NextRequest) {
   if (!isAuthenticated) {
     if (isPublic) return response;
 
-    return isApi
+    return withSessionCookies(isApi
       ? NextResponse.json({ message: "Niet ingelogd." }, { status: 401 })
-      : redirectToLogin(request);
+      : redirectToLogin(request));
   }
 
   if (isPublic && pathname === "/login") {
-    return NextResponse.redirect(new URL("/", request.url));
+    return withSessionCookies(NextResponse.redirect(new URL("/", request.url)));
   }
 
   if (!isPublic && claims) {
@@ -131,16 +145,16 @@ export async function updateSession(request: NextRequest) {
 
     if (!profile || !profile.active) {
       await supabase.auth.signOut();
-      return redirectToLogin(request, "inactive");
+      return withSessionCookies(redirectToLogin(request, "inactive"));
     }
 
     const currentProfile = profile as UserProfile | null;
     const manager = hasFullAccess(currentProfile);
-    if (manager && claims.aal !== "aal2") {
-      if (isApi) return NextResponse.json({ message: "Bevestig je tweede verificatiestap.", code: "MFA_REQUIRED" }, { status: 403, headers: { "Cache-Control": "no-store" } });
+    if (manager && !hasRecentMfa(claims)) {
+      if (isApi) return withSessionCookies(NextResponse.json({ message: "Bevestig je tweede verificatiestap.", code: "MFA_REQUIRED" }, { status: 403, headers: { "Cache-Control": "no-store" } }));
       const mfaUrl = new URL("/auth/mfa", request.url);
       mfaUrl.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
-      return NextResponse.redirect(mfaUrl);
+      return withSessionCookies(NextResponse.redirect(mfaUrl));
     }
     const managementApi =
       pathname === "/api/management-dashboard" ||
@@ -151,17 +165,16 @@ export async function updateSession(request: NextRequest) {
       pathname === "/api/leat-insights" || pathname === "/api/wordpress-status" ||
       pathname === "/api/recepturen/data-import" ||
       (pathname === "/api/tamigo-employees" && (request.nextUrl.searchParams.get("view") === "management" || request.nextUrl.searchParams.get("mode") === "connection"));
-    if (isApi && managementApi && !manager) return NextResponse.json({ message: "Alleen managers hebben toegang tot deze gegevens." }, { status: 403, headers: { "Cache-Control": "no-store" } });
+    if (isApi && managementApi && !manager) return withSessionCookies(NextResponse.json({ message: "Alleen managers hebben toegang tot deze gegevens." }, { status: 403, headers: { "Cache-Control": "no-store" } }));
     if (!isApi && !canAccessPath(currentProfile, pathname)) {
       const fallbackPath = getDefaultPathForProfile(currentProfile);
       const fallbackUrl = new URL(fallbackPath, request.url);
 
       if (fallbackUrl.pathname !== pathname) {
-        return NextResponse.redirect(fallbackUrl);
+        return withSessionCookies(NextResponse.redirect(fallbackUrl));
       }
     }
   }
 
-  if (!isPublic) response.headers.set("Cache-Control", "private, no-store");
-  return response;
+  return withSessionCookies(response);
 }

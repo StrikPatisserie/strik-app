@@ -182,6 +182,7 @@ export default function LoginPanel({
             />
             Ingelogd blijven
           </label>
+          <p className="text-xs leading-relaxed text-[#6b645b]">Voor management: blijf ingelogd op je eigen apparaat om je authenticator maar één keer per 7 dagen te bevestigen.</p>
           <SubmitButton pending={loginPending}>Open Strik Team App</SubmitButton>
         </form>
       ) : mode === "signup" ? (

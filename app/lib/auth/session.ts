@@ -5,6 +5,7 @@ import { createClient } from "../supabase/server";
 import { createAdminClient } from "../supabase/admin";
 import type { UserPermissions, UserProfile } from "../supabase/types";
 import { hasFullAccess } from "./access";
+import { hasRecentMfa } from "./mfa";
 
 const PROFILE_SELECT =
   "id,full_name,email,role,store,permissions,active,avatar_url,created_at";
@@ -27,8 +28,8 @@ export async function getCurrentProfile() {
       .eq("id", claimsData.claims.sub)
       .maybeSingle();
 
-    // A manager profile must never authorize sensitive server actions at AAL1.
-    if (profile && hasFullAccess(profile as UserProfile) && claimsData.claims.aal !== "aal2") return null;
+    // Server actions enforce the same seven-day MFA window as the proxy.
+    if (profile && hasFullAccess(profile as UserProfile) && !hasRecentMfa(claimsData.claims)) return null;
     return (profile as UserProfile | null) || null;
   } catch {
     return null;
