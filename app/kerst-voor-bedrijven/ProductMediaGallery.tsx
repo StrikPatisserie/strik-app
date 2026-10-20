@@ -9,6 +9,10 @@ function PlayIcon() {
   return <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5a1 1 0 0 1 1.5-.86l10 6a1.57 1.57 0 0 1 0 2.72l-10 6A1 1 0 0 1 8 18.5Z" /></svg>;
 }
 
+function PauseIcon() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>;
+}
+
 export default function ProductMediaGallery({ name, image, story, eager = false, imageNote }: Readonly<{
   name: string;
   image: string;
@@ -22,13 +26,15 @@ export default function ProductMediaGallery({ name, image, story, eager = false,
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [paused, setPaused] = useState(true);
 
   const showSlide = useCallback((next: number) => {
     if (!story || !viewport.current) return;
     setPlaying(next === 1);
     setFailed(false);
+    if (next === 1 && !video.current) setPaused(true);
     if (next === 1 && video.current) {
-      // Browser interruptions leave the native play control available.
+      // Autoplay interruptions leave our play button available.
       void video.current.play().catch(() => {});
     }
     const left = next * viewport.current.clientWidth;
@@ -39,6 +45,13 @@ export default function ProductMediaGallery({ name, image, story, eager = false,
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
     });
   }, [story]);
+
+  function togglePlayback() {
+    const player = video.current;
+    if (!player) return;
+    if (paused) void player.play().catch(() => setPaused(true));
+    else player.pause();
+  }
 
   // Unplayed, paused and interrupted clips return to the product photo.
   useEffect(() => {
@@ -112,12 +125,16 @@ export default function ProductMediaGallery({ name, image, story, eager = false,
       </div>
       {story && <div className={`${styles.mediaSlide} ${styles.storySlide}`} inert={index !== 1} aria-hidden={index !== 1}>
         {failed ? <div className={styles.mediaError} role="status"><p>De video kon niet worden geladen.</p><button type="button" onClick={() => showSlide(0)}>Terug naar de productfoto</button></div>
-          : index === 1 && playing ? <video ref={video} src={story.src} poster={story.poster} aria-label={story.description} controls autoPlay muted playsInline preload="none" onError={() => setFailed(true)} className={styles.storyVideo}>
-            Je browser kan deze video niet afspelen.
-          </video>
+          : index === 1 && playing ? <>
+            {/* Native mobile controls dim playing videos until the first tap. */}
+            <video ref={video} src={story.src} poster={story.poster} aria-label={story.description} autoPlay muted playsInline preload="none" onPlaying={() => setPaused(false)} onPause={() => setPaused(true)} onEnded={() => setPaused(true)} onError={() => setFailed(true)} className={styles.storyVideo}>
+              Je browser kan deze video niet afspelen.
+            </video>
+            <button type="button" className={styles.videoPlayback} aria-label={paused ? `Speel de maakvideo van ${name} af` : `Pauzeer de maakvideo van ${name}`} onClick={togglePlayback}><span>{paused ? <PlayIcon /> : <PauseIcon />}</span></button>
+          </>
           : <>
             <Image src={story.poster} alt={story.description} fill sizes="(max-width: 760px) 40vw, 33vw" className={styles.storyPoster} />
-            <button type="button" className={styles.storyPlay} aria-label={`Speel de maakvideo van ${name} af`} onClick={() => { setFailed(false); setPlaying(true); }}><span><PlayIcon /></span></button>
+            <button type="button" className={styles.storyPlay} aria-label={`Speel de maakvideo van ${name} af`} onClick={() => { setFailed(false); setPaused(true); setPlaying(true); }}><span><PlayIcon /></span></button>
             <span className={styles.silentBadge}>Zonder geluid</span>
           </>}
       </div>}

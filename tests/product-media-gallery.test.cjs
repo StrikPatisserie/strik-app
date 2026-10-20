@@ -83,7 +83,8 @@ test('a completed clip stays on its final frame for 15 seconds before returning 
   card.scroll(320);
   const player = find(card.commit(nativePlayer), node => node.type === 'video');
   assert.equal(player.props.loop, undefined);
-  assert.equal(player.props.onEnded, undefined, 'ending must leave the native final frame visible');
+  player.props.onEnded();
+  assert.equal(card.viewport.scrollLeft, 320, 'ending must leave the final frame visible');
   listeners.get('ended')();
   card.advance(14_999);
   assert.equal(card.viewport.scrollLeft, 320);
@@ -152,7 +153,7 @@ test('playback cancels the idle deadline; pausing and buffering start a fresh 15
   assert.equal(listeners.size, 0, 'returning to the photo removes playback listeners');
 });
 
-test('video button moves to the second slide and plays muted inline with accessible native controls', () => {
+test('video plays muted inline without the native controls that dim mobile playback', () => {
   const card = gallery();
   find(card.render(), node => node.props?.['aria-label'] === 'Bekijk hoe we Kerststol maken').props.onClick();
   assert.equal(card.viewport.scrollLeft, 320);
@@ -161,7 +162,7 @@ test('video button moves to the second slide and plays muted inline with accessi
   assert.equal(player.props.src, '/silent.mp4');
   assert.equal(player.props.muted, true);
   assert.equal(player.props.playsInline, true);
-  assert.equal(player.props.controls, true);
+  assert.equal(player.props.controls, undefined);
   assert.equal(player.props.preload, 'none');
   assert.equal(player.props.autoPlay, true);
   // A resize may move the viewport before its scroll event; an explicit video
@@ -173,6 +174,34 @@ test('video button moves to the second slide and plays muted inline with accessi
   assert.ok(find(card.render(), node => node.type === 'video'));
   card.scroll(0);
   assert.equal(find(card.render(), node => node.type === 'video'), undefined, 'returning to the photo must remove the player');
+});
+
+test('the transparent playback button follows native play/pause and cancels the idle deadline on resume', () => {
+  const card = gallery();
+  const listeners = new Map();
+  let playerNode, pauseCalls = 0, playCalls = 0;
+  const nativePlayer = {
+    paused: false, readyState: 4,
+    addEventListener(name, callback) { listeners.set(name, callback); },
+    removeEventListener(name) { listeners.delete(name); },
+    pause() { pauseCalls++; this.paused = true; playerNode.props.onPause(); listeners.get('pause')?.(); },
+    play() { playCalls++; this.paused = false; playerNode.props.onPlaying(); listeners.get('playing')?.(); return Promise.resolve(); },
+  };
+  find(card.render(), node => node.props?.['aria-label'] === 'Bekijk hoe we Kerststol maken').props.onClick();
+  card.scroll(320);
+  playerNode = find(card.commit(nativePlayer), node => node.type === 'video');
+  playerNode.props.onPlaying();
+  find(card.render(), node => node.type === 'button' && node.props['aria-label'] === 'Pauzeer de maakvideo van Kerststol').props.onClick();
+  assert.equal(pauseCalls, 1);
+  card.advance(14_999);
+  assert.equal(card.viewport.scrollLeft, 320);
+  find(card.render(), node => node.type === 'button' && node.props['aria-label'] === 'Speel de maakvideo van Kerststol af').props.onClick();
+  assert.equal(playCalls, 1);
+  card.advance(20_000);
+  assert.equal(card.viewport.scrollLeft, 320, 'resuming removes the scheduled photo return');
+  const css = fs.readFileSync('app/kerst-voor-bedrijven/ChristmasFolder.module.css', 'utf8');
+  assert.match(css, /\.videoPlayback\{[^}]*background:transparent/);
+  assert.match(css, /\.storyPlay\{[^}]*background:transparent/);
 });
 
 test('swiping to the story offers explicit playback, and video errors have a usable photo fallback', () => {
