@@ -32,6 +32,7 @@ import {
   formatDate,
   formatEuro,
   formatPercent,
+  ingredientCostForQuantity,
   normalizePackagePrice,
   normalizeProductionLog,
   normalizeProductionRequests,
@@ -3341,16 +3342,6 @@ function normalizePackagingDrafts(
     }),
     packagingItems
   );
-}
-
-function ingredientCostForQuantity(
-  ingredient: Ingredient,
-  quantity: number,
-  unit: RecipeUnit
-) {
-  const baseQuantity = convertQuantityToUnit(quantity, unit, ingredient.recipeUnit);
-
-  return roundMoney(baseQuantity * ingredient.pricePerBaseUnit);
 }
 
 function semiFinishedCostForQuantity(

@@ -3,10 +3,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
-function load(file, imports = {}) {
+function load(file, imports = {}, expose = '') {
   const exports = {};
-  const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
-  vm.runInNewContext(source, { exports, require: name => imports[name] || {}, Response, Request, FormData, File, Buffer, URL });
+  const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
+  vm.runInNewContext(source + '\n' + expose, { exports, require: name => imports[name] || {}, Response, Request, FormData, File, Buffer, URL });
   return exports;
 }
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -77,6 +77,17 @@ test('5 liters of the invoice cream and 450 grams sugar cost €16.29 without as
   const costs = utils.recalculateAllRecipeCosts([sweet], [cream, sugar]);
   assert.equal(costs[0].standardBatchQuantity, 5.45);
   assert.equal(costs[0].costPrice, 2.99);
+});
+
+test('recipe editor calculates the same liter-priced batch as the shared recipe calculation', () => {
+  const detail = load('app/bakkerij/recepturen/RecipeDetail.tsx', { './utils': utils }, 'exports.normalizeIngredients = normalizeIngredientDrafts;');
+  const lines = detail.normalizeIngredients([
+    { ingredientId: cream.id, quantity: '5', unit: 'liter' },
+    { ingredientId: sugar.id, quantity: '450', unit: 'gram' },
+  ], [cream, sugar]);
+  assert.equal(lines[0].costContribution, 16);
+  assert.equal(lines[1].costContribution, .293);
+  assert.equal(utils.roundMoney(utils.directIngredientCost(lines)), 16.293);
 });
 
 test('future imports redirect old sweetened names, raw names and generic room, while keeping the whipped recipe distinct', async () => {
