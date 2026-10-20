@@ -1,0 +1,22 @@
+.panel { min-width: 0; border: 1px solid #e2e2d7; border-radius: 16px; background: #fffefa; padding: 16px; color: #2d2a26; }
+.panel h2 { font-size: 22px; line-height: 1.25; font-weight: 800; }
+.layout { display: grid; min-width: 0; gap: 16px; margin-top: 12px; }
+.form { display: grid; min-width: 0; align-content: start; gap: 12px; }
+.weekPicker { display: grid; grid-template-columns: 44px minmax(0,1fr) 44px; gap: 6px; }
+.weekPicker button { min-height: 44px; border: 1px solid #c3d3bc; border-radius: 10px; background: #edf3e8; color: #315e42; font-size: 26px; line-height: 1; }
+.weekPicker > div { display: flex; min-width: 0; align-items: center; justify-content: center; border: 1px solid #e2ddd6; border-radius: 10px; padding: 6px; text-align: center; font-size: 13px; line-height: 1.4; font-weight: 700; }
+.field { display: grid; min-width: 0; gap: 5px; font-size: 12px; font-weight: 700; color: #756b60; }
+.field :is(input,select) { min-width: 0; width: 100%; min-height: 44px; border: 1px solid #e2ddd6; border-radius: 10px; padding: 8px 10px; background: white; color: #2d2a26; font-size: 14px; font-weight: 500; }
+.field input[type="file"] { overflow: hidden; padding: 5px; font-size: 12px; }
+.field input::file-selector-button { min-height: 36px; margin-right: 8px; border: 0; border-radius: 7px; padding: 6px 10px; background: #315e42; color: white; font: inherit; font-weight: 700; }
+.multipleWeeks { display: grid; gap: 8px; border: 1px solid #e2ddd6; border-radius: 12px; padding: 8px 10px; background: #f7f8f2; }
+.toggle { display: flex; min-height: 44px; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.toggle input { width: 20px; height: 20px; flex-shrink: 0; accent-color: #315e42; }
+.status { font-size: 13px; line-height: 1.5; color: #756b60; overflow-wrap: anywhere; }
+.preview { min-width: 0; border: 1px solid #e2ddd6; border-radius: 12px; padding: 10px; background: #f7f8f2; }
+.preview > p { margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #756b60; }
+.image { display: flex; aspect-ratio: 210 / 297; width: 100%; max-width: 22rem; align-items: center; justify-content: center; margin: 0 auto; overflow: hidden; border-radius: 8px; background: white; }
+.image img { width: 100%; height: 100%; object-fit: contain; }
+.image p { padding: 12px; text-align: center; font-size: 13px; color: #82786e; }
+@media (min-width: 768px) { .layout { grid-template-columns: minmax(0,1fr) minmax(14rem,20rem); } }
+@media (max-width: 767px) { .panel { padding: 12px; } .field :is(input:not([type="file"]),select) { font-size: 16px; } .weekPicker > div { font-size: 12px; } }

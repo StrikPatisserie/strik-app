@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
+import styles from "../../bakkerij/recepturen/OfferManager.module.css";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
 import {
   emptyBakeryHomeData,
@@ -83,7 +84,7 @@ export default function ManagementBakkerijPage() {
         setData(result.data);
         setHome(normalizedHome);
         setLabel(offerForWeek(normalizedHome, selectedWeek)?.label || "");
-        setStatus("Bakkerij voorpagina geladen.");
+        setStatus("");
       } else {
         setStatus(result.message);
       }
@@ -105,9 +106,9 @@ export default function ManagementBakkerijPage() {
 
   async function persistHome(nextHome: BakeryHomeData, message: string) {
     const nextData: RecepturenData = {
+      ...data,
       ingredients: data?.ingredients || [],
       recipes: data?.recipes || [],
-      packagingItems: data?.packagingItems || [],
       invoiceImports: data?.invoiceImports || [],
       bakeryHome: nextHome,
     };
@@ -174,6 +175,8 @@ export default function ManagementBakkerijPage() {
         },
         "Aanbieding opgeslagen."
       );
+    } catch {
+      setStatus("De aanbieding kon niet worden geüpload. Controleer je verbinding en probeer opnieuw.");
     } finally {
       setIsUploading(false);
     }
@@ -182,84 +185,79 @@ export default function ManagementBakkerijPage() {
   return (
     <StrikShell wide>
       <StrikPageHeader
-        title="Bakkerij voorpagina"
-        description="Beheer de aanbiedingsfoto per week."
+        title="Aanbieding"
         icon={strikIcons.bakkerij}
         kicker="Management"
         tone="green"
       />
 
-      <section className="grid gap-4 rounded-[1.5rem] border border-[#e7e0d8] bg-white p-5 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-[2.75rem_minmax(0,1fr)_2.75rem]">
-          <button
-            type="button"
-            onClick={() => selectRelativeWeek(-7)}
-            className="border border-[#c3d3bc] bg-[#c3d3bc] text-3xl leading-none"
-            aria-label="Vorige week"
-          >
-            ‹
-          </button>
-          <div className="flex items-center justify-center border border-[#c3d3bc] px-3 py-2 text-sm font-black uppercase tracking-[0.08em]">
-            {formatWeekRange(selectedWeek)}
-          </div>
-          <button
-            type="button"
-            onClick={() => selectRelativeWeek(7)}
-            className="border border-[#c3d3bc] bg-[#c3d3bc] text-3xl leading-none"
-            aria-label="Volgende week"
-          >
-            ›
-          </button>
-        </div>
-
-        <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
-          Label
-          <input
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-            placeholder="Bijvoorbeeld Vaderdag aanbieding"
-            className="border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] outline-none"
-          />
-        </label>
-
-        <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
-          Aanbiedingfoto
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            disabled={isUploading}
-            onChange={(event) => {
-              void uploadOfferImage(event.currentTarget.files?.[0] || null);
-              event.currentTarget.value = "";
-            }}
-            className="border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525]"
-          />
-        </label>
-
-        <div className="border border-[#c3d3bc] bg-[#f8f8f6] p-3">
-          <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
-            Huidige foto
-          </p>
-          <div className="flex max-h-[28rem] items-center justify-center overflow-hidden bg-white">
-            {selectedOffer?.imageUrl ? (
-              <img
-                src={selectedOffer.imageUrl}
-                alt={selectedOffer.label || "Aanbieding"}
-                className="max-h-[28rem] max-w-full object-contain"
-              />
-            ) : (
-              <div className="flex min-h-64 w-full items-center justify-center px-4 text-center text-sm font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
-                Nog geen foto voor deze week
+      <section className={styles.panel}>
+        <div className={styles.layout}>
+          <div className={styles.form}>
+            <div className={styles.weekPicker}>
+              <button
+                type="button"
+                onClick={() => selectRelativeWeek(-7)}
+                disabled={isUploading}
+                aria-label="Vorige week"
+              >
+                ‹
+              </button>
+              <div>
+                {formatWeekRange(selectedWeek)}
               </div>
-            )}
-          </div>
-        </div>
+              <button
+                type="button"
+                onClick={() => selectRelativeWeek(7)}
+                disabled={isUploading}
+                aria-label="Volgende week"
+              >
+                ›
+              </button>
+            </div>
 
-        {status && (
-          <p className="rounded-2xl bg-[#f8f6f3] p-3 text-center text-sm font-bold text-[#707070]">
-            {status}
-          </p>
-        )}
+            <label className={styles.field}>
+              Label
+              <input
+                value={label}
+                onChange={(event) => setLabel(event.target.value)}
+                placeholder="Bijvoorbeeld Vaderdag aanbieding"
+                disabled={isUploading}
+              />
+            </label>
+
+            <label className={styles.field}>
+              Aanbiedingfoto
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={isUploading || !data}
+                onChange={(event) => {
+                  void uploadOfferImage(event.currentTarget.files?.[0] || null);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+
+            {status && <p role="status" className={styles.status}>{status}</p>}
+          </div>
+          <div className={styles.preview}>
+            <p>
+              Huidige foto
+            </p>
+            <div className={styles.image}>
+              {selectedOffer?.imageUrl ? (
+                <img
+                  src={selectedOffer.imageUrl}
+                  alt={selectedOffer.label || "Aanbieding"}
+                />
+              ) : (
+                <p>Nog geen foto voor deze week</p>
+              )}
+            </div>
+          </div>
+
+        </div>
       </section>
     </StrikShell>
   );

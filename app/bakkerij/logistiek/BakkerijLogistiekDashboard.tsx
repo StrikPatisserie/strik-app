@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StrikPageHeader, StrikShell, strikIcons } from "../../StrikUI";
+import { openRoutePrintWindow } from "./routePrintWindow";
 import {
   AREND_PRINT_SESSION_KEY,
   AREND_PRINT_SQUARES_PER_SHEET,
@@ -4934,6 +4935,9 @@ function createBusRoutePrintHtml(input: {
     (total, route) => total + route.stops.length,
     0
   );
+  const generatedAt = new Intl.DateTimeFormat("nl-NL", {
+    timeZone: "Europe/Amsterdam", hour: "2-digit", minute: "2-digit",
+  }).format(new Date());
   const title = `${routeGroupDisplayTitle(input.routeGroup.vehicle)} · ${formatDateLabel(
     input.plan.date
   )}`;
@@ -5069,7 +5073,7 @@ function createBusRoutePrintHtml(input: {
           </section>
 
           <footer class="page-footer">
-            <span>Pagina ${pageIndex + 1} van ${printPages.length}</span>
+            <span>Pagina ${pageIndex + 1} van ${printPages.length} · ${stopCount} stops · gemaakt ${generatedAt}</span>
             ${
               nextPage
                 ? `<strong>Z.O.Z. — ${escapeHtml(nextPage[0]?.title || "VOLGENDE RONDE")}</strong>`
@@ -5085,7 +5089,8 @@ function createBusRoutePrintHtml(input: {
 <html lang="nl">
   <head>
     <meta charset="utf-8">
-    <title>${escapeHtml(title)}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)} · ${stopCount} stops · ${generatedAt}</title>
     <style>
       @page { margin: 0; size: A4 portrait; }
       * { box-sizing: border-box; }
@@ -5470,10 +5475,10 @@ function createBusRoutePrintHtml(input: {
   </head>
   <body>
     <div class="screen-actions">
-      <h1>${escapeHtml(title)} · ${stopCount} stops</h1>
+      <h1>${escapeHtml(title)} · ${stopCount} stops · gemaakt ${generatedAt}</h1>
       <div class="action-buttons">
         <button type="button" class="secondary" onclick="if (window.opener) window.close(); else window.history.back();">Terug</button>
-        <button type="button" onclick="window.print()">Afdrukken</button>
+        <button type="button" onclick="if(document.querySelectorAll('.stop-card').length === ${stopCount}) window.print(); else alert('De route is niet volledig geladen. Open de routeprint opnieuw.');">${stopCount} stops afdrukken</button>
       </div>
     </div>
     ${routesHtml}
@@ -5491,23 +5496,15 @@ function openBusRouteSheet(
     return;
   }
 
-  const printHtml = createBusRoutePrintHtml({
-    plan,
-    routeGroup,
-    departureOverride,
+  // Capture precisely the rounds shown on screen, including unsaved additions,
+  // business addresses and manual stop order. Do not regenerate a base route.
+  const snapshot = JSON.parse(JSON.stringify({ plan, routeGroup, departureOverride })) as {
+    plan: DayPlan; routeGroup: RouteGroup; departureOverride: string;
+  };
+  openRoutePrintWindow({
+    html: createBusRoutePrintHtml(snapshot),
+    expectedStopCount: snapshot.routeGroup.routes.reduce((total, route) => total + route.stops.length, 0),
   });
-  const printUrl = URL.createObjectURL(
-    new Blob([printHtml], { type: "text/html;charset=utf-8" })
-  );
-  const printWindow = window.open(printUrl, "_blank", "width=950,height=800");
-  if (!printWindow) {
-    URL.revokeObjectURL(printUrl);
-    window.alert("Routevenster kon niet geopend worden.");
-    return;
-  }
-
-  printWindow.focus();
-  window.setTimeout(() => URL.revokeObjectURL(printUrl), 60_000);
 }
 
 function createSpecialSchoolDeliveryPrintHtml(input: {

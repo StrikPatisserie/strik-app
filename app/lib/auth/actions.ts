@@ -6,6 +6,7 @@ import { createClient } from "../supabase/server";
 import { getSiteUrl } from "../supabase/config";
 import {
   getPasswordUpdateUrl,
+  getPasswordResetErrorMessage,
   sendPasswordResetEmail,
 } from "../supabase/passwordReset";
 import { getDefaultPathForRole, getSignupDepartment, WINKEL_STORE_IDS } from "./access";
@@ -125,8 +126,8 @@ export async function requestPasswordResetAction(
 ): Promise<AuthActionState> {
   const email = cleanEmail(formData.get("email"));
 
-  if (!email) {
-    return { message: "Vul je e-mailadres in." };
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { message: "Vul een geldig e-mailadres in." };
   }
 
   try {
@@ -136,21 +137,19 @@ export async function requestPasswordResetAction(
     );
 
     if (error) {
-      return { message: "De resetmail kon niet worden verstuurd." };
+      console.error("Resetmail mislukt", { code: error.code, status: error.status });
+      return { message: getPasswordResetErrorMessage(error) };
     }
   } catch (error) {
     return {
-      message:
-        error instanceof Error
-          ? error.message
-          : "De resetmail kon niet worden verstuurd.",
+      message: getPasswordResetErrorMessage(error),
     };
   }
 
   return {
     ok: true,
     message:
-      "Als dit e-mailadres bekend is, staat er zo een resetlink in de mailbox.",
+      "Als dit e-mailadres bekend is, ontvang je een resetlink. Controleer ook je spammap en gebruik de meest recente mail.",
   };
 }
 

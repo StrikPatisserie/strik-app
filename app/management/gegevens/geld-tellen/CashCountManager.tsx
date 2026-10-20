@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import styles from "./CashCountManager.module.css";
 import {
   cashDenominationTotal,
   cashDenominations,
@@ -2297,10 +2298,10 @@ export default function CashCountManager() {
     : "";
 
   return (
-    <div className="space-y-3">
+    <div className={`${styles.root} space-y-3`}>
       <nav
         aria-label="Geldgegevens"
-        className="grid w-full max-w-lg grid-cols-3 gap-1 rounded-full border border-white/70 bg-white/82 p-1 shadow-sm backdrop-blur-sm"
+        className={`${styles.tabs} grid w-full max-w-lg grid-cols-3 gap-1 rounded-full border border-white/70 bg-white/82 p-1 shadow-sm backdrop-blur-sm`}
       >
         <Link
           href="/management/gegevens/geld-tellen"
@@ -2492,7 +2493,7 @@ export default function CashCountManager() {
             </div>
           </div>
 
-          <div className="grid grid-cols-[2.75rem_minmax(5rem,1fr)_2.75rem_minmax(8rem,1.25fr)] gap-1.5 md:col-span-2 xl:col-span-4 xl:ml-auto xl:w-full xl:max-w-[28rem]">
+          <div className={`${styles.weekActions} gap-1.5 md:col-span-2 xl:col-span-4 xl:ml-auto xl:w-full xl:max-w-[28rem]`}>
             <button
               type="button"
               onClick={() =>
@@ -2909,7 +2910,7 @@ export default function CashCountManager() {
                         kassa
                       </span>
                     </div>
-                    <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    <div className={`${styles.metrics} mt-2 grid grid-cols-3 gap-1.5`}>
                       <CashOverviewMetric
                         label="Cash"
                         value={formatOptionalMoney(selectedRegisteredCash)}
@@ -2947,7 +2948,7 @@ export default function CashCountManager() {
                         telling
                       </span>
                     </div>
-                    <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    <div className={`${styles.metrics} mt-2 grid grid-cols-3 gap-1.5`}>
                       <CashOverviewMetricButton
                         label="Geteld in lade"
                         value={formatOptionalMoney(selectedCountedCash)}
@@ -3038,7 +3039,7 @@ export default function CashCountManager() {
                         />
                       </label>
                     </div>
-                    <div className="mt-2 grid grid-cols-3 gap-1.5">
+                    <div className={`${styles.metrics} mt-2 grid grid-cols-3 gap-1.5`}>
                       <CashOverviewMetric
                         label="Volgens kassa"
                         value={formatMoney(selectedExpectedCash)}
@@ -3997,11 +3998,11 @@ function CashOverviewMetric({
         emphasized ? "bg-[#f1f6ef]" : "bg-[#faf8f5]"
       }`}
     >
-      <p className="truncate text-[0.5rem] font-bold uppercase tracking-[0.04em] text-[#8b8278]">
+      <p className={`${styles.metricLabel} truncate text-[0.5rem] font-bold uppercase tracking-[0.04em] text-[#8b8278]`}>
         {label}
       </p>
       <p
-        className={`mt-0.5 truncate whitespace-nowrap font-black leading-none tabular-nums ${valueColorClass} ${
+        className={`${styles.metricValue} mt-0.5 truncate whitespace-nowrap font-black leading-none tabular-nums ${valueColorClass} ${
           emphasized ? "text-base" : "text-sm"
         }`}
         title={value}
@@ -4027,7 +4028,7 @@ function CashOverviewMetricButton({
       onClick={onClick}
       className="min-w-0 rounded-xl bg-[#faf8f5] px-2 py-2 text-left transition hover:bg-[#f2eee9] focus:outline-none focus:ring-2 focus:ring-[#9b938a]"
     >
-      <span className="block truncate text-[0.5rem] font-bold uppercase tracking-[0.04em] text-[#8b8278]">
+      <span className={`${styles.metricLabel} block truncate text-[0.5rem] font-bold uppercase tracking-[0.04em] text-[#8b8278]`}>
         {label}
       </span>
       <span

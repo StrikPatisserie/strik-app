@@ -1,0 +1,25 @@
+.root { min-width: 0; }
+.weekActions { display: grid; grid-template-columns: 2.75rem minmax(0,1fr) 2.75rem; }
+.weekActions > :last-child { grid-column: 1 / -1; }
+@media (min-width: 768px) {
+  .weekActions { grid-template-columns: 2.75rem minmax(5rem,1fr) 2.75rem minmax(8rem,1.25fr); }
+  .weekActions > :last-child { grid-column: auto; }
+}
+@media (max-width: 767px) {
+  .root { font-size: 14px; }
+  .root h2 { font-size: 21px; line-height: 1.25; }
+  .root h3 { font-size: 17px; line-height: 1.3; }
+  .root :is(p,span,label,strong,small)[class*="text-[0."] { font-size: 12px; line-height: 1.4; letter-spacing: normal; }
+  .root :is(button,summary,a,input:not([type="checkbox"]),select,textarea) { min-height: 44px; }
+  .root button { min-width: 44px; }
+  .root :is(input:not([type="checkbox"]),select,textarea) { min-width: 0; max-width: 100%; font-size: 16px; }
+  .root input:not([type="checkbox"]) { width: 100%; }
+  .root input[type="checkbox"] { width: 20px; height: 20px; flex-shrink: 0; }
+  .tabs { border-radius: 14px; }
+  .tabs > :is(a,button) { display: flex; align-items: center; justify-content: center; border-radius: 10px; padding: 7px 5px; font-size: 12px; line-height: 1.3; }
+  .metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .metrics > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .metricLabel { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .metricValue { font-size: 16px; line-height: 1.3; }
+  .root [role="dialog"] { max-height: calc(100dvh - 16px); border-radius: 18px; }
+}

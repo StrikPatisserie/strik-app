@@ -1,19 +1,14 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   updatePasswordAction,
   type AuthActionState,
 } from "../lib/auth/actions";
-import { createClient } from "../lib/supabase/client";
+import { createRecoveryClient } from "../lib/supabase/client";
+import { loadPasswordRecoverySession } from "../lib/supabase/recoverySession";
 
 const initialState: AuthActionState = {};
-
-function getResetLinkErrorMessage(value: string | null) {
-  if (!value) return "";
-
-  return "Deze resetlink is verlopen of niet geldig. Vraag een nieuwe resetmail aan.";
-}
 
 export default function UpdatePasswordPanel() {
   const [state, formAction, pending] = useActionState(
@@ -22,65 +17,27 @@ export default function UpdatePasswordPanel() {
   );
   const [linkMessage, setLinkMessage] = useState("Resetlink controleren...");
   const [linkReady, setLinkReady] = useState(false);
+  const recoveryRequest = useRef<ReturnType<typeof loadPasswordRecoverySession> | null>(null);
 
   useEffect(() => {
     let ignoreResult = false;
 
     async function loadRecoverySession() {
-      const supabase = createClient();
-      const searchParams = new URLSearchParams(window.location.search);
-      const hashParams = new URLSearchParams(
-        window.location.hash.replace(/^#/, "")
-      );
-      const linkError =
-        getResetLinkErrorMessage(searchParams.get("error")) ||
-        getResetLinkErrorMessage(hashParams.get("error"));
-
-      if (linkError) {
+      try {
+        if (!recoveryRequest.current) {
+          const supabase = createRecoveryClient();
+          recoveryRequest.current = loadPasswordRecoverySession(supabase.auth, window.location.search, window.location.hash);
+        }
+        const result = await recoveryRequest.current;
+        if (!ignoreResult) {
+          setLinkReady(result.ready);
+          setLinkMessage(result.message);
+          if (result.clearUrl) window.history.replaceState(null, "", window.location.pathname);
+        }
+      } catch {
         if (!ignoreResult) {
           setLinkReady(false);
-          setLinkMessage(linkError);
-        }
-
-        return;
-      }
-
-      const accessToken = hashParams.get("access_token");
-      const refreshToken = hashParams.get("refresh_token");
-
-      if (accessToken && refreshToken) {
-        const { error } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
-
-        if (!ignoreResult) {
-          if (error) {
-            setLinkReady(false);
-            setLinkMessage(
-              "Deze resetlink kon niet worden geladen. Vraag een nieuwe resetmail aan."
-            );
-          } else {
-            setLinkReady(true);
-            setLinkMessage("Resetlink geladen. Kies nu je nieuwe wachtwoord.");
-            window.history.replaceState(null, "", window.location.pathname);
-          }
-        }
-
-        return;
-      }
-
-      const { data } = await supabase.auth.getSession();
-
-      if (!ignoreResult) {
-        if (data.session) {
-          setLinkReady(true);
-          setLinkMessage("Kies nu je nieuwe wachtwoord.");
-        } else {
-          setLinkReady(false);
-          setLinkMessage(
-            "Open de link uit de meest recente resetmail om je wachtwoord te wijzigen."
-          );
+          setLinkMessage("De resetlink kon niet worden geladen. Probeer het opnieuw of neem contact op met een beheerder.");
         }
       }
     }

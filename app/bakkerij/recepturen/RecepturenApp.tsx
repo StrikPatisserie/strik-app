@@ -14,6 +14,7 @@ import IngredientsList, { IngredientDetail } from "./IngredientsList";
 import { persistIngredientSpecification } from "./specsPlazaLink";
 import MargeOverzicht from "./MargeOverzicht";
 import managementStyles from "./ManagementScreens.module.css";
+import offerStyles from "./OfferManager.module.css";
 import {
   ingredients,
   invoiceImports,
@@ -3359,45 +3360,40 @@ function BakeryHomeManager({
   }, [selectedOffer?.label, selectedWeek]);
 
   return (
-    <div className="border border-[#c3d3bc] bg-white p-6 lg:col-span-2">
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#8c8c8c]">
-        Voorpagina
-      </p>
-      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
-        <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]">
+    <section className={offerStyles.panel}>
+      <h2>Aanbieding</h2>
+      <div className={offerStyles.layout}>
+        <div className={offerStyles.form}>
+          <div className={offerStyles.weekPicker}>
             <button
               type="button"
               onClick={() => onSelectWeek(addDays(selectedWeek, -7))}
-              className="border border-[#c3d3bc] bg-[#c3d3bc] text-3xl leading-none"
               aria-label="Vorige week"
             >
               ‹
             </button>
-            <div className="flex items-center justify-center border border-[#c3d3bc] px-3 py-2 text-sm font-black uppercase tracking-[0.08em]">
+            <div>
               {formatWeekRange(selectedWeek)}
             </div>
             <button
               type="button"
               onClick={() => onSelectWeek(addDays(selectedWeek, 7))}
-              className="border border-[#c3d3bc] bg-[#c3d3bc] text-3xl leading-none"
               aria-label="Volgende week"
             >
               ›
             </button>
           </div>
 
-          <label className="grid gap-1 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+          <label className={offerStyles.field}>
             Label
             <input
               value={label}
               onChange={(event) => setLabel(event.target.value)}
               placeholder="Bijvoorbeeld Vaderdag aanbieding"
-              className="min-w-0 border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525] outline-none focus:ring-2 focus:ring-[#c3d3bc]"
             />
           </label>
 
-          <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+          <label className={offerStyles.field}>
             Aanbiedingfoto
             <input
               type="file"
@@ -3410,12 +3406,11 @@ function BakeryHomeManager({
                 );
                 event.currentTarget.value = "";
               }}
-              className="min-w-0 border border-[#c3d3bc] bg-white px-3 py-3 text-sm font-bold normal-case tracking-normal text-[#252525]"
             />
           </label>
 
-          <div className="flex flex-wrap items-center gap-3 border border-[#c3d3bc] bg-[#f8f8f6] px-3 py-2">
-            <label className="inline-flex min-w-0 items-center gap-2 text-xs font-black uppercase tracking-[0.08em] text-[#252525]">
+          <div className={offerStyles.multipleWeeks}>
+            <label className={offerStyles.toggle}>
               <input
                 type="checkbox"
                 checked={appliesMultipleWeeks}
@@ -3425,12 +3420,11 @@ function BakeryHomeManager({
               Geldt voor meerdere weken
             </label>
             {appliesMultipleWeeks && (
-              <label className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.08em] text-[#8c8c8c]">
+              <label className={offerStyles.field}>
                 Aantal
                 <select
                   value={weekCount}
                   onChange={(event) => setWeekCount(Number(event.target.value))}
-                  className="border border-[#c3d3bc] bg-white px-2 py-1 text-xs font-black text-[#252525]"
                 >
                   {[2, 3, 4].map((count) => (
                     <option key={count} value={count}>
@@ -3442,36 +3436,32 @@ function BakeryHomeManager({
             )}
           </div>
 
-          <p className="text-xs font-bold leading-relaxed text-[#707070]">
-            Foto&apos;s worden als WordPress media opgeslagen; de app bewaart alleen de link bij de juiste week.
-          </p>
           {(uploadStatus || status) && (
-            <p className="text-xs font-bold text-[#707070]">
+            <p role="status" className={offerStyles.status}>
               {uploadStatus || status}
             </p>
           )}
         </div>
 
-        <div className="border border-[#c3d3bc] bg-[#f8f8f6] p-3">
-          <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-[#8c8c8c]">
+        <div className={offerStyles.preview}>
+          <p>
             Huidige foto
           </p>
-          <div className="flex aspect-[4/5] items-center justify-center overflow-hidden bg-white">
+          <div className={offerStyles.image}>
             {selectedOffer?.imageUrl ? (
               <img
                 src={selectedOffer.imageUrl}
                 alt=""
-                className="h-full w-full object-contain"
               />
             ) : (
-              <p className="px-4 text-center text-xs font-black uppercase tracking-[0.14em] text-[#2d2a26]/35">
+              <p>
                 Nog geen foto voor deze week
               </p>
             )}
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 

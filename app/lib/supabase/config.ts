@@ -45,6 +45,6 @@ export function getSiteUrl() {
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` ||
-    "http://localhost:3000"
+    (process.env.NODE_ENV === "production" ? "https://app.strik-patisserie.nl" : "http://localhost:3000")
   );
 }
